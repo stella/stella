@@ -1,13 +1,16 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { canonicalUsReporterCitation } from "@stll/api-contract/us-reporter-citation";
 import {
+  assertProperty,
   propertyConfig,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
 
+import { US_REPORTER_SPELLINGS } from "../../../../../../packages/api-contract/src/us-reporter-editions.generated";
 import { scanRun, US_CITATION_WORK_LIMIT } from "./us-citation-scanner";
 
 const noise = fc
@@ -33,6 +36,68 @@ const scan = (text: string, limit = US_CITATION_WORK_LIMIT) => {
   });
   return { result, budget };
 };
+
+test("every unambiguous reporter spelling scans to its parsed identity", () => {
+  const spellings = Object.keys(US_REPORTER_SPELLINGS).filter(
+    (spelling) => canonicalUsReporterCitation(`137 ${spelling} 246`) !== null,
+  );
+  const assertIdentity = (text: string) => {
+    const canonical = canonicalUsReporterCitation(text);
+    if (canonical === null) {
+      panic("Generated reporter citation has no canonical identity");
+    }
+    const { result } = scan(text);
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(
+      result.value.events.flatMap((event) =>
+        event.kind === "token" && event.token.kind === "full"
+          ? [event.token.base?.identifier.value]
+          : [],
+      ),
+    ).toEqual([canonical]);
+    const parallel = scan(`319 U.S. 527, ${text}`).result;
+    if (Result.isError(parallel)) {
+      throw parallel.error;
+    }
+    expect(
+      parallel.value.events.flatMap((event) =>
+        event.kind === "token" && event.token.kind === "full"
+          ? [event.token.base?.identifier.value]
+          : [],
+      ),
+    ).toEqual(["319 U.S. 527", canonical]);
+    const short = scan(
+      `319 U.S. 527, ${text.replace(/\s+\d+$/u, ", at 891")}`,
+    ).result;
+    if (Result.isError(short)) {
+      throw short.error;
+    }
+    expect(
+      short.value.events.flatMap((event) =>
+        event.kind === "token" ? [event.token.kind] : [],
+      ),
+    ).toEqual(["full", "volume-reporter"]);
+  };
+  for (const spelling of spellings) {
+    assertIdentity(`137 ${spelling} 246`);
+  }
+  assertProperty(
+    "every unambiguous reporter spelling scans to its parsed identity",
+    fc.property(
+      fc.constantFrom(...spellings),
+      fc.integer({ min: 1, max: 9999 }),
+      fc.integer({ min: 1, max: 99_999 }),
+      fc.constantFrom(" ", "   ", "\r\n  ", "\u00a0\u00a0\u00a0"),
+      (spelling, volume, page, gap) => {
+        assertIdentity(
+          `${String(volume)}${gap}${spelling}${gap}${String(page)}`,
+        );
+      },
+    ),
+  );
+});
 
 test(
   "reporter tokens retain their source spans under a prefix",

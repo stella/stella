@@ -9,6 +9,56 @@ const identityKey = ({ value }: { value: string }) => value;
 const scan = (text: string, budget: CitationWorkBudget) =>
   scanRun([{ type: "text", text }], { identityKey, budget });
 
+test("table-supported typography names the same reporter citation", () => {
+  const cases = [
+    ["137 F3d 246", "137 F.3d 246"],
+    ["137 F.Supp.3D 246", "137 F. Supp. 3d 246"],
+    ["137 NW2d 246", "137 N.W.2d 246"],
+    ["137 P.[2nd] 246", "137 P.2d 246"],
+    ["137 S.W.,SecondSeries, 246", "137 S.W.2d 246"],
+    ["137   U.\n  S.\t 246", "137 U.S. 246"],
+  ] as const;
+  for (const [text, canonical] of cases) {
+    const result = scan(text, { limit: 10_000, spent: 0 });
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(
+      result.value.events.flatMap((event) =>
+        event.kind === "token" && event.token.kind === "full"
+          ? [event.token.base?.identifier.value]
+          : [],
+      ),
+    ).toEqual([canonical]);
+  }
+});
+
+test("case-folded footnote pins retain their note kind", () => {
+  const result = scan("137 F3d 246, 247 N. 8", {
+    limit: 10_000,
+    spent: 0,
+  });
+  if (Result.isError(result)) {
+    throw result.error;
+  }
+  expect(
+    result.value.events.flatMap((event) =>
+      event.kind === "token" && event.token.kind === "full"
+        ? [event.token.pin]
+        : [],
+    ),
+  ).toEqual([
+    {
+      type: "pin",
+      raw: "247 N. 8",
+      parts: [
+        { kind: "page", start: "247" },
+        { kind: "footnote", start: "8" },
+      ],
+    },
+  ]);
+});
+
 describe("the scanning budget", () => {
   const cases = {
     "short forms": "Id. ".repeat(1000),

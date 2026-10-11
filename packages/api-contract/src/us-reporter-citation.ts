@@ -99,14 +99,17 @@ const flexibleSpellingSource = (spelling: string): string => {
       const next = characters[index + 1];
       const escaped = escapeRegExp(character);
       return next !== undefined && spaceMayFollow(character, next)
-        ? `${escaped}\\s*`
+        ? `${escaped}\\s{0,16}`
         : escaped;
     })
     .join("");
 };
 
-// Longest first, so an edition is never read as a shorter one it begins with.
-const REPORTER_SOURCE = Object.keys(US_REPORTER_SPELLINGS)
+/**
+ * Bounded spelling grammar shared by parsing and scanning. Longest first,
+ * so an edition is never read as a shorter one it begins with.
+ */
+export const US_REPORTER_SPELLING_SOURCE = Object.keys(US_REPORTER_SPELLINGS)
   .toSorted((left, right) => right.length - left.length)
   .map(flexibleSpellingSource)
   .join("|");
@@ -119,11 +122,11 @@ const PIN_SOURCE = String.raw`(?:${PAGE_RANGE_SOURCE}(?:\s*,?\s*(?:&\s*|and\s+)?
 const PIN_LIST_SOURCE = String.raw`${PIN_SOURCE}(?:\s*,\s*${PIN_SOURCE}){0,9}`;
 
 const VOLUME_SOURCE = String.raw`(?<volume>\d{1,4})`;
-const REPORTER_GROUP_SOURCE = `(?<reporter>${REPORTER_SOURCE})`;
+const REPORTER_GROUP_SOURCE = `(?<reporter>${US_REPORTER_SPELLING_SOURCE})`;
 
 const FULL_RE = new RegExp(
   String.raw`^${VOLUME_SOURCE}\s+${REPORTER_GROUP_SOURCE}` +
-    String.raw`(?:\s*\((?<nominative>\d{1,3}\s+(?:${REPORTER_SOURCE}))\))?` +
+    String.raw`(?:\s*\((?<nominative>\d{1,3}\s+(?:${US_REPORTER_SPELLING_SOURCE}))\))?` +
     String.raw`\s+(?<page>\d{1,5})` +
     String.raw`(?:(?:\s*,\s*(?:at\s+)?|\s+at\s+)(?<pins>${PIN_LIST_SOURCE}))?` +
     String.raw`(?:\s*\((?<parenthetical>[^()]{0,60}\d{4})\))?$`,
