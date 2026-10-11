@@ -5,8 +5,8 @@ import ts from "typescript";
 
 import {
   isCaseLawPublicReadModule,
-  moduleHasRuntimeSchemaRead,
-  moduleHasRuntimeSchemaReadFromSources,
+  moduleRestrictedSchemaReads,
+  moduleRestrictedSchemaReadsFromSources,
   UNREDACTED_VIEW_ALLOWED_MODULES,
 } from "../public-case-law-db-boundary.ts";
 import { PUBLIC_LAW_MIXED_MODULES } from "../public-law-decision-surface-modules.ts";
@@ -104,6 +104,18 @@ describe.serial("public-law relation scan", () => {
       ),
     ).toHaveLength(1);
 
+    const unredactedAlias = [
+      'import { unredactedCaseLawDecisions as rows } from "@/api/db/schema";',
+      "void rows;",
+    ].join("\n");
+    expect(
+      await lint(
+        unredactedAlias,
+        "apps/api/src/handlers/chat/chat-prompt.ts",
+        options,
+      ),
+    ).toHaveLength(1);
+
     const privateRelation = [
       'import { sql } from "drizzle-orm";',
       "export const query = sql`select id from users`;",
@@ -196,27 +208,59 @@ describe.serial("public-law relation scan", () => {
     expect(decisionSurfaceOption).toBe(true);
   });
 
-  test("helper classification follows runtime decision schema exports", () => {
+  test("helper classification identifies the restricted schema bindings", () => {
+    const baseDecision = new Set(["caseLawDecisions"]);
+    const unredactedDecision = new Set(["unredactedCaseLawDecisions"]);
     expect(
-      moduleHasRuntimeSchemaRead(
+      moduleRestrictedSchemaReads(
         ".oxlint-plugins/__fixtures__/case-law-base-helper.fixture",
       ),
-    ).toBe(true);
+    ).toEqual(baseDecision);
     expect(
-      moduleHasRuntimeSchemaRead(
+      moduleRestrictedSchemaReads(
         ".oxlint-plugins/__fixtures__/case-law-namespace-helper.fixture",
       ),
-    ).toBe(true);
+    ).toEqual(new Set(["caseLawDecisions", "unredactedCaseLawDecisions"]));
     expect(
-      moduleHasRuntimeSchemaRead(
+      moduleRestrictedSchemaReads(
         ".oxlint-plugins/__fixtures__/case-law-reexport-helper.fixture",
       ),
-    ).toBe(true);
+    ).toEqual(baseDecision);
     expect(
-      moduleHasRuntimeSchemaRead(
+      moduleRestrictedSchemaReads(
         ".oxlint-plugins/__fixtures__/case-law-type-helper.fixture",
       ),
-    ).toBe(false);
+    ).toEqual(new Set());
+    expect(
+      moduleRestrictedSchemaReads(
+        ".oxlint-plugins/__fixtures__/case-law-unredacted-helper.fixture",
+      ),
+    ).toEqual(unredactedDecision);
+    expect(
+      moduleRestrictedSchemaReads(
+        ".oxlint-plugins/__fixtures__/case-law-unredacted-helper.fixture",
+        { exportName: "helper" },
+      ),
+    ).toEqual(unredactedDecision);
+    expect(
+      moduleRestrictedSchemaReads(
+        ".oxlint-plugins/__fixtures__/case-law-unredacted-reexport.fixture",
+        { exportName: "decisionRows" },
+      ),
+    ).toEqual(unredactedDecision);
+
+    const mixedBarrel =
+      ".oxlint-plugins/__fixtures__/case-law-mixed-schema-barrel.fixture";
+    expect(
+      moduleRestrictedSchemaReads(mixedBarrel, {
+        exportName: "subjectDecisions",
+      }),
+    ).toEqual(unredactedDecision);
+    expect(
+      moduleRestrictedSchemaReads(mixedBarrel, {
+        exportName: "baseDecisions",
+      }),
+    ).toEqual(baseDecision);
   });
 
   test("cyclic helper exports retain the runtime schema classification", () => {
@@ -226,30 +270,45 @@ describe.serial("public-law relation scan", () => {
         [
           'export { cycleHelper } from "./cycle-b";',
           'import { caseLawDecisions as decisionTable } from "@/api/db/schema/case-law";',
+          "export const helper = decisionTable.id;",
         ].join("\n"),
       ],
       ["fixture/cycle-b", 'export { helper } from "./cycle-a";'],
     ]);
-    for (const expected of [true, false]) {
-      if (!expected) {
-        cycleModules.set(
-          "fixture/cycle-a",
-          'export { cycleHelper } from "./cycle-b";',
-        );
-      }
-      for (const moduleId of cycleModules.keys()) {
-        expect(
-          moduleHasRuntimeSchemaReadFromSources(moduleId, {
-            readSource: (dependencyId) => {
-              const source = cycleModules.get(dependencyId);
-              return source === undefined
-                ? null
-                : { filename: `${dependencyId}.ts`, source };
-            },
-            seen: new Set(),
-          }),
-        ).toBe(expected);
-      }
+    const readSource = (dependencyId: string) => {
+      const source = cycleModules.get(dependencyId);
+      return source === undefined
+        ? null
+        : { filename: `${dependencyId}.ts`, source };
+    };
+    for (const moduleId of cycleModules.keys()) {
+      expect(
+        moduleRestrictedSchemaReadsFromSources(moduleId, {
+          readSource,
+        }),
+      ).toEqual(new Set(["caseLawDecisions"]));
+    }
+    cycleModules.set(
+      "fixture/cycle-a",
+      [
+        'export { cycleHelper } from "./cycle-b";',
+        'import { unredactedCaseLawDecisions as decisionTable } from "@/api/db/schema/case-law";',
+        "export const helper = decisionTable.id;",
+      ].join("\n"),
+    );
+    for (const moduleId of cycleModules.keys()) {
+      expect(
+        moduleRestrictedSchemaReadsFromSources(moduleId, { readSource }),
+      ).toEqual(new Set(["unredactedCaseLawDecisions"]));
+    }
+    cycleModules.set(
+      "fixture/cycle-a",
+      'export { cycleHelper } from "./cycle-b";',
+    );
+    for (const moduleId of cycleModules.keys()) {
+      expect(
+        moduleRestrictedSchemaReadsFromSources(moduleId, { readSource }),
+      ).toEqual(new Set());
     }
   });
 
@@ -264,23 +323,35 @@ describe.serial("public-law relation scan", () => {
     ).toHaveLength(1);
   });
 
+  test("the subject lookup cannot import the base decision table", async () => {
+    const source = [
+      'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
+      'import { caseLawDecisions as rows } from "@/api/db/schema";',
+      "void rows;",
+      "void caseLawPublicReadDb;",
+    ].join("\n");
+    expect(
+      await lint(source, "apps/api/src/lib/case-law/public-subject.ts"),
+    ).toHaveLength(1);
+  });
+
   test("the unredacted decision view is reserved for subject lookup", async () => {
     const source = [
       'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
-      'import { unredactedCaseLawDecisions } from "@/api/db/schema";',
-      "void unredactedCaseLawDecisions;",
+      'import { unredactedCaseLawDecisions as subjectRows } from "@/api/db/schema";',
+      "void subjectRows;",
     ].join("\n");
     expect(
       await lint(source, "apps/api/src/handlers/case-law/read.ts"),
     ).toHaveLength(1);
   });
 
-  test("subject lookup may use the unredacted decision view", async () => {
+  test("subject lookup may import an unredacted binding from the schema barrel", async () => {
     const source = [
       'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
-      'import { unredactedCaseLawDecisions } from "@/api/db/schema";',
+      'import { unredactedCaseLawDecisions as subjectRows } from "@/api/db/schema";',
       "void caseLawPublicReadDb;",
-      "void unredactedCaseLawDecisions;",
+      "void subjectRows;",
     ].join("\n");
     expect(
       await lint(source, "apps/api/src/lib/case-law/public-subject.ts"),
@@ -291,6 +362,49 @@ describe.serial("public-law relation scan", () => {
     expect(UNREDACTED_VIEW_ALLOWED_MODULES).toEqual([
       "apps/api/src/lib/case-law/public-subject.ts",
     ]);
+  });
+
+  test("named schema re-exports and closed-over helpers retain their allowance", async () => {
+    for (const binding of [
+      {
+        fixture: "case-law-unredacted-reexport",
+        name: "decisionRows",
+        subjectAllowed: true,
+      },
+      {
+        fixture: "case-law-unredacted-helper",
+        name: "helper",
+        subjectAllowed: true,
+      },
+      {
+        fixture: "case-law-mixed-schema-barrel",
+        name: "subjectDecisions",
+        subjectAllowed: true,
+      },
+      {
+        fixture: "case-law-mixed-schema-barrel",
+        name: "baseDecisions",
+        subjectAllowed: false,
+      },
+    ]) {
+      const source = [
+        'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
+        `import { ${binding.name} as rows } from "../../../../../.oxlint-plugins/__fixtures__/${binding.fixture}.fixture.ts";`,
+        "void caseLawPublicReadDb;",
+        "void rows;",
+      ].join("\n");
+      expect(
+        await lint(source, "apps/api/src/handlers/case-law/read.ts"),
+      ).toEqual([2]);
+      expect(
+        await lint(source, "apps/api/src/handlers/chat/chat-prompt.ts", {
+          scope: "decision-surface",
+        }),
+      ).toEqual([2]);
+      expect(
+        await lint(source, "apps/api/src/lib/case-law/public-subject.ts"),
+      ).toEqual(binding.subjectAllowed ? [] : [2]);
+    }
   });
 
   test("every production public-read module is in the rule boundary", () => {

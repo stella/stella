@@ -105,7 +105,25 @@ const isSchemaModule = (moduleId: string | null): boolean =>
   (moduleId !== null && moduleId.startsWith(`${SCHEMA_MODULE}/`));
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("../", import.meta.url));
-const helperReadsBaseDecisionCache = new Map<string, boolean>();
+const RESTRICTED_SCHEMA_IMPORTS = {
+  caseLawDecisions: {
+    allowed: (_filename: string) => false,
+    messageId: "baseCaseLawRead",
+  },
+  unredactedCaseLawDecisions: {
+    allowed: canUseUnredactedView,
+    messageId: "unredactedView",
+  },
+} as const;
+type RestrictedSchemaImport = keyof typeof RESTRICTED_SCHEMA_IMPORTS;
+const isRestrictedSchemaImport = (
+  name: string,
+): name is RestrictedSchemaImport =>
+  Object.hasOwn(RESTRICTED_SCHEMA_IMPORTS, name);
+const restrictedSchemaCache = new Map<
+  string,
+  ReadonlySet<RestrictedSchemaImport>
+>();
 
 const moduleSourcePath = (moduleId: string): string | null => {
   for (const extension of [".ts", ".tsx"] as const) {
@@ -131,7 +149,13 @@ const schemaReexportCache = new Map<string, boolean>();
 
 const moduleReexportsSchema = (
   moduleId: string,
-  seen = new Set<string>(),
+  {
+    readSource = readLocalModuleSource,
+    seen = new Set<string>(),
+  }: {
+    readonly readSource?: LocalModuleSourceReader;
+    readonly seen?: Set<string>;
+  } = {},
 ): boolean => {
   if (isSchemaModule(moduleId)) {
     return true;
@@ -140,7 +164,7 @@ const moduleReexportsSchema = (
     return false;
   }
   seen.add(moduleId);
-  const source = readLocalModuleSource(moduleId);
+  const source = readSource(moduleId);
   if (source === null) {
     return false;
   }
@@ -164,7 +188,7 @@ const moduleReexportsSchema = (
     }
     return moduleReexportsSchema(
       canonicalModuleId(statement.moduleSpecifier.text, moduleId),
-      seen,
+      { readSource, seen },
     );
   });
 };
@@ -182,23 +206,39 @@ const isSchemaOrReexportModule = (moduleId: string | null): boolean => {
   return result;
 };
 
-export const moduleHasRuntimeSchemaReadFromSources = (
+export const moduleRestrictedSchemaReadsFromSources = (
   moduleId: string,
   {
     readSource,
     seen = new Set<string>(),
+    exportName,
   }: {
     readonly readSource: LocalModuleSourceReader;
     readonly seen?: Set<string>;
+    readonly exportName?: string;
   },
-): boolean => {
-  if (seen.has(moduleId)) {
-    return false;
+): ReadonlySet<RestrictedSchemaImport> => {
+  const identities = new Set<RestrictedSchemaImport>();
+  if (isSchemaModule(moduleId)) {
+    if (exportName === undefined) {
+      for (const name of Object.keys(RESTRICTED_SCHEMA_IMPORTS)) {
+        if (isRestrictedSchemaImport(name)) {
+          identities.add(name);
+        }
+      }
+    } else if (isRestrictedSchemaImport(exportName)) {
+      identities.add(exportName);
+    }
+    return identities;
   }
-  seen.add(moduleId);
+  const key = `${moduleId}:${exportName ?? "*"}`;
+  if (seen.has(key)) {
+    return identities;
+  }
+  seen.add(key);
   const sourceFile = readSource(moduleId);
   if (sourceFile === null) {
-    return false;
+    return identities;
   }
   const file = ts.createSourceFile(
     sourceFile.filename,
@@ -207,6 +247,15 @@ export const moduleHasRuntimeSchemaReadFromSources = (
     true,
     sourceFile.filename.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
+  const includeDependency = (dependency: string, name?: string) => {
+    for (const identity of moduleRestrictedSchemaReadsFromSources(dependency, {
+      readSource,
+      seen,
+      exportName: name,
+    })) {
+      identities.add(identity);
+    }
+  };
   for (const statement of file.statements) {
     if (ts.isImportDeclaration(statement)) {
       const clause = statement.importClause;
@@ -221,21 +270,26 @@ export const moduleHasRuntimeSchemaReadFromSources = (
         statement.moduleSpecifier.text,
         moduleId,
       );
-      if (isSchemaModule(dependency)) {
-        const bindings = clause.namedBindings;
-        if (
-          clause.name !== undefined ||
-          bindings === undefined ||
-          ts.isNamespaceImport(bindings) ||
-          (ts.isNamedImports(bindings) &&
-            bindings.elements.some(
-              (element) =>
-                !element.isTypeOnly &&
-                (element.propertyName?.text ?? element.name.text) ===
-                  "caseLawDecisions",
-            ))
-        ) {
-          return true;
+      if (!moduleReexportsSchema(dependency, { readSource })) {
+        continue;
+      }
+      const bindings = clause.namedBindings;
+      if (clause.name !== undefined) {
+        includeDependency(
+          dependency,
+          isSchemaModule(dependency) ? undefined : "default",
+        );
+      }
+      if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
+        includeDependency(dependency);
+      } else if (bindings !== undefined && ts.isNamedImports(bindings)) {
+        for (const element of bindings.elements) {
+          if (!element.isTypeOnly) {
+            includeDependency(
+              dependency,
+              element.propertyName?.text ?? element.name.text,
+            );
+          }
         }
       }
       continue;
@@ -252,42 +306,45 @@ export const moduleHasRuntimeSchemaReadFromSources = (
       statement.moduleSpecifier.text,
       moduleId,
     );
-    if (isSchemaModule(dependency)) {
-      const clause = statement.exportClause;
-      if (
-        clause === undefined ||
-        ts.isNamespaceExport(clause) ||
-        (ts.isNamedExports(clause) &&
-          clause.elements.some(
-            (element) =>
-              !element.isTypeOnly &&
-              (element.propertyName?.text ?? element.name.text) ===
-                "caseLawDecisions",
-          ))
-      ) {
-        return true;
+    const clause = statement.exportClause;
+    if (clause === undefined) {
+      includeDependency(dependency, exportName);
+    } else if (ts.isNamespaceExport(clause)) {
+      if (exportName === undefined || clause.name.text === exportName) {
+        includeDependency(dependency);
       }
-      continue;
-    }
-    if (
-      moduleHasRuntimeSchemaReadFromSources(dependency, { readSource, seen })
-    ) {
-      return true;
+    } else {
+      for (const element of clause.elements) {
+        if (
+          !element.isTypeOnly &&
+          (exportName === undefined || element.name.text === exportName)
+        ) {
+          includeDependency(
+            dependency,
+            element.propertyName?.text ?? element.name.text,
+          );
+        }
+      }
     }
   }
-  return false;
+  return identities;
 };
 
-export const moduleHasRuntimeSchemaRead = (moduleId: string): boolean => {
-  const cached = helperReadsBaseDecisionCache.get(moduleId);
+export const moduleRestrictedSchemaReads = (
+  moduleId: string,
+  { exportName }: { readonly exportName?: string } = {},
+): ReadonlySet<RestrictedSchemaImport> => {
+  const key = `${moduleId}:${exportName ?? "*"}`;
+  const cached = restrictedSchemaCache.get(key);
   if (cached !== undefined) {
     return cached;
   }
-  const readsBaseDecision = moduleHasRuntimeSchemaReadFromSources(moduleId, {
+  const identities = moduleRestrictedSchemaReadsFromSources(moduleId, {
     readSource: readLocalModuleSource,
+    exportName,
   });
-  helperReadsBaseDecisionCache.set(moduleId, readsBaseDecision);
-  return readsBaseDecision;
+  restrictedSchemaCache.set(key, identities);
+  return identities;
 };
 
 /**
@@ -1382,8 +1439,6 @@ export default eslintCompatPlugin({
             "Public case-law reads must use the published decisions view, not the base decision table.",
           unredactedView:
             "The unredacted decisions view is reserved for the public subject lookup.",
-          baseCaseLawHelper:
-            "Public case-law reads cannot import a runtime helper that reads the base decision schema.",
           namedSchemaImport: "Import schema tables by name.",
         },
       },
@@ -1531,59 +1586,41 @@ export default eslintCompatPlugin({
                 return;
               }
             }
-            if (node.importKind !== "type" && !isSchemaModule(importedModule)) {
-              const hasRuntimeBindings = node.specifiers.some(
-                (specifier) =>
-                  isAstNode(specifier) && specifier.importKind !== "type",
-              );
-              if (
-                !hasRuntimeBindings &&
-                node.specifiers.length === 0 &&
-                importedModule !== null &&
-                moduleHasRuntimeSchemaRead(importedModule)
-              ) {
-                context.report({
-                  node,
-                  messageId: "baseCaseLawHelper",
-                });
+            const reportRestrictedIdentities = (
+              binding: AstNode,
+              exportName?: string,
+            ) => {
+              if (importedModule === null) {
+                return;
               }
-              for (const specifier of node.specifiers) {
-                if (
-                  isAstNode(specifier) &&
-                  specifier.importKind !== "type" &&
-                  importedModule !== null &&
-                  moduleHasRuntimeSchemaRead(importedModule)
-                ) {
+              for (const identity of moduleRestrictedSchemaReads(
+                importedModule,
+                {
+                  exportName,
+                },
+              )) {
+                const policy = RESTRICTED_SCHEMA_IMPORTS[identity];
+                if (!policy.allowed(importerRepoPath)) {
                   context.report({
-                    node: specifier,
-                    messageId: "baseCaseLawHelper",
+                    node: binding,
+                    messageId: policy.messageId,
                   });
                 }
               }
-            }
-            if (!isSchemaModule(importedModule)) {
-              return;
+            };
+            if (node.specifiers.length === 0) {
+              reportRestrictedIdentities(node);
             }
             for (const specifier of node.specifiers) {
               if (isAstNode(specifier) && specifier.importKind === "type") {
                 continue;
               }
               const imported = getImportedName(specifier);
-              if (imported === "caseLawDecisions") {
-                context.report({
-                  node: specifier,
-                  messageId: "baseCaseLawRead",
-                });
-                continue;
-              }
+              reportRestrictedIdentities(specifier, imported ?? undefined);
               if (
-                imported === "unredactedCaseLawDecisions" &&
-                !canUseUnredactedView(importerRepoPath)
+                !isSchemaModule(importedModule) ||
+                (imported !== null && isRestrictedSchemaImport(imported))
               ) {
-                context.report({
-                  node: specifier,
-                  messageId: "unredactedView",
-                });
                 continue;
               }
               if (decisionSurfaceOnly) {
