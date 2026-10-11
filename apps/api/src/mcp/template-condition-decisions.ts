@@ -112,9 +112,7 @@ export const toUndecidedConditionOutput = (
   reason: DECISION_UNDECIDED_REASON_CODES[condition.reason],
 });
 
-/** A condition previewed without filling anything. The generative fallback
- *  never runs here; a decided answer comes from the supplied values or the
- *  decision model. */
+/** A condition previewed without filling anything. */
 export const toPreviewConditionDecision = ({
   path,
   label,
@@ -122,22 +120,29 @@ export const toPreviewConditionDecision = ({
 }: TemplateConditionAnswer): TemplateConditionDecisionOutput => {
   switch (decision.state) {
     case "decided":
-      return decision.decidedBy === "user"
-        ? {
+      switch (decision.decidedBy) {
+        case "user":
+        case "generative_model":
+          return {
             path,
             label,
             state: "decided",
             value: decision.value,
-            decided_by: "user",
-          }
-        : {
+            decided_by: decision.decidedBy,
+          };
+        case "decision_model":
+          return {
             path,
             label,
             state: "decided",
             value: decision.value,
-            decided_by: "decision_model",
+            decided_by: decision.decidedBy,
             probability: decision.probability,
           };
+        default:
+          decision satisfies never;
+          return panic("Unhandled preview decision source");
+      }
     case "undecided":
       return {
         path,

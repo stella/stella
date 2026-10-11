@@ -13,16 +13,7 @@ FROM "case_law_decisions"
 WHERE redacted_at IS NULL;--> statement-breakpoint
 
 REVOKE SELECT ON TABLE "case_law_decisions" FROM stella_public_law_reader;--> statement-breakpoint
-
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'stella_caselaw_reader'
-  ) THEN
-    EXECUTE 'REVOKE SELECT ON TABLE public.case_law_decisions FROM stella_caselaw_reader';
-  END IF;
-END
-$$;--> statement-breakpoint
+REVOKE SELECT ON TABLE "case_law_decisions" FROM stella_caselaw_reader;--> statement-breakpoint
 
 REVOKE SELECT (
   id,
@@ -97,6 +88,13 @@ GRANT SELECT (
   updated_at
 ) ON TABLE "case_law_published_decisions", "case_law_unredacted_decisions"
   TO stella_public_law_reader;--> statement-breakpoint
+
+GRANT SELECT ON TABLE "case_law_published_decisions", "case_law_unredacted_decisions"
+  TO stella_caselaw_reader;--> statement-breakpoint
+
+-- Request-scoped corpus reads run as `stella`; the view keeps the public
+-- publication boundary while avoiding direct table reads in those queries.
+GRANT SELECT ON TABLE "case_law_published_decisions" TO stella;--> statement-breakpoint
 
 GRANT SELECT ON TABLE "case_law_published_decisions", "case_law_unredacted_decisions"
   TO stella_ingestion;

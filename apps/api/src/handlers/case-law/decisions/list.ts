@@ -1,4 +1,4 @@
-import { and, desc, eq, notExists, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
@@ -197,6 +197,27 @@ export const listDecisionsPageQuery = ({
     conditions.push(decisionDateKeysetAfter(cursor));
   }
 
+  // Keep the representative lookup correlated and bounded: flattening it
+  // into an anti-join makes the browse walk sort the whole country's corpus.
+  const earlierSibling = tx
+    .select({ id: sibling.id })
+    .from(sibling)
+    .innerJoin(siblingSource, eq(siblingSource.id, sibling.sourceId))
+    .where(
+      and(
+        eq(
+          sibling.languageGroupKey,
+          publishedCaseLawDecisions.languageGroupKey,
+        ),
+        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column against column inside one statement, nothing round-trips through a JS Date
+        sql`(${sibling.createdAt}, ${sibling.id}) < (${publishedCaseLawDecisions.createdAt}, ${publishedCaseLawDecisions.id})`,
+        redistributableCaseLawSourceFor(siblingSource.descriptor),
+        ...decisionFilterConditions(query, sibling),
+      ),
+    )
+    .limit(1)
+    .as("earlier_sibling");
+
   return tx
     .select(publicDecisionRowColumns())
     .from(publishedCaseLawDecisions)
@@ -204,35 +225,13 @@ export const listDecisionsPageQuery = ({
       caseLawSources,
       eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
     )
+    .leftJoinLateral(earlierSibling, sql`true`)
     .where(
       and(
         ...conditions,
-        // A multilingual decision is listed once, by its oldest listable
-        // version. Rows only ever arrive with newer timestamps, so no later
-        // ingested translation can displace the representative between two
-        // pages of one walk, and the keyset cursor stays valid. Siblings are
-        // held to the same filters and the same redistribution gate as the
-        // row itself.
-        // Equality against a null group key matches no sibling, so the
-        // anti-join also keeps ungrouped decisions without a separate OR arm.
-        notExists(
-          tx
-            .select({ one: sql`1` })
-            .from(sibling)
-            .innerJoin(siblingSource, eq(siblingSource.id, sibling.sourceId))
-            .where(
-              and(
-                eq(
-                  sibling.languageGroupKey,
-                  publishedCaseLawDecisions.languageGroupKey,
-                ),
-                // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column against column inside one statement, nothing round-trips through a JS Date
-                sql`(${sibling.createdAt}, ${sibling.id}) < (${publishedCaseLawDecisions.createdAt}, ${publishedCaseLawDecisions.id})`,
-                redistributableCaseLawSourceFor(siblingSource.descriptor),
-                ...decisionFilterConditions(query, sibling),
-              ),
-            ),
-        ),
+        // Only an older version eligible for this request hides a row.
+        // A null group key matches no sibling, so ungrouped rows remain.
+        isNull(earlierSibling.id),
       ),
     )
     .orderBy(

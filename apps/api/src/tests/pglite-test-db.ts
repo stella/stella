@@ -654,6 +654,52 @@ const applyStellaTablePrivileges = async (client: PGlite): Promise<void> => {
   await client.exec(statements.join(";\n"));
 };
 
+const installTestSecurityBarrierViews = async (
+  db: AnyDrizzle,
+): Promise<void> => {
+  const dialect = new PgDialect();
+  for (const view of securityBarrierViews) {
+    const config = getViewConfig(view);
+    const query = config.query;
+    if (query === undefined) {
+      panic(`Security-barrier view ${config.name} has no query`);
+    }
+    const rendered = dialect.sqlToQuery(query);
+    if (rendered.params.length > 0) {
+      panic(`Security-barrier view ${config.name} query has bound parameters`);
+    }
+    await db.execute(sql`
+      CREATE VIEW ${sql.identifier(config.schema ?? "public")}.${sql.identifier(
+        config.name,
+      )}
+      WITH (security_barrier = true)
+      AS (${sql.raw(rendered.sql)})
+    `);
+  }
+};
+
+/** Rebuild schema-derived views and their grants after a fixture column change. */
+export const rebuildTestSecurityBarrierViews = async (
+  client: PGlite,
+  change: () => Promise<void>,
+): Promise<void> => {
+  const db = drizzle({ client });
+  for (const view of securityBarrierViews) {
+    const config = getViewConfig(view);
+    await db.execute(sql`
+      DROP VIEW ${sql.identifier(config.schema ?? "public")}.${sql.identifier(
+        config.name,
+      )}
+    `);
+  }
+  await change();
+  await installTestSecurityBarrierViews(db);
+  await applyStellaTablePrivileges(client);
+  for (const statement of ROLE_GRANT_STATEMENTS) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 /**
  * Build a fully provisioned test PGlite from scratch: RLS roles, schema
  * prerequisites, the drizzle schema push, workspace-access objects, and
@@ -697,25 +743,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   for (const statement of sqlStatements) {
     await db.execute(sql.raw(statement));
   }
-  const dialect = new PgDialect();
-  for (const view of securityBarrierViews) {
-    const config = getViewConfig(view);
-    const query = config.query;
-    if (query === undefined) {
-      panic(`Security-barrier view ${config.name} has no query`);
-    }
-    const rendered = dialect.sqlToQuery(query);
-    if (rendered.params.length > 0) {
-      panic(`Security-barrier view ${config.name} query has bound parameters`);
-    }
-    await db.execute(sql`
-      CREATE VIEW ${sql.identifier(config.schema ?? "public")}.${sql.identifier(
-        config.name,
-      )}
-      WITH (security_barrier = true)
-      AS (${sql.raw(rendered.sql)})
-    `);
-  }
+  await installTestSecurityBarrierViews(db);
   await installPgliteFlowTransitions(db);
   await installPgliteWorkspaceAccessObjects(db);
   await db.transaction(async (tx) => {

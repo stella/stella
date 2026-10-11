@@ -471,13 +471,11 @@ export const publicLawColumnPairs = (
     })),
   );
 
-/**
- * The v0.7.22 reader contract retained during the bounded rollout window.
- * Remove these constants with `stella_caselaw_reader` after that release can
- * be excluded from deployments and rollback.
- */
+/** The corpus relations retained for the legacy reader's bounded rollout. */
 export const ROLLOUT_CASE_LAW_WHOLE_RELATIONS = [
   "case_law_citations",
+  "case_law_published_decisions",
+  "case_law_unredacted_decisions",
   "case_law_provision_citations",
 ] as const;
 export const ROLLOUT_CASE_LAW_SOURCE_RELATION = "case_law_sources";

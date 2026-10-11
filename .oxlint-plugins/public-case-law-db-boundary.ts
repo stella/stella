@@ -1609,6 +1609,12 @@ export default eslintCompatPlugin({
                   ...(exportName === undefined ? {} : { exportName }),
                 },
               )) {
+                if (
+                  identity === "unredactedCaseLawDecisions" &&
+                  !isSchemaOrReexportModule(importedModule)
+                ) {
+                  continue;
+                }
                 const policy = RESTRICTED_SCHEMA_IMPORTS[identity];
                 if (!policy.allowed(importerRepoPath)) {
                   context.report({

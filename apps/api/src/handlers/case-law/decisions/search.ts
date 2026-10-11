@@ -202,7 +202,7 @@ import {
   corpusRankingCursorTarget,
 } from "@/api/lib/legal-search/corpus-ranking-policy";
 import {
-  partitionCorpusRehydration,
+  partitionReturnedCorpusRecords,
   recordCorpusRehydrationDispositions,
 } from "@/api/lib/legal-search/corpus-rehydration-disposition";
 import {
@@ -1406,10 +1406,9 @@ export const candidateDecisionRowsQuery = async (
   tx: CaseLawPublicReadTransaction,
   options: DecisionRowsQueryOptions,
 ) =>
-  partitionCorpusRehydration({
-    ids: options.ids,
-    records: await candidateDecisionRowsStatement(tx, options),
-  });
+  partitionReturnedCorpusRecords(
+    await candidateDecisionRowsStatement(tx, options),
+  );
 
 type CandidateDecisionRow = Awaited<
   ReturnType<typeof candidateDecisionRowsQuery>
@@ -1477,10 +1476,7 @@ export const pageDecisionRowsQuery = async (
   tx: CaseLawPublicReadTransaction,
   options: DecisionRowsQueryOptions,
 ) =>
-  partitionCorpusRehydration({
-    ids: options.ids,
-    records: await pageDecisionRowsStatement(tx, options),
-  });
+  partitionReturnedCorpusRecords(await pageDecisionRowsStatement(tx, options));
 
 type PageDecisionRow = Awaited<
   ReturnType<typeof pageDecisionRowsQuery>
@@ -1709,7 +1705,7 @@ export const rehydrateCaseLawCandidates = async ({
     courtTierById.set(id, decisionCourtWeight(courtWeights, row).tier);
   }
 
-  // Candidates missing from Postgres (index/DB drift) are dropped. Every
+  // Candidates absent from eligible published rows are dropped. Every
   // version is blended before the fold, so a version whose citation authority
   // lifts it past a lexically stronger sibling still stands for the judgment;
   // the versions of one decision then fold into their best-blended member. The

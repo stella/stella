@@ -740,6 +740,27 @@ test.each(["publishedCaseLawDecisions", "unredactedCaseLawDecisions"])(
   },
 );
 
+test("a projected corpus source id is not a fixed source in an aggregate join", () => {
+  const query = [
+    'import { eq, sql, alias } from "drizzle-orm";',
+    'const source = alias(caseLawSources, "related_source");',
+    'const candidate = db.select({ relatedId: caseLawCitations.citedDecisionId }).from(caseLawCitations).limit(25).as("candidate");',
+    'const relatedDecisionLookup = (tx, relatedId) => tx.select({ sourceId: publishedCaseLawDecisions.sourceId }).from(publishedCaseLawDecisions).where(eq(publishedCaseLawDecisions.id, relatedId)).limit(1).as("related");',
+    "const related = relatedDecisionLookup(db, candidate.relatedId);",
+    "db.select({ total: sql<number>`count(*) FILTER (WHERE true)` }).from(candidate).leftJoinLateral(related, sql`true`).leftJoin(source, eq(source.id, related.sourceId));",
+  ].join("\n");
+
+  expect(kinds(query)).not.toContain("per-source-full-count");
+  expect(
+    kinds(
+      query.replace(
+        "eq(source.id, related.sourceId)",
+        "eq(source.id, sourceId)",
+      ),
+    ),
+  ).toContain("per-source-full-count");
+});
+
 test.each([
   "sql`SELECT source_id, count(*) FROM legislation_documents WHERE country = ${country} GROUP BY source_id`",
   'import { count, eq } from "drizzle-orm"; db.select({ source: legislationDocuments.sourceId, count: count() }).from(legislationDocuments).where(eq(legislationDocuments.country, country)).groupBy(legislationDocuments.sourceId);',

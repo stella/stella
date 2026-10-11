@@ -255,7 +255,7 @@ if (!databaseUrl || !runPostgresTests) {
       const lowId = ids.at(0) ?? panic("Expected the first duplicate");
       const highId = ids.at(1) ?? panic("Expected the second duplicate");
       const englishId = await insertDecision("English document");
-      const withdrawnId = await insertDecision("Withdrawn document");
+      const withdrawnId = await insertDecision(null);
       const languageGroupKey = `detail-alternates-${suffix}`;
       await db
         .update(caseLawDecisions)

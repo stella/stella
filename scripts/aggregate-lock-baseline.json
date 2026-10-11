@@ -4518,12 +4518,6 @@
     "reason": "transaction-boundary in apps/api/src/scripts/normalize-review-passage-references.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },
   {
-    "file": "apps/api/src/scripts/polarity-system-one-compare.ts",
-    "fingerprint": "725302c2a3fb1edb66ad8c7a13ca1bc4cbf3dac50329ebac080b58e4c1729347",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/scripts/polarity-system-one-compare.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
     "file": "apps/api/src/scripts/readjudicate-ambiguous-citations.ts",
     "fingerprint": "84fd44b054900aeed3671e1b4bf5433e232fd43428d8b52c07e013c1c71577dd",
     "count": 1,

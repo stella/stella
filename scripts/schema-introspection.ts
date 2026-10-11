@@ -53,6 +53,65 @@ const memberName = (node: ts.Node): string | undefined => {
   return undefined;
 };
 
+const isDrizzleViewDefinitionSelect = (
+  node: ts.Node,
+  source: ts.SourceFile,
+): boolean => {
+  let callback: ts.Node | undefined;
+  for (
+    let current: ts.Node | undefined = node;
+    current;
+    current = current.parent
+  ) {
+    if (ts.isArrowFunction(current) || ts.isFunctionExpression(current)) {
+      callback = current;
+      break;
+    }
+  }
+  if (
+    callback === undefined ||
+    !ts.isArrowFunction(callback) ||
+    (!ts.isPropertyAccessExpression(node) &&
+      !ts.isElementAccessExpression(node)) ||
+    !ts.isCallExpression(callback.parent) ||
+    !ts.isPropertyAccessExpression(callback.parent.expression) ||
+    callback.parent.expression.name.text !== "as" ||
+    !callback.parent.arguments.includes(callback)
+  ) {
+    return false;
+  }
+  const builderParameter = callback.parameters.at(0)?.name;
+  if (
+    builderParameter === undefined ||
+    !ts.isIdentifier(builderParameter) ||
+    (!ts.isPropertyAccessExpression(node) &&
+      !ts.isElementAccessExpression(node)) ||
+    !ts.isIdentifier(node.expression)
+  ) {
+    return false;
+  }
+  const checker = sourceProgram(source).getTypeChecker();
+  if (
+    checker.getSymbolAtLocation(builderParameter) !==
+    checker.getSymbolAtLocation(node.expression)
+  ) {
+    return false;
+  }
+  let receiver: ts.Expression = callback.parent.expression.expression;
+  while (ts.isCallExpression(receiver)) {
+    if (
+      ts.isPropertyAccessExpression(receiver.expression) &&
+      receiver.expression.name.text === "pgView"
+    ) {
+      return true;
+    }
+    receiver = ts.isPropertyAccessExpression(receiver.expression)
+      ? receiver.expression.expression
+      : receiver.expression;
+  }
+  return false;
+};
+
 const transparentExpression = (node: ts.Expression): ts.Expression => {
   if (
     ts.isAsExpression(node) ||
@@ -541,6 +600,13 @@ export const validateSchemaIntrospection = ({
           return;
         }
         if (name === "query" && !isCalledAlias(source, node)) {
+          return;
+        }
+        if (
+          name === "select" &&
+          file.startsWith("apps/api/src/db/schema/") &&
+          isDrizzleViewDefinitionSelect(node, source)
+        ) {
           return;
         }
         knownNonDatabaseReceiver ??= nonDatabaseMethodReceiver(source);

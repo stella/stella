@@ -49,6 +49,16 @@ const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 const READER_ROLE = stellaPublicLawReader.name;
 
+const errorAndCauseMessages = (error: unknown): string => {
+  if (!(error instanceof Error)) {
+    return String(error);
+  }
+  const cause = error.cause;
+  return cause === undefined
+    ? error.message
+    : `${error.message} ${errorAndCauseMessages(cause)}`;
+};
+
 /** A one-connection client, closed once `fn` settles. */
 const withClient = async <T>(
   url: string,
@@ -200,7 +210,9 @@ if (!databaseUrl || !runPostgresTests) {
         }),
       );
       expect(baseRelationFailure).toBeInstanceOf(Error);
-      expect(String(baseRelationFailure)).toContain("permission denied");
+      expect(errorAndCauseMessages(baseRelationFailure)).toContain(
+        "permission denied",
+      );
     });
 
     test("the search and configuration reads return the seeded rows", async () => {

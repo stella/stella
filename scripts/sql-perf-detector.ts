@@ -527,19 +527,106 @@ const sqlTableName = (name: string): string =>
   schemaRelationNames.get(name) ??
   name.replaceAll(/([a-z\d])([A-Z])/gu, "$1_$2").toLowerCase();
 
-const isCorpusColumn = (column: string, bindings: ConstBindings): boolean => {
+const selectedColumnOf = (
+  expression: ts.Expression,
+  name: string,
+  bindings: ConstBindings,
+  seen = new Set<string>(),
+): ts.Expression | undefined => {
+  let current = expression;
+  if (
+    ts.isCallExpression(current) &&
+    ts.isIdentifier(current.expression) &&
+    !seen.has(current.expression.text)
+  ) {
+    seen.add(current.expression.text);
+    const producer = bindings.get(current.expression.text)?.at(0)?.initializer;
+    if (producer !== undefined && ts.isArrowFunction(producer)) {
+      if (!ts.isBlock(producer.body)) {
+        return selectedColumnOf(producer.body, name, bindings, seen);
+      }
+      const statement = producer.body.statements.at(0);
+      if (
+        producer.body.statements.length === 1 &&
+        statement !== undefined &&
+        ts.isReturnStatement(statement) &&
+        statement.expression !== undefined
+      ) {
+        return selectedColumnOf(statement.expression, name, bindings, seen);
+      }
+    }
+  }
+  while (
+    ts.isCallExpression(current) &&
+    ts.isPropertyAccessExpression(current.expression)
+  ) {
+    if (current.expression.name.text === "select") {
+      const projection = current.arguments.at(0);
+      if (
+        projection === undefined ||
+        !ts.isObjectLiteralExpression(projection)
+      ) {
+        return undefined;
+      }
+      const selected = projection.properties.find(
+        (property) =>
+          ts.isPropertyAssignment(property) &&
+          ((ts.isIdentifier(property.name) && property.name.text === name) ||
+            (ts.isStringLiteralLike(property.name) &&
+              property.name.text === name)),
+      );
+      return selected !== undefined && ts.isPropertyAssignment(selected)
+        ? selected.initializer
+        : undefined;
+    }
+    current = current.expression.expression;
+  }
+  return undefined;
+};
+
+const isCorpusColumn = (
+  column: string,
+  bindings: ConstBindings,
+  seen = new Set<string>(),
+): boolean => {
   const owner = column.slice(0, column.lastIndexOf("."));
+  if (owner.length === 0) {
+    return false;
+  }
   if (REPORT_CORPUS_TABLES.has(sqlTableName(owner))) {
     return true;
   }
+  if (seen.has(column)) {
+    return false;
+  }
+  seen.add(column);
   const alias = bindings.get(owner)?.at(0)?.initializer;
-  return (
+  if (
     alias !== undefined &&
     ts.isCallExpression(alias) &&
     ts.isIdentifier(alias.expression) &&
     alias.expression.text === "alias" &&
     alias.arguments[0] !== undefined &&
     REPORT_CORPUS_TABLES.has(sqlTableName(alias.arguments[0].getText()))
+  ) {
+    return true;
+  }
+  const declarations = bindings.get(owner);
+  return (
+    declarations !== undefined &&
+    declarations.length > 0 &&
+    declarations.every(({ initializer }) => {
+      const selected = selectedColumnOf(
+        initializer,
+        column.slice(column.lastIndexOf(".") + 1),
+        bindings,
+      );
+      return (
+        selected !== undefined &&
+        ts.isPropertyAccessExpression(selected) &&
+        isCorpusColumn(selected.getText(), bindings, new Set(seen))
+      );
+    })
   );
 };
 

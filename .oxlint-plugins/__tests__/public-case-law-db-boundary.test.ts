@@ -367,7 +367,19 @@ describe.serial("public-law relation scan", () => {
     ]);
   });
 
-  test("named schema re-exports and closed-over helpers retain their allowance", async () => {
+  test("public-subject helper consumers do not inherit its private view read", async () => {
+    const source = [
+      'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
+      'import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";',
+      "void caseLawPublicReadDb;",
+      "void withRedistributableSubject;",
+    ].join("\n");
+    expect(
+      await lint(source, "apps/api/src/handlers/case-law/decisions/read.ts"),
+    ).toEqual([]);
+  });
+
+  test("schema re-exports stay restricted while private helper reads stay owned", async () => {
     for (const binding of [
       {
         fixture: "case-law-unredacted-reexport",
@@ -396,14 +408,15 @@ describe.serial("public-law relation scan", () => {
         "void caseLawPublicReadDb;",
         "void rows;",
       ].join("\n");
+      const expectedOutsideOwner = binding.name === "helper" ? [] : [2];
       expect(
         await lint(source, "apps/api/src/handlers/case-law/read.ts"),
-      ).toEqual([2]);
+      ).toEqual(expectedOutsideOwner);
       expect(
         await lint(source, "apps/api/src/handlers/chat/chat-prompt.ts", {
           scope: "decision-surface",
         }),
-      ).toEqual([2]);
+      ).toEqual(expectedOutsideOwner);
       expect(
         await lint(source, "apps/api/src/lib/case-law/public-subject.ts"),
       ).toEqual(binding.subjectAllowed ? [] : [2]);

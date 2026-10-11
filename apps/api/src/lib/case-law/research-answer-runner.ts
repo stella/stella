@@ -89,6 +89,7 @@ import {
   planSystemOneAnswers,
 } from "@/api/lib/workflow/decisions/answer-questions";
 import { decideMany } from "@/api/lib/workflow/decisions/decide";
+import type { DecisionGenerationOptions } from "@/api/lib/workflow/decisions/decide";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 
 const ANSWER_TIMEOUT_MS = 120_000;
@@ -367,9 +368,56 @@ const answerDecision = async (
     return;
   }
 
-  // Always asked: without a decision model every question comes back
-  // undecided and every column falls through to the generative call.
+  const analyticsOptions = {
+    dataClass: "customer",
+    feature: "case-law.research-answers",
+    modelRole: "fast",
+    organizationId: input.organizationId,
+    orgAIConfig: input.orgAIConfig,
+    properties: {
+      decision_id: decisionId,
+      jurisdiction: decision.country,
+      organization_id: input.organizationId,
+      question_count: questions.length,
+    },
+    sessionId: decisionId,
+    traceId: Bun.randomUUIDv7(),
+    usageMetering: {
+      actionType: "case_law",
+      organizationId: input.organizationId,
+      safeDb,
+      serviceTier: "standard",
+      userId: input.userId,
+      workspaceId: null,
+    },
+  } as const satisfies Parameters<typeof createTanStackAIAnalyticsCallbacks>[0];
+
   const tier = await answerWithSystemOne({
+    generation: (prompt, questionCount) => ({
+      dataClass: "customer",
+      role: "fast",
+      serviceTier: "standard",
+      orgAIConfig: input.orgAIConfig,
+      managedAIResidency: input.managedAIResidency,
+      organizationId: input.organizationId,
+      admission: input.admission,
+      tenantWorkspaceIds: [],
+      analytics: createTanStackAIAnalyticsCallbacks({
+        ...analyticsOptions,
+        properties: {
+          ...analyticsOptions.properties,
+          question_count: questionCount,
+        },
+      }),
+      caching: resolveCaching({
+        promptCachingEnabled: input.promptCachingEnabled,
+        role: "fast",
+        scopeKey: decisionId,
+      }),
+      system: RESEARCH_SYSTEM_PROMPT,
+      prompt,
+      deadlineMs: ANSWER_TIMEOUT_MS,
+    }),
     caseLawDb,
     decisionModel,
     orgAIConfig: input.orgAIConfig,
@@ -393,26 +441,10 @@ const answerDecision = async (
   }
 
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
-    dataClass: "customer",
-    feature: "case-law.research-answers",
-    modelRole: "fast",
-    organizationId: input.organizationId,
-    orgAIConfig: input.orgAIConfig,
+    ...analyticsOptions,
     properties: {
-      decision_id: decisionId,
-      jurisdiction: decision.country,
-      organization_id: input.organizationId,
+      ...analyticsOptions.properties,
       question_count: generativeQuestions.length,
-    },
-    sessionId: decisionId,
-    traceId: Bun.randomUUIDv7(),
-    usageMetering: {
-      actionType: "case_law",
-      organizationId: input.organizationId,
-      safeDb,
-      serviceTier: "standard",
-      userId: input.userId,
-      workspaceId: null,
     },
   });
 
@@ -845,11 +877,18 @@ export const retrieveResearchPassages = async ({
 };
 
 type SystemOnePassOptions = {
+  generation: (
+    prompt: string,
+    questionCount: number,
+  ) => Extract<DecisionGenerationOptions, { dataClass: "customer" }>;
   caseLawDb: CaseLawPublicReadDb;
   decisionModel: DecisionModel | null | undefined;
   usageMetering: AIUsageMetering;
   orgAIConfig: OrgAIConfig | null;
-  decision: ResearchDecisionRow;
+  decision: Pick<
+    ResearchDecisionRow,
+    "id" | "caseNumber" | "court" | "country" | "language" | "decisionType"
+  >;
   questions: readonly ResearchRunColumn[];
   text: {
     passages: readonly ResearchPassage[];
@@ -867,11 +906,11 @@ type SystemOnePass = {
 
 /**
  * Ask one decision's closed-answer questions in a single request and keep what
- * came back settled. Nothing here fails a cell: a transport error, an
- * unplannable question or an undecided answer leaves the column to the
- * generative call, which is the behaviour of a deployment without the tier.
+ * came back settled. The decision runtime owns fallback; only unplanned
+ * questions continue to the runner's normal generation call.
  */
-const answerWithSystemOne = async ({
+export const answerWithSystemOne = async ({
+  generation,
   usageMetering,
   caseLawDb,
   decisionModel,
@@ -881,7 +920,7 @@ const answerWithSystemOne = async ({
   text,
 }: SystemOnePassOptions): Promise<SystemOnePass> => {
   const untouched: SystemOnePass = { outcomes: [], remaining: [...questions] };
-  const { asked } = splitSystemOneQuestions(questions);
+  const { asked, generative } = splitSystemOneQuestions(questions);
   if (asked.length === 0) {
     return untouched;
   }
@@ -921,7 +960,17 @@ const answerWithSystemOne = async ({
   if (plan.plans.size === 0) {
     return untouched;
   }
-  const { decisions, model } = await decideMany({
+  const plannedQuestions = questions.filter((question) =>
+    plan.plans.has(question.columnId),
+  );
+  const prompt = buildResearchUserMessage({
+    decision,
+    passages: text.passages,
+    questions: plannedQuestions,
+    retrieved: text.retrieved,
+  });
+  const { decisions } = await decideMany({
+    generation: generation(prompt, plannedQuestions.length),
     dataClass: "customer",
     id: "case-law.research-answers",
     orgAIConfig,
@@ -931,17 +980,11 @@ const answerWithSystemOne = async ({
     client: decisionModel,
     usageMetering: { ...usageMetering, callId: Bun.randomUUIDv7() },
   });
-  // No model answered, so nothing is settled and the run facts have no model
-  // to stamp: every column is the generative model's.
-  if (model === null) {
-    return untouched;
-  }
   const resolved = resolveSystemOneOutcomes({
     questions: asked,
     outcomes: decodeSystemOneAnswers({ plan, questions: asked, decisions }),
     excerptByAnchor: new Map(sources.map((source) => [source.id, source.text])),
     run: {
-      model,
       completedAt: Temporal.Now.instant().toString({
         fractionalSecondDigits: 3,
       }),
@@ -951,15 +994,22 @@ const answerWithSystemOne = async ({
   const byColumn = new Map(
     resolved.settled.map((entry) => [entry.columnId, entry.outcome]),
   );
+  const unplannedColumnIds = new Set([
+    ...generative.map((question) => question.columnId),
+    ...plan.unplanned,
+  ]);
   const outcomes: ColumnOutcome[] = [];
   const remaining: ResearchRunColumn[] = [];
   for (const question of questions) {
-    const outcome = byColumn.get(question.columnId);
-    if (outcome === undefined) {
+    if (unplannedColumnIds.has(question.columnId)) {
       remaining.push(question);
       continue;
     }
-    outcomes.push({ columnId: question.columnId, outcome });
+    const outcome = byColumn.get(question.columnId);
+    outcomes.push({
+      columnId: question.columnId,
+      outcome: outcome ?? { state: "failed", failureReason: "missing_answer" },
+    });
   }
   return { outcomes, remaining };
 };

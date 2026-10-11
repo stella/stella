@@ -51,7 +51,7 @@ import {
   corpusRankingCursorTarget,
 } from "@/api/lib/legal-search/corpus-ranking-policy";
 import {
-  partitionCorpusRehydration,
+  partitionReturnedCorpusRecords,
   recordCorpusRehydrationDispositions,
 } from "@/api/lib/legal-search/corpus-rehydration-disposition";
 import {
@@ -213,10 +213,9 @@ export const rehydrateCorpusIndexProviderCandidatesQuery = async (
   tx: CaseLawPublicReadTransaction,
   options: RehydrateCorpusIndexCandidatesOptions,
 ) =>
-  partitionCorpusRehydration({
-    ids: options.ids,
-    records: await rehydrateCorpusIndexProviderCandidatesStatement(tx, options),
-  });
+  partitionReturnedCorpusRecords(
+    await rehydrateCorpusIndexProviderCandidatesStatement(tx, options),
+  );
 
 export const rehydrateCorpusIndexProviderCandidates =
   definePublicLawSharedQuery(
