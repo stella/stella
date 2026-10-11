@@ -18,6 +18,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readReaderAnswerDecision } from "@/api/lib/case-law/reader-answer-corpus";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionScopedCount } from "@/api/lib/db/transitions";
@@ -262,6 +263,30 @@ const readReaderAnswerContext = async ({
     return Result.ok({ decision, anchor, answerId });
   });
 
+/** A thread past the message cap is refused rather than read truncated. */
+const readReaderAnswerThread = async (
+  tx: Transaction,
+  answerId: SafeId<"legalReaderAnswer">,
+) => {
+  const thread = await readBounded(
+    tx
+      .select()
+      .from(legalReaderAnswerMessages)
+      .where(eq(legalReaderAnswerMessages.answerId, answerId))
+      .orderBy(asc(legalReaderAnswerMessages.sequence)),
+    READER_ANSWER_MAX_MESSAGES,
+  );
+  if (thread.type === "overflow") {
+    return abortTransaction(
+      new HandlerError({
+        status: 409,
+        message: "Reader answer thread has reached its message limit",
+      }),
+    );
+  }
+  return thread.rows;
+};
+
 /** Validation and corpus I/O finish before the locked turn transaction. */
 export const prepareReaderAnswer = async (
   options: PrepareReaderAnswerOptions,
@@ -317,12 +342,7 @@ export const prepareReaderAnswer = async (
         }),
       );
     }
-    const messages = await tx
-      .select()
-      .from(legalReaderAnswerMessages)
-      .where(eq(legalReaderAnswerMessages.answerId, answerId))
-      .orderBy(asc(legalReaderAnswerMessages.sequence))
-      .limit(READER_ANSWER_MAX_MESSAGES);
+    const messages = await readReaderAnswerThread(tx, answerId);
     const streaming = messages.find(({ status }) => status === "streaming");
     const now = new Date();
     if (

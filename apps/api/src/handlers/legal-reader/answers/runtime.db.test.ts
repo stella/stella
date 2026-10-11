@@ -12,7 +12,10 @@ import { asc, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
-import { READER_ANSWER_ERROR_CODES } from "@stll/api-contract/reader-answers";
+import {
+  READER_ANSWER_ERROR_CODES,
+  READER_ANSWER_MAX_MESSAGES,
+} from "@stll/api-contract/reader-answers";
 import { sleep } from "@stll/concurrency/sleep";
 
 import { organization, user } from "@/api/db/auth-schema";
@@ -337,6 +340,59 @@ describe("reader answer turn lifecycle", () => {
       content: "",
     });
     await complete(prepared);
+  });
+
+  test("a thread holding more messages than the cap refuses regeneration instead of reading a truncated history", async () => {
+    const prepared = await create();
+    await complete(prepared);
+    const extra = Array.from(
+      { length: READER_ANSWER_MAX_MESSAGES - 1 },
+      (_, index) => ({
+        id: createSafeId<"legalReaderAnswerMessage">(),
+        answerId: prepared.answer.id,
+        sequence: index + 3,
+        role: index % 2 === 0 ? ("user" as const) : ("assistant" as const),
+        content: `Message ${index + 3}`,
+        status: "complete" as const,
+      }),
+    );
+    await database.insert(legalReaderAnswerMessages).values(extra);
+    const before = await database
+      .select()
+      .from(legalReaderAnswerMessages)
+      .where(eq(legalReaderAnswerMessages.answerId, prepared.answer.id))
+      .orderBy(asc(legalReaderAnswerMessages.sequence));
+    expect(before).toHaveLength(READER_ANSWER_MAX_MESSAGES + 1);
+
+    const result = await prepareReaderAnswer({
+      ...scope(),
+      command: {
+        type: "regenerate",
+        answerId: prepared.answer.id,
+        body: { locale: "cs-CZ" },
+      },
+      readDecision: async () =>
+        Result.ok({
+          decisionId,
+          court: "Test court",
+          decisionDate: "2026-01-01",
+          paragraphs: [{ paragraphId: "p-1", text: "The holding follows." }],
+        }),
+    });
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toMatchObject({
+        status: 409,
+        message: "Reader answer thread has reached its message limit",
+      });
+    }
+    expect(
+      await database
+        .select()
+        .from(legalReaderAnswerMessages)
+        .where(eq(legalReaderAnswerMessages.answerId, prepared.answer.id))
+        .orderBy(asc(legalReaderAnswerMessages.sequence)),
+    ).toEqual(before);
   });
 
   test("creating and regenerating an explanation write only reader thread storage", async () => {
