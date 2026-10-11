@@ -3,13 +3,9 @@ import { sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { envFeatureAccess } from "@/api/env-feature-access";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import { isFeatureDeployed } from "@/api/lib/feature-access/deployment";
-import { decideFeatureAccess } from "@/api/lib/feature-access/policy";
-import { featurePrerequisiteClosure } from "@/api/lib/feature-access/prerequisites";
-import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
-import { isRecord } from "@/api/lib/type-guards";
+import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
+import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 type ScopedFeatureAccessOptions = {
   tx: { execute: (query: SQLWrapper | string) => PromiseLike<unknown> };
@@ -25,24 +21,11 @@ export const resolveScopedFeatureIds = async ({
   if (userId === null) {
     return [];
   }
-  // The same deployment decision as the request snapshot: a feature whose
-  // routes the deployment hides admits nothing through row policies.
-  const candidates = Object.keys(FEATURE_REGISTRY).filter(
-    (id) =>
-      isFeatureDeployed(FEATURE_REGISTRY, id) &&
-      [...featurePrerequisiteClosure(FEATURE_REGISTRY, id)].every(
-        (required) =>
-          envFeatureAccess.API_FEATURE_ACCESS_GRANTS[required]?.some(
-            (grant) => grant.organizationId === organizationId,
-          ) === true,
-      ),
-  );
-  if (candidates.length === 0) {
-    return [];
-  }
   const identity = executedRows(
     await tx.execute(sql`
-    SELECT u.email, u.email_verified AS "emailVerified"
+    SELECT u.email, u.email_verified AS "emailVerified",
+      coalesce((SELECT array_agg(e.feature_id) FROM public.feature_enrolments e
+        WHERE e.organization_id = m.organization_id AND e.user_id = m.user_id), '{}') AS "enrolledFeatureIds"
     FROM public.member m INNER JOIN public."user" u ON u.id = m.user_id
     WHERE m.organization_id = ${organizationId} AND m.user_id = ${userId}
       AND u.deleted_at IS NULL
@@ -55,7 +38,9 @@ export const resolveScopedFeatureIds = async ({
   if (
     !isRecord(identity) ||
     typeof identity["email"] !== "string" ||
-    typeof identity["emailVerified"] !== "boolean"
+    typeof identity["emailVerified"] !== "boolean" ||
+    !isUnknownArray(identity["enrolledFeatureIds"]) ||
+    !identity["enrolledFeatureIds"].every((id) => typeof id === "string")
   ) {
     return panic("Feature access requires a verified identity row");
   }
@@ -63,19 +48,19 @@ export const resolveScopedFeatureIds = async ({
     email: identity["email"],
     emailVerified: identity["emailVerified"],
   };
-  return candidates.filter(
-    (featureId) =>
-      decideFeatureAccess({
-        registry: FEATURE_REGISTRY,
-        grants: envFeatureAccess.API_FEATURE_ACCESS_GRANTS,
-        featureId,
-        organizationId,
-        userId,
-        user,
-        membership: true,
-        deploymentEnabled: isFeatureDeployed(FEATURE_REGISTRY, featureId),
-      }).status === "enabled",
-  );
+  const snapshot = buildFeatureAccessSnapshot({
+    organizationId,
+    userId,
+    identity: user,
+    enrolments: identity["enrolledFeatureIds"].map((featureId) => ({
+      featureId,
+      organizationId,
+      userId,
+    })),
+  });
+  return [...snapshot.decisions]
+    .filter(([, decision]) => decision.status === "enabled")
+    .map(([featureId]) => featureId);
 };
 
 /** Admission reads the feature decision installed by the authenticated scope. */

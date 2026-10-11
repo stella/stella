@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { sql } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
@@ -23,7 +24,10 @@ import {
   NO_AUDIT,
   createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -38,8 +42,7 @@ describe.skipIf(!runPostgresTests)(
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { sql: client, db } = openClient();
         const scopedDatabase = markRlsDatabase(db);
-        const previousFlag = env.FEATURE_TIME_BILLING;
-        env.FEATURE_TIME_BILLING = true;
+        testState.setConfig("FEATURE_TIME_BILLING", true);
         const restoreRuntimeMode = setRuntimeModeForTesting({
           mode: RUNTIME_MODE.strict,
         });
@@ -87,26 +90,61 @@ describe.skipIf(!runPostgresTests)(
           expect(auditEvents.at(0)).toMatchObject({
             metadata: { featureId: "time-billing", enrolled: true },
           });
+          expect(
+            env.API_FEATURE_ACCESS_GRANTS["time-billing"]?.some(
+              (grant) => grant.organizationId === orgA,
+            ) ?? false,
+          ).toBe(false);
+          type AssertFeatureParityOptions = {
+            organizationId: typeof orgA;
+            userId: typeof userA;
+            expectedStatus: "enabled" | "hidden";
+          };
+          const assertFeatureParity = async ({
+            organizationId,
+            userId,
+            expectedStatus,
+          }: AssertFeatureParityOptions) => {
+            const callerDb = createScopedDb(
+              scopedDatabase,
+              [],
+              organizationId,
+              userId,
+            );
+            await callerDb(async (tx) => {
+              const snapshot = await resolveFeatureAccessSnapshot({
+                tx,
+                organizationId,
+                userId,
+              });
+              const scoped = (
+                await tx
+                  .select({
+                    featureIds: sql<
+                      string[]
+                    >`coalesce(nullif(current_setting('app.enabled_features', true), ''), '[]')::jsonb`,
+                  })
+                  .from(sql`(SELECT 1) AS feature_scope`)
+              ).at(0);
+              expect(scoped).toBeDefined();
+              expect(scoped?.featureIds).toEqual(
+                [...snapshot.decisions]
+                  .filter(([, decision]) => decision.status === "enabled")
+                  .map(([featureId]) => featureId),
+              );
+              expect(snapshot.decisions.get("time-billing")?.status).toBe(
+                expectedStatus,
+              );
+            });
+          };
           for (const userId of [userA, userB]) {
             for (const orgId of [orgA, orgB]) {
               const owns = userId === userA && orgId === orgA;
-              const callerDb = createScopedDb(
-                scopedDatabase,
-                [],
-                orgId,
+              await assertFeatureParity({
+                organizationId: orgId,
                 userId,
-              );
-              const snapshot = await callerDb(
-                async (tx) =>
-                  await resolveFeatureAccessSnapshot({
-                    tx,
-                    organizationId: orgId,
-                    userId,
-                  }),
-              );
-              expect(snapshot.decisions.get("time-billing")?.status).toBe(
-                owns ? "enabled" : "hidden",
-              );
+                expectedStatus: owns ? "enabled" : "hidden",
+              });
               expect(
                 await getFeatureEnrolments.handler(
                   createTestHandlerContext<
@@ -159,6 +197,38 @@ describe.skipIf(!runPostgresTests)(
               });
             }
           }
+          await client`UPDATE "user" SET email_verified = false WHERE id = ${userA}`;
+          await assertFeatureParity({
+            organizationId: orgA,
+            userId: userA,
+            expectedStatus: "hidden",
+          });
+          await client`UPDATE "user" SET email_verified = true, deleted_at = now() WHERE id = ${userA}`;
+          await assertFeatureParity({
+            organizationId: orgA,
+            userId: userA,
+            expectedStatus: "hidden",
+          });
+          await client`UPDATE "user" SET deleted_at = NULL WHERE id = ${userA}`;
+          await client`DELETE FROM member WHERE organization_id = ${orgA} AND user_id = ${userA}`;
+          await assertFeatureParity({
+            organizationId: orgA,
+            userId: userA,
+            expectedStatus: "hidden",
+          });
+          await client`INSERT INTO member (id, organization_id, user_id, role, created_at) VALUES (${Bun.randomUUIDv7()}, ${orgA}, ${userA}, 'member', now())`;
+          testState.setConfig("FEATURE_TIME_BILLING", false);
+          await assertFeatureParity({
+            organizationId: orgA,
+            userId: userA,
+            expectedStatus: "hidden",
+          });
+          testState.setConfig("FEATURE_TIME_BILLING", true);
+          await assertFeatureParity({
+            organizationId: orgA,
+            userId: userA,
+            expectedStatus: "enabled",
+          });
           for (const changed of ["user", "organization"] as const) {
             expect(
               await rejectionOf(
@@ -194,7 +264,7 @@ describe.skipIf(!runPostgresTests)(
           ).toEqual({
             features: [{ featureId: "time-billing", enrolled: false }],
           });
-          env.FEATURE_TIME_BILLING = false;
+          testState.setConfig("FEATURE_TIME_BILLING", false);
           expect(
             await getFeatureEnrolments.handler(
               createTestHandlerContext<
@@ -218,7 +288,6 @@ describe.skipIf(!runPostgresTests)(
           ).toMatchObject({ code: 404 });
           expect(auditEvents).toHaveLength(2);
         } finally {
-          env.FEATURE_TIME_BILLING = previousFlag;
           restoreRuntimeMode();
           for (const orgId of [orgA, orgB]) {
             await client`DELETE FROM organization WHERE id = ${orgId}`;

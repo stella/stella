@@ -2,21 +2,30 @@ import { expect, test } from "bun:test";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
+import {
+  createMembershipScopedDb,
+  createMembershipSafeDb,
+  markRlsDatabase,
+} from "@/api/db/scoped";
 import { resolveScopedFeatureIds } from "@/api/db/scoped-feature-access";
 import { env } from "@/api/env";
-import { buildFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   LEGAL_LISTS_FEATURE_ID,
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
+import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { createTestState } from "@/api/tests/helpers/test-state";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
 const grant = { type: "organization", organizationId: "fixture-org" } as const;
-const memberIdentity = { email: "member@example.test", emailVerified: true };
+const memberIdentity = {
+  email: "member@example.test",
+  emailVerified: true,
+  enrolledFeatureIds: [],
+};
 const GRANT_SETS: readonly (readonly string[])[] = [
   [],
   [LEGAL_LISTS_FEATURE_ID],
@@ -70,7 +79,13 @@ test("authenticated feature scope derives the complete prerequisite grant decisi
     const tx = {
       execute: async () => {
         queries += 1;
-        return [{ email: "member@example.test", emailVerified: true }];
+        return [
+          {
+            email: "member@example.test",
+            emailVerified: true,
+            enrolledFeatureIds: [],
+          },
+        ];
       },
     };
     const actual = await resolveScopedFeatureIds({
@@ -82,14 +97,20 @@ test("authenticated feature scope derives the complete prerequisite grant decisi
       ? featureIds
       : [];
     expect(actual).toEqual(expected);
-    expect(queries).toBe(expected.length === 0 ? 0 : 1);
+    expect(queries).toBe(1);
   }
   testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
     [LEGAL_LISTS_FEATURE_ID]: [grant],
   });
   for (const identity of [
     [],
-    [{ email: "member@example.test", emailVerified: false }],
+    [
+      {
+        email: "member@example.test",
+        emailVerified: false,
+        enrolledFeatureIds: [],
+      },
+    ],
   ]) {
     expect(
       await resolveScopedFeatureIds({
@@ -167,4 +188,92 @@ test("the database scope and the request snapshot make the same decision", async
       }
     }
   }
+});
+
+test("enrolled member decisions agree across request and database scope", async () => {
+  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
+  const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+  try {
+    for (const deployed of [false, true]) {
+      testState.setConfig("FEATURE_TIME_BILLING", deployed);
+      for (const identity of [
+        null,
+        { email: "member@example.test", emailVerified: false },
+        { email: "member@example.test", emailVerified: true },
+      ]) {
+        const enrolments = [
+          {
+            featureId: "time-billing",
+            organizationId: grant.organizationId,
+            userId: "fixture-user",
+          },
+        ];
+        const snapshot = buildFeatureAccessSnapshot({
+          organizationId: grant.organizationId,
+          userId: "fixture-user",
+          identity,
+          enrolments,
+        });
+        let queries = 0;
+        const scoped = await resolveScopedFeatureIds({
+          tx: {
+            execute: async () => {
+              queries += 1;
+              return identity === null
+                ? []
+                : [{ ...identity, enrolledFeatureIds: ["time-billing"] }];
+            },
+          },
+          organizationId: grant.organizationId,
+          userId: "fixture-user",
+        });
+        expect(scoped).toEqual(
+          [...snapshot.decisions]
+            .filter(([, decision]) => decision.status === "enabled")
+            .map(([id]) => id),
+        );
+        expect(scoped).toEqual(
+          deployed && identity?.emailVerified ? ["time-billing"] : [],
+        );
+        expect(queries).toBe(1);
+      }
+    }
+  } finally {
+    restoreMode();
+  }
+});
+
+test("request transactions reuse their authenticated feature snapshot", async () => {
+  const organizationId = toSafeId<"organization">(grant.organizationId);
+  const userId = toSafeId<"user">("fixture-user");
+  const featureAccessSnapshot = buildFeatureAccessSnapshot({
+    organizationId,
+    userId,
+    identity: memberIdentity,
+    enrolments: [],
+  });
+  let queries = 0;
+  const tx = {
+    execute: async () => {
+      queries += 1;
+      return [];
+    },
+  };
+  const database = markRlsDatabase({
+    transaction: async <T>(fn: (transaction: typeof tx) => Promise<T>) =>
+      await fn(tx),
+  });
+  const options = {
+    organizationId,
+    userId,
+    serverValidatedWorkspaceIds: [],
+    featureAccessSnapshot,
+  };
+  const scoped = createMembershipScopedDb(database, options);
+  const safe = createMembershipSafeDb(database, options);
+  await scoped(async () => undefined);
+  await scoped(async () => undefined);
+  const result = await safe(async () => undefined);
+  expect(result.isOk()).toBe(true);
+  expect(queries).toBe(3);
 });

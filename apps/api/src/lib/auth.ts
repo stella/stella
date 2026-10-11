@@ -103,7 +103,6 @@ import {
   EMAIL_OTP_ALLOWED_ATTEMPTS,
   requireEmailOtpResetConfirmation,
 } from "@/api/lib/auth/email-otp-reset-confirmation";
-import { buildFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import {
   createOAuthConsentInfoPlugin,
   getVerifiedOAuthOrigins,
@@ -182,6 +181,7 @@ import {
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
 import {
   AUTH_RATE_LIMITS,
   EMAIL_OTP_MIN_RESPONSE_DURATION_MS,
@@ -2915,6 +2915,7 @@ const resolveValidateAuth = async ({
     return true;
   };
   const databaseIdentity = {
+    featureAccessSnapshot,
     organizationId: activeOrganizationId,
     serverValidatedWorkspaceIds,
     userId,

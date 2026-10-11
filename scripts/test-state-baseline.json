@@ -9,11 +9,6 @@
     "owner": "security",
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },
-  "apps/api/src/db/feature-enrolments.postgres.test.ts": {
-    "count": 3,
-    "owner": "database",
-    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
-  },
   "apps/api/src/db/list-verification-rls.db.test.ts": {
     "count": 2,
     "owner": "database",
