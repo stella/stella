@@ -34,7 +34,7 @@ const buildWithCompiler = (metadata: string, overrideMetadata?: string) => {
       {
         env: {
           ...process.env,
-          PATH: `${directory}:${process.env["PATH"]}`,
+          PATH: `${directory}:${process.env["PATH"] ?? ""}`,
           CARGO_HOME: directory,
           RUSTC: overrideMetadata === undefined ? "" : overrideCompiler,
         },
