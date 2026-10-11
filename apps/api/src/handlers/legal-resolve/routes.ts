@@ -122,7 +122,6 @@ type LegalResolveRouteDependencies = {
   rateLimitContext?: RateLimitContext;
   publicLawEnabled?: () => boolean;
   resolveSessionContext?: LegalResolveAuthorizationDependencies["resolveSessionContext"];
-  mayReadPublicLaw?: LegalResolveAuthorizationDependencies["mayReadPublicLaw"];
   resolveDecision?: typeof resolveDecision;
   resolveLaw?: typeof resolveLawCitation;
 };
@@ -133,7 +132,6 @@ export const createLegalResolveRoute = ({
   decisionRateLimit,
   lawRateLimit,
   rateLimitContext,
-  mayReadPublicLaw,
   publicLawEnabled,
   resolveSessionContext,
   resolveDecision: resolveDecisionRequest = resolveDecision,
@@ -145,7 +143,6 @@ export const createLegalResolveRoute = ({
   const auditedRequests = new WeakSet<Request>();
   const usesDefaultAuthorization =
     authenticate === undefined &&
-    mayReadPublicLaw === undefined &&
     publicLawEnabled === undefined &&
     resolveSessionContext === undefined;
   const getAuthorization = usesDefaultAuthorization
@@ -155,7 +152,6 @@ export const createLegalResolveRoute = ({
           await authorizeLegalResolveRequest(request, {
             ...(authenticate === undefined ? {} : { authenticate }),
             publicLawEnabled: isPublicLawEnabled,
-            ...(mayReadPublicLaw === undefined ? {} : { mayReadPublicLaw }),
             ...(resolveSessionContext === undefined
               ? {}
               : { resolveSessionContext }),
