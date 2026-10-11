@@ -8,8 +8,8 @@ import type {
   ChatTurnFailureCode,
   ChatTurnInteractionType,
 } from "@/api/handlers/chat/chat-turn-state";
-import type { ChatTurnStatus } from "@/api/lib/chat-turn-status";
 import type { TanStackTextFinishReason } from "@/api/lib/chat/tanstack-chat-runtime";
+import type { ChatTurnStatus } from "@/api/lib/chat/turn-status";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { PLAIN_TOOL_NAME } from "@/api/tests/helpers/chat-approval-harness";
 import {

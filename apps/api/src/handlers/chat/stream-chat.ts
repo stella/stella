@@ -2761,13 +2761,13 @@ export const processServerChatStream = async function* ({
         flushProcessor: true,
         outcome: cutShortOutcome(),
       });
-    } else {
-      reportStreamFailure(error, kind);
-      await terminalize({
-        flushProcessor: true,
-        outcome: { type: "failed", error: kind },
-      });
+      return;
     }
+    reportStreamFailure(error, kind);
+    await terminalize({
+      flushProcessor: true,
+      outcome: { type: "failed", error: kind },
+    });
     yield* announceBeforeFailure();
     yield {
       type: EventType.RUN_ERROR,

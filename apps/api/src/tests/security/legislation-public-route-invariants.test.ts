@@ -40,6 +40,7 @@ const PUBLIC_SCHEMA_DOMAIN_IMPORTS = new Set([
   "@/api/handlers/chat/chat-turn-state",
   "@/api/lib/chat/ai-data-policy",
   "@/api/lib/chat/thread-name-kinds",
+  "@/api/lib/chat/turn-status",
 ]);
 
 const isForbiddenPublicRuntimeImport = (path: string): boolean => {

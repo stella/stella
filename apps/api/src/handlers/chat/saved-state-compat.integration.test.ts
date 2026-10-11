@@ -619,7 +619,7 @@ const writeFixture = ({
     release: null,
     sourceCommit: git("rev-parse", "HEAD"),
     newestMigration: migrations.toSorted().at(-1) ?? "",
-    shape: savedStateShape(rows).join("; "),
+    shape: "TODO: what this stored shape adds or drops",
     actors: { organizationId: ids.orgA, userId: ids.userA1 },
     threadId,
     pendingToolCallId,

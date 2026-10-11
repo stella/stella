@@ -4,7 +4,7 @@ import { panic } from "better-result";
 
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import type { ChatPart, ChatTurnOutcome } from "@/api/handlers/chat/types";
-import type { ChatTurnStatus } from "@/api/lib/chat-turn-status";
+import type { ChatTurnStatus } from "@/api/lib/chat/turn-status";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
 

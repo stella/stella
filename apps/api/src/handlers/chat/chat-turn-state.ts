@@ -3,7 +3,7 @@ import { panic } from "better-result";
 import type { PermissionInput } from "@stll/permissions";
 
 import type { SafeId } from "@/api/lib/branded-types";
-import type { ChatTurnStatus } from "@/api/lib/chat-turn-status";
+import type { ChatTurnStatus } from "@/api/lib/chat/turn-status";
 
 /** Whoever may start a turn in a thread may also stop it. */
 export const CHAT_TURN_PERMISSIONS = {
