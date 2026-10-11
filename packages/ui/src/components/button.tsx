@@ -28,8 +28,20 @@ import { renderTooltipTrigger } from "./tooltip-trigger-helper";
  */
 const buttonAccessibleDisabledClass = "cursor-not-allowed opacity-64";
 
+/**
+ * Press feedback: the button gives slightly under the pointer.
+ *
+ * Applied by `Button` only while it can act, so a disabled or loading button
+ * never appears to respond. `scale` is its own property in Tailwind v4, so it
+ * composes with a caller's `translate` (a vertically centred icon button) and
+ * the transition names only the transform family. Menu rows and link-styled
+ * buttons keep the treatment of their surface instead.
+ */
+const buttonPressClass =
+  "transition-transform duration-150 ease-out motion-safe:active:scale-[0.98]";
+
 const buttonVariants = cva(
-  "focus-visible:ring-ring focus-visible:ring-offset-background relative inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border text-base font-medium whitespace-nowrap outline-none before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] focus-visible:ring-2 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-64 sm:text-sm pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11 [&_svg]:pointer-events-none [&_svg]:-mx-0.5 [&_svg]:shrink-0 [&_svg:not([class*='opacity-'])]:opacity-80 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
+  "focus-visible:ring-ring focus-visible:ring-offset-background relative inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border text-base font-medium whitespace-nowrap outline-none select-none before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] focus-visible:ring-2 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-64 sm:text-sm pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11 [&_svg]:pointer-events-none [&_svg]:-mx-0.5 [&_svg]:shrink-0 [&_svg:not([class*='opacity-'])]:opacity-80 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
   {
     defaultVariants: {
       size: "default",
@@ -132,6 +144,10 @@ function Button({
       children
     ),
     className: cn(
+      disposition === BUTTON_DISPOSITION.enabled &&
+        size !== "row" &&
+        variant !== "link" &&
+        buttonPressClass,
       buttonVariants({ className, size, variant }),
       // While loading, the loader is the button's only icon: a caller's own
       // leading icon would otherwise sit beside it as a second spinner.
