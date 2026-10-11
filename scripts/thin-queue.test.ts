@@ -1264,6 +1264,9 @@ test("scoped queue eligibility is invariant under depth and the retired browser 
           if (scope) {
             planner.outputs[scope] = required;
           }
+          if (scope === "legal_atlas_image_required") {
+            planner.outputs["legal_atlas_image_inputs_required"] = required;
+          }
           if (job === "postgres-service-suites") {
             planner.outputs["postgres_suites_required"] = required;
           }

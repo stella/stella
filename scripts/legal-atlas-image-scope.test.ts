@@ -120,6 +120,9 @@ test("image selection includes every consumed source and workspace manifest and 
       /(?:^|\n)\s*legal_atlas_image_required=true\s*(?:\n|$)/u.test(body),
     );
   expect(caseBody).toBeDefined();
+  if (caseBody === undefined) {
+    panic("Missing legal-atlas image scope case");
+  }
   const coarse = Bun.spawnSync(
     [
       "bash",

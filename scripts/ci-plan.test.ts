@@ -2101,6 +2101,9 @@ test("thin merge groups require planned desktop Rust tests to succeed", () => {
           ...base.env,
           QUEUE_DEPTH: "thin",
           THIN_JOBS: JSON.stringify(thinJobs({ jobs: ciJobs })),
+          QUEUE_REQUIRED_JOBS: JSON.stringify(
+            queueAdmittedJobs({ jobs: ciJobs }),
+          ),
         },
       };
     },
@@ -5269,6 +5272,7 @@ test("path-scoped coverage rejects event and queue-depth exclusions", () => {
     scopedCoverageViolations([
       {
         ...check,
+        requiredOnThin: false,
         condition: `github.event_name != 'pull_request' && (${scoped})`,
       },
     ]),
