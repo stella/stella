@@ -65,10 +65,12 @@ test("the real outbound census and SDK manifests have total offline coverage", (
 });
 
 test("SDK discovery uses the transport definition and catches SDK-shaped additions", () => {
+  expect(readExternalSdks(ROOT)).toContain("posthog-js");
   for (const sdk of [
     "@aws-sdk/client-new",
     "@tanstack/ai-openai",
     "better-auth",
+    "posthog-js",
     "@better-auth/core",
     "@example/sdk",
   ]) {
