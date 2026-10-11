@@ -636,6 +636,54 @@ test("each API test owner invalidates cached checking and rejects a newly introd
     check(0);
     write(`apps/api/${coupled}`, valid);
     check(0);
+    for (const { project, file, include } of [
+      { project: "src", file: coupled, include: "src/new-source/**/*.ts" },
+      { project: "tests", file: safe, include: "src/new-tests/**/*.test.ts" },
+    ]) {
+      write(
+        `apps/api/tsconfig.${project}.json`,
+        JSON.stringify({
+          compilerOptions: { strict: true, noEmit: true, types: [] },
+          files: [file],
+          include: [include],
+        }),
+      );
+    }
+    regenerateInputs();
+    check(0);
+    const beforeNewRoots = executions();
+    check(0);
+    expect(executions()).toEqual(beforeNewRoots);
+    for (const { file, owner } of [
+      { file: "src/new-source/standalone.ts", owner: "source" },
+      { file: "src/new-tests/standalone.test.ts", owner: "tests" },
+    ]) {
+      const beforeNewRoot = executions().length;
+      write(`apps/api/${file}`, invalid);
+      check(1);
+      expect(executions().slice(beforeNewRoot)).toEqual([owner]);
+      rmSync(path.join(directory, "apps/api", file));
+      check(0);
+    }
+    const withDiscovery = fixtureTasks["@stll/api#typecheck:src"].inputs;
+    fixtureTasks["@stll/api#typecheck:src"].inputs = withDiscovery.filter(
+      (input) => input !== "src/new-source/**/*.ts",
+    );
+    writeTasks();
+    check(0);
+    const withoutDiscovery = executions();
+    write("apps/api/src/new-source/standalone.ts", invalid);
+    check(0);
+    expect(executions()).toEqual(withoutDiscovery);
+    const uncached = Bun.spawnSync(
+      [process.execPath, "check", "--all", "--project=tsconfig.src.json"],
+      { cwd: path.join(directory, "apps/api"), stdout: "pipe", stderr: "pipe" },
+    );
+    expect(uncached.exitCode).toBe(1);
+    rmSync(path.join(directory, "apps/api/src/new-source/standalone.ts"));
+    fixtureTasks["@stll/api#typecheck:src"].inputs = withDiscovery;
+    writeTasks();
+    check(0);
     // The previous blanket exclusion hides a real coupled-test type error.
     fixtureTasks["@stll/api#typecheck:src"].inputs = [
       ...sourceTask["inputs"].filter(

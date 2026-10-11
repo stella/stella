@@ -303,6 +303,7 @@ const checkResolvedApiTestPartition = (root: string) => {
   const programFiles = (task: string) =>
     new Set(
       (programs.get(task) ?? [])
+        .filter((file) => !/[!*?{]/u.test(file))
         .filter((file) => /\.[cm]?tsx?$/u.test(file))
         .map((file) =>
           path.resolve(
