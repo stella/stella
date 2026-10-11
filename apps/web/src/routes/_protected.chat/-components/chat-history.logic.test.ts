@@ -10,7 +10,9 @@ import {
   chatHistorySearchSchema,
   groupChatHistoryByPeriod,
   hasChatHistoryFilter,
+  initialSearchFieldState,
   isMatterUnavailable,
+  syncSearchField,
 } from "./chat-history.logic";
 
 const instant = (iso: string) => Temporal.Instant.from(iso);
@@ -169,6 +171,63 @@ describe("an unavailable matter filter", () => {
         matter: "matter-a",
       }),
     ).toBe(false);
+  });
+});
+
+describe("keeping the search field in step with the URL", () => {
+  test("an unchanged URL leaves the field, and its state object, alone", () => {
+    const state = { ...initialSearchFieldState("lease"), value: "lease ren" };
+    expect(syncSearchField({ state, urlQuery: "lease" })).toBe(state);
+  });
+
+  test("a query from elsewhere replaces what the field shows", () => {
+    const state = { ...initialSearchFieldState("lease"), value: "lease" };
+    expect(syncSearchField({ state, urlQuery: "arbitration" })).toEqual({
+      lastUrlQuery: "arbitration",
+      pending: { status: "idle" },
+      value: "arbitration",
+    });
+    // Back to a page with no query empties the field.
+    expect(syncSearchField({ state, urlQuery: undefined }).value).toBe("");
+  });
+
+  test("the field's own write landing keeps what the reader typed since", () => {
+    const state = {
+      lastUrlQuery: undefined,
+      pending: { status: "sent" as const, query: "lea" },
+      value: "lease ren",
+    };
+    expect(syncSearchField({ state, urlQuery: "lea" })).toEqual({
+      lastUrlQuery: "lea",
+      pending: { status: "idle" },
+      value: "lease ren",
+    });
+  });
+
+  test("an own write that cleared the query is told apart from no write", () => {
+    const cleared = {
+      lastUrlQuery: "lease",
+      pending: { status: "sent" as const, query: undefined },
+      value: "le",
+    };
+    expect(syncSearchField({ state: cleared, urlQuery: undefined }).value).toBe(
+      "le",
+    );
+    const idle = { ...cleared, pending: { status: "idle" as const } };
+    expect(syncSearchField({ state: idle, urlQuery: undefined }).value).toBe(
+      "",
+    );
+  });
+
+  test("a different query from elsewhere wins over a pending own write", () => {
+    const state = {
+      lastUrlQuery: "lease",
+      pending: { status: "sent" as const, query: "leas" },
+      value: "leas",
+    };
+    expect(syncSearchField({ state, urlQuery: "arbitration" }).value).toBe(
+      "arbitration",
+    );
   });
 });
 

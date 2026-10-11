@@ -112,6 +112,52 @@ export const groupChatHistoryByPeriod = <
   });
 };
 
+/** The query the field last sent to the URL, until the URL shows it. */
+export type PendingSearchQuery =
+  | { status: "idle" }
+  | { status: "sent"; query: string | undefined };
+
+/** The search field's own state: what it shows and what it knows of the URL. */
+export type SearchFieldState = {
+  lastUrlQuery: string | undefined;
+  pending: PendingSearchQuery;
+  value: string;
+};
+
+export const initialSearchFieldState = (
+  urlQuery: string | undefined,
+): SearchFieldState => ({
+  lastUrlQuery: urlQuery,
+  pending: { status: "idle" },
+  value: urlQuery ?? "",
+});
+
+/**
+ * Keeps the field in step with the URL. A query that arrives from elsewhere
+ * (Back, Forward, a link) replaces what the field shows. The field's own
+ * debounced write is recognised when it lands and leaves the field alone,
+ * since the reader may have typed on since it was sent. Returns the same
+ * state object when nothing changed.
+ */
+export const syncSearchField = ({
+  state,
+  urlQuery,
+}: {
+  state: SearchFieldState;
+  urlQuery: string | undefined;
+}): SearchFieldState => {
+  if (urlQuery === state.lastUrlQuery) {
+    return state;
+  }
+  const ownWrite =
+    state.pending.status === "sent" && state.pending.query === urlQuery;
+  return {
+    lastUrlQuery: urlQuery,
+    pending: { status: "idle" },
+    value: ownWrite ? state.value : (urlQuery ?? ""),
+  };
+};
+
 const MATTER_UNAVAILABLE_STATUS = 404;
 
 /**

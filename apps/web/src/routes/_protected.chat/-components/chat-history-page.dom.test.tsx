@@ -15,7 +15,7 @@ const previousFetch = globalThis.fetch;
 const testing = await import("@testing-library/react");
 const query = await import("@tanstack/react-query");
 const router = await import("@tanstack/react-router");
-const { useState } = await import("react");
+const { useSyncExternalStore } = await import("react");
 const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
@@ -259,8 +259,22 @@ const createClient = () => {
 /** The page as its route mounts it, with the URL's search held in state. */
 const openHistory = async (initial: ChatHistorySearch = {}) => {
   const searchChanges: ChatHistorySearch[] = [];
+  // The URL's search, held outside the page so a test can also change it the
+  // way Back, Forward or a link would.
+  let current = initial;
+  const listeners = new Set<() => void>();
+  const setSearch = (next: ChatHistorySearch) => {
+    current = next;
+    for (const listener of listeners) {
+      listener();
+    }
+  };
+  const subscribe = (listener: () => void) => {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  };
   const Host = () => {
-    const [search, setSearch] = useState(initial);
+    const search = useSyncExternalStore(subscribe, () => current);
     return (
       <ChatHistoryPage
         onSearchChange={(next) => {
@@ -326,7 +340,12 @@ const openHistory = async (initial: ChatHistorySearch = {}) => {
       </RenderLoopGuard>
     </AnalyticsContext>,
   );
-  return { appRouter, searchChanges, ui };
+  const navigateTo = async (next: ChatHistorySearch) => {
+    await testing.act(async () => {
+      setSearch(next);
+    });
+  };
+  return { appRouter, navigateTo, searchChanges, ui };
 };
 
 /** Clicks inside `act`, so dialog open/close transitions settle in order. */
@@ -480,6 +499,23 @@ describe("chat history page", () => {
       ui.getByRole("button", { name: messages.common.retry }),
     ).toBeDefined();
     expect(ui.queryByText(messages.chat.history.matterUnavailable)).toBeNull();
+  });
+
+  test("a query arriving from elsewhere replaces the search field's text", async () => {
+    serve(fullServer());
+    const { navigateTo, ui } = await openHistory({ q: "lease" });
+    const field = ui.getByRole("searchbox", { name: messages.common.search });
+    expect(field).toHaveProperty("value", "lease");
+
+    await navigateTo({ q: "claim" });
+
+    expect(field).toHaveProperty("value", "claim");
+    await testing.waitFor(() =>
+      expect(threadLink(ui, THIS_WEEK_IN_A.title)).toBeDefined(),
+    );
+
+    await navigateTo({});
+    expect(field).toHaveProperty("value", "");
   });
 
   test("clearing the filters brings every chat back", async () => {

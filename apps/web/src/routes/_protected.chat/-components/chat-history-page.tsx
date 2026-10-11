@@ -79,7 +79,9 @@ import {
   CHAT_HISTORY_PERIOD,
   groupChatHistoryByPeriod,
   hasChatHistoryFilter,
+  initialSearchFieldState,
   isMatterUnavailable,
+  syncSearchField,
 } from "./chat-history.logic";
 import type {
   ChatHistoryPeriod,
@@ -125,9 +127,26 @@ export const ChatHistoryPage = ({
   const userId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.id,
   });
-  const [query, setQuery] = useState(search.q ?? "");
+  const [searchField, setSearchField] = useState(() =>
+    initialSearchFieldState(search.q),
+  );
+  // A query that reaches the URL from elsewhere (Back, Forward, a link)
+  // replaces the field's text, adjusted during render rather than in an
+  // effect; the field's own debounced write is recognised and left alone.
+  const syncedSearchField = syncSearchField({
+    state: searchField,
+    urlQuery: search.q,
+  });
+  if (syncedSearchField !== searchField) {
+    setSearchField(syncedSearchField);
+  }
   const commitQuery = useDebouncedCallback((q: string) => {
-    onSearchChange({ ...search, q: q.trim().length > 0 ? q : undefined });
+    const nextQuery = q.trim().length > 0 ? q : undefined;
+    setSearchField((field) => ({
+      ...field,
+      pending: { status: "sent", query: nextQuery },
+    }));
+    onSearchChange({ ...search, q: nextQuery });
   }, SEARCH_DEBOUNCE_MS);
   const [deleteDialog, setDeleteDialog] = useState<DeleteDialog>({
     type: "closed",
@@ -168,7 +187,11 @@ export const ChatHistoryPage = ({
 
   const clearFilters = () => {
     commitQuery.cancel();
-    setQuery("");
+    setSearchField((field) => ({
+      ...field,
+      pending: { status: "sent", query: undefined },
+      value: "",
+    }));
     onSearchChange({});
   };
 
@@ -184,11 +207,11 @@ export const ChatHistoryPage = ({
             clearLabel={t("common.clearSearch")}
             groupClassName="sm:flex-1"
             onValueChange={(value) => {
-              setQuery(value);
+              setSearchField((field) => ({ ...field, value }));
               commitQuery(value);
             }}
             placeholder={t("common.search")}
-            value={query}
+            value={syncedSearchField.value}
           />
           <div className="flex min-w-0 flex-col gap-1 sm:w-64">
             <label className="sr-only" htmlFor={matterFieldId}>
