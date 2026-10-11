@@ -6,7 +6,10 @@ import { isNonNullObject } from "@stll/template-conditions/path";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
-import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
+import {
+  publicCaseLawDecisionJoin,
+  publicCaseLawDecisionWhere,
+} from "@/api/lib/case-law/search-sql";
 import { LIMITS } from "@/api/lib/limits";
 import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
@@ -445,7 +448,8 @@ export const buildSearchPreviewQuery = ({
           parentFilter: sql`passage.decision_id = clsd.decision_id`,
           table: "case-law",
         })}
-        WHERE clsd.decision_id = ${resultId}
+        WHERE ${publicCaseLawDecisionWhere}
+          AND clsd.decision_id = ${resultId}
           ${previewTextFilter(sql`clsd.tsv`, tsQuery)}
         LIMIT 1
       `;

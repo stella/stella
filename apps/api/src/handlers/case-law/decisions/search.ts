@@ -145,6 +145,7 @@ import {
 import {
   bodyPreviewJoin,
   publicCaseLawDecisionJoin,
+  publicCaseLawDecisionWhere,
 } from "@/api/lib/case-law/search-sql";
 import { errorTag } from "@/api/lib/errors/utils";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
@@ -558,7 +559,8 @@ export const caseLawSearchPlan = ({
         ON d.id = sd.decision_id
       ${publicCaseLawDecisionJoin}
       LEFT JOIN ${citationAuthorityLateral} ON true
-      WHERE ${ftsSearch.predicate}
+      WHERE ${publicCaseLawDecisionWhere}
+        AND ${ftsSearch.predicate}
         ${allFilters}
     )
   `;
@@ -656,12 +658,13 @@ export const caseLawSearchPlan = ({
     JOIN case_law_decisions d
       ON d.id = sd.decision_id
     ${publicCaseLawDecisionJoin}
+    WHERE ${publicCaseLawDecisionWhere}
   `;
 
   const courtFacetQuery = sql`
     SELECT d.court AS value, ${judgmentCountSql} AS count
     ${facetFrom}
-    WHERE ${ftsSearch.predicate}
+    AND ${ftsSearch.predicate}
       ${datedFilter}
       ${countryFilter}
       ${dateFromFilter}
@@ -680,7 +683,7 @@ export const caseLawSearchPlan = ({
     SELECT extract(year FROM d.decision_date)::int AS value,
            ${judgmentCountSql} AS count
     ${facetFrom}
-    WHERE ${ftsSearch.predicate}
+    AND ${ftsSearch.predicate}
       ${courtFilter}
       ${courtListFilter}
       ${countryFilter}
@@ -701,7 +704,7 @@ export const caseLawSearchPlan = ({
     SELECT ${decisionTypeKindSql(sql`d.decision_type`)} AS value,
            ${judgmentCountSql} AS count
     ${facetFrom}
-    WHERE ${ftsSearch.predicate}
+    AND ${ftsSearch.predicate}
       ${datedFilter}
       ${courtFilter}
       ${courtListFilter}
@@ -720,7 +723,7 @@ export const caseLawSearchPlan = ({
     WITH source_matches AS NOT MATERIALIZED (
       SELECT d.id, d.source_id, d.language_group_key
       ${facetFrom}
-      WHERE ${ftsSearch.predicate}
+      AND ${ftsSearch.predicate}
         ${datedFilter}
         ${courtFilter}
         ${courtListFilter}
@@ -759,7 +762,7 @@ export const caseLawSearchPlan = ({
   const languageFacetQuery = sql`
     SELECT d.language AS value, count(distinct sd.decision_id)::int AS count
     ${facetFrom}
-    WHERE ${ftsSearch.predicate}
+    AND ${ftsSearch.predicate}
       ${datedFilter}
       ${courtFilter}
       ${courtListFilter}

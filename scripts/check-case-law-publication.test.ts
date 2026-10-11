@@ -64,14 +64,14 @@ test("publication fragments resolve through their loaded source module", () => {
       file: "apps/api/src/lib/case-law/search-sql.ts",
       source: `import { sql } from "drizzle-orm";
         import { publishedCaseLawDecisionSqlFor as eligibleSql } from "@/api/lib/case-law/published-decisions";
-        export const publicCaseLawDecisionJoin = sql\`JOIN case_law_sources ON \${sql.raw(eligibleSql("d"))}\`;`,
+        export const publicCaseLawDecisionWhere = sql\`\${sql.raw(eligibleSql("d"))}\`;`,
     },
     {
       file: "apps/api/src/lib/legal-search/provider.ts",
       source: `import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-        import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
+        import { publicCaseLawDecisionWhere } from "@/api/lib/case-law/search-sql";
         declare const db: CaseLawPublicReadDb;
-        const query = sql\`SELECT d.id FROM case_law_decisions d \${publicCaseLawDecisionJoin}\`;`,
+        const query = sql\`SELECT d.id FROM case_law_decisions d WHERE \${publicCaseLawDecisionWhere}\`;`,
     },
   ]);
   expect(report.errors).toEqual([]);
@@ -232,4 +232,28 @@ test("the publication predicate is checked as a top-level condition", () => {
   ]);
   expect(report.reads).toHaveLength(2);
   expect(report.errors).toHaveLength(1);
+});
+
+test("a joined source condition does not certify the base decision", () => {
+  const inspect = (where: boolean) =>
+    inspectCaseLawPublication([
+      {
+        file: "apps/api/src/lib/legal-search/join-conditions.ts",
+        source: `${publicationImports}
+      import { sql, eq } from "drizzle-orm";
+      import { publishedCaseLawDecisionSqlFor as eligibleSql } from "@/api/lib/case-law/published-decisions";
+      const raw = sql\`SELECT d.id FROM case_law_decisions d
+        LEFT JOIN case_law_sources s ON s.id = d.source_id
+        ${where ? "WHERE" : "AND"} \${sql.raw(eligibleSql("d"))}\`;
+      const builder = db.select().from(caseLawDecisions)
+        .leftJoin(caseLawSources, ${where ? "eq(caseLawSources.id, caseLawDecisions.sourceId)" : "eligible(caseLawDecisions)"})
+        ${where ? ".where(eligible(caseLawDecisions))" : ""};`,
+      },
+    ]);
+  const joined = inspect(false);
+  expect(joined.reads).toHaveLength(2);
+  expect(joined.errors).toHaveLength(2);
+  const filtered = inspect(true);
+  expect(filtered.reads).toHaveLength(2);
+  expect(filtered.errors).toEqual([]);
 });

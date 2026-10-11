@@ -170,12 +170,44 @@ const isClauseEnd = (token: Token | undefined, kind: "WHERE" | "ON") =>
   (token?.kind === "word" &&
     (kind === "ON" ? JOIN_END : CLAUSE_END).has(token.text));
 
-/** Return only interpolations that are complete, positive WHERE/ON operands. */
+const introducedDecisionAlias = (
+  tokens: readonly Token[],
+  clauseStart: number,
+): string | undefined => {
+  const depth = tokens[clauseStart]?.depth;
+  const preceding = tokens.slice(0, clauseStart);
+  const joinIndex = preceding.findLastIndex(
+    (token) =>
+      token.depth === depth && token.kind === "word" && token.text === "JOIN",
+  );
+  const relation = tokens[joinIndex + 1];
+  if (
+    joinIndex === -1 ||
+    relation?.kind !== "word" ||
+    relation.text !== "CASE_LAW_DECISIONS"
+  ) {
+    return undefined;
+  }
+  const afterRelation = tokens[joinIndex + 2];
+  const alias =
+    afterRelation?.text === "AS" ? tokens[joinIndex + 3] : afterRelation;
+  if (alias?.kind !== "word") {
+    return undefined;
+  }
+  return alias.text === "ON" ? "case_law_decisions" : alias.text.toLowerCase();
+};
+
+export type PositiveSqlConjunct = {
+  expression: ts.Expression;
+  targetAlias: string | undefined;
+};
+
+/** ON operands belong only to the relation introduced by their own JOIN. */
 export const positiveSqlConjunctInterpolations = (
   template: ts.TemplateExpression,
-): ts.Node[] => {
+): PositiveSqlConjunct[] => {
   const tokens = tokenize(template);
-  const accepted = new Set<ts.Expression>();
+  const accepted: PositiveSqlConjunct[] = [];
   for (let clauseStart = 0; clauseStart < tokens.length; clauseStart += 1) {
     const start = tokens[clauseStart];
     if (
@@ -185,6 +217,13 @@ export const positiveSqlConjunctInterpolations = (
       continue;
     }
     const clauseKind = start.text;
+    let targetAlias: string | undefined;
+    if (clauseKind === "ON") {
+      targetAlias = introducedDecisionAlias(tokens, clauseStart);
+      if (targetAlias === undefined) {
+        continue;
+      }
+    }
     let end = clauseStart + 1;
     while (end < tokens.length) {
       const token = tokens[end];
@@ -229,9 +268,9 @@ export const positiveSqlConjunctInterpolations = (
       const insideCase =
         caseDepthBefore(clause.slice(0, offset), start.depth) > 0;
       if (leftBoundary && rightBoundary && !insideCase && token.expression) {
-        accepted.add(token.expression);
+        accepted.push({ expression: token.expression, targetAlias });
       }
     }
   }
-  return [...accepted];
+  return accepted;
 };

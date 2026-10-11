@@ -3,14 +3,14 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
-import { positiveSqlConjunctInterpolations } from "./case-law-publication-conjuncts";
+import {
+  positiveSqlConjunctInterpolations,
+  type PositiveSqlConjunct,
+} from "./case-law-publication-conjuncts";
 import {
   CASE_LAW_DECISION_TABLE,
   createDecisionTableResolver,
 } from "./case-law-publication-tables";
-
-const lastSqlToken = (text: string, pattern: RegExp): number =>
-  Math.max(-1, ...[...text.matchAll(pattern)].map((match) => match.index));
 
 const SQL_RELATION_BOUNDARIES = new Set([
   "WHERE",
@@ -208,25 +208,12 @@ const exportedOwnerBindings = (
         ts.isIdentifier(node.name) &&
         node.initializer &&
         exported(node.parent.parent) &&
-        (isOwnerConjunct({
+        isOwnerConjunct({
           node: node.initializer,
           names: localOwners,
           andNames: drizzleOperatorNames(tree, "and"),
           sqlNames: drizzleOperatorNames(tree, "sql"),
-        }) ||
-          (ts.isTaggedTemplateExpression(node.initializer) &&
-            ts.isIdentifier(node.initializer.tag) &&
-            drizzleOperatorNames(tree, "sql").has(node.initializer.tag.text) &&
-            ts.isTemplateExpression(node.initializer.template) &&
-            positiveSqlConjunctInterpolations(node.initializer.template).some(
-              (expression) =>
-                isOwnerConjunct({
-                  node: expression,
-                  names: localOwners,
-                  andNames: drizzleOperatorNames(tree, "and"),
-                  sqlNames: drizzleOperatorNames(tree, "sql"),
-                }),
-            )))
+        })
       ) {
         exposed.add(node.name.text);
       }
@@ -443,7 +430,7 @@ type OwnerResolver = {
   hasOwnerTable: (node: ts.Node, table: string) => boolean;
   hasOwnerProjection: (node: ts.Node, table?: string) => boolean;
   hasRelationalWhereOwner: (node: ts.Node) => boolean;
-  rawFilterOwners: (node: ts.Node) => ts.Node[];
+  rawFilterOwners: (node: ts.Node) => PositiveSqlConjunct[];
 };
 
 type OwnerResolverOptions = {
@@ -743,8 +730,8 @@ const createOwnerQueryChecks = ({
     visit(node);
     return found;
   };
-  const rawFilterOwners = (node: ts.Node): ts.Node[] => {
-    const owners: ts.Node[] = [];
+  const rawFilterOwners = (node: ts.Node): PositiveSqlConjunct[] => {
+    const owners: PositiveSqlConjunct[] = [];
     const visit = (current: ts.Node): void => {
       if (
         ts.isTaggedTemplateExpression(current) &&
@@ -754,7 +741,7 @@ const createOwnerQueryChecks = ({
       ) {
         owners.push(
           ...positiveSqlConjunctInterpolations(current.template).filter(
-            usesOwner,
+            ({ expression }) => usesOwner(expression),
           ),
         );
       }
@@ -929,19 +916,19 @@ type FileCensusContext = {
   file: string;
   tree: ts.SourceFile;
   predicateLocals: Set<string>;
-  importedJoinAliases: Map<string, string>;
+  importedOwnerAliases: Map<string, string>;
 };
 
 const createFileCensusContext = (
   file: string,
   tree: ts.SourceFile,
   ownerExports: ReadonlyMap<string, ReadonlySet<string>>,
-  ownerJoinAliases: ReadonlyMap<string, string>,
+  ownerFragmentAliases: ReadonlyMap<string, string>,
 ): FileCensusContext | null => {
   const subjectImports = importNames(tree, SUBJECT);
   const dbImports = importNames(tree, PUBLIC_DB);
   const predicateLocals = new Set<string>();
-  const importedJoinAliases = new Map<string, string>();
+  const importedOwnerAliases = new Map<string, string>();
   for (const statement of tree.statements) {
     if (
       !ts.isImportDeclaration(statement) ||
@@ -962,19 +949,15 @@ const createFileCensusContext = (
     }
     for (const item of bindings.elements) {
       const imported = (item.propertyName ?? item.name).text;
-      const joinAlias =
-        resolved === null
-          ? undefined
-          : ownerJoinAliases.get(`${modulePath(resolved)}:${imported}`);
-      if (ownerNames.has(imported) && joinAlias === undefined) {
+      if (ownerNames.has(imported)) {
         predicateLocals.add(item.name.text);
       }
       if (resolved !== null) {
-        const alias = ownerJoinAliases.get(
+        const alias = ownerFragmentAliases.get(
           `${modulePath(resolved)}:${imported}`,
         );
         if (alias !== undefined) {
-          importedJoinAliases.set(item.name.text, alias);
+          importedOwnerAliases.set(item.name.text, alias);
         }
       }
     }
@@ -992,7 +975,7 @@ const createFileCensusContext = (
     ) ||
     hasSubjectScope ||
     predicateLocals.size > 0 ||
-    importedJoinAliases.size > 0;
+    importedOwnerAliases.size > 0;
   if (!publicReadModule) {
     return null;
   }
@@ -1000,7 +983,7 @@ const createFileCensusContext = (
     file,
     tree,
     predicateLocals,
-    importedJoinAliases,
+    importedOwnerAliases,
   };
 };
 
@@ -1008,7 +991,7 @@ const inspectFileReads = (
   context: FileCensusContext,
   tableOf: (node: ts.Node) => string | undefined,
 ): PublicationCensus => {
-  const { file, tree, predicateLocals, importedJoinAliases } = context;
+  const { file, tree, predicateLocals, importedOwnerAliases } = context;
   const resolver = createOwnerResolver({
     file,
     tree,
@@ -1031,39 +1014,6 @@ const inspectFileReads = (
     const rawQuery = site.node.getText(tree);
     const rawFilters =
       site.kind === "raw" ? resolver.rawFilterOwners(site.node) : [];
-    const joinedAliases: string[] = [];
-    const visitJoins = (node: ts.Node): void => {
-      if (
-        ts.isTaggedTemplateExpression(node) &&
-        ts.isTemplateExpression(node.template)
-      ) {
-        let prefix = node.template.head.text;
-        for (const span of node.template.templateSpans) {
-          if (ts.isIdentifier(span.expression)) {
-            const alias = importedJoinAliases.get(span.expression.text);
-            const suffix = span.literal.text.trimStart();
-            if (
-              alias !== undefined &&
-              /\bFROM\b/iu.test(prefix) &&
-              !/\b(?:WHERE|CASE|OR|NOT)\b/iu.test(
-                prefix.slice(lastSqlToken(prefix, /\bFROM\b/giu)),
-              ) &&
-              (suffix.length === 0 ||
-                /^(?:WHERE|JOIN|LEFT|RIGHT|INNER|CROSS|GROUP|ORDER|LIMIT)\b/iu.test(
-                  suffix,
-                ))
-            ) {
-              joinedAliases.push(alias);
-            }
-          }
-          prefix += span.literal.text;
-        }
-      }
-      ts.forEachChild(node, visitJoins);
-    };
-    if (site.kind === "raw") {
-      visitJoins(site.node);
-    }
     const aliases = site.kind === "raw" ? rawDecisionAliases(rawQuery) : [];
     const label = `${file}:${site.line}`;
     reads.push(label);
@@ -1083,14 +1033,17 @@ const inspectFileReads = (
       (site.kind === "relational" &&
         resolver.hasRelationalWhereOwner(site.node)) ||
       rawFilters.length > 0 ||
-      joinedAliases.length > 0 ||
       resolver.hasOwnerProjection(site.node);
     const allowedMaintenanceAliases = MAINTENANCE_TARGET_ENUMERATION.get(file);
     const everyAliasOwned = aliases.every(
       (alias) =>
-        rawFilters.some((filter) => resolver.hasOwnerAlias(filter, alias)) ||
-        joinedAliases.includes(alias) ||
-        allowedMaintenanceAliases?.has(alias),
+        rawFilters.some(
+          ({ expression, targetAlias }) =>
+            (targetAlias === undefined || targetAlias === alias) &&
+            (resolver.hasOwnerAlias(expression, alias) ||
+              (ts.isIdentifier(expression) &&
+                importedOwnerAliases.get(expression.text) === alias)),
+        ) || allowedMaintenanceAliases?.has(alias),
     );
     const target = site.kind === "builder" ? tableOf(site.target) : undefined;
     const builderOwned =
@@ -1125,7 +1078,11 @@ export const inspectCaseLawPublication = (
     ]),
   );
   const ownerExports = exportedOwnerBindings(files, trees);
-  const ownerJoinAliases = findOwnerJoinAliases({ files, ownerExports, trees });
+  const ownerFragmentAliases = findOwnerFragmentAliases({
+    files,
+    ownerExports,
+    trees,
+  });
   const tableOf = createDecisionTableResolver(trees);
   const reads: string[] = [];
   const errors: string[] = [];
@@ -1141,7 +1098,7 @@ export const inspectCaseLawPublication = (
       file,
       tree,
       ownerExports,
-      ownerJoinAliases,
+      ownerFragmentAliases,
     );
     if (!context) {
       continue;
@@ -1162,17 +1119,17 @@ const isCensusSource = (file: string): boolean =>
   !file.endsWith(".test.ts") &&
   !file.endsWith(".db.test.ts");
 
-type FindOwnerJoinAliasesOptions = {
+type FindOwnerFragmentAliasesOptions = {
   files: readonly SourceInput[];
   ownerExports: ReadonlyMap<string, ReadonlySet<string>>;
   trees: ReadonlyMap<string, ts.SourceFile>;
 };
 
-const findOwnerJoinAliases = ({
+const findOwnerFragmentAliases = ({
   files,
   ownerExports,
   trees,
-}: FindOwnerJoinAliasesOptions): Map<string, string> => {
+}: FindOwnerFragmentAliasesOptions): Map<string, string> => {
   const aliases = new Map<string, string>();
   for (const { file } of files) {
     const tree = trees.get(file);
