@@ -244,8 +244,8 @@ const acceptsCursor = ({
     : { [property]: cursor };
   const result = v.safeParse(schema, input);
   const output =
-    isRecord(result.output) && nested && Array.isArray(result.output.items)
-      ? result.output.items.at(0)
+    isRecord(result.output) && nested && Array.isArray(result.output["items"])
+      ? result.output["items"].at(0)
       : result.output;
   return (
     !result.issues?.some((issue) => {

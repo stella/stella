@@ -69,4 +69,19 @@ describe("provision text windows", () => {
       }),
     ).toEqual({ type: "invalid-cursor" });
   });
+
+  test("refuses a cursor once the same subject's text changes", () => {
+    const first = windowProvisionText({ limit: 1, subject: "one", text: "ab" });
+    if (first.type !== "window" || first.nextTextCursor === null) {
+      throw new Error("Expected another text window");
+    }
+    expect(
+      windowProvisionText({
+        cursor: first.nextTextCursor,
+        limit: 1,
+        subject: "one",
+        text: "ac",
+      }),
+    ).toEqual({ type: "invalid-cursor" });
+  });
 });

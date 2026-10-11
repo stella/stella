@@ -2,7 +2,7 @@ import { sha256Base64Url } from "@stll/sha256/bun";
 
 type TextCursorPayload = {
   offset: number;
-  subject: string;
+  binding: string;
 };
 
 const CURSOR_PREFIX = "ptw1";
@@ -14,23 +14,28 @@ export const isProvisionTextCursor = (value: string): boolean =>
 
 const checksum = (payload: string): string => sha256Base64Url(payload);
 
-const encodePayload = ({ offset, subject }: TextCursorPayload): string => {
-  const encoded = `${offset}.${checksum(subject)}`;
+// A cursor continues one exact text: a corrected consolidation under the same
+// subject must not be stitched onto windows read from the previous wording.
+const textBinding = (subject: string, text: string): string =>
+  checksum(`${subject}\u0000${checksum(text)}`);
+
+const encodePayload = ({ offset, binding }: TextCursorPayload): string => {
+  const encoded = `${offset}.${binding}`;
   return `${CURSOR_PREFIX}.${encoded}.${checksum(encoded)}`;
 };
 
 const decodePayload = (cursor: string): TextCursorPayload | null => {
-  const [prefix, offsetText, subjectText, digest, extra] = cursor.split(".");
+  const [prefix, offsetText, bindingText, digest, extra] = cursor.split(".");
   if (
     prefix !== CURSOR_PREFIX ||
     offsetText === undefined ||
-    subjectText === undefined ||
+    bindingText === undefined ||
     digest === undefined ||
     extra !== undefined
   ) {
     return null;
   }
-  const encoded = `${offsetText}.${subjectText}`;
+  const encoded = `${offsetText}.${bindingText}`;
   if (checksum(encoded) !== digest) {
     return null;
   }
@@ -41,7 +46,7 @@ const decodePayload = (cursor: string): TextCursorPayload | null => {
   }
   return {
     offset,
-    subject: subjectText,
+    binding: bindingText,
   };
 };
 
@@ -70,7 +75,7 @@ export const windowProvisionText = ({
   if (
     cursor !== undefined &&
     (decoded === null ||
-      decoded.subject !== checksum(subject) ||
+      decoded.binding !== textBinding(subject, text) ||
       decoded.offset > text.length)
   ) {
     return { type: "invalid-cursor" };
@@ -86,7 +91,9 @@ export const windowProvisionText = ({
     end -= 1;
   }
   const nextTextCursor =
-    end < text.length ? encodePayload({ offset: end, subject }) : null;
+    end < text.length
+      ? encodePayload({ offset: end, binding: textBinding(subject, text) })
+      : null;
   return {
     type: "window",
     text: text.slice(offset, end),
