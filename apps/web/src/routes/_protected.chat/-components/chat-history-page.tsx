@@ -81,6 +81,7 @@ import {
   hasChatHistoryFilter,
   initialSearchFieldState,
   isMatterUnavailable,
+  isStaleSearchWrite,
   syncSearchField,
 } from "./chat-history.logic";
 import type {
@@ -140,14 +141,24 @@ export const ChatHistoryPage = ({
   if (syncedSearchField !== searchField) {
     setSearchField(syncedSearchField);
   }
-  const commitQuery = useDebouncedCallback((q: string) => {
-    const nextQuery = q.trim().length > 0 ? q : undefined;
-    setSearchField((field) => ({
-      ...field,
-      pending: { status: "sent", query: nextQuery },
-    }));
-    onSearchChange({ ...search, q: nextQuery });
-  }, SEARCH_DEBOUNCE_MS);
+  // Each write remembers how many outside queries the field had seen when it
+  // was typed; the debounced callback reads the latest field state, so a
+  // write that an outside query has overtaken is dropped instead of undoing
+  // that navigation.
+  const commitQuery = useDebouncedCallback(
+    (q: string, scheduledAfter: number) => {
+      if (isStaleSearchWrite({ scheduledAfter, state: syncedSearchField })) {
+        return;
+      }
+      const nextQuery = q.trim().length > 0 ? q : undefined;
+      setSearchField((field) => ({
+        ...field,
+        pending: { status: "sent", query: nextQuery },
+      }));
+      onSearchChange({ ...search, q: nextQuery });
+    },
+    SEARCH_DEBOUNCE_MS,
+  );
   const [deleteDialog, setDeleteDialog] = useState<DeleteDialog>({
     type: "closed",
   });
@@ -208,7 +219,7 @@ export const ChatHistoryPage = ({
             groupClassName="sm:flex-1"
             onValueChange={(value) => {
               setSearchField((field) => ({ ...field, value }));
-              commitQuery(value);
+              commitQuery(value, syncedSearchField.externalChanges);
             }}
             placeholder={t("common.search")}
             value={syncedSearchField.value}

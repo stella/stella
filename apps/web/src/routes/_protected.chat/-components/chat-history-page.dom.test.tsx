@@ -1,5 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, describe, expect, jest, test } from "bun:test";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import type { WebApiRoutes } from "@/lib/eden-client";
@@ -499,6 +499,39 @@ describe("chat history page", () => {
       ui.getByRole("button", { name: messages.common.retry }),
     ).toBeDefined();
     expect(ui.queryByText(messages.chat.history.matterUnavailable)).toBeNull();
+  });
+
+  test("navigating away mid-typing drops the typing's pending write", async () => {
+    serve(fullServer());
+    const { navigateTo, searchChanges, ui } = await openHistory();
+    const field = ui.getByRole("searchbox", { name: messages.common.search });
+    await testing.waitFor(() =>
+      expect(threadLink(ui, TODAY_GLOBAL.title)).toBeDefined(),
+    );
+
+    jest.useFakeTimers();
+    try {
+      await testing.act(async () => {
+        testing.fireEvent.change(field, { target: { value: "lease" } });
+      });
+      // The URL moves on before the typing's debounce fires.
+      await navigateTo({ q: "claim" });
+      await testing.act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+
+    expect(field).toHaveProperty("value", "claim");
+    expect(searchChanges).toEqual([]);
+    await testing.waitFor(() =>
+      expect(threadLink(ui, THIS_WEEK_IN_A.title)).toBeDefined(),
+    );
+    expect(ui.queryByText(OLDER_IN_B.title)).toBeNull();
+    expect(
+      listRequests.map((url) => url.searchParams.get("search")),
+    ).not.toContain("lease");
   });
 
   test("a query arriving from elsewhere replaces the search field's text", async () => {

@@ -117,8 +117,13 @@ export type PendingSearchQuery =
   | { status: "idle" }
   | { status: "sent"; query: string | undefined };
 
-/** The search field's own state: what it shows and what it knows of the URL. */
+/**
+ * The search field's own state: what it shows, what it knows of the URL, and
+ * how many queries have reached the URL from elsewhere. A write scheduled
+ * before the latest of those is stale.
+ */
 export type SearchFieldState = {
+  externalChanges: number;
   lastUrlQuery: string | undefined;
   pending: PendingSearchQuery;
   value: string;
@@ -127,6 +132,7 @@ export type SearchFieldState = {
 export const initialSearchFieldState = (
   urlQuery: string | undefined,
 ): SearchFieldState => ({
+  externalChanges: 0,
   lastUrlQuery: urlQuery,
   pending: { status: "idle" },
   value: urlQuery ?? "",
@@ -151,12 +157,36 @@ export const syncSearchField = ({
   }
   const ownWrite =
     state.pending.status === "sent" && state.pending.query === urlQuery;
+  if (ownWrite) {
+    return {
+      externalChanges: state.externalChanges,
+      lastUrlQuery: urlQuery,
+      pending: { status: "idle" },
+      value: state.value,
+    };
+  }
   return {
+    externalChanges: state.externalChanges + 1,
     lastUrlQuery: urlQuery,
     pending: { status: "idle" },
-    value: ownWrite ? state.value : (urlQuery ?? ""),
+    value: urlQuery ?? "",
   };
 };
+
+/**
+ * Whether a debounced write from the field has gone stale: a query reached
+ * the URL from elsewhere after the write was scheduled, so sending it would
+ * overwrite that navigation with older typing. The field's own writes landing
+ * do not count, so typing on while one lands is never lost.
+ */
+export const isStaleSearchWrite = ({
+  scheduledAfter,
+  state,
+}: {
+  /** `externalChanges` when the write was scheduled. */
+  scheduledAfter: number;
+  state: SearchFieldState;
+}): boolean => scheduledAfter !== state.externalChanges;
 
 const MATTER_UNAVAILABLE_STATUS = 404;
 

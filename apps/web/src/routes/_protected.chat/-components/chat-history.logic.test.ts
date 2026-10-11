@@ -12,8 +12,10 @@ import {
   hasChatHistoryFilter,
   initialSearchFieldState,
   isMatterUnavailable,
+  isStaleSearchWrite,
   syncSearchField,
 } from "./chat-history.logic";
+import type { SearchFieldState } from "./chat-history.logic";
 
 const instant = (iso: string) => Temporal.Instant.from(iso);
 
@@ -175,14 +177,22 @@ describe("an unavailable matter filter", () => {
 });
 
 describe("keeping the search field in step with the URL", () => {
+  const field = (
+    overrides: Partial<SearchFieldState> = {},
+  ): SearchFieldState => ({
+    ...initialSearchFieldState("lease"),
+    ...overrides,
+  });
+
   test("an unchanged URL leaves the field, and its state object, alone", () => {
-    const state = { ...initialSearchFieldState("lease"), value: "lease ren" };
+    const state = field({ value: "lease ren" });
     expect(syncSearchField({ state, urlQuery: "lease" })).toBe(state);
   });
 
   test("a query from elsewhere replaces what the field shows", () => {
-    const state = { ...initialSearchFieldState("lease"), value: "lease" };
+    const state = field();
     expect(syncSearchField({ state, urlQuery: "arbitration" })).toEqual({
+      externalChanges: 1,
       lastUrlQuery: "arbitration",
       pending: { status: "idle" },
       value: "arbitration",
@@ -192,12 +202,13 @@ describe("keeping the search field in step with the URL", () => {
   });
 
   test("the field's own write landing keeps what the reader typed since", () => {
-    const state = {
+    const state = field({
       lastUrlQuery: undefined,
-      pending: { status: "sent" as const, query: "lea" },
+      pending: { status: "sent", query: "lea" },
       value: "lease ren",
-    };
+    });
     expect(syncSearchField({ state, urlQuery: "lea" })).toEqual({
+      externalChanges: 0,
       lastUrlQuery: "lea",
       pending: { status: "idle" },
       value: "lease ren",
@@ -205,11 +216,10 @@ describe("keeping the search field in step with the URL", () => {
   });
 
   test("an own write that cleared the query is told apart from no write", () => {
-    const cleared = {
-      lastUrlQuery: "lease",
-      pending: { status: "sent" as const, query: undefined },
+    const cleared = field({
+      pending: { status: "sent", query: undefined },
       value: "le",
-    };
+    });
     expect(syncSearchField({ state: cleared, urlQuery: undefined }).value).toBe(
       "le",
     );
@@ -219,15 +229,30 @@ describe("keeping the search field in step with the URL", () => {
     );
   });
 
-  test("a different query from elsewhere wins over a pending own write", () => {
-    const state = {
-      lastUrlQuery: "lease",
-      pending: { status: "sent" as const, query: "leas" },
+  test("a query from elsewhere cancels a pending own write", () => {
+    const typing = field({
+      pending: { status: "sent", query: "leas" },
       value: "leas",
-    };
-    expect(syncSearchField({ state, urlQuery: "arbitration" }).value).toBe(
-      "arbitration",
-    );
+    });
+    const scheduledAfter = typing.externalChanges;
+    const navigated = syncSearchField({ state: typing, urlQuery: "claim" });
+
+    expect(navigated.value).toBe("claim");
+    expect(navigated.pending).toEqual({ status: "idle" });
+    // The debounced write typed before the navigation must not fire.
+    expect(isStaleSearchWrite({ scheduledAfter, state: navigated })).toBe(true);
+  });
+
+  test("an own write landing does not cancel typing that followed it", () => {
+    const typing = field({
+      lastUrlQuery: undefined,
+      pending: { status: "sent", query: "lea" },
+      value: "lease",
+    });
+    const scheduledAfter = typing.externalChanges;
+    const landed = syncSearchField({ state: typing, urlQuery: "lea" });
+
+    expect(isStaleSearchWrite({ scheduledAfter, state: landed })).toBe(false);
   });
 });
 
