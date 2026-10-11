@@ -204,7 +204,7 @@ test("sequential gated and ungated calls execute in document order after approva
           );
           for (const part of pending) {
             if (part.type !== "tool-call" || part.approval === undefined) {
-              return panic("Approval part lost its approval");
+              panic("Approval part lost its approval");
             }
             processor.addToolApprovalResponse(part.approval.id, approved);
           }
@@ -337,9 +337,12 @@ test("a plain client request after a pending gate can finish while server succes
       chunk.outcome?.type === "interrupt"
     ) {
       interrupts.push(
-        ...chunk.outcome.interrupts.map(
-          (interrupt) => `${interrupt.toolCallId}:${interrupt.reason}`,
-        ),
+        ...chunk.outcome.interrupts.map((interrupt) => {
+          if (interrupt.toolCallId === undefined) {
+            panic("Tool interrupt lost its call identity");
+          }
+          return `${interrupt.toolCallId}:${interrupt.reason}`;
+        }),
       );
     }
   }
@@ -376,7 +379,7 @@ test("a plain client request after a pending gate can finish while server succes
     .flatMap(({ parts }) => parts)
     .find((part) => part.type === "tool-call" && part.id === "client-order-0");
   if (pending?.type !== "tool-call" || pending.approval === undefined) {
-    return panic("The gate must remain pending while the client finishes");
+    panic("The gate must remain pending while the client finishes");
   }
   expect(pending.state).toBe("approval-requested");
   processor.addToolApprovalResponse(pending.approval.id, true);

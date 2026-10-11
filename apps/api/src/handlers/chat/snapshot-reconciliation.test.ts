@@ -344,9 +344,9 @@ test("SDK contract drift is observed once and retains the SDK projection for the
     const observed: SnapshotReconciliationError[] = [];
     const original = { type: "text", content: "before" } as const;
     const incoming = { type: "thinking", content: "SDK projection" } as const;
-    const owner = new SnapshotPartReconciler([original], (error) =>
-      observed.push(error),
-    );
+    const owner = new SnapshotPartReconciler([original], (error) => {
+      observed.push(error);
+    });
     switch (phase) {
       case "provenance":
         owner.observe([incoming], [{ ...incoming }]);
@@ -406,9 +406,9 @@ test("SDK snapshot normalization detects removed slots and empty projections", (
     { type: "text", content: "before" },
   ] satisfies UIMessage["parts"];
   const failures: SnapshotReconciliationError[] = [];
-  const owner = new SnapshotPartReconciler(original, (error) =>
-    failures.push(error),
-  );
+  const owner = new SnapshotPartReconciler(original, (error) => {
+    failures.push(error);
+  });
   owner.adoptSnapshot(original, []);
   expect(failures.at(0)?.phase).toBe("normalization");
   expect(
@@ -548,9 +548,9 @@ const textualMetadataCases = [
 for (const scenario of textualMetadataCases) {
   test(scenario.name, () => {
     const failures: SnapshotReconciliationError[] = [];
-    const owner = new SnapshotPartReconciler(scenario.initial, (error) =>
-      failures.push(error),
-    );
+    const owner = new SnapshotPartReconciler(scenario.initial, (error) => {
+      failures.push(error);
+    });
     let parts: UIMessage["parts"] = scenario.initial;
     for (const incoming of [scenario.incoming, scenario.replay]) {
       parts = owner.reconcile({
@@ -604,9 +604,9 @@ test("textual range drift reports once and adopts the SDK projection", () => {
     { type: "text", content: "AB" },
   ] satisfies UIMessage["parts"];
   const failures: SnapshotReconciliationError[] = [];
-  const owner = new SnapshotPartReconciler(initial, (error) =>
-    failures.push(error),
-  );
+  const owner = new SnapshotPartReconciler(initial, (error) => {
+    failures.push(error);
+  });
   let reads = 0;
   const incoming = {
     type: "text",
