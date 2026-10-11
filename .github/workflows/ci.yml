@@ -2545,8 +2545,12 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
         run: |
-          bun test scripts/check-oxlint-rule-coverage.test.ts scripts/check-oxlint-test-timeouts.test.ts
+          bun test scripts/check-oxlint-rule-coverage.test.ts
           bun scripts/check-oxlint-rule-coverage.ts
+
+      - name: Custom lint test timeout policy
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/check-oxlint-test-timeouts.test.ts
 
       - name: Documentation source policy rule
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}

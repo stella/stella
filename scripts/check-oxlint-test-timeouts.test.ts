@@ -186,7 +186,9 @@ for (const [name, source, expected] of [
   test(`${name} are classified before applying the timeout policy`, () => {
     withFixture((directory, file) => {
       writeFileSync(file, `${IMPORTS}${source}`);
-      expect(customLintTestTimeoutViolations({ directory })).toEqual(expected);
+      expect(customLintTestTimeoutViolations({ directory })).toEqual([
+        ...expected,
+      ]);
     });
   });
 }
@@ -254,9 +256,9 @@ for (const signature of ["options-first", "callback-first"]) {
             file,
             `${IMPORTS}const callback = () => {}; ${setup}test("case", ${argumentsSource});`,
           );
-          expect(customLintTestTimeoutViolations({ directory })).toEqual(
-            expected,
-          );
+          expect(customLintTestTimeoutViolations({ directory })).toEqual([
+            ...expected,
+          ]);
         });
       });
     }
