@@ -376,17 +376,18 @@ export const chatMessages = p.pgTable(
 );
 
 const CHAT_CONTENT_V3_BACKFILL_SOURCES = ["message", "revision"] as const;
-const CHAT_CONTENT_V3_BACKFILL_OUTCOMES = [
+export const CHAT_CONTENT_V3_BACKFILL_OUTCOMES = [
   "converted",
   "skipped",
   "failed",
+  "deleted-concurrently",
 ] as const;
 const CHAT_CONTENT_V3_BACKFILL_SOURCE_SQL_VALUES =
   CHAT_CONTENT_V3_BACKFILL_SOURCES.map((source) => sql.raw(`'${source}'`));
 const CHAT_CONTENT_V3_BACKFILL_OUTCOME_SQL_VALUES =
   CHAT_CONTENT_V3_BACKFILL_OUTCOMES.map((outcome) => sql.raw(`'${outcome}'`));
 
-/** Owner-only repair receipts contain identifiers and fixed reasons, never chat content. */
+/** Owner-only repair receipts retain identifiers and fixed reasons after deletion, never chat content. */
 export const chatContentV3BackfillReceipts = p.pgTable.withRLS(
   "chat_content_v3_backfill_receipts",
   {
@@ -401,13 +402,6 @@ export const chatContentV3BackfillReceipts = p.pgTable.withRLS(
   },
   (table) => [
     p.primaryKey({ columns: [table.source, table.rowId] }),
-    p
-      .foreignKey({
-        name: "chat_content_v3_receipts_message_fk",
-        columns: [table.messageId],
-        foreignColumns: [chatMessages.id],
-      })
-      .onDelete("cascade"),
     p
       .index("chat_content_v3_backfill_receipts_message_idx")
       .on(table.messageId),

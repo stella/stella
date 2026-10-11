@@ -14,6 +14,7 @@ import type {
   OnlineMigrationConnection,
   OnlineRepair,
 } from "./online-migration-connection";
+import { CHAT_CONTENT_V3_BACKFILL_OUTCOMES } from "./schema/chat";
 import type { chatContentV3BackfillReceipts } from "./schema/chat";
 
 // Bound JSON conversion and row locks even for tool-heavy conversations.
@@ -39,6 +40,14 @@ class ChatContentV3UpgradeError extends TaggedError(
   cause?: unknown;
 }> {}
 
+type ChatContentV3Receipt = {
+  row_id: string;
+  message_id: string;
+  from_version: number | null;
+  outcome: typeof chatContentV3BackfillReceipts.$inferInsert.outcome;
+  reason: string;
+};
+
 type BatchOptions = {
   tx: Pick<OnlineMigrationConnection, "query" | "execute">;
   source: ChatContentV3Source;
@@ -59,7 +68,7 @@ export const backfillChatContentV3Batch = async ({
       ? [Math.min(size, CHAT_CONTENT_V3_BATCH_SIZE)]
       : [cursor, Math.min(size, CHAT_CONTENT_V3_BATCH_SIZE)],
   );
-  const receipts = [];
+  const receipts: ChatContentV3Receipt[] = [];
   const updates = [];
   let last = cursor;
   for (const row of rows) {
@@ -145,19 +154,47 @@ export const backfillChatContentV3Batch = async ({
     }
   }
   if (receipts.length > 0) {
-    // A replay must retain the original conversion provenance.
-    await tx.execute(
+    // Receipts outlive deletion and contain only identifiers and fixed reasons.
+    // The live-parent join records deletions without racing a foreign-key check;
+    // a replay still retains the original conversion provenance.
+    const recorded = await tx.query(
       `INSERT INTO chat_content_v3_backfill_receipts
        (source, row_id, message_id, from_version, outcome, reason)
-       SELECT $1, row_id, message_id, from_version, outcome, reason
+       SELECT $1, receipt.row_id, receipt.message_id, receipt.from_version,
+         CASE WHEN parent.id IS NULL THEN 'deleted-concurrently' ELSE receipt.outcome END,
+         CASE WHEN parent.id IS NULL THEN 'parent-deleted' ELSE receipt.reason END
        FROM jsonb_to_recordset($2::text::jsonb)
        AS receipt(row_id uuid, message_id uuid, from_version integer, outcome text, reason text)
+       LEFT JOIN chat_messages AS parent ON parent.id = receipt.message_id
+       WHERE true
        ON CONFLICT (source, row_id) DO UPDATE SET
        from_version = EXCLUDED.from_version, outcome = EXCLUDED.outcome,
        reason = EXCLUDED.reason, recorded_at = now()
-       WHERE chat_content_v3_backfill_receipts.outcome <> 'converted'`,
+       WHERE chat_content_v3_backfill_receipts.outcome <> 'converted'
+       RETURNING row_id, outcome, reason`,
       [source, JSON.stringify(receipts)],
     );
+    const receiptsById = new Map(
+      receipts.map((receipt) => [receipt.row_id, receipt]),
+    );
+    for (const row of recorded) {
+      if (
+        !isRecord(row) ||
+        typeof row["row_id"] !== "string" ||
+        typeof row["reason"] !== "string"
+      ) {
+        panic("Invalid chat backfill receipt identity");
+      }
+      const outcome = CHAT_CONTENT_V3_BACKFILL_OUTCOMES.find(
+        (candidate) => candidate === row["outcome"],
+      );
+      const receipt = receiptsById.get(row["row_id"]);
+      if (outcome === undefined || receipt === undefined) {
+        panic("Invalid chat backfill receipt outcome");
+      }
+      receipt.outcome = outcome;
+      receipt.reason = row["reason"];
+    }
   }
   return { cursor: last, done: rows.length === 0, value: receipts };
 };
