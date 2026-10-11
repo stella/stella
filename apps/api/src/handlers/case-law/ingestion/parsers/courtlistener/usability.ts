@@ -81,6 +81,33 @@ const isMetadata = (text: string): boolean =>
   COURT_IDENTIFIER.test(text) ||
   DATE_ONLY.test(text.replace(/\s+/gu, ""));
 
+type NonRulingBlock = "metadata" | "placeholder";
+
+const nonRulingBlock = (block: string): NonRulingBlock | null => {
+  const compact = block.replace(/\s+/gu, " ").trim();
+  if (SOURCE_PLACEHOLDERS.some((pattern) => pattern.test(compact))) {
+    return "placeholder";
+  }
+  if (isMetadata(compact)) {
+    return "metadata";
+  }
+  const lines = block
+    .split("\n")
+    .map((line) => line.replace(/\s+/gu, " ").trim())
+    .filter((line) => line.length > 0);
+  let kind: NonRulingBlock = "metadata";
+  for (const line of lines) {
+    if (SOURCE_PLACEHOLDERS.some((pattern) => pattern.test(line))) {
+      kind = "placeholder";
+      continue;
+    }
+    if (!isMetadata(line)) {
+      return null;
+    }
+  }
+  return lines.length > 0 ? kind : null;
+};
+
 const hasReadableSentence = (text: string): boolean => {
   const compactBody = text.replace(/\s+/gu, " ").trim();
   if (
@@ -133,43 +160,46 @@ const hasReadableSentence = (text: string): boolean => {
   return false;
 };
 
-type BodyClassificationOptions = {
-  normalized: string;
-  unattributed: string;
-};
-
-const classifyBody = ({
-  normalized,
-  unattributed,
-}: BodyClassificationOptions): CourtListenerTextUsability => {
-  const compact = unattributed.replace(/\s+/gu, " ").trim();
-  const metadataOnly = unattributed
+const classifyBody = (unattributed: string): CourtListenerTextUsability => {
+  const blocks = unattributed
     .split(/\n[^\S\n]*\n/gu)
-    .filter((block) => block.trim().length > 0)
-    .every((block) => {
-      if (isMetadata(block.replace(/\s+/gu, " ").trim())) {
-        return true;
-      }
-      return block
-        .split("\n")
-        .map((line) => line.replace(/\s+/gu, " ").trim())
-        .filter((line) => line.length > 0)
-        .every(isMetadata);
-    });
-  if (compact.length > 0 && metadataOnly) {
-    return COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT;
+    .map((block) => block.trim())
+    .filter((block) => block.length > 0);
+  const rulingBlocks: string[] = [];
+  let hasPlaceholder = false;
+  for (const block of blocks) {
+    const kind = nonRulingBlock(block);
+    switch (kind) {
+      case "metadata":
+        break;
+      case "placeholder":
+        hasPlaceholder = true;
+        break;
+      case null:
+        rulingBlocks.push(block);
+        break;
+      default:
+        kind satisfies never;
+        return panic("Unhandled non-ruling block classification");
+    }
   }
-  if (hasReadableSentence(unattributed)) {
+  if (blocks.length > 0 && rulingBlocks.length === 0) {
+    // An explicit publisher replacement is more specific than missing ruling text.
+    return hasPlaceholder
+      ? COURTLISTENER_TEXT_USABILITY.SOURCE_PLACEHOLDER
+      : COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT;
+  }
+  // Metadata and replacement messages cannot supply words to damaged ruling text.
+  const rulingText = rulingBlocks.join("\n\n");
+  const compact = rulingText.replace(/\s+/gu, " ").trim();
+  if (hasReadableSentence(rulingText)) {
     return COURTLISTENER_TEXT_USABILITY.USABLE;
   }
-  if (SOURCE_PLACEHOLDERS.some((pattern) => pattern.test(compact))) {
-    return COURTLISTENER_TEXT_USABILITY.SOURCE_PLACEHOLDER;
-  }
-  if (unattributed.split(/\n/gu).some((line) => RULING_WORDS.test(line))) {
+  if (rulingText.split(/\n/gu).some((line) => RULING_WORDS.test(line))) {
     return COURTLISTENER_TEXT_USABILITY.USABLE;
   }
 
-  const remaining = unattributed
+  const remaining = rulingText
     .replace(WRITTEN_DATE, " ")
     // A suffix cannot consume the letter opening the next exemption code.
     .replace(/\([a-z]\)\s*\(\d+\)(?:\s*\([a-z]\)(?!\s*\(\d+\)))?/gu, " ")
@@ -183,7 +213,7 @@ const classifyBody = ({
     return COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT;
   }
   if (!/\p{L}/u.test(remaining)) {
-    return /\d/u.test(normalized) || !remaining
+    return /\d/u.test(rulingText) || !remaining
       ? COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT
       : COURTLISTENER_TEXT_USABILITY.UNDECODABLE;
   }
@@ -216,7 +246,7 @@ const classifyBody = ({
       damagedTokens.length > 0 &&
       !intactWords.some((word) => word.length >= 6)) ||
     (DAMAGED_OFFICE_HEADER.test(compact) &&
-      /general[^\S\r\n]*\n/u.test(unattributed) &&
+      /general[^\S\r\n]*\n/u.test(rulingText) &&
       /[!?[]\p{L}/u.test(compact))
   ) {
     return COURTLISTENER_TEXT_USABILITY.UNDECODABLE;
@@ -241,7 +271,7 @@ export const classifyCourtListenerText = (
         : line;
     })
     .join("\n");
-  const classification = classifyBody({ normalized, unattributed });
+  const classification = classifyBody(unattributed);
   switch (classification) {
     case COURTLISTENER_TEXT_USABILITY.SOURCE_PLACEHOLDER:
     case COURTLISTENER_TEXT_USABILITY.USABLE:

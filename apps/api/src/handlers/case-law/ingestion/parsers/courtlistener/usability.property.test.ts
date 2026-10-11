@@ -127,6 +127,46 @@ const metadataHeader = fc.oneof(
   ),
 );
 
+const publisherPlaceholder = fc.constantFrom(
+  ...shortTexts
+    .filter(({ expected }) => expected === "source-placeholder")
+    .flatMap(({ texts }) => texts),
+  "Unable to extract document content",
+  "Failed to extract text.",
+  "No opinion found. Click here to view source material.",
+  "USCA2 Opinion can't open 24-9876A.pdf",
+);
+const classificationBlock = fc.oneof(
+  metadataHeader.map((text) => ({ type: "metadata" as const, text })),
+  publisherPlaceholder.map((text) => ({ type: "placeholder" as const, text })),
+  ruling.map((text) => ({ type: "ruling" as const, text })),
+);
+
+test(
+  "CourtListener metadata and placeholder block mixes classify by their ruling content",
+  () => {
+    assertProperty(
+      "CourtListener metadata and placeholder block mixes classify by their ruling content",
+      fc.property(
+        fc.array(classificationBlock, { minLength: 1, maxLength: 24 }),
+        fc.constantFrom("\n", "\n\n", "\r\n\r\n"),
+        (blocks, separator) => {
+          const body = blocks.map(({ text }) => text).join(separator);
+          if (blocks.some(({ type }) => type === "ruling")) {
+            expect(classifyCourtListenerText(body)).toBe("usable");
+            return;
+          }
+          const expected = blocks.some(({ type }) => type === "placeholder")
+            ? "source-placeholder"
+            : "no-ruling-text";
+          expect(classifyCourtListenerText(body)).toBe(expected);
+        },
+      ),
+    );
+  },
+  propertyTestTimeout(10_000),
+);
+
 test(
   "CourtListener metadata sequences contain no ruling until a ruling block is added",
   () => {

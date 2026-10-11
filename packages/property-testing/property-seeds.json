@@ -8,6 +8,22 @@
       "date": "2026-10-11"
     }
   ],
+  "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/usability.property.test.ts::CourtListener readable sentences make every nonusable short body usable": [
+    {
+      "seed": 20260901,
+      "path": "0:0:0:0",
+      "note": "Regression coverage",
+      "date": "2026-10-11"
+    }
+  ],
+  "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/usability.property.test.ts::CourtListener ruling words make non-ruling bodies usable": [
+    {
+      "seed": 20260901,
+      "path": "18:1",
+      "note": "Regression coverage",
+      "date": "2026-10-11"
+    }
+  ],
   "apps/api/src/handlers/case-law/ingestion/parsers/cz-ns-retention.property.test.ts::Czech supreme body markers retain their source order": [
     {
       "seed": 20260901,

@@ -89,25 +89,31 @@ const RECORDED = [
 ] as const;
 
 describe("which column becomes an opinion's text", () => {
-  const unusableText = "Unable to extract document content";
-  const unusableSources = {
-    xml: `<opinion><p>${unusableText}</p></opinion>`,
-    plain: unusableText,
-    pre: `<pre>${unusableText}</pre>`,
-    html: `<p>${unusableText}</p>`,
-  } as const satisfies Record<TextStructure, string>;
+  const unusableTexts = [
+    "Unable to extract document content",
+    "Case: 24-12345 Date Filed: 01/01/2024 Page: 1 of 2\n\nUnable to extract document content",
+    "Unable to extract document content\n\nUnable to extract document content",
+  ];
   const usabilityFormats = COURTLISTENER_TEXT_FORMATS.flatMap((format) =>
-    Object.entries(unusableSources)
-      .filter(([structure]) => {
-        if (format === "xml_harvard") {
-          return structure === "xml";
-        }
-        if (format === "plain_text") {
-          return structure === "plain";
-        }
-        return structure !== "plain";
-      })
-      .map(([structure, source]) => ({ format, structure, source })),
+    unusableTexts.flatMap((unusableText) => {
+      const unusableSources = {
+        xml: `<opinion><p>${unusableText.replaceAll("\n\n", "</p><p>")}</p></opinion>`,
+        plain: unusableText,
+        pre: `<pre>${unusableText}</pre>`,
+        html: `<p>${unusableText.replaceAll("\n\n", "</p><p>")}</p>`,
+      } as const satisfies Record<TextStructure, string>;
+      return Object.entries(unusableSources)
+        .filter(([structure]) => {
+          if (format === "xml_harvard") {
+            return structure === "xml";
+          }
+          if (format === "plain_text") {
+            return structure === "plain";
+          }
+          return structure !== "plain";
+        })
+        .map(([structure, source]) => ({ format, structure, source }));
+    }),
   );
   test.each(usabilityFormats)(
     "$format/$structure rejects placeholders and selects a later usable representation",
@@ -255,6 +261,25 @@ describe("which column becomes an opinion's text", () => {
     expect(outcome.opinions[0]?.attempts).toHaveLength(
       COURTLISTENER_TEXT_FORMATS.length,
     );
+  });
+
+  test("holds a cluster whose text columns contain only metadata and placeholders", () => {
+    const blank = Object.fromEntries(
+      COURTLISTENER_TEXT_FORMATS.map((format) => [format, ""]),
+    );
+    const outcome = composeCourtListenerText(
+      mutated("10742675", {
+        ...blank,
+        plain_text:
+          "Case: 24-12345 Date Filed: 01/01/2024 Page: 1 of 2\n\nUnable to extract document content\n\nUnable to extract document content",
+      }),
+    );
+    expect(outcome).toMatchObject({ status: "held", reason: "no-usable-text" });
+    expect(outcome.opinions[0]?.attempts).toContainEqual({
+      format: "plain_text",
+      structure: "plain",
+      reason: "source-placeholder",
+    });
   });
 
   test("needs the page images where only scan layout is left", () => {

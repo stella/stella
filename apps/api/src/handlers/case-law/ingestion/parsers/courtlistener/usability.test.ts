@@ -8,6 +8,37 @@ import {
 
 describe("CourtListener short text usability", () => {
   test.each([
+    [
+      "Case: 24-12345 Date Filed: 01/01/2024 Page: 1 of 2\n\nUnable to extract document content",
+      "source-placeholder",
+    ],
+    [
+      "Case: 24-12345 Date Filed: 01/01/2024 Page: 1 of 2\nUnable to extract document content",
+      "source-placeholder",
+    ],
+    [
+      "Unable to extract document content\n\nUnable to extract document content",
+      "source-placeholder",
+    ],
+    [
+      "No opinion found.\nClick here to view source material.",
+      "source-placeholder",
+    ],
+    [
+      "Case: 24-12345 Date Filed: 01/01/2024 Page: 1 of 2\n\nOffice of the Attorney General",
+      "no-ruling-text",
+    ],
+  ] satisfies [string, CourtListenerTextUsability][])(
+    "classifies metadata and publisher placeholder blocks: %s",
+    (body, expected) => {
+      expect(classifyCourtListenerText(body)).toBe(expected);
+      expect(
+        classifyCourtListenerText(`${body}\n\nThe order is vacated.`),
+      ).toBe("usable");
+    },
+  );
+
+  test.each([
     "Case: 24-12345 Date Filed: 01/01/2024 Page: 1 of 2\n\nCase: 24-12345 Date Filed: 01/01/2024 Page: 2 of 2",
     "Case: 24-12345 Date Filed: 01/01/2024 Page: 1 of 2\nOffice of the Attorney General\nUnited States Court of Appeals for the Second Circuit",
     "Case: 24-12345\nDate Filed: 01/01/2024 Page: 1 of 2\n\nCase: 24-12345\nDate Filed: 01/01/2024 Page: 2 of 2",
@@ -78,6 +109,7 @@ describe("CourtListener short text usability", () => {
 
   test.each([
     ["Unable\tto extract\n document content", "source-placeholder"],
+    ["Unable to extract document content\n\n\ufffd\ufffd\ufffd", "undecodable"],
     [
       "No opinion found.\nClick here to view source material.",
       "source-placeholder",
@@ -91,6 +123,7 @@ describe("CourtListener short text usability", () => {
     ["(b) (7)(C)\n\n(b) (6)", "no-ruling-text"],
     ["Zqhr, J.\n\n17/08/2088", "no-ruling-text"],
     ["\ufffd\ufffd\ufffd\ufffd", "undecodable"],
+    ["Unable to extract document content\n\nÿþc", "undecodable"],
     ["\ufeffc\ufeff\ufeff", "undecodable"],
     ["\ufffda\ufffdb\ufffdc\ufffd", "undecodable"],
     ["ï»¿c", "undecodable"],
