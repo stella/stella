@@ -62,6 +62,7 @@ describe("organization public-law content admission", () => {
       const source = await Bun.file(
         new URL(`../../${file}`, import.meta.url),
       ).text();
+      expect(source).toContain('lawRead: "conditional"');
       expect(source).toContain("admission: LawReadAdmission");
       expect(source).toMatch(/\b(?:admit|admitLawRead)\(\{\s*organizationId/u);
       expect(source).toContain('type: "refused"');

@@ -7,6 +7,7 @@ import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
+import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -47,15 +48,19 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import { MCP_ERROR_CODES, projectMcpRefusal } from "@/api/mcp/error-codes";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { MAX_LIST_LIMIT } from "@/api/mcp/tool-utils";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createScopedDbMock,
   createSelectQueryMock,
   toSafeDbMock,
 } from "@/api/tests/scoped-db-mock";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const loadOrgSettingsMock = mock(async () => ({
   orgAIConfig: null,
@@ -1783,6 +1788,44 @@ describe("discriminated-union input validation names the field", () => {
 // --- capability executor: workspace resolution --------------------------------
 
 describe("capability executor workspace resolution", () => {
+  test("disabled public law retains matter link records with a refused decision payload", async () => {
+    const link = {
+      id: "link_1",
+      decisionId: "decision_1",
+      note: "Organization note",
+      linkedBy: "user_1",
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+    };
+    const database = createScopedDbMock({
+      select: () => createSelectQueryMock([link]),
+    });
+    const restoreRuntimeMode = setRuntimeModeForTesting({
+      mode: RUNTIME_MODE.strict,
+    });
+    testState.setConfig("FEATURE_PUBLIC_LAW", false);
+    disabledFeatures.add("FEATURE_PUBLIC_LAW");
+    try {
+      const result = await handleCapabilityCall({
+        args: {
+          capability: "case-law.matter-links.list",
+          input: { params: { matterId: "ws_1" } },
+        },
+        context: createContext(database),
+      });
+      expect(parseToolPayload(result)).toMatchObject({
+        links: [
+          {
+            ...link,
+            createdAt: link.createdAt.toISOString(),
+            decision: { type: "refused", code: "missing_scope" },
+          },
+        ],
+      });
+    } finally {
+      restoreRuntimeMode();
+    }
+  });
+
   test("inaccessible workspace -> not_found", async () => {
     const result = await handleCapabilityCall({
       args: {

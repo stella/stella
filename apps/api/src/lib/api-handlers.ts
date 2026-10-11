@@ -426,7 +426,7 @@ export type HandlerConfig = InputSchema &
     requestTimeoutMs?: number;
     requiresUsage?: UsageMeteringConfig;
     featureAccess?: FeatureAccessRequirement;
-    lawRead?: "public";
+    lawRead?: "public" | "conditional";
     /** Finite synchronous work; streaming and queued execution need their own lifetimes. */
     actionAdmission?: { type: "handler"; actionKind: PeriodActionKind };
     /**
@@ -490,7 +490,10 @@ export const isAdmittedLawReadHandler = (handler: unknown): boolean =>
 
 const recordSafeHandler = <
   TDefinition extends {
-    config: { accountAccess: AccountAccess; lawRead?: "public" };
+    config: {
+      accountAccess: AccountAccess;
+      lawRead?: "public" | "conditional";
+    };
     handler: object;
   },
 >(

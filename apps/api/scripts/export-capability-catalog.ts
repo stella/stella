@@ -477,8 +477,8 @@ const readApiModule = (importPath: string): string | undefined => {
  *    read_case_law_decision, the legislation corpus tools search_legislation,
  *    read_statute, read_statute_provisions and read_provision_history, the BOE
  *    connector search_boe_legislation, and the public case-law routes);
- *    legislation and case-law capabilities (corpus analysis, matter-links into
- *    corpus decisions, ingestion admin) are corpus-backed.
+ *    legislation and case-law capabilities are corpus-backed. Conditional
+ *    law hydration keeps the owning record listing deployment-independent.
  *  - FEATURE_USAGE gates only `get_usage` (tool disposition; inherited
  *    mechanically, no capability-disposition entries), so `usage` needs no row.
  * Flags read only by the web build gate UI routes, not any API surface (their
@@ -510,6 +510,21 @@ const DOMAIN_FEATURE: Record<string, string> = {
   "vat-rates": "FEATURE_TIME_BILLING",
   "work-obligations": "FEATURE_GOVERNED_WORKFLOW",
 };
+
+type CapabilityDeploymentFeatureOptions = {
+  config: Record<string, unknown>;
+  domain: string;
+  inheritedFeature: string | undefined;
+};
+
+const capabilityDeploymentFeature = ({
+  config,
+  domain,
+  inheritedFeature,
+}: CapabilityDeploymentFeatureOptions): string | undefined =>
+  config["lawRead"] === "conditional"
+    ? undefined
+    : (inheritedFeature ?? DOMAIN_FEATURE[domain]);
 
 type CapabilityMcp =
   | { type: "tool"; name: string }
@@ -1572,7 +1587,11 @@ const buildCatalog = async (): Promise<BuildResult> => {
         permissions,
         compactedInputSchema,
         exposure: endpoint.exposure,
-        feature: inheritedFeature ?? DOMAIN_FEATURE[domain],
+        feature: capabilityDeploymentFeature({
+          config: endpoint.config,
+          domain,
+          inheritedFeature,
+        }),
         featureAccess: parseFeatureRequirement(
           endpoint.config["featureAccess"],
         ),

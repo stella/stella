@@ -150,6 +150,7 @@ const readThreadDecisionPreviews = async ({
 };
 
 const config = {
+  lawRead: "conditional",
   description:
     "List your own chat threads, most recently active first, split into " +
     "global threads and groups per matter. Threads with no messages, and " +
