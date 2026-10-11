@@ -70,3 +70,36 @@ test.each([
 ])("inline stylesheets pass: %s", (css) => {
   expect(inspectMcpAppHtml(`<style>${css}</style>`)).toEqual([]);
 });
+
+test("style elements follow the CSS policy", () => {
+  expect(
+    inspectMcpAppHtml(
+      "<style>width: expression(document.body.clientWidth)</style>",
+    ),
+  ).toContain("Script-bearing CSS: style");
+});
+
+test.each([
+  ".expressionless { color: red }",
+  'body::before { content: "expressionless" }',
+  "color: red",
+])("ordinary CSS passes the style checks: %s", (css) => {
+  expect(inspectMcpAppHtml(`<style>${css}</style>`)).toEqual([]);
+  expect(inspectMcpAppHtml(`<div style="${css}"></div>`)).toEqual([]);
+});
+
+test("committed MCP app bundles pass the HTML guard", async () => {
+  const appsDirectory = new URL("../../src/mcp/apps/", import.meta.url)
+    .pathname;
+  const paths = await Array.fromAsync(
+    new Bun.Glob("*/generated/app.html.txt").scan({
+      absolute: true,
+      cwd: appsDirectory,
+    }),
+  );
+
+  expect(paths.length).toBeGreaterThan(0);
+  for (const path of paths) {
+    expect(inspectMcpAppHtml(await Bun.file(path).text())).toEqual([]);
+  }
+});
