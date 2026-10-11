@@ -1054,7 +1054,7 @@ class WriteSourceResolver {
     }
     return result;
   };
-  private canonicalMethod = ({
+  private readonly canonicalMethod = ({
     value,
     owner,
     binding,
@@ -1077,7 +1077,7 @@ class WriteSourceResolver {
     });
     return imported?.module === owner && imported.imported === binding;
   };
-  private transactionHandleToken = (
+  private readonly transactionHandleToken = (
     value: LocatedExpression,
     seen = new Set<ts.Expression>(),
   ): ts.Expression | undefined => {
@@ -1100,7 +1100,7 @@ class WriteSourceResolver {
     );
   };
   /** The safe handle wraps callback values in Result; unwrap only its canonical generator bridge. */
-  private safeTransactionPropagates = (
+  private readonly safeTransactionPropagates = (
     value: LocatedExpression & { node: ts.CallExpression },
   ): boolean => {
     const bridge = value.node.parent;
@@ -1147,7 +1147,7 @@ class WriteSourceResolver {
         }),
     });
   };
-  private transactionCallback = (
+  private readonly transactionCallback = (
     value: LocatedExpression & { node: ts.CallExpression },
   ): ts.Expression | undefined => {
     if (value.node.questionDotToken !== undefined) {
