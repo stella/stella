@@ -397,10 +397,20 @@ describe("chat history page", () => {
     expect(
       ui.queryByRole("button", { name: messages.common.loadMore }),
     ).toBeNull();
-    expect(listRequests.length).toBeGreaterThan(0);
+    // The page asks the server for that matter's chats; the only unfiltered
+    // read is the matter picker ranking its recent matters.
     expect(
-      listRequests.map((url) => url.searchParams.get("workspaceId")),
-    ).toEqual(listRequests.map(() => MATTER_B.id));
+      listRequests.filter(
+        (url) => url.searchParams.get("workspaceId") === MATTER_B.id,
+      ),
+    ).toHaveLength(1);
+    expect(
+      listRequests.filter(
+        (url) =>
+          url.searchParams.get("workspaceId") !== MATTER_B.id &&
+          url.searchParams.get("workspaceId") !== null,
+      ),
+    ).toEqual([]);
   });
 
   test("clearing the filters brings every chat back", async () => {

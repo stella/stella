@@ -1,10 +1,15 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import {
   Combobox,
+  ComboboxCollection,
   ComboboxEmpty,
+  ComboboxGroup,
+  ComboboxGroupLabel,
   ComboboxInput,
   ComboboxItem,
   ComboboxList,
@@ -13,10 +18,30 @@ import {
 } from "@stll/ui/combobox";
 import { SearchIcon } from "@stll/ui/icons";
 
-import { selectRecentWorkspaces } from "@/components/app-sidebar.logic";
+import {
+  chatActivityByWorkspace,
+  selectPinnedThenRecentWorkspaces,
+} from "@/components/app-sidebar.logic";
 import { MatterIcon } from "@/components/matter-icon";
 import { MatterOptionLabel } from "@/components/matter-option-label";
+import {
+  groupMatterOptions,
+  isBrowsingMatters,
+  MATTER_OPTION_GROUP,
+  MATTER_PICKER_RECENT_LIMIT,
+} from "@/components/workspaces/matter-combobox.logic";
+import type {
+  MatterOptionGroup,
+  MatterOptionGroupKey,
+} from "@/components/workspaces/matter-combobox.logic";
+import {
+  groupedChatThreadsOptions,
+  mergeGroupedChatThreadPages,
+} from "@/features/chat/queries";
+import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
+import { usePinnedStore } from "@/lib/pinned-store";
+import { useQueryView } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 export type MatterOption = {
@@ -39,7 +64,10 @@ export const toMatterOption = (matter: {
   name: matter.name,
 });
 
-const EMPTY_MATTERS: MatterOption[] = [];
+const GROUP_LABEL = {
+  [MATTER_OPTION_GROUP.recent]: "navigation.recents",
+  [MATTER_OPTION_GROUP.all]: "inspector.matterPicker.allMatters",
+} as const satisfies Record<MatterOptionGroupKey, TranslationKey>;
 
 type MatterComboboxProps = {
   /**
@@ -53,7 +81,6 @@ type MatterComboboxProps = {
   id: string;
   onChange: (matter: MatterOption | null) => void;
   value: MatterOption | null;
-  order?: "recent" | "default";
 };
 
 /**
@@ -64,7 +91,9 @@ type MatterComboboxProps = {
  * everywhere. Filtering is client-side over the navigation list the sidebar
  * already holds, so the popup opens without a round trip. Base UI owns the
  * input text and filters the items it is given, so its empty state appears
- * only when nothing matches.
+ * only when nothing matches. While browsing, the reader's recent matters
+ * (pinned first, then by activity, as the sidebar ranks them) lead in their
+ * own group; typing collapses the groups into one filtered list.
  */
 export const MatterCombobox = ({
   activeOrganizationId,
@@ -72,33 +101,45 @@ export const MatterCombobox = ({
   id,
   onChange,
   value,
-  order = "default",
 }: MatterComboboxProps) => {
   const t = useTranslations();
   const { contains } = useComboboxFilter({ sensitivity: "base", value });
+  const [query, setQuery] = useState(value?.name ?? "");
+  const pinnedOrder = usePinnedStore((state) => state.pinnedOrder);
   const {
-    data: matters = EMPTY_MATTERS,
+    data: navigation,
     error,
     isPending,
     refetch,
-  } = useQuery({
-    ...workspacesNavigationOptions({
+  } = useQuery(
+    workspacesNavigationOptions({
       organizationId: activeOrganizationId,
       userId,
     }),
-    select: (data) => {
-      const ordered =
-        order === "recent"
-          ? selectRecentWorkspaces({
-              activeWorkspaceId: undefined,
-              chatActivityByWorkspaceId: new Map(),
-              limit: data.workspaces.length,
-              pinnedIds: new Set(),
-              workspaces: data.workspaces,
-            })
-          : data.workspaces;
-      return ordered.map(toMatterOption);
-    },
+  );
+  // Chat activity only reorders the recent group; without it the group falls
+  // back to matter activity, so its failure is not the picker's to show.
+  const groupedThreadsQuery = useInfiniteQuery(
+    groupedChatThreadsOptions({ activeOrganizationId, userId }),
+  );
+  const groupedThreadsView = useQueryView(groupedThreadsQuery);
+  const workspaces = navigation?.workspaces ?? [];
+  const matters = workspaces.map(toMatterOption);
+  const recentIds = selectPinnedThenRecentWorkspaces({
+    chatActivityByWorkspaceId: chatActivityByWorkspace(
+      mergeGroupedChatThreadPages(
+        groupedThreadsView.type === "items"
+          ? groupedThreadsView.items.pages
+          : undefined,
+      ),
+    ),
+    limit: MATTER_PICKER_RECENT_LIMIT,
+    pinnedOrder,
+    workspaces,
+  }).map((matter) => matter.id);
+  const browsing = isBrowsingMatters({
+    query,
+    selectedName: value?.name ?? null,
   });
 
   return (
@@ -107,13 +148,14 @@ export const MatterCombobox = ({
         // A matter matches on its name or its client's, accent- and
         // case-insensitively. While the input still shows the chosen
         // matter's name, the filter keeps every matter in view.
-        filter={(matter: MatterOption, query) =>
-          contains(matter, query, matterName) ||
-          contains(matter, query, matterClientName)
+        filter={(matter: MatterOption, search) =>
+          contains(matter, search, matterName) ||
+          contains(matter, search, matterClientName)
         }
         isItemEqualToValue={(item, selected) => item.id === selected.id}
-        items={matters}
+        items={browsing ? groupMatterOptions({ matters, recentIds }) : matters}
         itemToStringLabel={(matter) => matter.name}
+        onInputValueChange={setQuery}
         onValueChange={(matter) => onChange(matter)}
         value={value}
       >
@@ -131,11 +173,26 @@ export const MatterCombobox = ({
         />
         <ComboboxPopup>
           <ComboboxList>
-            {(matter: MatterOption) => (
-              <ComboboxItem key={matter.id} value={matter}>
-                <MatterOptionLabel matter={matter} />
-              </ComboboxItem>
-            )}
+            {(entry: MatterOption | MatterOptionGroup<MatterOption>) =>
+              "items" in entry ? (
+                <ComboboxGroup items={entry.items} key={entry.value}>
+                  <ComboboxGroupLabel>
+                    {t(GROUP_LABEL[entry.value])}
+                  </ComboboxGroupLabel>
+                  <ComboboxCollection>
+                    {(matter: MatterOption) => (
+                      <ComboboxItem key={matter.id} value={matter}>
+                        <MatterOptionLabel matter={matter} />
+                      </ComboboxItem>
+                    )}
+                  </ComboboxCollection>
+                </ComboboxGroup>
+              ) : (
+                <ComboboxItem key={entry.id} value={entry}>
+                  <MatterOptionLabel matter={entry} />
+                </ComboboxItem>
+              )
+            }
           </ComboboxList>
           <ComboboxEmpty>{t("common.noResults")}</ComboboxEmpty>
         </ComboboxPopup>

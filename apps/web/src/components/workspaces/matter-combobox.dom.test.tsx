@@ -12,6 +12,8 @@ const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { workspacesNavigationOptions } =
   await import("@/lib/workspaces/queries");
+const { groupedChatThreadsOptions } = await import("@/features/chat/queries");
+const { usePinnedStore } = await import("@/lib/pinned-store");
 const { resolveMatterColor } = await import("@/lib/matter-colors");
 const { MatterCombobox } = await import("./matter-combobox");
 
@@ -26,6 +28,7 @@ const matter = (
   name: string,
   color: string | null,
   client: string | null,
+  lastActivityAt = NOW,
 ) =>
   ({
     client: client === null ? null : { displayName: client, id },
@@ -33,7 +36,7 @@ const matter = (
     color,
     defaultViewId: null,
     id,
-    lastActivityAt: NOW,
+    lastActivityAt,
     name,
     reference: null,
     status: "active",
@@ -52,9 +55,24 @@ const LEASE = matter(
   null,
 );
 
+// Seven matters, each a day less active than the one before.
+const MANY = Array.from({ length: 7 }, (_, index) =>
+  matter(
+    `00000000-0000-7000-8000-00000000c0${index}0`,
+    `Matter ${index}`,
+    "#5a6b7c",
+    null,
+    new Date(NOW.getTime() - index * 86_400_000),
+  ),
+);
+const many = (index: number) => MANY[index] ?? MANY[0];
+
+type ChatActivity = { workspaceId: string; updatedAt: string };
+
 const clients: InstanceType<typeof query.QueryClient>[] = [];
 
 afterEach(() => {
+  usePinnedStore.setState({ pinnedIds: new Set(), pinnedOrder: [] });
   testing.cleanup();
   for (const client of clients) {
     client.clear();
@@ -65,7 +83,18 @@ afterAll(async () => {
   await GlobalRegistrator.unregister();
 });
 
-const openCombobox = (initial: MatterOption = null) => {
+const openCombobox = (
+  initial: MatterOption = null,
+  {
+    chat = [],
+    pinned = [],
+    workspaces = [NOVAK, LEASE],
+  }: {
+    chat?: ChatActivity[];
+    pinned?: string[];
+    workspaces?: WorkspaceNavigationItem[];
+  } = {},
+) => {
   const client = new query.QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
@@ -75,8 +104,38 @@ const openCombobox = (initial: MatterOption = null) => {
       organizationId: ORGANIZATION_ID,
       userId: USER_ID,
     }).queryKey,
-    { workspaces: [NOVAK, LEASE], features: { timeBilling: false } },
+    { workspaces, features: { timeBilling: false } },
   );
+  const history = groupedChatThreadsOptions({
+    activeOrganizationId: ORGANIZATION_ID,
+    userId: USER_ID,
+  });
+  client.setQueryData(history.queryKey, {
+    pageParams: [history.initialPageParam],
+    pages: [
+      {
+        global: [],
+        nextCursor: null,
+        workspaces: chat.map(({ workspaceId, updatedAt }) => ({
+          workspaceId,
+          workspaceName: workspaceId,
+          threads: [
+            {
+              context: { fileCount: 0, files: [], matterCount: 0, matters: [] },
+              createdAt: updatedAt,
+              decision: null,
+              id: `thread-${workspaceId}`,
+              origin: "original",
+              title: "Chat",
+              updatedAt,
+              usedAnonymization: false,
+            },
+          ],
+        })),
+      },
+    ],
+  });
+  usePinnedStore.setState({ pinnedIds: new Set(pinned), pinnedOrder: pinned });
   const Host = () => {
     const [value, setValue] = useState(initial);
     return (
@@ -130,6 +189,86 @@ const openList = async (input: HTMLInputElement) => {
     testing.fireEvent.keyDown(input, { key: "ArrowDown" });
   });
 };
+
+const groupedOptions = (ui: ReturnType<typeof testing.render>) =>
+  ui.queryAllByRole("group").map((group) => [
+    document.querySelector(
+      `[id="${group.getAttribute("aria-labelledby") ?? ""}"]`,
+    )?.textContent ?? "",
+    testing
+      .within(group)
+      .getAllByRole("option")
+      .map((option) => option.textContent),
+  ]);
+
+describe("matter combobox groups", () => {
+  test("browsing leads with recent matters: pinned, then by activity, then all others", async () => {
+    const { input, ui } = openCombobox(null, {
+      // A recent chat lifts the least active matter into the group.
+      chat: [{ workspaceId: many(6).id, updatedAt: NOW.toISOString() }],
+      pinned: [many(5).id],
+      workspaces: MANY,
+    });
+    await openList(input);
+
+    await testing.waitFor(() =>
+      expect(groupedOptions(ui)).toEqual([
+        [
+          messages.navigation.recents,
+          [
+            many(5).name,
+            many(6).name,
+            many(0).name,
+            many(1).name,
+            many(2).name,
+          ],
+        ],
+        [
+          messages.inspector.matterPicker.allMatters,
+          [many(3).name, many(4).name],
+        ],
+      ]),
+    );
+  });
+
+  test("typing drops the groups for one filtered list", async () => {
+    const { input, ui } = openCombobox(null, { workspaces: MANY });
+    await type(input, "Matter 6");
+
+    await testing.waitFor(() =>
+      expect(
+        ui.getAllByRole("option").map((option) => option.textContent),
+      ).toEqual([many(6).name]),
+    );
+    expect(ui.queryAllByRole("group")).toEqual([]);
+    expect(ui.queryByText(messages.navigation.recents)).toBeNull();
+  });
+
+  test("the keyboard reaches the recent group first", async () => {
+    const { input, ui } = openCombobox(null, {
+      pinned: [many(4).id],
+      workspaces: MANY,
+    });
+    await openList(input);
+    await testing.waitFor(() =>
+      expect(ui.getAllByRole("option").length).toBeGreaterThan(0),
+    );
+    if (
+      ui.container.ownerDocument.querySelector("[data-highlighted]") === null
+    ) {
+      await testing.act(async () => {
+        testing.fireEvent.keyDown(input, { key: "ArrowDown" });
+      });
+    }
+
+    await testing.waitFor(() =>
+      expect(
+        ui.container.ownerDocument.querySelector("[data-highlighted]")
+          ?.textContent,
+      ).toBe(many(4).name),
+    );
+  });
+});
 
 describe("matter combobox", () => {
   test("the full list never shows the empty state", async () => {
