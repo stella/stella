@@ -8,8 +8,8 @@ import { workflowSchema } from "./check-ci-event-policy";
 
 const referencedPackages = (value: unknown): string[] => {
   if (typeof value === "string") {
-    const name = value
-      .match(/^\.?\/?node_modules\/((?:@[^/]+\/)?[^/]+)\//u)
+    const name = /^\.?\/?node_modules\/((?:@[^/]+\/)?[^/]+)\//u
+      .exec(value)
       ?.at(1);
     return name === undefined ? [] : [name];
   }
