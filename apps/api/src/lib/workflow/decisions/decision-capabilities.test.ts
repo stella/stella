@@ -51,7 +51,7 @@ test.each([
       },
       generator: async ({ questions }) => {
         generationCalls += 1;
-        expect(questions.answer?.requiredCapability).toBe("tools");
+        expect(questions["answer"]?.requiredCapability).toBe("tools");
         return {
           model: "fake-generative",
           output: { answers: [{ id: "answer", answer, evidence: null }] },

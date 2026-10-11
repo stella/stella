@@ -1618,10 +1618,7 @@ describe("MCP template tools", () => {
         },
       });
       const context = createContext({ scopedDb });
-      context.testDependencies = {
-        ...context.testDependencies,
-        templateDecideConditionsLogic: undefined,
-      };
+      delete context.testDependencies?.templateDecideConditionsLogic;
       const result = await handleMcpToolCall({
         args: { template_id: TEMPLATE_ID, values: { is_consumer: false } },
         context,
