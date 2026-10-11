@@ -480,6 +480,9 @@ export const readDecisionTextByDecision = async ({
       ids: readonly SafeId<"caseLawDecision">[],
     ) => await db(async (tx) => await readDecisionTextCompletions(tx, ids)));
   const textByDecision = new Map<string, CitationDecisionText>();
+  if (pointers.length === 0) {
+    return textByDecision;
+  }
   for (const group of chunkItems(pointers, PASSAGE_AST_GROUP_SIZE)) {
     const ids = group.map((pointer) => pointer.id);
     const columns = await readColumns(caseLawDb, ids);
@@ -497,43 +500,48 @@ export const readDecisionTextByDecision = async ({
         return { id: pointer.id, text };
       }),
     );
-    const currentCompletions = await readCurrent(caseLawDb, ids);
-    const pointerById = new Map(group.map((pointer) => [pointer.id, pointer]));
     for (const entry of entries) {
-      const pointer = pointerById.get(entry.id);
-      if (pointer === undefined) {
-        return panic("Citation text result lost its source pointer");
-      }
-      const completion = checkDecisionTextCompletion(
-        pointer.textEligibilityFingerprint,
-        currentCompletions.get(String(entry.id)),
-      );
-      let text: CitationDecisionText;
-      switch (completion.type) {
-        case "eligible":
-          text = entry.text;
-          break;
-        case "withheld":
-          text = { type: "withheld", reason: completion.reason };
-          break;
-        case "incomplete":
-          text = {
-            type: "gate-failed",
-            error: new CitationTextGateError({
-              message: "Citation decision text changed during its read",
-              reason: completion.reason,
-            }),
-          };
-          break;
-        default:
-          completion satisfies never;
-          return panic("Unhandled post-read text completion state");
-      }
-      if (text.type === "gate-failed" && entry.text.type !== "gate-failed") {
-        captureCitationTextGateFailure(text.error, "completion");
-      }
-      textByDecision.set(String(entry.id), text);
+      textByDecision.set(String(entry.id), entry.text);
     }
+  }
+  const currentCompletions = await readCurrent(
+    caseLawDb,
+    pointers.map(({ id }) => id),
+  );
+  for (const pointer of pointers) {
+    const readText = textByDecision.get(String(pointer.id));
+    if (readText === undefined) {
+      return panic("Citation source pointer has no document result");
+    }
+    const completion = checkDecisionTextCompletion(
+      pointer.textEligibilityFingerprint,
+      currentCompletions.get(String(pointer.id)),
+    );
+    let text: CitationDecisionText;
+    switch (completion.type) {
+      case "eligible":
+        text = readText;
+        break;
+      case "withheld":
+        text = { type: "withheld", reason: completion.reason };
+        break;
+      case "incomplete":
+        text = {
+          type: "gate-failed",
+          error: new CitationTextGateError({
+            message: "Citation decision text changed during its read",
+            reason: completion.reason,
+          }),
+        };
+        break;
+      default:
+        completion satisfies never;
+        return panic("Unhandled post-read text completion state");
+    }
+    if (text.type === "gate-failed" && readText.type !== "gate-failed") {
+      captureCitationTextGateFailure(text.error, "completion");
+    }
+    textByDecision.set(String(pointer.id), text);
   }
   return textByDecision;
 };
@@ -663,10 +671,10 @@ export const completeDecisionCitations = async ({
   if (gated.type === "invalid_cursor") {
     return gated;
   }
-  const textByDecision = await readDecisionTextByDecision(
+  const textByDecision = await readDecisionTextByDecision({
     caseLawDb,
-    gated.sources,
-  );
+    pointers: gated.sources,
+  });
   const evidenceByCitation = new Map(
     gated.evidence.type === "ready"
       ? gated.evidence.rows.map((row) => [String(row.id), row] as const)

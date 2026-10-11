@@ -292,7 +292,7 @@ export const hydrateDeferredDocument = async ({
     documentAstSource: null,
     fulltext: null,
     sections: null,
-    metadata: null,
+    metadata: {},
     headnote: absentTextField(absenceReason),
     textFields: absentDecisionTextFields(absenceReason),
     citationsFrom: [],

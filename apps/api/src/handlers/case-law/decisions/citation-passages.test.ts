@@ -384,6 +384,101 @@ test("an unchanged completion during the AST read retains citation text and exce
   });
 });
 
+test("a later AST batch changes the first decision before the page completion", async () => {
+  const citationText = "21 Cdo 500/2019";
+  const paragraph = `Synthetic reasoning in ${citationText}.`;
+  const ast = astOf([{ anchorId: "p1", text: paragraph }]);
+  const pointer = () => ({
+    id: createSafeId<"caseLawDecision">(),
+    astS3Key: "synthetic/ast",
+    contentHash: "synthetic-hash",
+    textEligibilityFingerprint: "eligible-revision",
+  });
+  const first = pointer();
+  const last = pointer();
+  const pointers = [
+    first,
+    ...Array.from(
+      { length: LIMITS.caseLawCitationPassageConcurrency - 1 },
+      pointer,
+    ),
+    last,
+  ];
+  const eligible = {
+    textEligibilityFingerprint: "eligible-revision",
+    textWithheldReason: null,
+    textIncompleteReason: null,
+    textRevisionFingerprint: "synthetic-revision",
+  };
+  let firstCompletion: DecisionTextCompletionSnapshot = eligible;
+  let astReads = 0;
+  const completions: { ids: readonly string[]; astReads: number }[] = [];
+  const textByDecision = await readDecisionTextByDecision({
+    caseLawDb: caseLawPublicReadDb,
+    pointers,
+    readColumns: async (_db, ids) =>
+      new Map(
+        ids.map((id) => [
+          String(id),
+          {
+            ...eligible,
+            contentHash: "synthetic-hash",
+            documentAst: ast,
+            sections: null,
+          },
+        ]),
+      ),
+    readAst: async (source) => {
+      astReads += 1;
+      if (source.id === last.id) {
+        firstCompletion = {
+          textEligibilityFingerprint: "withheld-revision",
+          textWithheldReason: DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE,
+          textIncompleteReason: null,
+          textRevisionFingerprint: "synthetic-revision",
+        };
+      }
+      return ast;
+    },
+    readTombstones: async () => new Set(),
+    readCurrentCompletions: async (_db, ids) => {
+      completions.push({ ids, astReads });
+      return new Map(
+        ids.map((id) => [
+          String(id),
+          id === first.id ? firstCompletion : eligible,
+        ]),
+      );
+    },
+  });
+  const text = textByDecision.get(String(first.id));
+  expect(text).toEqual({
+    type: "withheld",
+    reason: DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE,
+  });
+  expect(
+    citationTextFields({
+      text,
+      textWithheldReason: text?.type === "withheld" ? text.reason : null,
+      citationText,
+      sectionIndex: 0,
+      windowStart: 0,
+      windowEnd: paragraph.length,
+    }),
+  ).toEqual({
+    citationText: null,
+    passage: null,
+    evidenceExcerpt: null,
+    textIncompleteReason: null,
+  });
+  for (const other of pointers.slice(1)) {
+    expect(textByDecision.get(String(other.id))?.type).toBe("eligible");
+  }
+  expect(completions).toEqual([
+    { ids: pointers.map(({ id }) => id), astReads: pointers.length },
+  ]);
+});
+
 test("an absent analysis retains eligible citation text without excerpts", () => {
   expect(
     citationTextFields({

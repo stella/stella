@@ -258,7 +258,7 @@ test.each([
           documentAstSource: null,
           fulltext: null,
           sections: null,
-          metadata: null,
+          metadata: {},
           headnote: {
             type: "absent",
             reason: absenceReason,
