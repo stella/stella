@@ -78,7 +78,7 @@ const serializeContactExport = (
     };
   }
 
-  const csvRows = [CONTACT_IMPORT_FIELDS.join(",")];
+  const csvRows: string[] = [CONTACT_IMPORT_FIELDS.join(",")];
   for (const contact of portable) {
     csvRows.push(
       CONTACT_IMPORT_FIELDS.map((field) => escapeCSV(contact[field])).join(","),
