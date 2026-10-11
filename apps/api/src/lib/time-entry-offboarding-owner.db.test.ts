@@ -219,7 +219,9 @@ describe.skipIf(!enabled)(
           });
           const census = openClient().sql;
           expect(
-            await census.unsafe(`SELECT id FROM ${schema}.system_audit_runs`),
+            await census.unsafe<{ id: string }[]>(
+              `SELECT id FROM ${schema}.system_audit_runs`,
+            ),
           ).toEqual([]);
           const remaining = await census.unsafe<{ count: number }[]>(
             `SELECT count(*)::int AS count FROM ${schema}.billing_arrangements`,
