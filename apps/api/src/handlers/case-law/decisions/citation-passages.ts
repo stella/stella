@@ -340,8 +340,9 @@ export const readCitationDecisionText = async ({
   }
   const read = await Result.tryPromise(
     async () =>
-      await readAst({ ...pointer, documentAst: columns.documentAst }, () =>
-        Promise.resolve(tombstones.value),
+      await readAst(
+        { ...pointer, documentAst: columns.documentAst },
+        async () => Promise.resolve(tombstones.value),
       ),
   );
   if (Result.isError(read)) {
