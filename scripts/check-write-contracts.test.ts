@@ -374,7 +374,11 @@ describe("write contracts cover the mutation route graph", () => {
       "apps/api/src/lib/write-contract.ts",
       'const REVISION_PRECONDITIONS = {existing: ["revision"]} as const;',
     );
-    expect(check(sources)).toEqual([]);
+    expect(check(sources)).toEqual([
+      expect.stringContaining(
+        "Replacement must reach owner enforcement for revision",
+      ),
+    ]);
   });
   test("debt IDs and the exact baseline must shrink together", () => {
     const registrations = enumerate(fixture(deferredConfig));
