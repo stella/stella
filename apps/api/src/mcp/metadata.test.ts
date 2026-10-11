@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { env } from "@/api/env";
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import {
+  MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_DEFAULT_RESOURCE_SCOPES,
   MCP_LAW_RESOURCE_SCOPES,
@@ -50,6 +51,19 @@ describe("MCP protected resource metadata", () => {
     });
   });
 
+  test("keeps external gateway consent on the advanced resource", () => {
+    expect(getMcpProtectedResourceMetadata().scopes_supported).not.toContain(
+      "stella:external_mcps",
+    );
+    expect(
+      getMcpProtectedResourceMetadata("advanced").scopes_supported,
+    ).toEqual([...MCP_ADVANCED_RESOURCE_SCOPES]);
+    expect(getMcpResourceUrl("advanced")).toEndWith("/mcp/advanced");
+    expect(getMcpProtectedResourceMetadataUrl("advanced")).toEndWith(
+      "/.well-known/oauth-protected-resource/mcp/advanced",
+    );
+  });
+
   test("advertises anonymized MCP metadata on the separate resource", () => {
     expect(getMcpProtectedResourceMetadata("anonymized")).toEqual({
       authorization_servers: [getAuthIssuerUrl()],
@@ -76,7 +90,7 @@ describe("MCP protected resource metadata", () => {
     });
   });
 
-  test("advertises the law MCP metadata with only search and read", () => {
+  test("advertises the scopes derived for the law MCP resource", () => {
     expect(getMcpProtectedResourceMetadata("law")).toEqual({
       authorization_servers: [getAuthIssuerUrl()],
       bearer_methods_supported: ["header"],
@@ -86,7 +100,7 @@ describe("MCP protected resource metadata", () => {
         "favicon.svg",
         `${env.FRONTEND_URL.replace(/\/$/u, "")}/`,
       ).toString(),
-      scopes_supported: ["stella:search", "stella:read"],
+      scopes_supported: MCP_LAW_RESOURCE_SCOPES,
       stella_contract: {
         capabilities: { ...STELLA_API_CONTRACT.capabilities },
         protocol: STELLA_API_CONTRACT.protocol,
@@ -101,8 +115,12 @@ describe("MCP protected resource metadata", () => {
       },
     });
     // The public-corpus audience carries no write grant and no anonymized
-    // pairing, so the advertised list is exactly the two read grants.
-    expect(MCP_LAW_RESOURCE_SCOPES).toEqual(["stella:search", "stella:read"]);
+    // pairing, so the advertised list is exactly its three read grants.
+    expect(MCP_LAW_RESOURCE_SCOPES).toEqual([
+      "stella:search",
+      "stella:read",
+      "stella:law_read",
+    ]);
   });
 
   test("resolves the law resource and its discovery document on /mcp-law", () => {

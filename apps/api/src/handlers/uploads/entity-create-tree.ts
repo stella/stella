@@ -539,6 +539,7 @@ const createPendingRows = async ({
 // The purpose is fixed at entity_create, so the grant that purpose spends is
 // the static gate; nothing is left for the handler to authorize.
 const config = {
+  contract: "patch",
   permissions: { entity: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: entityUploadRealtimeUpdates,

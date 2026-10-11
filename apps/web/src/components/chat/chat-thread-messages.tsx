@@ -6,6 +6,8 @@ import { useTranslations } from "use-intl";
 
 import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
 import type { AIErrorKind } from "@stll/api-contract";
+import { isChatPastedTextPart } from "@stll/api-contract/chat";
+import type { ChatPastedTextPart } from "@stll/api-contract/chat";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 import {
@@ -35,6 +37,7 @@ import {
 } from "@/components/chat/chat-activity.logic";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
 import { ChatAnswerDecisionProvider } from "@/components/chat/chat-decision-citation";
+import { ChatAttachmentChip } from "@/components/chat/chat-draft-attachment-chips";
 import { ChatImageAttachment } from "@/components/chat/chat-image-attachment";
 import { ChatMessageActionsMenu } from "@/components/chat/chat-message-actions-menu";
 import {
@@ -74,6 +77,7 @@ import {
   hasRunningToolCallInLatestAssistantMessage,
   isApprovalPart,
   isOpaquePersistedChatToolCallPart,
+  isPendingApprovalPart,
   savedPlaybookId,
 } from "@/components/chat/chat-ui-tools";
 import {
@@ -89,11 +93,15 @@ import { RequestSecretCard } from "@/components/chat/request-secret-card";
 import { SourceChips } from "@/components/chat/source-chips";
 import { SpawnSubagentsCard } from "@/components/chat/spawn-subagents-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
-import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
+import {
+  PendingToolApprovalCard,
+  ToolApprovalCard,
+} from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { uiResourceRenderer } from "@/components/chat/ui-resource-renderer";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
 import { CopyActionButton } from "@/components/copy-action-button";
+import { ProviderDiagnosticMessage } from "@/components/provider-diagnostic-message";
 import { ReferenceRenderScope } from "@/components/references/reference-chip";
 import {
   mentionAttrsToHref,
@@ -110,6 +118,7 @@ import { dedupeById } from "@/lib/dedupe-by-id";
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { chatRefusal } from "@/lib/errors/api";
+import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   getUserFileContentUrl,
@@ -129,6 +138,8 @@ export const ChatThreadMessages = ({
   loadOlderError = false,
   messages: rawMessages,
   onLoadOlder,
+  onAnswerEdited,
+  answerRewriteAvailability = "unknown",
   scrollContainerRef,
   onResend,
   onSendWithoutAnonymization,
@@ -354,9 +365,9 @@ export const ChatThreadMessages = ({
         ) : (
           <>
             {(() => {
-              const fileParts: ChatAttachmentPart[] = [];
+              const fileParts: UserAttachmentPart[] = [];
               for (const part of message.parts) {
-                if (isChatAttachmentPart(part)) {
+                if (isChatAttachmentPart(part) || isChatPastedTextPart(part)) {
                   fileParts.push(part);
                 }
               }
@@ -364,7 +375,7 @@ export const ChatThreadMessages = ({
               return <UserAttachments parts={fileParts} />;
             })()}
             {message.parts.map((part, partIndex) =>
-              part.type === "text" ? (
+              part.type === "text" && !isChatPastedTextPart(part) ? (
                 <UserMessageText
                   // oxlint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates parts within this single message.
                   key={`${message.id}-user-text-${partIndex}`}
@@ -388,7 +399,15 @@ export const ChatThreadMessages = ({
     <ReferenceRenderScope workspaceId={workspaceId}>
       {scrollRef !== null && <ChatTranscriptCopy rootRef={scrollRef} />}
       {branchSource !== undefined && scrollRef !== null && (
-        <ChatSelectionToolbar rootRef={scrollRef} source={branchSource} />
+        <ChatSelectionToolbar
+          key={branchSource.threadRef.threadId}
+          rootRef={scrollRef}
+          source={branchSource}
+          messages={messages}
+          isGenerating={generationActive}
+          onAnswerEdited={onAnswerEdited}
+          answerRewriteAvailability={answerRewriteAvailability}
+        />
       )}
       {canLoadOlder && (
         <LoadOlderSentinel
@@ -482,9 +501,9 @@ const StickyUserTurn = ({
     messages,
     headerIndex,
   );
-  const fileParts: ChatAttachmentPart[] = [];
+  const fileParts: UserAttachmentPart[] = [];
   for (const part of headerMessage.parts) {
-    if (isChatAttachmentPart(part)) {
+    if (isChatAttachmentPart(part) || isChatPastedTextPart(part)) {
       fileParts.push(part);
     }
   }
@@ -494,7 +513,10 @@ const StickyUserTurn = ({
   // case so the pinned context is never blank; turns that have text keep the
   // current behavior (attachments hidden, text clamped).
   const hasVisibleText = headerMessage.parts.some(
-    (part) => part.type === "text" && part.content.trim().length > 0,
+    (part) =>
+      part.type === "text" &&
+      !isChatPastedTextPart(part) &&
+      part.content.trim().length > 0,
   );
 
   // The compact pinned header must be a visual change only. If collapsing
@@ -656,7 +678,7 @@ const StickyUserTurn = ({
                 )}
               >
                 {headerMessage.parts.map((part, partIndex) =>
-                  part.type === "text" ? (
+                  part.type === "text" && !isChatPastedTextPart(part) ? (
                     <UserMessageText
                       // oxlint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates parts within this single message.
                       key={`${headerMessage.id}-user-text-${partIndex}`}
@@ -820,10 +842,12 @@ const downloadDataAttachment = ({
   downloadFile(new Blob([decoded.value], { type: mimeType }), fileName);
 };
 
+type UserAttachmentPart = ChatAttachmentPart | ChatPastedTextPart;
+
 const UserAttachments = ({
   parts,
 }: {
-  parts: readonly ChatAttachmentPart[];
+  parts: readonly UserAttachmentPart[];
 }) => {
   const t = useTranslations();
 
@@ -834,6 +858,20 @@ const UserAttachments = ({
   return (
     <div className="flex flex-wrap gap-1.5">
       {parts.map((part, index) => {
+        if (isChatPastedTextPart(part)) {
+          const pastedTextKey = `pasted-text-${index}`;
+          return (
+            <ChatAttachmentChip
+              behavior={{ type: "sent" }}
+              item={{
+                type: "pasted_text",
+                id: pastedTextKey,
+                text: part.content,
+              }}
+              key={pastedTextKey}
+            />
+          );
+        }
         const url = getAttachmentUrl(part);
         const filename = getAttachmentFilename(part);
         const mimeType = getAttachmentMimeType(part);
@@ -943,6 +981,12 @@ const CHAT_ERROR_TRANSLATION_KEYS = {
   model_unavailable: "chat.sendErrorModelUnavailable",
   provider_credentials_rejected: "chat.sendErrorProviderCredentialsRejected",
   provider_stream_incomplete: "chat.sendErrorStreamIncomplete",
+  // A chat turn keeps a `length` answer and carries no schema or deadline of
+  // its own, so these reach it only through a structured side call; each
+  // reads as its nearest chat outcome.
+  output_incomplete: "chat.sendErrorStreamIncomplete",
+  output_invalid: "chat.sendError",
+  deadline_exceeded: "chat.sendErrorProviderUnavailable",
   provider_unavailable: "chat.sendErrorProviderUnavailable",
   quota_exhausted: "chat.sendErrorQuotaExhausted",
 } as const satisfies Record<MappedChatErrorKind, TranslationKey>;
@@ -985,6 +1029,7 @@ export const ChatErrorMessage = ({
     onSendWithoutAnonymization !== undefined &&
     isThirdPartyBoundaryRefusalError(error);
   const refusal = chatRefusal(error);
+  const diagnostic = providerDiagnosticFromThrown(error);
 
   if (actionAdmissionOutcome(error)) {
     return (
@@ -1009,9 +1054,13 @@ export const ChatErrorMessage = ({
   return (
     <Message from="assistant">
       <MessageContent className="bg-destructive/10 border-destructive/20 text-destructive max-w-md rounded-lg border px-3 py-2">
-        <p className="text-sm">
-          {refusal ? refusal.message : t(chatErrorTranslationKey(error))}
-        </p>
+        {diagnostic !== undefined ? (
+          <ProviderDiagnosticMessage diagnostic={diagnostic} />
+        ) : (
+          <p className="text-sm">
+            {refusal ? refusal.message : t(chatErrorTranslationKey(error))}
+          </p>
+        )}
         <div className="flex flex-wrap gap-2">
           {canSendWithoutAnonymization && (
             <Button
@@ -1135,13 +1184,21 @@ const AssistantMessageActions = ({
   const text = useMemo(() => getMessageText(message), [message]);
   const canRetry = Boolean(onResend) && retryOffered;
   const canFork = Boolean(threadRef) && forkOffered;
+  const outcome = message.metadata?.turnOutcome;
+  const stoppedByUser =
+    outcome?.type === "cancelled" && outcome.reason === "user-stop";
 
-  if (!text && !canRetry && !canFork) {
+  if (!text && !canRetry && !canFork && !stoppedByUser) {
     return null;
   }
 
   return (
     <div className="flex shrink-0 items-center gap-1" data-chat-answer-actions>
+      {stoppedByUser && (
+        <span className="text-muted-foreground px-1.5 text-xs" role="status">
+          {t("chat.stopped")}
+        </span>
+      )}
       {text && (
         <CopyActionButton
           className="text-muted-foreground h-6 px-1.5"
@@ -1221,6 +1278,12 @@ type ChatThreadMessagesProps = {
    *  sentinel cannot loop the request (the manual button still retries). */
   loadOlderError?: boolean | undefined;
   messages: ChatUIMessage[];
+  onAnswerEdited?: ((messageId: string) => Promise<void>) | undefined;
+  answerRewriteAvailability?:
+    | "available"
+    | "anonymized"
+    | "unknown"
+    | undefined;
   /** Explicit scroll container for surfaces that render outside a
    *  `Conversation`/StickToBottom provider (e.g. the file-chat overlay);
    *  falls back to the StickToBottom context when omitted. */
@@ -1460,7 +1523,8 @@ const toAssistantPartRenderEntries = (
 // transport companions, so they stay inside a process run without becoming
 // visible steps or splitting the run. Interactive tool cards (ask-user,
 // create-document, approvals, subagent runs) read as answer content, so
-// they stay outside the folded process disclosure.
+// they stay outside the folded process disclosure; an approval-gated call
+// is one of them from its first input byte, before the request arrives.
 const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
   if (entry.type === "rich") {
     return false;
@@ -1477,7 +1541,8 @@ const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
     part.name !== "ask-user" &&
     part.name !== "create-document" &&
     part.name !== "spawn_subagents" &&
-    !isApprovalPart(part)
+    !isApprovalPart(part) &&
+    !isPendingApprovalPart(part)
   );
 };
 
@@ -1615,6 +1680,12 @@ const AssistantMessageParts = ({
   const renderEntries = toAssistantPartRenderEntries(message.parts);
   const isTurnActive = isGenerating && isLatestAssistantMessage;
   const renderGroups = toAssistantPartRenderGroups(renderEntries);
+  // Start open while this message is actively streaming its reasoning (no
+  // answer text yet), but always render the same disclosure so the user can
+  // collapse it immediately. Once the stream settles it folds unless the user
+  // already did so.
+  const thinkingDisplayState =
+    !hasAnswerContent && isTurnActive ? "expanded" : "folded";
   const renderEntry = (entry: AssistantPartRenderEntry, index: number) => {
     if (entry.type === "rich") {
       return (
@@ -1632,15 +1703,7 @@ const AssistantMessageParts = ({
       return (
         <AssistantThinkingPart
           components={streamdownComponents}
-          displayState={
-            // Start open while this message is actively streaming its
-            // reasoning (no answer text yet), but always render the same
-            // disclosure so the user can collapse it immediately. Once
-            // the stream settles it folds unless the user already did so.
-            !hasAnswerContent && isGenerating && isLatestAssistantMessage
-              ? "expanded"
-              : "folded"
-          }
+          displayState={thinkingDisplayState}
           key={`${message.id}-thinking-${index}`}
           reasoningTokenCount={
             index === firstThinkingPartIndex ? reasoningTokenCount : null
@@ -1664,6 +1727,8 @@ const AssistantMessageParts = ({
           components={streamdownComponents}
           key={`${message.id}-text-${index}`}
           restorationPairs={restorationPairs}
+          partIndex={index}
+          sourceOffsets={!isTurnActive}
           text={part.content}
         />
       );
@@ -1777,6 +1842,10 @@ const AssistantMessageParts = ({
             part={part}
           />
         );
+      }
+
+      if (isPendingApprovalPart(part)) {
+        return <PendingToolApprovalCard key={part.id} part={part} />;
       }
 
       return (
@@ -2055,11 +2124,15 @@ const AssistantTextPart = ({
   className,
   components,
   restorationPairs,
+  partIndex,
+  sourceOffsets = false,
   text,
 }: {
   className?: string | undefined;
   components: ChatThreadMessagesProps["streamdownComponents"];
   restorationPairs: readonly ChatAnonRestoration[];
+  partIndex?: number;
+  sourceOffsets?: boolean;
   text: string;
 }) => {
   // Stable identity so MessageResponse memo can short-circuit when
@@ -2078,6 +2151,8 @@ const AssistantTextPart = ({
     return (
       <MessageResponse
         components={components}
+        data-text-part-index={partIndex}
+        sourceOffsets={sourceOffsets}
         fallbackChildren={assistantMessageFallbackText(text)}
         {...classNamePatch}
       >
@@ -2088,6 +2163,8 @@ const AssistantTextPart = ({
   return (
     <MessageResponse
       components={components}
+      data-text-part-index={partIndex}
+      sourceOffsets={sourceOffsets}
       fallbackChildren={assistantMessageFallbackText(text)}
       rehypePlugins={rehypePlugins}
       {...classNamePatch}

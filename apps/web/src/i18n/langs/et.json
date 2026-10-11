@@ -727,6 +727,13 @@
         "procedural-history": "Menetluskäik",
         "reasoning": "Arutlus"
       },
+      "errors": {
+        "answerIncomplete": "{source, select, organization {Sinu organisatsiooni {provider}-võti andis puuduliku vastuse.} other {AI-mudel andis puuduliku vastuse.}}",
+        "providerRefused": "{source, select, organization {{provider} lükkas sinu organisatsiooni võtmega tehtud päringu tagasi. Kontrolli võtit, selle limiiti ja arveldust organisatsiooni seadetes.} other {AI-teenusepakkuja lükkas päringu tagasi.}}",
+        "providerUnavailable": "{source, select, organization {{provider} pole sinu organisatsiooni võtmega praegu saadaval.} other {AI-teenusepakkuja pole praegu saadaval.}}",
+        "timedOut": "{source, select, organization {{provider} ei vastanud sinu organisatsiooni võtmega õigel ajal.} other {AI-mudel ei vastanud õigel ajal.}}",
+        "unavailable": "Selle lahendi AI-analüüs pole saadaval."
+      },
       "generate": "Koosta AI lühikokkuvõtted",
       "holdingAnchor": "Mine lõigu juurde",
       "invitation": "Tasuta kontoga koostab AI selle lahendi kohta töömärkmed.",
@@ -1091,6 +1098,18 @@
     "anonymizedSpan": {
       "tooltip": "Mudelile saadeti kujul {placeholder}."
     },
+    "answerEdit": {
+      "acceptFailed": "Muudatust ei saanud salvestada. Proovige uuesti.",
+      "ask": "Taotle muudatusi",
+      "failed": "Muudatust ei saanud ette valmistada. Proovige uuesti.",
+      "instruction": "Kirjeldage muudatust",
+      "instructionRequired": "Kirjeldage, kuidas valitud teksti muuta.",
+      "invalidSelection": "Seda valikut ei saa muuta. Valige järjestikune tekstilõik.",
+      "proposal": "Soovitatud muudatus",
+      "requesting": "Muudatuste ettevalmistamine…",
+      "stale": "See vastus on muutunud. Valige tekst uuesti.",
+      "submit": "Taotle muudatust"
+    },
     "applyMode": {
       "description": "Word salvestab, kes iga muudatuse tegi. Jätame sinu valiku meelde.",
       "direct": "Ei, rakenda otse",
@@ -1314,7 +1333,9 @@
     "pastedText": {
       "expand": "Näita kogu teksti",
       "fromClipboard": "Kleebitud {count, plural, one {# märk} other {# märki}}",
-      "fromPromptFallback": "Oskus"
+      "fromPromptFallback": "Oskus",
+      "showInTextField": "Kuva tekstiväljal",
+      "title": "Kleebitud tekst"
     },
     "placeholder": "Kirjutage oma küsimus siia, / oskuste jaoks, @ konteksti lisamiseks",
     "promptImprovementStrategies": {
@@ -1682,6 +1703,7 @@
     "actions": "Toimingud",
     "active": "Aktiivne",
     "add": "Lisa",
+    "advanced": "Täpsemad seaded",
     "all": "Kõik",
     "and": "Ja",
     "anonymizationLabels": {
@@ -1748,6 +1770,7 @@
     "createdAt": "Loodud {date}",
     "currency": "Valuuta",
     "currentPage": "Praegune lehekülg",
+    "custom": "Kohandatud",
     "date": "Kuupäev",
     "datePicker": {
       "label": "Kuupäevavalija",
@@ -1901,6 +1924,7 @@
     "noResults": "Tulemused puuduvad",
     "noVersions": "Versiooniajalogu pole",
     "none": "Puudub",
+    "notStated": "Pole märgitud",
     "notes": "Märkused",
     "open": "Ava",
     "openInNewTab": "Ava uuel vahekaardil",
@@ -1935,6 +1959,7 @@
     "rename": "Nimeta ümber",
     "required": "Kohustuslik",
     "reset": "Lähtesta",
+    "resetToDefault": "Lähtesta vaikeväärtusele",
     "resetZoom": "Lähtesta suum",
     "restore": "Taasta",
     "retry": "Proovi uuesti",
@@ -1969,6 +1994,7 @@
     "sort": "Sorteeri",
     "source": "Allikas",
     "stale": "Aegunud",
+    "start": "Alusta",
     "status": "Olek",
     "stepCount": "{count, plural, one {# samm} other {# sammu}}",
     "stepProgress": "{current} / {total}",
@@ -1988,6 +2014,7 @@
     "unexpectedError": "Ilmnes ootamatu viga. Palun pöörduge klienditoe poole.",
     "unknownUser": "Tundmatu kasutaja",
     "unpin": "Eemalda kinnitamine",
+    "unsavedChanges": "Salvestamata muudatused",
     "unsavedChangesEscape": "Salvestamata muudatused. Loobumiseks vajuta uuesti Esc",
     "unsavedLeaveConfirm": "Teil on salvestamata muudatusi. Kas lahkuda salvestamata?",
     "unverified": "Kontrollimata",
@@ -2035,6 +2062,7 @@
     "scopeExternalMcps": "Teie ühendatud väliste tööriistade kasutamine",
     "scopeFeedback": "Tootetagasiside saatmine stella hooldajatele",
     "scopeKnowledgeWrite": "Luua, muuta ja kustutada teie klausleid ja käivitada playbooke",
+    "scopeLawRead": "Lugeda avalikke õigusakte ja kohtupraktikat",
     "scopeMattersWrite": "Luua ja muuta teie toimikuid ja ülesandeid",
     "scopeOfflineAccess": "Hoida teid sisse logituna ilma korduva nõusolekuta",
     "scopeOnboarding": "Seadistada teie organisatsiooni praktikajurisdiktsioonid",
@@ -2046,11 +2074,38 @@
     "scopeSkills": "Teie salvestatud stella oskuste kasutamine",
     "scopeTemplates": "Dokumendimallide loend, täitmine ja loomine",
     "scopeTemplatesAnonymized": "Loendada, täita ja luua teie dokumendimallide anonüümitud versioone",
+    "sensitiveAccess": "Sisaldab juurdepääsu, mis võib andmeid kustutada või teie organisatsiooni muuta",
+    "showAllPermissions": "{count, plural, one {Näita õigust} other {Näita kõiki # õigust}}",
     "signedInAs": "Sisse logitud kui <email>{accountEmail}</email>",
+    "summaryAdminRead": "auditilogi",
+    "summaryAdminWrite": "organisatsiooni liikmed ja seaded, sealhulgas nende kustutamine",
+    "summaryBillingWrite": "ajakirjed, sealhulgas nende kustutamine",
+    "summaryChat": "vestlused, sealhulgas nende kustutamine",
+    "summaryContactsWrite": "kontaktid, sealhulgas nende kustutamine",
+    "summaryDocumentsWrite": "dokumendid, sealhulgas nende kustutamine",
+    "summaryExternalMcps": "ühendatud välised tööriistad",
+    "summaryFeedback": "tagasiside",
+    "summaryKnowledgeWrite": "klauslid ja playbookid, sealhulgas klauslite kustutamine",
+    "summaryLawRead": "avalikke õigusakte ja kohtupraktikat",
+    "summaryLineChange": "<group>Saab muuta:</group> {items} ({count})",
+    "summaryLineOther": "<group>Lisaks:</group> {items}",
+    "summaryLineRead": "<group>Saab lugeda:</group> {items} ({count})",
+    "summaryMattersWrite": "toimikud ja ülesanded, sealhulgas nende kustutamine",
+    "summaryOfflineAccess": "sisselogituks jäämine",
+    "summaryOnboarding": "praktikajurisdiktsioonid",
+    "summaryProfile": "profiil",
+    "summaryRead": "dokumendid, toimikud ja kontaktid",
+    "summaryReadAnonymized": "anonüümitud dokumendid ja toimikud",
+    "summarySearch": "otsing",
+    "summarySearchAnonymized": "anonüümitud otsing",
+    "summarySkills": "oskused, sealhulgas nende kustutamine",
+    "summaryTemplates": "dokumendimallid, sealhulgas nende kustutamine",
+    "summaryTemplatesAnonymized": "anonüümitud dokumendimallid",
     "title": "Anna juurdepääs",
     "unverifiedApp": "Kinnitamata rakendus",
     "unverifiedExplanation": "stella pole kontrollinud, kes selle rakenduse avaldab.",
-    "useAnotherAccount": "Kasuta teist kontot"
+    "useAnotherAccount": "Kasuta teist kontot",
+    "verifiedPublisher": "Kinnitatud rakendus, väljaandja {publisher}"
   },
   "contacts": {
     "alsoPartyIn": "Esineb osapoolena ka {count, plural, one {# teises toimikus} other {# teises toimikus}}",
@@ -2754,7 +2809,6 @@
       },
       "selectFlow": "Vali töövoog",
       "sizeConfirmTitle": "Mahukas töövoo käivitus",
-      "start": "Alusta",
       "startFailed": "Töövoogu ei õnnestunud käivitada.",
       "started": "Töövoog käivitatud",
       "stepProgress": "Samm {current} / {total}",
@@ -2971,8 +3025,7 @@
   "guides": {
     "action": {
       "replay": "Alusta uuesti",
-      "skip": "Jäta vahele",
-      "start": "Alusta"
+      "skip": "Jäta vahele"
     },
     "checklist": {
       "progress": "{completed} / {total} tehtud"
@@ -3652,6 +3705,10 @@
         "nameMissing": "Salvestamata: lisage nimi",
         "positionsNeedAttention": "Salvestamata: {count, plural, one {# seisukoht vajab} other {# seisukohta vajavad}} tähelepanu"
       },
+      "buildWithAi": {
+        "description": "Vasta vestluses mõnele küsimusele ja playbook salvestatakse jooksvalt.",
+        "title": "Loo AI-ga"
+      },
       "check": "Kasuta tehisintellekti asemel täpset reeglit",
       "checkHint": "Mõõdetavate tingimuste jaoks, näiteks: maksetähtaeg ≤ 30 päeva.",
       "checkKind": {
@@ -3803,7 +3860,6 @@
         "fallback": "Alternatiiv",
         "notAcceptable": "Vastuvõetamatu"
       },
-      "unsavedChanges": "Salvestamata muudatused",
       "untitledPosition": "Pealkirjata seisukoht",
       "updated": "Playbook uuendatud",
       "updatedAt": "Uuendatud {date}",
@@ -3892,7 +3948,9 @@
   },
   "lawHome": {
     "clearRecent": "Kustuta hiljutised",
+    "clearRecentConfirmation": "Kas kustutada kõik teie hiljutised otsingud, kohtulahendid ja õigusaktid selles organisatsioonis? Seda ei saa tagasi võtta.",
     "enteringIntoForce": "Peagi jõustuv",
+    "importFailed": "Kohalikku ajalugu ei saanud importida. See on endiselt selles seadmes alles.",
     "inForceFrom": "Jõustub {date}",
     "noRecent": "Hiljutisi tegevusi pole",
     "noSignals": "Signaale veel pole",
@@ -4012,7 +4070,6 @@
       "invalidBinding": "Lisage klahv, mis pole muuteklahv",
       "notRebindable": "Seda otseteed ei saa muuta",
       "pressKeys": "Vajutage uued klahvid…",
-      "resetToDefault": "Lähtesta vaikeväärtusele",
       "title": "Klaviatuuri otseteed"
     },
     "showShortcuts": "Kuva klaviatuuri otseteed",
@@ -4102,37 +4159,55 @@
     "aiConfig": {
       "addProvider": "Lisa teenusepakkuja",
       "addProviderFirst": "Lisa esmalt teenusepakkuja",
+      "anthropicKeyDisabled": "Looge Anthropic Console’is aktiivne API-võti ja asendage see võti.",
+      "anthropicNoCredits": "Lisage Anthropic Console’i arveldusjaotises API-krediiti ja proovige uuesti.",
+      "anthropicOrganizationRestricted": "Paluge oma Anthropic organisatsiooni administraatorilt juurdepääsu või kasutage lubatud organisatsiooni võtit.",
+      "anthropicSubscriptionToken": "Kasutage Anthropic Console’is loodud API-võtit, mitte Claude’i tellimuse tokenit.",
+      "anthropicWorkspaceId": "Tööruumi ID",
+      "anthropicWorkspaceRequired": "See Anthropic API-võti vajab tööruumi. Sisestage tööruumi ID Anthropic Console’ist ja salvestage uuesti.",
+      "anthropicWorkspaces": "Ava Anthropic tööruumid",
       "apiKey": "API-võti",
       "apiKeyConfiguredPlaceholder": "Seadistatud: {key}. Sisesta uus võti, et see asendada.",
       "apiKeyPlaceholder": "Sisestage oma API võti",
       "apiKeySaved": "Salvestatud võti {key}",
       "apiKeyUpdatePlaceholder": "Sisestage uus võti selle asendamiseks",
+      "azureModelNotEnabled": "Kontrollige, kas mudeli juurutus on valitud Azure’i ressursis ja piirkonnas olemas ning kas sellel võtmel on sellele juurdepääs.",
       "baseUrl": "Põhi-URL",
+      "bedrockModelNotEnabled": "Kontrollige mudeli saadavust valitud AWS-i piirkonnas, mudelile juurdepääsu ja oma IAM-i õigusi. Lubage mudel või valige ligipääsetav mudel ja proovige uuesti.",
       "chooseModelsSubtitle": "Vali igale rollile mudel. Hinnad uuenevad paremal.",
       "chooseModelsTitle": "Vali mudelid",
       "configure": "Seadista",
       "customModelBadge": "Kohandatud · {provider}",
       "customModelDescription": "Seda mudeli ID-d stella kataloogis ei ole. See saadetakse valitud teenusepakkujale sisestatud kujul.",
       "customModelHint": "Kataloogis vastet pole. Sisesta ükskõik milline mudeli ID; kohandatud ID salvestatakse sisestatud kujul.",
-      "dataRegion": "Andmepiirkond",
-      "dataRegionDescription": "Suunab AI päringud valitud piirkonna kaudu andmesuveräänsuse tagamiseks.",
-      "dataRegionUnsupported": "Piirkondlik marsruutimine on saadaval ainult Google AI (Vertex AI) puhul.",
       "decision": {
-        "add": "Lisa otsustusmudel",
-        "description": "Kindla vastusega küsimused, näiteks dokumendikategooriad või viidete polaarsus, suunatakse sellele mudelile; ilma selleta vastab neile generatiivne mudel.",
+        "dataRegion": "Andmepiirkond",
+        "description": "Kindla vastusega küsimused (dokumendikategooriad, viidete polaarsus)",
+        "generativeFallback": "Kasutab ülesande jaoks generatiivset mudelit.",
         "incomplete": "Sisesta otsustusmudeli jaoks API-võti ja mudel või eemalda see.",
         "instanceProvided": "stella pakub juba otsustusmudelit; lisa oma ainult siis, kui soovid mõnda teist kasutada.",
-        "label": "Otsustusmudel",
-        "modelId": "Mudeli ID"
+        "label": "Otsustamine",
+        "regionEu": "Euroopa Liit",
+        "regionGlobal": "Ülemaailmne",
+        "reuseOpenAIKey": "Kasuta minu OpenAI võtit",
+        "separateKey": "Kasuta eraldi võtit"
       },
       "defaultModel": "Vaikimisi: {model}",
       "defaultModelOption": "Vaikimisi",
+      "defaultRationale": {
+        "chat": "Vestlusteks ja igapäevasteks küsimusteks.",
+        "fast": "Lühikesteks tavapärasteks ülesanneteks.",
+        "pdf": "PDF-dokumentide lugemiseks ja analüüsimiseks.",
+        "reasoning": "Keerukateks ülesanneteks, mis nõuavad põhjalikku arutlemist."
+      },
       "deploymentNamePlaceholder": "Juurutuse nimi",
-      "description": "Kasutage oma API võtit või seadistage andmesuveräänsuse piirkond.",
       "editProviders": "Muuda teenusepakkujaid",
       "endpoint": "Lõpp-punkt",
       "endpointDescription": "Kasuta Azure OpenAI või Azure Foundry /openai/v1 endpointi. stella salvestab normaliseeritud endpointi.",
+      "googleApiNotEnabled": "Lubage Generative Language API selles Google Cloudi projektis, millele võti kuulub, ja proovige uuesti.",
+      "googleKeyRestricted": "Kontrollige Google Cloudis selle võtme API-, IP-aadressi- ja viitavate veebisaitide piiranguid. Lubage vajalik API ja oma serveri päringud ning proovige uuesti.",
       "keepSavedKey": "Hoia salvestatud võti alles",
+      "keyFormatHint": "Selle võtme vorming on teenusepakkuja {provider} puhul ebatavaline. Salvestage võti, et seda teenusepakkujaga kontrollida.",
       "modelForRole": "Rolli {role} mudel",
       "modelIdPlaceholder": "Otsi mudeleid",
       "modelsDescription": "Vali iga AI-kategooria jaoks teenusepakkuja ja üks pakutud multimodaalne mudel.",
@@ -4140,6 +4215,9 @@
       "newApiKey": "Uus API võti",
       "newApiKeyDescription": "See asendab salvestatud võtme muudatuste salvestamisel.",
       "noModelResults": "Sobivaid pakutud mudeleid ei leitud",
+      "openaiInsufficientQuota": "Kontrollige oma OpenAI projekti eelarvet ja API arveldust. Lisage krediiti või suurendage vastavat limiiti ja proovige uuesti.",
+      "openaiProjectOrganizationMismatch": "Kasutage soovitud OpenAI projekti ja organisatsiooni API-võtit. Kontrollige nende juurdepääsuseadeid ja proovige uuesti.",
+      "openrouterNoCredits": "Lisage OpenRouteri arveldusjaotises krediiti ja proovige uuesti.",
       "overrideRoles": "Alista rollid",
       "overrideRolesDescription": "Vali, millised rollid kasutavad seda võtit, ja seejärel iga rolli mudel. Valimata rollid kasutavad platvormi vaikevalikut.",
       "prices": {
@@ -4159,15 +4237,14 @@
       "providerForRole": "{role} teenusepakkuja",
       "providerKeyInvalid": "{provider} keeldus võtmest. Kontrollige seda enne salvestamist.",
       "providerKeyInvalidShort": "Vigane",
+      "providerSetupConsole": "Ava teenusepakkuja seaded",
       "providersDescription": "Lisa nende teenusepakkujate mandaadid, mida stella peaks kasutama.",
       "providersPanel": "Teenusepakkujad",
-      "regions": {
-        "ch": "Šveits (europe-west6)",
-        "eu": "EL (europe-west4)",
-        "global": "Globaalne"
-      },
+      "removeLastProviderConfirm": "Kas eemaldada {provider}? See lähtestab ka kohandatud tehisintellektimudelite valikud.",
       "removeProvider": "Eemalda teenusepakkuja",
+      "removeProviderConfirm": "Kas eemaldada {provider} ja salvestatud autentimisandmed?",
       "replaceKey": "Asenda võti",
+      "roleUnavailable": "{provider} ei toeta seda rolli.",
       "roles": {
         "chat": "Vestlus",
         "fast": "Kiire",
@@ -4177,7 +4254,8 @@
       "selectAtLeastOneRole": "Vali selle võtme jaoks vähemalt üks roll.",
       "selectModelForEachRole": "Lisa teenusepakkuja ja vali iga kategooria jaoks mudel.",
       "selectedProvider": "{provider}",
-      "title": "AI seadistus"
+      "title": "AI seadistus",
+      "usingDefaults": "Kasutusel on vaikeseaded"
     },
     "invitations": {
       "cancelInvitation": "Tühista kutse",
@@ -4207,7 +4285,6 @@
       "patternMustContainSeq": "Muster peab sisaldama '{'SEQ'}'",
       "patternRequired": "Muster on kohustuslik",
       "presets": {
-        "custom": "Kohandatud",
         "sequential": "Järjestikune (001)",
         "yearMonthSequential": "Aasta-kuu / Järjestikune (2026-02/001)",
         "yearSequential": "Aasta / Järjestikune (2026/001)"
@@ -4239,7 +4316,6 @@
       "member": "Liige",
       "owner": "Omanik"
     },
-    "settings": "Organisatsiooni seaded",
     "settingsDescription": "Muutke oma organisatsiooni nime ja slugi",
     "switchOrganization": "Vaheta organisatsiooni"
   },
@@ -4614,7 +4690,7 @@
     "organization": {
       "activeMembers": "Aktiivsed liikmed",
       "ai": "AI seadistus",
-      "aiDescription": "Kasutage oma API võtit või seadistage andmesuveräänsuse piirkond",
+      "aiDescription": "Ühendage oma tehisintellekti teenusepakkujate võtmed.",
       "anonymization": {
         "addPlaceholder": "Termin, mida alati maskeerida (nt meeskonna nimi)",
         "deleteAction": "Kustuta termin",
@@ -4779,7 +4855,17 @@
     "amendedTimes": "{count, plural, =0 {Muutmata} one {Muudetud # kord} other {Muudetud # korda}}",
     "asOf": "Kehtinud tekst kuupäeval",
     "backToList": "Kõik õigusaktid",
+    "citingDecisionHideSnippet": "Ahenda lõik",
+    "citingDecisionMentionCount": "viidatud {count}×",
+    "citingDecisionOlderVersion": "Varasem redaktsioon",
+    "citingDecisionShowSnippet": "Näita kogu lõiku",
+    "citingDecisionsCourtPlaceholder": "Kõik kohtud",
     "citingDecisionsFilterPlaceholder": "Filtreeri laaditud lahendeid",
+    "citingDecisionsSnapshotCapped": "Kuvatakse {count} lahendit (kuni {limit} kõige rohkem seda sätet maininud lahendit).",
+    "citingDecisionsSortCitations": "Viited sellele sättele",
+    "citingDecisionsSortDate": "Lahendi kuupäev",
+    "citingDecisionsYear": "Lahendi aasta",
+    "citingDecisionsYearPlaceholder": "Kõik aastad",
     "columns": {
       "act": "Õigusakt",
       "amendments": "Muudatused",
@@ -4821,6 +4907,7 @@
     "inForceSince": "Kehtib alates {date}",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecisions": "Juhtivad lahendid",
+    "leadingDecisionsExplanation": "Iga lahendi esimene viide, järjestatud viite kaalukuse järgi: kaalutud saabuvad viited, arvestades kohtu taset, viite polaarsust ja vanust.",
     "noVersionInForce": "Valitud kuupäeval ei kehtinud ükski selle õigusakti redaktsioon.",
     "openEnded": "praeguseni",
     "openProvision": "Ava säte",
@@ -5458,11 +5545,7 @@
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx",
       "currentKey": "Salvestatud võti",
       "description": "Seadistage DeepL-i API-võti, et lubada dokumentide tõlkimine. Toetatud on nii Free- kui ka Pro-võtmed.",
-      "removed": "DeepL-i võti eemaldatud",
-      "removedDescription": "Tõlkimine on keelatud, kuni lisatakse uus võti.",
       "removing": "Eemaldan…",
-      "saved": "DeepL-i võti salvestatud",
-      "savedDescription": "Tõlked on nüüd saadaval.",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "DeepL-i tõlge"
@@ -6032,12 +6115,30 @@
         "addPDF": "Lisa PDF",
         "applyCrop": "Rakenda kärpimine",
         "crop": "Kärbi",
-        "cropBottom": "All",
-        "cropDescription": "{count, plural, one {Määra valitud lehe kärpimisveerised.} other {Määra # valitud lehe kärpimisveerised.}}",
-        "cropLeft": "Vasakul",
-        "cropRight": "Paremal",
+        "cropAdvanced": "Täpsemad seaded",
+        "cropBottom": "All (mm)",
+        "cropDescription": "{count, plural, one {Määra valitud lehe kärpimisveerised millimeetrites.} other {Määra # valitud lehe kärpimisveerised millimeetrites.}}",
+        "cropHandle": "Muuda kärpimisala suurust: {position}",
+        "cropHandleBottom": "all",
+        "cropHandleBottomLeft": "all vasakul",
+        "cropHandleBottomRight": "all paremal",
+        "cropHandleLeft": "vasakul",
+        "cropHandleRight": "paremal",
+        "cropHandleTop": "üleval",
+        "cropHandleTopLeft": "üleval vasakul",
+        "cropHandleTopRight": "üleval paremal",
+        "cropHint": "Lohista ala või selle pidemeid. Nooleklahvid muudavad kärpimist 1 mm kaupa, koos Shiftiga 10 mm kaupa. Kõigile valitud lehtedele rakendatakse samu veeriseid.",
+        "cropLeft": "Vasakul (mm)",
+        "cropMove": "Liiguta kärpimisala",
+        "cropNextPage": "Järgmine valitud leht",
+        "cropPage": "Leht {page, number} / {count, number}",
+        "cropPreview": "Kärpimise eelvaade, leht {page, number}",
+        "cropPreviewFailed": "Lehe eelvaadet ei õnnestunud kuvada.",
+        "cropPreviousPage": "Eelmine valitud leht",
+        "cropRight": "Paremal (mm)",
         "cropTitle": "Kärbi lehti",
-        "cropTop": "Ülal",
+        "cropTooSmall": "See leht on liiga väike, et kärpida seda vähemalt 10 mm suuruseks.",
+        "cropTop": "Ülal (mm)",
         "delete": "Kustuta",
         "deselectAll": "Tühista kõik valikud",
         "discard": "Loobu",
@@ -6246,7 +6347,6 @@
     "views": {
       "addAdvancedFilter": "Lisa täpsem filter",
       "addFields": "Lisa väljad",
-      "advancedFilter": "Täpsem",
       "advancedFilterCount": "{count, plural, =0 {suvaline} one {# reegel} other {# reeglit}}",
       "aiGenerated": "Tehisintellektiga loodud",
       "calendar": {

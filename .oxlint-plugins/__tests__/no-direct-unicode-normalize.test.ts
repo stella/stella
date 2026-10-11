@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { lintSingleRule } from "./lint-single-rule.ts";
+import { lintRuleAcrossFiles, lintSingleRule } from "./lint-single-rule.ts";
 
 test("rejects every native normalization form shape", async () => {
   const source = [
@@ -65,4 +65,19 @@ test("allows the text-normalize owner to call the native primitive", async () =>
       { sourcePath: "packages/text-normalize/src/native.ts" },
     ),
   ).toEqual([]);
+});
+
+test("resets owner exclusions and Node path bindings between files", async () => {
+  expect(
+    await lintRuleAcrossFiles("no-direct-unicode-normalize", {
+      "a-path.ts": 'import path from "node:path"; path.normalize(file);',
+      "packages/text-normalize/src/native.ts": 'text.normalize("NFC");',
+      "z-consumer.ts":
+        'const path = "text";\npath.normalize();\ntext.normalize("NFC");',
+    }),
+  ).toEqual({
+    "a-path.ts": [],
+    "packages/text-normalize/src/native.ts": [],
+    "z-consumer.ts": [2, 3],
+  });
 });

@@ -77,7 +77,10 @@ export const OWNER_LOST_OUTCOME = {
 const AI_ERROR_RETRYABLE = {
   empty_completion: true,
   loop_detected: false,
+  deadline_exceeded: true,
   model_unavailable: false,
+  output_incomplete: true,
+  output_invalid: true,
   provider_billing: false,
   provider_credentials_rejected: false,
   provider_stream_incomplete: true,
@@ -93,7 +96,10 @@ const AI_ERROR_RETRYABLE = {
 export const AI_ERROR_FAILURE_CODE = {
   empty_completion: "empty-response",
   loop_detected: "provider-error",
+  deadline_exceeded: "provider-error",
   model_unavailable: "provider-error",
+  output_incomplete: "provider-error",
+  output_invalid: "provider-error",
   provider_billing: "provider-error",
   provider_credentials_rejected: "provider-error",
   provider_stream_incomplete: "provider-error",

@@ -1,10 +1,12 @@
 import type { AIErrorKind } from "@stll/api-contract";
+import { declareFailureClass } from "@stll/errors";
 
 import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
 import {
   INCOMPLETE_STREAM_CODE,
   TRUNCATED_AT_OUTPUT_CEILING_CODE,
 } from "@/api/lib/chat/provider-stream-contract";
+import type { RedactedProviderDiagnostic } from "@/api/lib/errors/redacted-provider-diagnostic";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
@@ -51,7 +53,13 @@ type ProviderCallErrorOptions = {
   kind: AIErrorKind;
   facts?: { status: number; isRetryable?: boolean } | undefined;
   requestId?: string | undefined;
+  providerDiagnostic?: RedactedProviderDiagnostic | undefined;
 };
+
+const diagnostics = new WeakMap<
+  ProviderCallError,
+  RedactedProviderDiagnostic
+>();
 
 export class ProviderCallError extends HandlerError {
   declare code?: ProviderCallErrorCode | undefined;
@@ -61,6 +69,10 @@ export class ProviderCallError extends HandlerError {
   readonly requestId: string | undefined;
   readonly kind: AIErrorKind;
 
+  get providerDiagnostic(): RedactedProviderDiagnostic | undefined {
+    return diagnostics.get(this);
+  }
+
   constructor({
     model,
     status,
@@ -68,6 +80,7 @@ export class ProviderCallError extends HandlerError {
     kind,
     facts,
     requestId,
+    providerDiagnostic,
   }: ProviderCallErrorOptions) {
     super({
       message: PROVIDER_CALL_ERROR_MESSAGE,
@@ -84,6 +97,9 @@ export class ProviderCallError extends HandlerError {
             },
           }),
     });
+    if (providerDiagnostic !== undefined) {
+      diagnostics.set(this, providerDiagnostic);
+    }
     this.name = "ProviderCallError";
     this.provider = model.provider;
     this.keySource = model.keySource;
@@ -107,10 +123,77 @@ export class ModelRunError extends HandlerError {
   readonly provider: ResolvedTanStackTextModel["provider"];
   readonly keySource: ResolvedTanStackTextModel["keySource"];
 
-  constructor({ model }: ModelRunErrorOptions) {
-    super({ message: MODEL_RUN_ERROR_MESSAGE, status: 502 });
+  constructor(
+    { model }: ModelRunErrorOptions,
+    message: string = MODEL_RUN_ERROR_MESSAGE,
+  ) {
+    super({ message, status: 502 });
     this.name = "ModelRunError";
     this.provider = model.provider;
     this.keySource = model.keySource;
+  }
+}
+
+export const MODEL_OUTPUT_INCOMPLETE_MESSAGE =
+  "The AI model's answer was cut off before it was complete";
+
+/**
+ * The model's answer ended before it was whole: the run stopped at its output
+ * budget (a `length` finish, a `max_tokens` stop), or the structured output it
+ * produced was cut off and does not parse. Named rather than left a bare
+ * `ModelRunError`, so every sink records it as the incomplete answer it is and
+ * a caller can tell the user so.
+ */
+export class ModelOutputIncompleteError extends ModelRunError {
+  static {
+    declareFailureClass(this, "model_output_incomplete");
+  }
+
+  constructor(options: ModelRunErrorOptions) {
+    super(options, MODEL_OUTPUT_INCOMPLETE_MESSAGE);
+    this.name = "ModelOutputIncompleteError";
+  }
+}
+
+const MODEL_OUTPUT_INVALID_MESSAGE =
+  "The AI model's answer did not match the requested structure";
+
+/**
+ * A complete structured answer the requested schema rejects. The schema's own
+ * issue text can quote the answer, so like its parent it keeps a fixed
+ * message and no cause.
+ */
+export class ModelOutputInvalidError extends ModelRunError {
+  static {
+    declareFailureClass(this, "model_output_invalid");
+  }
+
+  constructor(options: ModelRunErrorOptions) {
+    super(options, MODEL_OUTPUT_INVALID_MESSAGE);
+    this.name = "ModelOutputInvalidError";
+  }
+}
+
+const MODEL_DEADLINE_EXCEEDED_MESSAGE =
+  "The AI model did not answer within the time allowed";
+
+/**
+ * A run that outlived the deadline its caller set. Distinct from a
+ * cancellation (the caller or its client went away): the provider was slower
+ * than the budget, so the caller says so instead of reporting an abort. The
+ * deadline bounds model resolution too, so a run that never reached a model
+ * ends this way as well, and the error names no provider.
+ */
+export class ModelDeadlineExceededError extends HandlerError {
+  readonly deadlineMs: number;
+
+  static {
+    declareFailureClass(this, "model_deadline_exceeded");
+  }
+
+  constructor({ deadlineMs }: { deadlineMs: number }) {
+    super({ message: MODEL_DEADLINE_EXCEEDED_MESSAGE, status: 502 });
+    this.name = "ModelDeadlineExceededError";
+    this.deadlineMs = deadlineMs;
   }
 }

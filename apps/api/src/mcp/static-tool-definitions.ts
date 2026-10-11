@@ -70,6 +70,14 @@ export const DEFAULT_MCP_TOOL_DEFINITIONS = [
   ...CAPABILITY_TOOL_SET.definitions,
 ] as const satisfies readonly McpToolDefinition[];
 
+const PURPOSE_BUILT_MCP_TOOL_DEFINITIONS = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
+  ({ name }) =>
+    name !== "list_capabilities" &&
+    name !== "describe_capability" &&
+    name !== MCP_CAPABILITY_EXECUTORS.read &&
+    name !== MCP_CAPABILITY_EXECUTORS.write,
+);
+
 export type AnonymizingMcpToolName = Extract<
   (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number],
   { anonymized: { exposure: "anonymize" } }
@@ -374,7 +382,8 @@ export const LAW_MCP_TOOL_DEFINITIONS = scopeDefinitionsToSurface([
  * one's by falling through a conditional.
  */
 const MCP_TOOL_DEFINITIONS_BY_MODE = {
-  default: DEFAULT_MCP_TOOL_DEFINITIONS,
+  advanced: DEFAULT_MCP_TOOL_DEFINITIONS,
+  default: PURPOSE_BUILT_MCP_TOOL_DEFINITIONS,
   anonymized: ANONYMIZED_MCP_TOOL_DEFINITIONS,
   documents: DOCUMENTS_MCP_TOOL_DEFINITIONS,
   law: LAW_MCP_TOOL_DEFINITIONS,
@@ -386,6 +395,7 @@ const toToolDefinitionMap = (definitions: readonly McpToolDefinition[]) =>
   );
 
 const MCP_TOOL_DEFINITION_MAPS = {
+  advanced: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.advanced),
   default: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.default),
   anonymized: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.anonymized),
   documents: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.documents),

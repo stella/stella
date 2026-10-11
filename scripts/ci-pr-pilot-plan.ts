@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 
 export const PILOT_FAST_ROOTS = [
+  "desktop-rust-lint",
+  "scan-engine-wasm-drift",
   "ci-checks-docs",
   "ci-checks-generated",
   "ci-checks-policy",
@@ -8,13 +10,18 @@ export const PILOT_FAST_ROOTS = [
   "ci-tests",
   "code-quality-api",
   "code-quality-web-rest",
+  "query-perf",
 ] as const;
+/** Jobs every profile runs: wall-clock checks no plan scope can skip. */
+export const PILOT_ALWAYS = ["dated-waiver-expiry"] as const;
+// Queue-only Docker checks remain deferred on PRs, including the pilot profile.
 export const PILOT_DEFERRED = [
   "docker-checks",
   "parser-version-guard",
   "ci-generated-sources",
   "ci-browser",
   "service-suites",
+  "postgres-service-suites",
   "migration-upgrade-rehearsal",
   "release-typecheck",
   "fix-tests-on-base",
@@ -34,7 +41,8 @@ export const PILOT_DEFERRED = [
   "api-image-smoke",
   "legal-atlas-image",
   "windows-scripts",
-  "desktop-clippy",
+  "desktop-windows-dry-run",
+  "desktop-rust-tests",
   "dependency-malware",
   "api-test-durations",
 ] as const;
@@ -52,6 +60,7 @@ export const pilotFastJobs = (workflow: unknown) => {
   const declared = new Set<string>([
     "ci-plan",
     "ci-result",
+    ...PILOT_ALWAYS,
     ...PILOT_FAST_ROOTS,
     ...PILOT_DEFERRED,
   ]);

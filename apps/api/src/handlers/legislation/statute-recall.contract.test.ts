@@ -25,7 +25,6 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import {
   CORPUS_INDEX_MANIFESTS,
-  corpusIndexConfigFromManifest,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { buildLegislationV2ProjectionDocuments } from "@/api/lib/legal-search/corpus-index-projection-builder";
@@ -37,6 +36,7 @@ import type {
   LegislationReadDb,
   LegislationReadTransaction,
 } from "@/api/lib/legislation-public-read-db";
+import { corpusFixtureIndexConfig } from "@/api/tests/helpers/corpus-fixture-index";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestPglite,
@@ -330,7 +330,7 @@ describe.skipIf(!runEngineTests)(
       );
 
       const created = await corpusClient.createIndex(
-        corpusIndexConfigFromManifest(MANIFEST, INDEX_ID),
+        corpusFixtureIndexConfig(MANIFEST, INDEX_ID),
         "unobserved",
       );
       if (created.isErr()) {
@@ -365,11 +365,13 @@ describe.skipIf(!runEngineTests)(
         }
         return built.value;
       });
-      const ingested = await corpusClient.ingestCommittedBatch(
-        INDEX_ID,
-        `${documents.map((document) => JSON.stringify(document)).join("\n")}\n`,
-        "unobserved",
-      );
+      const ingested = await corpusClient.ingestCommittedBatch({
+        indexId: INDEX_ID,
+        ndjson: `${documents.map((document) => JSON.stringify(document)).join("\n")}\n`,
+        observer: "unobserved",
+        commitTimeoutSecs:
+          MANIFEST.engine.indexConfig.indexing_settings.commit_timeout_secs,
+      });
       if (ingested.isErr()) {
         throw ingested.error;
       }

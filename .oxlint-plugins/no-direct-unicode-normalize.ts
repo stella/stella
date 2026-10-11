@@ -59,14 +59,21 @@ export default eslintCompatPlugin({
             "Use stripUnicodeMarks() or stripDiacritics() from @stll/text-normalize so mark-removal semantics stay explicit.",
         },
       },
-      create(context) {
-        if (filenameForContext(context).includes("packages/text-normalize/")) {
-          return {};
-        }
+      createOnce(context) {
         const nodePathBindings = new Set<string>();
+        let isOwnerFile = false;
 
         return {
+          before() {
+            nodePathBindings.clear();
+            isOwnerFile = filenameForContext(context).includes(
+              "packages/text-normalize/",
+            );
+          },
           ImportDeclaration(node) {
+            if (isOwnerFile) {
+              return;
+            }
             if (
               typeof node.source.value !== "string" ||
               !NODE_PATH_SPECIFIERS.has(node.source.value)
@@ -84,6 +91,9 @@ export default eslintCompatPlugin({
             }
           },
           CallExpression(node) {
+            if (isOwnerFile) {
+              return;
+            }
             if (
               !isAstNode(node.callee) ||
               node.callee.type !== "MemberExpression"

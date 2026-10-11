@@ -36,7 +36,6 @@ import {
 } from "@/api/lib/document-processing-queue";
 import type { DocumentProcessingReconciliationDependencies } from "@/api/lib/document-processing-queue";
 import {
-  automaticOcrRetryDelayMs,
   DOCUMENT_PROCESSING_FAILURE_REPORT,
   documentProcessingFailureReport,
   DocumentProcessingRunSettledError,
@@ -55,10 +54,10 @@ import {
   isPreservableAutomaticProjection,
   ownsPromotedManualOcrClaim,
   requiresOcrPolicy,
-  shouldFailStaleAutomaticOcrRun,
   shouldPreserveCurrentProjection,
 } from "@/api/lib/document-processing-queue-policy";
 import { createReconciliationProgress } from "@/api/lib/document-processing-reconciliation-progress";
+import { documentProcessingRetryDelayMs } from "@/api/lib/document-processing-retry";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { isTransientPgConnectionError } from "@/api/lib/pg-error";
 import { isTransientRedisConnectionError } from "@/api/lib/redis-error-classification";
@@ -988,37 +987,11 @@ describe("bounded search-index replay", () => {
   });
 });
 
-describe("stale OCR lease recovery", () => {
-  test("terminates capped automatic OCR but leaves manual and index replay claims recoverable", () => {
-    expect(
-      shouldFailStaleAutomaticOcrRun({
-        attemptCount: 5,
-        errorCode: null,
-        requestSource: "upload",
-      }),
-    ).toBe(true);
-    expect(
-      shouldFailStaleAutomaticOcrRun({
-        attemptCount: 5,
-        errorCode: null,
-        requestSource: "manual",
-      }),
-    ).toBe(false);
-    expect(
-      shouldFailStaleAutomaticOcrRun({
-        attemptCount: 5,
-        errorCode: "search_index_failed",
-        requestSource: "repair",
-      }),
-    ).toBe(false);
-  });
-});
-
 describe("automatic OCR failure recovery", () => {
   test("uses bounded exponential backoff", () => {
-    expect(automaticOcrRetryDelayMs(1)).toBe(30_000);
-    expect(automaticOcrRetryDelayMs(2)).toBe(60_000);
-    expect(automaticOcrRetryDelayMs(10)).toBe(30 * 60 * 1000);
+    expect(documentProcessingRetryDelayMs(1)).toBe(30_000);
+    expect(documentProcessingRetryDelayMs(2)).toBe(60_000);
+    expect(documentProcessingRetryDelayMs(10)).toBe(30 * 60 * 1000);
   });
 
   test("requeues only retryable automatic failures below the attempt cap", () => {
@@ -1201,8 +1174,8 @@ describe("worker interruption lifecycle", () => {
     expect(queueSource).toContain("cause: processingResult.error");
     expect(queueSource).toContain('if (settlement === "unsettled")');
     expect(queueSource).toContain("throw processingResult.error");
-    expect(queueSource).toContain(
-      'logger.warn("document_processing.attempt_failed", {\n      ...documentProcessingFailureFields(error)',
+    expect(queueSource).toMatch(
+      /logger\.warn\(\s*"document_processing\.attempt_failed",\s*sanitizeErrorAttributesForOutput\(\{\s*\.\.\.documentProcessingFailureFields\(error\)/u,
     );
   });
 

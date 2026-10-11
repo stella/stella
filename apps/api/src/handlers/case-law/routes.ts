@@ -24,6 +24,7 @@ const authenticatedCaseLawRoute = new Elysia({
   .guard({ validateAuth: true })
   .get("/decisions/:decisionId/analysis", generateDecisionAnalysis.handler, {
     params: generateDecisionAnalysis.config.params,
+    query: generateDecisionAnalysis.config.query,
     permissions: generateDecisionAnalysis.config.permissions,
   })
   .post("/decisions/search/refine", refineCaseLawSearch.handler, {

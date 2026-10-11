@@ -655,6 +655,7 @@ const TemplateStudioChatInner = ({
   const {
     error,
     messages,
+    refreshAnswers,
     resendLatestMessage,
     sendMessage,
     queuedMessages,
@@ -1347,6 +1348,10 @@ const TemplateStudioChatInner = ({
             scrollRef={threadScrollRef}
           >
             <ChatThreadMessages
+              onAnswerEdited={refreshAnswers}
+              answerRewriteAvailability={
+                data.usedAnonymization ? "anonymized" : "available"
+              }
               approvalPendingMessageId={approvalPendingMessageId}
               error={error}
               isGenerating={isGenerating}

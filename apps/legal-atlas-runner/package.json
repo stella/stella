@@ -28,7 +28,7 @@
     "start": "bun src/index.ts",
     "smoke": "bun src/index.ts smoke",
     "test": "bun test src",
-    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
+    "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check apps/legal-atlas-runner",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/legal-atlas-runner",
     "format": "bun ../../scripts/run-oxfmt.ts .",

@@ -43,6 +43,7 @@ import { createSha256 } from "@stll/sha256/bun";
 
 import { env } from "@/api/env";
 import {
+  resolveOrgAIModelForRole,
   normalizeProviderRegion,
   type AIRequestServiceTier,
   type DataRegion,
@@ -57,6 +58,7 @@ import type {
   AIRequestPolicy,
   ManagedAIResidency,
 } from "@/api/lib/chat/ai-data-policy";
+import { anthropicClientOptions } from "@/api/lib/chat/anthropic-config";
 import {
   getManagedOpenRouterConfiguration,
   type ManagedOpenRouterCredential,
@@ -71,6 +73,7 @@ import {
 import { withProviderImageInput } from "@/api/lib/chat/provider-image-input";
 import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
 import { validateDataUrl } from "@/api/lib/data-url";
+import { registerProviderDiagnosticCredentials } from "@/api/lib/errors/redacted-provider-diagnostic";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import {
@@ -339,6 +342,7 @@ type ModelOverride = {
 type TanStackModelFactoryOptions = {
   provider: AIProvider;
   region?: DataRegion | undefined;
+  anthropicWorkspaceId?: string | undefined;
 } & (
   | { apiKey: string; dataClass: AIDataClass }
   | ({
@@ -566,17 +570,28 @@ const createExtendedGeminiAdapter = (
   return gemini(modelId, apiKey);
 };
 
-const createExtendedAnthropicAdapter = (
-  modelId: string,
-  apiKey: string,
-): AnyTextAdapter => {
+type AnthropicAdapterOptions = {
+  modelId: string;
+  apiKey: string;
+  anthropicWorkspaceId: string | undefined;
+};
+
+const createExtendedAnthropicAdapter = ({
+  modelId,
+  apiKey,
+  anthropicWorkspaceId,
+}: AnthropicAdapterOptions): AnyTextAdapter => {
   const anthropic = extendAdapter(createAnthropicChat, [
     createModel(modelId, {
       input: ["text", "image", "document"] as const,
       features: ["structured_outputs"] as const,
     }),
   ]);
-  return anthropic(modelId, apiKey);
+  return anthropic(
+    modelId,
+    apiKey,
+    anthropicClientOptions(anthropicWorkspaceId),
+  );
 };
 
 const createExtendedOpenAIAdapter = (
@@ -885,7 +900,12 @@ const createProviderTextAdapterFactory = (
         apiKey ?? env.ANTHROPIC_API_KEY,
         "ANTHROPIC_API_KEY",
       );
-      return (modelId) => createExtendedAnthropicAdapter(modelId, key);
+      return (modelId) =>
+        createExtendedAnthropicAdapter({
+          modelId,
+          apiKey: key,
+          anthropicWorkspaceId: options.anthropicWorkspaceId,
+        });
     }
     case "bedrock": {
       const key = apiKey ?? env.BEDROCK_API_KEY;
@@ -1209,7 +1229,10 @@ export const requireTanStackAIAvailableForRole = ({
     return Result.ok(undefined);
   }
 
-  const selection = orgConfig.overrideModels[role];
+  const selection = resolveOrgAIModelForRole(orgConfig, role);
+  if (selection === null) {
+    return Result.err(byokRoleNotConfiguredError(role));
+  }
   const providerConfig = getOrgProviderConfig(orgConfig, selection.provider);
   const support = resolveTanStackAIProviderSupport({
     provider: providerConfig.provider,
@@ -1260,7 +1283,10 @@ export const isDeferredServiceTierAvailableForRole = (
   orgConfig: OrgAIConfig | null | undefined,
 ): boolean => {
   if (orgConfig) {
-    const selection = orgConfig.overrideModels[role];
+    const selection = resolveOrgAIModelForRole(orgConfig, role);
+    if (selection === null) {
+      return false;
+    }
     const providerConfig = getOrgProviderConfig(orgConfig, selection.provider);
     const region = providerRegion(providerConfig);
     return (
@@ -1353,10 +1379,13 @@ const byokCacheKey = (config: OrgAIProviderConfig): string => {
     case "huggingface":
       hasher.update(config.baseURL);
       break;
+    case "anthropic":
+      hasher.update(config.anthropicWorkspaceId ?? "");
+      hasher.update(providerRegion(config) ?? "global");
+      break;
     case "google":
     case "openrouter":
     case "openai":
-    case "anthropic":
     case "bedrock":
     case "mistral":
     case "openai_compatible":
@@ -1364,9 +1393,7 @@ const byokCacheKey = (config: OrgAIProviderConfig): string => {
       break;
     default: {
       config satisfies never;
-      return panic(
-        `Unsupported BYOK provider configuration: ${JSON.stringify(config)}`,
-      );
+      return panic("Unsupported BYOK provider configuration");
     }
   }
   const hash = hasher.digest("hex").slice(0, 16);
@@ -1375,15 +1402,19 @@ const byokCacheKey = (config: OrgAIProviderConfig): string => {
 
 const factoryExtras = (
   config: OrgAIProviderConfig,
-): Pick<TanStackModelFactoryOptions, "region"> => {
+): Pick<TanStackModelFactoryOptions, "region" | "anthropicWorkspaceId"> => {
   switch (config.provider) {
     case "azure_foundry":
     case "huggingface":
       return {};
+    case "anthropic":
+      return {
+        region: providerRegion(config),
+        anthropicWorkspaceId: config.anthropicWorkspaceId,
+      };
     case "google":
     case "openrouter":
     case "openai":
-    case "anthropic":
     case "bedrock":
     case "mistral":
     case "openai_compatible":
@@ -1924,7 +1955,7 @@ const resolveByokTextModel = ({
   assertTanStackBYOKModelRoleSupport({ provider, modelId, role });
 
   const factory = getCachedFactory(providerConfig);
-  return buildResolvedTextModel({
+  const resolved = buildResolvedTextModel({
     adapter: factory(modelId),
     keySource: "byok",
     provider,
@@ -1935,6 +1966,8 @@ const resolveByokTextModel = ({
     reasoningEffort,
     useRoleReasoningDefault,
   });
+  registerProviderDiagnosticCredentials(resolved, [providerConfig.apiKey]);
+  return resolved;
 };
 
 /**
@@ -2012,8 +2045,10 @@ export const getTanStackTextModelForRole = (
     managedOpenRouterCredential?: ManagedOpenRouterCredential | undefined;
   } & AIRequestPolicy,
 ): ResolvedTanStackTextModel => {
-  if (orgConfig) {
-    const selection = orgConfig.overrideModels[role];
+  const selection = orgConfig
+    ? resolveOrgAIModelForRole(orgConfig, role)
+    : null;
+  if (orgConfig && selection !== null) {
     return resolveByokTextModel({
       role,
       providerConfig: getOrgProviderConfig(orgConfig, selection.provider),
@@ -2022,7 +2057,7 @@ export const getTanStackTextModelForRole = (
     });
   }
 
-  if (!hasConfiguredTanStackInstanceProvider()) {
+  if (orgConfig || !hasConfiguredTanStackInstanceProvider()) {
     throw byokRoleNotConfiguredError(role);
   }
 
@@ -2036,7 +2071,14 @@ export const getTanStackTextModelForRole = (
       throw availability.error;
     }
   }
+  assertTanStackProviderRoleSupport(
+    resolveTanStackTextProvider({ provider }),
+    role,
+  );
   const modelId = MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[provider][role];
+  if (modelId === null) {
+    return panic("Supported instance role has no catalog default");
+  }
   return resolveInstanceTextModel({
     role,
     modelId,
@@ -2053,8 +2095,10 @@ export const getTanStackTextModelInfoForRole = (
     organizationId: SafeId<"organization"> | null;
   },
 ): ResolvedTanStackTextModelInfo => {
-  if (orgConfig) {
-    const selection = orgConfig.overrideModels[role];
+  const selection = orgConfig
+    ? resolveOrgAIModelForRole(orgConfig, role)
+    : null;
+  if (orgConfig && selection !== null) {
     const providerConfig = getOrgProviderConfig(orgConfig, selection.provider);
     const region = providerRegion(providerConfig);
     const provider = resolveTanStackTextProvider({
@@ -2077,7 +2121,7 @@ export const getTanStackTextModelInfoForRole = (
     };
   }
 
-  if (!hasConfiguredTanStackInstanceProvider()) {
+  if (orgConfig || !hasConfiguredTanStackInstanceProvider()) {
     throw byokRoleNotConfiguredError(role);
   }
 
@@ -2085,6 +2129,9 @@ export const getTanStackTextModelInfoForRole = (
   const supportedProvider = resolveTanStackTextProvider({ provider });
   assertTanStackProviderRoleSupport(supportedProvider, role);
   const modelId = MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[provider][role];
+  if (modelId === null) {
+    return panic("Supported instance role has no catalog default");
+  }
   // Metadata must agree with dispatch: never advertise an instance
   // model that resolveInstanceTextModel would refuse as unrated.
   if (supportedProvider === "openrouter") {

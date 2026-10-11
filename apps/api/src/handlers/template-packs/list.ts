@@ -52,6 +52,7 @@ const listTemplatePacksQuerySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "List the template packs bundled with this deployment, ranked for the " +
     "organization: packs covering one of its practice jurisdictions first, " +

@@ -1,13 +1,26 @@
 import { describe, expect, test } from "bun:test";
 
+import {
+  CASE_LAW_ANALYSIS_FAILURE_CODES,
+  CASE_LAW_ANALYSIS_UNAVAILABLE_CODES,
+} from "@stll/api-contract";
+import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import type {
   AnalysisHeading,
   DecisionAnalysis,
 } from "@stll/legal-ast/analysis";
 
-import { parseAnalysisResponse } from "@/features/case-law/queries/decision-analysis";
+import {
+  type AnalysisError,
+  parseAnalysisResponse,
+} from "@/features/case-law/queries/decision-analysis";
 
-import { analysisStateFromQuery } from "./use-decision-analysis";
+import {
+  analysisRetryOf,
+  analysisStateFromQuery,
+} from "./use-decision-analysis";
+
+const UNREADABLE: AnalysisError = { kind: "unreadable" };
 
 const heading = {
   id: "h1",
@@ -70,10 +83,70 @@ describe("decision analysis response parsing", () => {
     ).toBeNull();
   });
 
-  test("accepts an error without exposing its transport message", () => {
+  test("an error without a code it knows is unreadable, never a guessed message", () => {
     expect(
       parseAnalysisResponse({ status: "error", error: "HTTP 500" }),
-    ).toEqual({ status: "error" });
+    ).toEqual({ status: "error", error: { kind: "unreadable" } });
+    expect(
+      parseAnalysisResponse({ status: "error", code: "something_new" }),
+    ).toEqual({ status: "error", error: { kind: "unreadable" } });
+  });
+
+  test("reads every code the server will not analyse a decision for", () => {
+    for (const code of CASE_LAW_ANALYSIS_UNAVAILABLE_CODES) {
+      expect(
+        parseAnalysisResponse({ status: "error", code, error: "x" }),
+      ).toEqual({ status: "error", error: { kind: "unavailable", code } });
+    }
+  });
+
+  test("reads every failed-run code with whose key the run used", () => {
+    for (const code of CASE_LAW_ANALYSIS_FAILURE_CODES) {
+      expect(
+        parseAnalysisResponse({
+          status: "error",
+          code,
+          error: "x",
+          key: { source: "organization", provider: "google" },
+        }),
+      ).toEqual({
+        status: "error",
+        error: {
+          kind: "failed",
+          code,
+          key: { source: "organization", provider: "google" },
+        },
+      });
+      expect(
+        parseAnalysisResponse({
+          status: "error",
+          code,
+          error: "x",
+          key: { source: "platform" },
+        }),
+      ).toEqual({
+        status: "error",
+        error: { kind: "failed", code, key: { source: "platform" } },
+      });
+    }
+  });
+
+  test("a failed run without a readable key is unreadable", () => {
+    for (const key of [
+      undefined,
+      { source: "organization" },
+      { source: "organization", provider: "" },
+      { source: "someone-else" },
+    ]) {
+      expect(
+        parseAnalysisResponse({
+          status: "error",
+          code: "timed_out",
+          error: "x",
+          key,
+        }),
+      ).toEqual({ status: "error", error: { kind: "unreadable" } });
+    }
   });
 });
 
@@ -83,7 +156,7 @@ describe("decision analysis query state", () => {
       analysisStateFromQuery({
         hasQueryError: false,
         isFetching: true,
-        result: { kind: "error" },
+        result: { kind: "error", error: UNREADABLE },
       }),
     ).toEqual({ status: "generating", tree: [] });
   });
@@ -93,9 +166,9 @@ describe("decision analysis query state", () => {
       analysisStateFromQuery({
         hasQueryError: false,
         isFetching: false,
-        result: { kind: "error" },
+        result: { kind: "error", error: UNREADABLE },
       }),
-    ).toEqual({ status: "error" });
+    ).toEqual({ status: "error", error: UNREADABLE });
   });
 
   test("a thrown request error becomes progress only while retrying", () => {
@@ -112,6 +185,92 @@ describe("decision analysis query state", () => {
         isFetching: false,
         result: undefined,
       }),
-    ).toEqual({ status: "error" });
+    ).toEqual({ status: "error", error: UNREADABLE });
   });
+
+  test("a failed run's named error reaches the reader state unchanged", () => {
+    const error = {
+      kind: "failed",
+      code: "timed_out",
+      key: { source: "organization", provider: "google" },
+    } satisfies AnalysisError;
+    expect(
+      analysisStateFromQuery({
+        hasQueryError: false,
+        isFetching: false,
+        result: { kind: "error", error },
+      }),
+    ).toEqual({ status: "error", error });
+  });
+});
+
+describe("what Retry does for each analysis error", () => {
+  test("a failed run asks for a new run, for every failure code and key", () => {
+    for (const code of CASE_LAW_ANALYSIS_FAILURE_CODES) {
+      for (const key of [
+        { source: "organization", provider: "google" },
+        { source: "platform" },
+      ] as const) {
+        expect(analysisRetryOf({ kind: "failed", code, key })).toBe("new-run");
+      }
+    }
+  });
+
+  test("an unreadable answer is read again: it may have been a transport blip", () => {
+    expect(analysisRetryOf(UNREADABLE)).toBe("read-again");
+  });
+
+  test("a decision the server will never analyse offers no retry", () => {
+    for (const code of CASE_LAW_ANALYSIS_UNAVAILABLE_CODES) {
+      expect(analysisRetryOf({ kind: "unavailable", code })).toBe("none");
+    }
+  });
+});
+
+test("a failed analysis preserves a validated provider diagnostic and its retry action", () => {
+  const diagnostic = {
+    provider: "anthropic",
+    code: "ai_config_anthropic_no_credits",
+    message: "API credit balance is too low",
+  } as const satisfies ProviderDiagnostic;
+  const parsed = parseAnalysisResponse({
+    status: "error",
+    code: "provider_unavailable",
+    key: { source: "organization", provider: "anthropic" },
+    providerDiagnostic: diagnostic,
+  });
+  expect(parsed).toEqual({
+    status: "error",
+    error: {
+      kind: "failed",
+      code: "provider_unavailable",
+      key: { source: "organization", provider: "anthropic" },
+      providerDiagnostic: diagnostic,
+    },
+  });
+  if (parsed?.status !== "error") {
+    return;
+  }
+  const state = analysisStateFromQuery({
+    hasQueryError: false,
+    isFetching: false,
+    result: { kind: "error", error: parsed.error },
+  });
+  expect(state).toEqual({ status: "error", error: parsed.error });
+  expect(analysisRetryOf(parsed.error)).toBe("new-run");
+});
+
+test("malformed diagnostics cannot become an analysis error message", () => {
+  expect(
+    parseAnalysisResponse({
+      status: "error",
+      code: "provider_unavailable",
+      key: { source: "organization", provider: "anthropic" },
+      providerDiagnostic: {
+        provider: "anthropic",
+        code: "unknown_code",
+        message: "Invalid diagnostic",
+      },
+    }),
+  ).toEqual({ status: "error", error: { kind: "unreadable" } });
 });

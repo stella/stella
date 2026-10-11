@@ -51,7 +51,7 @@ export const timedSegments = (
       startMs: Temporal.Instant.from(start).epochMilliseconds,
     }))
     .filter(({ endMs, startMs }) => endMs > startMs)
-    .toSorted((left, right) => left.startMs - right.startMs);
+    .sort((left, right) => left.startMs - right.startMs);
 
 export const totalDurationMs = (segments: readonly TimedSegment[]) =>
   segments.reduce(
@@ -74,7 +74,7 @@ export const appTotals = (segments: readonly TimedSegment[]): AppTotal[] => {
       name: segment.appName,
     });
   }
-  return [...totals.values()].toSorted(
+  return [...totals.values()].sort(
     (left, right) =>
       right.durationMs - left.durationMs || left.name.localeCompare(right.name),
   );

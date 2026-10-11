@@ -12,12 +12,13 @@ import {
 import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
 import {
   RESOURCE_PATH_PATTERN,
-  inferResourceKind,
+  RESOURCE_PATH_MAX_CHARS,
 } from "@/api/lib/agent-skills/resource-path";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const renameSkillResourceParamsSchema = t.Object({
@@ -25,14 +26,15 @@ const renameSkillResourceParamsSchema = t.Object({
 });
 
 const renameSkillResourceBodySchema = t.Object({
-  oldPath: t.String({ minLength: 1, maxLength: 512 }),
-  newPath: t.String({ minLength: 1, maxLength: 512 }),
+  oldPath: t.String({ minLength: 1, maxLength: RESOURCE_PATH_MAX_CHARS }),
+  newPath: t.String({ minLength: 1, maxLength: RESOURCE_PATH_MAX_CHARS }),
 });
 
 const config = {
+  contract: "patch",
   description:
-    "Move one file of an agent skill to a new path, re-deriving its kind " +
-    "from that path and leaving the content untouched. A path identical to " +
+    "Move one file of an agent skill to a new path, leaving its content " +
+    "untouched. A path identical to " +
     "the old one, a path already used by another file in the same skill, and " +
     "a bundled skill are all refused.",
   permissions: { agentSkill: ["update"] },
@@ -59,7 +61,11 @@ const renameSkillResource = createSafeRootHandler(
     user,
   }) {
     const newPath = body.newPath.trim();
-    if (!newPath || !RESOURCE_PATH_PATTERN.test(newPath)) {
+    if (
+      !newPath ||
+      newPath.length > RESOURCE_PATH_MAX_CHARS ||
+      !RESOURCE_PATH_PATTERN.test(newPath)
+    ) {
       return Result.err(
         new HandlerError({ status: 400, message: "Invalid resource path" }),
       );
@@ -88,7 +94,6 @@ const renameSkillResource = createSafeRootHandler(
           .select({
             id: agentSkillResources.id,
             path: agentSkillResources.path,
-            kind: agentSkillResources.kind,
             sizeBytes: agentSkillResources.sizeBytes,
             content: agentSkillResources.content,
           })
@@ -129,19 +134,17 @@ const renameSkillResource = createSafeRootHandler(
       );
     }
 
-    const nextKind = inferResourceKind(newPath);
-
     yield* Result.await(
       safeDb(
         async (tx) =>
-          await tx.transaction(async (innerTx) => {
+          await withAggregateSavepoint(tx, async (innerTx) => {
             const lockedSkill = await lockSkillForResourceWrite(
               innerTx,
               params.skillId,
             );
             await innerTx
               .update(agentSkillResources)
-              .set({ path: newPath, kind: nextKind })
+              .set({ path: newPath })
               .where(eq(agentSkillResources.id, existing.id));
             await refreshSkillContentHash(innerTx, lockedSkill);
 
@@ -151,8 +154,8 @@ const renameSkillResource = createSafeRootHandler(
               resourceId: params.skillId,
               changes: {
                 resource: {
-                  old: { path: existing.path, kind: existing.kind },
-                  new: { path: newPath, kind: nextKind },
+                  old: { path: existing.path },
+                  new: { path: newPath },
                 },
               },
               metadata: {
@@ -169,7 +172,6 @@ const renameSkillResource = createSafeRootHandler(
       id: existing.id,
       skillId: params.skillId,
       path: newPath,
-      kind: nextKind,
       content: existing.content,
       sizeBytes: existing.sizeBytes,
     });

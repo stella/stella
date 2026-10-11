@@ -1,9 +1,17 @@
+import { createElement } from "react";
+
+import { Result } from "better-result";
+
+import { copyToClipboard } from "@stll/clipboard";
 import { createDetached } from "@stll/errors";
 import { stellaToast } from "@stll/ui/toast";
 
 import { notifyActionAdmissionRefusal } from "@/components/action-admission-outcome";
+import { ProviderDiagnosticToast } from "@/components/provider-diagnostic-content";
+import { getTranslator } from "@/i18n/translator";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { toAuthClientError } from "@/lib/errors/auth";
+import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
 type UserErrorToastOptions = Omit<
@@ -24,9 +32,29 @@ export const notifyUserError = (
     }
     return false;
   }
+  const diagnostic = providerDiagnosticFromThrown(error);
   const toast = {
     ...options,
-    title: userErrorFromThrown(error, fallback),
+    title:
+      diagnostic === undefined
+        ? userErrorFromThrown(error, fallback)
+        : createElement(ProviderDiagnosticToast, {
+            diagnostic,
+            onCopy: async () => {
+              const copied = await copyToClipboard(
+                `${diagnostic.provider}: ${diagnostic.message}`,
+              );
+              if (Result.isError(copied)) {
+                getAnalytics().captureError(copied.error);
+                notifyUserError(
+                  copied.error,
+                  getTranslator()("errors.actionFailed"),
+                );
+                return false;
+              }
+              return true;
+            },
+          }),
     type: "error",
   } as const;
   if (toastId !== undefined) {

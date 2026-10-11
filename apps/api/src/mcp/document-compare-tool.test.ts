@@ -9,7 +9,10 @@ import type {
 } from "@/api/handlers/documents/compare";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { McpRequestContext } from "@/api/mcp/context";
-import { handleCompareDocumentsTool } from "@/api/mcp/document-compare-tool";
+import {
+  COMPARE_DOCUMENTS_TOOL_DEFINITION,
+  handleCompareDocumentsTool,
+} from "@/api/mcp/document-compare-tool";
 import type { CompareDocumentsDependencies } from "@/api/mcp/document-compare-tool";
 import type {
   FileComparisonRunOptions,
@@ -172,6 +175,9 @@ describe("compare_documents", () => {
     const result = await harness.run(versionsArgs());
 
     expect(dataOf(result)).toEqual({ results: [] });
+    expect(COMPARE_DOCUMENTS_TOOL_DEFINITION.annotations.destructiveHint).toBe(
+      false,
+    );
     expect(harness.comparedWith).toHaveLength(1);
     expect(harness.comparedWith.at(0)?.body).toMatchObject({
       filePropertyId: AGREEMENT_PROPERTY_ID,

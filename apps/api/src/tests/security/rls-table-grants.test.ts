@@ -199,6 +199,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "action_cost_calls",
   // Search backfill retries are ingestion control state, not request data.
   "case_law_search_backfill_failures",
+  // A reader's failed analysis run: written and read only by the owner
+  // connection that runs the analysis.
+  "case_law_analysis_failures",
   "registration_daily_budget",
   "agent_registration",
   "agent_trusted_issuer",
@@ -210,6 +213,7 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "oauth_resource",
   "oauth_client_resource",
   "oauth_client_assertion",
+  "service_oauth_clients",
   // Machine API keys: credential digests plus the permission set each key
   // carries. A tenant-scoped connection must be able to neither read a digest
   // nor widen a key's permissions, so every access goes through better-auth on

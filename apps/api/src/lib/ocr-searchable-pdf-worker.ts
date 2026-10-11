@@ -9,6 +9,7 @@ import { PDF } from "@libpdf/core";
  */
 import { TaggedError } from "better-result";
 
+import { sanitizeErrorForOutput } from "@stll/errors";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import type {
@@ -216,7 +217,8 @@ try {
     });
   });
 } catch (error) {
-  const type = error instanceof Error ? error.constructor.name : "UnknownError";
+  const outputError = sanitizeErrorForOutput(error);
+  const type = outputError instanceof Error ? outputError.name : "UnknownError";
   process.stderr.write(`ocr-searchable-pdf-worker error: ${type}\n`);
   process.exit(1);
 }

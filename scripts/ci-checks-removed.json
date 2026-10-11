@@ -54,5 +54,17 @@
   {
     "name": "Test autofix decision boundaries",
     "reason": "Replaced by Test autofix protected paths; API duration weights are no longer repository files managed by autofix."
+  },
+  {
+    "name": "Test migration identity and merge gate logic",
+    "reason": "Renamed to Test migration identity logic after removing the repository merge CLI."
+  },
+  {
+    "name": "Test merge \u0062ar freshness, arm guard and disarm",
+    "reason": "Removed with the repository merge CLI; pull requests now enter the merge queue directly."
+  },
+  {
+    "name": "Test merge queue jump-reset recovery",
+    "reason": "Removed with the repository merge CLI and its queue-position recovery behavior."
   }
 ]

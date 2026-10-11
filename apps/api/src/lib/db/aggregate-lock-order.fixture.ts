@@ -20,6 +20,15 @@ export const aggregateFences = () => {
   const threadId = createSafeId<"chatThread">();
   const userId = mintAuthProviderId<"user">();
   return {
+    signingSession: {
+      aggregate: "signingSession",
+      id: {
+        id: createSafeId<"pdfSigningSession">(),
+        workspaceId,
+        organizationId,
+      },
+      mode: "update",
+    },
     organization: {
       aggregate: "organization",
       id: organizationId,
@@ -100,6 +109,16 @@ export const aggregateFences = () => {
       id: { id: createSafeId<"entity">(), workspaceId },
       mode: "update",
     },
+    entityVersion: {
+      aggregate: "entityVersion",
+      id: { id: createSafeId<"entityVersion">(), workspaceId },
+      mode: "update",
+    },
+    field: {
+      aggregate: "field",
+      id: { id: createSafeId<"field">(), workspaceId },
+      mode: "update",
+    },
     signal: {
       aggregate: "signal",
       id: { id: createSafeId<"signal">(), organizationId },
@@ -118,6 +137,11 @@ export const aggregateFences = () => {
     personalCatalog: {
       aggregate: "personalCatalog",
       id: { organizationId, userId: mintAuthProviderId<"user">() },
+    },
+    searchHistory: {
+      aggregate: "searchHistory",
+      id: { organizationId, userId: mintAuthProviderId<"user">() },
+      mode: "update",
     },
     chatMessage: {
       aggregate: "chatMessage",
@@ -142,7 +166,7 @@ const hashFixture = (value: unknown) => {
 /** Stable physical keys distinguish namespaces and principals; this is not a PostgreSQL hash oracle. */
 export const aggregateExecutionRows = (statement: SQL, found = true) => {
   const query = new PgDialect().sqlToQuery(statement);
-  if (!query.sql.includes("advisory_xact_lock")) {
+  if (!query.sql.includes("AS key1")) {
     return found ? [{ id: "locked" }] : [];
   }
   const first = query.params.at(0);
