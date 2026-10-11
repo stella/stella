@@ -16,14 +16,23 @@ type ActiveSkillCatalogueEntry = {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-const isActiveSkillChatContext = (
+const isOptionalString = (value: unknown): value is string | undefined =>
+  value === undefined || typeof value === "string";
+
+/** Whether stored or broadcast JSON is a chat's active skill. */
+export const isActiveSkillContext = (
   value: unknown,
 ): value is ActiveSkillChatContext =>
   isRecord(value) &&
   typeof value["skillName"] === "string" &&
-  typeof value["skillId"] === "string" &&
-  (value["skillDisplayName"] === undefined ||
-    typeof value["skillDisplayName"] === "string");
+  isOptionalString(value["skillId"]) &&
+  isOptionalString(value["skillDisplayName"]);
+
+/** An installed skill's chat context: one with a row to name by `skillId`. */
+const isInstalledActiveSkillContext = (
+  value: unknown,
+): value is ActiveSkillChatContext & { skillId: string } =>
+  isActiveSkillContext(value) && typeof value.skillId === "string";
 
 const getToolDetailActiveSkillContext = (
   payload: unknown,
@@ -55,7 +64,7 @@ const getToolDetailActiveSkillContext = (
   }
 
   const activeSkill = payload["activeSkill"];
-  return isActiveSkillChatContext(activeSkill) ? activeSkill : undefined;
+  return isInstalledActiveSkillContext(activeSkill) ? activeSkill : undefined;
 };
 
 export const getActiveSkillChatContext = (
