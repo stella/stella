@@ -1521,7 +1521,7 @@ jobs:
       - name: Install dependencies
         id: install
         if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        run: bash scripts/retry.sh bun ci --frozen-lockfile --ignore-scripts --filter @stll/agent-engine... --filter stella
         env:
           NPM_TOKEN: ""
 
