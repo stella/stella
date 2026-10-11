@@ -649,7 +649,7 @@ if (!databaseUrl || !runPostgresTests) {
               steps: [
                 {
                   name: "refresh-batch",
-                  run: (tx) =>
+                  run: async (tx) =>
                     refreshDecisionCitationStats({ tx, decisionIds: ids }),
                 },
               ],
