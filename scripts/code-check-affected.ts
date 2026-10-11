@@ -130,7 +130,8 @@ export const PLUGIN_REGISTRY_INPUTS = [
   "$TURBO_ROOT$/scripts/check-oxlint-plugin-registry.ts",
 ] as const;
 export const ROOT_SCRIPT_LINT_INPUTS = [
-  ...ALL_WORKSPACE_CACHE_INPUTS,
+  ...DEPENDENCY_CACHE_INPUTS,
+  ...SHARED_COMPILER_CACHE_INPUTS,
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
   "$TURBO_ROOT$/scripts/lint-root-scripts.sh",
   "$TURBO_ROOT$/scripts/tsconfig.json",
@@ -675,6 +676,17 @@ export const executeCheckCommands = async ({
   }
   write(`code-check: ${failures.length} failed command(s)\n`);
   for (const failure of failures) {
+    // The nested full check already printed its task diagnostics.
+    if (
+      failure.command[0] === "bun" &&
+      failure.command[1] === "run" &&
+      failure.command[2] === "code-check"
+    ) {
+      write(
+        `code-check: delegated full check failed (exit ${failure.exitCode}): ${failure.command.join(" ")}\n`,
+      );
+      continue;
+    }
     write(
       formatCheckFailure({
         summary: summarizeCheckFailure(failure),

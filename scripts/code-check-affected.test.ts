@@ -551,6 +551,21 @@ describe("affected code-check planning", () => {
     expect(planned.rootChecks).toContain("root-script-lint");
   });
 
+  test.each(["bun.lock", "package.json"])(
+    "root dependency change %s schedules root-script lint independently of workspaces",
+    (changedPath) => {
+      const planned = plan([changedPath], []);
+      expect(planned.type).toBe("scoped");
+      if (planned.type !== "scoped") {
+        throw new Error("Expected a scoped root dependency check");
+      }
+      expect(scopedCommands(planned)).toContainEqual([
+        "bash",
+        "scripts/lint-root-scripts.sh",
+      ]);
+    },
+  );
+
   test("falls back when Turbo omits the directly changed workspace", () => {
     expect(plan(["apps/api/src/server.ts"], ["apps/web"])).toEqual({
       type: "fallback",
@@ -626,8 +641,11 @@ describe("Turbo cache input contract", () => {
     expect(PLUGIN_FIXTURE_INPUTS).toContain("$TURBO_ROOT$/tsconfig.json");
   });
 
-  test("root script lint covers every shared workspace input", () => {
-    for (const input of ALL_WORKSPACE_CACHE_INPUTS) {
+  test("root script lint covers full root dependencies and shared compiler inputs", () => {
+    for (const input of [
+      ...DEPENDENCY_CACHE_INPUTS,
+      ...SHARED_COMPILER_CACHE_INPUTS,
+    ]) {
       expect(ROOT_SCRIPT_LINT_INPUTS).toContain(input);
     }
   });
@@ -1271,6 +1289,38 @@ describe("check failure reporting", () => {
       "code-check: failed (exit 2): bun turbo typecheck\n",
     );
   });
+  test.each([[], ["--leg", "api"]])(
+    "delegated full-check failures report the command without replaying task diagnostics (%j)",
+    async (args) => {
+      const command = ["bun", "run", "code-check", ...args];
+      const output: string[] = [];
+      expect(
+        await executeCheckCommands({
+          commands: [command],
+          runner: () =>
+            Result.err(
+              new CommandFailedError({
+                message: "Nested check failed",
+                command,
+                exitCode: 2,
+                output:
+                  "Failed: @stll/api#lint\n::error::already reported\nerror TS2322: seeded nested error",
+              }),
+            ),
+          write: (line) => {
+            output.push(line);
+          },
+        }),
+      ).toBe(1);
+      expect(output.join(" ")).toContain(
+        `delegated full check failed (exit 2): ${command.join(" ")}`,
+      );
+      expect(output.join(" ")).not.toContain("@stll/api#lint");
+      expect(output.join(" ")).not.toContain("::error");
+      expect(output.join(" ")).not.toContain("TS2322");
+    },
+  );
+
   test("all successful commands and an empty plan exit zero without a failure summary", async () => {
     for (const successfulCommands of [commands, []]) {
       const executed: (readonly string[])[] = [];
