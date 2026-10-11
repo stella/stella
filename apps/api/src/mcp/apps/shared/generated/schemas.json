@@ -1012,6 +1012,7 @@
               "enum": [
                 "found",
                 "ambiguous",
+                "incomplete_identifier",
                 "not_found",
                 "lookup_failed"
               ],
@@ -1026,6 +1027,12 @@
             },
             "message": {
               "type": "string"
+            },
+            "missing": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             },
             "hint": {
               "type": "string"

@@ -244,7 +244,10 @@ test("a search page holding a corrupt directory row serves its valid peers", asy
       },
       {
         courtId: "ca1",
-        presented: { courtAbbreviation: null, courtTier: "regional" },
+        presented: {
+          courtAbbreviation: "First Circuit",
+          courtTier: "regional",
+        },
         rerankTier: 2,
       },
       {

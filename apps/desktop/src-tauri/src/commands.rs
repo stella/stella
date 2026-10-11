@@ -50,7 +50,7 @@ pub async fn open_stella_account(
         )
       },
     );
-    return crate::account::open_browser_connection(&app, api_base_url, origin);
+    return crate::account::open_browser_connection(&app, api_base_url, origin).await;
   }
   let web_origin = linked.as_ref().map(|account| account.web_origin.as_str());
   app

@@ -39,6 +39,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import { printError } from "@stll/errors";
+
 import { parseCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-load";
 import { expandSchemaDefs } from "../../../packages/cli/src/expand-schema-defs";
 import { buildCliRouteTree } from "../../../packages/cli/src/generate-capability-tree";
@@ -236,6 +238,7 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // billing write bucket rather than the read scope its resolution tool used.
   rates: "stella:billing_write",
   "saved-time-narratives": "stella:billing_write",
+  "search-history": "stella:knowledge_write",
   // Report export creates workspace artifacts (entities / template records), so
   // it stays on the workspace write bucket. Unlike chat (which got its own
   // stella:chat scope because thread reads/renames should not demand a
@@ -1677,7 +1680,7 @@ const printErrors = (errors: readonly string[]): void => {
     "\nexport-capability-catalog: cannot generate the catalog until these are resolved:",
   );
   for (const error of errors) {
-    console.error(`  ${error}`);
+    printError(`  ${error}`);
   }
 };
 
@@ -1772,8 +1775,12 @@ const computeCliCommandPaths = async (
   return { cliCommandPathById, errors };
 };
 
-const main = async (): Promise<number> => {
-  const checkMode = process.argv.includes("--check");
+// Repeated calls rescan handler files; already imported modules remain warm.
+// Callers must start a new process when changing an existing handler's source.
+export const exportCapabilityCatalog = async (
+  mode: "write" | "check",
+): Promise<number> => {
+  const checkMode = mode === "check";
   if (
     !hasPreparedGeneratedSources(new URL("../../../", import.meta.url).pathname)
   ) {
@@ -1852,7 +1859,6 @@ const main = async (): Promise<number> => {
     internalWaiverCounts,
   });
 
-  const mode = checkMode ? "check" : "write";
   const catalogDrift = await syncCapabilityShards({
     directory: CATALOG_PATH,
     shards: catalogShards,
@@ -1899,4 +1905,10 @@ const main = async (): Promise<number> => {
 // The handler graph transitively opens a Redis subscriber (lib/sse.ts) at import
 // time and never unrefs it, so this one-off script's event loop would hang. The
 // work is done here; exit explicitly like export-mcp-tool-registry.ts.
-process.exit(await main());
+if (import.meta.main) {
+  process.exit(
+    await exportCapabilityCatalog(
+      process.argv.includes("--check") ? "check" : "write",
+    ),
+  );
+}

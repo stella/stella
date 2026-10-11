@@ -72,7 +72,16 @@ if [[ "$api_path" == "$latest_api_path" ]]; then
       [[ "$(jq -r '.draft // false' <<< "$newest_release")" == true ]] && publishing=true
       workflow_created_at=''
       for workflow in release.yml release-desktop.yml; do
-        runs="$(bash "$gh_retry_script" api "repos/${repo}/actions/workflows/${workflow}/runs?branch=${newest_tag}&per_page=10")" || { echo "::error::Desktop release workflow metadata unavailable" >&2; exit 1; }
+        # release-desktop.yml starts from workflow_run, so its runs report the
+        # default branch, never the tag: match them by run name instead.
+        case "$workflow" in
+          release.yml) runs_query="branch=${newest_tag}&per_page=10" ;;
+          release-desktop.yml) runs_query="per_page=30" ;;
+        esac
+        runs="$(bash "$gh_retry_script" api "repos/${repo}/actions/workflows/${workflow}/runs?${runs_query}")" || { echo "::error::Desktop release workflow metadata unavailable" >&2; exit 1; }
+        if [[ "$workflow" == release-desktop.yml ]]; then
+          runs="$(jq --arg title "Release Desktop App ${newest_tag}" '.workflow_runs |= map(select(.display_title == $title))' <<< "$runs")"
+        fi
         workflow_created_at="$(jq -r --arg earliest "$workflow_created_at" '
           [$earliest, (.workflow_runs[]?.created_at // empty)]
           | map(select(length > 0))

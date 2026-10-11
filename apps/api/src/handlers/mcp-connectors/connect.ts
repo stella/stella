@@ -9,6 +9,7 @@ import {
   mcpOAuthClients,
   mcpOAuthState,
   mcpUserConnections,
+  MCP_RESPONSE_DISPOSITION,
 } from "@/api/db/schema";
 import { mcpConnectorRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -110,6 +111,8 @@ export const createConnectMcpConnectorHandler = ({
                 connectorId: connector.id,
                 userId: user.id,
                 status: "connected",
+                responseDisposition: MCP_RESPONSE_DISPOSITION.normal,
+                responseTargetUrl: null,
                 enabled: true,
               })
               .onConflictDoUpdate({
@@ -120,6 +123,8 @@ export const createConnectMcpConnectorHandler = ({
                 ],
                 set: {
                   status: "connected",
+                  responseDisposition: MCP_RESPONSE_DISPOSITION.normal,
+                  responseTargetUrl: null,
                   enabled: true,
                   accessTokenEncrypted: null,
                   accessTokenIv: null,

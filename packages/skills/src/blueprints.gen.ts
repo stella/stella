@@ -30,9 +30,7 @@ export const BLUEPRINTS = [
   {
     id: "blank",
     source: blueprint1,
-    resources: [
-
-    ],
+    resources: [],
   },
   {
     id: "check-against-rules",

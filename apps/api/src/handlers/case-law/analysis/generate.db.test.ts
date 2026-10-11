@@ -132,10 +132,12 @@ describe("generating an analysis for a decision in a language with no prompt", (
       orgAIConfig,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
       promptCachingEnabled: false,
+      retry: false,
     });
 
     expect(response.unwrap()).toEqual({
       status: "error",
+      code: "language_unsupported",
       error: `Analysis is not available for decisions in language "${UNSUPPORTED_LANGUAGE}"`,
     });
     expect(rootPoolConnectionCount()).toBe(claimsBefore);

@@ -1,4 +1,4 @@
-import { SKILL_RESOURCE_KINDS } from "@stll/skills/resource-kinds";
+import { SKILL_RESOURCE_KINDS } from "@stll/skills/format";
 
 import {
   agentSkillChildPolicies,

@@ -32,6 +32,7 @@ export const createPublicCorpusRateLimitComposition = ({
       rateLimit({
         duration: API_RATE_LIMITS.api.duration,
         max: API_RATE_LIMITS.api.max,
+        budget: { name: "api.address", keyKind: "address" },
         ...createRedisBinding({
           failurePolicy: "fail_open_local",
           scope: "api",

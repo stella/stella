@@ -36,9 +36,17 @@ const listTimeSuggestions = createSafeHandler(
     access: "read",
     query: listTimeSuggestionsQuerySchema,
   },
-  async function* ({ query, safeDb, session, user, workspaceId }) {
+  async function* ({
+    query,
+    safeDb,
+    session,
+    user,
+    workspaceId,
+    featureAccessSnapshot,
+  }) {
     const loaded = yield* loadTimeSuggestions({
       safeDb,
+      featureAccessSnapshot,
       organizationId: session.activeOrganizationId,
       workspaceId,
       userId: user.id,

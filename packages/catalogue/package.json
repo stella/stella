@@ -17,6 +17,10 @@
     "./schema": {
       "types": "./src/schema.ts",
       "import": "./src/schema.ts"
+    },
+    "./pinned-facts": {
+      "types": "./scripts/pinned-content-facts.ts",
+      "import": "./scripts/pinned-content-facts.ts"
     }
   },
   "scripts": {

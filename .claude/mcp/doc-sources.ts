@@ -16,6 +16,14 @@ export type NoLlmsTxtExclusion = {
 };
 
 export const DOC_SOURCES = {
+  AGUI: {
+    dependencies: ["@ag-ui/core"],
+    url: "https://docs.ag-ui.com/llms.txt",
+  },
+  Zod: {
+    dependencies: ["zod"],
+    url: "https://zod.dev/llms.txt",
+  },
   Anthropic: {
     dependencies: ["@anthropic-ai/sdk"],
     url: "https://platform.claude.com/llms.txt",
@@ -432,6 +440,30 @@ export const DOC_SOURCE_EXCLUSIONS = [
       dependency: "@sparticuz/chromium-min",
       explanation:
         "https://raw.githubusercontent.com/Sparticuz/chromium/main/llms.txt returns 404. Use the canonical documentation at https://github.com/Sparticuz/chromium directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "mdast-util-from-markdown",
+      explanation:
+        "https://unifiedjs.com/llms.txt and the canonical repository's raw llms.txt endpoint return 404. Use the parser API at https://github.com/syntax-tree/mdast-util-from-markdown directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "mdast-util-gfm",
+      explanation:
+        "https://unifiedjs.com/llms.txt and the canonical repository's raw llms.txt endpoint return 404. Use the GFM tree extension API at https://github.com/syntax-tree/mdast-util-gfm directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "micromark-extension-gfm",
+      explanation:
+        "https://unifiedjs.com/llms.txt and the canonical repository's raw llms.txt endpoint return 404. Use the GFM syntax extension API at https://github.com/micromark/micromark-extension-gfm directly.",
       expiresAt: "2026-11-05T00:00:00.000Z",
       reason: "no-llms-txt",
     },

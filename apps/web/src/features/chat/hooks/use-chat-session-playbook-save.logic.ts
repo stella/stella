@@ -7,6 +7,7 @@ import {
 
 type ReconcilePlaybookSaveToolCallsOptions = {
   handledToolCallIds: Set<string>;
+  historicalToolCallIds?: ReadonlySet<string>;
   messages: readonly PlaybookSaveMessage[];
   organizationId: string;
   playbookKeys: {
@@ -42,6 +43,7 @@ type PlaybookSaveReconciliation = {
  */
 export const reconcilePlaybookSaveToolCalls = ({
   handledToolCallIds,
+  historicalToolCallIds,
   messages,
   organizationId,
   playbookKeys,
@@ -50,6 +52,7 @@ export const reconcilePlaybookSaveToolCalls = ({
 }: ReconcilePlaybookSaveToolCallsOptions): PlaybookSaveReconciliation | null => {
   const consumed = consumePlaybookSaveToolCalls({
     handledToolCallIds,
+    ...(historicalToolCallIds === undefined ? {} : { historicalToolCallIds }),
     messages,
   });
   if (consumed === null) {

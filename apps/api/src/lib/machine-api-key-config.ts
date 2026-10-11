@@ -1,9 +1,10 @@
 import * as v from "valibot";
 
-import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract";
+import { MCP_ADVANCED_RESOURCE_SCOPES } from "@stll/api-contract";
 import { statements } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 
+import { API_KEY_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 import type { McpMode } from "@/api/mcp/constants";
 
 /**
@@ -63,11 +64,7 @@ export const MACHINE_API_KEY_START_LENGTH = MACHINE_API_KEY_PREFIX.length + 6;
  * The window is milliseconds — the plugin's unit, not the seconds used by
  * better-auth's own rate limiter.
  */
-export const MACHINE_API_KEY_RATE_LIMIT = {
-  enabled: true,
-  timeWindow: 60_000,
-  maxRequests: 600,
-} as const;
+export const MACHINE_API_KEY_RATE_LIMIT = API_KEY_RATE_LIMITS.machine;
 
 /**
  * Lifetime bounds. A machine credential with no expiry is a credential nobody
@@ -94,7 +91,7 @@ export const MACHINE_API_KEY_EXPIRY = {
  * excluded: they exist for a different consent surface and are not something an
  * org admin grants to a headless caller here.
  */
-export const MACHINE_API_KEY_GRANTABLE_SCOPES = MCP_DEFAULT_RESOURCE_SCOPES;
+export const MACHINE_API_KEY_GRANTABLE_SCOPES = MCP_ADVANCED_RESOURCE_SCOPES;
 
 export type MachineApiKeyScope =
   (typeof MACHINE_API_KEY_GRANTABLE_SCOPES)[number];
@@ -152,6 +149,7 @@ const machineApiKeyScopeSchema = v.picklist(MACHINE_API_KEY_GRANTABLE_SCOPES);
  * list equals it, so a new audience cannot quietly fail to be offered here.
  */
 export const MACHINE_API_KEY_GRANTABLE_AUDIENCES = [
+  "advanced",
   "default",
   "documents",
   "law",

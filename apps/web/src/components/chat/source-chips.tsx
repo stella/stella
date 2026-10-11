@@ -9,20 +9,12 @@ import { ExternalLinkIcon } from "@stll/ui/icons";
 import { Separator } from "@stll/ui/separator";
 import { cn } from "@stll/ui/utils";
 
-import type { ChatToolCallPart } from "@/components/chat/chat-ui-tools";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { LegalCitationLink } from "@/components/chat/legal-citation-link";
 import { findMcpConnectorIconHref } from "@/components/chat/mcp-connector-icon";
-import type {
-  ExternalSourceEntry,
-  SourceDocumentEntry,
-} from "@/components/chat/source-chips.logic";
-import {
-  collectExternalSources,
-  collectSourceDocuments,
-  dedupeExternalSources,
-} from "@/components/chat/source-chips.logic";
+import type { ExternalSourceEntry } from "@/components/chat/source-chips.logic";
+import { collectSourceChipEntries } from "@/components/chat/source-chips.logic";
 import { ReferenceIcon } from "@/components/references/reference-chip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { ChatMessage, ChatSourceDocument } from "@/lib/api-contract";
@@ -37,33 +29,6 @@ type SourceChipsProps = {
   sourceDocuments?: readonly ChatSourceDocument[] | undefined;
   parts: ChatMessage["parts"];
   workspaceId?: string | undefined;
-};
-
-type McpToolInfo = {
-  connectorSlug: string;
-  sourceToolName: string;
-};
-
-const getToolOutput = (part: ChatMessage["parts"][number]): unknown => {
-  if (part.type !== "tool-call" || !("output" in part)) {
-    return undefined;
-  }
-
-  return part.output;
-};
-
-const getMcpToolInfo = (part: ChatToolCallPart): McpToolInfo | null => {
-  const sourceToolName = part.name;
-  if (!sourceToolName.startsWith("mcp__")) {
-    return null;
-  }
-
-  const [, connectorSlug, ...toolParts] = sourceToolName.split("__");
-  if (!connectorSlug || toolParts.length === 0) {
-    return null;
-  }
-
-  return { connectorSlug, sourceToolName };
 };
 
 export const SourceChips = ({
@@ -138,59 +103,6 @@ export const SourceChips = ({
       </div>
     </>
   );
-};
-
-const collectSourceChipEntries = ({
-  parts,
-  sourceDocuments = [],
-}: {
-  parts: ChatMessage["parts"];
-  sourceDocuments?: readonly ChatSourceDocument[] | undefined;
-}): {
-  uniqueExternalSources: ExternalSourceEntry[];
-  uniqueSources: SourceDocumentEntry[];
-} => {
-  const sources: SourceDocumentEntry[] = [];
-  const externalSources: ExternalSourceEntry[] = [];
-  for (const sourceDocument of sourceDocuments) {
-    sources.push({ data: sourceDocument });
-  }
-
-  for (const part of parts) {
-    if (part.type !== "tool-call") {
-      continue;
-    }
-
-    const toolOutput = getToolOutput(part);
-    collectSourceDocuments(toolOutput, sources);
-    const mcpToolInfo = getMcpToolInfo(part);
-    const toolExternalSources: ExternalSourceEntry[] = [];
-    collectExternalSources(toolOutput, toolExternalSources);
-    for (const source of toolExternalSources) {
-      externalSources.push({
-        ...source,
-        caseLawDecision: mcpToolInfo ? undefined : source.caseLawDecision,
-        appUrl: mcpToolInfo ? undefined : source.appUrl,
-        sourceUrl: mcpToolInfo ? undefined : source.sourceUrl,
-        connectorSlug: source.connectorSlug ?? mcpToolInfo?.connectorSlug,
-        sourceToolName: source.sourceToolName ?? mcpToolInfo?.sourceToolName,
-      });
-    }
-  }
-
-  const seen = new Set<string>();
-  const uniqueSources = sources.filter(({ data }) => {
-    const key = `${data.workspaceId ?? ""}:${data.entityId}`;
-    if (seen.has(key)) {
-      return false;
-    }
-    seen.add(key);
-    return true;
-  });
-  return {
-    uniqueExternalSources: dedupeExternalSources(externalSources),
-    uniqueSources,
-  };
 };
 
 const cls = "size-3 shrink-0";

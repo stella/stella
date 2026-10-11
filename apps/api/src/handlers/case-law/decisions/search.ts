@@ -1819,6 +1819,7 @@ export const findDecisionIdsByIdentity = async ({
     case "unique":
       return [resolution.decision.id];
     case "ambiguous":
+    case "incomplete_identifier":
       return resolution.candidates.map((hit) => hit.id);
     default: {
       resolution satisfies never;

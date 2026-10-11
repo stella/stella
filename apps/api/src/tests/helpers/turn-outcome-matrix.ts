@@ -159,6 +159,18 @@ export const AI_ERROR_KIND_SHAPES = {
   model_unavailable: ["fails-before-output"],
   provider_unavailable: REFUSED_BEFORE_OUTPUT,
   provider_stream_incomplete: ["early-eof", "unusable-stop"],
+  output_incomplete: {
+    notAShape:
+      "A structured answer cut off or unparseable (`generateTanStackObjectForRole`); a chat turn keeps a `length` answer.",
+  },
+  output_invalid: {
+    notAShape:
+      "A structured answer its schema rejects (`generateTanStackObjectForRole`); a chat turn carries no schema.",
+  },
+  deadline_exceeded: {
+    notAShape:
+      "A caller's own deadline on an awaited generation (`deadlineMs`); a chat turn is bounded by its lease instead.",
+  },
   loop_detected: {
     notAShape:
       "Read across several runs of a turn, not from one answer (`detectModelLoop`).",

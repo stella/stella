@@ -99,6 +99,7 @@ type WorkflowRun = {
   status: "queued" | "in_progress" | "completed";
   conclusion: "success" | "failure" | null;
   created_at: string;
+  display_title?: string;
 };
 
 type McpPayloadOptions = { name: string; rpc: Scenario["rpc"] };
@@ -196,15 +197,25 @@ const desktopFixture = ({ pathname, scenario }: DesktopFixtureOptions) => {
       ],
     });
   }
+  // GitHub lists a workflow_run-triggered run under the default branch, so a
+  // branch-filtered query for the tag finds none of the desktop runs.
+  if (pathname === "/desktop/desktop-workflow-by-branch") {
+    return Response.json({ workflow_runs: [] });
+  }
   if (pathname === "/desktop/desktop-workflow") {
     return Response.json({
-      workflow_runs: scenario.desktopWorkflowRuns ?? [
-        {
-          status: scenario.desktopWorkflowStatus ?? "completed",
-          conclusion: scenario.desktopWorkflowConclusion ?? "success",
-          created_at: "2026-10-09T09:00:00Z",
-        },
-      ],
+      workflow_runs: (
+        scenario.desktopWorkflowRuns ?? [
+          {
+            status: scenario.desktopWorkflowStatus ?? "completed",
+            conclusion: scenario.desktopWorkflowConclusion ?? "success",
+            created_at: "2026-10-09T09:00:00Z",
+          },
+        ]
+      ).map((run) => ({
+        ...run,
+        display_title: run.display_title ?? "Release Desktop App v10.0.0",
+      })),
     });
   }
   return null;
@@ -392,6 +403,7 @@ case "$*" in
   *git/tags/*) route=tag-object ;;
   *matching-refs*) route=tags ;;
   *releases/tags*) route=release ;;
+  *release-desktop.yml*branch=*) route=desktop-workflow-by-branch ;;
   *release-desktop.yml*) route=desktop-workflow ;;
   *release.yml*) route=release-workflow ;;
   *) route=latest ;;
@@ -744,6 +756,28 @@ describe("scheduled read journeys", () => {
     });
     expect(result.exit).toBe(0);
     expect(result.stdout).toBe("desktop-release-policy: publishing\n");
+  });
+  test("ignores an in-progress desktop run for another tag", async () => {
+    const result = await run({
+      scenario: {
+        latest: "v2.0.0",
+        newestTagCreatedAt: "2020-01-01T00:00:00Z",
+        releaseWorkflowRuns: [],
+        desktopWorkflowRuns: [
+          {
+            status: "in_progress",
+            conclusion: null,
+            created_at: "2026-10-09T09:00:00Z",
+            display_title: "Release Desktop App v2.0.0",
+          },
+        ],
+      },
+      mode: "desktop",
+    });
+    expect(result.exit).toBe(1);
+    expect(result.stderr).toContain(
+      "Desktop latest must match the newest stable application tag",
+    );
   });
   test("rejects an old newest release that is not latest", async () => {
     const result = await run({

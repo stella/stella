@@ -1,3 +1,5 @@
+import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
+
 import {
   isApprovalOnceChatToolName,
   isToolApprovedByGrant,
@@ -22,6 +24,7 @@ export const hasAutomaticApproval = ({
   isPublicOfficialApproval,
   name,
 }: HasAutomaticApprovalOptions) =>
+  !requiresPerCallChatApproval(name) &&
   !isApprovalOnceChatToolName(name) &&
   (isPublicOfficialApproval ||
     isToolApprovedByGrant(conversationApprovedTools, name) ||

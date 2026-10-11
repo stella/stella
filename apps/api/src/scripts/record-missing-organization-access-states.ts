@@ -9,12 +9,15 @@
  * missing row is denied once the state is enforced. Existing rows are never
  * changed, so re-running is safe.
  */
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
+
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { recordMissingOrganizationAccessStates } from "@/api/lib/usage/organization-access-state";
 
-const db = openMaintenanceDb({ readOnly: false });
-await db.transaction(
-  async (tx) => await recordMissingOrganizationAccessStates(tx),
-);
-
-console.log("Every organization now has an access state.");
+await runScriptWithErrorOutput(async () => {
+  const db = openMaintenanceDb({ readOnly: false });
+  await db.transaction(
+    async (tx) => await recordMissingOrganizationAccessStates(tx),
+  );
+  console.log("Every organization now has an access state.");
+});

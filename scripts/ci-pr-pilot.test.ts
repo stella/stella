@@ -168,12 +168,14 @@ test("coverage decisions emit one observable profile annotation", async () => {
 });
 
 const conditionContext = (profile: string, event: string, depth: string) => {
-  const values: Record<string, string | boolean> = {
+  const values: Record<string, string | boolean | string[]> = {
     "github.event_name": event,
     "github.event.pull_request.draft": false,
+    "github.event.pull_request.labels.*.name": [],
     "inputs.heavy_only": false,
     "inputs.pr_depth_only": false,
     "vars.CI_POSTGRES_PR_SELECTION": "",
+    "vars.QUEUE_BROWSER_SUITES": "",
     "needs.ci-plan.outputs.coverage_profile": profile,
     "needs.ci-plan.outputs.run_required": "true",
     "needs.ci-plan.outputs.pr_depth_reused": "false",
@@ -181,6 +183,7 @@ const conditionContext = (profile: string, event: string, depth: string) => {
     "needs.ci-plan.outputs.suite_depth": depth,
     "needs.ci-plan.outputs.queue_depth": "full",
     "needs.ci-plan.outputs.trusted": "true",
+    "needs.ci-plan.outputs.e2e_production_required": "true",
   };
   for (const name of Object.keys(workflow.jobs)) {
     values[`needs.${name}.result`] = "success";
@@ -196,16 +199,23 @@ const conditionContext = (profile: string, event: string, depth: string) => {
     values[`needs.ci-plan.outputs.${scope}`] = "true";
   }
   values["needs.ci-plan.outputs.corpus_suites_required"] = "false";
+  values["needs.ci-plan.outputs.postgres_service_suites_required"] =
+    event === "pull_request" ? "false" : "true";
   return {
     values,
-    status: { success: true, failure: false, cancelled: false },
+    status: { always: true, success: true, failure: false, cancelled: false },
   };
 };
 
+const DECLARED_NORMAL_PLAN_CHANGES = new Set([
+  "e2e-production-shard",
+  "web-build",
+]);
+
 test("off and unset preserve today's job plan across every event and depth", async () => {
-  expect(Object.keys(original.jobs).toSorted()).toEqual(
-    Object.keys(workflow.jobs).toSorted(),
-  );
+  expect(
+    [...Object.keys(original.jobs), "postgres-service-suites"].toSorted(),
+  ).toEqual(Object.keys(workflow.jobs).toSorted());
   for (const variable of ["", "off"]) {
     for (const event of [
       "pull_request",
@@ -229,6 +239,17 @@ test("off and unset preserve today's job plan across every event and depth", asy
         for (const depth of ["fast", "full"]) {
           const context = conditionContext("normal-v1", event, depth);
           for (const [name, job] of Object.entries(original.jobs)) {
+            if (DECLARED_NORMAL_PLAN_CHANGES.has(name)) {
+              const actual = evaluate(
+                workflow.jobs[name]?.if ?? "true",
+                context,
+              );
+              const baseline = evaluate(job.if ?? "true", context);
+              expect(actual, name).toBe(
+                event === "pull_request" ? true : baseline,
+              );
+              continue;
+            }
             expect(
               evaluate(workflow.jobs[name]?.if ?? "true", context),
               name,
@@ -238,6 +259,10 @@ test("off and unset preserve today's job plan across every event and depth", asy
       }
     }
   }
+  expect([...DECLARED_NORMAL_PLAN_CHANGES]).toEqual([
+    "e2e-production-shard",
+    "web-build",
+  ]);
 });
 
 test("Postgres PR execution follows explicit opt-in in either pilot profile", () => {
@@ -245,8 +270,13 @@ test("Postgres PR execution follows explicit opt-in in either pilot profile", ()
     for (const selection of ["", "off", "on"]) {
       const context = conditionContext(profile, "pull_request", "fast");
       context.values["vars.CI_POSTGRES_PR_SELECTION"] = selection;
+      context.values["needs.ci-plan.outputs.postgres_service_suites_required"] =
+        String(selection === "on");
       expect(
-        evaluate(workflow.jobs["service-suites"]?.if ?? "false", context),
+        evaluate(
+          workflow.jobs["postgres-service-suites"]?.if ?? "false",
+          context,
+        ),
       ).toBe(selection === "on");
     }
   }
@@ -269,6 +299,9 @@ test("corpus-only PRs start only corpus service steps", () => {
     .map((step) => step.name);
   expect(selectedSteps).toContain("Run corpus engine suites");
   expect(selectedSteps).not.toContain("Run Postgres-gated API suites");
+  expect(
+    evaluate(workflow.jobs["postgres-service-suites"]?.if ?? "false", context),
+  ).toBe(false);
   expect(selectedSteps).not.toContain("Run Valkey-gated API suites");
 });
 
@@ -288,6 +321,49 @@ test("docs-only PRs retain Markdown checks in every pilot coverage profile", () 
       .filter(([, job]) => evaluate(job.if ?? "true", context) === true)
       .map(([name]) => name);
     expect(scheduled).toEqual(["ci-checks-docs"]);
+  }
+});
+
+test("Docker checks retain every queue depth in both coverage profiles", () => {
+  expect(fastJobs(workflow)).not.toContain("docker-checks");
+  for (const profile of ["normal-v1", "pilot-fast-v1"]) {
+    for (const queueDepth of ["thin", "full"]) {
+      const context = conditionContext(profile, "merge_group", "full");
+      context.values["needs.ci-plan.outputs.queue_depth"] = queueDepth;
+      context.values["needs.ci-plan.outputs.run_required"] = "false";
+      expect(
+        evaluate(workflow.jobs["docker-checks"]?.if ?? "false", context),
+      ).toBe(true);
+      context.values["needs.ci-plan.outputs.docker_checks_required"] = "false";
+      expect(
+        evaluate(workflow.jobs["docker-checks"]?.if ?? "false", context),
+      ).toBe(false);
+    }
+  }
+});
+
+test("desktop Rust lint retains both platforms in every PR coverage profile and queue depth", () => {
+  expect(fastJobs(workflow)).toContain("desktop-rust-lint");
+  expect(fastJobs(workflow)).not.toContain("desktop-rust-tests");
+  for (const profile of ["normal-v1", "pilot-fast-v1"]) {
+    for (const event of ["pull_request", "merge_group"]) {
+      for (const queueDepth of ["thin", "full"]) {
+        const context = conditionContext(
+          profile,
+          event,
+          event === "pull_request" ? "fast" : "full",
+        );
+        context.values["needs.ci-plan.outputs.queue_depth"] = queueDepth;
+        expect(
+          evaluate(workflow.jobs["desktop-rust-lint"]?.if ?? "false", context),
+        ).toBe(true);
+        context.values["needs.ci-plan.outputs.desktop_rust_checks_required"] =
+          "false";
+        expect(
+          evaluate(workflow.jobs["desktop-rust-lint"]?.if ?? "false", context),
+        ).toBe(false);
+      }
+    }
   }
 });
 
@@ -388,6 +464,7 @@ test("the prerequisite census rejects every undecided new job and every deferred
     "web-build",
     "ci-browser",
     "service-suites",
+    "postgres-service-suites",
   ]) {
     expect(
       pilotFastJobs({

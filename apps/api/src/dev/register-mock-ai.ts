@@ -8,10 +8,21 @@ import type {
   TokenUsage,
 } from "@tanstack/ai";
 import { panic } from "better-result";
+import * as v from "valibot";
 
+import {
+  REQUEST_SECRET_TOOL_NAME,
+  requestSecretInputSchema,
+} from "@stll/api-contract/chat-secret";
+import type { RequestSecretInput } from "@stll/api-contract/chat-secret";
 import { Temporal } from "@stll/time";
 
 import { isMockAI } from "@/api/consts";
+import {
+  MOCK_AI_CANCELLATION_MARKER,
+  mockAiCancellationChunks,
+  mockAiCancellationSignal,
+} from "@/api/dev/mock-ai-cancellation";
 import {
   mockAiStreamKindChunks,
   mockAiStreamKindOf,
@@ -75,6 +86,18 @@ const EMPTY_COMPLETION_DELAY_MS = 1500;
 // continuation already holds the question, so this exercises the server's
 // empty-answer check on a message that is not itself empty.
 const E2E_EMPTY_CONTINUATION_MARKER = "Ask me, then answer with nothing please";
+
+// The mock pauses on the same private request card used in a normal turn.
+const E2E_REQUEST_SECRET_MARKER =
+  "Request a private connector credential please";
+const E2E_PRIVATE_INPUT_REQUEST = v.parse(requestSecretInputSchema, {
+  purpose: "Authenticate the sample connector",
+  kind: "token",
+  target: {
+    type: "mcp-connector",
+    connectorSlug: "fixture-private-connector",
+  },
+}) satisfies RequestSecretInput;
 
 const E2E_ASK_USER_ARGUMENTS = {
   analysis: "The answer depends on the side the user represents.",
@@ -269,6 +292,70 @@ function* emptyContinuationChunks({
   };
 }
 
+type RequestSecretPhase = "call" | "reply" | null;
+
+const resolveRequestSecretPhase = ({
+  latestUserText,
+  messages,
+}: {
+  latestUserText: string;
+  messages: ModelMessage[];
+}): RequestSecretPhase => {
+  if (!latestUserText.includes(E2E_REQUEST_SECRET_MARKER)) {
+    return null;
+  }
+  return messages.at(-1)?.role === "tool" ? "reply" : "call";
+};
+
+type RequestSecretCallChunksOptions = {
+  messageId: string;
+  model: string;
+  runId: string;
+  threadId: string;
+  timestamp: number;
+};
+
+function* requestSecretCallChunks({
+  messageId,
+  model,
+  runId,
+  threadId,
+  timestamp,
+}: RequestSecretCallChunksOptions): Generator<AdapterYieldChunk> {
+  const toolCallId = "mock-request-secret-call";
+  yield {
+    type: EventType.TEXT_MESSAGE_START,
+    messageId,
+    role: "assistant",
+    model,
+    timestamp,
+  };
+  yield {
+    type: EventType.TOOL_CALL_START,
+    toolCallId,
+    toolCallName: REQUEST_SECRET_TOOL_NAME,
+    parentMessageId: messageId,
+    timestamp,
+  };
+  yield {
+    type: EventType.TOOL_CALL_ARGS,
+    toolCallId,
+    delta: JSON.stringify(E2E_PRIVATE_INPUT_REQUEST),
+    model,
+    timestamp,
+  };
+  yield { type: EventType.TOOL_CALL_END, toolCallId, timestamp };
+  yield {
+    type: EventType.RUN_FINISHED,
+    runId,
+    threadId,
+    model,
+    timestamp,
+    finishReason: "tool_calls",
+    usage: mockUsage,
+  };
+}
+
 type CreateDocumentCallChunksOptions = {
   messageId: string;
   model: string;
@@ -354,7 +441,7 @@ async function* createDocumentCallChunks({
   };
 }
 
-const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
+export const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
   kind: "text",
   name: "mock",
   model: modelId,
@@ -366,7 +453,8 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
     toolCallMetadata: {},
     systemPromptMetadata: undefined,
   },
-  async *chatStream({ model, runId, threadId, messages }) {
+  async *chatStream(options) {
+    const { model, runId, threadId, messages } = options;
     logger.debug("mock_ai.turn_answered", { "ai.model": model });
     const resolvedRunId = runId ?? "mock-run";
     const resolvedThreadId = threadId ?? "mock-thread";
@@ -377,6 +465,10 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
     // The continuation after the client posted the draft result ends with a
     // tool message; only the first turn of the marker prompt calls the tool.
     const createDocumentPhase = resolveCreateDocumentPhase({
+      latestUserText,
+      messages,
+    });
+    const requestSecretPhase = resolveRequestSecretPhase({
       latestUserText,
       messages,
     });
@@ -419,6 +511,50 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
       return;
     }
 
+    if (requestSecretPhase === "call") {
+      yield* requestSecretCallChunks({
+        messageId,
+        model,
+        runId: resolvedRunId,
+        threadId: resolvedThreadId,
+        timestamp,
+      });
+      return;
+    }
+
+    if (requestSecretPhase === "reply") {
+      yield {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId,
+        role: "assistant",
+        model,
+        timestamp,
+      } satisfies AdapterYieldChunk;
+      yield {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId,
+        delta: "Done.",
+        model,
+        timestamp,
+      } satisfies AdapterYieldChunk;
+      yield {
+        type: EventType.TEXT_MESSAGE_END,
+        messageId,
+        model,
+        timestamp,
+      } satisfies AdapterYieldChunk;
+      yield {
+        type: EventType.RUN_FINISHED,
+        runId: resolvedRunId,
+        threadId: resolvedThreadId,
+        model,
+        timestamp,
+        finishReason: "stop",
+        usage: mockUsage,
+      } satisfies AdapterYieldChunk;
+      return;
+    }
+
     if (latestUserText.includes(E2E_EMPTY_CONTINUATION_MARKER)) {
       yield* emptyContinuationChunks({
         answered: messages.at(-1)?.role === "tool",
@@ -457,7 +593,19 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
       timestamp,
     } satisfies AdapterYieldChunk;
 
-    if (slowStream) {
+    if (latestUserText.includes(MOCK_AI_CANCELLATION_MARKER)) {
+      for await (const delta of mockAiCancellationChunks(
+        mockAiCancellationSignal(options),
+      )) {
+        yield {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId,
+          delta,
+          model,
+          timestamp,
+        } satisfies AdapterYieldChunk;
+      }
+    } else if (slowStream) {
       for (const delta of SLOW_STREAM_CHUNKS) {
         yield {
           type: EventType.TEXT_MESSAGE_CONTENT,
@@ -904,7 +1052,7 @@ const synthesizeJsonSchemaArray = (node: JsonSchemaNode): unknown[] => {
   );
 };
 
-if (isMockAI()) {
+export const registerMockAI = () => {
   registerBatchGenerator(generateBatchMock);
   registerTanStackMockTextAdapterFactory(createMockTextAdapter);
   logger.warn("mock_ai.enabled", {
@@ -914,4 +1062,8 @@ if (isMockAI()) {
         ? "every AI request gets a canned reply, organization keys included"
         : "AI requests get canned replies unless the organization configured its own key",
   });
+};
+
+if (isMockAI()) {
+  registerMockAI();
 }

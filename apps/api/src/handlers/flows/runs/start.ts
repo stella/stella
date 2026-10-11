@@ -10,7 +10,7 @@ import {
 import { flowRunRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import {
   ACCOUNT_ACCESS,
-  assertRunSizeConfirmedForHandler,
+  authorizeHandlerRunSize,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -98,7 +98,7 @@ const startFlowRunHandler = createSafeHandler(
             orgAIConfig,
             { dataClass: "customer", organizationId },
           );
-          return await assertRunSizeConfirmedForHandler({
+          return await authorizeHandlerRunSize({
             metering: { actionType: "background", modelRole: "chat" },
             estimatedUnits: estimateFlowRunUnits({
               modelId: stepModel.modelId,
@@ -106,6 +106,8 @@ const startFlowRunHandler = createSafeHandler(
               inputEntityCount: body.inputEntityIds.length,
             }),
             confirmedUnits: body.confirmedUnits,
+            steps,
+            definitionId: body.definitionId,
             organizationId,
             orgAIConfig,
             workspaceId,

@@ -83,6 +83,7 @@ const call = async (
         params: { name, arguments: args },
       }),
     }),
+    { mode: "advanced" },
   );
   expect(response.status).toBe(200);
   return await readTestJson<{

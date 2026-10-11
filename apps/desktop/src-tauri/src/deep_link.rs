@@ -236,7 +236,9 @@ pub fn handle_url(
           &app_handle,
           &api_base_url,
           &web_origin,
-        ) {
+        )
+        .await
+        {
           tracing::warn!(error = %error, "desktop account connection could not start");
         }
       });
@@ -601,19 +603,22 @@ async fn acknowledge_desktop_edit_handoff_opened(
     return Err("Desktop account server changed".into());
   }
   let url = format!("{api_base_url}/v1/desktop-edit-handoffs/{handoff_id}/opened");
-  let response = client
+  let builder = client
     .post(url)
-    .bearer_auth(&account.credential.key)
     .json(&AcknowledgeDesktopEditHandoffOpenedRequest {
       handoff_token,
       session_id,
     })
-    .timeout(ACKNOWLEDGE_TIMEOUT)
-    .send()
-    .await
-    .map_err(|e| {
-      format!("stella desktop could not acknowledge the edit handoff: {e}")
-    })?;
+    .timeout(ACKNOWLEDGE_TIMEOUT);
+  let response = crate::http_client::device_proof_request(
+    builder,
+    &account.device_key,
+    Some(&account.credential.key),
+    None,
+  )?
+  .send()
+  .await
+  .map_err(|e| format!("stella desktop could not acknowledge the edit handoff: {e}"))?;
 
   if response.status().is_success() {
     return Ok(());

@@ -26,7 +26,7 @@ import {
   isPublicStatuteCountry,
   STATUTE_COUNTRIES,
   statuteCountryName,
-} from "@/lib/statute-route";
+} from "@/lib/statutes/statute-route";
 
 /**
  * The jurisdiction the reader is in, in the title row.

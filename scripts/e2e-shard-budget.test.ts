@@ -3,13 +3,11 @@ import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
+import { allE2eMatrix } from "./e2e-spec-shards-core";
 import { evaluate } from "./github-expression";
 
 const jobSchema = v.object({
   "timeout-minutes": v.number(),
-  strategy: v.object({
-    matrix: v.object({ shard: v.array(v.union([v.number(), v.string()])) }),
-  }),
   steps: v.array(
     v.object({
       name: v.string(),
@@ -19,7 +17,7 @@ const jobSchema = v.object({
   ),
 });
 const workflow = v.parse(
-  v.object({ jobs: v.object({ "e2e-production-shard": jobSchema }) }),
+  v.object({ jobs: v.object({ "e2e-production-shard": v.unknown() }) }),
   Bun.YAML.parse(
     readFileSync(
       new URL("../.github/workflows/ci.yml", import.meta.url),
@@ -27,9 +25,14 @@ const workflow = v.parse(
     ),
   ),
 );
-const job = workflow.jobs["e2e-production-shard"];
+const parsedJob = v.parse(jobSchema, workflow.jobs["e2e-production-shard"]);
+const job = {
+  "timeout-minutes": parsedJob["timeout-minutes"],
+  strategy: { matrix: allE2eMatrix() },
+  steps: parsedJob.steps,
+};
 
-const budgetViolations = (candidate: v.InferOutput<typeof jobSchema>) => {
+const budgetViolations = (candidate: typeof job) => {
   const violations: string[] = [];
   for (const shard of candidate.strategy.matrix.shard) {
     let total = 0;

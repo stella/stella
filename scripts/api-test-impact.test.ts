@@ -281,6 +281,20 @@ test("every tracked API and workspace module is scannable by the import graph", 
   expect(unscannable).toEqual([]);
 }, 30_000);
 
+test("computed loader calls are found through comments and escapes, literal ones are not", () => {
+  const computed = (source: string) =>
+    analyzeModule("module.ts", source).computedImports;
+  expect(computed('export const load = () => import("./literal");')).toBe(
+    false,
+  );
+  expect(computed('const loaded = require("./literal");')).toBe(false);
+  expect(computed('import { value } from "./static";')).toBe(false);
+  expect(computed("const load = (name) => import(name);")).toBe(true);
+  expect(computed("const load = (name) => import /* x */ (name);")).toBe(true);
+  expect(computed("const load = (name) => require // x\n(name);")).toBe(true);
+  expect(computed("const load = (name) => \\u0072equire(name);")).toBe(true);
+});
+
 test("duration budgeting uses selected work only and never creates an empty shard", () => {
   withRepository((root, write) => {
     const durationPath = path.join(root, "duration-cache.json");

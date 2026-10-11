@@ -92,6 +92,10 @@ import type {
 import { isTemplateData } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import {
+  cloneOperationInput,
+  snapshotOperationInput,
+} from "@/api/lib/proofs/checked-transaction";
 import type { BindingContext } from "@/api/lib/template-binding/apply-source-fields";
 import { buildBindingContext } from "@/api/lib/template-binding/build-binding-context";
 import { recordTemplateUse } from "@/api/lib/templates/record-use";
@@ -1780,22 +1784,23 @@ const fillWithinAiAdmission = async <TRejection>({
  * substitute. Records the template use when a `templateId` is present.
  * Backs every fill boundary, so a template fills identically at each of them.
  */
-const fillTemplateDocxWithPolicy = async <TRejection = never>({
-  source,
-  values,
-  scopedDb,
-  organizationId,
-  thirdPartyOutboundPermit,
-  requiredFields,
-  clauseOverrides,
-  aiFill,
-  lookupResolver,
-  useRecording = "after-fill",
-  workspaceId,
-  unusedValuePolicy,
-}: FillDocxWithPolicyOptions<TRejection>): Promise<
-  FilledDocx | FillRejection<TRejection>
-> => {
+const fillTemplateDocxWithPolicy = async <TRejection = never>(
+  options: FillDocxWithPolicyOptions<TRejection>,
+): Promise<FilledDocx | FillRejection<TRejection>> => {
+  const {
+    source,
+    values,
+    scopedDb,
+    organizationId,
+    thirdPartyOutboundPermit,
+    requiredFields,
+    clauseOverrides,
+    aiFill,
+    lookupResolver,
+    useRecording = "after-fill",
+    workspaceId,
+    unusedValuePolicy,
+  } = snapshotOperationInput(options);
   const { templateId } = source;
   const { manifest, discovered, slots, bodies, clauses } =
     await discoverTemplateSource({
@@ -1841,7 +1846,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
     decideAiCondition,
     adaptAiValue,
   }: AiFillCollaborators): Promise<FilledDocx | FillRejection<TRejection>> => {
-    let record: FillValues = { ...values };
+    let record = cloneOperationInput(values);
     const resolveLookup = await fillLookupResolver({
       permit: thirdPartyOutboundPermit,
       lookupResolver,
@@ -2021,15 +2026,15 @@ export const fillTemplateDocxStrict = async <TRejection = never>(
  * Backs the fill-by-id and fill-to-workspace routes, the chat tools, and the
  * report exporter.
  */
-export const fillStoredTemplateDocx = async <TRejection = never>({
-  templateId,
-  ...options
-}: FillServiceOptions<TRejection>): Promise<
+export const fillStoredTemplateDocx = async <TRejection = never>(
+  input: FillServiceOptions<TRejection>,
+): Promise<
   | FilledDocx
   | TemplateServiceError
   | { requiredFieldsRejection: MissingRequiredField[] }
   | { usageRejection: TRejection }
 > => {
+  const { templateId, ...options } = snapshotOperationInput(input);
   const loaded = await loadStoredTemplateSource({
     templateId,
     organizationId: options.organizationId,
@@ -2122,15 +2127,15 @@ export const fillStoredTemplateWithText = async <TRejection = never>(
   return await withExtractedText(filled);
 };
 
-export const fillStoredTemplateWithTextStrict = async <TRejection = never>({
-  templateId,
-  ...options
-}: FillServiceOptions<TRejection>): Promise<
+export const fillStoredTemplateWithTextStrict = async <TRejection = never>(
+  input: FillServiceOptions<TRejection>,
+): Promise<
   | FillTemplateWithDocxResult
   | { inputRejection: TemplateInputRejection }
   | { requiredFieldsRejection: MissingRequiredField[] }
   | { usageRejection: TRejection }
 > => {
+  const { templateId, ...options } = snapshotOperationInput(input);
   const loaded = await loadStoredTemplateSource({
     templateId,
     organizationId: options.organizationId,
@@ -2157,14 +2162,12 @@ export const fillStoredTemplateWithTextStrict = async <TRejection = never>({
   return await withExtractedText(filled);
 };
 
-export const fillStoredTemplate = async (
-  options: FillServiceOptions,
-): Promise<FillTemplateResult> => {
+export const fillStoredTemplate = async <TRejection = never>(
+  options: FillServiceOptions<TRejection>,
+): Promise<FillTemplateResult | { usageRejection: TRejection }> => {
   const filled = await fillStoredTemplateDocx(options);
   if ("usageRejection" in filled) {
-    // Unreachable: TRejection is `never` here, so no `aiFill` this caller
-    // passes can refuse, and the service never returns a usage rejection.
-    panic("fillStoredTemplate received an unexpected usage rejection");
+    return filled;
   }
   if ("requiredFieldsRejection" in filled) {
     return filled;

@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import path from "node:path";
 import ts from "typescript";
 
+import { DESKTOP_FEATURE_IDS } from "@stll/api-contract/desktop-feature-access";
 import { compareCodeUnit } from "@stll/collation";
 
 import { featurePrerequisiteClosure } from "../../src/lib/feature-access/prerequisites";
@@ -577,6 +578,16 @@ const validateOwnership = (
   const tableOwners = new Map<string, Map<string, Requirement>>();
   const dispatchModules = new Set<string>();
   for (const [featureId, { ownership }] of Object.entries(registry)) {
+    // A desktop feature is gated by the client from its served decision, so
+    // it may own no API source at all.
+    if (
+      ownership === undefined &&
+      DESKTOP_FEATURE_IDS.some(
+        (desktopFeatureId) => desktopFeatureId === featureId,
+      )
+    ) {
+      continue;
+    }
     if (
       ownership === undefined ||
       [

@@ -102,6 +102,10 @@ const ChatThreadDomPage = ({
           handleAlwaysAllow: session.handleAlwaysAllow,
           handleApprove: session.handleApprove,
           handleDeny: session.handleDeny,
+          handleRequestSecret: session.handleRequestSecret,
+          continueRequestSecret: session.continueRequestSecret,
+          resolveSecretTarget: session.resolveSecretTarget,
+          secretAvailabilityKey: session.secretAvailabilityKey,
         }}
       >
         {/* The selection bar quotes into the composer through the editor

@@ -57,6 +57,10 @@ import type {
   UsCitedDecision,
 } from "@/api/handlers/case-law/ingestion/us-citation-occurrences";
 import {
+  boundedCitationKey,
+  fitsCitationStorageField,
+} from "@/api/lib/case-law/citation-storage-bounds";
+import {
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
@@ -1559,12 +1563,13 @@ export const bareCitationKey = (text: string): string =>
  * call site, and the database refuses the loser (`citation_key <> ''`).
  */
 export const citationKeyOf = (text: string): string | null =>
-  bareCitationKey(text) || null;
+  boundedCitationKey(bareCitationKey(text));
 
 /**
  * A decision's own `citation_key`: its docket's key, and none where the
  * primary reference is not a docket. Citations reach such a decision through
- * its typed identifiers instead.
+ * its typed identifiers instead. A reference whose key would not fit the
+ * column is no docket a citation could name, so it gets no key either.
  */
 export const decisionCitationKeyOf = ({
   caseNumber,
@@ -1821,6 +1826,43 @@ const mergeCollectionCitations = ({
   }
 };
 
+type StorageBoundedCitationMatchOptions = {
+  pattern: RegExp;
+  match: RegExpExecArray;
+  kioRunEnd: number;
+};
+
+const storageBoundedCitationMatch = ({
+  pattern,
+  match,
+  kioRunEnd,
+}: StorageBoundedCitationMatchOptions) => {
+  // Preserve the printed passage for exact anchoring; only keys normalize it.
+  const citationText = match[0].trim();
+  const caseNumber = match.groups?.["caseNumber"]?.trim();
+  const matchEnd = match.index + match[0].length;
+  if (
+    pattern !== PL_KIO_PATTERN ||
+    (match.index >= kioRunEnd &&
+      fitsCitationStorageField("key", bareCitationKey(citationText)) &&
+      fitsCitationStorageField("text", citationText))
+  ) {
+    return { citationText, caseNumber, matchEnd, kioRunEnd };
+  }
+  // An oversized joined run is read docket by docket. A single KIO docket
+  // has no comma, and subsequent regex matches stay inside this run's end.
+  const [first = citationText] = citationText.split(",");
+  const firstDocket = first.trim();
+  const firstEnd = match.index + firstDocket.length;
+  pattern.lastIndex = firstEnd;
+  return {
+    citationText: firstDocket,
+    caseNumber: firstDocket,
+    matchEnd: firstEnd,
+    kioRunEnd: Math.max(kioRunEnd, matchEnd),
+  };
+};
+
 /**
  * Extract citation references from decision text.
  *
@@ -1847,19 +1889,22 @@ export const extractCitations = (
   for (const section of sections) {
     for (const pattern of CITATION_PATTERNS) {
       pattern.lastIndex = 0;
+      // End of a joined KIO run too long to key as one citation; the
+      // dockets up to it are read one at a time.
+      let kioRunEnd = -1;
 
       for (
         let match = pattern.exec(section.text);
         match !== null;
         match = pattern.exec(section.text)
       ) {
-        // citationText is stored verbatim (only edge-trimmed), never
-        // whitespace-normalized: exact-passage anchoring must be able to
-        // find this exact string in the source document, including an
-        // embedded line-wrap newline. Only the dedup key below is
-        // canonicalized.
-        const citationText = match[0].trim();
-        const caseNumber = match.groups?.["caseNumber"]?.trim();
+        const projected = storageBoundedCitationMatch({
+          pattern,
+          match,
+          kioRunEnd,
+        });
+        const { citationText, caseNumber, matchEnd } = projected;
+        kioRunEnd = projected.kioRunEnd;
         // A bare letter run under a court's label is also how a ministry
         // writes a file number, so the docket grammar decides whether this
         // capture is a case number at all.
@@ -1928,10 +1973,7 @@ export const extractCitations = (
         );
         const observed: Record<AgreeingHint, string | null> = {
           citedCourtHint: detectCitationCourtHint(section.text, match.index),
-          citedSheetNumber: detectCitationSheetNumber(
-            section.text,
-            match.index + match[0].length,
-          ),
+          citedSheetNumber: detectCitationSheetNumber(section.text, matchEnd),
           citedDecisionDate: detectCitationDecisionDate(
             section.text,
             match.index,
@@ -1940,7 +1982,7 @@ export const extractCitations = (
         const position: CitationPosition = {
           sectionIndex: section.index,
           start: match.index,
-          end: match.index + match[0].length,
+          end: matchEnd,
         };
 
         const existing = byKey.get(dedupKey);

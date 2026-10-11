@@ -95,6 +95,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     type: "resource",
     resourceType: RESOURCE_TYPE.CHAT_MESSAGE,
   },
+  chatMessageRevision: { type: "non_resource", reason: "subresource" },
   chatTurn: { type: "non_resource", reason: "workflow" },
   chatThreadCompaction: { type: "non_resource", reason: "projection" },
   chatThread: {
@@ -265,6 +266,8 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     type: "resource",
     resourceType: RESOURCE_TYPE.SAVED_TIME_NARRATIVE,
   },
+  // One use of a search or an opened decision or statute, private to its user.
+  searchHistoryEntry: { type: "non_resource", reason: "event" },
   sellerProfile: {
     type: "resource",
     resourceType: RESOURCE_TYPE.SELLER_PROFILE,

@@ -18,6 +18,7 @@ import { timeEntryPolicies } from "@/api/db/rls";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import type { SafeId } from "@/api/lib/branded-types";
 
+import { reviewResetOwnerPolicies } from "../review-reset-policies";
 import { BILLING_ARRANGEMENT_MODES } from "./billing-arrangements";
 import {
   EXPENSE_CATEGORIES,
@@ -73,6 +74,7 @@ export const timeDailyTargets = p.pgTable(
     updatedAt: timestamptz("updated_at").defaultNow().notNull(),
   },
   (table) => [
+    ...reviewResetOwnerPolicies("time_daily_targets"),
     p.primaryKey({ columns: [table.organizationId, table.userId] }),
     p
       .foreignKey({
@@ -392,6 +394,7 @@ export const timeTimers = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...reviewResetOwnerPolicies("time_timers"),
     p.foreignKey({
       columns: [table.workspaceId, table.organizationId],
       foreignColumns: [workspaces.id, workspaces.organizationId],
@@ -465,6 +468,7 @@ export const timeTimerConfirmations = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...reviewResetOwnerPolicies("time_timer_confirmations"),
     p
       .index("time_timer_confirmations_owner_idx")
       .on(table.organizationId, table.userId),
@@ -501,6 +505,7 @@ export const savedTimeNarratives = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...reviewResetOwnerPolicies("saved_time_narratives"),
     p
       .index("saved_time_narratives_owner_name_id_idx")
       .on(table.organizationId, table.userId, table.name, table.id),
@@ -1242,6 +1247,7 @@ export const timeEntryTimerStates = p.pgTable(
     state: p.text("state", { enum: TIME_TIMER_STATES }).notNull(),
   },
   (table) => [
+    ...reviewResetOwnerPolicies("time_entry_timer_states"),
     p
       .index("time_entry_timer_states_org_entry_idx")
       .on(table.organizationId, table.entryId),

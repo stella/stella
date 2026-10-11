@@ -2,7 +2,10 @@ import { panic } from "better-result";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
 import type { Transaction } from "@/api/db/root";
-import type { AUDIT_ACTIVITY_CATEGORIES } from "@/api/db/schema";
+import type {
+  AUDIT_ACTIVITY_CATEGORIES,
+  SearchHistoryKind,
+} from "@/api/db/schema";
 import { auditLogs } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveClientIp } from "@/api/lib/client-ip";
@@ -126,6 +129,44 @@ export type AuditRecorder = (
   tx: AuditTransaction,
   event: AuditEvent | AuditEvent[],
 ) => Promise<void>;
+
+const HISTORY_AUDIT_KINDS = {
+  // A free-text search does not identify one of the document kinds.
+  search: null,
+  decision: "case_law",
+  statute: "statute",
+} as const satisfies Record<SearchHistoryKind, "case_law" | "statute" | null>;
+
+type SearchHistoryAuditOptions = {
+  resourceId: string;
+  operation: "record" | "import" | "delete" | "clear" | "account-deletion";
+  entryCount: number;
+  kinds: readonly SearchHistoryKind[];
+};
+
+/** Only mutation metadata crosses the audit boundary; history content stays private. */
+export const searchHistoryAuditEvent = ({
+  resourceId,
+  operation,
+  entryCount,
+  kinds,
+}: SearchHistoryAuditOptions) =>
+  ({
+    action:
+      operation === "record" || operation === "import"
+        ? AUDIT_ACTION.UPDATE
+        : AUDIT_ACTION.DELETE,
+    resourceType: AUDIT_RESOURCE_TYPE.SEARCH_HISTORY,
+    resourceId,
+    metadata: {
+      operation,
+      entryCount,
+      kinds: kinds.flatMap((kind) => {
+        const auditKind = HISTORY_AUDIT_KINDS[kind];
+        return auditKind === null ? [] : [auditKind];
+      }),
+    },
+  }) as const satisfies AuditEvent;
 
 type AuditRecorderBindings = {
   organizationId: SafeId<"organization">;
@@ -312,6 +353,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   report_export: "other",
   rate_table: "other",
   saved_search: "other",
+  search_history: "other",
   seller_profile: "other",
   saved_time_narrative: "other",
   number_series: "other",

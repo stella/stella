@@ -208,6 +208,7 @@ for (const transport of [
         if (transport === "MCP capability") {
           result = modelViewOf(
             await handleMcpToolCall({
+              mode: "advanced",
               context,
               toolName: MCP_CAPABILITY_EXECUTORS.read,
               args: { capability, input },
@@ -354,6 +355,7 @@ for (const { id, access } of requiredCapabilities) {
     const executor = MCP_CAPABILITY_EXECUTORS[access];
     for (const toolName of ["describe_capability", executor] as const) {
       const result = await handleMcpToolCall({
+        mode: "advanced",
         context,
         toolName,
         args: {
@@ -394,6 +396,7 @@ test("shared list descriptions follow caller discovery", async () => {
     for (const context of [granted, hidden]) {
       const described = modelViewOf(
         await handleMcpToolCall({
+          mode: "advanced",
           context,
           toolName: "describe_capability",
           args: { capability },
@@ -421,6 +424,7 @@ test("conditional view schemas follow caller discovery", async () => {
   )) {
     const enabled = modelViewOf(
       await handleMcpToolCall({
+        mode: "advanced",
         context: granted,
         toolName: "describe_capability",
         args: { capability: id },
@@ -428,6 +432,7 @@ test("conditional view schemas follow caller discovery", async () => {
     );
     const denied = modelViewOf(
       await handleMcpToolCall({
+        mode: "advanced",
         context: hidden,
         toolName: "describe_capability",
         args: { capability: id },

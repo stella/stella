@@ -43,6 +43,7 @@ describe("API test batch planning", () => {
           classifyTestBatch({
             dbBacked: isDbTest(testPath, source),
             heavyLogic: false,
+            heavyDb: false,
             installsModuleMock: source.includes("mock.module"),
             propertyOnly: true,
           }) === TEST_BATCH_KIND.db,
@@ -70,6 +71,7 @@ describe("API test batch planning", () => {
         classifyTestBatch({
           dbBacked: true,
           heavyLogic: false,
+          heavyDb: false,
           installsModuleMock,
           propertyOnly: true,
         }),
@@ -80,6 +82,7 @@ describe("API test batch planning", () => {
       classifyTestBatch({
         dbBacked: true,
         heavyLogic: false,
+        heavyDb: false,
         installsModuleMock: true,
         propertyOnly: false,
       }),
@@ -98,6 +101,99 @@ describe("API test batch planning", () => {
       ["db-a.test.ts", "db-b.test.ts", "db-c.test.ts"],
       ["db-d.test.ts"],
     ]);
+  });
+
+  test.each([false, true])(
+    "heavy DB files run alone with their ceiling (property mode: %s)",
+    async (propertyOnly) => {
+      const apiRoot = mkdtempSync(path.join(tmpdir(), "api-heavy-db-"));
+      const ordinaryPaths = ["src/a.db.test.ts", "src/b.db.test.ts"];
+      const heavyPaths = ["src/c.db.test.ts", "src/d.db.test.ts"];
+      try {
+        mkdirSync(path.join(apiRoot, "src"));
+        await Promise.all(
+          [...ordinaryPaths, ...heavyPaths].map(async (testPath) =>
+            Bun.write(
+              path.join(apiRoot, testPath),
+              [
+                heavyPaths.includes(testPath) ? "// @api-test-heavy-db" : "",
+                'assertProperty("fixture", property);',
+              ].join("\n"),
+            ),
+          ),
+        );
+        const groups = await planApiTestBatches({
+          apiRoot,
+          propertyOnly,
+          testPaths: [...ordinaryPaths, ...heavyPaths],
+        });
+        expect(
+          groups.find(({ kind }) => kind === TEST_BATCH_KIND.heavyDb),
+        ).toEqual({
+          isolate: false,
+          kind: TEST_BATCH_KIND.heavyDb,
+          maxPeakRssMb: 3072,
+          testBatches: heavyPaths.map((testPath) => [testPath]),
+        });
+        expect(groups.find(({ kind }) => kind === TEST_BATCH_KIND.db)).toEqual({
+          isolate: false,
+          kind: TEST_BATCH_KIND.db,
+          maxPeakRssMb: 2560,
+          testBatches: propertyOnly
+            ? ordinaryPaths.map((testPath) => [testPath])
+            : [ordinaryPaths],
+        });
+      } finally {
+        rmSync(apiRoot, { recursive: true, force: true });
+      }
+    },
+  );
+
+  test("heavy DB classification excludes logic markers and wins over module mocks", () => {
+    for (const propertyOnly of [false, true]) {
+      for (const installsModuleMock of [false, true]) {
+        const options = {
+          dbBacked: true,
+          heavyDb: true,
+          heavyLogic: false,
+          installsModuleMock,
+          propertyOnly,
+        };
+        expect(classifyTestBatch(options)).toBe(TEST_BATCH_KIND.heavyDb);
+        expect(() =>
+          classifyTestBatch({ ...options, heavyLogic: true }),
+        ).toThrow(
+          "Heavy DB tests must be DB-backed and cannot also be heavy logic",
+        );
+        expect(() =>
+          classifyTestBatch({ ...options, dbBacked: false }),
+        ).toThrow(
+          "Heavy DB tests must be DB-backed and cannot also be heavy logic",
+        );
+      }
+    }
+  });
+
+  test("full-size sanctions corpora declare singleton heavy DB batches", async () => {
+    const testPaths = [
+      "src/lib/lists/sanctions/refresh-event-loop.db.test.ts",
+      "src/handlers/sanctions/public-routes.db.test.ts",
+      "src/lib/lists/sanctions/monitoring-drain.db.test.ts",
+    ];
+    const groups = await planApiTestBatches({
+      apiRoot: API_ROOT,
+      propertyOnly: false,
+      testPaths,
+    });
+    expect(
+      groups.find(({ kind }) => kind === TEST_BATCH_KIND.heavyDb)?.testBatches,
+    ).toEqual(testPaths.slice(0, 2).map((testPath) => [testPath]));
+    expect(
+      groups.find(({ kind }) => kind === TEST_BATCH_KIND.db)?.maxPeakRssMb,
+    ).toBe(2560);
+    expect(
+      groups.find(({ kind }) => kind === TEST_BATCH_KIND.db)?.testBatches,
+    ).toEqual([["src/lib/lists/sanctions/monitoring-drain.db.test.ts"]]);
   });
 
   test("runs a solo file alone without regrouping any other batch", () => {

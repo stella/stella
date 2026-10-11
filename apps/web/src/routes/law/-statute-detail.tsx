@@ -49,6 +49,7 @@ import {
 } from "@/components/legal-reader/outline-jump-field.logic";
 import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
+import { useLawHistory } from "@/features/law-search-history/law-search-history-query";
 import {
   StatuteIneligibleVersionNotice,
   StatuteWindowGapNotice,
@@ -65,7 +66,6 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
-import { recordLawOpen } from "@/lib/law-search-history/law-search-history";
 import { statuteVersionRouteParams } from "@/routes/law/-statute-detail.logic";
 import type { PublicStatuteRouteData } from "@/routes/law/-statute-detail.logic";
 
@@ -180,21 +180,36 @@ const useRecordStatuteOpen = ({
   const openedPath = useRouterState({
     select: ({ location }) => location.pathname,
   });
+  const {
+    record: { mutate: recordHistory },
+    enabled: historyEnabled,
+  } = useLawHistory();
   useExternalSyncEffect(() => {
-    const citation = splitStatuteTitleCitation(title).citation;
+    if (!historyEnabled) {
+      return;
+    }
+    const { citation, rest } = splitStatuteTitleCitation(title);
     const eliCitation = /\/(\d{4})\/(\d+)$/u.exec(eli);
     const year = eliCitation?.at(1);
     const number = eliCitation?.at(2);
-    recordLawOpen({
+    recordHistory({
       kind: "statute",
-      id: eli,
-      title:
-        citation !== null || year === undefined || number === undefined
-          ? title
-          : `${number}/${year} · ${title}`,
+      documentId: eli,
+      documentIdentity:
+        number === undefined || year === undefined
+          ? { kind: "unknown" }
+          : { kind: "statute", number, year },
+      title: {
+        identifier:
+          citation ??
+          (year === undefined || number === undefined
+            ? ""
+            : `${number}/${year}`),
+        description: rest,
+      },
       path: openedPath,
     });
-  }, [title, eli, openedPath]);
+  }, [historyEnabled, recordHistory, title, eli, openedPath]);
 };
 
 /**
