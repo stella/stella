@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { panic } from "better-result";
+import * as v from "valibot";
 
 import {
   CASE_LAW_ANALYSIS_FAILURE_CODES,
@@ -7,6 +8,10 @@ import {
   type CaseLawAnalysisFailureCode as AnalysisFailureCode,
   type CaseLawAnalysisUnavailableCode,
 } from "@stll/api-contract";
+import {
+  providerDiagnosticSchema,
+  type ProviderDiagnostic,
+} from "@stll/api-contract/provider-setup";
 import { fetchWithTimeout } from "@stll/fetch";
 import {
   type DecisionAnalysis,
@@ -29,7 +34,12 @@ export type AnalysisFailureKey =
  */
 export type AnalysisError =
   | { kind: "unavailable"; code: CaseLawAnalysisUnavailableCode }
-  | { kind: "failed"; code: AnalysisFailureCode; key: AnalysisFailureKey }
+  | {
+      kind: "failed";
+      code: AnalysisFailureCode;
+      key: AnalysisFailureKey;
+      providerDiagnostic?: ProviderDiagnostic;
+    }
   | { kind: "unreadable" };
 
 type AnalysisResponse =
@@ -86,7 +96,17 @@ const parseAnalysisError = (value: Record<string, unknown>): AnalysisError => {
   }
   if (isMember(CASE_LAW_ANALYSIS_FAILURE_CODES, code)) {
     const key = parseFailureKey(value["key"]);
-    return key === null ? UNREADABLE : { kind: "failed", code, key };
+    if (key === null) {
+      return UNREADABLE;
+    }
+    const diagnostic = value["providerDiagnostic"];
+    if (diagnostic === undefined) {
+      return { kind: "failed", code, key };
+    }
+    const parsed = v.safeParse(providerDiagnosticSchema, diagnostic);
+    return parsed.success
+      ? { kind: "failed", code, key, providerDiagnostic: parsed.output }
+      : UNREADABLE;
   }
   return UNREADABLE;
 };

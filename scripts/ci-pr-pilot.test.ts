@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
-import { pilotFastJobs } from "./ci-pr-pilot-plan";
+import { PILOT_ALWAYS, pilotFastJobs } from "./ci-pr-pilot-plan";
 import { evaluate } from "./github-expression";
 
 const schema = v.object({
@@ -232,12 +232,17 @@ const conditionContext = (profile: string, event: string, depth: string) => {
 const DECLARED_NORMAL_PLAN_CHANGES = new Set([
   "e2e-production-shard",
   "web-build",
+  "scan-engine-wasm-drift",
 ]);
 
 test("off and unset preserve today's job plan across every event and depth", async () => {
   expect(
     [...Object.keys(original.jobs), "postgres-service-suites"].toSorted(),
-  ).toEqual(Object.keys(workflow.jobs).toSorted());
+  ).toEqual(
+    Object.keys(workflow.jobs)
+      .filter((job) => job !== "query-perf")
+      .toSorted(),
+  );
   for (const variable of ["", "off"]) {
     for (const event of [
       "pull_request",
@@ -283,6 +288,7 @@ test("off and unset preserve today's job plan across every event and depth", asy
   expect([...DECLARED_NORMAL_PLAN_CHANGES]).toEqual([
     "e2e-production-shard",
     "web-build",
+    "scan-engine-wasm-drift",
   ]);
 });
 
@@ -341,7 +347,7 @@ test("docs-only PRs retain Markdown checks in every pilot coverage profile", () 
       .filter(([name]) => !["ci-plan", "ci-result"].includes(name))
       .filter(([, job]) => evaluate(job.if ?? "true", context) === true)
       .map(([name]) => name);
-    expect(scheduled).toEqual(["ci-checks-docs"]);
+    expect(scheduled).toEqual(["ci-checks-docs", ...PILOT_ALWAYS]);
   }
 });
 
@@ -359,6 +365,29 @@ test("Docker checks retain every queue depth in both coverage profiles", () => {
       expect(
         evaluate(workflow.jobs["docker-checks"]?.if ?? "false", context),
       ).toBe(false);
+    }
+  }
+});
+
+test("desktop Rust tests retain merge-group selection in every coverage profile and queue depth", () => {
+  expect(fastJobs(workflow)).not.toContain("desktop-rust-tests");
+  for (const profile of ["normal-v1", "pilot-fast-v1"]) {
+    for (const event of ["pull_request", "merge_group"]) {
+      for (const queueDepth of ["thin", "full"]) {
+        for (const required of ["true", "false"]) {
+          const context = conditionContext(profile, event, "full");
+          context.values["needs.ci-plan.outputs.queue_depth"] = queueDepth;
+          context.values["needs.ci-plan.outputs.desktop_rust_checks_required"] =
+            required;
+          expect(
+            evaluate(
+              workflow.jobs["desktop-rust-tests"]?.if ?? "false",
+              context,
+            ),
+            `${profile}/${event}/${queueDepth}/${required}`,
+          ).toBe(event === "merge_group" && required === "true");
+        }
+      }
     }
   }
 });
@@ -393,7 +422,12 @@ test("pilot pushes execute only the fast allowlist and its generated-input prere
   expect(outputs.get("coverage_profile")).toBe("pilot-fast-v1");
   const allowed = fastJobs(workflow);
   const context = conditionContext("pilot-fast-v1", "pull_request", "fast");
+  const always: readonly string[] = PILOT_ALWAYS;
   for (const [name, job] of Object.entries(workflow.jobs)) {
+    if (always.includes(name)) {
+      expect(evaluate(job.if ?? "true", context), name).toBe(true);
+      continue;
+    }
     if (!allowed.includes(name)) {
       expect(evaluate(job.if ?? "true", context), name).toBe(false);
     }
@@ -537,4 +571,25 @@ test("pilot-fast aggregation requires its planned jobs and accepts deferred skip
       ).toBe(1);
     }
   }
+});
+
+test("scan engine builds offline on affected PRs in both coverage profiles", () => {
+  const condition = workflow.jobs["scan-engine-wasm-drift"]?.if;
+  if (!condition) {
+    throw new Error("Missing scan engine condition");
+  }
+  for (const profile of ["normal-v1", "pilot-fast-v1"]) {
+    for (const required of ["false", "true"]) {
+      for (const trusted of ["false", "true"]) {
+        const context = conditionContext(profile, "pull_request", "fast");
+        context.values["needs.ci-plan.outputs.scan_engine_wasm_required"] =
+          required;
+        context.values["needs.ci-plan.outputs.trusted"] = trusted;
+        expect(evaluate(condition, context)).toBe(
+          required === "true" && trusted === "true",
+        );
+      }
+    }
+  }
+  expect(fastJobs(workflow)).toContain("scan-engine-wasm-drift");
 });

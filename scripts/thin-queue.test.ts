@@ -18,7 +18,12 @@ import {
   evaluate as evaluateExpression,
   UNKNOWN,
 } from "./github-expression";
-import { mainHeavyJobs, queueAdmittedJobs, thinJobs } from "./main-heavy-plan";
+import {
+  mainHeavyJobs,
+  queueAdmittedJobs,
+  queueGateJobs,
+  thinJobs,
+} from "./main-heavy-plan";
 
 const root = new URL("../", import.meta.url).pathname;
 const stepSchema = v.looseObject({
@@ -62,6 +67,8 @@ const THIN_JOBS = thinJobs(ci);
 const main = readWorkflow("main-heavy.yml");
 const heavy = mainHeavyJobs(ci);
 const admitted = queueAdmittedJobs(ci);
+const gates = queueGateJobs(ci);
+const browserAdmitted = admitted.filter((job) => !gates.includes(job));
 const eventPolicy = v.parse(
   v.object({ jobs: v.record(v.string(), v.string()) }),
   JSON.parse(
@@ -297,6 +304,7 @@ type ExpectedPrSelectionOptions = {
 const DECLARED_PR_PLAN_CHANGES = new Set([
   "ci-browser",
   "e2e-production-shard",
+  "scan-engine-wasm-drift",
   "web-build",
 ]);
 const expectedPrSelection = ({
@@ -313,6 +321,13 @@ const expectedPrSelection = ({
     return (
       value.needs["ci-plan"]?.outputs["trusted"] === "true" &&
       value.needs["ci-plan"].outputs["desktop_browser_required"] === "true"
+    );
+  }
+  if (job === "scan-engine-wasm-drift") {
+    expect(DECLARED_PR_PLAN_CHANGES.has(job)).toBe(true);
+    return (
+      value.needs["ci-plan"]?.outputs["trusted"] === "true" &&
+      value.needs["ci-plan"].outputs["scan_engine_wasm_required"] === "true"
     );
   }
   if (job === "web-build") {
@@ -812,14 +827,18 @@ test("unset and full preserve historical predicates except declared PR, Postgres
         "ci-generated-sources",
         "ci-checks-docs",
         "code-quality-web-rest",
+        "dated-waiver-expiry",
         "desktop-rust-tests",
         "desktop-rust-lint",
+        "query-perf",
+        "scan-engine-wasm-drift",
       ]),
     ].toSorted(),
   );
   expect([...DECLARED_PR_PLAN_CHANGES].toSorted()).toEqual([
     "ci-browser",
     "e2e-production-shard",
+    "scan-engine-wasm-drift",
     "web-build",
   ]);
   for (const event of events) {
@@ -914,15 +933,17 @@ test("one variable moves only derived heavy jobs from merge groups to ordinary m
         }
         if (
           resolved.exitCode !== 0 ||
-          (thinQueue && heavy.includes(job) && !admitted.includes(job))
+          (thinQueue &&
+            heavy.includes(job) &&
+            !admitted.includes(job) &&
+            job !== "desktop-rust-tests")
         ) {
           expect(runs, `${event.event}/${variable}/${job}`).toBe(false);
           continue;
         }
-        // An admitted browser suite keeps its full-depth queue selection in a
-        // thin group while the switch is unset.
+        // Browser suites and macOS desktop tests retain full-depth selection in thin groups.
         const certified =
-          thinQueue && admitted.includes(job)
+          thinQueue && (admitted.includes(job) || job === "desktop-rust-tests")
             ? {
                 ...value,
                 needs: {
@@ -1047,7 +1068,12 @@ const evaluate = ({
   );
   const dependencies = Object.fromEntries(
     needs.map((name) => {
-      let jobResult = heavy.includes(name) ? "skipped" : "success";
+      let jobResult =
+        heavy.includes(name) &&
+        !gates.includes(name) &&
+        name !== "desktop-rust-tests"
+          ? "skipped"
+          : "success";
       if (name === job) {
         jobResult = result ?? "missing";
       }
@@ -1107,7 +1133,7 @@ test("thin aggregation accepts only intended heavy skips and still requires ever
       ).toBe(1);
     }
   }
-  for (const job of THIN_JOBS) {
+  for (const job of [...THIN_JOBS, ...gates, "desktop-rust-tests"]) {
     expect(evaluate({ queueDepth: "thin", job, result: "skipped" }), job).toBe(
       1,
     );
@@ -1304,10 +1330,10 @@ test("main release and scheduled runs execute the planned version compiler in ei
 }, 30_000);
 
 test("thin merge groups admit exactly the planned browser suites until the switch turns them off", () => {
-  expect([...admitted].toSorted()).toEqual(
+  expect([...browserAdmitted].toSorted()).toEqual(
     ["e2e-production-shard", "route-smoke"].toSorted(),
   );
-  for (const job of admitted) {
+  for (const job of browserAdmitted) {
     // Main-heavy keeps certifying them after merge as well.
     expect(heavy, job).toContain(job);
     const scope = scopes[job];
@@ -1358,7 +1384,7 @@ test("a browser suite without the queue switch drops out of thin merge groups", 
 });
 
 test("the queue switch admits browser suites only in merge groups", () => {
-  for (const job of admitted) {
+  for (const job of browserAdmitted) {
     const scope = scopes[job];
     if (!scope) {
       panic(`Missing planner scope for ${job}`);

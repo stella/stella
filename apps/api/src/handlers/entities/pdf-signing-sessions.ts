@@ -67,6 +67,7 @@ const sessionNotFound = () =>
   });
 
 const statusConfig = {
+  contract: "patch",
   params: paramsSchema,
   permissions: { entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -95,6 +96,7 @@ export const readPdfSigningSessionStatus = createSafeHandler<
 );
 
 const cancelConfig = {
+  contract: "patch",
   params: paramsSchema,
   permissions: { entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,

@@ -16,6 +16,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 const config = {
+  contract: "patch",
   description:
     "Update an active issuer profile in the active organization. Omitted " +
     "fields stay unchanged; null clears an optional field.",

@@ -15,6 +15,7 @@ const listSkillRevisionsParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "List the recorded revisions of an agent skill, newest first, without " +
     "their bodies. Every body change records one, including the edits that " +

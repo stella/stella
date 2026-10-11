@@ -31,6 +31,7 @@ const abortParamsSchema = workspaceParams({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Abandon an upload reserved by uploads.create, discarding the staged " +
     "object. Call this when the presigned PUT fails or the upload is no " +

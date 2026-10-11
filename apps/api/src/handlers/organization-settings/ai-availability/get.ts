@@ -10,6 +10,7 @@ import {
 } from "@/api/lib/tanstack-ai-models";
 
 const config = {
+  contract: "patch",
   description:
     "Report whether AI is usable in this organization: whether the " +
     "deployment provides a model, whether the organization has configured " +

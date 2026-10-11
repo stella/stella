@@ -169,7 +169,7 @@ const parseWaiver = (raw: unknown, index: number): Waiver | string => {
   return { id, rule, file, symbol, count, reason, evidence, kind };
 };
 
-const parseLedger = (raw: unknown): ParseResult => {
+export const parseLedger = (raw: unknown): ParseResult => {
   const rawWaivers = isRecord(raw) ? raw["waivers"] : undefined;
   if (!Array.isArray(rawWaivers)) {
     return {
