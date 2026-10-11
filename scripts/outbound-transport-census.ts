@@ -829,6 +829,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch"],
   },
   {
+    path: "apps/web/src/testing/dom-network-guard.ts",
+    class: "package-owned-client",
+    reason:
+      "Replaces the HTTP client's request functions in DOM tests so unmocked requests are refused; it sends none.",
+    transports: ["module:node:http", "module:node:https"],
+  },
+  {
     path: "apps/web/src/components/ai-suggestions/document-review-proposal-stream.ts",
     class: "operator-configured-infrastructure",
     reason: "Streams review proposals from the configured API.",
