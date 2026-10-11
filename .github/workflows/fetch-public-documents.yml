@@ -1,5 +1,9 @@
 name: Fetch public source documents for verification
 
+defaults:
+  run:
+    shell: bash
+
 on:
   workflow_dispatch:
     inputs:
