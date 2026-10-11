@@ -51,10 +51,37 @@ const unwrap = (node: ts.Expression): ts.Expression => {
   }
   return node;
 };
+const testsNonNullConflict = (
+  condition: ts.Expression,
+  name: string,
+): boolean =>
+  (ts.isIdentifier(condition) && condition.text === name) ||
+  (ts.isBinaryExpression(condition) &&
+    (condition.operatorToken.kind ===
+      ts.SyntaxKind.ExclamationEqualsEqualsToken ||
+      condition.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsToken) &&
+    ((ts.isIdentifier(condition.left) &&
+      condition.left.text === name &&
+      condition.right.kind === ts.SyntaxKind.NullKeyword) ||
+      (ts.isIdentifier(condition.right) &&
+        condition.right.text === name &&
+        condition.left.kind === ts.SyntaxKind.NullKeyword)));
+
 /** Recognize only a returned value or an immediate conflict early return. */
-const propagatesConflict = (call: ts.CallExpression): boolean => {
+type ConflictPropagationOptions = {
+  returnsValue?: (expression: ts.Expression, name: string) => boolean;
+  testsConflict?: (expression: ts.Expression, name: string) => boolean;
+  delegatesGenerator?: boolean;
+};
+const propagatesConflict = (
+  call: ts.Expression,
+  options: ConflictPropagationOptions = {},
+): boolean => {
   let expression: ts.Node = call;
   while (
+    (options.delegatesGenerator === true &&
+      ts.isYieldExpression(expression.parent) &&
+      expression.parent.asteriskToken !== undefined) ||
     ts.isAwaitExpression(expression.parent) ||
     ts.isParenthesizedExpression(expression.parent) ||
     ts.isAsExpression(expression.parent) ||
@@ -95,8 +122,9 @@ const propagatesConflict = (call: ts.CallExpression): boolean => {
     return (
       ts.isReturnStatement(node) &&
       node.expression !== undefined &&
-      ts.isIdentifier(unwrap(node.expression)) &&
-      unwrap(node.expression).getText() === name
+      ((ts.isIdentifier(unwrap(node.expression)) &&
+        unwrap(node.expression).getText() === name) ||
+        options.returnsValue?.(unwrap(node.expression), name) === true)
     );
   };
   if (next === undefined) {
@@ -109,23 +137,17 @@ const propagatesConflict = (call: ts.CallExpression): boolean => {
     return false;
   }
   const condition = unwrap(next.expression);
-  const nonNull =
-    (ts.isIdentifier(condition) && condition.text === name) ||
-    (ts.isBinaryExpression(condition) &&
-      (condition.operatorToken.kind ===
-        ts.SyntaxKind.ExclamationEqualsEqualsToken ||
-        condition.operatorToken.kind ===
-          ts.SyntaxKind.ExclamationEqualsToken) &&
-      ((ts.isIdentifier(condition.left) &&
-        condition.left.text === name &&
-        condition.right.kind === ts.SyntaxKind.NullKeyword) ||
-        (ts.isIdentifier(condition.right) &&
-          condition.right.text === name &&
-          condition.left.kind === ts.SyntaxKind.NullKeyword)));
-  return nonNull && returnsConflict(next.thenStatement);
+  return (
+    (testsNonNullConflict(condition, name) ||
+      options.testsConflict?.(condition, name) === true) &&
+    returnsConflict(next.thenStatement)
+  );
 };
 
 const modulePath = (file: string, specifier: string) => {
+  if (specifier === "better-result") {
+    return specifier;
+  }
   let target: string | undefined;
   if (specifier.startsWith("@/api/")) {
     target = `apps/api/src/${specifier.slice(6)}`;
@@ -165,6 +187,7 @@ type EnforcementOptions = {
   value: LocatedExpression;
   type: string;
   seen: Set<string>;
+  handles?: LexicalScope;
 };
 type EnforcementCallOptions = Omit<EnforcementOptions, "value"> & {
   value: LocatedExpression & { node: ts.CallExpression };
@@ -300,6 +323,13 @@ const factoryImport = ({
     return { module: target, imported: node.name.text };
   }
   return undefined;
+};
+
+type CanonicalMethodOptions = {
+  value: LocatedExpression;
+  owner: string;
+  binding: string;
+  method: string;
 };
 
 class WriteSourceResolver {
@@ -758,6 +788,10 @@ class WriteSourceResolver {
   };
   private readonly safeBoundaries = new Set<string>();
   private readonly handlers = new Map<string, SafeCall[]>();
+  private readonly transactionHandles = new Map<
+    ts.Expression,
+    "safeDb" | "scopedDb"
+  >();
 
   /** Follow only invoked functions and callbacks, never unrelated module declarations. */
   enforcementFields = (handler: string, type: string): Set<string> => {
@@ -767,8 +801,39 @@ class WriteSourceResolver {
       if (callback === undefined) {
         return new Set<string>();
       }
+      const resolved = this.resolve({
+        file: safe.file,
+        node: callback,
+        scope: safe.scope,
+      });
+      const scope = new Map(resolved?.scope);
+      if (
+        resolved !== undefined &&
+        (ts.isArrowFunction(resolved.node) ||
+          ts.isFunctionExpression(resolved.node))
+      ) {
+        const context = resolved.node.parameters.at(0)?.name;
+        if (context !== undefined && ts.isObjectBindingPattern(context)) {
+          for (const element of context.elements) {
+            const property = element.propertyName ?? element.name;
+            if (
+              !ts.isIdentifier(property) ||
+              !ts.isIdentifier(element.name) ||
+              element.initializer !== undefined ||
+              element.dotDotDotToken !== undefined
+            ) {
+              continue;
+            }
+            if (property.text !== "safeDb" && property.text !== "scopedDb") {
+              continue;
+            }
+            this.transactionHandles.set(element.name, property.text);
+            scope.set(element.name.text, element.name);
+          }
+        }
+      }
       return this.functionEnforcement({
-        value: { file: safe.file, node: callback, scope: safe.scope },
+        value: { file: safe.file, node: callback, scope },
         type,
         seen: new Set(),
       });
@@ -784,6 +849,7 @@ class WriteSourceResolver {
     value,
     type,
     seen,
+    handles,
   }: EnforcementOptions): Set<string> => {
     const resolved = this.resolve(value);
     const result = new Set<string>();
@@ -799,7 +865,29 @@ class WriteSourceResolver {
       return result;
     }
     seen.add(key);
-    const scope = wrapperScope(resolved);
+    const parameterScope = new Map(resolved.scope);
+    for (const parameter of resolved.node.parameters) {
+      for (const name of bindingNames(parameter.name)) {
+        parameterScope.set(name, undefined);
+      }
+      if (!ts.isObjectBindingPattern(parameter.name)) {
+        continue;
+      }
+      for (const element of parameter.name.elements) {
+        if (
+          ts.isIdentifier(element.name) &&
+          this.transactionHandles.has(element.name)
+        ) {
+          parameterScope.set(element.name.text, element.name);
+        }
+      }
+    }
+    for (const [name, expression] of handles ?? []) {
+      parameterScope.set(name, expression);
+    }
+    const scope = ts.isBlock(resolved.node.body)
+      ? blockScope(resolved.node.body, parameterScope)
+      : parameterScope;
     const visit = (node: ts.Node, currentScope: LexicalScope) => {
       // Only unconditional, propagated comparisons count: a branch, loop, catch, short
       // circuit or optional call may skip the comparison on some write path.
@@ -827,7 +915,7 @@ class WriteSourceResolver {
       const nestedScope = ts.isBlock(node)
         ? blockScope(node, currentScope)
         : currentScope;
-      if (ts.isCallExpression(node) && propagatesConflict(node)) {
+      if (ts.isCallExpression(node)) {
         for (const field of this.callEnforcement({
           value: { file: resolved.file, node, scope: nestedScope },
           type,
@@ -868,6 +956,9 @@ class WriteSourceResolver {
       imported?.module === OWNER &&
       imported.imported === "enforceWritePrecondition"
     ) {
+      if (!propagatesConflict(value.node)) {
+        return result;
+      }
       const argument = value.node.arguments.at(0);
       const options =
         argument === undefined
@@ -883,23 +974,222 @@ class WriteSourceResolver {
       }
       return result;
     }
-    // Transaction callbacks run while their decisive lock is held. Other callback
-    // consumers require a called write helper rather than an assumed invocation.
-    const callbacks =
-      ts.isPropertyAccessExpression(value.node.expression) &&
-      value.node.expression.name.text === "transaction"
-        ? value.node.arguments
-        : [];
-    for (const expression of [value.node.expression, ...callbacks]) {
+    const transactionCallback = this.transactionCallback(value);
+    if (transactionCallback !== undefined) {
       for (const field of this.functionEnforcement({
-        value: { file: value.file, node: expression, scope: value.scope },
+        value: {
+          file: value.file,
+          node: transactionCallback,
+          scope: value.scope,
+        },
         type,
         seen: new Set(seen),
       })) {
         result.add(field);
       }
+      return result;
+    }
+    const helper = this.resolve({
+      file: value.file,
+      node: value.node.expression,
+      scope: value.scope,
+    });
+    const generator =
+      helper !== undefined &&
+      ts.isFunctionExpression(helper.node) &&
+      helper.node.asteriskToken !== undefined;
+    if (!propagatesConflict(value.node, { delegatesGenerator: generator })) {
+      return result;
+    }
+    const handles = new Map<string, ts.Expression | undefined>();
+    if (
+      helper !== undefined &&
+      (ts.isArrowFunction(helper.node) || ts.isFunctionExpression(helper.node))
+    ) {
+      for (const [index, parameter] of helper.node.parameters.entries()) {
+        const argument = value.node.arguments.at(index);
+        if (
+          argument === undefined ||
+          !ts.isObjectBindingPattern(parameter.name)
+        ) {
+          continue;
+        }
+        const fields = this.fields({
+          file: value.file,
+          node: argument,
+          scope: value.scope,
+        });
+        for (const element of parameter.name.elements) {
+          const property = element.propertyName ?? element.name;
+          if (
+            !ts.isIdentifier(property) ||
+            !ts.isIdentifier(element.name) ||
+            element.initializer !== undefined ||
+            element.dotDotDotToken !== undefined
+          ) {
+            continue;
+          }
+          const supplied = fields.get(property.text);
+          if (supplied === undefined) {
+            continue;
+          }
+          const token = this.transactionHandleToken(supplied);
+          if (token !== undefined) {
+            handles.set(element.name.text, token);
+          }
+        }
+      }
+    }
+    for (const field of this.functionEnforcement({
+      value: {
+        file: value.file,
+        node: value.node.expression,
+        scope: value.scope,
+      },
+      type,
+      handles,
+      seen: new Set(seen),
+    })) {
+      result.add(field);
     }
     return result;
+  };
+  private canonicalMethod = ({
+    value,
+    owner,
+    binding,
+    method,
+  }: CanonicalMethodOptions): boolean => {
+    const node = unwrap(value.node);
+    if (
+      !ts.isCallExpression(node) ||
+      !ts.isPropertyAccessExpression(node.expression) ||
+      node.expression.name.text !== method ||
+      node.questionDotToken !== undefined ||
+      node.expression.questionDotToken !== undefined
+    ) {
+      return false;
+    }
+    const imported = this.factoryBinding({
+      file: value.file,
+      expression: node.expression.expression,
+      scope: value.scope,
+    });
+    return imported?.module === owner && imported.imported === binding;
+  };
+  private transactionHandleToken = (
+    value: LocatedExpression,
+    seen = new Set<ts.Expression>(),
+  ): ts.Expression | undefined => {
+    const node = unwrap(value.node);
+    if (!ts.isIdentifier(node)) {
+      return undefined;
+    }
+    const binding = value.scope?.get(node.text);
+    if (binding === undefined || seen.has(binding)) {
+      return undefined;
+    }
+    const handle = this.transactionHandles.get(binding);
+    if (handle !== undefined) {
+      return binding;
+    }
+    seen.add(binding);
+    return this.transactionHandleToken(
+      { file: value.file, node: binding, scope: value.scope },
+      seen,
+    );
+  };
+  /** The safe handle wraps callback values in Result; unwrap only its canonical generator bridge. */
+  private safeTransactionPropagates = (
+    value: LocatedExpression & { node: ts.CallExpression },
+  ): boolean => {
+    const bridge = value.node.parent;
+    if (
+      !ts.isCallExpression(bridge) ||
+      bridge.arguments.length !== 1 ||
+      !this.canonicalMethod({
+        value: { ...value, node: bridge },
+        owner: "better-result",
+        binding: "Result",
+        method: "await",
+      })
+    ) {
+      return false;
+    }
+    const yielded = bridge.parent;
+    if (!ts.isYieldExpression(yielded) || yielded.asteriskToken === undefined) {
+      return false;
+    }
+    const refersTo = (expression: ts.Expression, name: string) =>
+      ts.isIdentifier(expression) && expression.text === name;
+    return propagatesConflict(yielded, {
+      testsConflict: (expression, name) =>
+        ts.isCallExpression(expression) &&
+        expression.arguments.length === 1 &&
+        expression.arguments.at(0) !== undefined &&
+        refersTo(expression.arguments[0], name) &&
+        this.canonicalMethod({
+          value: { ...value, node: expression },
+          owner: "apps/api/src/lib/errors/tagged-errors.ts",
+          binding: "HandlerError",
+          method: "is",
+        }),
+      returnsValue: (expression, name) =>
+        ts.isCallExpression(expression) &&
+        expression.arguments.length === 1 &&
+        expression.arguments.at(0) !== undefined &&
+        refersTo(expression.arguments[0], name) &&
+        this.canonicalMethod({
+          value: { ...value, node: expression },
+          owner: "better-result",
+          binding: "Result",
+          method: "err",
+        }),
+    });
+  };
+  private transactionCallback = (
+    value: LocatedExpression & { node: ts.CallExpression },
+  ): ts.Expression | undefined => {
+    if (value.node.questionDotToken !== undefined) {
+      return undefined;
+    }
+    const token = this.transactionHandleToken({
+      ...value,
+      node: value.node.expression,
+    });
+    const handle =
+      token === undefined ? undefined : this.transactionHandles.get(token);
+    if (handle === "safeDb") {
+      return this.safeTransactionPropagates(value)
+        ? value.node.arguments.at(0)
+        : undefined;
+    }
+    let expression: ts.Node = value.node;
+    while (ts.isParenthesizedExpression(expression.parent)) {
+      expression = expression.parent;
+    }
+    if (
+      !ts.isAwaitExpression(expression.parent) ||
+      !propagatesConflict(value.node)
+    ) {
+      return undefined;
+    }
+    if (handle === "scopedDb") {
+      return value.node.arguments.at(0);
+    }
+    const imported = this.factoryBinding({
+      file: value.file,
+      expression: value.node.expression,
+      scope: value.scope,
+    });
+    if (
+      imported?.module === "apps/api/src/lib/db/aggregate-lock.ts" &&
+      (imported.imported === "withAggregateTransaction" ||
+        imported.imported === "withAggregateSavepoint")
+    ) {
+      return value.node.arguments.at(1);
+    }
+    return undefined;
   };
   config = (handler: string): Map<string, LocatedExpression> => {
     const match = /^(.*\.ts)(?:#(.*))?\.handler$/u.exec(handler);

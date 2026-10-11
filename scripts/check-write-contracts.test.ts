@@ -248,8 +248,9 @@ describe("write contracts cover the mutation route graph", () => {
     const guarded = `import { t } from 'elysia';
       import { createSafeHandler } from '@/api/lib/api-handlers';
       import { enforceWritePrecondition as enforce } from '@/api/lib/write-contract';
+      import { withAggregateTransaction } from '@/api/lib/db/aggregate-lock';
       export default createSafeHandler(${config}, async ({body, scopedDb}) =>
-        scopedDb.transaction(async (tx) => {
+        await withAggregateTransaction(database, async (tx) => {
           const stored = await tx.readForUpdate();
           const conflict = enforce({type: 'updatedAt', field: 'expectedUpdatedAt', expectedUpdatedAt: body.expectedUpdatedAt, storedUpdatedAt: stored.updatedAt, resource: 'Example'});
           if (conflict !== null) return conflict;
@@ -266,6 +267,97 @@ describe("write contracts cover the mutation route graph", () => {
     sources.set(handler, guarded.replace(/enforce\(\{type:[^;]+;/u, ""));
     expect(sources.get(handler)).toContain("body: t.Object");
     expect(check(sources)).toContainEqual(diagnostic);
+  });
+  test("awaited canonical transactions propagate callback conflicts, and refuse dropped or uninvoked callbacks", () => {
+    const config = `{contract: 'replace', precondition: {type: 'updatedAt', field: 'expectedUpdatedAt'}}`;
+    const callback = `async (tx) => {
+      const conflict = enforceWritePrecondition({type: 'updatedAt', field: 'expectedUpdatedAt'});
+      if (conflict) return conflict;
+      return tx.replace();
+    }`;
+    const sources = fixture(config);
+    const withBody = (body: string, module = "@/api/lib/db/aggregate-lock") => `
+      import { createSafeHandler } from '@/api/lib/api-handlers';
+      import { enforceWritePrecondition } from '@/api/lib/write-contract';
+      import { withAggregateTransaction as transaction } from '${module}';
+      export default createSafeHandler(${config}, async () => { ${body} });`;
+    for (const body of [
+      `return await transaction(database, ${callback});`,
+      `const conflict = await transaction(database, ${callback}); if (conflict) return conflict; return {};`,
+    ]) {
+      sources.set(handler, withBody(body));
+      expect(check(sources)).toEqual([]);
+    }
+    for (const body of [
+      `await transaction(database, ${callback}); return {};`,
+      `const conflict = await transaction(database, ${callback}); return {};`,
+      `const neverInvoked = ${callback}; return {};`,
+      `return transaction(database, ${callback});`,
+      `if (body.run) return await transaction(database, ${callback}); return {};`,
+      `try { return await transaction(database, ${callback}); } catch { return {}; }`,
+      `return await transaction(database, ${callback.replace("if (conflict) return conflict;", "")});`,
+      `return await transaction(database, ${callback.replace("const conflict =", "if (body.run) { const conflict =").replace("return tx.replace();", "} return tx.replace();")});`,
+    ]) {
+      sources.set(handler, withBody(body));
+      expect(check(sources)).toContainEqual(
+        expect.stringContaining("Replacement must reach owner enforcement"),
+      );
+    }
+    sources.set(
+      handler,
+      withBody(
+        `return await transaction(database, ${callback});`,
+        "./lookalike",
+      ),
+    );
+    expect(check(sources)).toContainEqual(
+      expect.stringContaining("Replacement must reach owner enforcement"),
+    );
+    sources.set(
+      handler,
+      withBody(`return await database.transaction(${callback});`),
+    );
+    expect(check(sources)).toContainEqual(
+      expect.stringContaining("Replacement must reach owner enforcement"),
+    );
+  });
+  test("safe handler database callbacks require the canonical Result bridge and conflict return", () => {
+    const config = `{contract: 'replace', precondition: {type: 'updatedAt', field: 'expectedUpdatedAt'}}`;
+    const sources = fixture(config);
+    const callback = `async (tx) => { const conflict = enforceWritePrecondition({type: 'updatedAt', field: 'expectedUpdatedAt'}); if (conflict) return conflict; return tx.replace(); }`;
+    const guarded = `import { Result } from 'better-result';
+      import { HandlerError } from '@/api/lib/errors/tagged-errors';
+      import { createSafeHandler } from '@/api/lib/api-handlers';
+      import { enforceWritePrecondition } from '@/api/lib/write-contract';
+      export default createSafeHandler(${config}, async function* ({safeDb: database}) {
+        const updated = yield* Result.await(database(${callback}));
+        if (HandlerError.is(updated)) return Result.err(updated);
+        return Result.ok(updated);
+      });`;
+    sources.set(handler, guarded);
+    expect(check(sources)).toEqual([]);
+    for (const changed of [
+      guarded.replace(
+        "if (HandlerError.is(updated)) return Result.err(updated);",
+        "",
+      ),
+      guarded.replace("@/api/lib/errors/tagged-errors", "./lookalike"),
+      guarded.replace("better-result", "./lookalike"),
+      guarded.replace(
+        "const updated =",
+        "const database = other; const updated =",
+      ),
+      guarded.replace("if (conflict) return conflict;", ""),
+      guarded.replace(
+        "yield* Result.await(database",
+        "yield* Result.await(ignore",
+      ),
+    ]) {
+      sources.set(handler, changed);
+      expect(check(sources)).toContainEqual(
+        expect.stringContaining("Replacement must reach owner enforcement"),
+      );
+    }
   });
   test("owner identity, field and invoked helper reachability are required", () => {
     const config = `{contract: 'replace', precondition: {type: 'updatedAt', field: 'expectedUpdatedAt'}}`;
