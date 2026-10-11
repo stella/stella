@@ -824,4 +824,7 @@ fn rgba_to_gray(width: u32, height: u32, pixels: &[u8]) -> Result<GrayImage, Unr
 }
 
 #[cfg(test)]
+mod property_tests;
+
+#[cfg(test)]
 mod tests;
