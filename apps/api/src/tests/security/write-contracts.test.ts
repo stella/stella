@@ -10,7 +10,7 @@ import {
 import { isLocalDevOpen } from "@/api/runtime-mode";
 import api from "@/api/server";
 
-import { enumerateWriteContracts } from "../../../../../scripts/check-write-contracts";
+import { enumerateWriteContracts } from "../../../../../scripts/check-write-contracts.ts";
 
 const root = path.resolve(import.meta.dir, "../../../../..");
 const mutationMethods = ["POST", "PUT", "PATCH", "DELETE", "ALL"];
