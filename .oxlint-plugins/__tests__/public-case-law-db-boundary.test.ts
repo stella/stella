@@ -168,6 +168,9 @@ describe.serial("public-law relation scan", () => {
         ".oxlint-plugins/__fixtures__/case-law-type-helper.fixture",
       ),
     ).toBe(false);
+  });
+
+  test("cyclic helper exports retain the runtime schema classification", () => {
     const cycleModules = new Map([
       [
         "fixture/cycle-a",
@@ -178,18 +181,27 @@ describe.serial("public-law relation scan", () => {
       ],
       ["fixture/cycle-b", 'export { helper } from "./cycle-a";'],
     ]);
-    expect(
-      moduleHasRuntimeSchemaReadFromSources(
-        "fixture/cycle-a",
-        (moduleId) => {
-          const source = cycleModules.get(moduleId);
-          return source === undefined
-            ? null
-            : { filename: `${moduleId}.ts`, source };
-        },
-        new Set(),
-      ),
-    ).toBe(true);
+    for (const expected of [true, false]) {
+      if (!expected) {
+        cycleModules.set(
+          "fixture/cycle-a",
+          'export { cycleHelper } from "./cycle-b";',
+        );
+      }
+      for (const moduleId of cycleModules.keys()) {
+        expect(
+          moduleHasRuntimeSchemaReadFromSources(moduleId, {
+            readSource: (dependencyId) => {
+              const source = cycleModules.get(dependencyId);
+              return source === undefined
+                ? null
+                : { filename: `${dependencyId}.ts`, source };
+            },
+            seen: new Set(),
+          }),
+        ).toBe(expected);
+      }
+    }
   });
 
   test("public case-law SQL cannot name the base decision table", async () => {
