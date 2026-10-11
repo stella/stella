@@ -1,7 +1,8 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
+import { caseLawProvisionExtractions } from "@/api/db/schema";
 import { listDecisionProvisionsHandler } from "@/api/handlers/case-law/provisions/list-for-decision";
 import { createSafeId } from "@/api/lib/branded-types";
 import type {
@@ -169,11 +170,18 @@ if (!databaseUrl || !runPostgresTests) {
           canDelegatePublicLaw: false,
         });
 
+        const [queuedExtraction] = await ownerDb
+          .select({ pendingSince: caseLawProvisionExtractions.pendingSince })
+          .from(caseLawProvisionExtractions)
+          .where(eq(caseLawProvisionExtractions.decisionId, decisionId));
+        const pendingSince =
+          queuedExtraction?.pendingSince ??
+          panic("expected the decision insert to enqueue extraction");
         const first = await page();
         expect(first).toMatchObject({
           items: [{ spanStart: 10 }],
           capability: { type: "supported", languages: ["cs"] },
-          pendingSince: null,
+          pendingSince: pendingSince.toISOString(),
           status: { type: "legacy" },
           generation: "0",
           publishedProjectionDigest: null,
