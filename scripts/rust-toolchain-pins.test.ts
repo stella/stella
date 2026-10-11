@@ -31,6 +31,26 @@ const channel = (file: string): string => {
   return match[1];
 };
 
+const trackedToolchains = (): string[] => {
+  const result = Bun.spawnSync(
+    [
+      "git",
+      "ls-files",
+      "-z",
+      "--",
+      ...CRATES.map((crate) => path.dirname(crate.toolchainFile)),
+    ],
+    { cwd: root },
+  );
+  expect(result.exitCode, result.stderr.toString()).toBe(0);
+  return result.stdout
+    .toString()
+    .split("\0")
+    .filter((file) =>
+      ["rust-toolchain.toml", "rust-toolchain"].includes(path.basename(file)),
+    );
+};
+
 const environmentSchema = v.optional(v.record(v.string(), v.unknown()), {});
 const workflowSchema = v.looseObject({
   env: environmentSchema,
@@ -90,10 +110,12 @@ const jobSource = (file: string, job: string): string =>
   JSON.stringify(readWorkflow(file).jobs[job]);
 
 test("Rust toolchains are exact versions, never a floating channel", () => {
+  const files = trackedToolchains();
   for (const crate of CRATES) {
-    expect(channel(crate.toolchainFile), crate.toolchainFile).toMatch(
-      EXACT_VERSION,
-    );
+    expect(files).toContain(crate.toolchainFile);
+  }
+  for (const file of files) {
+    expect(channel(file), file).toMatch(EXACT_VERSION);
   }
   const uses = toolchainUses();
   expect(uses.length).toBeGreaterThan(0);
@@ -119,5 +141,17 @@ test("each workflow job uses the pin of the crate it builds", () => {
   // Both crates are built by at least one job, so the binding is exercised.
   for (const { name } of CRATES) {
     expect(counts.get(name) ?? 0, name).toBeGreaterThan(0);
+  }
+});
+
+test("nearer crate toolchain files match their owning package pin", () => {
+  for (const file of trackedToolchains()) {
+    const owner = v.parse(
+      v.object({ toolchainFile: v.string() }),
+      CRATES.find((crate) =>
+        file.startsWith(`${path.dirname(crate.toolchainFile)}/`),
+      ),
+    );
+    expect(channel(file), file).toBe(channel(owner.toolchainFile));
   }
 });
