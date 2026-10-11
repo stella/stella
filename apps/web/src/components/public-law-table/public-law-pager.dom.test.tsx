@@ -16,6 +16,7 @@ import messages from "@/i18n/langs/en.json";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cases" });
 const { useRef, useState } = await import("react");
+const { flushSync } = await import("react-dom");
 const { cleanup, fireEvent, render } = await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
@@ -68,8 +69,9 @@ const Results = ({
   landOn = landOnRequested,
 }: ResultsProps) => {
   const [page, setPage] = useState(initialPage);
+  const [shownPage, setShownPage] = useState<number | null>(initialPage);
   const regionRef = useRef<HTMLDivElement>(null);
-  const requestPage = usePublicLawPageArrival({ regionRef, shownPage: page });
+  const requestPage = usePublicLawPageArrival({ regionRef, shownPage });
   const model = publicLawNumberedPagerModel({
     deepestPage: DEEPEST_PAGE,
     rest,
@@ -96,7 +98,11 @@ const Results = ({
         navigation={{ type: "numbered", model }}
         onPageRequest={(target) => {
           requestPage(target);
-          setPage(landOn(target));
+          // The route keeps the old rows while the requested step is in flight.
+          flushSync(() => setShownPage(null));
+          const arrival = landOn(target);
+          setPage(arrival);
+          setShownPage(arrival);
         }}
         onPageSizeChange={() => undefined}
         pageLink={({ label, page: target }) => (
@@ -104,7 +110,13 @@ const Results = ({
         )}
         pageSize={PAGE_SIZE}
       />
-      <button onClick={() => setPage(1)} type="button">
+      <button
+        onClick={() => {
+          setPage(1);
+          setShownPage(1);
+        }}
+        type="button"
+      >
         {OTHER_NAVIGATION}
       </button>
     </div>
@@ -177,34 +189,46 @@ describe("stepping to another page", () => {
     expect(document.activeElement).toBe(clear);
   });
 
-  test("a modified click opens the page elsewhere and a later filter keeps focus", () => {
+  test.each(["metaKey", "ctrlKey", "shiftKey", "altKey"])(
+    "a modified click (%s) opens the page elsewhere and a later filter keeps focus",
+    (modifier) => {
+      const view = mount({
+        initialPage: 2,
+        rest: PUBLIC_LAW_PAGE_REST.more,
+        total: LONG_RESULTS,
+      });
+      fireEvent.click(view.getByLabelText(messages.common.previous), {
+        [modifier]: true,
+      });
+      expect(view.getByText(rowLabel(2, 0))).toBeDefined();
+      const clear = view.getByRole("button", { name: OTHER_NAVIGATION });
+      clear.focus();
+
+      fireEvent.click(clear);
+
+      expect(view.getByText(rowLabel(1, 0))).toBeDefined();
+      expect(document.activeElement).toBe(clear);
+    },
+  );
+
+  test("a jump redirected to another page focuses its first row and does not take focus later", () => {
     const view = mount({
-      initialPage: 2,
+      initialPage: 6,
       rest: PUBLIC_LAW_PAGE_REST.more,
       total: LONG_RESULTS,
+      landOn: (requested) => Math.min(requested, 3),
     });
-    fireEvent.click(view.getByLabelText(messages.common.previous), {
-      ctrlKey: true,
-    });
-    expect(view.getByText(rowLabel(2, 0))).toBeDefined();
-    const clear = view.getByRole("button", { name: OTHER_NAVIGATION });
-    clear.focus();
+    const scroller = view.getByTestId("scroller");
+    const jump = view.getByLabelText("Go to page 8");
+    scroller.scrollTop = 400;
+    jump.focus();
+    expect(scroller.scrollTop).toBe(400);
+    expect(document.activeElement).toBe(jump);
 
-    fireEvent.click(clear);
+    fireEvent.click(jump);
 
-    expect(view.getByText(rowLabel(1, 0))).toBeDefined();
-    expect(document.activeElement).toBe(clear);
-  });
-
-  test("a request redirected to another page does not take focus later", () => {
-    const view = mount({
-      initialPage: 2,
-      rest: PUBLIC_LAW_PAGE_REST.more,
-      total: LONG_RESULTS,
-      landOn: () => 3,
-    });
-    fireEvent.click(view.getByLabelText(messages.common.previous));
-    expect(view.getByText(rowLabel(3, 0))).toBeDefined();
+    expect(scroller.scrollTop).toBe(0);
+    expect(document.activeElement).toBe(view.getByText(rowLabel(3, 0)));
     const clear = view.getByRole("button", { name: OTHER_NAVIGATION });
     clear.focus();
 
