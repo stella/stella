@@ -1,3 +1,4 @@
+// parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
 import { Result, panic } from "better-result";
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
@@ -111,6 +112,8 @@ import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-asse
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
+
+import { logDocumentParseFailure } from "./document-parse-failure";
 
 // ── Publisher boundary ───────────────────────────────────
 
@@ -997,10 +1000,10 @@ export const assemblePlKioDecision = ({
           catch: errorTag,
         });
   if (parsed !== null && Result.isError(parsed)) {
-    logger.warn("case_law.ingestion.document_parse_failed", {
+    logDocumentParseFailure({
       adapterKey: ADAPTER_KEYS.PL_KIO,
       caseNumber,
-      "error.type": parsed.error,
+      error: parsed.error,
     });
   }
   const document = parsed !== null && Result.isOk(parsed) ? parsed.value : null;

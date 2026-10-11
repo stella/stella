@@ -117,6 +117,7 @@
     "@stll/business-registries": "workspace:*",
     "@stll/calculations": "workspace:*",
     "@stll/catalogue": "workspace:*",
+    "@stll/chat": "workspace:*",
     "@stll/chat-limits": "workspace:*",
     "@stll/cli": "workspace:*",
     "@stll/collation": "workspace:*",

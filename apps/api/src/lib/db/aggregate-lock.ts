@@ -20,7 +20,7 @@ import { compareCodeUnit } from "@stll/collation";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import { workspaces } from "@/api/db/schema";
+import { pdfSigningSessions, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
@@ -59,6 +59,7 @@ export const AGGREGATE_LOCKS = {
   personalCatalog: { rank: 700, kind: "advisory" },
   searchHistory: { rank: 710, kind: "row" },
   chatMessage: { rank: 810, kind: "row" },
+  signingSession: { rank: 900, kind: "row" },
 } as const;
 
 export type AggregateName = keyof typeof AGGREGATE_LOCKS;
@@ -112,6 +113,7 @@ export const AGGREGATE_CHAINS = {
   personalCatalog: ["personalCatalog"],
   searchHistory: ["desktopMembership", "searchHistory"],
   chatRevision: ["chatThread", "chatMessage"],
+  signingSession: ["workspace", "signingSession"],
 } as const satisfies Record<string, readonly AggregateName[]>;
 
 export const ROW_LOCK_MODES = [
@@ -210,6 +212,11 @@ type AggregateIdentities = {
     userId: SafeId<"user">;
   };
   chatMessage: { id: SafeId<"chatMessage">; threadId: SafeId<"chatThread"> };
+  signingSession: {
+    id: SafeId<"pdfSigningSession">;
+    workspaceId: SafeId<"workspace">;
+    organizationId: SafeId<"organization">;
+  };
 };
 
 type ExecuteTransaction = { execute: (statement: SQL) => PromiseLike<unknown> };
@@ -704,6 +711,14 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
           options.id.userId,
         ],
       };
+    case "signingSession":
+      return {
+        table: "pdf_signing_sessions",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["workspace_id"],
+        scopeValues: [options.id.workspaceId],
+      };
     case "memberCleanup":
       switch (options.id.type) {
         case "organization-member":
@@ -753,7 +768,23 @@ const physicalRowLock = ({
 };
 const rowLock = (options: RowIdentityOptions, mode: RowLockMode): HeldLock => {
   const { table, values } = rowResource(options);
-  return physicalRowLock({ aggregate: options.aggregate, table, values, mode });
+  const lock = physicalRowLock({
+    aggregate: options.aggregate,
+    table,
+    values,
+    mode,
+  });
+  return options.aggregate === "signingSession"
+    ? {
+        ...lock,
+        orderKey: JSON.stringify([
+          options.aggregate,
+          table,
+          options.id.organizationId,
+          ...values,
+        ]),
+      }
+    : lock;
 };
 
 // A batch is ordered twice: by SQL (COLLATE "C", byte order) and by the
@@ -1023,6 +1054,60 @@ export const withAggregateLock = async (
   }
   completeAcquisition(history);
   return rows.length > 0 ? { status: "locked" } : { status: "missing" };
+};
+
+type OpenSigningPageOptions = {
+  tx: Transaction;
+  sessions: readonly AggregateIdentities["signingSession"][];
+};
+
+/** Lock and recheck a discovered page; a concurrently closed session is no longer eligible. */
+export const lockOpenSigningPage = async ({
+  tx,
+  sessions,
+}: OpenSigningPageOptions) => {
+  if (sessions.length === 0) {
+    return [];
+  }
+  const history = lockHistory(tx);
+  assertAggregateLevelAvailable(history);
+  const ordered = sessions.toSorted((left, right) =>
+    compareCodeUnit(left.id, right.id),
+  );
+  const locks = new Map(
+    ordered.map((session) => [
+      session.id,
+      rowLock({ aggregate: "signingSession", id: session }, "update"),
+    ]),
+  );
+  for (const lock of locks.values()) {
+    assertLockOrder(history, lock, "block");
+  }
+  history.status = "acquiring";
+  const rows = await tx.execute(sql`
+    SELECT id, workspace_id FROM ${pdfSigningSessions}
+    WHERE (id, workspace_id) IN (${sql.join(
+      ordered.map(
+        (session) => sql`(${session.id}::uuid, ${session.workspaceId}::uuid)`,
+      ),
+      sql`, `,
+    )})
+      AND status = 'open'
+    ORDER BY id FOR UPDATE
+  `);
+  const heldIds = new Set(
+    executedRows(rows).map((row) => v.parse(parentRowSchema, row).id),
+  );
+  for (const session of ordered) {
+    if (heldIds.has(session.id)) {
+      retainLock(
+        history,
+        locks.get(session.id) ?? panic("Missing signing session lock"),
+      );
+    }
+  }
+  completeAcquisition(history);
+  return ordered.filter(({ id }) => heldIds.has(id));
 };
 
 type AggregateLockableQuery<Row> = {

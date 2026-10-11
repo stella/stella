@@ -1,6 +1,9 @@
 name: Tag verified release
 
 # release-chain-alert
+defaults:
+  run:
+    shell: bash
 
 on:
   workflow_dispatch:
