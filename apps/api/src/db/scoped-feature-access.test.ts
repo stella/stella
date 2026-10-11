@@ -274,9 +274,10 @@ test("request transactions reuse their authenticated feature snapshot", async ()
             return [];
           }
           const rendered = dialect.sqlToQuery(query.getSQL());
-          const setting = rendered.sql.match(
-            /set_config\('app\.enabled_features', \$(\d+), true\)/u,
-          );
+          const setting =
+            /set_config\('app\.enabled_features', \$(\d+), true\)/u.exec(
+              rendered.sql,
+            );
           expect(setting).not.toBeNull();
           expect(rendered.params.at(Number(setting?.at(1)) - 1)).toBe(
             JSON.stringify([LEGAL_LISTS_FEATURE_ID]),
