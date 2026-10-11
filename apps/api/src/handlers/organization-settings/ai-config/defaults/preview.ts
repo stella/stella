@@ -5,6 +5,7 @@ import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 import { resolveAIConfigDefaults } from "../../ai-config-defaults";
 
@@ -30,5 +31,11 @@ const previewAIConfigDefaults = createSafeRootHandler(
     return Result.ok(resolveAIConfigDefaults(body.providers));
   },
 );
+
+declareAggregateMutation(previewAIConfigDefaults.handler, {
+  type: "independent",
+  reason:
+    "Resolves default models for the submitted provider set and returns them; it reads no aggregate and changes no stored state.",
+});
 
 export default previewAIConfigDefaults;
