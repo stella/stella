@@ -22,6 +22,7 @@ import {
   pinSourceKey,
 } from "../packages/external-contracts/src/guard";
 import { EXTERNAL_CONTRACTS } from "../packages/external-contracts/src/registry";
+import type { ExternalSystemId } from "../packages/external-contracts/src/registry";
 import type {
   ExternalContractEntry,
   FixtureSet,
@@ -446,6 +447,7 @@ export const uncharacterisedFromSource = (text: string): string[] => {
 };
 
 type ExternalContractCheckOptions = {
+  registry?: Readonly<Record<ExternalSystemId, ExternalContractEntry>>;
   census?: readonly OutboundTransportCensusEntry[];
   sdks?: readonly string[];
 };
@@ -453,13 +455,14 @@ type ExternalContractCheckOptions = {
 export const checkExternalContracts = (
   root: string,
   {
+    registry = EXTERNAL_CONTRACTS,
     census = OUTBOUND_TRANSPORT_CENSUS,
     sdks = readExternalSdks(root),
   }: ExternalContractCheckOptions = {},
 ): string[] => {
   const manifest = v.parse(manifestSchema, json(root, "package.json"));
   const catalogProblems = findCatalogProblems({
-    registry: EXTERNAL_CONTRACTS,
+    registry,
     packages: Object.keys(manifest.catalog),
     inProcess: IN_PROCESS_CATALOG_PACKAGES,
   });
@@ -471,12 +474,12 @@ export const checkExternalContracts = (
     }
   }
   const problems = findTotalityProblems({
-    registry: EXTERNAL_CONTRACTS,
+    registry,
     owners: census.map(({ path: owner }) => owner),
     sdks,
   });
   problems.push(...catalogProblems);
-  for (const [system, entry] of Object.entries(EXTERNAL_CONTRACTS)) {
+  for (const [system, entry] of Object.entries(registry)) {
     for (const owner of entry.owners) {
       if (!existsSync(path.join(root, owner.path))) {
         problems.push(`${system}: missing owner ${owner.path}.`);
@@ -501,7 +504,7 @@ export const checkExternalContracts = (
       );
     }
   }
-  const publisher = EXTERNAL_CONTRACTS["legal-publishers"];
+  const publisher = registry["legal-publishers"];
   for (const fixtureRoot of CAPTURED_FIXTURE_ROOTS) {
     if (
       !publisher.fixtures.some(

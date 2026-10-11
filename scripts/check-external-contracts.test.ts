@@ -79,6 +79,44 @@ test("SDK discovery uses the transport definition and catches SDK-shaped additio
   }
 });
 
+test("a characterised contract cannot gain shared scope until its receipt is refreshed", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "external-contract-shared-"));
+  try {
+    const contract = EXTERNAL_CONTRACTS.quickwit;
+    const fixture = contract.fixtures[0];
+    const receiptPath = path.join(root, "quickwit.source.json");
+    const originalReceipt: unknown = JSON.parse(
+      readFileSync(path.join(ROOT, fixture.metadata), "utf-8"),
+    );
+    const sharedOwner = EXTERNAL_CONTRACTS.postgres.owners[0].path;
+    const registry = {
+      ...EXTERNAL_CONTRACTS,
+      quickwit: {
+        ...contract,
+        owners: [...contract.owners, { path: sharedOwner, role: "shared" }],
+        fixtures: [{ ...fixture, metadata: path.relative(ROOT, receiptPath) }],
+      },
+    } as const;
+    writeFileSync(receiptPath, JSON.stringify(originalReceipt));
+    const problems = checkExternalContracts(ROOT, { registry });
+    expect(problems).toHaveLength(1);
+    expect(problems.join("\n")).toContain("re-characterise quickwit");
+    writeFileSync(
+      receiptPath,
+      JSON.stringify({
+        characterisedAt: readCurrentPins(ROOT, contract),
+        fixtureSet: fixture.path,
+        provenance: fixture.provenance,
+        coveredOwners: registry.quickwit.owners.map(({ path: owner }) => owner),
+        coveredSdks: contract.sdks,
+      }),
+    );
+    expect(checkExternalContracts(ROOT, { registry })).toEqual([]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("literal source inspection binds the shrink-only set to entry statuses", () => {
   const source = readFileSync(
     path.join(ROOT, "packages/external-contracts/src/registry.ts"),
