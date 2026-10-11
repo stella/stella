@@ -3,7 +3,7 @@ import { describe as context, expect, test as check } from "bun:test";
 import {
   analyzeGatingWorkflow,
   firstCollectionFailure,
-  isCollectedByGatingPlaywright,
+  gatingPlaywrightCollection,
   gatingWorkflowJobs,
   managedServiceRunnerFailure,
   packageTestCollectionFailure,
@@ -948,7 +948,7 @@ context("Playwright failure propagation", () => {
     },
   ])("rejects suppression in the $layer", ({ invocation, body }) => {
     expect(
-      isCollectedByGatingPlaywright({
+      gatingPlaywrightCollection({
         file: "apps/desktop/tests/browser/theme-prepaint.playwright.spec.ts",
         packageFile: "apps/desktop/package.json",
         scripts: { "test:browser": body },
@@ -958,6 +958,89 @@ context("Playwright failure propagation", () => {
           workflow: invocation,
         },
       }),
-    ).toBe(false);
+    ).toEqual({ type: "not-collected" });
+  });
+});
+
+context("Playwright configuration filters", () => {
+  const collects = (
+    filter: string,
+    name = "theme-prepaint.playwright.spec.ts",
+  ) =>
+    gatingPlaywrightCollection({
+      file: `apps/desktop/tests/browser/${name}`,
+      packageFile: "apps/desktop/package.json",
+      scripts: { "test:browser": "playwright test" },
+      topology: {
+        gatingJobs: new Map([
+          ["browser-tests", ["bun --filter @stll/desktop test:browser"]],
+        ]),
+        shardedPackages: new Set(),
+        workflow: "",
+      },
+      readConfig: () =>
+        `export default defineConfig({ testDir: "./tests/browser", ${filter} });`,
+    });
+  check("an array testIgnore excludes a file", () => {
+    expect(
+      collects('testIgnore: ["**/theme-prepaint.playwright.spec.ts"]'),
+    ).toEqual({ type: "not-collected" });
+  });
+  check("an array testMatch includes only matching files", () => {
+    const filter = 'testMatch: ["**/theme-prepaint.playwright.spec.ts"]';
+    expect(collects(filter)).toEqual({ type: "collected" });
+    expect(collects(filter, "other.playwright.spec.ts")).toEqual({
+      type: "not-collected",
+    });
+  });
+  check(
+    "literal RegExp patterns used by repository projects are resolved",
+    () => {
+      expect(
+        collects(
+          String.raw`testIgnore: /landing-.*\.spec\.ts$/u`,
+          "landing-home.spec.ts",
+        ),
+      ).toEqual({ type: "not-collected" });
+      expect(
+        collects(
+          String.raw`testMatch: /landing-.*\.spec\.ts$/u`,
+          "landing-home.spec.ts",
+        ),
+      ).toEqual({ type: "collected" });
+    },
+  );
+  check(
+    "project filters are inherited and coverage is the union of projects",
+    () => {
+      expect(
+        collects(
+          'testMatch: ["**/theme-prepaint.playwright.spec.ts"], projects: [{ testIgnore: ["**/*.spec.ts"] }]',
+        ),
+      ).toEqual({ type: "not-collected" });
+      expect(
+        collects(
+          'projects: [{ testIgnore: ["**/*.spec.ts"] }, { testMatch: ["**/theme-prepaint.playwright.spec.ts"] }]',
+        ),
+      ).toEqual({ type: "collected" });
+    },
+  );
+  check.each([
+    'testIgnore: ["**/*.spec.ts", unknownPattern]',
+    'testIgnore: () => "**/*.spec.ts"',
+    "testIgnore: false",
+  ])("unsupported filter fails closed: %s", (filter) => {
+    expect(collects(filter)).toEqual({
+      type: "unresolved",
+      finding:
+        "runner config: apps/desktop/playwright.config.ts has unresolved testIgnore",
+    });
+  });
+  check("an unresolved RegExp fails closed", () => {
+    expect(collects('testMatch: new RegExp(".*")')).toEqual({
+      type: "unresolved",
+      finding:
+        "runner config: apps/desktop/playwright.config.ts has unresolved testMatch",
+    });
   });
 });

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -1328,28 +1328,318 @@ const repositoryTestExecutionTopology = (): RepositoryTestExecutionTopology => {
   return cachedRepositoryTestExecutionTopology;
 };
 
+type PlaywrightCollection =
+  | { readonly type: "collected" }
+  | { readonly type: "not-collected" }
+  | { readonly type: "unresolved"; readonly finding: string };
+
+type PlaywrightConfigSource = {
+  readonly configFile: string;
+  readonly source: string;
+  readonly readConfig: (configFile: string) => string;
+  readonly visited?: ReadonlySet<string>;
+};
+
+type PlaywrightConfigOptions = PlaywrightConfigSource & {
+  readonly file: string;
+};
+
+const playwrightObjectFields = (
+  expression: ts.Expression,
+): Map<string, ts.Expression> | undefined => {
+  if (!ts.isObjectLiteralExpression(expression)) {
+    return undefined;
+  }
+  const fields = new Map<string, ts.Expression>();
+  for (const property of expression.properties) {
+    if (
+      !ts.isPropertyAssignment(property) ||
+      !(ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))
+    ) {
+      return undefined;
+    }
+    fields.set(property.name.text, property.initializer);
+  }
+  return fields;
+};
+
+const playwrightConfigFields = ({
+  configFile,
+  source,
+  readConfig,
+  visited: visitedConfigs = new Set(),
+}: PlaywrightConfigSource): Map<string, ts.Expression> | undefined => {
+  if (visitedConfigs.has(configFile)) {
+    return undefined;
+  }
+  const ast = parseTypeScript(configFile, source);
+  const readConstants = () => {
+    const entries = new Map<string, ts.Expression>();
+    for (const statement of ast.statements) {
+      if (
+        !ts.isVariableStatement(statement) ||
+        statement.declarationList.getFirstToken(ast)?.kind !==
+          ts.SyntaxKind.ConstKeyword
+      ) {
+        continue;
+      }
+      for (const declaration of statement.declarationList.declarations) {
+        if (
+          ts.isIdentifier(declaration.name) &&
+          declaration.initializer !== undefined
+        ) {
+          entries.set(declaration.name.text, declaration.initializer);
+        }
+      }
+    }
+    return entries;
+  };
+  const constants = readConstants();
+  const resolve = (expression: ts.Expression): ts.Expression => {
+    let node = expression;
+    const visited = new Set<string>();
+    while (true) {
+      if (
+        ts.isParenthesizedExpression(node) ||
+        ts.isAsExpression(node) ||
+        ts.isSatisfiesExpression(node)
+      ) {
+        node = node.expression;
+        continue;
+      }
+      if (!ts.isIdentifier(node) || visited.has(node.text)) {
+        return node;
+      }
+      visited.add(node.text);
+      const initializer = constants.get(node.text);
+      if (initializer === undefined) {
+        return node;
+      }
+      node = initializer;
+    }
+  };
+  const expand = (
+    expression: ts.Expression,
+    visited = new Set<ts.Expression>(),
+  ): ts.Expression => {
+    const node = resolve(expression);
+    if (visited.has(node)) {
+      return node;
+    }
+    const next = new Set([...visited, node]);
+    if (ts.isArrayLiteralExpression(node)) {
+      return ts.factory.createArrayLiteralExpression(
+        node.elements.map((element) => expand(element, next)),
+      );
+    }
+    if (ts.isObjectLiteralExpression(node)) {
+      return ts.factory.createObjectLiteralExpression(
+        node.properties.map((property) =>
+          ts.isPropertyAssignment(property)
+            ? ts.factory.createPropertyAssignment(
+                property.name,
+                expand(property.initializer, next),
+              )
+            : property,
+        ),
+      );
+    }
+    return node;
+  };
+  const exported = ast.statements.find(ts.isExportAssignment);
+  if (exported === undefined) {
+    return undefined;
+  }
+  const exportedExpression = resolve(exported.expression);
+  const layers = ts.isCallExpression(exportedExpression)
+    ? exportedExpression.arguments
+    : [exportedExpression];
+  const root = new Map<string, ts.Expression>();
+  for (const layer of layers) {
+    let fields = playwrightObjectFields(expand(layer));
+    const node = resolve(layer);
+    if (fields === undefined && ts.isIdentifier(node)) {
+      const imported = ast.statements.find(
+        (statement) =>
+          ts.isImportDeclaration(statement) &&
+          statement.importClause?.name?.text === node.text,
+      );
+      if (
+        imported !== undefined &&
+        ts.isImportDeclaration(imported) &&
+        ts.isStringLiteral(imported.moduleSpecifier) &&
+        imported.moduleSpecifier.text.startsWith(".")
+      ) {
+        const modulePath = path.posix.join(
+          path.posix.dirname(configFile),
+          imported.moduleSpecifier.text,
+        );
+        const importedFile = [modulePath, `${modulePath}.ts`].find((file) =>
+          existsSync(path.join(ROOT, file)),
+        );
+        if (importedFile !== undefined) {
+          fields = playwrightConfigFields({
+            configFile: importedFile,
+            source: readConfig(path.join(ROOT, importedFile)),
+            readConfig,
+            visited: new Set([...visitedConfigs, configFile]),
+          });
+        }
+      }
+    }
+    if (fields === undefined) {
+      return undefined;
+    }
+    for (const [name, value] of fields) {
+      root.set(name, value);
+    }
+  }
+  return root;
+};
+
+const playwrightConfigCollection = (
+  options: PlaywrightConfigOptions,
+): PlaywrightCollection => {
+  const { file, configFile } = options;
+  const root = playwrightConfigFields(options);
+  const unresolved = (field: string): PlaywrightCollection => ({
+    type: "unresolved",
+    finding: `runner config: ${configFile} has unresolved ${field}`,
+  });
+  if (root === undefined) {
+    return unresolved("configuration object");
+  }
+  const projects = root.get("projects");
+  const scopes: Map<string, ts.Expression>[] = [];
+  if (projects === undefined) {
+    scopes.push(root);
+  } else {
+    const node = projects;
+    if (!ts.isArrayLiteralExpression(node)) {
+      return unresolved("projects");
+    }
+    for (const project of node.elements) {
+      const fields = playwrightObjectFields(project);
+      if (fields === undefined) {
+        return unresolved("project configuration");
+      }
+      scopes.push(new Map([...root, ...fields]));
+    }
+  }
+  type Patterns =
+    | {
+        readonly type: "patterns";
+        readonly values: readonly (string | RegExp)[];
+      }
+    | { readonly type: "unresolved" };
+  const patterns = (expression: ts.Expression): Patterns => {
+    const node = expression;
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+      return { type: "patterns", values: [node.text] };
+    }
+    if (ts.isRegularExpressionLiteral(node)) {
+      const delimiter = node.text.lastIndexOf("/");
+      // Literal regexes are static configuration; constructors and other
+      // executable expressions remain unresolved.
+      const compiled = Result.try(
+        () =>
+          new RegExp(
+            node.text.slice(1, delimiter),
+            node.text.slice(delimiter + 1),
+          ),
+      );
+      return compiled.isErr()
+        ? { type: "unresolved" }
+        : { type: "patterns", values: [compiled.value] };
+    }
+    if (!ts.isArrayLiteralExpression(node)) {
+      return { type: "unresolved" };
+    }
+    const values: (string | RegExp)[] = [];
+    for (const element of node.elements) {
+      const parsed = patterns(element);
+      if (
+        parsed.type === "unresolved" ||
+        ts.isArrayLiteralExpression(element)
+      ) {
+        return { type: "unresolved" };
+      }
+      values.push(...parsed.values);
+    }
+    return { type: "patterns", values };
+  };
+  let collected = false;
+  for (const scope of scopes) {
+    const testDir = scope.get("testDir");
+    const directory = testDir;
+    if (
+      directory === undefined ||
+      !(
+        ts.isStringLiteral(directory) ||
+        ts.isNoSubstitutionTemplateLiteral(directory)
+      )
+    ) {
+      return unresolved("testDir");
+    }
+    const relative = path.posix.relative(
+      path.posix.normalize(
+        path.posix.join(path.posix.dirname(configFile), directory.text),
+      ),
+      file,
+    );
+    const matches = (value: string | RegExp): boolean => {
+      if (typeof value === "string") {
+        return playwrightGlobMatches(value, relative);
+      }
+      value.lastIndex = 0;
+      return value.test(file);
+    };
+    const testMatch = scope.get("testMatch");
+    const match = testMatch === undefined ? undefined : patterns(testMatch);
+    const testIgnore = scope.get("testIgnore");
+    const ignore = testIgnore === undefined ? undefined : patterns(testIgnore);
+    if (match?.type === "unresolved") {
+      return unresolved("testMatch");
+    }
+    if (ignore?.type === "unresolved") {
+      return unresolved("testIgnore");
+    }
+    if (
+      !relative.startsWith("../") &&
+      (match === undefined || match.values.some(matches)) &&
+      (ignore === undefined || !ignore.values.some(matches))
+    ) {
+      collected = true;
+    }
+  }
+  return collected ? { type: "collected" } : { type: "not-collected" };
+};
+
 type GatingPlaywrightOptions = {
+  readonly readConfig?: (configFile: string) => string;
   readonly file: string;
   readonly packageFile: string;
   readonly scripts: PackageScripts;
   readonly topology: RepositoryTestExecutionTopology;
 };
 
-export const isCollectedByGatingPlaywright = ({
+export const gatingPlaywrightCollection = ({
+  readConfig = (configFile) => readFileSync(configFile, "utf-8"),
   file,
   packageFile,
   scripts,
   topology,
-}: GatingPlaywrightOptions): boolean => {
+}: GatingPlaywrightOptions): PlaywrightCollection => {
   const parsed = readJson(packageFile);
   if (typeof parsed !== "object" || parsed === null || !("name" in parsed)) {
-    return false;
+    return { type: "not-collected" };
   }
   const packageName = parsed.name;
   if (typeof packageName !== "string") {
-    return false;
+    return { type: "not-collected" };
   }
   const packageDirectory = path.posix.dirname(packageFile);
+  let finding: PlaywrightCollection = { type: "not-collected" };
   for (const [scriptName, command] of Object.entries(scripts)) {
     if (
       typeof command !== "string" ||
@@ -1380,29 +1670,21 @@ export const isCollectedByGatingPlaywright = ({
     if (!existsSync(configFile)) {
       continue;
     }
-    const config = readFileSync(configFile, "utf-8");
-    const testDir = /\btestDir:\s*["']([^"']+)["']/u.exec(config)?.at(1);
-    if (testDir === undefined) {
-      continue;
-    }
-    const testMatch = /\btestMatch:\s*["']([^"']+)["']/u.exec(config)?.at(1);
-    const testIgnore = /\btestIgnore:\s*["']([^"']+)["']/u.exec(config)?.at(1);
-    const configDirectory = path.posix.dirname(
-      path.posix.join(packageDirectory, configName),
-    );
-    const relative = path.posix.relative(
-      path.posix.normalize(path.posix.join(configDirectory, testDir)),
+    const config = readConfig(configFile);
+    const collection = playwrightConfigCollection({
       file,
-    );
-    if (
-      !relative.startsWith("../") &&
-      (testMatch === undefined || playwrightGlobMatches(testMatch, relative)) &&
-      (testIgnore === undefined || !playwrightGlobMatches(testIgnore, relative))
-    ) {
-      return true;
+      configFile: path.posix.join(packageDirectory, configName),
+      source: config,
+      readConfig,
+    });
+    if (collection.type === "collected") {
+      return collection;
+    }
+    if (collection.type === "unresolved") {
+      finding = collection;
     }
   }
-  return false;
+  return finding;
 };
 
 type FirstCollectionOptions = {
@@ -1543,7 +1825,13 @@ export const firstCollectionFailure = ({
       packageName,
     });
   }
-  if (isCollectedByGatingPlaywright({ file, packageFile, scripts, topology })) {
+  const playwrightCollection = gatingPlaywrightCollection({
+    file,
+    packageFile,
+    scripts,
+    topology,
+  });
+  if (playwrightCollection.type === "collected") {
     return undefined;
   }
   for (const scriptName of Object.keys(scripts).toSorted(compareCodeUnit)) {
@@ -1564,7 +1852,9 @@ export const firstCollectionFailure = ({
       return undefined;
     }
   }
-  return collectionFailure;
+  return playwrightCollection.type === "unresolved"
+    ? playwrightCollection.finding
+    : collectionFailure;
 };
 
 const validateCanonicalOrder = (
