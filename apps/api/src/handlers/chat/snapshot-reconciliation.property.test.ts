@@ -139,7 +139,10 @@ const view = (parts: UIMessage["parts"]) => {
   });
 };
 
-const collectTurn = async (chunks: StreamChunk[]) => {
+const collectTurn = async (
+  chunks: StreamChunk[],
+  assertPersisted?: (parts: UIMessage["parts"]) => void,
+) => {
   const capture = createStreamMessageCapture({
     initialMessages: [],
     capture: toChatMessage,
@@ -178,6 +181,7 @@ const collectTurn = async (chunks: StreamChunk[]) => {
     live.processor.processChunk(chunk);
   }
   const persisted = terminal.response;
+  assertPersisted?.(persisted.parts);
   const reload = chatMessageFromPersisted({
     id: persisted.id,
     role: persisted.role,
@@ -193,6 +197,38 @@ const collectTurn = async (chunks: StreamChunk[]) => {
     view(live.processor.getMessages().flatMap(({ parts }) => parts)),
   ).toEqual(view(reload.parts));
   return { emitted, persisted, reload };
+};
+
+const expectTerminalMonotonicity = (emitted: StreamChunk[]) => {
+  const live = createStreamMessageCapture({
+    initialMessages: [],
+    capture: (message) => message,
+  });
+  const settled = new Set<string>();
+  const decisions = new Map<string, boolean>();
+  for (const chunk of emitted) {
+    live.processor.processChunk(chunk);
+    for (const part of live.processor
+      .getMessages()
+      .flatMap(({ parts }) => parts)) {
+      if (part.type === "tool-result") {
+        if (settled.has(part.toolCallId)) {
+          expect(part.state).not.toBe("streaming");
+        }
+        if (part.state !== "streaming") {
+          settled.add(part.toolCallId);
+        }
+      }
+      if (part.type === "tool-call") {
+        if (decisions.has(part.id)) {
+          expect(part.approval?.approved).toBe(decisions.get(part.id));
+        }
+        if (part.approval?.approved !== undefined) {
+          decisions.set(part.id, part.approval.approved);
+        }
+      }
+    }
+  }
 };
 
 test(
@@ -427,35 +463,7 @@ test(
 
         // Terminal state must remain settled at every visible snapshot, including
         // the deliberately stale active/approval-requested replays.
-        const live = createStreamMessageCapture({
-          initialMessages: [],
-          capture: (message) => message,
-        });
-        const settled = new Set<string>();
-        const decisions = new Map<string, boolean>();
-        for (const chunk of emitted) {
-          live.processor.processChunk(chunk);
-          for (const part of live.processor
-            .getMessages()
-            .flatMap(({ parts }) => parts)) {
-            if (part.type === "tool-result") {
-              if (settled.has(part.toolCallId)) {
-                expect(part.state).not.toBe("streaming");
-              }
-              if (part.state !== "streaming") {
-                settled.add(part.toolCallId);
-              }
-            }
-            if (part.type === "tool-call") {
-              if (decisions.has(part.id)) {
-                expect(part.approval?.approved).toBe(decisions.get(part.id));
-              }
-              if (part.approval?.approved !== undefined) {
-                decisions.set(part.id, part.approval.approved);
-              }
-            }
-          }
-        }
+        expectTerminalMonotonicity(emitted);
       }),
       { numRuns: 100 },
     );
@@ -593,6 +601,372 @@ test(
           ).toEqual(expected);
           expect(reload.parts).toEqual(expected);
         }
+      }),
+      { numRuns: 100 },
+    );
+  },
+  propertyTestTimeout(15_000),
+);
+
+type TextualKind = "text" | "thinking";
+type TextualReference =
+  | { origin: "snapshot-derived"; segments: string[] }
+  | { origin: "delta-streamed"; content: string };
+
+const referenceContent = (reference: TextualReference): string => {
+  switch (reference.origin) {
+    case "snapshot-derived":
+      return reference.segments.join("");
+    case "delta-streamed":
+      return reference.content;
+    default:
+      reference satisfies never;
+      return panic("Unhandled textual reference origin");
+  }
+};
+
+const textualSegments = (parts: UIMessage["parts"], kind: TextualKind) =>
+  parts.flatMap((part) =>
+    (part.type === "text" || part.type === "thinking") && part.type === kind
+      ? [part.content]
+      : [],
+  );
+
+const partitionContent = (content: string, cuts: number[]) => {
+  if (content.length < 2) {
+    return [content];
+  }
+  const boundaries = [
+    ...new Set(cuts.map((cut) => 1 + (cut % (content.length - 1)))),
+  ].toSorted((left, right) => left - right);
+  const segments: string[] = [];
+  let previous = 0;
+  for (const boundary of boundaries) {
+    segments.push(content.slice(previous, boundary));
+    previous = boundary;
+  }
+  segments.push(content.slice(previous));
+  return segments;
+};
+
+const segmentTokenArbitrary = fc
+  .array(fc.constantFrom("A", "B", "é", "中", "🙂"), {
+    minLength: 1,
+    maxLength: 8,
+  })
+  .map((characters) => characters.join(""));
+const resegmentationArbitrary = fc.record({
+  text: fc.tuple(segmentTokenArbitrary, segmentTokenArbitrary),
+  thinking: fc.tuple(segmentTokenArbitrary, segmentTokenArbitrary),
+  updates: fc.array(
+    fc.record({
+      kind: fc.constantFrom("text", "thinking"),
+      type: fc.constantFrom("delta", "snapshot"),
+      snapshotMode: fc.constantFrom("reshape", "extend", "replace", "shorten"),
+      token: segmentTokenArbitrary,
+      cuts: fc.array(fc.nat({ max: 30 }), { maxLength: 6 }),
+    }),
+    { minLength: 1, maxLength: 25 },
+  ),
+});
+
+test("snapshot-derived text and reasoning merge without retaining obsolete slots", async () => {
+  const merged = [
+    { type: "text", content: "AB" },
+    { type: "thinking", content: "AB" },
+  ] satisfies UIMessage["parts"];
+  const { persisted, reload } = await collectTurn(
+    [
+      {
+        type: EventType.RUN_STARTED,
+        runId: "reshape-run",
+        threadId: "reshape-thread",
+      },
+      {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId: MESSAGE_ID,
+        role: "assistant",
+      },
+      snapshot([
+        { type: "text", content: "A" },
+        { type: "text", content: "B" },
+        { type: "thinking", content: "A" },
+        { type: "thinking", content: "B" },
+      ]),
+      snapshot(merged),
+      {
+        type: EventType.RUN_FINISHED,
+        runId: "reshape-run",
+        threadId: "reshape-thread",
+        finishReason: "stop",
+      },
+    ],
+    (parts) => {
+      expect(parts).toEqual(merged);
+    },
+  );
+  expect(persisted.parts).toEqual(merged);
+  expect(reload.parts).toEqual(merged);
+});
+
+const resegmentationAncillary = (token: string) => {
+  const input = { query: token };
+  const call = {
+    type: "tool-call",
+    id: "reshape-result-call",
+    name: "lookup",
+    arguments: JSON.stringify(input),
+    input,
+    state: "input-complete",
+  } as const satisfies ToolCallPart;
+  const result = {
+    type: "tool-result",
+    toolCallId: call.id,
+    content: JSON.stringify({ answer: token }),
+    state: "complete",
+  } as const satisfies ToolResultPart;
+  const completed = {
+    ...call,
+    state: "complete",
+    output: { answer: token },
+  } as const satisfies ToolCallPart;
+  const partial = {
+    ...result,
+    state: "streaming",
+    content: JSON.stringify({ progress: token }),
+  } as const satisfies ToolResultPart;
+  const approval = { id: "reshape-approval", needsApproval: true };
+  const requested = {
+    ...call,
+    id: "reshape-approval-call",
+    state: "approval-requested",
+    approval,
+  } as const satisfies ToolCallPart;
+  const decided = {
+    ...requested,
+    state: "approval-responded",
+    approval: { ...approval, approved: token.length % 2 === 0 },
+  } as const satisfies ToolCallPart;
+  const activity = {
+    type: "activity",
+    activityType: "review",
+    content: { status: "complete", token },
+  } as const;
+  const chains: StreamChunk[][] = [
+    [
+      ...callEvents(call),
+      snapshot([call, partial]),
+      snapshot([completed, result]),
+      snapshot([call, partial]),
+    ],
+    [
+      ...callEvents(requested),
+      {
+        type: EventType.CUSTOM,
+        name: "approval-requested",
+        value: {
+          approval,
+          input,
+          toolCallId: requested.id,
+          toolName: requested.name,
+        },
+      },
+      snapshot([decided]),
+      snapshot([requested]),
+    ],
+    [
+      snapshot([{ ...activity, content: { status: "running", token } }]),
+      snapshot([activity]),
+    ],
+  ];
+  const expected = [
+    completed,
+    result,
+    decided,
+    activity,
+  ] satisfies UIMessage["parts"];
+  return { chains, expected };
+};
+
+test(
+  "textual snapshots preserve segmentation changes and delta content",
+  async () => {
+    await assertProperty(
+      "textual snapshots preserve segmentation changes and delta content",
+      fc.asyncProperty(resegmentationArbitrary, async (scenario) => {
+        const reference: Record<TextualKind, TextualReference> = {
+          text: { origin: "snapshot-derived", segments: scenario.text },
+          thinking: { origin: "snapshot-derived", segments: scenario.thinking },
+        };
+        const chunks: StreamChunk[] = [
+          {
+            type: EventType.RUN_STARTED,
+            runId: "reshape-run",
+            threadId: "reshape-thread",
+          },
+          {
+            type: EventType.TEXT_MESSAGE_START,
+            messageId: MESSAGE_ID,
+            role: "assistant",
+          },
+          snapshot([
+            ...scenario.text.map(
+              (content) => ({ type: "text", content }) as const,
+            ),
+            ...scenario.thinking.map(
+              (content) => ({ type: "thinking", content }) as const,
+            ),
+          ]),
+        ];
+        const ancillary = resegmentationAncillary(scenario.text.join(""));
+        for (const update of scenario.updates) {
+          // Partition decisions also schedule sibling events, exercising tool
+          // interruptions between textual snapshots and deltas.
+          for (const selection of update.cuts) {
+            const available = ancillary.chains.filter(
+              (chain) => chain.length > 0,
+            );
+            if (available.length === 0) {
+              break;
+            }
+            const sibling = available.at(selection % available.length)?.shift();
+            if (sibling === undefined) {
+              panic("Generated scheduler selected an empty sibling chain");
+            }
+            chunks.push(sibling);
+          }
+          const previous = reference[update.kind];
+          const previousContent = referenceContent(previous);
+          switch (update.type) {
+            case "delta": {
+              chunks.push(
+                update.kind === "text"
+                  ? {
+                      type: EventType.TEXT_MESSAGE_CONTENT,
+                      messageId: MESSAGE_ID,
+                      delta: update.token,
+                    }
+                  : {
+                      type: EventType.REASONING_MESSAGE_CONTENT,
+                      messageId: "reshape-reasoning",
+                      delta: update.token,
+                    },
+              );
+              reference[update.kind] = {
+                origin: "delta-streamed",
+                content: previousContent + update.token,
+              };
+              break;
+            }
+            case "snapshot": {
+              let content: string;
+              switch (update.snapshotMode) {
+                case "reshape":
+                  content = previousContent;
+                  break;
+                case "extend":
+                  content = previousContent + update.token;
+                  break;
+                case "replace":
+                  content = update.token;
+                  break;
+                case "shorten":
+                  content = previousContent.slice(
+                    0,
+                    Math.max(1, previousContent.length - update.token.length),
+                  );
+                  break;
+                default:
+                  update.snapshotMode satisfies never;
+                  panic("Unhandled generated snapshot mode");
+              }
+              const segments = partitionContent(content, update.cuts);
+              chunks.push(
+                snapshot(
+                  segments.map((segment) => ({
+                    type: update.kind,
+                    content: segment,
+                  })),
+                ),
+              );
+              switch (previous.origin) {
+                case "snapshot-derived":
+                  reference[update.kind] = {
+                    origin: "snapshot-derived",
+                    segments,
+                  };
+                  break;
+                case "delta-streamed":
+                  if (
+                    content.length > previousContent.length &&
+                    content.startsWith(previousContent)
+                  ) {
+                    reference[update.kind] = {
+                      origin: "delta-streamed",
+                      content,
+                    };
+                  }
+                  break;
+                default:
+                  previous satisfies never;
+                  panic("Unhandled textual reference origin");
+              }
+              break;
+            }
+            default:
+              update.type satisfies never;
+              panic("Unhandled generated resegmentation update");
+          }
+        }
+        const hasAncillaryEvents = scenario.updates.some(
+          (update) => update.cuts.length > 0,
+        );
+        if (hasAncillaryEvents) {
+          for (const chain of ancillary.chains) {
+            chunks.push(...chain);
+          }
+        }
+        chunks.push({
+          type: EventType.RUN_FINISHED,
+          runId: "reshape-run",
+          threadId: "reshape-thread",
+          finishReason: "stop",
+        });
+        const assertReference = (parts: UIMessage["parts"]) => {
+          for (const kind of ["text", "thinking"] as const) {
+            const expected = reference[kind];
+            const segments = textualSegments(parts, kind);
+            expect(segments.join("")).toBe(referenceContent(expected));
+            switch (expected.origin) {
+              case "snapshot-derived":
+                expect(segments).toEqual(expected.segments);
+                break;
+              case "delta-streamed":
+                break;
+              default:
+                expected satisfies never;
+                panic("Unhandled textual reference origin");
+            }
+          }
+          expect(
+            view(
+              parts.filter(
+                (part) => part.type !== "text" && part.type !== "thinking",
+              ),
+            ),
+          ).toEqual(view(hasAncillaryEvents ? ancillary.expected : []));
+        };
+        const { persisted, reload, emitted } = await collectTurn(
+          chunks,
+          assertReference,
+        );
+        assertReference(reload.parts);
+        for (const kind of ["text", "thinking"] as const) {
+          expect(textualSegments(reload.parts, kind)).toEqual(
+            textualSegments(persisted.parts, kind),
+          );
+        }
+        expectTerminalMonotonicity(emitted);
       }),
       { numRuns: 100 },
     );

@@ -308,56 +308,66 @@ export class SnapshotPartReconciler {
         (existing) => existing.type === "text" || existing.type === "thinking",
       )
       .filter((existing) => existing.type === part.type);
-    const ordinal = snapshotParts
-      .slice(0, snapshotParts.indexOf(part))
-      .filter((existing) => existing.type === part.type).length;
-    const existing = sameKind.at(ordinal);
-    if (existing === undefined) {
-      if (
-        !sameKind.some(
-          (candidate) => this.provenanceOf(candidate) === "delta-streamed",
-        )
-      ) {
-        parts.push(this.snapshot(part));
-      }
+    if (sameKind.length === 0) {
+      parts.push(this.snapshot(part));
       return;
     }
-    if (existing.type !== part.type) {
-      panic("Snapshot text slot has a different type");
+    const incoming = snapshotParts
+      .filter(
+        (candidate) =>
+          candidate.type === "text" || candidate.type === "thinking",
+      )
+      .filter((candidate) => candidate.type === part.type);
+    if (incoming.at(0) !== part) {
+      return;
     }
-    const snapshotCount = snapshotParts.filter(
-      (candidate) => candidate.type === part.type,
-    ).length;
-    // An explicit final UI snapshot may flatten several retained
-    // delta segments. Append only its strict suffix to the last slot;
-    // keep every earlier segment beside its original tool/reasoning.
-    if (preservesPartLayout && snapshotCount === 1 && sameKind.length > 1) {
-      const content = sameKind.map((candidate) => candidate.content).join("");
-      const last = sameKind.at(-1);
-      if (
-        last !== undefined &&
-        part.content.length > content.length &&
-        part.content.startsWith(content)
-      ) {
-        parts[parts.indexOf(last)] = this.inherit(
-          {
-            ...last,
-            content: last.content + part.content.slice(content.length),
-          },
-          last,
-        );
-        return;
+    const content = sameKind.map((candidate) => candidate.content).join("");
+    const snapshotContent = incoming
+      .map((candidate) => candidate.content)
+      .join("");
+    const hasDeltas = sameKind.some(
+      (candidate) => this.provenanceOf(candidate) === "delta-streamed",
+    );
+    if (!hasDeltas) {
+      // A snapshot owns the whole textual sequence, including its segmentation.
+      // Replacing ordinal slots would retain obsolete segments after a merge.
+      const first = sameKind.at(0);
+      if (first === undefined) {
+        panic("Snapshot text sequence has no canonical slot");
       }
+      const insertionIndex = parts.indexOf(first);
+      for (let index = parts.length - 1; index >= 0; index -= 1) {
+        if (parts.at(index)?.type === part.type) {
+          parts.splice(index, 1);
+        }
+      }
+      parts.splice(
+        insertionIndex,
+        0,
+        ...incoming.map((candidate) => this.snapshot(candidate)),
+      );
+      return;
     }
+    // Explicit UI snapshots may complete a streamed sequence even when their
+    // segments split or merge. Compare whole content and retain delta placement.
     if (
-      this.provenanceOf(existing) === "snapshot-derived" ||
-      (preservesPartLayout &&
-        snapshotCount === sameKind.length &&
-        part.content.length > existing.content.length &&
-        part.content.startsWith(existing.content))
+      !preservesPartLayout ||
+      snapshotContent.length <= content.length ||
+      !snapshotContent.startsWith(content)
     ) {
-      parts[parts.indexOf(existing)] = this.inherit(part, existing);
+      return;
     }
+    const last = sameKind.at(-1);
+    if (last === undefined) {
+      panic("Streamed text sequence has no final slot");
+    }
+    parts[parts.indexOf(last)] = this.inherit(
+      {
+        ...last,
+        content: last.content + snapshotContent.slice(content.length),
+      },
+      last,
+    );
   }
 
   reconcile({
