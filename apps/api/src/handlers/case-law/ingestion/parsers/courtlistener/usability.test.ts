@@ -61,6 +61,13 @@ describe("CourtListener short text usability", () => {
       "usable",
     );
   });
+  test("recognizes filing metadata with whitespace-only separators", () => {
+    expect(
+      classifyCourtListenerText(
+        "Case \t24-12345 Date Filed \n01/01/2024 Page \t1 of 2",
+      ),
+    ).toBe("no-ruling-text");
+  });
   test.each([
     "FILE\nUNAVAILABLE\nUnable to extract document content",
     "FILE\nUNAVAILABLE\n\nUnable to extract document content",
@@ -81,6 +88,14 @@ describe("CourtListener short text usability", () => {
     expect(classifyCourtListenerText("Office of the Attorney General A.")).toBe(
       "usable",
     );
+  });
+
+  test("keeps withdrawn-motion prose usable when the opinion continues", () => {
+    expect(
+      classifyCourtListenerText(
+        "The opinion explains why the motion was withdrawn. The court affirms the judgment.",
+      ),
+    ).toBe("usable");
   });
 
   test.each(["Acquitted.", "Convicted.", "Sustained.", "Allowed."])(
@@ -105,6 +120,39 @@ describe("CourtListener short text usability", () => {
       ).toBe("usable");
     },
   );
+
+  test.each([
+    "Affirmed.",
+    "Acquitted.",
+    "Convicted.",
+    "Sustained.",
+    "Allowed.",
+  ])(
+    "keeps an explicit disposition between author metadata and a publisher message: %s",
+    (outcome) => {
+      expect(
+        classifyCourtListenerText(
+          `Mr. Justice Zqlrv.\n\n${outcome}\n\ndelivered the opinion of the court.\n\nThis opinion has been withdrawn.\n\nOpinion #C-729`,
+        ),
+      ).toBe("usable");
+    },
+  );
+
+  test("does not treat delivery metadata as an explicit ruling", () => {
+    expect(
+      classifyCourtListenerText(
+        "Mr. Justice Zqlrv.\n\ndelivered the opinion of the court.\n\nThis opinion has been withdrawn.\n\nOpinion #C-729",
+      ),
+    ).toBe("source-placeholder");
+  });
+
+  test("keeps ruling prose usable before unrelated numeric blocks", () => {
+    const text = [
+      "The court affirms the judgment.",
+      ...Array.from({ length: 32 }, (_, index) => String(index + 1)),
+    ].join("\n\n");
+    expect(classifyCourtListenerText(text)).toBe("usable");
+  });
 
   test("covers every reviewed group and synthetic text", () => {
     expect(shortTexts).toHaveLength(281);

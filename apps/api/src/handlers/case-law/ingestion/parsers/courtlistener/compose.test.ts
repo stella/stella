@@ -282,6 +282,49 @@ describe("which column becomes an opinion's text", () => {
     });
   });
 
+  test.each([
+    "This opinion has been withdrawn.\n\nOpinion #C-729",
+    "This opinion has been\nwithdrawn.\n\nOpinion #C-729",
+    "Mr. Justice Zqlrv.\n\ndelivered the opinion of the court.\n\nThis opinion has been withdrawn.\n\nOpinion #C-729",
+    [
+      "Mr.",
+      "Justice",
+      "Zqlrv.",
+      "delivered",
+      "the",
+      "opinion",
+      "of",
+      "the",
+      "court.",
+      "This opinion has been withdrawn.",
+      "Opinion #C-729",
+    ].join("\n\n"),
+  ])(
+    "rejects a split publisher message after metadata and selects the fallback: %s",
+    (message) => {
+      const outcome = composeCourtListenerText([
+        {
+          row: opinionRow({
+            xml_harvard: "",
+            html_with_citations: `<pre>Office of the Attorney General\n\n${message}</pre>`,
+            plain_text: "The court affirms the judgment.",
+          }),
+          type: "020lead",
+        },
+      ]);
+      expect(outcome.status).toBe("parsed");
+      expect(outcome.opinions.at(0)).toMatchObject({
+        selection: "parsed",
+        format: "plain_text",
+      });
+      expect(outcome.opinions.at(0)?.attempts).toContainEqual({
+        format: "html_with_citations",
+        structure: "pre",
+        reason: "source-placeholder",
+      });
+    },
+  );
+
   test("needs the page images where only scan layout is left", () => {
     const blank = Object.fromEntries(
       COURTLISTENER_TEXT_FORMATS.map((format) => [format, ""]),

@@ -126,42 +126,43 @@ const ATTRIBUTION =
   /^(?:opinion by )?[\p{L}'’-]+(?: (?:[\p{L}'’-]+|\p{L}\.)){0,8}, ?(?:(?:[cp] ?\. ?)?j ?\.|c ?\. ?j ?\.|(?:bankruptcy )?judge)(?: ?[:.]| )?$/u;
 const SIGNATURE = /^\/s\/ ?[\p{L}.'’\- ]+$/u;
 const AUTHOR_INTRODUCTION =
-  /^(?:mr\. )?justice [\p{L}.'’-]+(?: [\p{L}.'’-]+)* delivered the opinion of the court[.!]?$/u;
+  /^(?:mr\.\s+)?justice\s+[\p{L}.'’-]+(?:\s+[\p{L}.'’-]+){0,8}\s+delivered\s+the\s+opinion\s+of\s+the\s+court[.!]?$/u;
 const AUTHOR_PUBLICATION_NOTE =
-  /^opinion by justice [\p{L}.'’-]+(?: [\p{L}.'’-]+)*\. not to be published in full[.!]?$/u;
+  /^opinion\s+by\s+justice\s+[\p{L}.'’-]+(?:\s+[\p{L}.'’-]+){0,8}\.\s+not\s+to\s+be\s+published\s+in\s+full[.!]?$/u;
 const COURT_HEADER =
-  /^(?:in the )?\p{L}+(?: \p{L}+){0,3} court of appeals for the \p{L}+(?: \p{L}+)* circuit[.!]?$/u;
+  /^(?:in\s+the\s+)?\p{L}+(?:\s+\p{L}+){0,3}\s+court\s+of\s+appeals\s+for\s+the\s+\p{L}+(?:\s+\p{L}+){0,8}\s+circuit[.!]?$/u;
 const FILING_HEADER =
-  /^case ?:? ?[\w:.-]+ (?:document \d+ )?(?:date )?filed ?:? ?\d[\d/.-]* page ?:? ?\d+ of \d+$/u;
+  /^case\s*(?::\s*)?[\w:.-]+(?:\s+document\s+\d+)?(?:\s+date)?\s+filed\s*(?::\s*)?\d[\d/.-]*\s+page\s*(?::\s*)?\d+\s+of\s+\d+$/u;
 const PARTICIPATION_NOTE =
-  /^(?:judge [\p{L}'’-]+(?: [\p{L}'’-]+)* took no part|present ?[—:-] ?[\p{L}.,'’-]+(?: [\p{L}.,'’-]+)* (?:jj|j)\.)[.!]?$/u;
+  /^(?:judge\s+[\p{L}'’-]+(?:\s+[\p{L}'’-]+){0,8}\s+took\s+no\s+part|present\s*[—:-]\s*[\p{L}.,'’-]+(?:\s+[\p{L}.,'’-]+){0,8}\s+(?:jj|j)\.)[.!]?$/u;
 const OFFICE_HEADER =
-  /^[^\p{L}]*office of (?:the )?[\p{L}'’]+(?: general)?(?: of \p{L}+)?[^\p{L}'’]*$/u;
+  /^[^\p{L}]{0,64}office\s+of\s+(?:the\s+)?[\p{L}'’]+(?:\s+general)?(?:\s+of\s+\p{L}+)?[^\p{L}'’]{0,64}$/u;
 const DAMAGED_OFFICE_HEADER =
   /^(?:office of\b|[\p{L}'’]+\s+[\p{L}'’[\]]+ general\b)[\s\S]{0,100}$/u;
 const COURT_IDENTIFIER =
   /^\d{4}\s+[a-z]{2,4}\s+(?:super|app|sup)\s+\d+[a-z]?(?:\s+[\da-z]+)?$/u;
 // Preserve very short dispositions; readable sentences do not need these words.
 const RULING_WORDS =
-  /^[\s[(]*(?:affirm(?:ed)?|den(?:y|ied)|grant(?:ed)?|dismiss(?:ed)?|revers(?:e|ed)|remand(?:ed)?|ordered|per\s+curiam)[\s.!\])]*$/u;
+  /^[\s[(]*(?:affirm(?:ed)?|den(?:y|ied)|grant(?:ed)?|dismiss(?:ed)?|revers(?:e|ed)|remand(?:ed)?|ordered|per\s+curiam|acquitted|convicted|sustained|allowed)[\s.!\])]*$/u;
 
-const isOfficeHeader = (text: string): boolean => {
-  let end = 0;
-  for (const match of text.matchAll(/\p{L}/gu)) {
-    end = match.index + match[0].length;
-  }
-  return OFFICE_HEADER.test(text.slice(0, end));
-};
+const METADATA_PATTERNS = [
+  AUTHOR_INTRODUCTION,
+  AUTHOR_PUBLICATION_NOTE,
+  COURT_HEADER,
+  FILING_HEADER,
+  PARTICIPATION_NOTE,
+  OFFICE_HEADER,
+  COURT_IDENTIFIER,
+  DATE_ONLY,
+] as const;
 
+// The OCR-date grammar keeps its existing whitespace-insensitive behavior.
 const isMetadata = (text: string): boolean =>
-  AUTHOR_INTRODUCTION.test(text) ||
-  AUTHOR_PUBLICATION_NOTE.test(text) ||
-  COURT_HEADER.test(text) ||
-  FILING_HEADER.test(text) ||
-  PARTICIPATION_NOTE.test(text) ||
-  isOfficeHeader(text) ||
-  COURT_IDENTIFIER.test(text) ||
-  DATE_ONLY.test(text.replace(/\s+/gu, ""));
+  METADATA_PATTERNS.some((pattern) =>
+    pattern === DATE_ONLY
+      ? pattern.test(text.replace(/\s+/gu, ""))
+      : pattern.test(text),
+  );
 
 type NonRulingBlock = "metadata" | "placeholder";
 
@@ -266,6 +267,99 @@ const isExplicitNoRulingBody = (text: string): boolean => {
   );
 };
 
+// These grammars run once over the joined paragraph stream. Boundary maps
+// require each match to consume complete blocks, without limiting wrapping.
+const paragraphMetadataPatterns = METADATA_PATTERNS.filter(
+  (pattern) => pattern !== DATE_ONLY,
+).map((pattern) => {
+  const body = pattern.source.replace(/^\^/u, "").replace(/\$$/u, "");
+  return new RegExp(`(?:^|\\n\\n)(${body})(?=\\n\\n|$)`, "gu");
+});
+
+const findMetadataBlocks = (
+  blocks: string[],
+  blockKinds: (NonRulingBlock | null)[],
+): Set<number> => {
+  const metadataBlocks = new Set<number>();
+  const metadataRangeDeltas = new Int32Array(blocks.length + 1);
+  const placeholderPrefix = new Uint32Array(blocks.length + 1);
+  const blockStarts = new Map<number, number>();
+  const blockEnds = new Map<number, number>();
+  const updateMetadataRangeDelta = (index: number, delta: number): void => {
+    const current = metadataRangeDeltas[index];
+    if (current === undefined) {
+      return panic("Missing metadata range while locating metadata");
+    }
+    metadataRangeDeltas[index] = current + delta;
+  };
+  let blockOffset = 0;
+  for (const [index, block] of blocks.entries()) {
+    blockStarts.set(blockOffset, index);
+    blockOffset += block.length;
+    blockEnds.set(blockOffset, index);
+    const kind = blockKinds[index];
+    if (kind === undefined) {
+      return panic("Missing block classification while locating metadata");
+    }
+    if (kind === "metadata") {
+      metadataBlocks.add(index);
+    }
+    const previousPlaceholderCount = placeholderPrefix[index];
+    if (previousPlaceholderCount === undefined) {
+      return panic("Missing placeholder prefix while locating metadata");
+    }
+    placeholderPrefix[index + 1] =
+      previousPlaceholderCount + (kind === "placeholder" ? 1 : 0);
+    blockOffset += 2;
+  }
+  const paragraphText = blocks.join("\n\n");
+  for (const pattern of paragraphMetadataPatterns) {
+    for (const match of paragraphText.matchAll(pattern)) {
+      const metadataText = match[1];
+      if (metadataText === undefined) {
+        return panic("Missing metadata capture while locating metadata");
+      }
+      const startOffset = match.index + match[0].length - metadataText.length;
+      const endOffset = startOffset + metadataText.length;
+      const start = blockStarts.get(startOffset);
+      const end = blockEnds.get(endOffset);
+      if (start === undefined || end === undefined) {
+        continue;
+      }
+      const placeholdersBeforeStart = placeholderPrefix[start];
+      const placeholdersThroughEnd = placeholderPrefix[end + 1];
+      if (
+        placeholdersBeforeStart === undefined ||
+        placeholdersThroughEnd === undefined
+      ) {
+        return panic(
+          "Missing placeholder prefix range while locating metadata",
+        );
+      }
+      if (
+        placeholdersThroughEnd > placeholdersBeforeStart ||
+        isSourcePlaceholderSequence(metadataText)
+      ) {
+        continue;
+      }
+      updateMetadataRangeDelta(start, 1);
+      updateMetadataRangeDelta(end + 1, -1);
+    }
+  }
+  let metadataRangeDepth = 0;
+  for (let index = 0; index < blocks.length; index += 1) {
+    const rangeDelta = metadataRangeDeltas[index];
+    if (rangeDelta === undefined) {
+      return panic("Missing metadata range while locating metadata");
+    }
+    metadataRangeDepth += rangeDelta;
+    if (metadataRangeDepth > 0) {
+      metadataBlocks.add(index);
+    }
+  }
+  return metadataBlocks;
+};
+
 const classifyRulingText = (rulingText: string): CourtListenerTextUsability => {
   // Metadata and replacement messages cannot supply words to damaged ruling text.
   const compact = rulingText.replace(/\s+/gu, " ").trim();
@@ -334,28 +428,39 @@ const classifyRulingText = (rulingText: string): CourtListenerTextUsability => {
 };
 
 const classifyBody = (unattributed: string): CourtListenerTextUsability => {
-  const completeBody = unattributed.replace(/\s+/gu, " ").trim();
-  if (isSourcePlaceholderSequence(completeBody)) {
-    return COURTLISTENER_TEXT_USABILITY.SOURCE_PLACEHOLDER;
-  }
-  if (isExplicitNoRulingBody(completeBody)) {
-    return COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT;
-  }
   const blocks = unattributed
     .split(/\n[^\S\n]*\n/gu)
     .map((block) => block.trim())
     .filter((block) => block.length > 0);
+  if (
+    blocks.some((block) =>
+      RULING_WORDS.test(block.replace(/\s+/gu, " ").trim()),
+    )
+  ) {
+    return COURTLISTENER_TEXT_USABILITY.USABLE;
+  }
+  const completeBody = unattributed.replace(/\s+/gu, " ").trim();
+  if (isExplicitNoRulingBody(completeBody)) {
+    return COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT;
+  }
+  const blockKinds = blocks.map(nonRulingBlock);
+  const metadataBlocks = findMetadataBlocks(blocks, blockKinds);
+  const remainder = blocks.flatMap((block, index) =>
+    metadataBlocks.has(index) ? [] : [{ block, kind: nonRulingBlock(block) }],
+  );
+  if (
+    isSourcePlaceholderSequence(remainder.map(({ block }) => block).join(" "))
+  ) {
+    return COURTLISTENER_TEXT_USABILITY.SOURCE_PLACEHOLDER;
+  }
   const rulingBlocks: string[] = [];
-  let hasPlaceholder = false;
-  let hasMetadata = false;
-  for (const block of blocks) {
-    const kind = nonRulingBlock(block);
+  const hasPlaceholder = remainder.some(({ kind }) => kind === "placeholder");
+  const hasMetadata = metadataBlocks.size > 0;
+  for (const { block, kind } of remainder) {
     switch (kind) {
       case "metadata":
-        hasMetadata = true;
         break;
       case "placeholder":
-        hasPlaceholder = true;
         break;
       case null:
         rulingBlocks.push(block);
@@ -387,6 +492,9 @@ const classifyBody = (unattributed: string): CourtListenerTextUsability => {
     return hasPlaceholder
       ? COURTLISTENER_TEXT_USABILITY.SOURCE_PLACEHOLDER
       : COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT;
+  }
+  if (blocks.length > 0 && remainder.length === 0) {
+    return COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT;
   }
   if (blocks.length > 0 && rulingBlocks.length === 0) {
     // An explicit publisher replacement is more specific than missing ruling text.
