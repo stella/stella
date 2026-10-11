@@ -739,6 +739,14 @@ class WriteSourceResolver {
         visit(node.left, currentScope);
         return;
       }
+      // A catch clause can swallow the precondition failure, so only the
+      // finally block of a try with a catch still counts.
+      if (ts.isTryStatement(node) && node.catchClause !== undefined) {
+        if (node.finallyBlock !== undefined) {
+          visit(node.finallyBlock, currentScope);
+        }
+        return;
+      }
       const nestedScope = ts.isBlock(node)
         ? blockScope(node, currentScope)
         : currentScope;
