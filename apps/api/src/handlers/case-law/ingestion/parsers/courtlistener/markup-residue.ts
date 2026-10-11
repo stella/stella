@@ -194,7 +194,7 @@ const citationUrlRanges = (text: string): { start: number; end: number }[] => {
         break;
       }
       continuation.lastIndex = end + newline;
-      if (!continuation.exec(text)) {
+      if (!continuation.test(text)) {
         break;
       }
       end = continuation.lastIndex;
