@@ -413,8 +413,8 @@ test("selecting decision text and clicking Explain opens the persisted margin an
             answer={answer}
             generationMode="enabled"
             active={answers.activeAnswerId === answer.id}
-            openRevision={0}
-            onOpen={() => answers.setActiveAnswerId(answer.id)}
+            openRevision={answers.openRevision}
+            onOpen={() => answers.activateAnswer(answer.id)}
             onFollowUp={(question) => {
               void answers.followUp(answer.id, question);
             }}

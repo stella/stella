@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -14,7 +14,6 @@ import { Textarea } from "@stll/ui/textarea";
 import { cn } from "@stll/ui/utils";
 
 import { CopyActionButton } from "@/components/copy-action-button";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 import { AnnotationVisibilityToggle } from "./analysis/annotation-visibility-toggle";
 import { readerAnswerErrorCodeKind } from "./reader-answers.logic";
@@ -55,6 +54,12 @@ export const ReaderAnswerCard = ({
   const [display, setDisplay] = useState<"expanded" | "minimised">("expanded");
   const [question, setQuestion] = useState("");
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const cardRef = useRef<HTMLElement>(null);
+  const observerRef = useRef<IntersectionObserver>(null);
+  const revealedRevision = useRef<number | null>(null);
+  const visibility = useRef<
+    "awaiting-reveal" | "awaiting-visible" | "tracking"
+  >("tracking");
   const [previousOpenRevision, setPreviousOpenRevision] =
     useState(openRevision);
   if (previousOpenRevision !== openRevision) {
@@ -68,26 +73,55 @@ export const ReaderAnswerCard = ({
     if (node === null) {
       return undefined;
     }
+    cardRef.current = node;
     const observer = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => !entry.isIntersecting)) {
-        setDisplay("minimised");
+      for (const entry of entries) {
+        if (entry.isIntersecting && visibility.current !== "awaiting-reveal") {
+          visibility.current = "tracking";
+        } else if (visibility.current === "tracking") {
+          setDisplay("minimised");
+        }
       }
     });
+    observerRef.current = observer;
     observer.observe(node);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      observerRef.current = null;
+      cardRef.current = null;
+    };
   }, []);
-  useExternalSyncEffect(() => {
-    if (active) {
-      composerRef.current?.focus({ preventScroll: true });
+  useLayoutEffect(() => {
+    if (!active) {
+      visibility.current = "tracking";
+      revealedRevision.current = null;
+      return undefined;
     }
+    if (revealedRevision.current === openRevision) {
+      return undefined;
+    }
+    // Ignore the observer's pre-scroll sample until the revealed card is seen.
+    visibility.current = "awaiting-reveal";
+    // Card expansion and the gutter's measured placement commit before this frame.
+    const frame = requestAnimationFrame(() => {
+      revealedRevision.current = openRevision;
+      const node = cardRef.current;
+      if (node === null) {
+        return;
+      }
+      node.scrollIntoView({ behavior: "instant", block: "nearest" });
+      // Reobserve for a fresh post-scroll sample, even if the card was visible.
+      observerRef.current?.disconnect();
+      observerRef.current?.takeRecords();
+      visibility.current = "awaiting-visible";
+      observerRef.current?.observe(node);
+      composerRef.current?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
   }, [active, openRevision]);
   const open = () => {
     setDisplay("expanded");
     onOpen();
-    // Wait for the collapsed content to mount before focusing its composer.
-    requestAnimationFrame(() =>
-      composerRef.current?.focus({ preventScroll: true }),
-    );
   };
   const submit = () => {
     const trimmed = question.trim();

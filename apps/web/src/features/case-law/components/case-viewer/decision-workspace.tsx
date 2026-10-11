@@ -240,19 +240,9 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     measure();
     return () => observer.disconnect();
   });
-  const [openRevision, setOpenRevision] = useState(0);
   const openAnswer = useLatestCallback((id: string) => {
     annotations.clearActive();
-    answers.setActiveAnswerId(id);
-    setOpenRevision((revision) => revision + 1);
-    // Expansion and gutter placement must commit before revealing the card.
-    requestAnimationFrame(() => {
-      mainRef.current
-        ?.querySelector<HTMLElement>(
-          `[data-reader-answer-id="${CSS.escape(id)}"]`,
-        )
-        ?.scrollIntoView({ behavior: "instant", block: "nearest" });
-    });
+    answers.activateAnswer(id);
   });
   const activateMark = (id: string | null) => {
     if (
@@ -302,7 +292,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     answer,
     generationMode: props.aiMode,
     active: answers.activeAnswerId === answer.id,
-    openRevision,
+    openRevision: answers.openRevision,
     busy:
       answers.busyAnswerIds.has(answer.id) ||
       answer.messages.some((message) => message.status === "streaming"),

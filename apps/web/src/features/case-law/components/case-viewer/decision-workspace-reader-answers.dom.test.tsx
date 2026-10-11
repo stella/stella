@@ -1,6 +1,7 @@
 import type { ComponentProps } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { plugin } from "bun";
 import { afterAll, afterEach, expect, test } from "bun:test";
 import { DetachedWindowAPI } from "happy-dom";
 
@@ -8,7 +9,10 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
-import type { ReaderAnswer } from "@stll/api-contract/reader-answers";
+import type {
+  ReaderAnswerStreamEvent,
+  ReaderAnswer,
+} from "@stll/api-contract/reader-answers";
 import {
   type DecisionAnalysis,
   parsePersistedDecisionAnalysis,
@@ -19,6 +23,16 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { AnalysisQueryResult } from "@/features/case-law/queries/decision-analysis";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
+// Match Vite's emitted worker URL without loading worker code on the DOM thread.
+plugin({
+  name: "worker-url",
+  setup(build) {
+    build.onLoad({ filter: /\?worker&url$/u }, () => ({
+      contents: 'export default "/worker.js";',
+      loader: "js",
+    }));
+  },
+});
 const originalFetch = globalThis.fetch;
 // Importing auth starts its session prefetch before the per-test transport.
 globalThis.fetch = Object.assign(async () => Response.json(null), {
@@ -40,23 +54,90 @@ const { default: messages } = await import("@/i18n/langs/en.json");
 const { toSafeId } = await import("@/lib/safe-id");
 const { decisionAnalysisOptions } =
   await import("@/features/case-law/queries/decision-analysis");
+const { ChatEditorProvider } =
+  await import("@/components/chat-editor-provider");
 const { DecisionWorkspace } = await import("./decision-workspace");
 const { readerAnswersOptions } = await import("./reader-answers-query");
 
+const { ActionCapabilitiesProvider } =
+  await import("@/lib/organization/feature-access/capability-actions");
+const { resolveActionCapabilities } =
+  await import("@/lib/organization/feature-access/action-capabilities.logic");
+const originalScroll = HTMLElement.prototype.scrollIntoView;
+const originalRangeRects = Range.prototype.getClientRects;
+const originalObserver = globalThis.IntersectionObserver;
+const observers = new Map<
+  Element,
+  { callback: IntersectionObserverCallback; observer: IntersectionObserver }
+>();
+class VisibilityObserver implements IntersectionObserver {
+  readonly root = null;
+  readonly rootMargin = "0px";
+  readonly scrollMargin = "0px";
+  readonly thresholds = [0];
+  private readonly callback: IntersectionObserverCallback;
+  constructor(callback: IntersectionObserverCallback) {
+    this.callback = callback;
+  }
+  observe(target: Element) {
+    observers.set(target, { callback: this.callback, observer: this });
+  }
+  unobserve(target: Element) {
+    observers.delete(target);
+  }
+  disconnect() {
+    for (const [target, registration] of observers) {
+      if (registration.observer === this) {
+        observers.delete(target);
+      }
+    }
+  }
+  takeRecords() {
+    return [];
+  }
+}
+const reportVisibility = (node: HTMLElement, isIntersecting: boolean) => {
+  const registration = observers.get(node);
+  if (!registration) {
+    throw new TypeError("Answer must have a visibility observer");
+  }
+  const bounds = node.getBoundingClientRect();
+  act(() =>
+    registration.callback(
+      [
+        {
+          target: node,
+          isIntersecting,
+          intersectionRatio: isIntersecting ? 1 : 0,
+          time: 0,
+          boundingClientRect: bounds,
+          intersectionRect: bounds,
+          rootBounds: null,
+        },
+      ],
+      registration.observer,
+    ),
+  );
+};
 const originalRect = HTMLElement.prototype.getBoundingClientRect;
 const originalHeight = Object.getOwnPropertyDescriptor(
   HTMLElement.prototype,
   "offsetHeight",
 );
 const clients: InstanceType<typeof QueryClient>[] = [];
-const { window: testWindow } = globalThis;
+const { document: testDocument, window: testWindow } = globalThis;
 afterEach(async () => {
+  testDocument.getSelection()?.removeAllRanges();
   await act(async () => cleanup());
   for (const client of clients) {
     client.clear();
   }
   clients.length = 0;
   globalThis.fetch = originalFetch;
+  HTMLElement.prototype.scrollIntoView = originalScroll;
+  Range.prototype.getClientRects = originalRangeRects;
+  globalThis.IntersectionObserver = originalObserver;
+  observers.clear();
   HTMLElement.prototype.getBoundingClientRect = originalRect;
   if (originalHeight) {
     Object.defineProperty(
@@ -196,15 +277,42 @@ const analysis = {
   })),
 } satisfies DecisionAnalysis;
 
-const fakeReaderServer = () => {
+const fakeReaderServer = (initialAnswers: ReaderAnswer[] = [answer]) => {
+  let rows = initialAnswers;
+  let stream: ReadableStreamDefaultController<Uint8Array> | undefined;
+  const emit = (event: ReaderAnswerStreamEvent) => {
+    if (!stream) {
+      throw new TypeError("Generation stream must be open");
+    }
+    stream.enqueue(
+      new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`),
+    );
+  };
   const requests: Request[] = [];
   globalThis.fetch = Object.assign(
     async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
       const request = new Request(input, init);
       requests.push(request);
       const path = new URL(request.url).pathname;
+      if (request.method === "POST" && path.includes("/reader/answers")) {
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            stream = controller;
+          },
+        });
+        emit({
+          type: "started",
+          answerId: answer.id,
+          messageId: toSafeId<"legalReaderAnswerMessage">(
+            "00000000-0000-4000-8000-000000000005",
+          ),
+        });
+        return new Response(body, {
+          headers: { "Content-Type": "text/event-stream" },
+        });
+      }
       if (path.endsWith("/reader/answers")) {
-        return Response.json({ items: [answer], nextCursor: null, limit: 50 });
+        return Response.json({ items: rows, nextCursor: null, limit: 50 });
       }
       if (path.endsWith("/provisions")) {
         return Response.json({
@@ -218,23 +326,54 @@ const fakeReaderServer = () => {
       if (path.endsWith("/reader/annotations") || path.endsWith("/citations")) {
         return Response.json({ items: [], nextCursor: null });
       }
+      if (/\/chat\/threads\/[^/]+\/messages$/u.test(path)) {
+        return Response.json({ message: "Not found" }, { status: 404 });
+      }
+      if (path.endsWith("/workspaces/navigation")) {
+        return Response.json({ items: [], nextCursor: null, workspaces: [] });
+      }
+      if (path.endsWith("/organization-settings/ai-availability")) {
+        return Response.json({ available: true });
+      }
       throw new TypeError(`Unexpected request: ${request.method} ${path}`);
     },
     { preconnect: originalFetch.preconnect },
   );
-  return requests;
+  return {
+    requests,
+    complete: () => {
+      rows = [answer];
+      emit({
+        type: "complete",
+        messageId: toSafeId<"legalReaderAnswerMessage">(
+          "00000000-0000-4000-8000-000000000005",
+        ),
+        content: "An explanation.",
+        citations: [],
+        invalidCitationCount: 0,
+        model: "test",
+        usage: null,
+      });
+      stream?.close();
+    },
+  };
 };
 
-const renderGatedWorkspace = async (
+const renderWorkspace = async (
   client: InstanceType<typeof QueryClient>,
+  aiMode: "enabled" | "gated" = "gated",
 ) => {
   const root = createRootRoute({
     component: () => (
-      <DecisionWorkspace
-        decision={decision}
-        decisionId={decision.id}
-        aiMode="gated"
-      />
+      <ChatEditorProvider>
+        <DecisionWorkspace
+          decision={decision}
+          decisionId={decision.id}
+          {...(aiMode === "enabled"
+            ? { aiMode, ensureAIAvailable: async () => true }
+            : { aiMode })}
+        />
+      </ChatEditorProvider>
     ),
   });
   const router = createRouter({
@@ -247,9 +386,20 @@ const renderGatedWorkspace = async (
       <AuthenticatedUserProvider user={user}>
         <IntlProvider locale="en" messages={messages} timeZone="UTC">
           <FormattingProvider locale="en" timeZone="UTC">
-            <WebReaderPresentationProvider>
-              <RouterProvider router={router} />
-            </WebReaderPresentationProvider>
+            <ActionCapabilitiesProvider
+              value={resolveActionCapabilities({
+                role: "member",
+                ai: true,
+                deepl: false,
+                ocr: false,
+                desktop: "none",
+                settings: undefined,
+              })}
+            >
+              <WebReaderPresentationProvider>
+                <RouterProvider router={router} />
+              </WebReaderPresentationProvider>
+            </ActionCapabilitiesProvider>
           </FormattingProvider>
         </IntlProvider>
       </AuthenticatedUserProvider>
@@ -257,7 +407,7 @@ const renderGatedWorkspace = async (
   );
 };
 
-test("opening a passage answer reveals its expanded gutter card below preceding notes", async () => {
+const installDisplacedLayout = () => {
   // HappyDOM has no layout: supply paragraph positions and measured note heights;
   // the real gutter placement still decides each card's resulting top.
   HTMLElement.prototype.getBoundingClientRect = function () {
@@ -281,7 +431,7 @@ test("opening a passage answer reveals its expanded gutter card below preceding 
     if (this.closest("[data-reader-notes-column]")) {
       return new DOMRect(0, 0, 300, 1200);
     }
-    return originalRect.call(this);
+    return new DOMRect(0, 0, 1000, 400);
   };
   Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
     configurable: true,
@@ -289,11 +439,9 @@ test("opening a passage answer reveals its expanded gutter card below preceding 
       return this.closest('[data-margin-note="card"]') ? 250 : 100;
     },
   });
-  fakeReaderServer();
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-  clients.push(client);
+};
+
+const seedAnalysis = (client: InstanceType<typeof QueryClient>) => {
   const persistedAnalysis = parsePersistedDecisionAnalysis(analysis);
   if (persistedAnalysis === null || "status" in persistedAnalysis) {
     throw new TypeError("Completed analysis fixture must parse");
@@ -309,6 +457,16 @@ test("opening a passage answer reveals its expanded gutter card below preceding 
         analysis: persistedAnalysis,
       }) satisfies AnalysisQueryResult,
   );
+};
+
+test("opening a passage answer reveals its expanded gutter card below preceding notes", async () => {
+  installDisplacedLayout();
+  fakeReaderServer();
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  clients.push(client);
+  seedAnalysis(client);
   // A member can retain answers while the account's AI availability is gated.
   // This exercises the reader without activating the unrelated chat overlay.
   client.setQueryData(
@@ -319,7 +477,7 @@ test("opening a passage answer reveals its expanded gutter card below preceding 
     }).queryKey,
     [answer],
   );
-  const view = await renderGatedWorkspace(client);
+  const view = await renderWorkspace(client);
   const card = await view.findByRole("region", {
     name: messages.readerAnswers.title,
   });
@@ -373,13 +531,13 @@ test("opening a passage answer reveals its expanded gutter card below preceding 
 });
 
 test("a gated reader loads saved explanations from an empty cache without offering mutations", async () => {
-  const requests = fakeReaderServer();
+  const { requests } = fakeReaderServer();
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   clients.push(client);
   expect(client.getQueryCache().getAll()).toHaveLength(0);
-  const view = await renderGatedWorkspace(client);
+  const view = await renderWorkspace(client);
   const card = await view.findByRole("region", {
     name: messages.readerAnswers.title,
   });
@@ -411,3 +569,119 @@ test("a gated reader loads saved explanations from an empty cache without offeri
     within(card).queryByRole("button", { name: messages.readerAnswers.share }),
   ).toBeNull();
 });
+
+for (const activation of ["create", "regenerate", "follow-up"]) {
+  test(`${activation} reveals the expanded answer after gutter placement and keeps it open after generation`, async () => {
+    installDisplacedLayout();
+    globalThis.IntersectionObserver = VisibilityObserver;
+    Range.prototype.getClientRects = () => {
+      const rect = new DOMRect(320, 120, 100, 20);
+      return {
+        length: 1,
+        item: () => rect,
+        [Symbol.iterator]: () => [rect][Symbol.iterator](),
+      };
+    };
+    const server = fakeReaderServer(activation === "create" ? [] : [answer]);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    clients.push(client);
+    seedAnalysis(client);
+    const scrolls: { card: HTMLElement; top: number; expanded: boolean }[] = [];
+    HTMLElement.prototype.scrollIntoView = function () {
+      if (this.dataset["readerAnswerId"] === answer.id) {
+        scrolls.push({
+          card: this,
+          top: this.getBoundingClientRect().top,
+          expanded:
+            within(this)
+              .getByRole("button", { name: messages.readerAnswers.minimise })
+              .getAttribute("aria-expanded") === "true",
+        });
+      }
+    };
+    const view = await renderWorkspace(client, "enabled");
+    await waitFor(() =>
+      expect(
+        view.container.querySelectorAll('[data-margin-note="card"]'),
+      ).toHaveLength(3),
+    );
+    if (activation === "create") {
+      const paragraph = view.container.querySelector('[data-anchor="p-2"]');
+      if (!paragraph) {
+        throw new TypeError("Selected passage must exist");
+      }
+      const range = testDocument.createRange();
+      range.selectNodeContents(paragraph);
+      const selection = testDocument.getSelection();
+      if (!selection) {
+        throw new TypeError("Reader selection must exist");
+      }
+      act(() => {
+        selection.removeAllRanges();
+        selection.addRange(range);
+        testDocument.dispatchEvent(new Event("selectionchange"));
+      });
+      fireEvent.click(
+        await view.findByRole("button", {
+          name: messages.readerAnswers.explain,
+        }),
+      );
+    } else {
+      const card = await view.findByRole("region", {
+        name: messages.readerAnswers.title,
+      });
+      if (activation === "regenerate") {
+        fireEvent.click(
+          within(card).getByRole("button", {
+            name: messages.readerAnswers.regenerate,
+          }),
+        );
+      } else {
+        fireEvent.change(
+          within(card).getByRole("textbox", {
+            name: messages.readerAnswers.followUp,
+          }),
+          { target: { value: "Why?" } },
+        );
+        fireEvent.click(
+          within(card).getByRole("button", {
+            name: messages.readerAnswers.send,
+          }),
+        );
+      }
+    }
+    await waitFor(() => expect(scrolls).toHaveLength(1));
+    const reveal = scrolls.at(0);
+    if (!reveal) {
+      throw new TypeError("Activated answer must be revealed");
+    }
+    expect(reveal.top).toBeGreaterThanOrEqual(400);
+    expect(reveal.expanded).toBe(true);
+    // An offscreen sample queued before the reveal must not close the result.
+    reportVisibility(reveal.card, false);
+    act(() => server.complete());
+    await waitFor(() =>
+      expect(reveal.card.getAttribute("aria-busy")).toBe("false"),
+    );
+    expect(
+      within(reveal.card).getByRole("textbox", {
+        name: messages.readerAnswers.followUp,
+      }),
+    ).toBeDefined();
+    expect(within(reveal.card).getAllByText("An explanation.")).toBeDefined();
+    reportVisibility(reveal.card, true);
+    reportVisibility(reveal.card, false);
+    expect(within(reveal.card).queryByRole("textbox")).toBeNull();
+    fireEvent.click(
+      within(reveal.card).getByRole("button", { name: "An explanation." }),
+    );
+    await waitFor(() => expect(scrolls).toHaveLength(2));
+    expect(
+      within(reveal.card).getByRole("textbox", {
+        name: messages.readerAnswers.followUp,
+      }),
+    ).toBeDefined();
+  });
+}

@@ -239,7 +239,8 @@ const GutterNotes = ({
     const h = el.offsetHeight;
     if (heights.get(id) !== h) {
       heights.set(id, h);
-      requestAnimationFrame(recalc);
+      // Commit measured placement before an activated answer's reveal frame.
+      recalc();
     }
   };
 

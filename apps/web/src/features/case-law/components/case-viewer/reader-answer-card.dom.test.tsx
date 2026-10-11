@@ -19,16 +19,40 @@ const { ReaderAnswerCard } = await import("./reader-answer-card");
 const messages = (await import("@/i18n/langs/en.json")).default;
 const arabicMessages = (await import("@/i18n/langs/ar.json")).default;
 const observers: IntersectionObserverCallback[] = [];
+let initialVisibility: "manual" | "visible" = "manual";
 const originalObserver = globalThis.IntersectionObserver;
 class VisibilityObserver implements IntersectionObserver {
   readonly root = null;
   readonly rootMargin = "0px";
   readonly scrollMargin = "0px";
   readonly thresholds = [0];
+  private readonly callback: IntersectionObserverCallback;
   constructor(callback: IntersectionObserverCallback) {
+    this.callback = callback;
     observers.push(callback);
   }
-  observe() {}
+  observe(target: Element) {
+    if (initialVisibility === "manual") {
+      return;
+    }
+    queueMicrotask(() => {
+      const bounds = target.getBoundingClientRect();
+      this.callback(
+        [
+          {
+            target,
+            isIntersecting: true,
+            intersectionRatio: 1,
+            time: 0,
+            boundingClientRect: bounds,
+            intersectionRect: bounds,
+            rootBounds: null,
+          },
+        ],
+        this,
+      );
+    });
+  }
   unobserve() {}
   disconnect() {}
   takeRecords() {
@@ -39,6 +63,7 @@ globalThis.IntersectionObserver = VisibilityObserver;
 afterEach(() => {
   cleanup();
   observers.length = 0;
+  initialVisibility = "manual";
 });
 afterAll(async () => {
   globalThis.IntersectionObserver = originalObserver;
@@ -244,6 +269,40 @@ test("an offscreen card minimises and its preview reopens the thread", () => {
   expect(handlers.onOpen).toHaveBeenCalledTimes(1);
 });
 
+test("revealing an already visible card still lets it minimise when the reader scrolls away", async () => {
+  initialVisibility = "visible";
+  const { container, queryByRole } = mount({ active: true, openRevision: 1 });
+  const node = container.querySelector("section");
+  const callback = observers.at(0);
+  if (node === null || callback === undefined) {
+    throw new TypeError("Visible answer must be observed");
+  }
+  const scroll = mock(() => undefined);
+  node.scrollIntoView = scroll;
+  await waitFor(() => expect(scroll).toHaveBeenCalledTimes(1));
+  await act(async () => {
+    await Promise.resolve();
+  });
+  const bounds = node.getBoundingClientRect();
+  act(() =>
+    callback(
+      [
+        {
+          target: node,
+          isIntersecting: false,
+          intersectionRatio: 0,
+          time: 0,
+          boundingClientRect: bounds,
+          intersectionRect: bounds,
+          rootBounds: null,
+        },
+      ],
+      new VisibilityObserver(() => undefined),
+    ),
+  );
+  expect(queryByRole("textbox")).toBeNull();
+});
+
 test("streaming and failed partial replies remain visible, with typed errors and invalid citation feedback", () => {
   const { getByRole, getByText, rerender, tree, props } = mount({
     busy: true,
@@ -328,7 +387,7 @@ test("the Arabic card uses the Arabic catalog for region and composer labels", (
   ).toBeDefined();
 });
 
-test("opening the same active answer again expands its minimised thread and focuses the composer", () => {
+test("opening the same active answer again expands its minimised thread and focuses the composer", async () => {
   const { getByRole, queryByRole, rerender, tree, props, container } = mount({
     active: true,
   });
@@ -336,7 +395,9 @@ test("opening the same active answer again expands its minimised thread and focu
   expect(queryByRole("textbox")).toBeNull();
   rerender(tree({ ...props, openRevision: 1 }));
   const composer = getByRole("textbox");
-  expect(container.ownerDocument.activeElement).toBe(composer);
+  await waitFor(() =>
+    expect(container.ownerDocument.activeElement).toBe(composer),
+  );
 });
 
 test("opening another answer leaves this minimised card closed", () => {

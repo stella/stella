@@ -74,7 +74,7 @@ type RunStreamAnswerOptions = StreamAnswerOptions & {
   queryClient: QueryClient;
   decisionId: string;
   userId: string;
-  setActiveAnswerId: Dispatch<SetStateAction<string | null>>;
+  activateAnswer: (id: string) => void;
   setBusyAnswerIds: Dispatch<SetStateAction<ReadonlySet<string>>>;
   setErrors: Dispatch<SetStateAction<ReaderAnswerErrors>>;
 };
@@ -91,7 +91,7 @@ const runStreamAnswer = async (
     queryClient,
     decisionId,
     userId,
-    setActiveAnswerId,
+    activateAnswer,
     setBusyAnswerIds,
     setErrors,
   }: RunStreamAnswerOptions,
@@ -112,7 +112,7 @@ const runStreamAnswer = async (
             currentAnswerId = event.answerId;
             runtime.ownedMessageIds.add(event.messageId);
             ownership.messageId = event.messageId;
-            setActiveAnswerId(event.answerId);
+            activateAnswer(event.answerId);
             setBusyAnswerIds(
               (current) => new Set([...current, event.answerId]),
             );
@@ -394,7 +394,12 @@ export const useReaderAnswers = ({
   const [runtime, setRuntime] = useState(() =>
     createReaderAnswerRuntime(scope),
   );
-  const [activeAnswerId, setActiveAnswerId] = useState<string | null>(null);
+  const [activation, setActivation] = useState<{
+    id: string | null;
+    revision: number;
+  }>({ id: null, revision: 0 });
+  const activateAnswer = (id: string) =>
+    setActivation((current) => ({ id, revision: current.revision + 1 }));
   const [busyAnswerIds, setBusyAnswerIds] = useState<ReadonlySet<string>>(
     new Set(),
   );
@@ -414,7 +419,7 @@ export const useReaderAnswers = ({
   if (runtime.scope !== scope) {
     runtime.cancel();
     setRuntime(createReaderAnswerRuntime(scope));
-    setActiveAnswerId(null);
+    setActivation({ id: null, revision: 0 });
     setBusyAnswerIds(new Set());
     setIsCreating(false);
     setErrors(new Map());
@@ -450,15 +455,16 @@ export const useReaderAnswers = ({
           queryClient,
           decisionId,
           userId: user?.id ?? "",
-          setActiveAnswerId,
+          activateAnswer,
           setBusyAnswerIds,
           setErrors,
         }),
     );
   return {
     answers: query.data ?? [],
-    activeAnswerId,
-    setActiveAnswerId,
+    activeAnswerId: activation.id,
+    openRevision: activation.revision,
+    activateAnswer,
     busyAnswerIds,
     isCreating,
     errors,
@@ -502,7 +508,11 @@ export const useReaderAnswers = ({
           (current: ReaderAnswer[] | undefined) =>
             current?.filter((answer) => answer.id !== answerId),
         );
-        setActiveAnswerId((current) => (current === answerId ? null : current));
+        setActivation((current) =>
+          current.id === answerId
+            ? { id: null, revision: current.revision }
+            : current,
+        );
       }),
     setVisibility: async (
       answerId: string,
