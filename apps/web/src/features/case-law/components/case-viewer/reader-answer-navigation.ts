@@ -101,8 +101,8 @@ export const attachReaderAnswerMarkers = ({
     marker.type = "button";
     marker.textContent = "¶";
     marker.className = "reader-chrome text-muted-foreground px-1 text-xs";
-    marker.dataset.readerChrome = "";
-    marker.dataset.readerAnswerMarker = answer.id;
+    marker.dataset["readerChrome"] = "";
+    marker.dataset["readerAnswerMarker"] = answer.id;
     marker.setAttribute("aria-label", label);
     marker.addEventListener("click", () => onOpen(answer.id));
     paragraph.append(marker);

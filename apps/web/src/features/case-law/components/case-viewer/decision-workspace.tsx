@@ -328,11 +328,11 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
       const number = paragraph?.type === "paragraph" ? paragraph.number : null;
       return citation.decisionId === decisionId
         ? t("readerAnswers.citation", {
-            paragraph: number ?? citation.paragraphId,
+            paragraph: number?.toString() ?? citation.paragraphId,
           })
         : t("readerAnswers.externalCitation", {
             decision: cited?.caseNumber ?? citation.decisionId,
-            paragraph: number ?? citation.paragraphId,
+            paragraph: number?.toString() ?? citation.paragraphId,
           });
     },
     onCitation: (citation) =>
@@ -342,9 +342,10 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
           decisionId,
           root: mainRef.current,
           openDecision: async (id, paragraphId) => {
-            const cited = await queryClient.ensureQueryData(
-              decisionOptions(id),
-            );
+            const cited = await queryClient.query({
+              ...decisionOptions(id),
+              staleTime: "static",
+            });
             const tab = createCaseDecisionViewTab({
               ...cited,
               decisionId: id,
