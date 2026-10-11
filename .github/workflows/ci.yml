@@ -3291,7 +3291,7 @@ jobs:
           CHECK_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || 'origin/main' }}
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: |
-          bun scripts/check-external-contracts.ts --check
+          bun --preload ./scripts/offline-network-preload.ts scripts/check-external-contracts.ts --check
           bun test scripts/check-external-contracts.test.ts scripts/external-contract-evidence.test.ts
 
       - name: Outbound transport ownership
