@@ -6,6 +6,7 @@ import type { StoreApi } from "zustand";
 import { isTaskStatus } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 
+import { isActiveSkillContext } from "@/components/inspector/inspector-active-skill";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { normalizeInspectorGroupAssignments } from "@/components/inspector/inspector-groups.logic";
 import {
@@ -259,20 +260,6 @@ export const isFileFacet = (
 const isMetadataLane = (value: unknown): value is FileTab["metadataLane"] =>
   value === undefined || value === "closed" || value === "expanded";
 
-const isActiveSkillContext = (
-  value: unknown,
-): value is ChatTab["activeSkill"] => {
-  if (value === undefined) {
-    return true;
-  }
-  return (
-    isRecord(value) &&
-    typeof value["skillName"] === "string" &&
-    isOptionalString(value["skillId"]) &&
-    isOptionalString(value["skillDisplayName"])
-  );
-};
-
 const isInspectorTab = (value: unknown): value is InspectorBroadcastTab => {
   if (!isRecord(value)) {
     return false;
@@ -327,7 +314,8 @@ const isInspectorChatTab = (value: Record<string, unknown>, label: unknown) =>
   isStringArray(value["contextMatterIds"]) &&
   isOptionalLegalDocumentChatKey(value["activeLegalKey"]) &&
   isOptionalString(value["activeDecisionId"]) &&
-  isActiveSkillContext(value["activeSkill"]);
+  (value["activeSkill"] === undefined ||
+    isActiveSkillContext(value["activeSkill"]));
 
 const isInspectorExternalTab = (
   value: Record<string, unknown>,
