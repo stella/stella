@@ -7942,7 +7942,7 @@ jobs:
 
       - name: Install dependencies
         timeout-minutes: 3
-        run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/scan-engine-wasm.log" --frozen-lockfile --ignore-scripts --filter @stll/scan-engine
+        run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/scan-engine-wasm.log" --frozen-lockfile --ignore-scripts --filter @stll/scan-engine --filter stella
         env:
           NPM_TOKEN: ""
 
