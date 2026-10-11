@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 2,
+  "reason": "The scan-engine package owns typed failures through better-result and uses bun-types to typecheck its Bun tests and build tooling; both reuse repository catalog versions."
+}

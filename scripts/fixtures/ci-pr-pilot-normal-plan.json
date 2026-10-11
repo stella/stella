@@ -93,6 +93,9 @@
     "windows-scripts": {
       "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name != 'pull_request' && ( needs.ci-plan.outputs.queue_depth != 'thin' && ((needs.ci-plan.outputs.trusted == 'true'\n || github.event_name == 'workflow_dispatch')\n&& needs.ci-plan.outputs.windows_scripts_required == 'true' ) ) )"
     },
+    "scan-engine-wasm-drift": {
+      "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name != 'pull_request' && ( needs.ci-plan.outputs.queue_depth != 'thin' && ((needs.ci-plan.outputs.trusted == 'true'\n || github.event_name == 'workflow_dispatch')\n&& needs.ci-plan.outputs.scan_engine_wasm_required == 'true' ) ) )"
+    },
     "dependency-malware": {
       "if": "(needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'dependency-malware')) && ( needs.ci-plan.outputs.run_required != 'false' && ( (needs.ci-plan.outputs.queue_depth != 'thin' || contains(fromJSON(needs.ci-plan.outputs.queue_required_jobs || '[]'), 'dependency-malware')) && (needs.ci-plan.outputs.trusted == 'true' && needs.ci-plan.outputs.dependency_malware_required == 'true') ) )"
     },

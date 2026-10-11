@@ -1353,6 +1353,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CI_PLAYWRIGHT_IMAGE",
   "POSTGRES_IMAGE",
   "REDIS_IMAGE",
+  // The scan engine drift check builds into a scratch directory and compares it.
+  "SCAN_ENGINE_WASM_OUT_DIR",
   // The manual checks workflow passes its inputs and result files to its scripts.
   "CHECK_CHECK",
   "CHECK_EXIT_FILE",
