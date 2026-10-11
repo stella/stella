@@ -720,23 +720,48 @@ fn content_bounds(binary: &GrayImage, dpi: f32) -> Option<ContentBox> {
 pub fn clean_scan(
     gray: &GrayImage,
     options: CleanOptions,
+    requested_quad: Option<Quad>,
 ) -> Result<CleanedScan, UnrecognizedReason> {
     if !options.dpi.is_finite() || options.dpi <= 0.0 {
         return Err(UnrecognizedReason::InvalidDpi);
     }
     checked_pixel_count(gray.width(), gray.height())?;
-    let applied_quad = detect_page_quad(gray);
+    let applied_quad = requested_quad.or_else(|| detect_page_quad(gray));
+    if let Some(quad) = applied_quad {
+        let max_x = gray.width().saturating_sub(1) as f32;
+        let max_y = gray.height().saturating_sub(1) as f32;
+        if quad.iter().any(|(x, y)| {
+            !x.is_finite() || !y.is_finite() || *x < 0.0 || *y < 0.0 || *x > max_x || *y > max_y
+        }) || (0..4)
+            .any(|index| cross(quad[index], quad[(index + 1) % 4], quad[(index + 2) % 4]) <= 0.0)
+        {
+            return Err(UnrecognizedReason::DegeneratePageQuad);
+        }
+    }
     let rectified = if let Some(quad) = applied_quad {
-        let edge_length = |start: Point, end: Point| {
-            ((end.0 - start.0).powi(2) + (end.1 - start.1).powi(2)).sqrt()
-        };
-        let width = ((edge_length(quad[0], quad[1]) + edge_length(quad[3], quad[2])) * 0.5)
-            .round()
-            .max(1.0) as u32;
-        let height = ((edge_length(quad[0], quad[3]) + edge_length(quad[1], quad[2])) * 0.5)
-            .round()
-            .max(1.0) as u32;
-        perspective(gray, quad, width, height)?
+        let full_frame = [
+            (0.0, 0.0),
+            (gray.width().saturating_sub(1) as f32, 0.0),
+            (
+                gray.width().saturating_sub(1) as f32,
+                gray.height().saturating_sub(1) as f32,
+            ),
+            (0.0, gray.height().saturating_sub(1) as f32),
+        ];
+        if quad == full_frame {
+            gray.clone()
+        } else {
+            let edge_length = |start: Point, end: Point| {
+                ((end.0 - start.0).powi(2) + (end.1 - start.1).powi(2)).sqrt()
+            };
+            let width = ((edge_length(quad[0], quad[1]) + edge_length(quad[3], quad[2])) * 0.5)
+                .round()
+                .max(1.0) as u32;
+            let height = ((edge_length(quad[0], quad[3]) + edge_length(quad[1], quad[2])) * 0.5)
+                .round()
+                .max(1.0) as u32;
+            perspective(gray, quad, width, height)?
+        }
     } else {
         gray.clone()
     };

@@ -20,6 +20,16 @@ import type {
 
 class FakeScanEngine implements ScanEngine {
   receivedOptions: ScanOptions[] = [];
+  detect = async () =>
+    Result.ok({
+      type: "full-frame" as const,
+      corners: {
+        topLeft: { x: 0, y: 0 },
+        topRight: { x: 399, y: 0 },
+        bottomRight: { x: 399, y: 599 },
+        bottomLeft: { x: 0, y: 599 },
+      },
+    });
   private readonly result: CleanScanResult;
 
   constructor(result: CleanScanResult) {
@@ -61,6 +71,26 @@ const options = (output: ScanOptions["output"]): ScanOptions => ({
 });
 
 describe("clean scan page review", () => {
+  test("cleans with the corners selected during review", async () => {
+    const engine = new FakeScanEngine(cleanedResult("grayscale"));
+    const scanOptions = {
+      ...options("grayscale"),
+      corners: {
+        topLeft: { x: 20, y: 10 },
+        topRight: { x: 380, y: 25 },
+        bottomRight: { x: 390, y: 580 },
+        bottomLeft: { x: 15, y: 590 },
+      },
+    } satisfies ScanOptions;
+    const result = await reviewPage({
+      engine,
+      pageId: "selected",
+      page: page(144, 0),
+      options: scanOptions,
+    });
+    expect(result.isOk()).toBe(true);
+    expect(engine.receivedOptions).toEqual([scanOptions]);
+  });
   test("keeps unrecognized pages visible and unapplied", async () => {
     const engine = new FakeScanEngine({
       type: "unrecognized",

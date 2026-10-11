@@ -21,7 +21,20 @@ export type ScanOptions = {
   output: "grayscale" | "binary";
   contentCrop: "on" | "off";
   deskew: "on" | "off";
+  corners?: ScanQuad;
 };
+
+/** Source-raster pixel coordinates, clockwise from the top-left corner. */
+export type ScanQuad = {
+  topLeft: { x: number; y: number };
+  topRight: { x: number; y: number };
+  bottomRight: { x: number; y: number };
+  bottomLeft: { x: number; y: number };
+};
+
+export type ScanCornerSuggestion =
+  | { type: "detected"; corners: ScanQuad }
+  | { type: "full-frame"; corners: ScanQuad };
 
 export type ContentBox = {
   /** Bounds of the detected content in the returned output image. */
@@ -43,13 +56,8 @@ export type CleanScanResult =
   | {
       type: "cleaned";
       image: CleanedScanImage;
-      /** Corners of the detected page in the input image, clockwise from top-left. */
-      appliedQuad: {
-        topLeft: { x: number; y: number };
-        topRight: { x: number; y: number };
-        bottomRight: { x: number; y: number };
-        bottomLeft: { x: number; y: number };
-      } | null;
+      /** Corners used to clean the input image, clockwise from top-left. */
+      appliedQuad: ScanQuad | null;
       skewDegrees: number;
       contentBox: ContentBox;
     }
@@ -62,6 +70,9 @@ export class ScanEngineError extends TaggedError("ScanEngineError")<{
 }> {}
 
 export type ScanEngine = {
+  detect: (
+    page: RasterizedScanPage,
+  ) => Promise<Result<ScanCornerSuggestion, ScanEngineError>>;
   clean: (
     page: RasterizedScanPage,
     options: ScanOptions,

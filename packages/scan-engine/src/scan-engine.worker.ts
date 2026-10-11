@@ -1,6 +1,12 @@
+import { panic } from "better-result";
+
 import { fetchWithTimeout } from "@stll/fetch";
 
-import initWasm, { clean_scan_rgba } from "../generated/scan_engine.js";
+import initWasm, {
+  clean_scan_rgba,
+  detect_page_quad_rgba,
+} from "../generated/scan_engine.js";
+import { scanCornerSuggestion, writeScanQuad } from "./scan-geometry";
 import type { WorkerRequest, WorkerResponse } from "./worker-protocol";
 
 const WASM_LOAD_TIMEOUT_MS = 10_000;
@@ -27,6 +33,30 @@ const initialize = async () => {
 const handle = async ({ data }: MessageEvent<WorkerRequest>) => {
   try {
     await initialize();
+    switch (data.type) {
+      case "detect": {
+        const values = detect_page_quad_rgba(
+          data.page.width,
+          data.page.height,
+          new Uint8Array(data.pixels),
+        );
+        const suggestion = scanCornerSuggestion(values, data.page);
+        if (suggestion.isErr()) {
+          throw suggestion.error;
+        }
+        post({
+          type: "detected",
+          suggestion: suggestion.value,
+        });
+        return;
+      }
+      case "clean":
+        break;
+      default:
+        panic(
+          `Unexpected scan worker request: ${String(data satisfies never)}`,
+        );
+    }
     let result: ReturnType<typeof clean_scan_rgba> | undefined;
     try {
       result = clean_scan_rgba(
@@ -37,6 +67,7 @@ const handle = async ({ data }: MessageEvent<WorkerRequest>) => {
         data.options.output,
         data.options.contentCrop === "on",
         data.options.deskew === "on",
+        writeScanQuad(data.options.corners),
       );
       const response: WorkerResponse = {
         type: "result",
@@ -57,14 +88,13 @@ const handle = async ({ data }: MessageEvent<WorkerRequest>) => {
       result?.free();
     }
   } catch (error) {
-    const response: WorkerResponse = {
+    post({
       type: "error",
       errorType:
         error instanceof WebAssembly.RuntimeError ? "runtime-trap" : "failure",
       message:
         error instanceof Error ? error.message : "Unknown worker failure",
-    };
-    post(response);
+    });
   }
 };
 

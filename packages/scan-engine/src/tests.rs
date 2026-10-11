@@ -61,6 +61,7 @@ fn deskewed_output_is_straight() {
             deskew: true,
             ..options(CleanOutput::Grayscale)
         },
+        None,
     )
     .expect("rotated page should clean");
 
@@ -87,7 +88,7 @@ fn deskew_without_content_crop_preserves_edge_content() {
     assert!((0..source.height()).any(|y| source.get_pixel(0, y)[0] < 100));
     assert!((0..source.height()).any(|y| source.get_pixel(source.width() - 1, y)[0] < 100));
 
-    let before = clean_scan(&source, options(CleanOutput::Grayscale))
+    let before = clean_scan(&source, options(CleanOutput::Grayscale), None)
         .expect("unrotated edge content should clean")
         .image
         .pixels()
@@ -102,6 +103,7 @@ fn deskew_without_content_crop_preserves_edge_content() {
             deskew: true,
             ..options(CleanOutput::Grayscale)
         },
+        None,
     )
     .expect("edge content should clean");
     let after = result.image.pixels().filter(|pixel| pixel[0] < 128).count();
@@ -169,6 +171,7 @@ fn content_crop_uses_physical_padding_and_ignores_a_noise_speck() {
             content_crop: true,
             ..options(CleanOutput::Binary)
         },
+        None,
     )
     .expect("page should clean");
     // Three millimetres at 300 DPI rounds to 35 pixels on each available side.
@@ -195,6 +198,7 @@ fn content_crop_recognizes_a_thin_diagonal_stroke() {
             content_crop: true,
             ..options(CleanOutput::Binary)
         },
+        None,
     )
     .expect("diagonal stroke should be recognized as content");
 
@@ -222,6 +226,7 @@ fn content_crop_includes_a_thin_diagonal_stroke_next_to_other_content() {
             content_crop: true,
             ..options(CleanOutput::Binary)
         },
+        None,
     )
     .expect("page content should clean");
 
@@ -257,7 +262,7 @@ fn photographed_page_keeps_its_aspect_ratio() {
         detected,
         [(0.0, 0.0), (899.0, 0.0), (899.0, 699.0), (0.0, 699.0)]
     );
-    let result = clean_scan(&source, options(CleanOutput::Grayscale))
+    let result = clean_scan(&source, options(CleanOutput::Grayscale), None)
         .expect("photographed page should clean");
     assert!(result.applied_quad.is_some());
     let aspect = result.image.width() as f32 / result.image.height() as f32;
@@ -297,6 +302,7 @@ fn photographed_page_reports_source_quad_after_deskew_and_crop() {
             deskew: true,
             ..options(CleanOutput::Grayscale)
         },
+        None,
     )
     .expect("photographed page should clean");
     let applied = result.applied_quad.expect("page quad should be detected");
@@ -318,7 +324,8 @@ fn flattening_removes_a_background_gradient_without_losing_text() {
             source.put_pixel(x, y, Luma([25]));
         }
     }
-    let result = clean_scan(&source, options(CleanOutput::Binary)).expect("page should clean");
+    let result =
+        clean_scan(&source, options(CleanOutput::Binary), None).expect("page should clean");
 
     assert!(
         result
@@ -378,7 +385,7 @@ fn full_frame_border_does_not_turn_an_enclosed_fill_into_background() {
     }
 
     for output in [CleanOutput::Binary, CleanOutput::Grayscale] {
-        let result = clean_scan(&source, options(output)).expect("framed page should clean");
+        let result = clean_scan(&source, options(output), None).expect("framed page should clean");
         let maximum = match output {
             CleanOutput::Binary => 0,
             CleanOutput::Grayscale => 210,
@@ -414,7 +421,8 @@ fn full_frame_border_still_allows_a_smooth_shadow_to_flatten() {
     }
 
     for output in [CleanOutput::Binary, CleanOutput::Grayscale] {
-        let result = clean_scan(&source, options(output)).expect("shadowed frame should clean");
+        let result =
+            clean_scan(&source, options(output), None).expect("shadowed frame should clean");
         let width = result.image.width();
         let height = result.image.height();
         let minimum = (height / 12..height * 5 / 12)
@@ -443,7 +451,7 @@ fn flattening_preserves_sharp_solid_fills_in_each_output_mode() {
         }
     }
     for output in [CleanOutput::Binary, CleanOutput::Grayscale] {
-        let result = clean_scan(&source, options(output)).expect("filled page should clean");
+        let result = clean_scan(&source, options(output), None).expect("filled page should clean");
         let maximum = match output {
             CleanOutput::Binary => 0,
             CleanOutput::Grayscale => 200,
@@ -528,6 +536,7 @@ fn clean_scan_rejects_oversized_narrow_quad_with_or_without_deskew() {
                 deskew,
                 ..options(CleanOutput::Grayscale)
             },
+            None,
         );
         assert!(matches!(result, Err(UnrecognizedReason::TooLarge)));
     }
@@ -566,7 +575,8 @@ fn transparent_rgba_is_composited_over_white() {
 
 #[test]
 fn binary_output_contains_only_black_and_white() {
-    let result = clean_scan(&text_page(), options(CleanOutput::Binary)).expect("page should clean");
+    let result =
+        clean_scan(&text_page(), options(CleanOutput::Binary), None).expect("page should clean");
     assert!(
         result
             .image
@@ -578,7 +588,7 @@ fn binary_output_contains_only_black_and_white() {
 #[test]
 fn grayscale_output_keeps_intermediate_levels() {
     let result =
-        clean_scan(&text_page(), options(CleanOutput::Grayscale)).expect("page should clean");
+        clean_scan(&text_page(), options(CleanOutput::Grayscale), None).expect("page should clean");
     assert!(
         result
             .image
@@ -604,13 +614,56 @@ fn identity_perspective_is_a_no_op() {
 #[test]
 fn blank_page_is_unrecognized() {
     let blank = GrayImage::from_pixel(500, 700, Luma([255]));
-    let result = clean_scan(&blank, options(CleanOutput::Grayscale));
+    let result = clean_scan(&blank, options(CleanOutput::Grayscale), None);
     assert!(matches!(result, Err(UnrecognizedReason::NoContent)));
 }
 
 #[test]
 fn full_frame_page_does_not_apply_a_quad() {
-    let result = clean_scan(&text_page(), options(CleanOutput::Grayscale))
+    let result = clean_scan(&text_page(), options(CleanOutput::Grayscale), None)
         .expect("flatbed page should clean");
     assert_eq!(result.applied_quad, None);
+}
+
+#[test]
+fn clean_scan_uses_explicit_page_corners() {
+    let source = text_page();
+    let corners = [(40.0, 50.0), (560.0, 50.0), (560.0, 750.0), (40.0, 750.0)];
+    let cleaned = clean_scan(&source, options(CleanOutput::Grayscale), Some(corners))
+        .expect("explicit page corners should clean");
+
+    assert_eq!(cleaned.applied_quad, Some(corners));
+    assert_eq!(cleaned.image.dimensions(), (520, 700));
+}
+
+#[test]
+fn clean_scan_preserves_dimensions_for_explicit_full_frame_corners() {
+    let source = text_page();
+    let corners = [
+        (0.0, 0.0),
+        (source.width() as f32 - 1.0, 0.0),
+        (source.width() as f32 - 1.0, source.height() as f32 - 1.0),
+        (0.0, source.height() as f32 - 1.0),
+    ];
+    let cleaned = clean_scan(&source, options(CleanOutput::Grayscale), Some(corners))
+        .expect("explicit full frame should clean");
+
+    assert_eq!(cleaned.image.dimensions(), source.dimensions());
+    assert_eq!(cleaned.applied_quad, Some(corners));
+}
+
+#[test]
+fn clean_scan_rejects_invalid_explicit_page_corners() {
+    let source = text_page();
+    let corners = [
+        (40.0, 50.0),
+        (f32::NAN, 50.0),
+        (560.0, 750.0),
+        (40.0, 750.0),
+    ];
+
+    assert!(matches!(
+        clean_scan(&source, options(CleanOutput::Grayscale), Some(corners)),
+        Err(UnrecognizedReason::DegeneratePageQuad)
+    ));
 }

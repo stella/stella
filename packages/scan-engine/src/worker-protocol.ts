@@ -1,4 +1,8 @@
-import type { RasterizedScanPage, ScanOptions } from "./types";
+import type {
+  RasterizedScanPage,
+  ScanOptions,
+  ScanCornerSuggestion,
+} from "./types";
 
 type SerializedWasmResult = {
   status: string;
@@ -13,14 +17,24 @@ type SerializedWasmResult = {
   applied_quad: Float32Array;
 };
 
-export type WorkerRequest = {
-  page: Omit<RasterizedScanPage, "pixels">;
-  pixels: ArrayBuffer;
-  options: ScanOptions;
-};
+type WorkerPage = Omit<RasterizedScanPage, "pixels">;
+
+export type WorkerRequest =
+  | {
+      type: "clean";
+      page: WorkerPage;
+      pixels: ArrayBuffer;
+      options: ScanOptions;
+    }
+  | {
+      type: "detect";
+      page: WorkerPage;
+      pixels: ArrayBuffer;
+    };
 
 export type WorkerResponse =
   | { type: "result"; result: SerializedWasmResult }
+  | { type: "detected"; suggestion: ScanCornerSuggestion }
   | {
       type: "error";
       errorType: "runtime-trap" | "failure";

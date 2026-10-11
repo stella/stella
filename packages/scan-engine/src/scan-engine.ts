@@ -1,8 +1,17 @@
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 
 import { fetchWithTimeout } from "@stll/fetch";
 
-import { clean_scan_rgba, initSync } from "../generated/scan_engine.js";
+import {
+  clean_scan_rgba,
+  detect_page_quad_rgba,
+  initSync,
+} from "../generated/scan_engine.js";
+import {
+  readAppliedScanQuad,
+  scanCornerSuggestion,
+  writeScanQuad,
+} from "./scan-geometry";
 import type {
   ContentBox,
   RasterizedScanPage,
@@ -35,15 +44,17 @@ type WasmBindings = {
       output: string,
       contentCrop: boolean,
       deskew: boolean,
+      corners: Float32Array,
     ]
   ) => WasmScanResult;
+  detect_page_quad_rgba: (
+    width: number,
+    height: number,
+    pixels: Uint8Array,
+  ) => Float32Array;
 };
 
 type WasmLoader = () => Promise<WasmBindings>;
-
-type AppliedQuad = NonNullable<
-  Extract<CleanScanResult, { type: "cleaned" }>["appliedQuad"]
->;
 
 const WASM_LOAD_TIMEOUT_MS = 10_000;
 const WORKER_REQUEST_TIMEOUT_MS = 10_000;
@@ -73,7 +84,7 @@ const loadWasmBindings = async () => {
   );
   const module = await WebAssembly.compile(await response.arrayBuffer());
   initSync({ module });
-  return { clean_scan_rgba };
+  return { clean_scan_rgba, detect_page_quad_rgba };
 };
 
 const createWorkerEngine = ({
@@ -91,23 +102,11 @@ const createWorkerEngine = ({
     worker = undefined;
   };
 
-  const clean = async (page: RasterizedScanPage, options: ScanOptions) => {
+  const send = async (request: WorkerRequest) => {
     const run = async () => {
       worker ??= createWorker();
       const activeWorker = worker;
-      const pixels = page.pixels.slice().buffer;
-      const request: WorkerRequest = {
-        page: {
-          width: page.width,
-          height: page.height,
-          pageSize: page.pageSize,
-          dpi: page.dpi,
-          rotation: page.rotation,
-        },
-        pixels,
-        options,
-      };
-      return await new Promise<CleanScanResult>((resolve, reject) => {
+      return await new Promise<WorkerResponse>((resolve, reject) => {
         let settled = false;
         const settle = (complete: () => void) => {
           if (settled) {
@@ -126,41 +125,36 @@ const createWorkerEngine = ({
             return;
           }
           const { data } = event;
-          if (data.type === "result") {
-            settle(() => {
-              // A malformed result must still settle the request, or the
-              // serialized queue would wait on it forever.
-              try {
-                resolve(
-                  convertResult(
-                    { ...data.result, free: () => undefined },
-                    options.output,
-                  ),
-                );
-              } catch (error) {
+          switch (data.type) {
+            case "result":
+            case "detected":
+              settle(() => resolve(data));
+              return;
+            case "error":
+              reset();
+              settle(() =>
                 reject(
-                  error instanceof ScanEngineError
-                    ? error
+                  data.errorType === "runtime-trap"
+                    ? new WebAssembly.RuntimeError(data.message)
                     : new ScanEngineError({
                         type: "engine-failure",
-                        message: "The scan engine returned an invalid result",
+                        message: data.message,
                       }),
-                );
+                ),
+              );
+              return;
+            default: {
+              const failure = Result.try(() =>
+                panic(
+                  `Unexpected worker response: ${String(data satisfies never)}`,
+                ),
+              );
+              if (failure.isErr()) {
+                settle(() => reject(failure.error));
               }
-            });
-            return;
+              return;
+            }
           }
-          reset();
-          settle(() =>
-            reject(
-              data.errorType === "runtime-trap"
-                ? new WebAssembly.RuntimeError(data.message)
-                : new ScanEngineError({
-                    type: "engine-failure",
-                    message: data.message,
-                  }),
-            ),
-          );
         };
         const onError = (event: MessageEvent<WorkerResponse> | ErrorEvent) => {
           if (!(event instanceof ErrorEvent)) {
@@ -189,7 +183,7 @@ const createWorkerEngine = ({
         }, requestTimeoutMs);
         activeWorker.addEventListener("message", onMessage);
         activeWorker.addEventListener("error", onError);
-        activeWorker.postMessage(request, [pixels]);
+        activeWorker.postMessage(request, [request.pixels]);
       });
     };
     const result = queue.then(run, run);
@@ -197,8 +191,85 @@ const createWorkerEngine = ({
       () => undefined,
       () => undefined,
     );
-    return await Result.tryPromise({
-      try: async () => await result,
+    return await result;
+  };
+
+  const pageRequest = (page: RasterizedScanPage) => ({
+    page: {
+      width: page.width,
+      height: page.height,
+      pageSize: page.pageSize,
+      dpi: page.dpi,
+      rotation: page.rotation,
+    },
+    pixels: page.pixels.slice().buffer,
+  });
+
+  const detect = async (page: RasterizedScanPage) =>
+    await Result.tryPromise({
+      try: async () => {
+        const response = await send({ type: "detect", ...pageRequest(page) });
+        switch (response.type) {
+          case "detected":
+            return response.suggestion;
+          case "result":
+            throw new ScanEngineError({
+              type: "engine-failure",
+              message:
+                "The scan engine returned the wrong response for detection",
+            });
+          case "error":
+            throw new ScanEngineError({
+              type: "engine-failure",
+              message: response.message,
+            });
+          default:
+            return panic(
+              `Unexpected worker response: ${String(response satisfies never)}`,
+            );
+        }
+      },
+      catch: (cause) =>
+        cause instanceof ScanEngineError
+          ? cause
+          : new ScanEngineError({
+              type: "engine-failure",
+              message: "The scan engine could not detect page corners",
+              cause,
+            }),
+    });
+
+  const clean = async (page: RasterizedScanPage, options: ScanOptions) =>
+    await Result.tryPromise({
+      try: async () => {
+        const response = await send({
+          type: "clean",
+          ...pageRequest(page),
+          options,
+        });
+        switch (response.type) {
+          case "result":
+            return convertResult(
+              { ...response.result, free: () => undefined },
+              options.output,
+            );
+          case "detected":
+            throw new ScanEngineError({
+              type: "engine-failure",
+              message:
+                "The scan engine returned the wrong response for cleaning",
+            });
+          case "error":
+            throw new ScanEngineError({
+              type: "engine-failure",
+              message: response.message,
+            });
+          default:
+            return panic(
+              `Unexpected worker response: ${String(response satisfies never)}`,
+            );
+        }
+      },
       catch: (cause) =>
         cause instanceof ScanEngineError
           ? cause
@@ -208,8 +279,7 @@ const createWorkerEngine = ({
               cause,
             }),
     });
-  };
-  return { clean };
+  return { clean, detect };
 };
 
 const readContentBox = (values: Uint32Array): ContentBox => {
@@ -230,44 +300,6 @@ const readContentBox = (values: Uint32Array): ContentBox => {
     });
   }
   return { x, y, width, height };
-};
-
-const readQuad = (values: Float32Array): AppliedQuad | null => {
-  if (values.length === 0) {
-    return null;
-  }
-  const coordinates = Array.from(values);
-  if (
-    coordinates.length !== 8 ||
-    coordinates.some((value) => !Number.isFinite(value))
-  ) {
-    throw new ScanEngineError({
-      type: "engine-failure",
-      message: "The scan engine returned an invalid page quadrilateral",
-    });
-  }
-  const [x0, y0, x1, y1, x2, y2, x3, y3] = coordinates;
-  if (
-    x0 === undefined ||
-    y0 === undefined ||
-    x1 === undefined ||
-    y1 === undefined ||
-    x2 === undefined ||
-    y2 === undefined ||
-    x3 === undefined ||
-    y3 === undefined
-  ) {
-    throw new ScanEngineError({
-      type: "engine-failure",
-      message: "The scan engine returned an invalid page quadrilateral",
-    });
-  }
-  return {
-    topLeft: { x: x0, y: y0 },
-    topRight: { x: x1, y: y1 },
-    bottomRight: { x: x2, y: y2 },
-    bottomLeft: { x: x3, y: y3 },
-  };
 };
 
 const convertResult = (
@@ -296,6 +328,10 @@ const convertResult = (
       message: "The scan engine returned an invalid pixel buffer",
     });
   }
+  const appliedQuad = readAppliedScanQuad(result.applied_quad);
+  if (appliedQuad.isErr()) {
+    throw appliedQuad.error;
+  }
   return {
     type: "cleaned",
     image: {
@@ -304,7 +340,7 @@ const convertResult = (
       height: result.height,
       format: output,
     },
-    appliedQuad: readQuad(result.applied_quad),
+    appliedQuad: appliedQuad.value,
     skewDegrees: result.skew_degrees,
     contentBox: readContentBox(result.content_box),
   };
@@ -322,6 +358,45 @@ export const createScanEngine = (
   const resolvedLoad = load ?? loadWasmBindings;
   let bindings: Promise<WasmBindings> | undefined;
   return {
+    detect: async (page: RasterizedScanPage) =>
+      await Result.tryPromise({
+        try: async () => {
+          if (bindings === undefined) {
+            const pending = resolvedLoad().catch((error: unknown) => {
+              if (bindings === pending) {
+                bindings = undefined;
+              }
+              throw error;
+            });
+            bindings = pending;
+          }
+          const wasm = await bindings;
+          const suggestion = scanCornerSuggestion(
+            wasm.detect_page_quad_rgba(
+              page.width,
+              page.height,
+              new Uint8Array(
+                page.pixels.buffer,
+                page.pixels.byteOffset,
+                page.pixels.byteLength,
+              ),
+            ),
+            page,
+          );
+          if (suggestion.isErr()) {
+            throw suggestion.error;
+          }
+          return suggestion.value;
+        },
+        catch: (cause) =>
+          cause instanceof ScanEngineError
+            ? cause
+            : new ScanEngineError({
+                type: "engine-failure",
+                message: "The scan engine could not detect page corners",
+                cause,
+              }),
+      }),
     clean: async (page: RasterizedScanPage, options: ScanOptions) =>
       await Result.tryPromise({
         try: async () => {
@@ -350,6 +425,7 @@ export const createScanEngine = (
                 options.output,
                 options.contentCrop === "on",
                 options.deskew === "on",
+                writeScanQuad(options.corners),
               );
               return convertResult(result, options.output);
             } finally {

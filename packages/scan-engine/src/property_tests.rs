@@ -109,7 +109,7 @@ fn generated_scans_return_without_panicking() {
         let source = random_page(&mut generator, case);
         for_each_mode(|output, deskew| {
             let result = catch_unwind(AssertUnwindSafe(|| {
-                clean_scan(&source, options(output, deskew))
+                clean_scan(&source, options(output, deskew), None)
             }));
             assert!(
                 result.is_ok(),
@@ -140,7 +140,7 @@ fn generated_output_dimensions_stay_within_the_allocation_limit() {
     for case in 0..CASES_PER_PROPERTY {
         let source = random_page(&mut generator, case);
         for_each_mode(|output, deskew| {
-            if let Ok(cleaned) = clean_scan(&source, options(output, deskew)) {
+            if let Ok(cleaned) = clean_scan(&source, options(output, deskew), None) {
                 let (width, height) = cleaned.image.dimensions();
                 assert!(
                     width > 0 && height > 0,
@@ -217,7 +217,7 @@ fn generated_solid_fill_interiors_remain_darker_than_the_page() {
         let inset = 8;
         let interior = (left + inset, top + inset, right - inset, bottom - inset);
         for_each_mode(|output, deskew| {
-            let cleaned = clean_scan(&source, options(output, deskew))
+            let cleaned = clean_scan(&source, options(output, deskew), None)
                 .unwrap_or_else(|reason| {
                     panic!(
                         "seed {FILL_SEED:#x}, case {case}, dimensions {:?}, {output:?}, deskew {deskew}: {reason:?}",
@@ -249,8 +249,8 @@ fn generated_scans_are_byte_deterministic() {
     for case in 0..CASES_PER_PROPERTY {
         let source = random_page(&mut generator, case);
         for_each_mode(|output, deskew| {
-            let first = clean_scan(&source, options(output, deskew));
-            let second = clean_scan(&source, options(output, deskew));
+            let first = clean_scan(&source, options(output, deskew), None);
+            let second = clean_scan(&source, options(output, deskew), None);
             match (first, second) {
                 (Ok(first), Ok(second)) => {
                     assert_eq!(first.image.dimensions(), second.image.dimensions());

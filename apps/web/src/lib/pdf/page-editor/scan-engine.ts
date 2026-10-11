@@ -1,5 +1,7 @@
 export type {
   ScanPageRotation,
+  ScanQuad,
+  ScanCornerSuggestion,
   PhysicalPageSize,
   RasterizedScanPage,
   ScanEngine,

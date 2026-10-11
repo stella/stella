@@ -12,6 +12,13 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "scan-corners": {
+    load: async () => {
+      const { ScanCornersPlayground } =
+        await import("./-components/scan-corners-playground");
+      return { default: ScanCornersPlayground };
+    },
+  },
   "chat-history-decision": {
     load: async () => {
       const { ChatHistoryDecisionPlayground } =

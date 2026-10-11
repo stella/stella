@@ -136,6 +136,7 @@ if (Symbol.dispose)
  * @param {string} output
  * @param {boolean} content_crop
  * @param {boolean} deskew
+ * @param {Float32Array} corners
  * @returns {WasmScanResult}
  */
 export function clean_scan_rgba(
@@ -146,6 +147,7 @@ export function clean_scan_rgba(
   output,
   content_crop,
   deskew,
+  corners,
 ) {
   try {
     const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
@@ -157,6 +159,8 @@ export function clean_scan_rgba(
       wasm.__wbindgen_export2,
     );
     const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passArrayF32ToWasm0(corners, wasm.__wbindgen_export);
+    const len2 = WASM_VECTOR_LEN;
     wasm.clean_scan_rgba(
       retptr,
       width,
@@ -168,6 +172,8 @@ export function clean_scan_rgba(
       len1,
       content_crop,
       deskew,
+      ptr2,
+      len2,
     );
     var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
     var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
@@ -176,6 +182,33 @@ export function clean_scan_rgba(
       throw takeObject(r1);
     }
     return WasmScanResult.__wrap(r0);
+  } finally {
+    wasm.__wbindgen_add_to_stack_pointer(16);
+  }
+}
+
+/**
+ * @param {number} width
+ * @param {number} height
+ * @param {Uint8Array} pixels
+ * @returns {Float32Array}
+ */
+export function detect_page_quad_rgba(width, height, pixels) {
+  try {
+    const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+    const ptr0 = passArray8ToWasm0(pixels, wasm.__wbindgen_export);
+    const len0 = WASM_VECTOR_LEN;
+    wasm.detect_page_quad_rgba(retptr, width, height, ptr0, len0);
+    var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+    var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+    var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+    var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+    if (r3) {
+      throw takeObject(r2);
+    }
+    var v2 = getArrayF32FromWasm0(r0, r1).slice();
+    wasm.__wbindgen_export3(r0, r1 * 4, 4);
+    return v2;
   } finally {
     wasm.__wbindgen_add_to_stack_pointer(16);
   }
@@ -295,6 +328,13 @@ let heap_next = heap.length;
 function passArray8ToWasm0(arg, malloc) {
   const ptr = malloc(arg.length * 1, 1) >>> 0;
   getUint8ArrayMemory0().set(arg, ptr / 1);
+  WASM_VECTOR_LEN = arg.length;
+  return ptr;
+}
+
+function passArrayF32ToWasm0(arg, malloc) {
+  const ptr = malloc(arg.length * 4, 4) >>> 0;
+  getFloat32ArrayMemory0().set(arg, ptr / 4);
   WASM_VECTOR_LEN = arg.length;
   return ptr;
 }

@@ -17,6 +17,15 @@ export const clean_scan_rgba: (
   h: number,
   i: number,
   j: number,
+  k: number,
+  l: number,
+) => void;
+export const detect_page_quad_rgba: (
+  a: number,
+  b: number,
+  c: number,
+  d: number,
+  e: number,
 ) => void;
 export const wasmscanresult_width: (a: number) => number;
 export const wasmscanresult_height: (a: number) => number;

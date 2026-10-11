@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
-import init, { clean_scan_rgba } from "../generated/scan_engine.js";
+import init, {
+  clean_scan_rgba,
+  detect_page_quad_rgba,
+} from "../generated/scan_engine.js";
 import { createScanEngine } from "./scan-engine";
 import type { RasterizedScanPage, ScanOptions } from "./types";
 import type { WorkerRequest, WorkerResponse } from "./worker-protocol";
@@ -12,7 +15,11 @@ const wasm = readFileSync(
 
 const loadRealWasm = async () => {
   await init({ module_or_path: wasm });
-  return { default: async () => undefined, clean_scan_rgba };
+  return {
+    default: async () => undefined,
+    clean_scan_rgba,
+    detect_page_quad_rgba,
+  };
 };
 
 const readPgm = (name: string): RasterizedScanPage => {
@@ -91,6 +98,7 @@ class FakeWorker {
   >();
   terminated = false;
   response: WorkerResponse | undefined;
+  lastRequest: WorkerRequest | undefined;
 
   constructor(response: WorkerResponse | undefined) {
     this.response = response;
@@ -118,7 +126,8 @@ class FakeWorker {
     this.errorListeners.delete(listener);
   }
 
-  postMessage(_request: WorkerRequest, _transfer: ArrayBuffer[]) {
+  postMessage(request: WorkerRequest, _transfer: ArrayBuffer[]) {
+    this.lastRequest = request;
     if (this.response === undefined) {
       return;
     }
@@ -151,6 +160,49 @@ const successfulWorkerResponse = {
 } satisfies WorkerResponse;
 
 describe("worker lifecycle", () => {
+  test("sends corner detection through the worker protocol", async () => {
+    const corners = {
+      topLeft: { x: 10, y: 20 },
+      topRight: { x: 80, y: 15 },
+      bottomRight: { x: 84, y: 92 },
+      bottomLeft: { x: 9, y: 96 },
+    };
+    const worker = new FakeWorker({
+      type: "detected",
+      suggestion: { type: "detected", corners },
+    });
+    const engine = createScanEngine(undefined, {
+      createWorker: () => worker,
+    });
+
+    expect((await engine.detect(onePixelPage)).unwrap()).toEqual({
+      type: "detected",
+      corners,
+    });
+    expect(worker.lastRequest?.type).toBe("detect");
+  });
+
+  test("passes chosen corners through the worker cleaning request", async () => {
+    const corners = {
+      topLeft: { x: 0, y: 0 },
+      topRight: { x: 80, y: 0 },
+      bottomRight: { x: 80, y: 92 },
+      bottomLeft: { x: 0, y: 92 },
+    };
+    const worker = new FakeWorker(successfulWorkerResponse);
+    const engine = createScanEngine(undefined, {
+      createWorker: () => worker,
+    });
+
+    expect(
+      (await engine.clean(onePixelPage, { ...options, corners })).isOk(),
+    ).toBe(true);
+    expect(worker.lastRequest).toMatchObject({
+      type: "clean",
+      options: { corners },
+    });
+  });
+
   test("times out a stalled worker and recovers with a fresh worker", async () => {
     const stalledWorker = new FakeWorker(undefined);
     const healthyWorker = new FakeWorker(successfulWorkerResponse);
@@ -261,6 +313,48 @@ describe("committed WebAssembly scan engine", () => {
     });
   });
 
+  test("suggests the full frame when existing detection confidence is absent", async () => {
+    const page = readPgm("blank.pgm");
+    const suggestion = (
+      await createScanEngine(loadRealWasm).detect(page)
+    ).unwrap();
+
+    expect(suggestion).toEqual({
+      type: "full-frame",
+      corners: {
+        topLeft: { x: 0, y: 0 },
+        topRight: { x: page.width - 1, y: 0 },
+        bottomRight: { x: page.width - 1, y: page.height - 1 },
+        bottomLeft: { x: 0, y: page.height - 1 },
+      },
+    });
+  });
+
+  test("cleans with an explicit full-frame quadrilateral", async () => {
+    const page = readPgm("rotated-3-degrees.pgm");
+    const corners = {
+      topLeft: { x: 0, y: 0 },
+      topRight: { x: page.width - 1, y: 0 },
+      bottomRight: { x: page.width - 1, y: page.height - 1 },
+      bottomLeft: { x: 0, y: page.height - 1 },
+    };
+    const result = await createScanEngine(loadRealWasm).clean(page, {
+      ...options,
+      deskew: "off",
+      corners,
+    });
+
+    expect(result.isOk()).toBe(true);
+    const cleaned = result.unwrap();
+    expect(cleaned.type).toBe("cleaned");
+    if (cleaned.type !== "cleaned") {
+      throw new Error("Expected the explicitly framed page to be cleaned");
+    }
+    expect(cleaned.image.width).toBe(page.width);
+    expect(cleaned.image.height).toBe(page.height);
+    expect(cleaned.appliedQuad).toEqual(corners);
+  });
+
   test("deskews a known rotation and emits strictly binary pixels", async () => {
     const result = await createScanEngine(loadRealWasm).clean(
       readPgm("rotated-3-degrees.pgm"),
@@ -282,15 +376,51 @@ describe("committed WebAssembly scan engine", () => {
 });
 
 describe("WebAssembly binding recovery", () => {
-  test("maps source-image page corners through unchanged", async () => {
-    const sourceQuad = new Float32Array([12, 20, 80, 15, 84, 92, 9, 96]);
+  test("rejects malformed nonempty detector output instead of using full frame", async () => {
     const engine = createScanEngine(async () => ({
       default: async () => undefined,
-      clean_scan_rgba: () =>
-        createCleanedWasmResult(() => undefined, sourceQuad),
+      detect_page_quad_rgba: () => new Float32Array([2, 3]),
+      clean_scan_rgba: () => createCleanedWasmResult(() => undefined),
     }));
 
-    const result = (await engine.clean(onePixelPage, options)).unwrap();
+    const result = await engine.detect(onePixelPage);
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) {
+      throw new Error("Expected malformed detector output to fail");
+    }
+    expect(result.error).toMatchObject({
+      type: "engine-failure",
+      message: "The scan engine returned an invalid page quadrilateral",
+    });
+  });
+
+  test("maps source-image page corners through unchanged", async () => {
+    const sourceQuad = new Float32Array([12, 20, 80, 15, 84, 92, 9, 96]);
+    const explicitCorners = {
+      topLeft: { x: 10, y: 12 },
+      topRight: { x: 80, y: 15 },
+      bottomRight: { x: 84, y: 92 },
+      bottomLeft: { x: 9, y: 96 },
+    };
+    let passedCorners: Float32Array | undefined;
+    const engine = createScanEngine(async () => ({
+      default: async () => undefined,
+      detect_page_quad_rgba: () => new Float32Array(),
+      clean_scan_rgba: (...args) => {
+        passedCorners = args[7];
+        return createCleanedWasmResult(() => undefined, sourceQuad);
+      },
+    }));
+
+    const result = (
+      await engine.clean(onePixelPage, {
+        ...options,
+        corners: explicitCorners,
+      })
+    ).unwrap();
+    expect(passedCorners).toEqual(
+      new Float32Array([10, 12, 80, 15, 84, 92, 9, 96]),
+    );
     expect(result.type).toBe("cleaned");
     if (result.type !== "cleaned") {
       throw new Error("Expected a cleaned result");
@@ -312,6 +442,7 @@ describe("WebAssembly binding recovery", () => {
       }
       return {
         default: async () => undefined,
+        detect_page_quad_rgba: () => new Float32Array(),
         clean_scan_rgba: () => createCleanedWasmResult(() => undefined),
       };
     };
@@ -329,6 +460,7 @@ describe("WebAssembly binding recovery", () => {
       const currentLoad = loadCount;
       return {
         default: async () => undefined,
+        detect_page_quad_rgba: () => new Float32Array(),
         clean_scan_rgba: () => {
           if (currentLoad === 1) {
             throw new WebAssembly.RuntimeError("trapped instance");
@@ -348,6 +480,7 @@ describe("WebAssembly binding recovery", () => {
     let freeCount = 0;
     const engine = createScanEngine(async () => ({
       default: async () => undefined,
+      detect_page_quad_rgba: () => new Float32Array(),
       clean_scan_rgba: () =>
         createCleanedWasmResult(() => {
           freeCount += 1;

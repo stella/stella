@@ -22,7 +22,14 @@ export function clean_scan_rgba(
   output: string,
   content_crop: boolean,
   deskew: boolean,
+  corners: Float32Array,
 ): WasmScanResult;
+
+export function detect_page_quad_rgba(
+  width: number,
+  height: number,
+  pixels: Uint8Array,
+): Float32Array;
 
 export type InitInput =
   | RequestInfo
@@ -50,6 +57,15 @@ export interface InitOutput {
     h: number,
     i: number,
     j: number,
+    k: number,
+    l: number,
+  ) => void;
+  readonly detect_page_quad_rgba: (
+    a: number,
+    b: number,
+    c: number,
+    d: number,
+    e: number,
   ) => void;
   readonly wasmscanresult_width: (a: number) => number;
   readonly wasmscanresult_height: (a: number) => number;

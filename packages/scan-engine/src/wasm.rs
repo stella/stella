@@ -1,6 +1,8 @@
 use wasm_bindgen::prelude::*;
 
-use crate::{CleanOptions, CleanOutput, UnrecognizedReason, clean_scan, rgba_to_gray};
+use crate::{
+    CleanOptions, CleanOutput, Quad, UnrecognizedReason, clean_scan, detect_page_quad, rgba_to_gray,
+};
 
 #[wasm_bindgen]
 pub struct WasmScanResult {
@@ -79,6 +81,7 @@ pub fn clean_scan_rgba(
     output: &str,
     content_crop: bool,
     deskew: bool,
+    corners: &[f32],
 ) -> Result<WasmScanResult, JsValue> {
     let output = match output {
         "grayscale" => CleanOutput::Grayscale,
@@ -89,6 +92,16 @@ pub fn clean_scan_rgba(
         Ok(gray) => gray,
         Err(reason) => return Ok(unrecognized(reason)),
     };
+    let requested_quad = match corners.len() {
+        0 => None,
+        8 => Some([
+            (corners[0], corners[1]),
+            (corners[2], corners[3]),
+            (corners[4], corners[5]),
+            (corners[6], corners[7]),
+        ]),
+        _ => return Err(JsValue::from_str("invalid page quadrilateral")),
+    };
     match clean_scan(
         &gray,
         CleanOptions {
@@ -97,6 +110,7 @@ pub fn clean_scan_rgba(
             deskew,
             dpi,
         },
+        requested_quad,
     ) {
         Ok(cleaned) => Ok(WasmScanResult {
             status: "cleaned",
@@ -122,4 +136,19 @@ pub fn clean_scan_rgba(
         }),
         Err(reason) => Ok(unrecognized(reason)),
     }
+}
+
+#[wasm_bindgen]
+pub fn detect_page_quad_rgba(width: u32, height: u32, pixels: &[u8]) -> Result<Vec<f32>, JsValue> {
+    let gray = match rgba_to_gray(width, height, pixels) {
+        Ok(gray) => gray,
+        Err(reason) => return Err(JsValue::from_str(reason.code())),
+    };
+    Ok(detect_page_quad(&gray)
+        .map(|quad: Quad| {
+            quad.into_iter()
+                .flat_map(|point| [point.0, point.1])
+                .collect()
+        })
+        .unwrap_or_default())
 }
