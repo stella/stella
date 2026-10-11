@@ -1443,6 +1443,18 @@
       "rejected": "Elutasítva"
     },
     "tabToAsk": "→ a kérdezéshez: „{prompt}“",
+    "tableChart": {
+      "bar": "Oszlop",
+      "kind": "Diagram típusa",
+      "line": "Vonal",
+      "loading": "Diagram kiválasztása…",
+      "pie": "Kör",
+      "scatter": "Pont",
+      "showChart": "Megjelenítés diagramként",
+      "summary": "Megjelenített értékek száma: {n, number}.",
+      "unavailable": "Nem sikerült diagramot kiválasztani. A táblázat látható.",
+      "values": "{label}: {value, number}"
+    },
     "thinking": "Kontextussal dolgozom",
     "threadFiles": {
       "title": "Fájlok ebben a csevegésben"

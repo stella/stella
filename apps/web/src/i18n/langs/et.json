@@ -1443,6 +1443,18 @@
       "rejected": "Tagasi lükatud"
     },
     "tabToAsk": "→ küsimiseks: \"{prompt}\"",
+    "tableChart": {
+      "bar": "Tulpdiagramm",
+      "kind": "Diagrammi tüüp",
+      "line": "Joondiagramm",
+      "loading": "Diagrammi valimine…",
+      "pie": "Sektordiagramm",
+      "scatter": "Hajuvusdiagramm",
+      "showChart": "Kuva diagrammina",
+      "summary": "Kuvatud väärtuste arv: {n, number}.",
+      "unavailable": "Diagrammi ei õnnestunud valida. Kuvatakse tabel.",
+      "values": "{label}: {value, number}"
+    },
     "thinking": "Töötan kontekstiga",
     "threadFiles": {
       "title": "Selle vestluse failid"

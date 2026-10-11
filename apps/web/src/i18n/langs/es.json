@@ -1443,6 +1443,18 @@
       "rejected": "Rechazado"
     },
     "tabToAsk": "→ para preguntar: \"{prompt}\"",
+    "tableChart": {
+      "bar": "Barras",
+      "kind": "Tipo de gráfico",
+      "line": "Líneas",
+      "loading": "Seleccionando un gráfico…",
+      "pie": "Circular",
+      "scatter": "Dispersión",
+      "showChart": "Mostrar como gráfico",
+      "summary": "Valores mostrados: {n, number}.",
+      "unavailable": "No se pudo seleccionar un gráfico. Se muestra la tabla.",
+      "values": "{label}: {value, number}"
+    },
     "thinking": "Trabajando con contexto",
     "threadFiles": {
       "title": "Archivos de este chat"

@@ -28,6 +28,7 @@
     "./generated-visual": "./src/generated-visual.ts",
     "./browser-control-json-schema": "./src/browser-control-json-schema.ts",
     "./chat": "./src/chat.ts",
+    "./table-chart": "./src/table-chart.ts",
     "./chat-message-revisions": "./src/chat-message-revisions.ts",
     "./spawn-subagents": "./src/spawn-subagents.ts",
     "./correspondence": "./src/correspondence.ts",

@@ -1443,6 +1443,18 @@
       "rejected": "Odmietnuté"
     },
     "tabToAsk": "→ pre otázku: \"{prompt}\"",
+    "tableChart": {
+      "bar": "Stĺpcový",
+      "kind": "Typ grafu",
+      "line": "Čiarový",
+      "loading": "Vyberá sa graf…",
+      "pie": "Koláčový",
+      "scatter": "Bodový",
+      "showChart": "Zobraziť ako graf",
+      "summary": "Počet zobrazených hodnôt: {n, number}.",
+      "unavailable": "Graf sa nepodarilo vybrať. Zobrazuje sa tabuľka.",
+      "values": "{label}: {value, number}"
+    },
     "thinking": "Pracujem s kontextom",
     "threadFiles": {
       "title": "Súbory v tomto chate"

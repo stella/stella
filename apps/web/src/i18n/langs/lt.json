@@ -1443,6 +1443,18 @@
       "rejected": "Atmesta"
     },
     "tabToAsk": "→, kad paklaustumėte: „{prompt}“",
+    "tableChart": {
+      "bar": "Stulpelinė",
+      "kind": "Diagramos tipas",
+      "line": "Linijinė",
+      "loading": "Parenkama diagrama…",
+      "pie": "Skritulinė",
+      "scatter": "Taškinė",
+      "showChart": "Rodyti kaip diagramą",
+      "summary": "Rodomų reikšmių skaičius: {n, number}.",
+      "unavailable": "Nepavyko parinkti diagramos. Rodoma lentelė.",
+      "values": "{label}: {value, number}"
+    },
     "thinking": "Dirbama su kontekstu",
     "threadFiles": {
       "title": "Šio pokalbio failai"

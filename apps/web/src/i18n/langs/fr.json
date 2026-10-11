@@ -1443,6 +1443,18 @@
       "rejected": "Rejeté"
     },
     "tabToAsk": "→ pour demander : « {prompt} »",
+    "tableChart": {
+      "bar": "Barres",
+      "kind": "Type de graphique",
+      "line": "Courbes",
+      "loading": "Sélection du graphique…",
+      "pie": "Secteurs",
+      "scatter": "Nuage de points",
+      "showChart": "Afficher sous forme de graphique",
+      "summary": "Valeurs affichées : {n, number}.",
+      "unavailable": "Impossible de sélectionner un graphique. Le tableau est affiché.",
+      "values": "{label} : {value, number}"
+    },
     "thinking": "Traitement du contexte",
     "threadFiles": {
       "title": "Fichiers de cette conversation"

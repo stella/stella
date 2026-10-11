@@ -1443,6 +1443,18 @@
       "rejected": "Noraidīts"
     },
     "tabToAsk": "→, lai jautātu: “{prompt}”",
+    "tableChart": {
+      "bar": "Stabiņu",
+      "kind": "Diagrammas veids",
+      "line": "Līniju",
+      "loading": "Tiek izvēlēta diagramma…",
+      "pie": "Sektoru",
+      "scatter": "Izkliedes",
+      "showChart": "Rādīt kā diagrammu",
+      "summary": "Attēloto vērtību skaits: {n, number}.",
+      "unavailable": "Neizdevās izvēlēties diagrammu. Tiek rādīta tabula.",
+      "values": "{label}: {value, number}"
+    },
     "thinking": "Strādāju ar kontekstu",
     "threadFiles": {
       "title": "Šīs tērzēšanas faili"
