@@ -59,6 +59,7 @@ import {
   createMembershipSafeDb,
   createMembershipScopedDb,
 } from "@/api/db/scoped";
+import type { TransactionOf } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
@@ -2831,6 +2832,15 @@ export const featureAccessSnapshotFromAuthorization = ({
         })),
   });
 
+// Keep the concrete transaction in named declarations without expanding the
+// full database schema into every auth macro.
+type AuthScopedDb = ReturnType<
+  typeof createMembershipScopedDb<TransactionOf<typeof rlsDb>>
+>;
+type AuthSafeDb = ReturnType<
+  typeof createMembershipSafeDb<TransactionOf<typeof rlsDb>>
+>;
+
 const resolveValidateAuth = async ({
   getSession,
   request,
@@ -2919,8 +2929,11 @@ const resolveValidateAuth = async ({
     serverValidatedWorkspaceIds,
     userId,
   };
-  const scopedDb = createMembershipScopedDb(rlsDb, databaseIdentity);
-  const safeDb = createMembershipSafeDb(rlsDb, databaseIdentity);
+  const scopedDb: AuthScopedDb = createMembershipScopedDb(
+    rlsDb,
+    databaseIdentity,
+  );
+  const safeDb: AuthSafeDb = createMembershipSafeDb(rlsDb, databaseIdentity);
 
   let accessibleWorkspacesPromise: Promise<AccessibleWorkspace[]> | null = null;
   const getAccessibleWorkspaces = async (): Promise<AccessibleWorkspace[]> => {
