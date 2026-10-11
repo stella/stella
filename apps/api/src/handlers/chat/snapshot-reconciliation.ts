@@ -108,36 +108,76 @@ export const reconcileSnapshotCall = (
   };
 };
 
+const snapshotPartIdentity = (part: MessagePart) => {
+  switch (part.type) {
+    case "text":
+    case "thinking":
+    case "structured-output":
+      return { type: part.type } as const;
+    case "tool-call":
+      return { type: part.type, id: part.id } as const;
+    case "tool-result":
+      return { type: part.type, id: part.toolCallId } as const;
+    case "activity":
+      return {
+        type: part.type,
+        activityType: part.activityType,
+        subagentRunId: part.subagentRunId ?? null,
+      } as const;
+    case "subagent":
+      return { type: part.type, id: part.subagent.id } as const;
+    case "ui-resource":
+      return {
+        type: part.type,
+        toolCallId: part.toolCallId,
+        uri: part.resource.uri,
+      } as const;
+    case "image":
+    case "audio":
+    case "video":
+    case "document":
+      return { type: part.type, source: part.source } as const;
+    default:
+      part satisfies never;
+      return panic("Unhandled snapshot part identity");
+  }
+};
+
+// Capture occurrences before mutation. Newly appended snapshot parts cannot
+// consume a later duplicate, and even repeated object references own slots.
+const createSnapshotPartMatcher = (parts: UIMessage["parts"]) => {
+  const candidates = [...parts];
+  const consumed = new Set<number>();
+  return (identity: ReturnType<typeof snapshotPartIdentity>) => {
+    const index = candidates.findIndex(
+      (part, candidateIndex) =>
+        !consumed.has(candidateIndex) &&
+        deepEquals(snapshotPartIdentity(part), identity),
+    );
+    if (index === -1) {
+      return undefined;
+    }
+    const part =
+      candidates.at(index) ?? panic("Matched occurrence has no part");
+    consumed.add(index);
+    return { part, index };
+  };
+};
+
 export const createSnapshotActivityReconciler = (
   parts: UIMessage["parts"],
   shouldReplace = (_canonical: ActivityPart, _snapshot: ActivityPart) => true,
 ) => {
-  // Capture prior slots once: newly appended parts must not consume later
-  // snapshot duplicates. Consuming a slot implements first-to-first matching.
-  const candidates = parts.flatMap((part, index) =>
-    part.type === "activity" ? [{ part, index }] : [],
-  );
-  const consumed = new Set<number>();
+  const matchPart = createSnapshotPartMatcher(parts);
   return (snapshot: ActivityPart) => {
-    const match = candidates.find(
-      ({ part, index }) =>
-        !consumed.has(index) &&
-        part.activityType === snapshot.activityType &&
-        (part.subagentRunId ?? undefined) ===
-          (snapshot.subagentRunId ?? undefined),
-    );
-    if (match === undefined) {
+    const match = matchPart(snapshotPartIdentity(snapshot));
+    const canonical = match?.part;
+    if (canonical?.type !== "activity") {
       parts.push(snapshot);
       return;
     }
-    consumed.add(match.index);
-    if (shouldReplace(match.part, snapshot)) {
-      // Textual snapshot segments may have changed the array's length or
-      // positions since candidates were captured. The part owns the slot.
-      const index = parts.indexOf(match.part);
-      if (index === -1) {
-        panic("Snapshot activity lost its canonical slot");
-      }
+    const index = match?.index ?? -1;
+    if (index !== -1 && shouldReplace(canonical, snapshot)) {
       parts[index] = snapshot;
     }
   };
@@ -238,6 +278,7 @@ type SnapshotLayoutOptions = {
   snapshot: UIMessage;
   parts: UIMessage["parts"];
   textSelections: Map<MessagePart, MessagePart[]>;
+  selectedParts: Map<MessagePart, MessagePart>;
 };
 
 type SnapshotPartsOptions = {
@@ -250,7 +291,7 @@ type SnapshotPartsOptions = {
 /** One turn owns provenance; snapshots and synthetic resume events cannot claim deltas. */
 export class SnapshotPartReconciler {
   private readonly sources = new WeakMap<MessagePart, PartSource>();
-  private readonly terminalCalls = new Map<string, ToolCallPart>();
+  private readonly terminalCalls = new WeakMap<MessagePart, ToolCallPart>();
 
   constructor(initial: UIMessage["parts"]) {
     // Completed history is canonical transcript content on a continuation.
@@ -410,7 +451,7 @@ export class SnapshotPartReconciler {
       ) {
         continue;
       }
-      if (previousIndex !== -1 && index !== previousIndex + 1) {
+      if (previousIndex !== -1) {
         boundaries.add(offset);
       }
       const start = offset;
@@ -463,196 +504,125 @@ export class SnapshotPartReconciler {
   }
 
   reconcile({
-    previous,
-    snapshot,
+    previous: previousMessage,
+    snapshot: snapshotMessage,
     preservesPartLayout,
     parseResultOutput,
   }: SnapshotPartsOptions): UIMessage["parts"] {
+    const seen = new Set<MessagePart>();
+    const previous = {
+      ...previousMessage,
+      parts: previousMessage.parts.map((part) => {
+        const retained = this.inherit({ ...part }, part);
+        if (seen.has(part)) {
+          this.record(retained, {
+            provenance: this.provenanceOf(part),
+            anchor: retained,
+          });
+        }
+        seen.add(part);
+        return retained;
+      }),
+    };
+    const snapshot = {
+      ...snapshotMessage,
+      parts: snapshotMessage.parts.map((part) => this.snapshot({ ...part })),
+    };
     const parts = [...previous.parts];
     const textSelections = new Map<MessagePart, MessagePart[]>();
-    const reconcileActivity = createSnapshotActivityReconciler(
-      parts,
-      (canonical, updatedActivity) =>
-        this.shouldReplace({
-          canonical,
-          snapshot: updatedActivity,
-        }),
-    );
+    const selectedParts = new Map<MessagePart, MessagePart>();
+    const matchPart = createSnapshotPartMatcher(parts);
     for (const part of snapshot.parts) {
-      this.snapshot(part);
+      const canonical = matchPart(snapshotPartIdentity(part))?.part;
+      if (part.type === "text" || part.type === "thinking") {
+        this.reconcileText({
+          previousParts: previous.parts,
+          snapshotParts: snapshot.parts,
+          parts,
+          part,
+          preservesPartLayout,
+          textSelections,
+        });
+        continue;
+      }
+      let selected = canonical ?? part;
       switch (part.type) {
-        case "text":
-        case "thinking":
-          this.reconcileText({
-            previousParts: previous.parts,
-            snapshotParts: snapshot.parts,
-            parts,
-            part,
-            preservesPartLayout,
-            textSelections,
-          });
-          break;
         case "tool-call":
+          break;
+        case "tool-result":
+          if (canonical?.type === "tool-result") {
+            selected = reconcileSnapshotResult({ canonical, snapshot: part });
+          }
+          break;
+        case "structured-output":
           if (
-            !parts.some(
-              (existing) =>
-                existing.type === "tool-call" && existing.id === part.id,
-            )
-          ) {
-            parts.push(part);
-          }
-          break;
-        case "tool-result": {
-          const existingIndex = parts.findIndex(
-            (existing) =>
-              existing.type === "tool-result" &&
-              existing.toolCallId === part.toolCallId,
-          );
-          if (existingIndex === -1) {
-            parts.push(part);
-            break;
-          }
-          const existing = parts.at(existingIndex);
-          if (existing?.type !== "tool-result") {
-            panic("A matching snapshot result has no streamed tool result");
-          }
-          parts[existingIndex] = reconcileSnapshotResult({
-            canonical: existing,
-            snapshot: part,
-          });
-          break;
-        }
-        case "activity":
-          reconcileActivity(part);
-          break;
-        case "structured-output": {
-          const existingIndex = parts.findIndex(
-            (existing) => existing.type === "structured-output",
-          );
-          const existing = parts.at(existingIndex);
-          if (existingIndex === -1) {
-            parts.push(part);
-          } else if (
-            existing?.type === "structured-output" &&
+            canonical?.type !== "structured-output" ||
             this.shouldReplace({
-              canonical: existing,
+              canonical,
               snapshot: part,
-              canonicalFinality: STRUCTURED_OUTPUT_FINALITY[existing.status],
+              canonicalFinality: STRUCTURED_OUTPUT_FINALITY[canonical.status],
               snapshotFinality: STRUCTURED_OUTPUT_FINALITY[part.status],
             })
           ) {
-            parts[existingIndex] = part;
+            selected = part;
           }
           break;
-        }
-        case "subagent": {
-          const existingIndex = parts.findIndex(
-            (existing) =>
-              existing.type === "subagent" &&
-              existing.subagent.id === part.subagent.id,
-          );
-          const existing = parts.at(existingIndex);
-          if (existingIndex === -1) {
-            parts.push(part);
-          } else if (
-            existing?.type === "subagent" &&
+        case "subagent":
+          if (
+            canonical?.type !== "subagent" ||
             this.shouldReplace({
-              canonical: existing,
+              canonical,
               snapshot: part,
-              canonicalFinality: SUBAGENT_FINALITY[existing.subagent.status],
+              canonicalFinality: SUBAGENT_FINALITY[canonical.subagent.status],
               snapshotFinality: SUBAGENT_FINALITY[part.subagent.status],
             })
           ) {
-            parts[existingIndex] = part;
+            selected = part;
           }
           break;
-        }
-        case "ui-resource": {
-          const existingIndex = parts.findIndex(
-            (existing) =>
-              existing.type === "ui-resource" &&
-              existing.toolCallId === part.toolCallId &&
-              existing.resource.uri === part.resource.uri,
-          );
-          if (existingIndex === -1) {
-            parts.push(part);
-          } else {
-            const existing = parts.at(existingIndex);
-            if (existing === undefined) {
-              panic("Matching snapshot part has no canonical slot");
-            }
-            if (
-              this.shouldReplace({
-                canonical: existing,
-                snapshot: part,
-              })
-            ) {
-              parts[existingIndex] = part;
-            }
-          }
-          break;
-        }
+        case "activity":
+        case "ui-resource":
         case "image":
         case "audio":
         case "video":
-        case "document": {
-          const existingIndex = parts.findIndex((existing) => {
-            switch (existing.type) {
-              case "image":
-              case "audio":
-              case "video":
-              case "document":
-                return (
-                  existing.type === part.type &&
-                  deepEquals(existing.source, part.source)
-                );
-              case "activity":
-              case "structured-output":
-              case "subagent":
-              case "text":
-              case "thinking":
-              case "tool-call":
-              case "tool-result":
-              case "ui-resource":
-                return false;
-              default:
-                existing satisfies never;
-                return panic("Unhandled snapshot media candidate");
-            }
-          });
-          if (existingIndex === -1) {
-            parts.push(part);
-          } else {
-            const existing = parts.at(existingIndex);
-            if (existing === undefined) {
-              panic("Matching snapshot part has no canonical slot");
-            }
-            if (
-              this.shouldReplace({
-                canonical: existing,
-                snapshot: part,
-              })
-            ) {
-              parts[existingIndex] = part;
-            }
+        case "document":
+          if (
+            canonical === undefined ||
+            this.shouldReplace({ canonical, snapshot: part })
+          ) {
+            selected = part;
           }
           break;
-        }
         default:
           part satisfies never;
           panic("Unhandled snapshot message part");
+      }
+      const index = canonical === undefined ? -1 : parts.indexOf(canonical);
+      if (index === -1) {
+        parts.push(selected);
+      } else {
+        parts[index] = selected;
+      }
+      selectedParts.set(part, selected);
+    }
+    const reconciled = this.reconcileCalls({
+      parts,
+      previous,
+      snapshot,
+      parseResultOutput,
+    });
+    for (const [incoming, selected] of selectedParts) {
+      const updated = reconciled.at(parts.indexOf(selected));
+      if (updated !== undefined) {
+        selectedParts.set(incoming, updated);
       }
     }
     return this.reconcileLayout({
       previous,
       snapshot,
       textSelections,
-      parts: this.reconcileCalls({
-        parts,
-        previous,
-        snapshot,
-        parseResultOutput,
-      }),
+      selectedParts,
+      parts: reconciled,
     });
   }
 
@@ -720,48 +690,10 @@ export class SnapshotPartReconciler {
   }
 
   private sameSnapshotSlot(candidate: MessagePart, incoming: MessagePart) {
-    switch (incoming.type) {
-      case "text":
-      case "thinking":
-        return candidate === incoming;
-      case "tool-call":
-        return candidate.type === "tool-call" && candidate.id === incoming.id;
-      case "tool-result":
-        return (
-          candidate.type === "tool-result" &&
-          candidate.toolCallId === incoming.toolCallId
-        );
-      case "activity":
-        return (
-          candidate.type === "activity" &&
-          candidate.activityType === incoming.activityType &&
-          candidate.subagentRunId === incoming.subagentRunId
-        );
-      case "structured-output":
-        return candidate.type === "structured-output";
-      case "subagent":
-        return (
-          candidate.type === "subagent" &&
-          candidate.subagent.id === incoming.subagent.id
-        );
-      case "ui-resource":
-        return (
-          candidate.type === "ui-resource" &&
-          candidate.toolCallId === incoming.toolCallId &&
-          candidate.resource.uri === incoming.resource.uri
-        );
-      case "image":
-      case "audio":
-      case "video":
-      case "document":
-        return (
-          candidate.type === incoming.type &&
-          deepEquals(candidate.source, incoming.source)
-        );
-      default:
-        incoming satisfies never;
-        return panic("Unhandled snapshot layout slot");
-    }
+    return deepEquals(
+      snapshotPartIdentity(candidate),
+      snapshotPartIdentity(incoming),
+    );
   }
 
   private reconcileLayout({
@@ -769,47 +701,35 @@ export class SnapshotPartReconciler {
     snapshot,
     parts,
     textSelections,
+    selectedParts,
   }: SnapshotLayoutOptions) {
     const used = new Set<MessagePart>();
     const layout: { incoming: MessagePart; selected: MessagePart }[] = [];
-    for (const [index, incoming] of snapshot.parts.entries()) {
-      const textual = textSelections.get(incoming);
-      if (textual !== undefined) {
-        for (const selected of textual) {
-          if (!used.has(selected)) {
-            used.add(selected);
-            layout.push({ incoming, selected });
-          }
-        }
-        continue;
-      }
-      let selected: MessagePart | undefined;
-      if (
+    const matchPart = createSnapshotPartMatcher(parts);
+    for (const incoming of snapshot.parts) {
+      const retainedText =
         (incoming.type === "text" || incoming.type === "thinking") &&
         previous.parts.some(
           (part) =>
             part.type === incoming.type &&
             this.provenanceOf(part) === "delta-streamed",
         )
-      ) {
-        // Snapshot segmentation cannot identify streamed segments. Retained
-        // segments are layout anchors, never replacements for their deltas.
-        const ordinal = snapshot.parts
-          .slice(0, index)
-          .filter((part) => part.type === incoming.type).length;
-        const retained = parts.filter((part) => part.type === incoming.type);
-        selected = retained.at(Math.min(ordinal, retained.length - 1));
-      } else {
-        selected = parts.find(
-          (part) => !used.has(part) && this.sameSnapshotSlot(part, incoming),
-        );
-      }
-      if (selected === undefined) {
-        panic("Snapshot layout has no selected part");
-      }
-      if (!used.has(selected)) {
-        used.add(selected);
-        layout.push({ incoming, selected });
+          ? parts.findLast((part) => part.type === incoming.type)
+          : undefined;
+      const selections = textSelections.get(incoming) ?? [
+        selectedParts.get(incoming) ??
+          matchPart(snapshotPartIdentity(incoming))?.part ??
+          retainedText ??
+          incoming,
+      ];
+      for (const selected of selections) {
+        if (!parts.includes(selected)) {
+          parts.push(selected);
+        }
+        if (!used.has(selected)) {
+          used.add(selected);
+          layout.push({ incoming, selected });
+        }
       }
     }
     const ordered = parts.filter(
@@ -854,37 +774,36 @@ export class SnapshotPartReconciler {
     snapshot,
     parseResultOutput,
   }: SnapshotCallPartsOptions) {
+    const matchCanonical = createSnapshotPartMatcher(previous.parts);
+    const matchSnapshot = createSnapshotPartMatcher(snapshot.parts);
+    const matchResult = createSnapshotPartMatcher(parts);
     return parts.map((part) => {
       if (part.type !== "tool-call") {
         return part;
       }
-      const result = parts.find(
-        (candidate) =>
-          candidate.type === "tool-result" && candidate.toolCallId === part.id,
-      );
-      const canonicalResult = previous.parts.find(
-        (candidate) =>
-          candidate.type === "tool-result" && candidate.toolCallId === part.id,
-      );
-      const canonicalCall = previous.parts.find(
-        (candidate) =>
-          candidate.type === "tool-call" && candidate.id === part.id,
-      );
+      const resultIdentity = { type: "tool-result", id: part.id } as const;
+      const result = matchResult(resultIdentity)?.part;
+      const canonicalResult = matchCanonical(resultIdentity)?.part;
+      const canonicalCall = matchCanonical(snapshotPartIdentity(part))?.part;
+      const updated = matchSnapshot(snapshotPartIdentity(part))?.part;
       if (canonicalCall?.type === "tool-call") {
         const completion = TOOL_CALL_COMPLETION[canonicalCall.state];
         // A later streaming sibling cannot turn an independently terminal
         // call into SDK progress on the next snapshot.
         if (
-          !this.terminalCalls.has(canonicalCall.id) &&
+          !this.terminalCalls.has(this.sourceOf(canonicalCall).anchor) &&
           (completion === "terminal" ||
             (completion === "result-dependent" &&
               (canonicalResult?.type !== "tool-result" ||
                 canonicalResult.state !== "streaming")))
         ) {
-          this.terminalCalls.set(canonicalCall.id, canonicalCall);
+          this.terminalCalls.set(
+            this.sourceOf(canonicalCall).anchor,
+            canonicalCall,
+          );
         }
       }
-      const terminalCall = this.terminalCalls.get(part.id);
+      const terminalCall = this.terminalCalls.get(this.sourceOf(part).anchor);
       if (terminalCall !== undefined) {
         return this.inherit(
           reconcileSnapshotCall({
@@ -895,10 +814,6 @@ export class SnapshotPartReconciler {
           terminalCall,
         );
       }
-      const updated = snapshot.parts.find(
-        (candidate) =>
-          candidate.type === "tool-call" && candidate.id === part.id,
-      );
       const snapshotCall = updated?.type === "tool-call" ? updated : part;
       // The selected result owns finality; without a result, only advance
       // the call. Equal-finality conflicts retain the streamed version.

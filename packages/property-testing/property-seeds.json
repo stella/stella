@@ -32,6 +32,13 @@
       "date": "2026-10-11"
     }
   ],
+  "apps/api/src/handlers/chat/snapshot-reconciliation.property.test.ts::snapshot reconciliation preserves duplicate occurrences of every SDK part kind": [
+    {
+      "seed": 20260901,
+      "note": "Duplicate SDK part occurrences",
+      "date": "2026-10-11"
+    }
+  ],
   "apps/api/src/handlers/chat/snapshot-reconciliation.property.test.ts::snapshot reconciliation preserves exact ordered parts around lifecycle anchors": [
     {
       "seed": 20260901,

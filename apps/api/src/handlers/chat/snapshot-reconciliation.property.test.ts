@@ -1,5 +1,6 @@
 import { EventType } from "@tanstack/ai";
 import type {
+  MessagePart,
   StreamChunk,
   ToolCallPart,
   ToolResultPart,
@@ -1540,6 +1541,182 @@ test(
           const { reload, emitted } = await collectTurn(chunks, (parts) => {
             expect(parts).toEqual(expected);
           });
+          expect(reload.parts).toEqual(expected);
+          const live = createStreamMessageCapture({
+            initialMessages: [],
+            capture: (message) => message,
+          });
+          for (const chunk of emitted) {
+            live.processor.processChunk(chunk);
+          }
+          expect(
+            live.processor.getMessages().flatMap(({ parts }) => parts),
+          ).toEqual(expected);
+          expectTerminalMonotonicity(emitted);
+        }
+      }),
+      { numRuns: 100 },
+    );
+  },
+  propertyTestTimeout(15_000),
+);
+
+const occurrenceFixtures = (token: string) =>
+  ({
+    text: { type: "text", content: token },
+    thinking: { type: "thinking", content: token, stepId: MESSAGE_ID },
+    "tool-call": {
+      type: "tool-call",
+      id: "occurrence-call",
+      name: "lookup",
+      arguments: "{}",
+      input: {},
+      state: "complete",
+      output: token,
+    },
+    "tool-result": {
+      type: "tool-result",
+      toolCallId: "occurrence-call",
+      content: token,
+      state: "complete",
+    },
+    activity: {
+      type: "activity",
+      activityType: "review",
+      content: { status: "complete", value: token },
+    },
+    "structured-output": {
+      type: "structured-output",
+      status: "complete",
+      raw: JSON.stringify({ value: token }),
+      data: { value: token },
+    },
+    subagent: {
+      type: "subagent",
+      subagent: {
+        id: "occurrence-child",
+        name: "Review",
+        status: "finished",
+        messages: [],
+      },
+    },
+    "ui-resource": {
+      type: "ui-resource",
+      toolCallId: "occurrence-call",
+      toolName: "lookup",
+      resource: { uri: "ui://occurrence", mimeType: "text/html", text: token },
+    },
+    image: {
+      type: "image",
+      source: {
+        type: "url",
+        value: "https://example.test/image.png",
+        mimeType: "image/png",
+      },
+    },
+    audio: {
+      type: "audio",
+      source: {
+        type: "url",
+        value: "https://example.test/audio.mp3",
+        mimeType: "audio/mpeg",
+      },
+    },
+    video: {
+      type: "video",
+      source: {
+        type: "url",
+        value: "https://example.test/video.mp4",
+        mimeType: "video/mp4",
+      },
+    },
+    document: {
+      type: "document",
+      source: {
+        type: "url",
+        value: "https://example.test/document.pdf",
+        mimeType: "application/pdf",
+      },
+    },
+  }) as const satisfies {
+    [Kind in MessagePart["type"]]: Extract<MessagePart, { type: Kind }>;
+  };
+
+const duplicateOccurrencesArbitrary = fc.record({
+  token: segmentTokenArbitrary,
+  copies: fc.integer({ min: 2, max: 4 }),
+  schedule: fc.array(fc.nat({ max: 100 }), { minLength: 1, maxLength: 40 }),
+});
+
+test("identical image occurrences survive repeated snapshots", async () => {
+  const image = occurrenceFixtures("Answer").image;
+  const expected = [
+    { type: "text", content: "Answer" },
+    image,
+    image,
+  ] satisfies UIMessage["parts"];
+  const { reload } = await collectTurn(
+    orderedTurn([expected.slice(0, 2), expected, expected]),
+    (parts) => {
+      expect(parts).toEqual(expected);
+    },
+  );
+  expect(reload.parts).toEqual(expected);
+});
+
+test(
+  "snapshot reconciliation preserves duplicate occurrences of every SDK part kind",
+  async () => {
+    await assertProperty(
+      "snapshot reconciliation preserves duplicate occurrences of every SDK part kind",
+      fc.asyncProperty(duplicateOccurrencesArbitrary, async (scenario) => {
+        for (const references of ["distinct", "aliased"] as const) {
+          const examples = Object.values(occurrenceFixtures(scenario.token));
+          const approval = {
+            type: "tool-call",
+            id: "occurrence-approval",
+            name: "lookup",
+            arguments: "{}",
+            input: {},
+            state: "error",
+            output: "Denied",
+            approval: {
+              id: "occurrence-decision",
+              needsApproval: true,
+              approved: false,
+            },
+          } as const satisfies ToolCallPart;
+          const initial: UIMessage["parts"] = [...examples, approval];
+          const chains = initial.map((part) =>
+            Array.from({ length: scenario.copies }, () =>
+              references === "distinct" ? structuredClone(part) : part,
+            ),
+          );
+          const expected: UIMessage["parts"] = [];
+          let step = 0;
+          while (chains.some((chain) => chain.length > 0)) {
+            const available = chains.filter((chain) => chain.length > 0);
+            const decision = scenario.schedule.at(
+              step % scenario.schedule.length,
+            );
+            if (decision === undefined) {
+              panic("Duplicate occurrence scheduler has no decision");
+            }
+            const part = available.at(decision % available.length)?.shift();
+            if (part === undefined) {
+              panic("Duplicate occurrence scheduler selected an empty chain");
+            }
+            expected.push(part);
+            step += 1;
+          }
+          // Identity keys describe content, not cardinality. Each repeated
+          // snapshot slot remains a distinct ordered transcript occurrence.
+          const { reload, emitted } = await collectTurn(
+            orderedTurn([initial, expected, structuredClone(expected)]),
+            (parts) => {
+              expect(parts).toEqual(expected);
+            },
+          );
           expect(reload.parts).toEqual(expected);
           const live = createStreamMessageCapture({
             initialMessages: [],
