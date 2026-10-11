@@ -1,11 +1,12 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    "disableSourceOfProjectReferenceRedirect": true,
     "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.scripts.json"
   },
-  // The main project already checks src and drizzle.config.ts. Imports from
-  // scripts remain part of this project through normal traversal; shared
-  // ambient asset declarations must stay rooted here.
+  // API imports resolve to declaration output; shared ambient asset declarations
+  // remain rooted in this program.
   "include": ["scripts", "evals", "../../types"],
-  "exclude": []
+  "exclude": [],
+  "references": [{ "path": "./tsconfig.declarations.json" }]
 }

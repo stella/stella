@@ -1,6 +1,7 @@
 {
   "extends": "@stll/typescript-config/base.json",
   "compilerOptions": {
+    "disableSourceOfProjectReferenceRedirect": true,
     "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.scripts.json",
     "paths": {
       "@/api/*": ["./apps/api/src/*"],
@@ -20,5 +21,6 @@
   // "types" is the shared ambient-module root (asset imports like *.docx and
   // *.wasm) that the same schema-import graph also reaches.
   "include": ["scripts/**/*.ts", "types"],
-  "exclude": ["scripts/browser"]
+  "exclude": ["scripts/browser"],
+  "references": [{ "path": "./apps/api/tsconfig.declarations.json" }]
 }

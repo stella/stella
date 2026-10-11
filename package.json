@@ -27,7 +27,7 @@
     "agent:attach": "bun packages/scripts/src/agent-session.ts attach",
     "typegen": "turbo run typegen",
     "typecheck": "turbo run typecheck",
-    "typecheck:repo": "bun scripts/ci-generated-sources.ts prepare && bun check --no-pretty --all --project=tsconfig.scripts.json && bun check --no-pretty --all --project=tsconfig.tooling.json && bun check --no-pretty --all --project=tsconfig.oxlint-plugins.json",
+    "typecheck:repo": "bun scripts/ci-generated-sources.ts prepare && bun packages/scripts/src/api-typecheck.ts --declarations && bun check --no-pretty --all --project=tsconfig.scripts.json && bun check --no-pretty --all --project=tsconfig.tooling.json && bun check --no-pretty --all --project=tsconfig.oxlint-plugins.json",
     "code-check": "bun run generate && bun scripts/code-check-affected.ts --all",
     "code-check:affected": "bun run generate && bun scripts/code-check-affected.ts",
     "secrets:check:staged": "bash scripts/check-staged-secrets.sh",

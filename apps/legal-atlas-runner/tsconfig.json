@@ -1,6 +1,7 @@
 {
   "extends": "@stll/typescript-config/base.json",
   "compilerOptions": {
+    "disableSourceOfProjectReferenceRedirect": true,
     "target": "ES2024",
     "lib": ["ESNext"],
     "module": "ESNext",
@@ -31,12 +32,12 @@
     },
     "types": ["bun-types"]
   },
-  // Imported API modules are checked through traversal; the API's own projects
-  // cover the remaining sources without rooting them in this runner as well.
+  // Imported API modules resolve to the referenced declaration output.
   "include": ["src", "../../types"],
   "exclude": [
     "node_modules",
     "../api/src/mcp/apps",
     "../api/src/handlers/visual-sandbox/browser"
-  ]
+  ],
+  "references": [{ "path": "../api/tsconfig.declarations.json" }]
 }

@@ -733,6 +733,9 @@
         "$TURBO_ROOT$/packages/ui/**"
       ]
     },
+    "@stll/legal-atlas-runner#typecheck": {
+      "dependsOn": ["transit", "@stll/api#typecheck:declarations"]
+    },
     "@stll/api#typecheck": {
       "cache": true,
       "dependsOn": [
@@ -978,7 +981,8 @@
       "dependsOn": [
         "transit",
         "@stll/cli#codegen:runtime",
-        "generate:capability-runtime"
+        "generate:capability-runtime",
+        "typecheck:declarations"
       ],
       "inputs": [
         "$TURBO_ROOT$/.oxlint-plugins/**",
@@ -1059,7 +1063,8 @@
       "dependsOn": [
         "transit",
         "@stll/cli#codegen:runtime",
-        "generate:capability-runtime"
+        "generate:capability-runtime",
+        "typecheck:declarations"
       ],
       "inputs": [
         "$TURBO_ROOT$/packages/agent-input/**",
