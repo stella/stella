@@ -384,7 +384,11 @@ context("test registration census", () => {
   check(
     "a package script runner whose failure cannot propagate collects nothing",
     () => {
-      for (const test of ["bun test src | cat", "bun test src &"]) {
+      for (const test of [
+        "bun test src | cat",
+        "bun test src &",
+        "bun test src; echo done",
+      ]) {
         expect(
           packageTestCollectionFailure({
             candidate: "packages/fixture/src/a.test.ts",
@@ -401,6 +405,13 @@ context("test registration census", () => {
           candidate: "packages/fixture/src/a.test.ts",
           packageDirectory: "packages/fixture",
           scripts: { test: "echo start | cat && bun test src" },
+        }),
+      ).toBeUndefined();
+      expect(
+        packageTestCollectionFailure({
+          candidate: "packages/fixture/src/a.test.ts",
+          packageDirectory: "packages/fixture",
+          scripts: { test: "echo start; bun test src && echo done" },
         }),
       ).toBeUndefined();
     },

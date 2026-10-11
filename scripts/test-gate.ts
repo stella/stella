@@ -624,9 +624,13 @@ const gatingCommandExecutionFailure = ({
 
 const SHELL_OPERATORS = new Set(["||", "&&", ";", "&", "|", "(", ")", "\n"]);
 
-// Workflow steps run under `bash -eo pipefail`; package scripts run without
-// pipefail, so a runner piped into another command cannot fail them.
-type ShellPropagation = { readonly pipefail: boolean };
+// Workflow steps run under `bash -eo pipefail`. Package scripts run with
+// neither errexit nor pipefail: only the last statement sets their status, and
+// a runner piped into another command cannot fail them.
+type ShellPropagation = {
+  readonly pipefail: boolean;
+  readonly errexit: boolean;
+};
 
 const shellInvocationGates = (
   command: string,
@@ -634,6 +638,7 @@ const shellInvocationGates = (
   propagation?: ShellPropagation,
 ): boolean => {
   const pipefail = propagation?.pipefail ?? true;
+  const scriptErrexit = propagation?.errexit ?? true;
   const words = shellWords(command.replaceAll(/\\\r?\n/gu, " "), "include");
   let errexit = true;
   for (let index = 0; index < words.length; index += 1) {
@@ -694,6 +699,13 @@ const shellInvocationGates = (
     // A background job's status never reaches errexit; a piped runner's status
     // reaches it only under pipefail.
     if (pipeline.includes("&") || (!pipefail && pipeline.includes("|"))) {
+      continue;
+    }
+    if (
+      !scriptErrexit &&
+      end !== -1 &&
+      suffix.slice(end + 1).some((word) => word !== ";" && word !== "\n")
+    ) {
       continue;
     }
     const suppressed =
@@ -1144,7 +1156,7 @@ export const packageTestCollectionFailure = ({
       !shellInvocationGates(
         normalizedCommand,
         (_words, cursor) => cursor === index,
-        { pipefail: false },
+        { pipefail: false, errexit: false },
       )
     ) {
       continue;
@@ -2253,7 +2265,7 @@ export const gatingPlaywrightCollection = ({
         command,
         (words, index) =>
           words[index] === "playwright" && words[index + 1] === "test",
-        { pipefail: false },
+        { pipefail: false, errexit: false },
       ) ||
       packageTestExecutionFailure({
         ...topology,
