@@ -50,7 +50,18 @@
     "keywordsOmitted": "{count} أخرى",
     "headnoteOmitted": "حُذفت خلاصات الأحكام لتقليل حجم هذه الصفحة. افتح القرار للاطلاع على التفاصيل.",
     "chooseFile": "اختيار ملف",
-    "noFileChosen": "لم يتم اختيار أي ملف"
+    "noFileChosen": "لم يتم اختيار أي ملف",
+    "timelineTitle": "سجل الأحكام",
+    "timelineOpenStart": "بداية مفتوحة",
+    "timelineOpenEnd": "نهاية مفتوحة",
+    "timelineCurrent": "النسخة الحالية",
+    "timelineCompare": "مقارنة النسختين المتتاليتين",
+    "timelineTruncated": "هذا النص مقتطع.",
+    "timelineLoadMore": "تحميل المزيد",
+    "timelineEmpty": "لا توجد نسخ لعرضها.",
+    "timelineNoDate": "لا يوجد لهذه النسخة تاريخ لقراءة النص التشريعي.",
+    "timelinePartialDiff": "تتضمن المقارنة نصًا مقتطعًا.",
+    "timelineReadVersion": "اقرأ هذا الإصدار"
   },
   "cs": {
     "constitutional": "Ústavní soudy",
@@ -103,7 +114,18 @@
     "keywordsOmitted": "Dalších {count}",
     "headnoteOmitted": "Právní věty jsou vynechány, aby stránka zůstala malá. Podrobnosti najdete po otevření rozhodnutí.",
     "chooseFile": "Vybrat soubor",
-    "noFileChosen": "Žádný soubor nebyl vybrán"
+    "noFileChosen": "Žádný soubor nebyl vybrán",
+    "timelineTitle": "Historie ustanovení",
+    "timelineOpenStart": "Otevřený začátek",
+    "timelineOpenEnd": "Otevřený konec",
+    "timelineCurrent": "Aktuální znění",
+    "timelineCompare": "Porovnat sousední znění",
+    "timelineTruncated": "Toto znění je zkrácené.",
+    "timelineLoadMore": "Načíst další",
+    "timelineEmpty": "Žádná znění k zobrazení.",
+    "timelineNoDate": "Tato verze nemá datum potřebné ke čtení ustanovení.",
+    "timelinePartialDiff": "Porovnání obsahuje zkrácené znění.",
+    "timelineReadVersion": "Přečíst toto znění"
   },
   "de": {
     "constitutional": "Verfassungsgerichte",
@@ -156,7 +178,18 @@
     "keywordsOmitted": "{count} weitere",
     "headnoteOmitted": "Leitsätze wurden ausgelassen, um die Seite klein zu halten. Öffnen Sie die Entscheidung für weitere Einzelheiten.",
     "chooseFile": "Datei auswählen",
-    "noFileChosen": "Keine Datei ausgewählt"
+    "noFileChosen": "Keine Datei ausgewählt",
+    "timelineTitle": "Versionsverlauf der Vorschrift",
+    "timelineOpenStart": "Offener Anfang",
+    "timelineOpenEnd": "Offenes Ende",
+    "timelineCurrent": "Aktuelle Fassung",
+    "timelineCompare": "Benachbarte Fassungen vergleichen",
+    "timelineTruncated": "Dieser Wortlaut ist gekürzt.",
+    "timelineLoadMore": "Mehr laden",
+    "timelineEmpty": "Keine Fassungen zum Anzeigen.",
+    "timelineNoDate": "Für diese Fassung fehlt das Datum für den Abruf des Normtexts.",
+    "timelinePartialDiff": "Der Vergleich enthält einen gekürzten Wortlaut.",
+    "timelineReadVersion": "Diese Fassung lesen"
   },
   "en": {
     "constitutional": "Constitutional courts",
@@ -209,7 +242,18 @@
     "keywordsOmitted": "{count} more",
     "headnoteOmitted": "Headnotes omitted to keep this page small. Open the decision for details.",
     "chooseFile": "Choose file",
-    "noFileChosen": "No file selected"
+    "noFileChosen": "No file selected",
+    "timelineTitle": "Provision history",
+    "timelineOpenStart": "Open start",
+    "timelineOpenEnd": "Open end",
+    "timelineCurrent": "Current version",
+    "timelineCompare": "Compare adjacent versions",
+    "timelineTruncated": "This wording is truncated.",
+    "timelineLoadMore": "Load more",
+    "timelineEmpty": "No versions to display.",
+    "timelineNoDate": "This version has no date for a provision read.",
+    "timelinePartialDiff": "The comparison includes truncated wording.",
+    "timelineReadVersion": "Read this version"
   },
   "et": {
     "constitutional": "Põhiseaduslikkuse järelevalve kohtud",
@@ -262,7 +306,18 @@
     "keywordsOmitted": "Veel {count}",
     "headnoteOmitted": "Õiguslikud seisukohad on lehe mahu vähendamiseks välja jäetud. Üksikasju leiate kohtulahendist.",
     "chooseFile": "Vali fail",
-    "noFileChosen": "Faili pole valitud"
+    "noFileChosen": "Faili pole valitud",
+    "timelineTitle": "Sätte ajalugu",
+    "timelineOpenStart": "Avatud algus",
+    "timelineOpenEnd": "Avatud lõpp",
+    "timelineCurrent": "Kehtiv redaktsioon",
+    "timelineCompare": "Võrdle kõrvutisi redaktsioone",
+    "timelineTruncated": "See sõnastus on kärbitud.",
+    "timelineLoadMore": "Laadi veel",
+    "timelineEmpty": "Redaktsioone pole kuvada.",
+    "timelineNoDate": "Sellel redaktsioonil puudub sätte lugemiseks vajalik kuupäev.",
+    "timelinePartialDiff": "Võrdlus sisaldab kärbitud sõnastust.",
+    "timelineReadVersion": "Loe seda redaktsiooni"
   },
   "fr": {
     "constitutional": "Juridictions constitutionnelles",
@@ -315,7 +370,18 @@
     "keywordsOmitted": "{count} de plus",
     "headnoteOmitted": "Les sommaires sont omis pour limiter la taille de cette page. Ouvrez la décision pour plus de détails.",
     "chooseFile": "Choisir un fichier",
-    "noFileChosen": "Aucun fichier sélectionné"
+    "noFileChosen": "Aucun fichier sélectionné",
+    "timelineTitle": "Historique de la disposition",
+    "timelineOpenStart": "Début ouvert",
+    "timelineOpenEnd": "Fin ouverte",
+    "timelineCurrent": "Version actuelle",
+    "timelineCompare": "Comparer les versions adjacentes",
+    "timelineTruncated": "Ce texte est tronqué.",
+    "timelineLoadMore": "Afficher plus",
+    "timelineEmpty": "Aucune version à afficher.",
+    "timelineNoDate": "Cette version ne comporte pas de date permettant de lire la disposition.",
+    "timelinePartialDiff": "La comparaison contient un texte tronqué.",
+    "timelineReadVersion": "Lire cette version"
   },
   "hu": {
     "constitutional": "Alkotmánybíróságok",
@@ -368,7 +434,18 @@
     "keywordsOmitted": "További {count}",
     "headnoteOmitted": "A döntvényi összefoglalók az oldal méretének csökkentése érdekében kimaradtak. A részletekért nyissa meg a határozatot.",
     "chooseFile": "Fájl kiválasztása",
-    "noFileChosen": "Nincs kiválasztott fájl"
+    "noFileChosen": "Nincs kiválasztott fájl",
+    "timelineTitle": "A rendelkezés története",
+    "timelineOpenStart": "Nyitott kezdet",
+    "timelineOpenEnd": "Nyitott vég",
+    "timelineCurrent": "Hatályos változat",
+    "timelineCompare": "Szomszédos változatok összehasonlítása",
+    "timelineTruncated": "Ez a szöveg csonkolt.",
+    "timelineLoadMore": "Továbbiak betöltése",
+    "timelineEmpty": "Nincs megjeleníthető változat.",
+    "timelineNoDate": "Ehhez a változathoz nincs dátum a rendelkezés lekéréséhez.",
+    "timelinePartialDiff": "Az összehasonlítás csonkolt szöveget tartalmaz.",
+    "timelineReadVersion": "A változat elolvasása"
   },
   "lv": {
     "constitutional": "Konstitucionālās tiesas",
@@ -421,7 +498,18 @@
     "keywordsOmitted": "Vēl {count}",
     "headnoteOmitted": "Tēzes ir izlaistas, lai samazinātu šīs lapas apjomu. Lai skatītu sīkāku informāciju, atveriet nolēmumu.",
     "chooseFile": "Izvēlēties failu",
-    "noFileChosen": "Nav izvēlēts neviens fails"
+    "noFileChosen": "Nav izvēlēts neviens fails",
+    "timelineTitle": "Normas vēsture",
+    "timelineOpenStart": "Atvērts sākums",
+    "timelineOpenEnd": "Atvērtas beigas",
+    "timelineCurrent": "Pašreizējā redakcija",
+    "timelineCompare": "Salīdzināt blakus esošās redakcijas",
+    "timelineTruncated": "Šis teksts ir saīsināts.",
+    "timelineLoadMore": "Ielādēt vēl",
+    "timelineEmpty": "Nav redakciju, ko parādīt.",
+    "timelineNoDate": "Šai redakcijai nav datuma normas nolasīšanai.",
+    "timelinePartialDiff": "Salīdzinājumā ir iekļauts saīsināts teksts.",
+    "timelineReadVersion": "Lasīt šo redakciju"
   },
   "lt": {
     "constitutional": "Konstituciniai teismai",
@@ -474,7 +562,18 @@
     "keywordsOmitted": "Dar {count}",
     "headnoteOmitted": "Tezės praleistos, kad šis puslapis būtų mažesnis. Daugiau informacijos rasite atidarę sprendimą.",
     "chooseFile": "Pasirinkti failą",
-    "noFileChosen": "Failas nepasirinktas"
+    "noFileChosen": "Failas nepasirinktas",
+    "timelineTitle": "Nuostatos istorija",
+    "timelineOpenStart": "Atvira pradžia",
+    "timelineOpenEnd": "Atvira pabaiga",
+    "timelineCurrent": "Dabartinė redakcija",
+    "timelineCompare": "Palyginti gretimas redakcijas",
+    "timelineTruncated": "Šis tekstas sutrumpintas.",
+    "timelineLoadMore": "Įkelti daugiau",
+    "timelineEmpty": "Nėra redakcijų, kurias būtų galima rodyti.",
+    "timelineNoDate": "Ši redakcija neturi nuostatos skaitymui reikalingos datos.",
+    "timelinePartialDiff": "Palyginime yra sutrumpintas tekstas.",
+    "timelineReadVersion": "Skaityti šią redakciją"
   },
   "pl": {
     "constitutional": "Trybunały konstytucyjne",
@@ -527,7 +626,18 @@
     "keywordsOmitted": "Jeszcze {count}",
     "headnoteOmitted": "Tezy pominięto, aby ograniczyć rozmiar tej strony. Otwórz orzeczenie, aby zobaczyć szczegóły.",
     "chooseFile": "Wybierz plik",
-    "noFileChosen": "Nie wybrano pliku"
+    "noFileChosen": "Nie wybrano pliku",
+    "timelineTitle": "Historia przepisu",
+    "timelineOpenStart": "Otwarty początek",
+    "timelineOpenEnd": "Otwarty koniec",
+    "timelineCurrent": "Aktualna wersja",
+    "timelineCompare": "Porównaj sąsiednie wersje",
+    "timelineTruncated": "Ten tekst jest skrócony.",
+    "timelineLoadMore": "Wczytaj więcej",
+    "timelineEmpty": "Brak wersji do wyświetlenia.",
+    "timelineNoDate": "Ta wersja nie ma daty potrzebnej do odczytania przepisu.",
+    "timelinePartialDiff": "Porównanie zawiera skrócony tekst.",
+    "timelineReadVersion": "Odczytaj tę wersję"
   },
   "pt-BR": {
     "constitutional": "Tribunais constitucionais",
@@ -580,7 +690,18 @@
     "keywordsOmitted": "Mais {count}",
     "headnoteOmitted": "As ementas foram omitidas para limitar o tamanho desta página. Abra a decisão para consultar os detalhes.",
     "chooseFile": "Escolher arquivo",
-    "noFileChosen": "Nenhum arquivo selecionado"
+    "noFileChosen": "Nenhum arquivo selecionado",
+    "timelineTitle": "Histórico do dispositivo",
+    "timelineOpenStart": "Início em aberto",
+    "timelineOpenEnd": "Fim em aberto",
+    "timelineCurrent": "Versão atual",
+    "timelineCompare": "Comparar versões adjacentes",
+    "timelineTruncated": "Este texto está truncado.",
+    "timelineLoadMore": "Carregar mais",
+    "timelineEmpty": "Nenhuma versão para exibir.",
+    "timelineNoDate": "Esta versão não tem data para consultar o dispositivo legal.",
+    "timelinePartialDiff": "A comparação inclui texto truncado.",
+    "timelineReadVersion": "Ler esta versão"
   },
   "sk": {
     "constitutional": "Ústavné súdy",
@@ -633,7 +754,18 @@
     "keywordsOmitted": "Ďalších {count}",
     "headnoteOmitted": "Právne vety sú vynechané, aby stránka zostala malá. Podrobnosti nájdete po otvorení rozhodnutia.",
     "chooseFile": "Vybrať súbor",
-    "noFileChosen": "Nebol vybraný žiadny súbor"
+    "noFileChosen": "Nebol vybraný žiadny súbor",
+    "timelineTitle": "História ustanovenia",
+    "timelineOpenStart": "Otvorený začiatok",
+    "timelineOpenEnd": "Otvorený koniec",
+    "timelineCurrent": "Aktuálne znenie",
+    "timelineCompare": "Porovnať susedné znenia",
+    "timelineTruncated": "Toto znenie je skrátené.",
+    "timelineLoadMore": "Načítať ďalšie",
+    "timelineEmpty": "Žiadne znenia na zobrazenie.",
+    "timelineNoDate": "Táto verzia nemá dátum potrebný na prečítanie ustanovenia.",
+    "timelinePartialDiff": "Porovnanie obsahuje skrátené znenie.",
+    "timelineReadVersion": "Prečítať toto znenie"
   },
   "es": {
     "constitutional": "Tribunales constitucionales",
@@ -686,6 +818,17 @@
     "keywordsOmitted": "{count} más",
     "headnoteOmitted": "Se omiten los sumarios para limitar el tamaño de esta página. Abra la resolución para consultar los detalles.",
     "chooseFile": "Elegir archivo",
-    "noFileChosen": "Ningún archivo seleccionado"
+    "noFileChosen": "Ningún archivo seleccionado",
+    "timelineTitle": "Historial de la disposición",
+    "timelineOpenStart": "Inicio abierto",
+    "timelineOpenEnd": "Fin abierto",
+    "timelineCurrent": "Versión vigente",
+    "timelineCompare": "Comparar versiones contiguas",
+    "timelineTruncated": "Este texto está truncado.",
+    "timelineLoadMore": "Cargar más",
+    "timelineEmpty": "No hay versiones para mostrar.",
+    "timelineNoDate": "Esta versión no tiene fecha para leer la disposición.",
+    "timelinePartialDiff": "La comparación incluye texto truncado.",
+    "timelineReadVersion": "Leer esta versión"
   }
 }

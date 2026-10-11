@@ -5,7 +5,7 @@ import type * as v from "valibot";
 
 import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "@stll/api-contract/mcp-app-sandbox-policy";
 
-import {
+import type {
   READ_PROVISION_HISTORY_PROJECTION,
   READ_STATUTE_PROVISIONS_PROJECTION,
 } from "../src/lib/chat/legislation-result-projections";
@@ -28,7 +28,8 @@ const VERSION_2020 = {
   appUrl: null,
   url: null,
   documentId: "00000000-0000-4000-8000-000000000001",
-  resourceName: "stella://resource/legislation_document/id=00000000-0000-4000-8000-000000000001",
+  resourceName:
+    "stella://resource/legislation_document/id=00000000-0000-4000-8000-000000000001",
   versionValidFrom: "2020-01-01",
   versionValidTo: "2020-12-31",
   expressionKind: "consolidation",
@@ -42,7 +43,8 @@ const VERSION_2021 = {
   appUrl: null,
   url: null,
   documentId: "00000000-0000-4000-8000-000000000002",
-  resourceName: "stella://resource/legislation_document/id=00000000-0000-4000-8000-000000000002",
+  resourceName:
+    "stella://resource/legislation_document/id=00000000-0000-4000-8000-000000000002",
   versionValidFrom: "2021-01-01",
   versionValidTo: null,
   expressionKind: "consolidation",
@@ -56,7 +58,8 @@ const VERSION_WITHHELD = {
   appUrl: null,
   url: null,
   documentId: "00000000-0000-4000-8000-000000000003",
-  resourceName: "stella://resource/legislation_document/id=00000000-0000-4000-8000-000000000003",
+  resourceName:
+    "stella://resource/legislation_document/id=00000000-0000-4000-8000-000000000003",
   versionValidFrom: null,
   versionValidTo: "2019-12-31",
   expressionKind: "consolidation",
@@ -108,7 +111,9 @@ const mountTimeline = async ({
 }): Promise<FrameLocator> => {
   page.on("pageerror", (error) => browserErrors.push(error.message));
   page.on("console", (message) => {
-    if (message.type() === "error") browserErrors.push(message.text());
+    if (message.type() === "error") {
+      browserErrors.push(message.text());
+    }
   });
   await page.setViewportSize({ width, height: 820 });
   const bundle = await readFile(
@@ -116,7 +121,7 @@ const mountTimeline = async ({
       "../src/mcp/apps/statute-timeline/generated/app.html.txt",
       import.meta.url,
     ),
-    "utf8",
+    "utf-8",
   );
   const html = bundle.replace(
     "<head>",
@@ -131,9 +136,18 @@ const mountTimeline = async ({
   );
   await page.goto("http://localhost/statute-timeline-fixture");
   const mounted = await page.evaluate(
-    ({ html: appHtml, initialTheme, input, firstPage, secondPage, versionRead }) => {
+    ({
+      html: appHtml,
+      initialTheme,
+      input,
+      firstPage,
+      secondPage,
+      versionRead,
+    }) => {
       const iframe = document.querySelector<HTMLIFrameElement>("iframe");
-      if (iframe === null) return false;
+      if (iframe === null) {
+        return false;
+      }
       const calls: FixtureHost["calls"] = [];
       const failures: string[] = [];
       const reply = (message: unknown) =>
@@ -146,12 +160,16 @@ const mountTimeline = async ({
         typeof value === "object" && value !== null && !Array.isArray(value);
       const reject = (id: unknown, message: string) => {
         failures.push(message);
-        reply({ jsonrpc: "2.0", id, error: { code: -32602, message } });
+        reply({ jsonrpc: "2.0", id, error: { code: -32_602, message } });
       };
       window.addEventListener("message", (event) => {
-        if (event.source !== iframe.contentWindow || !record(event.data)) return;
+        if (event.source !== iframe.contentWindow || !record(event.data)) {
+          return;
+        }
         const { method, params, id } = event.data;
-        if (typeof method !== "string") return;
+        if (typeof method !== "string") {
+          return;
+        }
         if (method === "ui/initialize") {
           reply({
             jsonrpc: "2.0",
@@ -191,13 +209,20 @@ const mountTimeline = async ({
           return;
         }
         if (method === "tools/call") {
-          if (!record(params) || typeof params["name"] !== "string" || !record(params["arguments"])) {
+          if (
+            !record(params) ||
+            typeof params["name"] !== "string" ||
+            !record(params["arguments"])
+          ) {
             reject(id, "Invalid timeline fixture request");
             return;
           }
           const { name, arguments: args } = params;
           calls.push({ name, arguments: args });
-          if (name === "read_provision_history" && args["cursor"] === "timeline-page-2") {
+          if (
+            name === "read_provision_history" &&
+            args["cursor"] === "timeline-page-2"
+          ) {
             reply({ jsonrpc: "2.0", id, result: toolResult(secondPage) });
             return;
           }
@@ -215,7 +240,9 @@ const mountTimeline = async ({
           });
           return;
         }
-        if (id !== undefined) reply({ jsonrpc: "2.0", id, result: {} });
+        if (id !== undefined) {
+          reply({ jsonrpc: "2.0", id, result: {} });
+        }
       });
       globalThis.statuteTimelineFixtureHost = {
         calls,
@@ -250,27 +277,40 @@ const calls = async (page: Page) =>
     failures: globalThis.statuteTimelineFixtureHost.failures,
   }));
 
-test("timeline selection, adjacent comparison and paging work in the fixture host", async ({ page }) => {
+test("timeline selection, adjacent comparison and paging work in the fixture host", async ({
+  page,
+}) => {
   const browserErrors: string[] = [];
   const app = await mountTimeline({ page, browserErrors });
-  await expect(app.getByRole("heading", { name: "Provision history" })).toBeVisible();
+  await expect(
+    app.getByRole("heading", { name: "Provision history" }),
+  ).toBeVisible();
   const versions = app.locator("button[data-version-id]");
   await expect(versions).toHaveCount(2);
   await expect(versions.nth(0)).toContainText("2021");
-  await expect(app.getByTestId("version-wording")).toContainText(VERSION_2021.text);
+  await expect(app.getByTestId("version-wording")).toContainText(
+    VERSION_2021.text,
+  );
 
   await versions.nth(1).click();
-  await expect(app.getByTestId("version-wording")).toContainText(VERSION_2020.text);
+  await expect(app.getByTestId("version-wording")).toContainText(
+    VERSION_2020.text,
+  );
   await app.getByRole("button", { name: "Read this version" }).click();
   await expect(app.getByText("This wording is truncated.")).toBeVisible();
   await versions.nth(0).click();
   await app.getByRole("button", { name: "Compare adjacent versions" }).click();
   await expect(app.locator('[data-slot="review-diff-text"]')).toBeVisible();
-  await expect(app.locator('[data-slot="review-diff-text"]')).toContainText("updated right");
+  await expect(app.locator('[data-slot="review-diff-text"]')).toContainText(
+    "updated right",
+  );
 
   await app.getByRole("button", { name: "Load more" }).click();
   await expect(versions).toHaveCount(3);
-  await expect(versions.nth(2)).toHaveAttribute("data-version-id", VERSION_WITHHELD.documentId);
+  await expect(versions.nth(2)).toHaveAttribute(
+    "data-version-id",
+    VERSION_WITHHELD.documentId,
+  );
   const recorded = await calls(page);
   expect(recorded.failures).toEqual([]);
   expect(recorded.calls).toContainEqual({
@@ -293,15 +333,23 @@ test("timeline selection, adjacent comparison and paging work in the fixture hos
   expect(browserErrors).toEqual([]);
 });
 
-test("timeline controls remain visible and keyboard reachable across themes and narrow widths", async ({ page }) => {
+test("timeline controls remain visible and keyboard reachable across themes and narrow widths", async ({
+  page,
+}) => {
   const browserErrors: string[] = [];
   const app = await mountTimeline({ page, width: 390, browserErrors });
   const chart = app.getByTestId("statute-timeline-chart");
   await expect(chart).toBeHidden();
   await expect(app.locator("button[data-version-id]")).toHaveCount(2);
-  await app.locator(`button[data-version-id="${VERSION_2020.documentId}"]`).click();
-  await expect(app.getByRole("button", { name: "Read this version" })).toBeVisible();
-  await expect(app.getByRole("heading", { name: "Provision history" })).toBeVisible();
+  await app
+    .locator(`button[data-version-id="${VERSION_2020.documentId}"]`)
+    .click();
+  await expect(
+    app.getByRole("button", { name: "Read this version" }),
+  ).toBeVisible();
+  await expect(
+    app.getByRole("heading", { name: "Provision history" }),
+  ).toBeVisible();
 
   const dimensions = await app.locator("body").evaluate((body) => ({
     scrollWidth: body.scrollWidth,
@@ -313,14 +361,20 @@ test("timeline controls remain visible and keyboard reachable across themes and 
   await firstVersion.focus();
   await expect(firstVersion).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(app.getByTestId("version-wording")).toContainText(VERSION_2021.text);
+  await expect(app.getByTestId("version-wording")).toContainText(
+    VERSION_2021.text,
+  );
 
   await page.evaluate(() =>
     globalThis.statuteTimelineFixtureHost.setTheme("dark"),
   );
   await expect(app.locator("html")).toHaveClass(/dark/u);
-  await app.locator(`button[data-version-id="${VERSION_2020.documentId}"]`).click();
-  await expect(app.getByRole("button", { name: "Read this version" })).toBeVisible();
+  await app
+    .locator(`button[data-version-id="${VERSION_2020.documentId}"]`)
+    .click();
+  await expect(
+    app.getByRole("button", { name: "Read this version" }),
+  ).toBeVisible();
   expect(browserErrors).toEqual([]);
 });
 
@@ -332,7 +386,9 @@ for (const theme of ["light", "dark"] as const) {
     const app = await mountTimeline({ page, theme, browserErrors });
     await expect(app.getByTestId("statute-timeline-chart")).toBeVisible();
     await expect(app.locator("button[data-version-id]")).toHaveCount(2);
-    await expect(app.getByRole("heading", { name: "Provision history" })).toBeVisible();
+    await expect(
+      app.getByRole("heading", { name: "Provision history" }),
+    ).toBeVisible();
     const classes = await app.locator("html").getAttribute("class");
     expect(classes?.split(/\s+/u).includes("dark")).toBe(theme === "dark");
     const dimensions = await app.locator("body").evaluate((body) => ({
