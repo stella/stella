@@ -6113,8 +6113,8 @@ type Messages = {
         "cropLeft": "Left (mm)";
         "cropMove": "Move crop area";
         "cropNextPage": "Next selected page";
-        "cropPage": "Page {page} of {count}";
-        "cropPreview": "Crop preview, page {page}";
+        "cropPage": "Page {page, number} of {count, number}";
+        "cropPreview": "Crop preview, page {page, number}";
         "cropPreviewFailed": "The page preview could not be rendered.";
         "cropPreviousPage": "Previous selected page";
         "cropRight": "Right (mm)";
