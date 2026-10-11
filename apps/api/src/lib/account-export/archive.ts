@@ -73,7 +73,7 @@ export type AccountExportFileUnavailableReason = "object_missing";
 const serializeRecord = (row: unknown): string | undefined =>
   JSON.stringify(row);
 
-const encodeRecord = (encoder: TextEncoder, row: unknown): Uint8Array => {
+const serializeBoundedRecord = (row: unknown): string => {
   const serialized = serializeRecord(row);
   if (serialized === undefined) {
     panic("Account export projection must produce JSON");
@@ -86,7 +86,7 @@ const encodeRecord = (encoder: TextEncoder, row: unknown): Uint8Array => {
       message: "Account export record exceeds its size limit",
     });
   }
-  return encoder.encode(serialized);
+  return serialized;
 };
 
 /**
@@ -171,7 +171,7 @@ export const buildAccountExportArchive = async ({
           signal,
         })) {
           signal.throwIfAborted();
-          const bytes = encodeRecord(encoder, row);
+          const bytes = encoder.encode(serializeBoundedRecord(row));
           if (summary.count > 0) {
             yield encoder.encode(",");
           }
@@ -208,23 +208,15 @@ export const buildAccountExportArchive = async ({
         size: file.sizeBytes,
       };
     }
-    const userFilesJson = async function* () {
-      yield encoder.encode("[");
-      for (const file of inventory) {
-        signal.throwIfAborted();
-        const bytes = encodeRecord(
-          encoder,
-          userFileRecord(file, unavailable.get(file)),
-        );
-        if (userFilesSummary.count > 0) {
-          yield encoder.encode(",");
-        }
-        yield bytes;
-        userFilesSummary.count += 1;
-      }
-      yield encoder.encode("]");
+    // The inventory is already held in memory, so its records are too.
+    const userFileRecords = inventory.map((file) =>
+      serializeBoundedRecord(userFileRecord(file, unavailable.get(file))),
+    );
+    userFilesSummary.count = userFileRecords.length;
+    yield {
+      name: "user_files.json",
+      input: encoder.encode(`[${userFileRecords.join(",")}]`),
     };
-    yield { name: "user_files.json", input: userFilesJson() };
     // client-zip consumes each entry before requesting the next: these
     // counts describe rows written, rather than a separate drifting census.
     yield {
