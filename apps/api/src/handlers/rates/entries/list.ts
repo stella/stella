@@ -56,6 +56,7 @@ const decodeRateEntryCursor = (cursor: string): RateEntryCursor | null => {
 
 const readRateEntries = createSafeHandler(
   {
+    contract: "patch",
     description:
       "List the rate lines of one rate table, earliest effective-from first, " +
       "with cursor pagination. Each line carries the hourly rate in minor " +

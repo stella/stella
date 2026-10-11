@@ -34,6 +34,7 @@ import { boundedAll } from "@/api/lib/db/bounded-all";
  */
 
 const config = {
+  contract: "patch",
   description:
     "Read the never-mask entries that apply in a matter: the " +
     "organization-wide ones plus the matter's own and, when entityId is " +

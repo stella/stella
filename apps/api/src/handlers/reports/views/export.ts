@@ -45,6 +45,7 @@ import { excludedEntityKindsForView } from "@/api/lib/views";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.standard,
   featureAccess: AVT_LAYOUT_FEATURE_ACCESS,
   description:

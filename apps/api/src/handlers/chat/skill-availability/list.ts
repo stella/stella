@@ -25,6 +25,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason: "Returns skill availability metadata rather than stored packages.",

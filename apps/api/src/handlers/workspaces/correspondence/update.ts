@@ -19,6 +19,7 @@ const HANDLING_STATE_SCHEMA_VALUES = [
 ] as const satisfies typeof CORRESPONDENCE_HANDLING_STATES;
 
 const config = {
+  contract: "patch",
   description:
     "Update supplied handling fields of a matter correspondence record. Omitted fields stay unchanged; null assignee clears assignment.",
   permissions: { workspace: ["update"] },

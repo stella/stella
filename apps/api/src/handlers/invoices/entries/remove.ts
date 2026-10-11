@@ -91,6 +91,7 @@ const buildDetachEvents = (params: {
 
 const removeEntries = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Detach time entries and expenses from a draft invoice, removing their " +
       "invoice lines, returning them to approved, unbilled status, and " +

@@ -29,6 +29,7 @@ const WEB_SEARCH_KEY_ERROR_CODE = {
 } as const;
 
 const config = {
+  contract: "patch",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },

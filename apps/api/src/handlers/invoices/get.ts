@@ -10,6 +10,7 @@ const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
 
 const readInvoiceById = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Read one invoice with its full detail: its lines in order with " +
       "quantity, unit price, VAT, and amounts; totals with the VAT breakdown " +

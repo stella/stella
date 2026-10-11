@@ -22,6 +22,7 @@ const addWorkspaceMemberBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Add one member of the organization to a matter, granting them access to " +
     "it. A user who is already a member is a 409, and the call is refused " +

@@ -11,6 +11,7 @@ import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-enti
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason:

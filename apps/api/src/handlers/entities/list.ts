@@ -52,6 +52,7 @@ const readEntitiesBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "List a matter's documents, folders, and tasks as table rows, using the " +
     "same filters, sorts, and search the matter's views use, with cursor " +

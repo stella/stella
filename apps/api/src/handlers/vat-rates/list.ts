@@ -52,6 +52,7 @@ true satisfies MissingVatRateListColumn extends never ? true : never;
 true satisfies UnexpectedVatRateListColumn extends never ? true : never;
 
 const config = {
+  contract: "patch",
   description: "List active VAT rates in the active organization.",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,

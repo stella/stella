@@ -16,6 +16,7 @@ import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
 const config = {
+  contract: "patch",
   description:
     "Remove one contact from a matter's party list, deleting the link with the " +
     "party role and notes recorded on it. The contact stays in the " +

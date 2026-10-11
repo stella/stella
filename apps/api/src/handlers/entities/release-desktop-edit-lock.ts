@@ -15,6 +15,7 @@ import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { broadcastSessionEvent } from "@/api/lib/sse";
 
 const config = {
+  contract: "patch",
   permissions: { entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "session_token_exchange" },

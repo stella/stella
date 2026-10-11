@@ -89,6 +89,7 @@ ${numbered}`;
 };
 
 const config = {
+  contract: "patch",
   actionAdmission: { type: "handler", actionKind: "clauses.rewrite" },
   description:
     "Rewrite the prose of a clause body with the model, following a " +

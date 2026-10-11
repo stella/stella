@@ -23,6 +23,7 @@ const createApiKeyBody = t.Object({
 });
 
 const config = {
+  contract: "patch",
   // Owner/admin only. Minting a credential that acts inside the organization is
   // an organization-configuration act, and this is the same statement the other
   // org-scoped secret endpoints (AI provider config, DeepL key) are gated on.

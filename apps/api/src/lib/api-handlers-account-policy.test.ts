@@ -18,6 +18,7 @@ import {
 } from "@/api/tests/helpers/handler-context";
 
 const config = {
+  contract: "patch",
   permissions: { integration: ["create"] },
   accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "internal", reason: "mcp_transport" },
@@ -123,6 +124,7 @@ test("allows sandbox matter mutations without an account growth check", async ()
   for (const operation of ["create", "update", "delete"] as const) {
     const checkAccountOperation = mock(() => Result.ok());
     const matterConfig = {
+      contract: "patch",
       permissions: { workspace: [operation] },
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "mcp_transport" },
@@ -150,6 +152,7 @@ test("allows sandbox matter mutations without an account growth check", async ()
 test("applies declared account access alongside resource permissions", async () => {
   const definition = createSafeRootHandler(
     {
+      contract: "patch",
       permissions: { workspace: ["read"] },
       accountAccess: ACCOUNT_ACCESS.standard,
       mcp: { type: "internal", reason: "mcp_transport" },
@@ -211,6 +214,7 @@ describe("session handler account policy", () => {
         }),
       );
       const sessionConfig = {
+        contract: "patch",
         accountAccess,
         mcp: { type: "internal", reason: "mcp_transport" },
       } as const satisfies SessionHandlerConfig;

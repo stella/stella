@@ -17,6 +17,7 @@ import { pinProposedPositions } from "@/api/lib/document-review/reference-passag
 const TIMEOUT_MS = 120_000;
 
 const config = {
+  contract: "patch",
   actionAdmission: {
     type: "handler",
     actionKind: "document-reviews.propose-positions",

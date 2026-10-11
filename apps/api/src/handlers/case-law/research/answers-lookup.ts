@@ -11,6 +11,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {
+  contract: "patch",
   description:
     "The organization's answer cells for the decisions a client has on " +
     "screen, every question column at once. Bounded by the decisions named " +

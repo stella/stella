@@ -227,6 +227,7 @@ export const listTemplatesHandler = async function* ({
 };
 
 const config = {
+  contract: "patch",
   description:
     "List the document templates in this organization (NDAs, powers of " +
     "attorney, leases): each template's id, name, field count, tags, and " +

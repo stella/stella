@@ -40,6 +40,7 @@ export const decisionSampleForPrompt = ({
 });
 
 const config = {
+  contract: "patch",
   actionAdmission: { type: "handler", actionKind: "properties.suggest-prompt" },
   description:
     "Draft or refine a question column's wording with the model, from the " +

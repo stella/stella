@@ -26,6 +26,7 @@ const transitionBody = t.Object({
 
 const transitionWorkObligation = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Complete, cancel, or reopen governed work while preserving its lifecycle history. Completing or cancelling the task a workflow review gate raised approves or rejects that gate.",
     permissions: { entity: ["update"] },

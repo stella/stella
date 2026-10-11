@@ -16,6 +16,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { projectResponseText } from "@/api/lib/search/project-response-text";
 
 const config = {
+  contract: "patch",
   cache: { kind: "none" },
   response: safePublicHandlerResponseSchemasWithStatusText(
     citationsResponseSchema,

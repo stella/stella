@@ -25,6 +25,7 @@ const paramsSchema = workspaceParams({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Restore a historical document version by copying it into a new current version; the prior history remains intact.",
   permissions: { entity: ["update"] },

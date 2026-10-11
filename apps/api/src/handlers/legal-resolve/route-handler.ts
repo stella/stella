@@ -39,6 +39,7 @@ const legalResolveParamsSchema = t.Object({
 });
 
 export const legalResolveBaseConfig = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   contentDelivery: {
     type: "none",

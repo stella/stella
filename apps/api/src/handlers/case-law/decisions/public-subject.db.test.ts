@@ -163,6 +163,7 @@ afterAll(async () => {
 const app = () => {
   const byId = createSafePublicSubjectHandler({
     config: {
+      contract: "patch",
       cache: { kind: "none" },
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },
@@ -174,6 +175,7 @@ const app = () => {
   });
   const bySlug = createSafePublicSubjectHandler({
     config: {
+      contract: "patch",
       cache: { kind: "none" },
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },

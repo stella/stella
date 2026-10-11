@@ -23,6 +23,7 @@ const requestBody = t.Object(
 );
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
   body: requestBody,

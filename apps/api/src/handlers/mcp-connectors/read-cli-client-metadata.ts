@@ -43,6 +43,7 @@ const toResponse = (
 
 const readCliClientMetadata = createSafeBoundedPublicHandler(
   {
+    contract: "patch",
     cache: { kind: "public", maxAge: 3600 },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "auth_plumbing" },

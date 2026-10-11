@@ -16,6 +16,7 @@ const listSkillProposalsParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "List the change proposals raised against an agent skill, newest first " +
     "and without their bodies. baseIsCurrent " +

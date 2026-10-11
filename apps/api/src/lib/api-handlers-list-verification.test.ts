@@ -192,6 +192,7 @@ describe("verification handler access admission", () => {
     };
     try {
       const config = {
+        contract: "patch",
         featureAccess: { featureId: "list-verification", type: "required" },
         permissions: { workspace: ["read"] },
         access: "read",

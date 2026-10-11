@@ -78,6 +78,7 @@ const cursorCodec = createTimestampIdCursorCodec({
 });
 
 const config = {
+  contract: "patch",
   description:
     "List correspondence filed in a matter, newest received first. When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original. A record whose source is upload was read from the email file sourceEntityId in the matter; its headers are as stated in that file and are not verified.",
   permissions: { workspace: ["read"] },

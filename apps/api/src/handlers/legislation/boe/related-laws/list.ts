@@ -27,6 +27,7 @@ const querySchema = t.Object({
 
 const boeRelatedLaws = createSafeRootHandler(
   {
+    contract: "patch",
     description:
       "List the Spanish BOE laws related to one law, narrowed by " +
       "relationType: modifies, modifiedBy, derogates, derogatedBy, or all " +

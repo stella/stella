@@ -22,6 +22,7 @@ const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
 
 const deleteInvoice = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Delete a draft invoice and return every time entry and expense on it to " +
       "approved, unbilled status so they can be invoiced again. Only draft " +

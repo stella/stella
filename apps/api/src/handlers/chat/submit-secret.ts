@@ -66,6 +66,7 @@ const submissionSchema = v.variant("decision", [
   }),
 ]);
 const config = {
+  contract: "patch",
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "chat_thread_ui" },

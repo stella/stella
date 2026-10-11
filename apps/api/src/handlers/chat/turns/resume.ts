@@ -28,6 +28,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { withSseHeartbeat } from "@/api/lib/sse";
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason:

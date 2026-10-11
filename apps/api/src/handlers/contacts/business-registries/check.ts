@@ -159,6 +159,7 @@ const subjectFromBody = (
 
 const businessRegistriesCheck = createSafeRootHandler(
   {
+    contract: "patch",
     description:
       "Screen a company or person against an official source, such as the " +
       "Czech insolvency or VAT register, or against every sanctions list. " +

@@ -60,6 +60,7 @@ const fromCommentsBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   actionAdmission: {
     type: "handler",
     actionKind: "skills.propose-from-comments",

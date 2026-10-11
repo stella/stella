@@ -158,6 +158,7 @@ export const createPublicSanctionsSearchHandler = ({
 }: PublicSanctionsSearchOptions = {}) =>
   createSafePublicHandler(
     {
+      contract: "patch",
       accountAccess: ACCOUNT_ACCESS.sandbox,
       cache: { kind: "none" },
       mcp: { type: "internal", reason: "public_indexing" },

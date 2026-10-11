@@ -58,6 +58,7 @@ const createTimeEntryBodySchema = t.Object({
 
 const createTimeEntry = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Create a time entry in the current matter. dateWorked, timezoneId, " +
       "durationMinutes, and narrative are required; workItemId is optional. " +

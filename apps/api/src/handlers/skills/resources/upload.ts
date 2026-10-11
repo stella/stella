@@ -58,6 +58,7 @@ const uploadSkillResourceBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Add one file to an agent skill by uploading it. A DOCX or PDF is stored " +
     "as its extracted text and anything else is decoded as UTF-8; content " +

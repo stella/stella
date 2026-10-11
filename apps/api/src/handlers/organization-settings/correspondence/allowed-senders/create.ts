@@ -23,6 +23,7 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description: "Approve a shared mailbox address for filing correspondence.",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.accountControl,

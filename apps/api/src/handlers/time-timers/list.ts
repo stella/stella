@@ -19,6 +19,7 @@ import { brandPersistedTimeTimerId } from "@/api/lib/safe-id-boundaries";
 
 const listMyTimeTimers = createSafeRootHandler(
   {
+    contract: "patch",
     description:
       "List your running and paused timers in the active organization. Use each returned timer ID to update, pause, resume, confirm or discard it. Follow nextCursor to read the next page.",
     permissions: { timeEntry: ["read"] },

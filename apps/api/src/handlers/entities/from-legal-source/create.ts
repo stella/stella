@@ -35,6 +35,7 @@ const CREATE_FROM_LEGAL_SOURCE_ERROR_CODE = {
 
 export default createSafeHandler(
   {
+    contract: "patch",
     contentDelivery: {
       type: "none",
       reason:

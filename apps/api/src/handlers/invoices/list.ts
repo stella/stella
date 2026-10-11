@@ -35,6 +35,7 @@ const invoiceCursor = createTimestampIdCursorCodec({
 
 const readInvoices = createSafeHandler(
   {
+    contract: "patch",
     description:
       "List a matter's invoices oldest first with cursor pagination, " +
       "returning each invoice's number (null before numbering), document type, original invoice id, reference, status, dates, currency, " +

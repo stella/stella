@@ -17,6 +17,7 @@ const paramsSchema = t.Object({
   senderId: tSafeId("correspondenceAllowedSender"),
 });
 const config = {
+  contract: "patch",
   description: "Remove one matter from a shared mailbox sender's filing scope.",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.accountControl,

@@ -156,6 +156,7 @@ export const moveAssigneeHandler = async function* ({
 
 const moveAssignee = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Reassign a task from one member to another in one atomic step: " +
       "removes fromUserId (when not null) and adds toUserId (when not null) " +

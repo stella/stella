@@ -21,6 +21,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { mockAnswersForOrganization } from "@/api/lib/tanstack-ai-models";
 
 const config = {
+  contract: "patch",
   actionAdmission: { type: "handler", actionKind: "documents.bounding-boxes" },
   contentDelivery: {
     type: "none",

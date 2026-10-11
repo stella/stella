@@ -52,6 +52,7 @@ const previewBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   actionAdmission: { type: "handler", actionKind: "properties.preview" },
   contentDelivery: {
     type: "none",

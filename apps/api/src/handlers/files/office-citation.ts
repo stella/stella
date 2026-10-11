@@ -8,6 +8,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { findOfficeEvidenceBlock } from "@/api/lib/files/office-evidence";
 
 const config = {
+  contract: "patch",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "upload_mechanics" },

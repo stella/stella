@@ -46,6 +46,7 @@ type ExternalPreviewResponse = {
 };
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "public",
     reason: "Returns previews of public external sources.",

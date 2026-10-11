@@ -30,6 +30,11 @@ const SNAPSHOT_STORE_FAILURE_SINK = failureSink({
 });
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/folio-collab/snapshot-store.ts",
+  },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   contentDelivery: {
     type: "none",

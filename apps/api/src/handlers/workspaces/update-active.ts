@@ -8,6 +8,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { prewarmScopedDownloadSigning } from "@/api/lib/s3-presign";
 
 const config = {
+  contract: "patch",
   // permissions-exempt: the write touches only the caller's own last-active
   // workspace pointer on their member row — navigation state no colleague
   // sees. Every role that may open a matter may move its own pointer, so

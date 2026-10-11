@@ -12,6 +12,7 @@ const paramsSchema = t.Object({
 
 const boeLawStructure = createSafeRootHandler(
   {
+    contract: "patch",
     description:
       "Read the block outline of one consolidated Spanish BOE law: its " +
       "parts, articles, and provisions with the block ids that address them. " +

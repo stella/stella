@@ -43,6 +43,7 @@ const createSkillResourceBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Add one text file to an agent skill at a path such as " +
     "references/checklist.md, taking its kind from the path unless you pass " +

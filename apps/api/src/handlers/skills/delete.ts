@@ -15,6 +15,7 @@ const deleteSkillParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Permanently delete an agent skill from the organization, with every " +
     "resource file attached to it. Team skills may only be deleted by an admin " +

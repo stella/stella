@@ -34,6 +34,7 @@ type DeletedLine = { id: SafeId<"invoiceLine">; totals: InvoiceTotals };
 
 const deleteInvoiceLine = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Remove one line from a draft invoice and recompute its totals. A time " +
       "entry or expense line returns its entry to approved, unbilled status, " +

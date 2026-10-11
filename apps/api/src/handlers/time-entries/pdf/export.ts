@@ -231,6 +231,7 @@ const buildMinimalPdf = (lines: readonly string[]): Uint8Array => {
 };
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.standard,
   featureAccess: { featureId: "time-billing", type: "required" },
   description:

@@ -15,6 +15,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contract: "patch",
   description:
     "Page backwards through one of your own chat threads using the " +
     "olderCursor a previous read returned. Returns only the message page and " +

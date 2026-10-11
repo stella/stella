@@ -25,6 +25,11 @@ import { broadcastWorkspaceResourceChanges } from "@/api/lib/resource-realtime";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/views/reorder.ts",
+  },
   featureAccess: AVT_LAYOUT_FEATURE_ACCESS,
   description:
     "Set the tab order of a matter's views. viewIds must name every view of " +

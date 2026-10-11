@@ -43,6 +43,7 @@ const readExpensesQuerySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "List expenses in a matter, earliest date first, with cursor pagination. " +
     "Filter by userId, work item (matterId), a date-incurred range " +

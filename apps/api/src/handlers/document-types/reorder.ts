@@ -8,6 +8,11 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/document-types/reorder.ts",
+  },
   description:
     "Set the display order of the organization's document types: each id's " +
     "position in orderedIds becomes its sort order. Ids that do not belong " +

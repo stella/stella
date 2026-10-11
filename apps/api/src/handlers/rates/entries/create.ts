@@ -236,6 +236,7 @@ export const createRateEntryHandler = async function* ({
 
 const createRateEntry = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Add one rate line to a rate table: an hourly rate in integer minor " +
       "currency units, effective from a date and optionally until another. " +

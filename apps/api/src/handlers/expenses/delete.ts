@@ -16,6 +16,7 @@ const deleteExpenseBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Delete an expense: a draft expense is permanently deleted, and any other " +
     "unbilled expense is written off instead (kept for the audit trail, " +

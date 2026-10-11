@@ -35,6 +35,7 @@ type LawRouteHandlerOptions = {
 
 const lawConfig = {
   ...legalResolveBaseConfig,
+  contract: "patch",
   query: permissiveRouteSchema({
     keys: ["citation", "collection", "year", "number", "section", "asOf"],
   }),

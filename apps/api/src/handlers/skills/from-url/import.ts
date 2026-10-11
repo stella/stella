@@ -21,6 +21,7 @@ const importSkillBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason: "Imports skill metadata without delivering stored-file bytes.",

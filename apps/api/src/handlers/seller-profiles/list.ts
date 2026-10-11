@@ -60,6 +60,7 @@ true satisfies MissingSellerProfileListColumn extends never ? true : never;
 true satisfies UnexpectedSellerProfileListColumn extends never ? true : never;
 
 const config = {
+  contract: "patch",
   description:
     "List active issuer profiles for the active organization, newest first, " +
     "with cursor pagination. Bank details are included for billing setup.",

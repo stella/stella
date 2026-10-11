@@ -42,6 +42,7 @@ const listSkillsQuerySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "List the agent skills visible to you, the organization's team skills " +
     "plus your own private ones, enabled first and then by scope and name, " +

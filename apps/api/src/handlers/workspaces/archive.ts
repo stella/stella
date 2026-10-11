@@ -17,6 +17,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contract: "patch",
   description:
     "Archive a matter: it stops being writable and is cleared from members' " +
     "last-visited matter. Reversible with matters.unarchive, and nothing " +

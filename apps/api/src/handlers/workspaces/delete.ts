@@ -10,6 +10,7 @@ import { WorkspaceStorageTeardownBoundError } from "@/api/lib/organization-stora
 import { executeAuthorizedWorkspaceDeletion } from "@/api/lib/workspace-deletion";
 
 const config = {
+  contract: "patch",
   description:
     "Permanently delete a matter and all its documents, tasks, fields, and " +
     "chat history. This is irreversible.",

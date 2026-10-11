@@ -12,6 +12,7 @@ import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contract: "patch",
   description:
     "Read one bilingual translation run: status, progress, and per-row results with consistency warnings.",
   permissions: { workspace: ["read"] },

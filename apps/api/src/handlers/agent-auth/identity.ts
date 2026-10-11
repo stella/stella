@@ -31,6 +31,7 @@ import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
  * (empty-by-default) trusted-issuer allow-list.
  */
 const config = {
+  contract: "patch",
   body: t.Union([
     t.Object({
       type: t.Literal("service_auth"),

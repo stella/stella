@@ -28,6 +28,12 @@ const updateAnonymizationBlacklistBodySchema = t.Object({
 });
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId:
+      "apps/api/src/handlers/organization-settings/anonymization-blacklist/update.ts",
+  },
   description:
     "Replace the organization-wide always-mask list with the entries you " +
     "pass: terms not in the list are deleted, terms already present are " +

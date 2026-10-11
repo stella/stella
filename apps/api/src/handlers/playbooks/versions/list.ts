@@ -11,6 +11,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 const config = {
+  contract: "patch",
   description:
     "List one playbook's approval history, newest version first: the version " +
     "number, the name it carried at that version, when it was created, and " +

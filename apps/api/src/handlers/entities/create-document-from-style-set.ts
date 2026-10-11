@@ -15,6 +15,7 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   access: "write",
   contentDelivery: {
     type: "none",

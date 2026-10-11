@@ -24,6 +24,7 @@ const EDITABLE_FIELDS = [
 ] as const;
 
 const config = {
+  contract: "patch",
   description:
     "Update an active number series. Pattern and padding lock after first allocation.",
   permissions: { organizationSettings: ["update"] },

@@ -25,6 +25,7 @@ const bodySchema = t.Object({
   body: t.String({ minLength: 1, maxLength: 10_000 }),
 });
 const config = {
+  contract: "patch",
   featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Add a comment to one list item. The comment is stored against the item " +

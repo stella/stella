@@ -22,6 +22,7 @@ import type { CaseLawResearchColumnContent } from "@/api/lib/case-law/research-a
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contract: "patch",
   description:
     "Reword or retype one of the organization's questions. A changed " +
     "question, answer type or option list invalidates every answer the " +

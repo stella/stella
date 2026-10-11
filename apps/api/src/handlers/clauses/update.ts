@@ -370,6 +370,11 @@ const addFieldDiff = (
 };
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/clauses/update.ts",
+  },
   description:
     "Change a clause's title, category, language, body, description, usage " +
     "notes, or metadata; only the fields you pass are written. By default a " +

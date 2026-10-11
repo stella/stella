@@ -10,6 +10,7 @@ import {
 } from "./recipes";
 
 const config = {
+  contract: "patch",
   description:
     "Create a template recipe, a named reusable block of pre-configured " +
     "template fields, from a name, an optional description, and a definition " +

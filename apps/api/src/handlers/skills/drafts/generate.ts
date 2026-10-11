@@ -45,6 +45,7 @@ const generateDraftBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   actionAdmission: { type: "handler", actionKind: "skills.generate-draft" },
   description:
     "Draft a skill bundle with the model: returns SKILL.md markdown plus up " +

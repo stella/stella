@@ -12,6 +12,7 @@ import { hasManagementPermission } from "@/api/lib/permission-authorization";
 
 const updateMemberDailyTarget = createSafeRootHandler(
   {
+    contract: "patch",
     description:
       "Set a current member's daily time target in the active organization. Only organization owners and admins may set another member's target. Pass minutes from 1 to 1440, or null to clear it.",
     permissions: { organizationSettings: ["update"] },

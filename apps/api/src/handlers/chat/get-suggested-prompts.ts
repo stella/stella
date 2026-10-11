@@ -41,6 +41,7 @@ Do not include headings, bullet points, numbering, or introductory text. Respond
 Write the suggestions in the same language as the conversation. Be specific to the actual topics, documents, and decisions discussed.`;
 
 const config = {
+  contract: "patch",
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },

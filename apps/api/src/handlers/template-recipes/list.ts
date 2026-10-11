@@ -7,6 +7,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { listTemplateRecipesHandler } from "./recipes";
 
 const config = {
+  contract: "patch",
   description:
     "List the organization's template recipes alphabetically by name, each " +
     "with its id, description, and full definition. Recipes are capped per " +

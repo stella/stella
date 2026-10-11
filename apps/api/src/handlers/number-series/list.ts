@@ -52,6 +52,7 @@ true satisfies MissingNumberSeriesListColumn extends never ? true : never;
 true satisfies UnexpectedNumberSeriesListColumn extends never ? true : never;
 
 const config = {
+  contract: "patch",
   description: "List active document number series in the active organization.",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,

@@ -14,6 +14,7 @@ import { readDocumentReviewRunDetail } from "@/api/lib/document-review/read-run-
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contract: "patch",
   description:
     "Read one document review run: its status, progress, pinned basis, and the findings committed so far.",
   permissions: { workspace: ["read"] },

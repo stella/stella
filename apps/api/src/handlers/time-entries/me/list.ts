@@ -140,6 +140,7 @@ true satisfies MissingMyTimeEntryColumn extends never ? true : never;
 true satisfies UnexpectedMyTimeEntryColumn extends never ? true : never;
 
 const config = {
+  contract: "patch",
   description:
     "List the signed-in user's client and internal time entries for one work date " +
     "in the active organization. Client rows include an accessible matter; internal rows have no matter. " +

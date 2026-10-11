@@ -14,6 +14,7 @@ import { hasCurrentTimerMatterAccess } from "@/api/lib/time-entry-timer-access";
 
 const startTimer = createSafeRootHandler(
   {
+    contract: "patch",
     description:
       "Start your timer in the active organization, optionally assigning a matter and description. Automatically pauses your running timer. Returns its ID for pause, resume, update, confirm or discard.",
     permissions: { timeEntry: ["create"] },

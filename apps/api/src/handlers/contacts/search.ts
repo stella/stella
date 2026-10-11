@@ -18,6 +18,7 @@ const searchContactsQuerySchema = t.Object({
 
 const searchContacts = createSafeRootHandler(
   {
+    contract: "patch",
     description:
       "Look up contacts by name, for a picker: q matches a substring of the " +
       "display name, first name, last name, or organization name, normalized " +

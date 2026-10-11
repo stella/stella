@@ -21,6 +21,7 @@ const deleteSkillProposalParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Delete a change proposal for an agent skill, along with the comments " +
     "anchored to it. The skill and its revisions are untouched. Only the " +

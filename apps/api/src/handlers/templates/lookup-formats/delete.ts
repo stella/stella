@@ -9,6 +9,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 
 const config = {
+  contract: "patch",
   description:
     "Delete a shared company specification format from the active organization.",
   permissions: { template: ["delete"] },

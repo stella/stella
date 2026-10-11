@@ -14,6 +14,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
  * exchange. Ownership comes from the validated session — never the body.
  */
 const config = {
+  contract: "patch",
   body: t.Object({
     user_code: t.String({ minLength: 1, maxLength: 32 }),
   }),

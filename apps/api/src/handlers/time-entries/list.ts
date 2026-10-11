@@ -152,6 +152,7 @@ const decodeTimeEntryCursor = (cursor: string): TimeEntryCursor | null => {
 
 const readTimeEntries = createSafeHandler(
   {
+    contract: "patch",
     description:
       "List time entries in a matter, optionally filtered by workItemId " +
       "(the document, folder, or task providing context), userId or scope=me, " +

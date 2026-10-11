@@ -74,6 +74,7 @@ true satisfies UnexpectedAdminTimerColumn extends never ? true : never;
 
 const listRunningMemberTimers = createSafeRootHandler(
   {
+    contract: "patch",
     description:
       "List running timers in the active organization as an organization owner or admin. Use the timer ID with time-timers.admin.stop to end it into its owner's draft entry. Follow nextCursor to read the next page.",
     permissions: { timeEntry: ["approve"] },

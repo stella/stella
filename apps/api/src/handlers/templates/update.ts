@@ -176,6 +176,11 @@ const updateTemplateHandler = async function* ({
 };
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/templates/update.ts",
+  },
   description:
     "Change a template's record: name, category, tags, languages, whenToUse " +
     "and whenNotToUse guidance. Only the fields you pass are written. The " +

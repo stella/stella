@@ -350,6 +350,7 @@ const normalizeOptionalArray = <T>(value: T[] | undefined): T[] => {
 };
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason:

@@ -11,6 +11,7 @@ const deleteClauseCategoryParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Delete one category from the organization's clause library taxonomy. No " +
     "clause is deleted: clauses filed under the category become uncategorized, " +

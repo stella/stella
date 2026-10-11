@@ -291,6 +291,7 @@ const dismissSuggestion = async function* ({
 
 const createTimeSuggestionDecision = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Decide on a suggested time entry from time-entries.suggestions.list. " +
       "`decision.type: accept` records a time entry with the given minutes " +

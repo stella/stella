@@ -265,6 +265,7 @@ export const createContactHandler = async function* ({
 
 const createContact = createSafeRootHandler(
   {
+    contract: "patch",
     description:
       "Create a contact in the organization address book. type (person or " +
       "organization), displayName, and the contact id are supplied in the " +

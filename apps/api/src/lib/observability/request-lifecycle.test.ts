@@ -57,6 +57,7 @@ import type {
 } from "@/api/tests/helpers/recording-telemetry";
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "health_infra" },
   cache: { kind: "none" },

@@ -44,6 +44,7 @@ const MCP_CONNECTOR_SETUP = {
 } as const satisfies Record<McpConnectorAuthType, CatalogueSetup>;
 
 const config = {
+  contract: "patch",
   description:
     "List the tool catalogue for the signed-in user's organization: curated " +
     "skills, MCP connectors, and native tools, plus the organization's own " +

@@ -16,6 +16,7 @@ const renameEntityBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Rename one document, folder, or task in a matter. For a document the " +
     "stored file name is renamed to match, so the table's file column stays " +

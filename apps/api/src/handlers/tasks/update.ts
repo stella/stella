@@ -8,6 +8,11 @@ import {
 
 const updateTask = createSafeHandler(
   {
+    contract: "replace",
+    precondition: {
+      type: "deferred",
+      baselineId: "apps/api/src/handlers/tasks/update.ts",
+    },
     description:
       "Change one task in a matter: name, status, priority, due date, list " +
       "item type, sort order, or the calendar fields of an agenda item " +

@@ -19,6 +19,11 @@ const saveDocumentParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/templates/document/update.ts",
+  },
   contentDelivery: {
     type: "none",
     reason:

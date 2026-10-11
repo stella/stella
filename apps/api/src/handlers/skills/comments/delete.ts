@@ -21,6 +21,7 @@ const deleteSkillCommentParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Delete a comment on an agent skill. Only its author or someone who may " +
     "edit the skill can.",

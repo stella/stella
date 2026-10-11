@@ -1356,6 +1356,7 @@ export const searchLegislationHandler = async (
 };
 
 const config = {
+  contract: "patch",
   description:
     "Full-text search the stella legislation corpus, returning ranked results " +
     "with strict or relaxed match metadata, a highlighted snippet and each document's ELI, title, country, " +

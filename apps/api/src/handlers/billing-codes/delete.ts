@@ -15,6 +15,7 @@ const deleteBillingCodeBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Permanently delete one billing code (a task or activity code) from a " +
     "matter's code list. Time entries already recorded under it keep their " +

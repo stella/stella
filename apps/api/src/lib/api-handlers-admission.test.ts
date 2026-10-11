@@ -42,6 +42,7 @@ const context = (signal?: AbortSignal) => ({
 });
 
 const config = {
+  contract: "patch",
   actionAdmission: { type: "handler", actionKind: "chat.improve-prompt" },
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -355,6 +356,7 @@ describe("finite HTTP action admission", () => {
       const deps = dependencies(0);
       const endpoint = createSafeRootHandler(
         {
+          contract: "patch",
           permissions: config.permissions,
           accountAccess: config.accountAccess,
           mcp: config.mcp,

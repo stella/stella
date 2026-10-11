@@ -13,6 +13,7 @@ import {
 // document actions and registry operations keep their own resource permissions.
 export default createSafeRootHandler(
   {
+    contract: "patch",
     permissions: DESKTOP_ACCOUNT_PERMISSION,
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "auth_plumbing" },

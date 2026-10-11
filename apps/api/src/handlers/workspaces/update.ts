@@ -56,6 +56,7 @@ const updateWorkspaceBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Change a matter: its name, reference, billing reference, colour, or " +
     "lead (who must already be a member of it). Only the fields you pass are " +

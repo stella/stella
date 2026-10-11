@@ -148,6 +148,7 @@ describe("handler content delivery", () => {
           });
           const endpoint = createSafePublicHandler(
             {
+              contract: "patch",
               accountAccess: ACCOUNT_ACCESS.sandbox,
               cache: { kind: "none" },
               mcp: { type: "internal", reason: "health_infra" },
@@ -219,6 +220,7 @@ describe("handler content delivery", () => {
           });
           const endpoint = createSafePublicHandler(
             {
+              contract: "patch",
               accountAccess: ACCOUNT_ACCESS.sandbox,
               cache: { kind: "none" },
               mcp: { type: "internal", reason: "health_infra" },
@@ -281,6 +283,7 @@ describe("handler content delivery", () => {
         for (const receipt of ["recorded", "missing"] as const) {
           const endpoint = createSafePublicHandler(
             {
+              contract: "patch",
               accountAccess: ACCOUNT_ACCESS.sandbox,
               cache: { kind: "none" },
               mcp: { type: "internal", reason: "health_infra" },

@@ -35,6 +35,7 @@ import {
 } from "@/api/lib/organization-time-zone";
 
 const config = {
+  contract: "patch",
   description:
     "Read the organization's general settings: document processing mode, " +
     "matter-number pattern and padding, practice jurisdictions, prompt " +

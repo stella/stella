@@ -22,6 +22,7 @@ const querySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "List the organization's style sets, most recently updated first, with " +
     "cursor pagination; deleted ones are left out. Each item carries the " +

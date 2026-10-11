@@ -18,6 +18,7 @@ import { hasCurrentTimerMatterAccess } from "@/api/lib/time-entry-timer-access";
 
 const updateTimer = createSafeRootHandler(
   {
+    contract: "patch",
     description:
       "Set your timer's description or matter. Pass null to clear either field. Confirm requires a matter and any narrative required by the organization.",
     permissions: { timeEntry: ["update"] },

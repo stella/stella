@@ -247,6 +247,7 @@ export const fillHandler = async ({
 };
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason: "Renders the template uploaded in this request.",

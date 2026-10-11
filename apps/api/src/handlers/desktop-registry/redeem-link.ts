@@ -165,6 +165,7 @@ export const createDesktopLinkRedeemHandler = (
 ) =>
   createSafeTokenHandler(
     {
+      contract: "patch",
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "provider_secret" },
       body: permissiveBodySchema({

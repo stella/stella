@@ -5,6 +5,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { isDocumentOcrWorkerAvailable } from "@/api/lib/document-processing-readiness";
 
 const config = {
+  contract: "patch",
   description:
     "Report whether a document OCR worker is currently ready to accept work.",
   // Any org member may see whether document OCR can currently accept work.

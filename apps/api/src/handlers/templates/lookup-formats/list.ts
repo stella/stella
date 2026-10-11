@@ -26,6 +26,7 @@ import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limit
 import { brandPersistedTemplateLookupFormatId } from "@/api/lib/safe-id-boundaries";
 
 const config = {
+  contract: "patch",
   description:
     "List shared company specification formats and the default for a business registry in the active organization.",
   permissions: { workspace: ["read"] },

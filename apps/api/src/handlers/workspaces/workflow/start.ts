@@ -13,6 +13,7 @@ import { startWorkflow } from "@/api/lib/workflow-queue";
 import { isReportedWorkflowStartStatus } from "@/api/lib/workflow/workflow-start-disposition";
 
 const config = {
+  contract: "patch",
   description:
     "Start an extraction workflow in a matter, filling the AI columns of the " +
     "documents that need it. Narrow it with entityIds and propertyIds, set " +

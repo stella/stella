@@ -12,6 +12,7 @@ const deleteVariantParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Permanently delete one variant (an alternative wording) of a clause, " +
     "leaving the clause and its other variants in place. Templates that used " +

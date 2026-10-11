@@ -19,6 +19,7 @@ const clauseVersionSummarizeParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   actionAdmission: { type: "handler", actionKind: "versions.summarize" },
   description:
     "Summarize in prose what changed between one stored clause version and " +

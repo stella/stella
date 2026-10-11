@@ -7,6 +7,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 
 const config = {
+  contract: "patch",
   description:
     "Create a playbook definition in the organization from a name, an " +
     "optional description, an optional document-type scope, and its " +

@@ -14,6 +14,7 @@ import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contract: "patch",
   description:
     "Choose or clear the default company specification format for a business registry in the active organization.",
   permissions: { template: ["update"] },

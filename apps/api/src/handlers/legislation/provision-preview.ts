@@ -31,6 +31,7 @@ import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 const PREVIEW_READ_STEP = "provisionPreview.corpusAst";
 
 const config = {
+  contract: "patch",
   response: safePublicHandlerResponseSchemasWithStatusText(
     provisionPreviewSuccessResponseSchema,
   ),

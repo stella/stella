@@ -14,6 +14,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 
 const config = {
+  contract: "patch",
   description:
     "Set the title of one of your own chat threads. The new title is marked " +
     "as user-chosen, so automatic title generation can never overwrite it " +
