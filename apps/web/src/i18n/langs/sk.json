@@ -1259,6 +1259,7 @@
     "greetingSubtitle": "Začnite spisom, dokumentom alebo obyčajnou otázkou.",
     "hideThread": "Skryť konverzáciu",
     "history": {
+      "matterUnavailable": "Tento spis nie je dostupný",
       "older": "Staršie",
       "previous7Days": "Predchádzajúcich 7 dní"
     },

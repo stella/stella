@@ -3,11 +3,14 @@ import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 
+import { APIError } from "@/lib/errors/api";
+
 import {
   chatHistoryPeriod,
   chatHistorySearchSchema,
   groupChatHistoryByPeriod,
   hasChatHistoryFilter,
+  isMatterUnavailable,
 } from "./chat-history.logic";
 
 const instant = (iso: string) => Temporal.Instant.from(iso);
@@ -143,6 +146,29 @@ describe("grouping chat history", () => {
     expect(
       groupChatHistoryByPeriod({ items: [], now, timeZone: "UTC" }),
     ).toEqual([]);
+  });
+});
+
+describe("an unavailable matter filter", () => {
+  const apiError = (status: number) =>
+    new APIError({ message: "Workspace not found", status });
+
+  test("is the API's 404 for a filtered read, by status, not message", () => {
+    expect(
+      isMatterUnavailable({ error: apiError(404), matter: "matter-a" }),
+    ).toBe(true);
+    expect(
+      isMatterUnavailable({ error: apiError(500), matter: "matter-a" }),
+    ).toBe(false);
+    expect(
+      isMatterUnavailable({ error: apiError(404), matter: undefined }),
+    ).toBe(false);
+    expect(
+      isMatterUnavailable({
+        error: new TypeError("Workspace not found"),
+        matter: "matter-a",
+      }),
+    ).toBe(false);
   });
 });
 

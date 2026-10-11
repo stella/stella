@@ -1259,6 +1259,7 @@
     "greetingSubtitle": "Commencez par un dossier, un document ou une question simple.",
     "hideThread": "Masquer la conversation",
     "history": {
+      "matterUnavailable": "Ce dossier n'est pas disponible",
       "older": "Plus anciennes",
       "previous7Days": "7 jours précédents"
     },

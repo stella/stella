@@ -1259,6 +1259,7 @@
     "greetingSubtitle": "Pradėkite nuo bylos, dokumento arba paprasto klausimo.",
     "hideThread": "Slėpti pokalbį",
     "history": {
+      "matterUnavailable": "Ši byla nepasiekiama",
       "older": "Senesni",
       "previous7Days": "Ankstesnės 7 dienos"
     },

@@ -1259,6 +1259,7 @@
     "greetingSubtitle": "Sāciet ar lietu, dokumentu vai vienkāršu jautājumu.",
     "hideThread": "Paslēpt sarunu",
     "history": {
+      "matterUnavailable": "Šī lieta nav pieejama",
       "older": "Vecākas",
       "previous7Days": "Iepriekšējās 7 dienas"
     },

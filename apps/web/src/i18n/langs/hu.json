@@ -1259,6 +1259,7 @@
     "greetingSubtitle": "Kezdje egy üggyel, dokumentummal vagy egyszerű kérdéssel.",
     "hideThread": "Beszélgetés elrejtése",
     "history": {
+      "matterUnavailable": "Ez az ügy nem érhető el",
       "older": "Régebbi",
       "previous7Days": "Előző 7 nap"
     },

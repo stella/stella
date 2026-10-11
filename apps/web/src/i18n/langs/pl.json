@@ -1259,6 +1259,7 @@
     "greetingSubtitle": "Zacznij od sprawy, dokumentu albo prostego pytania.",
     "hideThread": "Ukryj konwersację",
     "history": {
+      "matterUnavailable": "Ta sprawa jest niedostępna",
       "older": "Starsze",
       "previous7Days": "Poprzednie 7 dni"
     },

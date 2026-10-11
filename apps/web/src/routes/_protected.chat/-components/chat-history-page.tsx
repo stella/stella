@@ -79,6 +79,7 @@ import {
   CHAT_HISTORY_PERIOD,
   groupChatHistoryByPeriod,
   hasChatHistoryFilter,
+  isMatterUnavailable,
 } from "./chat-history.logic";
 import type {
   ChatHistoryPeriod,
@@ -144,6 +145,9 @@ export const ChatHistoryPage = ({
   });
   const threadsView = useQueryView(threadsQuery);
   useQueryViewError(threadsView);
+  const matterUnavailable =
+    threadsView.type === "error" &&
+    isMatterUnavailable({ error: threadsView.error, matter: search.matter });
   // The combobox owns this list's loading and error states; the page only
   // resolves the URL's matter id to a name for it.
   const mattersQuery = useQuery(
@@ -205,11 +209,25 @@ export const ChatHistoryPage = ({
             </Button>
           ) : null}
         </div>
-        {threadsView.type === "pending" ? (
-          <ChatHistorySkeleton />
-        ) : (
+        {threadsView.type === "pending" ? <ChatHistorySkeleton /> : null}
+        {matterUnavailable ? (
+          <div
+            className="text-muted-foreground flex flex-col items-start gap-2.5 px-1 text-sm"
+            role="status"
+          >
+            {t("chat.history.matterUnavailable")}
+            <Button
+              onClick={() => onSearchChange({ ...search, matter: undefined })}
+              size="sm"
+              variant="outline"
+            >
+              {t("workspaces.filters.clear")}
+            </Button>
+          </div>
+        ) : null}
+        {threadsView.type !== "pending" && !matterUnavailable ? (
           <QueryViewFeedback view={threadsView} />
-        )}
+        ) : null}
         {threadsView.type === "items" ? (
           <ChatHistoryResults
             hasFilter={hasChatHistoryFilter(search)}

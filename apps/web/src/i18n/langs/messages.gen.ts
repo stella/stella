@@ -1262,6 +1262,7 @@ type Messages = {
     "greetingSubtitle": "Start with a matter, document, or plain question.";
     "hideThread": "Hide conversation";
     "history": {
+      "matterUnavailable": "This matter isn't available";
       "older": "Older";
       "previous7Days": "Previous 7 days";
     };

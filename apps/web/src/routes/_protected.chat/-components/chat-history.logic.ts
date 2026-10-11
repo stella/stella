@@ -2,6 +2,8 @@ import * as v from "valibot";
 
 import { Temporal, todayFor } from "@stll/time";
 
+import { APIError } from "@/lib/errors/api";
+
 /**
  * The history page's filters live in the URL, so a reader who opens a chat
  * and comes back lands on the same search and matter. A malformed value falls
@@ -104,6 +106,24 @@ export const groupChatHistoryByPeriod = <
     return group === undefined ? [] : [{ period, items: group }];
   });
 };
+
+const MATTER_UNAVAILABLE_STATUS = 404;
+
+/**
+ * Whether the list refused the matter filter itself: the API answers 404 for
+ * a matter the reader cannot open or one being deleted. Retrying cannot
+ * change that, so the page offers to drop the filter instead.
+ */
+export const isMatterUnavailable = ({
+  error,
+  matter,
+}: {
+  error: unknown;
+  matter: string | undefined;
+}): boolean =>
+  matter !== undefined &&
+  APIError.is(error) &&
+  error.status === MATTER_UNAVAILABLE_STATUS;
 
 /** Whether the page shows a filtered view rather than the whole history. */
 export const hasChatHistoryFilter = ({ matter, q }: ChatHistorySearch) =>

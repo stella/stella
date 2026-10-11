@@ -174,13 +174,32 @@ const listPage = (server: Server, url: URL, pageSize: number): ThreadsPage => {
 };
 
 /** Serves the history list and thread deletes. */
-const serve = (server: Server, { pageSize = 50 } = {}) => {
+const serve = (
+  server: Server,
+  {
+    matterStatus = 200,
+    pageSize = 50,
+  }: {
+    /** How the API answers a matter-filtered list read. */
+    matterStatus?: 200 | 404 | 500;
+    pageSize?: number;
+  } = {},
+) => {
   globalThis.fetch = Object.assign(
     async (input: string | URL | Request, init?: RequestInit) => {
       const request = new Request(input, init);
       const url = new URL(request.url);
       if (url.pathname.endsWith("/chat/threads") && request.method === "GET") {
         listRequests.push(url);
+        if (url.searchParams.has("workspaceId") && matterStatus !== 200) {
+          return Response.json(
+            {
+              message:
+                matterStatus === 404 ? "Workspace not found" : "Server error",
+            },
+            { status: matterStatus },
+          );
+        }
         return Response.json(listPage(server, url, pageSize));
       }
       const deleted = /\/chat\/threads\/([^/]+)$/u.exec(url.pathname);
@@ -411,6 +430,48 @@ describe("chat history page", () => {
           url.searchParams.get("workspaceId") !== null,
       ),
     ).toEqual([]);
+  });
+
+  test("a matter the reader cannot open says so and offers to drop only that filter", async () => {
+    serve(fullServer(), { matterStatus: 404 });
+    const { searchChanges, ui } = await openHistory({
+      matter: MATTER_A.id,
+      q: "lease",
+    });
+
+    await testing.waitFor(() =>
+      expect(
+        ui.getByText(messages.chat.history.matterUnavailable),
+      ).toBeDefined(),
+    );
+    expect(
+      ui.queryByRole("button", { name: messages.common.retry }),
+    ).toBeNull();
+    expect(ui.queryByText(messages.common.somethingWentWrong)).toBeNull();
+
+    await press(
+      ui.getByRole("button", { name: messages.workspaces.filters.clear }),
+    );
+
+    // The search stays; only the matter goes.
+    expect(searchChanges).toEqual([{ matter: undefined, q: "lease" }]);
+    await testing.waitFor(() =>
+      expect(threadLink(ui, OLDER_IN_B.title)).toBeDefined(),
+    );
+    expect(ui.queryByText(messages.chat.history.matterUnavailable)).toBeNull();
+  });
+
+  test("any other failure of a filtered read keeps the error and retry", async () => {
+    serve(fullServer(), { matterStatus: 500 });
+    const { ui } = await openHistory({ matter: MATTER_A.id });
+
+    await testing.waitFor(() =>
+      expect(ui.getByText(messages.common.somethingWentWrong)).toBeDefined(),
+    );
+    expect(
+      ui.getByRole("button", { name: messages.common.retry }),
+    ).toBeDefined();
+    expect(ui.queryByText(messages.chat.history.matterUnavailable)).toBeNull();
   });
 
   test("clearing the filters brings every chat back", async () => {

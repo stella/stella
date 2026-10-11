@@ -1259,6 +1259,7 @@
     "greetingSubtitle": "Beginnen Sie mit einer Akte, einem Dokument oder einer einfachen Frage.",
     "hideThread": "Konversation ausblenden",
     "history": {
+      "matterUnavailable": "Diese Akte ist nicht verfügbar",
       "older": "Älter",
       "previous7Days": "Vorherige 7 Tage"
     },

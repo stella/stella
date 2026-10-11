@@ -1259,6 +1259,7 @@
     "greetingSubtitle": "ابدأ بملف قانوني أو مستند أو سؤال مباشر.",
     "hideThread": "إخفاء المحادثة",
     "history": {
+      "matterUnavailable": "هذا الملف القانوني غير متاح",
       "older": "أقدم",
       "previous7Days": "الأيام السبعة السابقة"
     },

@@ -1259,6 +1259,7 @@
     "greetingSubtitle": "Empiece con un asunto, un documento o una pregunta sencilla.",
     "hideThread": "Ocultar conversación",
     "history": {
+      "matterUnavailable": "Este asunto no está disponible",
       "older": "Más antiguas",
       "previous7Days": "7 días anteriores"
     },

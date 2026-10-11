@@ -1259,6 +1259,7 @@
     "greetingSubtitle": "Alustage toimikust, dokumendist või lihtsast küsimusest.",
     "hideThread": "Peida vestlus",
     "history": {
+      "matterUnavailable": "See toimik pole saadaval",
       "older": "Vanemad",
       "previous7Days": "Eelmised 7 päeva"
     },
