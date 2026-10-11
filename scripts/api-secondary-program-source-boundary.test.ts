@@ -11,6 +11,7 @@ import path from "node:path";
 
 import {
   apiSourceBoundaryViolations,
+  secondaryImportBoundaryViolations,
   secondaryProgramFiles,
 } from "./api-secondary-program-source-boundary";
 
@@ -58,6 +59,40 @@ describe("secondary TypeScript API source boundary", () => {
           path.basename(file),
         ),
       ).toEqual(["implementation.ts"]);
+
+      const declarationsProject = path.join(root, "tsconfig.declarations.json");
+      const output = path.join(root, "declarations/implementation.d.ts");
+      const writeDeclarationConfig = (rootFiles: string[]) =>
+        writeFileSync(
+          declarationsProject,
+          JSON.stringify({
+            compilerOptions: {
+              declaration: true,
+              emitDeclarationOnly: true,
+              rootDir: apiSource,
+              outDir: path.dirname(output),
+              types: [],
+            },
+            files: rootFiles,
+          }),
+        );
+      const importViolations = () =>
+        secondaryImportBoundaryViolations({
+          project: config,
+          declarationsProject,
+          sourceRoot: apiSource,
+        });
+      writeDeclarationConfig([importedSource]);
+      expect(importViolations()).toEqual([
+        `${entry}: missing API declaration ../../api/src/implementation`,
+      ]);
+      mkdirSync(path.dirname(output));
+      writeFileSync(output, "export declare const implementation = 1;\n");
+      expect(importViolations()).toEqual([]);
+      writeDeclarationConfig([importedDeclaration]);
+      expect(importViolations()).toEqual([
+        `${entry}: unsupported API import ../../api/src/implementation`,
+      ]);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

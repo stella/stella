@@ -1,8 +1,9 @@
 #!/usr/bin/env bun
 
 import { panic } from "better-result";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 
@@ -19,6 +20,105 @@ const generatedApiDeclarations = path.join(
   REPO_ROOT,
   "apps/api/.cache/typecheck-declarations/apps/api/src",
 );
+
+const readProject = (filename: string) => {
+  const parsed = ts.getParsedCommandLineOfConfigFile(
+    filename,
+    {},
+    {
+      ...ts.sys,
+      onUnRecoverableConfigFileDiagnostic: (diagnostic) =>
+        panic(ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")),
+    },
+  );
+  if (!parsed || parsed.errors.length > 0) {
+    panic(`Cannot read TypeScript project ${filename}`);
+  }
+  return parsed;
+};
+
+type SecondaryImportBoundaryOptions = {
+  project: string;
+  declarationsProject: string;
+  sourceRoot: string;
+};
+
+// The producer's root files define the supported import surface. Requiring an
+// output also catches missing declaration imports that --listFilesOnly can omit.
+export const secondaryImportBoundaryViolations = ({
+  project,
+  declarationsProject,
+  sourceRoot,
+}: SecondaryImportBoundaryOptions) => {
+  const consumer = readProject(project);
+  const producer = readProject(declarationsProject);
+  const supportedFiles = new Set(producer.fileNames);
+  const cache = ts.createModuleResolutionCache(
+    path.dirname(project),
+    (filename) => filename,
+    consumer.options,
+  );
+  const violations: string[] = [];
+  for (const filename of consumer.fileNames) {
+    const source = ts.createSourceFile(
+      filename,
+      readFileSync(filename, "utf-8"),
+      ts.ScriptTarget.Latest,
+      true,
+    );
+    const visit = (node: ts.Node) => {
+      let specifier: ts.Node | undefined;
+      if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+        specifier = node.moduleSpecifier;
+      } else if (
+        ts.isCallExpression(node) &&
+        node.expression.kind === ts.SyntaxKind.ImportKeyword
+      ) {
+        specifier = node.arguments.at(0);
+      } else if (
+        ts.isImportTypeNode(node) &&
+        ts.isLiteralTypeNode(node.argument)
+      ) {
+        specifier = node.argument.literal;
+      }
+      if (specifier && ts.isStringLiteralLike(specifier)) {
+        const resolved = ts.resolveModuleName(
+          specifier.text,
+          filename,
+          consumer.options,
+          ts.sys,
+          cache,
+        ).resolvedModule;
+        if (
+          resolved &&
+          /\.[cm]?tsx?$/u.test(resolved.resolvedFileName) &&
+          apiSourceBoundaryViolations([resolved.resolvedFileName], sourceRoot)
+            .length > 0
+        ) {
+          const target = resolved.resolvedFileName;
+          if (!supportedFiles.has(target)) {
+            violations.push(
+              `${filename}: unsupported API import ${specifier.text}`,
+            );
+          } else if (
+            !ts
+              .getOutputFileNames(producer, target, false)
+              .some(
+                (output) => /\.d\.[cm]?ts$/u.test(output) && existsSync(output),
+              )
+          ) {
+            violations.push(
+              `${filename}: missing API declaration ${specifier.text}`,
+            );
+          }
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+  }
+  return violations;
+};
 
 export const apiSourceBoundaryViolations = (
   files: readonly string[],
@@ -78,6 +178,16 @@ export const checkApiSecondaryProgramBoundary = () => {
   }
   const violations: string[] = [];
   for (const project of SECONDARY_PROJECTS) {
+    violations.push(
+      ...secondaryImportBoundaryViolations({
+        project: path.join(REPO_ROOT, project),
+        declarationsProject: path.join(
+          REPO_ROOT,
+          "apps/api/tsconfig.declarations.json",
+        ),
+        sourceRoot: apiSourceRoot,
+      }),
+    );
     violations.push(
       ...apiSourceBoundaryViolations(
         secondaryProgramFiles(project),
