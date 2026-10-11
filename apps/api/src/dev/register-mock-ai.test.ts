@@ -1,4 +1,11 @@
-import { chat, convertSchemaToJsonSchema, EventType } from "@tanstack/ai";
+import {
+  chat,
+  convertSchemaToJsonSchema,
+  EventType,
+  memoryStream,
+  toServerSentEventsResponse,
+} from "@tanstack/ai";
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -7,9 +14,16 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import {
   createMockTextAdapter,
   mockStructuredData,
+  registerMockAI,
 } from "@/api/dev/register-mock-ai";
+import { env } from "@/api/env";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
+import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { toTanStackValibotSchema } from "@/api/lib/tanstack-ai-schema";
+import { withTimeout } from "@/api/lib/with-timeout";
+import { createTestState } from "@/api/tests/helpers/test-state";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 // Runs a Valibot schema through the exact pipeline
 // `generateTanStackObjectForRole` / `streamTanStackObjectForRole`
@@ -253,4 +267,65 @@ test("the real SDK stops the cancellation fixture through its adapter signal", a
   run.abort(reason);
   expect(await failure).toBe(reason);
   expect(deltas).toEqual(["This mock reply streams back"]);
+});
+
+test("the registered mock streams the cancellation marker with prior chat history", async () => {
+  testState.setConfig("USE_MOCK_AI", "force");
+  registerMockAI();
+  const adapter = createTanStackTextAdapterFactory({
+    provider: "google",
+    dataClass: "customer",
+    managedAIResidency: "eu",
+  })("gemini-2.5-flash");
+  const run = new AbortController();
+  const stream = chat({
+    adapter,
+    abortController: run,
+    systemPrompts: ["Answer questions about the supplied documents."],
+    messages: [
+      { role: "user", content: "Summarize the notice provisions" },
+      { role: "assistant", content: "The notice period is thirty days." },
+      {
+        role: "user",
+        content: [{ type: "text", content: "Stream until stopped please" }],
+      },
+    ],
+  });
+  const durability = memoryStream({ runId: Bun.randomUUIDv7() });
+  const response = toServerSentEventsResponse(stream, {
+    abortController: run,
+    durability: { adapter: durability },
+  });
+  const reader = (
+    response.body ?? panic("SSE response requires a body")
+  ).getReader();
+  try {
+    const received = await withTimeout(
+      async () => {
+        const decoder = new TextDecoder();
+        let text = "";
+        while (!text.includes("This mock reply streams back")) {
+          const { done, value } = await reader.read();
+          if (done) {
+            panic("SSE ended before the cancellation answer was delivered");
+          }
+          text += decoder.decode(value, { stream: true });
+        }
+        return text;
+      },
+      { label: "registered cancellation answer delivery", timeoutMs: 1000 },
+    );
+    expect(received).not.toContain('"type":"RUN_ERROR"');
+    expect(run.signal.aborted).toBe(false);
+    expect(
+      (await durability.snapshot()).some(
+        ({ chunk }) =>
+          chunk.type === EventType.TEXT_MESSAGE_CONTENT &&
+          chunk.delta === "This mock reply streams back",
+      ),
+    ).toBe(true);
+  } finally {
+    run.abort(new DOMException("Stopped", "AbortError"));
+    await reader.cancel();
+  }
 });

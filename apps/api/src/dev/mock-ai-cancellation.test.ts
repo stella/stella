@@ -3,9 +3,21 @@ import { expect, test } from "bun:test";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
+  MOCK_AI_CANCELLATION_REPLY_TAIL,
   mockAiCancellationChunks,
   mockAiCancellationSignal,
 } from "./mock-ai-cancellation";
+
+const readReplyTail = async (
+  chunks: ReturnType<typeof mockAiCancellationChunks>,
+) => {
+  let tail = "";
+  while (tail !== MOCK_AI_CANCELLATION_REPLY_TAIL) {
+    const chunk = await chunks.next();
+    expect(chunk.done).toBe(false);
+    tail += chunk.value;
+  }
+};
 
 test("the cancellation fixture stays live until its provider run is stopped", async () => {
   const run = new AbortController();
@@ -14,6 +26,7 @@ test("the cancellation fixture stays live until its provider run is stopped", as
     done: false,
     value: "This mock reply streams back",
   });
+  await readReplyTail(chunks);
   let ended = false;
   const next = chunks.next();
   void next.then(
@@ -67,6 +80,7 @@ test("both SDK signal fields cancel the same fixture", async () => {
     expect(signal?.aborted).toBe(false);
     const chunks = mockAiCancellationChunks(signal);
     expect((await chunks.next()).done).toBe(false);
+    await readReplyTail(chunks);
     const pending = chunks.next();
     const reason = new DOMException("Stopped", "AbortError");
     run.abort(reason);

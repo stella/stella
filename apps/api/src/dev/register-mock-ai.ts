@@ -1052,7 +1052,7 @@ const synthesizeJsonSchemaArray = (node: JsonSchemaNode): unknown[] => {
   );
 };
 
-if (isMockAI()) {
+export const registerMockAI = () => {
   registerBatchGenerator(generateBatchMock);
   registerTanStackMockTextAdapterFactory(createMockTextAdapter);
   logger.warn("mock_ai.enabled", {
@@ -1062,4 +1062,8 @@ if (isMockAI()) {
         ? "every AI request gets a canned reply, organization keys included"
         : "AI requests get canned replies unless the organization configured its own key",
   });
+};
+
+if (isMockAI()) {
+  registerMockAI();
 }
