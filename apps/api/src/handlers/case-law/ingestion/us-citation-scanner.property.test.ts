@@ -2,7 +2,10 @@ import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { canonicalUsReporterCitation } from "@stll/api-contract/us-reporter-citation";
+import {
+  canonicalUsReporterCitation,
+  US_REPORTER_PAGE_LEAD_SOURCE,
+} from "@stll/api-contract/us-reporter-citation";
 import {
   assertProperty,
   propertyConfig,
@@ -37,6 +40,11 @@ const scan = (text: string, limit = US_CITATION_WORK_LIMIT) => {
   return { result, budget };
 };
 
+const FIRST_PAGE_RE = new RegExp(
+  String.raw`${US_REPORTER_PAGE_LEAD_SOURCE}\d{1,5}$`,
+  "u",
+);
+
 test("every unambiguous reporter spelling scans to its parsed identity", () => {
   const spellings = Object.keys(US_REPORTER_SPELLINGS).filter(
     (spelling) => canonicalUsReporterCitation(`137 ${spelling} 246`) !== null,
@@ -69,7 +77,7 @@ test("every unambiguous reporter spelling scans to its parsed identity", () => {
       ),
     ).toEqual(["319 U.S. 527", canonical]);
     const short = scan(
-      `319 U.S. 527, ${text.replace(/\s+\d+$/u, ", at 891")}`,
+      `319 U.S. 527, ${text.replace(FIRST_PAGE_RE, ", at 891")}`,
     ).result;
     if (Result.isError(short)) {
       throw short.error;
@@ -82,6 +90,8 @@ test("every unambiguous reporter spelling scans to its parsed identity", () => {
   };
   for (const spelling of spellings) {
     assertIdentity(`137 ${spelling} 246`);
+    assertIdentity(`137 ${spelling},246`);
+    assertIdentity(`137 ${spelling}, 246`);
   }
   assertProperty(
     "every unambiguous reporter spelling scans to its parsed identity",
@@ -90,9 +100,10 @@ test("every unambiguous reporter spelling scans to its parsed identity", () => {
       fc.integer({ min: 1, max: 9999 }),
       fc.integer({ min: 1, max: 99_999 }),
       fc.constantFrom(" ", "   ", "\r\n  ", "\u00a0\u00a0\u00a0"),
-      (spelling, volume, page, gap) => {
+      fc.constantFrom("", ","),
+      (spelling, volume, page, gap, separator) => {
         assertIdentity(
-          `${String(volume)}${gap}${spelling}${gap}${String(page)}`,
+          `${String(volume)}${gap}${spelling}${separator}${gap}${String(page)}`,
         );
       },
     ),

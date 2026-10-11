@@ -114,6 +114,9 @@ export const US_REPORTER_SPELLING_SOURCE = Object.keys(US_REPORTER_SPELLINGS)
   .map(flexibleSpellingSource)
   .join("|");
 
+/** A first page follows whitespace or a comma, with bounded typography gaps. */
+export const US_REPORTER_PAGE_LEAD_SOURCE = String.raw`(?:\s{0,16},\s{0,16}|\s{1,16})`;
+
 const DASH = "[-‐‑‒–—―−]";
 const PAGE_RANGE_SOURCE = String.raw`\d{1,5}(?:\s*${DASH}\s*\d{1,5})?`;
 const FOOTNOTE_SOURCE = String.raw`nn?\.\s*\d{1,4}(?:\s*${DASH}\s*\d{1,4})?`;
@@ -127,7 +130,7 @@ const REPORTER_GROUP_SOURCE = `(?<reporter>${US_REPORTER_SPELLING_SOURCE})`;
 const FULL_RE = new RegExp(
   String.raw`^${VOLUME_SOURCE}\s+${REPORTER_GROUP_SOURCE}` +
     String.raw`(?:\s*\((?<nominative>\d{1,3}\s+(?:${US_REPORTER_SPELLING_SOURCE}))\))?` +
-    String.raw`\s+(?<page>\d{1,5})` +
+    String.raw`${US_REPORTER_PAGE_LEAD_SOURCE}(?<page>\d{1,5})` +
     String.raw`(?:(?:\s*,\s*(?:at\s+)?|\s+at\s+)(?<pins>${PIN_LIST_SOURCE}))?` +
     String.raw`(?:\s*\((?<parenthetical>[^()]{0,60}\d{4})\))?$`,
   "iu",

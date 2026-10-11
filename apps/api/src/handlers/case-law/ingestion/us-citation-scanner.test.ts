@@ -17,6 +17,8 @@ test("table-supported typography names the same reporter citation", () => {
     ["137 P.[2nd] 246", "137 P.2d 246"],
     ["137 S.W.,SecondSeries, 246", "137 S.W.2d 246"],
     ["137   U.\n  S.\t 246", "137 U.S. 246"],
+    ["8 U.S., 229", "8 U.S. 229"],
+    ["8 U.S.,229", "8 U.S. 229"],
   ] as const;
   for (const [text, canonical] of cases) {
     const result = scan(text, { limit: 10_000, spent: 0 });
@@ -31,6 +33,20 @@ test("table-supported typography names the same reporter citation", () => {
       ),
     ).toEqual([canonical]);
   }
+});
+
+test("a page delimiter keeps an ambiguous reporter unresolved", () => {
+  const result = scan("8 Cranch,229", { limit: 10_000, spent: 0 });
+  if (Result.isError(result)) {
+    throw result.error;
+  }
+  expect(
+    result.value.events.flatMap((event) =>
+      event.kind === "token" && event.token.kind === "full"
+        ? [event.token.base]
+        : [],
+    ),
+  ).toEqual([null]);
 });
 
 test("case-folded footnote pins retain their note kind", () => {

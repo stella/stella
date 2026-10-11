@@ -19,6 +19,7 @@ import { panic, Result, TaggedError } from "better-result";
 import {
   canonicalUsReporterCitation,
   parseUsReporterReference,
+  US_REPORTER_PAGE_LEAD_SOURCE,
   US_REPORTER_SPELLING_SOURCE,
 } from "@stll/api-contract/us-reporter-citation";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -147,7 +148,7 @@ const NOTE_ITEM = String.raw`nn?\.\s?\d{1,4}(?:\s?${DASH}\s?\d{1,4})?`;
 const PIN_ITEM = String.raw`(?:¶¶?\s?\d{1,5}(?:\s?${DASH}\s?\d{1,5})?|${NOTE_ITEM}|\*?\d{1,5}(?:\s?${DASH}\s?\*?\d{1,5})?(?:\s?,?\s?(?:&\s?|and\s)?${NOTE_ITEM})?)`;
 // A pin never ends where a reporter abbreviation begins: in
 // `495, 74 S. Ct. 686` the 74 opens the next reference.
-const PIN_ITEM_END = String.raw`(?![\p{L}\p{N}])(?!\s{1,16}(?:${US_REPORTER_SPELLING_SOURCE})(?:\s{1,16}\d{1,5}(?![\p{L}\p{N}])|\s{0,16},?\s{1,16}at\s{1,16}))(?!\s{1,2}\p{L}[\p{L}'&]*\.)`;
+const PIN_ITEM_END = String.raw`(?![\p{L}\p{N}])(?!\s{1,16}(?:${US_REPORTER_SPELLING_SOURCE})(?:${US_REPORTER_PAGE_LEAD_SOURCE}\d{1,5}(?![\p{L}\p{N}])|\s{0,16},?\s{1,16}at\s{1,16}))(?!\s{1,2}\p{L}[\p{L}'&]*\.)`;
 const FIRST_PIN_RE = new RegExp(`${PIN_ITEM}${PIN_ITEM_END}`, "iyu");
 const NEXT_PIN_RE = new RegExp(
   String.raw`(?:\s?[,&]\s?|\sand\s)${PIN_ITEM}${PIN_ITEM_END}`,
@@ -284,7 +285,7 @@ const REPORTER_WORD = String.raw`(?!at\s)\p{L}[\p{L}'&]*\.?`;
 const REPORTER_PART = String.raw`(?:${REPORTER_WORD}|\d{1,2}(?:d|nd|rd|th|st)\.?|\(\d{1,3}\s{1,2}[^()\d]{1,24}\))`;
 const REPORTER_RUN = String.raw`${REPORTER_WORD}(?:(?:(?<=\.)\s{0,2}|\s{1,2})${REPORTER_PART}){0,5}`;
 const CANDIDATE_RE = new RegExp(
-  String.raw`${VOLUME_START}(?<head>(?<volume>\d{1,4})\s{1,16}(?:${US_REPORTER_SPELLING_SOURCE}))(?:\s{0,16}\(\d{1,3}\s{1,16}(?:${US_REPORTER_SPELLING_SOURCE})\))?(?:\s{1,16}(?<page>\d{1,5})(?![\p{L}\p{N}])|(?<short>\s{0,16},?\s{1,16}at\s{1,16}))`,
+  String.raw`${VOLUME_START}(?<head>(?<volume>\d{1,4})\s{1,16}(?:${US_REPORTER_SPELLING_SOURCE}))(?:\s{0,16}\(\d{1,3}\s{1,16}(?:${US_REPORTER_SPELLING_SOURCE})\))?(?:${US_REPORTER_PAGE_LEAD_SOURCE}(?<page>\d{1,5})(?![\p{L}\p{N}])|(?<short>\s{0,16},?\s{1,16}at\s{1,16}))`,
   "giu",
 );
 const UNSUPPORTED_SHORT_RE = new RegExp(
