@@ -1993,6 +1993,7 @@
     "sort": "Kārtot",
     "source": "Avots",
     "stale": "Novecojis",
+    "start": "Sākt",
     "status": "Statuss",
     "stepCount": "{count, plural, zero {# soļu} one {# solis} other {# soļi}}",
     "stepProgress": "{current} no {total}",
@@ -2807,7 +2808,6 @@
       },
       "selectFlow": "Izvēlieties darbplūsmu",
       "sizeConfirmTitle": "Apjomīga plūsmas izpilde",
-      "start": "Sākt",
       "startFailed": "Neizdevās palaist darbplūsmu.",
       "started": "Darbplūsma palaista",
       "stepProgress": "{current}. solis no {total}",
@@ -3024,8 +3024,7 @@
   "guides": {
     "action": {
       "replay": "Sākt no jauna",
-      "skip": "Izlaist",
-      "start": "Sākt"
+      "skip": "Izlaist"
     },
     "checklist": {
       "progress": "Pabeigti {completed} no {total}"
@@ -3704,6 +3703,10 @@
         "failed": "Neizdevās saglabāt",
         "nameMissing": "Nav saglabāts: pievienojiet nosaukumu",
         "positionsNeedAttention": "Nav saglabāts: {count, plural, zero {# pozīcijām} one {# pozīcijai} other {# pozīcijām}} jāpievērš uzmanība"
+      },
+      "buildWithAi": {
+        "description": "Atbildiet uz dažiem jautājumiem tērzēšanā, un pārbaudes ceļvedis tiks saglabāts sarunas gaitā.",
+        "title": "Izveidot ar AI"
       },
       "check": "Izmantot precīzu noteikumu AI vietā",
       "checkHint": "Izmērāmiem nosacījumiem, piemēram: maksājuma termiņš ≤ 30 dienas.",

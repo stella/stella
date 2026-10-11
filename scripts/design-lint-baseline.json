@@ -195,7 +195,7 @@
     "packages/ui/src/review/review-comment-card.tsx": 1
   },
   "shadcn/no-arbitrary-values": {
-    "apps/desktop/src/clipboard/ClipboardApp.tsx": 4,
+    "apps/desktop/src/clipboard/ClipboardApp.tsx": 3,
     "apps/desktop/src/clipboard/ClipboardEditor.tsx": 2,
     "apps/desktop/src/mainview/App.tsx": 2,
     "apps/landing/src/components/react/AnonymizeLiveDemo.tsx": 2,
@@ -1120,7 +1120,6 @@
     "apps/web/src/components/breadcrumbs/workspace-breadcrumb.tsx": 1,
     "apps/web/src/components/chat-editor-provider.tsx": 1,
     "apps/web/src/components/chat/ask-user-card.tsx": 1,
-    "apps/web/src/components/chat/tool-call-card.tsx": 1,
     "apps/web/src/components/docx/use-edit-session.ts": 1,
     "apps/web/src/components/docx/use-folio-collaboration-room.ts": 2,
     "apps/web/src/components/entity-views/entity-views.tsx": 1,
