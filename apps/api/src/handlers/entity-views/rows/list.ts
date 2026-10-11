@@ -41,6 +41,7 @@ import {
 } from "@/api/lib/work-obligations/at-risk";
 
 const config = {
+  contract: "patch",
   description:
     "Read a table or Kanban window across accessible matters, with the same " +
     "filters, sorts, fields and cursors as a matter view. With `inboxView`, " +

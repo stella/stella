@@ -19,6 +19,7 @@ import { extractLangFromRequest } from "@/api/lib/locale";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "account_lifecycle" },
 } satisfies SessionHandlerConfig;

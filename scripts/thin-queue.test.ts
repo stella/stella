@@ -812,8 +812,10 @@ test("unset and full preserve historical predicates except declared PR, Postgres
         "ci-generated-sources",
         "ci-checks-docs",
         "code-quality-web-rest",
+        "dated-waiver-expiry",
         "desktop-rust-tests",
         "desktop-rust-lint",
+        "scan-engine-wasm-drift",
       ]),
     ].toSorted(),
   );
@@ -914,15 +916,17 @@ test("one variable moves only derived heavy jobs from merge groups to ordinary m
         }
         if (
           resolved.exitCode !== 0 ||
-          (thinQueue && heavy.includes(job) && !admitted.includes(job))
+          (thinQueue &&
+            heavy.includes(job) &&
+            !admitted.includes(job) &&
+            job !== "desktop-rust-tests")
         ) {
           expect(runs, `${event.event}/${variable}/${job}`).toBe(false);
           continue;
         }
-        // An admitted browser suite keeps its full-depth queue selection in a
-        // thin group while the switch is unset.
+        // Browser suites and macOS desktop tests retain full-depth selection in thin groups.
         const certified =
-          thinQueue && admitted.includes(job)
+          thinQueue && (admitted.includes(job) || job === "desktop-rust-tests")
             ? {
                 ...value,
                 needs: {
@@ -1047,7 +1051,10 @@ const evaluate = ({
   );
   const dependencies = Object.fromEntries(
     needs.map((name) => {
-      let jobResult = heavy.includes(name) ? "skipped" : "success";
+      let jobResult =
+        heavy.includes(name) && name !== "desktop-rust-tests"
+          ? "skipped"
+          : "success";
       if (name === job) {
         jobResult = result ?? "missing";
       }
@@ -1107,7 +1114,7 @@ test("thin aggregation accepts only intended heavy skips and still requires ever
       ).toBe(1);
     }
   }
-  for (const job of THIN_JOBS) {
+  for (const job of [...THIN_JOBS, "desktop-rust-tests"]) {
     expect(evaluate({ queueDepth: "thin", job, result: "skipped" }), job).toBe(
       1,
     );

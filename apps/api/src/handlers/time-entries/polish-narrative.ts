@@ -48,6 +48,7 @@ export const buildPolishNarrativeMessage = ({
   });
 
 const config = {
+  contract: "patch",
   actionAdmission: {
     type: "handler",
     actionKind: "time-entries.polish-narrative",

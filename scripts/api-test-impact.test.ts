@@ -265,7 +265,10 @@ test("every tracked API and workspace module is scannable by the import graph", 
   const modules = listed.stdout
     .toString()
     .split("\0")
-    .filter((file) => /\.(?:[cm]?[jt]s|[jt]sx)$/u.test(file));
+    .filter(
+      (file) =>
+        /\.(?:[cm]?[jt]s|[jt]sx)$/u.test(file) && !file.endsWith(".d.ts"),
+    );
   expect(modules.length).toBeGreaterThan(1000);
   const unscannable = modules.filter((file) => {
     try {

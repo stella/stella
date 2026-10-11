@@ -760,6 +760,11 @@ describe("windowed text (S4)", () => {
     server.stop();
     expect(result.exitCode).toBe(0);
     expect(result.stdout.trim()).toBe("THE STATUTE BODY");
+    expect(server.requests).toHaveLength(1);
+    expect(server.requests.at(0)?.params).toEqual({
+      name: "read_statute",
+      arguments: { eli: "/eli/cz/sb/2012/89" },
+    });
   });
 
   test("--all concatenates the nested windows of a statute read", async () => {
@@ -967,6 +972,8 @@ describe("windowed text (S4)", () => {
     ).toEqual(["found", "not_found"]);
     expect(printed.items.at(0).decision.text).toBe("THE DECISION BODY");
     expect(printed).not.toHaveProperty("text");
+    expect(server.requests).toHaveLength(1);
+    expect(server.requests.at(0)?.params.name).toBe("read_case_law_decision");
     expect(server.requests.at(0)?.params.arguments).toMatchObject({
       decision_ids: [
         "00000000-0000-4000-8000-000000000001",
@@ -974,6 +981,88 @@ describe("windowed text (S4)", () => {
       ],
     });
   });
+
+  test("a generated provision read returns content through its dedicated reader", async () => {
+    const items = [{ eli: "/eli/cz/sb/2012/89", anchor: "par_1729" }];
+    const payload = {
+      items: [{ status: "found", provision: { text: "THE PROVISION BODY" } }],
+    };
+    const server = startMockServer(() => ({ toolPayload: payload }));
+    try {
+      const result = await runCli({
+        args: [
+          "legislation",
+          "provisions",
+          "--input",
+          JSON.stringify({ items }),
+          "--json",
+        ],
+        url: server.url,
+        token: READ,
+      });
+      expect(result.exitCode).toBe(EXIT_CODES.ok);
+      expect(JSON.parse(result.stdout)).toEqual(payload);
+      expect(server.requests).toHaveLength(1);
+      expect(server.requests.at(0)?.params).toEqual({
+        name: "read_statute_provisions",
+        arguments: { items },
+      });
+    } finally {
+      server.stop();
+    }
+  });
+
+  for (const { args, toolName } of [
+    {
+      args: [
+        "case-law",
+        "read",
+        "--decision-ids",
+        "00000000-0000-4000-8000-000000000001",
+      ],
+      toolName: "read_case_law_decision",
+    },
+    {
+      args: ["legislation", "read", "--eli", "/eli/cz/sb/2012/89"],
+      toolName: "read_statute",
+    },
+    {
+      args: [
+        "legislation",
+        "provisions",
+        "--input",
+        JSON.stringify({
+          items: [{ eli: "/eli/cz/sb/2012/89", anchor: "par_1729" }],
+        }),
+      ],
+      toolName: "read_statute_provisions",
+    },
+  ]) {
+    test(`${toolName} preserves a server rate refusal`, async () => {
+      const error = {
+        code: "rate_limited",
+        message: "The read rate limit has been reached.",
+        hint: "Retry after the current window.",
+      };
+      const server = startMockServer(() => ({
+        toolPayload: { error },
+        isError: true,
+      }));
+      try {
+        const result = await runCli({
+          args: [...args, "--json"],
+          url: server.url,
+          token: READ,
+        });
+        expect(result.exitCode).toBe(EXIT_CODES.server);
+        expect(result.stderr).toContain(error.message);
+        expect(server.requests).toHaveLength(1);
+        expect(server.requests.at(0)?.params.name).toBe(toolName);
+      } finally {
+        server.stop();
+      }
+    });
+  }
 
   test("a decision read pages by number, so it offers neither --cursor nor --all", async () => {
     // Each decision of a batch is paged with `--page`; there is no cursor for

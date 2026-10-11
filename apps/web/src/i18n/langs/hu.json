@@ -1993,6 +1993,7 @@
     "sort": "Rendezés",
     "source": "Forrás",
     "stale": "Elavult",
+    "start": "Kezdés",
     "status": "Státusz",
     "stepCount": "{count, plural, one {# lépés} other {# lépés}}",
     "stepProgress": "{current} / {total}",
@@ -2807,7 +2808,6 @@
       },
       "selectFlow": "Válasszon munkafolyamatot",
       "sizeConfirmTitle": "Nagy terjedelmű folyamatfuttatás",
-      "start": "Indítás",
       "startFailed": "A munkafolyamatot nem sikerült elindítani.",
       "started": "Munkafolyamat elindítva",
       "stepProgress": "{current}/{total}. lépés",
@@ -3024,8 +3024,7 @@
   "guides": {
     "action": {
       "replay": "Újrakezdés",
-      "skip": "Kihagyás",
-      "start": "Kezdés"
+      "skip": "Kihagyás"
     },
     "checklist": {
       "progress": "{completed} / {total} kész"
@@ -3704,6 +3703,10 @@
         "failed": "A mentés nem sikerült",
         "nameMissing": "Nincs mentve: adjon meg egy nevet",
         "positionsNeedAttention": "Nincs mentve: {count, plural, one {# álláspont} other {# álláspont}} figyelmet igényel"
+      },
+      "buildWithAi": {
+        "description": "Válaszoljon néhány kérdésre a csevegésben, a playbook pedig menet közben mentődik.",
+        "title": "Létrehozás AI-val"
       },
       "check": "Pontos szabály használata AI helyett",
       "checkHint": "Mérhető feltételekhez, például: fizetési határidő ≤ 30 nap.",
@@ -6103,12 +6106,30 @@
         "addPDF": "PDF hozzáadása",
         "applyCrop": "Vágás alkalmazása",
         "crop": "Vágás",
-        "cropBottom": "Alul",
-        "cropDescription": "{count, plural, one {Állítsa be a kijelölt oldal vágási margóit.} other {Állítsa be a(z) # kijelölt oldal vágási margóit.}}",
-        "cropLeft": "Balra",
-        "cropRight": "Jobbra",
+        "cropAdvanced": "Speciális beállítások",
+        "cropBottom": "Alul (mm)",
+        "cropDescription": "{count, plural, one {Állítsa be a kijelölt oldal vágási margóit milliméterben.} other {Állítsa be a(z) # kijelölt oldal vágási margóit milliméterben.}}",
+        "cropHandle": "Vágás átméretezése: {position}",
+        "cropHandleBottom": "lent",
+        "cropHandleBottomLeft": "bal alsó",
+        "cropHandleBottomRight": "jobb alsó",
+        "cropHandleLeft": "bal",
+        "cropHandleRight": "jobb",
+        "cropHandleTop": "fent",
+        "cropHandleTopLeft": "bal felső",
+        "cropHandleTopRight": "jobb felső",
+        "cropHint": "Húzza a területet vagy a fogópontjait. A nyílbillentyűk 1 mm-rel, a Shifttel együtt 10 mm-rel módosítanak. Minden kijelölt oldalra ugyanazok a margók vonatkoznak.",
+        "cropLeft": "Balra (mm)",
+        "cropMove": "Vágási terület mozgatása",
+        "cropNextPage": "Következő kijelölt oldal",
+        "cropPage": "{page, number}. oldal / {count, number}",
+        "cropPreview": "Vágási előnézet, {page, number}. oldal",
+        "cropPreviewFailed": "Nem sikerült megjeleníteni az oldal előnézetét.",
+        "cropPreviousPage": "Előző kijelölt oldal",
+        "cropRight": "Jobbra (mm)",
         "cropTitle": "Oldalak vágása",
-        "cropTop": "Felül",
+        "cropTooSmall": "Ez az oldal túl kicsi ahhoz, hogy legalább 10 mm-es méretre vágja.",
+        "cropTop": "Felül (mm)",
         "delete": "Törlés",
         "deselectAll": "Összes kijelölésének megszüntetése",
         "discard": "Elvetés",
