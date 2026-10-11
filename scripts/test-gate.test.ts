@@ -440,35 +440,25 @@ context("test registration census", () => {
   check(
     "resolves the root query-cache check without broadening its forwarded selection",
     () => {
-      const rootScripts = {
-        "check:query-cache-types":
-          "bun run generate && bun --filter @stll/orphan test -- src/one.test.ts && bun packages/scripts/src/query-cache-types.ts",
-      };
-      const options = {
-        rootScripts,
+      const topology = {
+        workflow: "",
         gatingJobs: new Map([
           ["package-check", ["bun run check:query-cache-types"]],
         ]),
-        packageDirectory: "packages/orphan",
-        packageName: "@stll/orphan",
         shardedPackages: new Set<string>(),
       };
       expect(
-        packageTestExecutionFailure({
-          ...options,
-          collection: {
-            candidate: "packages/orphan/src/one.test.ts",
-            scripts: { test: "bun test" },
-          },
+        firstCollectionFailure({
+          file: "packages/scripts/src/query-cache-types.test.ts",
+          nonGatingFiles: new Set(),
+          topology,
         }),
       ).toBeUndefined();
       expect(
-        packageTestExecutionFailure({
-          ...options,
-          collection: {
-            candidate: "packages/orphan/src/two.test.ts",
-            scripts: { test: "bun test" },
-          },
+        firstCollectionFailure({
+          file: "packages/scripts/src/i18n-usage.test.ts",
+          nonGatingFiles: new Set(),
+          topology,
         }),
       ).toContain("does not collect");
     },
