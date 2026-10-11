@@ -292,16 +292,18 @@
       ],
       // Root projects can import workspace source. The broad workspace inputs
       // trade some misses for correctness while still sharing exact results
-      // between linked worktrees and CI runners.
+      // between linked worktrees and CI runners. The full lockfile is needed:
+      // Turbo hashes only root dependencies for a root task, while this
+      // program also consumes workspace dependencies.
       "inputs": [
         "$TURBO_DEFAULT$",
-        "!bun.lock",
         "$TURBO_ROOT$/.claude/mcp/**",
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/apps/**",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/bun.lock",
         "$TURBO_ROOT$/packages/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/scripts/**",
