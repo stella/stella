@@ -40,6 +40,7 @@ const updateExpenseBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Change a draft or approved expense in a matter: its date, amount, " +
     "currency, category, description, invoice description, billable flag, " +

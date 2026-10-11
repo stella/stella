@@ -12,6 +12,7 @@ import {
 } from "@/api/lib/memory/persist-explicit-memory";
 
 const config = {
+  contract: "patch",
   // Memory is part of the AI assistant; gate on the chat capability.
   // Firm-scoped writes go through the separate, permission-gated route.
   permissions: { chat: ["create"] },

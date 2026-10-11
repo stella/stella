@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * The RTF reader against the constructs the court dialect states.
  *
@@ -6,24 +7,24 @@
  * a real decision is `parsers/hu-bhgy.test.ts`, which drives the same reader
  * from a captured file.
  */
-
-import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import type {
-  BlockContent,
-  Paragraph,
-  Run,
-  RunContent,
-} from "@stll/docx-core/model";
-import { propertyConfig } from "@stll/property-testing";
+import type { BlockContent, Paragraph, Run } from "@stll/docx-core/model";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
 
+import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 import {
   embeddedTextFixtures,
   embeddedTextRtf,
 } from "@/api/lib/legal-search/parsers/rtf-destinations.fixtures";
-import { isRtf, readRtf } from "@/api/lib/legal-search/parsers/rtf-reader";
+import {
+  isRtf,
+  readRtf,
+  readRtfString,
+} from "@/api/lib/legal-search/parsers/rtf-reader";
+
+import { runContentVisibleText } from "./run-content-text";
 
 /**
  * The bytes a document holds, one per character: RTF is a byte format and the
@@ -42,47 +43,13 @@ const bytesOf = (rtf: string): Uint8Array =>
 const runsOf = (paragraph: Paragraph): Run[] =>
   paragraph.content.filter((item): item is Run => item.type === "run");
 
-const runContentText = (item: RunContent): string => {
-  switch (item.type) {
-    case "text":
-      return item.text;
-    case "tab":
-      return "\t";
-    case "break":
-      return "\n";
-    // Verbatim-preserved markup folio does not model. Its `text` is what the
-    // markup puts on the line (a `w:ruby` base is visible text), so this
-    // reads it rather than dropping the characters.
-    case "preservedXml":
-      return item.text;
-    // Carry no characters of their own: a symbol, a note mark, a field's own
-    // instruction text, a hyphen the layout inserted, a drawing or a shape all
-    // reach the text through the runs around them.
-    case "symbol":
-    case "footnoteRef":
-    case "endnoteRef":
-    case "noteMarker":
-    case "fieldChar":
-    case "instrText":
-    case "softHyphen":
-    case "noBreakHyphen":
-    case "renderedPageBreak":
-    case "drawing":
-    case "shape":
-      return "";
-    default:
-      item satisfies never;
-      return panic(`Unhandled run content: ${JSON.stringify(item)}`);
-  }
-};
-
 const textOf = (block: BlockContent): string => {
   if (block.type !== "paragraph") {
     return "";
   }
   return runsOf(block)
     .flatMap((run) => run.content)
-    .map(runContentText)
+    .map(runContentVisibleText)
     .join("");
 };
 
@@ -90,6 +57,80 @@ const paragraphsOf = (rtf: string): string[] =>
   readRtf(bytesOf(rtf)).package.document.content.map(textOf);
 
 const HEADER = String.raw`{\rtf1\ansi\ansicpg1250\deff0{\fonttbl{\f0\froman Times;}}{\colortbl ;\red0\green0\blue0;\red0\green0\blue0;}\viewkind4\uc1\pard\qj\f0\fs24 `;
+
+test("invalid Unicode code points fail RTF parsing instead of publishing partial text", () => {
+  assertProperty(
+    "invalid Unicode code points fail RTF parsing instead of publishing partial text",
+    fc.property(
+      fc.oneof(
+        fc.integer({ min: 0x11_00_00, max: 0x7f_ff_ff_ff }),
+        fc.integer({ min: -0x7f_ff_ff_ff, max: -65_537 }),
+      ),
+      (parameter) => {
+        expect(() =>
+          readRtfString(`{\\rtf1 before\\u${parameter} after}`),
+        ).toThrow(RangeError);
+      },
+    ),
+    { numRuns: 100 },
+  );
+});
+
+test("generated RTF retains plain text without markup residue", () => {
+  const plainText = fc
+    .array(fc.constantFrom("alpha", "beta", "gamma", "delta", "šťáva😀"), {
+      minLength: 1,
+      maxLength: 8,
+    })
+    .map((words) => words.join(" "));
+  const destination = fc.constantFrom(
+    String.raw`{\*\unknown \rtf1\ansi hidden}`,
+    String.raw`{\*\unknown \result hidden}`,
+    String.raw`{\*\unknown{\footnote hidden}}`,
+    String.raw`{\info\trowd hidden\cell\row}`, // unknown destination
+    String.raw`{\pict\pngblip 89504e470d0a1a0000000d4948445200000000}`,
+    String.raw`{\object{\*\objdata\bin4 abcd}}`,
+    String.raw`{\*\unknown \rtf1\ansi hidden`, // unbalanced group
+  );
+  const binaryPayload = fc
+    .array(fc.integer({ min: 0, max: 255 }), { maxLength: 48 })
+    .map((bytes) => String.fromCodePoint(...bytes));
+  const encoded = fc.constantFrom(
+    String.raw`\'e1`,
+    String.raw`\u225?`,
+    String.raw`\uc2\u225??\uc1 `,
+  );
+
+  assertProperty(
+    "generated RTF retains plain text without markup residue",
+    fc.property(
+      plainText,
+      fc.array(encoded, { minLength: 1, maxLength: 8 }),
+      fc.array(destination, { maxLength: 8 }),
+      fc.nat({ max: 6 }),
+      fc.nat({ max: 4 }),
+      fc.array(binaryPayload, { minLength: 1, maxLength: 4 }),
+      (text, escapes, destinations, nesting, unmatchedClosings, payloads) => {
+        const visible = `${text}${escapes.join("")}`;
+        const nested = `${"{".repeat(nesting)}${visible}${"}".repeat(nesting)}`;
+        const binary = payloads
+          .map((payload) => `\\bin${String(payload.length)} ${payload}`)
+          .join("");
+        const rtf = `${HEADER}${nested}${binary}tail${destinations.join("")}\\par }${"}".repeat(unmatchedClosings)}`;
+        const document = readRtfString(rtf);
+        const output = [
+          ...document.package.document.content.map(textOf),
+          ...(document.package.footnotes ?? []).flatMap(({ content }) =>
+            content.map(textOf),
+          ),
+        ].join(" ");
+        expect(output).toBe(`${text}${"á".repeat(escapes.length)}tail`);
+        expect(markupResidueIn(output)).toBeUndefined();
+      },
+    ),
+    { numRuns: 300 },
+  );
+});
 
 describe("code pages", () => {
   test("reads `\\'xx` against the document's own ansicpg", () => {
@@ -346,7 +387,7 @@ describe("paragraphs and alignment", () => {
     ]);
   });
 
-  test("`\\tab` and `\\line` are content, not characters of their own", () => {
+  test("`\\tab` stays inline while `\\line` ends the parsed line", () => {
     const [paragraph] = readRtf(bytesOf(`${HEADER}a\\tab b\\line c\\par }`))
       .package.document.content;
     expect(paragraph?.type).toBe("paragraph");
@@ -356,7 +397,11 @@ describe("paragraphs and alignment", () => {
             run.content.map(({ type }) => type),
           )
         : [];
-    expect(kinds).toEqual(["text", "tab", "text", "break", "text"]);
+    expect(kinds).toEqual(["text", "tab", "text"]);
+    expect(paragraphsOf(`${HEADER}a\\tab b\\line c\\par }`)).toEqual([
+      "a\tb",
+      "c",
+    ]);
   });
 });
 
@@ -526,3 +571,97 @@ describe("embedded RTF text destinations", () => {
     ]);
   });
 });
+
+describe("Unicode transport respects counted opaque spans", () => {
+  for (const payload of [
+    "é}{\\bin99 ",
+    "ÿ{\\rtf1\\ansi}",
+    "Ā}",
+    "é{\\\\bin8 }",
+  ]) {
+    test(`binary payload ${JSON.stringify(payload)} cannot alter following text`, () => {
+      const rtf = `{\\rtf1 Before \\bin${String(payload.length)} ${payload}After\\par}`;
+      const document = readRtfString(rtf);
+      expect(document.package.document.content.map(textOf)).toEqual([
+        "Before After",
+      ]);
+      expect(document.package.footnotes ?? []).toEqual([]);
+    });
+  }
+  test("Unicode fallbacks retain their scoped character counts", () => {
+    const rtf = String.raw`{\rtf1\uc2\u225${"éĀ"}{\uc1\u269${"š"}}\u225${"éĀ"} After\par}`;
+    expect(readRtfString(rtf).package.document.content.map(textOf)).toEqual([
+      "áčá After",
+    ]);
+  });
+  test("an escaped binary control stays literal", () => {
+    expect(
+      readRtfString(
+        String.raw`{\rtf1 \\bin2 ${"é"}}text}`,
+      ).package.document.content.map(textOf),
+    ).toEqual([String.raw`\bin2 ${"é"}text`]);
+  });
+});
+
+test("Unicode transport emits literal characters as complete Unicode controls", () => {
+  const source = "šťáva";
+  expect(readRtfString(source).package.document.content.map(textOf)).toEqual([
+    source,
+  ]);
+  expect(
+    readRtfString(
+      String.raw`{\rtf1\ansi Literal ${"šťáva"} \'e1\uc2\u225??}`,
+    ).package.document.content.map(textOf),
+  ).toEqual(["Literal šťáva áá"]);
+});
+
+test("RTF line boundaries never merge a heading or word with following body text", () => {
+  assertProperty(
+    "RTF line boundaries never merge a heading or word with following body text",
+    fc.property(
+      fc.constantFrom("Odůvodnění", "Odlišné stanovisko", "Indokolás", "alpha"),
+      fc
+        .array(fc.constantFrom("a", "b", "c", "é"), {
+          minLength: 1,
+          maxLength: 20,
+        })
+        .map((letters) => letters.join("")),
+      (heading, body) => {
+        const document = readRtfString(
+          `{\\rtf1\\b ${heading}\\line\\b0 ${body}\\par}`,
+        );
+        expect(document.package.document.content.map(textOf)).toEqual([
+          heading,
+          body,
+        ]);
+      },
+    ),
+    { numRuns: 100 },
+  );
+});
+
+test.each(["line", "par", "sect", "page"])(
+  "\\%s separates lines and preserves each line's formatting",
+  (boundary) => {
+    const document = readRtfString(
+      `{\\rtf1\\qc\\b Heading\\${boundary}\\b0\\i Body\\par}`,
+    );
+    const blocks = document.package.document.content;
+    expect(blocks.map(textOf)).toEqual(["Heading", "Body"]);
+    expect(
+      blocks.map((block) =>
+        block.type === "paragraph" ? block.formatting?.alignment : null,
+      ),
+    ).toEqual(["center", "center"]);
+    expect(
+      blocks.map((block) =>
+        block.type === "paragraph"
+          ? runsOf(block).map((run) => [
+              run.formatting?.bold ?? false,
+              run.formatting?.italic ?? false,
+            ])
+          : [],
+      ),
+    ).toEqual([[[true, false]], [[false, true]]]);
+  },
+);

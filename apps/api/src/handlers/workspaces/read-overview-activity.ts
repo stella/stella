@@ -13,6 +13,7 @@ import {
 import { readOverviewActivityPage } from "./read-overview-activity.query";
 
 const config = {
+  contract: "patch",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "ui_navigation_state" },

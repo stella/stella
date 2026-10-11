@@ -9,6 +9,7 @@ import {
   legalListVerificationReadReceipts,
   legalListVerificationRuns,
 } from "@/api/db/schema";
+import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { VERIFICATION_RUN_STATUSES } from "@/api/lib/lists/verification/contract";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -99,6 +100,12 @@ describe.skipIf(!enabled)("document-owned verification history", () => {
         await client`INSERT INTO workspaces VALUES (${workspaceId}, ${organizationId})`;
         await client`INSERT INTO entities VALUES (${documentId}, ${workspaceId}), (${retainedDocumentId}, ${workspaceId})`;
 
+        const fixtureScoped = createScopedDb(
+          markRlsDatabase(db),
+          [workspaceId],
+          organizationId,
+          userId,
+        );
         const seedRun = async (
           entityId: typeof documentId,
           status: (typeof VERIFICATION_RUN_STATUSES)[number],
@@ -117,40 +124,57 @@ describe.skipIf(!enabled)("document-owned verification history", () => {
             status,
             errorCode: status === "failed" ? "internal" : null,
           });
-          await db.insert(legalListVerificationBlocks).values({
-            runId,
-            workspaceId,
-            ordinal: 0,
-            blockId: "p1",
-            kind: "docx-block",
-            text: "Pinned document text.",
-          });
-          await db.insert(legalListClaims).values({
-            id: claimId,
-            runId,
-            workspaceId,
-            position: 0,
-            type: "fact",
-            state: "nocover",
-            text: "Pinned quotation.",
-            anchor: { type: "docx-block", blockId: "p1", start: 0, end: 16 },
-          });
-          await db.insert(legalListClaimReviewEvents).values({
-            id: createSafeId<"legalListClaimReviewEvent">(),
-            runId,
-            claimId,
-            workspaceId,
-            kind: "note",
-            payload: { kind: "note", note: "Reviewed." },
-            actorId: userId,
-          });
-          await db.insert(legalListVerificationReadReceipts).values({
-            organizationId,
-            workspaceId,
-            runId,
-            userId,
-            auditedDay: "2026-10-06",
-          });
+          await fixtureScoped(
+            async (tx) =>
+              await tx.insert(legalListVerificationBlocks).values({
+                runId,
+                workspaceId,
+                ordinal: 0,
+                blockId: "p1",
+                kind: "docx-block",
+                text: "Pinned document text.",
+              }),
+          );
+          await fixtureScoped(
+            async (tx) =>
+              await tx.insert(legalListClaims).values({
+                id: claimId,
+                runId,
+                workspaceId,
+                position: 0,
+                type: "fact",
+                state: "nocover",
+                text: "Pinned quotation.",
+                anchor: {
+                  type: "docx-block",
+                  blockId: "p1",
+                  start: 0,
+                  end: 16,
+                },
+              }),
+          );
+          await fixtureScoped(
+            async (tx) =>
+              await tx.insert(legalListClaimReviewEvents).values({
+                id: createSafeId<"legalListClaimReviewEvent">(),
+                runId,
+                claimId,
+                workspaceId,
+                kind: "note",
+                payload: { kind: "note", note: "Reviewed." },
+                actorId: userId,
+              }),
+          );
+          await fixtureScoped(
+            async (tx) =>
+              await tx.insert(legalListVerificationReadReceipts).values({
+                organizationId,
+                workspaceId,
+                runId,
+                userId,
+                auditedDay: "2026-10-06",
+              }),
+          );
           return runId;
         };
         // Discover every dependent content table through the actual FK graph,
@@ -169,8 +193,13 @@ describe.skipIf(!enabled)("document-owned verification history", () => {
         const counts = async () => {
           const result: Record<string, number> = {};
           for (const { name } of dependents) {
-            const rows = await client.unsafe<{ count: number }[]>(
-              `SELECT count(*)::int AS count FROM "${schema}"."${name}"`,
+            const rows = await fixtureScoped(
+              async (tx) =>
+                await tx.execute<{ count: number }>(
+                  sql.raw(
+                    `SELECT count(*)::int AS count FROM "${schema}"."${name}"`,
+                  ),
+                ),
             );
             const row = rows.at(0);
             if (row === undefined) {

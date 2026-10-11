@@ -213,6 +213,7 @@ const releaseInvoiceEntries = async (
 
 const transitionInvoice = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Move an invoice through finalize, send, mark_paid, void, or revert_to_draft. " +
       "Finalize assigns an omitted number from the document type's default series, " +

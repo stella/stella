@@ -14,6 +14,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const deleteSkillResourceParamsSchema = t.Object({
@@ -25,6 +26,7 @@ const deleteSkillResourceBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Delete one resource file from an agent skill, addressed by its path; the " +
     "skill and its other resources are untouched. Bundled skills are read-only " +
@@ -71,7 +73,6 @@ const deleteSkillResource = createSafeRootHandler(
             id: agentSkillResources.id,
             path: agentSkillResources.path,
             sizeBytes: agentSkillResources.sizeBytes,
-            kind: agentSkillResources.kind,
           })
           .from(agentSkillResources)
           .where(
@@ -93,7 +94,7 @@ const deleteSkillResource = createSafeRootHandler(
     yield* Result.await(
       safeDb(
         async (tx) =>
-          await tx.transaction(async (innerTx) => {
+          await withAggregateSavepoint(tx, async (innerTx) => {
             const lockedSkill = await lockSkillForResourceWrite(
               innerTx,
               params.skillId,
@@ -111,7 +112,6 @@ const deleteSkillResource = createSafeRootHandler(
                 resource: {
                   old: {
                     path: existing.path,
-                    kind: existing.kind,
                     sizeBytes: existing.sizeBytes,
                   },
                   new: null,
