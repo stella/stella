@@ -22,6 +22,15 @@ import {
 import { sleep } from "@stll/concurrency/sleep";
 import { assertProperty } from "@stll/property-testing";
 
+import {
+  chatMessageFromPersisted,
+  isChatPart,
+  toChatMessageContent,
+  toPersistedChatMessageContentV3,
+  normalizePersistedChatMessageContent,
+} from "@/api/handlers/chat/chat-message-parts";
+import { chatRefsWrittenIn } from "@/api/handlers/chat/chat-refs-shown";
+import { toSafeId } from "@/api/lib/branded-types";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import {
   finishReasonOf,
@@ -379,6 +388,93 @@ test("SDK-resolved MCP tools retain server ownership behind approval, including 
       starts.find((chunk) => chunk.toolCallId === "mcp-read")?.metadata,
     ).toMatchObject({ [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" });
     expect(executed).toBe(0);
+  }
+});
+
+test("a continuation snapshot preserves normalized legacy server ownership", async () => {
+  const call = {
+    type: "tool-call",
+    id: "legacy-server",
+    name: "list_templates",
+    arguments: "{}",
+    input: {},
+    output: { templates: [] },
+    state: "complete",
+    metadata: { provider: "legacy" },
+  } as const;
+  const historical = chatMessageFromPersisted({
+    id: toSafeId<"chatMessage">("msg_legacy_server_snapshot"),
+    role: "assistant",
+    content: toChatMessageContent({ version: 2, data: [call] }),
+  });
+  const beforeRefs = chatRefsWrittenIn({
+    parts: historical.parts,
+    isServerTool: isServerChatToolCall,
+  });
+  const capture = createStreamMessageCapture({
+    initialMessages: [historical],
+    capture: (message) => message,
+  });
+  const adapter: AnyTextAdapter = {
+    ...scriptedAdapterBase,
+    async *chatStream({ model, runId, threadId }) {
+      yield* scriptedTurnChunks(
+        {
+          type: "step",
+          toolCalls: [
+            { toolCallId: "gate", toolName: "gate", arguments: "{}" },
+          ],
+        },
+        {
+          index: 0,
+          model,
+          runId: runId ?? "run",
+          threadId: threadId ?? "thread",
+        },
+      );
+    },
+    structuredOutput: () => panic("No structured output in this test"),
+  };
+  for await (const chunk of streamChatChunks({
+    adapter,
+    messages: [historical],
+    tools: [
+      toolDefinition({
+        name: "gate",
+        description: "Approval",
+        needsApproval: true,
+      }).server(() => ({})),
+      toolDefinition({
+        name: call.name,
+        description: "Changed registration",
+      }).client(),
+    ],
+  })) {
+    capture.processor.processChunk(chunk);
+  }
+  const restored = capture.processor
+    .getMessages()
+    .flatMap(({ parts }) => parts)
+    .find((part) => part.type === "tool-call" && part.id === call.id);
+  expect(isChatPart(restored)).toBe(true);
+  if (isChatPart(restored)) {
+    expect(restored).toMatchObject({
+      metadata: {
+        provider: "legacy",
+        [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server",
+      },
+      output: call.output,
+    });
+    const read = normalizePersistedChatMessageContent(
+      toPersistedChatMessageContentV3({ data: [restored] }),
+    );
+    expect(read.parts).toEqual(historical.parts);
+    expect(
+      chatRefsWrittenIn({
+        parts: read.parts,
+        isServerTool: isServerChatToolCall,
+      }),
+    ).toEqual(beforeRefs);
   }
 });
 

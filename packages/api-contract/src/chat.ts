@@ -42,6 +42,9 @@ export const isChatPastedTextPart = (
   );
 };
 
+export const ASK_USER_TOOL_NAME = "ask-user";
+export const CREATE_DOCUMENT_TOOL_NAME = "create-document";
+
 /** Executor recorded from the tool definition, independent of input readiness. */
 export const CHAT_TOOL_EXECUTOR_METADATA_KEY = "stellaToolExecutor";
 

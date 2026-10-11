@@ -6,7 +6,12 @@ import type { ChatClientState } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
-import { isServerChatToolCall } from "@stll/api-contract/chat";
+import {
+  ASK_USER_TOOL_NAME,
+  CREATE_DOCUMENT_TOOL_NAME,
+  isServerChatToolCall,
+} from "@stll/api-contract/chat";
+import { REQUEST_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 import type { FolioAgentToolName } from "@stll/folio-agents";
 
@@ -162,8 +167,8 @@ const isChatToolCallState = (
 ): value is ChatToolCallPart["state"] =>
   Object.hasOwn(TOOL_CALL_STATE_IS_RUNNING, value);
 const USER_INPUT_TOOL_NAMES = {
-  "ask-user": true,
-  request_secret: true,
+  [ASK_USER_TOOL_NAME]: true,
+  [REQUEST_SECRET_TOOL_NAME]: true,
 } as const satisfies Record<string, true>;
 
 // folio-agents tools a DOCX surface auto-runs against its bridge with no
@@ -928,7 +933,7 @@ const toTerminalIfRunningToolPart = (part: ChatPart): ChatPart => {
   // after hydration. Preserve it so the session effect can return its result
   // instead of turning a recoverable draft into an interrupted tool call.
   if (
-    part.name === "create-document" &&
+    part.name === CREATE_DOCUMENT_TOOL_NAME &&
     part.state === "input-complete" &&
     isJsonObject(part.input) &&
     typeof part.input["source"] === "string" &&

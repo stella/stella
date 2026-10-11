@@ -24,9 +24,10 @@ them.
 
 New tool calls record executor ownership when written. Older rows without a
 tag are normalized once at the persisted-message read boundary using the
-current tool registry (server for an executable definition, client otherwise).
-Recorded tags remain authoritative. All archived fixtures still exercise reload
-and continuation; their stored files remain intact.
+fixed catalog of historically client-executed names; all other names are
+server-owned. Request tool sets cannot change that decision, and recorded tags
+remain authoritative. All archived fixtures still exercise reload and
+continuation; their stored files remain intact.
 
 The older files were written by backporting the writer into a checkout of the
 release and sending requests the way today's web client builds them.

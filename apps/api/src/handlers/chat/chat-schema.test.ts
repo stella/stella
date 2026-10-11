@@ -15,8 +15,11 @@ import {
 } from "@stll/api-contract";
 import {
   CHAT_TOOL_EXECUTOR_METADATA_KEY,
+  chatToolExecutor,
+  isServerChatToolCall,
   createChatPastedTextPart,
 } from "@stll/api-contract/chat";
+import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 import { assertProperty } from "@stll/property-testing";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -24,10 +27,13 @@ import {
   createChatAttachmentPart,
   chatMessageContentFromMessage,
   chatMessageFromPersisted,
+  normalizePersistedChatMessageContent,
+  getAwaitingUserInteractions,
   isChatPart,
   toChatMessageContent,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
+import { chatRefsWrittenIn } from "@/api/handlers/chat/chat-refs-shown";
 import {
   ACTIVE_CONTEXT_SCHEMAS,
   activeDecisionSchema,
@@ -783,6 +789,110 @@ describe("validateMessage", () => {
           }),
         ),
       ).toBe(true);
+    }
+  });
+
+  test("legacy history and continuation keep the same owners across tool registrations", async () => {
+    const gate = {
+      type: "tool-call",
+      id: "gate",
+      name: "mcp__external__gate",
+      arguments: "{}",
+      input: {},
+      state: "approval-requested",
+      approval: { id: "approval-gate", needsApproval: true },
+    } as const;
+    const completed = {
+      type: "tool-call",
+      id: "completed-server",
+      name: "list_templates",
+      arguments: "{}",
+      input: {},
+      state: "complete",
+      output: { templates: [] },
+    } as const;
+    const pending = {
+      type: "tool-call",
+      id: "legacy-client",
+      name: FOLIO_AGENT_TOOL_NAMES.readDocument,
+      arguments: "{}",
+      input: {},
+      state: "input-complete",
+    } as const;
+    const content = toChatMessageContent({
+      version: 2,
+      data: [gate, completed, pending],
+    });
+    const id = chatMessageId("msg_legacy_owners");
+    const history = chatMessageFromPersisted({
+      id,
+      role: "assistant",
+      content,
+    });
+    const read = normalizePersistedChatMessageContent(content).parts;
+    expect(history.parts).toEqual(read);
+    expect(read.map(chatToolExecutor)).toEqual(["server", "server", "client"]);
+    expect(getAwaitingUserInteractions(history)).toEqual([
+      { toolCallId: gate.id, type: "approval" },
+      { toolCallId: pending.id, type: "client-tool" },
+    ]);
+    const beforeRefs = chatRefsWrittenIn({
+      parts: history.parts,
+      isServerTool: isServerChatToolCall,
+    });
+    expect(beforeRefs.values).toContainEqual(completed.output);
+    for (const serverDefinition of [true, false]) {
+      const result = await validateMessageWithPersistence({
+        message: {
+          id,
+          role: "assistant",
+          parts: [
+            {
+              ...gate,
+              state: "approval-responded",
+              approval: { ...gate.approval, approved: true },
+            },
+            completed,
+            { ...pending, state: "complete", output: { content: "Document" } },
+          ],
+        },
+        persistedMessage: { role: "assistant", content },
+        safeDb: noDbReads,
+        threadId: chatThreadId("thread_legacy_owners"),
+        userId: userId("user_legacy_owners"),
+        tools: {
+          mcp__external__gate: { name: gate.name, description: "Approval" },
+          list_templates: {
+            name: completed.name,
+            description: "Templates",
+            ...(serverDefinition
+              ? { execute: async () => ({ templates: [] }) }
+              : {}),
+          },
+          [pending.name]: {
+            name: pending.name,
+            description: "Document",
+            ...(serverDefinition
+              ? { execute: async () => ({ content: "Document" }) }
+              : {}),
+          },
+        },
+      });
+      expect(Result.isOk(result)).toBe(true);
+      if (Result.isOk(result)) {
+        expect(result.value.message.parts.map(chatToolExecutor)).toEqual([
+          "server",
+          "server",
+          "client",
+        ]);
+        expect(getAwaitingUserInteractions(result.value.message)).toEqual([]);
+        expect(
+          chatRefsWrittenIn({
+            parts: result.value.message.parts,
+            isServerTool: isServerChatToolCall,
+          }),
+        ).toEqual(beforeRefs);
+      }
     }
   });
 

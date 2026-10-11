@@ -4,6 +4,7 @@ import {
   StreamProcessor,
   uiMessagesToWire,
 } from "@tanstack/ai";
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -12,12 +13,17 @@ import {
   resourceRef,
   RESOURCE_TYPE,
 } from "@stll/api-contract";
+import { BROWSER_CONTROL_TOOL_NAME } from "@stll/api-contract/browser-control";
 import {
+  ASK_USER_TOOL_NAME,
+  CREATE_DOCUMENT_TOOL_NAME,
   CHAT_TOOL_EXECUTOR_METADATA_KEY,
   chatToolExecutor,
   isServerChatToolCall,
   createChatPastedTextPart,
 } from "@stll/api-contract/chat";
+import { REQUEST_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
+import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 import { propertyConfig } from "@stll/property-testing";
 
 import {
@@ -53,6 +59,7 @@ import type {
 } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { CHAT_REF_ENCODING } from "@/api/lib/chat/ref-token";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 import { richChatParts, unsafeScriptUrl } from "./__fixtures__/rich-chat-parts";
@@ -632,97 +639,169 @@ describe("persisted chat message parts", () => {
     }
   });
 
-  test("legacy calls normalize ownership once from the read registry", () => {
-    const call = {
-      arguments: "{}",
-      input: {},
-      id: "call",
-      name: "list_templates",
-      state: "input-complete",
-      type: "tool-call",
-      metadata: { provider: "retained" },
-    } as const;
-    const tagged = {
-      ...call,
-      metadata: {
-        ...call.metadata,
-        [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server",
-      },
-    };
-    const current = toPersistedChatMessageContentV3({ data: [tagged] });
-    const stored = current.data.at(0);
-    expect(stored?.type).toBe("tool-call");
-    if (stored?.type !== "tool-call") {
-      return;
-    }
-    const { metadata: _metadata, ...untagged } = stored;
-    const contents = [
-      { ...current, data: [{ ...untagged, metadata: call.metadata }] },
-      toChatMessageContent({ version: 2, data: [call] }),
-      {
-        version: 1 as const,
-        data: [
-          {
-            ...call,
-            type: "tool-list_templates",
-            toolCallId: call.id,
-            state: "input-available",
-          },
-        ],
-      },
-    ];
-    for (const content of contents) {
-      for (const definition of ["server", "client", "unknown"] as const) {
-        const tools =
-          definition === "unknown"
-            ? {}
-            : {
-                list_templates: {
-                  name: "list_templates",
-                  description: "List templates",
-                  ...(definition === "server"
-                    ? { execute: async () => [] }
-                    : {}),
-                },
-              };
-        const parts = normalizePersistedChatMessageContent(
-          content,
-          tools,
-        ).parts;
-        const normalized = parts.at(0);
-        expect(normalized).toMatchObject({
+  test("legacy ownership is fixed across content versions and canonical rewrites", () => {
+    const definitions = [
+      { name: "list_templates", executor: "server" },
+      { name: "mcp__external__lookup", executor: "server" },
+      { name: "mcp__unregistered__lookup", executor: "server" },
+      ...Object.values(FOLIO_AGENT_TOOL_NAMES)
+        .filter(
+          (name) =>
+            name !== FOLIO_AGENT_TOOL_NAMES.readPage &&
+            name !== FOLIO_AGENT_TOOL_NAMES.readSelection &&
+            name !== FOLIO_AGENT_TOOL_NAMES.scrollToBlock,
+        )
+        .map((name) => ({ name, executor: "client" }) as const),
+      ...(
+        [
+          ASK_USER_TOOL_NAME,
+          CREATE_DOCUMENT_TOOL_NAME,
+          REQUEST_SECRET_TOOL_NAME,
+          BROWSER_CONTROL_TOOL_NAME,
+        ] as const
+      ).map((name) => ({ name, executor: "client" }) as const),
+    ] as const;
+    for (const { name, executor } of definitions) {
+      const call = {
+        arguments: "{}",
+        input: {},
+        id: "call",
+        name,
+        state: "input-complete",
+        type: "tool-call",
+        metadata: { provider: "retained" },
+      } as const;
+      const tagged = {
+        ...call,
+        metadata: {
+          ...call.metadata,
+          [CHAT_TOOL_EXECUTOR_METADATA_KEY]: executor,
+        },
+      };
+      const current = toPersistedChatMessageContentV3({ data: [tagged] });
+      const stored = current.data.at(0);
+      expect(stored?.type).toBe("tool-call");
+      if (stored?.type !== "tool-call") {
+        continue;
+      }
+      const { metadata: _metadata, ...untagged } = stored;
+      const contents = [
+        { ...current, data: [{ ...untagged, metadata: call.metadata }] },
+        toChatMessageContent({ version: 2, data: [call] }),
+        {
+          version: 1 as const,
+          data: [
+            {
+              ...call,
+              type: `tool-${name}`,
+              toolCallId: call.id,
+              state: "input-available",
+            },
+          ],
+        },
+      ];
+      for (const content of contents) {
+        const parts = normalizePersistedChatMessageContent(content).parts;
+        expect(parts.at(0)).toMatchObject({
           type: "tool-call",
           metadata: { provider: "retained" },
         });
-        expect(chatToolExecutor(normalized)).toBe(
-          definition === "server" ? "server" : "client",
-        );
-        expect(isServerChatToolCall(normalized)).toBe(definition === "server");
+        expect(chatToolExecutor(parts.at(0))).toBe(executor);
+        expect(isServerChatToolCall(parts.at(0))).toBe(executor === "server");
         expect(
           getAwaitingUserInteractions({ role: "assistant", parts }),
         ).toEqual(
-          definition === "server"
+          executor === "server"
             ? []
-            : [{ toolCallId: call.id, type: "client-tool" }],
+            : [
+                {
+                  toolCallId: call.id,
+                  type:
+                    name === ASK_USER_TOOL_NAME ? "ask-user" : "client-tool",
+                },
+              ],
         );
         const written = toPersistedChatMessageContentV3({ data: parts });
         expect(normalizePersistedChatMessageContent(written).parts).toEqual(
           parts,
         );
-        expect(
-          normalizePersistedChatMessageContent(written, {
-            list_templates: {
-              name: "list_templates",
-              description: "Changed",
-              ...(definition !== "server" ? { execute: async () => [] } : {}),
+      }
+      // Recorded ownership remains authoritative even for an alternate registration.
+      const override = {
+        ...call,
+        metadata: {
+          [CHAT_TOOL_EXECUTOR_METADATA_KEY]:
+            executor === "server" ? "client" : "server",
+        },
+      };
+      expect(
+        normalizePersistedChatMessageContent(
+          toPersistedChatMessageContentV3({ data: [override] }),
+        ).parts,
+      ).toEqual([override]);
+    }
+  });
+
+  test("malformed legacy tool metadata produces a structured read error", () => {
+    const call = {
+      type: "tool-call",
+      name: "list_templates",
+      id: "call",
+      state: "complete",
+      arguments: "{}",
+      input: {},
+      output: {},
+    } as const;
+    const canonical = toPersistedChatMessageContentV3({
+      data: [
+        { ...call, metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" } },
+      ],
+    });
+    const stored = canonical.data.at(0);
+    expect(stored?.type).toBe("tool-call");
+    if (stored?.type !== "tool-call") {
+      return;
+    }
+    const { metadata: _metadata, ...untagged } = stored;
+    for (const metadata of [
+      null,
+      "provider",
+      42,
+      [],
+      { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "unknown" },
+    ]) {
+      for (const content of [
+        { ...canonical, data: [{ ...untagged, metadata }] },
+        toChatMessageContent({ version: 2, data: [{ ...call, metadata }] }),
+        {
+          version: 1 as const,
+          data: [
+            {
+              ...call,
+              type: "tool-list_templates",
+              toolCallId: call.id,
+              state: "output-available",
+              metadata,
             },
-          }).parts,
-        ).toEqual(parts);
+          ],
+        },
+      ]) {
+        const result = Result.try({
+          try: () => normalizePersistedChatMessageContent(content),
+          catch: (error) => error,
+        });
+        expect(Result.isError(result)).toBe(true);
+        if (Result.isError(result)) {
+          expect(HandlerError.is(result.error)).toBe(true);
+          if (HandlerError.is(result.error)) {
+            expect(result.error.status).toBe(422);
+            expect(result.error.message).toContain(
+              "Stored tool call has invalid",
+            );
+          }
+        }
       }
     }
-    expect(normalizePersistedChatMessageContent(current, {}).parts).toEqual([
-      tagged,
-    ]);
   });
 
   test("completed legacy tool calls render and export without a tool catalog", () => {
@@ -764,7 +843,7 @@ describe("persisted chat message parts", () => {
         ...call,
         metadata: {
           ...call.metadata,
-          [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client",
+          [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server",
         },
       },
       result,
