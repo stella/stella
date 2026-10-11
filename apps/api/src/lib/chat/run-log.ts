@@ -14,6 +14,7 @@ import {
   sql,
 } from "drizzle-orm";
 
+import type { ChatTurnTiming } from "@stll/api-contract/chat";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -93,11 +94,88 @@ type RunLogReaderOptions = Pick<
   "db" | "organizationId" | "runId"
 >;
 
+const hasRunningTiming = (metadata: Record<string, unknown> | undefined) => {
+  const timing = metadata?.["turnTiming"];
+  return (
+    typeof timing === "object" &&
+    timing !== null &&
+    "status" in timing &&
+    timing.status === "running"
+  );
+};
+
+const refreshRunningTiming = (
+  chunk: StreamChunk,
+  timing: ChatTurnTiming | null,
+): StreamChunk => {
+  if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
+    return {
+      ...chunk,
+      messages: chunk.messages.map((message) =>
+        hasRunningTiming(message.metadata)
+          ? {
+              ...message,
+              metadata: { ...message.metadata, turnTiming: timing },
+            }
+          : message,
+      ),
+    };
+  }
+  if (
+    (chunk.type === EventType.TEXT_MESSAGE_START ||
+      chunk.type === EventType.TEXT_MESSAGE_END) &&
+    hasRunningTiming(chunk.metadata)
+  ) {
+    return { ...chunk, metadata: { ...chunk.metadata, turnTiming: timing } };
+  }
+  return chunk;
+};
+
+const hasRunningChunkTiming = (chunk: StreamChunk) =>
+  chunk.type === EventType.MESSAGES_SNAPSHOT
+    ? chunk.messages.some((message) => hasRunningTiming(message.metadata))
+    : (chunk.type === EventType.TEXT_MESSAGE_START ||
+        chunk.type === EventType.TEXT_MESSAGE_END) &&
+      hasRunningTiming(chunk.metadata);
+
+const readCurrentRunTiming = async ({
+  tx,
+  organizationId,
+  runId,
+}: Pick<RunLogReaderOptions, "organizationId" | "runId"> & {
+  tx: Transaction;
+}) => {
+  const [row] = await tx
+    .select({
+      timing: messageTurnTiming({
+        messageId: chatTurns.timingMessageId,
+        threadId: chatTurns.threadId,
+        fallbackTurnId: chatTurns.id,
+      }),
+    })
+    .from(chatRunLogs)
+    .innerJoin(
+      chatTurns,
+      and(
+        eq(chatTurns.id, chatRunLogs.turnId),
+        eq(chatTurns.organizationId, chatRunLogs.organizationId),
+      ),
+    )
+    .where(logKey(organizationId, runId))
+    .limit(1);
+  return row?.timing ?? null;
+};
+
 const createRunLogReader = ({
   db,
   organizationId,
   runId,
-}: RunLogReaderOptions): Pick<StreamDurability, "read" | "snapshot"> => {
+  timingMode = "stored",
+}: RunLogReaderOptions & {
+  timingMode?: "stored" | "current";
+}): Pick<StreamDurability, "read" | "snapshot"> => {
+  const needsCurrentTiming = (chunks: readonly StreamChunk[]) =>
+    timingMode === "current" && chunks.some(hasRunningChunkTiming);
   const loadHeader = async (tx: Transaction) =>
     (
       await tx
@@ -165,7 +243,19 @@ const createRunLogReader = ({
         )
         .orderBy(asc(chatRunLogEntries.seq))
         .limit(READ_PAGE_SIZE);
-      return { entries, log };
+      if (!needsCurrentTiming(entries.map(({ chunk }) => chunk))) {
+        return { entries, log };
+      }
+      // Historical receipts cannot anchor a new browser runtime. Read once
+      // for this page, retaining durable offsets and all non-timing metadata.
+      const timing = await readCurrentRunTiming({ tx, organizationId, runId });
+      return {
+        entries: entries.map((entry) => ({
+          ...entry,
+          chunk: refreshRunningTiming(entry.chunk, timing),
+        })),
+        log,
+      };
     });
 
   return {
@@ -266,7 +356,18 @@ const createRunLogReader = ({
                 message: "Chat run log changed during snapshot",
               });
             }
-            return result;
+            if (!needsCurrentTiming(result.map(({ chunk }) => chunk))) {
+              return result;
+            }
+            const timing = await readCurrentRunTiming({
+              tx,
+              organizationId,
+              runId,
+            });
+            return result.map((entry) => ({
+              ...entry,
+              chunk: refreshRunningTiming(entry.chunk, timing),
+            }));
           }
         }
       }),
@@ -301,7 +402,12 @@ export const createChatRunLogReplay = async ({
         .limit(1)
     ).at(0),
   );
-  const reader = createRunLogReader({ db, organizationId, runId });
+  const reader = createRunLogReader({
+    db,
+    organizationId,
+    runId,
+    timingMode: "current",
+  });
   if (header === undefined) {
     return waitForStart
       ? {

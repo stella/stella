@@ -11,7 +11,5 @@ BEGIN;--> statement-breakpoint
 SET statement_timeout = '5min';--> statement-breakpoint
 ALTER TABLE "chat_turns"
   VALIDATE CONSTRAINT "chat_turns_timing_message_thread_fk";--> statement-breakpoint
-ALTER TABLE "chat_turns"
-  VALIDATE CONSTRAINT "chat_turns_active_timing_check";--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 SET lock_timeout = '1s';

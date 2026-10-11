@@ -12,6 +12,7 @@ import {
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 
 const { act, cleanup, render } = await import("@testing-library/react");
+const { Profiler } = await import("react");
 const { IntlProvider } = await import("use-intl");
 const { ChatTurnDuration } =
   await import("@/components/chat/chat-turn-duration");
@@ -30,6 +31,75 @@ afterEach(() => {
 });
 afterAll(async () => {
   await GlobalRegistrator.unregister();
+});
+
+test("keeps the duration label in the first render of a new reading", () => {
+  let monotonicNow = 100;
+  spyOn(performance, "now").mockImplementation(() => monotonicNow);
+  const observe = createChatTurnTimingObserver();
+  const running = {
+    status: "running",
+    durationMs: 4000,
+    elapsedMs: 1000,
+    startedAt: START,
+    observedAt: "2026-01-01T00:00:01.000Z",
+  } as const;
+  const message = { id: "duration", metadata: { turnTiming: running } };
+  observe([message], monotonicNow);
+  const container = document.createElement("div");
+  const renderedLabels: (string | null)[] = [];
+  const label = (timing: Parameters<typeof ChatTurnDuration>[0]["timing"]) => (
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <FormattingProvider locale="en" timeZone="UTC">
+        <Profiler
+          id="duration"
+          onRender={() => {
+            renderedLabels.push(container.textContent);
+          }}
+        >
+          <ChatTurnDuration timing={timing} />
+        </Profiler>
+      </FormattingProvider>
+    </IntlProvider>
+  );
+  const view = render(label(running), { container });
+  expect(container.textContent).toBe("Worked for 5s");
+  monotonicNow = 2100;
+  const fresh = {
+    ...running,
+    elapsedMs: 3000,
+    observedAt: "2026-01-01T00:00:03.000Z",
+  };
+  observe([{ ...message, metadata: { turnTiming: fresh } }], monotonicNow);
+  renderedLabels.length = 0;
+  view.rerender(label(fresh));
+  expect(renderedLabels.length).toBeGreaterThan(0);
+  expect(renderedLabels.at(0)).toBe("Worked for 7s");
+  expect(renderedLabels).not.toContain("");
+});
+
+test("omits an unobserved running duration without crashing its surface", () => {
+  const running = {
+    status: "running",
+    durationMs: 4000,
+    elapsedMs: 1000,
+    startedAt: START,
+    observedAt: "2026-01-01T00:00:01.000Z",
+  } as const;
+  createChatTurnTimingObserver()(
+    [{ id: "duration", metadata: { turnTiming: running } }],
+    performance.now(),
+  );
+  const view = render(
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <FormattingProvider locale="en" timeZone="UTC">
+        <span>{messages.chat.sendPrompt}</span>
+        <ChatTurnDuration timing={{ ...running }} />
+      </FormattingProvider>
+    </IntlProvider>,
+  );
+  expect(view.container.textContent).toBe(messages.chat.sendPrompt);
+  expect(view.container.querySelector("[data-chat-turn-duration]")).toBeNull();
 });
 
 for (const skewMs of [-3_600_000, 0, 3_600_000]) {

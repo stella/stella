@@ -9,6 +9,10 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 import fc from "fast-check";
 
+import {
+  createChatTurnTimingObserver,
+  getChatTurnDurationMs,
+} from "@stll/api-contract/chat-turn-duration";
 import { assertProperty } from "@stll/property-testing";
 
 import type { rootDb } from "@/api/db/root";
@@ -184,6 +188,120 @@ const rejectionMessage = async (
   );
 
 describe("chat run log database contract", () => {
+  test.each([0, 300])(
+    "fresh rejoin refreshes running timing without a continuation jumping backward (%s deltas)",
+    async (deltaCount) => {
+      const run = await seedRunningTurn();
+      const log = logFor(run);
+      const messageId = Bun.randomUUIDv7();
+      const oldTiming = {
+        status: "running",
+        durationMs: 4000,
+        elapsedMs: 1000,
+        startedAt: "2026-01-01T00:00:00.000Z",
+        observedAt: "2026-01-01T00:00:01.000Z",
+      } satisfies ChatTurnTiming;
+      await log.append([
+        {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId,
+          role: "assistant",
+          metadata: { turnTiming: oldTiming },
+        },
+        ...Array.from(
+          { length: deltaCount },
+          () =>
+            ({
+              type: EventType.TEXT_MESSAGE_CONTENT,
+              messageId,
+              delta: "x",
+            }) satisfies StreamChunk,
+        ),
+      ]);
+      // Advance the authoritative active segment by ten seconds without
+      // sleeping. The stored start event still describes the earlier reading.
+      await testDb
+        .update(chatTurns)
+        .set({
+          activeDurationMs: 4000,
+          activeStartedAt: sql`statement_timestamp() - interval '11 seconds'`,
+        })
+        .where(eq(chatTurns.id, run.execution.id));
+      const replay =
+        (await createChatRunLogReplay({
+          db: scopedDbA,
+          organizationId: ids.orgA,
+          runId: run.runId,
+          resumeOffset: "-1",
+        })) ?? panic("Expected running rejoin");
+      const reader = replay.read("-1")[Symbol.asyncIterator]();
+      const first = await reader.next();
+      if (first.done) {
+        panic("Expected replayed assistant start");
+      }
+      const { processor } = createStreamMessageCapture({
+        initialMessages: [],
+        capture: (message) => message,
+      });
+      processor.processChunk(first.value.chunk);
+      const metadata = processor.getMessages().at(0)?.metadata;
+      const timing = metadata?.["turnTiming"];
+      if (
+        typeof timing !== "object" ||
+        timing === null ||
+        !("status" in timing) ||
+        timing.status !== "running" ||
+        !("durationMs" in timing) ||
+        typeof timing.durationMs !== "number" ||
+        !("elapsedMs" in timing) ||
+        typeof timing.elapsedMs !== "number" ||
+        !("startedAt" in timing) ||
+        typeof timing.startedAt !== "string" ||
+        !("observedAt" in timing) ||
+        typeof timing.observedAt !== "string"
+      ) {
+        panic("Expected running timing in the fresh SDK runtime");
+      }
+      const reading = {
+        status: timing.status,
+        durationMs: timing.durationMs,
+        elapsedMs: timing.elapsedMs,
+        startedAt: timing.startedAt,
+        observedAt: timing.observedAt,
+      } satisfies ChatTurnTiming;
+      const messages = [{ id: messageId, metadata: { turnTiming: reading } }];
+      const fakeReceiptClock = 500;
+      const observeFresh = createChatTurnTimingObserver();
+      observeFresh(messages, fakeReceiptClock);
+      const freshDuration = getChatTurnDurationMs(reading, fakeReceiptClock);
+      expect(freshDuration).toBeGreaterThanOrEqual(15_000);
+      expect(freshDuration).toBeLessThan(17_000);
+      expect(getChatTurnDurationMs(reading, fakeReceiptClock + 2500)).toBe(
+        (freshDuration ?? panic("Expected observed duration")) + 2500,
+      );
+      // A mounted continuation has already accrued the same ten-second gap.
+      const observeContinuation = createChatTurnTimingObserver();
+      observeContinuation(
+        [{ id: messageId, metadata: { turnTiming: oldTiming } }],
+        fakeReceiptClock - 10_000,
+      );
+      const beforeReplay = getChatTurnDurationMs(oldTiming, fakeReceiptClock);
+      observeContinuation(messages, fakeReceiptClock);
+      expect(
+        getChatTurnDurationMs(reading, fakeReceiptClock),
+      ).toBeGreaterThanOrEqual(
+        beforeReplay ?? panic("Expected continuation duration"),
+      );
+      const storedStart = (await log.snapshot()).at(0)?.chunk;
+      if (storedStart?.type !== EventType.TEXT_MESSAGE_START) {
+        panic("Expected unchanged producer start event");
+      }
+      expect(storedStart.metadata?.["turnTiming"]).toEqual(oldTiming);
+      await reader.return?.();
+      await log.close();
+    },
+  );
+
   test("appends in order, preserves JSONB objects, normalizes bigint offsets, and reads strictly after an offset", async () => {
     const run = await seedRunningTurn();
     const log = logFor(run);
@@ -499,9 +617,7 @@ describe("chat run log database contract", () => {
       expect(await run.settled).toBe("stored");
       const liveTiming = capture.message()?.metadata?.["turnTiming"];
       expect(liveTiming).toEqual(
-        exit === "throw" || exit === "unavailable"
-          ? null
-          : persistedTiming.value,
+        exit === "unavailable" ? null : persistedTiming.value,
       );
       expect(capture.message()?.parts).toEqual([
         { type: "text", content: "Partial" },

@@ -614,6 +614,111 @@ for (const batchSize of [1, 2, 32]) {
   });
 }
 
+for (const exit of ["drained", "thrown"] as const) {
+  for (const batchSize of [1, 32]) {
+    test(`final timing reaches live and replay on ${exit} source at batch ${batchSize}`, async () => {
+      const stored: StreamChunk[] = [];
+      let state: "running" | "settled" = "running";
+      const capture = createStreamMessageCapture({
+        initialMessages: [],
+        capture: (message) => message,
+      });
+      const source = async function* () {
+        yield runStart;
+        yield starts[0];
+        yield {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: "answer",
+          delta: "Partial",
+        } as const satisfies StreamChunk;
+        if (exit === "thrown") {
+          throw new HandlerError({
+            status: 500,
+            message: "Synthetic source failure",
+          });
+        }
+      };
+      const response = toServerSentEventsResponse(
+        withChatTurnTiming({
+          source: source(),
+          getPhase: () => state,
+          readTiming: async () =>
+            readPresent(state === "running" ? running : finished),
+        }),
+        {
+          durability: {
+            batch: batchSize,
+            adapter: createChatTurnTimingDurability({
+              getTerminal: () => undefined,
+              getPhase: () => state,
+              readTiming: async () =>
+                readPresent(state === "running" ? running : finished),
+              finishSettlement: async () => {
+                state = "settled";
+                for (const chunk of stored) {
+                  if (chunk.type === EventType.TEXT_MESSAGE_END) {
+                    chunk.metadata = { turnTiming: finished };
+                  }
+                }
+              },
+              log: {
+                resumeFrom: () => null,
+                append: async (chunks) => {
+                  const offsets = chunks.map((_chunk, index) =>
+                    String(stored.length + index + 1),
+                  );
+                  stored.push(...structuredClone(chunks));
+                  return offsets;
+                },
+                async *read() {
+                  for (const [index, chunk] of stored.entries()) {
+                    yield { offset: String(index + 1), chunk };
+                  }
+                },
+                close: async () => {},
+                snapshot: async () =>
+                  stored.map((chunk, index) => ({
+                    offset: String(index + 1),
+                    chunk: structuredClone(chunk),
+                  })),
+              },
+            }),
+          },
+        },
+      );
+      const body = await response.text();
+      const deliveredTimings: unknown[] = [];
+      const deliveredErrors: string[] = [];
+      for (const line of body.split("\n")) {
+        if (!line.startsWith("data: ")) {
+          continue;
+        }
+        const chunk: StreamChunk = JSON.parse(line.slice(6));
+        capture.processor.processChunk(chunk);
+        if (chunk.type === EventType.RUN_ERROR) {
+          deliveredErrors.push(chunk.message);
+        }
+        if (chunk.type === EventType.TEXT_MESSAGE_END) {
+          deliveredTimings.push(chunk.metadata?.["turnTiming"]);
+        }
+      }
+      capture.processor.finalizeStream();
+      expect(deliveredErrors).toEqual(
+        exit === "thrown" ? ["Synthetic source failure"] : [],
+      );
+      expect(deliveredTimings.at(-1)).toEqual(finished);
+      expect(capture.message()?.metadata?.["turnTiming"]).toEqual(finished);
+      expect(capture.message()?.parts).toEqual([
+        { type: "text", content: "Partial" },
+      ]);
+      const persistedTimings = stored
+        .filter((chunk) => chunk.type === EventType.TEXT_MESSAGE_END)
+        .map((chunk) => chunk.metadata?.["turnTiming"]);
+      expect(deliveredTimings).toEqual(persistedTimings);
+    });
+  }
+}
+
 test("a failed cleanup append still settles once and closes durability", async () => {
   const log = memoryStream({ runId: "cleanup-failure" });
   let writes = 0;
@@ -653,3 +758,103 @@ test("a failed cleanup append still settles once and closes durability", async (
   expect(settlements).toBe(1);
   expect(closes).toBe(1);
 });
+
+test.each(["multiple messages drain", "throw after terminal"] as const)(
+  "settles all timing before releasing the execution fence on %s",
+  async (exit) => {
+    const log = memoryStream({ runId: `timing-fence-${exit}` });
+    const phase: { status: "running" | "settled" } = { status: "running" };
+    let rejectedWrites = 0;
+    let settlements = 0;
+    const source = async function* () {
+      yield runStart;
+      yield starts[0];
+      yield {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: "answer",
+        delta: "First",
+      } as const satisfies StreamChunk;
+      if (exit === "multiple messages drain") {
+        yield { ...starts[0], messageId: "answer-two" };
+        yield {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: "answer-two",
+          delta: "Second",
+        } as const satisfies StreamChunk;
+        return;
+      }
+      yield runEnd;
+      throw new HandlerError({
+        status: 500,
+        message: "Source cleanup failed after terminal",
+      });
+    };
+    const response = toServerSentEventsResponse(
+      withChatTurnTiming({
+        source: source(),
+        getPhase: () => phase.status,
+        readTiming: async () =>
+          readPresent(phase.status === "running" ? running : finished),
+      }),
+      {
+        durability: {
+          batch: 1,
+          adapter: createChatTurnTimingDurability({
+            log: {
+              ...log,
+              append: async (chunks) => {
+                // Mirror the database writer's execution fence: settlement
+                // removes ownership, so no subsequent append is legal.
+                if (phase.status === "settled") {
+                  rejectedWrites += 1;
+                  throw new HandlerError({
+                    status: 409,
+                    message: "Chat run log execution fence lost",
+                  });
+                }
+                return await log.append(chunks);
+              },
+            },
+            getTerminal: () =>
+              exit === "throw after terminal"
+                ? { chunk: runEnd, messageId: "answer" }
+                : undefined,
+            getPhase: () => phase.status,
+            readTiming: async () =>
+              readPresent(phase.status === "running" ? running : finished),
+            finishSettlement: async () => {
+              settlements += 1;
+              phase.status = "settled";
+            },
+          }),
+        },
+      },
+    );
+    const body = await response.text();
+    const { processor } = createStreamMessageCapture({
+      initialMessages: [],
+      capture: (message) => message,
+    });
+    for (const line of body.split("\n")) {
+      if (line.startsWith("data: ")) {
+        processor.processChunk(JSON.parse(line.slice(6)));
+      }
+    }
+    processor.finalizeStream();
+    expect(rejectedWrites).toBe(0);
+    expect(settlements).toBe(1);
+    expect(body).not.toContain("RUN_ERROR");
+    const messages = processor.getMessages();
+    expect(messages.map((message) => message.metadata?.["turnTiming"])).toEqual(
+      exit === "multiple messages drain" ? [finished, finished] : [finished],
+    );
+    expect(messages.flatMap((message) => message.parts)).toEqual(
+      exit === "multiple messages drain"
+        ? [
+            { type: "text", content: "First" },
+            { type: "text", content: "Second" },
+          ]
+        : [{ type: "text", content: "First" }],
+    );
+  },
+);

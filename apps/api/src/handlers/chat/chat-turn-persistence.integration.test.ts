@@ -1357,6 +1357,8 @@ describe("durable chat turn persistence", () => {
     await testDb
       .update(chatTurns)
       .set({
+        activeDurationMs: 2000,
+        activeStartedAt: new Date(expiredAt.getTime() - 1000),
         createdAt: new Date(expiredAt.getTime() - 1000),
         leaseExpiresAt: expiredAt,
       })
@@ -1392,6 +1394,8 @@ describe("durable chat turn persistence", () => {
     const turns = await testDb.query.chatTurns.findMany({
       where: { threadId: { eq: threadId } },
       columns: {
+        activeDurationMs: true,
+        activeStartedAt: true,
         executionId: true,
         id: true,
         interruptionReason: true,
@@ -1403,6 +1407,8 @@ describe("durable chat turn persistence", () => {
     expect(turns).toEqual(
       expect.arrayContaining([
         {
+          activeDurationMs: null,
+          activeStartedAt: null,
           executionId: null,
           id: acceptance.id,
           interruptionReason: "owner-lost",
@@ -1411,6 +1417,8 @@ describe("durable chat turn persistence", () => {
           status: "interrupted",
         },
         {
+          activeDurationMs: 0,
+          activeStartedAt: expect.any(Date),
           executionId: null,
           id: replacement.id,
           interruptionReason: null,
@@ -2261,6 +2269,7 @@ describe("durable active turn timing", () => {
       where: { id: { eq: fixture.acceptance.id } },
     });
     expect(settled?.activeDurationMs).toBe(5000);
+    expect(settled?.activeStartedAt).toBeNull();
     expect(unwrap(await readChatTurnTiming({ execution, safeDb }))).toEqual({
       durationMs: 5000,
       status: "finished",
@@ -2300,6 +2309,7 @@ describe("durable active turn timing", () => {
         where: { id: { eq: fixture.acceptance.id } },
       });
       expect(settled?.timingMessageId).toBe(fixture.assistantMessageId);
+      expect(settled?.activeStartedAt).toBeNull();
       expect(unwrap(await readChatTurnTiming({ execution, safeDb }))).toEqual({
         durationMs: 4000,
         status: "finished",
@@ -2439,6 +2449,10 @@ describe("durable active turn timing", () => {
       page.messages.find((message) => message.id === fixture.assistantMessageId)
         ?.metadata?.turnTiming,
     ).toEqual({ status: "finished", durationMs: 5000 });
+    const stopped = await testDb.query.chatTurns.findFirst({
+      where: { id: { eq: fixture.acceptance.id } },
+    });
+    expect(stopped?.activeStartedAt).toBeNull();
   });
 
   test("unknown history and reversed clocks never invent a duration", async () => {
@@ -2482,6 +2496,7 @@ describe("durable active turn timing", () => {
         where: { id: { eq: fixture.acceptance.id } },
       });
       expect(settled?.activeDurationMs).toBeNull();
+      expect(settled?.activeStartedAt).toBeNull();
       expect(
         unwrap(await readChatTurnTiming({ execution, safeDb })),
       ).toBeNull();

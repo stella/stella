@@ -1,6 +1,9 @@
 import { EventType } from "@tanstack/ai";
 import type { StreamChunk, StreamDurability } from "@tanstack/ai";
+import { toRunErrorPayload } from "@tanstack/ai/adapter-internals";
 import { panic, Result } from "better-result";
+
+import { Temporal } from "@stll/time";
 
 import type { ChatTurnTiming } from "@/api/handlers/chat/types";
 import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
@@ -51,14 +54,18 @@ export const withChatTurnTiming = async function* ({
       getPhase() === "settled"
         ? timingMetadata(await (settledTiming = readTiming()))
         : { turnTiming: null };
-    for (const messageId of messageIds) {
-      yield {
-        type: EventType.TEXT_MESSAGE_END,
-        messageId,
-        ...(timestamp === undefined ? {} : { timestamp }),
-        metadata: finished,
-      };
+    const messageId = Array.from(messageIds).at(-1);
+    if (messageId === undefined) {
+      return;
     }
+    // One finalization trigger lets durability group every message's final
+    // timing into a single fenced batch, including when SDK batch size is one.
+    yield {
+      type: EventType.TEXT_MESSAGE_END,
+      messageId,
+      ...(timestamp === undefined ? {} : { timestamp }),
+      metadata: finished,
+    };
   };
   const iterator = source[Symbol.asyncIterator]();
   let sourceState: "reading" | "ended" = "reading";
@@ -67,11 +74,25 @@ export const withChatTurnTiming = async function* ({
       const step = await Result.tryPromise(async () => await iterator.next());
       if (Result.isError(step)) {
         sourceState = "ended";
-        // Clear the anchor before the SDK flushes buffered events and records
-        // the source failure. Propagate the failure to the transport.
-        yield* emitSettledTiming();
-        const { error } = step;
-        throw error;
+        if (getPhase() === "settled") {
+          const { error } = step;
+          throw error;
+        }
+        // SDK cleanup appends thrown errors without forwarding that batch.
+        // Emit the terminal error here so durability can settle its timing
+        // while fenced and forward both events to the live reader.
+        const error = toRunErrorPayload(step.error.cause);
+        yield {
+          type: EventType.RUN_ERROR,
+          timestamp: Temporal.Now.instant().epochMilliseconds,
+          message: error.message,
+          ...(error.code === undefined ? {} : { code: error.code }),
+          error: {
+            message: error.message,
+            ...(error.code === undefined ? {} : { code: error.code }),
+          },
+        };
+        return;
       }
       if (step.value.done) {
         sourceState = "ended";
@@ -157,7 +178,6 @@ export const withChatTurnTiming = async function* ({
 type PrepareChatTurnTimingBatchArgs = {
   chunks: StreamChunk[];
   terminal: { chunk: StreamChunk; messageId: string } | undefined;
-  settlement: "pending" | "ready";
 };
 
 /** The SDK forwards the mutable append batch after persistence. Move final
@@ -167,7 +187,6 @@ type PrepareChatTurnTimingBatchArgs = {
 const prepareChatTurnTimingBatch = ({
   chunks,
   terminal,
-  settlement,
 }: PrepareChatTurnTimingBatchArgs): "pending" | "finishing" => {
   if (terminal === undefined) {
     const hasFinalTiming = chunks.some(
@@ -176,7 +195,7 @@ const prepareChatTurnTimingBatch = ({
         chunk.metadata !== undefined &&
         "turnTiming" in chunk.metadata,
     );
-    return settlement === "ready" && hasFinalTiming ? "finishing" : "pending";
+    return hasFinalTiming ? "finishing" : "pending";
   }
   for (let index = chunks.length - 1; index >= 0; index -= 1) {
     const chunk = chunks.at(index);
@@ -212,8 +231,8 @@ type CreateChatTurnTimingDurabilityArgs = {
 };
 
 /** Every producer exit persists final timing while still fenced, settles the
- * turn, and then releases delivery. Source failures clear the live anchor
- * before the SDK records its error and enters this same finalization point.
+ * turn, and then releases delivery. The final timing event emitted on source
+ * failure or exhaustion is finalized before the SDK forwards its batch.
  */
 export const createChatTurnTimingDurability = ({
   log,
@@ -224,12 +243,37 @@ export const createChatTurnTimingDurability = ({
 }: CreateChatTurnTimingDurabilityArgs): StreamDurability => {
   let status: "pending" | "finished" = "pending";
   let messageId: string | undefined;
+  const messageIds = new Set<string>();
   let settlement: Promise<void> | undefined;
   const settle = async () => {
     settlement ??= finishSettlement();
     await settlement;
   };
   const finalize = async (chunks: StreamChunk[]) => {
+    const endIndex = chunks.findIndex(
+      (chunk) =>
+        chunk.type === EventType.TEXT_MESSAGE_END &&
+        chunk.metadata !== undefined &&
+        "turnTiming" in chunk.metadata,
+    );
+    for (const id of messageIds) {
+      if (
+        chunks.some(
+          (chunk) =>
+            chunk.type === EventType.TEXT_MESSAGE_END &&
+            chunk.messageId === id &&
+            chunk.metadata !== undefined &&
+            "turnTiming" in chunk.metadata,
+        )
+      ) {
+        continue;
+      }
+      chunks.splice(endIndex, 0, {
+        type: EventType.TEXT_MESSAGE_END,
+        messageId: id,
+        metadata: { turnTiming: null },
+      });
+    }
     const offsets = await log.append(chunks);
     await settle();
     const timing = timingMetadata(await readTiming());
@@ -248,12 +292,16 @@ export const createChatTurnTimingDurability = ({
   return {
     ...log,
     append: async (chunks) => {
+      if (status === "finished") {
+        return await log.append(chunks);
+      }
       for (const chunk of chunks) {
         if (
           chunk.type === EventType.TEXT_MESSAGE_START &&
           chunk.role === "assistant"
         ) {
           messageId = chunk.messageId;
+          messageIds.add(chunk.messageId);
         }
       }
       const last = chunks.at(-1);
@@ -267,7 +315,6 @@ export const createChatTurnTimingDurability = ({
       const phase = prepareChatTurnTimingBatch({
         chunks,
         terminal,
-        settlement: getPhase() === "settled" ? "ready" : "pending",
       });
       return phase === "finishing"
         ? await finalize(chunks)

@@ -80,6 +80,40 @@ describe("assistant turn duration", () => {
     );
   });
 
+  test("clamps a stale render clock to the receipt of a new reading", () => {
+    const timing = {
+      status: "running",
+      durationMs: 4000,
+      elapsedMs: 3000,
+      startedAt: START,
+      observedAt: NOW.toISOString(),
+    } as const;
+    createChatTurnTimingObserver()(
+      [{ id: "duration", metadata: { turnTiming: timing } }],
+      2100,
+    );
+    for (const now of [100, 2099, 2100]) {
+      expect(getChatTurnDurationMs(timing, now)).toBe(7000);
+    }
+    expect(getChatTurnDurationMs(timing, 3100)).toBe(8000);
+  });
+
+  test("returns no duration for an unobserved clone of a running reading", () => {
+    const timing = {
+      status: "running",
+      durationMs: 4000,
+      elapsedMs: 1000,
+      startedAt: START,
+      observedAt: NOW.toISOString(),
+    } as const;
+    createChatTurnTimingObserver()(
+      [{ id: "duration", metadata: { turnTiming: timing } }],
+      100,
+    );
+    expect(getChatTurnDurationMs(timing, 1100)).toBe(6000);
+    expect(getChatTurnDurationMs({ ...timing }, 1100)).toBeUndefined();
+  });
+
   test("omits labels for malformed elapsed durations", () => {
     for (const durationMs of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
       expect(renderDuration({ status: "finished", durationMs })).toBe("");

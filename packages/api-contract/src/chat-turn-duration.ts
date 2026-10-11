@@ -54,17 +54,19 @@ export const getChatTurnDurationMs = (
     case "running": {
       const receivedAt = receivedAtByTiming.get(timing);
       if (receivedAt === undefined) {
-        return panic("Running chat timing has no receipt observation");
+        return undefined;
       }
       if (
         !Number.isFinite(timing.elapsedMs) ||
         timing.elapsedMs < 0 ||
-        !Number.isFinite(now) ||
-        now < receivedAt
+        !Number.isFinite(now)
       ) {
         return undefined;
       }
-      return timing.durationMs + timing.elapsedMs + now - receivedAt;
+      // A new reading can precede the label's next clock synchronization.
+      return (
+        timing.durationMs + timing.elapsedMs + Math.max(0, now - receivedAt)
+      );
     }
     default: {
       timing satisfies never;
