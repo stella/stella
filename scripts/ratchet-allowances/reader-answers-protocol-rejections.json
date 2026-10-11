@@ -1,5 +1,0 @@
-{
-  "metric": "throw-outside-boundary",
-  "delta": 11,
-  "reason": "Reader-answer HTTP/SSE adapters reject malformed responses, pagination cycles and invalid stream ordering with typed failures. Result.tryPromise in the stream and operation owners captures these rejections; the recovery query rejects failed reads so TanStack Query preserves its error state. These are the existing promise-consuming framework and stream callback boundaries, not business control flow."
-}
