@@ -281,26 +281,23 @@ const buildTx = ({
     select: (selectedFields: SelectedFields) => {
       if ("status" in selectedFields || "currentVersionId" in selectedFields) {
         const table = "status" in selectedFields ? workspaces : entities;
-        const rows =
+        const rows = [
           "status" in selectedFields
-            ? [
-                {
-                  id: workspaceId,
-                  organizationId,
-                  reference: null,
-                  status: "active",
-                },
-              ]
-            : [
-                {
-                  id: entityId,
-                  workspaceId,
-                  currentVersionId: lockedCurrentVersionId,
-                  docSequence: null,
-                  kind: "document",
-                  readOnly,
-                },
-              ];
+            ? {
+                id: workspaceId,
+                organizationId,
+                reference: null,
+                status: "active",
+              }
+            : {
+                id: entityId,
+                workspaceId,
+                currentVersionId: lockedCurrentVersionId,
+                docSequence: null,
+                kind: "document",
+                readOnly,
+              },
+        ];
         return {
           from: () => {
             const query = drizzle.mock().select(selectedFields).from(table);
