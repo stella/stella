@@ -1350,10 +1350,7 @@ export const markRunFailed = async ({
                 requestSource: documentProcessingRuns.requestSource,
               })
               .from(documentProcessingRuns),
-          where: and(
-            eq(documentProcessingRuns.status, "running"),
-            eq(documentProcessingRuns.claimedBy, claimToken),
-          ),
+          where: sql`${documentProcessingRuns.status} = ${"running"} AND ${documentProcessingRuns.claimedBy} = ${claimToken}`,
         })
       ).rows;
       const owned = ownedRows.at(0);

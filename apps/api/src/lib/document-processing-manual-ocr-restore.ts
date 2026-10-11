@@ -1,4 +1,4 @@
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 
 import type { rootDb } from "@/api/db/root";
 import {
@@ -97,10 +97,7 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
           lockTx
             .select({ id: entities.id, workspaceId: entities.workspaceId })
             .from(entities),
-        where: and(
-          eq(entities.currentVersionId, entityVersionId),
-          eq(entities.readOnly, false),
-        ),
+        where: sql`${entities.currentVersionId} = ${entityVersionId} AND ${entities.readOnly} = false`,
       })
     ).rows;
     if (!currentRows.at(0)) {

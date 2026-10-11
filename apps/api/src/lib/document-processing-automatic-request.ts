@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { rootDb, Transaction } from "@/api/db/root";
 import {
@@ -78,10 +78,7 @@ const lockCurrentAutomaticOcrSource = async ({
               eq(fields.workspaceId, workspaceId),
             ),
           ),
-      where: and(
-        eq(entities.currentVersionId, entityVersionId),
-        eq(entities.readOnly, false),
-      ),
+      where: sql`${entities.currentVersionId} = ${entityVersionId} AND ${entities.readOnly} = false`,
     })
   ).rows.at(0)?.content;
 

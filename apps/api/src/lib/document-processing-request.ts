@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne, or } from "drizzle-orm";
+import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
 
 import type { rootDb } from "@/api/db/root";
 import {
@@ -148,12 +148,8 @@ export const persistManualOcrRun = async ({
         select: (lockTx) =>
           lockTx
             .select({ id: entities.id, workspaceId: entities.workspaceId })
-            .from(entities)
-            .limit(1),
-        where: and(
-          eq(entities.currentVersionId, source.entityVersionId),
-          eq(entities.readOnly, false),
-        ),
+            .from(entities),
+        where: sql`${entities.currentVersionId} = ${source.entityVersionId} AND ${entities.readOnly} = false`,
       })
     ).rows;
     if (!currentRows.at(0)) {

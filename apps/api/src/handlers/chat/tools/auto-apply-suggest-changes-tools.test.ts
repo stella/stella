@@ -1,5 +1,9 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/bun-sql";
+import { PgDialect } from "drizzle-orm/pg-core";
+import type { SelectedFields } from "drizzle-orm/pg-core";
 
 import {
   FolioDocxReviewer,
@@ -7,10 +11,12 @@ import {
 } from "@stll/folio-core/server";
 
 import {
+  entities,
   entityVersions,
   fields,
   fileChatThreads,
   pendingUploads,
+  workspaces,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import {
@@ -186,22 +192,6 @@ const buildTx = ({
   const insertedTables: unknown[] = [];
   const updatedTables: { table: unknown; values: unknown }[] = [];
 
-  const entitiesSelect = {
-    from: () => ({
-      where: () => ({
-        limit: () => ({
-          for: async () => [
-            {
-              currentVersionId: lockedCurrentVersionId,
-              docSequence: null,
-              kind: "document",
-              readOnly,
-            },
-          ],
-        }),
-      }),
-    }),
-  };
   const cellMetadataSelect = {
     from: () => ({
       where: () => ({
@@ -221,15 +211,6 @@ const buildTx = ({
       where: () => ({
         limit: async () =>
           openDesktopEditSession ? [{ id: "open-edit-session" }] : [],
-      }),
-    }),
-  };
-  const workspaceStatusSelect = {
-    from: () => ({
-      where: () => ({
-        limit: () => ({
-          for: async () => [{ status: "active" }],
-        }),
       }),
     }),
   };
@@ -294,9 +275,42 @@ const buildTx = ({
         findFirst: async () => ({ reference: null, status: "active" }),
       },
     },
-    select: (selectedFields: Record<string, unknown>) => {
-      if ("status" in selectedFields) {
-        return workspaceStatusSelect;
+    select: (selectedFields: SelectedFields) => {
+      if ("status" in selectedFields || "currentVersionId" in selectedFields) {
+        const table = "status" in selectedFields ? workspaces : entities;
+        const rows =
+          "status" in selectedFields
+            ? [
+                {
+                  id: workspaceId,
+                  organizationId,
+                  reference: null,
+                  status: "active",
+                },
+              ]
+            : [
+                {
+                  id: entityId,
+                  workspaceId,
+                  currentVersionId: lockedCurrentVersionId,
+                  docSequence: null,
+                  kind: "document",
+                  readOnly,
+                },
+              ];
+        return {
+          from: () => {
+            const query = drizzle.mock().select(selectedFields).from(table);
+            return {
+              toSQL: () => query.toSQL(),
+              as: (alias: string) => query.as(alias),
+              where: (predicate: SQL) => ({
+                toSQL: () => query.where(predicate).toSQL(),
+                for: async () => rows,
+              }),
+            };
+          },
+        };
       }
       if ("metadata" in selectedFields) {
         return cellMetadataSelect;
@@ -304,12 +318,10 @@ const buildTx = ({
       if ("max" in selectedFields) {
         return maxVersionNumberSelect;
       }
-      if ("currentVersionId" in selectedFields) {
-        return entitiesSelect;
-      }
       return editSessionSelect;
     },
-    execute: async () => undefined,
+    execute: async (query: SQL) =>
+      new PgDialect().sqlToQuery(query).params.map((id) => ({ id })),
     insert: (table: unknown) => ({
       values: (values: unknown) => {
         insertedTables.push({ table, values });
