@@ -10,9 +10,10 @@ import { createTestWorkspace, deleteTestWorkspace } from "../helpers/workspace";
 
 test("Lists renders and saves an item for a granted caller", async ({
   page,
+  request,
 }) => {
   const fixture = v.parse(
-    v.object({ organizationId: v.string() }),
+    v.object({ organizationId: v.string(), email: v.string() }),
     JSON.parse(
       await readFile(
         path.resolve(
@@ -23,6 +24,14 @@ test("Lists renders and saves an item for a granted caller", async ({
       ),
     ),
   );
+  const sharedOrganizations = await request.get(
+    `${E2E_API_ORIGIN}/api/auth/organization/list`,
+  );
+  expect(sharedOrganizations.ok(), await sharedOrganizations.text()).toBe(true);
+  const organizationListSchema = v.array(v.object({ id: v.string() }));
+  expect(
+    v.parse(organizationListSchema, await sharedOrganizations.json()),
+  ).not.toContainEqual({ id: fixture.organizationId });
   const api = await playwrightRequest.newContext({
     extraHTTPHeaders: {
       origin: new URL(
@@ -31,7 +40,14 @@ test("Lists renders and saves an item for a granted caller", async ({
     },
   });
   try {
-    await signInWithEmailOtp(api, "test@stella.dev");
+    await signInWithEmailOtp(api, fixture.email);
+    const organizations = await api.get(
+      `${E2E_API_ORIGIN}/api/auth/organization/list`,
+    );
+    expect(organizations.ok(), await organizations.text()).toBe(true);
+    expect(v.parse(organizationListSchema, await organizations.json())).toEqual(
+      [{ id: fixture.organizationId }],
+    );
     const active = await api.post(
       `${E2E_API_ORIGIN}/api/auth/organization/set-active`,
       {
