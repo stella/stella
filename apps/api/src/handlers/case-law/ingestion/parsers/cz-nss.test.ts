@@ -7,6 +7,7 @@ import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/
 import type { ParseNssDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 
 import { nssUnitDecisionHtml } from "./cz-nss.test-fixture";
+import { inlinesToPlainText } from "./shared-inlines";
 
 // ── Helpers ─────────────────────────────────────────────────
 
@@ -325,6 +326,26 @@ describe("parseNssDecisionHtml", () => {
   });
 
   describe("numbered paragraphs", () => {
+    test.each(["  ", "\t", "\u00a0", " \t\u00a0"])(
+      "NSS numbered paragraphs preserve rendered text after leading %j",
+      (leading) => {
+        const { documentAst } = parseNssDecisionHtml(
+          baseInput(
+            `<html><body><p>Odůvodnění:</p><p>${leading}<b>[31]</b> <b>Body</b>  </p></body></html>`,
+          ),
+        );
+        const block = documentAst.blocks.find(
+          (candidate) =>
+            candidate.type === "paragraph" && candidate.plainText === "Body",
+        );
+        expect(block?.plainText).toBe("Body");
+        expect(
+          block?.type === "paragraph"
+            ? inlinesToPlainText(block.inlines)
+            : undefined,
+        ).toBe("Body");
+      },
+    );
     test("strips [N] prefix from numbered paragraphs", () => {
       const input = baseInput(nssUnitDecisionHtml);
       const { documentAst } = parseNssDecisionHtml(input);

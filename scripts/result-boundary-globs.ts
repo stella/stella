@@ -159,6 +159,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/routes/dev/**/*.{ts,tsx}",
   "apps/web/src/routes/sitemaps/**/*.{ts,tsx}",
   "apps/web/src/stores/**/*.{ts,tsx}",
+  "apps/web/src/testing/**/*.{ts,tsx}",
   "packages/agent-input/src/**/*.ts",
   "packages/mcp-kit/src/**/*.ts",
   "packages/ai-catalog/src/**/*.ts",
@@ -183,6 +184,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/permissions/src/**/*.ts",
   "packages/redis-config/src/**/*.ts",
   "packages/runtime-mode/src/**/*.ts",
+  "packages/scan-engine/src/**/*.ts",
   "packages/sanctions/src/**/*.ts",
   "packages/sha256/src/**/*.ts",
   "packages/start-runtime/src/**/*.ts",
@@ -284,6 +286,10 @@ export const RESULT_BOUNDARY_GLOBS = [
   "packages/start-runtime/src/runtime.ts",
   "packages/ssr-testkit/src/assert-document.ts",
   "packages/property-testing/src/index.ts",
+  // wasm-bindgen reports initialization failures and traps through rejection;
+  // this adapter converts that runtime contract to a typed Result.
+  "packages/scan-engine/src/scan-engine.ts",
+  "packages/scan-engine/src/scan-engine.worker.ts",
 ] as const;
 
 // Declaration files carry no runtime code. The lint ignores them outright, so

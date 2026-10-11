@@ -22,6 +22,7 @@ const updateSkillCommentBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Resolve or reopen a comment on an agent skill. Anyone who can see the " +
     "skill can, not only the comment's author.",

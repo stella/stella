@@ -1071,7 +1071,7 @@
     "apps/api/src/lib/bilingual/run-queue.ts": 1,
     "apps/api/src/lib/case-law/research-answer-runner.ts": 1,
     "apps/api/src/lib/chat/ref-registry.ts": 1,
-    "apps/api/src/lib/document-processing-queue.ts": 2,
+    "apps/api/src/lib/document-processing-queue.ts": 1,
     "apps/api/src/lib/document-processing-request.ts": 2,
     "apps/api/src/lib/document-translation/run-queue.ts": 2,
     "apps/api/src/lib/docx/block-directives.ts": 1,

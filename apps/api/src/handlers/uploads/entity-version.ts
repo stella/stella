@@ -18,6 +18,7 @@ import {
   lockObjectCleanupIntentsForWriter,
   retirePublishedObjectCleanupIntentsInTransaction,
 } from "@/api/lib/buffer-intent-reconciliation";
+import { withAggregateParentBatch } from "@/api/lib/db/aggregate-lock";
 import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
@@ -194,6 +195,12 @@ export const finalizeEntityVersion = async function* ({
       | Extract<PendingUploadFinalizedResult, { type: "entity_version" }>
       | undefined;
     const writeResultResult = await safeDb(async (tx) => {
+      await withAggregateParentBatch({
+        tx,
+        organizationIds: [],
+        workspaceIds: [workspaceId],
+        mode: "key share",
+      });
       const claimRows = await tx
         .select({ id: pendingUploads.id })
         .from(pendingUploads)
