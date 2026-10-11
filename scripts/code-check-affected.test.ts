@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import {
   existsSync,
@@ -849,7 +849,10 @@ process.exit(childExitStatus(result));
         continue;
       }
       for (const dependency of taskField(tasks, taskName, "dependsOn")) {
-        const owner = id.split("#")[0];
+        const owner = id.split("#").at(0);
+        if (!owner) {
+          panic(`Missing task owner: ${id}`);
+        }
         const qualified = dependency.includes("#")
           ? dependency
           : `${owner}#${dependency.replace(/^\^/u, "")}`;
