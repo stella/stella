@@ -163,7 +163,9 @@ test("an inferred act shows its basis once and preserves repeated citation count
   ).toHaveLength(0);
   expect(screen.getByText("2×")).toBeTruthy();
   expect(
-    screen.getByRole("button", { name: title }).getAttribute("aria-expanded"),
+    screen
+      .getByRole("button", { name: title, exact: false })
+      .getAttribute("aria-expanded"),
   ).toBe("true");
 });
 
