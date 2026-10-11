@@ -39,6 +39,20 @@ const TEST_REGISTRATIONS = [
 ] as const;
 const TEST_RUNNER_MODULES = new Set(["@playwright/test", "bun:test"]);
 const TEST_RUNNER_NAMESPACE = "<test runner namespace>";
+const REGISTRATION_MODIFIERS = new Set([
+  "concurrent",
+  "each",
+  "failing",
+  "fixme",
+  "if",
+  "only",
+  "parallel",
+  "serial",
+  "skip",
+  "skipIf",
+  "todo",
+  "todoIf",
+]);
 
 type DisabledLedger = {
   readonly managedServiceGates: readonly string[];
@@ -164,14 +178,18 @@ const registrationName = (
     return undefined;
   }
   const base = registrationName(expression.expression, aliases);
-  if (base === TEST_RUNNER_NAMESPACE) {
+  if (base === TEST_RUNNER_NAMESPACE || base === "test") {
     const registration = expression.name.text;
     if (TEST_REGISTRATIONS.some((candidate) => candidate === registration)) {
       return registration === "it" ? "test" : registration;
     }
-    return undefined;
+    if (base === TEST_RUNNER_NAMESPACE) {
+      return undefined;
+    }
   }
-  return base === undefined ? undefined : `${base}.${expression.name.text}`;
+  return base === undefined || !REGISTRATION_MODIFIERS.has(expression.name.text)
+    ? undefined
+    : `${base}.${expression.name.text}`;
 };
 
 const literalTitle = (node: ts.Node | undefined): string | undefined => {
@@ -268,6 +286,34 @@ const isTestRunnerNamespaceImport = (
   ts.isStringLiteral(moduleSpecifier) &&
   TEST_RUNNER_MODULES.has(moduleSpecifier.text);
 
+const serviceGateAliases = (source: ts.SourceFile) => {
+  const gateAliases = new Map<string, (typeof SERVICE_GATES)[number]>();
+  const discoverGateAliases = (node: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer !== undefined
+    ) {
+      const initializer = node.initializer.getText();
+      const gate = SERVICE_GATES.find(
+        (candidate) =>
+          initializer.includes(candidate) ||
+          [...gateAliases.entries()].some(
+            ([alias, aliasedGate]) =>
+              aliasedGate === candidate &&
+              new RegExp(`\\b${alias}\\b`, "u").test(initializer),
+          ),
+      );
+      if (gate !== undefined) {
+        gateAliases.set(node.name.text, gate);
+      }
+    }
+    ts.forEachChild(node, discoverGateAliases);
+  };
+  discoverGateAliases(source);
+  return gateAliases;
+};
+
 export const parseTestRegistrations = (
   file: string,
   sourceText: string,
@@ -323,30 +369,7 @@ export const parseTestRegistrations = (
 
   const constantTitles = constantStringBindings(source);
 
-  const gateAliases = new Map<string, (typeof SERVICE_GATES)[number]>();
-  const discoverGateAliases = (node: ts.Node): void => {
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer !== undefined
-    ) {
-      const initializer = node.initializer.getText();
-      const gate = SERVICE_GATES.find(
-        (candidate) =>
-          initializer.includes(candidate) ||
-          [...gateAliases.entries()].some(
-            ([alias, aliasedGate]) =>
-              aliasedGate === candidate &&
-              new RegExp(`\\b${alias}\\b`, "u").test(initializer),
-          ),
-      );
-      if (gate !== undefined) {
-        gateAliases.set(node.name.text, gate);
-      }
-    }
-    ts.forEachChild(node, discoverGateAliases);
-  };
-  discoverGateAliases(source);
+  const gateAliases = serviceGateAliases(source);
 
   const referencedServiceGate = (
     node: ts.Node,
@@ -416,16 +439,30 @@ export const parseTestRegistrations = (
       return;
     }
     const isOnly = name.split(".").includes("only");
-    const callback = node.arguments.at(-1);
-    const isDisabled =
+    const callback = node.arguments.find(
+      (argument, index) =>
+        (hook || index > 0) &&
+        (ts.isArrowFunction(argument) || ts.isFunctionExpression(argument)),
+    );
+    const calleeDisabled =
       name.includes("|conditional") ||
-      isConditionallyRegistered(node) ||
       name
         .split(".")
         .some((part) =>
-          ["skip", "todo", "skipIf", "todoIf", "if"].includes(part),
-        ) ||
-      (callback !== undefined && containsEnvironmentReturn(callback));
+          ["skip", "todo", "fixme", "skipIf", "todoIf", "if"].includes(part),
+        );
+    const callbackDisabled =
+      callback !== undefined && containsEnvironmentReturn(callback);
+    const isDisabled =
+      calleeDisabled || callbackDisabled || isConditionallyRegistered(node);
+    const unconditionallyDisabled = name
+      .split(".")
+      .some((part) => ["skip", "todo", "fixme"].includes(part));
+    const controlledGate = calleeDisabled
+      ? referencedServiceGate(node.expression)
+      : enclosingServiceGate(node);
+    const managedServiceGate =
+      unconditionallyDisabled || callbackDisabled ? undefined : controlledGate;
     if (title === undefined) {
       if (isOnly || isDisabled) {
         const { line, character } = source.getLineAndCharacterOfPosition(
@@ -433,6 +470,7 @@ export const parseTestRegistrations = (
         );
         findings.push({
           identity: `${file}::<dynamic title at ${line + 1}:${character + 1}>`,
+          ...(managedServiceGate === undefined ? {} : { managedServiceGate }),
           type: isOnly ? "only" : "disabled",
         });
       }
@@ -440,8 +478,6 @@ export const parseTestRegistrations = (
       return;
     }
     const identity = `${file}::${[...suites, title].join(" > ")}`;
-    const managedServiceGate =
-      referencedServiceGate(node.expression) ?? enclosingServiceGate(node);
     if (isOnly) {
       findings.push({ identity, type: "only" });
     }
@@ -813,7 +849,7 @@ const conditionExpression = (condition: string): string =>
   condition
     .trim()
     .replace(/^\$\{\{\s*/u, "")
-    .replace(/\s*\}\}$/u, "")
+    .replace(/\}\}$/u, "")
     .trim();
 
 type GatingContextOptions = {
@@ -861,7 +897,6 @@ const gatingEventContext = (
 const referencedContexts = (expression: string): readonly string[] =>
   [...expression.matchAll(/\b[A-Za-z_][\w-]*(?:\.[\w-]+)+/gu)]
     .map((match) => match[0])
-    .filter((value): value is string => value !== undefined)
     .toSorted(compareCodeUnit);
 
 type ExecutableConditionOptions = GatingContextOptions & {
@@ -1180,12 +1215,8 @@ const isCollectedByGatingPlaywright = (
   if (typeof packageName !== "string") {
     return false;
   }
-  const workflow = readFileSync(
-    path.join(ROOT, ".github/workflows/ci.yml"),
-    "utf-8",
-  );
   const gatingWorkflow = [
-    ...gatingWorkflowJobs(Bun.YAML.parse(workflow)).values(),
+    ...repositoryTestExecutionTopology().gatingJobs.values(),
   ]
     .flat()
     .join("\n");
@@ -1327,7 +1358,7 @@ const validateExecutionTopology = (errors: string[]): void => {
   const collectors = [
     "ci-checks-rest",
     "ci-tests",
-    "desktop-clippy",
+    "desktop-rust-lint",
     "e2e-production-shard",
     "e2e-vite-canary",
     "route-smoke",

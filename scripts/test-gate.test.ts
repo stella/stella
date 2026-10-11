@@ -78,6 +78,56 @@ context("test registration census", () => {
     ]);
   });
 
+  check("inspects callbacks before trailing timeouts and suite options", () => {
+    const source = `
+      test("timed environment return", async () => {
+        if (!process.env.CI) return;
+      }, 60_000);
+      beforeAll(() => { if (!process.env.CI) return; }, 60_000);
+      describe("suite with options", () => {
+        test.skip("nested skip", () => {});
+      }, { timeout: 60_000 });
+    `;
+    expect(parseTestRegistrations("fixture.test.ts", source)).toEqual([
+      { identity: "fixture.test.ts::hook:beforeAll", type: "disabled" },
+      {
+        identity: "fixture.test.ts::suite with options > nested skip",
+        type: "disabled",
+      },
+      {
+        identity: "fixture.test.ts::timed environment return",
+        type: "disabled",
+      },
+    ]);
+  });
+
+  check(
+    "enclosing service gates do not exempt independently disabled callees",
+    () => {
+      const source = `
+      const runPostgres = process.env.STELLA_RUN_POSTGRES_TESTS === "true";
+      if (runPostgres) {
+        test("controlled", () => {});
+        test.skip("permanent skip", () => {});
+        test.todo("permanent todo");
+        test.skipIf(otherFlag)("unrelated condition", () => {});
+        test("environment return", () => { if (!process.env.CI) return; });
+      }
+    `;
+      expect(parseTestRegistrations("fixture.test.ts", source)).toEqual([
+        {
+          identity: "fixture.test.ts::controlled",
+          managedServiceGate: "STELLA_RUN_POSTGRES_TESTS",
+          type: "disabled",
+        },
+        { identity: "fixture.test.ts::environment return", type: "disabled" },
+        { identity: "fixture.test.ts::permanent skip", type: "disabled" },
+        { identity: "fixture.test.ts::permanent todo", type: "disabled" },
+        { identity: "fixture.test.ts::unrelated condition", type: "disabled" },
+      ]);
+    },
+  );
+
   check("fails closed for unresolved titles on disabled registrations", () => {
     const source = `
       test.skip(getTitle(), () => {});
@@ -89,6 +139,33 @@ context("test registration census", () => {
       { identity: "fixture.test.ts::<dynamic title at 3:7>", type: "disabled" },
       {
         identity: "fixture.test.ts::<dynamic title at 4:20>",
+        type: "disabled",
+      },
+    ]);
+  });
+
+  check("runner utilities inside conditions are not test registrations", () => {
+    const source = `
+      import { test } from "@playwright/test";
+      test("screenshots", async () => {
+        if (language === "en") {
+          await page.screenshot({ path: test.info().outputPath(dynamicPath) });
+        }
+      });
+      if (configured) test.use({ locale: language });
+    `;
+    expect(parseTestRegistrations("fixture.test.ts", source)).toEqual([]);
+  });
+
+  check("managed gates control registrations with unresolved titles", () => {
+    const source = `
+      const runPostgres = process.env.STELLA_RUN_POSTGRES_TESTS === "true";
+      if (runPostgres) test(getTitle(), () => {});
+    `;
+    expect(parseTestRegistrations("fixture.test.ts", source)).toEqual([
+      {
+        identity: "fixture.test.ts::<dynamic title at 3:24>",
+        managedServiceGate: "STELLA_RUN_POSTGRES_TESTS",
         type: "disabled",
       },
     ]);
