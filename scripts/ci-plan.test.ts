@@ -909,6 +909,7 @@ type SuiteDepth = (typeof SUITE_DEPTH)[keyof typeof SUITE_DEPTH];
 const FULL_DEPTH_EVENTS = [EVENT.mergeGroup, EVENT.workflowDispatch] as const;
 
 type EvaluateResultOptions = {
+  queueDepth?: "thin" | "full";
   event: Event | "push";
   results: Record<string, string>;
   suiteDepth?: SuiteDepth | "";
@@ -992,6 +993,7 @@ afterAll(() => {
 // The ci-result step as GitHub would run it, with every job succeeding and
 // every scope selected unless the options say otherwise.
 const resultGateCase = ({
+  queueDepth = "full",
   event,
   results,
   suiteDepth = event === EVENT.pullRequest
@@ -1150,10 +1152,10 @@ const resultGateCase = ({
       PR_DEPTH_REUSED: plannedOutputs["pr_depth_reused"] ?? "false",
       PR_DEPTH_SOURCE_RUN_ID: plannedOutputs["pr_depth_source_run_id"] ?? "99",
       PR_DEPTH_JOBS: JSON.stringify(prDepthJobs({ jobs: ciJobs })),
-      QUEUE_DEPTH: "full",
+      QUEUE_DEPTH: queueDepth,
       HEAVY_ONLY: String(heavyOnly),
       HEAVY_JOBS: JSON.stringify(mainHeavyJobNames),
-      THIN_JOBS: "[]",
+      THIN_JOBS: JSON.stringify(thinJobs({ jobs: ciJobs })),
       GITHUB_RUN_ID: "123",
       GITHUB_RUN_ATTEMPT: "1",
       GITHUB_STEP_SUMMARY: "/dev/null",
@@ -1979,7 +1981,7 @@ test("path-scoped platform checks run in the merge group", () => {
 
 test("Docker checks are required at every selected merge-group depth", () => {
   const job = "docker-checks";
-  expect(thinJobs({ jobs: ciJobs })).toContain(job);
+  expect(mainHeavyJobs({ jobs: ciJobs })).toContain(job);
   expect(jobScopes[job]).toBe("docker_checks_required");
   expect(fastRequired).not.toContain(job);
   for (const queueDepth of ["thin", "full"] as const) {
@@ -3456,6 +3458,42 @@ test("folded Docker suites keep their scopes and fail independently, including m
       ["$", "{{ steps.api-deps.outcome }}"].join(""),
     );
   }
+});
+
+test("folded verdicts remain mandatory on main-heavy and thin queues", () => {
+  const gates: ExpectedResultGate[] = [];
+  for (const context of [
+    { event: EVENT.workflowDispatch, heavyOnly: true },
+    { event: EVENT.mergeGroup, queueDepth: "thin" },
+  ] as const) {
+    gates.push({
+      label: `${context.event}: successful folded verdicts`,
+      options: { ...context, results: {} },
+      exitCode: 0,
+    });
+    for (const suites of Object.values(foldedSuites)) {
+      for (const [suite, scope] of Object.entries(suites)) {
+        for (const verdict of ["failure", "skipped", "cancelled", ""]) {
+          const options = {
+            ...context,
+            results: {},
+            suiteResults: { [suite]: verdict },
+          };
+          gates.push({
+            label: `${context.event}/${suite}/${verdict}`,
+            options,
+            exitCode: 1,
+          });
+          gates.push({
+            label: `${context.event}/${suite}/unplanned/${verdict}`,
+            options: { ...options, unplannedScopes: [scope] },
+            exitCode: 0,
+          });
+        }
+      }
+    }
+  }
+  expectResultGates(gates);
 });
 
 test("the Docker fold is planned by either original scope without changing the suite selectors", () => {
@@ -5086,7 +5124,8 @@ test("path-scoped lint and test areas have required pre-merge coverage", () => {
         scope,
         condition: jobIf(body),
         requiredOnPr: fastRequired.includes(name),
-        requiredOnThin: thin.includes(name),
+        requiredOnThin:
+          thin.includes(name) || Object.hasOwn(foldedSuites, name),
       },
     ];
   });
