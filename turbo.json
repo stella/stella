@@ -882,7 +882,7 @@
       "outputs": []
     },
     "@stll/api#lint": {
-      "dependsOn": ["typecheck", "generate:capability-runtime"],
+      "dependsOn": ["typecheck"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",

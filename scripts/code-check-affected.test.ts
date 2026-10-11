@@ -799,6 +799,29 @@ process.exit(childExitStatus(result));
       expect.arrayContaining(["apps/extension", "apps/landing"]),
     );
     for (const { name } of generating) {
+      const compilerTasks = taskField(
+        tasks,
+        `${name}#typecheck`,
+        "dependsOn",
+      ).filter((dependency) => dependency.startsWith("typecheck:"));
+      if (compilerTasks.length > 0) {
+        // An aggregate delegates compiler work and cache outputs to its children.
+        expect(taskField(tasks, `${name}#lint`, "dependsOn")).toContain(
+          "typecheck",
+        );
+        expect(
+          taskField(tasks, `${name}#typecheck:tests`, "dependsOn"),
+        ).toContain("typecheck:declarations");
+        expect(
+          taskField(tasks, `${name}#typecheck:declarations`, "outputs"),
+        ).toContain(".cache/typecheck-declarations/**");
+        for (const compiler of compilerTasks) {
+          expect(
+            taskField(tasks, `${name}#${compiler}`, "dependsOn"),
+          ).toContain("generate:capability-runtime");
+        }
+        continue;
+      }
       const producers = taskField(
         tasks,
         `${name}#typecheck`,
