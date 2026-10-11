@@ -1,5 +1,9 @@
 name: Deploy main to staging
 
+defaults:
+  run:
+    shell: bash
+
 # Deploys a commit on main into staging on demand: the tip by default, or a
 # pinned `sha` that main already contains, so a release candidate can be
 # verified while main keeps moving. A pinned SHA that is not on main fails

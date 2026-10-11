@@ -167,4 +167,43 @@ describe("auth rate-limit storage", () => {
 
     expect(activeTimerCount).toBe(0);
   });
+  test("settles admission reservations once and never refunds another counter window", async () => {
+    let now = 1000;
+    const storage = createAuthRateLimitStorage({
+      now: () => now,
+      redis: {
+        send: async () => {
+          throw new TypeError("store unavailable");
+        },
+      },
+    });
+    const rule = { max: 1, window: 1 };
+    const old = await storage.reserve("admission", rule);
+    expect(old.type).toBe("reserved");
+    if (old.type !== "reserved") {
+      return;
+    }
+    expect((await storage.reserve("admission", rule)).type).toBe("limited");
+    await storage.settle(old.reservation, "accepted");
+    const successor = await storage.reserve("admission", rule);
+    expect(successor.type).toBe("reserved");
+    if (successor.type !== "reserved") {
+      return;
+    }
+    await storage.settle(old.reservation, "accepted");
+    expect((await storage.reserve("admission", rule)).type).toBe("limited");
+    now += 1001;
+    const current = await storage.reserve("admission", rule);
+    expect(current.type).toBe("reserved");
+    if (current.type !== "reserved") {
+      return;
+    }
+    await storage.settle(successor.reservation, "accepted");
+    expect((await storage.reserve("admission", rule)).type).toBe("limited");
+    await storage.settle(current.reservation, "rejected");
+    expect((await storage.reserve("admission", rule)).type).toBe("limited");
+    expect((await storage.reserve("different-admission", rule)).type).toBe(
+      "reserved",
+    );
+  });
 });

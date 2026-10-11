@@ -14,10 +14,16 @@ import { panic } from "better-result";
 import type { McpOAuthScope } from "@stll/api-contract";
 
 import { isVerifiedClientMetadataDocument } from "@/api/lib/auth/oauth-consent-info";
+import { createAuthRequestBudgetHook } from "@/api/lib/auth/request-budget-hooks";
 import {
   isLoopbackRedirectUri,
   OAUTH_CLIENT_REGISTRATION_PATH,
 } from "@/api/lib/oauth-loopback-registration";
+import {
+  isAuthRequestBudgetPath,
+  type AuthRequestBudgetFrameworkApi,
+} from "@/api/lib/rate-limit/auth-request-budget";
+import type { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import { isRecord } from "@/api/lib/type-guards";
 
 export const OAUTH_REGISTRATION_SCOPE_POLICY = {
@@ -403,7 +409,17 @@ type StellaOAuthProviderOptions = OAuthOptions<Scope[]> &
 
 export const createStellaOAuthProvider = (
   options: StellaOAuthProviderOptions,
-  { verifiedOrigins }: { verifiedOrigins: readonly string[] },
+  {
+    verifiedOrigins,
+    requestBudget,
+  }: {
+    verifiedOrigins: readonly string[];
+    requestBudget: {
+      storage: ReturnType<typeof createAuthRateLimitStorage>;
+      enabled: boolean;
+      frameworkApi: AuthRequestBudgetFrameworkApi;
+    };
+  },
 ) => {
   if (options.requestUriResolver) {
     // The scope policy reads the request's own parameters; a resolved
@@ -433,6 +449,11 @@ export const createStellaOAuthProvider = (
     } satisfies typeof options.postLogin,
   };
   const provider = oauthProvider(policyOptions);
+  const enforceRequestBudget = createAuthRequestBudgetHook({
+    ...requestBudget,
+    type: "oauth",
+    providerOptions: policyOptions,
+  });
   // Registration has its own capability policy; discovery retains the
   // provider's policy. Both endpoints use the provider's persistence path.
   const registration = oauthProvider({
@@ -451,7 +472,20 @@ export const createStellaOAuthProvider = (
     ...provider,
     hooks: {
       ...provider.hooks,
+      after: [
+        ...provider.hooks.after,
+        {
+          matcher: (ctx: HookEndpointContext) => ctx.path === "/oauth2/token",
+          handler: createAuthMiddleware(enforceRequestBudget.complete),
+        },
+      ],
       before: [
+        {
+          matcher: (ctx: HookEndpointContext) =>
+            isAuthRequestBudgetPath(ctx.path ?? "") &&
+            (ctx.path?.startsWith("/oauth2/") ?? false),
+          handler: createAuthMiddleware(enforceRequestBudget),
+        },
         ...provider.hooks.before,
         {
           matcher: (ctx: HookEndpointContext) =>
