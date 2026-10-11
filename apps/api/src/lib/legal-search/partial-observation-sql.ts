@@ -1,3 +1,4 @@
+// parser-output-unchanged: Only the index-name documentation changes; observation marker parsing and SQL predicates are identical.
 // parser-output-unchanged: Pipeline-owned quality ranks and marker writes change; publisher fields and parsed documents are unchanged.
 /**
  * The quality marker the ingestion pipeline persists with a partial source

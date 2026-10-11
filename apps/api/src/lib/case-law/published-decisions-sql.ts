@@ -1,3 +1,4 @@
+// parser-output-unchanged: Database publication predicates reached through schema imports do not change adapter parsing or emitted document content.
 import type { Column, SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
