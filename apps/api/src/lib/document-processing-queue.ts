@@ -3,6 +3,7 @@ import {
   and,
   asc,
   eq,
+  gte,
   gt,
   inArray,
   isNotNull,
@@ -98,6 +99,7 @@ import { createReconciliationProgress } from "@/api/lib/document-processing-reco
 import {
   claimDocumentProcessingAttempt,
   failDocumentProcessingAttempt,
+  failExhaustedQueuedRun,
   DOCUMENT_PROCESSING_MAX_ATTEMPTS,
   documentProcessingSleepMs,
 } from "@/api/lib/document-processing-retry";
@@ -1320,6 +1322,28 @@ const errorCode = (error: unknown): string => {
   return "processing_failed";
 };
 
+type ReportDocumentProcessingRunFailureOptions = {
+  error: unknown;
+  failureCode: string;
+  runId: SafeId<"documentProcessingRun">;
+};
+
+const reportDocumentProcessingRunFailure = ({
+  error,
+  failureCode,
+  runId,
+}: ReportDocumentProcessingRunFailureOptions): void => {
+  captureError(error, { runId });
+  logger.error(
+    "document_processing.run_failed",
+    sanitizeErrorAttributesForOutput({
+      ...documentProcessingFailureFields(error),
+      errorCode: failureCode,
+      runId,
+    }),
+  );
+};
+
 export const markRunFailed = async ({
   claimToken,
   database,
@@ -1372,15 +1396,7 @@ export const markRunFailed = async ({
     );
     return "settled";
   }
-  captureError(error, { runId: run.id });
-  logger.error(
-    "document_processing.run_failed",
-    sanitizeErrorAttributesForOutput({
-      ...documentProcessingFailureFields(error),
-      errorCode: failureCode,
-      runId: run.id,
-    }),
-  );
+  reportDocumentProcessingRunFailure({ error, failureCode, runId: run.id });
   return "settled";
 };
 
@@ -2314,6 +2330,53 @@ const recoverRetryableOcrFailures = async (
   dependencies: DocumentProcessingReconciliationDependencies,
 ) => {
   const now = new Date(dependencies.now());
+  const exhausted = await dependencies.database
+    .select({
+      id: documentProcessingRuns.id,
+      workspaceId: documentProcessingRuns.workspaceId,
+    })
+    .from(documentProcessingRuns)
+    .where(
+      and(
+        eq(documentProcessingRuns.status, "queued"),
+        gte(
+          documentProcessingRuns.attemptCount,
+          DOCUMENT_PROCESSING_MAX_ATTEMPTS,
+        ),
+      ),
+    )
+    .orderBy(
+      sql`${documentProcessingRuns.nextAttemptAt} ASC NULLS FIRST`,
+      asc(documentProcessingRuns.createdAt),
+      asc(documentProcessingRuns.id),
+    )
+    .limit(RECONCILE_BATCH_SIZE);
+  const settled = await mapWithConcurrency({
+    items: exhausted,
+    limit: WORKER_CONCURRENCY,
+    operation: async (run) => {
+      const outcome = await failExhaustedQueuedRun({
+        database: dependencies.database,
+        runId: run.id,
+        workspaceId: run.workspaceId,
+        now,
+      });
+      if (outcome === null) {
+        return false;
+      }
+      const error = new DocumentProcessingJobError({
+        code: outcome.errorCode,
+        message: outcome.errorMessage,
+      });
+      reportDocumentProcessingRunFailure({
+        error,
+        failureCode: outcome.errorCode,
+        runId: run.id,
+      });
+      return true;
+    },
+  });
+  const settledCount = settled.filter(Boolean).length;
   const retryableRuns = await dependencies.database
     .select({
       attemptCount: documentProcessingRuns.attemptCount,
@@ -2343,12 +2406,14 @@ const recoverRetryableOcrFailures = async (
     .limit(RECONCILE_BATCH_SIZE);
   // Only the selection is capped; the compare-and-set below can recover
   // fewer rows than it read, which says nothing about the backlog.
-  const hasMore = cappedSelectionHasMore({
-    limit: RECONCILE_BATCH_SIZE,
-    selected: retryableRuns.length,
-  });
+  const hasMore =
+    exhausted.length === RECONCILE_BATCH_SIZE ||
+    cappedSelectionHasMore({
+      limit: RECONCILE_BATCH_SIZE,
+      selected: retryableRuns.length,
+    });
   if (retryableRuns.length === 0) {
-    return { count: 0, hasMore };
+    return { count: settledCount, hasMore };
   }
 
   const capturedSchedules = or(
@@ -2366,7 +2431,7 @@ const recoverRetryableOcrFailures = async (
     ),
   );
   if (!capturedSchedules) {
-    return { count: 0, hasMore };
+    return { count: settledCount, hasMore };
   }
 
   const recovered = await dependencies.database
@@ -2385,7 +2450,7 @@ const recoverRetryableOcrFailures = async (
       ),
     )
     .returning({ id: documentProcessingRuns.id });
-  return { count: recovered.length, hasMore };
+  return { count: settledCount + recovered.length, hasMore };
 };
 
 type FailedSearchIndexCandidate = {
@@ -2853,7 +2918,8 @@ const createReconciliationPhaseRunners = (
  * - repair inserts queued runs due now (delivery selects queued rows with
  *   a due schedule) and, where a current projection already exists, failed
  *   runs coded `search_index_failed` and due now (reindex selects those).
- * - retry moves retryable failures to queued, due now: delivery.
+ * - retry moves retryable failures to queued, due now: delivery. Exhausted
+ *   queued runs become terminal failures and feed no later phase.
  * - stale-lease records a failed attempt with future backoff, or a terminal
  *   failure once the budget is exhausted; neither feeds this tick.
  * - reindex claims rows for itself; what it does not complete comes back

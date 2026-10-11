@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
@@ -29,6 +30,7 @@ import {
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const {
@@ -133,6 +135,93 @@ if (!databaseUrl || !runPostgresTests) {
     });
   });
 } else {
+  test("reconciliation terminalizes exhausted queued manual runs without consuming a fresh budget", async () => {
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db } = openClient();
+      const exhaustedFixture = await seedFixture(db);
+      const eligibleFixture = await seedFixture(db);
+      const recording = installRecordingLogger();
+      const now = new Date();
+      try {
+        const exhaustedId = await exhaustedFixture.insertRun({
+          kind: "ocr",
+          processorVersion: DOCUMENT_OCR_PROCESSOR_VERSION,
+          requestSource: "manual",
+          status: "queued",
+          attemptCount: DOCUMENT_PROCESSING_MAX_ATTEMPTS,
+          nextAttemptAt: new Date(now.getTime() + 60_000),
+          nextDeliveryAt: new Date(now.getTime() + 60_000),
+        });
+        const eligibleId = await eligibleFixture.insertRun({
+          kind: "ocr",
+          processorVersion: DOCUMENT_OCR_PROCESSOR_VERSION,
+          requestSource: "manual",
+          status: "queued",
+          attemptCount: DOCUMENT_PROCESSING_MAX_ATTEMPTS - 1,
+        });
+        const retryPhase =
+          createDocumentProcessingReconciliationPhases({
+            database: asTestRaw<typeof rootDb>(db),
+            broadcastWorkspaceResourceUpdated: () => undefined,
+            enqueueDocumentDeadlineScout: async () => undefined,
+            enqueueDocumentProcessingRun: async () => undefined,
+            indexEntity: async () => undefined,
+            now: () => now.getTime(),
+            readRepairScanCursor: async () => null,
+            readyRepairCursor: async () => undefined,
+            repairPassMemo: {
+              completedAt: () => null,
+              recordCompleted: () => undefined,
+            },
+            writeRepairScanCursor: async () => true,
+          }).find((phase) => phase.name === "retry") ??
+          panic("Retry reconciliation phase missing");
+        expect(await retryPhase.run()).toEqual({ count: 1, hasMore: false });
+        const exhausted = (
+          await db
+            .select()
+            .from(documentProcessingRuns)
+            .where(eq(documentProcessingRuns.id, exhaustedId))
+        ).at(0);
+        expect(exhausted?.status).toBe("failed");
+        expect(exhausted?.finishedAt).toEqual(now);
+        expect(exhausted?.errorCode).toBe("worker_lease_expired");
+        expect(exhausted?.nextAttemptAt).toBeNull();
+        expect(exhausted?.nextDeliveryAt).toBeNull();
+        expect(exhausted?.attemptCount).toBe(DOCUMENT_PROCESSING_MAX_ATTEMPTS);
+        const eligible = (
+          await db
+            .select()
+            .from(documentProcessingRuns)
+            .where(eq(documentProcessingRuns.id, eligibleId))
+        ).at(0);
+        expect(eligible?.status).toBe("queued");
+        expect(eligible?.finishedAt).toBeNull();
+        expect(eligible?.attemptCount).toBe(
+          DOCUMENT_PROCESSING_MAX_ATTEMPTS - 1,
+        );
+        expect(await retryPhase.run()).toEqual({ count: 0, hasMore: false });
+        expect(
+          recording
+            .at("ERROR")
+            .filter(
+              (record) =>
+                record.message === "document_processing.run_failed" &&
+                record.attributes?.["runId"] === exhaustedId,
+            ),
+        ).toHaveLength(1);
+      } finally {
+        recording.restore();
+        await db
+          .delete(organization)
+          .where(eq(organization.id, exhaustedFixture.organizationId));
+        await db
+          .delete(organization)
+          .where(eq(organization.id, eligibleFixture.organizationId));
+      }
+    });
+  });
+
   test.each(["native-extraction", "ocr"] as const)(
     "%s failures back off, exhaust the attempt budget, and leave healthy work claimable",
     async (kind) => {

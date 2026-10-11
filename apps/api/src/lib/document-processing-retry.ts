@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
+import { and, eq, gte, isNull, lt, or, sql } from "drizzle-orm";
 
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 
@@ -37,7 +37,7 @@ type ClaimDocumentProcessingAttemptOptions = {
 export const DOCUMENT_PROCESSING_RETRY_TRANSITIONS = defineTransitions(
   documentProcessingRuns,
   {
-    queued: ["running", "cancelled"],
+    queued: ["running", "cancelled", "failed"],
     running: ["failed", "succeeded", "queued", "cancelled"],
     failed: ["queued"],
     succeeded: ["queued"],
@@ -45,6 +45,76 @@ export const DOCUMENT_PROCESSING_RETRY_TRANSITIONS = defineTransitions(
   },
   { terminal: [] },
 );
+
+type FailExhaustedQueuedRunOptions = {
+  database: { transaction: ScopedDb };
+  runId: SafeId<"documentProcessingRun">;
+  workspaceId: SafeId<"workspace">;
+  now: Date;
+};
+
+/** Recheck the budget under the claim lock so a manual retry can reset it first. */
+export const failExhaustedQueuedRun = async ({
+  database,
+  runId,
+  workspaceId,
+  now,
+}: FailExhaustedQueuedRunOptions) =>
+  await withAggregateTransaction(database, async (tx) => {
+    const locked = await withAggregateRowQuery({
+      tx,
+      aggregate: "processingClaim",
+      id: { id: runId, workspaceId },
+      mode: "update",
+      select: (queryTx) => queryTx.select().from(documentProcessingRuns),
+      where:
+        and(
+          eq(documentProcessingRuns.status, "queued"),
+          gte(
+            documentProcessingRuns.attemptCount,
+            DOCUMENT_PROCESSING_MAX_ATTEMPTS,
+          ),
+        ) ?? panic("Missing exhausted document processing predicate"),
+    });
+    const owned = locked.rows.at(0);
+    if (!owned) {
+      return null;
+    }
+    const errorCode = owned.errorCode ?? "worker_lease_expired";
+    const errorMessage =
+      owned.errorMessage ?? "Document processing retry budget exhausted";
+    const changed = await transition({
+      tx,
+      spec: DOCUMENT_PROCESSING_RETRY_TRANSITIONS,
+      id: runId,
+      options: {
+        from: ["queued"],
+        to: "failed",
+        set: {
+          claimedAt: null,
+          claimedBy: null,
+          errorAt: now,
+          errorCode,
+          errorMessage,
+          finishedAt: now,
+          nextAttemptAt: null,
+          nextDeliveryAt: null,
+          updatedAt: now,
+        },
+      },
+      // Reconciliation repairs worker bookkeeping; the request owns its audit event.
+      recordTransitionAuditEvent: async () => await Promise.resolve(),
+    });
+    switch (changed.type) {
+      case "stale":
+        return panic("Locked exhausted document processing run changed");
+      case "transitioned":
+        return { errorCode, errorMessage };
+      default:
+        changed satisfies never;
+        return panic("Unknown document processing transition outcome");
+    }
+  });
 
 /** The final dispatch fence also covers duplicate and premature queue delivery. */
 export const claimDocumentProcessingAttempt = async ({
