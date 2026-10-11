@@ -4865,7 +4865,7 @@ jobs:
                       && needs.ci-plan.outputs.service_suites_pr_required == 'true')))
       )
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     permissions:
       contents: read
       packages: read
