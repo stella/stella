@@ -355,7 +355,7 @@ if (!databaseUrl || !runPostgresTests) {
                 // so the old source-first acquisition reaches the opposing wait.
                 await tx
                   .update(workspaces)
-                  .set({ updatedAt: new Date() })
+                  .set({ name: "Cap matter writer" })
                   .where(eq(workspaces.id, workspaceId));
               }
               ready.resolve(undefined);
