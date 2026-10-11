@@ -510,8 +510,8 @@ jobs:
                   || !planned.every((job) => typeof job === "string"
                     && Object.hasOwn(results, job) && results[job] === "success")) return;
               // A whole pull request run is reused only on its own base. A merge
-              // group reuses just the PR-depth jobs of an identical change, so
-              // a moved base is allowed there and every PR-depth job must pass.
+              // group records PR-depth evidence for an identical change; queued
+              // checks still run. A moved base is allowed for this evidence.
               if (!mergeGroup && evidence.base_sha !== pr.base.sha) return;
               if (mergeGroup && (!Array.isArray(evidence.pr_depth_jobs)
                   || JSON.stringify(evidence.pr_depth_jobs) !== process.env.PR_DEPTH_JOBS
@@ -1855,7 +1855,7 @@ jobs:
   ci-generated-sources:
     needs: ci-plan
     if: >-
-      needs.ci-plan.outputs.pr_depth_reused != 'true'
+      (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
       &&
       (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'ci-generated-sources')) && (
       needs.ci-plan.outputs.run_required != 'false'
@@ -2048,7 +2048,7 @@ jobs:
   ci-checks-generated:
     needs: [ci-plan, ci-generated-sources]
     if: >-
-      needs.ci-plan.outputs.pr_depth_reused != 'true'
+      (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -2358,7 +2358,7 @@ jobs:
   ci-checks-policy:
     needs: [ci-plan, ci-generated-sources]
     if: >-
-      needs.ci-plan.outputs.pr_depth_reused != 'true'
+      (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -2664,7 +2664,7 @@ jobs:
   ci-checks-rest:
     needs: [ci-plan, ci-generated-sources]
     if: >-
-      needs.ci-plan.outputs.pr_depth_reused != 'true'
+      (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -4622,7 +4622,7 @@ jobs:
   code-quality-api:
     needs: [ci-plan, ci-generated-sources]
     if: >-
-      needs.ci-plan.outputs.pr_depth_reused != 'true'
+      (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -4758,7 +4758,7 @@ jobs:
   code-quality-web-rest:
     needs: [ci-plan, ci-generated-sources]
     if: >-
-      needs.ci-plan.outputs.pr_depth_reused != 'true'
+      (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -8869,24 +8869,21 @@ jobs:
             exit 0
           fi
           if [[ "$EVENT" == merge_group && "${PR_DEPTH_REUSED:-false}" == true ]]; then
-            reused_violations=$(jq -r --argjson reused "$PR_DEPTH_JOBS" '[to_entries[] | select(.key as $job | $reused | index($job)) | select(.value.result != "skipped") | "\(.key) (\(.value.result))"] | join(", ")' <<< "$NEEDS")
-            if [[ -n "$reused_violations" || ! "${PR_DEPTH_SOURCE_RUN_ID:-}" =~ ^[1-9][0-9]*$ ]]; then
-              echo "::error::Invalid PR-depth reuse: $reused_violations"
+            if [[ ! "${PR_DEPTH_SOURCE_RUN_ID:-}" =~ ^[1-9][0-9]*$ ]]; then
+              echo "::error::Invalid PR-depth evidence source."
               exit 1
             fi
-            echo "Reused PR-depth checks from run ${PR_DEPTH_SOURCE_RUN_ID}." >> "$GITHUB_STEP_SUMMARY"
+            echo "PR-depth evidence recorded from run ${PR_DEPTH_SOURCE_RUN_ID}; queued checks remain required." >> "$GITHUB_STEP_SUMMARY"
           fi
           case "$SUITE_DEPTH" in
             full)
               # Planned checks must succeed. The derived queue list includes
               # every code gate; only reasoned non-code exceptions may skip.
-              violations=$(jq -r --argjson plan "$PLAN" --argjson scopes "$JOB_SCOPES" --arg queue "${QUEUE_DEPTH:-full}" --argjson thin "${THIN_JOBS:-[]}" --arg pr_reused "${PR_DEPTH_REUSED:-false}" --argjson pr_jobs "${PR_DEPTH_JOBS:-[]}" '
+              violations=$(jq -r --argjson plan "$PLAN" --argjson scopes "$JOB_SCOPES" --arg queue "${QUEUE_DEPTH:-full}" --argjson thin "${THIN_JOBS:-[]}" '
                 [to_entries[] | select(.key != "ci-plan") | .key as $job | .value.result as $result
                   | if $queue == "thin" and ($thin | index($job) | not) then
                       (if $result == "success" or $result == "skipped" then empty else "\($job) (\($result))" end)
                     elif ($scopes | has($job) | not) then "\($job) (no entry in JOB_SCOPES)"
-                    elif $pr_reused == "true" and ($pr_jobs | index($job)) then
-                      (if $result == "skipped" then empty else "\($job) (reused, \($result))" end)
                     elif ($scopes[$job] == null or $plan[$scopes[$job]] == "true") then
                       (if $result == "success" then empty else "\($job) (planned, \($result))" end)
                     elif $result == "success" or $result == "skipped" then empty

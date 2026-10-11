@@ -1155,10 +1155,10 @@ const resultGateCase = ({
       PR_DEPTH_REUSED: plannedOutputs["pr_depth_reused"] ?? "false",
       PR_DEPTH_SOURCE_RUN_ID: plannedOutputs["pr_depth_source_run_id"] ?? "99",
       PR_DEPTH_JOBS: JSON.stringify(prDepthJobs({ jobs: ciJobs })),
-      QUEUE_DEPTH: "full",
+      QUEUE_DEPTH: plannedOutputs["queue_depth"] ?? "full",
       HEAVY_ONLY: String(heavyOnly),
       HEAVY_JOBS: JSON.stringify(mainHeavyJobNames),
-      THIN_JOBS: "[]",
+      THIN_JOBS: JSON.stringify(thinJobs({ jobs: ciJobs })),
       GITHUB_RUN_ID: "123",
       GITHUB_RUN_ATTEMPT: "1",
       GITHUB_STEP_SUMMARY: "/dev/null",
@@ -1373,44 +1373,47 @@ test("a full-depth run passes jobs whose scope was not planned only when skipped
 // dispatched with. Both can be superseded by a newer run.
 const FAST_DEPTH_EVENTS = [EVENT.pullRequest, EVENT.workflowDispatch] as const;
 
-test("ci-result accepts only PR-depth skips backed by this run's reuse decision", () => {
+test("PR-depth evidence never replaces admitted merge-group checks", () => {
   const depthJobs = prDepthJobs({ jobs: ciJobs });
-  const skipped = Object.fromEntries(depthJobs.map((job) => [job, "skipped"]));
-  expect(
-    evaluateResult({
-      event: EVENT.mergeGroup,
-      results: skipped,
-      plannedOutputs: {
-        pr_depth_reused: "true",
+  const gates: ExpectedResultGate[] = [];
+  for (const queueDepth of ["thin", "full"] as const) {
+    for (const reused of ["false", "true"] as const) {
+      const plannedOutputs = {
+        queue_depth: queueDepth,
+        pr_depth_reused: reused,
         pr_depth_source_run_id: "99",
-      },
-    }),
-  ).toBe(0);
-  for (const outcome of ["skipped", "failure", "cancelled"] as const) {
-    expect(
-      evaluateResult({
-        event: EVENT.mergeGroup,
-        results: { ...skipped, [depthJobs.at(0) ?? "missing"]: outcome },
-      }),
-    ).toBe(1);
+      };
+      gates.push({
+        label: `${queueDepth}/${reused}/success`,
+        options: { event: EVENT.mergeGroup, plannedOutputs, results: {} },
+        exitCode: 0,
+      });
+      for (const job of depthJobs) {
+        expect(
+          runsAtDepth(jobIf(ciJobs[job]), {
+            event: EVENT.mergeGroup,
+            depth: "full",
+            queueDepth,
+            prDepthReused: reused,
+          }),
+          `${job}/${queueDepth}/${reused}`,
+        ).toBe(true);
+        for (const outcome of ["skipped", "failure", "cancelled"]) {
+          gates.push({
+            label: `${job}/${queueDepth}/${reused}/${outcome}`,
+            options: {
+              event: EVENT.mergeGroup,
+              plannedOutputs,
+              results: { [job]: outcome },
+            },
+            exitCode: 1,
+          });
+        }
+      }
+    }
   }
-  const ignoredReuse = resultStep.run.replace(
-    'elif $pr_reused == "true" and ($pr_jobs | index($job)) then',
-    "elif false then",
-  );
-  expect(ignoredReuse).not.toBe(resultStep.run);
-  expect(
-    evaluateResult({
-      event: EVENT.mergeGroup,
-      results: skipped,
-      plannedOutputs: {
-        pr_depth_reused: "true",
-        pr_depth_source_run_id: "99",
-      },
-      outcomeScript: ignoredReuse,
-    }),
-  ).toBe(1);
-});
+  expectResultGates(gates);
+}, 35_000);
 
 test("CI result rejects a failed check leg after independent guards finish", () => {
   for (const event of [EVENT.mergeGroup, EVENT.pullRequest]) {
@@ -5030,6 +5033,7 @@ type DepthContext = {
   depth: SuiteDepth;
   heavyOnly?: boolean;
   queueDepth?: "full" | "thin";
+  prDepthReused?: "false" | "true";
   proveFix?: boolean;
   /** The QUEUE_BROWSER_SUITES repository variable; GitHub reads unset as ''. */
   queueBrowserSuites?: string;
@@ -5042,6 +5046,7 @@ const runsAtDepth = (
     depth,
     heavyOnly,
     queueDepth = "full",
+    prDepthReused = "false",
     proveFix = false,
     queueBrowserSuites = "",
     corpusRequired = false,
@@ -5059,6 +5064,7 @@ const runsAtDepth = (
         "github.event.pull_request.draft": false,
         "inputs.heavy_only": heavyOnly === true,
         "inputs.pr_depth_only": false,
+        "needs.ci-plan.outputs.pr_depth_reused": prDepthReused,
         "needs.ci-plan.outputs.coverage_profile": "normal-v1",
         "needs.ci-plan.outputs.pilot_fast_jobs": "[]",
         "needs.ci-plan.outputs.suite_depth": depth,

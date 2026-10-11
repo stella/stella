@@ -1191,6 +1191,10 @@ test("thin groups require queued code checks regardless of normal PR completion"
           PATCH_ID: patchId,
           WORKFLOW_VERSION: pr.head.sha,
           PR_DEPTH_JOBS: JSON.stringify(prDepth),
+          GITHUB_STEP_SUMMARY: "/dev/null",
+          PR_DEPTH_REUSED: evidence.outputs.get("pr_depth_reused") ?? "false",
+          PR_DEPTH_SOURCE_RUN_ID:
+            evidence.outputs.get("pr_depth_source_run_id") ?? "",
           QUEUE_VALIDATION: "false",
           PLAN_RESULT: "success",
           TRUSTED: "true",
@@ -1200,7 +1204,12 @@ test("thin groups require queued code checks regardless of normal PR completion"
           NEEDS: JSON.stringify(needs),
         },
       });
-    expect(runAggregation(dependencies).exitCode).toBe(0);
+    const successfulAggregation = runAggregation(dependencies);
+    expect(
+      successfulAggregation.exitCode,
+      successfulAggregation.stdout.toString() +
+        successfulAggregation.stderr.toString(),
+    ).toBe(0);
     expect(evaluate(jobs["desktop-rust-tests"]?.if ?? "false", context)).toBe(
       true,
     );
@@ -1226,4 +1235,4 @@ test("thin groups require queued code checks regardless of normal PR completion"
       }
     }
   }
-});
+}, 35_000);
