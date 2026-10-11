@@ -3,6 +3,7 @@
 @source "../case-law-results/*.tsx";
 @source "./file-picker.tsx";
 @source "../decision-reader/*.tsx";
+@source "../citation-graph/*.tsx";
 @source "../../../../../../packages/decision-reader/src";
 /* Bundles embed this stylesheet; scanning them feeds escaped selectors back in. */
 @source not "../*/generated";

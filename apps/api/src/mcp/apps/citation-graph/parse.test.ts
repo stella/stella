@@ -1,0 +1,74 @@
+import { describe, expect, test } from "bun:test";
+
+import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
+
+import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
+
+import { parseCitationPage } from "./parse";
+import type { CitationPage } from "./parse";
+
+const validCitation = {
+  citationId: "synthetic-citation",
+  citationText: "Synthetic citation text",
+  textWithheldReason: null,
+  polarity: "unclassified",
+  decision: null,
+  passage: null,
+} satisfies CitationPage["citations"][number];
+
+const validPage = {
+  decisionId: "synthetic-subject",
+  direction: "cites",
+  nextCursor: null,
+  citations: [validCitation],
+} satisfies CitationPage;
+
+describe("citation page parsing", () => {
+  test("accepts the public citation shape and preserves withheld markers", () => {
+    const payload = {
+      ...validPage,
+      citations: [
+        {
+          ...validCitation,
+          citationText: "Synthetic text supplied with a withholding marker",
+          textWithheldReason: DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE,
+          passage: {
+            anchorId: "synthetic-anchor",
+            text: "Synthetic excerpt supplied with a withholding marker",
+            truncated: false,
+            mention: "sole",
+          },
+        },
+      ],
+    };
+
+    expect(parseCitationPage(payload)).toEqual(payload);
+  });
+
+  test("accepts every declared polarity, including unclassified", () => {
+    for (const polarity of CITATION_TREATMENTS) {
+      expect(
+        parseCitationPage({
+          ...validPage,
+          citations: [{ ...validCitation, polarity }],
+        })?.citations.at(0)?.polarity,
+      ).toBe(polarity);
+    }
+  });
+
+  test("rejects values outside the closed contract", () => {
+    for (const payload of [
+      {
+        ...validPage,
+        citations: [{ ...validCitation, polarity: "not-a-treatment" }],
+      },
+      {
+        ...validPage,
+        citations: [{ ...validCitation, extra: "not in the contract" }],
+      },
+      { ...validPage, direction: "incoming" },
+    ]) {
+      expect(parseCitationPage(payload)).toBeUndefined();
+    }
+  });
+});

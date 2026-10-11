@@ -4,6 +4,7 @@ import {
   LOOKUP_CASE_LAW_PROJECTION,
   SEARCH_CASE_LAW_PROJECTION,
 } from "../lib/chat/case-law-result-projections";
+import { READ_CASE_LAW_CITATIONS_PROJECTION } from "../lib/chat/projections";
 import { MCP_APPS } from "./apps/manifest";
 import type { PresentationApp } from "./apps/manifest";
 import {
@@ -37,6 +38,7 @@ export const MCP_APP_OUTPUT_SCHEMAS = {
   preview_cited_provision: provisionPreviewOutput,
   search_case_law: SEARCH_CASE_LAW_PROJECTION,
   lookup_case_law: LOOKUP_CASE_LAW_PROJECTION,
+  read_case_law_citations: READ_CASE_LAW_CITATIONS_PROJECTION,
 } as const satisfies Record<
   PresentationApp["callableTools"][number],
   v.GenericSchema

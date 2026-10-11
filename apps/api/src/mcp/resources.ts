@@ -47,8 +47,13 @@ import { unlistedToolNames } from "@/api/mcp/tool-mentions";
 
 import { isMcpAppAvailable } from "./app-policy";
 import caseLawResultsAppHtml from "./apps/case-law-results/generated/app.html.txt" with { type: "text" };
+import citationGraphAppHtml from "./apps/citation-graph/generated/app.html.txt" with { type: "text" };
 import decisionReaderAppHtml from "./apps/decision-reader/generated/app.html.txt" with { type: "text" };
-import { CASE_LAW_RESULTS_APP, DECISION_READER_APP } from "./apps/manifest";
+import {
+  CASE_LAW_RESULTS_APP,
+  CITATION_GRAPH_APP,
+  DECISION_READER_APP,
+} from "./apps/manifest";
 
 /**
  * MCP resources are static, no-argument documents (the textbook fit for a
@@ -132,6 +137,21 @@ const buildProductIdentity = (): string =>
   JSON.stringify(STELLA_PRODUCT_IDENTITY, null, 2);
 
 const STATIC_RESOURCES: readonly StaticResource[] = [
+  {
+    uri: CITATION_GRAPH_APP.uri,
+    name: "citation-graph",
+    title: "Citation graph",
+    description: "Explore a decision's citations and their treatments.",
+    mimeType: MCP_APP_RESOURCE_MIME_TYPE,
+    listed: false,
+    read: () => citationGraphAppHtml,
+    resourceMeta: () => ({
+      ui: {
+        csp: { connectDomains: [], resourceDomains: [] },
+        prefersBorder: true,
+      },
+    }),
+  },
   {
     uri: DECISION_READER_APP.uri,
     name: "decision-reader",
