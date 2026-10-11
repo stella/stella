@@ -440,6 +440,7 @@ pub(crate) async fn decline(target: Target, api_base_url: &str, token: &str) {
 
 /// One handoff waits for the account link at a time; a newer deep link
 /// replaces it. The token stays in native memory only.
+#[derive(Clone)]
 pub(crate) struct ParkedHandoff {
   pub target: Target,
   pub api_base_url: String,
@@ -448,6 +449,58 @@ pub(crate) struct ParkedHandoff {
 }
 
 static PARKED: std::sync::Mutex<Option<ParkedHandoff>> = std::sync::Mutex::new(None);
+static ACCOUNT_OFFER: Mutex<()> = Mutex::const_new(());
+
+/// Replacements queue behind the active offer instead of losing their dialog.
+/// The lease checks token ownership again after the user's response.
+pub(crate) struct AccountOffer {
+  token: zeroize::Zeroizing<String>,
+  _lease: tokio::sync::MutexGuard<'static, ()>,
+}
+
+pub(crate) async fn account_offer(token: &str) -> AccountOffer {
+  AccountOffer {
+    token: zeroize::Zeroizing::new(token.into()),
+    _lease: ACCOUNT_OFFER.lock().await,
+  }
+}
+
+impl AccountOffer {
+  pub(crate) fn pending(&self) -> Resumable {
+    self.pending_at(std::time::Instant::now())
+  }
+
+  fn pending_at(&self, now: std::time::Instant) -> Resumable {
+    let mut parked = PARKED
+      .lock()
+      .unwrap_or_else(std::sync::PoisonError::into_inner);
+    match parked.as_ref() {
+      Some(current) if current.token.as_str() == self.token.as_str() => {
+        if now >= current.expires {
+          parked.take();
+          return Resumable::Expired;
+        }
+        Resumable::Ready(current.clone())
+      }
+      _ => Resumable::Nothing,
+    }
+  }
+}
+
+/// A parked token gets an expiry notice even if the browser never completes.
+pub(crate) async fn expire_parked(token: &str) -> Resumable {
+  let expires = PARKED
+    .lock()
+    .unwrap_or_else(std::sync::PoisonError::into_inner)
+    .as_ref()
+    .filter(|current| current.token.as_str() == token)
+    .map(|current| current.expires);
+  let Some(expires) = expires else {
+    return Resumable::Nothing;
+  };
+  tokio::time::sleep_until(tokio::time::Instant::from_std(expires)).await;
+  account_offer(token).await.pending()
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum AccountWait {
@@ -541,6 +594,7 @@ fn take_parked_at(now: std::time::Instant) -> Resumable {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use std::future::Future;
   #[test]
   fn both_redeems_send_protocol_bearer_and_token_in_body() {
     let device_key = crate::device_proof::DeviceKey::fixture();
@@ -1206,6 +1260,97 @@ mod tests {
       assert_eq!(take_parked(), Resumable::Nothing);
       *state.lock().await = crate::account::AccountStore::Memory(None);
     }
+
+    // A replacement owns the next offer; cancelling the old dialog cannot
+    // strand it. Poll the queued lease once to deterministically hold the dialog.
+    let now = std::time::Instant::now();
+    park_at(Target::DesktopEdit, &origin, "first", now);
+    let first_offer = account_offer("first").await;
+    assert!(matches!(first_offer.pending(), Resumable::Ready(_)));
+    park_at(Target::PdfSigning, &origin, "second", now);
+    let mut second_offer = std::pin::pin!(account_offer("second"));
+    assert!(
+      std::future::poll_fn(|cx| std::task::Poll::Ready(
+        second_offer.as_mut().poll(cx).is_pending()
+      ))
+      .await,
+      "a replacement must queue behind the active offer"
+    );
+    assert_eq!(first_offer.pending(), Resumable::Nothing);
+    assert!(!unpark("first"));
+    drop(first_offer);
+    let second_offer = second_offer.await;
+    let Resumable::Ready(offered) = second_offer.pending() else {
+      panic!("cancelling a superseded offer must offer the current token");
+    };
+    assert_eq!(offered.token.as_str(), "second");
+    assert_eq!(offered.target, Target::PdfSigning);
+    assert!(unpark("second"));
+    assert_eq!(second_offer.pending(), Resumable::Nothing);
+    drop(second_offer);
+
+    // Completion during the old dialog resumes the replacement exactly once;
+    // neither the old response nor its queued offer may act on the resumed token.
+    park_at(Target::DesktopEdit, &origin, "first", now);
+    let first_offer = account_offer("first").await;
+    park_at(Target::PdfSigning, &origin, &token, now);
+    let mut second_offer = std::pin::pin!(account_offer(&token));
+    assert!(
+      std::future::poll_fn(|cx| std::task::Poll::Ready(
+        second_offer.as_mut().poll(cx).is_pending()
+      ))
+      .await,
+      "a replacement must queue behind the active offer"
+    );
+    {
+      let _lease = crate::account::lock_requests().await;
+      *state.lock().await = crate::account::AccountStore::fixture(linked_fixture(
+        &origin,
+        "stella_dr_live",
+      ));
+    }
+    let Resumable::Ready(resumed) = take_parked() else {
+      panic!("a link completed during the old offer must resume the replacement");
+    };
+    assert_eq!(resumed.token.as_str(), token);
+    assert_eq!(resumed.target, Target::PdfSigning);
+    let (_, account) = redeem_with::<serde_json::Value>(
+      RedeemCore {
+        state: &state,
+        client: &client,
+        target: resumed.target,
+        api_base_url: &resumed.api_base_url,
+        token: &resumed.token,
+      },
+      &no_recovery(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(account.credential.key, "stella_dr_live");
+    assert_eq!(redeems.swap(0, std::sync::atomic::Ordering::SeqCst), 1);
+    assert_eq!(first_offer.pending(), Resumable::Nothing);
+    drop(first_offer);
+    let second_offer = second_offer.await;
+    assert_eq!(second_offer.pending(), Resumable::Nothing);
+    drop(second_offer);
+    assert_eq!(take_parked(), Resumable::Nothing);
+    *state.lock().await = crate::account::AccountStore::Memory(None);
+
+    // A queued replacement that has expired gets one notice instead of an offer.
+    park_at(Target::DesktopEdit, &origin, "first", now);
+    let first_offer = account_offer("first").await;
+    park_at(Target::PdfSigning, &origin, "second", now);
+    drop(first_offer);
+    let second_offer = account_offer("second").await;
+    assert_eq!(
+      second_offer.pending_at(now + HANDOFF_LIFETIME),
+      Resumable::Expired
+    );
+    assert_eq!(
+      second_offer.pending_at(now + HANDOFF_LIFETIME),
+      Resumable::Nothing
+    );
+    drop(second_offer);
 
     // A saved credential the API rejects is dropped before any redeem.
     *state.lock().await = crate::account::AccountStore::fixture(linked_fixture(

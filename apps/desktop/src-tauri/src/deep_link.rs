@@ -16,6 +16,7 @@ const HANDOFF_TOKEN_LENGTH: usize = 64;
 static SELF_HOST_CONNECT_SENDER: std::sync::Mutex<
   Option<tokio::sync::oneshot::Sender<bool>>,
 > = std::sync::Mutex::new(None);
+static CONNECTION_CONFIRMATION: Mutex<()> = Mutex::const_new(());
 
 #[derive(Debug, PartialEq, Eq)]
 enum DeepLinkAction {
@@ -426,7 +427,6 @@ async fn present_handoff_failure(app: &AppHandle, failure: &crate::handoff::Fail
     show_connection_confirmation(app, ConnectionConfirmation::HandoffError(failure))
       .await
   {
-    // Only another open dialog refuses; it already holds the user's attention.
     tracing::warn!(error = %error, "document handoff notice was not shown");
   }
 }
@@ -457,6 +457,25 @@ async fn offer_account_link(
     }
   }
   tracing::info!(target: crate::logging::TRAIL_TARGET, event = "handoff.parked", target_kind = ?run.target);
+  let expiry_token = zeroize::Zeroizing::new(run.token.clone());
+  let expiry_app = app.clone();
+  tauri::async_runtime::spawn(async move {
+    if matches!(
+      crate::handoff::expire_parked(&expiry_token).await,
+      crate::handoff::Resumable::Expired
+    ) {
+      present_handoff_failure(&expiry_app, &crate::handoff::Failure::Expired).await;
+    }
+  });
+  let offer = crate::handoff::account_offer(&run.token).await;
+  match offer.pending() {
+    crate::handoff::Resumable::Nothing => return,
+    crate::handoff::Resumable::Expired => {
+      present_handoff_failure(&app, &crate::handoff::Failure::Expired).await;
+      return;
+    }
+    crate::handoff::Resumable::Ready(_) => {}
+  }
   let approved = match show_connection_confirmation(
     &app,
     ConnectionConfirmation::HandoffConnect(run.target),
@@ -465,12 +484,21 @@ async fn offer_account_link(
   {
     Ok(approved) => approved,
     Err(error) => {
-      // Another dialog, most likely the account approval itself, is open.
-      // The handoff stays parked for the link that dialog may complete.
+      // The expiry task still owns an outcome if the native window fails.
       tracing::warn!(error = %error, "account link offer was not shown");
       return;
     }
   };
+  // A replacement has its own queued offer. Consent for the old token must
+  // neither cancel it nor start a connection for its potentially different API.
+  match offer.pending() {
+    crate::handoff::Resumable::Nothing => return,
+    crate::handoff::Resumable::Expired => {
+      present_handoff_failure(&app, &crate::handoff::Failure::Expired).await;
+      return;
+    }
+    crate::handoff::Resumable::Ready(_) => {}
+  }
   if !approved {
     if crate::handoff::unpark(&run.token) {
       tracing::info!(target: crate::logging::TRAIL_TARGET, event = "handoff.dropped", target_kind = ?run.target);
@@ -586,6 +614,9 @@ pub(crate) async fn show_connection_confirmation(
 ) -> Result<bool, String> {
   use tauri::Manager;
 
+  // Notices and approvals share a native window. Queue them through its
+  // destruction so a busy dialog cannot swallow a handoff's final notice.
+  let _dialog = CONNECTION_CONFIRMATION.lock().await;
   let (sender, receiver) = tokio::sync::oneshot::channel();
   if try_reserve_self_host_connect_sender(sender).is_err() {
     return Err("A self-host connection dialog is already open.".to_string());
@@ -690,9 +721,18 @@ pub(crate) async fn show_connection_confirmation(
       // Cancel/Connect commands, so release the reserved approval sender on
       // destroy. Otherwise the slot stays reserved until the timeout and every
       // retry fails as "already open".
-      window.on_window_event(|event| {
+      let (closed_sender, closed_receiver) = tokio::sync::oneshot::channel();
+      let closed_sender = std::sync::Mutex::new(Some(closed_sender));
+      window.on_window_event(move |event| {
         if matches!(event, tauri::WindowEvent::Destroyed) {
           set_self_host_connect_response(false);
+          if let Some(sender) = closed_sender
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+          {
+            let _ = sender.send(());
+          }
         }
       });
       let _ = window.set_focus();
@@ -712,6 +752,10 @@ pub(crate) async fn show_connection_confirmation(
       // The dialog closes itself once the user responds; close it explicitly so
       // a timeout or dropped sender does not leave a ghost window behind.
       let _ = window.close();
+      tokio::time::timeout(ACKNOWLEDGE_TIMEOUT, closed_receiver)
+        .await
+        .map_err(|_| "A self-host connection dialog is already open.".to_string())?
+        .map_err(|_| "A self-host connection dialog is already open.".to_string())?;
       Ok(outcome)
     }
     Err(error) => {
