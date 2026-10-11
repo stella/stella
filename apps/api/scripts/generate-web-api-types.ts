@@ -31,7 +31,13 @@
 //   expanded). The identity check runs on the same printout with `Date` kept.
 
 import { panic } from "better-result";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
@@ -1321,8 +1327,12 @@ const main = () => {
   }
   mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
   const temporary = `${OUTPUT_PATH}.${process.pid}.tmp`;
-  writeFileSync(temporary, output);
-  renameSync(temporary, OUTPUT_PATH);
+  try {
+    writeFileSync(temporary, output);
+    renameSync(temporary, OUTPUT_PATH);
+  } finally {
+    rmSync(temporary, { force: true });
+  }
   console.log(
     `generate-web-api-types: ${check ? "verified deterministic" : "wrote"} ${path.relative(REPO_ROOT, OUTPUT_PATH)} ` +
       `(${Buffer.byteLength(output)} bytes) in ${Math.round(performance.now() - started)} ms`,
