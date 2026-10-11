@@ -101,10 +101,7 @@ export const apiDeclarationCacheInputs = (project: string) => {
         ts.sys,
         resolutionCache,
       ).resolvedModule;
-      if (
-        dependency &&
-        dependency.resolvedFileName.startsWith(`${root}${path.sep}`)
-      ) {
+      if (dependency?.resolvedFileName?.startsWith(`${root}${path.sep}`)) {
         queue.push(dependency.resolvedFileName);
       }
     }
