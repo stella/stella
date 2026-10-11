@@ -213,6 +213,7 @@
     "src/tests/security/branded-types.test.ts",
     "src/tests/security/chat-derived-scope.test.ts",
     "src/tests/security/cross-tenant-coverage.test.ts",
+    "src/tests/security/decision-fallback-ownership.test.ts",
     "src/tests/security/file-upload-limits.test.ts",
     "src/tests/security/organization-file-write-guard.test.ts",
     "src/tests/security/public-law-access-independence.test.ts",
