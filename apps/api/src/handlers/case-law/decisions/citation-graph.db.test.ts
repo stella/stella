@@ -968,105 +968,118 @@ test("citation evidence reads the persisted classifier window only after AST eli
   });
 });
 
-test("a changed text revision withholds citation evidence and reports a stale reason", async () => {
-  const citingId = createSafeId<"caseLawDecision">();
-  const referenceId = createSafeId<"caseLawCitation">();
-  const paragraph = "Synthetic reasoning cites an authority.";
-  const documentAst = {
-    version: 1,
-    source: {
-      system: "test",
-      documentId: "revision",
-      webUrl: "",
-      printUrl: "",
-    },
-    metadata: {
-      caseNumber: "revision",
-      court: "Court",
-      ecli: "",
-      decisionDate: "2024-02-01",
-      decisionType: "judgment",
-      keywords: [],
-      statutes: [],
-    },
-    blocks: [
-      {
-        id: "reasoning",
-        anchorId: "p1",
-        type: "paragraph",
-        inlines: [{ type: "text", text: paragraph }],
-        plainText: paragraph,
+test.each(["text revision", "publication eligibility"] as const)(
+  "a changed %s withholds citation evidence and reports an incomplete reason",
+  async (change) => {
+    const citingId = createSafeId<"caseLawDecision">();
+    const referenceId = createSafeId<"caseLawCitation">();
+    const paragraph = "Synthetic reasoning cites an authority.";
+    const documentAst = {
+      version: 1,
+      source: {
+        system: "test",
+        documentId: "revision",
+        webUrl: "",
+        printUrl: "",
       },
-    ],
-  } satisfies DocumentAst;
-  await db.insert(caseLawDecisions).values({
-    id: citingId,
-    caseNumber: "revision",
-    country: "CZE",
-    court: "Court",
-    language: "en",
-    sourceId: openSourceId,
-    contentHash: null,
-    documentAst,
-    sections: [
-      { index: 0, type: "argumentation", title: null, text: paragraph },
-    ],
-  });
-  await db.insert(caseLawCitations).values({
-    id: referenceId,
-    citingDecisionId: citingId,
-    citedDecisionId: subjectId,
-    citationText: "authority",
-    kind: CITATION_KIND.PRECEDENT,
-    polaritySource: "rule",
-    polarityWindowStart: 0,
-    polarityWindowEnd: paragraph.length,
-  });
-  const prepared = await withRedistributableSubject(
-    caseLawDb,
-    { kind: "id", id: citingId },
-    async (subject) =>
-      await prepareDecisionCitations({
-        subject,
-        cursor: undefined,
-        direction: "cites",
-        limit: 10,
-      }),
-  );
-  if (prepared === null || prepared.type !== "page") {
-    panic("Expected prepared public citation page");
-  }
-  const changedText = "Updated synthetic reasoning cites an authority.";
-  expect(changedText).not.toBe(paragraph);
-  await db
-    .update(caseLawDecisions)
-    .set({
-      sections: [
-        { index: 0, type: "argumentation", title: null, text: changedText },
-      ],
-    })
-    .where(eq(caseLawDecisions.id, citingId));
-  const [changed] = await db
-    .select({ contentHash: caseLawDecisions.contentHash })
-    .from(caseLawDecisions)
-    .where(eq(caseLawDecisions.id, citingId));
-  expect(changed?.contentHash).toBeNull();
-  expect(
-    await completeDecisionCitations({ caseLawDb, prepared }),
-  ).toMatchObject({
-    type: "page",
-    page: {
-      items: [
+      metadata: {
+        caseNumber: "revision",
+        court: "Court",
+        ecli: "",
+        decisionDate: "2024-02-01",
+        decisionType: "judgment",
+        keywords: [],
+        statutes: [],
+      },
+      blocks: [
         {
-          id: referenceId,
-          polarityEvidence: { excerpt: null },
-          passage: null,
-          textIncompleteReason: "text_changed",
+          id: "reasoning",
+          anchorId: "p1",
+          type: "paragraph",
+          inlines: [{ type: "text", text: paragraph }],
+          plainText: paragraph,
         },
       ],
-    },
-  });
-});
+    } satisfies DocumentAst;
+    await db.insert(caseLawDecisions).values({
+      id: citingId,
+      caseNumber: `revision-${change}`,
+      country: "CZE",
+      court: "Court",
+      language: "en",
+      sourceId: openSourceId,
+      contentHash: null,
+      documentAst,
+      sections: [
+        { index: 0, type: "argumentation", title: null, text: paragraph },
+      ],
+    });
+    await db.insert(caseLawCitations).values({
+      id: referenceId,
+      citingDecisionId: citingId,
+      citedDecisionId: subjectId,
+      citationText: "authority",
+      kind: CITATION_KIND.PRECEDENT,
+      polaritySource: "rule",
+      polarityWindowStart: 0,
+      polarityWindowEnd: paragraph.length,
+    });
+    const prepared = await withRedistributableSubject(
+      caseLawDb,
+      { kind: "id", id: citingId },
+      async (subject) =>
+        await prepareDecisionCitations({
+          subject,
+          cursor: undefined,
+          direction: "cites",
+          limit: 10,
+        }),
+    );
+    if (prepared?.type !== "page") {
+      panic("Expected prepared public citation page");
+    }
+    const changedText = "Updated synthetic reasoning cites an authority.";
+    expect(changedText).not.toBe(paragraph);
+    await db
+      .update(caseLawDecisions)
+      .set(
+        change === "text revision"
+          ? {
+              sections: [
+                {
+                  index: 0,
+                  type: "argumentation",
+                  title: null,
+                  text: changedText,
+                },
+              ],
+            }
+          : { metadata: LISTING_ONLY_METADATA },
+      )
+      .where(eq(caseLawDecisions.id, citingId));
+    const [changed] = await db
+      .select({ contentHash: caseLawDecisions.contentHash })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, citingId));
+    expect(changed?.contentHash).toBeNull();
+    expect(
+      await completeDecisionCitations({ caseLawDb, prepared }),
+    ).toMatchObject({
+      type: "page",
+      page: {
+        items: [
+          {
+            id: referenceId,
+            polarityEvidence: { excerpt: null },
+            passage: null,
+            textIncompleteReason:
+              change === "text revision" ? "text_changed" : "missing_text",
+          },
+        ],
+      },
+    });
+  },
+);
 
 test("outgoing citations through a retired UUID retain canonical passages and evidence", async () => {
   const retiredId = createSafeId<"caseLawDecision">();

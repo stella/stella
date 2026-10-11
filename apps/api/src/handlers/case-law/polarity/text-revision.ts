@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 
 import { caseLawDecisions } from "@/api/db/schema";
+import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
 
 export type CitationTextRevision = {
   contentHash: string | null;
@@ -23,6 +24,7 @@ const revisionFenceSql = ({
 }: RevisionFenceArgs) => sql`EXISTS (
   SELECT 1 FROM ${caseLawDecisions} AS citation_text_revision
    WHERE citation_text_revision.id = ${citingDecisionId}
+     AND ${sql.raw(publishedCaseLawDecisionSqlFor("citation_text_revision"))}
      AND ${predicate}
 )`;
 
