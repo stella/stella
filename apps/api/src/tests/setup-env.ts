@@ -99,3 +99,12 @@ process.env["CORPUS_INDEX_Q09_SEARCH_ENDPOINT"] ??= "http://localhost:7291";
 process.env["GOTENBERG_URL"] ??= "http://localhost:3002";
 process.env["GOTENBERG_USERNAME"] ??= "test";
 process.env["GOTENBERG_PASSWORD"] ??= "test";
+
+// Migrations leave pristine OAuth policy initialization to server startup.
+// Gated suites call auth directly, so run that same boundary before any fixture
+// creates users; resource availability must not depend on another suite's seed.
+if (process.env["STELLA_RUN_POSTGRES_TESTS"] === "true") {
+  const { assertConfiguredBetterAuthOAuthPolicy } =
+    await import("../lib/db/assert-better-auth-oauth-policy");
+  await assertConfiguredBetterAuthOAuthPolicy();
+}
