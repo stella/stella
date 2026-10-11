@@ -273,7 +273,7 @@ describe("write contracts cover the mutation route graph", () => {
     sources.set(
       helper,
       `import { enforceWritePrecondition } from '@/api/lib/write-contract';
-      export const write = (body) => { enforceWritePrecondition({type: 'updatedAt', field: 'expectedUpdatedAt', expectedUpdatedAt: body.expectedUpdatedAt}); };`,
+      export const write = (body) => { enforceWritePrecondition({type: 'updatedAt', field: 'expectedUpdatedAt', expectedUpdatedAt: body.expectedUpdatedAt, storedUpdatedAt: new Date(), resource: 'Example'}); };`,
     );
     const invoked = `import { createSafeHandler } from '@/api/lib/api-handlers'; import {write} from './write';
       export default createSafeHandler(${config}, async ({body}) => write(body));`;
@@ -308,6 +308,7 @@ describe("write contracts cover the mutation route graph", () => {
     for (const body of [
       `{ const enforceWritePrecondition = () => {}; enforceWritePrecondition({type: 'updatedAt', field: 'expectedUpdatedAt'}); }`,
       `const ignore = (callback) => {}; ignore(() => enforceWritePrecondition({type: 'updatedAt', field: 'expectedUpdatedAt'}));`,
+      `return {}; enforceWritePrecondition({type: 'updatedAt', field: 'expectedUpdatedAt'});`,
     ]) {
       const sources = fixture(config);
       sources.set(
@@ -331,8 +332,8 @@ describe("write contracts cover the mutation route graph", () => {
     const guarded = `import { createSafeHandler } from '@/api/lib/api-handlers';
       import { enforceWritePrecondition } from '@/api/lib/write-contract';
       export default createSafeHandler(${config}, async ({body}) => {
-        enforceWritePrecondition({type: 'revision', field: 'baseRevision', expectedRevision: body.baseRevision});
-        enforceWritePrecondition({type: 'revision', field: 'selectedTextHash', expectedRevision: body.selectedTextHash});
+        enforceWritePrecondition({type: 'revision', field: 'baseRevision', expectedRevision: body.baseRevision, storedRevision: 1, resource: 'Example'});
+        enforceWritePrecondition({type: 'revision', field: 'selectedTextHash', expectedRevision: body.selectedTextHash, storedRevision: 'hash', resource: 'Example'});
         return {};
       });`;
     sources.set(handler, guarded);

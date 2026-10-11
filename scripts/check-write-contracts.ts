@@ -742,6 +742,18 @@ class WriteSourceResolver {
           result.add(field);
         }
       }
+      if (ts.isBlock(node)) {
+        for (const statement of node.statements) {
+          visit(statement, nestedScope);
+          if (
+            ts.isReturnStatement(statement) ||
+            ts.isThrowStatement(statement)
+          ) {
+            break;
+          }
+        }
+        return;
+      }
       ts.forEachChild(node, (child) => visit(child, nestedScope));
     };
     visit(resolved.node.body, scope);
