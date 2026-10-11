@@ -1009,10 +1009,7 @@ describe("tanStackModelOptionsForTask", () => {
       },
     } satisfies Record<
       (typeof TANSTACK_AI_PROVIDERS)[number],
-      Record<
-        "routine" | "reasoning" | "fast",
-        ReturnType<typeof tanStackModelOptionsForTask>
-      >
+      { routine: unknown; reasoning: unknown; fast: unknown }
     >;
     const modeByGroup = {
       fast: "fast",
@@ -1030,7 +1027,7 @@ describe("tanStackModelOptionsForTask", () => {
           continue;
         }
         const mode = modeByGroup[MODEL_TASK_OVERRIDE_GROUP[task]];
-        expect(
+        expect<unknown>(
           tanStackModelOptionsForTask({
             provider,
             task,
