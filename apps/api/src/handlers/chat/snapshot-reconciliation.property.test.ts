@@ -26,7 +26,10 @@ import {
   classifyChatPartForPersistence,
   toPersistableChatMessage,
 } from "./chat-message-parts";
-import { SnapshotPartReconciler } from "./snapshot-reconciliation";
+import {
+  SnapshotPartReconciler,
+  type SnapshotReconciliationError,
+} from "./snapshot-reconciliation";
 import { processServerChatStream, toChatMessage } from "./stream-chat";
 import { createChatMessageIdMapper } from "./stream-message-identity";
 
@@ -169,6 +172,7 @@ const collectTurn = async (
     yield* chunks;
   };
   const emitted: StreamChunk[] = [];
+  const reconciliationFailures: SnapshotReconciliationError[] = [];
   for await (const chunk of processServerChatStream({
     abortSignal: new AbortController().signal,
     deadlineSignal: new AbortController().signal,
@@ -181,10 +185,14 @@ const collectTurn = async (
       terminal.response = responseMessage;
     },
     processor: capture.processor,
+    reportSnapshotFailure: (error) => {
+      reconciliationFailures.push(error);
+    },
     source: source(),
   })) {
     emitted.push(chunk);
   }
+  expect(reconciliationFailures).toEqual([]);
   if (terminal.response === null) {
     panic("Generated reconciliation turn did not persist");
   }
@@ -598,6 +606,7 @@ test(
               content: { progress: expectedProgress },
             },
           ] satisfies UIMessage["parts"];
+          expect(owner.failure).toBeUndefined();
           expect(parts).toEqual(expected);
           for (const part of parts) {
             expect(owner.provenanceOf(part)).toBe(origin);
@@ -1283,6 +1292,7 @@ test(
           call,
           { type: "text", content: scenario.suffix },
         ] satisfies UIMessage["parts"];
+        expect(owner.failure).toBeUndefined();
         expect(parts).toEqual(initial);
         const completion = scenario.extends ? scenario.completion : "";
         const incomingText = scenario.extends ? scenario.prefix : "stale";

@@ -97,7 +97,10 @@ import {
 import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
 import type { GuardedProviderHistory } from "@/api/handlers/chat/provider-history";
 import { stampReasoningProvenance } from "@/api/handlers/chat/reasoning-provenance-stamp";
-import { SnapshotPartReconciler } from "@/api/handlers/chat/snapshot-reconciliation";
+import {
+  SnapshotPartReconciler,
+  type SnapshotReconciliationError,
+} from "@/api/handlers/chat/snapshot-reconciliation";
 import {
   assistantMessageStartChunk,
   createTurnMessageIdMapper,
@@ -1815,6 +1818,9 @@ const createChatRuntimeMiddleware = ({
 };
 
 type ProcessServerChatStreamProps = {
+  reportSnapshotFailure?:
+    | ((error: SnapshotReconciliationError) => void)
+    | undefined;
   /** The run's own signal: aborted by the provider deadline below *and* by the
    *  response stream's cancel, which is how a client disconnect arrives. */
   abortSignal: AbortSignal;
@@ -2753,6 +2759,7 @@ const failedRunDetails = ({ chunk, sourceChunk }: FailedRunDetailsOptions) => {
 export const processServerChatStream = async function* ({
   abortSignal,
   runSignal = abortSignal,
+  reportSnapshotFailure,
   getRestorableCheckpoint,
   deadlineSignal,
   flushPendingSource,
@@ -2773,6 +2780,7 @@ export const processServerChatStream = async function* ({
   );
   const partProvenance = new SnapshotPartReconciler(
     arrayOrEmpty(initialResponseMessage?.parts),
+    reportSnapshotFailure,
   );
   // Source deltas or new content in an explicit UI snapshot establish an
   // answer. Continuation history alone cannot make an empty run successful.

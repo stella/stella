@@ -446,12 +446,16 @@ The sandbox has no network or filesystem access. Each execution is independent. 
 \`\`\`typescript
 ${generateTypeStubs(bindings)}
 \`\`\`
-
+${
+  lazyCatalog.length === 0
+    ? ""
+    : `
 ### Discoverable APIs
 
 Before writing code that calls an undocumented \`external_<name>\`, call \`discover_tools\` with its names for full TypeScript signatures. \`discover_tools\` is a separate tool call, unavailable inside \`execute_typescript\`.
 
-${lazyCatalog}`;
+${lazyCatalog}`
+}`;
 };
 
 let builtInVariants: ReadonlyMap<string, string> | undefined;

@@ -954,7 +954,7 @@ const getToolApprovalState = ({
     isDenied,
     // Approved, then the tool threw (or its stream died): neither allowed
     // nor denied, so the card says so instead of showing no status.
-    isFailed: part.state === "error",
+    isFailed: part.state === "error" && !isDenied,
     isExternalMcpApproval,
     // Working only while the turn runs: a denied call runs nothing, and an
     // answer inside a batch waits, idle, for the rest of the batch.

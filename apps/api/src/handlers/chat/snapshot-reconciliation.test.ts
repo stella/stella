@@ -1,3 +1,4 @@
+import { EventType } from "@tanstack/ai";
 import type {
   ActivityPart,
   MessagePart,
@@ -11,6 +12,7 @@ import { expect, test } from "bun:test";
 import {
   createSnapshotActivityReconciler,
   SnapshotPartReconciler,
+  SnapshotReconciliationError,
   reconcileSnapshotCall,
   reconcileSnapshotResult,
 } from "@/api/handlers/chat/snapshot-reconciliation";
@@ -331,3 +333,89 @@ for (const example of Object.values(sdkPartExamples)) {
     expect(owner.provenanceOf(delta)).toBe("delta-streamed");
   });
 }
+
+test("SDK contract drift is observed once and retains the SDK projection for the message", () => {
+  for (const phase of [
+    "provenance",
+    "normalization",
+    "textual-delta",
+  ] as const) {
+    const observed: SnapshotReconciliationError[] = [];
+    const original = { type: "text", content: "before" } as const;
+    const incoming = { type: "thinking", content: "SDK projection" } as const;
+    const owner = new SnapshotPartReconciler([original], (error) =>
+      observed.push(error),
+    );
+    switch (phase) {
+      case "provenance":
+        owner.observe([incoming], [{ ...incoming }]);
+        break;
+      case "normalization":
+        owner.adoptSnapshot([original], [incoming]);
+        break;
+      case "textual-delta":
+        expect(
+          owner.reconcileDelta({
+            before: [original],
+            after: [incoming],
+            chunk: {
+              type: EventType.TEXT_MESSAGE_CONTENT,
+              messageId: "answer",
+              delta: "next",
+            },
+          }),
+        ).toEqual([incoming]);
+        break;
+      default:
+        phase satisfies never;
+    }
+    expect(observed).toHaveLength(1);
+    expect(observed.at(0)).toBeInstanceOf(SnapshotReconciliationError);
+    expect(observed.at(0)?.phase).toBe(phase);
+    expect(owner.failure).toBe(observed.at(0));
+    expect(
+      owner.reconcile({
+        previous: { id: "answer", role: "assistant", parts: [original] },
+        snapshot: { id: "answer", role: "assistant", parts: [incoming] },
+        preservesPartLayout: true,
+        parseResultOutput: (content) => content,
+      }),
+    ).toEqual([incoming]);
+    const normalized = [
+      { type: "text", content: "later SDK projection" },
+    ] satisfies UIMessage["parts"];
+    owner.adoptSnapshot([incoming], normalized);
+    expect(
+      owner.reconcileDelta({
+        before: [incoming],
+        after: normalized,
+        chunk: {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: "answer",
+          delta: "unreconciled",
+        },
+      }),
+    ).toBe(normalized);
+    expect(observed).toHaveLength(1);
+  }
+});
+
+test("SDK snapshot normalization detects removed slots and empty projections", () => {
+  const original = [
+    { type: "text", content: "before" },
+  ] satisfies UIMessage["parts"];
+  const failures: SnapshotReconciliationError[] = [];
+  const owner = new SnapshotPartReconciler(original, (error) =>
+    failures.push(error),
+  );
+  owner.adoptSnapshot(original, []);
+  expect(failures.at(0)?.phase).toBe("normalization");
+  expect(
+    owner.reconcile({
+      previous: { id: "answer", role: "assistant", parts: original },
+      snapshot: { id: "answer", role: "assistant", parts: [] },
+      preservesPartLayout: true,
+      parseResultOutput: (content) => content,
+    }),
+  ).toEqual([]);
+});

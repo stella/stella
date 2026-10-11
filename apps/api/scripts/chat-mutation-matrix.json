@@ -2,6 +2,62 @@
   "$comment": "Each entry is one behaviour of the chat pipeline, stated as the mutation that removes it from the current tree, the scenario that exercises it, and the oracle (apps/api/src/tests/helpers/chat-oracles.ts) that must fail when it is gone. Run: bun apps/api/scripts/chat-mutation-matrix.ts. An entry whose mutation no longer applies fails until it is replaced or retired with a reason.",
   "entries": [
     {
+      "fix": "#5256",
+      "status": "active",
+      "id": "denied-approval-has-no-failure-details",
+      "behaviour": "A snapshot denial shows one denial status and no tool failure details.",
+      "file": "../web/src/components/chat/tool-approval-card.tsx",
+      "search": "isFailed: part.state === \"error\" && !isDenied,",
+      "replace": "isFailed: part.state === \"error\",",
+      "scenario": {
+        "file": "../web/src/components/chat/tool-approval-card.dom.test.tsx",
+        "test": "a denied approval restored as an SDK error shows only its denial status"
+      },
+      "oracle": "chat.render.cards-match-stored"
+    },
+    {
+      "fix": "#5256",
+      "status": "active",
+      "id": "activity-payloads-stay-internal",
+      "behaviour": "Recognized activities show translated captions without internal payloads.",
+      "file": "../web/src/components/chat/chat-thread-messages.tsx",
+      "search": "        {t(labelKey)}\n      </figcaption>",
+      "replace": "        {t(labelKey)}\n      </figcaption>\n      <pre>{JSON.stringify(part.content)}</pre>",
+      "scenario": {
+        "file": "../web/src/components/chat/chat-thread-messages.test.tsx",
+        "test": "activity roles and embedded parts show translated labels without internal payloads"
+      },
+      "oracle": "chat.render.cards-match-stored"
+    },
+    {
+      "fix": "#5256",
+      "status": "active",
+      "id": "unknown-activities-are-omitted",
+      "behaviour": "Unknown activity types do not render a user-facing activity card.",
+      "file": "../web/src/components/chat/chat-thread-messages.tsx",
+      "search": "    default:\n      return null;\n  }\n\n  return (\n    <figure",
+      "replace": "    default:\n      labelKey = \"chat.thinking\";\n  }\n\n  return (\n    <figure",
+      "scenario": {
+        "file": "../web/src/components/chat/chat-thread-messages.test.tsx",
+        "test": "unknown activity types and malformed activity messages leave the thread readable"
+      },
+      "oracle": "chat.render.cards-match-stored"
+    },
+    {
+      "fix": "#5256",
+      "status": "active",
+      "id": "malformed-activities-preserve-thread",
+      "behaviour": "Malformed activity envelopes are omitted without failing transcript rendering.",
+      "file": "../web/src/components/chat/chat-thread-messages.tsx",
+      "search": "  if (parts.length !== 1 || part?.type !== \"activity\") {\n    return null;\n  }",
+      "replace": "  if (parts.length !== 1 || part?.type !== \"activity\") {\n    return panic(\"An activity message must contain exactly one activity part\");\n  }",
+      "scenario": {
+        "file": "../web/src/components/chat/chat-thread-messages.test.tsx",
+        "test": "unknown activity types and malformed activity messages leave the thread readable"
+      },
+      "oracle": "chat.client.no-errors"
+    },
+    {
       "id": "subagent-snapshot-resumes-after-suspension",
       "fix": "#5256",
       "behaviour": "Resuming a suspended subagent updates its running status and child transcript; terminal snapshots reject active replays.",

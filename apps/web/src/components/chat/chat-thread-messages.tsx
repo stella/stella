@@ -21,7 +21,6 @@ import {
   XIcon,
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
-import { ScrollArea } from "@stll/ui/scroll-area";
 import { cn } from "@stll/ui/utils";
 
 import { ActionAdmissionOutcome } from "@/components/action-admission-outcome";
@@ -1494,23 +1493,33 @@ type ChatActivityPartProps = {
   part: Extract<ChatUIPart, { type: "activity" }>;
 };
 
-const ChatActivityPart = ({ part }: ChatActivityPartProps) => (
-  <figure className="border-border bg-muted/30 rounded-md border p-3">
-    <figcaption className="text-muted-foreground text-sm">
-      <bdi>{part.activityType}</bdi>
-    </figcaption>
-    <ScrollArea className="max-h-80">
-      <pre className="text-xs" dir="ltr">
-        <code>{JSON.stringify(part.content, null, 2)}</code>
-      </pre>
-    </ScrollArea>
-  </figure>
-);
+const ChatActivityPart = ({ part }: ChatActivityPartProps) => {
+  const t = useTranslations();
+  let labelKey: TranslationKey;
+  switch (part.activityType) {
+    case "progress":
+      labelKey = "chat.thinking";
+      break;
+    case "review":
+      labelKey = "navigation.shortcutCategories.review";
+      break;
+    default:
+      return null;
+  }
+
+  return (
+    <figure className="border-border bg-muted/30 rounded-md border p-3">
+      <figcaption className="text-muted-foreground text-sm">
+        {t(labelKey)}
+      </figcaption>
+    </figure>
+  );
+};
 
 const renderActivityMessage = (parts: readonly ChatUIPart[]) => {
   const part = parts.at(0);
   if (parts.length !== 1 || part?.type !== "activity") {
-    return panic("An activity message must contain exactly one activity part");
+    return null;
   }
   return <ChatActivityPart part={part} />;
 };

@@ -1,6 +1,6 @@
 Canonical TOOL_CALL_END input updates completed calls without resetting their state.
 Snapshot sibling results do not enrich terminal calls with absent output.
-No-approval server calls execute while sibling calls await approval.
+Sequential calls wait behind the first pending approval; plain client requests proceed.
 RUN_ERROR raw evidence retains HTTP status and AWS exception identity.
 Reasoning provenance survives UI/model conversions and AG-UI snapshots.
 TOOL_CALL_START flushes before waiting for further provider output.
@@ -48,20 +48,20 @@ index c21d483b5ed97eb9b4f64f4d6783ec3ba148a8f0..d8ae7d353e94e6634962124d15422d5e
  					...existingToolCall.metadata !== void 0 && { metadata: existingToolCall.metadata }
  				});
 diff --git a/dist/esm/activities/chat/tools/tool-calls.js b/dist/esm/activities/chat/tools/tool-calls.js
-index 9cce36e8652ace7754d552766ccf24a7d9f610ac..bb27288037336af171b7d2666def9f2164e471ef 100644
 --- a/dist/esm/activities/chat/tools/tool-calls.js
 +++ b/dist/esm/activities/chat/tools/tool-calls.js
-@@ -536,9 +536,12 @@ async function* executeToolCalls(toolCalls, tools, approvals = /* @__PURE__ */ n
+@@ -535,10 +535,12 @@
+ 			});
  			continue;
  		}
- 		if (hasPendingApprovals) {
-+			// Only an already approved call waits for the rest of its step's
-+			// approvals. A call that needs no approval runs now, like a client
-+			// request, so no server call ends a run without its result.
+-		if (hasPendingApprovals) {
++		// Sequential calls preceding the first approval may finish; later server
++		// calls must wait so dependent reads and writes retain call order.
++		if (hasPendingApprovals && (!runsInOrder || needsApproval.length > 0)) {
  			const isPendingApproval = tool.needsApproval && approvalResolution(approvals, toolCall.id) === void 0;
 -			const isPlainClientRequest = !tool.needsApproval && !tool.execute;
 -			if (!isPendingApproval && !isPlainClientRequest) continue;
-+			const isNoApprovalCall = !tool.needsApproval;
++			const isNoApprovalCall = !tool.needsApproval && (!runsInOrder || !tool.execute);
 +			if (!isPendingApproval && !isNoApprovalCall) continue;
  		}
  		if (resumeState?.cancelledToolCallIds?.has(toolCall.id)) {

@@ -6,9 +6,12 @@ import type {
 } from "@tanstack/ai";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
 import { sleep } from "@stll/concurrency/sleep";
+import { assertProperty } from "@stll/property-testing";
 
+import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import {
   finishReasonOf,
   STRIPPED_CHUNK_KEYS,
@@ -94,6 +97,141 @@ test("finishes an asynchronous document mutation before a sibling read starts", 
   expect(results).toHaveLength(2);
   expect(documentVersion).toBe(2);
   expect(observedVersion).toBe(documentVersion);
+});
+
+test("sequential gated and ungated calls execute in document order after approval", async () => {
+  await assertProperty(
+    "sequential gated and ungated calls execute in document order after approval",
+    fc.asyncProperty(
+      fc.array(fc.constantFrom("read_document", "write_document"), {
+        maxLength: 2,
+      }),
+      fc.array(
+        fc.constantFrom("read_document", "write_document", "approved_write"),
+        {
+          minLength: 1,
+          maxLength: 6,
+        },
+      ),
+      async (prefix, siblings) => {
+        // Every case reaches the gate before a dependent read and mutation.
+        const names = [
+          ...prefix,
+          "approved_write",
+          "read_document",
+          "write_document",
+          ...siblings,
+        ];
+        const calls = names.map((toolName, index) => ({
+          toolCallId: `call-${index}`,
+          toolName,
+          arguments: "{}",
+        }));
+        const executed: string[] = [];
+        const versions: number[] = [];
+        let documentVersion = 0;
+        let iteration = 0;
+        const adapter: AnyTextAdapter = {
+          ...scriptedAdapterBase,
+          async *chatStream({ model, runId, threadId }) {
+            const index = iteration++;
+            yield* scriptedTurnChunks(
+              index === 0
+                ? { type: "step", toolCalls: calls }
+                : { type: "step", text: "Document updated", toolCalls: [] },
+              {
+                index,
+                model,
+                runId: runId ?? "run",
+                threadId: threadId ?? "thread",
+              },
+            );
+          },
+          structuredOutput: () => panic("No structured output in this test"),
+        };
+        const tools = [
+          toolDefinition({
+            name: "approved_write",
+            description: "Approved document write",
+            needsApproval: true,
+          }).server(async () => {
+            await sleep(0);
+            executed.push("approved_write");
+            versions.push(++documentVersion);
+            return { version: documentVersion };
+          }),
+          toolDefinition({
+            name: "write_document",
+            description: "Document write",
+          }).server(async () => {
+            await sleep(0);
+            executed.push("write_document");
+            versions.push(++documentVersion);
+            return { version: documentVersion };
+          }),
+          toolDefinition({
+            name: "read_document",
+            description: "Document read",
+          }).server(() => {
+            executed.push("read_document");
+            versions.push(documentVersion);
+            return { version: documentVersion };
+          }),
+        ];
+        const { processor } = createStreamMessageCapture({
+          initialMessages: [],
+          capture: (message) => message,
+        });
+        for await (const chunk of streamChatChunks({
+          adapter,
+          messages: [],
+          tools,
+        })) {
+          processor.processChunk(chunk);
+        }
+        expect(iteration).toBe(1);
+        expect(executed).toEqual(prefix);
+        const pending = processor
+          .getMessages()
+          .flatMap(({ parts }) => parts)
+          .filter(
+            (part) => part.type === "tool-call" && part.approval !== undefined,
+          );
+        expect(pending).toHaveLength(
+          names.filter((name) => name === "approved_write").length,
+        );
+        for (const part of pending) {
+          if (part.type !== "tool-call" || part.approval === undefined) {
+            return panic("Approval part lost its approval");
+          }
+          processor.addToolApprovalResponse(part.approval.id, true);
+        }
+        for await (const chunk of streamChatChunks({
+          adapter,
+          messages: processor.getMessages(),
+          tools,
+        })) {
+          processor.processChunk(chunk);
+        }
+        expect(iteration).toBe(2);
+        expect(executed).toEqual(names);
+        let expectedVersion = 0;
+        expect(versions).toEqual(
+          names.map((name) =>
+            name === "read_document" ? expectedVersion : ++expectedVersion,
+          ),
+        );
+        expect(
+          processor
+            .getMessages()
+            .flatMap(({ parts }) => parts)
+            .filter((part) => part.type === "tool-call")
+            .every((part) => part.state === "complete"),
+        ).toBe(true);
+      },
+    ),
+    { numRuns: 20 },
+  );
 });
 
 type StrippedChunkType = keyof typeof STRIPPED_CHUNK_KEYS;

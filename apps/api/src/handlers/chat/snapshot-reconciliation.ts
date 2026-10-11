@@ -9,10 +9,31 @@ import type {
   SubagentPart,
   UIMessage,
 } from "@tanstack/ai";
-import { panic } from "better-result";
+import { panic, TaggedError } from "better-result";
 import { deepEquals } from "bun";
 
 import { TANSTACK_TOOL_RESULT_STATE_LIFECYCLE } from "@/api/handlers/chat/tanstack-chat-lifecycle";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+
+export class SnapshotReconciliationError extends TaggedError(
+  "SnapshotReconciliationError",
+)<{
+  message: string;
+  phase: "provenance" | "normalization" | "textual-delta";
+}> {}
+
+const SNAPSHOT_FAILURE_SINK = failureSink({
+  event: "chat.snapshot_reconciliation.failed",
+  expected: [],
+});
+
+const reportSnapshotFailure = (error: SnapshotReconciliationError) => {
+  observeFailure(error, {
+    sink: SNAPSHOT_FAILURE_SINK,
+    ctx: { phase: error.phase },
+  });
+};
 
 type ToolResultFinality =
   (typeof TANSTACK_TOOL_RESULT_STATE_LIFECYCLE)[ToolResultPart["state"]];
@@ -294,11 +315,37 @@ export class SnapshotPartReconciler {
   private readonly sources = new WeakMap<MessagePart, PartSource>();
   private readonly terminalCalls = new WeakMap<MessagePart, ToolCallPart>();
 
-  constructor(initial: UIMessage["parts"]) {
+  private projection:
+    | { type: "reconciled" }
+    | { type: "sdk"; error: SnapshotReconciliationError } = {
+    type: "reconciled",
+  };
+
+  private readonly reportFailure: typeof reportSnapshotFailure;
+
+  constructor(
+    initial: UIMessage["parts"],
+    reportFailure = reportSnapshotFailure,
+  ) {
+    this.reportFailure = reportFailure;
     // Completed history is canonical transcript content on a continuation.
     for (const part of initial) {
       this.record(part, { provenance: "delta-streamed", anchor: part });
     }
+  }
+
+  get failure() {
+    return this.projection.type === "sdk" ? this.projection.error : undefined;
+  }
+
+  private fallBack(error: SnapshotReconciliationError) {
+    if (this.projection.type === "sdk") {
+      return;
+    }
+    // One message permanently uses the SDK projection after contract drift;
+    // mixing ownership rules again would compound the original mismatch.
+    this.projection = { type: "sdk", error };
+    this.reportFailure(error);
   }
 
   private record(part: MessagePart, source: PartSource) {
@@ -306,7 +353,22 @@ export class SnapshotPartReconciler {
   }
 
   private sourceOf(part: MessagePart) {
-    return this.sources.get(part) ?? panic("Reconciled part has no provenance");
+    const source = this.sources.get(part);
+    if (source !== undefined) {
+      return source;
+    }
+    this.fallBack(
+      new SnapshotReconciliationError({
+        message: "Reconciled part has no provenance",
+        phase: "provenance",
+      }),
+    );
+    const adopted = {
+      provenance: "snapshot-derived",
+      anchor: part,
+    } satisfies PartSource;
+    this.record(part, adopted);
+    return adopted;
   }
 
   provenanceOf(part: MessagePart) {
@@ -314,6 +376,9 @@ export class SnapshotPartReconciler {
   }
 
   reconcileDelta({ before, after, chunk }: DeltaPartsOptions) {
+    if (this.projection.type === "sdk") {
+      return after;
+    }
     if (
       chunk.type !== EventType.TEXT_MESSAGE_CONTENT &&
       chunk.type !== EventType.REASONING_MESSAGE_CONTENT
@@ -342,7 +407,13 @@ export class SnapshotPartReconciler {
       updated === undefined ||
       (updated.type !== "text" && updated.type !== "thinking")
     ) {
-      panic("Textual delta produced no textual part");
+      this.fallBack(
+        new SnapshotReconciliationError({
+          message: "Textual delta produced no textual part",
+          phase: "textual-delta",
+        }),
+      );
+      return after;
     }
     let existingIndex = -1;
     if (kind === "text") {
@@ -510,6 +581,12 @@ export class SnapshotPartReconciler {
     preservesPartLayout,
     parseResultOutput,
   }: SnapshotPartsOptions): UIMessage["parts"] {
+    for (const part of previousMessage.parts) {
+      this.sourceOf(part);
+    }
+    if (this.projection.type === "sdk") {
+      return snapshotMessage.parts.map((part) => this.snapshot(part));
+    }
     const seen = new Set<MessagePart>();
     const previous = {
       ...previousMessage,
@@ -681,10 +758,27 @@ export class SnapshotPartReconciler {
   }
 
   adoptSnapshot(selected: UIMessage["parts"], normalized: UIMessage["parts"]) {
+    if (
+      selected.length !== normalized.length ||
+      normalized.some((part, index) => selected.at(index)?.type !== part.type)
+    ) {
+      this.fallBack(
+        new SnapshotReconciliationError({
+          message: "SDK snapshot normalization changed reconciled part slots",
+          phase: "normalization",
+        }),
+      );
+    }
+    if (this.projection.type === "sdk") {
+      for (const part of normalized) {
+        this.snapshot(part);
+      }
+      return;
+    }
     for (const [index, part] of normalized.entries()) {
       const previous = selected.at(index);
       if (previous === undefined || previous.type !== part.type) {
-        panic("SDK snapshot normalization changed reconciled part slots");
+        return;
       }
       this.record(part, this.sourceOf(previous));
     }

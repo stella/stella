@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { renderToReadableStream, renderToStaticMarkup } from "react-dom/server";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Result } from "better-result";
 import { afterAll, describe, expect, test } from "bun:test";
 import { Window } from "happy-dom";
 import { IntlProvider } from "use-intl";
@@ -97,7 +98,7 @@ const renderedText = (html: string) => {
 };
 
 describe("chat thread messages", () => {
-  test("activity roles and embedded parts show the same caption and escaped content", () => {
+  test("activity roles and embedded parts show translated labels without internal payloads", () => {
     for (const role of Object.values(CHAT_MESSAGE_RENDER_POLICY)) {
       if (role === "text") {
         continue;
@@ -110,9 +111,7 @@ describe("chat thread messages", () => {
         const activity = {
           id: "activity-progress",
           role,
-          parts: [
-            { type: "activity", activityType: "Document review", content },
-          ],
+          parts: [{ type: "activity", activityType: "review", content }],
         } satisfies ChatUIMessage;
         const html = renderWithProviders(
           <ChatThreadMessages
@@ -128,11 +127,94 @@ describe("chat thread messages", () => {
           />,
         );
         expect(renderedText(html)).toContain("Document review");
-        expect(renderedText(html)).toContain(JSON.stringify(content, null, 2));
+        expect(
+          renderedText(html),
+          JSON.stringify({ oracle: "chat.render.cards-match-stored" }),
+        ).not.toContain(content.status);
+        expect(renderedText(html)).not.toContain(content.detail);
         expect(html).toContain("<figcaption");
         expect(html).not.toContain("<script>activity payload</script>");
       }
     }
+  });
+
+  test("unknown activity types and malformed activity messages leave the thread readable", () => {
+    const activities = [
+      {
+        id: "activity-unknown",
+        role: "activity",
+        parts: [
+          {
+            type: "activity",
+            activityType: "internal-event",
+            content: { secret: "internal-payload" },
+          },
+        ],
+      },
+      { id: "activity-empty", role: "activity", parts: [] },
+      {
+        id: "activity-text",
+        role: "activity",
+        parts: [{ type: "text", content: "malformed-activity" }],
+      },
+      {
+        id: "activity-multiple",
+        role: "activity",
+        parts: [
+          { type: "activity", activityType: "review", content: {} },
+          { type: "activity", activityType: "progress", content: {} },
+        ],
+      },
+    ] satisfies ChatUIMessage[];
+    const rendered = Result.try(() =>
+      renderWithProviders(
+        <ChatThreadMessages
+          approvalPendingMessageId={null}
+          messages={[
+            ...activities,
+            {
+              id: "readable-user",
+              role: "user",
+              parts: [{ type: "text", content: "Still readable" }],
+            },
+            {
+              id: "activity-progress",
+              role: "assistant",
+              parts: [
+                {
+                  type: "activity",
+                  activityType: "progress",
+                  content: { secret: "internal-payload" },
+                },
+              ],
+            },
+          ]}
+          onAskUserSubmit={() => {}}
+          onCreateDocumentResolve={() => {}}
+          onOpenCreatedDocument={() => {}}
+          streamdownComponents={{
+            a: ({ children, ...props }) => <a {...props}>{children}</a>,
+          }}
+        />,
+      ),
+    );
+    expect(
+      rendered.isOk(),
+      JSON.stringify({ oracle: "chat.client.no-errors" }),
+    ).toBe(true);
+    if (!rendered.isOk()) {
+      return;
+    }
+    const html = rendered.value;
+    expect(renderedText(html)).toContain("Still readable");
+    expect(renderedText(html)).toContain(messages.chat.thinking);
+    expect(renderedText(html)).not.toContain("internal-event");
+    expect(renderedText(html)).not.toContain("internal-payload");
+    expect(renderedText(html)).not.toContain("malformed-activity");
+    expect(
+      html.match(/<figcaption/gu),
+      JSON.stringify({ oracle: "chat.render.cards-match-stored" }),
+    ).toHaveLength(1);
   });
 
   test("labels a reloaded user stop without labelling other terminal outcomes", () => {
