@@ -221,12 +221,7 @@ const providerToolMetadata = (metadata: unknown) => {
 export const streamChatChunks = async function* (
   options: StreamChatChunksOptions,
 ): AsyncIterable<PublicStreamChunk> {
-  const executors = new Map(
-    options.tools?.map((tool) => [
-      tool.name,
-      tool.execute ? "server" : "client",
-    ]),
-  );
+  const executors = new Map<string, "server" | "client">();
   // Input-complete server calls can wait behind an approval. Their executor
   // must survive snapshots so the browser does not offer a client resolution.
   const messages = (options.messages ?? []).map((message) => {
@@ -264,6 +259,18 @@ export const streamChatChunks = async function* (
     ...options,
     messages,
     toolExecution: "sequential",
+    middleware: [
+      ...(options.middleware ?? []),
+      {
+        name: "stella-tool-executors",
+        onConfig: (_context, config) => {
+          // The final SDK configuration includes MCP and discovered lazy tools.
+          for (const tool of config.tools) {
+            executors.set(tool.name, tool.execute ? "server" : "client");
+          }
+        },
+      },
+    ],
   })) {
     if (chunk.type === "TOOL_CALL_START") {
       const executor = executors.get(chunk.toolCallName);

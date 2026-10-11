@@ -875,7 +875,11 @@ export const isUnresolvedFolioAgentDocToolCallPart = (
     return false;
   }
 
-  if (part.type !== "tool-call" || part.state !== "input-complete") {
+  if (
+    part.type !== "tool-call" ||
+    part.state !== "input-complete" ||
+    isServerChatToolCall(part)
+  ) {
     return false;
   }
 

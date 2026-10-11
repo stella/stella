@@ -564,6 +564,32 @@ for (const scenario of textualMetadataCases) {
   });
 }
 
+test("unsigned snapshots own segmentation while signed blocks retain authenticated boundaries", () => {
+  for (const signed of [false, true]) {
+    const initial = ["A", "B"].map((content) => ({
+      type: "thinking" as const,
+      content,
+      ...(signed ? { signature: `signature-${content}` } : {}),
+    }));
+    const incoming = [{ type: "thinking", content: "AB" }] as const;
+    const owner = new SnapshotPartReconciler([]);
+    const canonical = owner.reconcile({
+      previous: { id: "answer", role: "assistant", parts: [] },
+      snapshot: { id: "answer", role: "assistant", parts: initial },
+      preservesPartLayout: true,
+      parseResultOutput: (content) => content,
+    });
+    const parts = owner.reconcile({
+      previous: { id: "answer", role: "assistant", parts: canonical },
+      snapshot: { id: "answer", role: "assistant", parts: [...incoming] },
+      preservesPartLayout: true,
+      parseResultOutput: (content) => content,
+    });
+    expect(parts).toEqual(signed ? initial : incoming);
+    expect(owner.failure).toBeUndefined();
+  }
+});
+
 test("empty placeholders from another step cannot inherit opaque reasoning metadata", () => {
   const initial = [
     {

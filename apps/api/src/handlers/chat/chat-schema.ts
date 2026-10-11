@@ -28,7 +28,10 @@ import {
   type ChatRunMode,
   type DocxEditRepresentation,
 } from "@stll/api-contract";
-import { isChatPastedTextPart } from "@stll/api-contract/chat";
+import {
+  isChatPastedTextPart,
+  isServerChatToolCall,
+} from "@stll/api-contract/chat";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import type { StoredFileRef } from "@/api/handlers/chat/attachment-validation";
@@ -780,18 +783,19 @@ const validateIncomingChatParts = ({
     );
   }
 
-  const persistedParts =
+  const canonicalMessage =
     message.role === "assistant" && persistedMessage?.role === "assistant"
       ? chatMessageFromPersisted({
           id: message.id,
           role: persistedMessage.role,
           content: persistedMessage.content,
-        }).parts
-      : [];
-  if (message.role === "assistant" && persistedMessage?.role === "assistant") {
+        })
+      : null;
+  const persistedParts = canonicalMessage?.parts ?? [];
+  if (canonicalMessage !== null) {
     const continuationResult = validateContinuationToolCallIntegrity({
       incomingParts: validatedParts,
-      persistedParts,
+      persistedMessage: canonicalMessage,
       resume,
       tools,
     });
@@ -896,19 +900,19 @@ type ValidatedContinuationToolCall =
 
 const validateContinuationToolCallIntegrity = ({
   incomingParts,
-  persistedParts,
+  persistedMessage,
   resume,
   tools,
 }: {
   incomingParts: readonly ChatPart[];
-  persistedParts: readonly ChatPart[];
+  persistedMessage: ChatMessage;
   resume: AgUiResume | undefined;
   tools: ChatToolMap;
 }): Result<
   ReadonlyMap<string, ValidatedContinuationToolCall>,
   HandlerError<400>
 > => {
-  const canonicalCalls = persistedParts.filter(
+  const canonicalCalls = persistedMessage.parts.filter(
     (part): part is ChatToolCallPart => part.type === "tool-call",
   );
   const incomingCalls = incomingParts.filter(
@@ -937,11 +941,15 @@ const validateContinuationToolCallIntegrity = ({
     validatedCallsById.set(incomingCall.id, validatedCallResult.value);
   }
 
-  const awaitedInteractions = getAwaitingUserInteractions({
-    parts: [...persistedParts],
-    role: "assistant",
-  });
+  const awaitedInteractions = getAwaitingUserInteractions(persistedMessage);
+  const awaitedCallIds = new Set(
+    awaitedInteractions.map(({ toolCallId }) => toolCallId),
+  );
   if (
+    [...validatedCallsById.values()].some(
+      (call) =>
+        call.type === "transitioned" && !awaitedCallIds.has(call.call.id),
+    ) ||
     awaitedInteractions.some(
       ({ toolCallId }) => !incomingCallsById.has(toolCallId),
     )
@@ -1163,7 +1171,11 @@ const validateContinuationToolCallTransition = ({
       return Result.ok({ type: "transitioned", call: candidate });
     }
     case "input-complete": {
-      if (incomingCall.state !== "complete" && incomingCall.state !== "error") {
+      if (
+        tool?.execute !== undefined ||
+        isServerChatToolCall(canonicalCall) ||
+        (incomingCall.state !== "complete" && incomingCall.state !== "error")
+      ) {
         return invalidContinuationToolCall();
       }
       const output: unknown = incomingCall.output;
@@ -1462,8 +1474,14 @@ export const validateToolCallParts = ({
   const toolCallsById = new Map<string, ValidatedToolCallPart>();
   const serverAuthoredCallIds = new Set<string>();
   const parts: ChatPart[] = [];
+  const awaitedCallIds = new Set(
+    getAwaitingUserInteractions(message).map(({ toolCallId }) => toolCallId),
+  );
+  const firstAwaitedIndex = message.parts.findIndex(
+    (part) => part.type === "tool-call" && awaitedCallIds.has(part.id),
+  );
 
-  for (const part of message.parts) {
+  for (const [index, part] of message.parts.entries()) {
     if (part.type === "tool-call") {
       if (toolCallsById.has(part.id) || serverAuthoredCallIds.has(part.id)) {
         return Result.err(
@@ -1485,7 +1503,10 @@ export const validateToolCallParts = ({
 
       const toolCallResult = validateToolCallPart({
         allowPartialInput,
-        allowDeferredServerInput,
+        allowDeferredServerInput:
+          allowDeferredServerInput &&
+          firstAwaitedIndex !== -1 &&
+          index > firstAwaitedIndex,
         part,
         tools,
       });
@@ -1549,8 +1570,23 @@ const validateToolCallPart = ({
       (part.state === "awaiting-input" || part.state === "input-streaming")) ||
     (allowDeferredServerInput &&
       part.state === "input-complete" &&
-      tool.execute !== undefined)
+      tool.execute !== undefined &&
+      part.output === undefined)
   ) {
+    if (allowDeferredServerInput && part.input !== undefined) {
+      const parsed = parseToolArguments(part.arguments);
+      if (Result.isError(parsed)) {
+        return Result.err(parsed.error);
+      }
+      const agreement = validateToolInputAgreement({
+        parsedArguments: parsed.value,
+        part,
+        schema: tool.inputSchema,
+      });
+      if (Result.isError(agreement)) {
+        return Result.err(agreement.error);
+      }
+    }
     return Result.ok({
       type: "schema",
       name: part.name,
@@ -1996,6 +2032,31 @@ const validateCanonicalToolInput = ({
       toolName: part.name,
     });
   }
+  const agreement = validateToolInputAgreement({
+    parsedArguments,
+    part,
+    schema,
+  });
+  if (Result.isError(agreement)) {
+    return Result.err(agreement.error);
+  }
+  return validateToolPayload({
+    payload: part.input,
+    payloadName: "input",
+    schema,
+    toolName: part.name,
+  });
+};
+
+const validateToolInputAgreement = ({
+  parsedArguments,
+  part,
+  schema,
+}: {
+  parsedArguments: unknown;
+  part: ChatToolCallPart;
+  schema: unknown;
+}): Result<void, HandlerError<400>> => {
   if (
     !deepEquals(
       withToolInputPlaceholdersOmitted(schema, parsedArguments),
@@ -2009,12 +2070,7 @@ const validateCanonicalToolInput = ({
       }),
     );
   }
-  return validateToolPayload({
-    payload: part.input,
-    payloadName: "input",
-    schema,
-    toolName: part.name,
-  });
+  return Result.ok();
 };
 
 const validateToolPayload = ({

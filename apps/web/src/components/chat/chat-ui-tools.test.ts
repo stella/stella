@@ -789,6 +789,27 @@ describe("hasRunningToolCallInLatestAssistantMessage", () => {
 });
 
 describe("isUnresolvedFolioAgentDocToolCallPart", () => {
+  test("idle watchers select client folio calls and never deferred server calls", () => {
+    for (const name of ["read_document", "suggest_changes"]) {
+      const client = {
+        arguments: "{}",
+        id: `client-${name}`,
+        input: {},
+        state: "input-complete",
+        name,
+        type: "tool-call",
+      } as const;
+      const server = {
+        ...client,
+        id: `server-${name}`,
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
+      };
+      expect(isUnresolvedFolioAgentDocToolCallPart(server)).toBe(false);
+      expect(
+        selectUnresolvedFolioAgentDocToolCallParts([server, client], new Set()),
+      ).toEqual([client]);
+    }
+  });
   test("matches a completed read_document call awaiting a result", () => {
     const part = {
       arguments: "{}",

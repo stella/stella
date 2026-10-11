@@ -12,7 +12,10 @@ import {
   resourceRef,
   RESOURCE_TYPE,
 } from "@stll/api-contract";
-import { createChatPastedTextPart } from "@stll/api-contract/chat";
+import {
+  CHAT_TOOL_EXECUTOR_METADATA_KEY,
+  createChatPastedTextPart,
+} from "@stll/api-contract/chat";
 import { propertyConfig } from "@stll/property-testing";
 
 import {
@@ -547,6 +550,36 @@ describe("persisted chat message parts", () => {
     ).toEqual([
       { toolCallId: "approval-first", type: "approval" },
       { toolCallId: "approval-second", type: "approval" },
+    ]);
+  });
+
+  test("executor ownership excludes deferred servers but keeps approvals and client calls", () => {
+    const server = {
+      arguments: "{}",
+      id: "server",
+      name: "list_templates",
+      state: "input-complete",
+      type: "tool-call",
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
+    } as const;
+    const client = {
+      ...server,
+      id: "client",
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
+    };
+    const approval = {
+      ...server,
+      id: "approval",
+      state: "approval-requested",
+    } as const;
+    expect(
+      getAwaitingUserInteractions({
+        role: "assistant",
+        parts: [server, client, approval],
+      }),
+    ).toEqual([
+      { toolCallId: "client", type: "client-tool" },
+      { toolCallId: "approval", type: "approval" },
     ]);
   });
 

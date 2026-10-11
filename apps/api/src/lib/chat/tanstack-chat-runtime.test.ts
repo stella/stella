@@ -1,14 +1,23 @@
-import { EventType, normalizeStreamChunk, toolDefinition } from "@tanstack/ai";
+import {
+  DISCOVERY_TOOL_NAME,
+  EventType,
+  normalizeStreamChunk,
+  toolDefinition,
+} from "@tanstack/ai";
 import type {
   AdapterYieldChunk,
   AnyTextAdapter,
+  ModelMessage,
   StreamChunk,
 } from "@tanstack/ai";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { isServerChatToolCall } from "@stll/api-contract/chat";
+import {
+  CHAT_TOOL_EXECUTOR_METADATA_KEY,
+  isServerChatToolCall,
+} from "@stll/api-contract/chat";
 import { sleep } from "@stll/concurrency/sleep";
 import { assertProperty } from "@stll/property-testing";
 
@@ -133,9 +142,11 @@ test("sequential gated and ungated calls execute in document order after approva
           const versions: number[] = [];
           let documentVersion = 0;
           let iteration = 0;
+          const modelHistory: ModelMessage[][] = [];
           const adapter: AnyTextAdapter = {
             ...scriptedAdapterBase,
-            async *chatStream({ model, runId, threadId }) {
+            async *chatStream({ messages, model, runId, threadId }) {
+              modelHistory.push(messages);
               const index = iteration++;
               yield* scriptedTurnChunks(
                 index === 0
@@ -256,6 +267,20 @@ test("sequential gated and ungated calls execute in document order after approva
               // The SDK inserts the denial into model history during UI
               // conversion; it does not emit that result on the raw stream.
               expect(result).toBeUndefined();
+              expect(
+                modelHistory
+                  .at(-1)
+                  ?.find(
+                    (message) =>
+                      message.role === "tool" && message.toolCallId === part.id,
+                  ),
+              ).toMatchObject({
+                content: JSON.stringify({
+                  approved: false,
+                  message: "User denied this action",
+                }),
+                metadata: { tanstack: { toolResultOutcome: "denied" } },
+              });
             } else {
               expect(part.state).toBe("complete");
               expect(result?.state).toBe("complete");
@@ -266,6 +291,92 @@ test("sequential gated and ungated calls execute in document order after approva
     ),
     { numRuns: 20 },
   );
+});
+
+test("SDK-resolved MCP tools retain server ownership behind approval, including lazy discovery", async () => {
+  for (const lazy of [false, true]) {
+    let iteration = 0;
+    let executed = 0;
+    const mcpTool = toolDefinition({
+      name: "mcp__fixture__read",
+      description: "Read a document",
+    }).server(() => {
+      executed++;
+      return {};
+    });
+    const adapter: AnyTextAdapter = {
+      ...scriptedAdapterBase,
+      async *chatStream({ model, runId, threadId }) {
+        const index = iteration++;
+        const discovery = lazy && index === 0;
+        yield* scriptedTurnChunks(
+          {
+            type: "step",
+            toolCalls: discovery
+              ? [
+                  {
+                    toolCallId: "discover",
+                    toolName: DISCOVERY_TOOL_NAME,
+                    arguments: JSON.stringify({ toolNames: [mcpTool.name] }),
+                  },
+                ]
+              : [
+                  { toolCallId: "gate", toolName: "gate", arguments: "{}" },
+                  {
+                    toolCallId: "mcp-read",
+                    toolName: mcpTool.name,
+                    arguments: "{}",
+                  },
+                ],
+          },
+          {
+            index,
+            model,
+            runId: runId ?? "run",
+            threadId: threadId ?? "thread",
+          },
+        );
+      },
+      structuredOutput: () => panic("No structured output in this test"),
+    };
+    const capture = createStreamMessageCapture({
+      initialMessages: [],
+      capture: (message) => message,
+    });
+    const starts: PublicToolCallStartChunk[] = [];
+    for await (const chunk of streamChatChunks({
+      adapter,
+      messages: [],
+      tools: [
+        toolDefinition({
+          name: "gate",
+          description: "Approve write",
+          needsApproval: true,
+        }).server(() => ({})),
+      ],
+      mcp: {
+        clients: [
+          { tools: async () => [{ ...mcpTool, lazy }], close: async () => {} },
+        ],
+        lazyTools: lazy,
+      },
+    })) {
+      if (chunk.type === EventType.TOOL_CALL_START) {
+        starts.push(chunk);
+      }
+      capture.processor.processChunk(chunk);
+    }
+    const deferred = capture.processor
+      .getMessages()
+      .flatMap(({ parts }) => parts)
+      .find((part) => part.type === "tool-call" && part.id === "mcp-read");
+    expect(deferred).toMatchObject({ state: "input-complete" });
+    expect(isServerChatToolCall(deferred)).toBe(true);
+    expect(
+      starts.find((chunk) => chunk.toolCallId === "mcp-read")?.metadata,
+    ).toMatchObject({ [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" });
+    expect(executed).toBe(0);
+  }
 });
 
 test("a plain client request after a pending gate can finish while server successors wait", async () => {

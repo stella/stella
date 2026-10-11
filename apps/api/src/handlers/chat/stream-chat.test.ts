@@ -6554,6 +6554,55 @@ describe("native visual stream persistence", () => {
   });
 });
 
+test("an error after a snapshot reasserts its assistant owner without opening another message", async () => {
+  const result = await persistNativeInterruptTurn(
+    streamChunks([
+      {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId: "snapshot-owner",
+        role: "assistant",
+      },
+      {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: "snapshot-owner",
+        delta: "Saved answer",
+      },
+      {
+        type: EventType.MESSAGES_SNAPSHOT,
+        messages: [
+          { id: "snapshot-owner", role: "assistant", content: "Saved answer" },
+        ],
+      },
+      {
+        type: EventType.RUN_ERROR,
+        message: "Provider failed",
+        code: "overloaded",
+      },
+    ]),
+  );
+  const errorIndex = result.emitted.findIndex(
+    (chunk) => chunk.type === EventType.RUN_ERROR,
+  );
+  expect(result.emitted.at(errorIndex - 1)).toMatchObject({
+    type: EventType.TEXT_MESSAGE_START,
+    messageId: result.finish?.responseMessage.id,
+  });
+  const capture = createStreamMessageCapture({
+    initialMessages: [],
+    capture: (message) => message,
+  });
+  for (const chunk of result.emitted) {
+    capture.processor.processChunk(chunk);
+  }
+  expect(capture.processor.getMessages()).toHaveLength(1);
+  expect(capture.processor.getMessages().at(0)?.id).toBe(
+    result.finish?.responseMessage.id,
+  );
+  expect(capture.processor.getMessages().at(0)?.parts).toEqual(
+    result.finish?.responseMessage.parts,
+  );
+});
+
 test("a provider diagnostic is redacted in what is streamed, stored and reloaded", async () => {
   const keyFragment = "sk-proj-********************wxyz";
   const providerDiagnostic = {
