@@ -30,6 +30,16 @@
     "reason": "static lint-rule input checked by the plugin fixture harness; contains deliberate invalid source, not executable tests"
   },
   {
+    "file": "apps/landing/e2e/landing-anonymize-demo.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "reason": "Playwright config is built by marketingConfig(); coverage proven by e2e-landing at runtime"
+  },
+  {
+    "file": "apps/landing/e2e/landing-navigation.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "reason": "Playwright config is built by marketingConfig(); coverage proven by e2e-landing at runtime"
+  },
+  {
     "file": "apps/visual-preview/browser/render.test.ts",
     "owningWorkflow": ".github/workflows/visual-preview.yml",
     "reason": "separate workflow; fold decision pending"

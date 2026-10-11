@@ -148,6 +148,7 @@
     "apps/api/src/scripts/review-account.db.test.ts::review account provisioning against PostgreSQL",
     "apps/api/src/tests/helpers/transaction-interleaving.postgres.test.ts::transaction interleaving (postgres)",
     "apps/api/src/tests/helpers/transaction-recorder.postgres.test.ts::real transaction recording",
+    "apps/api/src/tests/query-perf/query-perf.test.ts::query perf gate on PostgreSQL under RLS",
     "apps/api/src/tests/security/cross-member-time-entries.integration.test.ts::time entry changes between members of one organization > a member can change their own entry",
     "apps/api/src/tests/security/cross-member-time-entries.integration.test.ts::time entry changes between members of one organization > a member cannot run it even on their own entry",
     "apps/api/src/tests/security/public-law-reader-role.postgres.test.ts::public-law reader role on the migrated schema (postgres)",
