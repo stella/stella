@@ -198,7 +198,7 @@
     "test:unit": "bun test src --path-ignore-patterns '**/*.playwright.spec.ts'",
     "test:browser": "playwright test --config playwright.config.ts",
     "pack:check": "cd ../.. && bun scripts/check-published-exports.ts packages/ui",
-    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
+    "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/ui",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/ui",
     "format": "bun ../../scripts/run-oxfmt.ts .",

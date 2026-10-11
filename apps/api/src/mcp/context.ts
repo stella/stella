@@ -92,7 +92,10 @@ import type {
   recordTemplateUse,
 } from "@/api/lib/templates/record-use";
 import type { renameStoredTemplate } from "@/api/lib/templates/rename-template";
-import type { templateDecideConditionsLogic } from "@/api/lib/templates/template-decide-conditions";
+import type {
+  decideTemplateConditions,
+  templateDecideConditionsLogic,
+} from "@/api/lib/templates/template-decide-conditions";
 import type {
   describeStoredTemplate,
   fillStoredTemplateDocx,
@@ -195,6 +198,7 @@ export type McpRequestContext = {
     loadAnonymizationAllowlistCanonicalsByWorkspace?: typeof loadAnonymizationAllowlistCanonicalsByWorkspace;
     loadAnonymizationGazetteerEntriesByWorkspace?: typeof loadAnonymizationGazetteerEntriesByWorkspace;
     templateDecideConditionsLogic?: typeof templateDecideConditionsLogic;
+    decideTemplateConditions?: typeof decideTemplateConditions;
     fillStoredTemplateDocx?: typeof fillStoredTemplateDocx;
     fillStoredTemplateWithText?: typeof fillStoredTemplateWithText;
     fillStoredTemplateWithTextStrict?: typeof fillStoredTemplateWithTextStrict;

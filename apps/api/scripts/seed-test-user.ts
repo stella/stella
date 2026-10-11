@@ -100,7 +100,7 @@ const buildMemberId = (organizationId: string, userId: string): string =>
 // Better Auth may create the local test email before this seed runs, using its
 // own generated user id. Resolve by either unique identity so the seed
 // converges on that row instead of colliding on the email constraint.
-const ensureUserExists = async ({
+export const ensureUserExists = async ({
   id,
   name,
   email,
