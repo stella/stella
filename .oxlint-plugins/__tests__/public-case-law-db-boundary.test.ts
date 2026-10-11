@@ -5,8 +5,11 @@ import ts from "typescript";
 
 import {
   isCaseLawPublicReadModule,
+  moduleHasRuntimeSchemaRead,
+  moduleHasRuntimeSchemaReadFromSources,
   UNREDACTED_VIEW_ALLOWED_MODULES,
 } from "../public-case-law-db-boundary.ts";
+import { PUBLIC_LAW_MIXED_MODULES } from "../public-law-decision-surface-modules.ts";
 import { canonicalModuleId } from "../utils.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
 
@@ -23,9 +26,14 @@ const RELATION_SQL = [
   "export const allowed = sql`select 1 from legislation_search_documents`;",
 ].join("\n");
 
-const lint = async (source: string, sourcePath = "apps/api/src/lib/read.ts") =>
+const lint = async (
+  source: string,
+  sourcePath = "apps/api/src/lib/read.ts",
+  ruleOptions?: unknown,
+) =>
   await lintSingleRule("public-case-law-db-boundary", `${source}\n`, {
     sourcePath,
+    ...(ruleOptions === undefined ? {} : { ruleOptions }),
   });
 
 describe.serial("public-law relation scan", () => {
@@ -39,6 +47,149 @@ describe.serial("public-law relation scan", () => {
     expect(
       await lint(source, "apps/api/src/handlers/case-law/read.ts"),
     ).toHaveLength(1);
+  });
+
+  test("decision-surface mode checks base reads without private relation checks", async () => {
+    const options = { scope: "decision-surface" };
+    const directSchema = [
+      'import { caseLawDecisions as decisions } from "@/api/db/schema/case-law";',
+      "void decisions;",
+    ].join("\n");
+    expect(
+      await lint(
+        directSchema,
+        "apps/api/src/handlers/chat/chat-prompt.ts",
+        options,
+      ),
+    ).toHaveLength(1);
+
+    const rawBaseRead = [
+      'import { sql } from "drizzle-orm";',
+      "export const query = sql`select id from case_law_decisions`;",
+    ].join("\n");
+    expect(
+      await lint(
+        rawBaseRead,
+        "apps/api/src/handlers/chat/chat-prompt.ts",
+        options,
+      ),
+    ).toHaveLength(1);
+
+    const rawUnredactedRead = [
+      'import { sql } from "drizzle-orm";',
+      "export const query = sql`select id from case_law_unredacted_decisions`;",
+    ].join("\n");
+    expect(
+      await lint(
+        rawUnredactedRead,
+        "apps/api/src/handlers/chat/chat-prompt.ts",
+        options,
+      ),
+    ).toHaveLength(1);
+
+    const privateRelation = [
+      'import { sql } from "drizzle-orm";',
+      "export const query = sql`select id from users`;",
+    ].join("\n");
+    expect(
+      await lint(
+        privateRelation,
+        "apps/api/src/handlers/chat/chat-prompt.ts",
+        options,
+      ),
+    ).toEqual([]);
+  });
+
+  test("decision-surface config covers each mixed public-law module", () => {
+    const configPath = path.resolve(import.meta.dir, "../../oxlint.config.ts");
+    const configSource = readFileSync(configPath, "utf-8");
+    const config = ts.createSourceFile(
+      configPath,
+      configSource,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    let mixedModuleListReferences = 0;
+    let decisionSurfaceOption = false;
+    const visit = (node: ts.Node) => {
+      if (ts.isPropertyAssignment(node)) {
+        const name = node.name.getText(config);
+        if (
+          (name === "files" || name === "excludeFiles") &&
+          ts.isArrayLiteralExpression(node.initializer) &&
+          node.initializer.elements.some(
+            (element) =>
+              ts.isSpreadElement(element) &&
+              ts.isIdentifier(element.expression) &&
+              element.expression.text === "PUBLIC_LAW_MIXED_MODULES",
+          )
+        ) {
+          mixedModuleListReferences += 1;
+        }
+        if (
+          name === "scope" &&
+          ts.isStringLiteral(node.initializer) &&
+          node.initializer.text === "decision-surface"
+        ) {
+          decisionSurfaceOption = true;
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(config);
+
+    expect(PUBLIC_LAW_MIXED_MODULES).toHaveLength(7);
+    expect(new Set(PUBLIC_LAW_MIXED_MODULES).size).toBe(
+      PUBLIC_LAW_MIXED_MODULES.length,
+    );
+    expect(mixedModuleListReferences).toBe(2);
+    expect(decisionSurfaceOption).toBe(true);
+  });
+
+  test("helper classification follows runtime decision schema exports", () => {
+    expect(
+      moduleHasRuntimeSchemaRead(
+        ".oxlint-plugins/__fixtures__/case-law-base-helper.fixture",
+      ),
+    ).toBe(true);
+    expect(
+      moduleHasRuntimeSchemaRead(
+        ".oxlint-plugins/__fixtures__/case-law-namespace-helper.fixture",
+      ),
+    ).toBe(true);
+    expect(
+      moduleHasRuntimeSchemaRead(
+        ".oxlint-plugins/__fixtures__/case-law-reexport-helper.fixture",
+      ),
+    ).toBe(true);
+    expect(
+      moduleHasRuntimeSchemaRead(
+        ".oxlint-plugins/__fixtures__/case-law-type-helper.fixture",
+      ),
+    ).toBe(false);
+    const cycleModules = new Map([
+      [
+        "fixture/cycle-a",
+        [
+          'export { cycleHelper } from "./cycle-b";',
+          'import { caseLawDecisions as decisionTable } from "@/api/db/schema/case-law";',
+        ].join("\n"),
+      ],
+      ["fixture/cycle-b", 'export { helper } from "./cycle-a";'],
+    ]);
+    expect(
+      moduleHasRuntimeSchemaReadFromSources(
+        "fixture/cycle-a",
+        (moduleId) => {
+          const source = cycleModules.get(moduleId);
+          return source === undefined
+            ? null
+            : { filename: `${moduleId}.ts`, source };
+        },
+        new Set(),
+      ),
+    ).toBe(true);
   });
 
   test("public case-law SQL cannot name the base decision table", async () => {

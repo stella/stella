@@ -47,7 +47,7 @@ import {
   supplementAnchorPrefix,
 } from "@/api/lib/case-law/decision-absorption";
 import { normalizePublicDecisionLanguage } from "@/api/lib/case-law/decision-language";
-import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions";
+import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
 import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
 
 /** Module-private, so the subject type is constructible only below. */

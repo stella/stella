@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 
-import { caseLawDecisions } from "@/api/db/schema";
+import type { caseLawDecisions } from "@/api/db/schema";
 import { groupableSql } from "@/api/lib/groupable-sql";
 
 /**
@@ -25,12 +25,21 @@ export const SITEMAP_ALL_BUCKET = "all";
 // requested `bucket` stays bound. `groupableSql` enforces the inlining at
 // construction, and the refresh test executes the grouped read against
 // Postgres.
-export const decisionYearSql = groupableSql(
-  sql<string>`COALESCE(to_char(${caseLawDecisions.decisionDate}, 'YYYY'), ${sql.raw(`'${SITEMAP_UNDATED_YEAR}'`)})`,
-);
-export const decisionMonthSql = groupableSql(
-  sql<string>`COALESCE(to_char(${caseLawDecisions.decisionDate}, 'MM'), ${sql.raw(`'${SITEMAP_UNDATED_MONTH}'`)})`,
-);
-export const decisionBucketSql = groupableSql(
-  sql<string>`lpad(mod(hashtext(${caseLawDecisions.id}::text)::bigint + 2147483648, ${sql.raw(String(SITEMAP_SHARD_BUCKET_COUNT))})::text, ${sql.raw(String(SITEMAP_SHARD_BUCKET_WIDTH))}, '0')`,
-);
+export const decisionYearSqlFor = (
+  table: Pick<typeof caseLawDecisions, "decisionDate">,
+) =>
+  groupableSql(
+    sql<string>`COALESCE(to_char(${table.decisionDate}, 'YYYY'), ${sql.raw(`'${SITEMAP_UNDATED_YEAR}'`)})`,
+  );
+export const decisionMonthSqlFor = (
+  table: Pick<typeof caseLawDecisions, "decisionDate">,
+) =>
+  groupableSql(
+    sql<string>`COALESCE(to_char(${table.decisionDate}, 'MM'), ${sql.raw(`'${SITEMAP_UNDATED_MONTH}'`)})`,
+  );
+export const decisionBucketSqlFor = (
+  table: Pick<typeof caseLawDecisions, "id">,
+) =>
+  groupableSql(
+    sql<string>`lpad(mod(hashtext(${table.id}::text)::bigint + 2147483648, ${sql.raw(String(SITEMAP_SHARD_BUCKET_COUNT))})::text, ${sql.raw(String(SITEMAP_SHARD_BUCKET_WIDTH))}, '0')`,
+  );

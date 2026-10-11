@@ -29,8 +29,8 @@ import {
 } from "./analysis-failure";
 import {
   analysisSentinel,
-  claimableAnalysisRow,
-  storedAnalysisFingerprint,
+  claimableAnalysisRowFor,
+  storedAnalysisFingerprintFor,
   type AnalysisStoreKey,
 } from "./stored-analysis";
 
@@ -248,7 +248,7 @@ const swapAnalysisRow = async (
   const [updated] = await handle
     .update(caseLawDecisions)
     .set({ analysis: sentinel })
-    .where(claimableAnalysisRow({ decisionId, observed }))
+    .where(claimableAnalysisRowFor(caseLawDecisions, { decisionId, observed }))
     .returning({ id: caseLawDecisions.id });
   return updated === undefined ? null : sentinel;
 };
@@ -341,7 +341,7 @@ export const createDbAnalysisStore = (
       .where(
         and(
           eq(caseLawDecisions.id, decisionId),
-          sql`${storedAnalysisFingerprint} = ${analysis.inputFingerprint}`,
+          sql`${storedAnalysisFingerprintFor(caseLawDecisions)} = ${analysis.inputFingerprint}`,
           sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${contentHash}`,
           ...(expected === undefined
             ? []

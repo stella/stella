@@ -15,7 +15,7 @@ import type { SQL } from "drizzle-orm";
 
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
-import { caseLawDecisions } from "@/api/db/schema";
+import type { caseLawDecisions } from "@/api/db/schema";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
 import {
   EMPTY_CORPUS_CONTENT_HASHES,
@@ -48,7 +48,7 @@ type DecisionPayloadColumns = Pick<
  * rather than a document, and `{}` is the placeholder an adapter without
  * a parser emits, so neither counts.
  */
-const pgPayloadCarriesDocumentFor = ({
+export const pgPayloadCarriesDocumentFor = ({
   fulltext,
   documentAst,
   sections,
@@ -61,9 +61,6 @@ const pgPayloadCarriesDocumentFor = ({
   or ${jsonbArrayLength(sections)} > 0
 )`;
 
-export const pgPayloadCarriesDocument =
-  pgPayloadCarriesDocumentFor(caseLawDecisions);
-
 /** Whether either storage location holds a readable decision document. */
 export const rowHoldsDocumentFor = (
   table: DecisionPayloadColumns,
@@ -74,8 +71,6 @@ export const rowHoldsDocumentFor = (
     and ${notInArray(table.contentHash, [...EMPTY_CORPUS_CONTENT_HASHES])}
   )
 )`;
-
-export const rowHoldsDocument = rowHoldsDocumentFor(caseLawDecisions);
 
 /**
  * Public reads cannot inspect the normalized corpus key. Confirm the readable
@@ -93,9 +88,6 @@ export const publicRowHoldsDocumentFor = (
     and ${notInArray(table.contentHash, [...EMPTY_CORPUS_CONTENT_HASHES])}
   )
 )`;
-
-export const publicRowHoldsDocument =
-  publicRowHoldsDocumentFor(caseLawDecisions);
 
 /**
  * The same question as `pgPayloadCarriesDocument`, asked of a payload

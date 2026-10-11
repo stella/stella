@@ -18,7 +18,7 @@ import {
 } from "@stll/legal-ast/analysis";
 import { Temporal } from "@stll/time";
 
-import { caseLawDecisions } from "@/api/db/schema";
+import type { caseLawDecisions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 
@@ -96,7 +96,9 @@ export type AnalysisStoreKey = {
   fingerprint: AnalysisInputFingerprint;
 };
 
-export const storedAnalysisFingerprint = sql`${caseLawDecisions.analysis}->>'inputFingerprint'`;
+export const storedAnalysisFingerprintFor = (
+  table: Pick<typeof caseLawDecisions, "analysis">,
+) => sql`${table.analysis}->>'inputFingerprint'`;
 
 /**
  * The row a run may take: the one that still holds exactly the value this
@@ -109,28 +111,31 @@ export const storedAnalysisFingerprint = sql`${caseLawDecisions.analysis}->>'inp
  * read. `jsonb` equality is structural, so the key order the driver
  * returned the value in does not matter.
  */
-export const claimableAnalysisRow = ({
-  decisionId,
-  observed,
-}: {
-  decisionId: SafeId<"caseLawDecision">;
-  /**
-   * The `analysis` value this request read from the row, as read: it may
-   * be a shape the parser rejected, which is one of the reasons to claim.
-   */
-  observed: unknown;
-}) =>
+export const claimableAnalysisRowFor = (
+  table: Pick<typeof caseLawDecisions, "id" | "analysis">,
+  {
+    decisionId,
+    observed,
+  }: {
+    decisionId: SafeId<"caseLawDecision">;
+    /**
+     * The `analysis` value this request read from the row, as read: it may
+     * be a shape the parser rejected, which is one of the reasons to claim.
+     */
+    observed: unknown;
+  },
+) =>
   and(
-    eq(caseLawDecisions.id, decisionId),
+    eq(table.id, decisionId),
     observed === null || observed === undefined
       ? // The driver reads a JSON `null` in the column as JavaScript
         // `null` too, and SQL `IS NULL` does not see that one.
         or(
-          isNull(caseLawDecisions.analysis),
-          sql`jsonb_typeof(${caseLawDecisions.analysis}) = 'null'`,
+          isNull(table.analysis),
+          sql`jsonb_typeof(${table.analysis}) = 'null'`,
         )
       : // `::text::jsonb`, never a bare `::jsonb`: the driver would encode
         // the already-serialised string once more and the comparison would
         // never match.
-        sql`${caseLawDecisions.analysis} = ${JSON.stringify(observed)}::text::jsonb`,
+        sql`${table.analysis} = ${JSON.stringify(observed)}::text::jsonb`,
   );

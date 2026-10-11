@@ -25,7 +25,7 @@ import {
   readPublicDecisionLanguageAlternatesQuery,
 } from "@/api/lib/case-law/language-alternates";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
-import { rowHoldsDocument } from "@/api/lib/case-law/stored-payload";
+import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import {
   corpusKeys,
   EMPTY_CORPUS_CONTENT_HASHES,
@@ -236,7 +236,7 @@ if (!databaseUrl || !runPostgresTests) {
           .set(valuesFor(keys))
           .where(eq(caseLawDecisions.id, id));
         const [full] = await db
-          .select({ hasDocument: rowHoldsDocument })
+          .select({ hasDocument: rowHoldsDocumentFor(caseLawDecisions) })
           .from(caseLawDecisions)
           .where(eq(caseLawDecisions.id, id));
         const [publicRow] = await caseLawPublicReadDb(
@@ -247,7 +247,7 @@ if (!databaseUrl || !runPostgresTests) {
       }
     });
 
-    test("detail alternates prefer a document while collection alternates retain ID order", async () => {
+    test("detail alternates prefer documents and both reads exclude withdrawn versions", async () => {
       const ids = [
         await insertDecision(null),
         await insertDecision("Document"),
@@ -255,6 +255,7 @@ if (!databaseUrl || !runPostgresTests) {
       const lowId = ids.at(0) ?? panic("Expected the first duplicate");
       const highId = ids.at(1) ?? panic("Expected the second duplicate");
       const englishId = await insertDecision("English document");
+      const withdrawnId = await insertDecision("Withdrawn document");
       const languageGroupKey = `detail-alternates-${suffix}`;
       await db
         .update(caseLawDecisions)
@@ -268,22 +269,38 @@ if (!databaseUrl || !runPostgresTests) {
         .update(caseLawDecisions)
         .set({ languageGroupKey, language: "en" })
         .where(eq(caseLawDecisions.id, englishId));
+      await db
+        .update(caseLawDecisions)
+        .set({
+          languageGroupKey,
+          language: "fr",
+          redactedAt: new Date("2026-10-11T12:00:00.000Z"),
+        })
+        .where(eq(caseLawDecisions.id, withdrawnId));
       const collection = await caseLawPublicReadDb(
         async (tx) =>
           await readPublicDecisionLanguageAlternatesQuery(tx, [
             languageGroupKey,
           ]),
       );
-      expect(collection.find((row) => row.language === "cs")?.id).toBe(lowId);
+      expect(collection.map(({ id, language }) => ({ id, language }))).toEqual([
+        { id: lowId, language: "cs" },
+        { id: englishId, language: "en" },
+      ]);
       const detail = await caseLawPublicReadDb(
         async (tx) =>
           await listPublicDecisionLanguageAlternates({ tx, languageGroupKey }),
       );
-      expect(detail.find((row) => row.language === "cs")).toMatchObject({
-        id: highId,
-        hasDocument: true,
-      });
-      expect(detail).toHaveLength(2);
+      expect(
+        detail.map(({ id, language, hasDocument }) => ({
+          id,
+          language,
+          hasDocument,
+        })),
+      ).toEqual([
+        { id: highId, language: "cs", hasDocument: true },
+        { id: englishId, language: "en", hasDocument: true },
+      ]);
     });
   });
 }

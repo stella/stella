@@ -11,7 +11,7 @@ import {
 } from "@/api/db/schema";
 import { createStatuteCitationCountRepair } from "@/api/handlers/case-law/provisions/citation-count-repair";
 import { createSafeId } from "@/api/lib/branded-types";
-import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
+import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions-sql";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 

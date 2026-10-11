@@ -20,7 +20,7 @@ import {
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveLocalFtsConfig } from "@/api/lib/case-law/local-case-law-config";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
+import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
@@ -135,7 +135,7 @@ export const recordSearchBackfillFailure = async (
             eq(caseLawDecisions.id, decisionId),
             sql`${caseLawDecisions.updatedAt} = ${sourceUpdatedAt}::timestamptz`,
             redistributableCaseLawSource,
-            publishedCaseLawDecision,
+            publishedCaseLawDecisionFor(caseLawDecisions),
           ),
         )
         .for("update", { of: caseLawDecisions })
@@ -335,7 +335,10 @@ export const indexDecision = async (
         .select({ id: caseLawDecisions.id })
         .from(caseLawDecisions)
         .where(
-          and(eq(caseLawDecisions.id, decision.id), publishedCaseLawDecision),
+          and(
+            eq(caseLawDecisions.id, decision.id),
+            publishedCaseLawDecisionFor(caseLawDecisions),
+          ),
         )
         .for("share")
         .limit(1);

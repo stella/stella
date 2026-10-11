@@ -10,7 +10,7 @@ import type {
 } from "@/api/lib/case-law-public-read-db";
 import { normalizePublicDecisionLanguage } from "@/api/lib/case-law/decision-language";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
-import { publicRowHoldsDocument } from "@/api/lib/case-law/stored-payload";
+import { publicRowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import { LIMITS } from "@/api/lib/limits";
 import {
   definePublicLawSharedQuery,
@@ -257,10 +257,12 @@ export const listPublicDecisionLanguageAlternates = async ({
       court: publishedCaseLawDecisions.court,
       decisionDate: publishedCaseLawDecisions.decisionDate,
       language: publishedCaseLawDecisions.language,
-      hasDocument: publicRowHoldsDocument.as("has_document"),
+      hasDocument: publicRowHoldsDocumentFor(publishedCaseLawDecisions).as(
+        "has_document",
+      ),
       languageRank: sql<number>`row_number() over (
         partition by ${normalizedLanguageSql}
-        order by ${publicRowHoldsDocument} desc, ${publishedCaseLawDecisions.id}
+        order by ${publicRowHoldsDocumentFor(publishedCaseLawDecisions)} desc, ${publishedCaseLawDecisions.id}
       )`.as("language_rank"),
     })
     .from(publishedCaseLawDecisions)

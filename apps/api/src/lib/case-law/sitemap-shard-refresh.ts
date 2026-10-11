@@ -16,12 +16,12 @@ import {
   setSharedStatementTimeout,
 } from "@/api/db/shared-pool-timeouts";
 import { envBase } from "@/api/env-base";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
+import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import {
-  decisionBucketSql,
-  decisionMonthSql,
-  decisionYearSql,
+  decisionBucketSqlFor,
+  decisionMonthSqlFor,
+  decisionYearSqlFor,
   SITEMAP_ALL_BUCKET,
 } from "@/api/lib/case-law/sitemap-shard-sql";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -173,11 +173,11 @@ export const sitemapRefreshPageSql = ({
       ${caseLawDecisions.sourceId} AS source_id,
       ${caseLawDecisions.updatedAt} AS updated_at,
       ${caseLawDecisions.id} AS id,
-      ${decisionYearSql} AS year,
-      ${decisionMonthSql} AS month,
-      ${decisionBucketSql} AS bucket
+      ${decisionYearSqlFor(caseLawDecisions)} AS year,
+      ${decisionMonthSqlFor(caseLawDecisions)} AS month,
+      ${decisionBucketSqlFor(caseLawDecisions)} AS bucket
     FROM ${caseLawDecisions}
-    WHERE ${publishedCaseLawDecision}
+    WHERE ${publishedCaseLawDecisionFor(caseLawDecisions)}
       AND ${caseLawDecisions.country} = ${country}
       AND ${afterCursorSql(phase, cursor)}
     ORDER BY

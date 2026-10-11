@@ -17,7 +17,7 @@ import type {
 import {
   publishedCaseLawDecisionFor,
   publishedCaseLawDecisionSqlFor,
-} from "@/api/lib/case-law/published-decisions";
+} from "@/api/lib/case-law/published-decisions-sql";
 import { corpusIndexReadContract } from "@/api/lib/legal-search/corpus-index-read-contract";
 import {
   PARTIAL_OBSERVATION_FIELD,

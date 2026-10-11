@@ -979,9 +979,9 @@
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row-update.ts",
-    "fingerprint": "c053c6081dba8dc6c9eb93df702a4f7c0c2c889102c377969f8f397dd7e11070",
+    "fingerprint": "60da0167e1e8232dbf418d1f799ee1496e32daf142bcd7c577eb70d889b160ae",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/pipeline/decision-row-update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "Pass the relation explicitly to the stored-payload owner in the existing ingestion row lock query; acquisition mode, target and count are unchanged."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/source-totals.ts",
@@ -3085,15 +3085,15 @@
   },
   {
     "file": "apps/api/src/lib/legal-search/case-law-search-index.ts",
-    "fingerprint": "3de6e946f7b5dc514713fa89fb6b81fcbe7e6ec38224d0a18c31660e33e58e28",
+    "fingerprint": "106aff206b13512ed7c0ece6e1a13fad32c4aef3e80a2e64179b24639147d456",
     "count": 1,
-    "reason": "Use the publication owner in the existing projection write lock query; acquisition mode, target and count are unchanged."
+    "reason": "Pass the relation explicitly to the publication owner in the existing projection write lock query; acquisition mode, target and count are unchanged."
   },
   {
     "file": "apps/api/src/lib/legal-search/case-law-search-index.ts",
-    "fingerprint": "da84e36e8f19191e781cb3407790bd5225f3a90d0231a0445bbeb8100c09deba",
+    "fingerprint": "1216b0764623f970d8df9576ba0eb2695f2b571851d9aa52bc7f115e9f817f2b",
     "count": 1,
-    "reason": "Use the publication owner in the existing projection retry lock query; acquisition mode, target and count are unchanged."
+    "reason": "Pass the relation explicitly to the publication owner in the existing projection retry lock query; acquisition mode, target and count are unchanged."
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",

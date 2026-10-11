@@ -22,7 +22,7 @@ import type {
 } from "@/api/lib/case-law-public-read-db";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import {
-  decisionBucketSql,
+  decisionBucketSqlFor,
   SITEMAP_ALL_BUCKET,
   SITEMAP_UNDATED_MONTH,
   SITEMAP_UNDATED_YEAR,
@@ -126,7 +126,9 @@ export const getShardConditions = ({
   }
 
   if (bucket !== SITEMAP_ALL_BUCKET) {
-    conditions.push(sql`${decisionBucketSql} = ${bucket}`);
+    conditions.push(
+      sql`${decisionBucketSqlFor(publishedCaseLawDecisions)} = ${bucket}`,
+    );
   }
 
   return conditions;

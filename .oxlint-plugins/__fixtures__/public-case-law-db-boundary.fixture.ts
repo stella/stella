@@ -28,6 +28,9 @@ import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-dec
 // expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
 import { LIMITS } from "@/api/lib/limits";
 
+// oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: imported helper binds the base decision schema
+import { helper as baseDecisionHelper } from "./case-law-base-helper.fixture";
+
 declare const tx: {
   execute: (query: unknown) => unknown;
   query: {
@@ -42,6 +45,7 @@ declare const sql: ((
 declare const getRelationName: () => keyof typeof tx.query;
 declare const relationFragment: unknown;
 declare const dynamicSql: string;
+void baseDecisionHelper;
 
 // oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: private relation query crosses the boundary
 export const privateQuery = tx.query.caseLawMatterLinks.findMany();

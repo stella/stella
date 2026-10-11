@@ -22,9 +22,9 @@ import type {
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import {
-  publishedCaseLawDecision,
+  publishedCaseLawDecisionFor,
   publishedCaseLawDecisionSqlFor,
-} from "@/api/lib/case-law/published-decisions";
+} from "@/api/lib/case-law/published-decisions-sql";
 import {
   markListingOnly,
   partialObservationFromMetadata,
@@ -261,7 +261,7 @@ test(
       .where(
         and(
           eq(caseLawDecisions.country, SHAPE_COUNTRY),
-          publishedCaseLawDecision,
+          publishedCaseLawDecisionFor(caseLawDecisions),
         ),
       );
     expect(columnForm.map((row) => row.id).toSorted()).toEqual(expected);

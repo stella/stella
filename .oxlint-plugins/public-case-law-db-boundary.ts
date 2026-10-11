@@ -41,7 +41,9 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 
 import { PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT } from "../apps/api/src/lib/public-law-relations.ts";
 import {
@@ -101,6 +103,137 @@ const SCHEMA_MODULE = "apps/api/src/db/schema";
 const isSchemaModule = (moduleId: string | null): boolean =>
   moduleId === SCHEMA_MODULE ||
   (moduleId !== null && moduleId.startsWith(`${SCHEMA_MODULE}/`));
+
+const REPOSITORY_ROOT = fileURLToPath(new URL("../", import.meta.url));
+const helperReadsBaseDecisionCache = new Map<string, boolean>();
+
+const moduleSourcePath = (moduleId: string): string | null => {
+  for (const extension of [".ts", ".tsx"] as const) {
+    const candidate = path.join(REPOSITORY_ROOT, `${moduleId}${extension}`);
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+};
+
+type LocalModuleSource = { readonly filename: string; readonly source: string };
+type LocalModuleSourceReader = (moduleId: string) => LocalModuleSource | null;
+
+const readLocalModuleSource: LocalModuleSourceReader = (moduleId) => {
+  const filename = moduleSourcePath(moduleId);
+  return filename === null
+    ? null
+    : { filename, source: readFileSync(filename, "utf-8") };
+};
+
+export const moduleHasRuntimeSchemaReadFromSources = (
+  moduleId: string,
+  {
+    readSource,
+    seen = new Set<string>(),
+  }: {
+    readonly readSource: LocalModuleSourceReader;
+    readonly seen?: Set<string>;
+  },
+): boolean => {
+  if (seen.has(moduleId)) {
+    return false;
+  }
+  seen.add(moduleId);
+  const sourceFile = readSource(moduleId);
+  if (sourceFile === null) {
+    return false;
+  }
+  const file = ts.createSourceFile(
+    sourceFile.filename,
+    sourceFile.source,
+    ts.ScriptTarget.Latest,
+    true,
+    sourceFile.filename.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  for (const statement of file.statements) {
+    if (ts.isImportDeclaration(statement)) {
+      const clause = statement.importClause;
+      if (
+        clause === undefined ||
+        clause.isTypeOnly ||
+        !ts.isStringLiteral(statement.moduleSpecifier)
+      ) {
+        continue;
+      }
+      const dependency = canonicalModuleId(
+        statement.moduleSpecifier.text,
+        moduleId,
+      );
+      if (isSchemaModule(dependency)) {
+        const bindings = clause.namedBindings;
+        if (
+          clause.name !== undefined ||
+          bindings === undefined ||
+          ts.isNamespaceImport(bindings) ||
+          (ts.isNamedImports(bindings) &&
+            bindings.elements.some(
+              (element) =>
+                !element.isTypeOnly &&
+                (element.propertyName?.text ?? element.name.text) ===
+                  "caseLawDecisions",
+            ))
+        ) {
+          return true;
+        }
+      }
+      continue;
+    }
+    if (
+      !ts.isExportDeclaration(statement) ||
+      statement.isTypeOnly ||
+      statement.moduleSpecifier === undefined ||
+      !ts.isStringLiteral(statement.moduleSpecifier)
+    ) {
+      continue;
+    }
+    const dependency = canonicalModuleId(
+      statement.moduleSpecifier.text,
+      moduleId,
+    );
+    if (isSchemaModule(dependency)) {
+      const clause = statement.exportClause;
+      if (
+        clause === undefined ||
+        ts.isNamespaceExport(clause) ||
+        (ts.isNamedExports(clause) &&
+          clause.elements.some(
+            (element) =>
+              !element.isTypeOnly &&
+              (element.propertyName?.text ?? element.name.text) ===
+                "caseLawDecisions",
+          ))
+      ) {
+        return true;
+      }
+      continue;
+    }
+    if (
+      moduleHasRuntimeSchemaReadFromSources(dependency, { readSource, seen })
+    ) {
+      return true;
+    }
+  }
+  return false;
+};
+
+export const moduleHasRuntimeSchemaRead = (moduleId: string): boolean => {
+  const cached = helperReadsBaseDecisionCache.get(moduleId);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const readsBaseDecision = moduleHasRuntimeSchemaReadFromSources(moduleId, {
+    readSource: readLocalModuleSource,
+  });
+  helperReadsBaseDecisionCache.set(moduleId, readsBaseDecision);
+  return readsBaseDecision;
+};
 
 /**
  * Where a producer takes SQL text: an argument position, or named properties
@@ -1164,6 +1297,15 @@ export default eslintCompatPlugin({
     "public-case-law-db-boundary": {
       meta: {
         type: "problem",
+        schema: [
+          {
+            type: "object",
+            properties: {
+              scope: { enum: ["public-law", "decision-surface"] },
+            },
+            additionalProperties: false,
+          },
+        ],
         messages: {
           privateCaseLawImport:
             "Public case-law data files may only import the explicit public-law table allowlist from '@/api/db/schema'.",
@@ -1185,9 +1327,12 @@ export default eslintCompatPlugin({
             "Public case-law reads must use the published decisions view, not the base decision table.",
           unredactedView:
             "The unredacted decisions view is reserved for the public subject lookup.",
+          baseCaseLawHelper:
+            "Public case-law reads cannot import a runtime helper that reads the base decision schema.",
         },
       },
       createOnce(context) {
+        let decisionSurfaceOnly = false;
         // The case-law data boundary: schema imports, `tx.query` and private
         // SQL text are checked here.
         let inBoundary = false;
@@ -1245,6 +1390,9 @@ export default eslintCompatPlugin({
               report(reportNode(reference.token.owner), "unredactedView");
               return;
             }
+            if (decisionSurfaceOnly) {
+              return;
+            }
             if (
               !isGrantedRelation(reference.schema, reference.relation, ctes)
             ) {
@@ -1256,6 +1404,9 @@ export default eslintCompatPlugin({
                   : `${reference.schema}.${reference.relation}`,
               );
             }
+            return;
+          }
+          if (decisionSurfaceOnly) {
             return;
           }
           const part = reference.part;
@@ -1270,6 +1421,12 @@ export default eslintCompatPlugin({
 
         return {
           before() {
+            const configuredOptions = context.options.at(0);
+            decisionSurfaceOnly =
+              typeof configuredOptions === "object" &&
+              configuredOptions !== null &&
+              "scope" in configuredOptions &&
+              configuredOptions.scope === "decision-surface";
             importerRepoPath = repoRelativeFilename(context);
             inBoundary = false;
             readsPublicLaw = false;
@@ -1281,8 +1438,9 @@ export default eslintCompatPlugin({
           Program(node) {
             const importedModules = programImports(node, importerRepoPath);
             inBoundary =
-              isFileIn(context, [`${PUBLIC_READ_DB_MODULE}.ts`]) ||
-              importedModules.has(PUBLIC_READ_DB_MODULE);
+              !decisionSurfaceOnly &&
+              (isFileIn(context, [`${PUBLIC_READ_DB_MODULE}.ts`]) ||
+                importedModules.has(PUBLIC_READ_DB_MODULE));
             readsPublicLaw =
               isFileIn(
                 context,
@@ -1291,16 +1449,49 @@ export default eslintCompatPlugin({
               PUBLIC_LAW_BOUNDARY_OWNERS.some((owner) =>
                 importedModules.has(owner),
               );
-            inCaseLawReadBoundary = isCaseLawPublicReadModule(
-              importerRepoPath,
-              importedModules,
-            );
+            inCaseLawReadBoundary =
+              decisionSurfaceOnly ||
+              isCaseLawPublicReadModule(importerRepoPath, importedModules);
+            if (decisionSurfaceOnly) {
+              readsPublicLaw = true;
+            }
           },
           ImportDeclaration(node) {
-            if (
-              !inCaseLawReadBoundary ||
-              !isSchemaModule(declaredModule(node, importerRepoPath))
-            ) {
+            if (!inCaseLawReadBoundary) {
+              return;
+            }
+            const importedModule = declaredModule(node, importerRepoPath);
+            if (node.importKind !== "type" && !isSchemaModule(importedModule)) {
+              const hasRuntimeBindings = node.specifiers.some(
+                (specifier) =>
+                  isAstNode(specifier) && specifier.importKind !== "type",
+              );
+              if (
+                !hasRuntimeBindings &&
+                node.specifiers.length === 0 &&
+                importedModule !== null &&
+                moduleHasRuntimeSchemaRead(importedModule)
+              ) {
+                context.report({
+                  node,
+                  messageId: "baseCaseLawHelper",
+                });
+              }
+              for (const specifier of node.specifiers) {
+                if (
+                  isAstNode(specifier) &&
+                  specifier.importKind !== "type" &&
+                  importedModule !== null &&
+                  moduleHasRuntimeSchemaRead(importedModule)
+                ) {
+                  context.report({
+                    node: specifier,
+                    messageId: "baseCaseLawHelper",
+                  });
+                }
+              }
+            }
+            if (!isSchemaModule(importedModule)) {
               return;
             }
             for (const specifier of node.specifiers) {
@@ -1320,6 +1511,9 @@ export default eslintCompatPlugin({
                   node: specifier,
                   messageId: "unredactedView",
                 });
+                continue;
+              }
+              if (decisionSurfaceOnly) {
                 continue;
               }
               if (
@@ -1407,8 +1601,10 @@ export default eslintCompatPlugin({
               }
             }
             for (const [root, composition] of compositions) {
-              for (const issue of composition.issues) {
-                report(issue.node, issue.messageId);
+              if (!decisionSurfaceOnly) {
+                for (const issue of composition.issues) {
+                  report(issue.node, issue.messageId);
+                }
               }
               if (inlined.has(root)) {
                 continue;
@@ -1425,7 +1621,9 @@ export default eslintCompatPlugin({
                 for (const [name, token] of ctes) {
                   if (SCHEMA_TABLE_NAMES.has(name)) {
                     visible.delete(name);
-                    report(reportNode(token.owner), "shadowingCte", name);
+                    if (!decisionSurfaceOnly) {
+                      report(reportNode(token.owner), "shadowingCte", name);
+                    }
                   }
                 }
                 for (const reference of references) {
