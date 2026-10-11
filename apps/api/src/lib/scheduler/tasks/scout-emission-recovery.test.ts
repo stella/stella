@@ -1,11 +1,4 @@
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  test,
-} from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
@@ -41,6 +34,7 @@ import { emitInfoSoudHearingSignals } from "@/api/lib/scouts/infosoud-hearings";
 import type { HearingRecord } from "@/api/lib/scouts/infosoud-hearings.logic";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
@@ -53,13 +47,12 @@ const scoped = createRootScopedDb(
   { organizationId, userId, workspaceIds: [workspaceId] },
   asTestRaw<RlsDatabase<Transaction>>(db),
 );
-const previousSignalsFlag = env.FEATURE_SIGNALS;
-const previousScoutFlag = env.FEATURE_INBOX_DOCUMENT_SCOUTS;
+const testState = createTestState({ file: import.meta.path, config: env });
 const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
 
-beforeAll(async () => {
-  env.FEATURE_SIGNALS = true;
-  env.FEATURE_INBOX_DOCUMENT_SCOUTS = true;
+testState.beforeAll(async () => {
+  testState.setConfig("FEATURE_SIGNALS", true);
+  testState.setConfig("FEATURE_INBOX_DOCUMENT_SCOUTS", true);
   await db.insert(organization).values({
     id: organizationId,
     name: "Scout recovery",
@@ -101,8 +94,6 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
-  env.FEATURE_SIGNALS = previousSignalsFlag;
-  env.FEATURE_INBOX_DOCUMENT_SCOUTS = previousScoutFlag;
   restoreMode();
   await db.delete(organization).where(eq(organization.id, organizationId));
   await db.delete(user).where(eq(user.id, userId));
@@ -398,13 +389,13 @@ describe("deferred scout emission recovery", () => {
     await seedReview();
     await seedHearing();
     await enrol();
-    env.FEATURE_SIGNALS = false;
+    testState.setConfig("FEATURE_SIGNALS", false);
     try {
       await runRecovery();
       expect(await pending()).toHaveLength(2);
       expect(await emitted()).toEqual([]);
     } finally {
-      env.FEATURE_SIGNALS = true;
+      testState.setConfig("FEATURE_SIGNALS", true);
     }
     await runRecovery();
     expect(await pending()).toEqual([]);

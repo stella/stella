@@ -6,19 +6,20 @@ import { RUNTIME_MODE } from "@stll/runtime-mode";
 import { env } from "@/api/env";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { createScopedDbMock, toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 import { admittedEntityWindowUnionSource } from "./signal-window-rows";
 
 const organizationId = mintAuthProviderId<"organization">();
 const userId = mintAuthProviderId<"user">();
+const testState = createTestState({ file: import.meta.path, config: env });
 
 describe("signal window source admission", () => {
   for (const enabled of [false, true]) {
     for (const granted of [false, true]) {
       test(`deployment ${enabled} and caller grant ${granted}`, async () => {
-        const previous = env.FEATURE_SIGNALS;
-        env.FEATURE_SIGNALS = enabled;
+        testState.setConfig("FEATURE_SIGNALS", enabled);
         const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
         try {
           const { scopedDb } = createScopedDbMock(
@@ -47,15 +48,13 @@ describe("signal window source admission", () => {
             });
           }
         } finally {
-          env.FEATURE_SIGNALS = previous;
           restore();
         }
       });
     }
   }
   test("another caller's grant cannot authorize the window source", async () => {
-    const previous = env.FEATURE_SIGNALS;
-    env.FEATURE_SIGNALS = true;
+    testState.setConfig("FEATURE_SIGNALS", true);
     const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
     try {
       const { scopedDb } = createScopedDbMock(
@@ -88,7 +87,6 @@ describe("signal window source admission", () => {
         });
       }
     } finally {
-      env.FEATURE_SIGNALS = previous;
       restore();
     }
   });
