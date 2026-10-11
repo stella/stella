@@ -80,8 +80,7 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
               id: workspaces.id,
               organizationId: workspaces.organizationId,
             })
-            .from(workspaces)
-            .limit(1),
+            .from(workspaces),
         where: eq(workspaces.status, "active"),
       })
     ).rows;
@@ -97,8 +96,7 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
         select: (lockTx) =>
           lockTx
             .select({ id: entities.id, workspaceId: entities.workspaceId })
-            .from(entities)
-            .limit(1),
+            .from(entities),
         where: and(
           eq(entities.currentVersionId, entityVersionId),
           eq(entities.readOnly, false),

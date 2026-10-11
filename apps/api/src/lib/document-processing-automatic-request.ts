@@ -77,8 +77,7 @@ const lockCurrentAutomaticOcrSource = async ({
               eq(fields.entityVersionId, entityVersionId),
               eq(fields.workspaceId, workspaceId),
             ),
-          )
-          .limit(1),
+          ),
       where: and(
         eq(entities.currentVersionId, entityVersionId),
         eq(entities.readOnly, false),

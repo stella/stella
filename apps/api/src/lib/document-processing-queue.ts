@@ -269,8 +269,7 @@ const lockRunWorkspace = async (
           organizationId: workspaces.organizationId,
           status: workspaces.status,
         })
-        .from(workspaces)
-        .limit(1),
+        .from(workspaces),
   });
   return workspace.rows.at(0) ?? null;
 };
@@ -627,8 +626,7 @@ export const persistOcrProjection = async ({
                     eq(fields.workspaceId, run.workspaceId),
                     eq(fields.entityVersionId, entityVersions.id),
                   ),
-                )
-                .limit(1),
+                ),
           })
         ).rows
       : [];
@@ -966,8 +964,7 @@ export const processDocumentProcessingRun = async (
               workspaceId: entities.workspaceId,
               currentVersionId: entities.currentVersionId,
             })
-            .from(entities)
-            .limit(1),
+            .from(entities),
       })
     ).rows;
     if (entityRows.at(0)?.currentVersionId !== runContext.entityVersionId) {
@@ -1352,8 +1349,7 @@ export const markRunFailed = async ({
                 attemptCount: documentProcessingRuns.attemptCount,
                 requestSource: documentProcessingRuns.requestSource,
               })
-              .from(documentProcessingRuns)
-              .limit(1),
+              .from(documentProcessingRuns),
           where: and(
             eq(documentProcessingRuns.status, "running"),
             eq(documentProcessingRuns.claimedBy, claimToken),

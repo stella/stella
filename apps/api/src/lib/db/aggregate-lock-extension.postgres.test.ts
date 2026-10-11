@@ -170,11 +170,6 @@ if (!databaseUrl || !enabled) {
                 expect(acquisition.status).toBe(
                   extra === "other-only" ? "missing" : "locked",
                 );
-                if (acquisition.status === "busy") {
-                  panic(
-                    "Blocking declared-row acquisition must not reach the unrelated held row",
-                  );
-                }
                 expect(acquisition.rows.map((row) => row.id)).toEqual(
                   extra === "other-only" ? [] : [organizationId],
                 );
@@ -234,11 +229,6 @@ if (!databaseUrl || !enabled) {
                   ) ?? panic("Nonempty workspace disjunction must exist"),
               });
               expect(acquisition.status).toBe("missing");
-              if (acquisition.status === "busy") {
-                panic(
-                  "Wrong-tenant acquisition must not reach the physically matching held workspace",
-                );
-              }
               expect(acquisition.rows).toEqual([]);
               // Empty results still conservatively retain the declared workspace rank.
               expect(
