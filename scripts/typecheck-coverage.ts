@@ -980,6 +980,8 @@ const main = (): void => {
     "--filter=@stll/api",
   ]);
 
+  run(["bun", "packages/scripts/src/api-typecheck-partition.ts", "--resolved"]);
+
   const projects = typecheckProjects();
   assertOxcProjectDiscovery(projects);
   assertIncrementalProjectConfigs(projects);

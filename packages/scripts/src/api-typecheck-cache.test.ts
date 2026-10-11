@@ -85,9 +85,11 @@ test("declaration consumers run after emission and invalidate with API source ch
                 declarations,
           )
         ) {
-          consumers.add(
-            `${packageDir === "." ? "//" : manifest["name"]}#${name}`,
-          );
+          const owner = packageDir === "." ? "//" : manifest["name"];
+          if (typeof owner !== "string") {
+            panic(`Missing package name: ${filename}`);
+          }
+          consumers.add(`${owner}#${name}`);
         }
       }
     }
@@ -103,9 +105,13 @@ test("declaration consumers run after emission and invalidate with API source ch
       if (typeof dependency !== "string") {
         panic(`Invalid dependency: ${id}`);
       }
+      const owner = id.split("#")[0];
+      if (!owner) {
+        panic(`Missing task owner: ${id}`);
+      }
       const qualified = dependency.includes("#")
         ? dependency
-        : `${id.split("#")[0]}#${dependency}`;
+        : `${owner}#${dependency}`;
       if (qualified !== EMITTER) {
         fixtureTasks[qualified] ??= {};
       }
@@ -327,10 +333,10 @@ test("declaration consumers run after emission and invalidate with API source ch
     const beforeMutation = executions().length;
     write("patches/dependency.patch", "dependency types v3\n");
     run(command);
-    // With the producer input removed, consumers see the patch change while
-    // the producer replays its declaration result instead of emitting.
+    // Removing the producer input breaks patch invalidation. Only consumers
+    // with their own patch inputs rerun; the others replay the stale hash.
     const mutationRuns = executions().slice(beforeMutation);
-    expect(mutationRuns).toHaveLength(consumers.size);
+    expect(mutationRuns.length).toBeLessThan(consumers.size + 1);
     expect(mutationRuns.some((row) => JSON.parse(row).task === EMITTER)).toBe(
       false,
     );

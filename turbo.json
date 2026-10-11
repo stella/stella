@@ -772,11 +772,11 @@
         "$TURBO_ROOT$/packages/**",
         "$TURBO_ROOT$/types/**",
         "package.json",
-        "tsconfig*.json"
+        "tsconfig*.json",
+        "$TURBO_ROOT$/packages/scripts/src/api-typecheck-declarations.ts"
       ],
       "outputs": [
-        ".cache/typecheck-declarations/**",
-        ".cache/tsbuildinfo.declarations.json"
+        ".cache/typecheck-declarations/**"
       ]
     },
     "@stll/api#typecheck:tests": {

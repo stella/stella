@@ -107,7 +107,7 @@ test("missing and overlapping project roots fail ownership validation", () => {
   ).toEqual(["src/a.test.ts"]);
 });
 
-test("the API declaration command emits through the native compiler CLI", () => {
+test("the API declaration command emits its public surface", () => {
   const api = JSON.parse(
     readFileSync(path.join(REPO_ROOT, "apps/api/package.json"), "utf-8"),
   );

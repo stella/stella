@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { apiTestPartitionIssues } from "./api-typecheck-partition";
 import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
 
 type ProjectMembership = {
@@ -66,7 +67,9 @@ export const validateApiTypecheckProjects = (rootDir: string) => {
       continue;
     }
     const configPath = path.join(apiDir, project);
-    const read = ts.readConfigFile(configPath, ts.sys.readFile);
+    const read = ts.readConfigFile(configPath, (filename) =>
+      ts.sys.readFile(filename),
+    );
     const parsed = ts.parseJsonConfigFileContent(
       read.config,
       ts.sys,
@@ -91,5 +94,8 @@ export const validateApiTypecheckProjects = (rootDir: string) => {
     ["**/node_modules/**", "**/.cache/**", "**/.turbo/**", "**/dist/**"],
   );
   issues.push(...typecheckOwnershipIssues(sources, memberships));
+  if (existsSync(path.join(apiDir, "tsconfig.declarations.json"))) {
+    issues.push(...apiTestPartitionIssues(rootDir));
+  }
   return issues;
 };

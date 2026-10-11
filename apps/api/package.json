@@ -73,7 +73,7 @@
     "document-processing-worker": "bun src/scripts/document-processing-worker.ts",
     "dev:errors": "tail -F .dev-logs/errors.jsonl",
     "generate:capability-runtime": "bun scripts/generate-capability-runtime.ts",
-    "typecheck:declarations": "bun ../../packages/scripts/src/tsc-native.ts --project tsconfig.declarations.json",
+    "typecheck:declarations": "bun ../../packages/scripts/src/api-typecheck-declarations.ts tsconfig.declarations.json",
     "typecheck:src": "bun check --no-pretty --all --project=tsconfig.src.json",
     "typecheck:tests": "bun check --no-pretty --all --project=tsconfig.tests.json",
     "typecheck:scripts": "bun check --no-pretty --all --project=tsconfig.scripts.json",
