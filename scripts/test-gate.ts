@@ -1190,6 +1190,47 @@ const matrixEntries = (value: unknown, label: string): MatrixLeg[] => {
   return value;
 };
 
+const conditionExpression = (condition: string): string =>
+  condition
+    .trim()
+    .replace(/^\$\{\{\s*/u, "")
+    .replace(/\}\}$/u, "")
+    .trim();
+
+const LITERAL_INCLUDE_CHOICE =
+  /^fromJSON\(\s*(?<condition>[\s\S]+?)&&\s*'(?<whenTrue>(?:[^']|'')*)'\s*\|\|\s*'(?<whenFalse>(?:[^']|'')*)'\s*\)$/u;
+
+const literalMatrixEntries = (literal: string): MatrixLeg[] | undefined => {
+  try {
+    const value: unknown = JSON.parse(literal.replaceAll("''", "'"));
+    return Array.isArray(value) && value.every(isRecord) ? value : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+// `fromJSON(cond && '<json>' || '<json>')` selects one of two literal include
+// lists at runtime. Only entries present in both lists run whatever the
+// condition evaluates to, so only those legs can credit a gating command.
+const conditionalLiteralInclude = (
+  include: string,
+): MatrixLeg[] | undefined => {
+  const match = LITERAL_INCLUDE_CHOICE.exec(conditionExpression(include));
+  const whenTrue = literalMatrixEntries(match?.groups?.["whenTrue"] ?? "");
+  const whenFalse = literalMatrixEntries(match?.groups?.["whenFalse"] ?? "");
+  if (whenTrue === undefined || whenFalse === undefined) {
+    return undefined;
+  }
+  const common = whenTrue.filter((entry) =>
+    whenFalse.some(
+      (candidate) =>
+        Object.keys(candidate).length === Object.keys(entry).length &&
+        matrixEntryMatches(candidate, entry),
+    ),
+  );
+  return common.length > 0 ? common : undefined;
+};
+
 const matrixLegs = (job: Record<string, unknown>): readonly MatrixLeg[] => {
   const strategy = workflowRecord(job["strategy"]);
   const matrix = strategy?.["matrix"];
@@ -1211,15 +1252,22 @@ const matrixLegs = (job: Record<string, unknown>): readonly MatrixLeg[] => {
     }
     axes.push([name, values]);
   }
+  const conditionalInclude =
+    typeof matrix["include"] === "string"
+      ? conditionalLiteralInclude(matrix["include"])
+      : undefined;
   if (
-    (matrix["include"] !== undefined && !Array.isArray(matrix["include"])) ||
+    (matrix["include"] !== undefined &&
+      !Array.isArray(matrix["include"]) &&
+      conditionalInclude === undefined) ||
     (matrix["exclude"] !== undefined && !Array.isArray(matrix["exclude"]))
   ) {
     return [{}];
   }
   const originals = cartesianMatrix(axes);
   const excludes = matrixEntries(matrix["exclude"], "matrix.exclude");
-  const included = matrixEntries(matrix["include"], "matrix.include");
+  const included =
+    conditionalInclude ?? matrixEntries(matrix["include"], "matrix.include");
   let legs = originals.filter(
     (leg) => !excludes.some((entry) => matrixEntryMatches(leg, entry)),
   );
@@ -1252,13 +1300,6 @@ const hasDynamicMatrix = (job: Record<string, unknown>): boolean => {
       name !== "exclude" && name !== "include" && !Array.isArray(value),
   );
 };
-
-const conditionExpression = (condition: string): string =>
-  condition
-    .trim()
-    .replace(/^\$\{\{\s*/u, "")
-    .replace(/\}\}$/u, "")
-    .trim();
 
 type GatingContextOptions = {
   readonly eventName: (typeof GATING_EVENTS)[number];

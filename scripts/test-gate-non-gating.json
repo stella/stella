@@ -145,6 +145,11 @@
     "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
   },
   {
+    "file": "apps/web/e2e/specs/generated-visual-polish.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+  },
+  {
     "file": "apps/web/e2e/specs/generated-visual.spec.ts",
     "owningWorkflow": ".github/workflows/ci.yml",
     "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"

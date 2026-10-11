@@ -724,6 +724,44 @@ jobs:
     ).toBeUndefined();
   });
 
+  check("credits only include legs shared by both literal alternatives", () => {
+    const workflow = (os: string, include: string) =>
+      Bun.YAML.parse(`
+jobs:
+  package-check:
+    strategy:
+      matrix:
+        include: >-
+          ${include}
+    steps:
+      - if: matrix.os == '${os}'
+        run: bun --filter @stll/orphan test
+  ci-result:
+    needs: [package-check]
+`);
+    const choice = `\${{ fromJSON(needs.plan.outputs.depth == 'thin'
+          && '[{"os":"macos"}]'
+          || '[{"os":"macos"},{"os":"windows"}]') }}`;
+    const failure = (os: string, include: string) =>
+      packageTestExecutionFailure({
+        gatingJobs: gatingWorkflowJobs(workflow(os, include)),
+        packageDirectory: "packages/orphan",
+        packageName: "@stll/orphan",
+        shardedPackages: new Set<string>(),
+      });
+    expect(failure("macos", choice)).toBeUndefined();
+    expect(failure("windows", choice)).toBe(
+      "job condition: no gating job executes @stll/orphan test",
+    );
+    const planned = `\${{ fromJSON(needs.plan.outputs.platforms) }}`;
+    expect(failure("macos", planned)).toBe(
+      "job condition: no gating job executes @stll/orphan test",
+    );
+    expect(analyzeGatingWorkflow(workflow("macos", planned)).findings).toEqual([
+      "job condition: package-check/step-1 has unresolved context matrix.os",
+    ]);
+  });
+
   check("counts step outcomes on the successful runtime path", () => {
     const workflow = Bun.YAML.parse(`
 jobs:
