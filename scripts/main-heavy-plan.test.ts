@@ -468,8 +468,9 @@ test("a thin-depth skip on any gated code job violates merge-group coverage", ()
     if (!job) {
       panic(`Missing mutation job: ${name}`);
     }
-    const condition = (job.if ?? "true").replace(/^\$\{\{|\}\}$/gu, "");
-    job.if = `\${{ needs.ci-plan.outputs.queue_depth != 'thin' && (${condition}) }}`;
+    const condition = job.if?.trim() ?? "true";
+    const body = /^\$\{\{([\s\S]*)\}\}$/u.exec(condition)?.[1] ?? condition;
+    job.if = `\${{ needs.ci-plan.outputs.queue_depth != 'thin' && (${body}) }}`;
     expect(() => assertMergeGroupCoverage(mutated), name).toThrow(
       `${name}/thin`,
     );
