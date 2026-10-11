@@ -533,6 +533,8 @@ export const GENERATORS = [
     inputs: [
       "apps/web/src/i18n/glossary.json",
       "packages/scripts/src/glossary-gen.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+      ".oxfmtrc.json",
     ],
     write: ["bun", "packages/scripts/src/glossary-gen.ts", "apps/web/src/i18n"],
     check: [

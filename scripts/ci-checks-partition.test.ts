@@ -803,9 +803,18 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
             absorbedBaseline,
           )["timeout-minutes"]
         : 0;
-    expect(timeout).toBe(
-      v.parse(v.number(), originalTimeout) + absorbedTimeout,
-    );
+    const baselineBudget =
+      v.parse(v.number(), originalTimeout) + absorbedTimeout;
+    // Full version-change parity measured 15m in addition to the existing
+    // 25m repository-check budget; later merge bases retain that allowance.
+    const expectedBudget =
+      partitionIds.at(index) === "ci-checks-rest" &&
+      steps.some(
+        ({ name }) => name === "Typecheck parity (all checked projects)",
+      )
+        ? Math.max(baselineBudget, 40)
+        : baselineBudget;
+    expect(timeout).toBe(expectedBudget);
     expect(setupSteps(steps)).toEqual(originalSetup);
     const installIndex = steps.findIndex(
       ({ name }) => name === "Install dependencies",
@@ -1600,7 +1609,10 @@ test("dependent CI guards require the producing step's successful outcome", () =
 });
 
 type ConditionContextOptions = {
-  outcomes: Record<string, { outcome: string }>;
+  outcomes: Record<
+    string,
+    { outcome: string; outputs?: Record<string, string> }
+  >;
   scopes: Record<string, string>;
   event: string;
   cancelled: boolean;
@@ -1637,7 +1649,10 @@ type SimulateLegOptions = {
 };
 const simulateRestLeg = ({ failures, lockfileScope }: SimulateLegOptions) => {
   const { steps } = v.parse(headJobSchema, jobs["ci-checks-rest"]);
-  const outcomes: Record<string, { outcome: string }> = {};
+  const outcomes: Record<
+    string,
+    { outcome: string; outputs?: Record<string, string> }
+  > = {};
   const results: Record<string, string> = {};
   let failed = false;
   const scopes = v.parse(
@@ -1673,7 +1688,12 @@ const simulateRestLeg = ({ failures, lockfileScope }: SimulateLegOptions) => {
     }
     results[step.name] = outcome;
     if (id !== undefined) {
-      outcomes[id] = { outcome };
+      outcomes[id] = {
+        outcome,
+        ...(id === "typecheck_parity_gate"
+          ? { outputs: { required: outcome === "success" ? "true" : "" } }
+          : {}),
+      };
     }
     if (outcome === "failure") {
       failed = true;
@@ -1681,6 +1701,18 @@ const simulateRestLeg = ({ failures, lockfileScope }: SimulateLegOptions) => {
   }
   return results;
 };
+
+test("a failed parity selection keeps the seeded-error probe while skipping the full comparison", () => {
+  const results = simulateRestLeg({
+    failures: ["Select typecheck parity coverage"],
+    lockfileScope: "false",
+  });
+  expect(results["Select typecheck parity coverage"]).toBe("failure");
+  expect(results["Typecheck parity (all checked projects)"]).toBe("skipped");
+  expect(results["Record typecheck parity report"]).toBe("skipped");
+  expect(results["Upload typecheck parity report"]).toBe("skipped");
+  expect(results["Typecheck command rejects errors"]).toBe("success");
+});
 
 test("an unrelated pre-install failure still runs planned safety, installation and later guards", () => {
   for (const lockfileScope of ["true", "false"] as const) {
