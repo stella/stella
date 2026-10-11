@@ -813,9 +813,12 @@ class WriteSourceResolver {
         visit(node.left, currentScope);
         return;
       }
-      // A catch clause can swallow the precondition failure, so only the
-      // finally block of a try with a catch still counts.
-      if (ts.isTryStatement(node) && node.catchClause !== undefined) {
+      // A catch can swallow a failure, and a finally can override a return.
+      // Only propagation from the finally block survives either boundary.
+      if (
+        ts.isTryStatement(node) &&
+        (node.catchClause !== undefined || node.finallyBlock !== undefined)
+      ) {
         if (node.finallyBlock !== undefined) {
           visit(node.finallyBlock, currentScope);
         }

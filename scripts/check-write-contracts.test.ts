@@ -333,6 +333,7 @@ describe("write contracts cover the mutation route graph", () => {
       `for (const item of body.items) { const conflict = ${call}; if (conflict) return conflict; }`,
       `try { body.check(); } catch { return ${call}; }`,
       `try { const conflict = ${call}; if (conflict) return conflict; } catch {}`,
+      `try { const conflict = ${call}; if (conflict) return conflict; } finally { return {}; }`,
     ]) {
       const sources = fixture(config);
       sources.set(
