@@ -68,7 +68,6 @@
     "src/handlers/legislation/search-index.ts",
     "src/handlers/visual-sandbox/browser/presentation-css.ts",
     "src/handlers/visual-sandbox/document.ts",
-    "src/handlers/visual-sandbox/generated/runtime.js.txt",
     "src/handlers/visual-sandbox/resource-origin.ts",
     "src/handlers/visual-sandbox/sanitize.ts",
     "src/handlers/visual-sandbox/srcdoc.ts",
