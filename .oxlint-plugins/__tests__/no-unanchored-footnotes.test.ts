@@ -20,3 +20,17 @@ test("source parsers cannot read the note collection without paragraph anchors",
     1, 2, 3, 4, 5, 6, 7, 8,
   ]);
 });
+
+test("typed paragraph line readers preserve anchors without reading package notes", async () => {
+  expect(
+    await lintSingleRule(
+      "no-unanchored-footnotes",
+      [
+        'import { createParagraphLineReader } from "./document-footnotes";',
+        "const readLines = createParagraphLineReader(document, project);",
+        "const lines = readLines(paragraph);",
+        "const dynamic = document.package[key];",
+      ].join("\n"),
+    ),
+  ).toEqual([]);
+});

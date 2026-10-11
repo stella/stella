@@ -56,7 +56,7 @@ import {
  * letter rather than a failure, so the mapping is explicit and a code page
  * outside it is reported instead of guessed at.
  */
-export const RTF_CODE_PAGES = [
+const RTF_CODE_PAGES = [
   [1250, "windows-1250"],
   [1251, "windows-1251"],
   [1252, "windows-1252"],
@@ -67,7 +67,7 @@ export const RTF_CODE_PAGES = [
 ] as const;
 
 /** The labels above, as the decoder's own vocabulary. */
-export type RtfCodePage = (typeof RTF_CODE_PAGES)[number][0];
+type RtfCodePage = (typeof RTF_CODE_PAGES)[number][0];
 type CodePageLabel = (typeof RTF_CODE_PAGES)[number][1];
 
 const CODE_PAGE_LABELS = new Map<number, CodePageLabel>(RTF_CODE_PAGES);

@@ -58,12 +58,7 @@ import {
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
 } from "@stll/legal-ast/czech-document-roles";
 // parser-output-unchanged: imports the document AST from its package owner
-import type {
-  Block,
-  DocumentAst,
-  Inline,
-  ParagraphRole,
-} from "@stll/legal-ast/document-ast";
+import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
@@ -532,137 +527,172 @@ const makeAnchorId = (prefix: string, index: number): string =>
  *   2. Výrok / ruling zone (between "takto:" and "Odůvodnění:")
  *   3. Odůvodnění zone (after "Odůvodnění:")
  */
-export const classifyUsDocumentLines = (
-  lines: readonly ParsedLine[],
-): Block[] => {
-  let blockCounter = 0;
-  const makeBlockId = (): string => {
-    blockCounter += 1;
-    return `b${blockCounter}`;
-  };
-  const blocks: Block[] = [];
-  let blockIndex = 0;
+type UsClassificationState = {
+  blockCounter: number;
+  blockIndex: number;
+  inRuling: boolean;
+  inOduvodneni: boolean;
+  inDissent: boolean;
+  consumedLines: Set<ParsedLine>;
+};
 
-  let inRuling = false;
-  let inOduvodneni = false;
-  let inDissent = false;
-  const bodyRole = (): ParagraphRole | undefined =>
-    inDissent ? "dissent" : undefined;
-  const consumedLines = new Set<ParsedLine>();
+const makeUsBlockId = (state: UsClassificationState): string => {
+  state.blockCounter += 1;
+  return `b${state.blockCounter}`;
+};
 
-  const classifyBodyLine = (
-    body: BodyDocumentLine<ParsedLineData>,
-    i: number,
-  ): void => {
-    const line = body.value;
-    // Skip empty sentinel lines (paragraph breaks)
-    if (!line.plainText) {
-      return;
-    }
+type ClassifyUsBodyLineOptions = {
+  body: BodyDocumentLine<ParsedLineData>;
+  i: number;
+  lines: readonly ParsedLine[];
+  blocks: Block[];
+  state: UsClassificationState;
+};
 
-    // Peel the emblem rather than dropping the line it is glued to, then skip
-    // what turns out to have been decoration and nothing else.
-    const inlines = stripFurniturePrefix(line.inlines, EMBLEM_PREFIX_RE);
-    const plainText = inlinesToPlainText(inlines).trim();
-    if (!plainText || DECORATIVE_LINE_RE.test(plainText)) {
-      return;
-    }
+const classifyUsBodyLine = ({
+  body,
+  i,
+  lines,
+  blocks,
+  state,
+}: ClassifyUsBodyLineOptions): void => {
+  const line = body.value;
+  // Skip empty sentinel lines (paragraph breaks)
+  if (!line.plainText) {
+    return;
+  }
 
-    // Decision title: NALEZ, USNESENI, etc.
-    const collapsed = collapseSpaces(plainText);
-    if (TITLE_RE.test(plainText) || TITLE_RE.test(collapsed)) {
-      blockIndex += 1;
-      blocks.push({
-        id: makeBlockId(),
-        anchorId: makeAnchorId("h", blockIndex),
-        type: "heading",
-        level: 1,
-        role: "decision-title",
-        inlines,
-        plainText,
-      });
-      return;
-    }
+  // Peel the emblem rather than dropping the line it is glued to, then skip
+  // what turns out to have been decoration and nothing else.
+  const inlines = stripFurniturePrefix(line.inlines, EMBLEM_PREFIX_RE);
+  const plainText = inlinesToPlainText(inlines).trim();
+  if (!plainText || DECORATIVE_LINE_RE.test(plainText)) {
+    return;
+  }
 
-    // "takto:" separator
-    if (TAKTO_RE.test(plainText) || TAKTO_RE.test(collapsed)) {
-      inRuling = true;
-      blockIndex += 1;
-      blocks.push({
-        id: makeBlockId(),
-        anchorId: makeAnchorId("h", blockIndex),
-        type: "heading",
-        level: 2,
-        role: "section-heading",
-        inlines: textInline("takto:"),
-        plainText: "takto:",
-      });
-      return;
-    }
+  // Decision title: NALEZ, USNESENI, etc.
+  const collapsed = collapseSpaces(plainText);
+  if (TITLE_RE.test(plainText) || TITLE_RE.test(collapsed)) {
+    state.blockIndex += 1;
+    blocks.push({
+      id: makeUsBlockId(state),
+      anchorId: makeAnchorId("h", state.blockIndex),
+      type: "heading",
+      level: 1,
+      role: "decision-title",
+      inlines,
+      plainText,
+    });
+    return;
+  }
 
-    // "Odůvodnění:" separator
-    if (ODUVODNENI_RE.test(plainText) || ODUVODNENI_RE.test(collapsed)) {
-      inRuling = false;
-      inOduvodneni = true;
-      blockIndex += 1;
-      blocks.push({
-        id: makeBlockId(),
-        anchorId: makeAnchorId("h", blockIndex),
-        type: "heading",
-        level: 2,
-        role: "section-heading",
-        inlines: textInline("Odůvodnění:"),
-        plainText: "Odůvodnění:",
-      });
-      return;
-    }
+  // "takto:" separator
+  if (TAKTO_RE.test(plainText) || TAKTO_RE.test(collapsed)) {
+    state.inRuling = true;
+    state.blockIndex += 1;
+    blocks.push({
+      id: makeUsBlockId(state),
+      anchorId: makeAnchorId("h", state.blockIndex),
+      type: "heading",
+      level: 2,
+      role: "section-heading",
+      inlines: textInline("takto:"),
+      plainText: "takto:",
+    });
+    return;
+  }
 
-    // A separate opinion runs to the end of the document, so the heading
-    // opens a zone rather than a section.
-    // The court numbers some of these headings. The number is stripped for
-    // the match alone: the heading block below carries the line the court
-    // printed, because what the heading is does not change what it says.
-    const numberPrefix = NUMBERED_PARA_RE.exec(plainText)?.[0] ?? "";
-    const unnumberedText = plainText.slice(numberPrefix.length);
-    const unnumberedInlines = stripInlinePrefix(inlines, numberPrefix.length);
+  // "Odůvodnění:" separator
+  if (ODUVODNENI_RE.test(plainText) || ODUVODNENI_RE.test(collapsed)) {
+    state.inRuling = false;
+    state.inOduvodneni = true;
+    state.blockIndex += 1;
+    blocks.push({
+      id: makeUsBlockId(state),
+      anchorId: makeAnchorId("h", state.blockIndex),
+      type: "heading",
+      level: 2,
+      role: "section-heading",
+      inlines: textInline("Odůvodnění:"),
+      plainText: "Odůvodnění:",
+    });
+    return;
+  }
+
+  // A separate opinion runs to the end of the document, so the heading
+  // opens a zone rather than a section.
+  // The court numbers some of these headings. The number is stripped for
+  // the match alone: the heading block below carries the line the court
+  // printed, because what the heading is does not change what it says.
+  const numberPrefix = NUMBERED_PARA_RE.exec(plainText)?.[0] ?? "";
+  const unnumberedText = plainText.slice(numberPrefix.length);
+  const unnumberedInlines = stripInlinePrefix(inlines, numberPrefix.length);
+  if (
+    unnumberedText.length <= DISSENT_HEADING_MAX_CHARS &&
+    DISSENT_HEADING_RE.test(unnumberedText)
+  ) {
+    state.inDissent = true;
+    state.blockIndex += 1;
+    blocks.push({
+      id: makeUsBlockId(state),
+      anchorId: makeAnchorId("h", state.blockIndex),
+      type: "heading",
+      level: 2,
+      role: "section-heading",
+      inlines,
+      plainText,
+    });
+    return;
+  }
+
+  // Closing: "V Brně dne ..."
+  if (CLOSING_RE.test(plainText)) {
+    state.blockIndex += 1;
+    blocks.push({
+      id: makeUsBlockId(state),
+      anchorId: makeAnchorId("p", state.blockIndex),
+      type: "paragraph",
+      role: "closing",
+      inlines,
+      plainText,
+    });
+    return;
+  }
+
+  // Signature: judge title line
+  if (SIGNATURE_RE.test(plainText) && plainText.length < 80) {
+    state.blockIndex += 1;
+    blocks.push({
+      id: makeUsBlockId(state),
+      anchorId: makeAnchorId("p", state.blockIndex),
+      type: "paragraph",
+      role: "signature",
+      inlines,
+      plainText,
+    });
+    return;
+  }
+
+  // Judge name line (short, academic title prefix;
+  // only at the tail of the document)
+  if (
+    JUDGE_NAME_RE.test(plainText) &&
+    plainText.length < 80 &&
+    !state.inRuling
+  ) {
+    // Look ahead: if the next non-empty line is a
+    // signature or another judge name, treat as signature.
+    const nextNonEmpty = findNextNonEmpty(lines, i + 1);
     if (
-      unnumberedText.length <= DISSENT_HEADING_MAX_CHARS &&
-      DISSENT_HEADING_RE.test(unnumberedText)
+      !nextNonEmpty ||
+      SIGNATURE_RE.test(nextNonEmpty.value.plainText) ||
+      JUDGE_NAME_RE.test(nextNonEmpty.value.plainText) ||
+      CLOSING_RE.test(nextNonEmpty.value.plainText)
     ) {
-      inDissent = true;
-      blockIndex += 1;
+      state.blockIndex += 1;
       blocks.push({
-        id: makeBlockId(),
-        anchorId: makeAnchorId("h", blockIndex),
-        type: "heading",
-        level: 2,
-        role: "section-heading",
-        inlines,
-        plainText,
-      });
-      return;
-    }
-
-    // Closing: "V Brně dne ..."
-    if (CLOSING_RE.test(plainText)) {
-      blockIndex += 1;
-      blocks.push({
-        id: makeBlockId(),
-        anchorId: makeAnchorId("p", blockIndex),
-        type: "paragraph",
-        role: "closing",
-        inlines,
-        plainText,
-      });
-      return;
-    }
-
-    // Signature: judge title line
-    if (SIGNATURE_RE.test(plainText) && plainText.length < 80) {
-      blockIndex += 1;
-      blocks.push({
-        id: makeBlockId(),
-        anchorId: makeAnchorId("p", blockIndex),
+        id: makeUsBlockId(state),
+        anchorId: makeAnchorId("p", state.blockIndex),
         type: "paragraph",
         role: "signature",
         inlines,
@@ -670,153 +700,142 @@ export const classifyUsDocumentLines = (
       });
       return;
     }
+  }
 
-    // Judge name line (short, academic title prefix;
-    // only at the tail of the document)
-    if (JUDGE_NAME_RE.test(plainText) && plainText.length < 80 && !inRuling) {
-      // Look ahead: if the next non-empty line is a
-      // signature or another judge name, treat as signature.
-      const nextNonEmpty = findNextNonEmpty(lines, i + 1);
-      if (
-        !nextNonEmpty ||
-        SIGNATURE_RE.test(nextNonEmpty.value.plainText) ||
-        JUDGE_NAME_RE.test(nextNonEmpty.value.plainText) ||
-        CLOSING_RE.test(nextNonEmpty.value.plainText)
-      ) {
-        blockIndex += 1;
-        blocks.push({
-          id: makeBlockId(),
-          anchorId: makeAnchorId("p", blockIndex),
-          type: "paragraph",
-          role: "signature",
-          inlines,
-          plainText,
-        });
-        return;
-      }
-    }
+  // Ruling items (in the ruling zone): detected by Roman
+  // numeral prefix, emitted as holding paragraphs with
+  // the full original text preserved.
+  if (state.inRuling && !state.inOduvodneni) {
+    state.blockIndex += 1;
+    blocks.push({
+      id: makeUsBlockId(state),
+      anchorId: makeAnchorId("p", state.blockIndex),
+      type: "paragraph",
+      role: "holding",
+      inlines,
+      plainText,
+    });
+    return;
+  }
 
-    // Ruling items (in the ruling zone): detected by Roman
-    // numeral prefix, emitted as holding paragraphs with
-    // the full original text preserved.
-    if (inRuling && !inOduvodneni) {
-      blockIndex += 1;
+  // Section headings in Odůvodnění: standalone Roman
+  // numeral possibly followed by a title on the next line
+  if (state.inOduvodneni) {
+    const titledRoman = caseLawSectionHeading(plainText);
+    if (titledRoman !== null) {
+      state.blockIndex += 1;
       blocks.push({
-        id: makeBlockId(),
-        anchorId: makeAnchorId("p", blockIndex),
-        type: "paragraph",
-        role: "holding",
+        id: makeUsBlockId(state),
+        anchorId: makeAnchorId("h", state.blockIndex),
+        type: "heading",
+        level: titledRoman.level,
         inlines,
         plainText,
       });
       return;
     }
 
-    // Section headings in Odůvodnění: standalone Roman
-    // numeral possibly followed by a title on the next line
-    if (inOduvodneni) {
-      const titledRoman = caseLawSectionHeading(plainText);
-      if (titledRoman !== null) {
-        blockIndex += 1;
+    const romanMatch = SECTION_ROMAN_RE.exec(plainText);
+    if (romanMatch) {
+      // Check if next non-empty line is a short title
+      const nextNonEmpty = findNextNonEmpty(lines, i + 1);
+      if (
+        nextNonEmpty &&
+        nextNonEmpty.value.plainText.length < 120 &&
+        !NUMBERED_PARA_RE.test(nextNonEmpty.value.plainText) &&
+        !SECTION_ROMAN_RE.test(nextNonEmpty.value.plainText) &&
+        !CLOSING_RE.test(nextNonEmpty.value.plainText)
+      ) {
+        // Combine Roman numeral + title line
+        const combinedText = `${romanMatch.groups?.["roman"] ?? ""}. ${nextNonEmpty.value.plainText}`;
+        state.blockIndex += 1;
         blocks.push({
-          id: makeBlockId(),
-          anchorId: makeAnchorId("h", blockIndex),
-          type: "heading",
-          level: titledRoman.level,
-          inlines,
-          plainText,
-        });
-        return;
-      }
-
-      const romanMatch = SECTION_ROMAN_RE.exec(plainText);
-      if (romanMatch) {
-        // Check if next non-empty line is a short title
-        const nextNonEmpty = findNextNonEmpty(lines, i + 1);
-        if (
-          nextNonEmpty &&
-          nextNonEmpty.value.plainText.length < 120 &&
-          !NUMBERED_PARA_RE.test(nextNonEmpty.value.plainText) &&
-          !SECTION_ROMAN_RE.test(nextNonEmpty.value.plainText) &&
-          !CLOSING_RE.test(nextNonEmpty.value.plainText)
-        ) {
-          // Combine Roman numeral + title line
-          const combinedText = `${romanMatch.groups?.["roman"] ?? ""}. ${nextNonEmpty.value.plainText}`;
-          blockIndex += 1;
-          blocks.push({
-            id: makeBlockId(),
-            anchorId: makeAnchorId("h", blockIndex),
-            type: "heading",
-            level: 3,
-            inlines: textInline(combinedText),
-            plainText: combinedText,
-          });
-          // Skip the consumed title line
-          consumedLines.add(nextNonEmpty);
-          return;
-        }
-
-        // Standalone Roman numeral heading
-        const headingText = `${romanMatch[1] ?? ""}.`;
-        blockIndex += 1;
-        blocks.push({
-          id: makeBlockId(),
-          anchorId: makeAnchorId("h", blockIndex),
+          id: makeUsBlockId(state),
+          anchorId: makeAnchorId("h", state.blockIndex),
           type: "heading",
           level: 3,
-          inlines: textInline(headingText),
-          plainText: headingText,
+          inlines: textInline(combinedText),
+          plainText: combinedText,
         });
+        // Skip the consumed title line
+        state.consumedLines.add(nextNonEmpty);
         return;
       }
-    }
 
-    // Numbered paragraphs: "1. ...", "2. ..."
-    if (numberPrefix.length > 0) {
-      const strippedText = unnumberedText.trim();
-      blockIndex += 1;
+      // Standalone Roman numeral heading
+      const headingText = `${romanMatch[1] ?? ""}.`;
+      state.blockIndex += 1;
       blocks.push({
-        id: makeBlockId(),
-        anchorId: makeAnchorId("p", blockIndex),
-        type: "paragraph",
-        role: bodyRole(),
-        inlines:
-          unnumberedInlines.length > 0
-            ? unnumberedInlines
-            : textInline(strippedText),
-        plainText: strippedText,
+        id: makeUsBlockId(state),
+        anchorId: makeAnchorId("h", state.blockIndex),
+        type: "heading",
+        level: 3,
+        inlines: textInline(headingText),
+        plainText: headingText,
       });
       return;
     }
+  }
 
-    // Default: paragraph
-    blockIndex += 1;
+  // Numbered paragraphs: "1. ...", "2. ..."
+  if (numberPrefix.length > 0) {
+    const strippedText = unnumberedText.trim();
+    state.blockIndex += 1;
     blocks.push({
-      id: makeBlockId(),
-      anchorId: makeAnchorId("p", blockIndex),
+      id: makeUsBlockId(state),
+      anchorId: makeAnchorId("p", state.blockIndex),
       type: "paragraph",
-      role: bodyRole(),
-      inlines,
-      plainText,
+      role: state.inDissent ? "dissent" : undefined,
+      inlines:
+        unnumberedInlines.length > 0
+          ? unnumberedInlines
+          : textInline(strippedText),
+      plainText: strippedText,
     });
+    return;
+  }
+
+  // Default: paragraph
+  state.blockIndex += 1;
+  blocks.push({
+    id: makeUsBlockId(state),
+    anchorId: makeAnchorId("p", state.blockIndex),
+    type: "paragraph",
+    role: state.inDissent ? "dissent" : undefined,
+    inlines,
+    plainText,
+  });
+};
+
+export const classifyUsDocumentLines = (
+  lines: readonly ParsedLine[],
+): Block[] => {
+  const blocks: Block[] = [];
+  const state: UsClassificationState = {
+    blockCounter: 0,
+    blockIndex: 0,
+    inRuling: false,
+    inOduvodneni: false,
+    inDissent: false,
+    consumedLines: new Set(),
   };
 
   for (const [i, line] of lines.entries()) {
-    if (consumedLines.has(line)) {
+    if (state.consumedLines.has(line)) {
       continue;
     }
     if (line.kind === "body") {
-      classifyBodyLine(line, i);
+      classifyUsBodyLine({ body: line, i, lines, blocks, state });
       continue;
     }
     const { value, label, noteId } = line.note;
     if (value.plainText.length === 0) {
       continue;
     }
-    blockIndex += 1;
+    state.blockIndex += 1;
     blocks.push({
-      id: makeBlockId(),
-      anchorId: makeAnchorId("p", blockIndex),
+      id: makeUsBlockId(state),
+      anchorId: makeAnchorId("p", state.blockIndex),
       type: "paragraph",
       role: "apparatus",
       note: { type: "footnote", label, noteId },
