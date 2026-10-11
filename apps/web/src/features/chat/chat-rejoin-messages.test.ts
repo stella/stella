@@ -234,6 +234,7 @@ test("equal lifecycle states retain atomic payloads and advanced tools retain ap
             return { ...part, state: "complete", output: { saved: false } };
           case "structured-output":
             return { ...part, data: { saved: false } };
+          case "activity":
           case "audio":
           case "document":
           case "image":
