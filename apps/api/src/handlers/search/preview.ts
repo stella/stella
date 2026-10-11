@@ -17,6 +17,7 @@ export const searchPreviewBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "search_ui" },

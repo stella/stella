@@ -45,6 +45,7 @@ true satisfies UnexpectedArrangementColumn extends never ? true : never;
 
 const readBillingArrangement = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Read the matter's current hourly or flat-fee billing arrangement. The arrangement field is null for the existing hourly rate-table behavior; call rates.arrangement.update to configure it. Issued invoices retain their own snapshots.",
     permissions: { rate: ["read"] },

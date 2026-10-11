@@ -119,6 +119,8 @@ import { computeUsageUnitCost } from "@/api/lib/usage/action-weights";
 import { decideChatUsageLane } from "@/api/lib/usage/lane-routing";
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
 import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
+import { recordWriteContract } from "@/api/lib/write-contract";
+import type { WriteContract } from "@/api/lib/write-contract";
 // Type-only: derive the closed tool-name union from the single MCP registry
 // so `mcp: { type: "tool", name }` typechecks against the real tools. The
 // import is erased at build time and never creates a runtime import cycle
@@ -413,6 +415,7 @@ type ContentDeliveryDisposition = {
 };
 
 export type HandlerConfig = InputSchema &
+  WriteContract &
   CapabilityDescription &
   ContentDeliveryDisposition &
   CapabilityAccess &
@@ -482,12 +485,17 @@ const safeHandlerAccountAccess = new WeakMap<object, AccountAccess>();
 
 const recordSafeHandler = <
   TDefinition extends {
-    config: { accountAccess: AccountAccess };
+    config: WriteContract & {
+      accountAccess: AccountAccess;
+      body?: unknown;
+      description?: string;
+    };
     handler: object;
   },
 >(
   definition: TDefinition,
 ): TDefinition => {
+  recordWriteContract(definition.handler, definition.config);
   safeHandlerAccountAccess.set(
     definition.handler,
     definition.config.accountAccess,
@@ -501,6 +509,7 @@ export const getSafeHandlerAccountAccess = (handler: unknown) =>
     : undefined;
 
 export type SessionHandlerConfig = InputSchema &
+  WriteContract &
   CapabilityDescription &
   ContentDeliveryDisposition &
   CapabilityAccess &
@@ -512,6 +521,8 @@ export type SessionHandlerConfig = InputSchema &
 type ConfigRouteSchema<TConfig extends HandlerConfig> = UnwrapRoute<
   Omit<
     TConfig,
+    | "contract"
+    | "precondition"
     | "permissions"
     | "mcp"
     | "description"
@@ -526,7 +537,13 @@ type SessionConfigRouteSchema<TConfig extends SessionHandlerConfig> =
   UnwrapRoute<
     Omit<
       TConfig,
-      "mcp" | "description" | "access" | "contentDelivery" | "transport"
+      | "contract"
+      | "precondition"
+      | "mcp"
+      | "description"
+      | "access"
+      | "contentDelivery"
+      | "transport"
     >
   >;
 
@@ -1916,6 +1933,7 @@ export const authorizeHandlerRunSize = async <
 
 const createSafeDirectHandler = <
   TConfig extends InputSchema &
+    WriteContract &
     ContentDeliveryDisposition &
     SandboxAccountAccess,
   TContext extends SafeHandlerLogContext,
@@ -2064,6 +2082,7 @@ export type TokenHandlerConfig = Omit<
   InputSchema,
   "body" | "query" | "params"
 > &
+  WriteContract &
   CapabilityDescription &
   ContentDeliveryDisposition &
   CapabilityAccess &
@@ -2078,7 +2097,15 @@ type TokenHandlerContext<
   TConfig extends TokenHandlerConfig = TokenHandlerConfig,
 > = Context<
   UnwrapRoute<
-    Omit<TConfig, "mcp" | "description" | "access" | "contentDelivery">
+    Omit<
+      TConfig,
+      | "contract"
+      | "precondition"
+      | "mcp"
+      | "description"
+      | "access"
+      | "contentDelivery"
+    >
   >
 >;
 
@@ -2100,6 +2127,7 @@ export const createSafeTokenHandler = <
   createSafeDirectHandler(config, handler);
 
 export type PublicHandlerConfig = InputSchema &
+  WriteContract &
   CapabilityDescription &
   ContentDeliveryDisposition &
   CapabilityAccess &
@@ -2112,7 +2140,15 @@ export type PublicHandlerContext<
   TConfig extends PublicHandlerConfig = PublicHandlerConfig,
 > = Context<
   UnwrapRoute<
-    Omit<TConfig, "mcp" | "description" | "access" | "contentDelivery">
+    Omit<
+      TConfig,
+      | "contract"
+      | "precondition"
+      | "mcp"
+      | "description"
+      | "access"
+      | "contentDelivery"
+    >
   >
 >;
 

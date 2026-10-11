@@ -418,7 +418,11 @@ export const offlineImportGraphViolations = ({
         if (ts.isStringLiteralLike(target)) {
           follow(target.text);
         } else {
-          violation(file, "Dynamic module target cannot be enumerated");
+          classify(
+            file,
+            "dynamic-module",
+            "Dynamic module target cannot be enumerated",
+          );
         }
       }
       if (
@@ -431,7 +435,11 @@ export const offlineImportGraphViolations = ({
         if (target && ts.isStringLiteralLike(target)) {
           follow(target.text);
         } else {
-          violation(file, "Dynamic module target cannot be enumerated");
+          classify(
+            file,
+            "dynamic-module",
+            "Dynamic module target cannot be enumerated",
+          );
         }
       }
       ts.forEachChild(node, visit);

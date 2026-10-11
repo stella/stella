@@ -24,6 +24,7 @@ export const hostedUsageWebhookRoute = new Elysia({
     rateLimit({
       duration: API_RATE_LIMITS.hostedUsageWebhook.duration,
       max: API_RATE_LIMITS.hostedUsageWebhook.max,
+      budget: { name: "api.hosted_usage_webhook.address", keyKind: "address" },
       ...createRedisRateLimit({
         failurePolicy: "fail_open_local",
         scope: "hosted-usage-webhook",

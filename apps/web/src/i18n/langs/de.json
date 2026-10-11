@@ -1993,6 +1993,7 @@
     "sort": "Sortieren",
     "source": "Quelle",
     "stale": "Veraltet",
+    "start": "Starten",
     "status": "Status",
     "stepCount": "{count, plural, one {# Schritt} other {# Schritte}}",
     "stepProgress": "{current} von {total}",
@@ -2807,7 +2808,6 @@
       },
       "selectFlow": "Workflow auswählen",
       "sizeConfirmTitle": "Umfangreicher Ablauf",
-      "start": "Starten",
       "startFailed": "Der Workflow konnte nicht gestartet werden.",
       "started": "Workflow gestartet",
       "stepProgress": "Schritt {current} von {total}",
@@ -3024,8 +3024,7 @@
   "guides": {
     "action": {
       "replay": "Neu starten",
-      "skip": "Überspringen",
-      "start": "Starten"
+      "skip": "Überspringen"
     },
     "checklist": {
       "progress": "{completed} von {total} abgeschlossen"
@@ -3705,6 +3704,10 @@
         "nameMissing": "Nicht gespeichert: Fügen Sie einen Namen hinzu",
         "positionsNeedAttention": "Nicht gespeichert: {count, plural, one {# Standpunkt muss} other {# Standpunkte müssen}} überprüft werden"
       },
+      "buildWithAi": {
+        "description": "Beantworten Sie im Chat ein paar Fragen – das Playbook wird dabei laufend gespeichert.",
+        "title": "Mit KI erstellen"
+      },
       "check": "Exakte Regel statt KI verwenden",
       "checkHint": "Für messbare Bedingungen, etwa: Zahlungsziel ≤ 30 Tage.",
       "checkKind": {
@@ -4177,11 +4180,16 @@
       "customModelDescription": "Diese Modell-ID ist nicht im stella-Katalog. Sie wird unverändert an den gewählten Provider gesendet.",
       "customModelHint": "Kein Katalogtreffer. Geben Sie eine beliebige Modell-ID ein; benutzerdefinierte IDs werden unverändert gespeichert.",
       "decision": {
+        "dataRegion": "Datenregion",
         "description": "Fragen mit festen Antworten (Dokumentkategorien, Polarität von Zitaten)",
         "generativeFallback": "Verwendet das generative Modell für die jeweilige Aufgabe.",
         "incomplete": "Geben Sie für das Entscheidungsmodell einen API-Schlüssel und ein Modell an oder entfernen Sie es.",
         "instanceProvided": "stella stellt bereits ein Entscheidungsmodell bereit; fügen Sie nur dann ein eigenes hinzu, wenn Sie ein anderes nutzen möchten.",
-        "label": "Entscheidungsfindung"
+        "label": "Entscheidungsfindung",
+        "regionEu": "Europäische Union",
+        "regionGlobal": "Weltweit",
+        "reuseOpenAIKey": "Meinen OpenAI-Schlüssel verwenden",
+        "separateKey": "Separaten Schlüssel verwenden"
       },
       "defaultModel": "Standard: {model}",
       "defaultModelOption": "Standard",
@@ -6106,12 +6114,30 @@
         "addPDF": "PDF hinzufügen",
         "applyCrop": "Zuschnitt anwenden",
         "crop": "Zuschneiden",
-        "cropBottom": "Unten",
-        "cropDescription": "{count, plural, one {Legen Sie die Schnittbereiche für die ausgewählte Seite fest.} other {Legen Sie die Schnittbereiche für die # ausgewählten Seiten fest.}}",
-        "cropLeft": "Links",
-        "cropRight": "Rechts",
+        "cropAdvanced": "Erweitert",
+        "cropBottom": "Unten (mm)",
+        "cropDescription": "{count, plural, one {Legen Sie die Schnittbereiche für die ausgewählte Seite in Millimetern fest.} other {Legen Sie die Schnittbereiche für die # ausgewählten Seiten in Millimetern fest.}}",
+        "cropHandle": "Zuschnittgröße ändern: {position}",
+        "cropHandleBottom": "unten",
+        "cropHandleBottomLeft": "unten links",
+        "cropHandleBottomRight": "unten rechts",
+        "cropHandleLeft": "links",
+        "cropHandleRight": "rechts",
+        "cropHandleTop": "oben",
+        "cropHandleTopLeft": "oben links",
+        "cropHandleTopRight": "oben rechts",
+        "cropHint": "Ziehen Sie den Bereich oder seine Ziehpunkte. Die Pfeiltasten ändern den Zuschnitt um 1 mm, mit Umschalt um 10 mm. Für alle ausgewählten Seiten gelten dieselben Ränder.",
+        "cropLeft": "Links (mm)",
+        "cropMove": "Zuschnittbereich verschieben",
+        "cropNextPage": "Nächste ausgewählte Seite",
+        "cropPage": "Seite {page, number} von {count, number}",
+        "cropPreview": "Zuschnittvorschau, Seite {page, number}",
+        "cropPreviewFailed": "Die Seitenvorschau konnte nicht gerendert werden.",
+        "cropPreviousPage": "Vorherige ausgewählte Seite",
+        "cropRight": "Rechts (mm)",
         "cropTitle": "Seiten zuschneiden",
-        "cropTop": "Oben",
+        "cropTooSmall": "Diese Seite ist zu klein für einen Zuschnitt mit mindestens 10 mm Kantenlänge.",
+        "cropTop": "Oben (mm)",
         "delete": "Löschen",
         "deselectAll": "Auswahl aufheben",
         "discard": "Verwerfen",

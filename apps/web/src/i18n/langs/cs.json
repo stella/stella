@@ -1993,6 +1993,7 @@
     "sort": "Řadit",
     "source": "Zdroj",
     "stale": "Zastaralé",
+    "start": "Začít",
     "status": "Stav",
     "stepCount": "{count, plural, one {# krok} few {# kroky} many {# kroku} other {# kroků}}",
     "stepProgress": "{current} z {total}",
@@ -2807,7 +2808,6 @@
       },
       "selectFlow": "Vyberte pracovní postup",
       "sizeConfirmTitle": "Rozsáhlý běh postupu",
-      "start": "Spustit",
       "startFailed": "Pracovní postup se nepodařilo spustit.",
       "started": "Pracovní postup spuštěn",
       "stepProgress": "Krok {current} z {total}",
@@ -3024,8 +3024,7 @@
   "guides": {
     "action": {
       "replay": "Spustit znovu",
-      "skip": "Přeskočit",
-      "start": "Začít"
+      "skip": "Přeskočit"
     },
     "checklist": {
       "progress": "{completed} z {total} dokončeno"
@@ -3705,6 +3704,10 @@
         "nameMissing": "Neuloženo: zadejte název",
         "positionsNeedAttention": "Neuloženo: {count, plural, one {# pozice vyžaduje} few {# pozice vyžadují} other {# pozic vyžaduje}} pozornost"
       },
+      "buildWithAi": {
+        "description": "Odpovězte v chatu na pár otázek a playbook se bude průběžně ukládat.",
+        "title": "Vytvořit pomocí AI"
+      },
       "check": "Použít přesné pravidlo místo AI",
       "checkHint": "Pro měřitelné podmínky, například: splatnost ≤ 30 dnů.",
       "checkKind": {
@@ -4177,11 +4180,16 @@
       "customModelDescription": "Toto ID modelu není v katalogu stella. Vybranému poskytovateli se předá přesně tak, jak je zadané.",
       "customModelHint": "Žádná shoda v katalogu. Zadejte libovolné ID modelu; vlastní ID se uloží přesně tak, jak je napsané.",
       "decision": {
+        "dataRegion": "Oblast dat",
         "description": "Otázky s pevnou odpovědí (kategorie dokumentů, polarita citací)",
         "generativeFallback": "Používá generativní model pro danou úlohu.",
         "incomplete": "Zadejte klíč API a model pro rozhodovací model, nebo jej odeberte.",
         "instanceProvided": "stella už rozhodovací model poskytuje; vlastní přidejte jen tehdy, chcete-li použít jiný.",
-        "label": "Rozhodování"
+        "label": "Rozhodování",
+        "regionEu": "Evropská unie",
+        "regionGlobal": "Globální",
+        "reuseOpenAIKey": "Použít můj klíč OpenAI",
+        "separateKey": "Použít samostatný klíč"
       },
       "defaultModel": "Výchozí: {model}",
       "defaultModelOption": "Výchozí",
@@ -6106,12 +6114,30 @@
         "addPDF": "Přidat PDF",
         "applyCrop": "Použít ořez",
         "crop": "Oříznout",
-        "cropBottom": "Dole",
-        "cropDescription": "{count, plural, one {Nastavte okraje ořezu pro vybranou stránku.} few {Nastavte okraje ořezu pro # vybrané stránky.} other {Nastavte okraje ořezu pro # vybraných stránek.}}",
-        "cropLeft": "Vlevo",
-        "cropRight": "Vpravo",
+        "cropAdvanced": "Upřesnit",
+        "cropBottom": "Dole (mm)",
+        "cropDescription": "{count, plural, one {Nastavte okraje ořezu pro vybranou stránku v milimetrech.} few {Nastavte okraje ořezu pro # vybrané stránky v milimetrech.} other {Nastavte okraje ořezu pro # vybraných stránek v milimetrech.}}",
+        "cropHandle": "Změnit velikost ořezu: {position}",
+        "cropHandleBottom": "dole",
+        "cropHandleBottomLeft": "vlevo dole",
+        "cropHandleBottomRight": "vpravo dole",
+        "cropHandleLeft": "vlevo",
+        "cropHandleRight": "vpravo",
+        "cropHandleTop": "nahoře",
+        "cropHandleTopLeft": "vlevo nahoře",
+        "cropHandleTopRight": "vpravo nahoře",
+        "cropHint": "Přetáhněte oblast nebo její úchyty. Šipky upravují o 1 mm, se Shiftem o 10 mm. Stejné okraje se použijí pro všechny vybrané stránky.",
+        "cropLeft": "Vlevo (mm)",
+        "cropMove": "Posunout oblast ořezu",
+        "cropNextPage": "Další vybraná stránka",
+        "cropPage": "Stránka {page, number} z {count, number}",
+        "cropPreview": "Náhled ořezu, stránka {page, number}",
+        "cropPreviewFailed": "Náhled stránky se nepodařilo vykreslit.",
+        "cropPreviousPage": "Předchozí vybraná stránka",
+        "cropRight": "Vpravo (mm)",
         "cropTitle": "Oříznout stránky",
-        "cropTop": "Nahoře",
+        "cropTooSmall": "Tato stránka je příliš malá na ořez s minimálním rozměrem 10 mm.",
+        "cropTop": "Nahoře (mm)",
         "delete": "Smazat",
         "deselectAll": "Zrušit výběr",
         "discard": "Zahodit",

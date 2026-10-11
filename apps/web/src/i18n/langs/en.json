@@ -1993,6 +1993,7 @@
     "sort": "Sort",
     "source": "Source",
     "stale": "Stale",
+    "start": "Start",
     "status": "Status",
     "stepCount": "{count, plural, one {# step} other {# steps}}",
     "stepProgress": "{current} of {total}",
@@ -2807,7 +2808,6 @@
       },
       "selectFlow": "Choose a workflow",
       "sizeConfirmTitle": "Large flow run",
-      "start": "Start",
       "startFailed": "Couldn't start the workflow.",
       "started": "Workflow started",
       "stepProgress": "Step {current} of {total}",
@@ -3024,8 +3024,7 @@
   "guides": {
     "action": {
       "replay": "Start again",
-      "skip": "Skip",
-      "start": "Start"
+      "skip": "Skip"
     },
     "checklist": {
       "progress": "{completed} of {total} complete"
@@ -3705,6 +3704,10 @@
         "nameMissing": "Not saved: add a name",
         "positionsNeedAttention": "Not saved: {count, plural, one {# position needs} other {# positions need}} attention"
       },
+      "buildWithAi": {
+        "description": "Answer a few questions in a chat and the playbook is saved as you go.",
+        "title": "Build with AI"
+      },
       "check": "Use an exact rule instead of AI",
       "checkHint": "For measurable conditions, such as payment term ≤ 30 days.",
       "checkKind": {
@@ -4177,11 +4180,16 @@
       "customModelDescription": "This model ID is not in stella’s catalog. It will be passed to the selected provider as typed.",
       "customModelHint": "No catalog match. Type any model ID; custom IDs are saved as typed.",
       "decision": {
+        "dataRegion": "Data region",
         "description": "Questions with fixed answers (document categories, citation polarity)",
         "generativeFallback": "Uses the generative model for the task.",
         "incomplete": "Enter an API key and a model for the decision model, or remove it.",
         "instanceProvided": "stella already provides a decision model; add your own only to use a different one.",
-        "label": "Decision-making"
+        "label": "Decision-making",
+        "regionEu": "European Union",
+        "regionGlobal": "Global",
+        "reuseOpenAIKey": "Use my OpenAI key",
+        "separateKey": "Use a separate key"
       },
       "defaultModel": "Default: {model}",
       "defaultModelOption": "Default",
@@ -6106,12 +6114,30 @@
         "addPDF": "Add PDF",
         "applyCrop": "Apply crop",
         "crop": "Crop",
-        "cropBottom": "Bottom",
-        "cropDescription": "{count, plural, one {Set the crop margins for the selected page.} other {Set the crop margins for the # selected pages.}}",
-        "cropLeft": "Left",
-        "cropRight": "Right",
+        "cropAdvanced": "Advanced crop settings",
+        "cropBottom": "Bottom (mm)",
+        "cropDescription": "{count, plural, one {Set the crop margins for the selected page in millimeters.} other {Set the crop margins for the # selected pages in millimeters.}}",
+        "cropHandle": "Resize crop: {position}",
+        "cropHandleBottom": "bottom",
+        "cropHandleBottomLeft": "bottom left",
+        "cropHandleBottomRight": "bottom right",
+        "cropHandleLeft": "left",
+        "cropHandleRight": "right",
+        "cropHandleTop": "top",
+        "cropHandleTopLeft": "top left",
+        "cropHandleTopRight": "top right",
+        "cropHint": "Drag the area or its handles. Arrow keys adjust by 1 mm; Shift adjusts by 10 mm. The same margins apply to every selected page.",
+        "cropLeft": "Left (mm)",
+        "cropMove": "Move crop area",
+        "cropNextPage": "Next selected page",
+        "cropPage": "Page {page, number} of {count, number}",
+        "cropPreview": "Crop preview, page {page, number}",
+        "cropPreviewFailed": "The page preview could not be rendered.",
+        "cropPreviousPage": "Previous selected page",
+        "cropRight": "Right (mm)",
         "cropTitle": "Crop pages",
-        "cropTop": "Top",
+        "cropTooSmall": "This page is too small to crop to at least 10 mm.",
+        "cropTop": "Top (mm)",
         "delete": "Remove page",
         "deselectAll": "Deselect all",
         "discard": "Discard page edits",

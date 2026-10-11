@@ -61,6 +61,7 @@ describe("createSafeHandler workspace audit binding", () => {
     let recorderWorkspaceId: string | null | undefined;
     const endpoint = createSafeHandler(
       {
+        contract: "patch",
         permissions: { workspace: ["read"] },
         accountAccess: ACCOUNT_ACCESS.sandbox,
         mcp: { type: "internal", reason: "health_infra" },
@@ -130,6 +131,7 @@ describe("createSafeRootHandler usage preflight", () => {
       let bodyRan = false;
       const endpoint = createSafeRootHandler(
         {
+          contract: "patch",
           permissions: { workspace: ["read"] },
           accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
@@ -225,6 +227,7 @@ describe("createSafeRootHandler usage preflight", () => {
       let meteredHandlerCalled = false;
       const endpoint = createSafeRootHandler(
         {
+          contract: "patch",
           permissions: { workspace: ["read"] },
           accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
@@ -266,6 +269,7 @@ describe("createSafeRootHandler usage preflight", () => {
       let safeDbCalled = false;
       const endpoint = createSafeRootHandler(
         {
+          contract: "patch",
           permissions: { workspace: ["read"] },
           accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
@@ -301,6 +305,7 @@ describe("createSafeRootHandler usage preflight", () => {
       let safeDbCalled = false;
       const endpoint = createSafeRootHandler(
         {
+          contract: "patch",
           permissions: { workspace: ["read"] },
           accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
@@ -397,6 +402,7 @@ describe("createSafeRootHandler member AI access", () => {
       let bodyRan = false;
       const endpoint = createSafeRootHandler(
         {
+          contract: "patch",
           permissions: { workspace: ["read"] },
           accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
@@ -436,6 +442,7 @@ describe("createSafeRootHandler member AI access", () => {
   test("runs a handler that declares no AI usage for the same member", async () => {
     const endpoint = createSafeRootHandler(
       {
+        contract: "patch",
         permissions: { workspace: ["read"] },
         accountAccess: ACCOUNT_ACCESS.sandbox,
         mcp: { type: "internal", reason: "health_infra" },
@@ -460,6 +467,7 @@ describe("createSafeRootHandler permission gate", () => {
     let bodyRan = false;
     const endpoint = createSafeRootHandler(
       {
+        contract: "patch",
         permissions: { organization: ["delete"] },
         accountAccess: ACCOUNT_ACCESS.standard,
         mcp: { type: "internal", reason: "health_infra" },
@@ -493,6 +501,7 @@ describe("createSafeRootHandler permission gate", () => {
     let bodyRan = false;
     const endpoint = createSafeRootHandler(
       {
+        contract: "patch",
         permissions: { organization: ["delete"] },
         accountAccess: ACCOUNT_ACCESS.standard,
         mcp: { type: "internal", reason: "health_infra" },
@@ -521,6 +530,7 @@ describe("request.failed severity", () => {
     try {
       const endpoint = createSafeRootHandler(
         {
+          contract: "patch",
           permissions: { workspace: ["read"] },
           accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
@@ -610,6 +620,7 @@ describe("a mapped status survives the transport wrapper", () => {
     try {
       const endpoint = createSafeRootHandler(
         {
+          contract: "patch",
           permissions: { workspace: ["read"] },
           accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
@@ -1030,6 +1041,7 @@ describe("provider failure HTTP response", () => {
         const model = instanceWireErrorModel(cassette.model);
         const endpoint = createSafeRootHandler(
           {
+            contract: "patch",
             permissions: { workspace: ["read"] },
             accountAccess: ACCOUNT_ACCESS.sandbox,
             mcp: { type: "internal", reason: "health_infra" },
@@ -1102,6 +1114,7 @@ test("BYOK provider diagnostics cross HTTP as a top-level field without entering
   });
   const endpoint = createSafeRootHandler(
     {
+      contract: "patch",
       permissions: { workspace: ["read"] },
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "health_infra" },

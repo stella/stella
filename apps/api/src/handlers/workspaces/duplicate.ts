@@ -88,6 +88,7 @@ import { portableLayout } from "@/api/lib/views/utils";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.standard,
   realtime: organizationWorkspaceRealtimeUpdates,
   contentDelivery: {

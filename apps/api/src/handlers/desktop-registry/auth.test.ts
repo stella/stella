@@ -7,7 +7,9 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
+import * as v from "valibot";
 
+import { env } from "@/api/env";
 import {
   DESKTOP_REGISTRY_KEY_CONFIG,
   DESKTOP_REGISTRY_KEY_PREFIX,
@@ -15,6 +17,9 @@ import {
   desktopRegistryKeyConfig,
   parseDesktopRegistryMetadata,
 } from "@/api/lib/business-registries/desktop/config";
+import { rateLimitBudgetEnvSchema } from "@/api/lib/rate-limit/budget-config-schema";
+
+const DEFAULT_BUDGETS = v.parse(v.object(rateLimitBudgetEnvSchema), {});
 
 const createTestAuth = (sessionForKeys = false) =>
   betterAuth({
@@ -33,6 +38,13 @@ const createTestAuth = (sessionForKeys = false) =>
       apiKey([
         {
           ...desktopRegistryKeyConfig,
+          // The harness pins the schema default so an ambient budget cannot
+          // rate-limit its repeated verifications.
+          rateLimit: {
+            enabled: true,
+            maxRequests: DEFAULT_BUDGETS.RATE_LIMIT_API_KEY_DESKTOP_MAX,
+            timeWindow: DEFAULT_BUDGETS.RATE_LIMIT_API_KEY_DESKTOP_WINDOW_MS,
+          },
           enableSessionForAPIKeys: sessionForKeys,
         },
         {
@@ -265,6 +277,11 @@ const assertDesktopIssuance = (
 
 describe("desktop registry API-key configuration", () => {
   test("keeps the registry credential separate and sessionless", async () => {
+    expect(desktopRegistryKeyConfig.rateLimit).toEqual({
+      enabled: true,
+      maxRequests: env.RATE_LIMIT_API_KEY_DESKTOP_MAX,
+      timeWindow: env.RATE_LIMIT_API_KEY_DESKTOP_WINDOW_MS,
+    });
     const auth = createTestAuth();
     const signedUp = await auth.api.signUpEmail({
       body: {

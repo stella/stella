@@ -1993,6 +1993,7 @@
     "sort": "Kārtot",
     "source": "Avots",
     "stale": "Novecojis",
+    "start": "Sākt",
     "status": "Statuss",
     "stepCount": "{count, plural, zero {# soļu} one {# solis} other {# soļi}}",
     "stepProgress": "{current} no {total}",
@@ -2807,7 +2808,6 @@
       },
       "selectFlow": "Izvēlieties darbplūsmu",
       "sizeConfirmTitle": "Apjomīga plūsmas izpilde",
-      "start": "Sākt",
       "startFailed": "Neizdevās palaist darbplūsmu.",
       "started": "Darbplūsma palaista",
       "stepProgress": "{current}. solis no {total}",
@@ -3024,8 +3024,7 @@
   "guides": {
     "action": {
       "replay": "Sākt no jauna",
-      "skip": "Izlaist",
-      "start": "Sākt"
+      "skip": "Izlaist"
     },
     "checklist": {
       "progress": "Pabeigti {completed} no {total}"
@@ -3705,6 +3704,10 @@
         "nameMissing": "Nav saglabāts: pievienojiet nosaukumu",
         "positionsNeedAttention": "Nav saglabāts: {count, plural, zero {# pozīcijām} one {# pozīcijai} other {# pozīcijām}} jāpievērš uzmanība"
       },
+      "buildWithAi": {
+        "description": "Atbildiet uz dažiem jautājumiem tērzēšanā, un pārbaudes ceļvedis tiks saglabāts sarunas gaitā.",
+        "title": "Izveidot ar AI"
+      },
       "check": "Izmantot precīzu noteikumu AI vietā",
       "checkHint": "Izmērāmiem nosacījumiem, piemēram: maksājuma termiņš ≤ 30 dienas.",
       "checkKind": {
@@ -4177,11 +4180,16 @@
       "customModelDescription": "Šis modeļa ID nav stella katalogā. Tas tiks nosūtīts izvēlētajam pakalpojumu sniedzējam tieši tā, kā ievadīts.",
       "customModelHint": "Katalogā nav atbilstības. Ievadiet jebkuru modeļa ID; pielāgotie ID tiek saglabāti tieši tā, kā ievadīti.",
       "decision": {
+        "dataRegion": "Datu reģions",
         "description": "Jautājumi ar noteiktām atbildēm (dokumentu kategorijas, citātu polaritāte)",
         "generativeFallback": "Uzdevumam izmanto ģeneratīvo modeli.",
         "incomplete": "Ievadiet lēmumu modeļa API atslēgu un modeli vai noņemiet to.",
         "instanceProvided": "stella jau nodrošina lēmumu modeli; pievienojiet savu tikai tad, ja vēlaties izmantot citu.",
-        "label": "Lēmumu pieņemšana"
+        "label": "Lēmumu pieņemšana",
+        "regionEu": "Eiropas Savienība",
+        "regionGlobal": "Globāls",
+        "reuseOpenAIKey": "Izmantot manu OpenAI atslēgu",
+        "separateKey": "Izmantot atsevišķu atslēgu"
       },
       "defaultModel": "Noklusējums: {model}",
       "defaultModelOption": "Noklusējums",
@@ -6106,12 +6114,30 @@
         "addPDF": "Pievienot PDF",
         "applyCrop": "Lietot apgriešanu",
         "crop": "Apgriezt",
-        "cropBottom": "Apakšā",
-        "cropDescription": "{count, plural, zero {Iestatiet apgriešanas malas atlasītajām lapām.} one {Iestatiet apgriešanas malas atlasītajai lapai.} other {Iestatiet apgriešanas malas # atlasītajām lapām.}}",
-        "cropLeft": "Pa kreisi",
-        "cropRight": "Pa labi",
+        "cropAdvanced": "Papildu iestatījumi",
+        "cropBottom": "Apakšā (mm)",
+        "cropDescription": "{count, plural, zero {Iestatiet apgriešanas malas atlasītajām lapām milimetros.} one {Iestatiet apgriešanas malas atlasītajai lapai milimetros.} other {Iestatiet apgriešanas malas # atlasītajām lapām milimetros.}}",
+        "cropHandle": "Mainīt apgriešanas apgabala izmēru: {position}",
+        "cropHandleBottom": "apakšā",
+        "cropHandleBottomLeft": "apakšā pa kreisi",
+        "cropHandleBottomRight": "apakšā pa labi",
+        "cropHandleLeft": "pa kreisi",
+        "cropHandleRight": "pa labi",
+        "cropHandleTop": "augšā",
+        "cropHandleTopLeft": "augšā pa kreisi",
+        "cropHandleTopRight": "augšā pa labi",
+        "cropHint": "Velciet apgabalu vai tā rokturus. Bulttaustiņi maina apgriešanu par 1 mm, kopā ar Shift — par 10 mm. Visām atlasītajām lapām tiek piemērotas vienādas malas.",
+        "cropLeft": "Pa kreisi (mm)",
+        "cropMove": "Pārvietot apgriešanas apgabalu",
+        "cropNextPage": "Nākamā atlasītā lapa",
+        "cropPage": "{page, number}. lapa no {count, number}",
+        "cropPreview": "Apgriešanas priekšskatījums, {page, number}. lapa",
+        "cropPreviewFailed": "Neizdevās attēlot lapas priekšskatījumu.",
+        "cropPreviousPage": "Iepriekšējā atlasītā lapa",
+        "cropRight": "Pa labi (mm)",
         "cropTitle": "Apgriezt lappuses",
-        "cropTop": "Augšā",
+        "cropTooSmall": "Šī lapa ir pārāk maza, lai to apgrieztu līdz vismaz 10 mm izmēram.",
+        "cropTop": "Augšā (mm)",
         "delete": "Dzēst",
         "deselectAll": "Noņemt visu atlasi",
         "discard": "Atmest",
