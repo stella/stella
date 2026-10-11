@@ -182,7 +182,9 @@ const Timeline = ({
   return (
     <main className="min-w-0 space-y-4 p-4">
       <h1 className="text-lg font-semibold">{t("timelineTitle")}</h1>
-      <p className="text-muted-foreground break-words">{history.anchor}</p>
+      <p className="text-muted-foreground break-words">
+        <bdi>{history.anchor}</bdi>
+      </p>
       {history.items.length === 0 ? (
         <p>{t("timelineEmpty")}</p>
       ) : (
@@ -378,7 +380,7 @@ const VersionContent = ({
         {comparison.truncated && (
           <p className="text-muted-foreground">{t("timelinePartialDiff")}</p>
         )}
-        <div className="break-words whitespace-pre-wrap">
+        <div dir="auto" className="break-words whitespace-pre-wrap">
           <ReviewDiffText segments={comparison.segments} />
         </div>
       </>
@@ -395,6 +397,7 @@ const VersionContent = ({
             <p className="text-muted-foreground">{t("timelineTruncated")}</p>
           )}
           <p
+            dir="auto"
             data-testid="version-wording"
             className="break-words whitespace-pre-wrap"
           >

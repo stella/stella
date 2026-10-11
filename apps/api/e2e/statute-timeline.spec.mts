@@ -102,11 +102,13 @@ const mountTimeline = async ({
   page,
   theme = "light",
   width = 1024,
+  locale = "en-GB",
   browserErrors,
 }: {
   page: Page;
   theme?: "light" | "dark";
   width?: number;
+  locale?: string;
   browserErrors: string[];
 }): Promise<FrameLocator> => {
   page.on("pageerror", (error) => browserErrors.push(error.message));
@@ -139,6 +141,7 @@ const mountTimeline = async ({
     ({
       html: appHtml,
       initialTheme,
+      hostLocale,
       input,
       firstPage,
       secondPage,
@@ -179,7 +182,7 @@ const mountTimeline = async ({
               hostInfo: { name: "Fixture", version: "1.0.0" },
               hostCapabilities: { serverTools: {}, openLinks: {} },
               hostContext: {
-                locale: "en-GB",
+                locale: hostLocale,
                 theme: initialTheme,
                 displayMode: "inline",
                 availableDisplayModes: ["inline"],
@@ -247,11 +250,11 @@ const mountTimeline = async ({
       globalThis.statuteTimelineFixtureHost = {
         calls,
         failures,
-        setTheme: (theme) =>
+        setTheme: (nextTheme) =>
           reply({
             jsonrpc: "2.0",
             method: "ui/notifications/host-context-changed",
-            params: { theme },
+            params: { theme: nextTheme },
           }),
       } satisfies FixtureHost;
       // safe-html: trusted generated MCP app bundle from the repository build.
@@ -261,6 +264,7 @@ const mountTimeline = async ({
     {
       html,
       initialTheme: theme,
+      hostLocale: locale,
       input: INPUT,
       firstPage: FIRST_PAGE,
       secondPage: SECOND_PAGE,
@@ -330,6 +334,31 @@ test("timeline selection, adjacent comparison and paging work in the fixture hos
       ],
     },
   });
+  expect(browserErrors).toEqual([]);
+});
+
+test("source wording keeps its direction in an Arabic host", async ({
+  page,
+}) => {
+  const browserErrors: string[] = [];
+  const app = await mountTimeline({ page, locale: "ar", browserErrors });
+  await expect(app.locator("html")).toHaveAttribute("dir", "rtl");
+  await expect(app.locator("main > p > bdi")).toHaveText(INPUT.anchor);
+  const wording = app.getByTestId("version-wording");
+  await expect(wording).toHaveAttribute("dir", "auto");
+  expect(
+    await wording.evaluate((node) => getComputedStyle(node).direction),
+  ).toBe("ltr");
+  await app
+    .locator('button[aria-pressed="false"]:not([data-version-id])')
+    .click();
+  const comparison = app
+    .locator('[data-slot="review-diff-text"]')
+    .locator("..");
+  await expect(comparison).toHaveAttribute("dir", "auto");
+  expect(
+    await comparison.evaluate((node) => getComputedStyle(node).direction),
+  ).toBe("ltr");
   expect(browserErrors).toEqual([]);
 });
 

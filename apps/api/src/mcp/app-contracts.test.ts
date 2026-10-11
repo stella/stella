@@ -10,7 +10,7 @@ import {
 } from "@stll/api-contract/mcp-app.fixtures";
 import { UI_LOCALES } from "@stll/locales";
 
-import type {
+import {
   READ_PROVISION_HISTORY_PROJECTION,
   READ_STATUTE_PROVISIONS_PROJECTION,
 } from "../lib/chat/legislation-result-projections";
@@ -47,7 +47,7 @@ APP_SEARCH_FIXTURE satisfies SearchResults;
 APP_LOOKUP_FIXTURE satisfies LookupResults;
 APP_UNAVAILABLE_FIXTURE satisfies SearchResults & LookupResults;
 
-const PROVISION_HISTORY_FIXTURE = {
+const PROVISION_HISTORY_FIXTURE = v.parse(READ_PROVISION_HISTORY_PROJECTION, {
   eli: "cz:act:2012:89",
   anchor: "par_1",
   items: [
@@ -82,9 +82,9 @@ const PROVISION_HISTORY_FIXTURE = {
     },
   ],
   nextCursor: "history-next-page",
-} satisfies ProvisionHistoryFixture;
+}) satisfies ProvisionHistoryFixture;
 
-const STATUTE_PROVISIONS_FIXTURE = {
+const STATUTE_PROVISIONS_FIXTURE = v.parse(READ_STATUTE_PROVISIONS_PROJECTION, {
   items: [
     {
       eli: "cz:act:2012:89",
@@ -109,7 +109,7 @@ const STATUTE_PROVISIONS_FIXTURE = {
       message: "The source does not permit displaying this wording.",
     },
   ],
-} satisfies StatuteProvisionsFixture;
+}) satisfies StatuteProvisionsFixture;
 
 const appRoot = path.resolve(import.meta.dirname, "apps");
 const directories = [...new Bun.Glob("*/app.html").scanSync(appRoot)].map(
