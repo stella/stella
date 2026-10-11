@@ -15,6 +15,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { authMacro } from "@/api/lib/auth";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { readDevOtp } from "@/api/lib/dev-otp-store";
 import {
   mintDevSeedSession,
@@ -296,16 +297,26 @@ export const devRoute = new Elysia({ prefix: "/dev" })
 
     return { ok: true };
   })
-  .post("/rebuild-search", async (ctx) => {
-    await ctx.scopedDb(
-      async (tx) =>
-        await getSearchMaintenance(tx, upsertSearchDocument).rebuildIndex(
-          ctx.session.activeOrganizationId,
-        ),
-    );
-    await rebuildSupplementalSearchIndex(ctx.session.activeOrganizationId);
-    return { ok: true };
-  })
+  .post(
+    "/rebuild-search",
+    declareAggregateMutation(
+      async (ctx) => {
+        await ctx.scopedDb(
+          async (tx) =>
+            await getSearchMaintenance(tx, upsertSearchDocument).rebuildIndex(
+              ctx.session.activeOrganizationId,
+            ),
+        );
+        await rebuildSupplementalSearchIndex(ctx.session.activeOrganizationId);
+        return { ok: true };
+      },
+      {
+        type: "independent",
+        reason:
+          "Rebuilds derived search indexes from authorized current records without changing source aggregates.",
+      },
+    ),
+  )
   .post("/clear-cache", () => {
     rmSync(VITE_CACHE_DIR, { recursive: true, force: true });
     return { ok: true };
