@@ -485,10 +485,10 @@ test(
           }),
         ),
       );
-      const sources = await readAsReader((tx) =>
+      const sources = await readAsReader(async (tx) =>
         readCaseLawCoverageSourcesQuery(tx, "pg-fts"),
       );
-      const unknown = await readAsReader((tx) =>
+      const unknown = await readAsReader(async (tx) =>
         readCaseLawCoverageSourcesQuery(tx, "corpus-index"),
       );
       expect(unknown.find(({ id }) => id === sourceId)).toMatchObject({
