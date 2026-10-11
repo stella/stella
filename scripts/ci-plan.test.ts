@@ -5300,10 +5300,12 @@ test("parity rejects new queue-only jobs, ungated PR paths and stale exemptions"
   ).toThrow("Unknown CI predicate context");
 });
 
-test("thin merge groups intentionally skip heavy jobs while full parity stays enforced", () => {
+test("thin merge groups intentionally skip heavy-only jobs while full parity stays enforced", () => {
   const heavy = new Set(mainHeavyJobs({ jobs: ciJobs }));
   const admitted = new Set(queueAdmittedJobs({ jobs: ciJobs }));
   for (const { name, condition } of parityJobs) {
+    // Folded producers run on thin queues as well as in main-heavy.
+    const skippedOnThin = heavy.has(name) && !Object.hasOwn(foldedSuites, name);
     const full = runsAtDepth(condition, {
       event: EVENT.mergeGroup,
       depth: SUITE_DEPTH.full,
@@ -5323,7 +5325,7 @@ test("thin merge groups intentionally skip heavy jobs while full parity stays en
         queueDepth: "thin",
       }),
       name,
-    ).toBe(heavy.has(name) && !admitted.has(name) ? false : full);
+    ).toBe(skippedOnThin && !admitted.has(name) ? false : full);
     // The off switch restores the thin skip for the admitted browser suites.
     expect(
       runsAtDepth(condition, {
@@ -5333,7 +5335,7 @@ test("thin merge groups intentionally skip heavy jobs while full parity stays en
         queueBrowserSuites: "off",
       }),
       `${name}/off`,
-    ).toBe(heavy.has(name) ? false : full);
+    ).toBe(skippedOnThin ? false : full);
     for (const event of [EVENT.pullRequest, EVENT.workflowDispatch]) {
       expect(
         runsAtDepth(condition, {
