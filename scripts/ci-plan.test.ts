@@ -6507,6 +6507,69 @@ const browserPlanOutput = ({
   );
 };
 
+test("browser scope vetoes otherwise eligible execution", () => {
+  for (const event of [
+    EVENT.pullRequest,
+    EVENT.mergeGroup,
+    EVENT.workflowDispatch,
+  ]) {
+    const eligible = {
+      event,
+      depth: SUITE_DEPTH.full,
+      desktopRequired: "true",
+    };
+    expect(
+      browserPlanOutput({ ...eligible, browserScopeRequired: "true" }),
+      event,
+    ).toBe("true");
+    const planned = browserPlanOutput({
+      ...eligible,
+      browserScopeRequired: "false",
+    });
+    expect(planned, event).toBe("false");
+    expect(
+      evaluate(jobIf(ciJobs["ci-browser"]), {
+        values: {
+          "needs.ci-plan.outputs.ci_browser_required": planned,
+          "needs.ci-plan.outputs.coverage_profile": "normal-v1",
+        },
+      }),
+      event,
+    ).toBe(false);
+  }
+});
+
+test("Legal Atlas API source scope vetoes otherwise eligible execution", () => {
+  const { outputs } = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  for (const apiSourceRequired of ["true", "false", ""]) {
+    const planned = evaluate(outputs["legal_atlas_image_required"] ?? "", {
+      values: {
+        "steps.changed-files.outputs.legal_atlas_image_required": "true",
+        "steps.legal-atlas-scope.outputs.api_source_required":
+          apiSourceRequired,
+      },
+    });
+    const expected = apiSourceRequired !== "false";
+    expect(planned, apiSourceRequired).toBe(expected);
+    expect(
+      evaluate(jobIf(ciJobs["legal-atlas-image"]), {
+        values: {
+          "inputs.pr_depth_only": false,
+          "github.event_name": EVENT.mergeGroup,
+          "needs.ci-plan.outputs.run_required": "true",
+          "needs.ci-plan.outputs.trusted": "true",
+          "needs.ci-plan.outputs.legal_atlas_image_required": String(planned),
+          "needs.ci-plan.outputs.suite_depth": SUITE_DEPTH.full,
+        },
+      }),
+      apiSourceRequired,
+    ).toBe(expected);
+  }
+});
+
 test("browser planning, scheduling and result gates agree across events and depths", () => {
   const cases = (
     [
