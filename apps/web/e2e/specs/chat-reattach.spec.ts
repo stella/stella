@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { EXPECTS_DEV_RUNTIME } from "../helpers/runtime-mode";
 import { expect, test } from "../helpers/test";
 
-// The installed mock provider delays this reply at word boundaries.
-const SLOW_STREAM_PROMPT = "Stream slowly please";
+// This provider ends only through Stop, so browser work cannot exhaust the run.
+const LIVE_STREAM_PROMPT = "Stream until stopped please";
 const ANSWER_START = "This mock reply streams back";
 
 test("reloading a running turn rejoins its answer without duplication", async ({
@@ -13,7 +13,7 @@ test("reloading a running turn rejoins its answer without duplication", async ({
   await page.goto("/chat", { waitUntil: "commit" });
   const composer = page.locator('[role="textbox"][contenteditable="true"]');
   await expect(composer).toBeVisible({ timeout: 30_000 });
-  await composer.fill(SLOW_STREAM_PROMPT);
+  await composer.fill("Summarize the notice provisions");
   await page.getByRole("button", { name: "Send message" }).click();
   await expect(page).toHaveURL(/\/chat\/[\da-f-]+$/u, { timeout: 30_000 });
   const transcript = page.getByRole("log");
@@ -22,25 +22,16 @@ test("reloading a running turn rejoins its answer without duplication", async ({
     timeout: 30_000,
   });
   await expect(stop).toBeHidden({ timeout: 30_000 });
-  const answer = transcript.getByText(ANSWER_START, { exact: false });
-  await expect(answer).toBeVisible();
-  const uninterrupted = await answer.textContent();
-  assert.ok(uninterrupted !== null, "The completed answer must contain text");
-
-  // Keep the provider running through reload and hydration. A finite slow
-  // reply can finish before the resume probe and correctly skip joining.
-  await composer.fill("Stream until stopped please");
+  await composer.fill(LIVE_STREAM_PROMPT);
   await page.getByRole("button", { name: "Send message" }).click();
   await expect(stop).toBeVisible();
-  await expect(answer).toHaveCount(2);
-  const heldAnswer =
-    "This mock reply streams back while awaiting an explicit cancellation.";
-  // The durable stream can retain a partial batch until Stop. Reload after
-  // visible progress, then compare the replayed prefix before flushing its tail.
-  await expect(answer.last()).toContainText(ANSWER_START);
-  const heldPrefix = await answer.last().textContent();
-  assert.ok(heldPrefix !== null, "The running answer must contain text");
-  expect(heldAnswer.startsWith(heldPrefix)).toBe(true);
+  const answer = transcript.getByText(ANSWER_START, { exact: false });
+  await expect(answer).toHaveCount(1);
+  await expect(answer).toBeVisible();
+  // All fixture text is flushed in one batch before the provider parks.
+  await expect(answer).toContainText("explicit cancellation.");
+  const uninterrupted = await answer.textContent();
+  assert.ok(uninterrupted !== null, "The streaming answer must contain text");
   await page.screenshot({ path: test.info().outputPath("before-reload.png") });
   const join = page.waitForResponse(
     (response) =>
@@ -49,22 +40,23 @@ test("reloading a running turn rejoins its answer without duplication", async ({
   );
   await page.reload({ waitUntil: "commit" });
   expect((await join).ok()).toBe(true);
-  await expect(answer).toHaveCount(2);
-  await expect(answer.first()).toHaveText(uninterrupted);
-  await expect(answer.last()).toContainText(heldPrefix, { timeout: 30_000 });
-  await page.screenshot({ path: test.info().outputPath("after-catchup.png") });
+  await expect(answer).toHaveCount(1);
+  await expect(answer).toHaveText(uninterrupted);
   await expect(stop).toBeVisible();
+  await expect(stop).toBeEnabled();
+  await page.screenshot({ path: test.info().outputPath("after-catchup.png") });
   await stop.click();
   await expect(stop).toBeHidden({ timeout: 30_000 });
   await expect(transcript).toContainText("Stopped");
-  await expect(answer.last()).toHaveText(heldAnswer);
+  const settled = await answer.textContent();
+  assert.ok(settled !== null, "The stopped answer must contain text");
+  expect(settled).toBe(uninterrupted);
   await expect(transcript.getByRole("button", { name: "Resend" })).toHaveCount(
     0,
   );
   await page.reload({ waitUntil: "commit" });
-  await expect(answer).toHaveCount(2);
-  await expect(answer.first()).toHaveText(uninterrupted);
-  await expect(answer.last()).toHaveText(heldAnswer);
+  await expect(answer).toHaveCount(1);
+  await expect(answer).toHaveText(settled);
 });
 
 test("a pending question survives reload and continues its original turn", async ({
@@ -125,7 +117,7 @@ test("Stop in another tab cancels a detached turn and settles both viewers", asy
     });
     // This turn ends only through cancellation, so reload cannot race a
     // finite mock reply finishing and morphing Stop into disabled Send.
-    await composer.fill("Stream until stopped please");
+    await composer.fill(LIVE_STREAM_PROMPT);
     await page.getByRole("button", { name: "Send message" }).click();
     await expect(
       page.getByRole("log").getByText(ANSWER_START, { exact: false }),

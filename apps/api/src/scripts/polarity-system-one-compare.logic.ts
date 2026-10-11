@@ -26,6 +26,7 @@ import type {
   ClassifiablePolarity,
   Polarity,
 } from "@/api/handlers/case-law/polarity/consts";
+import type { DecisionModelProvider } from "@/api/lib/ai-config";
 import { SYSTEM_ONE_ERROR_KINDS } from "@/api/lib/workflow/decisions/system-one";
 import type { SystemOneErrorKind } from "@/api/lib/workflow/decisions/system-one";
 
@@ -81,7 +82,7 @@ export const SAMPLE_SKIP_REASONS = [
 
 export type SampleSkipReason = (typeof SAMPLE_SKIP_REASONS)[number];
 
-export type JevReading = {
+export type DecisionReading = {
   polarity: ClassifiablePolarity;
   probabilities: Record<ClassifiablePolarity, number>;
   confidence: number;
@@ -91,8 +92,9 @@ export type JevReading = {
   model: string;
 };
 
-export type JevOutcome =
-  | ({ status: "read" } & JevReading)
+export type DecisionOutcome =
+  | ({ status: "read" } & DecisionReading)
+  | { status: "refused"; inputTokens: number; latencyMs: number; model: string }
   | { status: "failed"; kind: SystemOneErrorKind; message: string };
 
 export type LlmOutcome =
@@ -119,7 +121,7 @@ export type ComparisonRow = {
   /** The `extractContext` window, truncated to `EXCERPT_MAX_CHARS`. */
   excerpt: string;
   stored: StoredLabel;
-  jev: JevOutcome;
+  decision: DecisionOutcome;
   llm: LlmOutcome;
 };
 
@@ -172,8 +174,8 @@ export type PolarityCounts = readonly LabelCount<ClassifiablePolarity>[];
 
 export type ConfusionRow = {
   stored: StoredLabel;
-  /** Jev's reading of the rows carrying this stored label. */
-  byJev: PolarityCounts;
+  /** Decision model's reading of the rows carrying this stored label. */
+  byDecision: PolarityCounts;
   /** Rows of this stored label the tier never read. */
   failed: number;
   total: number;
@@ -226,7 +228,7 @@ export type LlmSummary = {
   read: number;
   failed: number;
   agreementWithStored: TierAgreement;
-  agreementWithJev: AgreementCell;
+  agreementWithDecision: AgreementCell;
   latency: LatencySummary;
 };
 
@@ -236,19 +238,20 @@ export type ComparisonSummary = {
   /** Citations a reading was attempted for: sampled, less the skipped. */
   attempted: number;
   read: number;
+  refused: number;
   skipped: readonly LabelCount<SampleSkipReason>[];
   failures: readonly LabelCount<SystemOneErrorKind>[];
   stored: readonly LabelCount<StoredLabel>[];
   matrix: readonly ConfusionRow[];
   agreement: TierAgreement;
   /**
-   * What Jev read on the rows the corpus has no reading for. Coverage the
+   * What the decision model read on the rows the corpus has no reading for. Coverage the
    * corpus does not have yet, so it is reported rather than scored.
    */
   unscored: readonly {
     stored: UnscoredStoredLabel;
     read: number;
-    byJev: PolarityCounts;
+    byDecision: PolarityCounts;
   }[];
   curve: readonly AcceptancePoint[];
   latency: LatencySummary;
@@ -308,8 +311,8 @@ const agreementOf = (pairs: readonly LabelPair[]): AgreementCell => {
 const scorableStored = (row: ComparisonRow): ClassifiablePolarity | null =>
   isClassifiablePolarity(row.stored) ? row.stored : null;
 
-const jevRead = (row: ComparisonRow): JevReading | null =>
-  row.jev.status === "read" ? row.jev : null;
+const decisionRead = (row: ComparisonRow): DecisionReading | null =>
+  row.decision.status === "read" ? row.decision : null;
 
 const llmRead = (
   row: ComparisonRow,
@@ -355,18 +358,21 @@ export const buildConfusionMatrix = (
   STORED_LABELS.map((stored) => {
     const ofLabel = rows.filter((row) => row.stored === stored);
     const readings = ofLabel.flatMap((row) => {
-      const read = jevRead(row);
+      const read = decisionRead(row);
       return read === null ? [] : [read.polarity];
     });
     return {
       stored,
-      byJev: tallyOver(CLASSIFIABLE_POLARITIES, readings),
+      byDecision: tallyOver(CLASSIFIABLE_POLARITIES, readings),
       failed: ofLabel.length - readings.length,
       total: ofLabel.length,
     };
   });
 
-const pairFor = (row: ComparisonRow, read: JevReading): LabelPair | null => {
+const pairFor = (
+  row: ComparisonRow,
+  read: DecisionReading,
+): LabelPair | null => {
   const stored = scorableStored(row);
   return stored === null ? null : { left: stored, right: read.polarity };
 };
@@ -376,7 +382,7 @@ export const acceptanceCurve = (
   floors: readonly number[] = CONFIDENCE_FLOORS,
 ): AcceptancePoint[] => {
   const readings = rows.flatMap((row) => {
-    const read = jevRead(row);
+    const read = decisionRead(row);
     return read === null
       ? []
       : [{ confidence: read.confidence, pair: pairFor(row, read) }];
@@ -401,8 +407,7 @@ export type SummariseComparisonOptions = {
   /** Citations the sample query returned, skipped ones included. */
   sampled: number;
   skipped: readonly SampleSkipReason[];
-  /** `SYSTEM_ONE_USD_PER_INPUT_TOKEN` at the runner; a parameter so the
-   * arithmetic is checked against a rate the test owns. */
+  /** Provider rate supplied by the runner. */
   usdPerInputToken: number;
   floors?: readonly number[];
 };
@@ -415,11 +420,14 @@ export const summariseComparison = ({
   floors = CONFIDENCE_FLOORS,
 }: SummariseComparisonOptions): ComparisonSummary => {
   const readings = rows.flatMap((row) => {
-    const read = jevRead(row);
+    const read = decisionRead(row);
     return read === null ? [] : [read];
   });
-  const inputTokens = readings.reduce(
-    (total, reading) => total + reading.inputTokens,
+  const responses = rows.flatMap((row) =>
+    row.decision.status === "failed" ? [] : [row.decision],
+  );
+  const inputTokens = responses.reduce(
+    (total, response) => total + response.inputTokens,
     0,
   );
   const llmRows = rows.filter((row) => row.llm.status !== "not-run");
@@ -427,11 +435,13 @@ export const summariseComparison = ({
     sampled,
     attempted: rows.length,
     read: readings.length,
+    refused: responses.filter((response) => response.status === "refused")
+      .length,
     skipped: tallyOver(SAMPLE_SKIP_REASONS, skipped),
     failures: tallyOver(
       SYSTEM_ONE_ERROR_KINDS,
       rows.flatMap((row) =>
-        row.jev.status === "failed" ? [row.jev.kind] : [],
+        row.decision.status === "failed" ? [row.decision.kind] : [],
       ),
     ),
     stored: tallyOver(
@@ -439,21 +449,24 @@ export const summariseComparison = ({
       rows.map((row) => row.stored),
     ),
     matrix: buildConfusionMatrix(rows),
-    agreement: tierAgreementOf(rows, (row) => jevRead(row)?.polarity ?? null),
+    agreement: tierAgreementOf(
+      rows,
+      (row) => decisionRead(row)?.polarity ?? null,
+    ),
     unscored: UNSCORED_STORED_LABELS.map((stored) => {
       const ofLabel = rows.filter((row) => row.stored === stored);
       const labels = ofLabel.flatMap((row) => {
-        const read = jevRead(row);
+        const read = decisionRead(row);
         return read === null ? [] : [read.polarity];
       });
       return {
         stored,
         read: labels.length,
-        byJev: tallyOver(CLASSIFIABLE_POLARITIES, labels),
+        byDecision: tallyOver(CLASSIFIABLE_POLARITIES, labels),
       };
     }),
     curve: acceptanceCurve(rows, floors),
-    latency: latencySummaryOf(readings.map((reading) => reading.latencyMs)),
+    latency: latencySummaryOf(responses.map((response) => response.latencyMs)),
     cost: {
       inputTokens,
       usd: inputTokens * usdPerInputToken,
@@ -469,13 +482,13 @@ export const summariseComparison = ({
               llmRows,
               (row) => llmRead(row)?.polarity ?? null,
             ),
-            agreementWithJev: agreementOf(
+            agreementWithDecision: agreementOf(
               llmRows.flatMap((row) => {
-                const jev = jevRead(row);
+                const decision = decisionRead(row);
                 const llm = llmRead(row);
-                return jev === null || llm === null
+                return decision === null || llm === null
                   ? []
-                  : [{ left: jev.polarity, right: llm.polarity }];
+                  : [{ left: decision.polarity, right: llm.polarity }];
               }),
             ),
             latency: latencySummaryOf(
@@ -488,7 +501,7 @@ export const summariseComparison = ({
   };
 };
 
-/** Rows where the corpus and Jev both decided, and decided differently. */
+/** Rows where the corpus and the decision model both decided, and decided differently. */
 export const disagreements = (
   rows: readonly ComparisonRow[],
   limit: number,
@@ -496,7 +509,7 @@ export const disagreements = (
   rows
     .filter((row) => {
       const stored = scorableStored(row);
-      const read = jevRead(row);
+      const read = decisionRead(row);
       return stored !== null && read !== null && stored !== read.polarity;
     })
     .slice(0, limit);
@@ -511,6 +524,9 @@ export const DEFAULT_SEED = "polarity";
 export const DEFAULT_OUT_DIR = ".cache/polarity-system-one-compare";
 
 export type CompareOptions = {
+  decisionProvider: DecisionModelProvider;
+  compareProvider: "openai" | null;
+  openaiRegion: "eu" | "global";
   limit: number;
   /** Decision language to restrict the sample to; null takes any. */
   language: string | null;
@@ -537,13 +553,17 @@ export const USAGE = `Usage: bun --env-file=.env src/scripts/polarity-system-one
   --stratify         Equal shares per stored polarity, NULL included (default).
   --no-stratify      Sample the population instead.
   --seed <text>      Sampling seed (default ${DEFAULT_SEED}).
-  --concurrency <n>  Readings in flight (default ${DEFAULT_CONCURRENCY}, max ${MAX_CONCURRENCY}).
+  --concurrency <n>  Citations in flight (default ${DEFAULT_CONCURRENCY}, max ${MAX_CONCURRENCY}).
   --out <dir>        Report directory (default ${DEFAULT_OUT_DIR}).
   --llm              Also run the generative tier; costs generative tokens.
-  --model <id>       Pin a System One model (default: TYPESAFE_MODEL).
+  --model <id>       Pin the primary decision model (default: provider default).
+  --decision-provider <typesafe|openai>  Primary provider (default: typesafe).
+  --compare-provider openai             Run both providers on the same sample.
+  --openai-region <eu|global>           OpenAI endpoint (default: eu).
   --help             Print this and exit.
 
-Reads only. Needs PUBLIC_LAW_DATABASE_URL and TYPESAFE_API_KEY.`;
+Reads only. Needs PUBLIC_LAW_DATABASE_URL and the selected provider key:
+TYPESAFE_API_KEY for typesafe, OPENAI_API_KEY for openai (both for comparison).`;
 
 const VALUE_FLAGS = [
   "limit",
@@ -552,6 +572,9 @@ const VALUE_FLAGS = [
   "concurrency",
   "out",
   "model",
+  "decision-provider",
+  "compare-provider",
+  "openai-region",
 ] as const;
 
 const TOGGLE_FLAGS = ["stratify", "no-stratify", "llm", "help"] as const;
@@ -695,9 +718,30 @@ export const parseCompareArgs = (
     return invalid("--model must not be empty");
   }
 
+  const decisionProvider = values.get("decision-provider") ?? "typesafe";
+  if (decisionProvider !== "typesafe" && decisionProvider !== "openai") {
+    return invalid("--decision-provider must be typesafe or openai");
+  }
+  const compareProvider = values.get("compare-provider") ?? null;
+  if (compareProvider !== null && compareProvider !== "openai") {
+    return invalid("--compare-provider must be openai");
+  }
+  if (compareProvider !== null && decisionProvider !== "typesafe") {
+    return invalid(
+      "--compare-provider openai requires --decision-provider typesafe",
+    );
+  }
+  const openaiRegion = values.get("openai-region") ?? "eu";
+  if (openaiRegion !== "eu" && openaiRegion !== "global") {
+    return invalid("--openai-region must be eu or global");
+  }
+
   return Result.ok({
     type: "options",
     options: {
+      decisionProvider,
+      compareProvider,
+      openaiRegion,
       limit: limit.value,
       language,
       stratify: !toggles.has("no-stratify"),
@@ -770,16 +814,17 @@ export const renderComparisonReport = ({
   model,
 }: RenderComparisonReportOptions): string => {
   const lines: string[] = [
-    "# System One polarity, against the stored corpus labels",
+    "# Decision model polarity, against the stored corpus labels",
     "",
     `- sample: ${summary.sampled} citations (limit ${options.limit}, seed \`${options.seed}\`, ${options.stratify ? "stratified per stored label" : "population"}, language ${options.language ?? "any"})`,
+    `- provider: ${options.decisionProvider}, refused: ${summary.refused}`,
     `- read: ${summary.read} of ${summary.attempted} attempted; model ${model ?? "—"}`,
     `- agreement on stored labels: ${rate(summary.agreement.overall.rate)} over ${summary.agreement.overall.compared} citations`,
     `- latency p50 ${ms(summary.latency.p50)}, p95 ${ms(summary.latency.p95)}`,
     `- ${summary.cost.inputTokens} input tokens, ${usd(summary.cost.usd)} at ${summary.cost.usdPerInputToken} USD/token`,
     "",
     "Rows whose stored label is NULL or `unknown` are excluded from agreement:",
-    "neither is a reading of the text. What Jev read on them is reported under",
+    "neither is a reading of the text. What the decision model read on them is reported under",
     "coverage below.",
     "",
     "## Not compared",
@@ -791,13 +836,13 @@ export const renderComparisonReport = ({
       ({ label, count }) => `| read failed: ${label} | ${count} |`,
     ),
     "",
-    "## Confusion matrix — stored label × Jev",
+    "## Confusion matrix — stored label × decision model",
     "",
     `| stored | ${CLASSIFIABLE_POLARITIES.join(" | ")} | not read | total |`,
     `| --- | ${CLASSIFIABLE_POLARITIES.map(() => "---:").join(" | ")} | ---: | ---: |`,
     ...summary.matrix.map(
       (row) =>
-        `| ${row.stored} | ${row.byJev.map(({ count }) => count).join(" | ")} | ${row.failed} | ${row.total} |`,
+        `| ${row.stored} | ${row.byDecision.map(({ count }) => count).join(" | ")} | ${row.failed} | ${row.total} |`,
     ),
     "",
     "## Agreement per stored label",
@@ -816,12 +861,12 @@ export const renderComparisonReport = ({
     `| --- | ---: | ${CLASSIFIABLE_POLARITIES.map(() => "---:").join(" | ")} |`,
     ...summary.unscored.map(
       (row) =>
-        `| ${row.stored} | ${row.read} | ${row.byJev.map(({ count }) => count).join(" | ")} |`,
+        `| ${row.stored} | ${row.read} | ${row.byDecision.map(({ count }) => count).join(" | ")} |`,
     ),
     "",
     "## Acceptance curve",
     "",
-    `The floor \`SYSTEM_ONE_POLARITY_ACCEPT_CONFIDENCE\` is set from; it is ${acceptFloor} today.`,
+    `The acceptance floor is calibrated per model; it is ${acceptFloor} today.`,
     "Accepted share is over every reading returned; the rate is over the accepted",
     "readings whose stored label is one a classifier may assign.",
     "",
@@ -840,7 +885,7 @@ export const renderComparisonReport = ({
       "",
       `- read: ${summary.llm.read}, failed: ${summary.llm.failed}`,
       `- agreement on stored labels: ${rate(summary.llm.agreementWithStored.overall.rate)} over ${summary.llm.agreementWithStored.overall.compared} citations`,
-      `- agreement with Jev: ${rate(summary.llm.agreementWithJev.rate)} over ${summary.llm.agreementWithJev.compared} citations`,
+      `- agreement with the decision model: ${rate(summary.llm.agreementWithDecision.rate)} over ${summary.llm.agreementWithDecision.compared} citations`,
       `- latency p50 ${ms(summary.llm.latency.p50)}, p95 ${ms(summary.llm.latency.p95)}`,
       "",
       "| stored | compared | agreed | rate |",
@@ -859,16 +904,16 @@ export const renderComparisonReport = ({
     "",
     examples.length === 0
       ? "None: every compared citation was read as its stored label."
-      : "Stored against Jev, for a reader to judge which is right.",
+      : "Stored against the decision model, for a reader to judge which is right.",
     "",
   );
   if (examples.length > 0) {
     lines.push(
-      "| case | stored | Jev | confidence | citation | excerpt |",
+      "| case | stored | decision model | confidence | citation | excerpt |",
       "| --- | --- | --- | ---: | --- | --- |",
       ...examples.map((row) => {
         const read =
-          jevRead(row) ??
+          decisionRead(row) ??
           panic("a disagreement carries no reading", {
             citationId: row.citationId,
           });
@@ -878,5 +923,81 @@ export const renderComparisonReport = ({
     );
   }
 
+  return lines.join("\n");
+};
+
+export type PairedComparisonOptions = {
+  typesafe: { rows: readonly ComparisonRow[]; usdPerInputToken: number };
+  openai: { rows: readonly ComparisonRow[]; usdPerInputToken: number };
+  sampled: number;
+  skipped: readonly SampleSkipReason[];
+};
+
+/** A paired evaluation must use the same citations, in the same order. */
+export const summarisePairedComparison = ({
+  typesafe,
+  openai,
+  sampled,
+  skipped,
+}: PairedComparisonOptions) => {
+  if (
+    typesafe.rows.length !== openai.rows.length ||
+    typesafe.rows.some(
+      (row, index) => row.citationId !== openai.rows.at(index)?.citationId,
+    )
+  ) {
+    panic("paired decision reports require the same sample");
+  }
+  const modelOf = (rows: readonly ComparisonRow[]) =>
+    rows
+      .flatMap((row) =>
+        row.decision.status === "failed" ? [] : [row.decision.model],
+      )
+      .at(0) ?? null;
+  return {
+    models: { typesafe: modelOf(typesafe.rows), openai: modelOf(openai.rows) },
+    typesafe: summariseComparison({ ...typesafe, sampled, skipped }),
+    openai: summariseComparison({ ...openai, sampled, skipped }),
+  };
+};
+
+export const renderPairedComparisonReport = (
+  summaries: ReturnType<typeof summarisePairedComparison>,
+): string => {
+  const invalidCount = (summary: ComparisonSummary) =>
+    summary.failures.find(({ label }) => label === "invalid_response")?.count ??
+    panic("decision error vocabulary has no invalid_response");
+  const { typesafe, openai } = summaries;
+  const lines = [
+    "# Paired decision polarity comparison",
+    "",
+    `Same sample: ${typesafe.sampled} citations, ${typesafe.attempted} attempted per provider.`,
+    "Accuracy measures agreement with stored labels; absent and unknown labels are unscored.",
+    "",
+    "| metric | typesafe | openai |",
+    "| --- | ---: | ---: |",
+    `| model | ${cell(summaries.models.typesafe ?? "—")} | ${cell(summaries.models.openai ?? "—")} |`,
+    `| accuracy | ${rate(typesafe.agreement.overall.rate)} | ${rate(openai.agreement.overall.rate)} |`,
+    `| compared | ${typesafe.agreement.overall.compared} | ${openai.agreement.overall.compared} |`,
+    `| p50 latency | ${ms(typesafe.latency.p50)} | ${ms(openai.latency.p50)} |`,
+    `| p95 latency | ${ms(typesafe.latency.p95)} | ${ms(openai.latency.p95)} |`,
+    `| invalid responses | ${invalidCount(typesafe)} | ${invalidCount(openai)} |`,
+    `| refusals | ${typesafe.refused} | ${openai.refused} |`,
+    `| input tokens | ${typesafe.cost.inputTokens} | ${openai.cost.inputTokens} |`,
+    `| cost | ${usd(typesafe.cost.usd)} | ${usd(openai.cost.usd)} |`,
+    "",
+    "## Acceptance curve",
+    "",
+    "| floor | typesafe accepted | typesafe share | typesafe accuracy | openai accepted | openai share | openai accuracy |",
+    "| ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+  ];
+  for (const left of typesafe.curve) {
+    const right =
+      openai.curve.find(({ floor }) => floor === left.floor) ??
+      panic("paired decision reports require identical floors");
+    lines.push(
+      `| ${left.floor} | ${left.accepted} | ${percent(left.acceptedShare)} | ${rate(left.rate)} | ${right.accepted} | ${percent(right.acceptedShare)} | ${rate(right.rate)} |`,
+    );
+  }
   return lines.join("\n");
 };
