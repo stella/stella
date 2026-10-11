@@ -1178,7 +1178,7 @@ test("thin groups require queued code checks regardless of normal PR completion"
       ]),
     );
     dependencies["ci-plan"] = { result: "success" };
-    const runAggregation = (needs: typeof dependencies) =>
+    const runAggregation = (needs: typeof dependencies, plan = allScopes) =>
       Bun.spawnSync(["bash", "-e", "-c", aggregation.run ?? ""], {
         env: {
           ...process.env,
@@ -1200,7 +1200,7 @@ test("thin groups require queued code checks regardless of normal PR completion"
           TRUSTED: "true",
           THIN_JOBS: JSON.stringify(thin),
           QUEUE_REQUIRED_JOBS: JSON.stringify(queueJobs),
-          PLAN: JSON.stringify(allScopes),
+          PLAN: JSON.stringify(plan),
           NEEDS: JSON.stringify(needs),
         },
       });

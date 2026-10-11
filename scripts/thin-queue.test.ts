@@ -818,6 +818,7 @@ test("unset and full preserve historical predicates except declared PR, Postgres
         "dated-waiver-expiry",
         "desktop-rust-tests",
         "desktop-rust-lint",
+        "query-perf",
         "scan-engine-wasm-drift",
       ]),
     ].toSorted(),

@@ -10,6 +10,7 @@ import {
   createSystemOneClient,
   noul,
 } from "@/api/lib/workflow/decisions/system-one";
+import { failingDecisionGenerator } from "@/api/tests/helpers/decision-generator";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -74,6 +75,7 @@ describe("decision usage accounting", () => {
     async (keySource) => {
       const { client, rows, usageMetering } = setup(keySource);
       const result = await decideMany({
+        generator: failingDecisionGenerator,
         id: "test.usage",
         dataClass: "public_corpus",
         orgAIConfig: null,
@@ -118,6 +120,7 @@ describe("decision usage accounting", () => {
   test("does not spend instance funds behind a generative BYOK preflight", async () => {
     const { client, rows, usageMetering, calls } = setup("instance");
     const result = await decideMany({
+      generator: failingDecisionGenerator,
       id: "test.byok-preflight",
       dataClass: "public_corpus",
       orgAIConfig: {
@@ -137,7 +140,8 @@ describe("decision usage accounting", () => {
     });
     expect(result.decisions.eligible).toMatchObject({
       state: "undecided",
-      reason: "no-backend",
+      reason: "failed",
+      source: "generative",
     });
     expect(calls()).toBe(0);
     expect(rows).toEqual([]);
@@ -153,6 +157,7 @@ describe("decision usage accounting", () => {
         },
       });
       const result = await decideMany({
+        generator: failingDecisionGenerator,
         id: "test.ledger-failure",
         dataClass: "public_corpus",
         orgAIConfig: null,
@@ -184,6 +189,7 @@ test.each(["eu", "global"] as const)(
         }),
     });
     const result = await decideMany({
+      generator: failingDecisionGenerator,
       id: "test.refused-usage",
       dataClass: "customer",
       orgAIConfig: null,
@@ -194,8 +200,10 @@ test.each(["eu", "global"] as const)(
     });
     expect(result.decisions.eligible).toEqual({
       state: "undecided",
-      reason: "refusal",
+      reason: "failed",
       confidence: null,
+      source: "generative",
+      model: null,
     });
     expect(rows).toHaveLength(1);
     expect(rows.at(0)).toMatchObject({
