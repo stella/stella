@@ -1444,6 +1444,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "E2E_WEB_URL",
   "EVENT_NAME",
   "EXPECTED_COMMIT",
+  // Offline Git regression fixtures trace child processes to prove no fetch ran.
+  "GIT_TRACE2_EVENT",
   "GH_READ_TOKEN",
   "HEAD_SHA",
   // Scheduled journey checks: endpoint overrides and bounded request/retry timing.
