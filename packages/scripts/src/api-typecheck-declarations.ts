@@ -117,6 +117,8 @@ export const apiDeclarationCacheInputs = (project: string) => {
     "$TURBO_ROOT$/bun.lock",
     "$TURBO_ROOT$/patches/**",
     "$TURBO_ROOT$/packages/**",
+    "!$TURBO_ROOT$/packages/**/.cache/**",
+    "!$TURBO_ROOT$/packages/**/.turbo/**",
     "$TURBO_ROOT$/types/**",
     "package.json",
     "tsconfig*.json",

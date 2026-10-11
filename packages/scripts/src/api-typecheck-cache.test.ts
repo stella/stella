@@ -37,6 +37,8 @@ test("declaration consumers run after emission and invalidate with API source ch
       panic(`Missing task inputs: ${id}`);
     }
     expect(task["inputs"], id).toContain("$TURBO_ROOT$/patches/**");
+    expect(task["inputs"], id).toContain("!$TURBO_ROOT$/packages/**/.cache/**");
+    expect(task["inputs"], id).toContain("!$TURBO_ROOT$/packages/**/.turbo/**");
   }
   const consumers = new Set(["@stll/api#typecheck:tests"]);
   for (const [id, task] of Object.entries(tasks)) {
@@ -285,6 +287,13 @@ test("declaration consumers run after emission and invalidate with API source ch
         .trim()
         .split("\n");
     const cold = executions();
+    write(
+      "packages/dependency/.cache/tsbuildinfo.json",
+      "generated compiler state",
+    );
+    write("packages/dependency/.turbo/task.log", "generated execution log");
+    run(command);
+    expect(executions()).toEqual(cold);
     expect(cold).toHaveLength(consumers.size + 1);
     const output = path.join(
       directory,
@@ -557,6 +566,30 @@ test("each API test owner invalidates cached checking and rejects a newly introd
     check(1);
     expect(executions().slice(beforeSafe)).toEqual(["tests"]);
     write(`apps/api/${safe}`, valid);
+    check(0);
+    // Both projects can reach API script helpers through relative imports.
+    const script = "scripts/test-path-filters.ts";
+    write(`apps/api/${script}`, valid);
+    for (const file of [safe, coupled]) {
+      const relative = path.relative(path.dirname(file), script);
+      write(
+        `apps/api/${file}`,
+        `import { value } from '${relative}';\nexport const checked: number = value;\n`,
+      );
+    }
+    check(0);
+    const beforeScriptError = executions().length;
+    write(`apps/api/${script}`, invalid);
+    check(1);
+    expect(executions().slice(beforeScriptError).toSorted()).toEqual([
+      "source",
+      "tests",
+    ]);
+    write(`apps/api/${script}`, valid);
+    check(0);
+    for (const file of [safe, coupled]) {
+      write(`apps/api/${file}`, valid);
+    }
     check(0);
     // The previous blanket exclusion hides a real coupled-test type error.
     fixtureTasks["@stll/api#typecheck:src"].inputs = [
