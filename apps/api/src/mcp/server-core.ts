@@ -1301,7 +1301,7 @@ export const createMcpHttpRequestHandler = ({
     {
       clientIp = null,
       mode = "default",
-    }: { clientIp?: string | null; mode?: McpMode } = {},
+    }: { clientIp?: string | null | undefined; mode?: McpMode } = {},
   ): Promise<Response> => {
     if (incomingRequest.method === "OPTIONS") {
       return new Response(null, {
