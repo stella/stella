@@ -5,6 +5,10 @@ name: Bundle size nightly
 # job summary, so growth that slipped through stays visible until it is
 # trimmed or re-measured.
 
+defaults:
+  run:
+    shell: bash
+
 on:
   schedule:
     - cron: "41 2 * * *"

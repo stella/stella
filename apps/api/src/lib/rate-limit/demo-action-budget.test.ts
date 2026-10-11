@@ -3,11 +3,16 @@ import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import {
+  resetMetricLineSinkForTesting,
+  setMetricLineSinkForTesting,
+} from "@/api/lib/observability/request-metrics";
+import {
   ActionAdmissionError,
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
 import { DEMO_ACCOUNT_DAILY_ACTION_BUDGET } from "@/api/lib/rate-limit/demo-action-budget";
 import { createTestDemoActionBudget } from "@/api/tests/helpers/demo-action-budget";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
 const organizationId = toSafeId<"organization">("org_demo");
 const demoUser = toSafeId<"user">("user_demo");
@@ -74,6 +79,34 @@ const expectDailyRefusal = (
 };
 
 describe("demo account daily action budget", () => {
+  test("reports the configured rejection window without caller identity", async () => {
+    const { budget } = demoBudget();
+    await exhaustWith(budget, disabledAction);
+    const logger = installRecordingLogger();
+    const metrics: string[] = [];
+    setMetricLineSinkForTesting((line) => {
+      metrics.push(line);
+    });
+    try {
+      expectDailyRefusal(await disabledAction(budget));
+      expect(logger.records).toHaveLength(1);
+      expect(logger.records.at(0)?.attributes).toEqual({
+        budget: "demo.action.user",
+        "budget.keyKind": "user",
+        "budget.windowMs": DEMO_ACCOUNT_DAILY_ACTION_BUDGET.durationMs,
+        "http.status_code": 429,
+      });
+      expect(metrics).toHaveLength(1);
+      expect(JSON.parse(metrics.at(0) ?? "{}")).toMatchObject({
+        budgetName: "demo.action.user",
+        RateLimitRejected: 1,
+      });
+    } finally {
+      logger.restore();
+      resetMetricLineSinkForTesting();
+    }
+  });
+
   test("admits the daily maximum and refuses the next action even with admission disabled", async () => {
     const tracked = demoBudget();
     const { budget } = tracked;

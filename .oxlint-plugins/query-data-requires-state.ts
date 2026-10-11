@@ -9,7 +9,7 @@ import {
   isIdentifier,
   isIdentifierReference,
   repoRelativeFilename,
-  resolveImportedExpression,
+  resolveImportedExpressionForEnforcement,
   resolveVariable,
   staticStringValue,
   type ScopeContext,
@@ -334,7 +334,10 @@ const preservesState = ({
     });
   }
   if (expression.type === "CallExpression") {
-    const imported = resolveImportedExpression(context, expression.callee);
+    const imported = resolveImportedExpressionForEnforcement(
+      context,
+      expression.callee,
+    );
     if (
       imported?.source === "react" &&
       imported.imported === "useMemo" &&
