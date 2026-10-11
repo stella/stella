@@ -111,7 +111,9 @@ describe("account export worker", () => {
   test("a failed build persists retry state and reports the original failure", async () => {
     const { deps, deleted, failures } = fixture();
     const failure = new AccountExportArchiveError({ message: "Build failed" });
-    let durableStatus: "processing" | "requested" = "processing";
+    const durable: { status: "processing" | "requested" } = {
+      status: "processing",
+    };
     const injected = {
       ...deps,
       build: async () => {
@@ -119,7 +121,7 @@ describe("account export worker", () => {
       },
       complete: async () => panic("Failed builds must not complete"),
       fail: async () => {
-        durableStatus = "requested";
+        durable.status = "requested";
         return true;
       },
       canReclaim: async () => true,
@@ -129,7 +131,7 @@ describe("account export worker", () => {
         processAccountExport({ id: claim.id, db, deps: injected }),
       ),
     ).toBe(failure);
-    expect(durableStatus).toBe("requested");
+    expect(durable.status).toBe("requested");
     expect(failures).toEqual([failure]);
     expect(deleted).toEqual([[claim.objectKey]]);
   });
@@ -139,22 +141,24 @@ describe("account export worker", () => {
     const failure = new AccountExportArchiveError({
       message: "Completion response lost",
     });
-    let durableStatus: "processing" | "ready" = "processing";
+    const durable: { status: "processing" | "ready" } = {
+      status: "processing",
+    };
     const injected = {
       ...deps,
       complete: async () => {
-        durableStatus = "ready";
+        durable.status = "ready";
         throw failure;
       },
       fail: async () => false,
-      canReclaim: async () => durableStatus !== "ready",
+      canReclaim: async () => durable.status !== "ready",
     } satisfies AccountExportProcessDeps;
     expect(
       await rejectionOf(
         processAccountExport({ id: claim.id, db, deps: injected }),
       ),
     ).toBe(failure);
-    expect(durableStatus).toBe("ready");
+    expect(durable.status).toBe("ready");
     expect(failures).toEqual([failure]);
     expect(deleted).toEqual([]);
   });
