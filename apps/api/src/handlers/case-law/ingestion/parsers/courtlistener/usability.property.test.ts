@@ -106,6 +106,10 @@ const readableSentence = fc.oneof(
     .map(([subject, predicate, ending]) => `${subject} ${predicate}${ending}`),
 );
 
+test("CourtListener long body without sentence breaks classifies within the normal test time", () => {
+  expect(classifyCourtListenerText("a".repeat(100_000))).toBe("usable");
+});
+
 test(
   "CourtListener readable sentences make every nonusable short body usable",
   () => {

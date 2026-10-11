@@ -14,7 +14,7 @@ export type CourtListenerTextUsability =
 // document bodies. Match the whole message, never a quotation within an opinion.
 const SOURCE_PLACEHOLDERS = [
   /^(?:unable|failed) to extract (?:document )?(?:content|text)[.!]?$/u,
-  /^no opinion found\s*\.?\s*(?:click here to view source material[.!]?)?$/u,
+  /^no opinion found(?: ?\. ?| )?(?:click here to view source material[.!]?)?$/u,
   /^(?:usca\d+\s+)?opinion (?:can't|cannot|could not) open\s+\S+$/u,
   /^(?:this )?opinion\b.{0,100}\b(?:was|has been) (?:never (?:issued|released)|withdrawn)(?: or was withdrawn)?[.!]?(?:\s+opinion\s*#\s*[\w-]+(?:\s*['’])?)?$/u,
   /^decision removed at the request of the court[.!]?$/u,
@@ -35,20 +35,20 @@ const DATE_ONLY = new RegExp(`^${MONTH}\\d{1,2},?\\d{4}$`, "u");
 // A title after a personal name is attribution; "per curiam" is deliberately
 // absent because it is itself a published short ruling.
 const ATTRIBUTION =
-  /(?:^|\n)[^\S\r\n]*(?:opinion\s+by\s+)?[\p{L}'’-]+(?:[^\S\r\n]+(?:[\p{L}'’-]+|\p{L}\.)){0,8},[^\S\r\n]*(?:(?:[cp]\s*\.\s*)?j\s*\.|c\s*\.\s*j\s*\.|(?:bankruptcy\s+)?judge)[^\S\r\n]*[:.]?[^\S\r\n]*(?=\n|$)/gu;
-const SIGNATURE = /(?:^|\n)\s*\/s\/\s*[\p{L}.'’\- ]+(?=\n|$)/gu;
+  /^(?:opinion by )?[\p{L}'’-]+(?: (?:[\p{L}'’-]+|\p{L}\.)){0,8}, ?(?:(?:[cp] ?\. ?)?j ?\.|c ?\. ?j ?\.|(?:bankruptcy )?judge)(?: ?[:.]| )?$/u;
+const SIGNATURE = /^\/s\/ ?[\p{L}.'’\- ]+$/u;
 const AUTHOR_INTRODUCTION =
-  /^(?:mr\.\s+)?justice\s+[\p{L}.'’\- ]+\s+delivered the opinion of the court[.!]?$/u;
+  /^(?:mr\. )?justice [\p{L}.'’-]+(?: [\p{L}.'’-]+)* delivered the opinion of the court[.!]?$/u;
 const AUTHOR_PUBLICATION_NOTE =
-  /^opinion by\s+justice\s+[\p{L}.'’\- ]+\.\s+not to be published in full[.!]?$/u;
+  /^opinion by justice [\p{L}.'’-]+(?: [\p{L}.'’-]+)*\. not to be published in full[.!]?$/u;
 const COURT_HEADER =
-  /^(?:in the\s+)?\p{L}+(?:\s+\p{L}+){0,3}\s+court of appeals\s+for the\s+[\p{L} ]+\s+circuit[.!]?$/u;
+  /^(?:in the )?\p{L}+(?: \p{L}+){0,3} court of appeals for the \p{L}+(?: \p{L}+)* circuit[.!]?$/u;
 const FILING_HEADER =
-  /^case\s*:?\s*[\w:.-]+\s+(?:document\s+\d+\s+)?(?:date\s+)?filed\s*:?\s*\d+[\d/.-]*\s+page\s*:?\s*\d+\s+of\s+\d+$/u;
+  /^case ?:? ?[\w:.-]+ (?:document \d+ )?(?:date )?filed ?:? ?\d[\d/.-]* page ?:? ?\d+ of \d+$/u;
 const PARTICIPATION_NOTE =
-  /^(?:judge\s+[\p{L}'’\- ]+\s+took no part|present\s*[—:-]\s+[\p{L}.,'’\- ]+\b(?:jj|j)\.)[.!]?$/u;
+  /^(?:judge [\p{L}'’-]+(?: [\p{L}'’-]+)* took no part|present ?[—:-] ?[\p{L}.,'’-]+(?: [\p{L}.,'’-]+)* (?:jj|j)\.)[.!]?$/u;
 const OFFICE_HEADER =
-  /^[^\p{L}]*office of\s+(?:the\s+)?[\p{L}'’]+(?:\s+general)?(?:\s+of\s+\p{L}+)?(?:\s+[\p{L}]+)?[^\p{L}]*(?:\s+[a-z])?$/u;
+  /^[^\p{L}]*office of (?:the )?[\p{L}'’]+(?: general)?(?: of \p{L}+)?(?: \p{L}+)?[^\p{L}'’]*$/u;
 const DAMAGED_OFFICE_HEADER =
   /^(?:office of\b|[\p{L}'’]+\s+[\p{L}'’[\]]+ general\b)[\s\S]{0,100}$/u;
 const COURT_IDENTIFIER =
@@ -57,13 +57,25 @@ const COURT_IDENTIFIER =
 const RULING_WORDS =
   /^[\s[(]*(?:affirm(?:ed)?|den(?:y|ied)|grant(?:ed)?|dismiss(?:ed)?|revers(?:e|ed)|remand(?:ed)?|ordered|per\s+curiam)[\s.!\])]*$/u;
 
+const isOfficeHeader = (text: string): boolean => {
+  let end = 0;
+  for (const match of text.matchAll(/\p{L}/gu)) {
+    end = match.index + match[0].length;
+  }
+  const header = text.slice(0, end);
+  return (
+    OFFICE_HEADER.test(header) ||
+    (/ [a-z]$/u.test(header) && OFFICE_HEADER.test(header.slice(0, -2)))
+  );
+};
+
 const isMetadata = (text: string): boolean =>
   AUTHOR_INTRODUCTION.test(text) ||
   AUTHOR_PUBLICATION_NOTE.test(text) ||
   COURT_HEADER.test(text) ||
   FILING_HEADER.test(text) ||
   PARTICIPATION_NOTE.test(text) ||
-  OFFICE_HEADER.test(text) ||
+  isOfficeHeader(text) ||
   COURT_IDENTIFIER.test(text) ||
   DATE_ONLY.test(text.replace(/\s+/gu, ""));
 
@@ -76,14 +88,15 @@ const hasReadableSentence = (text: string): boolean => {
   ) {
     return false;
   }
-  for (const paragraph of text.split(/\n\s*\n/gu)) {
+  for (const paragraph of text.split(/\n[^\S\n]*\n/gu)) {
     const compact = paragraph.replace(/\s+/gu, " ").trim();
     if (isMetadata(compact)) {
       continue;
     }
     // Inspect each sentence separately so a damaged header cannot outweigh an
     // intact sentence, and a publisher message cannot supply its word tokens.
-    for (const sentence of compact.match(/[^.!?。！？]+[.!?。！？]+/gu) ?? []) {
+    // Sticky matching prevents retrying an unterminated tail at every character.
+    for (const [sentence] of compact.matchAll(/[^.!?。！？]*[.!?。！？]+/guy)) {
       const candidate = sentence.trim();
       if (
         SOURCE_PLACEHOLDERS.some((pattern) => pattern.test(candidate)) ||
@@ -94,7 +107,10 @@ const hasReadableSentence = (text: string): boolean => {
       ) {
         continue;
       }
-      const tokens = candidate.match(/\S+/gu) ?? [];
+      const tokens = Array.from(
+        candidate.matchAll(/\S+/gu),
+        ([match]) => match,
+      );
       const words = tokens.filter((token) =>
         /^["“”'‘’([{]*\p{L}+(?:['’−-]\p{L}+)*[,;:!?。.！？」\])}"“”'‘’]*$/u.test(
           token,
@@ -134,9 +150,13 @@ const isUndecodable = ({
   const letters = readable.match(/\p{L}/gu)?.length ?? 0;
   const punctuation = readable.match(/[^\p{L}\p{N}\s]/gu)?.length ?? 0;
   const damagedWord = /\p{L}[~+?![]\p{L}|\p{L}~~\p{L}/u.test(readable);
-  const intactWords =
-    readable.match(/(?<![\p{L}\p{N}])\p{L}+(?![\p{L}\p{N}])/gu) ?? [];
-  const tokens = readable.match(/\S+/gu) ?? [];
+  // Consume each alphanumeric run once; testing a trailing digit must not
+  // backtrack through a long letter run looking for another word boundary.
+  const intactWords = Array.from(
+    readable.matchAll(/[\p{L}\p{N}]+/gu),
+    ([match]) => match,
+  ).filter((word) => /^\p{L}+$/u.test(word));
+  const tokens = Array.from(readable.matchAll(/\S+/gu), ([match]) => match);
   const damagedTokens = tokens.filter((token) =>
     /\p{L}[~+?![]\p{L}|\p{L}~~\p{L}/u.test(token),
   );
@@ -162,9 +182,17 @@ export const classifyCourtListenerText = (
   text: string,
 ): CourtListenerTextUsability => {
   const normalized = text.toLowerCase().trim();
+  // Normalize spacing before matching whole lines so names and whitespace
+  // never compete for the same characters during backtracking.
   const unattributed = normalized
-    .replace(ATTRIBUTION, "\n")
-    .replace(SIGNATURE, "\n");
+    .split("\n")
+    .map((line) => {
+      const compactLine = line.replace(/[^\S\r\n]+/gu, " ").trim();
+      return ATTRIBUTION.test(compactLine) || SIGNATURE.test(compactLine)
+        ? ""
+        : line;
+    })
+    .join("\n");
   const compact = unattributed.replace(/\s+/gu, " ").trim();
   if (hasReadableSentence(unattributed)) {
     return COURTLISTENER_TEXT_USABILITY.USABLE;
@@ -184,7 +212,7 @@ export const classifyCourtListenerText = (
     // A suffix cannot consume the letter opening the next exemption code.
     .replace(/\([a-z]\)\s*\(\d+\)(?:\s*\([a-z]\)(?!\s*\(\d+\)))?/gu, " ")
     .replace(/\bappendix\s+\d+\b/gu, " ")
-    .replace(/\b\d+[\d/.,: -]*\b/gu, " ")
+    .replace(/\b\d[\d/.,: -]*\b/gu, " ")
     .replace(/\b(?:for|at|of|the|and|to|in|on)\b/gu, " ")
     .trim();
   if (
