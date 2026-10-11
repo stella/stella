@@ -1704,6 +1704,9 @@ export const rehydrateCaseLawCandidates = async ({
   // be carried through the scan.
   return {
     context: null,
+    rehydratedCandidateCount: candidates.filter((candidate) =>
+      byId.has(candidate.id),
+    ).length,
     ranked: representatives.filter((hit) => {
       const token = groupTokenById.get(hit.id);
       if (token === undefined) {
@@ -2197,6 +2200,44 @@ type SearchCorpusIndexDecisionsOptions = {
   dependencies?: SearchCorpusIndexDependencies;
 };
 
+type ReportMissingSearchSnippetsOptions = {
+  ranked: readonly RankedHit[];
+  servedIds: ReadonlySet<string>;
+  snippetById: ReadonlyMap<string, string>;
+};
+
+export const reportMissingSearchSnippets = ({
+  ranked,
+  servedIds,
+  snippetById,
+}: ReportMissingSearchSnippetsOptions): void => {
+  reportCaseLawIncompleteAnswer({
+    surface: "search",
+    reason: "snippet_missing",
+    count: ranked.filter(({ id }) => servedIds.has(id) && !snippetById.has(id))
+      .length,
+  });
+};
+
+type CountDroppedIdentityCandidatesOptions = {
+  candidateCount: number;
+  rehydratedCandidateCount: number;
+  offset: number;
+  limit: number;
+};
+
+/** Page shortfall from candidate rehydration, before the language-group fold. */
+export const countDroppedIdentityCandidates = ({
+  candidateCount,
+  rehydratedCandidateCount,
+  offset,
+  limit,
+}: CountDroppedIdentityCandidatesOptions): number => {
+  const inWindow = (count: number) =>
+    Math.max(0, Math.min(offset + limit, count) - offset);
+  return inWindow(candidateCount) - inWindow(rehydratedCandidateCount);
+};
+
 export const searchCorpusIndexDecisions = async ({
   body,
   caseLawDb,
@@ -2374,6 +2415,16 @@ export const searchCorpusIndexDecisions = async ({
         limit,
         offset,
         ranked: identityRanking.ranked,
+      });
+      reportCaseLawIncompleteAnswer({
+        surface: "search",
+        reason: "identity_row_dropped",
+        count: countDroppedIdentityCandidates({
+          candidateCount: ids.length,
+          rehydratedCandidateCount: identityRanking.rehydratedCandidateCount,
+          offset,
+          limit,
+        }),
       });
       if (identityRole === "pin") {
         pinned = identityRanking.ranked.slice(0, limit);
@@ -2630,12 +2681,10 @@ export const searchCorpusIndexDecisions = async ({
     reason: "rehydration_row_dropped",
     count: dispositions.excluded + dispositions.drift,
   });
-  reportCaseLawIncompleteAnswer({
-    surface: "search",
-    reason: "snippet_missing",
-    count: searchPage.pageRanked.filter(
-      ({ id }) => servedIds.has(id) && !snippetById.has(id),
-    ).length,
+  reportMissingSearchSnippets({
+    ranked: searchPage.pageRanked,
+    servedIds,
+    snippetById,
   });
   reportCaseLawIncompleteAnswer({
     surface: "search",
