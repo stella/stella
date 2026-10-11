@@ -260,13 +260,6 @@
     "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
   },
   {
-    "id": "apps/api/src/lib/audit-log.ts::insertAuditRows",
-    "writes": {
-      "insert:auditLogs": 1
-    },
-    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
-  },
-  {
     "id": "apps/api/src/lib/auth-artifacts.ts::agentDelegation",
     "writes": {
       "delete:agentDelegation": 1
@@ -566,6 +559,13 @@
     "id": "apps/api/src/lib/db/account-row.ts::anonymizeDeletedAccountRow",
     "writes": {
       "update:user": 1
+    },
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
+    "id": "apps/api/src/lib/db/audit-recording.ts::insertAuditRows",
+    "writes": {
+      "insert:auditLogs": 1
     },
     "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
   },

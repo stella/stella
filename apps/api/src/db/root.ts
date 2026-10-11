@@ -10,10 +10,21 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { queryCountLogger } from "@/api/lib/db-query-counter";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
+import { recordLegalResolveAuditInTransaction } from "@/api/lib/db/legal-resolve-audit";
+import type { LegalResolveAudit } from "@/api/lib/db/legal-resolve-audit";
 import { readAuditedActivitySummary } from "@/api/lib/db/operator-activity/read";
 import type { RegistrationQuery } from "@/api/lib/db/operator-registrations/input";
 import { readAuditedRegistrationPage } from "@/api/lib/db/operator-registrations/read";
 import type { createReviewAccountOrganizationStore } from "@/api/lib/db/review-account-organization-store";
+import { readOAuthClientBinding } from "@/api/lib/db/service-client-binding";
+import {
+  createServiceOAuthClientInTransaction,
+  changeServiceOAuthClientInTransaction,
+} from "@/api/lib/db/service-client-operator";
+import type {
+  CreateServiceOAuthClientOptions,
+  ChangeServiceOAuthClientOptions,
+} from "@/api/lib/db/service-client-operator";
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { mayReadPublicLaw } from "@/api/lib/usage/public-law-access";
 import { isLocalDevOpen } from "@/api/runtime-mode";
@@ -134,4 +145,30 @@ export type Transaction = TransactionOf<Database>;
 export const readOperatorActivitySummary = async (now: number) =>
   await withAggregateTransaction(rootDb, async (tx) =>
     readAuditedActivitySummary(tx, now),
+  );
+
+/** Organization-bound OAuth operations never expose the owner connection. */
+export const readServiceOAuthClientBinding = async (clientId: string) =>
+  await readOAuthClientBinding(rootDb, clientId);
+export const createServiceOAuthClient = async (
+  options: CreateServiceOAuthClientOptions,
+) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) =>
+      await createServiceOAuthClientInTransaction({ ...options, tx }),
+  );
+export const changeServiceOAuthClient = async (
+  options: ChangeServiceOAuthClientOptions,
+) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) =>
+      await changeServiceOAuthClientInTransaction({ ...options, tx }),
+  );
+export const recordLegalResolveAudit = async (options: LegalResolveAudit) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) =>
+      await recordLegalResolveAuditInTransaction({ ...options, tx }),
   );
