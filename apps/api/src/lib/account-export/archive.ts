@@ -151,12 +151,12 @@ export const buildAccountExportArchive = async ({
   };
 
   const entries = async function* () {
-    let inventory: AccountExportFile[] = [];
+    // One inventory read: user_files.json and the file entries both come from it.
+    const inventory = await readFileInventory();
     const userFilesSummary = { table: "user_files", count: 0 };
     for (const table of EXPORTED_ACCOUNT_TABLE_NAMES) {
       if (table === "user_files") {
         tables.push(userFilesSummary);
-        inventory = await readFileInventory();
         continue;
       }
       const summary = { table, count: 0 };

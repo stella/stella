@@ -31,6 +31,7 @@ import {
 } from "@/api/lib/db/account-row";
 import { readOwnFeedbackReportPage } from "@/api/lib/db/feedback-report-store";
 import { LIMITS } from "@/api/lib/limits";
+import { iterateCursorPages } from "@/api/lib/pagination";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 
 export type AccountExportDataDb = Pick<typeof rootDb, "select">;
@@ -43,6 +44,25 @@ const resolveScopedDatabase = async () => {
 
 const after = (column: AnyPgColumn, cursor: string | null) =>
   cursor === null ? undefined : sql`${column} > ${cursor}`;
+
+/**
+ * Walk one id-keyed reader in bounded pages: each page starts after the last
+ * id of the page before it, and an empty page ends the walk.
+ *
+ * @yields Each page's rows, in reader order.
+ */
+const idPages = <Row extends { id: string }>(
+  readPage: (after: Row["id"] | null) => Promise<Row[]>,
+  signal: AbortSignal,
+) => {
+  let last: Row["id"] | null = null;
+  return iterateCursorPages(async () => {
+    signal.throwIfAborted();
+    const items = await readPage(last);
+    last = items.at(-1)?.id ?? null;
+    return { items, nextCursor: last, limit: ACCOUNT_EXPORT_PAGE_SIZE };
+  });
+};
 const stillMember = (
   organizationId: SafeId<"organization">,
   userId: SafeId<"user">,
@@ -504,23 +524,17 @@ async function* accountMemberships({
   userId,
   signal,
 }: AccountMembershipOptions) {
-  let cursor: string | null = null;
-  while (true) {
-    signal.throwIfAborted();
-    const rows = await listAccountMembershipPage({
-      database: db,
-      userId,
-      ...(cursor === null ? {} : { after: cursor }),
-    });
-    const next = rows.at(-1)?.id;
-    if (next === undefined) {
-      return;
-    }
+  const pages = idPages(
+    async (cursor) =>
+      await listAccountMembershipPage({
+        database: db,
+        userId,
+        ...(cursor === null ? {} : { after: cursor }),
+      }),
+    signal,
+  );
+  for await (const rows of pages) {
     yield* rows;
-    if (next === cursor) {
-      panic("Account membership cursor did not advance");
-    }
-    cursor = next;
   }
 }
 
@@ -541,26 +555,21 @@ export async function* exportAccountRows({
     return;
   }
   if (table === "feedback_reports") {
-    let cursor: FeedbackReportPageRow["id"] | null = null;
-    while (true) {
-      signal.throwIfAborted();
-      const rows: FeedbackReportPageRow[] = await readOwnFeedbackReportPage({
-        database: db,
-        userId,
-        ...(cursor === null ? {} : { after: cursor }),
-      });
-      const next = rows.at(-1)?.id;
-      if (next === undefined) {
-        return;
-      }
+    const pages = idPages(
+      async (cursor: FeedbackReportPageRow["id"] | null) =>
+        await readOwnFeedbackReportPage({
+          database: db,
+          userId,
+          ...(cursor === null ? {} : { after: cursor }),
+        }),
+      signal,
+    );
+    for await (const rows of pages) {
       for (const row of rows) {
         yield projections.feedback_reports(row);
       }
-      if (next === cursor) {
-        panic("Feedback cursor did not advance");
-      }
-      cursor = next;
     }
+    return;
   }
   const database = scopedDatabase ?? (await resolveScopedDatabase());
   for await (const membership of accountMemberships({ db, userId, signal })) {
@@ -573,30 +582,24 @@ export async function* exportAccountRows({
       membership.organizationId,
     );
     const scopedDb = createScopedDb(database, [], organizationId, userId);
-    let cursor: string | null = null;
-    while (true) {
-      signal.throwIfAborted();
-      const rows = await readOrganizationPage({
-        projections,
-        scopedDb,
-        organizationId,
-        userId,
-        table,
-        cursor,
-      });
-      if (rows.length === 0) {
-        break;
-      }
+    const pages = idPages(
+      async (cursor) =>
+        await readOrganizationPage({
+          projections,
+          scopedDb,
+          organizationId,
+          userId,
+          table,
+          cursor,
+        }),
+      signal,
+    );
+    for await (const rows of pages) {
       for (const { value } of rows) {
         if (value !== null && value !== undefined) {
           yield { organizationId, data: value };
         }
       }
-      const next = rows.at(-1)?.id;
-      if (next === undefined || next === cursor) {
-        panic("Account export cursor did not advance");
-      }
-      cursor = next;
     }
   }
 }
@@ -657,18 +660,17 @@ export async function* exportAccountFiles({
       membership.organizationId,
     );
     const scopedDb = createScopedDb(database, [], organizationId, userId);
-    let cursor: string | null = null;
-    while (true) {
-      signal.throwIfAborted();
-      const rows = await readUserFileObjectsPage({
-        scopedDb,
-        organizationId,
-        userId,
-        cursor,
-      });
-      if (rows.length === 0) {
-        break;
-      }
+    const pages = idPages(
+      async (cursor) =>
+        await readUserFileObjectsPage({
+          scopedDb,
+          organizationId,
+          userId,
+          cursor,
+        }),
+      signal,
+    );
+    for await (const rows of pages) {
       for (const row of rows) {
         yield {
           organizationId,
@@ -677,11 +679,6 @@ export async function* exportAccountFiles({
           sizeBytes: row.sizeBytes,
         };
       }
-      const next = rows.at(-1)?.id;
-      if (next === undefined || next === cursor) {
-        panic("Account file cursor did not advance");
-      }
-      cursor = next;
     }
   }
 }

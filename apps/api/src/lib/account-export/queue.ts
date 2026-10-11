@@ -35,7 +35,10 @@ import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { deleteS3Keys } from "@/api/lib/files/utils";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import { encodePaginationCursor } from "@/api/lib/pagination";
+import {
+  encodePaginationCursor,
+  iterateCursorPages,
+} from "@/api/lib/pagination";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 
@@ -300,21 +303,30 @@ export const createAccountExportWorker =
           try {
             const sweep = await Result.tryPromise({
               try: async () => {
-                for (
-                  let pageNumber = 0;
-                  pageNumber < RECOVERY_PAGES_PER_TICK;
-                  pageNumber += 1
-                ) {
-                  if (stopped()) {
+                // Resume where the previous tick stopped; the first read after
+                // a finished sweep starts from the beginning again.
+                const resumeFrom = cursor;
+                const pages = iterateCursorPages(
+                  async (next) =>
+                    await listRecoverableAccountExports(db, next ?? resumeFrom),
+                );
+                if (stopped()) {
+                  return;
+                }
+                let pagesRead = 0;
+                for await (const rows of pages) {
+                  // A page past this tick's budget is left for the next tick,
+                  // which resumes after the last recovered row.
+                  if (pagesRead >= RECOVERY_PAGES_PER_TICK) {
                     return;
                   }
-                  const page = await listRecoverableAccountExports(db, cursor);
-                  for (const row of page.items) {
+                  for (const row of rows) {
                     if (stopped()) {
                       return;
                     }
                     const recovered = await Result.tryPromise({
                       try: async () =>
+                        // db-await-in-loop: rows recover one at a time so each row's state transition, storage cleanup, and failure stay isolated and the tick deadline is honoured between rows; a tick reads at most RECOVERY_PAGES_PER_TICK pages
                         await recoverAccountExport({ row, db, signal }),
                       catch: (cause) => cause,
                     });
@@ -326,13 +338,12 @@ export const createAccountExportWorker =
                     }
                     // Retain progress within a page when this tick's deadline
                     // ends; one slow row cannot pin recovery to the first page.
+                    // After a page's last row this equals its next cursor.
                     cursor = encodePaginationCursor([row.id]);
                   }
-                  cursor = page.nextCursor;
-                  if (cursor === null) {
-                    return;
-                  }
+                  pagesRead += 1;
                 }
+                cursor = null;
               },
               catch: (cause) => cause,
             });
