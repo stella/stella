@@ -80,6 +80,12 @@ test("style elements follow the CSS policy", () => {
   ).toContain("Script-bearing CSS: style");
 });
 
+test("style attributes follow the CSS policy", () => {
+  expect(
+    inspectMcpAppHtml('<div style="width: expression(1)"></div>'),
+  ).toContain("Script-bearing CSS style: div");
+});
+
 test.each([
   ".expressionless { color: red }",
   'body::before { content: "expressionless" }',
