@@ -52,8 +52,10 @@ describe("account export HTTP authentication", () => {
             }),
           resolveAuthorization: async (identity) => {
             membershipReads += 1;
-            expect(identity.userId).toBe(oauthSession.userId);
-            expect(identity.organizationId).toBe(oauthSession.organizationId);
+            expect<string>(identity.userId).toBe(oauthSession.userId);
+            expect<string>(identity.organizationId).toBe(
+              oauthSession.organizationId,
+            );
             return memberAuthorization;
           },
           getSession: async () =>

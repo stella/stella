@@ -37,6 +37,8 @@ export const OAUTH_REGISTRATION_SCOPE_POLICY = {
   "stella:billing_write": "open",
   "stella:admin_read": "elevated",
   "stella:admin_write": "elevated",
+  "stella:account_export_read": "elevated",
+  "stella:account_export_write": "elevated",
   "stella:onboarding": "open",
   "stella:skills": "open",
   "stella:external_mcps": "elevated",

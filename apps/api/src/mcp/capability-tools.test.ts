@@ -3365,9 +3365,15 @@ describe("capability executor deployment feature gate", () => {
           !isFeatureEnabled(snapshot, entry.featureId, context),
       )
       .map(({ id }) => id);
-    expect([...new Set([...disabledIds, ...ungrantedIds])].toSorted()).toEqual(
-      hidden,
-    );
+    // Account exports also require account consent, which this caller lacks.
+    const accountConsentIds = capabilityCatalog
+      .filter((entry) => entry.id.startsWith("account-exports."))
+      .map(({ id }) => id);
+    expect(
+      [
+        ...new Set([...disabledIds, ...ungrantedIds, ...accountConsentIds]),
+      ].toSorted(),
+    ).toEqual(hidden);
   });
 
   test("describe exposes the feature flag on an enabled entry", async () => {
@@ -3800,7 +3806,10 @@ for (const grants of [
 
 describe("capability executor access isolation", () => {
   const enabledContext = () => {
-    const context = createContext({ grantedScopes: [...MCP_OAUTH_SCOPES] });
+    const context = createContext({
+      credential: { type: "oauth_client", clientId: "client" },
+      grantedScopes: [...MCP_OAUTH_SCOPES],
+    });
     const grants = Object.fromEntries(
       Object.keys(FEATURE_REGISTRY).map((featureId) => [
         featureId,

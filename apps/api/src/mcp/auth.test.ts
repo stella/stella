@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import type { JWTPayload } from "jose";
+import type { JWTPayload, JWTVerifyOptions } from "jose";
 
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import { MACHINE_API_KEY_PREFIX } from "@/api/lib/machine-api-key-config";
@@ -37,7 +37,10 @@ describe("extractMcpSession", () => {
     const authenticated = await authenticateAccountExportRequest(
       "oauth-token",
       {
-        verifyToken: async (_token, options) => {
+        verifyToken: async (
+          _token: string | undefined,
+          options?: { verifyOptions?: JWTVerifyOptions },
+        ) => {
           verifications += 1;
           expect(options?.verifyOptions?.audience).toEqual([
             getMcpResourceUrl("advanced"),
