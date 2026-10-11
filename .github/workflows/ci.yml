@@ -67,8 +67,8 @@ concurrency:
 permissions: {}
 
 env:
-  # Queue-ref cache entries cannot be reused by other refs.
-  TURBO_CACHE: ${{ github.event_name == 'merge_group' && 'local:rw,remote:r' || 'local:rw,remote:rw' }}
+  # Only main populates the shared cache; PR and queue runs restore it.
+  TURBO_CACHE: ${{ github.ref == 'refs/heads/main' && 'local:rw,remote:rw' || 'local:rw,remote:r' }}
   # Disposable non-RDS databases: online index builds in migrate must not wait
   # on EBS metrics or a wall-clock busy window.
   DB_LOAD_GATE_EBS_SIGNAL: disabled
@@ -3830,6 +3830,12 @@ jobs:
         env:
           STELLA_VERIFY: check
         run: bun test scripts/verify.test.ts scripts/verify-workflow.test.ts scripts/prepare-typecheck-base.test.ts
+
+      - name: Typecheck cache contract
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        env:
+          STELLA_VERIFY: check
+        run: bun test scripts/typecheck-cache.test.ts
 
       - name: Test CI check partition
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
