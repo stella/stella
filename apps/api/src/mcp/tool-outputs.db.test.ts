@@ -475,6 +475,7 @@ describe("every MCP tool's real output passes its output contract", () => {
     const seeded: Seeded = { userId: caller.userId };
     for (const step of STEPS) {
       const result = await handleMcpToolCall({
+        mode: "advanced",
         args: step.args(seeded),
         context: await requestContext(caller),
         toolName: step.tool,

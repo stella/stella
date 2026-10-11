@@ -1,12 +1,48 @@
-import { mergeAttributes, Node } from "@tiptap/core";
+import { Extension, mergeAttributes, Node } from "@tiptap/core";
 import type { Editor, JSONContent } from "@tiptap/core";
 import { ReactNodeViewRenderer } from "@tiptap/react";
+import * as v from "valibot";
 
 import { SKILL_REF_HREF_PREFIX } from "@stll/api-contract";
 
 import { ChatPastedTextNode } from "@/components/chat-pasted-text-node";
 
 export const PASTED_TEXT_NODE_NAME = "pastedText";
+
+export const PASTED_TEXT_ATTACHMENTS_ATTR = "pastedTextAttachments";
+
+const pastedTextAttachmentsSchema = v.array(
+  v.object({
+    type: v.literal("pasted_text"),
+    id: v.string(),
+    text: v.string(),
+  }),
+);
+export type PastedTextAttachment = v.InferOutput<
+  typeof pastedTextAttachmentsSchema
+>[number];
+
+export const readPastedTextAttachments = (value: unknown) =>
+  v.parse(pastedTextAttachmentsSchema, value);
+
+// Document attributes use invertible DocAttrSteps, so attachment edits share
+// the editor's history without contributing duplicate text to submitted HTML.
+export const ChatPastedTextAttachments = Extension.create({
+  name: "chatPastedTextAttachments",
+  addGlobalAttributes() {
+    return [
+      {
+        types: ["doc"],
+        attributes: {
+          [PASTED_TEXT_ATTACHMENTS_ATTR]: {
+            default: [],
+            rendered: false,
+          },
+        },
+      },
+    ];
+  },
+});
 
 const PASTED_TEXT_SOURCES = ["paste", "prompt", "skill", "command"] as const;
 export type PastedTextSource = (typeof PASTED_TEXT_SOURCES)[number];

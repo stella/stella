@@ -29,6 +29,7 @@ const lookupPreviewBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Preview a registry-lookup field: resolve a company number against the " +
     "chosen public register and render the field's format string over the " +

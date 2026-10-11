@@ -727,6 +727,13 @@
         "procedural-history": "Histórico processual",
         "reasoning": "Fundamentação"
       },
+      "errors": {
+        "answerIncomplete": "{source, select, organization {A chave {provider} da sua organização retornou uma resposta incompleta.} other {O modelo de IA retornou uma resposta incompleta.}}",
+        "providerRefused": "{source, select, organization {{provider} recusou a solicitação feita com a chave da sua organização. Verifique a chave, a cota e o faturamento nas configurações da organização.} other {O provedor de IA recusou a solicitação.}}",
+        "providerUnavailable": "{source, select, organization {{provider} está indisponível no momento para a chave da sua organização.} other {O provedor de IA está indisponível no momento.}}",
+        "timedOut": "{source, select, organization {{provider} não respondeu a tempo com a chave da sua organização.} other {O modelo de IA não respondeu a tempo.}}",
+        "unavailable": "A análise por IA não está disponível para esta decisão."
+      },
       "generate": "Gerar ementas com IA",
       "holdingAnchor": "Ir para o parágrafo",
       "invitation": "Com uma conta gratuita, a IA prepara notas de trabalho sobre esta decisão.",
@@ -1326,7 +1333,9 @@
     "pastedText": {
       "expand": "Mostrar texto completo",
       "fromClipboard": "{count, plural, one {# caractere colado} other {# caracteres colados}}",
-      "fromPromptFallback": "Habilidade"
+      "fromPromptFallback": "Habilidade",
+      "showInTextField": "Mostrar no campo de texto",
+      "title": "Texto colado"
     },
     "placeholder": "Digite sua pergunta aqui, / para habilidades, @ para adicionar contexto",
     "promptImprovementStrategies": {
@@ -1984,6 +1993,7 @@
     "sort": "Classificar",
     "source": "Fonte",
     "stale": "Desatualizado",
+    "start": "Começar",
     "status": "Status",
     "stepCount": "{count, plural, one {# etapa} other {# etapas}}",
     "stepProgress": "{current} de {total}",
@@ -2063,11 +2073,38 @@
     "scopeSkills": "Usar suas habilidades stella salvas",
     "scopeTemplates": "Listar, preencher e criar seus modelos de documento",
     "scopeTemplatesAnonymized": "Listar, preencher e criar versões anônimas de seus modelos de documento",
+    "sensitiveAccess": "Inclui acesso que pode excluir dados ou alterar sua organização",
+    "showAllPermissions": "{count, plural, one {Mostrar a permissão} other {Mostrar todas as # permissões}}",
     "signedInAs": "Conectado como <email>{accountEmail}</email>",
+    "summaryAdminRead": "registro de auditoria",
+    "summaryAdminWrite": "membros e configurações da organização, incluindo excluí-los",
+    "summaryBillingWrite": "lançamentos de horas, incluindo excluí-los",
+    "summaryChat": "conversas, incluindo excluí-los",
+    "summaryContactsWrite": "contatos, incluindo excluí-los",
+    "summaryDocumentsWrite": "documentos, incluindo excluí-los",
+    "summaryExternalMcps": "ferramentas externas conectadas",
+    "summaryFeedback": "comentários",
+    "summaryKnowledgeWrite": "cláusulas e playbooks, incluindo excluir cláusulas",
+    "summaryLawRead": "legislação pública e jurisprudência",
+    "summaryLineChange": "<group>Pode alterar:</group> {items} ({count})",
+    "summaryLineOther": "<group>Também:</group> {items}",
+    "summaryLineRead": "<group>Pode ler:</group> {items} ({count})",
+    "summaryMattersWrite": "casos e tarefas, incluindo excluí-los",
+    "summaryOfflineAccess": "sessão mantida",
+    "summaryOnboarding": "jurisdições de atuação",
+    "summaryProfile": "perfil",
+    "summaryRead": "documentos, casos e contatos",
+    "summaryReadAnonymized": "documentos e casos anonimizados",
+    "summarySearch": "pesquisa",
+    "summarySearchAnonymized": "pesquisa anonimizada",
+    "summarySkills": "habilidades, incluindo excluí-los",
+    "summaryTemplates": "modelos de documento, incluindo excluí-los",
+    "summaryTemplatesAnonymized": "modelos de documento anonimizados",
     "title": "Autorizar acesso",
     "unverifiedApp": "Aplicativo não verificado",
     "unverifiedExplanation": "O stella não verificou quem publica este aplicativo.",
-    "useAnotherAccount": "Usar outra conta"
+    "useAnotherAccount": "Usar outra conta",
+    "verifiedPublisher": "App verificado de {publisher}"
   },
   "contacts": {
     "alsoPartyIn": "Também aparece como parte em {count, plural, one {# outro caso} many {# outros casos} other {# outros casos}}",
@@ -2771,7 +2808,6 @@
       },
       "selectFlow": "Escolha um fluxo de trabalho",
       "sizeConfirmTitle": "Execução de fluxo extensa",
-      "start": "Iniciar",
       "startFailed": "Não foi possível iniciar o fluxo de trabalho.",
       "started": "Fluxo de trabalho iniciado",
       "stepProgress": "Etapa {current} de {total}",
@@ -2988,8 +3024,7 @@
   "guides": {
     "action": {
       "replay": "Começar de novo",
-      "skip": "Pular",
-      "start": "Começar"
+      "skip": "Pular"
     },
     "checklist": {
       "progress": "{completed} de {total} concluídos"
@@ -3669,6 +3704,10 @@
         "nameMissing": "Não salvo: adicione um nome",
         "positionsNeedAttention": "Não salvo: {count, plural, one {# posição precisa} other {# posições precisam}} de atenção"
       },
+      "buildWithAi": {
+        "description": "Responda a algumas perguntas em um chat e o playbook vai sendo salvo durante a conversa.",
+        "title": "Criar com IA"
+      },
       "check": "Usar uma regra exata em vez de IA",
       "checkHint": "Para condições mensuráveis, por exemplo: prazo de pagamento ≤ 30 dias.",
       "checkKind": {
@@ -4135,11 +4174,16 @@
       "customModelDescription": "Este ID de modelo não está no catálogo da stella. Ele será enviado ao provedor selecionado exatamente como digitado.",
       "customModelHint": "Nenhuma correspondência de catálogo. Digite qualquer ID de modelo; IDs personalizados são salvos conforme digitados.",
       "decision": {
+        "dataRegion": "Região dos dados",
         "description": "Perguntas com respostas fixas (categorias de documentos, polaridade das citações)",
         "generativeFallback": "Usa o modelo generativo para a tarefa.",
         "incomplete": "Informe uma chave de API e um modelo para o modelo de decisão, ou remova-o.",
         "instanceProvided": "stella já fornece um modelo de decisão; adicione o seu apenas para usar outro.",
-        "label": "Tomada de decisões"
+        "label": "Tomada de decisões",
+        "regionEu": "União Europeia",
+        "regionGlobal": "Mundial",
+        "reuseOpenAIKey": "Usar minha chave OpenAI",
+        "separateKey": "Usar uma chave separada"
       },
       "defaultModel": "Padrão: {model}",
       "defaultModelOption": "Padrão",
@@ -6058,12 +6102,30 @@
         "addPDF": "Adicionar PDF",
         "applyCrop": "Aplicar recorte",
         "crop": "Recortar",
-        "cropBottom": "Inferior",
-        "cropDescription": "{count, plural, one {Defina as margens de recorte para a página selecionada.} other {Defina as margens de recorte para as # páginas selecionadas.}}",
-        "cropLeft": "Esquerda",
-        "cropRight": "Direita",
+        "cropAdvanced": "Opções avançadas",
+        "cropBottom": "Inferior (mm)",
+        "cropDescription": "{count, plural, one {Defina as margens de recorte para a página selecionada em milímetros.} other {Defina as margens de recorte para as # páginas selecionadas em milímetros.}}",
+        "cropHandle": "Redimensionar o recorte: {position}",
+        "cropHandleBottom": "inferior",
+        "cropHandleBottomLeft": "inferior esquerdo",
+        "cropHandleBottomRight": "inferior direito",
+        "cropHandleLeft": "esquerdo",
+        "cropHandleRight": "direito",
+        "cropHandleTop": "superior",
+        "cropHandleTopLeft": "superior esquerdo",
+        "cropHandleTopRight": "superior direito",
+        "cropHint": "Arraste a área ou suas alças. As setas ajustam o recorte em 1 mm; com Shift, em 10 mm. As mesmas margens se aplicam a todas as páginas selecionadas.",
+        "cropLeft": "Esquerda (mm)",
+        "cropMove": "Mover a área de recorte",
+        "cropNextPage": "Próxima página selecionada",
+        "cropPage": "Página {page, number} de {count, number}",
+        "cropPreview": "Prévia do recorte, página {page, number}",
+        "cropPreviewFailed": "Não foi possível exibir a prévia da página.",
+        "cropPreviousPage": "Página selecionada anterior",
+        "cropRight": "Direita (mm)",
         "cropTitle": "Recortar páginas",
-        "cropTop": "Superior",
+        "cropTooSmall": "Esta página é pequena demais para um recorte de pelo menos 10 mm.",
+        "cropTop": "Superior (mm)",
         "delete": "Excluir",
         "deselectAll": "Desmarcar tudo",
         "discard": "Descartar",

@@ -114,7 +114,7 @@ requires (request it at `stella auth login --scopes`).
 | contact | `stella contact lookup-registry` | read |  |
 | contact | `stella contact read` | read |  |
 | contact | `stella contact save` | matters_write | destructive (needs `--yes` off a TTY) |
-| document | `stella document compare` | documents_write | destructive (needs `--yes` off a TTY) |
+| document | `stella document compare` | documents_write |  |
 | document | `stella document comparison prepare` | documents_write |  |
 | document | `stella document comparison prepare-from-links` | documents_write |  |
 | document | `stella document content` | read | paginated; windowed text |

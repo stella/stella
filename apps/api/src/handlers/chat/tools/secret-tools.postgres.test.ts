@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 
 import { USE_CONNECTOR_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
 
-import { organization, user } from "@/api/db/auth-schema";
+import { member, organization, user } from "@/api/db/auth-schema";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import {
   chatSecrets,
@@ -13,6 +13,7 @@ import {
   mcpConnectors,
   mcpUserConnections,
 } from "@/api/db/schema";
+import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { storeChatSecret } from "@/api/handlers/chat/chat-secrets";
 import { createSecretTools } from "@/api/handlers/chat/tools/secret-tools";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -53,6 +54,13 @@ const withFixture = async (
     createdAt: new Date(),
     updatedAt: new Date(),
   });
+  await db.insert(member).values({
+    id: Bun.randomUUIDv7(),
+    organizationId,
+    userId,
+    role: "owner",
+    createdAt: new Date(),
+  });
   try {
     await db.insert(mcpConnectors).values({
       id: connectorId,
@@ -73,11 +81,19 @@ const withFixture = async (
       enabled: true,
     });
     if (pendingReview) {
-      await db.insert(mcpConnectorAuthorizationReviews).values({
+      await createScopedDb(
+        markRlsDatabase(db),
+        [],
         organizationId,
-        connectorId,
-        status: "needs_reapproval",
-      });
+        userId,
+      )(
+        async (tx) =>
+          await tx.insert(mcpConnectorAuthorizationReviews).values({
+            organizationId,
+            connectorId,
+            status: "needs_reapproval",
+          }),
+      );
     }
     await run({ organizationId, userId, connectorId, connectionId });
   } finally {
@@ -230,7 +246,7 @@ if (!databaseUrl || !runPostgres) {
             const upstream = fakeUpstream();
             const tools = createSecretTools({
               safeDb: safeDbFromScoped(
-                async (run) => await db.transaction(run),
+                createScopedDb(markRlsDatabase(db), [], organizationId, userId),
               ),
               organizationId,
               userId,
@@ -284,7 +300,7 @@ if (!databaseUrl || !runPostgres) {
           db,
           async ({ organizationId, userId, connectorId }) => {
             const safeDb = safeDbFromScoped(
-              async (run) => await db.transaction(run),
+              createScopedDb(markRlsDatabase(db), [], organizationId, userId),
             );
             const tools = createSecretTools({
               safeDb,

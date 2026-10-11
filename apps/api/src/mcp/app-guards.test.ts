@@ -8,6 +8,11 @@ const readerTool = {
   description: "Read decision blocks",
   access: "read",
   readClass: "public",
+  annotationReasons: {
+    readOnlyHint: "Reads fixture data without modifying it.",
+    destructiveHint: "The fixture changes no existing data.",
+    openWorldHint: "The fixture reads local data only.",
+  },
   anonymized: { exposure: "passthrough" },
   consumesServices: false,
   scope: "stella:read",
@@ -67,6 +72,10 @@ describe("presentation app tool audiences", () => {
       scope: readerTool.scope,
       inputSchema: readerTool.inputSchema,
       annotations: { ...readerTool.annotations, readOnlyHint: false },
+      annotationReasons: {
+        ...readerTool.annotationReasons,
+        readOnlyHint: "Writes fixture data.",
+      },
       anonymized: readerTool.anonymized,
       consumesServices: readerTool.consumesServices,
       _meta: readerTool._meta,

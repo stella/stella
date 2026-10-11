@@ -727,6 +727,13 @@
         "procedural-history": "Menetluskäik",
         "reasoning": "Arutlus"
       },
+      "errors": {
+        "answerIncomplete": "{source, select, organization {Sinu organisatsiooni {provider}-võti andis puuduliku vastuse.} other {AI-mudel andis puuduliku vastuse.}}",
+        "providerRefused": "{source, select, organization {{provider} lükkas sinu organisatsiooni võtmega tehtud päringu tagasi. Kontrolli võtit, selle limiiti ja arveldust organisatsiooni seadetes.} other {AI-teenusepakkuja lükkas päringu tagasi.}}",
+        "providerUnavailable": "{source, select, organization {{provider} pole sinu organisatsiooni võtmega praegu saadaval.} other {AI-teenusepakkuja pole praegu saadaval.}}",
+        "timedOut": "{source, select, organization {{provider} ei vastanud sinu organisatsiooni võtmega õigel ajal.} other {AI-mudel ei vastanud õigel ajal.}}",
+        "unavailable": "Selle lahendi AI-analüüs pole saadaval."
+      },
       "generate": "Koosta AI lühikokkuvõtted",
       "holdingAnchor": "Mine lõigu juurde",
       "invitation": "Tasuta kontoga koostab AI selle lahendi kohta töömärkmed.",
@@ -1326,7 +1333,9 @@
     "pastedText": {
       "expand": "Näita kogu teksti",
       "fromClipboard": "Kleebitud {count, plural, one {# märk} other {# märki}}",
-      "fromPromptFallback": "Oskus"
+      "fromPromptFallback": "Oskus",
+      "showInTextField": "Kuva tekstiväljal",
+      "title": "Kleebitud tekst"
     },
     "placeholder": "Kirjutage oma küsimus siia, / oskuste jaoks, @ konteksti lisamiseks",
     "promptImprovementStrategies": {
@@ -1984,6 +1993,7 @@
     "sort": "Sorteeri",
     "source": "Allikas",
     "stale": "Aegunud",
+    "start": "Alusta",
     "status": "Olek",
     "stepCount": "{count, plural, one {# samm} other {# sammu}}",
     "stepProgress": "{current} / {total}",
@@ -2063,11 +2073,38 @@
     "scopeSkills": "Teie salvestatud stella oskuste kasutamine",
     "scopeTemplates": "Dokumendimallide loend, täitmine ja loomine",
     "scopeTemplatesAnonymized": "Loendada, täita ja luua teie dokumendimallide anonüümitud versioone",
+    "sensitiveAccess": "Sisaldab juurdepääsu, mis võib andmeid kustutada või teie organisatsiooni muuta",
+    "showAllPermissions": "{count, plural, one {Näita õigust} other {Näita kõiki # õigust}}",
     "signedInAs": "Sisse logitud kui <email>{accountEmail}</email>",
+    "summaryAdminRead": "auditilogi",
+    "summaryAdminWrite": "organisatsiooni liikmed ja seaded, sealhulgas nende kustutamine",
+    "summaryBillingWrite": "ajakirjed, sealhulgas nende kustutamine",
+    "summaryChat": "vestlused, sealhulgas nende kustutamine",
+    "summaryContactsWrite": "kontaktid, sealhulgas nende kustutamine",
+    "summaryDocumentsWrite": "dokumendid, sealhulgas nende kustutamine",
+    "summaryExternalMcps": "ühendatud välised tööriistad",
+    "summaryFeedback": "tagasiside",
+    "summaryKnowledgeWrite": "klauslid ja playbookid, sealhulgas klauslite kustutamine",
+    "summaryLawRead": "avalikke õigusakte ja kohtupraktikat",
+    "summaryLineChange": "<group>Saab muuta:</group> {items} ({count})",
+    "summaryLineOther": "<group>Lisaks:</group> {items}",
+    "summaryLineRead": "<group>Saab lugeda:</group> {items} ({count})",
+    "summaryMattersWrite": "toimikud ja ülesanded, sealhulgas nende kustutamine",
+    "summaryOfflineAccess": "sisselogituks jäämine",
+    "summaryOnboarding": "praktikajurisdiktsioonid",
+    "summaryProfile": "profiil",
+    "summaryRead": "dokumendid, toimikud ja kontaktid",
+    "summaryReadAnonymized": "anonüümitud dokumendid ja toimikud",
+    "summarySearch": "otsing",
+    "summarySearchAnonymized": "anonüümitud otsing",
+    "summarySkills": "oskused, sealhulgas nende kustutamine",
+    "summaryTemplates": "dokumendimallid, sealhulgas nende kustutamine",
+    "summaryTemplatesAnonymized": "anonüümitud dokumendimallid",
     "title": "Anna juurdepääs",
     "unverifiedApp": "Kinnitamata rakendus",
     "unverifiedExplanation": "stella pole kontrollinud, kes selle rakenduse avaldab.",
-    "useAnotherAccount": "Kasuta teist kontot"
+    "useAnotherAccount": "Kasuta teist kontot",
+    "verifiedPublisher": "Kinnitatud rakendus, väljaandja {publisher}"
   },
   "contacts": {
     "alsoPartyIn": "Esineb osapoolena ka {count, plural, one {# teises toimikus} other {# teises toimikus}}",
@@ -2771,7 +2808,6 @@
       },
       "selectFlow": "Vali töövoog",
       "sizeConfirmTitle": "Mahukas töövoo käivitus",
-      "start": "Alusta",
       "startFailed": "Töövoogu ei õnnestunud käivitada.",
       "started": "Töövoog käivitatud",
       "stepProgress": "Samm {current} / {total}",
@@ -2988,8 +3024,7 @@
   "guides": {
     "action": {
       "replay": "Alusta uuesti",
-      "skip": "Jäta vahele",
-      "start": "Alusta"
+      "skip": "Jäta vahele"
     },
     "checklist": {
       "progress": "{completed} / {total} tehtud"
@@ -3669,6 +3704,10 @@
         "nameMissing": "Salvestamata: lisage nimi",
         "positionsNeedAttention": "Salvestamata: {count, plural, one {# seisukoht vajab} other {# seisukohta vajavad}} tähelepanu"
       },
+      "buildWithAi": {
+        "description": "Vasta vestluses mõnele küsimusele ja playbook salvestatakse jooksvalt.",
+        "title": "Loo AI-ga"
+      },
       "check": "Kasuta tehisintellekti asemel täpset reeglit",
       "checkHint": "Mõõdetavate tingimuste jaoks, näiteks: maksetähtaeg ≤ 30 päeva.",
       "checkKind": {
@@ -4135,11 +4174,16 @@
       "customModelDescription": "Seda mudeli ID-d stella kataloogis ei ole. See saadetakse valitud teenusepakkujale sisestatud kujul.",
       "customModelHint": "Kataloogis vastet pole. Sisesta ükskõik milline mudeli ID; kohandatud ID salvestatakse sisestatud kujul.",
       "decision": {
+        "dataRegion": "Andmepiirkond",
         "description": "Kindla vastusega küsimused (dokumendikategooriad, viidete polaarsus)",
         "generativeFallback": "Kasutab ülesande jaoks generatiivset mudelit.",
         "incomplete": "Sisesta otsustusmudeli jaoks API-võti ja mudel või eemalda see.",
         "instanceProvided": "stella pakub juba otsustusmudelit; lisa oma ainult siis, kui soovid mõnda teist kasutada.",
-        "label": "Otsustamine"
+        "label": "Otsustamine",
+        "regionEu": "Euroopa Liit",
+        "regionGlobal": "Ülemaailmne",
+        "reuseOpenAIKey": "Kasuta minu OpenAI võtit",
+        "separateKey": "Kasuta eraldi võtit"
       },
       "defaultModel": "Vaikimisi: {model}",
       "defaultModelOption": "Vaikimisi",
@@ -6058,12 +6102,30 @@
         "addPDF": "Lisa PDF",
         "applyCrop": "Rakenda kärpimine",
         "crop": "Kärbi",
-        "cropBottom": "All",
-        "cropDescription": "{count, plural, one {Määra valitud lehe kärpimisveerised.} other {Määra # valitud lehe kärpimisveerised.}}",
-        "cropLeft": "Vasakul",
-        "cropRight": "Paremal",
+        "cropAdvanced": "Täpsemad seaded",
+        "cropBottom": "All (mm)",
+        "cropDescription": "{count, plural, one {Määra valitud lehe kärpimisveerised millimeetrites.} other {Määra # valitud lehe kärpimisveerised millimeetrites.}}",
+        "cropHandle": "Muuda kärpimisala suurust: {position}",
+        "cropHandleBottom": "all",
+        "cropHandleBottomLeft": "all vasakul",
+        "cropHandleBottomRight": "all paremal",
+        "cropHandleLeft": "vasakul",
+        "cropHandleRight": "paremal",
+        "cropHandleTop": "üleval",
+        "cropHandleTopLeft": "üleval vasakul",
+        "cropHandleTopRight": "üleval paremal",
+        "cropHint": "Lohista ala või selle pidemeid. Nooleklahvid muudavad kärpimist 1 mm kaupa, koos Shiftiga 10 mm kaupa. Kõigile valitud lehtedele rakendatakse samu veeriseid.",
+        "cropLeft": "Vasakul (mm)",
+        "cropMove": "Liiguta kärpimisala",
+        "cropNextPage": "Järgmine valitud leht",
+        "cropPage": "Leht {page, number} / {count, number}",
+        "cropPreview": "Kärpimise eelvaade, leht {page, number}",
+        "cropPreviewFailed": "Lehe eelvaadet ei õnnestunud kuvada.",
+        "cropPreviousPage": "Eelmine valitud leht",
+        "cropRight": "Paremal (mm)",
         "cropTitle": "Kärbi lehti",
-        "cropTop": "Ülal",
+        "cropTooSmall": "See leht on liiga väike, et kärpida seda vähemalt 10 mm suuruseks.",
+        "cropTop": "Ülal (mm)",
         "delete": "Kustuta",
         "deselectAll": "Tühista kõik valikud",
         "discard": "Loobu",

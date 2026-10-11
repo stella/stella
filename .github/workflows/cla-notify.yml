@@ -1,4 +1,8 @@
 name: Contributor signature notification
+defaults:
+  run:
+    shell: bash
+
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]

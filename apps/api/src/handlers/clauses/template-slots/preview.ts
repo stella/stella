@@ -31,6 +31,7 @@ const templateSlotPreviewParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason: "Returns parsed template slot data rather than stored-file bytes.",

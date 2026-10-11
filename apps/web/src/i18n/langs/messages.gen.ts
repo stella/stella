@@ -730,6 +730,13 @@ type Messages = {
         "procedural-history": "Procedural history";
         "reasoning": "Reasoning";
       };
+      "errors": {
+        "answerIncomplete": "{source, select, organization {Your organization's {provider} key returned an incomplete answer.} other {The AI model returned an incomplete answer.}}";
+        "providerRefused": "{source, select, organization {{provider} refused the request made with your organization's key. Check the key, its quota and billing in organization settings.} other {The AI provider refused the request.}}";
+        "providerUnavailable": "{source, select, organization {{provider} is unavailable for your organization's key right now.} other {The AI provider is unavailable right now.}}";
+        "timedOut": "{source, select, organization {{provider} did not answer in time using your organization's key.} other {The AI model did not answer in time.}}";
+        "unavailable": "AI analysis is not available for this decision.";
+      };
       "generate": "Generate AI headnotes";
       "holdingAnchor": "Go to paragraph";
       "invitation": "With a free account, AI drafts working notes on this decision.";
@@ -1330,6 +1337,8 @@ type Messages = {
       "expand": "Show full text";
       "fromClipboard": "Pasted {count, plural, one {# character} other {# characters}}";
       "fromPromptFallback": "Skill";
+      "showInTextField": "Show in text field";
+      "title": "Pasted text";
     };
     "placeholder": "Type your question here, / for skills, @ to add context";
     "promptImprovementStrategies": {
@@ -1987,6 +1996,7 @@ type Messages = {
     "sort": "Sort";
     "source": "Source";
     "stale": "Stale";
+    "start": "Start";
     "status": "Status";
     "stepCount": "{count, plural, one {# step} other {# steps}}";
     "stepProgress": "{current} of {total}";
@@ -2066,11 +2076,38 @@ type Messages = {
     "scopeSkills": "Use your saved stella skills";
     "scopeTemplates": "List, fill, and create your document templates";
     "scopeTemplatesAnonymized": "List, fill, and create anonymized versions of your document templates";
+    "sensitiveAccess": "Includes access that can delete data or change your organization";
+    "showAllPermissions": "{count, plural, one {Show the permission} other {Show all # permissions}}";
     "signedInAs": "Signed in as <email>{accountEmail}</email>";
+    "summaryAdminRead": "audit log";
+    "summaryAdminWrite": "organization members and settings, including deleting them";
+    "summaryBillingWrite": "time entries, including deleting them";
+    "summaryChat": "chats, including deleting them";
+    "summaryContactsWrite": "contacts, including deleting them";
+    "summaryDocumentsWrite": "documents, including deleting them";
+    "summaryExternalMcps": "connected integrations";
+    "summaryFeedback": "feedback";
+    "summaryKnowledgeWrite": "clauses and playbooks, including deleting clauses";
+    "summaryLawRead": "public statutes and case law";
+    "summaryLineChange": "<group>Can change:</group> {items} ({count})";
+    "summaryLineOther": "<group>Also:</group> {items}";
+    "summaryLineRead": "<group>Can read:</group> {items} ({count})";
+    "summaryMattersWrite": "matters and tasks, including deleting them";
+    "summaryOfflineAccess": "staying signed in";
+    "summaryOnboarding": "practice jurisdictions";
+    "summaryProfile": "profile";
+    "summaryRead": "documents, matters and contacts";
+    "summaryReadAnonymized": "anonymized documents and matters";
+    "summarySearch": "search";
+    "summarySearchAnonymized": "anonymized search";
+    "summarySkills": "skills, including deleting them";
+    "summaryTemplates": "templates, including deleting them";
+    "summaryTemplatesAnonymized": "anonymized templates";
     "title": "Authorize access";
     "unverifiedApp": "Unverified app";
     "unverifiedExplanation": "stella has not verified who publishes this app.";
     "useAnotherAccount": "Use another account";
+    "verifiedPublisher": "Verified app by {publisher}";
   };
   "contacts": {
     "alsoPartyIn": "Also appears as party in {count, plural, one {# other matter} other {# other matters}}";
@@ -2774,7 +2811,6 @@ type Messages = {
       };
       "selectFlow": "Choose a workflow";
       "sizeConfirmTitle": "Large flow run";
-      "start": "Start";
       "startFailed": "Couldn't start the workflow.";
       "started": "Workflow started";
       "stepProgress": "Step {current} of {total}";
@@ -2992,7 +3028,6 @@ type Messages = {
     "action": {
       "replay": "Start again";
       "skip": "Skip";
-      "start": "Start";
     };
     "checklist": {
       "progress": "{completed} of {total} complete";
@@ -3672,6 +3707,10 @@ type Messages = {
         "nameMissing": "Not saved: add a name";
         "positionsNeedAttention": "Not saved: {count, plural, one {# position needs} other {# positions need}} attention";
       };
+      "buildWithAi": {
+        "description": "Answer a few questions in a chat and the playbook is saved as you go.";
+        "title": "Build with AI";
+      };
       "check": "Use an exact rule instead of AI";
       "checkHint": "For measurable conditions, such as payment term ≤ 30 days.";
       "checkKind": {
@@ -4138,11 +4177,16 @@ type Messages = {
       "customModelDescription": "This model ID is not in stella’s catalog. It will be passed to the selected provider as typed.";
       "customModelHint": "No catalog match. Type any model ID; custom IDs are saved as typed.";
       "decision": {
+        "dataRegion": "Data region";
         "description": "Questions with fixed answers (document categories, citation polarity)";
         "generativeFallback": "Uses the generative model for the task.";
         "incomplete": "Enter an API key and a model for the decision model, or remove it.";
         "instanceProvided": "stella already provides a decision model; add your own only to use a different one.";
         "label": "Decision-making";
+        "regionEu": "European Union";
+        "regionGlobal": "Global";
+        "reuseOpenAIKey": "Use my OpenAI key";
+        "separateKey": "Use a separate key";
       };
       "defaultModel": "Default: {model}";
       "defaultModelOption": "Default";
@@ -6061,12 +6105,30 @@ type Messages = {
         "addPDF": "Add PDF";
         "applyCrop": "Apply crop";
         "crop": "Crop";
-        "cropBottom": "Bottom";
-        "cropDescription": "{count, plural, one {Set the crop margins for the selected page.} other {Set the crop margins for the # selected pages.}}";
-        "cropLeft": "Left";
-        "cropRight": "Right";
+        "cropAdvanced": "Advanced crop settings";
+        "cropBottom": "Bottom (mm)";
+        "cropDescription": "{count, plural, one {Set the crop margins for the selected page in millimeters.} other {Set the crop margins for the # selected pages in millimeters.}}";
+        "cropHandle": "Resize crop: {position}";
+        "cropHandleBottom": "bottom";
+        "cropHandleBottomLeft": "bottom left";
+        "cropHandleBottomRight": "bottom right";
+        "cropHandleLeft": "left";
+        "cropHandleRight": "right";
+        "cropHandleTop": "top";
+        "cropHandleTopLeft": "top left";
+        "cropHandleTopRight": "top right";
+        "cropHint": "Drag the area or its handles. Arrow keys adjust by 1 mm; Shift adjusts by 10 mm. The same margins apply to every selected page.";
+        "cropLeft": "Left (mm)";
+        "cropMove": "Move crop area";
+        "cropNextPage": "Next selected page";
+        "cropPage": "Page {page, number} of {count, number}";
+        "cropPreview": "Crop preview, page {page, number}";
+        "cropPreviewFailed": "The page preview could not be rendered.";
+        "cropPreviousPage": "Previous selected page";
+        "cropRight": "Right (mm)";
         "cropTitle": "Crop pages";
-        "cropTop": "Top";
+        "cropTooSmall": "This page is too small to crop to at least 10 mm.";
+        "cropTop": "Top (mm)";
         "delete": "Remove page";
         "deselectAll": "Deselect all";
         "discard": "Discard page edits";

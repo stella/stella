@@ -43,6 +43,7 @@ const getTemplatePackQuerySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Read one bundled template pack: attribution (drafters, reviewers, " +
     "converters), license and license URL, source, disclaimer, review date, " +

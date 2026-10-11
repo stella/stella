@@ -727,6 +727,13 @@
         "procedural-history": "Procédure",
         "reasoning": "Raisonnement"
       },
+      "errors": {
+        "answerIncomplete": "{source, select, organization {La clé {provider} de votre organisation a renvoyé une réponse incomplète.} other {Le modèle d’IA a renvoyé une réponse incomplète.}}",
+        "providerRefused": "{source, select, organization {{provider} a refusé la requête faite avec la clé de votre organisation. Vérifiez la clé, son quota et la facturation dans les paramètres de l’organisation.} other {Le fournisseur d’IA a refusé la requête.}}",
+        "providerUnavailable": "{source, select, organization {{provider} est indisponible pour la clé de votre organisation pour le moment.} other {Le fournisseur d’IA est indisponible pour le moment.}}",
+        "timedOut": "{source, select, organization {{provider} n’a pas répondu à temps avec la clé de votre organisation.} other {Le modèle d’IA n’a pas répondu à temps.}}",
+        "unavailable": "L’analyse par IA n’est pas disponible pour cette décision."
+      },
       "generate": "Générer les sommaires par IA",
       "holdingAnchor": "Aller au paragraphe",
       "invitation": "Avec un compte gratuit, l’IA prépare des notes de travail sur cette décision.",
@@ -1326,7 +1333,9 @@
     "pastedText": {
       "expand": "Afficher le texte complet",
       "fromClipboard": "Collé : {count, plural, one {# caractère} other {# caractères}}",
-      "fromPromptFallback": "Compétence"
+      "fromPromptFallback": "Compétence",
+      "showInTextField": "Afficher dans le champ de texte",
+      "title": "Texte collé"
     },
     "placeholder": "Saisissez votre question ici, / pour les compétences, @ pour ajouter du contexte",
     "promptImprovementStrategies": {
@@ -1984,6 +1993,7 @@
     "sort": "Trier",
     "source": "Source",
     "stale": "Obsolète",
+    "start": "Commencer",
     "status": "Statut",
     "stepCount": "{count, plural, one {# étape} other {# étapes}}",
     "stepProgress": "{current} sur {total}",
@@ -2063,11 +2073,38 @@
     "scopeSkills": "Utiliser vos compétences stella enregistrées",
     "scopeTemplates": "Lister, remplir et créer vos modèles de documents",
     "scopeTemplatesAnonymized": "Lister, remplir et créer des versions anonymisées de vos modèles de documents",
+    "sensitiveAccess": "Comprend des accès qui peuvent supprimer des données ou modifier votre organisation",
+    "showAllPermissions": "{count, plural, one {Afficher l’autorisation} other {Afficher les # autorisations}}",
     "signedInAs": "Connecté en tant que <email>{accountEmail}</email>",
+    "summaryAdminRead": "journal d'audit",
+    "summaryAdminWrite": "membres et paramètres de l'organisation, y compris leur suppression",
+    "summaryBillingWrite": "saisies de temps, y compris leur suppression",
+    "summaryChat": "conversations, y compris leur suppression",
+    "summaryContactsWrite": "contacts, y compris leur suppression",
+    "summaryDocumentsWrite": "documents, y compris leur suppression",
+    "summaryExternalMcps": "outils externes connectés",
+    "summaryFeedback": "retours",
+    "summaryKnowledgeWrite": "clauses et playbooks, y compris la suppression de clauses",
+    "summaryLawRead": "textes législatifs publics et jurisprudence",
+    "summaryLineChange": "<group>Peut modifier :</group> {items} ({count})",
+    "summaryLineOther": "<group>Aussi :</group> {items}",
+    "summaryLineRead": "<group>Peut lire :</group> {items} ({count})",
+    "summaryMattersWrite": "dossiers et tâches, y compris leur suppression",
+    "summaryOfflineAccess": "connexion maintenue",
+    "summaryOnboarding": "juridictions d’exercice",
+    "summaryProfile": "profil",
+    "summaryRead": "documents, dossiers et contacts",
+    "summaryReadAnonymized": "documents et dossiers anonymisés",
+    "summarySearch": "recherche",
+    "summarySearchAnonymized": "recherche anonymisée",
+    "summarySkills": "compétences, y compris leur suppression",
+    "summaryTemplates": "modèles de documents, y compris leur suppression",
+    "summaryTemplatesAnonymized": "modèles de documents anonymisés",
     "title": "Autoriser l’accès",
     "unverifiedApp": "Application non vérifiée",
     "unverifiedExplanation": "stella n’a pas vérifié qui publie cette application.",
-    "useAnotherAccount": "Utiliser un autre compte"
+    "useAnotherAccount": "Utiliser un autre compte",
+    "verifiedPublisher": "Application vérifiée de {publisher}"
   },
   "contacts": {
     "alsoPartyIn": "Apparaît également comme partie dans {count, plural, one {# autre dossier} many {# autres dossiers} other {# autres dossiers}}",
@@ -2771,7 +2808,6 @@
       },
       "selectFlow": "Choisissez un flux de travail",
       "sizeConfirmTitle": "Exécution de flux volumineuse",
-      "start": "Démarrer",
       "startFailed": "Impossible de démarrer le flux de travail.",
       "started": "Flux de travail démarré",
       "stepProgress": "Étape {current} sur {total}",
@@ -2988,8 +3024,7 @@
   "guides": {
     "action": {
       "replay": "Recommencer",
-      "skip": "Ignorer",
-      "start": "Commencer"
+      "skip": "Ignorer"
     },
     "checklist": {
       "progress": "{completed} sur {total} terminés"
@@ -3669,6 +3704,10 @@
         "nameMissing": "Non enregistré : ajoutez un nom",
         "positionsNeedAttention": "Non enregistré : {count, plural, one {# critère nécessite} other {# critères nécessitent}} votre attention"
       },
+      "buildWithAi": {
+        "description": "Répondez à quelques questions dans une conversation et le playbook s’enregistre au fur et à mesure.",
+        "title": "Créer avec l’IA"
+      },
       "check": "Utiliser une règle exacte plutôt que l’IA",
       "checkHint": "Pour des conditions mesurables, par exemple : délai de paiement ≤ 30 jours.",
       "checkKind": {
@@ -4135,11 +4174,16 @@
       "customModelDescription": "Cet ID de modèle n’est pas dans le catalogue stella. Il sera transmis tel quel au fournisseur sélectionné.",
       "customModelHint": "Aucune correspondance dans le catalogue. Saisissez n’importe quel ID de modèle; les IDs personnalisés sont enregistrés tels quels.",
       "decision": {
+        "dataRegion": "Région des données",
         "description": "Questions à réponse fixe (catégories de documents, polarité des citations)",
         "generativeFallback": "Utilise le modèle génératif pour la tâche.",
         "incomplete": "Renseignez une clé API et un modèle pour le modèle de décision, ou supprimez-le.",
         "instanceProvided": "stella fournit déjà un modèle de décision ; ajoutez le vôtre uniquement pour en utiliser un autre.",
-        "label": "Prise de décision"
+        "label": "Prise de décision",
+        "regionEu": "Union européenne",
+        "regionGlobal": "Mondial",
+        "reuseOpenAIKey": "Utiliser ma clé OpenAI",
+        "separateKey": "Utiliser une clé distincte"
       },
       "defaultModel": "Par défaut : {model}",
       "defaultModelOption": "Par défaut",
@@ -6058,12 +6102,30 @@
         "addPDF": "Ajouter un PDF",
         "applyCrop": "Appliquer le rognage",
         "crop": "Rogner",
-        "cropBottom": "Bas",
-        "cropDescription": "{count, plural, one {Définissez les marges de rognage pour la page sélectionnée.} other {Définissez les marges de rognage pour les # pages sélectionnées.}}",
-        "cropLeft": "Gauche",
-        "cropRight": "Droite",
+        "cropAdvanced": "Options avancées",
+        "cropBottom": "Bas (mm)",
+        "cropDescription": "{count, plural, one {Définissez les marges de rognage pour la page sélectionnée en millimètres.} other {Définissez les marges de rognage pour les # pages sélectionnées en millimètres.}}",
+        "cropHandle": "Redimensionner le rognage : {position}",
+        "cropHandleBottom": "bas",
+        "cropHandleBottomLeft": "en bas à gauche",
+        "cropHandleBottomRight": "en bas à droite",
+        "cropHandleLeft": "gauche",
+        "cropHandleRight": "droite",
+        "cropHandleTop": "haut",
+        "cropHandleTopLeft": "en haut à gauche",
+        "cropHandleTopRight": "en haut à droite",
+        "cropHint": "Faites glisser la zone ou ses poignées. Les flèches ajustent le rognage de 1 mm, ou de 10 mm avec Maj. Les mêmes marges s’appliquent à toutes les pages sélectionnées.",
+        "cropLeft": "Gauche (mm)",
+        "cropMove": "Déplacer la zone de rognage",
+        "cropNextPage": "Page sélectionnée suivante",
+        "cropPage": "Page {page, number} sur {count, number}",
+        "cropPreview": "Aperçu du rognage, page {page, number}",
+        "cropPreviewFailed": "L’aperçu de la page n’a pas pu être affiché.",
+        "cropPreviousPage": "Page sélectionnée précédente",
+        "cropRight": "Droite (mm)",
         "cropTitle": "Rogner les pages",
-        "cropTop": "Haut",
+        "cropTooSmall": "Cette page est trop petite pour un rognage d’au moins 10 mm.",
+        "cropTop": "Haut (mm)",
         "delete": "Supprimer",
         "deselectAll": "Tout désélectionner",
         "discard": "Abandonner",

@@ -12,6 +12,7 @@ import {
 } from "@/api/lib/memory/persist-explicit-memory";
 
 const config = {
+  contract: "patch",
   // Firm-wide memory is governance-gated: only roles granted
   // `firmMemory.create` (admin, owner) may write it. Everyone reads it.
   permissions: { firmMemory: ["create"] },

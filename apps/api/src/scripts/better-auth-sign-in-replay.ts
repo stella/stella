@@ -20,6 +20,7 @@ import { drizzle } from "drizzle-orm/bun-sql";
 import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
 import * as v from "valibot";
 
+import { errorOutputLogger } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import { hasSecureDatabaseTransport, resolveDatabaseUrl } from "@/api/db-url";
@@ -258,6 +259,7 @@ const run = async (
   };
   const database = drizzle({ client });
   const auth = betterAuth({
+    logger: errorOutputLogger,
     baseURL: oauthBaseUrl,
     // A throwaway secret: nothing signed here outlives the replay.
     secret: Bun.randomUUIDv7() + Bun.randomUUIDv7(),

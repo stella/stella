@@ -21,6 +21,10 @@
     "./frontmatter": {
       "types": "./src/frontmatter.ts",
       "import": "./src/frontmatter.ts"
+    },
+    "./static-import-graph": {
+      "types": "./src/static-import-graph.ts",
+      "import": "./src/static-import-graph.ts"
     }
   },
   "scripts": {

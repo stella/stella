@@ -37,103 +37,119 @@ if (!runPostgresTests || databaseUrl === undefined) {
       test("upgrades an ADMIN-only creator membership and converges on replay", async () => {
         await withGatedTestClients(databaseUrl, async ({ openClient }) => {
           const admin = openClient().sql;
-          const connection = await openClient().sql.reserve();
           const suffix = Bun.randomUUIDv7().replaceAll("-", "");
           const creator = `sanctions_creator_${suffix}`;
           const ingestion = `sanctions_probe_${suffix}`;
-          // Both identifiers are generated from fixed prefixes and UUID hex.
+          const password = Bun.randomUUIDv7();
+          const creatorUrl = new URL(databaseUrl);
+          creatorUrl.username = creator;
+          creatorUrl.password = password;
+          // The login and password are generated UUID values, not external input.
+          await admin.unsafe(
+            `CREATE ROLE "${creator}" LOGIN CREATEROLE PASSWORD '${password}'`,
+          );
           try {
-            await admin.unsafe(`CREATE ROLE "${creator}" LOGIN CREATEROLE`);
-            await connection.unsafe(`SET ROLE "${creator}"`);
-            await connection.unsafe(`CREATE ROLE "${ingestion}" NOLOGIN`);
-            // Role-switch permissions follow session_user: remove the original
-            // superuser identity so the successful SET ROLE is meaningful.
-            await connection.unsafe(`SET SESSION AUTHORIZATION "${creator}"`);
-            const posture = await connection.unsafe<
-              {
-                name: string;
-                sessionName: string;
-                isSuperuser: boolean;
-                canCreateRole: boolean;
-              }[]
-            >(`
+            await withGatedTestClients(
+              creatorUrl.href,
+              async ({ openClient: openCreatorClient }) => {
+                const connection = await openCreatorClient().sql.reserve();
+                try {
+                  await connection.unsafe(`CREATE ROLE "${ingestion}" NOLOGIN`);
+                  const posture = await connection.unsafe<
+                    {
+                      name: string;
+                      sessionName: string;
+                      isSuperuser: boolean;
+                      canCreateRole: boolean;
+                    }[]
+                  >(`
               SELECT CURRENT_USER AS name, SESSION_USER AS "sessionName",
                 rolsuper AS "isSuperuser",
                 rolcreaterole AS "canCreateRole"
               FROM pg_roles WHERE rolname = CURRENT_USER
             `);
-            expect(posture.at(0)).toEqual({
-              name: creator,
-              sessionName: creator,
-              isSuperuser: false,
-              canCreateRole: true,
-            });
-            const grantOptions = async () =>
-              await connection.unsafe<
-                {
-                  grantor: number;
-                  admin: boolean;
-                  inherits: boolean;
-                  canSet: boolean;
-                }[]
-              >(
-                `SELECT grantor, admin_option AS admin, inherit_option AS inherits,
+                  expect(posture.at(0)).toEqual({
+                    name: creator,
+                    sessionName: creator,
+                    isSuperuser: false,
+                    canCreateRole: true,
+                  });
+                  const grantOptions = async () =>
+                    await connection.unsafe<
+                      {
+                        grantor: number;
+                        admin: boolean;
+                        inherits: boolean;
+                        canSet: boolean;
+                      }[]
+                    >(
+                      `SELECT grantor, admin_option AS admin, inherit_option AS inherits,
                   set_option AS "canSet" FROM pg_auth_members
                  WHERE roleid = (SELECT oid FROM pg_roles WHERE rolname = $1)
                    AND member = (SELECT oid FROM pg_roles WHERE rolname = $2)
                  ORDER BY grantor`,
-                [ingestion, creator],
-              );
-            const creatorGrant = await grantOptions();
-            expect(creatorGrant).toHaveLength(1);
-            expect(creatorGrant.at(0)).toMatchObject({
-              admin: true,
-              inherits: false,
-              canSet: false,
-            });
-            const membership = async () =>
-              await connection.unsafe<{ member: boolean; canSet: boolean }[]>(
-                `SELECT pg_has_role($1, $2, 'MEMBER') AS member,
+                      [ingestion, creator],
+                    );
+                  const creatorGrant = await grantOptions();
+                  expect(creatorGrant).toHaveLength(1);
+                  expect(creatorGrant.at(0)).toMatchObject({
+                    admin: true,
+                    inherits: false,
+                    canSet: false,
+                  });
+                  const membership = async () =>
+                    await connection.unsafe<
+                      { member: boolean; canSet: boolean }[]
+                    >(
+                      `SELECT pg_has_role($1, $2, 'MEMBER') AS member,
                   pg_has_role($1, $2, 'SET') AS "canSet"`,
-                [creator, ingestion],
-              );
-            // A MEMBER guard skips this membership even though SET is denied.
-            expect((await membership()).at(0)).toEqual({
-              member: true,
-              canSet: false,
-            });
-            const migration = (await Bun.file(migrationPath).text()).replaceAll(
-              stellaPublicSanctionsReader.name,
-              () => ingestion,
+                      [creator, ingestion],
+                    );
+                  // A MEMBER guard skips this membership even though SET is denied.
+                  expect((await membership()).at(0)).toEqual({
+                    member: true,
+                    canSet: false,
+                  });
+                  const migration = (
+                    await Bun.file(migrationPath).text()
+                  ).replaceAll(
+                    stellaPublicSanctionsReader.name,
+                    () => ingestion,
+                  );
+                  const grant = /DO \$\$[\s\S]*?END \$\$;/u
+                    .exec(migration)
+                    ?.at(0);
+                  if (grant === undefined) {
+                    panic("Public sanctions role grant is missing");
+                  }
+                  const apply = async () => await connection.unsafe(grant);
+                  await apply();
+                  expect((await membership()).at(0)).toEqual({
+                    member: true,
+                    canSet: true,
+                  });
+                  const granted = await grantOptions();
+                  await connection.unsafe(`SET ROLE "${ingestion}"`);
+                  const assumed = await connection.unsafe<{ name: string }[]>(
+                    "SELECT CURRENT_USER AS name",
+                  );
+                  expect(assumed.at(0)?.name).toBe(ingestion);
+                  await connection.unsafe("RESET ROLE");
+                  await apply();
+                  expect(await grantOptions()).toEqual(granted);
+                  expect((await membership()).at(0)).toEqual({
+                    member: true,
+                    canSet: true,
+                  });
+                } finally {
+                  await connection.unsafe("RESET ROLE");
+                  await connection.unsafe(`DROP ROLE IF EXISTS "${ingestion}"`);
+                  connection.release();
+                }
+              },
             );
-            const grant = /DO \$\$[\s\S]*?END \$\$;/u.exec(migration)?.at(0);
-            if (grant === undefined) {
-              panic("Public sanctions role grant is missing");
-            }
-            const apply = async () => await connection.unsafe(grant);
-            await apply();
-            expect((await membership()).at(0)).toEqual({
-              member: true,
-              canSet: true,
-            });
-            const granted = await grantOptions();
-            await connection.unsafe(`SET ROLE "${ingestion}"`);
-            const assumed = await connection.unsafe<{ name: string }[]>(
-              "SELECT CURRENT_USER AS name",
-            );
-            expect(assumed.at(0)?.name).toBe(ingestion);
-            await connection.unsafe("RESET ROLE");
-            await apply();
-            expect(await grantOptions()).toEqual(granted);
-            expect((await membership()).at(0)).toEqual({
-              member: true,
-              canSet: true,
-            });
           } finally {
-            connection.release();
-            await admin.unsafe(
-              `DROP ROLE IF EXISTS "${ingestion}", "${creator}"`,
-            );
+            await admin.unsafe(`DROP ROLE IF EXISTS "${creator}"`);
           }
         });
       });

@@ -54,6 +54,7 @@ import { workspaceParams } from "@/api/lib/custom-schema";
 
 const readWorkspace = createSafeHandler(
   {
+    contract: "patch",
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "list_matters" },
@@ -76,6 +77,7 @@ const readWorkspace = createSafeHandler(
 
 const readOverview = createSafeHandler(
   {
+    contract: "patch",
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "list_matters" },
@@ -97,6 +99,7 @@ const readOverview = createSafeHandler(
 
 const readWorkspaceContacts = createSafeHandler(
   {
+    contract: "patch",
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "list_matters" },
@@ -112,6 +115,7 @@ const readWorkspaceContacts = createSafeHandler(
 
 const readWorkspaceMembers = createSafeHandler(
   {
+    contract: "patch",
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "list_matters" },

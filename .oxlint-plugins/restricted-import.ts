@@ -24,7 +24,7 @@ import type {
 import {
   type AstNode,
   canonicalModuleId,
-  dynamicModuleSource,
+  dynamicModuleSourceForEnforcement,
   getImportedName,
   getPropertyName,
   invokedCallee,
@@ -380,7 +380,7 @@ const exportOfExpression = (
     return null;
   }
   seen.add(expression);
-  const loaded = dynamicModuleSource(expression);
+  const loaded = dynamicModuleSourceForEnforcement(expression, context);
   if (loaded !== null) {
     return { moduleId: canonical(context, loaded), imported: NAMESPACE_IMPORT };
   }
@@ -598,8 +598,8 @@ export const restrictedImportVisitors = (
       }
     },
     CallExpression(node) {
-      const required = dynamicModuleSource(node);
-      if (required !== null && isIdentifier(node.callee, "require")) {
+      const required = dynamicModuleSourceForEnforcement(node, context);
+      if (required !== null) {
         reportModuleLoad(node, required, MODULE_LOADING.static);
         return;
       }

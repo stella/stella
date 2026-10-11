@@ -6,6 +6,7 @@ import {
 } from "@/api/lib/billing/time-timers";
 
 const config = {
+  contract: "patch",
   description:
     "Pause your timer without creating a time entry. Pausing an already paused timer leaves its elapsed time unchanged.",
   permissions: { timeEntry: ["update"] },

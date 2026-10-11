@@ -20,6 +20,11 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/legal-reader/annotations/update.ts",
+  },
   permissions: { legalReaderAnnotation: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   description:

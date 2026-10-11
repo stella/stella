@@ -350,6 +350,7 @@ const normalizeOptionalArray = <T>(value: T[] | undefined): T[] => {
 };
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason:
@@ -607,6 +608,20 @@ export class ChatSendLifecycle {
 
   constructor(options: ChatSendLifecycleOptions) {
     this.options = options;
+  }
+
+  /** Once accepted durably, a turn belongs to its lease rather than a viewer. */
+  isClientConnectionAborted(signal: AbortSignal): boolean {
+    switch (this.claimedTurn.status) {
+      case "unclaimed":
+        return signal.aborted;
+      case "preflight":
+      case "failure-pending":
+      case "handed-over":
+        return false;
+      default:
+        return panic(this.claimedTurn satisfies never);
+    }
   }
 
   /**
@@ -1771,6 +1786,7 @@ const prepareValidatedIncomingMessage = async ({
             ? []
             : activeDraftContext.originDataWorkspaceIds,
         initialContextMatterIds: requestedContextMatterIds,
+        initialActiveSkill: body.activeSkill,
         organizationId,
         recordAuditEvent,
         safeDb,
@@ -2121,7 +2137,11 @@ export const createSendMessage = (
         "parentRunId" in transportBody ? transportBody.parentRunId : undefined;
       const transportResume =
         "resume" in transportBody ? transportBody.resume : undefined;
-      const isClientConnectionAborted = () => request.signal.aborted;
+      let acceptedLifecycle: ChatSendLifecycle | undefined = undefined;
+      const isClientConnectionAborted = () =>
+        acceptedLifecycle === undefined
+          ? request.signal.aborted
+          : acceptedLifecycle.isClientConnectionAborted(request.signal);
 
       if (isClientConnectionAborted()) {
         return Result.err(
@@ -2332,6 +2352,7 @@ export const createSendMessage = (
             };
       const validationThreadState = yield* Result.await(
         readThreadValidationState({
+          initialActiveSkill: body.activeSkill,
           messageId: body.message.id,
           organizationId: session.activeOrganizationId,
           safeDb,
@@ -2356,7 +2377,7 @@ export const createSendMessage = (
       );
       const validationActiveSkillContext = yield* Result.await(
         resolveActiveChatSkillContext({
-          activeSkill: body.activeSkill,
+          activeSkill: validationThreadState.activeSkill,
           memberRole,
           organizationId: session.activeOrganizationId,
           safeDb,
@@ -2395,6 +2416,7 @@ export const createSendMessage = (
         workspaceId,
         rollbackSideEffects: dependencies.rollbackSideEffects,
       });
+      acceptedLifecycle = lifecycle;
 
       // The try/finally starts immediately after the loader is constructed
       // (rather than just around the streaming pass) so that a throw from
@@ -2578,10 +2600,9 @@ export const createSendMessage = (
           threadNames.retiredRefs,
         );
 
-        // The incoming message is durable now, so a disconnect must not run the
-        // pre-persistence rollback (which would delete files referenced by that
-        // message). It should still stop before connector discovery and any
-        // metered provider work.
+        // Before acceptance, a disconnected viewer may abandon preparation.
+        // Once claimed, the lifecycle ignores viewer loss and preserves the
+        // accepted message, execution admission, and provider budgets.
         if (isClientConnectionAborted()) {
           yield* Result.await(lifecycle.interruptCurrentTurn());
           return Result.err(

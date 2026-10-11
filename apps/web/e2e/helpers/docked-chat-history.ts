@@ -5,6 +5,7 @@ const THREAD_ID = toSafeId<"chatThread">(
 );
 const fixtureTime = new Date().toISOString();
 export const dockedChatMessagePage = {
+  activeSkill: null,
   activeTurnId: null,
   attachedFiles: { fileCount: 0, files: [] },
   forkProvenance: { type: "none" as const },

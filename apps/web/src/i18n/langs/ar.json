@@ -727,6 +727,13 @@
         "procedural-history": "التاريخ الإجرائي",
         "reasoning": "التسبيب"
       },
+      "errors": {
+        "answerIncomplete": "{source, select, organization {أعاد مفتاح {provider} الخاص بمؤسستك إجابة غير مكتملة.} other {أعاد نموذج الذكاء الاصطناعي إجابة غير مكتملة.}}",
+        "providerRefused": "{source, select, organization {رفض {provider} الطلب المُرسل بمفتاح مؤسستك. تحقّق من المفتاح وحصّته والفوترة في إعدادات المؤسسة.} other {رفض مزوّد الذكاء الاصطناعي الطلب.}}",
+        "providerUnavailable": "{source, select, organization {{provider} غير متاح حالياً لمفتاح مؤسستك.} other {مزوّد الذكاء الاصطناعي غير متاح حالياً.}}",
+        "timedOut": "{source, select, organization {لم يُجب {provider} في الوقت المحدد باستخدام مفتاح مؤسستك.} other {لم يُجب نموذج الذكاء الاصطناعي في الوقت المحدد.}}",
+        "unavailable": "تحليل الذكاء الاصطناعي غير متاح لهذا الحكم."
+      },
       "generate": "توليد خلاصات الحكم بالذكاء الاصطناعي",
       "holdingAnchor": "الانتقال إلى الفقرة",
       "invitation": "مع حساب مجاني، يُعِدّ الذكاء الاصطناعي ملاحظات عمل حول هذا الحكم.",
@@ -1326,7 +1333,9 @@
     "pastedText": {
       "expand": "عرض النص الكامل",
       "fromClipboard": "تم لصق {count, plural, zero {# حرف} one {# حرف} two {# حرفين} few {# أحرف} many {# حرفاً} other {# حرف}}",
-      "fromPromptFallback": "مهارة"
+      "fromPromptFallback": "مهارة",
+      "showInTextField": "عرض في حقل النص",
+      "title": "نص ملصق"
     },
     "placeholder": "اكتب سؤالك هنا، / للمهارات، @ لإضافة سياق",
     "promptImprovementStrategies": {
@@ -1984,6 +1993,7 @@
     "sort": "فرز",
     "source": "المصدر",
     "stale": "قديم",
+    "start": "ابدأ",
     "status": "الحالة",
     "stepCount": "{count, plural, zero {# خطوة} one {# خطوة} two {# خطوتان} few {# خطوات} many {# خطوة} other {# خطوة}}",
     "stepProgress": "{current} من {total}",
@@ -2063,11 +2073,38 @@
     "scopeSkills": "استخدام مهارات stella المحفوظة لديك",
     "scopeTemplates": "سرد قوالب مستنداتك وتعبئتها وإنشاؤها",
     "scopeTemplatesAnonymized": "سرد النسخ المُخفاة الهوية من قوالب مستنداتك وتعبئتها وإنشاؤها",
+    "sensitiveAccess": "يتضمن وصولًا يمكنه حذف البيانات أو تغيير مؤسستك",
+    "showAllPermissions": "{count, plural, zero {عرض الأذونات} one {عرض الإذن} two {عرض الإذنين} few {عرض الأذونات الـ#} many {عرض الأذونات الـ#} other {عرض الأذونات الـ#}}",
     "signedInAs": "تم تسجيل الدخول باسم <email>{accountEmail}</email>",
+    "summaryAdminRead": "سجل التدقيق",
+    "summaryAdminWrite": "أعضاء المؤسسة وإعداداتها، بما في ذلك حذفها",
+    "summaryBillingWrite": "إدخالات الوقت، بما في ذلك حذفها",
+    "summaryChat": "الدردشات، بما في ذلك حذفها",
+    "summaryContactsWrite": "جهات الاتصال، بما في ذلك حذفها",
+    "summaryDocumentsWrite": "المستندات، بما في ذلك حذفها",
+    "summaryExternalMcps": "التكاملات المتصلة",
+    "summaryFeedback": "الملاحظات",
+    "summaryKnowledgeWrite": "البنود وأدلّة المراجعة، بما في ذلك حذف البنود",
+    "summaryLawRead": "التشريعات العامة وأحكام القضاء",
+    "summaryLineChange": "<group>يمكنه تغيير:</group> {items} ({count})",
+    "summaryLineOther": "<group>وأيضًا:</group> {items}",
+    "summaryLineRead": "<group>يمكنه قراءة:</group> {items} ({count})",
+    "summaryMattersWrite": "الملفات والمهام، بما في ذلك حذفها",
+    "summaryOfflineAccess": "البقاء مسجّل الدخول",
+    "summaryOnboarding": "الولايات القضائية للممارسة",
+    "summaryProfile": "الملف الشخصي",
+    "summaryRead": "المستندات والملفات القانونية وجهات الاتصال",
+    "summaryReadAnonymized": "المستندات والملفات المُخفاة الهوية",
+    "summarySearch": "البحث",
+    "summarySearchAnonymized": "البحث المُخفى الهوية",
+    "summarySkills": "المهارات، بما في ذلك حذفها",
+    "summaryTemplates": "قوالب المستندات، بما في ذلك حذفها",
+    "summaryTemplatesAnonymized": "قوالب المستندات المُخفاة الهوية",
     "title": "التفويض بالوصول",
     "unverifiedApp": "تطبيق غير موثّق",
     "unverifiedExplanation": "لم تتحقق stella من الجهة التي تنشر هذا التطبيق.",
-    "useAnotherAccount": "استخدم حسابًا آخر"
+    "useAnotherAccount": "استخدم حسابًا آخر",
+    "verifiedPublisher": "تطبيق موثَّق من {publisher}"
   },
   "contacts": {
     "alsoPartyIn": "يظهر أيضاً كطرف في {count, plural, zero {# ملف قانوني آخر} one {ملف قانوني آخر واحد} two {ملفين قانونيين آخرين} few {# ملفات قانونية أخرى} many {# ملفًا قانونيًا آخر} other {# ملف قانوني آخر}}",
@@ -2771,7 +2808,6 @@
       },
       "selectFlow": "اختر مسار عمل",
       "sizeConfirmTitle": "تشغيل سير عمل كبير",
-      "start": "بدء",
       "startFailed": "تعذّر بدء مسار العمل.",
       "started": "تم بدء مسار العمل",
       "stepProgress": "الخطوة {current} من {total}",
@@ -2988,8 +3024,7 @@
   "guides": {
     "action": {
       "replay": "البدء من جديد",
-      "skip": "تخطي",
-      "start": "ابدأ"
+      "skip": "تخطي"
     },
     "checklist": {
       "progress": "اكتمل {completed} من {total}"
@@ -3669,6 +3704,10 @@
         "nameMissing": "لم يُحفظ: أضِف اسمًا",
         "positionsNeedAttention": "لم يُحفظ: {count, plural, zero {لا مواقف تحتاج} one {موقف واحد يحتاج} two {موقفان يحتاجان} few {# مواقف تحتاج} many {# موقفًا يحتاج} other {# موقف يحتاج}} إلى مراجعة"
       },
+      "buildWithAi": {
+        "description": "أجب عن بضعة أسئلة في دردشة، ويُحفظ دليل المراجعة أولًا بأول.",
+        "title": "الإنشاء بالذكاء الاصطناعي"
+      },
       "check": "استخدام قاعدة دقيقة بدلًا من الذكاء الاصطناعي",
       "checkHint": "للشروط القابلة للقياس، مثل: مهلة السداد ≤ 30 يومًا.",
       "checkKind": {
@@ -4135,11 +4174,16 @@
       "customModelDescription": "معرّف هذا النموذج غير موجود في كتالوج stella. سيُمرَّر إلى المزوّد المحدد كما هو مكتوب.",
       "customModelHint": "لا تطابق في الكتالوج. اكتب أي معرّف نموذج؛ تُحفظ المعرّفات المخصصة كما هي مكتوبة.",
       "decision": {
+        "dataRegion": "منطقة البيانات",
         "description": "أسئلة ذات إجابات محددة (فئات المستندات، قطبية الاستشهادات)",
         "generativeFallback": "يستخدم النموذج التوليدي للمهمة.",
         "incomplete": "أدخل مفتاح API ونموذجًا لنموذج القرار، أو أزِله.",
         "instanceProvided": "توفّر stella بالفعل نموذج قرار؛ أضف نموذجك الخاص فقط لاستخدام نموذج آخر.",
-        "label": "اتخاذ القرارات"
+        "label": "اتخاذ القرارات",
+        "regionEu": "الاتحاد الأوروبي",
+        "regionGlobal": "عالمي",
+        "reuseOpenAIKey": "استخدام مفتاح OpenAI الخاص بي",
+        "separateKey": "استخدام مفتاح منفصل"
       },
       "defaultModel": "الافتراضي: {model}",
       "defaultModelOption": "الافتراضي",
@@ -6058,12 +6102,30 @@
         "addPDF": "إضافة PDF",
         "applyCrop": "تطبيق الاقتصاص",
         "crop": "اقتصاص",
-        "cropBottom": "أسفل",
-        "cropDescription": "{count, plural, zero {حدد هوامش الاقتصاص.} one {حدد هوامش الاقتصاص للصفحة المحددة.} two {حدد هوامش الاقتصاص للصفحتين المحددتين.} few {حدد هوامش الاقتصاص لـ # صفحات محددة.} many {حدد هوامش الاقتصاص لـ # صفحة محددة.} other {حدد هوامش الاقتصاص لـ # صفحة محددة.}}",
-        "cropLeft": "يسار",
-        "cropRight": "يمين",
+        "cropAdvanced": "إعدادات متقدمة",
+        "cropBottom": "أسفل (mm)",
+        "cropDescription": "{count, plural, zero {حدد هوامش الاقتصاص بالملليمتر.} one {حدد هوامش الاقتصاص للصفحة المحددة بالملليمتر.} two {حدد هوامش الاقتصاص للصفحتين المحددتين بالملليمتر.} few {حدد هوامش الاقتصاص لـ # صفحات محددة بالملليمتر.} many {حدد هوامش الاقتصاص لـ # صفحة محددة بالملليمتر.} other {حدد هوامش الاقتصاص لـ # صفحة محددة بالملليمتر.}}",
+        "cropHandle": "تغيير حجم الاقتصاص: {position}",
+        "cropHandleBottom": "أسفل",
+        "cropHandleBottomLeft": "أسفل اليسار",
+        "cropHandleBottomRight": "أسفل اليمين",
+        "cropHandleLeft": "يسار",
+        "cropHandleRight": "يمين",
+        "cropHandleTop": "أعلى",
+        "cropHandleTopLeft": "أعلى اليسار",
+        "cropHandleTopRight": "أعلى اليمين",
+        "cropHint": "اسحب المنطقة أو مقابضها. تضبط مفاتيح الأسهم الاقتصاص بمقدار 1 مم، ومع Shift بمقدار 10 مم. تُطبَّق الهوامش نفسها على كل الصفحات المحددة.",
+        "cropLeft": "يسار (mm)",
+        "cropMove": "تحريك منطقة الاقتصاص",
+        "cropNextPage": "الصفحة المحددة التالية",
+        "cropPage": "الصفحة {page, number} من {count, number}",
+        "cropPreview": "معاينة الاقتصاص، الصفحة {page, number}",
+        "cropPreviewFailed": "تعذّر عرض معاينة الصفحة.",
+        "cropPreviousPage": "الصفحة المحددة السابقة",
+        "cropRight": "يمين (mm)",
         "cropTitle": "اقتصاص الصفحات",
-        "cropTop": "أعلى",
+        "cropTooSmall": "هذه الصفحة صغيرة جدًا لاقتصاصها إلى حجم لا يقل عن 10 مم.",
+        "cropTop": "أعلى (mm)",
         "delete": "حذف",
         "deselectAll": "إلغاء تحديد الكل",
         "discard": "تجاهل",
