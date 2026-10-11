@@ -37,6 +37,7 @@ import {
   stampKeyAdjustment,
   type StampPageSize,
 } from "@/components/inspector/pdf-signing-stamp.logic";
+import { useBoxDrag, type BoxDragAdjustment } from "@/hooks/use-box-drag";
 import { useMountEffect } from "@/hooks/use-effect";
 import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
 import { resolveAppTimeZone } from "@/i18n/time-zone";
@@ -490,14 +491,6 @@ const StampPage = ({
   );
 };
 
-type Drag = {
-  box: StampBox;
-  mode: StampAdjustMode;
-  origin: { x: number; y: number };
-  pointerId: number;
-  preview: StampPageSize;
-};
-
 const StampBoxControl = ({
   describedBy,
   onChange,
@@ -508,14 +501,26 @@ const StampBoxControl = ({
   placement: StampPlacement;
 }) => {
   const t = useTranslations();
-  const dragRef = useRef<Drag | null>(null);
   const { box, page } = placement;
-
-  const endDrag = (pointerId: number) => {
-    if (dragRef.current?.pointerId === pointerId) {
-      dragRef.current = null;
-    }
-  };
+  const { startDrag, ...pointerHandlers } = useBoxDrag({
+    adjust: ({
+      box: initialBox,
+      delta,
+      mode,
+    }: BoxDragAdjustment<StampBox, StampAdjustMode>) =>
+      adjustStampBox({
+        box: initialBox,
+        deltaPt: previewDeltaToPoints({
+          delta,
+          page,
+          preview: { height: 1, width: 1 },
+        }),
+        mode,
+        page,
+      }),
+    box,
+    onChange,
+  });
 
   return (
     <button
@@ -536,49 +541,17 @@ const StampBoxControl = ({
         event.preventDefault();
         onChange(adjustStampBox({ box, page, ...adjustment }));
       }}
-      onLostPointerCapture={(event) => endDrag(event.pointerId)}
-      onPointerCancel={(event) => endDrag(event.pointerId)}
       onPointerDown={(event) => {
         const surface = event.currentTarget.parentElement;
-        if (event.button !== 0 || surface === null) {
+        if (surface === null) {
           return;
         }
-        const rect = surface.getBoundingClientRect();
         const onHandle =
           event.target instanceof Element &&
           event.target.closest("[data-stamp-resize]") !== null;
-        event.currentTarget.setPointerCapture(event.pointerId);
-        event.currentTarget.focus({ preventScroll: true });
-        dragRef.current = {
-          box,
-          mode: onHandle ? "resize" : "move",
-          origin: { x: event.clientX, y: event.clientY },
-          pointerId: event.pointerId,
-          preview: { height: rect.height, width: rect.width },
-        };
+        startDrag(event, { mode: onHandle ? "resize" : "move", surface });
       }}
-      onPointerMove={(event) => {
-        const drag = dragRef.current;
-        if (drag?.pointerId !== event.pointerId) {
-          return;
-        }
-        onChange(
-          adjustStampBox({
-            box: drag.box,
-            deltaPt: previewDeltaToPoints({
-              delta: {
-                x: event.clientX - drag.origin.x,
-                y: event.clientY - drag.origin.y,
-              },
-              page,
-              preview: drag.preview,
-            }),
-            mode: drag.mode,
-            page,
-          }),
-        );
-      }}
-      onPointerUp={(event) => endDrag(event.pointerId)}
+      {...pointerHandlers}
       style={{
         height: percent(box.height),
         insetInlineStart: percent(box.x),

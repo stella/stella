@@ -35,6 +35,7 @@ const REVERT_OUTCOME = {
  */
 const revertDocxSuggestion = createSafeHandler(
   {
+    contract: "patch",
     permissions: { entity: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "document_processing" },

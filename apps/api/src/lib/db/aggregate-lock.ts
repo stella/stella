@@ -1,6 +1,8 @@
 import { panic, Result, TaggedError } from "better-result";
 import {
   and,
+  eq,
+  or,
   getColumnTable,
   getColumns,
   getTableName,
@@ -20,7 +22,13 @@ import { compareCodeUnit } from "@stll/collation";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import { pdfSigningSessions, workspaces } from "@/api/db/schema";
+import {
+  entities,
+  entityVersions,
+  fields,
+  pdfSigningSessions,
+  workspaces,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
@@ -52,6 +60,8 @@ export const AGGREGATE_LOCKS = {
   currentStep: { rank: 300, kind: "row" },
   obligation: { rank: 400, kind: "row" },
   entity: { rank: 500, kind: "row" },
+  entityVersion: { rank: 510, kind: "row" },
+  field: { rank: 520, kind: "row" },
   signal: { rank: 600, kind: "row" },
   automatedFlowRunCap: { rank: 700, kind: "advisory" },
   processingClaim: { rank: 600, kind: "row" },
@@ -107,6 +117,13 @@ export const AGGREGATE_CHAINS = {
     "entity",
   ],
   desktopRenewal: ["desktopMembership", "desktopCredential"],
+  documentSource: [
+    "workspace",
+    "entity",
+    "entityVersion",
+    "field",
+    "processingClaim",
+  ],
   signal: ["signal"],
   automatedFlowRunCap: ["automatedFlowRunCap"],
   contactCapacity: ["contactCapacity"],
@@ -208,6 +225,11 @@ type AggregateIdentities = {
   currentStep: { id: SafeId<"flowRunStep">; workspaceId: SafeId<"workspace"> };
   obligation: { id: SafeId<"entity">; workspaceId: SafeId<"workspace"> };
   entity: { id: SafeId<"entity">; workspaceId: SafeId<"workspace"> };
+  entityVersion: {
+    id: SafeId<"entityVersion">;
+    workspaceId: SafeId<"workspace">;
+  };
+  field: { id: SafeId<"field">; workspaceId: SafeId<"workspace"> };
   signal: { id: SafeId<"signal">; organizationId: SafeId<"organization"> };
   automatedFlowRunCap: SafeId<"flowDefinition">;
   processingClaim: {
@@ -585,6 +607,31 @@ type RowResource = {
   scopeColumns: readonly string[];
   scopeValues: readonly (string | number)[];
 };
+const memberCleanupRowResource = (
+  id: AggregateIdentities["memberCleanup"],
+): RowResource => {
+  switch (id.type) {
+    case "organization-member":
+      return {
+        table: "member",
+        columns: ["id"],
+        values: [id.id],
+        scopeColumns: ["organization_id"],
+        scopeValues: [id.organizationId],
+      };
+    case "workspace-member":
+      return {
+        table: "workspace_members",
+        columns: ["id"],
+        values: [id.id],
+        scopeColumns: ["workspace_id"],
+        scopeValues: [id.workspaceId],
+      };
+    default:
+      id satisfies never;
+      return panic("Unknown member cleanup resource");
+  }
+};
 const rowResource = (options: RowIdentityOptions): RowResource => {
   switch (options.aggregate) {
     case "organization":
@@ -667,6 +714,22 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         scopeColumns: ["workspace_id"],
         scopeValues: [options.id.workspaceId],
       };
+    case "entityVersion":
+      return {
+        table: "entity_versions",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["workspace_id"],
+        scopeValues: [options.id.workspaceId],
+      };
+    case "field":
+      return {
+        table: "fields",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["workspace_id"],
+        scopeValues: [options.id.workspaceId],
+      };
     case "signal":
       return {
         table: "signals",
@@ -744,27 +807,7 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         scopeValues: [options.id.workspaceId],
       };
     case "memberCleanup":
-      switch (options.id.type) {
-        case "organization-member":
-          return {
-            table: "member",
-            columns: ["id"],
-            values: [options.id.id],
-            scopeColumns: ["organization_id"],
-            scopeValues: [options.id.organizationId],
-          };
-        case "workspace-member":
-          return {
-            table: "workspace_members",
-            columns: ["id"],
-            values: [options.id.id],
-            scopeColumns: ["workspace_id"],
-            scopeValues: [options.id.workspaceId],
-          };
-        default:
-          options.id satisfies never;
-          return panic("Unknown member cleanup resource");
-      }
+      return memberCleanupRowResource(options.id);
     default:
       options satisfies never;
       return panic("Unknown row aggregate");
@@ -905,6 +948,83 @@ export const withAggregateParentBatch = async ({
     workspaceIds: new Set(matters.map(brandPersistedWorkspaceId)),
   };
 };
+type AggregateEntityBatchOptions = {
+  tx: Transaction;
+  ids: readonly AggregateIdentities["entity"][];
+  mode: RowLockMode;
+  limit: number;
+};
+
+/** Bounded entity snapshots keep one ordered acquisition for a repair batch. */
+export const withAggregateEntityBatch = async ({
+  tx,
+  ids,
+  mode,
+  limit,
+}: AggregateEntityBatchOptions) => {
+  if (!Number.isSafeInteger(limit) || limit <= 0) {
+    panic("Aggregate entity batch requires a positive integer limit");
+  }
+  const identities = new Map<string, AggregateIdentities["entity"]>();
+  for (const id of ids) {
+    const previous = identities.get(id.id);
+    if (previous !== undefined && previous.workspaceId !== id.workspaceId) {
+      panic("Aggregate entity batch declares conflicting tenant identities");
+    }
+    identities.set(id.id, id);
+  }
+  const ordered = [...identities.values()].toSorted((left, right) =>
+    compareCodeUnit(left.id, right.id),
+  );
+  if (ordered.length === 0) {
+    return [];
+  }
+  const history = lockHistory(tx);
+  assertAggregateLevelAvailable(history);
+  const locks = new Map(
+    ordered.map((id) => [id.id, rowLock({ aggregate: "entity", id }, mode)]),
+  );
+  for (const lock of locks.values()) {
+    assertLockOrder(history, lock, "block");
+  }
+  history.status = "acquiring";
+  const rows = await tx
+    .select({
+      id: entities.id,
+      workspaceId: entities.workspaceId,
+      currentVersionId: entities.currentVersionId,
+      readOnly: entities.readOnly,
+    })
+    .from(entities)
+    .where(
+      or(
+        ...ordered.map((id) =>
+          and(eq(entities.id, id.id), eq(entities.workspaceId, id.workspaceId)),
+        ),
+      ),
+    )
+    .orderBy(sql`${entities.id}::text COLLATE "C"`)
+    .limit(limit)
+    .for(mode);
+  for (const lock of locks.values()) {
+    retainReservation(history, lock);
+  }
+  for (const row of rows) {
+    const identity =
+      identities.get(row.id) ??
+      panic("Aggregate entity batch returned an undeclared row");
+    if (row.workspaceId !== identity.workspaceId) {
+      panic("Aggregate entity batch returned an undeclared tenant");
+    }
+    retainLock(
+      history,
+      locks.get(row.id) ?? panic("Missing aggregate batch lock"),
+    );
+  }
+  completeAcquisition(history);
+  return rows;
+};
+
 const rowStatement = (
   options: RowIdentityOptions,
   mode: RowLockMode,
@@ -1199,7 +1319,19 @@ type AggregateLockableQuery<Row> = {
   toSQL: () => { sql: string };
   as: (alias: string) => Subquery;
 };
-type AggregateRowQueryOptions<Row> = RowIdentityOptions & {
+type DocumentSourceChild = Extract<
+  RowIdentityOptions,
+  { aggregate: "entityVersion" | "field" }
+>;
+type AggregateQueryIdentity =
+  | (Extract<RowIdentityOptions, { aggregate: "entity" }> & {
+      children?: readonly DocumentSourceChild[];
+    })
+  | (Exclude<RowIdentityOptions, { aggregate: "entity" }> & {
+      children?: undefined;
+    });
+
+type AggregateRowQueryOptions<Row> = AggregateQueryIdentity & {
   mode: RowLockMode;
   select: (tx: Transaction) => {
     where: (predicate: SQL) => AggregateLockableQuery<Row>;
@@ -1427,6 +1559,19 @@ const aggregateSelectTarget = (source: string) => {
   }
   return {
     table: table.value,
+    tables: [
+      table.value,
+      ...tokens.flatMap((token, index) => {
+        if (token.kind !== "word" || token.value !== "join") {
+          return [];
+        }
+        const joined = tokens.at(index + 1);
+        if (joined === undefined || joined.kind === "symbol") {
+          return panic("Unsupported aggregate JOIN target");
+        }
+        return [joined.value];
+      }),
+    ],
     joined: tokens.some(
       (token) => token.kind === "word" && token.value === "join",
     ),
@@ -1591,22 +1736,45 @@ const validateProjectedRows = (rows: readonly ProjectedValue[][]): void => {
 };
 
 /** Apply the registered identity and tenant predicate before locking; extra predicates can only narrow it. */
-export const withAggregateRowQuery = async <Row>(
+export function withAggregateRowQuery<Row>(
+  options: AggregateRowQueryOptions<Row> & { wait?: "block" },
+): Promise<Exclude<AggregateRowsResult<Row>, { status: "busy" }>>;
+export function withAggregateRowQuery<Row>(
   options: AggregateRowQueryOptions<Row>,
-): Promise<AggregateRowsResult<Row>> => {
+): Promise<AggregateRowsResult<Row>>;
+export async function withAggregateRowQuery<Row>(
+  options: AggregateRowQueryOptions<Row>,
+): Promise<AggregateRowsResult<Row>> {
   const history = lockHistory(options.tx);
   assertAggregateLevelAvailable(history);
   const wait = options.wait ?? "block";
-  const requested = rowLock(options, options.mode);
-  assertLockOrder(history, requested, wait);
+  const children = options.children;
+  const identities: RowIdentityOptions[] = [options];
+  if (children !== undefined) {
+    identities.push(...children);
+  }
+  const requests = identities.map((identity) =>
+    rowLock(identity, options.mode),
+  );
+  for (const [index, requested] of requests.entries()) {
+    assertLockOrder(history, requested, wait);
+    const previous = requests.at(index - 1);
+    if (
+      index > 0 &&
+      previous !== undefined &&
+      requested.rank <= previous.rank
+    ) {
+      panic("Aggregate child locks must ascend by registered rank");
+    }
+  }
   const acquire = async (
     tx: Transaction,
   ): Promise<AggregateRowsResult<Row>> => {
     const queryHistory = lockHistory(tx);
     assertAggregateLevelAvailable(queryHistory);
     const query = options.select(tx);
-    const resource = rowResource(options);
-    const table = resource.table;
+    const primaryResource = rowResource(options);
+    const table = primaryResource.table;
     const target = aggregateSelectTarget(query.toSQL().sql);
     if (target.table !== table) {
       panic("Aggregate query target does not match its registered resource");
@@ -1614,8 +1782,37 @@ export const withAggregateRowQuery = async <Row>(
     if (target.filtered) {
       panic("Pass additional aggregate predicates through the where option");
     }
+    const resources = identities.map(rowResource);
     const of = options.lockConfig?.of;
-    if (of !== undefined) {
+    let lockConfig = options.lockConfig;
+    if (children !== undefined && children.length > 0) {
+      if (of !== undefined) {
+        panic("Aggregate child query owns its lock targets");
+      }
+      const tables = [
+        entities,
+        ...children.map((child) => {
+          switch (child.aggregate) {
+            case "entityVersion":
+              return entityVersions;
+            case "field":
+              return fields;
+            default:
+              return panic("Unknown aggregate source child");
+          }
+        }),
+      ];
+      const registeredTables = resources.map(
+        ({ table: targetTable }) => targetTable,
+      );
+      const joinedTargets = target.tables.filter((name) =>
+        registeredTables.includes(name),
+      );
+      if (JSON.stringify(joinedTargets) !== JSON.stringify(registeredTables)) {
+        panic("Aggregate child query joins must follow registered rank");
+      }
+      lockConfig = { ...options.lockConfig, of: tables };
+    } else if (of !== undefined) {
       const targets = Array.isArray(of) ? of : [of];
       if (
         targets.length !== 1 ||
@@ -1628,18 +1825,20 @@ export const withAggregateRowQuery = async <Row>(
     } else if (target.joined) {
       panic("Joined aggregate query requires an explicit registered OF target");
     }
-    const projection = registeredProjection(
-      getColumns(query.as("aggregate_projection")),
-      resource,
+    const selection = getColumns(query.as("aggregate_projection"));
+    const projections = resources.map((resource) =>
+      registeredProjection(selection, resource),
     );
-    const columns = [...resource.columns, ...resource.scopeColumns];
-    const values = [...resource.values, ...resource.scopeValues];
     const predicate =
       and(
-        ...columns.map(
-          (column, index) =>
-            sql`${sql.identifier(table)}.${sql.identifier(column)} = ${values.at(index) ?? panic("Missing aggregate row key")}`,
-        ),
+        ...resources.flatMap((resource) => {
+          const columns = [...resource.columns, ...resource.scopeColumns];
+          const values = [...resource.values, ...resource.scopeValues];
+          return columns.map(
+            (column, index) =>
+              sql`${sql.identifier(resource.table)}.${sql.identifier(column)} = ${values.at(index) ?? panic("Missing aggregate row key")}`,
+          );
+        }),
         options.where,
       ) ?? panic("Missing registered aggregate predicate");
     const scopedQuery = query.where(predicate);
@@ -1648,27 +1847,39 @@ export const withAggregateRowQuery = async <Row>(
     queryHistory.status = "acquiring";
     const rows = await scopedQuery.for(
       options.mode,
-      wait === "nowait"
-        ? { ...options.lockConfig, noWait: true }
-        : options.lockConfig,
+      wait === "nowait" ? { ...lockConfig, noWait: true } : lockConfig,
     );
     // PostgreSQL may lock a snapshot-matching row and omit it after rechecking
     // an updated predicate. Reserve its order, but only returned rows confirm
     // held coverage for later acquisitions of the same identity.
     // https://www.postgresql.org/docs/current/sql-select.html#SQL-FOR-UPDATE-SHARE
-    retainReservation(queryHistory, requested);
-    const projected = rows.map((row) => projectedRowValues(row, projection));
-    // The query already holds these locks, even when its returned rows fail validation.
-    for (const row of projected) {
-      const physicalValues = projectedPhysicalIdentity(row);
-      retainLock(queryHistory, {
-        ...requested,
-        key: JSON.stringify(["row", table, ...physicalValues]),
-        orderKey: JSON.stringify([options.aggregate, table, ...physicalValues]),
-      });
+    for (const [index, requested] of requests.entries()) {
+      retainReservation(queryHistory, requested);
+      const resource =
+        resources.at(index) ?? panic("Missing aggregate resource");
+      const projection =
+        projections.at(index) ?? panic("Missing aggregate projection");
+      const projected = rows.map((row) => projectedRowValues(row, projection));
+      // Record every locked target before validating the returned identities.
+      for (const row of projected) {
+        const physicalValues = projectedPhysicalIdentity(row);
+        retainLock(queryHistory, {
+          ...requested,
+          key: JSON.stringify(["row", resource.table, ...physicalValues]),
+          orderKey: JSON.stringify([
+            identities.at(index)?.aggregate,
+            resource.table,
+            ...physicalValues,
+          ]),
+        });
+      }
     }
     completeAcquisition(queryHistory);
-    validateProjectedRows(projected);
+    for (const projection of projections) {
+      validateProjectedRows(
+        rows.map((row) => projectedRowValues(row, projection)),
+      );
+    }
     return { status: rows.length === 0 ? "missing" : "locked", rows };
   };
   if (wait === "nowait") {
@@ -1690,7 +1901,7 @@ export const withAggregateRowQuery = async <Row>(
     return abortTransaction(result.error.cause);
   }
   return await acquire(options.tx);
-};
+}
 
 type AutomatedFlowRunCapLockOptions = {
   definitionId: SafeId<"flowDefinition">;

@@ -1,4 +1,4 @@
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 
 import type { rootDb } from "@/api/db/root";
 import {
@@ -9,6 +9,10 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  withAggregateRowQuery,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { isExactOcrProjection } from "@/api/lib/document-processing-automatic-request-state";
 import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
@@ -56,47 +60,47 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
   sourceSha256Hex: string;
   workspaceId: SafeId<"workspace">;
 }): Promise<void> => {
-  await db.transaction(async (tx) => {
+  await withAggregateTransaction(db, async (tx) => {
     const parents = await lockForWrite(tx, {
       organizationIds: [organizationId],
-      workspaceIds: [workspaceId],
     });
-    if (
-      !parents.organizationIds.has(organizationId) ||
-      !parents.workspaceIds.has(workspaceId)
-    ) {
+    if (!parents.organizationIds.has(organizationId)) {
       return;
     }
 
-    const currentRows = await tx
-      .select({ id: entities.id })
-      .from(entities)
-      .where(
-        and(
-          eq(entities.id, entityId),
-          eq(entities.workspaceId, workspaceId),
-          eq(entities.currentVersionId, entityVersionId),
-          eq(entities.readOnly, false),
-        ),
-      )
-      .limit(1)
-      .for("update");
-    if (!currentRows.at(0)) {
+    const workspaceRows = (
+      await withAggregateRowQuery({
+        tx,
+        aggregate: "workspace",
+        id: { id: workspaceId, organizationId },
+        mode: "no key update",
+        select: (lockTx) =>
+          lockTx
+            .select({
+              id: workspaces.id,
+              organizationId: workspaces.organizationId,
+            })
+            .from(workspaces),
+        where: eq(workspaces.status, "active"),
+      })
+    ).rows;
+    if (!workspaceRows.at(0)) {
       return;
     }
-    const workspaceRows = await tx
-      .select({ id: workspaces.id })
-      .from(workspaces)
-      .where(
-        and(
-          eq(workspaces.id, workspaceId),
-          eq(workspaces.organizationId, organizationId),
-          eq(workspaces.status, "active"),
-        ),
-      )
-      .limit(1)
-      .for("no key update");
-    if (!workspaceRows.at(0)) {
+    const currentRows = (
+      await withAggregateRowQuery({
+        tx,
+        aggregate: "entity",
+        id: { id: entityId, workspaceId },
+        mode: "update",
+        select: (lockTx) =>
+          lockTx
+            .select({ id: entities.id, workspaceId: entities.workspaceId })
+            .from(entities),
+        where: sql`${entities.currentVersionId} = ${entityVersionId} AND ${entities.readOnly} = false`,
+      })
+    ).rows;
+    if (!currentRows.at(0)) {
       return;
     }
     const sourceFieldRows = await tx

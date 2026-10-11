@@ -444,6 +444,9 @@ test("everything the API image is built from requires the API image smoke", () =
     "apps/web/package.json",
     "apps/landing/public/fonts/CabinetGrotesk-Regular.otf",
     "docker/postgres/init.sql",
+    "docker/postgres/prod-parity.conf",
+    "docker/postgres/server.conf",
+    "scripts/configure-test-postgres.sh",
     ".gitmodules",
     "bun.lock",
     "bunfig.toml",
@@ -1994,6 +1997,117 @@ test("Docker checks are required at every selected merge-group depth", () => {
   expect(
     evaluateResult({ event: EVENT.mergeGroup, results: { [job]: "skipped" } }),
   ).toBe(1);
+});
+
+test("desktop Rust tests select classified merge-group changes at every queue depth", () => {
+  const job = v.parse(
+    v.object({
+      strategy: v.object({ matrix: v.object({ include: v.string() }) }),
+    }),
+    ciJobs["desktop-rust-tests"],
+  );
+  const platforms = v.array(
+    v.object({ os: v.string(), runner: v.string(), target: v.string() }),
+  );
+  const lintPlatforms = v.parse(
+    v.object({
+      strategy: v.object({ matrix: v.object({ include: platforms }) }),
+    }),
+    ciJobs["desktop-rust-lint"],
+  ).strategy.matrix.include;
+  for (const event of [EVENT.mergeGroup, EVENT.pullRequest]) {
+    for (const file of ["apps/desktop/src-tauri/src/lib.rs", "docs/guide.md"]) {
+      const [required] = runSelector(
+        [file],
+        ["desktop_rust_checks_required"],
+        "full",
+        "false",
+        event,
+      );
+      expect(required, file).toBe(String(file.endsWith(".rs")));
+      for (const queueDepth of ["thin", "full"]) {
+        for (const runRequired of ["true", "false"]) {
+          const context = {
+            values: {
+              "github.event_name": event,
+              "inputs.pr_depth_only": false,
+              "needs.ci-plan.outputs.run_required": runRequired,
+              "needs.ci-plan.outputs.queue_depth": queueDepth,
+              "needs.ci-plan.outputs.trusted": "true",
+              "needs.ci-plan.outputs.desktop_rust_checks_required":
+                required ?? "",
+            },
+            status: { cancelled: false },
+          };
+          expect(
+            evaluate(jobIf(ciJobs["desktop-rust-tests"]), context),
+            `${event}/${file}/${queueDepth}/${runRequired}`,
+          ).toBe(
+            event === EVENT.mergeGroup &&
+              required === "true" &&
+              runRequired === "true",
+          );
+          const selected = v.parse(
+            platforms,
+            evaluate(job.strategy.matrix.include, context),
+          );
+          expect(selected.map(({ os }) => os)).toEqual(
+            queueDepth === "thin" ? ["macos"] : ["macos", "windows"],
+          );
+          expect(selected).toEqual(
+            lintPlatforms.filter(
+              ({ os }) => queueDepth !== "thin" || os === "macos",
+            ),
+          );
+          expect(selected.at(0)).toEqual({
+            os: "macos",
+            runner: "macos-14",
+            target: "aarch64-apple-darwin",
+          });
+          if (queueDepth === "full") {
+            expect(selected.at(1)).toEqual({
+              os: "windows",
+              runner: "windows-latest",
+              target: "x86_64-pc-windows-msvc",
+            });
+          }
+        }
+      }
+    }
+  }
+});
+
+test("thin merge groups require planned desktop Rust tests to succeed", () => {
+  const cases = ["true", "false"].flatMap((required) =>
+    ["success", "skipped", "failure", "cancelled"].map((result) => ({
+      required,
+      result,
+    })),
+  );
+  for (const { item, exitCode } of runBashBatch(
+    cases,
+    ({ required, result }) => {
+      const base = resultGateCase({
+        event: EVENT.mergeGroup,
+        results: { "desktop-rust-tests": result },
+        unplannedScopes:
+          required === "false" ? ["desktop_rust_checks_required"] : [],
+      });
+      return {
+        ...base,
+        env: {
+          ...base.env,
+          QUEUE_DEPTH: "thin",
+          THIN_JOBS: JSON.stringify(thinJobs({ jobs: ciJobs })),
+        },
+      };
+    },
+  )) {
+    const accepted =
+      item.result === "success" ||
+      (item.required === "false" && item.result === "skipped");
+    expect(exitCode, `${item.required}/${item.result}`).toBe(accepted ? 0 : 1);
+  }
 });
 
 test("desktop Rust lint is required on PRs and every merge-group depth", () => {
@@ -4922,6 +5036,7 @@ const runsAtDepth = (
         "github.event.pull_request.labels.*.name": proveFix
           ? ["prove-fix"]
           : [],
+        "github.event.pull_request.draft": false,
         "inputs.heavy_only": heavyOnly === true,
         "inputs.pr_depth_only": false,
         "needs.ci-plan.outputs.coverage_profile": "normal-v1",
@@ -5284,7 +5399,11 @@ test("thin merge groups intentionally skip heavy jobs while full parity stays en
         queueDepth: "thin",
       }),
       name,
-    ).toBe(heavy.has(name) && !admitted.has(name) ? false : full);
+    ).toBe(
+      heavy.has(name) && !admitted.has(name) && name !== "desktop-rust-tests"
+        ? false
+        : full,
+    );
     // The off switch restores the thin skip for the admitted browser suites.
     expect(
       runsAtDepth(condition, {
@@ -5294,7 +5413,7 @@ test("thin merge groups intentionally skip heavy jobs while full parity stays en
         queueBrowserSuites: "off",
       }),
       `${name}/off`,
-    ).toBe(heavy.has(name) ? false : full);
+    ).toBe(heavy.has(name) && name !== "desktop-rust-tests" ? false : full);
     for (const event of [EVENT.pullRequest, EVENT.workflowDispatch]) {
       expect(
         runsAtDepth(condition, {
@@ -5546,7 +5665,8 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
           },
         }) !== false,
     );
-    expect(scheduled).toEqual(["ci-checks-docs"]);
+    // The wall-clock expiry check runs on every candidate, docs-only included.
+    expect(scheduled).toEqual(["dated-waiver-expiry", "ci-checks-docs"]);
     expect(resultJob.needs).toContain("ci-checks-docs");
     expect(fastRequired).toContain("ci-checks-docs");
     expect(
@@ -5555,7 +5675,7 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
         suiteDepth: depth,
         results: Object.fromEntries(
           gatedJobs
-            .filter((job) => job !== "ci-checks-docs")
+            .filter((job) => !scheduled.includes(job))
             .map((job) => [job, "skipped"]),
         ),
         unplannedScopes: Object.keys(plan).filter(
