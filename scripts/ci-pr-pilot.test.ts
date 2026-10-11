@@ -199,6 +199,8 @@ const conditionContext = (profile: string, event: string, depth: string) => {
     values[`needs.ci-plan.outputs.${scope}`] = "true";
   }
   values["needs.ci-plan.outputs.corpus_suites_required"] = "false";
+  values["needs.ci-plan.outputs.postgres_service_suites_required"] =
+    event === "pull_request" ? "false" : "true";
   return {
     values,
     status: { always: true, success: true, failure: false, cancelled: false },
@@ -211,9 +213,9 @@ const DECLARED_NORMAL_PLAN_CHANGES = new Set([
 ]);
 
 test("off and unset preserve today's job plan across every event and depth", async () => {
-  expect(Object.keys(original.jobs).toSorted()).toEqual(
-    Object.keys(workflow.jobs).toSorted(),
-  );
+  expect(
+    [...Object.keys(original.jobs), "postgres-service-suites"].toSorted(),
+  ).toEqual(Object.keys(workflow.jobs).toSorted());
   for (const variable of ["", "off"]) {
     for (const event of [
       "pull_request",
@@ -268,8 +270,13 @@ test("Postgres PR execution follows explicit opt-in in either pilot profile", ()
     for (const selection of ["", "off", "on"]) {
       const context = conditionContext(profile, "pull_request", "fast");
       context.values["vars.CI_POSTGRES_PR_SELECTION"] = selection;
+      context.values["needs.ci-plan.outputs.postgres_service_suites_required"] =
+        String(selection === "on");
       expect(
-        evaluate(workflow.jobs["service-suites"]?.if ?? "false", context),
+        evaluate(
+          workflow.jobs["postgres-service-suites"]?.if ?? "false",
+          context,
+        ),
       ).toBe(selection === "on");
     }
   }
@@ -292,6 +299,9 @@ test("corpus-only PRs start only corpus service steps", () => {
     .map((step) => step.name);
   expect(selectedSteps).toContain("Run corpus engine suites");
   expect(selectedSteps).not.toContain("Run Postgres-gated API suites");
+  expect(
+    evaluate(workflow.jobs["postgres-service-suites"]?.if ?? "false", context),
+  ).toBe(false);
   expect(selectedSteps).not.toContain("Run Valkey-gated API suites");
 });
 
@@ -454,6 +464,7 @@ test("the prerequisite census rejects every undecided new job and every deferred
     "web-build",
     "ci-browser",
     "service-suites",
+    "postgres-service-suites",
   ]) {
     expect(
       pilotFastJobs({
