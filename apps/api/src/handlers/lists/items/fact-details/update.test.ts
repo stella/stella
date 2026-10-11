@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
@@ -199,9 +199,10 @@ for (const operation of ["create", "update"] as const) {
 
     const result = await updateFactDetails.handler(context);
 
-    expect(result).toMatchObject({
-      updatedAt: storedUpdatedAt,
-    });
+    if (!("updatedAt" in result)) {
+      return panic("Fact detail write did not return its stored timestamp");
+    }
+    expect(result.updatedAt.toISOString()).toBe(storedUpdatedAt.toISOString());
   });
 }
 

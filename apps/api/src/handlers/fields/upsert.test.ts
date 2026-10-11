@@ -163,7 +163,9 @@ for (const operation of ["create", "update"] as const) {
 
     expect(Result.isOk(result)).toBe(true);
     if (Result.isOk(result)) {
-      expect(result.value).toEqual({ updatedAt: storedUpdatedAt });
+      expect(result.value.updatedAt.toISOString()).toBe(
+        storedUpdatedAt.toISOString(),
+      );
     }
   });
 }
