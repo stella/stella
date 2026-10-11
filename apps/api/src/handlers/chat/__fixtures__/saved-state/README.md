@@ -22,10 +22,11 @@ approved call its continuation never closed). The harness must report exactly
 those on the loaded thread, and continuing the thread must add nothing to
 them.
 
-Tool calls now require recorded executor ownership. Fixtures without that
-metadata exercise rejection at the persisted metadata boundary; their owner
-is never inferred from a later tool catalog. Fixtures that carry the metadata
-still exercise reload and continuation. Existing fixture files remain intact.
+New tool calls record executor ownership when written. Older rows without a
+tag are normalized once at the persisted-message read boundary using the
+current tool registry (server for an executable definition, client otherwise).
+Recorded tags remain authoritative. All archived fixtures still exercise reload
+and continuation; their stored files remain intact.
 
 The older files were written by backporting the writer into a checkout of the
 release and sending requests the way today's web client builds them.

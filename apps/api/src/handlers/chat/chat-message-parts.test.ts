@@ -14,6 +14,8 @@ import {
 } from "@stll/api-contract";
 import {
   CHAT_TOOL_EXECUTOR_METADATA_KEY,
+  chatToolExecutor,
+  isServerChatToolCall,
   createChatPastedTextPart,
 } from "@stll/api-contract/chat";
 import { propertyConfig } from "@stll/property-testing";
@@ -625,12 +627,100 @@ describe("persisted chat message parts", () => {
           ? [{ toolCallId: call.id, type: "client-tool" }]
           : [],
       );
-      expect(() =>
-        normalizePersistedChatMessageContent(
-          toChatMessageContent({ version: 2, data: [call] }),
-        ),
-      ).toThrow("Stored tool call has no executor ownership");
     }
+  });
+
+  test("legacy calls normalize ownership once from the read registry", () => {
+    const call = {
+      arguments: "{}",
+      input: {},
+      id: "call",
+      name: "list_templates",
+      state: "input-complete",
+      type: "tool-call",
+      metadata: { provider: "retained" },
+    } as const;
+    const tagged = {
+      ...call,
+      metadata: {
+        ...call.metadata,
+        [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server",
+      },
+    };
+    const current = toPersistedChatMessageContentV3({ data: [tagged] });
+    const stored = current.data.at(0);
+    expect(stored?.type).toBe("tool-call");
+    if (stored?.type !== "tool-call") {
+      return;
+    }
+    const { metadata: _metadata, ...untagged } = stored;
+    const contents = [
+      { ...current, data: [{ ...untagged, metadata: call.metadata }] },
+      toChatMessageContent({ version: 2, data: [call] }),
+      {
+        version: 1 as const,
+        data: [
+          {
+            ...call,
+            type: "tool-list_templates",
+            toolCallId: call.id,
+            state: "input-available",
+          },
+        ],
+      },
+    ];
+    for (const content of contents) {
+      for (const definition of ["server", "client", "unknown"] as const) {
+        const tools =
+          definition === "unknown"
+            ? {}
+            : {
+                list_templates: {
+                  name: "list_templates",
+                  description: "List templates",
+                  ...(definition === "server"
+                    ? { execute: async () => [] }
+                    : {}),
+                },
+              };
+        const parts = normalizePersistedChatMessageContent(
+          content,
+          tools,
+        ).parts;
+        const normalized = parts.at(0);
+        expect(normalized).toMatchObject({
+          type: "tool-call",
+          metadata: { provider: "retained" },
+        });
+        expect(chatToolExecutor(normalized)).toBe(
+          definition === "server" ? "server" : "client",
+        );
+        expect(isServerChatToolCall(normalized)).toBe(definition === "server");
+        expect(
+          getAwaitingUserInteractions({ role: "assistant", parts }),
+        ).toEqual(
+          definition === "server"
+            ? []
+            : [{ toolCallId: call.id, type: "client-tool" }],
+        );
+        const written = toPersistedChatMessageContentV3({ data: parts });
+        expect(normalizePersistedChatMessageContent(written).parts).toEqual(
+          parts,
+        );
+        expect(
+          normalizePersistedChatMessageContent(written, {
+            list_templates: {
+              name: "list_templates",
+              description: "Changed",
+              ...(definition !== "server" ? { execute: async () => [] } : {}),
+            },
+          }).parts,
+        ).toEqual(parts);
+      }
+    }
+    expect(normalizePersistedChatMessageContent(current, {}).parts).toEqual([
+      tagged,
+    ]);
   });
 
   test("prefers an explicit approval response over an unchanged ask-user call", () => {

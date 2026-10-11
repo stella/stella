@@ -790,6 +790,7 @@ const validateIncomingChatParts = ({
           id: message.id,
           role: persistedMessage.role,
           content: persistedMessage.content,
+          tools,
         })
       : null;
   const persistedParts = arrayOrEmpty(canonicalMessage?.parts);

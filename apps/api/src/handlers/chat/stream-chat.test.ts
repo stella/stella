@@ -4544,24 +4544,25 @@ describe("interrupt snapshot assistant message identity", () => {
   });
 
   /** A tool call the user has answered, followed by its result part. */
-  const answeredCall = (id: string): [ToolCallChatPart, ChatMessagePart] => [
-    {
-      arguments: '{"question":"Which side?"}',
-      id,
-      input: { question: "Which side?" },
-      name: "ask-user",
-      output: { answers: [{ answer: id, question: "Which side?" }] },
-      state: "complete",
-      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
-      type: "tool-call",
-    },
-    {
-      content: JSON.stringify({ answers: [{ answer: id }] }),
-      state: "complete",
-      toolCallId: id,
-      type: "tool-result",
-    },
-  ];
+  const answeredCall = (id: string) =>
+    [
+      {
+        arguments: '{"question":"Which side?"}',
+        id,
+        input: { question: "Which side?" },
+        name: "ask-user",
+        output: { answers: [{ answer: id, question: "Which side?" }] },
+        state: "complete",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
+        type: "tool-call",
+      },
+      {
+        content: JSON.stringify({ answers: [{ answer: id }] }),
+        state: "complete",
+        toolCallId: id,
+        type: "tool-result",
+      },
+    ] as const satisfies readonly [ToolCallChatPart, ChatMessagePart];
 
   type RemapSnapshotOptions = {
     history: readonly ChatMessage[];

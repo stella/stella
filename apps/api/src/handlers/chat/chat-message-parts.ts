@@ -11,6 +11,7 @@ import {
   MCP_APP_RESOURCE_MIME_TYPE,
 } from "@stll/api-contract";
 import {
+  CHAT_TOOL_EXECUTOR_METADATA_KEY,
   chatToolExecutor,
   isServerChatToolCall,
 } from "@stll/api-contract/chat";
@@ -46,6 +47,10 @@ import type { VisualResourceOrigin } from "@/api/handlers/visual-sandbox/resourc
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  registeredChatTool,
+  type ChatToolMap,
+} from "@/api/lib/chat/chat-tool-types";
+import {
   isPersistedJsonValue,
   proveParsedToolInput,
   proveParsedToolOutput,
@@ -54,6 +59,7 @@ import {
   provePersistedToolCallMetadata,
 } from "@/api/lib/chat/persisted-message-content";
 import type {
+  PersistedJsonObject,
   PersistedToolInput,
   PersistedToolResultContent,
 } from "@/api/lib/chat/persisted-message-content";
@@ -119,9 +125,10 @@ export type NormalizedLegacyMessageParts = {
 };
 
 type PersistedChatMessageRow = {
-  content: PersistedChatMessageContent;
+  content: StoredChatMessageContent;
   id: SafeId<"chatMessage">;
   role: ChatMessageRole;
+  tools?: ChatToolMap | undefined;
 };
 
 export const isChatTextPart = (
@@ -278,26 +285,70 @@ const normalizeLegacyMessagePartsToTanStack = (
   return { metadata, parts: normalized };
 };
 
-export const normalizePersistedChatMessageContent = (
-  content: PersistedChatMessageContent,
-): NormalizedLegacyMessageParts => {
-  if (content.version === 3) {
-    return normalizePersistedV3ChatMessageContent(content);
-  }
+// Stored rows may predate executor metadata; the writer output remains strict.
+type StoredChatMessageContentV3 = Omit<
+  PersistedChatMessageContentV3,
+  "data"
+> & {
+  data: (
+    | Exclude<PersistedV3Part, { type: "tool-call" }>
+    | (Omit<Extract<PersistedV3Part, { type: "tool-call" }>, "metadata"> & {
+        metadata?: PersistedJsonObject | undefined;
+      })
+  )[];
+};
+type StoredChatMessageContent =
+  | Exclude<PersistedChatMessageContent, { version: 3 }>
+  | StoredChatMessageContentV3;
 
-  if (content.version === 2) {
-    return {
+export const normalizePersistedChatMessageContent = (
+  content: StoredChatMessageContent,
+  tools: ChatToolMap = {},
+): NormalizedLegacyMessageParts => {
+  let normalized: NormalizedLegacyMessageParts;
+  if (content.version === 3) {
+    normalized = normalizePersistedV3ChatMessageContent(content);
+  } else if (content.version === 2) {
+    normalized = {
       metadata: content.metadata ?? {},
       parts: normalizeLegacyPersistedToolInputs(content.data),
     };
+  } else {
+    const legacy = normalizeLegacyMessagePartsToTanStack(
+      normalizeLegacyRawToolInputs(content.data),
+    );
+    normalized = {
+      metadata: legacy.metadata,
+      parts: normalizeLegacyPersistedToolInputs(legacy.parts),
+    };
   }
-
-  const normalized = normalizeLegacyMessagePartsToTanStack(
-    normalizeLegacyRawToolInputs(content.data),
-  );
   return {
-    metadata: normalized.metadata,
-    parts: normalizeLegacyPersistedToolInputs(normalized.parts),
+    ...normalized,
+    parts: normalized.parts.map((part) => {
+      if (part.type !== "tool-call" || chatToolExecutor(part) !== null) {
+        return part;
+      }
+      const metadata = part.metadata;
+      if (metadata !== undefined && !isRecord(metadata)) {
+        panic("Stored tool call has invalid metadata");
+      }
+      const provider = isRecord(metadata) ? metadata : {};
+      if (provider[CHAT_TOOL_EXECUTOR_METADATA_KEY] !== undefined) {
+        panic("Stored tool call has invalid executor ownership");
+      }
+      // Older rows predate recorded ownership. Resolve it only at this read
+      // boundary; downstream selection, validation and refs use the tag.
+      const tool = registeredChatTool(tools, part.name);
+      return {
+        ...part,
+        metadata: {
+          ...provider,
+          [CHAT_TOOL_EXECUTOR_METADATA_KEY]: tool?.execute
+            ? "server"
+            : "client",
+        },
+      } satisfies ChatPart;
+    }),
   };
 };
 
@@ -306,9 +357,6 @@ const normalizeLegacyPersistedToolInputs = (
 ): ChatPart[] => parts.map(normalizeLegacyPersistedToolInput);
 
 const normalizeLegacyPersistedToolInput = (part: ChatPart): ChatPart => {
-  if (part.type === "tool-call" && chatToolExecutor(part) === null) {
-    panic("Stored tool call has no executor ownership");
-  }
   if (
     part.type !== "tool-call" ||
     part.input !== undefined ||
@@ -336,7 +384,7 @@ const normalizeLegacyPersistedToolInput = (part: ChatPart): ChatPart => {
 type PersistedV3Part = PersistedChatMessageContentV3["data"][number];
 
 const normalizePersistedV3ChatMessageContent = (
-  content: PersistedChatMessageContentV3,
+  content: StoredChatMessageContentV3,
 ): NormalizedLegacyMessageParts => {
   if (!Array.isArray(content.data)) {
     panic("Stored v3 chat content has invalid data");
@@ -369,16 +417,13 @@ const persistedV3PartToChatPart = ({
   part,
 }: {
   outputByToolCallId: ReadonlyMap<string, unknown>;
-  part: PersistedV3Part;
+  part: StoredChatMessageContentV3["data"][number];
 }): ChatPart => {
   if (part.type === "tool-call") {
     const persistedInput = decodePersistedToolInput(part.input);
     const input = persistedToolInputToChatInput(persistedInput);
     const output = outputByToolCallId.get(part.id);
-    if (
-      chatToolExecutor(part) === null ||
-      !isPersistedJsonValue(part.metadata)
-    ) {
+    if (part.metadata !== undefined && !isPersistedJsonValue(part.metadata)) {
       panic("Stored v3 tool call has invalid metadata");
     }
     const candidate: unknown = {
@@ -389,7 +434,7 @@ const persistedV3PartToChatPart = ({
           : stringifyPersistedJsonValue(persistedInput.value),
       id: part.id,
       ...(input === undefined ? {} : { input }),
-      metadata: part.metadata,
+      ...(part.metadata === undefined ? {} : { metadata: part.metadata }),
       name: part.name,
       ...(part.output === undefined ? {} : { output }),
       state: part.state,
@@ -525,8 +570,9 @@ export const chatMessageFromPersisted = ({
   content,
   id,
   role,
+  tools = {},
 }: PersistedChatMessageRow): PersistableChatMessage => {
-  const normalized = normalizePersistedChatMessageContent(content);
+  const normalized = normalizePersistedChatMessageContent(content, tools);
   return toPersistableChatMessage({
     id,
     role,
@@ -1585,6 +1631,7 @@ const legacyToolPartToTanStack = (
     state: legacyToolStateToTanStack(part["state"]),
     ...("input" in part ? { input } : {}),
     ...("output" in part ? { output: Reflect.get(part, "output") } : {}),
+    ...("metadata" in part ? { metadata: part["metadata"] } : {}),
     ...legacyToolApprovalToTanStack(part["approval"]),
   };
 
