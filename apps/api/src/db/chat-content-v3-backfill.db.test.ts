@@ -88,8 +88,8 @@ type BatchWorkOptions = {
 };
 
 const withFixture = async (work: (connection: Connection) => Promise<void>) => {
-  const result = await Result.tryPromise(
-    async () =>
+  const result = await Result.tryPromise({
+    try: async () =>
       await database.transaction(async (transaction) => {
         await transaction.execute(
           sql`TRUNCATE chat_messages, chat_threads, database_backfill_states CASCADE`,
@@ -113,7 +113,8 @@ const withFixture = async (work: (connection: Connection) => Promise<void>) => {
         await work(connection);
         transaction.rollback();
       }),
-  );
+    catch: (error) => error,
+  });
   if (result.isErr() && !(result.error instanceof TransactionRollbackError)) {
     throw result.error;
   }
