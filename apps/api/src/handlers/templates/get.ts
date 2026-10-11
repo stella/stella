@@ -16,6 +16,7 @@ const getTemplateParamsSchema = t.Object({
 const PRESIGN_EXPIRES_IN = 900;
 
 const config = {
+  contract: "patch",
   contentDelivery: { type: "audited" },
   description:
     "Read one template's record: name, file name, size, manifest, field " +

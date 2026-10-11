@@ -22,12 +22,12 @@ export const CourtTierBadge = ({
 }: CourtTierBadgeProps) => (
   <span className={cn(className)}>
     <DocumentIdentityBadge
+      size={size}
       identity={{
         kind: "decision",
         courtAbbreviation: abbreviation,
         courtTier: tier,
       }}
-      size={size}
     />
   </span>
 );

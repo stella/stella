@@ -32,6 +32,9 @@ const resolveImport = (filename: string, specifier: string) => {
   if (specifier === "@stll/ui/document-identity-badge") {
     return BADGE_OWNER;
   }
+  if (specifier.startsWith("@stll/decision-reader/")) {
+    return `packages/decision-reader/src/${specifier.slice("@stll/decision-reader/".length)}`;
+  }
   if (specifier.startsWith("@/api/")) {
     return `apps/api/src/${specifier.slice(6)}`;
   }
@@ -272,6 +275,27 @@ const visitReturnedOutput = ({ body, visit }: VisitReturnedOutputOptions) => {
 
 const documentKindOutputs = (body: ts.Node, file: ts.SourceFile) => {
   const outputs: ts.Expression[] = [];
+  const panicBindings = new Set(
+    file.statements.flatMap((statement) => {
+      if (
+        !ts.isImportDeclaration(statement) ||
+        !ts.isStringLiteral(statement.moduleSpecifier) ||
+        statement.moduleSpecifier.text !== "better-result"
+      ) {
+        return [];
+      }
+      const bindings = statement.importClause?.namedBindings;
+      if (bindings === undefined || !ts.isNamedImports(bindings)) {
+        return [];
+      }
+      return bindings.elements
+        .filter(
+          (binding) =>
+            (binding.propertyName?.text ?? binding.name.text) === "panic",
+        )
+        .map((binding) => binding.name.text);
+    }),
+  );
   const append = (expression: ts.Expression) => {
     if (ts.isParenthesizedExpression(expression)) {
       append(expression.expression);
@@ -288,6 +312,14 @@ const documentKindOutputs = (body: ts.Node, file: ts.SourceFile) => {
       expression.kind === ts.SyntaxKind.NullKeyword ||
       expression.kind === ts.SyntaxKind.FalseKeyword ||
       (ts.isIdentifier(expression) && expression.text === "undefined")
+    ) {
+      return;
+    }
+    // A never-returning invariant failure has no rendered document branch.
+    if (
+      ts.isCallExpression(expression) &&
+      ts.isIdentifier(expression.expression) &&
+      panicBindings.has(expression.expression.text)
     ) {
       return;
     }
@@ -632,6 +664,7 @@ export const readDocumentIdentitySources = (root: string) => {
     "apps/web/src",
     "apps/api/src/mcp/apps",
     "packages/ui/src",
+    "packages/decision-reader/src",
   ]) {
     for (const filename of new Bun.Glob("**/*.{ts,tsx}").scanSync({
       cwd: path.join(root, scope),

@@ -33,6 +33,7 @@ const reviewSkillProposalBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Accept or reject a change proposal for an agent skill that its author " +
     "has submitted for review (status proposed); a draft is a 409. Accepting writes " +

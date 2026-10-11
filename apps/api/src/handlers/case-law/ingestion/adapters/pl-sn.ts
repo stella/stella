@@ -47,6 +47,7 @@ import { Result, panic } from "better-result";
  * what relates a row here to its SAOS copy.
  */
 
+// parser-output-unchanged: error output projection only; parsed decision fields are unchanged.
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
@@ -104,6 +105,8 @@ import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-asse
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
+
+import { logDocumentParseFailure } from "./document-parse-failure";
 
 // ── Publisher boundary ───────────────────────────────────
 
@@ -791,10 +794,10 @@ export const assemblePlSnDecision = async ({
           catch: errorTag,
         });
   if (parsed !== null && Result.isError(parsed)) {
-    logger.warn("case_law.ingestion.document_parse_failed", {
+    logDocumentParseFailure({
       adapterKey: ADAPTER_KEYS.PL_SN,
       caseNumber,
-      "error.type": parsed.error,
+      error: parsed.error,
     });
   }
   const document = parsed !== null && Result.isOk(parsed) ? parsed.value : null;

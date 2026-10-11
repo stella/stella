@@ -3,7 +3,7 @@
 // the importing file, the app path aliases expand to their source roots, and
 // extensions and a trailing `/index` drop. Bare package specifiers pass
 // through unchanged.
-export const canonicalModuleId = (
+export const exactModuleId = (
   specifier: string,
   importerRepoPath: string,
 ): string => {
@@ -27,5 +27,11 @@ export const canonicalModuleId = (
       resolved = `apps/${app}/src/${specifier.slice("@/".length)}`;
     }
   }
-  return resolved.replace(/\.[cm]?[jt]sx?$/u, "").replace(/\/index$/u, "");
+  return resolved.replace(/\.[cm]?[jt]sx?$/u, "");
 };
+
+export const canonicalModuleId = (
+  specifier: string,
+  importerRepoPath: string,
+): string =>
+  exactModuleId(specifier, importerRepoPath).replace(/\/index$/u, "");

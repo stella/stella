@@ -2,7 +2,8 @@ import { panic } from "better-result";
 
 import { FileTextIcon } from "../icons";
 import { cn } from "../lib/utils";
-import { CourtBadge, type CourtBadgeSize } from "./court-badge";
+import { CourtBadge } from "./court-badge";
+import type { CourtBadgeSize } from "./court-badge";
 import {
   COURT_TIER_WEIGHT,
   statuteIdentityLabels,

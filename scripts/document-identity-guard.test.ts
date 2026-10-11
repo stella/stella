@@ -201,32 +201,76 @@ describe("document identity ownership guard", () => {
     },
   );
 
-  test("every requested surface fails the guard if its shared rendering is replaced", () => {
+  test("every requested surface fails when shared badge rendering is removed from the component graph", () => {
     const sources = readDocumentIdentitySources(
       path.resolve(import.meta.dir, ".."),
     );
     const baseline = checkDocumentIdentitySources(sources);
     expect(baseline.violations).toEqual([]);
-    for (const [filename, source] of sources) {
-      if (!source.includes("<DocumentIdentityBadge")) {
-        continue;
-      }
-      const ownedSurfaces = baseline.surfaces.filter((surface) =>
-        surface.startsWith(`${filename}#`),
-      );
-      if (ownedSurfaces.length === 0) {
-        continue;
-      }
-      const replacement = source.replaceAll("<DocumentIdentityBadge", "<span");
-      expect(replacement).not.toBe(source);
-      const mutated = new Map(sources);
-      mutated.set(filename, replacement);
-      const result = checkDocumentIdentitySources(mutated);
-      for (const surface of ownedSurfaces) {
-        expect(result.violations).toContain(surface);
-      }
-    }
+    const mutated = new Map(
+      [...sources].map(([filename, source]) => [
+        filename,
+        source.includes("<DocumentIdentityBadge")
+          ? `${source.replaceAll("<DocumentIdentityBadge", "<UnsharedDocumentIdentityBadge")}
+              const UnsharedDocumentIdentityBadge = ({ identity }) =>
+                identity.kind === "decision"
+                  ? <span>{identity.courtAbbreviation}</span>
+                  : <span>{identity.number}/{identity.year}</span>;`
+          : source,
+      ]),
+    );
+    const result = checkDocumentIdentitySources(mutated);
+    expect(result.surfaces).toEqual(baseline.surfaces);
+    expect(result.violations).toEqual(baseline.surfaces);
   }, 30_000);
+
+  test.each(["panic", "failInvariant"])(
+    "a never-returning %s branch renders no identity",
+    (name) => {
+      const filename = "apps/web/src/components/decision-row.tsx";
+      const sources = fixture(
+        filename,
+        `${IMPORT}
+      import { panic as ${name} } from "better-result";
+      export const DecisionRow = ({ row }) => {
+        if (row.kind !== "decision") return ${name}("Expected decision");
+        return <li><DocumentIdentityBadge identity={row.identity} />{row.caseNumber}</li>;
+      }`,
+      );
+      const result = checkDocumentIdentitySources(sources);
+      expect(result.surfaces).toEqual([`${filename}#DecisionRow`]);
+      expect(result.violations).toEqual([]);
+      sources.set(
+        filename,
+        sources.get(filename)?.replaceAll("<DocumentIdentityBadge", "<span") ??
+          "",
+      );
+      expect(checkDocumentIdentitySources(sources).violations).toEqual(
+        result.surfaces,
+      );
+    },
+  );
+
+  test("reader package component imports follow the rendered badge", () => {
+    const filename = "apps/web/src/components/decision-row.tsx";
+    const reader = "packages/decision-reader/src/court-name.tsx";
+    const sources = fixture(
+      filename,
+      `
+      import { CourtName } from "@stll/decision-reader/court-name";
+      export const DecisionRow = ({ row }) => <li><CourtName identity={row.identity} />{row.caseNumber}</li>;
+    `,
+    );
+    sources.set(
+      reader,
+      `${IMPORT}export const CourtName = ({ identity }) => <DocumentIdentityBadge identity={identity} />;`,
+    );
+    expect(checkDocumentIdentitySources(sources).violations).toEqual([]);
+    sources.set(reader, `${IMPORT}export const CourtName = () => <span />;`);
+    expect(checkDocumentIdentitySources(sources).violations).toEqual([
+      `${filename}#DecisionRow`,
+    ]);
+  });
 
   test("every discovered repository document row or rail reaches the shared badge", () => {
     const sources = readDocumentIdentitySources(

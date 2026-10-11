@@ -23,6 +23,7 @@ const requestQuery = t.Object({
 });
 
 const config = {
+  contract: "patch",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "provider_secret" },

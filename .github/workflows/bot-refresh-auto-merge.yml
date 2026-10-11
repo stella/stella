@@ -1,5 +1,9 @@
 name: Bot Refresh Auto Merge
 
+defaults:
+  run:
+    shell: bash
+
 on:
   workflow_run:
     workflows: [CI Checks]
