@@ -43,8 +43,10 @@ export const mergePage = (model: GraphModel, page: CitationPage) => {
     return model;
   }
   const citations = new Map<string, Citation>();
-  for (const citation of previous?.citations ?? []) {
-    citations.set(citation.citationId, citation);
+  if (previous !== undefined) {
+    for (const citation of previous.citations) {
+      citations.set(citation.citationId, citation);
+    }
   }
   for (const citation of page.citations) {
     citations.set(citation.citationId, citation);

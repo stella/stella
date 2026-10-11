@@ -1,3 +1,8 @@
+import * as v from "valibot";
+
+import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
+
+import { openDecisionOutput } from "../../../lib/chat/decision-reader-projections";
 import type { createPresentationBridge } from "../shared/bridge";
 import { canExpand, createGraph, mergePage } from "./model";
 import type { GraphModel } from "./model";
@@ -132,6 +137,22 @@ export const createGraphController = (bridge: GraphBridge) => {
       return;
     }
     if (generation !== current) {
+      return;
+    }
+    const parsed = v.safeParse(openDecisionOutput, result.structuredContent);
+    const url = parsed.success
+      ? parseLegalCitationHttpUrl(parsed.output.metadata.appUrl)
+      : null;
+    if (
+      !parsed.success ||
+      parsed.output.metadata.decisionId !== decisionId ||
+      url === null
+    ) {
+      onError(null);
+      return;
+    }
+    await bridge.openLink(url.href, onError);
+    if (generation !== current || snapshot.request.status !== "loading") {
       return;
     }
     snapshot = { model: snapshot.model, request: { status: "idle" } };

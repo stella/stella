@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import type * as v from "valibot";
 
+import type { openDecisionOutput } from "../../../lib/chat/decision-reader-projections";
 import { createGraphController } from "./controller";
 import type { CitationPage } from "./parse";
 
@@ -56,7 +58,28 @@ const toolResult = (
     structuredContent,
   }) satisfies BridgeToolResult;
 
-const createBridge = (supportsTools = true) => {
+const openedDecision = (decisionId: string, appUrl: string | null) =>
+  ({
+    status: "unavailable",
+    metadata: {
+      decisionId,
+      appUrl,
+      caseNumber: "Synthetic case",
+      caseNumberType: "case-number",
+      courtAbbreviation: null,
+      courtTier: "supreme",
+      language: "en",
+      court: "Synthetic court",
+      country: "cze",
+      date: null,
+      ecli: null,
+    },
+  }) satisfies v.InferOutput<typeof openDecisionOutput>;
+
+const createBridge = ({
+  supportsTools = true,
+  linkError = "synthetic link failure",
+}: { supportsTools?: boolean; linkError?: string | null } = {}) => {
   let current: BridgeSnapshot = {
     context: {},
     input: {},
@@ -87,7 +110,9 @@ const createBridge = (supportsTools = true) => {
       onError?: (message: string | null) => void,
     ) => {
       openedLinks.push(url);
-      onError?.("synthetic link failure");
+      if (linkError !== null) {
+        onError?.(linkError);
+      }
     },
   } satisfies GraphBridge;
 
@@ -120,7 +145,7 @@ const startWithPage = (
 
 describe("citation graph controller", () => {
   test("serializes opening and paging so a late opening cannot release a pending read", async () => {
-    const bridge = createBridge();
+    const bridge = createBridge({ linkError: null });
     const controller = startWithPage(
       bridge,
       page({ nextCursor: "synthetic-cursor" }),
@@ -129,7 +154,11 @@ describe("citation graph controller", () => {
     await controller.read("synthetic-subject");
     await controller.open("synthetic-target", null);
     expect(bridge.requests).toHaveLength(1);
-    bridge.resolveNext(toolResult({}));
+    bridge.resolveNext(
+      toolResult(
+        openedDecision("synthetic-target", "https://example.org/selected"),
+      ),
+    );
     await opening;
     const reading = controller.read("synthetic-subject");
     await controller.open("synthetic-target", null);
@@ -287,8 +316,78 @@ describe("citation graph controller", () => {
     });
   });
 
+  test("opens the validated URL returned by the selected decision tool", async () => {
+    const bridge = createBridge({ linkError: null });
+    const controller = startWithPage(bridge, page());
+    const opening = controller.open(
+      "synthetic-target",
+      "https://example.org/old",
+    );
+    bridge.resolveNext(
+      toolResult(
+        openedDecision("synthetic-target", "https://example.org/selected"),
+      ),
+    );
+    await opening;
+    expect(bridge.openedLinks).toEqual(["https://example.org/selected"]);
+    expect(controller.getSnapshot().request.status).toBe("idle");
+  });
+
+  test("does not navigate a late open result after the host resets the graph", async () => {
+    const bridge = createBridge({ linkError: null });
+    const controller = startWithPage(bridge, page());
+    const opening = controller.open("synthetic-target", null);
+    bridge.emit({ status: "loading" });
+    bridge.resolveNext(
+      toolResult(
+        openedDecision("synthetic-target", "https://example.org/selected"),
+      ),
+    );
+    await opening;
+    expect(bridge.openedLinks).toEqual([]);
+    expect(controller.getSnapshot()).toMatchObject({
+      model: null,
+      request: { status: "idle" },
+    });
+  });
+
+  test("preserves a host navigation refusal after a successful open call", async () => {
+    const bridge = createBridge();
+    const controller = startWithPage(bridge, page());
+    const opening = controller.open("synthetic-target", null);
+    bridge.resolveNext(
+      toolResult(
+        openedDecision("synthetic-target", "https://example.org/selected"),
+      ),
+    );
+    await opening;
+    expect(bridge.openedLinks).toEqual(["https://example.org/selected"]);
+    expect(controller.getSnapshot().request).toEqual({
+      status: "error",
+      message: "synthetic link failure",
+    });
+  });
+
+  test.each([
+    {},
+    openedDecision("synthetic-other", "https://example.org/selected"),
+    openedDecision("synthetic-target", null),
+    openedDecision("synthetic-target", "file:///synthetic-decision"),
+  ])(
+    "rejects an invalid or mismatched open result without navigating (%#)",
+    async (result) => {
+      const bridge = createBridge({ linkError: null });
+      const controller = startWithPage(bridge, page());
+      const opening = controller.open("synthetic-target", null);
+      bridge.resolveNext(toolResult(result));
+      await opening;
+      expect(bridge.openedLinks).toEqual([]);
+      expect(controller.getSnapshot().request.status).toBe("error");
+    },
+  );
+
   test("surfaces fallback link failures while preserving the graph", async () => {
-    const bridge = createBridge(false);
+    const bridge = createBridge({ supportsTools: false });
     const controller = startWithPage(bridge, page());
     const originalModel = controller.getSnapshot().model;
 

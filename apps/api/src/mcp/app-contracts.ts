@@ -1,10 +1,10 @@
 import type * as v from "valibot";
 
+import { READ_CASE_LAW_CITATIONS_PROJECTION } from "../lib/chat/case-law-citation-projection";
 import {
   LOOKUP_CASE_LAW_PROJECTION,
   SEARCH_CASE_LAW_PROJECTION,
 } from "../lib/chat/case-law-result-projections";
-import { READ_CASE_LAW_CITATIONS_PROJECTION } from "../lib/chat/projections";
 import { MCP_APPS } from "./apps/manifest";
 import type { PresentationApp } from "./apps/manifest";
 import {

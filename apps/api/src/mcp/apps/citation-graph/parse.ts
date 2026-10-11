@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-import { READ_CASE_LAW_CITATIONS_PROJECTION } from "../../../lib/chat/projections";
+import { READ_CASE_LAW_CITATIONS_PROJECTION } from "../../../lib/chat/case-law-citation-projection";
 
 export type CitationPage = v.InferOutput<
   typeof READ_CASE_LAW_CITATIONS_PROJECTION

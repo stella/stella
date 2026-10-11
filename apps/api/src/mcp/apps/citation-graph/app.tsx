@@ -211,6 +211,7 @@ const CitationList = ({
               {node.type === "resolved" ? (
                 <Button
                   variant="link"
+                  className="max-w-full min-w-0 shrink"
                   disabled={busy || (!bridge.supportsTools() && url === null)}
                   onClick={containedEventHandler(() =>
                     bridge.detached(
@@ -240,7 +241,7 @@ const CitationList = ({
                 {t(edge.direction)} · {t(edge.polarity)}
               </span>
             </div>
-            <p className="text-muted-foreground text-xs break-all">
+            <p dir="ltr" className="text-muted-foreground text-xs break-all">
               <bdi>{edge.source}</bdi> → <bdi>{edge.target}</bdi>
             </p>
             {edge.textWithheldReason !== null ? (
@@ -252,6 +253,7 @@ const CitationList = ({
               edge.passage !== null && (
                 <blockquote className="text-sm break-words">
                   {edge.passage.text}
+                  {edge.passage.truncated && "…"}
                 </blockquote>
               )
             )}

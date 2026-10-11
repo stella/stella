@@ -3,10 +3,11 @@ import type { FrameLocator, Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import type * as v from "valibot";
 
-import MCP_APP_MESSAGES from "@stll/api-contract/mcp-app-messages";
+import MCP_APP_MESSAGES from "@stll/api-contract/mcp-app-messages" with { type: "json" };
 import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "@stll/api-contract/mcp-app-sandbox-policy";
 
-import type { READ_CASE_LAW_CITATIONS_PROJECTION } from "../src/lib/chat/projections";
+import type { READ_CASE_LAW_CITATIONS_PROJECTION } from "../src/lib/chat/case-law-citation-projection";
+import type { openDecisionOutput } from "../src/lib/chat/decision-reader-projections";
 
 type CitationPage = v.InferOutput<typeof READ_CASE_LAW_CITATIONS_PROJECTION>;
 const EN_MESSAGES = MCP_APP_MESSAGES.en;
@@ -30,7 +31,10 @@ const DECISION_IDS = [
   "00000000-0000-4000-8000-000000000006",
   "00000000-0000-4000-8000-000000000007",
 ] as const;
-const caseNumber = (index: number) => `Fixture case ${index + 1}`;
+const caseNumber = (index: number) =>
+  index === 0
+    ? `Fixture case ${"1234567890".repeat(24)}`
+    : `Fixture case ${index + 1}`;
 const decisionUrl = (id: string) =>
   `https://stella.example/law/cze/cases/${id}`;
 const citation = (
@@ -61,7 +65,7 @@ const citation = (
     passage: {
       anchorId: `fixture-anchor-${index}`,
       text: `Fixture passage ${index + 1}.`,
-      truncated: false,
+      truncated: index === 0,
       mention: "sole",
     },
   }) satisfies CitationPage["citations"][number];
@@ -226,7 +230,31 @@ const mountGraph = async ({
             const { name, arguments: args } = params;
             calls.push({ name, arguments: args });
             if (name === "open_case_law_decision") {
-              reply({ jsonrpc: "2.0", id, result: toolResult({}) });
+              const decisionId = args["decision_id"];
+              if (typeof decisionId !== "string") {
+                reject(id, "Invalid fixture decision id");
+                return;
+              }
+              reply({
+                jsonrpc: "2.0",
+                id,
+                result: toolResult({
+                  status: "unavailable",
+                  metadata: {
+                    decisionId,
+                    appUrl: `https://stella.example/law/cze/cases/${decisionId}`,
+                    caseNumber: "Fixture case",
+                    caseNumberType: "case-number",
+                    courtAbbreviation: null,
+                    courtTier: "supreme",
+                    language: "en",
+                    court: "Fixture court",
+                    country: "cze",
+                    date: null,
+                    ecli: null,
+                  },
+                } satisfies v.InferOutput<typeof openDecisionOutput>),
+              });
               break;
             }
             if (name !== "read_case_law_citations") {
@@ -329,6 +357,12 @@ test("citation graph renders the subject, six treatments, unresolved citations, 
       app.getByTestId("citation-list").locator(`[data-polarity="${polarity}"]`),
     ).toContainText(EN_MESSAGES[polarity]);
   }
+  await expect(
+    app.locator('article[data-citation-id="fixture-citation-0"] blockquote'),
+  ).toHaveText("Fixture passage 1.…");
+  await expect(
+    app.locator('article[data-citation-id="fixture-citation-1"] blockquote'),
+  ).toHaveText("Fixture passage 2.");
   expect((await history(page)).calls).toEqual([]);
 });
 
@@ -383,6 +417,10 @@ test("citation graph opens decisions through host tools and openLink fallback", 
       name: "open_case_law_decision",
       arguments: { decision_id: DECISION_IDS[0] },
     });
+
+  await expect
+    .poll(async () => (await history(page)).links)
+    .toEqual([decisionUrl(DECISION_IDS[0])]);
 
   const fallbackPage = await page.context().newPage();
   const fallback = await mountGraph({
@@ -484,6 +522,22 @@ test("citation graph uses Arabic messages and right-to-left layout", async ({
     app.getByRole("heading", { name: AR_MESSAGES.graphTitle }),
   ).toBeVisible();
   await expect(app.locator("html")).toHaveAttribute("dir", "rtl");
+  const direction = app.locator(
+    'article[data-citation-id="fixture-citation-0"] p[dir="ltr"]',
+  );
+  await expect(direction).toHaveText(`${SUBJECT_ID} → ${DECISION_IDS[0]}`);
+  const order = await direction.evaluate((row) => {
+    const endpoints = row.querySelectorAll("bdi");
+    const source = endpoints.item(0).getBoundingClientRect();
+    const target = endpoints.item(1).getBoundingClientRect();
+    return {
+      sourceX: source.left,
+      targetX: target.left,
+      direction: getComputedStyle(row).direction,
+    };
+  });
+  expect(order.direction).toBe("ltr");
+  expect(order.sourceX).toBeLessThan(order.targetX);
   await app
     .getByRole("button", { name: AR_MESSAGES.graphView, exact: true })
     .click();

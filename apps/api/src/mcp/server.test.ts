@@ -900,7 +900,7 @@ describe("handleMcpHttpRequest", () => {
       ]);
       expect(
         listed.tools.find(({ name }) => name === "read_case_law_citations")
-          ?._meta?.ui,
+          ?._meta?.["ui"],
       ).toMatchObject({
         resourceUri: "ui://stella/citation-graph",
         visibility: ["model", "app"],
