@@ -398,6 +398,22 @@ test("a partial or property-only plan classifies every measured file like a full
   expect(await dbClass(["scripts/resource-usage.test.ts"], true)).toEqual(full);
   expect(await dbClass(listApiTestPaths(apiRoot), true)).toEqual(full);
 });
+test("full-size refresh tests reclaim their process before another DB suite", async () => {
+  const refresh = "src/lib/lists/sanctions/refresh-event-loop.db.test.ts";
+  const monitoring = "src/lib/lists/sanctions/monitoring-drain.db.test.ts";
+  const groups = await planApiTestBatches({
+    apiRoot: path.resolve(import.meta.dir, ".."),
+    propertyOnly: false,
+    testPaths: [monitoring, refresh],
+  });
+  const batches = groups.flatMap(({ testBatches }) => testBatches);
+  expect(batches.flat().toSorted()).toEqual([monitoring, refresh].toSorted());
+  expect(batches.find((batch) => batch.includes(refresh))).toEqual([refresh]);
+  expect(batches.find((batch) => batch.includes(monitoring))).toEqual([
+    monitoring,
+  ]);
+});
+
 test("measurement arguments preserve provenance without entering test filters", () => {
   const options = parseRssMeasurementArguments([
     "--measure-rss",

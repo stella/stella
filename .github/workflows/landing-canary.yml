@@ -1,5 +1,9 @@
 name: Landing canary
 
+defaults:
+  run:
+    shell: bash
+
 # Proves stll.app serves whole between deploys: the homepage, a few routes,
 # and every hashed asset the served homepage references. The same check the
 # landing deploy runs after publishing; here it runs on a schedule, so a page

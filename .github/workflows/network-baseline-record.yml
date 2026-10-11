@@ -1,5 +1,9 @@
 name: Record network baseline
 
+defaults:
+  run:
+    shell: bash
+
 # Main owns recordings. PR checks never write the shared JSON.
 on:
   schedule:
