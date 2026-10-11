@@ -1924,6 +1924,7 @@
     "noResults": "Nincs találat",
     "noVersions": "Nincs verzióelőzmény",
     "none": "Nincs",
+    "notStated": "Nincs megadva",
     "notes": "Megjegyzések",
     "open": "Megnyitás",
     "openInNewTab": "Megnyitás új lapon",
@@ -1993,6 +1994,7 @@
     "sort": "Rendezés",
     "source": "Forrás",
     "stale": "Elavult",
+    "start": "Kezdés",
     "status": "Státusz",
     "stepCount": "{count, plural, one {# lépés} other {# lépés}}",
     "stepProgress": "{current} / {total}",
@@ -2807,7 +2809,6 @@
       },
       "selectFlow": "Válasszon munkafolyamatot",
       "sizeConfirmTitle": "Nagy terjedelmű folyamatfuttatás",
-      "start": "Indítás",
       "startFailed": "A munkafolyamatot nem sikerült elindítani.",
       "started": "Munkafolyamat elindítva",
       "stepProgress": "{current}/{total}. lépés",
@@ -3024,8 +3025,7 @@
   "guides": {
     "action": {
       "replay": "Újrakezdés",
-      "skip": "Kihagyás",
-      "start": "Kezdés"
+      "skip": "Kihagyás"
     },
     "checklist": {
       "progress": "{completed} / {total} kész"
@@ -3704,6 +3704,10 @@
         "failed": "A mentés nem sikerült",
         "nameMissing": "Nincs mentve: adjon meg egy nevet",
         "positionsNeedAttention": "Nincs mentve: {count, plural, one {# álláspont} other {# álláspont}} figyelmet igényel"
+      },
+      "buildWithAi": {
+        "description": "Válaszoljon néhány kérdésre a csevegésben, a playbook pedig menet közben mentődik.",
+        "title": "Létrehozás AI-val"
       },
       "check": "Pontos szabály használata AI helyett",
       "checkHint": "Mérhető feltételekhez, például: fizetési határidő ≤ 30 nap.",

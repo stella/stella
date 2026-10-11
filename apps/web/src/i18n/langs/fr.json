@@ -1924,6 +1924,7 @@
     "noResults": "Aucun résultat",
     "noVersions": "Aucun historique de versions",
     "none": "Aucun",
+    "notStated": "Non précisé",
     "notes": "Notes",
     "open": "Ouvrir",
     "openInNewTab": "Ouvrir dans un nouvel onglet",
@@ -1993,6 +1994,7 @@
     "sort": "Trier",
     "source": "Source",
     "stale": "Obsolète",
+    "start": "Commencer",
     "status": "Statut",
     "stepCount": "{count, plural, one {# étape} other {# étapes}}",
     "stepProgress": "{current} sur {total}",
@@ -2807,7 +2809,6 @@
       },
       "selectFlow": "Choisissez un flux de travail",
       "sizeConfirmTitle": "Exécution de flux volumineuse",
-      "start": "Démarrer",
       "startFailed": "Impossible de démarrer le flux de travail.",
       "started": "Flux de travail démarré",
       "stepProgress": "Étape {current} sur {total}",
@@ -3024,8 +3025,7 @@
   "guides": {
     "action": {
       "replay": "Recommencer",
-      "skip": "Ignorer",
-      "start": "Commencer"
+      "skip": "Ignorer"
     },
     "checklist": {
       "progress": "{completed} sur {total} terminés"
@@ -3704,6 +3704,10 @@
         "failed": "Échec de l’enregistrement",
         "nameMissing": "Non enregistré : ajoutez un nom",
         "positionsNeedAttention": "Non enregistré : {count, plural, one {# critère nécessite} other {# critères nécessitent}} votre attention"
+      },
+      "buildWithAi": {
+        "description": "Répondez à quelques questions dans une conversation et le playbook s’enregistre au fur et à mesure.",
+        "title": "Créer avec l’IA"
       },
       "check": "Utiliser une règle exacte plutôt que l’IA",
       "checkHint": "Pour des conditions mesurables, par exemple : délai de paiement ≤ 30 jours.",

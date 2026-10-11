@@ -1924,6 +1924,7 @@
     "noResults": "Keine Ergebnisse",
     "noVersions": "Kein Versionsverlauf",
     "none": "Keine",
+    "notStated": "Nicht angegeben",
     "notes": "Notizen",
     "open": "Öffnen",
     "openInNewTab": "In neuem Tab öffnen",
@@ -1993,6 +1994,7 @@
     "sort": "Sortieren",
     "source": "Quelle",
     "stale": "Veraltet",
+    "start": "Starten",
     "status": "Status",
     "stepCount": "{count, plural, one {# Schritt} other {# Schritte}}",
     "stepProgress": "{current} von {total}",
@@ -2807,7 +2809,6 @@
       },
       "selectFlow": "Workflow auswählen",
       "sizeConfirmTitle": "Umfangreicher Ablauf",
-      "start": "Starten",
       "startFailed": "Der Workflow konnte nicht gestartet werden.",
       "started": "Workflow gestartet",
       "stepProgress": "Schritt {current} von {total}",
@@ -3024,8 +3025,7 @@
   "guides": {
     "action": {
       "replay": "Neu starten",
-      "skip": "Überspringen",
-      "start": "Starten"
+      "skip": "Überspringen"
     },
     "checklist": {
       "progress": "{completed} von {total} abgeschlossen"
@@ -3704,6 +3704,10 @@
         "failed": "Speichern fehlgeschlagen",
         "nameMissing": "Nicht gespeichert: Fügen Sie einen Namen hinzu",
         "positionsNeedAttention": "Nicht gespeichert: {count, plural, one {# Standpunkt muss} other {# Standpunkte müssen}} überprüft werden"
+      },
+      "buildWithAi": {
+        "description": "Beantworten Sie im Chat ein paar Fragen – das Playbook wird dabei laufend gespeichert.",
+        "title": "Mit KI erstellen"
       },
       "check": "Exakte Regel statt KI verwenden",
       "checkHint": "Für messbare Bedingungen, etwa: Zahlungsziel ≤ 30 Tage.",
