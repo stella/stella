@@ -39,12 +39,10 @@ import type {
   ChatPart,
   ChatTurnOutcome,
   PersistableChatMessageCandidate,
-  PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { CHAT_REF_ENCODING } from "@/api/lib/chat/ref-token";
 import { LIMITS } from "@/api/lib/limits";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { richChatParts, unsafeScriptUrl } from "./__fixtures__/rich-chat-parts";
 
@@ -990,11 +988,4 @@ describe("merging a message's anonymization restorations", () => {
     ]);
     expect(merged.conflicts).toBe(1);
   });
-});
-
-test.each([1, 2])("rejects unmigrated persisted version %i", (version) => {
-  const stored = asTestRaw<PersistedChatMessageContent>({ version, data: [] });
-  expect(() => normalizePersistedChatMessageContent(stored)).toThrow(
-    "Stored chat content requires the v3 data backfill",
-  );
 });

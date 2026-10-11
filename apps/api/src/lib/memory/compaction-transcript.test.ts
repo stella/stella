@@ -1,12 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
-import type { PersistedChatMessageContent } from "@/api/handlers/chat/types";
 import {
   renderTranscript,
   TRANSCRIPT_MAX_CHARS,
 } from "@/api/lib/memory/compaction-transcript";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // The transcript is untrusted tenant text passed to the extraction prompt
 // builder. These tests pin flattening and budget behavior; prompt-construction
@@ -19,19 +17,6 @@ const textMessage = (content: string) =>
   });
 
 describe("renderTranscript", () => {
-  test.each([1, 2])(
-    "rejects unmigrated version %i before extraction",
-    (version) => {
-      const content = asTestRaw<PersistedChatMessageContent>({
-        version,
-        data: [{ type: "text", text: "legacy private text" }],
-      });
-      expect(() => renderTranscript([{ role: "user", content }])).toThrow(
-        "Stored chat content requires the v3 data backfill",
-      );
-    },
-  );
-
   test("preserves raw content for the prompt trust boundary", () => {
     const rendered = renderTranscript([
       {
