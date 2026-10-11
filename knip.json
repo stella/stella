@@ -17,7 +17,9 @@
         "eslint",
         "oxlint-tsgolint",
         "oxlint",
-        "squawk-cli"
+        "squawk-cli",
+        // .oxfmtrc.json reads tailwindcss/theme.css by path.
+        "tailwindcss"
       ],
       "ignoreBinaries": ["scripts/dev.sh"]
     },
