@@ -164,6 +164,7 @@ type PublicDecisionReadEntry =
 /** The spellings of the one predicate, plus the marker reader the projection uses. */
 const PUBLIC_DECISION_PREDICATE_TOKENS = [
   "publishedCaseLawDecision",
+  "servedCaseLawDecisionFor",
   "publicCaseLawDecisionJoin",
   "partialObservationFromMetadata",
 ] as const;
@@ -217,6 +218,7 @@ const PUBLIC_DECISION_READ_GATES = {
     gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
   },
   [STATUS_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
+  [COVERAGE_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   [CITING_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   "apps/api/src/handlers/case-law/provisions/previews-for-decision.ts": {
     gate: PUBLIC_DECISION_READ_GATE.SUBJECT,

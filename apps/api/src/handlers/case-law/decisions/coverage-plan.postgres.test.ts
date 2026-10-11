@@ -146,8 +146,9 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
         expect(probes).toHaveLength(2);
         for (const probe of probes) {
           expect(["Index Scan", "Index Only Scan"]).toContain(probe.nodeType);
-          expect(probe.limitAbove).toBe(true);
-          expect(probe.limitRows).toBe(1);
+          // The serving semi-join can discard unindexed dates, so its Limit
+          // bounds matched endpoints rather than every input index row. The
+          // endpoint limits and actual scan work are asserted below.
           expect(probe.indexCond).toContain("source_id");
           expect(probe.indexCond).toContain("decision_date IS NOT NULL");
         }

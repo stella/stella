@@ -257,71 +257,78 @@ test(
         name: "Court count fixture",
       }),
     );
-    const rows = [
-      { court: "Published court A", metadata: {}, redactedAt: undefined },
-      { court: "Published court B", metadata: {}, redactedAt: undefined },
-      { court: "Withdrawn court", metadata: {}, redactedAt: NOW },
-      {
-        court: "Listing-only court",
-        metadata: LISTING_ONLY,
-        redactedAt: undefined,
-      },
-      { court: "Unserved court", metadata: {}, redactedAt: undefined },
-    ].map(({ court, metadata, redactedAt }) => ({
-      ...decisionRow({
-        caseNumber: court,
-        country: "POL",
-        court,
-        sourceId,
-        createdAt: NOW,
-        metadata,
-        redactedAt,
-      }),
-      id: createSafeId<"caseLawDecision">(),
-    }));
-    await db.insert(caseLawDecisions).values(rows);
-    await db.insert(caseLawSearchDocuments).values(
-      rows.slice(0, 4).map(({ id }) => ({
-        decisionId: id,
-        language: "cs",
-        regconfig: "simple",
-        searchableText: "Published decision text",
-        tsv: sql`to_tsvector('simple', 'Published decision text')`,
-      })),
-    );
-    const courtCount = await readAsReader(
-      async (tx) =>
-        await readCaseLawCourtCountQuery(tx, {
+    try {
+      const rows = [
+        { court: "Published court A", metadata: {}, redactedAt: undefined },
+        { court: "Published court B", metadata: {}, redactedAt: undefined },
+        { court: "Withdrawn court", metadata: {}, redactedAt: NOW },
+        {
+          court: "Listing-only court",
+          metadata: LISTING_ONLY,
+          redactedAt: undefined,
+        },
+        { court: "Unserved court", metadata: {}, redactedAt: undefined },
+      ].map(({ court, metadata, redactedAt }) => ({
+        ...decisionRow({
+          caseNumber: court,
           country: "POL",
-          excludedSourceIds: [],
-          engine: "pg-fts",
+          court,
+          sourceId,
+          createdAt: NOW,
+          metadata,
+          ...(redactedAt === undefined ? {} : { redactedAt }),
         }),
-    );
-    expect(courtCount).toBe(2);
-    const breakdown = caseLawCourtStatusRows({
-      country: "POL",
-      buckets: [{ value: "Published court A", count: 1 }],
-      activity: new Map(),
-      courtWeights: courtWeightMapFromSeed(),
-      total: 2,
-      courtCount,
-    });
-    expect(breakdown.find(({ type }) => type === "other-courts")).toEqual({
-      type: "other-courts",
-      tier: "other",
-      courts: 1,
-      decisions: 1,
-    });
-    expect(
-      await readAsReader(
+        id: createSafeId<"caseLawDecision">(),
+      }));
+      await db.insert(caseLawDecisions).values(rows);
+      await db.insert(caseLawSearchDocuments).values(
+        rows.slice(0, 4).map(({ id }) => ({
+          decisionId: id,
+          language: "cs",
+          regconfig: "simple",
+          searchableText: "Published decision text",
+          tsv: sql`to_tsvector('simple', 'Published decision text')`,
+        })),
+      );
+      const courtCount = await readAsReader(
         async (tx) =>
           await readCaseLawCourtCountQuery(tx, {
             country: "POL",
             excludedSourceIds: [],
-            engine: "corpus-index",
+            engine: "pg-fts",
           }),
-      ),
-    ).toBeNull();
+      );
+      expect(courtCount).toBe(2);
+      const breakdown = caseLawCourtStatusRows({
+        country: "POL",
+        buckets: [{ value: "Published court A", count: 1 }],
+        activity: new Map(),
+        courtWeights: courtWeightMapFromSeed(),
+        total: 2,
+        courtCount,
+      });
+      expect(breakdown.find(({ type }) => type === "other-courts")).toEqual({
+        type: "other-courts",
+        tier: "other",
+        courts: 1,
+        decisions: 1,
+      });
+      expect(
+        await readAsReader(
+          async (tx) =>
+            await readCaseLawCourtCountQuery(tx, {
+              country: "POL",
+              excludedSourceIds: [],
+              engine: "corpus-index",
+            }),
+        ),
+      ).toBeNull();
+    } finally {
+      await db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, sourceId));
+      await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+    }
   },
   { timeout: DB_TEST_TIMEOUT_MS },
 );
@@ -388,12 +395,12 @@ test(
                 sourceId,
                 createdAt: new Date("2000-01-01T00:00:00.000Z"),
                 decisionDate: `${year}-06-15`,
-                fulltext:
-                  status === "listing-only"
-                    ? "Excluded decision text"
-                    : undefined,
-                metadata: status === "listing-only" ? LISTING_ONLY : {},
-                redactedAt: status === "withdrawn" ? NOW : undefined,
+                ...(status === "listing-only"
+                  ? {
+                      fulltext: "Excluded decision text",
+                      metadata: LISTING_ONLY,
+                    }
+                  : { redactedAt: NOW }),
               }),
             ),
           ),
@@ -466,7 +473,7 @@ test(
         { year: 2020, count: 2 },
       ]);
       await db.insert(caseLawDecisions).values(
-        [1800, 2100].map((year) =>
+        [1800, 2020].map((year) =>
           decisionRow({
             caseNumber: `unindexed ${year}`,
             country: "CZE",
