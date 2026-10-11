@@ -51,8 +51,10 @@ import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
+import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
 import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
 import { decisionTextWithheldReason } from "@/api/lib/legal-search/corpus-source";
+import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -136,9 +138,46 @@ type PassageSourcePointer = {
   id: SafeId<"caseLawDecision">;
   astS3Key: string | null;
   contentHash: string | null;
-  textRevisionFingerprint: string;
-  textWithheldReason: DecisionTextWithheldReason | null;
+  textEligibilityFingerprint: string;
 };
+
+type PassageTextEligibility = {
+  published: boolean;
+  redistributable: boolean;
+  textRevisionFingerprint: string;
+  descriptor: CorpusSourceDescriptor | null;
+};
+
+/** Both phases bind the text revision and source disposition to the publication gate. */
+const passageTextEligibility = ({
+  published,
+  redistributable,
+  textRevisionFingerprint,
+  descriptor,
+}: PassageTextEligibility) => ({
+  textEligibilityFingerprint: JSON.stringify([
+    published,
+    textRevisionFingerprint,
+    redistributable,
+    decisionTextWithheldReason(descriptor),
+  ]),
+  textWithheldReason: decisionTextWithheldReason(descriptor),
+});
+
+const passageTextEligibilityColumns = {
+  published: sql<boolean>`${publishedCaseLawDecision}`,
+  redistributable: sql<boolean>`${redistributableCaseLawSourceFor(caseLawSources.descriptor)}`,
+  textRevisionFingerprint: citationTextRevisionFingerprintSql({
+    contentHash: caseLawDecisions.contentHash,
+    sections: caseLawDecisions.sections,
+  }),
+  descriptor: caseLawSources.descriptor,
+};
+
+const passageTextEligibilityGate = and(
+  publishedCaseLawDecision,
+  redistributableCaseLawSourceFor(caseLawSources.descriptor),
+);
 
 const readPassageSourcePointers = async (
   tx: CaseLawPublicReadTransaction,
@@ -152,24 +191,33 @@ const readPassageSourcePointers = async (
       id: caseLawDecisions.id,
       astS3Key: caseLawDecisions.astS3Key,
       contentHash: caseLawDecisions.contentHash,
-      textRevisionFingerprint: citationTextRevisionFingerprintSql({
-        contentHash: caseLawDecisions.contentHash,
-        sections: caseLawDecisions.sections,
-      }),
-      descriptor: caseLawSources.descriptor,
+      ...passageTextEligibilityColumns,
     })
     .from(caseLawDecisions)
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
     .where(
-      and(inArray(caseLawDecisions.id, [...ids]), publishedCaseLawDecision),
+      and(inArray(caseLawDecisions.id, [...ids]), passageTextEligibilityGate),
     );
   // The same split the decision read makes: redistribution decides whether a
   // citation may be listed at all, derived AI whether its text may travel
   // with it.
-  return rows.map(({ descriptor, ...row }) => ({
-    ...row,
-    textWithheldReason: decisionTextWithheldReason(descriptor),
-  }));
+  return rows.map(
+    ({
+      published,
+      redistributable,
+      descriptor,
+      textRevisionFingerprint,
+      ...row
+    }) => ({
+      ...row,
+      textEligibilityFingerprint: passageTextEligibility({
+        published,
+        redistributable,
+        descriptor,
+        textRevisionFingerprint,
+      }).textEligibilityFingerprint,
+    }),
+  );
 };
 
 /**
@@ -184,7 +232,8 @@ const readPassageSourcePointers = async (
  */
 type DecisionTextColumns = {
   contentHash: string | null;
-  textRevisionFingerprint: string;
+  textEligibilityFingerprint: string;
+  textWithheldReason: DecisionTextWithheldReason | null;
   documentAst: unknown;
   sections: DecisionSection[] | null;
 };
@@ -200,19 +249,44 @@ const readDecisionTextColumns = async (
           id: caseLawDecisions.id,
           documentAst: caseLawDecisions.documentAst,
           contentHash: caseLawDecisions.contentHash,
-          textRevisionFingerprint: citationTextRevisionFingerprintSql({
-            contentHash: caseLawDecisions.contentHash,
-            sections: caseLawDecisions.sections,
-          }),
+          ...passageTextEligibilityColumns,
           sections: caseLawDecisions.sections,
         })
         .from(caseLawDecisions)
+        .innerJoin(
+          caseLawSources,
+          eq(caseLawSources.id, caseLawDecisions.sourceId),
+        )
         .where(
-          and(inArray(caseLawDecisions.id, [...ids]), publishedCaseLawDecision),
+          and(
+            inArray(caseLawDecisions.id, [...ids]),
+            passageTextEligibilityGate,
+          ),
         ),
   );
   return new Map(
-    rows.map(({ id, ...columns }) => [String(id), columns] as const),
+    rows.map(
+      ({
+        id,
+        published,
+        redistributable,
+        descriptor,
+        textRevisionFingerprint,
+        ...columns
+      }) =>
+        [
+          String(id),
+          {
+            ...columns,
+            ...passageTextEligibility({
+              published,
+              redistributable,
+              descriptor,
+              textRevisionFingerprint,
+            }),
+          },
+        ] as const,
+    ),
   );
 };
 
@@ -290,6 +364,7 @@ export class CitationTextGateError extends TaggedError(
 
 export type CitationDecisionText =
   | { type: "eligible"; ast: DocumentAst; sections: DecisionSection[] | null }
+  | { type: "withheld"; reason: DecisionTextWithheldReason }
   | { type: "absent-ast" }
   | { type: "gate-failed"; error: CitationTextGateError };
 
@@ -307,9 +382,12 @@ export const readCitationDecisionText = async ({
   readAst = readDecisionAnalysisAst,
   readTombstones = readCorpusTombstones,
 }: ReadCitationDecisionTextOptions): Promise<CitationDecisionText> => {
+  if (columns !== undefined && columns.textWithheldReason !== null) {
+    return { type: "withheld", reason: columns.textWithheldReason };
+  }
   if (
     columns === undefined ||
-    columns.textRevisionFingerprint !== pointer.textRevisionFingerprint
+    columns.textEligibilityFingerprint !== pointer.textEligibilityFingerprint
   ) {
     return {
       type: "gate-failed",
@@ -544,14 +622,7 @@ export const completeDecisionCitations = async ({
   }
   const textByDecision = await readDecisionTextByDecision(
     caseLawDb,
-    gated.sources.filter(
-      ({ textWithheldReason }) => textWithheldReason === null,
-    ),
-  );
-  const withholdingByDecision = new Map(
-    gated.sources.map(
-      ({ id, textWithheldReason }) => [String(id), textWithheldReason] as const,
-    ),
+    gated.sources,
   );
   const evidenceByCitation = new Map(
     gated.evidence.type === "ready"
@@ -564,10 +635,7 @@ export const completeDecisionCitations = async ({
         ? String(gated.resolvedDecisionId)
         : String(item.decision?.id);
     const text = textByDecision.get(citingId);
-    const textWithheldReason = withholdingByDecision.get(citingId);
-    if (textWithheldReason === undefined) {
-      return panic(`No source disposition for citing decision ${citingId}`);
-    }
+    const textWithheldReason = text?.type === "withheld" ? text.reason : null;
     const evidence =
       gated.evidence.type === "not-granted"
         ? null
@@ -728,6 +796,13 @@ export const citationTextFields = ({
         passage: null,
         evidenceExcerpt: null,
         textIncompleteReason: "absent_ast" as const,
+      };
+    case "withheld":
+      return {
+        citationText: null,
+        passage: null,
+        evidenceExcerpt: null,
+        textIncompleteReason: null,
       };
     case "gate-failed":
       return {

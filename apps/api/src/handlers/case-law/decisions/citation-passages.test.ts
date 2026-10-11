@@ -236,12 +236,12 @@ test("a text-eligibility failure returns no citation text and an incomplete reas
       id: createSafeId<"caseLawDecision">(),
       astS3Key: "synthetic/ast",
       contentHash: "synthetic-hash",
-      textRevisionFingerprint: "synthetic-revision",
-      textWithheldReason: null,
+      textEligibilityFingerprint: "synthetic-revision",
     },
     columns: {
+      textWithheldReason: null,
       contentHash: "synthetic-hash",
-      textRevisionFingerprint: "synthetic-revision",
+      textEligibilityFingerprint: "synthetic-revision",
       documentAst: ast,
       sections: [
         { index: 0, text: paragraph, type: "argumentation", title: null },

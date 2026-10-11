@@ -1081,6 +1081,167 @@ test.each(["text revision", "publication eligibility"] as const)(
   },
 );
 
+test.each([
+  {
+    change: "unchanged descriptor",
+    updatedDescriptor: null,
+    expected: {
+      citationText: "authority",
+      passage: { text: "Synthetic reasoning cites an authority." },
+      polarityEvidence: { excerpt: "Synthetic reasoning cites an authority." },
+      textWithheldReason: null,
+      textIncompleteReason: null,
+    },
+  },
+  {
+    change: "derived-AI permission revoked",
+    updatedDescriptor: {
+      allowsDerivedAi: false,
+      allowsRedistribution: true,
+      attribution: null,
+      license: "permitted-redistribution",
+    },
+    expected: {
+      citationText: null,
+      passage: null,
+      polarityEvidence: { excerpt: null },
+      textWithheldReason: "source_licence",
+      textIncompleteReason: null,
+    },
+  },
+  {
+    change: "derived-AI permission restored",
+    updatedDescriptor: {
+      allowsDerivedAi: true,
+      allowsRedistribution: true,
+      attribution: null,
+      license: "permitted-redistribution",
+    },
+    expected: {
+      citationText: null,
+      passage: null,
+      polarityEvidence: { excerpt: null },
+      textWithheldReason: null,
+      textIncompleteReason: "text_changed",
+    },
+  },
+  {
+    change: "redistribution permission revoked",
+    updatedDescriptor: {
+      allowsDerivedAi: true,
+      allowsRedistribution: false,
+      attribution: null,
+      license: "restricted",
+    },
+    expected: {
+      citationText: null,
+      passage: null,
+      polarityEvidence: { excerpt: null },
+      textWithheldReason: null,
+      textIncompleteReason: "missing_text",
+    },
+  },
+] as const)(
+  "completion rechecks the source descriptor after preparation: $change",
+  async ({ change, updatedDescriptor, expected }) => {
+    const sourceId = createSafeId<"caseLawSource">();
+    const citingId = createSafeId<"caseLawDecision">();
+    const referenceId = createSafeId<"caseLawCitation">();
+    const paragraph = "Synthetic reasoning cites an authority.";
+    const descriptor = {
+      allowsDerivedAi: change !== "derived-AI permission restored",
+      allowsRedistribution: true,
+      attribution: null,
+      license: "permitted-redistribution",
+    } as const;
+    const documentAst = {
+      version: 1,
+      source: {
+        system: "test",
+        documentId: "descriptor-revision",
+        webUrl: "",
+        printUrl: "",
+      },
+      metadata: {
+        caseNumber: "descriptor-revision",
+        court: "Court",
+        ecli: "",
+        decisionDate: "2024-02-01",
+        decisionType: "judgment",
+        keywords: [],
+        statutes: [],
+      },
+      blocks: [
+        {
+          id: "reasoning",
+          anchorId: "p1",
+          type: "paragraph",
+          inlines: [{ type: "text", text: paragraph }],
+          plainText: paragraph,
+        },
+      ],
+    } satisfies DocumentAst;
+    await db.insert(caseLawSources).values(
+      caseLawSourceRow({
+        adapterKey: `descriptor-${citingId}`,
+        descriptor,
+        id: sourceId,
+        name: `descriptor-${citingId}`,
+      }),
+    );
+    await db.insert(caseLawDecisions).values({
+      id: citingId,
+      caseNumber: `descriptor-${change}-${citingId}`,
+      country: "CZE",
+      court: "Court",
+      language: "en",
+      sourceId,
+      contentHash: null,
+      documentAst,
+      sections: [
+        { index: 0, type: "argumentation", title: null, text: paragraph },
+      ],
+    });
+    await db.insert(caseLawCitations).values({
+      id: referenceId,
+      citingDecisionId: citingId,
+      citedDecisionId: subjectId,
+      citationText: "authority",
+      kind: CITATION_KIND.PRECEDENT,
+      polaritySource: "rule",
+      polarityWindowStart: 0,
+      polarityWindowEnd: paragraph.length,
+    });
+    const prepared = await withRedistributableSubject(
+      caseLawDb,
+      { kind: "id", id: citingId },
+      async (subject) =>
+        await prepareDecisionCitations({
+          subject,
+          cursor: undefined,
+          direction: "cites",
+          limit: 10,
+        }),
+    );
+    if (prepared?.type !== "page") {
+      panic("Expected prepared public citation page");
+    }
+    if (updatedDescriptor !== null) {
+      await db
+        .update(caseLawSources)
+        .set({ descriptor: updatedDescriptor })
+        .where(eq(caseLawSources.id, sourceId));
+    }
+
+    expect(
+      await completeDecisionCitations({ caseLawDb, prepared }),
+    ).toMatchObject({
+      type: "page",
+      page: { items: [{ id: referenceId, ...expected }] },
+    });
+  },
+);
+
 test("outgoing citations through a retired UUID retain canonical passages and evidence", async () => {
   const retiredId = createSafeId<"caseLawDecision">();
   const canonicalId = createSafeId<"caseLawDecision">();
