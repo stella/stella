@@ -1,9 +1,22 @@
 import { expect, test } from "bun:test";
 
 import {
+  DOCUMENT_PROCESSING_MAX_ATTEMPTS,
   documentProcessingRetryDelayMs,
   documentProcessingSleepMs,
+  shouldRetryDocumentProcessing,
 } from "@/api/lib/document-processing-retry";
+
+test("document processing retries stop at the attempt bound", () => {
+  for (let attemptCount = 0; attemptCount < 100; attemptCount += 1) {
+    expect(shouldRetryDocumentProcessing(attemptCount, true)).toBe(
+      attemptCount < DOCUMENT_PROCESSING_MAX_ATTEMPTS,
+    );
+  }
+  expect(
+    shouldRetryDocumentProcessing(DOCUMENT_PROCESSING_MAX_ATTEMPTS - 1, false),
+  ).toBe(false);
+});
 
 test("document processing retry delays grow monotonically and stop at the cap", () => {
   const delays = Array.from({ length: 100 }, (_, index) =>

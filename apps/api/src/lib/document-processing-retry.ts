@@ -21,6 +21,11 @@ export const documentProcessingRetryDelayMs = (attemptCount: number): number =>
     maxMs: 30 * 60 * 1000,
   });
 
+export const shouldRetryDocumentProcessing = (
+  attemptCount: number,
+  retryable: boolean,
+) => retryable && attemptCount < DOCUMENT_PROCESSING_MAX_ATTEMPTS;
+
 type ClaimDocumentProcessingAttemptOptions = {
   database: Transaction;
   runId: SafeId<"documentProcessingRun">;
@@ -63,15 +68,22 @@ export const claimDocumentProcessingAttempt = async ({
     id: { id: runId, workspaceId: context.workspaceId },
     mode: "update",
     select: (queryTx) => queryTx.select().from(documentProcessingRuns),
-    where: and(
-      eq(documentProcessingRuns.status, "queued"),
-      lt(documentProcessingRuns.attemptCount, DOCUMENT_PROCESSING_MAX_ATTEMPTS),
-      or(
-        isNull(documentProcessingRuns.nextAttemptAt),
-        sql`${documentProcessingRuns.nextAttemptAt} <= ${now}::timestamptz`,
-      ),
-    ),
+    where:
+      and(
+        eq(documentProcessingRuns.status, "queued"),
+        lt(
+          documentProcessingRuns.attemptCount,
+          DOCUMENT_PROCESSING_MAX_ATTEMPTS,
+        ),
+        or(
+          isNull(documentProcessingRuns.nextAttemptAt),
+          sql`${documentProcessingRuns.nextAttemptAt} <= ${now}::timestamptz`,
+        ),
+      ) ?? panic("Missing document processing claim predicate"),
   });
+  if (locked.status === "busy") {
+    return panic("Blocking document processing claim lock was busy");
+  }
   const owned = locked.rows.at(0);
   if (!owned) {
     return null;
@@ -153,20 +165,26 @@ export const failDocumentProcessingAttempt = async ({
       id: { id: runId, workspaceId: context.workspaceId },
       mode: "update",
       select: (queryTx) => queryTx.select().from(documentProcessingRuns),
-      where: and(
-        eq(documentProcessingRuns.status, "running"),
-        eq(documentProcessingRuns.claimedBy, claimToken),
-        staleBefore === undefined
-          ? undefined
-          : sql`${documentProcessingRuns.claimedAt} < ${staleBefore}::timestamptz`,
-      ),
+      where:
+        and(
+          eq(documentProcessingRuns.status, "running"),
+          eq(documentProcessingRuns.claimedBy, claimToken),
+          staleBefore === undefined
+            ? undefined
+            : sql`${documentProcessingRuns.claimedAt} < ${staleBefore}::timestamptz`,
+        ) ?? panic("Missing document processing failure predicate"),
     });
+    if (locked.status === "busy") {
+      return panic("Blocking document processing failure lock was busy");
+    }
     const owned = locked.rows.at(0);
     if (!owned) {
       return null;
     }
-    const retryScheduled =
-      retryable && owned.attemptCount < DOCUMENT_PROCESSING_MAX_ATTEMPTS;
+    const retryScheduled = shouldRetryDocumentProcessing(
+      owned.attemptCount,
+      retryable,
+    );
     const changed = await transition({
       tx,
       spec: DOCUMENT_PROCESSING_RETRY_TRANSITIONS,
