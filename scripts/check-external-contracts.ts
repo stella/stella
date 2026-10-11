@@ -503,6 +503,10 @@ export const checkExternalContracts = (
     }
   }
   const publisher = registry["legal-publishers"];
+  if (publisher.status === "uncharacterised") {
+    problems.push("The legal-publishers contract must be characterised.");
+    return problems;
+  }
   for (const fixtureRoot of CAPTURED_FIXTURE_ROOTS) {
     if (
       !publisher.fixtures.some(

@@ -79,6 +79,24 @@ test("SDK discovery uses the transport definition and catches SDK-shaped additio
   }
 });
 
+test("publisher captures require a characterised contract", () => {
+  const publisher = EXTERNAL_CONTRACTS["legal-publishers"];
+  const registry = {
+    ...EXTERNAL_CONTRACTS,
+    "legal-publishers": {
+      owners: publisher.owners,
+      sdks: publisher.sdks,
+      pinSources: publisher.pinSources,
+      driftTriggers: publisher.driftTriggers,
+      status: "uncharacterised",
+      reason: "The publisher replay corpus is not enrolled.",
+    },
+  } as const;
+  expect(checkExternalContracts(ROOT, { registry })).toEqual([
+    "The legal-publishers contract must be characterised.",
+  ]);
+});
+
 test("a characterised contract cannot gain shared scope until its receipt is refreshed", () => {
   const root = mkdtempSync(path.join(tmpdir(), "external-contract-shared-"));
   try {
