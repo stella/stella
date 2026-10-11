@@ -1,0 +1,194 @@
+import { panic } from "better-result";
+import { describe, expect, test } from "bun:test";
+import { sql } from "drizzle-orm";
+
+import { caseLawSources } from "@/api/db/schema";
+import { readCaseLawCoverageSourcesQuery } from "@/api/handlers/case-law/decisions/coverage";
+import { createSafeId } from "@/api/lib/branded-types";
+import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { CASE_LAW_COVERAGE_INDEX } from "@/api/lib/case-law/coverage-index";
+import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  explainRoot,
+  scanOccurrences,
+} from "@/api/tests/query-plans/plan-walker";
+
+const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+const COVERAGE_INDEX = CASE_LAW_COVERAGE_INDEX.name;
+const SOURCES = 3;
+const DECISIONS_PER_SOURCE = 4000;
+
+const planNodes = (
+  node: Record<string, unknown>,
+): Record<string, unknown>[] => {
+  const children = node["Plans"];
+  if (children === undefined) {
+    return [node];
+  }
+  if (!isUnknownArray(children) || !children.every(isRecord)) {
+    return panic("The coverage plan has malformed children");
+  }
+  return [node, ...children.flatMap(planNodes)];
+};
+
+describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
+  test("each source probes both indexed date endpoints with one bounded row", async () => {
+    const databaseUrl =
+      process.env["DATABASE_URL"] ??
+      panic("The enabled coverage plan test requires DATABASE_URL");
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const captured: { query: string; params: unknown[] }[] = [];
+      const { db, sql: client } = openClient({
+        max: 1,
+        logger: {
+          logQuery: (query, params) => captured.push({ query, params }),
+        },
+      });
+      const schemaName = `coverage_plan_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+      const schema = sql.identifier(schemaName);
+      await db.execute(sql`CREATE SCHEMA ${schema}`);
+      try {
+        for (const table of ["case_law_sources", "case_law_decisions"]) {
+          await db.execute(sql`CREATE TABLE ${schema}.${sql.identifier(table)}
+            (LIKE public.${sql.identifier(table)} INCLUDING ALL)`);
+        }
+        await db.execute(sql`SET search_path TO ${schema}, public`);
+        // The coverage index is still online-only: exercise its production DDL
+        // rather than depending on what this Postgres fixture has installed.
+        const existing = await db.execute(sql`SELECT indexname FROM pg_indexes
+          WHERE schemaname = ${schemaName} AND tablename = 'case_law_decisions'
+            AND indexdef LIKE '%(source_id, decision_date, id)%'`);
+        for (const row of existing) {
+          const indexName = row["indexname"];
+          if (typeof indexName !== "string") {
+            panic("The cloned coverage index has no name");
+          }
+          await db.execute(
+            sql`DROP INDEX ${schema}.${sql.identifier(indexName)}`,
+          );
+        }
+        const { createSql, definitionBody } = CASE_LAW_COVERAGE_INDEX;
+        await db.execute(
+          sql.raw(
+            createSql
+              .replace("CREATE INDEX CONCURRENTLY", "CREATE INDEX")
+              .replace(
+                'public."case_law_decisions"',
+                () => `"${schemaName}"."case_law_decisions"`,
+              ),
+          ),
+        );
+        const installed =
+          await db.execute(sql`SELECT pg_get_indexdef(indexrelid) AS definition
+          FROM pg_index JOIN pg_class ON pg_class.oid = indexrelid
+          JOIN pg_namespace ON pg_namespace.oid = pg_class.relnamespace
+          WHERE pg_namespace.nspname = ${schemaName} AND pg_class.relname = ${COVERAGE_INDEX}`);
+        expect(installed).toEqual([
+          {
+            definition: `CREATE INDEX ${COVERAGE_INDEX} ${definitionBody.replace("ON public.", () => `ON ${schemaName}.`)}`,
+          },
+        ]);
+        await db.insert(caseLawSources).values(
+          Array.from({ length: SOURCES }, () => ({
+            id: createSafeId<"caseLawSource">(),
+            adapterKey: `coverage-plan-${createSafeId<"caseLawSource">()}`,
+            name: "Coverage plan fixture",
+          })),
+        );
+        await db.execute(sql`INSERT INTO case_law_decisions
+          (id, source_id, case_number, court, country, language, decision_date, fulltext)
+          SELECT gen_random_uuid(), sources.id, 'published/' || n,
+            'Plan court', 'CZE', 'cs', DATE '2000-01-01' + n, 'Published text'
+          FROM case_law_sources sources CROSS JOIN generate_series(1, ${DECISIONS_PER_SOURCE}) n`);
+        await db.execute(sql`INSERT INTO case_law_decisions
+          (id, source_id, case_number, court, country, language, decision_date, fulltext, redacted_at, metadata)
+          SELECT gen_random_uuid(), sources.id, 'excluded/' || status || '/' || endpoint,
+            'Plan court', 'CZE', 'cs', endpoint,
+            CASE WHEN status = 'listing-only' THEN 'Excluded text' END,
+            CASE WHEN status = 'withdrawn' THEN TIMESTAMPTZ '2026-01-01 00:00:00+00' END,
+            CASE WHEN status = 'listing-only' THEN
+              '{"_stellaPartialObservation":{"isListingOnly":true}}'::jsonb ELSE '{}'::jsonb END
+          FROM case_law_sources sources
+          CROSS JOIN (VALUES (DATE '1900-01-01'), (DATE '2020-01-01')) endpoints(endpoint)
+          CROSS JOIN (VALUES ('withdrawn'), ('listing-only')) statuses(status)`);
+        await db.execute(sql`VACUUM (ANALYZE) case_law_decisions`);
+        await db.execute(sql`ANALYZE case_law_sources`);
+
+        captured.length = 0;
+        const rows = await readCaseLawCoverageSourcesQuery(
+          asTestRaw<CaseLawPublicReadTransaction>(db),
+        );
+        expect(captured).toHaveLength(1);
+        const statement =
+          captured.at(0) ??
+          panic("The production coverage SQL was not captured");
+        const root = explainRoot(
+          await client.unsafe(
+            `EXPLAIN (ANALYZE, BUFFERS, VERBOSE, FORMAT JSON) ${statement.query}`,
+            statement.params,
+          ),
+        );
+        const probes = scanOccurrences(root).filter(
+          ({ index }) => index === COVERAGE_INDEX,
+        );
+        expect(probes).toHaveLength(2);
+        for (const probe of probes) {
+          expect(["Index Scan", "Index Only Scan"]).toContain(probe.nodeType);
+          expect(probe.limitAbove).toBe(true);
+          expect(probe.limitRows).toBe(1);
+          expect(probe.indexCond).toContain("source_id");
+          expect(probe.indexCond).toContain("decision_date IS NOT NULL");
+        }
+        const endpointLimits = planNodes(root).filter(
+          (node) =>
+            node["Node Type"] === "Limit" &&
+            planNodes(node).some(
+              (child) => child["Index Name"] === COVERAGE_INDEX,
+            ),
+        );
+        // Exclude the outer page limit, which owns both correlated probes.
+        const limits = endpointLimits.filter(
+          (node) => node["Actual Loops"] === SOURCES,
+        );
+        expect(limits).toHaveLength(2);
+        for (const limit of limits) {
+          expect(limit["Actual Rows"]).toBe(1);
+          const nodes = planNodes(limit);
+          expect(
+            nodes.some((node) =>
+              ["Seq Scan", "Sort", "Aggregate"].includes(
+                String(node["Node Type"]),
+              ),
+            ),
+          ).toBe(false);
+          const scan =
+            nodes.find((node) => node["Index Name"] === COVERAGE_INDEX) ??
+            panic("Missing endpoint scan");
+          expect(scan["Actual Rows"]).toBe(1);
+          expect(scan["Actual Loops"]).toBe(SOURCES);
+        }
+        expect(
+          new Set(
+            limits
+              .flatMap(planNodes)
+              .filter((node) => node["Index Name"] === COVERAGE_INDEX)
+              .map((node) => node["Scan Direction"]),
+          ),
+        ).toEqual(new Set(["Forward", "Backward"]));
+        expect(rows).toHaveLength(SOURCES);
+        for (const row of rows) {
+          expect(row).toMatchObject({
+            decisionYearFrom: 2000,
+            decisionYearTo: 2010,
+            pendingTextCount: 0,
+          });
+        }
+      } finally {
+        await db.execute(sql`SET search_path TO public`);
+        await db.execute(sql`DROP SCHEMA ${schema} CASCADE`);
+      }
+    });
+  }, 120_000);
+});

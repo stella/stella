@@ -38,14 +38,12 @@ import type {
 } from "@/api/lib/case-law-public-read-db";
 import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-redistributable-sources";
 import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
+import { publishedUnredactedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions-sql";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
-import {
-  storedObservationHasDetailSqlFor,
-  storedObservationIsListingOnlySqlFor,
-} from "@/api/lib/legal-search/partial-observation-sql";
+import { storedObservationIsListingOnlySqlFor } from "@/api/lib/legal-search/partial-observation-sql";
 import { createUnrecognizedSourceReporter } from "@/api/lib/legal-search/source-registry-membership";
 import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
 import { LIMITS } from "@/api/lib/limits";
@@ -238,7 +236,7 @@ type CaseLawCoverageSourceRow = {
  * here rather than per number, so a withheld source contributes to nothing.
  */
 const PUBLISHED_COVERAGE_DECISION_SQL = sql.raw(
-  storedObservationHasDetailSqlFor("coverage_decisions.metadata"),
+  publishedUnredactedCaseLawDecisionSqlFor("coverage_decisions"),
 );
 const LISTING_ONLY_COVERAGE_DECISION_SQL = sql.raw(
   storedObservationIsListingOnlySqlFor("coverage_decisions.metadata"),
@@ -261,16 +259,22 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
         storedTotal: caseLawSources.storedTotal,
         storedTotalAsOf: caseLawSources.storedTotalAsOf,
         decisionYearFrom: sql<number | null>`(
-          SELECT min(extract(year FROM coverage_decisions.decision_date))::integer
+          SELECT extract(year FROM coverage_decisions.decision_date)::integer
           FROM case_law_decisions AS coverage_decisions
           WHERE coverage_decisions.source_id = case_law_sources.id
             AND ${PUBLISHED_COVERAGE_DECISION_SQL}
+            AND coverage_decisions.decision_date IS NOT NULL
+          ORDER BY coverage_decisions.decision_date ASC
+          LIMIT 1
         )`,
         decisionYearTo: sql<number | null>`(
-          SELECT max(extract(year FROM coverage_decisions.decision_date))::integer
+          SELECT extract(year FROM coverage_decisions.decision_date)::integer
           FROM case_law_decisions AS coverage_decisions
           WHERE coverage_decisions.source_id = case_law_sources.id
             AND ${PUBLISHED_COVERAGE_DECISION_SQL}
+            AND coverage_decisions.decision_date IS NOT NULL
+          ORDER BY coverage_decisions.decision_date DESC
+          LIMIT 1
         )`,
         pendingTextCount: sql<number>`(
           SELECT count(*)::integer

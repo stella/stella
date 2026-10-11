@@ -1,7 +1,8 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
@@ -14,6 +15,10 @@ import { readCaseLawArrivalsQuery } from "@/api/handlers/case-law/decisions/cove
 import { CASE_LAW_COVERAGE_HEALTH } from "@/api/handlers/case-law/decisions/coverage-health";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import {
+  publishedUnredactedCaseLawDecisionFor,
+  publishedUnredactedCaseLawDecisionSqlFor,
+} from "@/api/lib/case-law/published-decisions-sql";
 import { refreshCaseLawSourceArrivals } from "@/api/lib/case-law/source-arrivals-refresh";
 import { SOURCE_ARRIVALS_FRESHNESS_MS } from "@/api/lib/case-law/source-arrivals-window";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
@@ -63,6 +68,7 @@ const decisionRow = (overrides: {
   metadata?: Record<string, unknown>;
   decisionDate?: string;
   fulltext?: string;
+  redactedAt?: Date;
 }) => ({
   caseNumber: overrides.caseNumber,
   country: overrides.country,
@@ -74,6 +80,7 @@ const decisionRow = (overrides: {
   metadata: overrides.metadata ?? {},
   decisionDate: overrides.decisionDate,
   fulltext: overrides.fulltext,
+  redactedAt: overrides.redactedAt,
 });
 
 beforeAll(
@@ -240,6 +247,134 @@ const loadCoverage = async (
     readCourts: async () => [],
     ...overrides,
   });
+
+test(
+  "withdrawn and listing-only decisions cannot widen either published year bound",
+  async () => {
+    const db = drizzle({ client });
+    const sourceId = createSafeId<"caseLawSource">();
+    await db.insert(caseLawSources).values(
+      caseLawSourceRow({
+        id: sourceId,
+        adapterKey: `coverage-regression-${sourceId}`,
+        name: "Coverage regression fixture",
+      }),
+    );
+    try {
+      const inserted = await db
+        .insert(caseLawDecisions)
+        .values([
+          ...[2000, 2010].map((year) =>
+            decisionRow({
+              caseNumber: `published ${year}`,
+              country: "CZE",
+              court: "Nejvyšší soud",
+              sourceId,
+              createdAt: new Date("2000-01-01T00:00:00.000Z"),
+              decisionDate: `${year}-06-15`,
+              fulltext: "Published decision text",
+            }),
+          ),
+          ...["withdrawn", "listing-only"].flatMap((status) =>
+            [1900, 2020].map((year) =>
+              decisionRow({
+                caseNumber: `excluded ${status} ${year}`,
+                country: "CZE",
+                court: "Nejvyšší soud",
+                sourceId,
+                createdAt: new Date("2000-01-01T00:00:00.000Z"),
+                decisionDate: `${year}-06-15`,
+                fulltext:
+                  status === "listing-only"
+                    ? "Excluded decision text"
+                    : undefined,
+                metadata: status === "listing-only" ? LISTING_ONLY : {},
+                redactedAt: status === "withdrawn" ? NOW : undefined,
+              }),
+            ),
+          ),
+        ])
+        .returning({
+          id: caseLawDecisions.id,
+          caseNumber: caseLawDecisions.caseNumber,
+        });
+      const expectedIds = inserted
+        .filter(({ caseNumber }) => caseNumber.startsWith("published "))
+        .map(({ id }) => id)
+        .toSorted();
+      expect(expectedIds).toHaveLength(2);
+      const decision = alias(caseLawDecisions, "publication_parity_decisions");
+      await readAsReader(async (tx) => {
+        const published = await tx
+          .select({ id: caseLawDecisions.id })
+          .from(caseLawDecisions)
+          .where(
+            and(
+              eq(caseLawDecisions.sourceId, sourceId),
+              publishedUnredactedCaseLawDecisionFor(caseLawDecisions),
+            ),
+          );
+        const aliased = await tx
+          .select({ id: decision.id })
+          .from(decision)
+          .where(
+            and(
+              eq(decision.sourceId, sourceId),
+              publishedUnredactedCaseLawDecisionFor(decision),
+            ),
+          );
+        const raw = await tx
+          .select({ id: decision.id })
+          .from(decision)
+          .where(
+            and(
+              eq(decision.sourceId, sourceId),
+              sql.raw(
+                publishedUnredactedCaseLawDecisionSqlFor(
+                  "publication_parity_decisions",
+                ),
+              ),
+            ),
+          );
+        for (const rows of [published, aliased, raw]) {
+          expect(rows.map(({ id }) => id).toSorted()).toEqual(expectedIds);
+        }
+      });
+      const fixture = await client.query(
+        `
+        SELECT extract(year FROM decision_date)::integer AS year, count(*)::integer AS count
+        FROM case_law_decisions WHERE source_id = $1 AND case_number LIKE 'excluded %'
+        GROUP BY decision_date ORDER BY decision_date
+      `,
+        [sourceId],
+      );
+      expect(fixture.rows).toEqual([
+        { year: 1900, count: 2 },
+        { year: 2020, count: 2 },
+      ]);
+      const sources = await readAsReader(readCaseLawCoverageSourcesQuery);
+      expect(sources.find(({ id }) => id === sourceId)).toMatchObject({
+        decisionYearFrom: 2000,
+        decisionYearTo: 2010,
+        pendingTextCount: 0,
+      });
+      expect(sources.find(({ id }) => id === skSourceId)).toMatchObject({
+        decisionYearFrom: null,
+        decisionYearTo: null,
+      });
+      expect(sources.find(({ id }) => id === disabledSourceId)).toMatchObject({
+        decisionYearFrom: null,
+        decisionYearTo: null,
+      });
+    } finally {
+      await db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, sourceId));
+      await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+    }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
 
 test(
   "the reader role can run every statement the coverage page needs",

@@ -892,7 +892,7 @@ describe("public case-law route boundary", () => {
 
   test("the listing-only predicate has one owner", async () => {
     const [ownerSource, markerSource] = await Promise.all([
-      readSource("apps/api/src/lib/case-law/published-decisions.ts"),
+      readSource("apps/api/src/lib/case-law/published-decisions-sql.ts"),
       readSource("apps/api/src/lib/legal-search/ingestion-normalization.ts"),
     ]);
 

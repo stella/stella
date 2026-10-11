@@ -111,6 +111,13 @@ export const REVIEWED_SQL_PRODUCERS: readonly {
     reason: "A predicate over the aliased decision's metadata column.",
   },
   {
+    modules: ["apps/api/src/lib/case-law/published-decisions-sql"],
+    name: "publishedUnredactedCaseLawDecisionSqlFor",
+    sqlArguments: [0],
+    reason:
+      "The publication predicate and redaction check over a code-owned decision alias.",
+  },
+  {
     modules: ["apps/api/src/lib/legal-search/partial-observation-sql"],
     name: "storedObservationHasDetailSqlFor",
     sqlArguments: [0],
