@@ -21,7 +21,7 @@ import { MCP_CONTENT_MAX_CHARS, toPlainCorpusText } from "@/api/mcp/tool-utils";
 const organizationId =
   parseAuthProviderId<"organization">("organization") ??
   panic("Fixture organization id is invalid");
-const admissionResult = await admitLawRead({
+const admissionResult = admitLawRead({
   organizationId,
   publicLawEnabled: () => true,
 });
