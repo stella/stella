@@ -1,5 +1,6 @@
 import {
   App,
+  PostMessageTransport,
   applyDocumentTheme,
   applyHostStyleVariables,
 } from "@modelcontextprotocol/ext-apps";
@@ -98,6 +99,22 @@ const requestPresentationTool = async ({
   return called.value;
 };
 
+type PresentationTransport = {
+  target: ConstructorParameters<typeof PostMessageTransport>[0];
+  source: ConstructorParameters<typeof PostMessageTransport>[1];
+};
+
+const notifyPresentationListeners = (listeners: Set<() => void>) => {
+  for (const listener of listeners) {
+    listener();
+  }
+};
+
+const createPresentationErrorReporter =
+  <View>(publish: (result: ResultState<View>) => void) =>
+  ({ message }: Error) =>
+    publish({ status: "error", message });
+
 export const createPresentationBridge = <View>({
   manifest,
   parse,
@@ -122,9 +139,7 @@ export const createPresentationBridge = <View>({
       tool: snapshot.tool,
       result,
     };
-    for (const listener of listeners) {
-      listener();
-    }
+    notifyPresentationListeners(listeners);
   };
   const receive = (result: Awaited<ReturnType<App["callServerTool"]>>) => {
     if (result.isError === true) {
@@ -156,9 +171,7 @@ export const createPresentationBridge = <View>({
       result: snapshot.result,
     };
     applyHostPresentation(merged);
-    for (const listener of listeners) {
-      listener();
-    }
+    notifyPresentationListeners(listeners);
   };
   const toolInput = ({ arguments: input }: AppEventMap["toolinput"]) => {
     generation += 1;
@@ -169,9 +182,7 @@ export const createPresentationBridge = <View>({
       input: input ?? {},
       result: { status: "loading" },
     };
-    for (const listener of listeners) {
-      listener();
-    }
+    notifyPresentationListeners(listeners);
   };
   const toolResult = (result: AppEventMap["toolresult"]) => {
     hostContext(app.getHostContext() ?? {});
@@ -195,9 +206,7 @@ export const createPresentationBridge = <View>({
     listeners.clear();
     return {};
   };
-  const reportAppError: NonNullable<typeof app.onerror> = ({ message }) =>
-    publish({ status: "error", message });
-  Reflect.set(app, "onerror", reportAppError);
+  Reflect.set(app, "onerror", createPresentationErrorReporter(publish));
 
   // Paged reads and previews own their request state; a late failure must not replace a newer opening.
   const requestTool = async (request: ReadCall) =>
@@ -261,8 +270,14 @@ export const createPresentationBridge = <View>({
       ((message: string | null) => publish({ status: "error", message }));
     await openPresentationLink({ app, url, fail });
   };
-  const connect = async (): Promise<void> => {
-    const connected = await Result.tryPromise(async () => app.connect());
+  const connect = async (transport?: PresentationTransport): Promise<void> => {
+    const connected = await Result.tryPromise(async () =>
+      app.connect(
+        transport === undefined
+          ? undefined
+          : new PostMessageTransport(transport.target, transport.source),
+      ),
+    );
     if (Result.isError(connected)) {
       publish({ status: "error", message: connected.error.message });
       return;
