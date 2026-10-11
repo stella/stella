@@ -198,6 +198,65 @@ test("the check preload denies every fetch invocation", () => {
   );
 });
 
+test("the offline baseline reader uses the merge base and preserves absent files", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "offline-git-baseline-"));
+  const git = (args: string[]) => {
+    const result = Bun.spawnSync(["git", ...args], { cwd: directory });
+    expect(result.exitCode).toBe(0);
+    return result.stdout.toString().trim();
+  };
+  try {
+    git(["init", "--initial-branch=main"]);
+    writeFileSync(path.join(directory, "baseline.txt"), "original\n");
+    git(["add", "."]);
+    git([
+      "-c",
+      "user.name=Baseline Test",
+      "-c",
+      "user.email=baseline@example.invalid",
+      "commit",
+      "--no-gpg-sign",
+      "-m",
+      "baseline",
+    ]);
+    const base = git(["rev-parse", "HEAD"]);
+    writeFileSync(path.join(directory, "baseline.txt"), "changed\n");
+    writeFileSync(path.join(directory, "introduced.txt"), "new\n");
+    git(["add", "."]);
+    git([
+      "-c",
+      "user.name=Baseline Test",
+      "-c",
+      "user.email=baseline@example.invalid",
+      "commit",
+      "--no-gpg-sign",
+      "-m",
+      "head",
+    ]);
+    const read = (file: string, ref = base) =>
+      runPreloaded(
+        `import { readGitBaseline } from './scripts/offline-git-read.ts';
+       console.log(JSON.stringify({ baseline: readGitBaseline(${JSON.stringify({ root: directory, base: ref, file })}) }));`,
+        "--check",
+      );
+    const existing = read("baseline.txt");
+    expect(existing.exitCode).toBe(0);
+    expect(JSON.parse(existing.stdout.toString())).toEqual({
+      baseline: "original\n",
+    });
+    const absent = read("introduced.txt");
+    expect(absent.exitCode).toBe(0);
+    expect(JSON.parse(absent.stdout.toString())).toEqual({});
+    const invalid = read("baseline.txt", "--help");
+    expect(invalid.exitCode).not.toBe(0);
+    expect(invalid.stderr.toString()).toContain(
+      "Cannot resolve baseline --help",
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test.each([
   [
     "node:https.get",

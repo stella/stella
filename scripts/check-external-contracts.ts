@@ -1,5 +1,4 @@
 import { panic } from "better-result";
-import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
@@ -29,6 +28,7 @@ import type {
 } from "../packages/external-contracts/src/types";
 import { parseBunLockText } from "./bun-lock-text";
 import { readFixtureEvidence } from "./external-contract-evidence";
+import { readGitBaseline } from "./offline-git-read";
 import {
   OUTBOUND_TRANSPORT_CENSUS,
   type OutboundTransportCensusEntry,
@@ -807,48 +807,24 @@ export const checkExternalContracts = (
 
 if (import.meta.main) {
   const base = process.env["CHECK_BASE_REF"] ?? "origin/main";
-  const mergeBase = spawnSync("git", ["merge-base", "HEAD", base], {
-    cwd: ROOT,
-    encoding: "utf-8",
-  });
-  if (mergeBase.status !== 0) {
-    panic(
-      `Cannot resolve external contract baseline ${base}: ${mergeBase.stderr}`,
-    );
-  }
   const problems = checkExternalContracts(ROOT);
   for (const file of [REGISTRY_PATH]) {
-    const tree = spawnSync(
-      "git",
-      ["ls-tree", "--name-only", mergeBase.stdout.trim(), "--", file],
-      { cwd: ROOT, encoding: "utf-8" },
-    );
-    if (tree.status !== 0) {
-      panic(`Cannot inspect external classification baseline: ${tree.stderr}`);
-    }
+    const baseline = readGitBaseline({ root: ROOT, base, file });
     // The initial enrollment establishes the set; later changes may only shrink it.
-    if (tree.stdout.trim() === "") {
+    if (baseline === undefined) {
       continue;
-    }
-    const baseline = spawnSync(
-      "git",
-      ["show", `${mergeBase.stdout.trim()}:${file}`],
-      { cwd: ROOT, encoding: "utf-8" },
-    );
-    if (baseline.status !== 0) {
-      panic(`Cannot read external classification baseline: ${baseline.stderr}`);
     }
     const currentSource = readFileSync(path.join(ROOT, file), "utf-8");
     problems.push(
       ...findUncharacterisedGrowth(
         uncharacterisedFromSource(currentSource),
-        uncharacterisedFromSource(baseline.stdout),
+        uncharacterisedFromSource(baseline),
       ),
     );
     problems.push(
       ...findShrinkOnlyGrowth({
         current: uncharacterisedScopeFromSource(currentSource),
-        baseline: uncharacterisedScopeFromSource(baseline.stdout),
+        baseline: uncharacterisedScopeFromSource(baseline),
         label: "Uncharacterised scope",
       }),
     );
