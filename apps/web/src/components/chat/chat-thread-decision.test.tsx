@@ -51,11 +51,22 @@ describe("chat thread decision label", () => {
     expect(html).toContain('<span class="sr-only">Nejvyšší soud</span>');
   });
 
-  test("writes the court out when it has no chip to draw", () => {
-    const html = render({ ...DECISION, courtAbbreviation: null });
+  test.each([null, "", "  ", "Kúria", "SCOTUS"])(
+    "writes the court out when %j has no inline chip to draw",
+    (courtAbbreviation) => {
+      const html = render({ ...DECISION, courtAbbreviation });
 
-    expect(html).not.toContain('data-slot="court-badge"');
-    expect(html).toContain("Nejvyšší soud");
+      expect(html).not.toContain('data-slot="court-badge"');
+      expect(html).toContain("Nejvyšší soud");
+    },
+  );
+
+  test("trims the corpus abbreviation before drawing the shared identity badge", () => {
+    const html = render({ ...DECISION, courtAbbreviation: " CJEU " });
+
+    expect(html).toContain('data-slot="document-identity-badge"');
+    expect(html).toContain('data-kind="decision"');
+    expect(html).toContain(">CJEU<");
   });
 
   test("leaves the date out when the decision states none", () => {
