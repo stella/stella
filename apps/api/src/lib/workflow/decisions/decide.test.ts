@@ -549,7 +549,7 @@ test("the generation deadline bounds a stalled resolver without aborting the cal
       caching: { enabled: false, reason: "org-disabled" },
       prompt: "Read the contract.",
       deadlineMs: 10,
-      resolveTextModel: () => {
+      resolveTextModel: async () => {
         resolverCalls += 1;
         return new Promise(() => {});
       },
