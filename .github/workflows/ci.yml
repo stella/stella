@@ -3785,7 +3785,7 @@ jobs:
 
       - name: Test changed e2e shard selection
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun test scripts/e2e-spec-shards.test.ts
+        run: bun test scripts/e2e-spec-shards.test.ts scripts/e2e-geometry-shards.test.ts
 
       - name: Validate CI service image mirror inventory
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
@@ -6579,19 +6579,21 @@ jobs:
               exit 1
               ;;
           esac
+          status=0
           bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" \
-            bun --filter @stll/web test:e2e -- --grep-invert='route-smoke' "${args[@]}"
+            bun --filter @stll/web test:e2e -- --grep-invert='route-smoke' "${args[@]}" || status=$?
           if [[ "$E2E_MODE" == full ]]; then
             # Shard the uniform-cost geometry matrix independently; cheap tests
             # must not displace its cases onto one shard. Keep the shared 7m cap.
             # Preserve both blob reports, including when geometry fails.
             shopt -s nullglob
-            trap 'for report in apps/web/e2e/test-results/geometry/blob-report/*.zip; do cp "$report" apps/web/e2e/test-results/blob-report/; done' EXIT
+            trap 'mkdir -p apps/web/e2e/test-results/blob-report; for report in apps/web/e2e/test-results/geometry/blob-report/*.zip; do cp "$report" apps/web/e2e/test-results/blob-report/; done' EXIT
             E2E_OUTPUT_DIR=test-results/geometry \
               PLAYWRIGHT_JSON_OUTPUT_FILE="$GITHUB_WORKSPACE/.cache/playwright-timings/run-geometry-shard.json" \
               bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" \
-              bun --filter @stll/web test:e2e -- --project=docked-chat-geometry --shard=${{ matrix.shard }}/2
+              bun --filter @stll/web test:e2e -- --project=docked-chat-geometry --shard=${{ matrix.shard }}/2 || status=$?
           fi
+          exit "$status"
 
       # API-owned browser checks (visual sandbox) need the API from this stack
       # but no web app; one shard runs them.

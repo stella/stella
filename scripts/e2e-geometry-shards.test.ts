@@ -1,5 +1,13 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -13,11 +21,17 @@ type ListedSuite = {
   suites: ListedSuite[];
   specs: { title: string }[];
 };
+type ListedSuiteInput = Omit<ListedSuite, "suites" | "specs"> & {
+  suites?: ListedSuiteInput[] | undefined;
+  specs?: ListedSuite["specs"] | undefined;
+};
 const suiteSchema = v.object({
   title: v.string(),
   file: v.string(),
   suites: v.optional(
-    v.array(v.lazy((): v.GenericSchema<ListedSuite> => suiteSchema)),
+    v.array(
+      v.lazy((): v.GenericSchema<ListedSuiteInput, ListedSuite> => suiteSchema),
+    ),
     [],
   ),
   specs: v.optional(v.array(v.object({ title: v.string() })), []),
@@ -75,7 +89,7 @@ const listGeometry = (args: string[]) => {
   return cases;
 };
 
-test("production shards split every geometry viewport evenly without losing hosts", () => {
+const productionShardRun = () => {
   const workflow = v.parse(
     v.object({
       jobs: v.object({
@@ -93,10 +107,17 @@ test("production shards split every geometry viewport evenly without losing host
   const run = workflow.jobs["e2e-production-shard"].steps.find(
     ({ name }) => name === "Run Playwright shard",
   )?.run;
-  expect(run).toBeDefined();
+  if (run === undefined) {
+    return panic("Production shard step is missing its run command");
+  }
+  return run;
+};
+
+test("production shards split every geometry viewport evenly without losing hosts", () => {
+  const run = productionShardRun();
   const generalProjects =
-    run
-      ?.match(/args=\(([^\n]+)\)/u)?.[1]
+    /args=\(([^\n]+)\)/u
+      .exec(run)?.[1]
       ?.split(" ")
       .filter((arg) => arg.startsWith("--project=")) ?? [];
   expect(generalProjects.length).toBeGreaterThan(0);
@@ -134,8 +155,10 @@ test("production shards split every geometry viewport evenly without losing host
     allCases.map((name) => /docked chat geometry (\d+x\d+)/u.exec(name)?.[1]),
   );
   expect(viewports.size).toBe(2);
-  expect(viewports.has(undefined)).toBe(false);
   for (const viewport of viewports) {
+    if (viewport === undefined) {
+      panic("Geometry case is missing its viewport");
+    }
     const counts = shards.map(
       (cases) =>
         cases.filter((name) =>
@@ -145,3 +168,78 @@ test("production shards split every geometry viewport evenly without losing host
     expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1);
   }
 }, 60_000);
+
+test.each([
+  { generalStatus: 0, geometryStatus: 0, expectedStatus: 0 },
+  { generalStatus: 1, geometryStatus: 0, expectedStatus: 1 },
+  { generalStatus: 0, geometryStatus: 2, expectedStatus: 2 },
+  { generalStatus: 1, geometryStatus: 2, expectedStatus: 2 },
+])(
+  "geometry runs and retains reports with phase statuses $generalStatus/$geometryStatus",
+  ({ generalStatus, geometryStatus, expectedStatus }) => {
+    const workspace = mkdtempSync(
+      path.join(tmpdir(), "geometry-shard-phases-"),
+    );
+    try {
+      const runner = path.join(
+        workspace,
+        ".github/actions/setup-playwright/run-in-image.sh",
+      );
+      mkdirSync(path.dirname(runner), { recursive: true });
+      writeFileSync(
+        runner,
+        `#!/usr/bin/env bash
+set -euo pipefail
+case "$*" in
+  *--project=docked-chat-geometry*)
+    echo geometry >> phases.log
+    mkdir -p apps/web/e2e/test-results/geometry/blob-report
+    echo geometry > apps/web/e2e/test-results/geometry/blob-report/report-geometry.zip
+    exit "$GEOMETRY_STATUS"
+    ;;
+  *)
+    echo general >> phases.log
+    mkdir -p apps/web/e2e/test-results/blob-report
+    echo general > apps/web/e2e/test-results/blob-report/report-general.zip
+    exit "$GENERAL_STATUS"
+    ;;
+esac
+`,
+      );
+      const result = Bun.spawnSync(
+        [
+          "bash",
+          "-c",
+          productionShardRun().replaceAll(`\${{ matrix.shard }}`, "1"),
+        ],
+        {
+          cwd: workspace,
+          env: {
+            ...process.env,
+            GITHUB_WORKSPACE: workspace,
+            E2E_MODE: "full",
+            GENERAL_STATUS: String(generalStatus),
+            GEOMETRY_STATUS: String(geometryStatus),
+          },
+        },
+      );
+      expect(result.exitCode, result.stderr.toString()).toBe(expectedStatus);
+      expect(readFileSync(path.join(workspace, "phases.log"), "utf-8")).toBe(
+        "general\ngeometry\n",
+      );
+      for (const phase of ["general", "geometry"]) {
+        expect(
+          readFileSync(
+            path.join(
+              workspace,
+              `apps/web/e2e/test-results/blob-report/report-${phase}.zip`,
+            ),
+            "utf-8",
+          ),
+        ).toBe(`${phase}\n`);
+      }
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  },
+);

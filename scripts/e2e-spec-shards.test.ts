@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -370,4 +376,14 @@ test("a route-smoke-only PR runs only the dedicated network leg", () => {
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("CI executes the geometry shard plan guard alongside spec selection", () => {
+  const source = readFileSync(
+    new URL("../.github/workflows/ci.yml", import.meta.url),
+    "utf-8",
+  );
+  expect(source).toContain(
+    "run: bun test scripts/e2e-spec-shards.test.ts scripts/e2e-geometry-shards.test.ts",
+  );
 });
