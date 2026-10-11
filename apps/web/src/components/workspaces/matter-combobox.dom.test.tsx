@@ -7,7 +7,8 @@ GlobalRegistrator.register({ url: "http://localhost:3000/", width: 1280 });
 
 const testing = await import("@testing-library/react");
 const query = await import("@tanstack/react-query");
-const { useState } = await import("react");
+const { Profiler, useState } = await import("react");
+const { panic } = await import("better-result");
 const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { workspacesNavigationOptions } =
@@ -19,6 +20,13 @@ const { RenderLoopGuard } = await import("@/testing/render-loop-guard");
 const { MatterCombobox } = await import("./matter-combobox");
 
 type MatterOption = Parameters<typeof MatterCombobox>[0]["value"];
+
+/**
+ * How many commits the picker may take to settle after mounting, and again
+ * after one keystroke. A settled picker needs a handful; an option list
+ * rebuilt on every render never settles.
+ */
+const MATTER_PICKER_SETTLE_COMMITS = 10;
 
 const ORGANIZATION_ID = "00000000-0000-7000-8000-00000000ffff";
 const USER_ID = "00000000-0000-7000-8000-00000000fffe";
@@ -89,9 +97,12 @@ const openCombobox = (
   {
     chat = [],
     pinned = [],
+    onCommit = () => {},
     workspaces = [NOVAK, LEASE],
   }: {
     chat?: ChatActivity[];
+    /** Called on every commit of the picker's subtree. */
+    onCommit?: () => void;
     pinned?: string[];
     workspaces?: WorkspaceNavigationItem[];
   } = {},
@@ -153,7 +164,9 @@ const openCombobox = (
     <RenderLoopGuard>
       <query.QueryClientProvider client={client}>
         <IntlProvider locale="en" messages={messages} timeZone="UTC">
-          <Host />
+          <Profiler id="matter-combobox" onRender={onCommit}>
+            <Host />
+          </Profiler>
         </IntlProvider>
       </query.QueryClientProvider>
     </RenderLoopGuard>,
@@ -203,6 +216,35 @@ const groupedOptions = (ui: ReturnType<typeof testing.render>) =>
       .getAllByRole("option")
       .map((option) => option.textContent),
   ]);
+
+describe("matter combobox rendering", () => {
+  test("settles within a few commits after mounting and after a keystroke", async () => {
+    let commits = 0;
+    const countCommit = () => {
+      commits += 1;
+      if (commits > MATTER_PICKER_SETTLE_COMMITS) {
+        // Thrown from the commit phase, this unmounts the tree and ends a
+        // render loop at once instead of letting it grow.
+        panic(
+          `MatterCombobox did not settle: more than ${MATTER_PICKER_SETTLE_COMMITS} commits`,
+        );
+      }
+    };
+    const { input } = openCombobox(null, {
+      chat: [{ workspaceId: many(6).id, updatedAt: NOW.toISOString() }],
+      onCommit: countCommit,
+      pinned: [many(5).id],
+      workspaces: MANY,
+    });
+    await testing.act(async () => {});
+    expect(commits).toBeLessThanOrEqual(MATTER_PICKER_SETTLE_COMMITS);
+
+    commits = 0;
+    await type(input, "M");
+    expect(commits).toBeGreaterThan(0);
+    expect(commits).toBeLessThanOrEqual(MATTER_PICKER_SETTLE_COMMITS);
+  });
+});
 
 describe("matter combobox groups", () => {
   test("browsing leads with recent matters: pinned, then by activity, then all others", async () => {
