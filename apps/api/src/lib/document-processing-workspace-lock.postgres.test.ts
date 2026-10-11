@@ -193,10 +193,14 @@ const withSourceBarrier = (tx: Transaction, options: SourceBarrierOptions) => {
   return wrap(tx);
 };
 
-// Pause only the unlocked identity lookup, after it has read its rows.
-// A replay can then commit before the manual path takes the claim lock.
-const withRunReadBarrier = (tx: Transaction, options: SourceBarrierOptions) => {
-  let paused = false;
+// Replay commits with triggers enabled before the manual transaction acquires
+// parent locks. Supply its earlier identity snapshot only to the unlocked read;
+// the real claim lock must read the updated budget from Postgres.
+const withRunReadSnapshot = (
+  tx: Transaction,
+  snapshot: (typeof documentProcessingRuns.$inferSelect)[],
+) => {
+  let supplied = false;
   const wrap = <T extends object>(target: T, readsRun = false): T =>
     new Proxy(target, {
       get: (object, key) => {
@@ -209,13 +213,11 @@ const withRunReadBarrier = (tx: Transaction, options: SourceBarrierOptions) => {
           const isRun =
             readsRun ||
             (key === "from" && args.at(0) === documentProcessingRuns);
-          if (key === "limit" && isRun && !paused) {
-            paused = true;
+          if (key === "limit" && isRun && !supplied) {
+            supplied = true;
             return (async () => {
-              const rows = await result;
-              options.ready();
-              await options.release;
-              return rows;
+              await result;
+              return snapshot;
             })();
           }
           if (
@@ -449,64 +451,26 @@ if (!databaseUrl || !runPostgresTests) {
         });
         const fixture = await seedOcrFixture(replay.db);
         const { organizationId, workspaceId, userId, source } = fixture;
-        const ready = Promise.withResolvers<undefined>();
-        const release = Promise.withResolvers<undefined>();
-        let pending: Promise<unknown> | undefined;
         try {
           const id = await seedFailedSearchReplay(
             replay.db,
             fixture,
             attemptCount,
           );
-          // Use a scheduled row here so the concurrency guard also reaches the
+          // Use a scheduled row here so the stale-read guard also reaches the
           // old replay predicate independently of the null-schedule regression.
           await replay.db
             .update(documentProcessingRuns)
             .set({ nextAttemptAt: new Date(Date.now() - 1000) })
             .where(eq(documentProcessingRuns.id, id));
-          const db = {
-            transaction: async <T>(run: (tx: Transaction) => Promise<T>) =>
-              await manual.db.transaction(
-                async (tx) =>
-                  await run(
-                    withRunReadBarrier(tx, {
-                      ready: () => ready.resolve(undefined),
-                      release: release.promise,
-                    }),
-                  ),
-              ),
-          };
-          pending =
-            path === "request"
-              ? persistManualOcrRun({
-                  db,
-                  organizationId,
-                  workspaceId,
-                  userId,
-                  source,
-                  recordAuditEvent: async () => undefined,
-                })
-              : restoreManualOcrRunAfterProjectionLoss({
-                  db,
-                  organizationId,
-                  workspaceId,
-                  ...source,
-                });
-          await withTimeout(async () => await ready.promise, {
-            label: "manual OCR identity read",
-            timeoutMs: 5000,
-          });
-          // Isolate the claim-row invariant from the feature-gate trigger's
-          // incidental parent SHARE lock. Only this dedicated replay session
-          // bypasses triggers; the real replay claim and failure still run.
-          await replay.sql`SET session_replication_role = replica`;
-          try {
-            await searchReplayPhase(replay.db, async () => {
-              throw new Error("index unavailable");
-            }).run();
-          } finally {
-            await replay.sql`SET session_replication_role = origin`;
-          }
+          const snapshot = await replay.db
+            .select()
+            .from(documentProcessingRuns)
+            .where(eq(documentProcessingRuns.id, id));
+          expect(snapshot.at(0)?.attemptCount).toBe(attemptCount);
+          await searchReplayPhase(replay.db, async () => {
+            throw new Error("index unavailable");
+          }).run();
           const before = (
             await replay.db
               .select()
@@ -515,8 +479,27 @@ if (!databaseUrl || !runPostgresTests) {
           ).at(0);
           expect(before?.attemptCount).toBe(attemptCount + 1);
           expect(before?.status).toBe("failed");
-          release.resolve(undefined);
-          await pending;
+          const db = {
+            transaction: async <T>(run: (tx: Transaction) => Promise<T>) =>
+              await manual.db.transaction(
+                async (tx) => await run(withRunReadSnapshot(tx, snapshot)),
+              ),
+          };
+          await (path === "request"
+            ? persistManualOcrRun({
+                db,
+                organizationId,
+                workspaceId,
+                userId,
+                source,
+                recordAuditEvent: async () => undefined,
+              })
+            : restoreManualOcrRunAfterProjectionLoss({
+                db,
+                organizationId,
+                workspaceId,
+                ...source,
+              }));
           const after = (
             await replay.db
               .select()
@@ -533,8 +516,6 @@ if (!databaseUrl || !runPostgresTests) {
               : "queued",
           );
         } finally {
-          release.resolve(undefined);
-          await Promise.allSettled(pending ? [pending] : []);
           await fixture.cleanup();
         }
       });

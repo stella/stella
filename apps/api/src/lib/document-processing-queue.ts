@@ -52,6 +52,7 @@ import {
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
+import { readCursorPage } from "@/api/lib/db/read-bounded";
 import {
   timestampCasToken,
   timestampMatchesCasToken,
@@ -2330,27 +2331,30 @@ const recoverRetryableOcrFailures = async (
   dependencies: DocumentProcessingReconciliationDependencies,
 ) => {
   const now = new Date(dependencies.now());
-  const exhausted = await dependencies.database
-    .select({
-      id: documentProcessingRuns.id,
-      workspaceId: documentProcessingRuns.workspaceId,
-    })
-    .from(documentProcessingRuns)
-    .where(
-      and(
-        eq(documentProcessingRuns.status, "queued"),
-        gte(
-          documentProcessingRuns.attemptCount,
-          DOCUMENT_PROCESSING_MAX_ATTEMPTS,
+  const exhaustedPage = await readCursorPage(
+    dependencies.database
+      .select({
+        id: documentProcessingRuns.id,
+        workspaceId: documentProcessingRuns.workspaceId,
+      })
+      .from(documentProcessingRuns)
+      .where(
+        and(
+          eq(documentProcessingRuns.status, "queued"),
+          gte(
+            documentProcessingRuns.attemptCount,
+            DOCUMENT_PROCESSING_MAX_ATTEMPTS,
+          ),
         ),
+      )
+      .orderBy(
+        sql`${documentProcessingRuns.nextAttemptAt} ASC NULLS FIRST`,
+        asc(documentProcessingRuns.createdAt),
+        asc(documentProcessingRuns.id),
       ),
-    )
-    .orderBy(
-      sql`${documentProcessingRuns.nextAttemptAt} ASC NULLS FIRST`,
-      asc(documentProcessingRuns.createdAt),
-      asc(documentProcessingRuns.id),
-    )
-    .limit(RECONCILE_BATCH_SIZE);
+    { limit: RECONCILE_BATCH_SIZE, cursorForItem: (run) => run.id },
+  );
+  const exhausted = exhaustedPage.items;
   const settled = await mapWithConcurrency({
     items: exhausted,
     limit: WORKER_CONCURRENCY,
@@ -2377,41 +2381,40 @@ const recoverRetryableOcrFailures = async (
     },
   });
   const settledCount = settled.filter(Boolean).length;
-  const retryableRuns = await dependencies.database
-    .select({
-      attemptCount: documentProcessingRuns.attemptCount,
-      id: documentProcessingRuns.id,
-      nextAttemptAtToken: timestampCasToken(
-        documentProcessingRuns.nextAttemptAt,
-      ),
-    })
-    .from(documentProcessingRuns)
-    .where(
-      and(
-        eq(documentProcessingRuns.status, "failed"),
-        sql`${documentProcessingRuns.errorCode} IS DISTINCT FROM ${SEARCH_INDEX_FAILURE_CODE}`,
-        lt(
-          documentProcessingRuns.attemptCount,
-          DOCUMENT_PROCESSING_MAX_ATTEMPTS,
+  const retryablePage = await readCursorPage(
+    dependencies.database
+      .select({
+        attemptCount: documentProcessingRuns.attemptCount,
+        id: documentProcessingRuns.id,
+        nextAttemptAtToken: timestampCasToken(
+          documentProcessingRuns.nextAttemptAt,
         ),
-        isNotNull(documentProcessingRuns.nextAttemptAt),
-        sql`${documentProcessingRuns.nextAttemptAt} <= ${now}::timestamptz`,
+      })
+      .from(documentProcessingRuns)
+      .where(
+        and(
+          eq(documentProcessingRuns.status, "failed"),
+          sql`${documentProcessingRuns.errorCode} IS DISTINCT FROM ${SEARCH_INDEX_FAILURE_CODE}`,
+          lt(
+            documentProcessingRuns.attemptCount,
+            DOCUMENT_PROCESSING_MAX_ATTEMPTS,
+          ),
+          isNotNull(documentProcessingRuns.nextAttemptAt),
+          sql`${documentProcessingRuns.nextAttemptAt} <= ${now}::timestamptz`,
+        ),
+      )
+      .orderBy(
+        asc(documentProcessingRuns.nextAttemptAt),
+        asc(documentProcessingRuns.createdAt),
+        asc(documentProcessingRuns.id),
       ),
-    )
-    .orderBy(
-      asc(documentProcessingRuns.nextAttemptAt),
-      asc(documentProcessingRuns.createdAt),
-      asc(documentProcessingRuns.id),
-    )
-    .limit(RECONCILE_BATCH_SIZE);
-  // Only the selection is capped; the compare-and-set below can recover
-  // fewer rows than it read, which says nothing about the backlog.
+    { limit: RECONCILE_BATCH_SIZE, cursorForItem: (run) => run.id },
+  );
+  const retryableRuns = retryablePage.items;
+  // Continuation comes from selection, independent of compare-and-set losses.
   const hasMore =
-    exhausted.length === RECONCILE_BATCH_SIZE ||
-    cappedSelectionHasMore({
-      limit: RECONCILE_BATCH_SIZE,
-      selected: retryableRuns.length,
-    });
+    exhaustedPage.nextCursor !== null || retryablePage.nextCursor !== null;
+
   if (retryableRuns.length === 0) {
     return { count: settledCount, hasMore };
   }

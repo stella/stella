@@ -242,7 +242,8 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
     });
     switch (changed.type) {
       case "stale":
-        return panic("Locked manual OCR run changed during projection repair");
+        panic("Locked manual OCR run changed during projection repair");
+        return;
       case "transitioned":
         return;
       default:
