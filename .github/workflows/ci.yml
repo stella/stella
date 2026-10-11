@@ -8082,7 +8082,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
-          toolchain: 1.89.0
+          toolchain: 1.99.0
           targets: wasm32-unknown-unknown
 
       - name: Restore Rust build cache

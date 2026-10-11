@@ -4,6 +4,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 const root = path.resolve(import.meta.dir, "..");
+const PINNED_VERSION = "1.99.0";
 const EXACT_VERSION = /^\d+\.\d+\.\d+$/u;
 
 // Each crate owns its pin; rustup finds it from the package directory, so
@@ -22,6 +23,9 @@ const CRATES = [
 ] as const;
 
 const channel = (file: string): string => {
+  if (path.basename(file) === "rust-toolchain") {
+    return readFileSync(path.join(root, file), "utf-8").trim();
+  }
   const match = /^channel = "([^"]+)"$/mu.exec(
     readFileSync(path.join(root, file), "utf-8"),
   );
@@ -32,16 +36,7 @@ const channel = (file: string): string => {
 };
 
 const trackedToolchains = (): string[] => {
-  const result = Bun.spawnSync(
-    [
-      "git",
-      "ls-files",
-      "-z",
-      "--",
-      ...CRATES.map((crate) => path.dirname(crate.toolchainFile)),
-    ],
-    { cwd: root },
-  );
+  const result = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: root });
   expect(result.exitCode, result.stderr.toString()).toBe(0);
   return result.stdout
     .toString()
@@ -144,14 +139,10 @@ test("each workflow job uses the pin of the crate it builds", () => {
   }
 });
 
-test("nearer crate toolchain files match their owning package pin", () => {
-  for (const file of trackedToolchains()) {
-    const owner = v.parse(
-      v.object({ toolchainFile: v.string() }),
-      CRATES.find((crate) =>
-        file.startsWith(`${path.dirname(crate.toolchainFile)}/`),
-      ),
-    );
-    expect(channel(file), file).toBe(channel(owner.toolchainFile));
+test("every tracked Rust toolchain file uses the repository pin", () => {
+  const files = trackedToolchains();
+  expect(files.length).toBeGreaterThan(0);
+  for (const file of files) {
+    expect(channel(file), file).toBe(PINNED_VERSION);
   }
 });
