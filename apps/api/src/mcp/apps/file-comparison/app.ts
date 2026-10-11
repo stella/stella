@@ -5,6 +5,7 @@ import { FILE_COMPARISON_TRANSPORT } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { hashUploadFile } from "../file-content-hash";
+import { formatAppError, LocalizedAppError } from "../shared/app-error";
 import { parseAppToolPayload } from "../shared/bridge";
 import { mountFilePicker } from "../shared/file-picker";
 
@@ -76,18 +77,22 @@ type ComparisonReservation = {
 
 const parsePreparedUpload = (
   value: unknown,
-): Result<PreparedUpload, ComparisonAppError> => {
+): Result<PreparedUpload, ComparisonAppError | LocalizedAppError> => {
   if (!isRecord(value)) {
-    return Result.err(comparisonError(t("invalidComparisonReservation")));
+    return Result.err(
+      new LocalizedAppError({ key: "invalidComparisonReservation" }),
+    );
   }
   const { headers, url } = value;
   if (typeof url !== "string" || !isRecord(headers)) {
-    return Result.err(comparisonError(t("invalidComparisonReservation")));
+    return Result.err(
+      new LocalizedAppError({ key: "invalidComparisonReservation" }),
+    );
   }
   const headerEntries: [string, string][] = [];
   for (const [key, headerValue] of Object.entries(headers)) {
     if (typeof headerValue !== "string") {
-      return Result.err(comparisonError(t("invalidUploadHeaders")));
+      return Result.err(new LocalizedAppError({ key: "invalidUploadHeaders" }));
     }
     headerEntries.push([key, headerValue]);
   }
@@ -102,17 +107,23 @@ const isComparisonSource = (value: unknown): value is ComparisonSource =>
 
 const parseReservation = (
   value: unknown,
-): Result<ComparisonReservation, ComparisonAppError> => {
+): Result<ComparisonReservation, ComparisonAppError | LocalizedAppError> => {
   if (!isRecord(value)) {
-    return Result.err(comparisonError(t("invalidComparisonReservation")));
+    return Result.err(
+      new LocalizedAppError({ key: "invalidComparisonReservation" }),
+    );
   }
   const { base, next, target } = value;
   if (!isRecord(next)) {
-    return Result.err(comparisonError(t("invalidComparisonReservation")));
+    return Result.err(
+      new LocalizedAppError({ key: "invalidComparisonReservation" }),
+    );
   }
   const { source } = next;
   if (!isComparisonSource(source)) {
-    return Result.err(comparisonError(t("invalidComparisonReservation")));
+    return Result.err(
+      new LocalizedAppError({ key: "invalidComparisonReservation" }),
+    );
   }
   const parsedBase = parsePreparedUpload(base);
   if (Result.isError(parsedBase)) {
@@ -134,7 +145,9 @@ const app = new App({ name: "stella file comparison", version: "1.0.0" });
 const prepareComparison = async (
   base: File,
   target: File,
-): Promise<Result<ComparisonReservation, ComparisonAppError>> => {
+): Promise<
+  Result<ComparisonReservation, ComparisonAppError | LocalizedAppError>
+> => {
   const [baseFile, targetFile] = await Promise.all([
     describeFile(base),
     describeFile(target),
@@ -159,12 +172,12 @@ const prepareComparison = async (
   if (result.isError === true) {
     const message = result.content.find((part) => part.type === "text")?.text;
     return Result.err(
-      comparisonError(
-        message ??
-          t("capabilityFailed", {
-            capability: FILE_COMPARISON_TRANSPORT.prepareToolName,
+      message !== undefined
+        ? comparisonError(message)
+        : new LocalizedAppError({
+            key: "capabilityFailed",
+            values: { capability: FILE_COMPARISON_TRANSPORT.prepareToolName },
           }),
-      ),
     );
   }
   const payload = parseAppToolPayload(result);
@@ -176,7 +189,7 @@ const prepareComparison = async (
 const putFile = async (
   upload: PreparedUpload,
   file: File,
-): Promise<Result<void, ComparisonAppError>> => {
+): Promise<Result<void, ComparisonAppError | LocalizedAppError>> => {
   const response = await Result.tryPromise(
     async () =>
       await fetchWithTimeout(upload.url, {
@@ -191,7 +204,10 @@ const putFile = async (
   }
   if (!response.value.ok) {
     return Result.err(
-      comparisonError(t("storageRejected", { status: response.value.status })),
+      new LocalizedAppError({
+        key: "storageRejected",
+        values: { status: response.value.status },
+      }),
     );
   }
   return Result.ok();
@@ -246,7 +262,10 @@ const uploadSelectedFiles = async (): Promise<void> => {
   setStatus(() => t("preparingUpload"), "idle");
   const reservation = await prepareComparison(base, target);
   if (Result.isError(reservation)) {
-    setStatus(() => reservation.error.message, "error");
+    setStatus(
+      () => formatAppError(reservation.error, t, "uploadFailed"),
+      "error",
+    );
     refreshUploadEnabled();
     return;
   }
@@ -258,7 +277,7 @@ const uploadSelectedFiles = async (): Promise<void> => {
   ]);
   for (const put of puts) {
     if (Result.isError(put)) {
-      setStatus(() => put.error.message, "error");
+      setStatus(() => formatAppError(put.error, t, "uploadFailed"), "error");
       refreshUploadEnabled();
       return;
     }
@@ -281,7 +300,10 @@ const uploadSelectedFiles = async (): Promise<void> => {
   if (Result.isError(outcome)) {
     setStatus(
       () =>
-        t("redlineStartFailed", { message: outcome.error.message, ask: ask() }),
+        t("redlineStartFailed", {
+          message: formatAppError(outcome.error, t, "uploadFailed"),
+          ask: ask(),
+        }),
       "error",
     );
     return;
@@ -309,10 +331,7 @@ uploadButton.addEventListener("click", () => {
       refreshUploadEnabled();
     })
     .catch((error: unknown) => {
-      setStatus(
-        () => (error instanceof Error ? error.message : t("uploadFailed")),
-        "error",
-      );
+      setStatus(() => formatAppError(error, t, "uploadFailed"), "error");
     });
 });
 

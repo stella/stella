@@ -22,7 +22,7 @@ export const appLocale = (hostLocale: string | undefined) => {
   };
 };
 
-type AppMessageKey = keyof typeof messages.en;
+export type AppMessageKey = keyof typeof messages.en;
 
 export const isAppMessageKey = (key: string): key is AppMessageKey =>
   Object.hasOwn(messages.en, key);

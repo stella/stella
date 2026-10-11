@@ -1,4 +1,5 @@
 import { load } from "cheerio";
+import { isText } from "domhandler";
 import path from "node:path";
 import ts from "typescript";
 
@@ -29,7 +30,7 @@ export const inspectAppHtmlSources = (
     };
     html("*").each((_, element) => {
       for (const child of html(element).contents()) {
-        if (child.type === "text") {
+        if (isText(child)) {
           report(child.data);
         }
       }

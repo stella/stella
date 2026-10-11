@@ -11,6 +11,7 @@ import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-exec
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { hashUploadFile } from "../file-content-hash";
+import { formatAppError, LocalizedAppError } from "../shared/app-error";
 import { parseAppToolPayload } from "../shared/bridge";
 import { mountFilePicker } from "../shared/file-picker";
 import { createUploadTargetController } from "./upload-target";
@@ -58,8 +59,12 @@ const callCapability = async (
   });
   if (result.isError === true) {
     const message = result.content.find((part) => part.type === "text")?.text;
-    throw new UploadAppError({
-      message: message ?? t("capabilityFailed", { capability }),
+    if (message !== undefined) {
+      throw new UploadAppError({ message });
+    }
+    throw new LocalizedAppError({
+      key: "capabilityFailed",
+      values: { capability },
     });
   }
   const payload = parseAppToolPayload(result);
@@ -70,9 +75,7 @@ const parseReservation = (
   value: unknown,
 ): { headers: Record<string, string>; uploadId: string; url: string } => {
   if (!isRecord(value)) {
-    throw new UploadAppError({
-      message: t("invalidUploadReservation"),
-    });
+    throw new LocalizedAppError({ key: "invalidUploadReservation" });
   }
   const { headers, uploadId, url } = value;
   if (
@@ -80,16 +83,12 @@ const parseReservation = (
     typeof url !== "string" ||
     !isRecord(headers)
   ) {
-    throw new UploadAppError({
-      message: t("invalidUploadReservation"),
-    });
+    throw new LocalizedAppError({ key: "invalidUploadReservation" });
   }
   const headerEntries: [string, string][] = [];
   for (const [key, headerValue] of Object.entries(headers)) {
     if (typeof headerValue !== "string") {
-      throw new UploadAppError({
-        message: t("invalidUploadHeaders"),
-      });
+      throw new LocalizedAppError({ key: "invalidUploadHeaders" });
     }
     headerEntries.push([key, headerValue]);
   }
@@ -151,8 +150,9 @@ const uploadSelectedFile = async (): Promise<void> => {
       timeoutMs: UPLOAD_TIMEOUT_MS,
     });
     if (!put.ok) {
-      throw new UploadAppError({
-        message: t("storageRejected", { status: put.status }),
+      throw new LocalizedAppError({
+        key: "storageRejected",
+        values: { status: put.status },
       });
     }
 
@@ -169,7 +169,7 @@ const uploadSelectedFile = async (): Promise<void> => {
     picker.clearFiles();
     setStatus(() => t("versionUploaded"), "success");
   } catch (error) {
-    let message = error instanceof Error ? error.message : t("uploadFailed");
+    let message = () => formatAppError(error, t, "uploadFailed");
     if (uploadId !== undefined) {
       try {
         await callCapability(
@@ -182,14 +182,14 @@ const uploadSelectedFile = async (): Promise<void> => {
           true,
         );
       } catch (cleanupError) {
-        const cleanupMessage =
-          cleanupError instanceof Error
-            ? cleanupError.message
-            : t("cleanupFailed");
-        message = t("uploadCleanupFailed", { message, cleanupMessage });
+        message = () =>
+          t("uploadCleanupFailed", {
+            message: formatAppError(error, t, "uploadFailed"),
+            cleanupMessage: formatAppError(cleanupError, t, "cleanupFailed"),
+          });
       }
     }
-    setStatus(() => message, "error");
+    setStatus(message, "error");
     targetController.handleFileChange();
   }
 };
@@ -201,10 +201,7 @@ uploadButton.addEventListener("click", () => {
       targetController.handleFileChange();
     })
     .catch((error: unknown) => {
-      setStatus(
-        () => (error instanceof Error ? error.message : t("uploadFailed")),
-        "error",
-      );
+      setStatus(() => formatAppError(error, t, "uploadFailed"), "error");
     });
 });
 
