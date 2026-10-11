@@ -66,10 +66,7 @@ export const ALL_WORKSPACE_CACHE_INPUTS = [
 ] as const;
 // Turbo hashes each workspace's resolved dependencies. Root programs span
 // multiple workspaces and still need the complete lockfile in their inputs.
-export const WORKSPACE_TYPECHECK_CACHE_INPUTS =
-  ALL_WORKSPACE_CACHE_INPUTS.filter(
-    (input) => input !== "$TURBO_ROOT$/bun.lock",
-  );
+export const WORKSPACE_TYPECHECK_CACHE_INPUTS = ALL_WORKSPACE_CACHE_INPUTS;
 // Every module `oxlint.config.ts` imports is rule configuration: a row edited
 // in the ownership table, a glob in the result-boundary scope, or a file in the
 // design-system backlog changes what every workspace lint reports.
@@ -1105,8 +1102,7 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
         "--quiet",
         `${DEFAULT_BASE}^{commit}`,
       ]);
-      const terminated =
-        reference.signalCode !== undefined && reference.signalCode !== null;
+      const terminated = Boolean(reference.signalCode);
       if (reference.exitCode === 1 && !terminated) {
         return null;
       }

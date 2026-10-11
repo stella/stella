@@ -700,7 +700,9 @@ exec "$CHECK_REAL_BUN" "$@"
         },
       );
       expect(result.exitCode).toBe(1);
-      expect(result.stderr.toString()).toContain("generate-bun-toolchain.ts");
+      expect(result.stderr.toString()).toContain(
+        "drifted: scripts/bun-toolchain.gen.json",
+      );
       expect(result.stdout.toString()).not.toContain(
         "code-check: lint all; typecheck all",
       );
@@ -745,7 +747,7 @@ process.exit(childExitStatus(result));
     }
   }, 30_000);
 
-  test("a missing origin/main with exit 1 and null signal uses the full-check fallback", () => {
+  test("a missing origin/main with exit 1 and no signal uses the full-check fallback", () => {
     const directory = mkdtempSync(path.join(tmpdir(), "code-check-git-"));
     const git = Bun.which("git");
     expect(git).not.toBeNull();
@@ -769,7 +771,7 @@ process.exit(childExitStatus(result));
         { env: { ...process.env, PATH: `${directory}:${environmentPath}` } },
       );
       expect(reference.exitCode).toBe(1);
-      expect(reference.signalCode).toBeNull();
+      expect(Boolean(reference.signalCode)).toBe(false);
       const result = Bun.spawnSync(
         ["bun", "scripts/code-check-affected.ts", "--all", "--dry-run"],
         { env: { ...process.env, PATH: `${directory}:${environmentPath}` } },
