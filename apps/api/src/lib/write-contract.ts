@@ -19,11 +19,9 @@ const REPLACE_CONTRACT_DEBT_IDS = [
   "apps/api/src/handlers/entities/versions/upload.ts",
   "apps/api/src/handlers/entity-views/reorder.ts",
   "apps/api/src/handlers/entity-views/update.ts",
-  "apps/api/src/handlers/fields/upsert.ts",
   "apps/api/src/handlers/flows/update.ts",
   "apps/api/src/handlers/folio-collab/snapshot-store.ts",
   "apps/api/src/handlers/legal-reader/annotations/update.ts",
-  "apps/api/src/handlers/lists/items/fact-details/update.ts",
   "apps/api/src/handlers/organization-settings/anonymization-blacklist/update.ts",
   "apps/api/src/handlers/organization-settings/practice-jurisdictions/update.ts",
   "apps/api/src/handlers/organization-settings/update-ai-config.ts",
@@ -207,6 +205,43 @@ const isRevisionField = (schema: unknown): boolean => {
   }
 };
 
+const isDateTimeSchema = (schema: unknown): boolean =>
+  typeof schema === "object" &&
+  schema !== null &&
+  Kind in schema &&
+  schema[Kind] === "String" &&
+  "format" in schema &&
+  schema.format === "date-time";
+
+const isNullSchema = (schema: unknown): boolean =>
+  typeof schema === "object" &&
+  schema !== null &&
+  Kind in schema &&
+  schema[Kind] === "Null";
+
+const isExpectedUpdatedAtSchema = (schema: unknown): boolean => {
+  if (isDateTimeSchema(schema)) {
+    return true;
+  }
+  if (
+    typeof schema !== "object" ||
+    schema === null ||
+    !(Kind in schema) ||
+    schema[Kind] !== "Union" ||
+    !("anyOf" in schema) ||
+    !Array.isArray(schema.anyOf)
+  ) {
+    return false;
+  }
+  return (
+    schema.anyOf.some(isDateTimeSchema) &&
+    schema.anyOf.some(isNullSchema) &&
+    schema.anyOf.every(
+      (branch) => isDateTimeSchema(branch) || isNullSchema(branch),
+    )
+  );
+};
+
 /** TypeBox unions require the token in every alternative; an intersection may supply it in one conjunct. */
 const requiresField = (schema: unknown, field: string): boolean => {
   if (typeof schema !== "object" || schema === null || !(Kind in schema)) {
@@ -233,11 +268,7 @@ const requiresField = (schema: unknown, field: string): boolean => {
         return false;
       }
       if (field === "expectedUpdatedAt") {
-        return (
-          value[Kind] === "String" &&
-          "format" in value &&
-          value.format === "date-time"
-        );
+        return isExpectedUpdatedAtSchema(value);
       }
       return isRevisionField(value);
     }

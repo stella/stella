@@ -49,6 +49,7 @@ export const readEntityByIdHandler = async function* ({
         columns: {
           kind: true,
           name: true,
+          updatedAt: true,
         },
         with: {
           extractedContent: {
@@ -125,6 +126,7 @@ export const readEntityByIdHandler = async function* ({
     entityId,
     kind: entity.kind,
     name: entity.name,
+    updatedAt: entity.updatedAt,
     currentVersionId: entity.currentVersion.id,
     currentVersionCreatedAt: entity.currentVersion.createdAt,
     // Per version, not per matter: an older version carries no reference even
@@ -141,7 +143,7 @@ const config = {
   contract: "patch",
   description:
     "Read one document, folder, or task in a matter: its kind, name, current " +
-    "version id, creation time and document reference, that version's field " +
+    "version id, entity updatedAt write token, creation time and document reference, that version's field " +
     "values, and which field is the current text-extraction source. Use " +
     "entities.versions.get to read a historical version, and " +
     "entities.versions.list for the version list.",
@@ -169,6 +171,7 @@ const readEntityById = createSafeHandler(
       entityId: entity.entityId,
       kind: entity.kind,
       name: entity.name,
+      updatedAt: entity.updatedAt,
       currentVersionId: entity.currentVersionId,
       currentVersionCreatedAt: entity.currentVersionCreatedAt,
       currentVersionReference: entity.currentVersionReference,

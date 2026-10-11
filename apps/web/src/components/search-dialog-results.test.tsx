@@ -102,6 +102,7 @@ test.each([
         entityId: toSafeId<"entity">(recent.entityId),
         kind: "document",
         name: recent.title,
+        updatedAt: hit.updatedAt,
         currentVersionId: toSafeId<"entityVersion">("version_search_image"),
         currentVersionCreatedAt: hit.updatedAt,
         currentVersionReference: null,

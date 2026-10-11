@@ -408,6 +408,48 @@ describe("write contracts cover the mutation route graph", () => {
     );
     expect(check(sources)).toEqual([]);
   });
+  test("transaction callbacks enforce replacements only when conflicts propagate", () => {
+    const config = `{contract: 'replace', precondition: {type: 'updatedAt', field: 'expectedUpdatedAt'}}`;
+    const call = `enforceWritePrecondition({type: 'updatedAt', field: 'expectedUpdatedAt', expectedUpdatedAt: body.expectedUpdatedAt, storedUpdatedAt: new Date(), resource: 'Example'})`;
+    const returnedCallback = `async (tx) => { const conflict = ${call}; if (conflict !== null) return conflict; return tx.replace(body); }`;
+    const thrownCallback = `async (tx) => { const conflict = ${call}; if (conflict !== null) throw conflict; return tx.replace(body); }`;
+    const abortedCallback = `async (tx) => { const conflict = ${call}; if (conflict !== null) return abortTransaction(conflict); return tx.replace(body); }`;
+    const sources = fixture(config);
+    const withBody = (body: string) => `import { Result } from 'better-result';
+      import { createSafeHandler } from '@/api/lib/api-handlers';
+      import { abortableTx, abortTransaction } from '@/api/db/safe-db';
+      import { enforceWritePrecondition } from '@/api/lib/write-contract';
+      export default createSafeHandler(${config}, async function* ({body, safeDb}) { ${body} });`;
+
+    for (const body of [
+      `return yield* Result.await(safeDb(${returnedCallback}));`,
+      `return yield* Result.await(abortableTx(safeDb, ${thrownCallback}));`,
+      `const writeResult = yield* Result.await(safeDb(${returnedCallback})); return writeResult;`,
+      `const writeResult = yield* Result.await(abortableTx(safeDb, ${thrownCallback})); return writeResult;`,
+      `const writeResult = yield* Result.await(abortableTx(safeDb, ${abortedCallback})); return writeResult;`,
+      `const conflict = ${call}; if (conflict !== null) throw conflict; return {};`,
+    ]) {
+      sources.set(handler, withBody(body));
+      expect(enumerate(sources)).toHaveLength(1);
+      expect(check(sources)).toEqual([]);
+    }
+
+    for (const body of [
+      `safeDb(${returnedCallback}); return {};`,
+      `void safeDb(${returnedCallback}); return {};`,
+      `const ignored = safeDb(${returnedCallback}); return {};`,
+      `abortableTx(safeDb, ${thrownCallback}); return {};`,
+      `void abortableTx(safeDb, ${thrownCallback}); return {};`,
+      `void abortableTx(safeDb, ${abortedCallback}); return {};`,
+      `try { const conflict = ${call}; if (conflict !== null) throw conflict; } catch {} return {};`,
+    ]) {
+      sources.set(handler, withBody(body));
+      expect(enumerate(sources)).toHaveLength(1);
+      expect(check(sources)).toContainEqual(
+        expect.stringContaining("Replacement must reach owner enforcement"),
+      );
+    }
+  });
   test("compound revision declarations require every owner comparison", () => {
     const config = `{contract: 'replace', precondition: {type: 'revision', fields: ['baseRevision', 'selectedTextHash']}}`;
     const sources = fixture(config);

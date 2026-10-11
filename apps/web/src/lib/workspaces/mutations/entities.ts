@@ -322,6 +322,7 @@ type UpsertFieldVars = {
   propertyId: string;
   entityId: string;
   content: UpsertFieldContent;
+  expectedUpdatedAt: string | null;
 };
 
 type UpdateKanbanPlacementVars = {
@@ -375,6 +376,7 @@ export const useUpsertField = () => {
       propertyId,
       entityId,
       content,
+      expectedUpdatedAt,
     }: UpsertFieldVars) => {
       const response = await api
         .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
@@ -382,6 +384,7 @@ export const useUpsertField = () => {
           propertyId: toSafeId<"property">(propertyId),
           entityId: toSafeId<"entity">(entityId),
           content,
+          expectedUpdatedAt,
         });
 
       return unwrapEden(response);

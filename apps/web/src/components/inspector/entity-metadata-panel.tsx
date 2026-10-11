@@ -88,6 +88,7 @@ type EntityMetadataContentProps = {
   entity: {
     kind: EntityKind;
     entityId: EntityId;
+    updatedAt: string | null;
     fields: EntityField[];
   };
 };
@@ -455,6 +456,7 @@ const EntityMetadataContent = ({
                 content={verdictField.content}
                 entityId={entity.entityId}
                 entityKind={entity.kind}
+                entityUpdatedAt={entity.updatedAt}
                 property={verdictProperty}
                 propertyId={verdictField.propertyId}
                 readonly
@@ -467,6 +469,7 @@ const EntityMetadataContent = ({
           <EditableField
             content={field.content}
             entityKind={entity.kind}
+            entityUpdatedAt={entity.updatedAt}
             entityId={entity.entityId}
             property={property}
             propertyId={field.propertyId}

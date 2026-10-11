@@ -1,9 +1,10 @@
 import { Result, panic } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
+import { abortableTx } from "@/api/db/safe-db";
 import {
   entities,
   legalListFactDetails,
@@ -25,10 +26,15 @@ import {
 } from "@/api/lib/lists/fact-details";
 import type { FactDatePrecision } from "@/api/lib/lists/fact-details";
 import { LIST_VERIFICATION_ITEM_OPERATION } from "@/api/lib/lists/item-operations";
+import {
+  expectedUpdatedAtSchema,
+  VERSION_CONFLICT_ERROR_CODE,
+} from "@/api/lib/optimistic-concurrency";
 import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { enforceWritePrecondition } from "@/api/lib/write-contract";
 
 // `t.UnionEnum` over the const tuples keeps the literal unions in the
 // inferred body type, which the web client reads its types from.
@@ -56,13 +62,14 @@ const bodySchema = t.Object({
     }),
   ),
   scoring: t.UnionEnum(FACT_SCORING),
+  expectedUpdatedAt: t.Nullable(expectedUpdatedAtSchema),
 });
 
 const config = {
   contract: "replace",
   precondition: {
-    type: "deferred",
-    baselineId: "apps/api/src/handlers/lists/items/fact-details/update.ts",
+    type: "updatedAt",
+    field: "expectedUpdatedAt",
   },
   featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
@@ -92,6 +99,9 @@ const FACT_DETAIL_FIELDS = [
   "interpretationNote",
   "scoring",
 ] as const satisfies readonly (keyof typeof legalListFactDetails.$inferSelect)[];
+const ABSENT_FACT_DETAILS_UPDATED_AT = new Date(0);
+const ABSENT_FACT_DETAILS_EXPECTED_UPDATED_AT =
+  ABSENT_FACT_DETAILS_UPDATED_AT.toISOString();
 
 /** A partial date has one spelling: its first day. */
 const canonicalDate = (date: string, precision: FactDatePrecision): string => {
@@ -115,7 +125,8 @@ const canonicalDate = (date: string, precision: FactDatePrecision): string => {
 const updateFactDetails = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, user, body, recordAuditEvent }) {
-    const { listId, itemEntityId, occurredOn, ...detail } = body;
+    const { listId, itemEntityId, occurredOn, expectedUpdatedAt, ...detail } =
+      body;
     const values = {
       ...detail,
       ...(occurredOn === null
@@ -127,7 +138,7 @@ const updateFactDetails = createSafeHandler(
     };
 
     const result = yield* Result.await(
-      safeDb(async (tx) => {
+      abortableTx(safeDb, async (tx) => {
         const item = (
           await tx
             .select({ listItemType: entities.listItemType })
@@ -169,6 +180,19 @@ const updateFactDetails = createSafeHandler(
             .for("update")
         ).at(0);
 
+        const conflict = enforceWritePrecondition({
+          type: "updatedAt",
+          field: "expectedUpdatedAt",
+          storedUpdatedAt:
+            existing?.updatedAt ?? ABSENT_FACT_DETAILS_UPDATED_AT,
+          expectedUpdatedAt:
+            expectedUpdatedAt ?? ABSENT_FACT_DETAILS_EXPECTED_UPDATED_AT,
+          resource: "Fact details",
+        });
+        if (conflict !== null) {
+          return conflict;
+        }
+
         const changes: FieldDiffs = {};
         for (const key of FACT_DETAIL_FIELDS) {
           const old = existing?.[key] ?? null;
@@ -177,23 +201,50 @@ const updateFactDetails = createSafeHandler(
           }
         }
         if (existing !== undefined && Object.keys(changes).length === 0) {
-          return { type: "unchanged" } as const;
+          return { type: "unchanged", updatedAt: existing.updatedAt } as const;
         }
 
-        const now = new Date();
-        await tx
-          .insert(legalListFactDetails)
-          .values({
-            itemEntityId,
-            workspaceId,
-            listId,
-            ...values,
-            updatedBy: user.id,
-          })
-          .onConflictDoUpdate({
-            target: legalListFactDetails.itemEntityId,
-            set: { ...values, updatedBy: user.id, updatedAt: now },
+        const written = (
+          existing === undefined
+            ? await tx
+                .insert(legalListFactDetails)
+                .values({
+                  itemEntityId,
+                  workspaceId,
+                  listId,
+                  ...values,
+                  updatedBy: user.id,
+                })
+                .onConflictDoNothing({
+                  target: legalListFactDetails.itemEntityId,
+                })
+                .returning({ updatedAt: legalListFactDetails.updatedAt })
+            : await tx
+                .update(legalListFactDetails)
+                .set({
+                  ...values,
+                  updatedBy: user.id,
+                  updatedAt: sql`clock_timestamp()`,
+                })
+                .where(
+                  and(
+                    eq(legalListFactDetails.itemEntityId, itemEntityId),
+                    eq(legalListFactDetails.workspaceId, workspaceId),
+                  ),
+                )
+                .returning({ updatedAt: legalListFactDetails.updatedAt })
+        ).at(0);
+        if (written === undefined) {
+          if (existing !== undefined) {
+            return panic("Locked fact details disappeared");
+          }
+          throw new HandlerError({
+            code: VERSION_CONFLICT_ERROR_CODE,
+            status: 409,
+            message:
+              "Fact details changed while it was being edited; reload and try again",
           });
+        }
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM,
@@ -204,7 +255,7 @@ const updateFactDetails = createSafeHandler(
             listId,
           },
         });
-        return { type: "updated" } as const;
+        return { type: "updated", updatedAt: written.updatedAt } as const;
       }),
     );
 
@@ -212,6 +263,9 @@ const updateFactDetails = createSafeHandler(
       return Result.err(
         new HandlerError({ status: 404, message: "List item not found" }),
       );
+    }
+    if (HandlerError.is(result)) {
+      return Result.err(result);
     }
     if (result.type === "not-a-fact") {
       return Result.err(
@@ -222,7 +276,11 @@ const updateFactDetails = createSafeHandler(
         }),
       );
     }
-    const projected: FactDetailsProjection = { itemEntityId, ...values };
+    const projected: FactDetailsProjection = {
+      itemEntityId,
+      ...values,
+      updatedAt: result.updatedAt,
+    };
     return Result.ok(projected);
   },
 );
@@ -230,7 +288,7 @@ const updateFactDetails = createSafeHandler(
 type FactDetailsRow = typeof legalListFactDetails.$inferSelect;
 type FactDetailsProjection = Pick<
   FactDetailsRow,
-  "itemEntityId" | (typeof FACT_DETAIL_FIELDS)[number]
+  "itemEntityId" | "updatedAt" | (typeof FACT_DETAIL_FIELDS)[number]
 >;
 
 const UNPROJECTED_FACT_DETAIL_COLUMNS = [
@@ -241,7 +299,6 @@ const UNPROJECTED_FACT_DETAIL_COLUMNS = [
   // Bookkeeping: who last saved and when is in the audit trail.
   "updatedBy",
   "createdAt",
-  "updatedAt",
 ] as const satisfies readonly (keyof FactDetailsRow)[];
 
 type MissingProjectedFactDetailColumn = UnprojectedColumns<

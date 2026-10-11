@@ -221,6 +221,7 @@ const readListItems = createSafeHandler(config, async function* (context) {
               medium: legalListFactDetails.medium,
               interpretationNote: legalListFactDetails.interpretationNote,
               scoring: legalListFactDetails.scoring,
+              updatedAt: legalListFactDetails.updatedAt,
             },
             firstSource: {
               documentId: firstSource.documentId,

@@ -35,6 +35,7 @@ const factDetailsMutationKey = ({ workspaceId, listId }: ListScope) =>
 type SaveVariables = {
   targetIds: [ListItem["id"]];
   details: EditableFactDetails;
+  expectedUpdatedAt: string | null;
 };
 
 type PreviousDetails = { previous: FactDetails | null };
@@ -73,7 +74,11 @@ export const useFactDetailActions = (scope: ListScope) => {
   const save = useMutation({
     mutationKey,
     scope: { id: mutationKey.join(":") },
-    mutationFn: async ({ targetIds: [itemEntityId], details }: SaveVariables) =>
+    mutationFn: async ({
+      targetIds: [itemEntityId],
+      details,
+      expectedUpdatedAt,
+    }: SaveVariables) =>
       unwrapEden(
         await api
           .lists({ workspaceId: toSafeId<"workspace">(scope.workspaceId) })
@@ -82,12 +87,14 @@ export const useFactDetailActions = (scope: ListScope) => {
               listId: toSafeId<"legalList">(scope.listId),
               itemEntityId,
               details,
+              expectedUpdatedAt,
             }),
           ),
       ),
     onMutate: async ({
       targetIds: [itemEntityId],
       details,
+      expectedUpdatedAt,
     }): Promise<PreviousDetails> => {
       await queryClient.cancelQueries({ queryKey: itemsKey });
       const previous =
@@ -95,7 +102,10 @@ export const useFactDetailActions = (scope: ListScope) => {
           .getQueryData(itemsKey)
           ?.pages.flatMap((page) => page.items)
           .find((item) => item.id === itemEntityId)?.factDetails ?? null;
-      writeDetails(itemEntityId, details);
+      writeDetails(itemEntityId, {
+        ...details,
+        updatedAt: expectedUpdatedAt ?? new Date(0).toISOString(),
+      });
       return { previous };
     },
     onSuccess: ({ itemEntityId, ...stored }) => {
@@ -115,7 +125,13 @@ export const useFactDetailActions = (scope: ListScope) => {
       itemEntityId: ListItem["id"],
       details: EditableFactDetails,
     ) => {
-      save.mutate({ targetIds: [itemEntityId], details });
+      const expectedUpdatedAt =
+        queryClient
+          .getQueryData(itemsKey)
+          ?.pages.flatMap((page) => page.items)
+          .find((item) => item.id === itemEntityId)?.factDetails?.updatedAt ??
+        null;
+      save.mutate({ targetIds: [itemEntityId], details, expectedUpdatedAt });
     },
   };
 };

@@ -12,6 +12,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   FIELD_VALUE_WRITE_PERMISSIONS,
   upsertFieldContentSchema,
+  INTERNAL_FIELD_WRITE_PRECONDITION,
   writeFieldValue,
 } from "@/api/lib/fields/write-field";
 import type { FlowRunCompletionNotice } from "@/api/lib/flows/flow-run-actor";
@@ -122,6 +123,7 @@ export const createUpdateKanbanPlacement = ({
                     entityId: body.entityId,
                     propertyId: field.propertyId,
                     content: field.content,
+                    expectedUpdatedAt: INTERNAL_FIELD_WRITE_PRECONDITION,
                     flushSearchRepairs: false,
                   }),
                 ),

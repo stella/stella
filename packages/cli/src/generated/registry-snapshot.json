@@ -2622,10 +2622,15 @@
       "scope": "documents_write"
     },
     "name": "set_field_value",
-    "description": "Set a document's value for a property (a cell in the matter's table). Pass the document entity_id, the property_id (from list_properties), and a content object whose 'type' matches the property's value type: text (value: string), single-select (value: string or null), multi-select (value: array of strings), date (value: ISO YYYY-MM-DD or null), or int (value: integer, optional currency: 3-letter ISO code). An empty value clears the cell.",
+    "description": "Set a document's value for a property (a cell in the matter's table). Pass the document entity_id, the property_id (from list_properties), and a content object whose 'type' matches the property's value type: text (value: string), single-select (value: string or null), multi-select (value: array of strings), date (value: ISO YYYY-MM-DD or null), or int (value: integer, optional currency: 3-letter ISO code). An empty value clears the cell. Pass expected_updated_at from read_document when the cell exists, or null when it is absent.",
     "inputSchema": {
       "type": "object",
-      "required": ["entity_id", "property_id", "content"],
+      "required": [
+        "entity_id",
+        "property_id",
+        "expected_updated_at",
+        "content"
+      ],
       "additionalProperties": false,
       "properties": {
         "entity_id": {
@@ -2637,6 +2642,18 @@
           "type": "string",
           "format": "uuid",
           "description": "Property ID, as returned by list_properties"
+        },
+        "expected_updated_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "description": "Document updatedAt from read_document when replacing an existing cell; null when creating an absent cell"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "content": {
           "description": "The value to set; 'type' must match the property.",

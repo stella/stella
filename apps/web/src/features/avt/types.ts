@@ -41,7 +41,7 @@ export type ListItem =
   ListsRoutes[":listId"]["items"]["get"]["response"][200]["items"][number];
 export type FactDetails = NonNullable<ListItem["factDetails"]>;
 export type FactDetailsBody = ListsRoutes["item-fact-details"]["put"]["body"];
-export type EditableFactDetails = FactDetails &
+export type EditableFactDetails = Omit<FactDetails, "updatedAt"> &
   Pick<FactDetailsBody, "scoring">;
 export type FactConfidence = FactDetails["confidence"];
 export type FactDatePrecision = NonNullable<FactDetails["occurredOnPrecision"]>;

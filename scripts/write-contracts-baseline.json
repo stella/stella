@@ -60,12 +60,6 @@
     "baselineId": "apps/api/src/handlers/entity-views/reorder.ts"
   },
   {
-    "key": "apps/api/src/handlers/fields/routes.ts|POST|/fields/:workspaceId/|apps/api/src/handlers/fields/upsert.ts.handler",
-    "count": 1,
-    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
-    "baselineId": "apps/api/src/handlers/fields/upsert.ts"
-  },
-  {
     "key": "apps/api/src/handlers/flows/routes.ts|PUT|/flows/:flowId|apps/api/src/handlers/flows/update.ts.handler",
     "count": 1,
     "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
@@ -82,12 +76,6 @@
     "count": 1,
     "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
     "baselineId": "apps/api/src/handlers/legal-reader/annotations/update.ts"
-  },
-  {
-    "key": "apps/api/src/handlers/lists/verification-routes.ts|PUT|/item-fact-details|apps/api/src/handlers/lists/items/fact-details/update.ts.handler",
-    "count": 1,
-    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
-    "baselineId": "apps/api/src/handlers/lists/items/fact-details/update.ts"
   },
   {
     "key": "apps/api/src/handlers/organization-settings/routes.ts|POST|/organization-settings/ai-config|apps/api/src/handlers/organization-settings/update-ai-config.ts.handler",

@@ -26,6 +26,7 @@ type FactDetailsBodyArgs = {
   listId: FactDetailsBody["listId"];
   itemEntityId: FactDetailsBody["itemEntityId"];
   details: EditableFactDetails;
+  expectedUpdatedAt: FactDetailsBody["expectedUpdatedAt"];
 };
 
 /**
@@ -37,9 +38,11 @@ export const toFactDetailsBody = ({
   listId,
   itemEntityId,
   details,
+  expectedUpdatedAt,
 }: FactDetailsBodyArgs): FactDetailsBody => ({
   listId,
   itemEntityId,
+  expectedUpdatedAt,
   occurredOn:
     details.occurredOn === null || details.occurredOnPrecision === null
       ? null

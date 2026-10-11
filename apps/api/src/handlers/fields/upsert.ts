@@ -9,12 +9,14 @@ import {
   upsertFieldContentSchema,
   writeFieldValue,
 } from "@/api/lib/fields/write-field";
+import { expectedUpdatedAtSchema } from "@/api/lib/optimistic-concurrency";
+import { enforceWritePrecondition } from "@/api/lib/write-contract";
 
 const config = {
   contract: "replace",
   precondition: {
-    type: "deferred",
-    baselineId: "apps/api/src/handlers/fields/upsert.ts",
+    type: "updatedAt",
+    field: "expectedUpdatedAt",
   },
   description:
     "Set a document's value for a property (a cell in the matter's table). " +
@@ -36,6 +38,10 @@ const config = {
       description: "Document entity ID whose cell to set",
     }),
     content: upsertFieldContentSchema,
+    expectedUpdatedAt: t.Nullable(expectedUpdatedAtSchema, {
+      description:
+        "Entity updatedAt when replacing a cell; null when creating an absent cell",
+    }),
   }),
 } satisfies WorkspaceHandlerConfig;
 
@@ -49,6 +55,18 @@ const upsertField = createSafeHandler(
     memberRole,
     recordAuditEvent,
   }) {
+    const normalizedExpectedUpdatedAt =
+      body.expectedUpdatedAt ?? new Date(0).toISOString();
+    const malformedToken = enforceWritePrecondition({
+      type: "updatedAt",
+      field: "expectedUpdatedAt",
+      storedUpdatedAt: new Date(normalizedExpectedUpdatedAt),
+      expectedUpdatedAt: normalizedExpectedUpdatedAt,
+      resource: "Field value",
+    });
+    if (malformedToken !== null) {
+      return malformedToken;
+    }
     return yield* writeFieldValue({
       safeDb,
       authority: memberRole,
@@ -58,6 +76,7 @@ const upsertField = createSafeHandler(
       entityId: body.entityId,
       propertyId: body.propertyId,
       content: body.content,
+      expectedUpdatedAt: body.expectedUpdatedAt,
     });
   },
 );

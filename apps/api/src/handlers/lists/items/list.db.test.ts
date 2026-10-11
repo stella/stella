@@ -319,6 +319,7 @@ test("returns fact details for an undated fact", async () => {
     medium: null,
     interpretationNote: "Witnesses disagree on who attended.",
     scoring: "held",
+    updatedAt: expect.any(Date),
   });
 });
 
@@ -331,6 +332,7 @@ test("returns the date of a dated fact", async () => {
     medium: "email",
     interpretationNote: null,
     scoring: "included",
+    updatedAt: expect.any(Date),
   });
 });
 

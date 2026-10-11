@@ -465,6 +465,7 @@ const KanbanCardFieldValue = ({
       displayVariant="kanban"
       entityId={entity.entityId}
       entityKind={entity.kind}
+      entityUpdatedAt={entity.updatedAt}
       fieldId={fieldId}
       property={property}
       propertyId={property.id}

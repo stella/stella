@@ -20,6 +20,10 @@ const details = {
   interpretationNote: null,
   scoring: "included",
 } as const satisfies EditableFactDetails;
+const storedDetails = {
+  ...details,
+  updatedAt: "2026-01-01T00:00:00.000Z",
+} as const satisfies FactDetails;
 
 const item = (suffix: number, factDetails: FactDetails | null) => ({
   id: factId(suffix),
@@ -30,7 +34,12 @@ const item = (suffix: number, factDetails: FactDetails | null) => ({
 describe("fact detail saves", () => {
   test("send the whole detail, dated with its precision", () => {
     expect(
-      toFactDetailsBody({ listId, itemEntityId: factId(1), details }),
+      toFactDetailsBody({
+        listId,
+        itemEntityId: factId(1),
+        details,
+        expectedUpdatedAt: null,
+      }),
     ).toEqual({
       listId,
       itemEntityId: factId(1),
@@ -40,6 +49,7 @@ describe("fact detail saves", () => {
       confidence: "medium",
       interpretationNote: null,
       scoring: "included",
+      expectedUpdatedAt: null,
     });
   });
 
@@ -49,24 +59,25 @@ describe("fact detail saves", () => {
         listId,
         itemEntityId: factId(1),
         details: { ...details, occurredOn: null, occurredOnPrecision: null },
+        expectedUpdatedAt: null,
       }).occurredOn,
     ).toBeNull();
   });
 
   test("replace only the saved fact's detail in the cached pages", () => {
-    const pages = [{ items: [item(1, null), item(2, details)] }];
+    const pages = [{ items: [item(1, null), item(2, storedDetails)] }];
 
-    const next = withFactDetails(pages, factId(1), details);
+    const next = withFactDetails(pages, factId(1), storedDetails);
 
-    expect(next.at(0)?.items.at(0)?.factDetails).toEqual(details);
+    expect(next.at(0)?.items.at(0)?.factDetails).toEqual(storedDetails);
     expect(next.at(0)?.items.at(1)).toBe(pages.at(0)?.items.at(1));
   });
 });
 
 describe("anchor fact order", () => {
   test("puts held facts first and keeps list order otherwise", () => {
-    const held = { ...details, scoring: "held" as const };
-    const facts = [item(1, details), item(2, held), item(3, null)];
+    const held = { ...storedDetails, scoring: "held" as const };
+    const facts = [item(1, storedDetails), item(2, held), item(3, null)];
 
     expect(orderHeldFirst(facts).map((fact) => fact.name)).toEqual([
       "Fact 2",

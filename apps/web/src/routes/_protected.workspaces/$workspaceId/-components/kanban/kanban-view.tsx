@@ -89,6 +89,7 @@ import {
 import {
   entitiesWindowOptions,
   entitiesKeys,
+  kanbanGroupOptions,
   useKanbanGroupOptions,
   visibleEntityFieldIds,
 } from "@/lib/workspaces/queries/entities";
@@ -451,6 +452,36 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
 
   const groups = getKanbanGroups(options, t("common.uncategorized"));
 
+  const findRenderedEntity = (entityId: string) => {
+    const subgroupEntity = subgroupEntities.find(
+      (entity) => entity.entityId === entityId,
+    );
+    if (subgroupEntity) {
+      return subgroupEntity;
+    }
+    for (const group of groups) {
+      const column = queryClient.getQueryData(
+        kanbanGroupOptions({
+          workspaceId,
+          filters,
+          sorts,
+          limit: KANBAN_GROUP_PAGE_SIZE,
+          fieldMode: "visible",
+          fieldIds,
+          groupByPropertyId,
+          groupValue: group.value,
+        }).queryKey,
+      );
+      const entity = column?.pages
+        .flatMap((page) => page.entities)
+        .find((row) => row.entityId === entityId);
+      if (entity) {
+        return entity;
+      }
+    }
+    return panic("Dragged Kanban entity is not loaded");
+  };
+
   const handleDrop = (targetValue: string | null, entityId: string) => {
     if (isStatusGrouping && targetValue !== null) {
       updateTaskStatus.mutate({ taskId: entityId, status: targetValue });
@@ -468,12 +499,17 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       type: "single-select" as const,
       value: targetValue,
     };
+    const entity = findRenderedEntity(entityId);
     upsertField.mutate(
       {
         workspaceId,
         propertyId: groupByPropertyId,
         entityId,
         content,
+        expectedUpdatedAt:
+          entity.fields[toSafeId<"property">(groupByPropertyId)] === undefined
+            ? null
+            : entity.updatedAt,
       },
       {
         onSuccess: () => {
@@ -553,6 +589,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         propertyId: groupByPropertyId,
         entityId,
         content,
+        expectedUpdatedAt: null,
       });
     }
   };
@@ -713,6 +750,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       propertyId: subgroup.property.id,
       entityId,
       content,
+      expectedUpdatedAt: null,
     });
     await queryClient.invalidateQueries({
       queryKey: entitiesKeys.all(workspaceId),
@@ -797,10 +835,15 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       if (isBuiltInGrouping || isReadOnlyVerdictGrouping) {
         panic("Read-only Kanban primary grouping accepted a drag");
       }
+      const entity = findRenderedEntity(entityId);
       await upsertField.mutateAsync({
         workspaceId,
         propertyId: groupByPropertyId,
         entityId,
+        expectedUpdatedAt:
+          entity.fields[toSafeId<"property">(groupByPropertyId)] === undefined
+            ? null
+            : entity.updatedAt,
         content: {
           version: 1,
           type: "single-select",

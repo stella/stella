@@ -614,6 +614,7 @@ export const READ_DOCUMENT_DEFAULT_PROJECTION = v.strictObject({
   entityId: readDocumentEntityId(),
   kind: v.string(),
   name: v.string(),
+  updatedAt: v.string(),
   fields: v.array(documentFieldProjection),
   contentState: documentContentStateProjection,
   searchIndexState: documentSearchIndexStateProjection,

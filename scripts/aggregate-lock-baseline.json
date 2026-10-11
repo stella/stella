@@ -3031,7 +3031,7 @@
   },
   {
     "file": "apps/api/src/lib/fields/write-field.ts",
-    "fingerprint": "031b9e35d0f1b92f5f679c3ca307b205459ab6a6e8e1316abcfcc07c73dda41e",
+    "fingerprint": "96b5c67967597ccc117f5eb1317e889dd1f1222688fcaa788b59e2d4d274eb76",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/fields/write-field.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },

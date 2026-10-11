@@ -1528,6 +1528,7 @@ const handleReadDocumentTool: TypedMcpToolHandler<
     entityId: current.entityId,
     kind: current.kind,
     name: current.name,
+    updatedAt: current.updatedAt.toISOString(),
     fields: current.fields,
     contentState: processingStates.contentState,
     searchIndexState: processingStates.searchIndexState,
@@ -2326,6 +2327,15 @@ const setFieldValueArgsSchema = nullAsAbsent(
   v.strictObject({
     entity_id: uuidInputSchema("Document entity ID whose cell to set"),
     property_id: uuidInputSchema("Property ID, as returned by list_properties"),
+    expected_updated_at: v.nullable(
+      v.pipe(
+        v.string(),
+        v.isoTimestamp(),
+        v.description(
+          "Document updatedAt from read_document when replacing an existing cell; null when creating an absent cell",
+        ),
+      ),
+    ),
     content: v.pipe(
       setFieldValueContentSchema,
       v.description("The value to set; 'type' must match the property."),
@@ -2415,6 +2425,7 @@ const handleSetFieldValueTool: TypedMcpToolHandler<
       entityId,
       propertyId: brandPersistedPropertyId(parsed.output.property_id),
       content: toFieldContent(parsed.output.content),
+      expectedUpdatedAt: parsed.output.expected_updated_at,
     }),
   );
   if (Result.isError(result)) {
@@ -2593,9 +2604,10 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       "(value: string), single-select (value: string or null), multi-select " +
       "(value: array of strings), date (value: ISO YYYY-MM-DD or null), or int " +
       "(value: integer, optional currency: 3-letter ISO code). An empty value " +
-      "clears the cell.",
+      "clears the cell. Pass expected_updated_at from read_document when the " +
+      "cell exists, or null when it is absent.",
     inputSchema: setFieldValueArgsSchema,
-    // Not idempotent: writeFieldValue unconditionally deletes/reinserts and
+    // Not idempotent: writeFieldValue replaces or clears the value and
     // reindexes the cell and records a fresh audit event + updatedAt bump on
     // every call, so a repeat with identical args has an observable additional
     // effect (a duplicate audit entry) in this compliance context.

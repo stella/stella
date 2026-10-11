@@ -133,6 +133,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
           workspaceId,
           propertyId: datePropertyId,
           entityId,
+          expectedUpdatedAt: null,
           content: {
             type: "date",
             version: 1,
@@ -506,6 +507,14 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
           workspaceId,
           propertyId: datePropertyId,
           entityId,
+          expectedUpdatedAt:
+            calendarTasks
+              .find((task) => task.taskId === entityId)
+              ?.fields.some((field) => field.propertyId === datePropertyId) ===
+            true
+              ? (calendarTasks.find((task) => task.taskId === entityId)
+                  ?.updatedAt ?? null)
+              : null,
           content: {
             type: "date",
             version: 1,

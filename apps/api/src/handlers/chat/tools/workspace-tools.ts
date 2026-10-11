@@ -16,7 +16,10 @@ import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_ENTITY_REF_PREFIX } from "@/api/lib/chat/ref-registry";
 import { formatIsoDateForDisplay } from "@/api/lib/date-format";
 import { ChatToolError, HandlerError } from "@/api/lib/errors/tagged-errors";
-import { writeFieldValue } from "@/api/lib/fields/write-field";
+import {
+  INTERNAL_FIELD_WRITE_PRECONDITION,
+  writeFieldValue,
+} from "@/api/lib/fields/write-field";
 import type { FieldWriteContent } from "@/api/lib/fields/write-field";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord } from "@/api/lib/type-guards";
@@ -462,6 +465,7 @@ export const createWorkspaceTools = ({
             entityId,
             propertyId,
             content,
+            expectedUpdatedAt: INTERNAL_FIELD_WRITE_PRECONDITION,
           }),
         );
         if (Result.isError(written)) {

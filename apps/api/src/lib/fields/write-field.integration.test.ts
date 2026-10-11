@@ -29,7 +29,10 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
-import { writeFieldValue } from "@/api/lib/fields/write-field";
+import {
+  INTERNAL_FIELD_WRITE_PRECONDITION,
+  writeFieldValue,
+} from "@/api/lib/fields/write-field";
 import {
   authorizedMemberRole,
   sessionMemberRole,
@@ -296,6 +299,7 @@ describe("writing a field value", () => {
         entityId,
         propertyId: chatPropertyId,
         content: textContent("Acme"),
+        expectedUpdatedAt: INTERNAL_FIELD_WRITE_PRECONDITION,
         flushSearchRepairs: false,
       }),
     );

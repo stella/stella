@@ -265,6 +265,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella document field set`
   - `--entity-id` — Document entity ID whose cell to set (string)
   - `--property-id` — Property ID, as returned by list_properties (string)
+  - `--expected-updated-at` (nullable-string)
   - via `--input` only: content
   - content: type="text": value:string; type="single-select": value:string|null; type="multi-select": value:string[]; type="date": value:string|null; type="int": value:integer, currency?:string|null. Example: `--input '{"content":{"type":"text","value":"xxxxx"}}'`
 - `stella document list`

@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -7,6 +7,7 @@ import type { PermissionInput } from "@stll/permissions";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
+import { abortableTx, abortTransaction } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import { cellMetadata, entities, fields } from "@/api/db/schema";
 import { currencyCodeSchema } from "@/api/db/schema-validators";
@@ -19,10 +20,12 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { acquireCellLock } from "@/api/lib/cell-lock";
 import { tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { VERSION_CONFLICT_ERROR_CODE } from "@/api/lib/optimistic-concurrency";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { enforceWritePrecondition } from "@/api/lib/write-contract";
 
 /**
  * The single writer of a person's own field value (one document cell). Every
@@ -123,6 +126,10 @@ export const upsertFieldContentSchema = t.Union(
 
 export type FieldWriteContent = Static<typeof upsertFieldContentSchema>;
 
+export const INTERNAL_FIELD_WRITE_PRECONDITION = "internal" as const;
+const ABSENT_ROW_UPDATED_AT = new Date(0);
+const ABSENT_ROW_EXPECTED_UPDATED_AT = ABSENT_ROW_UPDATED_AT.toISOString();
+
 type LockCellArgs = {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
@@ -138,8 +145,6 @@ const lockCellOnManualEdit = async ({
   propertyId,
   userId,
 }: LockCellArgs) => {
-  await acquireCellLock({ tx, entityVersionId, propertyId });
-
   const existingRows = await tx
     .select({ metadata: cellMetadata.metadata })
     .from(cellMetadata)
@@ -219,6 +224,108 @@ const isEmptyContent = (content: FieldWriteContent): boolean => {
   }
 };
 
+type ReplaceStoredFieldOptions = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  propertyId: SafeId<"property">;
+  entityVersionId: SafeId<"entityVersion">;
+  content: FieldWriteContent | null;
+  previousContent: (typeof fields.$inferSelect)["content"] | undefined;
+  entityId: SafeId<"entity">;
+  entityKind: (typeof entities.$inferSelect)["kind"];
+  recordAuditEvent: AuditRecorder;
+};
+
+/** Called under the entity and cell locks; a create must never replace another writer. */
+const replaceStoredField = async ({
+  tx,
+  workspaceId,
+  propertyId,
+  entityVersionId,
+  content,
+  previousContent,
+  entityId,
+  entityKind,
+  recordAuditEvent,
+}: ReplaceStoredFieldOptions) => {
+  const cellPredicate = and(
+    eq(fields.propertyId, propertyId),
+    eq(fields.entityVersionId, entityVersionId),
+    eq(fields.workspaceId, workspaceId),
+  );
+  if (content === null) {
+    await tx.delete(fields).where(cellPredicate);
+  } else if (previousContent === undefined) {
+    const inserted = await tx
+      .insert(fields)
+      .values({
+        workspaceId,
+        propertyId,
+        entityVersionId,
+        content,
+      })
+      .onConflictDoNothing({
+        target: [fields.propertyId, fields.entityVersionId],
+      })
+      .returning({ id: fields.id });
+    if (inserted.length === 0) {
+      return abortTransaction(
+        new HandlerError({
+          code: VERSION_CONFLICT_ERROR_CODE,
+          status: 409,
+          message:
+            "Field value changed while it was being edited; reload and try again",
+        }),
+      );
+    }
+  } else {
+    await tx.update(fields).set({ content, fileId: null }).where(cellPredicate);
+  }
+
+  let action: AuditAction = AUDIT_ACTION.CREATE;
+  if (content === null) {
+    action = AUDIT_ACTION.DELETE;
+  } else if (previousContent !== undefined) {
+    action = AUDIT_ACTION.UPDATE;
+  }
+
+  await recordAuditEvent(tx, {
+    action,
+    resourceType: AUDIT_RESOURCE_TYPE.FIELD,
+    resourceId: `${entityVersionId}:${propertyId}`,
+    changes: {
+      content: {
+        old: previousContent ?? null,
+        new: content,
+      },
+    },
+    metadata: {
+      entityId,
+      kind: entityKind,
+      propertyId,
+      entityVersionId,
+    },
+    // The cell's own matter, whichever matter the recorder is bound to
+    // (a chat turn may write into any matter it is authorized for).
+    workspaceId,
+  });
+
+  const updatedEntity = (
+    await tx
+      .update(entities)
+      .set({ updatedAt: sql`clock_timestamp()` })
+      .where(
+        and(eq(entities.id, entityId), eq(entities.workspaceId, workspaceId)),
+      )
+      .returning({ updatedAt: entities.updatedAt })
+  ).at(0);
+  if (updatedEntity === undefined || updatedEntity.updatedAt === null) {
+    return panic("Locked field entity did not return updatedAt");
+  }
+
+  return updatedEntity.updatedAt;
+};
+
 export type WriteFieldValueProps = {
   safeDb: SafeDb;
   /** The caller's effective authority (role plus credential attenuation). */
@@ -233,6 +340,8 @@ export type WriteFieldValueProps = {
    * clears a cell whose type has no empty value (an `int`).
    */
   content: FieldWriteContent | null;
+  /** Null declares that the cell was absent when the caller read it. */
+  expectedUpdatedAt: string | null | typeof INTERNAL_FIELD_WRITE_PRECONDITION;
   flushSearchRepairs?: boolean;
 };
 
@@ -253,6 +362,7 @@ export const writeFieldValue = async function* ({
   entityId,
   propertyId,
   content,
+  expectedUpdatedAt,
   flushSearchRepairs = true,
 }: WriteFieldValueProps) {
   if (!hasMemberPermission(authority, FIELD_VALUE_WRITE_PERMISSIONS)) {
@@ -293,17 +403,14 @@ export const writeFieldValue = async function* ({
     content === null || isEmptyContent(content) ? null : content;
 
   const writeResult = yield* Result.await(
-    safeDb(async (tx) => {
-      // Lock acquisition order (entity row → advisory cell lock)
-      // must match update-cell-metadata.ts. Reversing here would
-      // deadlock against a concurrent manual-flag update on the
-      // same cell.
+    abortableTx(safeDb, async (tx) => {
       const entityRows = await tx
         .select({
           id: entities.id,
           currentVersionId: entities.currentVersionId,
           kind: entities.kind,
           readOnly: entities.readOnly,
+          updatedAt: entities.updatedAt,
         })
         .from(entities)
         .where(
@@ -313,24 +420,29 @@ export const writeFieldValue = async function* ({
       const entity = entityRows.at(0);
 
       if (!entity) {
-        return { status: "entity-not-found" as const };
+        return abortTransaction(
+          new HandlerError({
+            status: 404,
+            message: "Entity not found in workspace",
+          }),
+        );
       }
       if (entity.readOnly) {
-        return { status: "entity-read-only" as const };
+        return abortTransaction(
+          new HandlerError({ status: 409, message: "Entity is read-only" }),
+        );
       }
       if (!entity.currentVersionId) {
-        return { status: "entity-without-version" as const };
+        return abortTransaction(
+          new HandlerError({
+            status: 404,
+            message: "Entity has no current version",
+          }),
+        );
       }
 
       const entityVersionId = entity.currentVersionId;
-
-      await lockCellOnManualEdit({
-        tx,
-        workspaceId,
-        entityVersionId,
-        propertyId: property.id,
-        userId,
-      });
+      await acquireCellLock({ tx, entityVersionId, propertyId: property.id });
 
       const existingFieldRows = await tx
         .select({ content: fields.content })
@@ -344,87 +456,53 @@ export const writeFieldValue = async function* ({
         .limit(1);
       const existingField = existingFieldRows.at(0);
 
-      await tx
-        .delete(fields)
-        .where(
-          and(
-            eq(fields.propertyId, property.id),
-            eq(fields.entityVersionId, entityVersionId),
-          ),
-        );
-
-      if (storedContent !== null) {
-        await tx.insert(fields).values({
-          workspaceId,
-          propertyId: property.id,
-          entityVersionId,
-          content: storedContent,
-        });
+      const storedUpdatedAt =
+        existingField === undefined
+          ? ABSENT_ROW_UPDATED_AT
+          : (entity.updatedAt ?? ABSENT_ROW_UPDATED_AT);
+      const expected =
+        expectedUpdatedAt === INTERNAL_FIELD_WRITE_PRECONDITION
+          ? storedUpdatedAt.toISOString()
+          : (expectedUpdatedAt ?? ABSENT_ROW_EXPECTED_UPDATED_AT);
+      const conflict = enforceWritePrecondition({
+        type: "updatedAt",
+        field: "expectedUpdatedAt",
+        storedUpdatedAt,
+        expectedUpdatedAt: expected,
+        resource: "Field value",
+      });
+      if (conflict !== null) {
+        return abortTransaction(conflict);
       }
 
-      await tx
-        .update(entities)
-        .set({ updatedAt: new Date() })
-        .where(eq(entities.id, entityId));
-
-      let action: AuditAction = AUDIT_ACTION.CREATE;
-      if (storedContent === null) {
-        action = AUDIT_ACTION.DELETE;
-      } else if (existingField) {
-        action = AUDIT_ACTION.UPDATE;
-      }
-
-      await recordAuditEvent(tx, {
-        action,
-        resourceType: AUDIT_RESOURCE_TYPE.FIELD,
-        resourceId: `${entityVersionId}:${property.id}`,
-        changes: {
-          content: {
-            old: existingField?.content ?? null,
-            new: storedContent,
-          },
-        },
-        metadata: {
-          entityId,
-          kind: entity.kind,
-          propertyId: property.id,
-          entityVersionId,
-        },
-        // The cell's own matter, whichever matter the recorder is bound to
-        // (a chat turn may write into any matter it is authorized for).
+      const updatedAt = await replaceStoredField({
+        tx,
         workspaceId,
+        propertyId: property.id,
+        entityVersionId,
+        content: storedContent,
+        previousContent: existingField?.content,
+        entityId,
+        entityKind: entity.kind,
+        recordAuditEvent,
+      });
+
+      await lockCellOnManualEdit({
+        tx,
+        workspaceId,
+        entityVersionId,
+        propertyId: property.id,
+        userId,
       });
 
       await enqueueEntitySearchRepairs(tx, [entityId]);
 
-      return { status: "ok" as const };
+      return { updatedAt };
     }),
   );
-
-  if (writeResult.status === "entity-not-found") {
-    return Result.err(
-      new HandlerError({
-        status: 404,
-        message: "Entity not found in workspace",
-      }),
-    );
-  }
-  if (writeResult.status === "entity-without-version") {
-    return Result.err(
-      new HandlerError({
-        status: 404,
-        message: "Entity has no current version",
-      }),
-    );
-  }
-  if (writeResult.status === "entity-read-only") {
-    return Result.err(
-      new HandlerError({ status: 409, message: "Entity is read-only" }),
-    );
-  }
 
   if (flushSearchRepairs) {
     flushEntitySearchRepairs([entityId]).catch(captureError);
   }
-  return Result.ok({});
+  return Result.ok({ updatedAt: writeResult.updatedAt });
 };

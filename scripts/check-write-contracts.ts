@@ -51,16 +51,46 @@ const unwrap = (node: ts.Expression): ts.Expression => {
   }
   return node;
 };
-/** Recognize only a returned value or an immediate conflict early return. */
-const propagatesConflict = (call: ts.CallExpression): boolean => {
+const propagatedExpression = (call: ts.CallExpression): ts.Node => {
   let expression: ts.Node = call;
   while (
     ts.isAwaitExpression(expression.parent) ||
+    ts.isYieldExpression(expression.parent) ||
     ts.isParenthesizedExpression(expression.parent) ||
     ts.isAsExpression(expression.parent) ||
     ts.isSatisfiesExpression(expression.parent)
   ) {
     expression = expression.parent;
+  }
+  if (
+    ts.isCallExpression(expression.parent) &&
+    expression.parent.arguments.at(0) === expression &&
+    ts.isPropertyAccessExpression(expression.parent.expression) &&
+    expression.parent.expression.name.text === "await"
+  ) {
+    expression = expression.parent;
+    while (ts.isYieldExpression(expression.parent)) {
+      expression = expression.parent;
+    }
+  }
+  return expression;
+};
+
+const delegatesResultAwait = (expression: ts.Node): boolean =>
+  ts.isYieldExpression(expression) &&
+  expression.asteriskToken !== undefined &&
+  expression.expression !== undefined &&
+  ts.isCallExpression(expression.expression) &&
+  ts.isPropertyAccessExpression(expression.expression.expression) &&
+  ts.isIdentifier(expression.expression.expression.expression) &&
+  expression.expression.expression.expression.text === "Result" &&
+  expression.expression.expression.name.text === "await";
+
+/** Recognize only a returned value or an immediate conflict early return. */
+const propagatesConflict = (call: ts.CallExpression): boolean => {
+  const expression = propagatedExpression(call);
+  if (delegatesResultAwait(expression)) {
+    return true;
   }
   const parent = expression.parent;
   if (ts.isReturnStatement(parent) || ts.isArrowFunction(parent)) {
@@ -93,16 +123,20 @@ const propagatesConflict = (call: ts.CallExpression): boolean => {
       );
     }
     return (
-      ts.isReturnStatement(node) &&
+      (ts.isReturnStatement(node) || ts.isThrowStatement(node)) &&
       node.expression !== undefined &&
-      ts.isIdentifier(unwrap(node.expression)) &&
-      unwrap(node.expression).getText() === name
+      ((ts.isIdentifier(unwrap(node.expression)) &&
+        unwrap(node.expression).getText() === name) ||
+        (ts.isCallExpression(node.expression) &&
+          ts.isIdentifier(node.expression.expression) &&
+          node.expression.expression.text === "abortTransaction" &&
+          node.expression.arguments.at(0)?.getText() === name))
     );
   };
   if (next === undefined) {
     return false;
   }
-  if (ts.isReturnStatement(next)) {
+  if (ts.isReturnStatement(next) || ts.isThrowStatement(next)) {
     return returnsConflict(next);
   }
   if (!ts.isIfStatement(next) || next.elseStatement !== undefined) {
@@ -886,8 +920,11 @@ class WriteSourceResolver {
     // Transaction callbacks run while their decisive lock is held. Other callback
     // consumers require a called write helper rather than an assumed invocation.
     const callbacks =
-      ts.isPropertyAccessExpression(value.node.expression) &&
-      value.node.expression.name.text === "transaction"
+      (ts.isPropertyAccessExpression(value.node.expression) &&
+        value.node.expression.name.text === "transaction") ||
+      (ts.isIdentifier(value.node.expression) &&
+        (value.node.expression.text === "safeDb" ||
+          value.node.expression.text === "abortableTx"))
         ? value.node.arguments
         : [];
     for (const expression of [value.node.expression, ...callbacks]) {

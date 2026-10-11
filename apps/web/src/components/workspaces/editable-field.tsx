@@ -49,6 +49,7 @@ type EditableFieldProps = {
   workspaceId: string;
   entityId: string;
   entityKind: EntityKind;
+  entityUpdatedAt: string | null;
   fieldId?: string | undefined;
   propertyId: string;
   property: WorkspaceProperty;
@@ -65,6 +66,7 @@ export const EditableField = ({
   workspaceId,
   entityId,
   entityKind,
+  entityUpdatedAt,
   fieldId,
   propertyId,
   property,
@@ -131,6 +133,7 @@ export const EditableField = ({
       displayVariant={resolvedDisplayVariant}
       entityId={entityId}
       entityKind={entityKind}
+      expectedUpdatedAt={content === undefined ? null : entityUpdatedAt}
       onManualSave={onManualSave}
       property={property}
       propertyId={propertyId}
@@ -150,6 +153,7 @@ type InlineEditorProps = {
   workspaceId: string;
   entityId: string;
   entityKind: EntityKind;
+  expectedUpdatedAt: string | null;
   propertyId: string;
   property: WorkspaceProperty;
   content: WorkspaceFieldContent | undefined;
@@ -164,6 +168,7 @@ const InlineEditor = ({
   workspaceId,
   entityId,
   entityKind,
+  expectedUpdatedAt,
   propertyId,
   property,
   content,
@@ -185,6 +190,7 @@ const InlineEditor = ({
           propertyId: toSafeId<"property">(propertyId),
           entityId: toSafeId<"entity">(entityId),
           content: newContent,
+          expectedUpdatedAt,
         });
       return unwrapEden(response);
     },
