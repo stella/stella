@@ -232,6 +232,7 @@ const conditionContext = (profile: string, event: string, depth: string) => {
 const DECLARED_NORMAL_PLAN_CHANGES = new Set([
   "e2e-production-shard",
   "web-build",
+  "scan-engine-wasm-drift",
 ]);
 
 test("off and unset preserve today's job plan across every event and depth", async () => {
@@ -283,6 +284,7 @@ test("off and unset preserve today's job plan across every event and depth", asy
   expect([...DECLARED_NORMAL_PLAN_CHANGES]).toEqual([
     "e2e-production-shard",
     "web-build",
+    "scan-engine-wasm-drift",
   ]);
 });
 
@@ -565,4 +567,25 @@ test("pilot-fast aggregation requires its planned jobs and accepts deferred skip
       ).toBe(1);
     }
   }
+});
+
+test("scan engine builds offline on affected PRs in both coverage profiles", () => {
+  const condition = workflow.jobs["scan-engine-wasm-drift"]?.if;
+  if (!condition) {
+    throw new Error("Missing scan engine condition");
+  }
+  for (const profile of ["normal-v1", "pilot-fast-v1"]) {
+    for (const required of ["false", "true"]) {
+      for (const trusted of ["false", "true"]) {
+        const context = conditionContext(profile, "pull_request", "fast");
+        context.values["needs.ci-plan.outputs.scan_engine_wasm_required"] =
+          required;
+        context.values["needs.ci-plan.outputs.trusted"] = trusted;
+        expect(evaluate(condition, context)).toBe(
+          required === "true" && trusted === "true",
+        );
+      }
+    }
+  }
+  expect(fastJobs(workflow)).toContain("scan-engine-wasm-drift");
 });
