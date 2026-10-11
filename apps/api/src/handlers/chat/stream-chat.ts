@@ -94,6 +94,10 @@ import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
 import type { GuardedProviderHistory } from "@/api/handlers/chat/provider-history";
 import { stampReasoningProvenance } from "@/api/handlers/chat/reasoning-provenance-stamp";
 import {
+  createSnapshotActivityReconciler,
+  reconcileSnapshotCall,
+} from "@/api/handlers/chat/snapshot-reconciliation";
+import {
   assistantMessageStartChunk,
   createTurnMessageIdMapper,
   ensureAssistantMessageStart,
@@ -2472,9 +2476,10 @@ const processPersistenceChunk = ({
         .find(({ id }) => id === responseMessageId);
       if (previous !== undefined && snapshot !== undefined) {
         // Model history cannot reconstruct the streamed transcript's text,
-        // reasoning placement or partial call arguments. Keep that transcript
+        // reasoning placement. Keep that transcript
         // and reconcile the presentation state available only in snapshots.
         let parts = [...previous.parts];
+        const reconcileActivity = createSnapshotActivityReconciler(parts);
         for (const part of snapshot.parts) {
           switch (part.type) {
             case "text":
@@ -2521,22 +2526,9 @@ const processPersistenceChunk = ({
               }
               break;
             }
-            case "activity": {
-              // Embedded SDK activities have no id: renderer type and child
-              // scope own their identity. The latest snapshot owns content.
-              const existingIndex = parts.findIndex(
-                (existing) =>
-                  existing.type === "activity" &&
-                  existing.activityType === part.activityType &&
-                  existing.subagentRunId === part.subagentRunId,
-              );
-              if (existingIndex === -1) {
-                parts.push(part);
-              } else {
-                parts[existingIndex] = part;
-              }
+            case "activity":
+              reconcileActivity(part);
               break;
-            }
             case "structured-output": {
               const existingIndex = parts.findIndex(
                 (existing) => existing.type === "structured-output",
@@ -2658,40 +2650,20 @@ const processPersistenceChunk = ({
             selected = snapshotCall;
           }
           const other = selected === part ? snapshotCall : part;
-          let approval = selected.approval ?? other.approval;
-          if (
-            selected.approval?.approved === undefined &&
-            other.approval?.approved !== undefined
-          ) {
-            approval = other.approval;
-          }
-          const input =
-            part.input === undefined ? snapshotCall.input : part.input;
-          const metadata =
-            part.metadata === undefined ? snapshotCall.metadata : part.metadata;
-          let state = selected.state;
-          let output: unknown = selected.output;
-          if (result?.type === "tool-result") {
-            state =
-              result.state === "streaming" ? "input-complete" : result.state;
-            if (result !== canonicalResult || output === undefined) {
-              output =
-                typeof result.content === "string"
-                  ? parseToolResultContent(result.content).value
-                  : result.content;
-            }
-          }
-          return {
-            type: part.type,
-            id: part.id,
-            name: part.name,
-            arguments: part.arguments,
-            ...(input === undefined ? {} : { input }),
-            ...(metadata === undefined ? {} : { metadata }),
-            ...(approval === undefined ? {} : { approval }),
-            state,
-            ...(output === undefined ? {} : { output }),
-          };
+          return reconcileSnapshotCall({
+            selected,
+            other,
+            ...(result?.type === "tool-result"
+              ? {
+                  result,
+                  resultOutput:
+                    typeof result.content === "string"
+                      ? parseToolResultContent(result.content).value
+                      : result.content,
+                }
+              : {}),
+            resultSelected: result !== canonicalResult,
+          });
         });
         chunk = {
           ...chunk,

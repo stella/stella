@@ -746,6 +746,81 @@ describe("snapshot tool-result reconciliation", () => {
     }
   }
 
+  test("snapshot completion replaces partial call arguments without deltas", async () => {
+    const partial = {
+      type: "tool-call",
+      id: "snapshot-call",
+      name: "lookup",
+      arguments: '{"query":',
+      state: "input-streaming",
+    } as const satisfies ToolCallPart;
+    const complete = {
+      ...partial,
+      arguments: '{"query":"complete"}',
+      input: { query: "complete" },
+      metadata: { provider: "snapshot" },
+      state: "input-complete",
+    } as const satisfies ToolCallPart;
+    const snapshots = [partial, complete].map((call) => {
+      const message = {
+        id: "snapshot-assistant",
+        role: "assistant",
+        parts: [call],
+      } satisfies UIMessage;
+      return unsafeFixture(
+        "The server snapshot extension carries complete UI call parts",
+        {
+          type: EventType.MESSAGES_SNAPSHOT,
+          messages: [message],
+        } satisfies StreamChunk,
+      );
+    });
+    const { emitted, finish } = await persistNativeInterruptTurn(
+      streamChunks([
+        {
+          type: EventType.RUN_STARTED,
+          runId: "snapshot-run",
+          threadId: "snapshot-thread",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: "snapshot-assistant",
+          role: "assistant",
+        },
+        ...snapshots,
+        {
+          type: EventType.RUN_FINISHED,
+          runId: "snapshot-run",
+          threadId: "snapshot-thread",
+          finishReason: "stop",
+        },
+      ]),
+    );
+    if (finish === null) {
+      panic("Snapshot arguments did not persist their turn");
+    }
+    const client = new StreamProcessor();
+    for (const chunk of emitted) {
+      client.processChunk(chunk);
+    }
+    expect(
+      finish.responseMessage.parts.find((part) => part.type === "tool-call"),
+    ).toMatchObject(complete);
+    const reload = chatMessageFromPersisted({
+      id: finish.responseMessage.id,
+      role: finish.responseMessage.role,
+      content: structuredClone(
+        chatMessageContentFromMessage(finish.responseMessage),
+      ),
+    });
+    expect(
+      reload.parts.find((part) => part.type === "tool-call"),
+    ).toMatchObject(complete);
+    expect(
+      diffLiveAgainstReload({ live: client.getMessages(), reload: [reload] }),
+    ).toEqual([]);
+  });
+
   test("snapshot activity updates persist beside the streamed transcript", async () => {
     const activity = {
       type: "activity",
