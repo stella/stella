@@ -543,19 +543,13 @@ export const cdataAsText = (root: ParentNode): void => {
 };
 
 /** The graphic constructs below `root`, by element name. */
-export const graphicsIn = (
-  root: ParentNode,
-  excluded?: WeakSet<Element>,
-): Record<string, number> => {
+export const graphicsIn = (root: ParentNode): Record<string, number> => {
   const found: Record<string, number> = {};
   const stack: AnyNode[] = [...root.children];
   while (stack.length > 0) {
     const node = stack.pop();
     if (node === undefined) {
       break;
-    }
-    if (isTag(node) && excluded?.has(node)) {
-      continue;
     }
     if (isTag(node) && GRAPHICS.has(nameOf(node))) {
       const name = nameOf(node);

@@ -232,6 +232,11 @@ export const selectOpinionText = ({
       }
       case "unusable":
         attempts.push({ format, structure, reason: parsed.reason });
+        if (
+          parsed.reason === TEXT_CANDIDATE_UNUSABLE.UNCLASSIFIED_PAGE_CHROME
+        ) {
+          return { status: "no-usable-text", attempts };
+        }
         break;
       case "requires-assets":
         return {

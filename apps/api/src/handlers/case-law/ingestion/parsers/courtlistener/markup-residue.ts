@@ -1,5 +1,6 @@
 import { entityResidueIn } from "@/api/lib/legal-search/parsers/entity-residue";
 import type { MarkupResidueRuleId } from "@/api/lib/legal-search/parsers/markup-residue";
+import { rtfControlResiduePattern } from "@/api/lib/legal-search/parsers/rtf-reader";
 
 const entityCharacterReferencePattern =
   /&(?:#[xX][\da-fA-F]+|#\d+|[a-zA-Z][\da-zA-Z]*);/gu;
@@ -35,83 +36,6 @@ const HEX_RUN_DIGITS_ONLY_MIN = 48;
 /** How much of the offending text a report carries. */
 const MARKUP_RESIDUE_EXCERPT_CHARS = 120;
 
-// Recognized control words distinguish RTF syntax from OCR fragments and
-// published Windows paths. This detection vocabulary is broader than the
-// reader's supported dialect; detecting a word does not imply parsing it.
-const RTF_CONTROL_WORDS = [
-  "rtf",
-  "ansi",
-  "mac",
-  "pc",
-  "pca",
-  "ansicpg",
-  "deff",
-  "deflang",
-  "fonttbl",
-  "f",
-  "fnil",
-  "froman",
-  "fswiss",
-  "fmodern",
-  "fcharset",
-  "colortbl",
-  "red",
-  "green",
-  "blue",
-  "stylesheet",
-  "s",
-  "cs",
-  "pard",
-  "plain",
-  "par",
-  "b",
-  "i",
-  "ul",
-  "ulnone",
-  "fs",
-  "cf",
-  "u",
-  "uc",
-  "tab",
-  "line",
-  "page",
-  "qc",
-  "ql",
-  "qr",
-  "qj",
-  "pict",
-  "pngblip",
-  "jpegblip",
-  "wmetafile",
-  "dibitmap",
-  "picprop",
-  "shppict",
-  "nonshppict",
-  "shplid",
-  "picw",
-  "pich",
-  "picwgoal",
-  "pichgoal",
-  "object",
-  "objemb",
-  "objdata",
-  "trowd",
-  "intbl",
-  "cell",
-  "row",
-  "cellx",
-  "li",
-  "ri",
-  "fi",
-  "sa",
-  "sb",
-  "sl",
-  "slmult",
-  "insrsid",
-  "lang",
-].join("|");
-const RTF_CONTROL_WORD = String.raw`\\(?:${RTF_CONTROL_WORDS})(?![a-zA-Z])-?\d{0,10}`;
-
 /**
  * Ordered: the first rule that matches names the finding, so a run of 48
  * digits reports as a number rather than as hex.
@@ -122,10 +46,7 @@ const MARKUP_RESIDUE_RULES: readonly MarkupResidueRule[] = [
     reason: "RTF control words",
     // Complete known control words, not arbitrary backslashed letters.
     // The group/header forms also catch unknown ignorable destinations.
-    pattern: new RegExp(
-      String.raw`\{\\\*|\{\\rtf\d{1,10}(?!\d)|${RTF_CONTROL_WORD}[\s{}]{0,4}${RTF_CONTROL_WORD}`,
-      "gu",
-    ),
+    pattern: rtfControlResiduePattern(),
   },
   {
     id: "html-tag",

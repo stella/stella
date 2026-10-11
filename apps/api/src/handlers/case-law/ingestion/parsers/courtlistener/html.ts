@@ -474,36 +474,105 @@ const publisherLinks = ($: cheerio.CheerioAPI, root: ParentNode): number =>
     .toArray()
     .filter((element) => !element.attribs["href"]?.startsWith("#")).length;
 
-/** A document header can carry its caption; page furniture needs page evidence. */
-const pageChrome = ($: cheerio.CheerioAPI, body: ParentNode): Element[] => {
-  const headers = $(body).find("header");
-  const pageHeaders = headers.filter(
-    (_, element) => $(element).find("nav").length > 0,
+// Tags and landmarks alone never justify losing visible text.
+export const PAGE_CHROME_SIGNATURES = {
+  OSCN_MENU:
+    "OSCN navigation Home Courts Court Dockets Legal Research Calendar Help Previous Case Top Of Index This Point in Index Citationize Next Case Print Only",
+  COURT_MENU:
+    "Home Courts Decisions Programs News Legal Research Court Records Quick Links",
+  BAP_MENU:
+    "About Us Clerk's Office Judges Directions Courthouse Visitor's Policy Employment Media Information Judicial Conduct and Disability How to File Notice of Appeal to the BAP Designation of Record and Statement of Issues One Document Motions or Responses Briefs Appendix Oral Argument Acknowledgement Form Notice of Appeal to the Circuit CM/ECF & PACER E-Filing (CM/ECF) Court Docket (PACER) Forms Fees Rules Argument Calendar Search Decisions",
+  SITE_CONTROLS:
+    "Search this site Home | Contact Us | Employment Contact the Webmaster",
+  REPORTING_BANNER:
+    "Law Reporting Bureau Thomas J.K. Smith, State Reporter Court Decisions Resources About Home All Court Decisions Decisions",
+  REPORTING_FOOTER:
+    "Court Decisions All Court Decisions Official Reports Service Bound Volumes Decision Search Resources RSS Feeds Style Manual Citation Tools Opinion Formatting & Privacy Guidelines Opinion Selection Criteria Legal Research Portal Site Index About About the Law Reporting Bureau About our Operations Contact Us Twitter Quick Contact Info 17 Lodge Street Albany, NY 12207 Phone: (518) 453-6900",
+} as const;
+
+const normalizePageChromeText = (text: string): string =>
+  text.normalize("NFC").replace(/\s+/gu, " ").trim();
+
+const pageChromeTextVocabulary = {
+  paragraphs: PARAGRAPHS,
+  headings: HEADINGS,
+  containers: CONTAINERS,
+  inlines: INLINES,
+  opinion: () => null,
+  footnote: () => null,
+  backlink: () => false,
+  pageAnchor: () => undefined,
+} satisfies BodyVocabulary;
+
+const pageChromeText = (element: Element): string =>
+  normalizePageChromeText(
+    sourceTextOf(element, pageChromeTextVocabulary).paragraphs.join(" "),
   );
-  const footers = $(body).find("footer");
-  const navigation = $(body).find("nav").toArray();
-  const documentHeading = $(body)
+
+type PageChrome =
+  | { readonly type: "classified"; readonly excluded: readonly Element[] }
+  | { readonly type: "unclassified" };
+
+const opinionContentRoots = (
+  $: cheerio.CheerioAPI,
+  body: ParentNode,
+): readonly ParentNode[] => {
+  const explicitRoots = $(body)
+    .find("opinion, div.opinion, div.courtcasedocbody, main, article")
+    .toArray();
+  if (explicitRoots.length > 0) {
+    return explicitRoots;
+  }
+  const heading = $(body)
     .find("h1")
     .toArray()
-    .some((heading) => $(heading).closest("header, footer, nav").length === 0);
-  if (pageHeaders.length === 0 || footers.length === 0 || !documentHeading) {
-    return navigation;
-  }
-  const pageAsides = $(body)
-    .find("aside")
-    .filter((_, element) => $(element).find("nav").length > 0);
-  const furniture = pageHeaders
-    .add(footers)
-    .add(pageAsides)
-    .filter(
-      (_, element) =>
-        !$(element)
-          .find("h1, h2, h3, h4, h5, h6")
-          .toArray()
-          .some((heading) => $(heading).closest("nav").length === 0),
+    .find(
+      (element) =>
+        $(element).closest("header, footer, aside, nav").length === 0,
+    );
+  return [heading?.parent ?? body];
+};
+
+/** Page chrome is excluded only when its own text matches a reviewed signature. */
+const pageChrome = ($: cheerio.CheerioAPI, body: ParentNode): PageChrome => {
+  const roots = opinionContentRoots($, body);
+  const rootSet = new WeakSet(roots);
+  const rootAncestors = new WeakSet(
+    roots.flatMap((root) => $(root).parents().toArray()),
+  );
+  const candidates = $(body)
+    .find(
+      'header, footer, aside, nav, [role="navigation"], [role="banner"], [role="contentinfo"]',
     )
     .toArray();
-  return [...navigation, ...furniture];
+  const excluded: Element[] = [];
+  const excludedSet = new WeakSet<Element>();
+  for (const candidate of candidates) {
+    const ancestors = $(candidate).parents().toArray();
+    if (ancestors.some((ancestor) => excludedSet.has(ancestor))) {
+      continue;
+    }
+    if (
+      rootSet.has(candidate) ||
+      rootAncestors.has(candidate) ||
+      ancestors.some((ancestor) => rootSet.has(ancestor))
+    ) {
+      continue;
+    }
+    const normalizedText = pageChromeText(candidate);
+    if (normalizedText === "") {
+      continue;
+    }
+    const signatureMatch = Object.values(PAGE_CHROME_SIGNATURES).some(
+      (signature) => signature === normalizedText,
+    );
+    if (!signatureMatch) {
+      return { type: "unclassified" };
+    }
+    excluded.push(candidate);
+    excludedSet.add(candidate);
+  }
+  return { type: "classified", excluded };
 };
 
 const parseHtml =
@@ -532,12 +601,20 @@ const parseHtml =
       };
     }
     const body = pageBody;
-    const chrome = context === "opinion" ? pageChrome($, pageBody) : [];
-    const excluded = new WeakSet(chrome);
-    const graphics = graphicsIn(pageBody, excluded);
+    const graphics = graphicsIn(pageBody);
     if (Object.keys(graphics).length > 0) {
       return { status: "requires-assets", graphics };
     }
+    const chrome = context === "opinion" ? pageChrome($, pageBody) : null;
+    if (chrome?.type === "unclassified") {
+      return {
+        status: "unusable",
+        reason: TEXT_CANDIDATE_UNUSABLE.UNCLASSIFIED_PAGE_CHROME,
+      };
+    }
+    const excludedElements =
+      chrome?.type === "classified" ? chrome.excluded : [];
+    const excluded = new WeakSet(excludedElements);
     $(body)
       .find("emphasis[typestyle]")
       .each((_, element) => {
@@ -571,9 +648,10 @@ const parseHtml =
       ...documentVocabulary,
       excluded: (element: Element) => excluded.has(element),
     };
-    // Snapshot the original body before the block walk removes identified chrome.
+    // Each excluded subtree was checked against its exact signature on the original
+    // body, before note preparation. Conservation covers every other visible character.
     const source = sourceTextOf(pageBody, vocabulary);
-    for (const element of chrome) {
+    for (const element of excludedElements) {
       $(element).remove();
     }
     const backlinkCharacters = preparedNotes.removed;
