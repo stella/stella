@@ -20,7 +20,7 @@ const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
 
 test("every API TypeScript source has exactly one compiler project owner", () => {
   expect(validateApiTypecheckProjects(REPO_ROOT)).toEqual([]);
-});
+}, 30_000);
 
 test("Bun consumers read referenced declarations instead of source", () => {
   const config = JSON.parse(

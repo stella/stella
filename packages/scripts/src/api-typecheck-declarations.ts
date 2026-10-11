@@ -13,7 +13,7 @@ export const typescriptModuleReferences = (text: string, filename: string) => {
     filename,
     text,
     ts.ScriptTarget.Latest,
-    true,
+    false,
   );
   const visit = (node: ts.Node): void => {
     if (
@@ -33,7 +33,6 @@ export const typescriptModuleReferences = (text: string, filename: string) => {
     if (
       ts.isImportEqualsDeclaration(node) &&
       ts.isExternalModuleReference(node.moduleReference) &&
-      node.moduleReference.expression &&
       ts.isStringLiteralLike(node.moduleReference.expression)
     ) {
       imports.add(node.moduleReference.expression.text);
@@ -91,6 +90,11 @@ export const emitApiTypecheckDeclarations = (project: string) => {
     rootNames: parsed.fileNames,
     options: { ...parsed.options, declarationMap: false },
   });
+  const resolutionCache = ts.createModuleResolutionCache(
+    path.dirname(configPath),
+    (filename) => filename,
+    parsed.options,
+  );
   const queue = [...parsed.fileNames];
   const emitted = new Set<string>();
   const outputs = new Map<string, string>();
@@ -114,6 +118,7 @@ export const emitApiTypecheckDeclarations = (project: string) => {
             filename,
             parsed.options,
             ts.sys,
+            resolutionCache,
           ).resolvedModule;
           if (!resolved || /\.d\.[cm]?ts$/u.test(resolved.resolvedFileName)) {
             continue;

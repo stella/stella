@@ -41,6 +41,11 @@ const readApiSourceConfig = (root: string) => {
 export const deriveApiTestPartition = (root: string) => {
   const api = path.join(root, "apps/api");
   const parsed = readApiSourceConfig(root);
+  const resolutionCache = ts.createModuleResolutionCache(
+    root,
+    (file) => file,
+    parsed.options,
+  );
   const surface: { files: string[] } = JSON.parse(
     readFileSync(path.join(api, "tsconfig.declarations.json"), "utf-8"),
   );
@@ -48,65 +53,105 @@ export const deriveApiTestPartition = (root: string) => {
     surface.files.map((file) => path.resolve(api, file)),
   );
   const testFiles = new Set(parsed.fileNames.filter(isTest));
-  const references = new Map<
+  const modules = new Map<
     string,
-    ReturnType<typeof typescriptModuleReferences>
+    { dependencies: Set<string>; unsafe: boolean }
   >();
-  const independent: string[] = [];
-  const coupled: string[] = [];
-  const sourceRoot = `${path.join(api, "src")}${path.sep}`;
-  for (const test of testFiles) {
-    const queue = [test];
-    const visited = new Set<string>();
-    let safe = true;
-    for (let index = 0; index < queue.length && safe; index++) {
-      const file = queue[index];
-      if (!file || visited.has(file)) {
+  const moduleInfo = (file: string, mode: "test" | "source" = "test") => {
+    const cached = modules.get(file);
+    if (cached) {
+      return cached;
+    }
+    const text = readFileSync(file, "utf-8");
+    // Source reachability needs only literal imports, which the compiler's
+    // preprocessor scans without constructing every implementation AST.
+    const imports =
+      mode === "source"
+        ? {
+            imports: new Set(
+              ts
+                .preProcessFile(text, true, true)
+                .importedFiles.map(({ fileName }) => fileName),
+            ),
+            dynamic: false,
+          }
+        : typescriptModuleReferences(text, file);
+    const dependencies = new Set<string>();
+    let unsafe = imports.dynamic;
+    for (const specifier of imports.imports) {
+      const resolved = ts.resolveModuleName(
+        specifier,
+        file,
+        parsed.options,
+        ts.sys,
+        resolutionCache,
+      ).resolvedModule;
+      if (!resolved) {
+        if (specifier.startsWith(".") || specifier.startsWith("@/api/")) {
+          unsafe = true;
+        }
         continue;
       }
-      visited.add(file);
-      const imports =
-        references.get(file) ??
-        typescriptModuleReferences(readFileSync(file, "utf-8"), file);
-      references.set(file, imports);
-      if (imports.dynamic) {
-        safe = false;
-        break;
-      }
-      for (const specifier of imports.imports) {
-        const resolved = ts.resolveModuleName(
-          specifier,
-          file,
-          parsed.options,
-          ts.sys,
-        ).resolvedModule;
-        if (!resolved) {
-          if (specifier.startsWith(".") || specifier.startsWith("@/api/")) {
-            safe = false;
-          }
-          continue;
-        }
-        const dependency = path.resolve(resolved.resolvedFileName);
-        if (/\.d\.[cm]?ts$/u.test(dependency) || declared.has(dependency)) {
-          continue;
-        }
-        if (dependency.startsWith(sourceRoot) && !testFiles.has(dependency)) {
-          safe = false;
-          break;
-        }
-        if (
-          dependency.startsWith(`${root}${path.sep}`) &&
-          !dependency.includes(`${path.sep}node_modules${path.sep}`)
-        ) {
-          queue.push(dependency);
-        }
+      const dependency = path.resolve(resolved.resolvedFileName);
+      if (
+        dependency.startsWith(`${root}${path.sep}`) &&
+        !dependency.includes(`${path.sep}node_modules${path.sep}`) &&
+        !/\.d\.[cm]?ts$/u.test(dependency)
+      ) {
+        dependencies.add(dependency);
       }
     }
-    (safe ? independent : coupled).push(path.relative(api, test));
+    const result = { dependencies, unsafe };
+    modules.set(file, result);
+    return result;
+  };
+  const sourceRoot = `${path.join(api, "src")}${path.sep}`;
+  const parents = new Map<string, Set<string>>();
+  const unsafe = new Set<string>();
+  const queue = [...testFiles];
+  const visited = new Set<string>();
+  for (const file of queue) {
+    if (visited.has(file)) {
+      continue;
+    }
+    visited.add(file);
+    const info = moduleInfo(file);
+    if (info.unsafe) {
+      unsafe.add(file);
+    }
+    for (const dependency of info.dependencies) {
+      if (declared.has(dependency)) {
+        continue;
+      }
+      if (dependency.startsWith(sourceRoot) && !testFiles.has(dependency)) {
+        unsafe.add(file);
+        continue;
+      }
+      const predecessors = parents.get(dependency) ?? new Set<string>();
+      predecessors.add(file);
+      parents.set(dependency, predecessors);
+      queue.push(dependency);
+    }
   }
+  // Propagate unsafe dependencies once through the reverse graph. Cycles are
+  // safe only when none of their reachable modules crosses the boundary.
+  const unsafeQueue = [...unsafe];
+  for (const file of unsafeQueue) {
+    for (const parent of parents.get(file) ?? []) {
+      if (unsafe.has(parent)) {
+        continue;
+      }
+      unsafe.add(parent);
+      unsafeQueue.push(parent);
+    }
+  }
+  const independent = [...testFiles].filter((file) => !unsafe.has(file));
+  const coupled = [...testFiles]
+    .filter((file) => unsafe.has(file))
+    .map((file) => path.relative(api, file));
   // A safe test imported by source-owned code still belongs to source: exclude
   // every such root from the isolated project, including transitive test imports.
-  const isolated = new Set(independent.map((file) => path.resolve(api, file)));
+  const isolated = new Set(independent);
   const sourceQueue = parsed.fileNames.filter((file) => !isolated.has(file));
   const visitedSource = new Set<string>();
   for (const file of sourceQueue) {
@@ -114,21 +159,7 @@ export const deriveApiTestPartition = (root: string) => {
       continue;
     }
     visitedSource.add(file);
-    const imports =
-      references.get(file) ??
-      typescriptModuleReferences(readFileSync(file, "utf-8"), file);
-    references.set(file, imports);
-    for (const specifier of imports.imports) {
-      const resolved = ts.resolveModuleName(
-        specifier,
-        file,
-        parsed.options,
-        ts.sys,
-      ).resolvedModule;
-      if (!resolved) {
-        continue;
-      }
-      const dependency = path.resolve(resolved.resolvedFileName);
+    for (const dependency of moduleInfo(file, "source").dependencies) {
       if (isolated.delete(dependency)) {
         coupled.push(path.relative(api, dependency));
       }
@@ -191,7 +222,7 @@ export const apiTestPartitionIssues = (root: string) => {
   return issues;
 };
 
-export const checkResolvedApiTestPartition = (root: string) => {
+const checkResolvedApiTestPartition = (root: string) => {
   const api = path.join(root, "apps/api");
   const surface: {
     files: string[];
@@ -233,7 +264,7 @@ export const checkResolvedApiTestPartition = (root: string) => {
       .split(/\r?\n/u)
       .filter((file) => path.isAbsolute(file)),
   );
-  const { independent } = deriveApiTestPartition(root);
+  const { independent, coupled } = deriveApiTestPartition(root);
   const owned = new Set(independent.map((file) => path.resolve(api, file)));
   const sourceChild = Bun.spawnSync(
     [
@@ -255,6 +286,11 @@ export const checkResolvedApiTestPartition = (root: string) => {
       .split(/\r?\n/u)
       .filter((file) => path.isAbsolute(file)),
   );
+  for (const file of coupled) {
+    if (!sourceFiles.has(path.resolve(api, file))) {
+      panic(`API source program omits coupled test: ${file}`);
+    }
+  }
   for (const file of owned) {
     if (sourceFiles.has(file)) {
       panic(`API test is checked by both source and tests programs: ${file}`);
