@@ -73,7 +73,7 @@ export const PageCropPlayground = () => {
               fileId: "page-crop-fixture",
               buffer: new Uint8Array(bytes).buffer,
             })
-          ).unwrap();
+          ).unwrap("The generated crop fixture PDF must load");
           document = loaded;
           if (lifecycle.disposed) {
             await destroyPDFDocument(loaded);
