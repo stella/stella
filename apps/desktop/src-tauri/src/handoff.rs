@@ -1404,6 +1404,7 @@ mod tests {
   // parallel tests cannot race on it.
   #[tokio::test]
   async fn a_handoff_arriving_unlinked_waits_for_the_link_and_then_completes() {
+    crate::i18n::init_en();
     let redeems = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let (origin, server) = handoff_server(redeems.clone()).await;
     let client = DesktopHttpClient::new(HttpClientOptions::default()).unwrap();

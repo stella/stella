@@ -6,7 +6,7 @@ import { rtfControlResidueMatchesIn } from "./rtf-reader";
 const matches = (text: string) => Array.from(rtfControlResidueMatchesIn(text));
 
 test("the specification vocabulary is sorted, unique and covers its sections", () => {
-  expect(RTF_CONTROLS).toEqual(RTF_CONTROLS.toSorted());
+  expect(Array.from(RTF_CONTROLS)).toEqual(RTF_CONTROLS.toSorted());
   expect(new Set(RTF_CONTROLS).size).toBe(RTF_CONTROLS.length);
   for (const control of [
     "loch",
@@ -35,7 +35,7 @@ test("the specification vocabulary is sorted, unique and covers its sections", (
     "\n",
     "\r",
   ]) {
-    expect(RTF_CONTROLS).toContain(control);
+    expect(RTF_CONTROLS.some((entry) => entry === control)).toBe(true);
   }
 });
 

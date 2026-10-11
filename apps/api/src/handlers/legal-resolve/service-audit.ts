@@ -22,13 +22,6 @@ export const serviceResolveAuditOutcome = (
   if (status >= 500) {
     return "error" as const;
   }
-  if (
-    status === 403 &&
-    isRecord(response) &&
-    response["error"] === "not_entitled"
-  ) {
-    return "not_entitled" as const;
-  }
   if (status === 403) {
     return "missing_scope" as const;
   }

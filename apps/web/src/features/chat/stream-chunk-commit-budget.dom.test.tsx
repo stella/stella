@@ -333,6 +333,7 @@ const createStreamingServer = (
       model: null,
       olderCursor: null,
       reasoningEffort: null,
+      activeSkill: null,
       threadExists: false,
       threadRevision: "revision-0",
       usedAnonymization: false,

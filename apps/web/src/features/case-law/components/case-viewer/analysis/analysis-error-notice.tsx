@@ -4,6 +4,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { SparklesIcon } from "@stll/ui/icons";
 
+import { ProviderDiagnosticMessage } from "@/components/provider-diagnostic-message";
 import {
   analysisErrorMessage,
   type AnalysisErrorMessage,
@@ -45,7 +46,11 @@ export const AnalysisErrorNotice = ({
       className="bg-background/75 supports-[backdrop-filter]:bg-background/55 mx-2 mt-8 flex flex-col items-center gap-2 rounded-lg border px-3 py-4 text-center shadow-sm backdrop-blur-xl"
       role="alert"
     >
-      <p className="text-muted-foreground text-xs leading-snug">{text}</p>
+      {error.kind === "failed" && error.providerDiagnostic !== undefined ? (
+        <ProviderDiagnosticMessage diagnostic={error.providerDiagnostic} />
+      ) : (
+        <p className="text-muted-foreground text-xs leading-snug">{text}</p>
+      )}
       {analysisRetryOf(error) !== "none" && (
         <Button onClick={onRetry} size="sm" variant="muted">
           <SparklesIcon className="size-3" />

@@ -247,6 +247,7 @@ describe("chat thread fetch failures", () => {
 
     expect(data).toMatchObject({
       messages: [],
+      activeSkill: null,
       threadExists: false,
     });
   });
@@ -3170,6 +3171,7 @@ describe("acquireChatRuntime reconcile", () => {
     contextMatterIds: [],
     lastActivityAt: null,
     threadRevision: null,
+    activeSkill: null,
     threadExists: true,
     usedAnonymization: false,
     webSearchAvailable: false,
@@ -3911,18 +3913,21 @@ describe("acquireChatRuntime reconcile", () => {
 
     const staleData = buildThreadData();
     const plainContext = { allowMissingThread: true };
-    // `getActiveSkill` flips contextKind, so this surface's PURE-DATA
+    // `getActiveTemplate` flips contextKind, so this surface's PURE-DATA
     // query key differs from the plain one — the busy reattach must
     // match on thread identity, not on the query key.
-    const skillContext = {
+    const templateContext = {
       allowMissingThread: true,
-      getActiveSkill: () => ({ skillId: "skill-A", skillName: "Summarize" }),
+      getActiveTemplate: () => ({
+        fileName: "template.docx",
+        templateId: "template-A",
+      }),
     };
     expect(
       chatThreadOptions({
         activeOrganizationId,
         key: threadRef,
-        context: skillContext,
+        context: templateContext,
       }).queryKey,
     ).not.toEqual(
       chatThreadOptions({
@@ -3934,7 +3939,7 @@ describe("acquireChatRuntime reconcile", () => {
 
     const streaming = acquireChatRuntime({
       activeOrganizationId,
-      context: skillContext,
+      context: templateContext,
       data: staleData,
       key: threadRef,
       queryClient,
@@ -3978,16 +3983,19 @@ describe("acquireChatRuntime reconcile", () => {
 
     const staleData = buildThreadData();
     const plainContext = { allowMissingThread: true };
-    const skillContext = {
+    const templateContext = {
       allowMissingThread: true,
-      getActiveSkill: () => ({ skillId: "skill-A", skillName: "Summarize" }),
+      getActiveTemplate: () => ({
+        fileName: "template.docx",
+        templateId: "template-A",
+      }),
     };
 
     // No prior entry under the plain key: the mid-stream acquire hits
     // the cross-key busy scan and records an alias under it.
     const streaming = acquireChatRuntime({
       activeOrganizationId,
-      context: skillContext,
+      context: templateContext,
       data: staleData,
       key: threadRef,
       queryClient,
@@ -4049,7 +4057,7 @@ describe("acquireChatRuntime reconcile", () => {
     expect(
       acquireChatRuntime({
         activeOrganizationId,
-        context: skillContext,
+        context: templateContext,
         data: staleData,
         key: threadRef,
         queryClient,
@@ -4061,9 +4069,12 @@ describe("acquireChatRuntime reconcile", () => {
     const queryClient = new QueryClient();
     const staleData = buildThreadData();
     const plainContext = { allowMissingThread: true };
-    const skillContext = {
+    const templateContext = {
       allowMissingThread: true,
-      getActiveSkill: () => ({ skillId: "skill-A", skillName: "Summarize" }),
+      getActiveTemplate: () => ({
+        fileName: "template.docx",
+        templateId: "template-A",
+      }),
     };
     const plainOptions = chatThreadOptions({
       activeOrganizationId,
@@ -4080,7 +4091,7 @@ describe("acquireChatRuntime reconcile", () => {
     });
     const skillRuntime = acquireChatRuntime({
       activeOrganizationId,
-      context: skillContext,
+      context: templateContext,
       data: staleData,
       key: threadRef,
       queryClient,
@@ -4105,7 +4116,7 @@ describe("acquireChatRuntime reconcile", () => {
     expect(
       acquireChatRuntime({
         activeOrganizationId,
-        context: skillContext,
+        context: templateContext,
         data: staleData,
         key: threadRef,
         queryClient,
