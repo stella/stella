@@ -88,12 +88,19 @@ export type ModelDefaultQuality =
         | {
             status: "different-mode";
             source: "external-benchmark";
+            modelId: string;
+            provider: AIProvider;
             measuredMode: ModelMode;
           };
     }
   | {
       source: "local-eval" | "same-weights" | "external-benchmark";
-      measurement: { status: "matching-mode"; measuredMode: ModelMode };
+      measurement: {
+        status: "matching-mode";
+        modelId: string;
+        provider: AIProvider;
+        measuredMode: ModelMode;
+      };
     };
 
 export type ModelDefaultRationale = {
@@ -149,14 +156,6 @@ const UNMEASURED_SEED_QUALITY = {
   source: "seed",
   measurement: { status: "unmeasured" },
 } as const satisfies ModelDefaultQuality;
-const GOOGLE_FLASH_DIFFERENT_MODE_QUALITY = {
-  source: "seed",
-  measurement: {
-    status: "different-mode",
-    source: "external-benchmark",
-    measuredMode: GOOGLE_FLASH_HIGH_MODE,
-  },
-} as const satisfies ModelDefaultQuality;
 
 const DEFAULT_RATIONALE_BY_GROUP = {
   fast: { rationaleKey: "organization.aiConfig.defaultRationale.fast" },
@@ -174,7 +173,7 @@ const CHAT_DEFAULTS = {
       modelId: "gemini-3.8-flash",
       mode: GOOGLE_FLASH_NONE_MODE,
     },
-    quality: GOOGLE_FLASH_DIFFERENT_MODE_QUALITY,
+    quality: UNMEASURED_SEED_QUALITY,
     rationale: DEFAULT_RATIONALE_BY_GROUP.chat,
   },
   openrouter: {
@@ -354,7 +353,7 @@ const PDF_DEFAULTS = {
       modelId: "gemini-3.8-flash",
       mode: GOOGLE_FLASH_NONE_MODE,
     },
-    quality: GOOGLE_FLASH_DIFFERENT_MODE_QUALITY,
+    quality: UNMEASURED_SEED_QUALITY,
     rationale: DEFAULT_RATIONALE_BY_GROUP.pdf,
   },
   openrouter: {
@@ -430,7 +429,7 @@ const FAST_DEFAULTS = {
       modelId: "gemini-3.8-flash",
       mode: GOOGLE_FLASH_NONE_MODE,
     },
-    quality: GOOGLE_FLASH_DIFFERENT_MODE_QUALITY,
+    quality: UNMEASURED_SEED_QUALITY,
     rationale: DEFAULT_RATIONALE_BY_GROUP.fast,
   },
   openrouter: {

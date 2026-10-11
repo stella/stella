@@ -258,7 +258,7 @@ describe("task default migration", () => {
     }
   });
 
-  test("does not inherit a high-effort Gemini rating for a none-effort seed", () => {
+  test("keeps Gemini seeds unmeasured without provider-bound evidence", () => {
     for (const task of MODEL_TASKS) {
       const entry = MODEL_DEFAULTS_LEDGER[task].google;
       if (task === "reasoning") {
@@ -268,11 +268,7 @@ describe("task default migration", () => {
       expect(entry.candidate.mode).toEqual(GOOGLE_NONE_LOW);
       expect(entry.quality).toEqual({
         source: "seed",
-        measurement: {
-          status: "different-mode",
-          source: "external-benchmark",
-          measuredMode: GOOGLE_HIGH_HIGH,
-        },
+        measurement: { status: "unmeasured" },
       });
     }
   });

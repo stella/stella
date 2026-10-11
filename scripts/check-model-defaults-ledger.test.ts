@@ -163,6 +163,8 @@ const matchingQuality = {
   source: "local-eval",
   measurement: {
     status: "matching-mode",
+    modelId: selected.candidate.modelId,
+    provider: "google",
     measuredMode: selected.candidate.mode,
   },
 } as const;
@@ -224,6 +226,52 @@ describe("model defaults evidence guard", () => {
     );
   });
 
+  test("rejects changing only the candidate model on measured evidence", () => {
+    for (const source of [
+      "local-eval",
+      "same-weights",
+      "external-benchmark",
+    ] as const) {
+      const entry = {
+        ...measured,
+        candidate: { ...measured.candidate, modelId: "gemini-3.7-flash" },
+        quality: { ...matchingQuality, source },
+      } as const satisfies ModelDefaultEntry;
+      expect(entry.candidate.modelId).not.toBe(
+        matchingQuality.measurement.modelId,
+      );
+      expect(entry.candidate.mode).toEqual(
+        matchingQuality.measurement.measuredMode,
+      );
+      expect(
+        checkModelDefaultsLedger({
+          ledger: withGoogleChat(entry),
+          exceptions: retiredExceptions,
+        }),
+      ).toContain(
+        "chat/google: measured evidence must match the selected model",
+      );
+    }
+  });
+
+  test("rejects evidence measured through another provider", () => {
+    const entry = {
+      ...measured,
+      quality: {
+        ...matchingQuality,
+        measurement: { ...matchingQuality.measurement, provider: "openrouter" },
+      },
+    } as const satisfies ModelDefaultEntry;
+    expect(
+      checkModelDefaultsLedger({
+        ledger: withGoogleChat(entry),
+        exceptions: retiredExceptions,
+      }),
+    ).toContain(
+      "chat/google: measured evidence must match the selected provider",
+    );
+  });
+
   test("rejects mode changes including effort, sampling, and thinking shape", () => {
     const modes = [
       {
@@ -270,7 +318,7 @@ describe("model defaults evidence guard", () => {
         ...measured,
         quality: {
           ...matchingQuality,
-          measurement: { status: "matching-mode", measuredMode },
+          measurement: { ...matchingQuality.measurement, measuredMode },
         },
       } as const;
       expect(
@@ -292,6 +340,8 @@ describe("model defaults evidence guard", () => {
         measurement: {
           status: "different-mode",
           source: "external-benchmark",
+          modelId: selected.candidate.modelId,
+          provider: "google",
           measuredMode: selected.candidate.mode,
         },
       },
@@ -300,6 +350,50 @@ describe("model defaults evidence guard", () => {
       checkModelDefaultsLedger({ ledger: withGoogleChat(entry), exceptions }),
     ).toContain(
       "chat/google: different-mode evidence matches the selected mode",
+    );
+  });
+
+  test("binds different-mode benchmark evidence to its model and provider", () => {
+    const quality = {
+      source: "seed",
+      measurement: {
+        status: "different-mode",
+        source: "external-benchmark",
+        modelId: selected.candidate.modelId,
+        provider: "google",
+        measuredMode: {
+          ...selected.candidate.mode,
+          requestedEffort: "high",
+          thinkingLevel: "HIGH",
+        },
+      },
+    } as const;
+    const entry = { ...selected, quality } as const satisfies ModelDefaultEntry;
+    expect(
+      checkModelDefaultsLedger({ ledger: withGoogleChat(entry), exceptions }),
+    ).toEqual([]);
+    expect(
+      checkModelDefaultsLedger({
+        ledger: withGoogleChat({
+          ...entry,
+          candidate: { ...entry.candidate, modelId: "gemini-3.7-flash" },
+        }),
+        exceptions,
+      }),
+    ).toContain("chat/google: measured evidence must match the selected model");
+    expect(
+      checkModelDefaultsLedger({
+        ledger: withGoogleChat({
+          ...entry,
+          quality: {
+            ...quality,
+            measurement: { ...quality.measurement, provider: "openrouter" },
+          },
+        }),
+        exceptions,
+      }),
+    ).toContain(
+      "chat/google: measured evidence must match the selected provider",
     );
   });
 

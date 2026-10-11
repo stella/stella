@@ -99,6 +99,18 @@ export const checkModelDefaultsLedger = ({
         continue;
       }
       const { quality, candidate } = entry;
+      if (quality.measurement.status !== "unmeasured") {
+        if (quality.measurement.modelId !== candidate.modelId) {
+          errors.push(
+            `${task}/${provider}: measured evidence must match the selected model`,
+          );
+        }
+        if (quality.measurement.provider !== provider) {
+          errors.push(
+            `${task}/${provider}: measured evidence must match the selected provider`,
+          );
+        }
+      }
       if (quality.source === "seed") {
         requiredExceptions.add(`seed:${task}:${provider}`);
         if (
