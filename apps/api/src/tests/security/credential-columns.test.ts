@@ -291,31 +291,33 @@ const handledMemberTables = async (omittedDelete?: PgTable) => {
     }
     return { rows: query.startsWith("select count(*)") ? [[0]] : [] };
   });
-  const transaction = new Proxy(database, {
-    get: (target, property, receiver) => {
-      if (property === "execute") {
-        return async (statement: SQL) => {
-          const { sql: query } = new PgDialect().sqlToQuery(statement);
-          if (query.includes("advisory_xact_lock")) {
-            return aggregateExecutionRows(statement);
-          }
-          return await target.execute(statement);
-        };
-      }
-      if (property === "transaction") {
-        return async (run: (savepoint: typeof database) => Promise<unknown>) =>
-          await run(transaction);
-      }
-      if (property === "delete") {
-        return (table: PgTable) =>
-          table === omittedDelete
-            ? { where: async () => [] }
-            : target.delete(table);
-      }
-      return Reflect.get(target, property, receiver);
-    },
-  });
-  await removeOrganizationMemberInTransaction(asTestRaw(transaction), {
+  const createTransaction = (): typeof database =>
+    new Proxy(database, {
+      get: (target, property, receiver) => {
+        if (property === "execute") {
+          return async (statement: SQL) => {
+            const { sql: query } = new PgDialect().sqlToQuery(statement);
+            if (query.includes("advisory_xact_lock")) {
+              return aggregateExecutionRows(statement);
+            }
+            return await target.execute(statement);
+          };
+        }
+        if (property === "transaction") {
+          return async (
+            run: (savepoint: typeof database) => Promise<unknown>,
+          ) => await run(createTransaction());
+        }
+        if (property === "delete") {
+          return (table: PgTable) =>
+            table === omittedDelete
+              ? { where: async () => [] }
+              : target.delete(table);
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+  await removeOrganizationMemberInTransaction(asTestRaw(createTransaction()), {
     organizationId: mintAuthProviderId<"organization">(),
     userId: mintAuthProviderId<"user">(),
     actorUserId: mintAuthProviderId<"user">(),

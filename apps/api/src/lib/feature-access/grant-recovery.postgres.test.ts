@@ -177,7 +177,7 @@ if (!databaseUrl || !enabled) {
           },
         });
         if (!membership) {
-          return panic("Missing recovery principal membership");
+          panic("Missing recovery principal membership");
         }
         const previousFlag = env.FEATURE_FLOWS;
         const restoreRuntime = setRuntimeModeForTesting({

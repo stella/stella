@@ -59,7 +59,7 @@ export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
   const limit = (count: number) => {
     const selected = rows.slice(rowOffset, rowOffset + count);
     return Object.assign(Promise.resolve(selected), {
-      for: async () => selected,
+      for: () => selected,
     });
   };
   const offset = (count: number) => {
@@ -71,7 +71,7 @@ export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
     Object.assign(Promise.resolve(rows), {
       limit,
       offset,
-      for: async () => rows,
+      for: () => rows,
       orderBy: () => ({ limit, offset }),
     });
   return {
@@ -197,7 +197,7 @@ export const createScopedDbMock = (
     // Tests provide only the transaction members touched by the handler.
     const advisoryKeys = new Map<string, number>();
     const transaction = {
-      execute: async (query: SQL) => {
+      execute: (query: SQL) => {
         const rendered = new PgDialect().sqlToQuery(query);
         if (!/pg_(?:try_)?advisory_xact_lock\(/u.test(rendered.sql)) {
           return [];

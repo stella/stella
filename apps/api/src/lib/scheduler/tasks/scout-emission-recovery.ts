@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, getTableColumns, lte, not, or, sql } from "drizzle-orm";
+import { and, asc, eq, getColumns, lte, not, or, sql } from "drizzle-orm";
 
 import { mapWithConcurrency } from "@stll/concurrency";
 
@@ -152,7 +152,7 @@ export const recoverScoutEmission: SchedulerTask = async ({
     await readCursorPage(
       db
         .select({
-          ...getTableColumns(pendingScoutEmissions),
+          ...getColumns(pendingScoutEmissions),
           nextAttemptAt: timestampCasToken(pendingScoutEmissions.nextAttemptAt),
         })
         .from(pendingScoutEmissions)
@@ -190,7 +190,7 @@ export const recoverScoutEmission: SchedulerTask = async ({
         switch (source.sourceKind) {
           case "document-review": {
             if (!isDeploymentFeatureEnabled("FEATURE_INBOX_DOCUMENT_SCOUTS")) {
-              return;
+              return { status: "paused" as const };
             }
             const outcome = await emitDocumentReviewSignal({
               tx,
@@ -201,7 +201,7 @@ export const recoverScoutEmission: SchedulerTask = async ({
               logger.info("scout.emission_paused", {
                 sourceKind: source.sourceKind,
               });
-              return;
+              return { status: "paused" as const };
             }
             break;
           }
@@ -216,7 +216,7 @@ export const recoverScoutEmission: SchedulerTask = async ({
               logger.info("scout.emission_paused", {
                 sourceKind: source.sourceKind,
               });
-              return;
+              return { status: "paused" as const };
             }
             const entityId = brandPersistedEntityId(source.sourceId);
             const entity = (
@@ -251,7 +251,7 @@ export const recoverScoutEmission: SchedulerTask = async ({
           }
           default:
             source.sourceKind satisfies never;
-            return panic("Unknown deferred scout source");
+            panic("Unknown deferred scout source");
         }
         if (!isDeploymentFeatureEnabled("FEATURE_SIGNALS")) {
           return { status: "paused" as const };
@@ -349,7 +349,7 @@ export const resumeScoutEmissionAfterGrant = async ({
   const page = await readCursorPage(
     tx
       .select({
-        ...getTableColumns(pendingScoutEmissions),
+        ...getColumns(pendingScoutEmissions),
         nextAttemptAt: timestampCasToken(pendingScoutEmissions.nextAttemptAt),
       })
       .from(pendingScoutEmissions)
@@ -399,7 +399,7 @@ const reconcileScoutEmissionGrantState = async ({
     await readCursorPage(
       database
         .select({
-          ...getTableColumns(pendingScoutEmissions),
+          ...getColumns(pendingScoutEmissions),
           nextAttemptAt: timestampCasToken(pendingScoutEmissions.nextAttemptAt),
         })
         .from(pendingScoutEmissions)
@@ -420,7 +420,7 @@ const reconcileScoutEmissionGrantState = async ({
     await readCursorPage(
       database
         .select({
-          ...getTableColumns(pendingScoutEmissions),
+          ...getColumns(pendingScoutEmissions),
           nextAttemptAt: timestampCasToken(pendingScoutEmissions.nextAttemptAt),
         })
         .from(pendingScoutEmissions)

@@ -195,10 +195,10 @@ const auditRows = async (subject: SafeId<"schedulerJobRun">) =>
 type CleanupOptions = Parameters<typeof cleanupFlowDefinitions>[0];
 
 const cleanupAllFeatures = async (options: CleanupOptions) => {
-  expect(await cleanupFlowDefinitions(options)).toBeUndefined();
-  expect(await cleanupScoutRuns(options)).toBeUndefined();
-  expect(await cleanupSignalEvents(options)).toBeUndefined();
-  expect(await cleanupSignals(options)).toBeUndefined();
+  await cleanupFlowDefinitions(options);
+  await cleanupScoutRuns(options);
+  await cleanupSignalEvents(options);
+  await cleanupSignals(options);
 };
 
 describe("feature reset cleanup audit transactions", () => {

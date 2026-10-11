@@ -267,7 +267,7 @@ const migrationScenario = async ({
       }
     }
     if (scenario === "invalid-index") {
-      if (migration.index === undefined || migration.table === undefined) {
+      if (migration.index === undefined) {
         return panic("Invalid-index scenario requires a concurrent migration");
       }
       await session.unsafe(

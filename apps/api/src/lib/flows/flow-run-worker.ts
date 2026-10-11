@@ -202,7 +202,7 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
             return;
           default:
             outcome satisfies never;
-            return panic("Unknown flow step execution outcome");
+            panic("Unknown flow step execution outcome");
         }
       } finally {
         clearTimeout(timeoutHandle);
