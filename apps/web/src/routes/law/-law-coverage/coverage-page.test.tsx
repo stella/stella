@@ -209,6 +209,53 @@ describe("the coverage page states what it counts", () => {
     expect(markup).not.toContain("50%");
   });
 
+  test("a source states its decision years, pending texts and known gaps", () => {
+    const markup = render(
+      <CaseLawCoveragePage
+        coverage={{
+          ...COVERAGE,
+          countries: [
+            {
+              ...CZECHIA,
+              sources: [
+                {
+                  ...NEARLY_COMPLETE,
+                  decisionYearFrom: 1958,
+                  decisionYearTo: 2011,
+                  pendingTextCount: 1234,
+                  knownGaps: {
+                    type: "known",
+                    gaps: [
+                      {
+                        from: "1969-01-01",
+                        to: "1970-12-31",
+                        reason: "Publisher archive has no decisions",
+                        evidenceRef: "publisher-index",
+                      },
+                      {
+                        from: "1989-01-01",
+                        to: "1989-12-31",
+                        reason: "Publisher archive has no decisions",
+                        evidenceRef: "publisher-index",
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        }}
+      />,
+    );
+
+    // The source's own range, distinct from the country's 1993–2026.
+    expect(markup).toContain("1958–2011");
+    expect(markup).toContain(
+      `${messages.caseLaw.coverage.pendingTexts}: 1,234`,
+    );
+    expect(markup).toContain(`${messages.caseLaw.coverage.knownGaps}: 2`);
+  });
+
   test("freshness is a word, with the dot only beside it", () => {
     const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
 
