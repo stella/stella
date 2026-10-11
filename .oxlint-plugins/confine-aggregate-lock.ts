@@ -39,7 +39,14 @@ export default eslintCompatPlugin({
               actual,
               baseline: baseline.filter((row) => row.file === file),
             })) {
-              const site = sites.at(0);
+              // Key-bearing problems point at their own acquisition; file-level
+              // problems fall back to the first site.
+              const site =
+                sites.find((candidate) =>
+                  problem.endsWith(
+                    `: ${candidate.file}:${candidate.fingerprint}`,
+                  ),
+                ) ?? sites.at(0);
               context.report({
                 ...(site === undefined
                   ? { node }
