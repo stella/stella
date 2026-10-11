@@ -1258,6 +1258,10 @@
     "greeting": "Nad czym chcesz pracować?",
     "greetingSubtitle": "Zacznij od sprawy, dokumentu albo prostego pytania.",
     "hideThread": "Ukryj konwersację",
+    "history": {
+      "older": "Starsze",
+      "previous7Days": "Poprzednie 7 dni"
+    },
     "historyContext": {
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {i # więcej} few {i # więcej} many {i # więcej} other {i # więcej}}"
@@ -1747,6 +1751,8 @@
     "citations": "Cytowania",
     "clauses": "Klauzule",
     "clearDate": "Wyczyść datę",
+    "clearFilters": "Wyczyść filtry",
+    "clearSearch": "Wyczyść wyszukiwanie",
     "close": "Zamknij",
     "closeAll": "Zamknij wszystko",
     "closeOthers": "Zamknij pozostałe",
@@ -4102,7 +4108,6 @@
     "appsSubtitle": "stella działa też poza przeglądarką: na komputerze i w asystencie AI. Do tej konfiguracji możesz wrócić w dowolnym momencie.",
     "appsTitle": "Korzystaj ze stelli wszędzie",
     "catalogueAlwaysOn": "Zawsze włączone",
-    "catalogueClearSearch": "Wyczyść wyszukiwanie",
     "catalogueCommunityHeading": "Pozostałe",
     "catalogueContinueWithCount": "{count, plural, one {Kontynuuj z # narzędziem} few {Kontynuuj z # narzędziami} many {Kontynuuj z # narzędziami} other {Kontynuuj z # narzędziami}}",
     "catalogueDetailAbout": "Opis",
@@ -6363,7 +6368,6 @@
         "year": "Rok"
       },
       "cannotDeleteRequired": "Wymagany jest co najmniej jeden widok tego typu",
-      "clearFilters": "Wyczyść filtry",
       "copySuffix": "{name} (kopia)",
       "deleteView": "Usuń widok",
       "exportCsv": "Eksportuj CSV",

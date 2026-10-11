@@ -59,7 +59,9 @@ export const MatterCombobox = ({
   order = "default",
 }: MatterComboboxProps) => {
   const t = useTranslations();
-  const [search, setSearch] = useState("");
+  // The input shows the typed search, so a control mounted with a matter
+  // already chosen starts out showing that matter's name.
+  const [search, setSearch] = useState(value?.name ?? "");
   const deferredSearch = useDeferredValue(search);
   const {
     data: matters = EMPTY_MATTERS,

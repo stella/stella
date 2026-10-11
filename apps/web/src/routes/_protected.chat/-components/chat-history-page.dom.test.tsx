@@ -1,0 +1,467 @@
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import { setTimeout as sleep } from "node:timers/promises";
+
+import type { WebApiRoutes } from "@/lib/eden-client";
+import type { WorkspaceNavigationItem } from "@/lib/memory-api";
+
+// Wide enough that rows are not in their narrow layout.
+GlobalRegistrator.register({
+  url: "http://localhost:3000/chat/history",
+  width: 1280,
+});
+
+const previousFetch = globalThis.fetch;
+const testing = await import("@testing-library/react");
+const query = await import("@tanstack/react-query");
+const router = await import("@tanstack/react-router");
+const { useState } = await import("react");
+const { IntlProvider } = await import("use-intl");
+const { default: messages } = await import("@/i18n/langs/en.json");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { AuthenticatedUserProvider } =
+  await import("@/lib/authenticated-user-context");
+const { AnalyticsContext } = await import("@/lib/analytics/provider");
+const { noopAnalytics } = await import("@/lib/analytics/noop");
+const { workspacesNavigationOptions } =
+  await import("@/lib/workspaces/queries");
+const { ChatHistoryPage } = await import("./chat-history-page");
+
+type ChatHistorySearch = Parameters<typeof ChatHistoryPage>[0]["search"];
+type ThreadsPage = WebApiRoutes["chat"]["threads"]["get"]["response"][200];
+type ThreadSlice = ThreadsPage["global"][number];
+
+// Sunday noon, UTC: "today" is 2026-10-11 for the reader below.
+const NOW = new Date("2026-10-11T12:00:00.000Z");
+
+const user = {
+  activeOrganizationId: "00000000-0000-7000-8000-00000000ffff",
+  id: "00000000-0000-7000-8000-00000000fffe",
+  email: "reader@example.test",
+  image: null,
+  name: "Reader",
+  preferredName: null,
+  timezoneId: "UTC",
+  wordEditShortcut: null,
+};
+
+const MATTER_A = {
+  client: null,
+  clientId: null,
+  color: null,
+  defaultViewId: null,
+  id: "00000000-0000-7000-8000-0000000000a1",
+  lastActivityAt: NOW,
+  name: "Novak v. Horak",
+  reference: "M-2026-001",
+  status: "active",
+} satisfies WorkspaceNavigationItem;
+const MATTER_B = {
+  ...MATTER_A,
+  id: "00000000-0000-7000-8000-0000000000b2",
+  name: "Lease renewal Vinohrady",
+  reference: "M-2026-002",
+} satisfies WorkspaceNavigationItem;
+
+const thread = (id: string, title: string, updatedAt: string): ThreadSlice => ({
+  context: { fileCount: 0, files: [], matterCount: 0, matters: [] },
+  createdAt: updatedAt,
+  decision: null,
+  id,
+  origin: "original",
+  title,
+  updatedAt,
+  usedAnonymization: false,
+});
+
+const TODAY_GLOBAL = thread(
+  "00000000-0000-7000-8000-000000000001",
+  "Limitation period for unpaid invoices",
+  "2026-10-11T09:00:00.000Z",
+);
+const THIS_WEEK_IN_A = thread(
+  "00000000-0000-7000-8000-000000000002",
+  "Draft statement of claim",
+  "2026-10-08T09:00:00.000Z",
+);
+const OLDER_IN_B = thread(
+  "00000000-0000-7000-8000-000000000003",
+  "Termination notice for the lease",
+  "2026-09-01T09:00:00.000Z",
+);
+
+type Server = {
+  global: ThreadSlice[];
+  workspaces: {
+    workspaceId: string;
+    workspaceName: string;
+    threads: ThreadSlice[];
+  }[];
+};
+
+const fullServer = (): Server => ({
+  global: [TODAY_GLOBAL],
+  workspaces: [
+    {
+      workspaceId: MATTER_A.id,
+      workspaceName: MATTER_A.name,
+      threads: [THIS_WEEK_IN_A],
+    },
+    {
+      workspaceId: MATTER_B.id,
+      workspaceName: MATTER_B.name,
+      threads: [OLDER_IN_B],
+    },
+  ],
+});
+
+const listRequests: URL[] = [];
+const deleteRequests: URL[] = [];
+const unexpected: string[] = [];
+const clients: InstanceType<typeof query.QueryClient>[] = [];
+
+/** Serves the history list (search matches titles) and thread deletes. */
+const serve = (server: Server) => {
+  globalThis.fetch = Object.assign(
+    async (input: string | URL | Request, init?: RequestInit) => {
+      const request = new Request(input, init);
+      const url = new URL(request.url);
+      if (url.pathname.endsWith("/chat/threads") && request.method === "GET") {
+        listRequests.push(url);
+        const term = url.searchParams.get("search")?.toLowerCase() ?? "";
+        const matches = (slice: ThreadSlice) =>
+          slice.title.toLowerCase().includes(term);
+        return Response.json({
+          global: server.global.filter(matches),
+          nextCursor: null,
+          workspaces: server.workspaces
+            .map((group) => ({
+              ...group,
+              threads: group.threads.filter(matches),
+            }))
+            .filter((group) => group.threads.length > 0),
+        } satisfies ThreadsPage);
+      }
+      const deleted = /\/chat\/threads\/([^/]+)$/u.exec(url.pathname);
+      if (deleted !== null && request.method === "DELETE") {
+        deleteRequests.push(url);
+        const id = deleted[1];
+        server.global = server.global.filter((slice) => slice.id !== id);
+        for (const group of server.workspaces) {
+          group.threads = group.threads.filter((slice) => slice.id !== id);
+        }
+        return Response.json({});
+      }
+      unexpected.push(`${request.method} ${url.pathname}`);
+      return Response.json(
+        { message: `Unexpected history test request: ${url.pathname}` },
+        { status: 500 },
+      );
+    },
+    { preconnect: previousFetch.preconnect },
+  );
+};
+
+afterEach(() => {
+  testing.cleanup();
+  for (const client of clients) {
+    client.clear();
+  }
+  clients.length = 0;
+  globalThis.fetch = previousFetch;
+  listRequests.length = 0;
+  deleteRequests.length = 0;
+  unexpected.length = 0;
+});
+afterAll(async () => {
+  await testing.act(async () => {
+    await sleep(50);
+  });
+  await GlobalRegistrator.unregister();
+});
+
+const createClient = () => {
+  const client = new query.QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  });
+  clients.push(client);
+  client.setQueryData(
+    workspacesNavigationOptions({
+      organizationId: user.activeOrganizationId,
+      userId: user.id,
+    }).queryKey,
+    { workspaces: [MATTER_A, MATTER_B], features: { timeBilling: false } },
+  );
+  return client;
+};
+
+/** The page as its route mounts it, with the URL's search held in state. */
+const openHistory = async (initial: ChatHistorySearch = {}) => {
+  const searchChanges: ChatHistorySearch[] = [];
+  const Host = () => {
+    const [search, setSearch] = useState(initial);
+    return (
+      <ChatHistoryPage
+        onSearchChange={(next) => {
+          searchChanges.push(next);
+          setSearch(next);
+        }}
+        search={search}
+      />
+    );
+  };
+  const root = router.createRootRoute({ component: router.Outlet });
+  const protectedRoute = router.createRoute({
+    getParentRoute: () => root,
+    id: "_protected",
+    beforeLoad: () => ({ user }),
+    component: router.Outlet,
+  });
+  const routes = [
+    router.createRoute({
+      getParentRoute: () => protectedRoute,
+      path: "/chat/history",
+      component: Host,
+    }),
+    router.createRoute({
+      getParentRoute: () => protectedRoute,
+      path: "/chat",
+      component: () => null,
+    }),
+    router.createRoute({
+      getParentRoute: () => protectedRoute,
+      path: "/chat/$threadId",
+      component: () => null,
+    }),
+    router.createRoute({
+      getParentRoute: () => protectedRoute,
+      path: "/chat/workspaces/$workspaceId/$threadId",
+      component: () => null,
+    }),
+  ];
+  const appRouter = router.createRouter({
+    routeTree: root.addChildren([protectedRoute.addChildren(routes)]),
+    history: router.createMemoryHistory({ initialEntries: ["/chat/history"] }),
+    isServer: false,
+  });
+  await appRouter.load();
+  const ui = testing.render(
+    <AnalyticsContext value={noopAnalytics}>
+      <query.QueryClientProvider client={createClient()}>
+        <IntlProvider locale="en" messages={messages} now={NOW} timeZone="UTC">
+          <FormattingProvider locale="en" timeZone="UTC">
+            <AuthenticatedUserProvider user={user}>
+              <router.RouterProvider router={appRouter} />
+            </AuthenticatedUserProvider>
+          </FormattingProvider>
+        </IntlProvider>
+      </query.QueryClientProvider>
+    </AnalyticsContext>,
+  );
+  return { appRouter, searchChanges, ui };
+};
+
+/** Clicks inside `act`, so dialog open/close transitions settle in order. */
+const press = async (element: Element) => {
+  await testing.act(async () => {
+    testing.fireEvent.click(element);
+  });
+};
+
+const threadLink = (ui: ReturnType<typeof testing.render>, title: string) =>
+  ui.getByRole("link", { name: new RegExp(title, "u") });
+
+const groupTitles = (ui: ReturnType<typeof testing.render>) =>
+  ui
+    .getAllByRole("heading", { level: 2 })
+    .map((heading) => heading.textContent);
+
+describe("chat history page", () => {
+  test("groups chats by the reader's day and links each to its own route", async () => {
+    serve(fullServer());
+    const { ui } = await openHistory();
+
+    await testing.waitFor(() =>
+      expect(groupTitles(ui)).toEqual([
+        messages.common.today,
+        messages.chat.history.previous7Days,
+        messages.chat.history.older,
+      ]),
+    );
+    const sections = ui.getAllByRole("heading", { level: 2 }).map((heading) =>
+      testing
+        .within(heading.closest("section") ?? ui.container)
+        .getAllByRole("link")
+        .map((link) => link.getAttribute("href")),
+    );
+    expect(sections).toEqual([
+      [`/chat/${TODAY_GLOBAL.id}`],
+      [`/chat/workspaces/${MATTER_A.id}/${THIS_WEEK_IN_A.id}`],
+      [`/chat/workspaces/${MATTER_B.id}/${OLDER_IN_B.id}`],
+    ]);
+    expect(unexpected).toEqual([]);
+  });
+
+  test("search runs on the server after the reader pauses typing", async () => {
+    serve(fullServer());
+    const { searchChanges, ui } = await openHistory();
+    await testing.waitFor(() =>
+      expect(threadLink(ui, TODAY_GLOBAL.title)).toBeDefined(),
+    );
+
+    await testing.act(async () => {
+      testing.fireEvent.change(
+        ui.getByRole("searchbox", { name: messages.common.search }),
+        { target: { value: "lease" } },
+      );
+    });
+
+    await testing.waitFor(() =>
+      expect(
+        listRequests.map((url) => url.searchParams.get("search")),
+      ).toContain("lease"),
+    );
+    expect(searchChanges).toEqual([{ q: "lease" }]);
+    await testing.waitFor(() =>
+      expect(ui.queryByText(TODAY_GLOBAL.title)).toBeNull(),
+    );
+    expect(threadLink(ui, OLDER_IN_B.title)).toBeDefined();
+  });
+
+  test("a matter filter keeps only the chats that live in that matter", async () => {
+    serve(fullServer());
+    const { ui } = await openHistory({ matter: MATTER_A.id });
+
+    await testing.waitFor(() =>
+      expect(threadLink(ui, THIS_WEEK_IN_A.title)).toBeDefined(),
+    );
+    expect(ui.queryByText(TODAY_GLOBAL.title)).toBeNull();
+    expect(ui.queryByText(OLDER_IN_B.title)).toBeNull();
+    // The field shows the matter the URL names.
+    expect(
+      ui.getByRole("combobox", { name: messages.common.matter }),
+    ).toHaveProperty("value", MATTER_A.name);
+  });
+
+  test("clearing the filters brings every chat back", async () => {
+    serve(fullServer());
+    const { searchChanges, ui } = await openHistory({ matter: MATTER_A.id });
+    await testing.waitFor(() =>
+      expect(threadLink(ui, THIS_WEEK_IN_A.title)).toBeDefined(),
+    );
+    expect(ui.queryByText(TODAY_GLOBAL.title)).toBeNull();
+
+    await press(ui.getByRole("button", { name: messages.common.clearFilters }));
+
+    expect(searchChanges).toEqual([{}]);
+    await testing.waitFor(() =>
+      expect(threadLink(ui, TODAY_GLOBAL.title)).toBeDefined(),
+    );
+    expect(
+      ui.getByRole("combobox", { name: messages.common.matter }),
+    ).toHaveProperty("value", "");
+  });
+
+  test("deleting asks first, then removes the chat in its own scope", async () => {
+    serve(fullServer());
+    const { ui } = await openHistory();
+    const row = await testing.waitFor(
+      () => threadLink(ui, THIS_WEEK_IN_A.title).closest("li") ?? ui.container,
+    );
+
+    const deleteButton = testing
+      .within(row)
+      .getByRole("button", { name: messages.chat.deleteThread });
+    await press(deleteButton);
+    const dialog = ui.getByRole("alertdialog");
+    expect(dialog.textContent).toContain(THIS_WEEK_IN_A.title);
+    expect(deleteRequests).toEqual([]);
+
+    await press(
+      testing
+        .within(dialog)
+        .getByRole("button", { name: messages.common.cancel }),
+    );
+    expect(ui.queryByRole("alertdialog")).toBeNull();
+    expect(deleteRequests).toEqual([]);
+
+    await press(deleteButton);
+    await press(
+      testing
+        .within(ui.getByRole("alertdialog"))
+        .getByRole("button", { name: messages.common.delete }),
+    );
+
+    await testing.waitFor(() =>
+      expect(ui.queryByText(THIS_WEEK_IN_A.title)).toBeNull(),
+    );
+    expect(
+      deleteRequests.map((url) => [
+        url.pathname.split("/").at(-1),
+        url.searchParams.get("workspaceId"),
+      ]),
+    ).toEqual([[THIS_WEEK_IN_A.id, MATTER_A.id]]);
+    expect(threadLink(ui, TODAY_GLOBAL.title)).toBeDefined();
+  });
+
+  test("each row is a link first, then its actions, in tab order", async () => {
+    serve(fullServer());
+    const { appRouter, ui } = await openHistory();
+    const link = await testing.waitFor(() =>
+      threadLink(ui, TODAY_GLOBAL.title),
+    );
+    const row = link.closest("li") ?? ui.container;
+    const tabStops = [
+      ...row.querySelectorAll<HTMLElement>("a[href], button"),
+    ].filter((element) => element.tabIndex >= 0);
+
+    expect(tabStops.at(0)).toBe(link);
+    expect(tabStops.at(-1)).toBe(
+      testing
+        .within(row)
+        .getByRole("button", { name: messages.chat.deleteThread }),
+    );
+
+    // A focused link activates on Enter with a click, as anchors do.
+    link.focus();
+    expect(document.activeElement).toBe(link);
+    await press(link);
+    await testing.waitFor(() =>
+      expect(appRouter.state.location.pathname).toBe(
+        `/chat/${TODAY_GLOBAL.id}`,
+      ),
+    );
+  });
+
+  test("with no chats at all, the empty state offers a new chat", async () => {
+    serve({ global: [], workspaces: [] });
+    const { ui } = await openHistory();
+
+    await testing.waitFor(() =>
+      expect(ui.getByText(messages.chat.noThreads)).toBeDefined(),
+    );
+    expect(
+      ui
+        .getByRole("link", { name: messages.chat.newChat })
+        .getAttribute("href"),
+    ).toBe("/chat");
+  });
+
+  test("a search with no matches says so and offers to clear it", async () => {
+    serve(fullServer());
+    const { searchChanges, ui } = await openHistory({ q: "arbitration" });
+
+    await testing.waitFor(() =>
+      expect(ui.getByText(messages.common.noResults)).toBeDefined(),
+    );
+    expect(ui.queryByText(messages.chat.noThreads)).toBeNull();
+    const clearButtons = ui.getAllByRole("button", {
+      name: messages.common.clearFilters,
+    });
+    await press(clearButtons.at(-1) ?? ui.container);
+    expect(searchChanges).toEqual([{}]);
+    await testing.waitFor(() =>
+      expect(threadLink(ui, TODAY_GLOBAL.title)).toBeDefined(),
+    );
+  });
+});

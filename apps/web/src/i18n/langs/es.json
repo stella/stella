@@ -1258,6 +1258,10 @@
     "greeting": "¿En qué le gustaría trabajar?",
     "greetingSubtitle": "Empiece con un asunto, un documento o una pregunta sencilla.",
     "hideThread": "Ocultar conversación",
+    "history": {
+      "older": "Más antiguas",
+      "previous7Days": "7 días anteriores"
+    },
     "historyContext": {
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {y # más} many {y # más} other {y # más}}"
@@ -1747,6 +1751,8 @@
     "citations": "Citas",
     "clauses": "Cláusulas",
     "clearDate": "Borrar fecha",
+    "clearFilters": "Borrar filtros",
+    "clearSearch": "Borrar búsqueda",
     "close": "Cerrar",
     "closeAll": "Cerrar todo",
     "closeOthers": "Cerrar otros",
@@ -4102,7 +4108,6 @@
     "appsSubtitle": "stella también funciona fuera del navegador: en su escritorio y dentro de su asistente de IA. Puede volver a esta configuración en cualquier momento.",
     "appsTitle": "Obtenga stella en todas partes",
     "catalogueAlwaysOn": "Siempre activo",
-    "catalogueClearSearch": "Borrar búsqueda",
     "catalogueCommunityHeading": "Otros",
     "catalogueContinueWithCount": "{count, plural, one {Continuar con # herramienta} other {Continuar con # herramientas}}",
     "catalogueDetailAbout": "Acerca de",
@@ -6363,7 +6368,6 @@
         "year": "Año"
       },
       "cannotDeleteRequired": "Se requiere al menos una vista de este tipo",
-      "clearFilters": "Borrar filtros",
       "copySuffix": "{name} (copia)",
       "deleteView": "Eliminar vista",
       "exportCsv": "Exportar CSV",

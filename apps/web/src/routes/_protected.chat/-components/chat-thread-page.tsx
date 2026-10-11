@@ -98,9 +98,9 @@ import { usageEntitlementOptions } from "@/lib/usage-queries";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { ChatThreadFilesButton } from "@/routes/_protected.chat/-components/chat-file-stack";
 import { ChatForkedFromBanner } from "@/routes/_protected.chat/-components/chat-forked-from-banner";
+import { ChatHistoryLink } from "@/routes/_protected.chat/-components/chat-history-link";
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
 import { ChatTurnNavigator } from "@/routes/_protected.chat/-components/chat-turn-navigator";
-import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
 
 // The composer block publishes its live height on this element, the
 // transcript's nearest shared ancestor (see `observeComposerBlock`).
@@ -622,7 +622,7 @@ export const ChatThreadPage = ({
                   </Button>
                 }
               />
-              <ThreadsSheet />
+              <ChatHistoryLink />
               <NewChatButton
                 hasMessages={messages.length > 0}
                 threadRef={threadRef}
