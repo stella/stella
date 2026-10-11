@@ -1454,10 +1454,9 @@ const chatPartToPersistedV3Part = ({
     if (!hasPairedOutput) {
       content = persistedToolResultContentFromChatContent(part.content);
     } else if (Array.isArray(part.content)) {
-      if (!deepEquals(part.content, output)) {
-        panic(`Tool result ${part.toolCallId} disagrees with canonical output`);
-      }
-      content = { type: "paired-output-parts" };
+      content = deepEquals(part.content, output)
+        ? { type: "paired-output-parts" }
+        : persistedToolResultContentFromChatContent(part.content);
     } else if (part.content !== stringifyPersistedJsonValue(output)) {
       content = { type: "text", value: part.content };
     }

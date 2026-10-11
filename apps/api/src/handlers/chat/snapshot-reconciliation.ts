@@ -144,6 +144,21 @@ export const createSnapshotActivityReconciler = (
 };
 
 // Calls without a sibling result must also advance monotonically on replay.
+// A complete call paired with streaming output is SDK progress, not a
+// terminal call. Error and independently completed calls own their payload.
+const TOOL_CALL_COMPLETION = {
+  "awaiting-input": "active",
+  "input-streaming": "active",
+  "input-complete": "active",
+  "approval-requested": "active",
+  "approval-responded": "active",
+  complete: "result-dependent",
+  error: "terminal",
+} as const satisfies Record<
+  ToolCallPart["state"],
+  "active" | "result-dependent" | "terminal"
+>;
+
 const TOOL_CALL_FINALITY = {
   "awaiting-input": 0,
   "input-streaming": 1,
@@ -233,6 +248,7 @@ type SnapshotPartsOptions = {
 /** One turn owns provenance; snapshots and synthetic resume events cannot claim deltas. */
 export class SnapshotPartReconciler {
   private readonly sources = new WeakMap<MessagePart, PartSource>();
+  private readonly terminalCalls = new Map<string, ToolCallPart>();
 
   constructor(initial: UIMessage["parts"]) {
     // Completed history is canonical transcript content on a continuation.
@@ -768,6 +784,35 @@ export class SnapshotPartReconciler {
         (candidate) =>
           candidate.type === "tool-result" && candidate.toolCallId === part.id,
       );
+      const canonicalCall = previous.parts.find(
+        (candidate) =>
+          candidate.type === "tool-call" && candidate.id === part.id,
+      );
+      if (canonicalCall?.type === "tool-call") {
+        const completion = TOOL_CALL_COMPLETION[canonicalCall.state];
+        // A later streaming sibling cannot turn an independently terminal
+        // call into SDK progress on the next snapshot.
+        if (
+          !this.terminalCalls.has(canonicalCall.id) &&
+          (completion === "terminal" ||
+            (completion === "result-dependent" &&
+              (canonicalResult?.type !== "tool-result" ||
+                canonicalResult.state !== "streaming")))
+        ) {
+          this.terminalCalls.set(canonicalCall.id, canonicalCall);
+        }
+      }
+      const terminalCall = this.terminalCalls.get(part.id);
+      if (terminalCall !== undefined) {
+        return this.inherit(
+          reconcileSnapshotCall({
+            selected: terminalCall,
+            other: terminalCall,
+            resultSelected: false,
+          }),
+          terminalCall,
+        );
+      }
       const updated = snapshot.parts.find(
         (candidate) =>
           candidate.type === "tool-call" && candidate.id === part.id,

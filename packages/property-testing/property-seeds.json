@@ -72,6 +72,20 @@
       "date": "2026-10-11"
     }
   ],
+  "apps/api/src/handlers/chat/snapshot-reconciliation.property.test.ts::terminal calls without sibling results preserve settled payloads across later result snapshots": [
+    {
+      "seed": 20260901,
+      "path": "0:0:0:0:0:0:0:1:1",
+      "note": "Settled call payload with a later sibling result",
+      "date": "2026-10-11"
+    },
+    {
+      "seed": 20260901,
+      "path": "7:0:0:1:1:1:1:1:1",
+      "note": "Settled call across repeated later result snapshots",
+      "date": "2026-10-11"
+    }
+  ],
   "apps/api/src/handlers/chat/snapshot-reconciliation.property.test.ts::textual snapshots preserve segmentation changes and delta content": [
     {
       "seed": 20260901,

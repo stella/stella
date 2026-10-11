@@ -399,28 +399,34 @@ describe("persisted chat message parts", () => {
     );
   });
 
-  test("rejects rich result content that disagrees with canonical output", () => {
-    expect(() =>
-      toPersistedChatMessageContentV3({
-        data: [
-          {
-            arguments: "{}",
-            id: "mismatched-output",
-            input: {},
-            name: "mcp__external__search",
-            output: [{ content: "canonical", type: "text" }],
-            state: "complete",
-            type: "tool-call",
-          },
-          {
-            content: [{ content: "stale", type: "text" }],
-            state: "complete",
-            toolCallId: "mismatched-output",
-            type: "tool-result",
-          },
-        ],
-      }),
-    ).toThrow("Tool result mismatched-output disagrees with canonical output");
+  test("preserves independent rich result content beside terminal call output", () => {
+    const persisted = toPersistedChatMessageContentV3({
+      data: [
+        {
+          arguments: "{}",
+          id: "mismatched-output",
+          input: {},
+          name: "mcp__external__search",
+          output: [{ content: "canonical", type: "text" }],
+          state: "complete",
+          type: "tool-call",
+        },
+        {
+          content: [{ content: "stale", type: "text" }],
+          state: "complete",
+          toolCallId: "mismatched-output",
+          type: "tool-result",
+        },
+      ],
+    });
+    expect(normalizePersistedChatMessageContent(persisted).parts.at(1)).toEqual(
+      {
+        content: [{ content: "stale", type: "text" }],
+        state: "complete",
+        toolCallId: "mismatched-output",
+        type: "tool-result",
+      },
+    );
   });
 
   test("rejects malformed v3 parsed input at the database boundary", () => {

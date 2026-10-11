@@ -1240,3 +1240,147 @@ test(
   },
   propertyTestTimeout(15_000),
 );
+
+const terminalCallArbitrary = fc.record({
+  terminal: fc.constantFrom("complete", "error", "denied"),
+  output: segmentTokenArbitrary,
+  updates: fc.array(
+    fc.record({
+      state: fc.constantFrom("streaming", "complete", "error", "denied"),
+      content: segmentTokenArbitrary,
+    }),
+    { minLength: 1, maxLength: 20 },
+  ),
+});
+
+const terminalCallScenario = (
+  terminal: "complete" | "error" | "denied",
+  output: string | undefined,
+) => {
+  const call = {
+    type: "tool-call",
+    id: "terminal-call",
+    name: "lookup",
+    arguments: "{}",
+    input: {},
+    state: terminal === "complete" ? "complete" : "error",
+    ...(output === undefined ? {} : { output }),
+    ...(terminal === "denied"
+      ? {
+          approval: {
+            id: "terminal-approval",
+            needsApproval: true,
+            approved: false,
+          },
+        }
+      : {}),
+  } as const satisfies ToolCallPart;
+  const before = { type: "text", content: "A" } as const;
+  const after = { type: "text", content: "B" } as const;
+  const stale = {
+    type: "tool-call",
+    id: call.id,
+    name: call.name,
+    arguments: call.arguments,
+    input: call.input,
+    state: "input-complete",
+  } as const satisfies ToolCallPart;
+  return { call, before, after, stale };
+};
+
+for (const terminal of ["complete", "error"] as const) {
+  test(`terminal ${terminal} call without result keeps its state and output when a sibling arrives`, async () => {
+    const { call, before, after, stale } = terminalCallScenario(
+      terminal,
+      "settled",
+    );
+    const result = {
+      type: "tool-result",
+      toolCallId: call.id,
+      state: terminal === "complete" ? "streaming" : "complete",
+      content: "later",
+    } as const satisfies ToolResultPart;
+    const expected = [before, call, result, after];
+    const { reload } = await collectTurn(
+      orderedTurn([
+        [before, call, after],
+        [before, stale, result, after],
+      ]),
+      (parts) => {
+        expect(parts).toEqual(expected);
+      },
+    );
+    expect(reload.parts).toEqual(expected);
+  });
+}
+
+test(
+  "terminal calls without sibling results preserve settled payloads across later result snapshots",
+  async () => {
+    await assertProperty(
+      "terminal calls without sibling results preserve settled payloads across later result snapshots",
+      fc.asyncProperty(terminalCallArbitrary, async (scenario) => {
+        for (const output of [scenario.output, undefined]) {
+          for (const contentMode of ["text", "parts"] as const) {
+            const { call, before, after, stale } = terminalCallScenario(
+              scenario.terminal,
+              output,
+            );
+            const snapshots: UIMessage["parts"][] = [[before, call, after]];
+            let result: ToolResultPart | undefined;
+            for (const update of scenario.updates) {
+              const content =
+                contentMode === "text"
+                  ? update.content
+                  : [{ type: "text", content: update.content } as const];
+              const incoming = {
+                type: "tool-result",
+                toolCallId: call.id,
+                state: update.state === "denied" ? "error" : update.state,
+                content,
+                ...(update.state === "denied"
+                  ? { outcome: "denied" as const }
+                  : {}),
+              } as const satisfies ToolResultPart;
+              snapshots.push([before, stale, incoming, after]);
+              if (result === undefined || result.state === "streaming") {
+                result = incoming;
+              }
+            }
+            if (result === undefined) {
+              panic("Terminal result generator produced no updates");
+            }
+            const expected = [before, call, result, after];
+            const { reload, emitted } = await collectTurn(
+              orderedTurn(snapshots),
+              (parts) => {
+                expect(parts).toEqual(expected);
+              },
+            );
+            expect(reload.parts).toEqual(expected);
+            const live = createStreamMessageCapture({
+              initialMessages: [],
+              capture: (message) => message,
+            });
+            for (const chunk of emitted) {
+              live.processor.processChunk(chunk);
+              for (const part of live.processor
+                .getMessages()
+                .flatMap(({ parts }) => parts)) {
+                if (part.type === "tool-call" && part.id === call.id) {
+                  expect(part).toEqual(call);
+                }
+              }
+            }
+            expect(
+              live.processor.getMessages().flatMap(({ parts }) => parts),
+            ).toEqual(expected);
+            expectTerminalMonotonicity(emitted);
+          }
+        }
+      }),
+      { numRuns: 100 },
+    );
+  },
+  propertyTestTimeout(15_000),
+);
