@@ -11,6 +11,10 @@ on:
         default: false
   workflow_dispatch:
 
+defaults:
+  run:
+    shell: bash
+
 permissions: {}
 
 concurrency:
