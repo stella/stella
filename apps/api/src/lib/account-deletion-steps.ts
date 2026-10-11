@@ -1059,6 +1059,7 @@ export const deleteUserFiles = async ({
   currentUserId,
   s3KeysToDelete,
 }: DeleteUserFilesParams): Promise<Date | null> => {
+  // audit: skip - The enclosing account-deletion request records file and export erasure in this transaction.
   // The account lock held by erasure fences claims and completion. Reclaimed
   // ledger rows hold no object keys and leave without a result set.
   await tx
