@@ -24,8 +24,8 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 
 /** Long composer lists (Skills, Context, a matter's files, the matter picker)
  *  stay short enough to open level with their trigger instead of being
- *  shifted up to fit the viewport; the rest scrolls under the pinned search
- *  field. */
+ *  shifted up to fit the viewport; the rest scrolls below the search field,
+ *  which the popup pins as its header. */
 export const COMPOSER_LIST_VIEWPORT_CLASS_NAME =
   "max-h-[min(22rem,var(--available-height))]";
 
@@ -106,10 +106,7 @@ export const ComposerSubmenuSearch = ({
   );
 
   return (
-    <div
-      className="bg-popover sticky top-0 z-10 px-2 pt-1.5 pb-2"
-      ref={bindPopupKeys}
-    >
+    <div className="px-2 pt-1.5 pb-2" ref={bindPopupKeys}>
       <InputGroup>
         <InputGroupAddon>
           {trigger ? (

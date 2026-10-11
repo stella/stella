@@ -166,7 +166,7 @@ const MatterPickerSearch = ({
 }: MatterPickerSearchProps) => {
   const t = useTranslations();
   return (
-    <div className="bg-popover sticky top-0 z-10 flex flex-col gap-1.5 border-b px-2 pt-1.5 pb-2">
+    <div className="flex flex-col gap-1.5 border-b px-2 pt-1.5 pb-2">
       <p className="text-foreground text-sm font-semibold">
         {t("inspector.matterPicker.title")}
       </p>
@@ -415,14 +415,16 @@ export const ChatMatterPicker = ({
       <MenuPopup
         align="start"
         className="w-72"
+        header={
+          <MatterPickerSearch
+            search={search}
+            onChange={setSearch}
+            searchRef={searchRef}
+          />
+        }
         sideOffset={6}
         viewportClassName={COMPOSER_LIST_VIEWPORT_CLASS_NAME}
       >
-        <MatterPickerSearch
-          search={search}
-          onChange={setSearch}
-          searchRef={searchRef}
-        />
         <div className="flex flex-col py-1">
           <QueryViewFeedback view={workspacesView} />
           {/* "All matters" sits above the per-matter rows so users

@@ -96,19 +96,22 @@ test("a long matter list scrolls inside a popup capped to the space around its t
   }
 });
 
-test("the title and search stay pinned above the scrolling matters", async () => {
+test("the title and search sit above the scrolling matters, never over them", async () => {
   await openPicker();
   const search = screen.getByPlaceholderText(
     en.inspector.matterPicker.searchPlaceholder,
   );
   const title = screen.getByText(en.inspector.matterPicker.title);
   const header = title.parentElement;
-  if (!header) {
-    throw new Error("Expected the picker header");
+  const viewport = screen
+    .getByText(`Matter ${MATTER_COUNT - 1}`)
+    .closest(".overflow-y-auto");
+  if (!header || !(viewport instanceof HTMLElement)) {
+    throw new Error("Expected the picker header and its scrolling list");
   }
   expect(header.contains(search)).toBe(true);
-  expect(header.classList.contains("sticky")).toBe(true);
-  expect(header.classList.contains("top-0")).toBe(true);
-  // An opaque background keeps scrolled rows from showing through.
-  expect(header.classList.contains("bg-popover")).toBe(true);
+  // The header is outside the scrolling list, so a row scrolled into view
+  // while moving up with the keyboard can never end up hidden under it.
+  expect(viewport.contains(header)).toBe(false);
+  expect(header.nextElementSibling).toBe(viewport);
 });
