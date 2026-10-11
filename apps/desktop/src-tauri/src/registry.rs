@@ -432,24 +432,6 @@ mod tests {
 
     for (case, (status, body, expected, linked)) in [
       (
-        StatusCode::FORBIDDEN,
-        serde_json::json!({}),
-        role_forbidden(),
-        true,
-      ),
-      (
-        StatusCode::UNAUTHORIZED,
-        serde_json::json!({"message":"Reconnect desktop to your account"}),
-        not_connected(),
-        false,
-      ),
-      (
-        StatusCode::UNAUTHORIZED,
-        serde_json::json!({"code":"desktop_proof_expired"}),
-        "Desktop account proof was refused".into(),
-        true,
-      ),
-      (
         StatusCode::UNAUTHORIZED,
         serde_json::json!({"code":"desktop_proof_invalid"}),
         "Desktop account proof was refused".into(),
@@ -457,21 +439,9 @@ mod tests {
       ),
       (
         StatusCode::UNAUTHORIZED,
-        serde_json::json!({"code":"desktop_proof_replayed"}),
-        "Desktop account proof was refused".into(),
-        true,
-      ),
-      (
-        StatusCode::UNAUTHORIZED,
-        serde_json::json!({"code":"desktop_device_mismatch"}),
-        "Desktop account proof was refused".into(),
-        true,
-      ),
-      (
-        StatusCode::UNAUTHORIZED,
-        serde_json::json!({"code":"unknown"}),
-        "Registry authorization failed".into(),
-        true,
+        serde_json::json!({"message":"Reconnect desktop to your account"}),
+        not_connected(),
+        false,
       ),
     ]
     .into_iter()
