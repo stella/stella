@@ -39,6 +39,14 @@ import {
 // oxlint-disable-next-line no-restricted-properties -- Claim clock is used by query fetch/interval callbacks for client recovery; it does not determine rendered SSR or hydration snapshots.
 const readerPollingNow = () => Temporal.Now.instant().epochMilliseconds;
 const MIN_RECOVERY_REQUEST_TIMEOUT_MS = 5000;
+const TERMINAL_READER_ANSWER_STATUSES = {
+  streaming: false,
+  complete: true,
+  failed: true,
+} as const satisfies Record<
+  ReaderAnswer["messages"][number]["status"],
+  boolean
+>;
 
 const createReaderAnswerRuntime = (scope: string) => {
   let phase: "active" | "cancelled" = "active";
@@ -62,7 +70,53 @@ const createReaderAnswerRuntime = (scope: string) => {
     },
   };
 };
-type ReaderAnswerErrors = ReadonlyMap<string, APIError | ReaderAnswerFailure>;
+type ReaderAnswerErrorOrigin =
+  | { type: "operation" }
+  | { type: "stream"; messageId: string };
+type ReaderAnswerErrors = ReadonlyMap<
+  string,
+  ReaderAnswerErrorOrigin & { error: APIError | ReaderAnswerFailure }
+>;
+type RecordReaderAnswerErrorOptions = {
+  key: string;
+  cause: unknown;
+  origin: ReaderAnswerErrorOrigin;
+  setErrors: Dispatch<SetStateAction<ReaderAnswerErrors>>;
+};
+const recordReaderAnswerError = ({
+  key,
+  cause,
+  origin,
+  setErrors,
+}: RecordReaderAnswerErrorOptions) => {
+  getAnalytics().captureError(cause);
+  const error =
+    APIError.is(cause) || ReaderAnswerFailure.is(cause)
+      ? cause
+      : new ReaderAnswerFailure({
+          kind: "request",
+          message: "Reader answer request failed",
+        });
+  switch (origin.type) {
+    case "operation":
+      setErrors((current) =>
+        new Map(current).set(key, { type: "operation", error }),
+      );
+      return;
+    case "stream":
+      setErrors((current) =>
+        new Map(current).set(key, {
+          type: "stream",
+          messageId: origin.messageId,
+          error,
+        }),
+      );
+      return;
+    default:
+      origin satisfies never;
+      panic("Unknown reader answer error origin");
+  }
+};
 type StreamAnswerOptions = {
   answerId: string | null;
   path: string;
@@ -160,14 +214,15 @@ const runStreamAnswer = async (
       runtime.ownedMessageIds.delete(event.messageId);
       if (event.type === "failed") {
         setErrors((current) =>
-          new Map(current).set(
-            id,
-            new ReaderAnswerFailure({
+          new Map(current).set(id, {
+            type: "stream",
+            messageId: event.messageId,
+            error: new ReaderAnswerFailure({
               kind: "model",
               code: event.errorCode,
               message: event.message,
             }),
-          ),
+          }),
         );
       }
     },
@@ -180,6 +235,14 @@ const runStreamAnswer = async (
   }
   if (streaming.isErr() && currentAnswerId !== null) {
     const failedId = currentAnswerId;
+    if (ownership.messageId !== null) {
+      recordReaderAnswerError({
+        key: failedId,
+        cause: streaming.error,
+        origin: { type: "stream", messageId: ownership.messageId },
+        setErrors,
+      });
+    }
     queryClient.setQueryData(queryKey, (current: ReaderAnswer[] | undefined) =>
       current?.map((answer) =>
         answer.id === failedId
@@ -211,7 +274,8 @@ const runStreamAnswer = async (
     });
   }
   await queryClient.invalidateQueries({ queryKey });
-  return streaming;
+  // An accepted stream's error is already surfaced; reconciliation may have cleared it.
+  return ownership.messageId === null ? streaming : Result.ok(undefined);
 };
 
 type PerformReaderAnswerOperationOptions = Pick<
@@ -282,15 +346,12 @@ const performReaderAnswerOperation = async (
   }
   const result = outcome.andThen((value) => value ?? Result.ok(undefined));
   if (result.isErr()) {
-    getAnalytics().captureError(result.error);
-    const error =
-      APIError.is(result.error) || ReaderAnswerFailure.is(result.error)
-        ? result.error
-        : new ReaderAnswerFailure({
-            kind: "request",
-            message: "Reader answer request failed",
-          });
-    setErrors((current) => new Map(current).set(busyKey, error));
+    recordReaderAnswerError({
+      key: busyKey,
+      cause: result.error,
+      origin: { type: "operation" },
+      setErrors,
+    });
   }
   if (id === null) {
     setIsCreating(false);
@@ -309,10 +370,12 @@ type ReaderAnswersRecoveryOptions = {
   userId: string;
   runtime: ReturnType<typeof createReaderAnswerRuntime>;
   queryClient: QueryClient;
+  setErrors: Dispatch<SetStateAction<ReaderAnswerErrors>>;
 };
 const readerAnswersRecoveryOptions = ({
   runtime,
   queryClient,
+  setErrors,
   ...key
 }: ReaderAnswersRecoveryOptions) => {
   const options = readerAnswersOptions(key);
@@ -361,6 +424,27 @@ const readerAnswersRecoveryOptions = ({
       });
       const now = readerPollingNow();
       if (fetched.isOk()) {
+        if (!context.signal.aborted && !runtime.isCancelled()) {
+          setErrors((current) => {
+            const next = new Map(current);
+            for (const answer of fetched.value) {
+              const failure = current.get(answer.id);
+              if (failure?.type !== "stream") {
+                continue;
+              }
+              const assistant = answer.messages.findLast(
+                (message) => message.role === "assistant",
+              );
+              if (
+                assistant?.id === failure.messageId &&
+                TERMINAL_READER_ANSWER_STATUSES[assistant.status]
+              ) {
+                next.delete(answer.id);
+              }
+            }
+            return next.size === current.size ? current : next;
+          });
+        }
         return projectExpiredReaderAnswers({
           answers: fetched.value,
           ownedMessageIds: runtime.ownedMessageIds,
@@ -417,6 +501,10 @@ export const useReaderAnswers = ({
     new Set(),
   );
   const [isCreating, setIsCreating] = useState(false);
+  const [failures, setErrors] = useState<ReaderAnswerErrors>(new Map());
+  const errors = new Map(
+    Array.from(failures, ([id, { error }]) => [id, error] as const),
+  );
   // A list refetch must not replace another thread's still-unsettled deltas.
   const query = useQuery({
     ...readerAnswersRecoveryOptions({
@@ -425,10 +513,10 @@ export const useReaderAnswers = ({
       userId: user?.id ?? "",
       runtime,
       queryClient,
+      setErrors,
     }),
     enabled: user !== null && !isCreating && busyAnswerIds.size === 0,
   });
-  const [errors, setErrors] = useState<ReaderAnswerErrors>(new Map());
   if (runtime.scope !== scope) {
     runtime.cancel();
     setRuntime(createReaderAnswerRuntime(scope));

@@ -323,9 +323,7 @@ test("failed regeneration keeps one fresh assistant and sanitized partials survi
     content: "Sanitized partial",
     status: "failed",
   });
-  expect(hook.result.current.errors.get("answer-1")).toMatchObject({
-    kind: "model",
-  });
+  expect(hook.result.current.errors.get("answer-1")).toBeUndefined();
   expect(
     hook.result.current.answers.at(0)?.messages.at(-1)?.invalidCitationCount,
   ).toBe(1);
@@ -349,6 +347,169 @@ test("failed regeneration keeps one fresh assistant and sanitized partials survi
     invalidCitationCount: 1,
   });
 });
+
+// oxlint-disable-next-line require-contract-domains/require-contract-domains -- These are tested reader actions, not API domain values.
+test.each(["create", "follow-up", "regenerate"] as const)(
+  "a truncated %s stream yields to the authoritative terminal answer without a stale card error",
+  async (action) => {
+    fakeServer(true);
+    const baseFetch = globalThis.fetch;
+    const { wrapper } = setup();
+    const hook = renderHook(
+      () =>
+        useReaderAnswers({
+          decisionId: "decision-1",
+          generationMode: "enabled",
+        }),
+      { wrapper },
+    );
+    await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
+    if (action !== "create") {
+      await act(async () => {
+        await hook.result.current.createExplain(anchor);
+      });
+    }
+    globalThis.fetch = Object.assign(
+      async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+        const response = await baseFetch(input, init);
+        const request = new Request(input, init);
+        if (request.method !== "POST") {
+          return response;
+        }
+        await response.body?.cancel();
+        const started = {
+          type: "started",
+          answerId: toSafeId<"legalReaderAnswer">("answer-1"),
+          messageId: toSafeId<"legalReaderAnswerMessage">(
+            action === "create" ? "assistant-1" : "assistant-2",
+          ),
+        } as const satisfies ReaderAnswerStreamEvent;
+        return new Response(`data: ${JSON.stringify(started)}\n\n`, {
+          headers: { "Content-Type": "text/event-stream" },
+        });
+      },
+      { preconnect: originalFetch.preconnect },
+    );
+    await act(async () => {
+      switch (action) {
+        case "create":
+          await hook.result.current.createExplain(anchor);
+          break;
+        case "follow-up":
+          await hook.result.current.followUp("answer-1", "What follows?");
+          break;
+        case "regenerate":
+          await hook.result.current.regenerate("answer-1");
+          break;
+      }
+    });
+    const expectedContent = {
+      create: "Answer 1",
+      "follow-up": "Answer 2",
+      regenerate: "Sanitized partial",
+    } as const satisfies Record<typeof action, string>;
+    const content = expectedContent[action];
+    await waitFor(() =>
+      expect(hook.result.current.answers.at(0)?.messages.at(-1)?.content).toBe(
+        content,
+      ),
+    );
+    const answer = hook.result.current.answers.at(0);
+    if (!answer) {
+      throw new TypeError("Missing reconciled reader answer");
+    }
+    const { IntlProvider } = await import("use-intl");
+    const { default: messages } = await import("@/i18n/langs/en.json");
+    const { ReaderAnswerCard } = await import("./reader-answer-card");
+    const view = render(
+      <IntlProvider locale="en" messages={messages}>
+        <ReaderAnswerCard
+          answer={answer}
+          generationMode="enabled"
+          active={false}
+          openRevision={0}
+          busy={false}
+          error={readerAnswerFailureKind(
+            hook.result.current.errors.get(answer.id),
+          )}
+          onOpen={() => undefined}
+          onFollowUp={() => undefined}
+          onRegenerate={() => undefined}
+          onDelete={() => undefined}
+          onVisibility={() => undefined}
+          onCitation={() => undefined}
+          citationLabel={(citation) => citation.paragraphId}
+        />
+      </IntlProvider>,
+    );
+    expect(view.getByText(content)).toBeTruthy();
+    expect(view.queryByText(messages.readerAnswers.networkError)).toBeNull();
+    expect(view.queryByText(messages.readerAnswers.modelError)).toBe(
+      action === "regenerate"
+        ? view.getByText(messages.readerAnswers.modelError)
+        : null,
+    );
+    expect(hook.result.current.errors.size).toBe(0);
+    expect(hook.result.current.error).toBeNull();
+  },
+);
+
+// oxlint-disable-next-line require-contract-domains/require-contract-domains -- These are tested reader actions, not API domain values.
+test.each(["follow-up", "regenerate", "share", "delete"] as const)(
+  "reading an older completed answer preserves a rejected %s operation error",
+  async (action) => {
+    fakeServer();
+    const baseFetch = globalThis.fetch;
+    const { client, wrapper } = setup();
+    const hook = renderHook(
+      () =>
+        useReaderAnswers({
+          decisionId: "decision-1",
+          generationMode: "enabled",
+        }),
+      { wrapper },
+    );
+    await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
+    await act(async () => {
+      await hook.result.current.createExplain(anchor);
+    });
+    globalThis.fetch = Object.assign(
+      async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+        const request = new Request(input, init);
+        return request.method === "GET"
+          ? await baseFetch(input, init)
+          : Response.json(
+              { message: "Operation unavailable" },
+              { status: 503 },
+            );
+      },
+      { preconnect: originalFetch.preconnect },
+    );
+    await act(async () => {
+      switch (action) {
+        case "follow-up":
+          await hook.result.current.followUp("answer-1", "What follows?");
+          break;
+        case "regenerate":
+          await hook.result.current.regenerate("answer-1");
+          break;
+        case "share":
+          await hook.result.current.setVisibility("answer-1", "shared");
+          break;
+        case "delete":
+          await hook.result.current.remove("answer-1");
+          break;
+      }
+      await client.invalidateQueries({ queryKey: ["reader-answers"] });
+    });
+    expect(hook.result.current.answers.at(0)?.messages.at(-1)?.content).toBe(
+      "Answer 1",
+    );
+    expect(
+      readerAnswerFailureKind(hook.result.current.errors.get("answer-1")),
+    ).toBe("network");
+  },
+);
 
 test("switching decision discards a delayed stream before it can activate an old card", async () => {
   const server = fakeServer();
@@ -722,7 +883,9 @@ test("stream admission exhaustion stays a budget failure after reload", async ()
     await hook.result.current.regenerate("answer-1");
   });
   expect(
-    readerAnswerFailureKind(hook.result.current.errors.get("answer-1")),
+    readerAnswerErrorCodeKind(
+      hook.result.current.answers.at(0)?.messages.at(-1)?.errorCode ?? null,
+    ),
   ).toBe("budget");
   hook.unmount();
   const reload = setup();
