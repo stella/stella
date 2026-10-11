@@ -141,6 +141,22 @@ const isUndecodable = ({
   unattributed,
 }: TextDecodabilityOptions): boolean => {
   const compact = unattributed.replace(/\s+/gu, " ").trim();
+  const metadataOnly = unattributed
+    .split(/\n[^\S\n]*\n/gu)
+    .filter((block) => block.trim().length > 0)
+    .every((block) => {
+      if (isMetadata(block.replace(/\s+/gu, " ").trim())) {
+        return true;
+      }
+      return block
+        .split("\n")
+        .map((line) => line.replace(/\s+/gu, " ").trim())
+        .filter((line) => line.length > 0)
+        .every(isMetadata);
+    });
+  if (compact.length > 0 && metadataOnly) {
+    return COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT;
+  }
   // UTF-16 decoded as a single-byte encoding and replacement/control bytes
   // cannot supply a word. A genuine word elsewhere still remains admissible.
   const readable = remaining
@@ -202,9 +218,6 @@ export const classifyCourtListenerText = (
   }
   if (unattributed.split(/\n/gu).some((line) => RULING_WORDS.test(line))) {
     return COURTLISTENER_TEXT_USABILITY.USABLE;
-  }
-  if (isMetadata(compact)) {
-    return COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT;
   }
 
   const remaining = unattributed

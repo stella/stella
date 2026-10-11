@@ -106,6 +106,54 @@ const readableSentence = fc.oneof(
     .map(([subject, predicate, ending]) => `${subject} ${predicate}${ending}`),
 );
 
+const metadataHeader = fc.oneof(
+  fc
+    .tuple(
+      fc.integer({ min: 10, max: 99 }),
+      fc.integer({ min: 1, max: 99_999 }),
+      fc.integer({ min: 1, max: 40 }),
+    )
+    .map(
+      ([year, docket, page]) =>
+        `Case: ${year}-${docket} Date Filed: 01/01/2024 Page: ${page} of 40`,
+    ),
+  fc.constantFrom(
+    "Office of the Attorney General",
+    "United States Court of Appeals for the Second Circuit",
+    "Mr. Justice Zqhr delivered the opinion of the court.",
+    "Judge Zqhr took no part.",
+    "2024 PA Super 123",
+    "January 1, 2024",
+  ),
+);
+
+test(
+  "CourtListener metadata sequences contain no ruling until a ruling block is added",
+  () => {
+    assertProperty(
+      "CourtListener metadata sequences contain no ruling until a ruling block is added",
+      fc.property(
+        fc.array(metadataHeader, { minLength: 1, maxLength: 40 }),
+        fc.constantFrom("\n", "\n\n", "\r\n\r\n"),
+        readableSentence,
+        fc.nat(),
+        (headers, separator, sentence, position) => {
+          const body = headers.join(separator);
+          expect(classifyCourtListenerText(body)).toBe("no-ruling-text");
+          const insertion = position % (headers.length + 1);
+          const withRuling = [
+            ...headers.slice(0, insertion),
+            sentence,
+            ...headers.slice(insertion),
+          ].join(separator);
+          expect(classifyCourtListenerText(withRuling)).toBe("usable");
+        },
+      ),
+    );
+  },
+  propertyTestTimeout(10_000),
+);
+
 test("CourtListener long body without sentence breaks classifies within the normal test time", () => {
   expect(classifyCourtListenerText("a".repeat(100_000))).toBe("usable");
 });

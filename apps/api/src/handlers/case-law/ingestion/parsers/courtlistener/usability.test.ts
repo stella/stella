@@ -7,6 +7,16 @@ import {
 } from "./usability";
 
 describe("CourtListener short text usability", () => {
+  test.each([
+    "Case: 24-12345 Date Filed: 01/01/2024 Page: 1 of 2\n\nCase: 24-12345 Date Filed: 01/01/2024 Page: 2 of 2",
+    "Case: 24-12345 Date Filed: 01/01/2024 Page: 1 of 2\nOffice of the Attorney General\nUnited States Court of Appeals for the Second Circuit",
+    "Case: 24-12345\nDate Filed: 01/01/2024 Page: 1 of 2\n\nCase: 24-12345\nDate Filed: 01/01/2024 Page: 2 of 2",
+  ])("multiple metadata blocks contain no ruling: %s", (body) => {
+    expect(classifyCourtListenerText(body)).toBe("no-ruling-text");
+    expect(classifyCourtListenerText(`${body}\n\nThe order is vacated.`)).toBe(
+      "usable",
+    );
+  });
   test("covers every reviewed group and synthetic text", () => {
     expect(shortTexts).toHaveLength(281);
     expect(
