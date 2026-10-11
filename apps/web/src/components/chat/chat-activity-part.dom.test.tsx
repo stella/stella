@@ -5,6 +5,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { testChatApprovalContextValue } from "@/components/chat/chat-approval-context.test-fixtures";
 import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
+import type { Analytics } from "@/lib/analytics/types";
 
 GlobalRegistrator.register({ url: "https://app.example.test/chat/thread" });
 const originalFetch = globalThis.fetch;
@@ -46,17 +47,12 @@ const activityMessage = (activityType: string) =>
     ],
   }) satisfies ChatUIMessage;
 
-const activityView = (message: ChatUIMessage, errors: unknown[]) => (
+const activityView = (message: ChatUIMessage, analytics: Analytics) => (
   <StrictMode>
     <ChatThreadTestRouter>
       <QueryClientProvider client={new QueryClient()}>
         <IntlProvider locale="cs" messages={messages} timeZone="UTC">
-          <AnalyticsContext
-            value={{
-              ...noopAnalytics,
-              captureError: (error) => errors.push(error),
-            }}
-          >
+          <AnalyticsContext value={analytics}>
             <ChatMattersContext
               value={{ createDocumentMattersView: { type: "empty" } }}
             >
@@ -84,11 +80,15 @@ const activityView = (message: ChatUIMessage, errors: unknown[]) => (
   </StrictMode>
 );
 
-test("unknown chat activities report once without rendering or reporting private payloads", () => {
+test("unknown chat activities report once per type across remounts without rendering or reporting private payloads", () => {
   const errors: unknown[] = [];
+  const analytics = {
+    ...noopAnalytics,
+    captureError: (error: unknown) => errors.push(error),
+  };
   const message = activityMessage("private-activity-type");
-  const view = render(activityView(message, errors));
-  view.rerender(activityView(structuredClone(message), errors));
+  const view = render(activityView(message, analytics));
+  view.rerender(activityView(structuredClone(message), analytics));
 
   expect(
     errors,
@@ -105,14 +105,51 @@ test("unknown chat activities report once without rendering or reporting private
   expect(view.container.textContent).not.toContain("private-activity-type");
   expect(view.container.textContent).not.toContain("private-payload");
 
-  view.rerender(activityView(activityMessage("another-private-type"), errors));
+  view.unmount();
+  const remounted = render(activityView(structuredClone(message), analytics));
+  expect(errors).toHaveLength(1);
+
+  remounted.rerender(
+    activityView(activityMessage("another-private-type"), analytics),
+  );
   expect(errors).toHaveLength(2);
   expect(JSON.stringify(errors)).not.toContain("another-private-type");
+
+  remounted.rerender(activityView(structuredClone(message), analytics));
+  expect(errors).toHaveLength(2);
+});
+
+test("a new analytics session reports an unknown activity again", () => {
+  const firstSessionErrors: unknown[] = [];
+  const secondSessionErrors: unknown[] = [];
+  const firstAnalytics = {
+    ...noopAnalytics,
+    captureError: (error: unknown) => firstSessionErrors.push(error),
+  };
+  const secondAnalytics = {
+    ...noopAnalytics,
+    captureError: (error: unknown) => secondSessionErrors.push(error),
+  };
+  const message = activityMessage("session-scoped-private-type");
+  const firstSession = render(activityView(message, firstAnalytics));
+  expect(firstSessionErrors).toHaveLength(1);
+  firstSession.unmount();
+
+  const secondSession = render(activityView(message, secondAnalytics));
+  secondSession.rerender(
+    activityView(structuredClone(message), secondAnalytics),
+  );
+  expect(firstSessionErrors).toHaveLength(1);
+  expect(secondSessionErrors).toHaveLength(1);
 });
 
 test("review activities use the dedicated translated chat label without telemetry", () => {
   const errors: unknown[] = [];
-  const view = render(activityView(activityMessage("review"), errors));
+  const analytics = {
+    ...noopAnalytics,
+    captureError: (error: unknown) => errors.push(error),
+  };
+  const view = render(activityView(activityMessage("review"), analytics));
   expect(view.getByText(messages.chat.activity.review)).toBeDefined();
   expect(view.container.textContent).not.toContain("private-payload");
   expect(errors).toEqual([]);

@@ -109,11 +109,12 @@ import {
   mentionTagAttrs,
 } from "@/components/references/reference.logic";
 import type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useMaybeStickToBottomContext } from "@/hooks/use-stick-to-bottom";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
+import type { Analytics } from "@/lib/analytics/types";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { detached } from "@/lib/detached";
@@ -1490,21 +1491,27 @@ const TextMessageParts = ({
   </>
 );
 
-const UnknownChatActivity = () => {
+const reportedUnknownActivityTypes = new WeakMap<Analytics, Set<string>>();
+
+const UnknownChatActivity = ({ activityType }: { activityType: string }) => {
   const analytics = useAnalytics();
-  const reported = useRef(false);
-  useMountEffect(() => {
-    if (reported.current) {
+  useExternalSyncEffect(() => {
+    let reportedTypes = reportedUnknownActivityTypes.get(analytics);
+    if (!reportedTypes) {
+      reportedTypes = new Set<string>();
+      reportedUnknownActivityTypes.set(analytics, reportedTypes);
+    }
+    if (reportedTypes.has(activityType)) {
       return;
     }
-    reported.current = true;
+    reportedTypes.add(activityType);
     analytics.captureError(
       new ClientTelemetryError({
         area: "chat-unknown-activity",
         message: "A chat activity has no registered renderer",
       }),
     );
-  });
+  }, [activityType, analytics]);
   return null;
 };
 
@@ -1523,7 +1530,12 @@ const ChatActivityPart = ({ part }: ChatActivityPartProps) => {
       labelKey = "chat.activity.review";
       break;
     default:
-      return <UnknownChatActivity key={part.activityType} />;
+      return (
+        <UnknownChatActivity
+          key={part.activityType}
+          activityType={part.activityType}
+        />
+      );
   }
 
   return (

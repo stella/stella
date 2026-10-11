@@ -7,11 +7,25 @@
       "id": "textual-snapshot-retains-provider-metadata",
       "behaviour": "A signed snapshot enriches streamed thinking; later unsigned snapshots retain its final signature and provider fields.",
       "file": "src/handlers/chat/snapshot-reconciliation.ts",
-      "search": "mergeTextualSnapshotMetadata({\n          canonical: metadataOwner,\n          incoming,\n          content: snapshotContent.slice(start, end),\n        })",
+      "search": "mergeTextualSnapshotMetadata({\n          canonical,\n          incoming,\n          content: snapshotContent.slice(start, end),\n          canonicalStart: canonicalRange?.start,\n          contentStart: fragmentStart,\n        })",
       "replace": "{ ...canonical, content: snapshotContent.slice(start, end) }",
       "scenario": {
         "file": "src/handlers/chat/snapshot-reconciliation.property.test.ts",
         "test": "signed thinking snapshots enrich streamed content and survive later unsigned snapshots"
+      },
+      "oracle": "chat.live.equals-reload"
+    },
+    {
+      "fix": "#5256",
+      "status": "active",
+      "id": "snapshot-only-textual-metadata-survives-unsigned-repeat",
+      "behaviour": "Snapshot-only textual blocks retain provider metadata and signed reasoning identities through repeated unsigned snapshots.",
+      "file": "src/handlers/chat/snapshot-reconciliation.ts",
+      "search": "mergeTextualSnapshotMetadata({\n          canonical,\n          incoming,\n          content: snapshotContent.slice(start, end),\n          canonicalStart: canonicalRange?.start,\n          contentStart: fragmentStart,\n        })",
+      "replace": "(hasDeltas ? mergeTextualSnapshotMetadata({\n          canonical,\n          incoming,\n          content: snapshotContent.slice(start, end),\n          canonicalStart: canonicalRange?.start,\n          contentStart: fragmentStart,\n        }) : { ...incoming, content: snapshotContent.slice(start, end) })",
+      "scenario": {
+        "file": "src/handlers/chat/snapshot-reconciliation.property.test.ts",
+        "test": "streamed textual completions preserve newly introduced lifecycle anchors"
       },
       "oracle": "chat.live.equals-reload"
     },
@@ -25,7 +39,7 @@
       "replace": "    return;",
       "scenario": {
         "file": "../web/src/components/chat/chat-activity-part.dom.test.tsx",
-        "test": "unknown chat activities report once without rendering or reporting private payloads"
+        "test": "unknown chat activities report once per type across remounts without rendering or reporting private payloads"
       },
       "oracle": "chat.client.no-errors"
     },
@@ -63,7 +77,7 @@
       "id": "unknown-activities-are-omitted",
       "behaviour": "Unknown activity types do not render a user-facing activity card.",
       "file": "../web/src/components/chat/chat-thread-messages.tsx",
-      "search": "    default:\n      return <UnknownChatActivity key={part.activityType} />;\n  }\n\n  return (\n    <figure",
+      "search": "    default:\n      return (\n        <UnknownChatActivity\n          key={part.activityType}\n          activityType={part.activityType}\n        />\n      );\n  }\n\n  return (\n    <figure",
       "replace": "    default:\n      labelKey = \"chat.thinking\";\n  }\n\n  return (\n    <figure",
       "scenario": {
         "file": "../web/src/components/chat/chat-thread-messages.test.tsx",

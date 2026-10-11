@@ -1696,6 +1696,39 @@ test("signed thinking snapshots enrich streamed content and survive later unsign
   expect(index).toBe(expectedSnapshots.length);
 });
 
+test("snapshot-only signed reasoning keeps its identity through unsigned splits and merges", () => {
+  const signed = {
+    type: "thinking",
+    content: "AB",
+    signature: "opaque",
+    stepId: "signed-step",
+    redacted: false,
+  } as const;
+  const owner = new SnapshotPartReconciler([]);
+  let parts: UIMessage["parts"] = [];
+  const snapshots = [
+    [signed],
+    [
+      { type: "thinking", content: "A" },
+      { type: "thinking", content: "B" },
+    ],
+    [{ type: "thinking", content: "AB" }],
+  ] satisfies UIMessage["parts"][];
+  for (const snapshotParts of snapshots) {
+    parts = owner.reconcile({
+      previous: { id: MESSAGE_ID, role: "assistant", parts },
+      snapshot: { id: MESSAGE_ID, role: "assistant", parts: snapshotParts },
+      preservesPartLayout: true,
+      parseResultOutput: (content) => content,
+    });
+    expect(
+      parts,
+      JSON.stringify({ oracle: CHAT_ORACLE.liveEqualsReload }),
+    ).toEqual([signed]);
+    expect(owner.failure).toBeUndefined();
+  }
+});
+
 test(
   "streamed textual completions preserve newly introduced lifecycle anchors",
   async () => {
@@ -1803,6 +1836,151 @@ test(
           ).toEqual(expected);
           expectTerminalMonotonicity(emitted);
         }
+        // Snapshots can introduce the entire block before any textual delta.
+        // Empty blocks carry opaque reasoning metadata, so identity matters even
+        // when every block occupies the same textual offset.
+        for (const redacted of [false, true]) {
+          for (const content of [scenario.streamed + scenario.completion, ""]) {
+            if (redacted && content !== "") {
+              continue;
+            }
+            const signed = {
+              type: "thinking",
+              content,
+              stepId: `signed:${scenario.metadataToken}`,
+              signature: `signature:${scenario.metadataToken}`,
+              redacted,
+            } as const;
+            const unsigned = {
+              type: "thinking",
+              content,
+              ...(content === "" ? { stepId: signed.stepId } : {}),
+            } as const;
+            const expected = [signed];
+            const splitAt = Math.floor(content.length / 2);
+            const split =
+              content === ""
+                ? [unsigned]
+                : ([
+                    { type: "thinking", content: content.slice(0, splitAt) },
+                    { type: "thinking", content: content.slice(splitAt) },
+                  ] satisfies UIMessage["parts"]);
+            if (content !== "") {
+              expect(split.every((part) => part.content.length > 0)).toBe(true);
+            }
+            const { reload } = await collectTurn(
+              orderedTurn([expected, [unsigned], split, [unsigned], split]),
+              (parts) => {
+                expect(
+                  parts,
+                  JSON.stringify({ oracle: CHAT_ORACLE.liveEqualsReload }),
+                ).toEqual(expected);
+              },
+            );
+            expect(
+              sdkParts(reload),
+              JSON.stringify({ oracle: CHAT_ORACLE.liveEqualsReload }),
+            ).toEqual(expected);
+            if (content !== "") {
+              const repeated = {
+                type: "thinking",
+                content: content + content,
+              } as const;
+              const extended = [
+                signed,
+                { type: "thinking", content },
+              ] satisfies UIMessage["parts"];
+              const { reload: extendedReload } = await collectTurn(
+                orderedTurn([expected, [repeated], [repeated]]),
+                (parts) => {
+                  expect(
+                    parts,
+                    JSON.stringify({ oracle: CHAT_ORACLE.liveEqualsReload }),
+                  ).toEqual(extended);
+                },
+              );
+              expect(
+                sdkParts(extendedReload),
+                JSON.stringify({ oracle: CHAT_ORACLE.liveEqualsReload }),
+              ).toEqual(extended);
+            }
+          }
+          const signed = {
+            type: "thinking",
+            content: "",
+            stepId: `signed:${scenario.metadataToken}`,
+            signature: `signature:${scenario.metadataToken}`,
+            redacted,
+          } as const;
+          const placeholder = {
+            type: "thinking",
+            content: "",
+            stepId: `placeholder:${scenario.metadataToken}`,
+          } as const;
+          expect(placeholder.stepId).not.toBe(signed.stepId);
+          const { reload } = await collectTurn(
+            orderedTurn([[signed], [placeholder], [placeholder]]),
+            (parts) => {
+              expect(
+                parts,
+                JSON.stringify({ oracle: CHAT_ORACLE.liveEqualsReload }),
+              ).toEqual([placeholder]);
+            },
+          );
+          expect(
+            sdkParts(reload),
+            JSON.stringify({ oracle: CHAT_ORACLE.liveEqualsReload }),
+          ).toEqual([placeholder]);
+          const failures: SnapshotReconciliationError[] = [];
+          const owner = new SnapshotPartReconciler([signed], (error) => {
+            failures.push(error);
+          });
+          const reconciled = owner.reconcile({
+            previous: { id: MESSAGE_ID, role: "assistant", parts: [signed] },
+            snapshot: {
+              id: MESSAGE_ID,
+              role: "assistant",
+              parts: [placeholder],
+            },
+            preservesPartLayout: true,
+            parseResultOutput: (output) => output,
+          });
+          expect(failures).toEqual([]);
+          expect(
+            reconciled.find(
+              (part) =>
+                part.type === "thinking" && part.stepId === placeholder.stepId,
+            ),
+          ).toEqual(placeholder);
+          expect(
+            reconciled.find(
+              (part) =>
+                part.type === "thinking" && part.stepId === signed.stepId,
+            ),
+          ).toEqual(signed);
+        }
+        const providerText = {
+          type: "text",
+          content: scenario.streamed,
+          metadata: { provider: scenario.metadataToken },
+        } as const;
+        const { reload } = await collectTurn(
+          orderedTurn([
+            [providerText],
+            [{ type: "text", content: providerText.content }],
+            [{ type: "text", content: providerText.content }],
+          ]),
+          (parts) => {
+            expect(
+              parts,
+              JSON.stringify({ oracle: CHAT_ORACLE.liveEqualsReload }),
+            ).toEqual([providerText]);
+          },
+        );
+        expect(
+          sdkParts(reload),
+          JSON.stringify({ oracle: CHAT_ORACLE.liveEqualsReload }),
+        ).toEqual([providerText]);
       }),
       { numRuns: 100 },
     );

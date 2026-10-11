@@ -340,44 +340,97 @@ const preserveSignedTextBoundaries = ({
 };
 
 type TextualSnapshotMetadataOptions = {
-  canonical: Extract<MessagePart, { type: "text" | "thinking" }>;
+  canonical: Extract<MessagePart, { type: "text" | "thinking" }> | undefined;
   incoming: Extract<MessagePart, { type: "text" | "thinking" }>;
   content: string;
+  canonicalStart?: number;
+  contentStart?: number;
+};
+
+// Empty reasoning blocks carry opaque data: offsets alone cannot identify them.
+const textualMetadataIdentityMatches = ({
+  canonical,
+  incoming,
+  content,
+  canonicalStart,
+  contentStart,
+}: TextualSnapshotMetadataOptions) => {
+  if (canonical === undefined) {
+    return false;
+  }
+  if (canonical.type !== incoming.type) {
+    return false;
+  }
+  if (canonical.type !== "thinking" || incoming.type !== "thinking") {
+    return true;
+  }
+  const sameStep = canonical.stepId === incoming.stepId;
+  const sameRedactedIdentity =
+    canonical.redacted === true &&
+    incoming.redacted === true &&
+    canonical.signature !== undefined &&
+    canonical.signature === incoming.signature;
+  if (content === "" && !sameStep && !sameRedactedIdentity) {
+    return false;
+  }
+  if (
+    content !== "" &&
+    canonical.stepId !== undefined &&
+    incoming.stepId !== undefined &&
+    !sameStep
+  ) {
+    return false;
+  }
+  return (
+    canonical.signature === undefined ||
+    (canonical.content === content && canonicalStart === contentStart)
+  );
 };
 
 // Completion snapshots own newly supplied replay metadata; an unsigned replay
 // cannot erase the provider artefact already attached to compatible content.
 const mergeTextualSnapshotMetadata = ({
-  canonical,
+  canonical: previous,
   incoming,
   content,
+  canonicalStart,
+  contentStart,
 }: TextualSnapshotMetadataOptions) => {
+  const canonical =
+    previous !== undefined &&
+    textualMetadataIdentityMatches({
+      canonical: previous,
+      incoming,
+      content,
+      canonicalStart,
+      contentStart,
+    })
+      ? previous
+      : undefined;
   switch (incoming.type) {
     case "text": {
-      if (canonical.type !== "text") {
+      if (canonical !== undefined && canonical.type !== "text") {
         return panic("Textual snapshot metadata compared different part types");
       }
       const metadata =
         incoming.metadata === undefined
-          ? canonical.metadata
+          ? canonical?.metadata
           : incoming.metadata;
       return {
-        ...canonical,
-        ...incoming,
+        type: incoming.type,
         content,
         ...(metadata === undefined ? {} : { metadata }),
       };
     }
     case "thinking": {
-      if (canonical.type !== "thinking") {
+      if (canonical !== undefined && canonical.type !== "thinking") {
         return panic("Textual snapshot metadata compared different part types");
       }
-      const signature = incoming.signature ?? canonical.signature;
-      const stepId = incoming.stepId ?? canonical.stepId;
-      const redacted = incoming.redacted ?? canonical.redacted;
+      const signature = incoming.signature ?? canonical?.signature;
+      const stepId = incoming.stepId ?? canonical?.stepId;
+      const redacted = incoming.redacted ?? canonical?.redacted;
       return {
-        ...canonical,
-        ...incoming,
+        type: incoming.type,
         content,
         ...(signature === undefined ? {} : { signature }),
         ...(stepId === undefined ? {} : { stepId }),
@@ -416,6 +469,14 @@ type SnapshotPartsOptions = {
   snapshot: UIMessage;
   preservesPartLayout: boolean;
   parseResultOutput: (content: string) => unknown;
+};
+
+type SnapshotOnlyTextOptions = Pick<
+  SnapshotTextOptions,
+  "snapshotParts" | "parts" | "part"
+> & {
+  sameKind: Extract<MessagePart, { type: "text" | "thinking" }>[];
+  firstIncoming: MessagePart | undefined;
 };
 
 /** One turn owns provenance; snapshots and synthetic resume events cannot claim deltas. */
@@ -542,12 +603,19 @@ export class SnapshotPartReconciler {
       existing !== undefined &&
       (existing.type === "text" || existing.type === "thinking")
     ) {
-      parts[existingIndex] = {
-        ...existing,
+      parts[existingIndex] = mergeTextualSnapshotMetadata({
+        canonical: existing,
+        incoming: updated,
         content: existing.content + chunk.delta,
-      };
+      });
     } else {
-      parts.push({ ...updated, content: chunk.delta });
+      parts.push(
+        mergeTextualSnapshotMetadata({
+          canonical: undefined,
+          incoming: updated,
+          content: chunk.delta,
+        }),
+      );
     }
     return parts;
   }
@@ -564,11 +632,22 @@ export class SnapshotPartReconciler {
         (candidate) =>
           candidate.start === range.start &&
           candidate.start === candidate.end &&
-          !consumedEmpty.has(candidate.canonical),
+          !consumedEmpty.has(candidate.canonical) &&
+          textualMetadataIdentityMatches({
+            canonical: candidate.canonical,
+            incoming: range.incoming,
+            content: "",
+          }),
       )?.canonical;
       const selected =
         canonical === undefined
-          ? this.snapshot(range.incoming)
+          ? this.snapshot(
+              mergeTextualSnapshotMetadata({
+                canonical: undefined,
+                incoming: range.incoming,
+                content: "",
+              }),
+            )
           : this.inherit(
               mergeTextualSnapshotMetadata({
                 canonical,
@@ -601,6 +680,59 @@ export class SnapshotPartReconciler {
     return { fragments, emptySelections };
   }
 
+  private reconcileSnapshotOnlyText({
+    sameKind,
+    snapshotParts,
+    parts,
+    part,
+    firstIncoming,
+  }: SnapshotOnlyTextOptions) {
+    if (firstIncoming === part) {
+      for (let index = parts.length - 1; index >= 0; index -= 1) {
+        if (parts.at(index)?.type === part.type) {
+          parts.splice(index, 1);
+        }
+      }
+    }
+    // Content selection is separate from placement: the ordered snapshot
+    // projection places each segment beside its actual neighboring parts.
+    let offset = 0;
+    for (const incoming of snapshotParts) {
+      if (incoming === part) {
+        break;
+      }
+      if (
+        (incoming.type === "text" || incoming.type === "thinking") &&
+        incoming.type === part.type
+      ) {
+        offset += incoming.content.length;
+      }
+    }
+    let canonicalOffset = 0;
+    const canonical = sameKind.find((candidate) => {
+      const start = canonicalOffset;
+      canonicalOffset += candidate.content.length;
+      return (
+        start === offset &&
+        candidate.content === part.content &&
+        textualMetadataIdentityMatches({
+          canonical: candidate,
+          incoming: part,
+          content: part.content,
+        })
+      );
+    });
+    parts.push(
+      this.snapshot(
+        mergeTextualSnapshotMetadata({
+          canonical,
+          incoming: part,
+          content: part.content,
+        }),
+      ),
+    );
+  }
+
   reconcileText({
     previousParts,
     snapshotParts,
@@ -620,22 +752,6 @@ export class SnapshotPartReconciler {
     const firstIncoming = snapshotParts.find(
       (candidate) => candidate.type === part.type,
     );
-    if (!hasDeltas) {
-      if (firstIncoming === part) {
-        for (let index = parts.length - 1; index >= 0; index -= 1) {
-          if (parts.at(index)?.type === part.type) {
-            parts.splice(index, 1);
-          }
-        }
-      }
-      // Content selection is separate from placement: the ordered snapshot
-      // projection places each segment beside its actual neighboring parts.
-      parts.push(this.snapshot(part));
-      return;
-    }
-    if (firstIncoming !== part) {
-      return;
-    }
     const content = sameKind.map((candidate) => candidate.content).join("");
     const snapshotContent = snapshotParts
       .flatMap((candidate) =>
@@ -645,6 +761,24 @@ export class SnapshotPartReconciler {
           : [],
       )
       .join("");
+    const canReconcileRanges =
+      content.length > 0 &&
+      preservesPartLayout &&
+      snapshotContent.length >= content.length &&
+      snapshotContent.startsWith(content);
+    if (!hasDeltas && !canReconcileRanges) {
+      this.reconcileSnapshotOnlyText({
+        sameKind,
+        snapshotParts,
+        parts,
+        part,
+        firstIncoming,
+      });
+      return;
+    }
+    if (firstIncoming !== part) {
+      return;
+    }
     // Explicit UI snapshots may complete a streamed sequence even when their
     // segments split or merge. Compare whole content and retain delta placement.
     if (
@@ -705,31 +839,29 @@ export class SnapshotPartReconciler {
         continue;
       }
       const fragmentStart = start;
-      const canonical =
-        canonicalRanges.find((range) => fragmentStart < range.end)?.canonical ??
-        last;
+      const canonicalRange = canonicalRanges.find(
+        (range) => fragmentStart < range.end,
+      );
+      const canonical = canonicalRange?.canonical ?? last;
       const incoming = incomingRanges.find(
         (range) => fragmentStart < range.end,
       )?.incoming;
       if (incoming === undefined) {
-        panic("Textual snapshot fragment has no incoming range");
+        this.fallBack(
+          new SnapshotReconciliationError({
+            message: "Textual snapshot fragment has no incoming range",
+            phase: "normalization",
+          }),
+        );
+        return;
       }
-      const metadataOwner =
-        canonical.type === "thinking" &&
-        canonical.signature !== undefined &&
-        !canonicalRanges.some(
-          (range) =>
-            range.canonical === canonical &&
-            range.start === fragmentStart &&
-            range.end === end,
-        )
-          ? incoming
-          : canonical;
       const selected = this.inherit(
         mergeTextualSnapshotMetadata({
-          canonical: metadataOwner,
+          canonical,
           incoming,
           content: snapshotContent.slice(start, end),
+          canonicalStart: canonicalRange?.start,
+          contentStart: fragmentStart,
         }),
         canonical,
       );
@@ -873,6 +1005,9 @@ export class SnapshotPartReconciler {
         parts[index] = selected;
       }
       selectedParts.set(part, selected);
+    }
+    if (this.failure !== undefined) {
+      return snapshotMessage.parts.map((part) => this.snapshot(part));
     }
     const reconciled = this.reconcileCalls({
       parts,

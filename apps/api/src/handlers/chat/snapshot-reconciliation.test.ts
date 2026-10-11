@@ -7,6 +7,7 @@ import type {
   ToolResultPart,
   UIMessage,
 } from "@tanstack/ai";
+import { deepEquals } from "bun";
 import { expect, test } from "bun:test";
 
 import {
@@ -422,6 +423,45 @@ test("SDK snapshot normalization detects removed slots and empty projections", (
 
 const textualMetadataCases = [
   {
+    name: "snapshot-only signed thinking survives an unsigned snapshot with identical content",
+    initial: [],
+    incoming: [
+      {
+        type: "thinking",
+        content: "AB",
+        signature: "opaque",
+        stepId: "step",
+        redacted: false,
+      },
+    ],
+    replay: [{ type: "thinking", content: "AB" }],
+    expected: [
+      {
+        type: "thinking",
+        content: "AB",
+        signature: "opaque",
+        stepId: "step",
+        redacted: false,
+      },
+    ],
+  },
+  {
+    name: "absent replay fields stay absent after textual normalization",
+    initial: [],
+    incoming: [
+      {
+        type: "thinking",
+        content: "AB",
+        signature: undefined,
+        stepId: undefined,
+        redacted: undefined,
+      },
+    ],
+    replay: [{ type: "thinking", content: "AB" }],
+    expected: [{ type: "thinking", content: "AB" }],
+  },
+
+  {
     name: "a signed snapshot merges unsigned thinking segments into one provider block",
     initial: [
       { type: "thinking", content: "A", stepId: "streamed-step" },
@@ -475,10 +515,11 @@ const textualMetadataCases = [
         type: "thinking",
         content: "",
         signature: "opaque-redacted-data",
+        stepId: "streamed-step",
         redacted: true,
       },
     ],
-    replay: [{ type: "thinking", content: "" }],
+    replay: [{ type: "thinking", content: "", stepId: "streamed-step" }],
     expected: [
       {
         type: "thinking",
@@ -519,8 +560,83 @@ for (const scenario of textualMetadataCases) {
         parseResultOutput: (content) => content,
       });
       expect(parts).toEqual(scenario.expected);
+      expect(deepEquals(parts, scenario.expected)).toBe(true);
     }
     expect(failures).toEqual([]);
     expect(owner.failure).toBeUndefined();
   });
 }
+
+test("empty placeholders from another step cannot inherit opaque reasoning metadata", () => {
+  const initial = [
+    {
+      type: "thinking",
+      content: "",
+      stepId: "signed-step",
+      signature: "opaque",
+      redacted: true,
+    },
+  ] satisfies UIMessage["parts"];
+  const incoming = [
+    { type: "thinking", content: "", stepId: "other-step" },
+  ] satisfies UIMessage["parts"];
+  const owner = new SnapshotPartReconciler(initial);
+  const parts = owner.reconcile({
+    previous: { id: "answer", role: "assistant", parts: initial },
+    snapshot: { id: "answer", role: "assistant", parts: incoming },
+    preservesPartLayout: true,
+    parseResultOutput: (content) => content,
+  });
+  expect(
+    parts.find(
+      (part) => part.type === "thinking" && part.stepId === "other-step",
+    ),
+  ).toEqual(incoming.at(0));
+  expect(
+    parts.find(
+      (part) => part.type === "thinking" && part.stepId === "signed-step",
+    ),
+  ).toEqual(initial.at(0));
+});
+
+test("textual range drift reports once and adopts the SDK projection", () => {
+  const initial = [
+    { type: "text", content: "AB" },
+  ] satisfies UIMessage["parts"];
+  const failures: SnapshotReconciliationError[] = [];
+  const owner = new SnapshotPartReconciler(initial, (error) =>
+    failures.push(error),
+  );
+  let reads = 0;
+  const incoming = {
+    type: "text",
+    get content() {
+      reads += 1;
+      // Simulate SDK range data changing after the content consistency check.
+      return reads === 1 ? "AB" : "";
+    },
+  } satisfies MessagePart;
+  owner.reconcileText({
+    previousParts: initial,
+    snapshotParts: [incoming],
+    parts: [...initial],
+    part: incoming,
+    preservesPartLayout: true,
+    textSelections: new Map(),
+  });
+  expect(failures.map((error) => error.message)).toEqual([
+    "Textual snapshot fragment has no incoming range",
+  ]);
+  const snapshot = [
+    { type: "text", content: "SDK" },
+  ] satisfies UIMessage["parts"];
+  expect(
+    owner.reconcile({
+      previous: { id: "answer", role: "assistant", parts: initial },
+      snapshot: { id: "answer", role: "assistant", parts: snapshot },
+      preservesPartLayout: true,
+      parseResultOutput: (content) => content,
+    }),
+  ).toEqual(snapshot);
+  expect(failures).toHaveLength(1);
+});
