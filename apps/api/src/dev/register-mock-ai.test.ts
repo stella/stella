@@ -12,6 +12,11 @@ import * as v from "valibot";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
+  MOCK_AI_CANCELLATION_MARKER,
+  MOCK_AI_CANCELLATION_REPLY_TAIL,
+  MOCK_AI_CONTINUOUS_MARKER,
+} from "@/api/dev/mock-ai-cancellation";
+import {
   createMockTextAdapter,
   mockStructuredData,
   registerMockAI,
@@ -269,63 +274,128 @@ test("the real SDK stops the cancellation fixture through its adapter signal", a
   expect(deltas).toEqual(["This mock reply streams back"]);
 });
 
-test("the registered mock streams the cancellation marker with prior chat history", async () => {
-  testState.setConfig("USE_MOCK_AI", "force");
-  registerMockAI();
-  const adapter = createTanStackTextAdapterFactory({
-    provider: "google",
-    dataClass: "customer",
-    managedAIResidency: "eu",
-  })("gemini-2.5-flash");
-  const run = new AbortController();
-  const stream = chat({
-    adapter,
-    abortController: run,
-    systemPrompts: ["Answer questions about the supplied documents."],
-    messages: [
-      { role: "user", content: "Summarize the notice provisions" },
-      { role: "assistant", content: "The notice period is thirty days." },
-      {
-        role: "user",
-        content: [{ type: "text", content: "Stream until stopped please" }],
-      },
-    ],
-  });
-  const durability = memoryStream({ runId: Bun.randomUUIDv7() });
-  const response = toServerSentEventsResponse(stream, {
-    abortController: run,
-    durability: { adapter: durability },
-  });
-  const reader = (
-    response.body ?? panic("SSE response requires a body")
-  ).getReader();
-  try {
-    const received = await withTimeout(
-      async () => {
-        const decoder = new TextDecoder();
-        let text = "";
-        while (!text.includes("This mock reply streams back")) {
-          const { done, value } = await reader.read();
-          if (done) {
-            panic("SSE ended before the cancellation answer was delivered");
+// TEXT_MESSAGE_START and 31 text deltas fill the SDK's default batch of 32.
+const FIRST_BATCH_TEXT_DELTAS = 31;
+
+for (const marker of [MOCK_AI_CANCELLATION_MARKER, MOCK_AI_CONTINUOUS_MARKER]) {
+  test(`the registered ${marker} fixture delivers durable batches and survives repeated rejoins`, async () => {
+    testState.setConfig("USE_MOCK_AI", "force");
+    registerMockAI();
+    const adapter = createTanStackTextAdapterFactory({
+      provider: "google",
+      dataClass: "customer",
+      managedAIResidency: "eu",
+    })("gemini-2.5-flash");
+    const run = new AbortController();
+    const stream = chat({
+      adapter,
+      abortController: run,
+      systemPrompts: ["Answer questions about the supplied documents."],
+      messages: [
+        { role: "user", content: "Summarize the notice provisions" },
+        { role: "assistant", content: "The notice period is thirty days." },
+        {
+          role: "user",
+          content: [{ type: "text", content: marker }],
+        },
+      ],
+    });
+    const runId = Bun.randomUUIDv7();
+    const durability = memoryStream({ runId });
+    const response = toServerSentEventsResponse(stream, {
+      abortController: run,
+      durability: { adapter: durability },
+    });
+    let reader = (
+      response.body ?? panic("SSE response requires a body")
+    ).getReader();
+    const readBatch = async () =>
+      await withTimeout(
+        async () => {
+          const decoder = new TextDecoder();
+          let text = "";
+          while (
+            (text.match(/"type":"TEXT_MESSAGE_CONTENT"/gu)?.length ?? 0) <
+            FIRST_BATCH_TEXT_DELTAS
+          ) {
+            const { done, value } = await reader.read();
+            if (done) {
+              panic("SSE ended before a live answer batch was delivered");
+            }
+            text += decoder.decode(value, { stream: true });
           }
-          text += decoder.decode(value, { stream: true });
-        }
-        return text;
-      },
-      { label: "registered cancellation answer delivery", timeoutMs: 1000 },
-    );
-    expect(received).not.toContain('"type":"RUN_ERROR"');
-    expect(run.signal.aborted).toBe(false);
-    expect(
-      (await durability.snapshot()).some(
-        ({ chunk }) =>
-          chunk.type === EventType.TEXT_MESSAGE_CONTENT &&
-          chunk.delta === "This mock reply streams back",
-      ),
-    ).toBe(true);
-  } finally {
-    run.abort(new DOMException("Stopped", "AbortError"));
-    await reader.cancel();
-  }
-});
+          return text;
+        },
+        { label: "registered live answer batch delivery", timeoutMs: 1000 },
+      );
+    try {
+      const received = await readBatch();
+      expect(received).not.toContain('"type":"RUN_ERROR"');
+      expect(run.signal.aborted).toBe(false);
+      const persisted = await durability.snapshot();
+      expect(
+        persisted.filter(
+          ({ chunk }) => chunk.type === EventType.TEXT_MESSAGE_CONTENT,
+        ).length,
+      ).toBeGreaterThanOrEqual(FIRST_BATCH_TEXT_DELTAS);
+      expect(
+        persisted.some(
+          ({ chunk }) =>
+            chunk.type === EventType.RUN_FINISHED ||
+            chunk.type === EventType.RUN_ERROR,
+        ),
+      ).toBe(false);
+      if (marker === MOCK_AI_CANCELLATION_MARKER) {
+        expect(
+          persisted
+            .flatMap(({ chunk }) =>
+              chunk.type === EventType.TEXT_MESSAGE_CONTENT
+                ? [chunk.delta]
+                : [],
+            )
+            .join(""),
+        ).toBe(
+          `This mock reply streams back${MOCK_AI_CANCELLATION_REPLY_TAIL}`,
+        );
+      }
+      // Reload detaches only the viewer. Replay the same bytes and offsets twice
+      // without invoking the provider again or ending the run.
+      for (let reload = 0; reload < 2; reload += 1) {
+        await reader.cancel();
+        expect(run.signal.aborted).toBe(false);
+        const replay = toServerSentEventsResponse((async function* () {})(), {
+          durability: { adapter: memoryStream({ runId, offset: "-1" }) },
+          abortController: new AbortController(),
+        });
+        reader = (
+          replay.body ?? panic("Replay requires an SSE body")
+        ).getReader();
+        expect(await readBatch()).toBe(received);
+        expect(run.signal.aborted).toBe(false);
+      }
+      if (marker === MOCK_AI_CONTINUOUS_MARKER) {
+        // Drain beyond one whole reply: a finite paced fixture must fail here,
+        // even if both rejoins happened before its terminal event.
+        await readBatch();
+        await readBatch();
+      }
+      run.abort(new DOMException("Stopped", "AbortError"));
+      await withTimeout(
+        async () => {
+          while (!(await reader.read()).done) {
+            // The replay viewer drains the producer's cancellation terminal.
+          }
+        },
+        { label: "registered live stream cancellation", timeoutMs: 1000 },
+      );
+      expect(
+        (await durability.snapshot()).filter(
+          ({ chunk }) => chunk.type === EventType.RUN_ERROR,
+        ),
+      ).toHaveLength(1);
+    } finally {
+      run.abort(new DOMException("Stopped", "AbortError"));
+      await reader.cancel();
+    }
+  });
+}

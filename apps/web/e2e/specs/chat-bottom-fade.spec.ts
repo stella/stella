@@ -52,11 +52,15 @@ test("transcript fade appears only while content remains below the viewport", as
   });
   await expect(fade).toBeHidden();
 
-  await composer.fill("Stream slowly please");
+  await composer.fill("Stream until stopped please");
   await page.getByRole("button", { name: "Send message" }).click();
   const stop = page.getByRole("button", { name: "Stop", exact: true });
   await expect(stop).toBeVisible({ timeout: 30_000 });
+  await expect(
+    transcript.getByText("This mock reply streams back", { exact: false }),
+  ).toBeVisible();
   await expect(fade).toBeHidden();
+  await stop.click();
   await expect(stop).toBeHidden({ timeout: 30_000 });
   await expect(fade).toBeHidden();
 });

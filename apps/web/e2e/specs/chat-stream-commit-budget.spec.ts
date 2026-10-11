@@ -72,10 +72,17 @@ for (const kind of KINDS) {
       }, RENDER_COMMIT_COUNT_GLOBAL);
     const commitsBefore = await readCommits();
     const startedAt = Date.now();
+    const streamed = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === "/v1/chat",
+    );
     await page.getByRole("button", { name: "Send message" }).click();
 
+    // These finite fixtures may finish before a browser observes Stop.
+    // Measure their actual SSE delivery instead of requiring that transient UI.
+    expect(await (await streamed).finished()).toBeNull();
     const stop = page.getByRole("button", { name: "Stop" });
-    await expect(stop).toBeVisible({ timeout: 30_000 });
     await expect(stop).toHaveCount(0, { timeout: 60_000 });
     const commits = (await readCommits()) - commitsBefore;
     const seconds = (Date.now() - startedAt) / 1000;
