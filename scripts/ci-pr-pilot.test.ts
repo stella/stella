@@ -363,6 +363,29 @@ test("Docker checks retain every queue depth in both coverage profiles", () => {
   }
 });
 
+test("desktop Rust tests retain merge-group selection in every coverage profile and queue depth", () => {
+  expect(fastJobs(workflow)).not.toContain("desktop-rust-tests");
+  for (const profile of ["normal-v1", "pilot-fast-v1"]) {
+    for (const event of ["pull_request", "merge_group"]) {
+      for (const queueDepth of ["thin", "full"]) {
+        for (const required of ["true", "false"]) {
+          const context = conditionContext(profile, event, "full");
+          context.values["needs.ci-plan.outputs.queue_depth"] = queueDepth;
+          context.values["needs.ci-plan.outputs.desktop_rust_checks_required"] =
+            required;
+          expect(
+            evaluate(
+              workflow.jobs["desktop-rust-tests"]?.if ?? "false",
+              context,
+            ),
+            `${profile}/${event}/${queueDepth}/${required}`,
+          ).toBe(event === "merge_group" && required === "true");
+        }
+      }
+    }
+  }
+});
+
 test("desktop Rust lint retains both platforms in every PR coverage profile and queue depth", () => {
   expect(fastJobs(workflow)).toContain("desktop-rust-lint");
   expect(fastJobs(workflow)).not.toContain("desktop-rust-tests");

@@ -8066,27 +8066,19 @@ jobs:
     needs: ci-plan
     if: >-
       inputs.pr_depth_only != true
-      &&
-      needs.ci-plan.outputs.run_required != 'false'
-      && (
-      github.event_name != 'pull_request' && (
-      needs.ci-plan.outputs.queue_depth != 'thin'
-      && ((needs.ci-plan.outputs.trusted == 'true'
-       || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.run_required != 'false'
+      && github.event_name != 'pull_request'
+      && (github.event_name == 'merge_group' || needs.ci-plan.outputs.queue_depth != 'thin')
+      && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.desktop_rust_checks_required == 'true'
-      )
-      )
-      )
-    strategy: &desktop_rust_platforms
+    strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: macos
-            runner: macos-14
-            target: aarch64-apple-darwin
-          - os: windows
-            runner: windows-latest
-            target: x86_64-pc-windows-msvc
+        # Thin merge groups execute macOS tests; Windows keeps its full-depth selection.
+        include: >-
+          ${{ fromJSON(needs.ci-plan.outputs.queue_depth == 'thin'
+          && '[{"os":"macos","runner":"macos-14","target":"aarch64-apple-darwin"}]'
+          || '[{"os":"macos","runner":"macos-14","target":"aarch64-apple-darwin"},{"os":"windows","runner":"windows-latest","target":"x86_64-pc-windows-msvc"}]') }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 35
     permissions:
@@ -8280,7 +8272,16 @@ jobs:
       && (github.event_name == 'merge_group' || needs.ci-plan.outputs.run_required != 'false')
       && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.desktop_rust_checks_required == 'true'
-    strategy: *desktop_rust_platforms
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos
+            runner: macos-14
+            target: aarch64-apple-darwin
+          - os: windows
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 35
     permissions:
@@ -8808,7 +8809,7 @@ jobs:
               # heavy skips selected by the same plan, and rejects failures.
               violations=$(jq -r --argjson plan "$PLAN" --argjson scopes "$JOB_SCOPES" --arg queue "${QUEUE_DEPTH:-full}" --argjson thin "${THIN_JOBS:-[]}" --arg pr_reused "${PR_DEPTH_REUSED:-false}" --argjson pr_jobs "${PR_DEPTH_JOBS:-[]}" '
                 [to_entries[] | select(.key != "ci-plan") | .key as $job | .value.result as $result
-                  | if $queue == "thin" and ($thin | index($job) | not) then
+                  | if $queue == "thin" and ($thin | index($job) | not) and $job != "desktop-rust-tests" then
                       (if $result == "success" or $result == "skipped" then empty else "\($job) (\($result))" end)
                     elif ($scopes | has($job) | not) then "\($job) (no entry in JOB_SCOPES)"
                     elif $pr_reused == "true" and ($pr_jobs | index($job)) then

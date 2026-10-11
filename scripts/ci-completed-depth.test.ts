@@ -1168,7 +1168,9 @@ test("thin groups run and require every deferred normal PR check unless normal c
         name,
         {
           result:
-            thin.includes(name) || queueJobs.includes(name)
+            thin.includes(name) ||
+            queueJobs.includes(name) ||
+            name === "desktop-rust-tests"
               ? "success"
               : "skipped",
         },
@@ -1198,6 +1200,18 @@ test("thin groups run and require every deferred normal PR check unless normal c
         },
       });
     expect(runAggregation(dependencies).exitCode).toBe(0);
+    expect(evaluate(jobs["desktop-rust-tests"]?.if ?? "false", context)).toBe(
+      true,
+    );
+    for (const outcome of ["skipped", "failure", "cancelled"]) {
+      expect(
+        runAggregation({
+          ...dependencies,
+          "desktop-rust-tests": { result: outcome },
+        }).exitCode,
+        `desktop-rust-tests/${completion}/${outcome}`,
+      ).toBe(1);
+    }
     for (const job of deferred.jobs) {
       const scheduled = evaluate(jobs[job]?.if ?? "true", context);
       expect(typeof scheduled, job).toBe("boolean");
