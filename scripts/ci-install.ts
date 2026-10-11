@@ -1,5 +1,5 @@
-// CI's explicit cold installs share a two-minute bound and an incrementally
-// written verbose log. The enclosing step has a longer timeout, leaving time
+// CI installs retain an incrementally written verbose log and a bounded runtime.
+// The enclosing step has a longer timeout, leaving time
 // for the failure artifact to upload even when Bun's installer hangs.
 // Only built-ins and the dependency-free exit-status owner are reachable before
 // dependencies exist.
@@ -16,6 +16,22 @@ import path from "node:path";
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 
 const INSTALL_TIMEOUT_MS = 120_000;
+// Windows Bun 1.4.3 completed 1,680 extractions from a 2,502-package resolved
+// graph before a cold install reached 120 s. Linear projection is 179 s;
+// 240 s adds 34% margin.
+// Count all packages conservatively, including those skipped on this platform.
+const WINDOWS_COLD_INSTALL_TIMEOUT_MS = 240_000;
+
+export const installTimeoutMs = (
+  cacheRestored: "true" | "false" | undefined,
+) => {
+  if (cacheRestored === undefined) {
+    return INSTALL_TIMEOUT_MS;
+  }
+  return cacheRestored === "true"
+    ? INSTALL_TIMEOUT_MS
+    : WINDOWS_COLD_INSTALL_TIMEOUT_MS;
+};
 const CONSOLE_TAIL_BYTES = 4096;
 
 type LoggedInstallOptions = {
@@ -80,6 +96,15 @@ export const runLoggedInstall = async ({
 };
 
 if (import.meta.main) {
+  const cacheRestored = process.env["CI_INSTALL_CACHE_RESTORED"];
+  if (
+    cacheRestored !== undefined &&
+    cacheRestored !== "true" &&
+    cacheRestored !== "false"
+  ) {
+    console.error("CI_INSTALL_CACHE_RESTORED must be true or false");
+    process.exit(1);
+  }
   const [logFile, ...args] = process.argv.slice(2);
   if (logFile === undefined || logFile === "") {
     console.error(
@@ -90,5 +115,6 @@ if (import.meta.main) {
   process.exitCode = await runLoggedInstall({
     command: [process.execPath, "install", "--verbose", ...args],
     logFile,
+    timeoutMs: installTimeoutMs(cacheRestored),
   });
 }

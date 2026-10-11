@@ -7817,16 +7817,35 @@ jobs:
           ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        id: setup-bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
+
+      - name: Restore Bun install cache
+        id: bun-install-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: bun-install-${{ runner.os }}-${{ steps.setup-bun.outputs.bun-version }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-install-${{ runner.os }}-${{ steps.setup-bun.outputs.bun-version }}-
 
       - name: Install dependencies
-        timeout-minutes: 3
+        timeout-minutes: 5
         run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/desktop-windows-dry-run.log" --frozen-lockfile --ignore-scripts
         env:
+          # A prefix-key restore is warm too, even when cache-hit is false.
+          CI_INSTALL_CACHE_RESTORED: ${{ steps.bun-install-cache.outputs.cache-matched-key != '' }}
           BUN_INSTALL_GLOBAL_STORE: "0"
           NPM_TOKEN: ""
+
+      - name: Save Bun install cache
+        if: github.ref == 'refs/heads/main' && steps.bun-install-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ steps.bun-install-cache.outputs.cache-primary-key }}
 
       - name: Upload failed Bun install logs
         if: failure()

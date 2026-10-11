@@ -57,6 +57,56 @@ test("Windows installs and every explicit CI cold install retain bounded logs", 
   }
 });
 
+test("longer Windows install budgets require an earlier cache restore and matched-key evidence", () => {
+  const restore = {
+    id: "bun-install-cache",
+    uses: "actions/cache/restore@fixture",
+  };
+  const install = {
+    run: 'bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/windows.log" --ignore-scripts',
+    "timeout-minutes": 5,
+    env: {
+      CI_INSTALL_CACHE_RESTORED: `\${{ steps.bun-install-cache.outputs.cache-matched-key != '' }}`,
+    },
+  };
+  const upload = {
+    uses: "actions/upload-artifact@fixture",
+    if: "failure()",
+    with: { path: `\${{ runner.temp }}/bun-install/*.log` },
+  };
+  const check = (steps: unknown[]) =>
+    boundedInstallProblems(
+      {
+        jobs: {
+          smoke: { "runs-on": "windows-latest", "timeout-minutes": 10, steps },
+        },
+      },
+      "windows",
+    );
+  expect(check([restore, install, upload])).toEqual([]);
+  for (const steps of [
+    [install, restore, upload],
+    [install, upload],
+    [restore, { ...install, env: {} }, upload],
+    [
+      restore,
+      {
+        ...install,
+        env: {
+          CI_INSTALL_CACHE_RESTORED: `\${{ steps.bun-install-cache.outputs.cache-hit }}`,
+        },
+      },
+      upload,
+    ],
+    [restore, { ...install, "timeout-minutes": 6 }, upload],
+    [restore, { ...install, "timeout-minutes": 3 }, upload],
+  ]) {
+    expect(check(steps)).toContain(
+      "smoke: install needs a bounded step timeout",
+    );
+  }
+});
+
 test("the install guard rejects bypasses, unbounded steps and lost logs", () => {
   const upload = {
     uses: "actions/upload-artifact@fixture",

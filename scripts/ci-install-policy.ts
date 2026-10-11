@@ -31,6 +31,20 @@ export const installWorkflowPolicy = (file: string): InstallWorkflowPolicy => {
   );
 };
 
+const hasRestoredCacheBudget = (
+  step: Record<string, unknown>,
+  previousSteps: readonly Record<string, unknown>[],
+) =>
+  isRecord(step["env"]) &&
+  step["env"]["CI_INSTALL_CACHE_RESTORED"] ===
+    `\${{ steps.bun-install-cache.outputs.cache-matched-key != '' }}` &&
+  previousSteps.some(
+    (candidate) =>
+      candidate["id"] === "bun-install-cache" &&
+      typeof candidate["uses"] === "string" &&
+      candidate["uses"].startsWith("actions/cache/restore@"),
+  );
+
 /** Windows workflows and CI's explicit cold installs must share the owner. */
 export const boundedInstallProblems = (
   workflow: unknown,
@@ -79,11 +93,16 @@ export const boundedInstallProblems = (
         if (!owner) {
           continue;
         }
+        const cacheAware =
+          windows && hasRestoredCacheBudget(step, steps.slice(0, index));
+        const defaultMaximum = windows ? 3 : 10;
+        const maximum = cacheAware ? 5 : defaultMaximum;
         const limit = step["timeout-minutes"];
         if (
           typeof limit !== "number" ||
           limit <= 0 ||
-          limit > (windows ? 3 : 10) ||
+          (cacheAware && limit < 5) ||
+          limit > maximum ||
           (typeof job["timeout-minutes"] === "number" &&
             limit >= job["timeout-minutes"])
         ) {
