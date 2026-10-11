@@ -1457,7 +1457,7 @@ export default eslintCompatPlugin({
             }
           },
           ImportDeclaration(node) {
-            if (!inCaseLawReadBoundary) {
+            if (!inCaseLawReadBoundary || node.importKind === "type") {
               return;
             }
             const importedModule = declaredModule(node, importerRepoPath);
@@ -1495,6 +1495,9 @@ export default eslintCompatPlugin({
               return;
             }
             for (const specifier of node.specifiers) {
+              if (isAstNode(specifier) && specifier.importKind === "type") {
+                continue;
+              }
               const imported = getImportedName(specifier);
               if (imported === "caseLawDecisions") {
                 context.report({
@@ -1517,10 +1520,9 @@ export default eslintCompatPlugin({
                 continue;
               }
               if (
-                (isAstNode(specifier) && specifier.importKind === "type") ||
-                (imported !== null &&
-                  (PUBLIC_LAW_SCHEMA_IMPORT_SET.has(imported) ||
-                    CONSTANT_EXPORT_RE.test(imported)))
+                imported !== null &&
+                (PUBLIC_LAW_SCHEMA_IMPORT_SET.has(imported) ||
+                  CONSTANT_EXPORT_RE.test(imported))
               ) {
                 continue;
               }

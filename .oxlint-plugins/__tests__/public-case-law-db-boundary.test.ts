@@ -49,6 +49,23 @@ describe.serial("public-law relation scan", () => {
     ).toHaveLength(1);
   });
 
+  test("public case-law reads allow type-only base schema imports", async () => {
+    for (const declaration of [
+      'import type { caseLawDecisions as decisions } from "@/api/db/schema/case-law";',
+      'import { type caseLawDecisions as decisions } from "@/api/db/schema/case-law";',
+    ]) {
+      const source = [
+        'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
+        declaration,
+        "export type DecisionTable = typeof decisions;",
+        "void caseLawPublicReadDb;",
+      ].join("\n");
+      expect(
+        await lint(source, "apps/api/src/handlers/case-law/read.ts"),
+      ).toEqual([]);
+    }
+  });
+
   test("decision-surface mode checks base reads without private relation checks", async () => {
     const options = { scope: "decision-surface" };
     const directSchema = [
