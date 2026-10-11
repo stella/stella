@@ -1,6 +1,6 @@
 import { EventType } from "@tanstack/ai";
 import type { StreamChunk, StreamDurability } from "@tanstack/ai";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { ChatTurnTiming } from "@/api/handlers/chat/types";
 import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
@@ -60,8 +60,24 @@ export const withChatTurnTiming = async function* ({
       };
     }
   };
+  const iterator = source[Symbol.asyncIterator]();
+  let sourceState: "reading" | "ended" = "reading";
   try {
-    for await (const chunk of source) {
+    while (true) {
+      const step = await Result.tryPromise(async () => await iterator.next());
+      if (Result.isError(step)) {
+        sourceState = "ended";
+        // Clear the anchor before the SDK flushes buffered events and records
+        // the source failure. Propagate the failure to the transport.
+        yield* emitSettledTiming();
+        const { error } = step;
+        throw error;
+      }
+      if (step.value.done) {
+        sourceState = "ended";
+        break;
+      }
+      const chunk = step.value.value;
       if ("subagentRunId" in chunk) {
         yield chunk;
         continue;
@@ -130,13 +146,12 @@ export const withChatTurnTiming = async function* ({
       }
       yield chunk;
     }
-  } catch (error) {
-    // Clear the live anchor before the SDK flushes its buffered events and
-    // records the source failure. Rethrow so the transport reports that error.
     yield* emitSettledTiming();
-    throw error;
+  } finally {
+    if (sourceState === "reading") {
+      await iterator.return?.();
+    }
   }
-  yield* emitSettledTiming();
 };
 
 type PrepareChatTurnTimingBatchArgs = {
