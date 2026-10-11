@@ -10,7 +10,7 @@ trap 'rm -rf "${SCRATCH_DIR}"' EXIT
 
 export CARGO_HOME="${SCRATCH_DIR}/cargo"
 export CARGO_TARGET_DIR="${SCRATCH_DIR}/target"
-export SCAN_ENGINE_WASM_OUT_DIR="${SCRATCH_DIR}/generated"
+export SCAN_ENGINE_WASM_OUT_DIR="${SCAN_ENGINE_WASM_OUT_DIR:-${SCRATCH_DIR}/generated}"
 export PATH="${CARGO_HOME}/bin:${PATH}"
 mkdir -p "${CARGO_HOME}"
 
