@@ -1,4 +1,8 @@
 import type { legalReaderAnnotations } from "@/api/db/schema";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 
 type PrivateAnnotationExportRow = Pick<
   typeof legalReaderAnnotations.$inferSelect,
@@ -44,3 +48,37 @@ export const projectPrivateAnnotationForAccountExport = (
     updatedAt: row.updatedAt.toISOString(),
   };
 };
+
+type LegalReaderAnnotationRow = typeof legalReaderAnnotations.$inferSelect;
+type PrivateAnnotationAccountExport = NonNullable<
+  ReturnType<typeof projectPrivateAnnotationForAccountExport>
+>;
+
+// Columns intentionally left out of the account export.
+const UNEXPORTED_LEGAL_READER_ANNOTATION_COLUMNS = [
+  // Tenant id: internal routing, not data the user provided.
+  "organizationId",
+  // The exporting account itself; every exported note is its own.
+  "userId",
+] as const satisfies readonly (keyof LegalReaderAnnotationRow)[];
+
+// Totality guard, bidirectional: every schema column must be exported or
+// explicitly excused above, and the export cannot carry a field that traces
+// back to no real column.
+type MissingExportedLegalReaderAnnotationColumn = UnprojectedColumns<
+  LegalReaderAnnotationRow,
+  PrivateAnnotationAccountExport,
+  (typeof UNEXPORTED_LEGAL_READER_ANNOTATION_COLUMNS)[number]
+>;
+type UnexpectedExportedLegalReaderAnnotationColumn = UnbackedProjectionKeys<
+  LegalReaderAnnotationRow,
+  PrivateAnnotationAccountExport,
+  (typeof UNEXPORTED_LEGAL_READER_ANNOTATION_COLUMNS)[number]
+>;
+
+true satisfies MissingExportedLegalReaderAnnotationColumn extends never
+  ? true
+  : never;
+true satisfies UnexpectedExportedLegalReaderAnnotationColumn extends never
+  ? true
+  : never;
