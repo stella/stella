@@ -1,10 +1,8 @@
 import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
 
-// Self-test fixture: a route whose body carries a recursive condition schema,
-// the exact shape (`t.Recursive` wrapped in `Type.Unsafe`) that broke
-// exactMirror for `tConditionNode`. Proves the detector flags the bug class
-// through the same code path the real check uses.
+// Verifies detection of recursive-schema serializer failures for a route body
+// containing `t.Recursive` wrapped in `Type.Unsafe`.
 export const SELF_TEST_ROUTE = "/exact-mirror-self-test/recursive";
 
 export const buildRecursiveFixtureApp = async () => {
