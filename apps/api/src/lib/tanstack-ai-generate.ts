@@ -213,7 +213,8 @@ type OutputTokenBudgetOption =
 
 type GenerateTanStackObjectForRoleOptions<TSchema extends v.GenericSchema> =
   TanStackTextForRoleOptions &
-    OutputTokenBudgetOption & {
+    OutputTokenBudgetOption &
+    Pick<StreamChatChunksOptions, "tools" | "agentLoopStrategy"> & {
       /** Explicit exception for a generative fallback or provider-path probe. */
       outputMode?: "generative" | undefined;
       outputSchema: TSchema;
@@ -1157,6 +1158,8 @@ const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>({
             adapter: model.adapter,
             messages: requestMessages,
             outputSchema: tanStackOutputSchema,
+            tools: options.tools,
+            agentLoopStrategy: options.agentLoopStrategy,
             ...systemPromptsPatch({
               caching: options.caching,
               model,

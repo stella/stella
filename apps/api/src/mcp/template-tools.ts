@@ -9,6 +9,7 @@ import type {
   TemplatePersistenceResult,
 } from "@/api/db/schema";
 import { configureTemplateFields } from "@/api/handlers/templates/configure-template-fields-service";
+import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
   loadManagedAIResidency,
@@ -669,10 +670,10 @@ const PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION = defineValibotMcpTool({
   description:
     "Ask what current values decide without filling. Returns every AI " +
     'condition with `path`, `label`, and either `state: "decided"`, its ' +
-    "`value`, `decided_by` (`user` or `decision_model`), and `probability` " +
+    "`value`, `decided_by` (`user`, `decision_model`, or `generative_model`), and `probability` " +
     'for model answers; or `state: "undecided"` and `reason` ' +
-    "(`no_decision_model`, `below_floor`, `failed`, `refusal`). Only the decision " +
-    "model runs; fill may later use the generative model. A boolean in " +
+    "(`failed` or `refusal`). The decision model uses the generative model " +
+    "when it cannot settle a question. Consumes AI usage. A boolean in " +
     "`values` wins. Nothing is written.",
   inputSchema: previewTemplateConditionsArgsSchema,
   annotations: {
@@ -3045,35 +3046,85 @@ const handlePreviewTemplateConditionsTool: TypedMcpToolHandler<
   const decideConditions =
     context.testDependencies?.templateDecideConditionsLogic ??
     templateDecideConditionsLogic;
-  // Preview never falls back to the instance provider (see `client` below),
-  // so an org barred from it previews on its own config, which is none.
-  const orgAIConfig = (await deferOrgAIConfig(context)()).unwrapOr(null);
-  const decided = await decideConditions({
-    scopedDb: context.scopedDb,
+  const readOrgAIConfig = deferOrgAIConfig(context);
+  const config = await readOrgAIConfig();
+  if (Result.isError(config)) {
+    return internalFailureResult(config.error);
+  }
+  const orgAIConfig = config.value;
+  const usageError = await assertTemplateFillUsage({
+    context,
+    readOrgAIConfig,
+    workspaceId: null,
+  });
+  if (usageError !== null) {
+    return internalFailureResult(usageError);
+  }
+  const admitModelAction = createModelActionAdmitter({
     organizationId: context.organizationId,
-    templateId: brandPersistedTemplateId(parsed.output.template_id),
-    body: { values: parsed.output.values },
-    orgAIConfig,
-    abortSignal:
-      context.request === undefined
-        ? AbortSignal.timeout(PREVIEW_TEMPLATE_CONDITIONS_TIMEOUT_MS)
-        : AbortSignal.any([
-            context.request.signal,
-            AbortSignal.timeout(PREVIEW_TEMPLATE_CONDITIONS_TIMEOUT_MS),
-          ]),
-    // Preview has no spend reservation. Match the REST route: only the org's
-    // own credential may run until the decision model has a usage preflight.
-    ...(orgAIConfig?.decision ? {} : { client: null }),
-    usageMetering: {
-      actionType: "chat",
+    userId: context.userId,
+    organizationStateDb: context.scopedDb,
+    actionKind: "templates.fill",
+  });
+  const admitted = await admitModelAction(async ({ signal, admission }) => {
+    const usageMetering = {
+      actionType: "chat" as const,
       organizationId: context.organizationId,
       safeDb: context.safeDb,
-      serviceTier: "standard",
+      serviceTier: "standard" as const,
       userId: context.userId,
       workspaceId: null,
-      callId: Bun.randomUUIDv7(),
-    },
+    };
+    return await decideConditions({
+      scopedDb: context.scopedDb,
+      organizationId: context.organizationId,
+      templateId: brandPersistedTemplateId(parsed.output.template_id),
+      body: { values: parsed.output.values },
+      orgAIConfig,
+      abortSignal: AbortSignal.any([
+        signal,
+        ...(context.request === undefined ? [] : [context.request.signal]),
+        AbortSignal.timeout(PREVIEW_TEMPLATE_CONDITIONS_TIMEOUT_MS),
+      ]),
+      usageMetering: { ...usageMetering, callId: Bun.randomUUIDv7() },
+      generation: {
+        dataClass: "customer",
+        managedAIResidency:
+          await (context.testDependencies?.loadManagedAIResidency?.(
+            context.organizationId,
+          ) ??
+            context.scopedDb(
+              async (tx) =>
+                await loadManagedAIResidency(tx, context.organizationId),
+            )),
+        orgAIConfig,
+        organizationId: context.organizationId,
+        admission,
+        tenantWorkspaceIds: [],
+        role: "fast",
+        serviceTier: "standard",
+        caching: resolveCaching({
+          promptCachingEnabled: false,
+          role: "fast",
+          scopeKey: parsed.output.template_id,
+        }),
+        prompt: "Decide the template conditions from the supplied values.",
+        analytics: createTanStackAIAnalyticsCallbacks({
+          dataClass: "customer",
+          feature: "templates.preview-conditions",
+          modelRole: "fast",
+          orgAIConfig,
+          organizationId: context.organizationId,
+          traceId: Bun.randomUUIDv7(),
+          usageMetering,
+        }),
+      },
+    });
   });
+  if (Result.isError(admitted)) {
+    return internalFailureResult(admitted.error);
+  }
+  const decided = admitted.value;
   if (Result.isError(decided)) {
     return storedTemplateFailureResult(decided.error);
   }

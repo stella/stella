@@ -1,5 +1,5 @@
 /**
- * What the organization's decision model says about a template's AI-decided
+ * What the organization's models say about a template's AI-decided
  * conditions, before anything is filled.
  *
  * The fill decides each condition as it reaches it and writes the answer into
@@ -7,12 +7,6 @@
  * decided, let alone disagree. This asks every condition of one template in a
  * single call so the form can show the answer and its confidence while the
  * values are still being typed, and let the person override it.
- *
- * The decision model only: no generative fallback here. The fill keeps its
- * cascade (decide, then the generative model when the answer is under the
- * floor), so a condition this reports as undecided may still be answered at
- * fill time. With no decision model configured every condition comes back
- * `no-backend`, which is the ordinary state of a self-hosted instance.
  */
 
 import { panic, Result } from "better-result";
@@ -44,7 +38,11 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { loadStoredTemplateSource } from "@/api/lib/templates/template-fill-service";
 import { decideMany } from "@/api/lib/workflow/decisions/decide";
-import type { Decision } from "@/api/lib/workflow/decisions/decide";
+import type {
+  Decision,
+  DecisionGenerationOptions,
+  DecisionGenerator,
+} from "@/api/lib/workflow/decisions/decide";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import type { DecisionUsageMetering } from "@/api/lib/workflow/decisions/decision-usage";
 import type {
@@ -74,6 +72,7 @@ type TemplateConditionDecision =
       decidedBy: "user";
       value: boolean;
     }
+  | { state: "decided"; decidedBy: "generative_model"; value: boolean }
   | { state: "undecided"; reason: DecisionUndecidedReason };
 
 export type TemplateConditionAnswer = {
@@ -115,6 +114,9 @@ const toConditionDecision = (
       return { state: "undecided", reason: decision.reason };
     case "decided": {
       const value = decision.answer.noul > 0.5;
+      if (decision.source === "generative") {
+        return { state: "decided", decidedBy: "generative_model", value };
+      }
       return {
         state: "decided",
         decidedBy: "decision_model",
@@ -131,6 +133,13 @@ const toConditionDecision = (
   }
 };
 
+type TemplateDecisionRuntime =
+  | {
+      generation: Extract<DecisionGenerationOptions, { dataClass: "customer" }>;
+      generator?: DecisionGenerator | undefined;
+    }
+  | { generation?: never; generator: DecisionGenerator };
+
 export type DecideTemplateConditionsOptions = {
   fields: readonly FieldMeta[];
   values: Record<string, unknown>;
@@ -139,7 +148,7 @@ export type DecideTemplateConditionsOptions = {
   /** Injected by tests; the org's resolved decision model otherwise. */
   client?: DecisionModel | null | undefined;
   usageMetering?: DecisionUsageMetering | undefined;
-};
+} & TemplateDecisionRuntime;
 
 /**
  * Every AI-decided condition of one manifest, in one call: they share a state
@@ -153,6 +162,8 @@ export const decideTemplateConditions = async ({
   abortSignal,
   client,
   usageMetering,
+  generation,
+  generator,
 }: DecideTemplateConditionsOptions): Promise<TemplateConditionDecisions> => {
   const conditions = templateAiConditions(fields);
   const supplied = new Map<string, boolean>();
@@ -183,6 +194,16 @@ export const decideTemplateConditions = async ({
     };
   }
 
+  const runtime =
+    generation === undefined
+      ? { generator }
+      : {
+          generation: {
+            ...generation,
+            deadlineMs: DECIDE_CONDITIONS_TIMEOUT_MS,
+          },
+          generator,
+        };
   const { decisions, model } = await decideMany({
     dataClass: "customer",
     id: CONDITION_DECISION_ID,
@@ -196,6 +217,7 @@ export const decideTemplateConditions = async ({
     abortSignal,
     client,
     usageMetering,
+    ...runtime,
   });
 
   return {
@@ -232,7 +254,7 @@ export type TemplateDecideConditionsProps = {
   /** Injected by tests; the org's resolved decision model otherwise. */
   client?: DecisionModel | null | undefined;
   usageMetering?: DecisionUsageMetering | undefined;
-};
+} & TemplateDecisionRuntime;
 
 type DerivedManifestFieldsOptions = Pick<
   TemplateDecideConditionsProps,
@@ -296,6 +318,8 @@ export const templateDecideConditionsLogic = async ({
   abortSignal,
   client,
   usageMetering,
+  generation,
+  generator,
 }: TemplateDecideConditionsProps): Promise<
   ResultType<TemplateConditionDecisions, HandlerError<404 | 422 | 500 | 503>>
 > => {
@@ -399,6 +423,7 @@ export const templateDecideConditionsLogic = async ({
       abortSignal,
       client,
       usageMetering,
+      ...(generation === undefined ? { generator } : { generation, generator }),
     }),
   );
 };

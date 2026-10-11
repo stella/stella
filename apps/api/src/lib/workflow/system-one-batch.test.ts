@@ -85,6 +85,8 @@ const answered = (
   confidence: number,
 ): AnswerOutcome => ({
   state: "answered",
+  source: "decision-model",
+  model: "jev-1.13.0",
   answer,
   probability: 0.9,
   confidence,
@@ -310,21 +312,31 @@ describe("outputFromSystemOneOutcomes", () => {
     });
   });
 
-  test("an undecided outcome falls back to the generative model", () => {
+  test("an unresolved decision is terminal and only an unplanned property continues", () => {
     const { output, fallbackPropertyIds } = outputFromSystemOneOutcomes({
       properties: [singleSelect, dateProperty],
       outcomes: new Map<string, AnswerOutcome>([
-        [singleSelect.id, { state: "undecided", reason: "below-floor" }],
+        [
+          singleSelect.id,
+          {
+            state: "undecided",
+            reason: "failed",
+            source: "generative",
+            model: null,
+          },
+        ],
       ]),
       locators,
     });
 
     // The unplanned date question has no outcome at all, and falls back too.
-    expect(fallbackPropertyIds).toEqual([singleSelect.id, dateProperty.id]);
-    expect(output).toEqual({});
+    expect(fallbackPropertyIds).toEqual([dateProperty.id]);
+    expect(output).toEqual({
+      [singleSelect.id]: { answer: null, justification: [] },
+    });
   });
 
-  test("with no decision model the whole batch is the generative model's", async () => {
+  test("with no decision model shared generation settles the planned batch", async () => {
     const { sources, locators: batchLocators } = await sourcesFromPreparedFiles(
       [docxFile],
       [],
@@ -343,6 +355,16 @@ describe("outputFromSystemOneOutcomes", () => {
       orgAIConfig: null,
       state: plan.state,
       questions: plan.questions,
+      generator: async ({ questions: openQuestions }) => ({
+        model: "test-generative",
+        output: {
+          answers: Object.keys(openQuestions).map((id) => ({
+            id,
+            answer: { type: "refusal" },
+            evidence: null,
+          })),
+        },
+      }),
       client: null,
     });
 
@@ -352,8 +374,11 @@ describe("outputFromSystemOneOutcomes", () => {
       locators: batchLocators,
     });
 
-    expect(output).toEqual({});
-    expect(fallbackPropertyIds).toEqual([singleSelect.id, dateProperty.id]);
+    expect(output).toEqual({
+      [singleSelect.id]: { answer: null, justification: [] },
+      [dateProperty.id]: { answer: null, justification: [] },
+    });
+    expect(fallbackPropertyIds).toEqual([]);
   });
 
   test("not stated above the floor is a null answer, not a fallback", () => {
@@ -364,6 +389,8 @@ describe("outputFromSystemOneOutcomes", () => {
           dateProperty.id,
           {
             state: "not_stated",
+            source: "decision-model",
+            model: "jev-1.13.0",
             confidence: 0.8,
             rationale: "Jev found no answer in the text (80% confidence).",
           },

@@ -150,26 +150,53 @@ export const noul = (
 
 const unitInterval = v.pipe(v.number(), v.minValue(0), v.maxValue(1));
 
-const wireAnswerSchema = v.variant("type", [
-  v.object({ type: v.literal("noul"), noul: unitInterval }),
-  v.object({
-    type: v.literal("choice"),
-    choice: v.string(),
-    probabilities: v.record(v.string(), unitInterval),
-    confidence: unitInterval,
-  }),
+const noulAnswerSchema = v.strictObject({
+  type: v.literal("noul"),
+  noul: unitInterval,
+});
+const choiceAnswerSchema = v.strictObject({
+  type: v.literal("choice"),
+  choice: v.string(),
+  probabilities: v.record(v.string(), unitInterval),
+  confidence: unitInterval,
+});
+
+export const systemOneAnswerSchema = v.variant("type", [
+  noulAnswerSchema,
+  choiceAnswerSchema,
 ]);
+
+/** Provider grammars need a closed probability object for this question. */
+export const systemOneAnswerSchemaFor = (question: SystemOneQuestion) => {
+  switch (question.type) {
+    case "noul":
+      return noulAnswerSchema;
+    case "choice": {
+      const criteria = Object.keys(question.criteria);
+      return v.strictObject({
+        ...choiceAnswerSchema.entries,
+        choice: v.picklist(criteria),
+        probabilities: v.strictObject(
+          Object.fromEntries(criteria.map((key) => [key, unitInterval])),
+        ),
+      });
+    }
+    default:
+      question satisfies never;
+      return panic("Unhandled decision question type");
+  }
+};
 
 const wireResponseSchema = v.object({
   model: v.string(),
-  answers: v.record(v.string(), wireAnswerSchema),
+  answers: v.record(v.string(), systemOneAnswerSchema),
   usage: v.object({
     input_tokens: v.pipe(v.number(), v.integer(), v.minValue(0)),
     output_tokens: v.pipe(v.number(), v.integer(), v.minValue(0)),
   }),
 });
 
-type WireAnswer = v.InferOutput<typeof wireAnswerSchema>;
+type WireAnswer = v.InferOutput<typeof systemOneAnswerSchema>;
 
 export const isSystemOneAnswerForQuestion = <
   TQuestion extends SystemOneQuestion,

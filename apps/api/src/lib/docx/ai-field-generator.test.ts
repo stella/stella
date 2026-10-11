@@ -68,7 +68,11 @@ const captureRequest = ({
 
 const DRAFTED_VALUE = "drafted value";
 const ADAPTED_RENDERINGS = { renderings: ["adapted"] };
-const CONDITION_DECISION = { decision: true };
+const CONDITION_DECISION = {
+  answers: [
+    { id: "answer", answer: { type: "noul", noul: 1 }, evidence: null },
+  ],
+};
 /** The two structured-output callers ask for different shapes through the one
  *  adapter, and each parses its answer strictly, so the fake answers the shape
  *  the prompt asked for rather than one shape for both. */
@@ -692,6 +696,24 @@ describe("buildAiConditionDecider decision tier", () => {
 
     expect(capturedRequests).toHaveLength(1);
     expect(decided?.decidedBy).toBe("generative_model");
+  });
+
+  test("generative failure remains a typed undecided condition", async () => {
+    const decideCondition = buildAiConditionDecider({
+      decisionModel: null,
+      orgAIConfig,
+      managedAIResidency: "eu",
+      organizationId,
+      admission: testModelAdmission(organizationId),
+      resolveTextModel: () => {
+        throw new Error("Generation unavailable");
+      },
+      tenantWorkspaceIds: [],
+    });
+    expect(await decideCondition?.(input)).toEqual({
+      decidedBy: "undecided",
+      reason: "failed",
+    });
   });
 
   test("keeps conditions unavailable without an eligible customer-content model", () => {

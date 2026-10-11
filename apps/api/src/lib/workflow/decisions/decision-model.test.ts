@@ -19,6 +19,7 @@ import {
   resolveDecisionModel,
 } from "@/api/lib/workflow/decisions/decision-model";
 import { noul } from "@/api/lib/workflow/decisions/system-one";
+import { failingDecisionGenerator } from "@/api/tests/helpers/decision-generator";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -105,8 +106,9 @@ describe("decision model request policy", () => {
     );
   });
 
-  test("keeps unavailable decisions empty without telemetry", async () => {
+  test("keeps unavailable decisions typed when generation fails", async () => {
     const result = await decideMany({
+      generator: failingDecisionGenerator,
       id: "test.request-policy",
       orgAIConfig: null,
       dataClass: "customer",
@@ -117,14 +119,16 @@ describe("decision model request policy", () => {
       decisions: {
         eligible: {
           state: "undecided",
-          reason: "no-backend",
+          reason: "failed",
           confidence: null,
+          source: "generative",
+          model: null,
         },
       },
       model: null,
     });
-    expect(runtime.analytics.exceptions()).toHaveLength(0);
-    expect(runtime.logger.records).toHaveLength(0);
+    expect(runtime.analytics.exceptions()).toHaveLength(1);
+    expect(runtime.logger.records).toHaveLength(1);
     expect(runtime.fetch).not.toHaveBeenCalled();
   });
 
@@ -235,6 +239,7 @@ describe("OpenAI decision credentials", () => {
       } as const satisfies OrgAIConfig;
       expect(resolveDecisionModel(config, dataClass)).toBeNull();
       const result = await decideMany({
+        generator: failingDecisionGenerator,
         id: "test.missing-decision-key",
         orgAIConfig: config,
         dataClass,
@@ -245,13 +250,15 @@ describe("OpenAI decision credentials", () => {
         decisions: {
           eligible: {
             state: "undecided",
-            reason: "no-backend",
+            reason: "failed",
             confidence: null,
+            source: "generative",
+            model: null,
           },
         },
         model: null,
       });
-      expect(runtime.analytics.exceptions()).toHaveLength(1);
+      expect(runtime.analytics.exceptions()).toHaveLength(2);
       expect(runtime.analytics.exceptions().at(0)?.properties).toMatchObject({
         "error.class": "ConfigurationError",
         source: "resolveDecisionModel",

@@ -302,6 +302,22 @@ describe("describeConditionChip", () => {
     });
   });
 
+  test("a generative preview states its answer without claiming a decision-model probability", () => {
+    expect(
+      describeConditionChip({
+        kind: "model",
+        decision: {
+          state: "decided",
+          decidedBy: "generative_model",
+          value: true,
+        },
+      }),
+    ).toEqual({
+      tone: "success",
+      answer: { kind: "generative", value: true },
+    });
+  });
+
   test("a value the user set never shows a probability", () => {
     expect(describeConditionChip({ kind: "forced", value: false })).toEqual({
       tone: "highlight",
@@ -321,16 +337,19 @@ describe("describeConditionChip", () => {
     });
   });
 
-  test("no answer yet reads the same as no backend", () => {
-    expect(describeConditionChip({ kind: "model", decision: null })).toEqual(
+  test("a pending preview differs from a terminal undecided answer", () => {
+    expect(
+      describeConditionChip({ kind: "model", decision: null }).answer,
+    ).toEqual({ kind: "onGenerate" });
+    expect(
       describeConditionChip({
         kind: "model",
         decision: { state: "undecided", reason: "no-backend" },
-      }),
-    );
+      }).answer,
+    ).toEqual({ kind: "notSettled" });
   });
 
-  test("only below-floor warns; every other undecided reason defers to generation", () => {
+  test("every terminal undecided reason reports no settled answer", () => {
     const expected = {
       "below-floor": {
         reason: "below-floor",
@@ -340,17 +359,17 @@ describe("describeConditionChip", () => {
       "no-backend": {
         reason: "no-backend",
         tone: "neutral",
-        answer: { kind: "onGenerate" },
+        answer: { kind: "notSettled" },
       },
       failed: {
         reason: "failed",
         tone: "neutral",
-        answer: { kind: "onGenerate" },
+        answer: { kind: "notSettled" },
       },
       refusal: {
         reason: "refusal",
         tone: "neutral",
-        answer: { kind: "onGenerate" },
+        answer: { kind: "notSettled" },
       },
     } as const satisfies {
       [

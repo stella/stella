@@ -41,6 +41,9 @@ test("condition preview addresses a template only in its organization", async ()
     body: { values: {} },
     orgAIConfig: null,
     client: null,
+    generator: async () => {
+      throw new Error("Empty manifest must not ask a generator");
+    },
     abortSignal: new AbortController().signal,
   });
   expect(own.unwrap()).toEqual({ conditions: [], model: null });
@@ -51,6 +54,9 @@ test("condition preview addresses a template only in its organization", async ()
     body: { values: {} },
     orgAIConfig: null,
     client: null,
+    generator: async () => {
+      throw new Error("Empty manifest must not ask a generator");
+    },
     abortSignal: new AbortController().signal,
   });
   expect(Result.isError(other)).toBe(true);

@@ -433,13 +433,7 @@ Reply with only the text for this field — no preamble, no quotes, no markdown.
 };
 
 const AI_CONDITION_TIMEOUT_MS = 20_000;
-const AI_CONDITION_MAX_TOKENS = 400;
-
-// strictObject + object root: OpenAI strict structured output rejects a bare
-// boolean root, so the yes/no answer rides in a single required boolean field.
-const conditionDecisionSchema = v.strictObject({
-  decision: v.boolean(),
-});
+const AI_CONDITION_MAX_TOKENS = 800;
 
 /**
  * Model-backed decider for AI-decided boolean fields (a boolean FieldMeta with
@@ -499,56 +493,58 @@ export const buildAiConditionDecider = ({
         return undefined;
       }
       const skillTools = skillToolsResult.value;
-      // A prompt that references a skill needs the tools to load it, which
-      // only the generative run carries; every other condition is a yes/no
-      // the decision model settles first.
-      if (skillTools === undefined) {
-        const decided = await decide({
+      const decided = await decide({
+        dataClass: "customer",
+        id: CONDITION_DECISION_ID,
+        orgAIConfig,
+        state: conditionState({ prompt, values }),
+        question: CONDITION_QUESTION,
+        abortSignal: operationSignal,
+        timeoutMs: AI_CONDITION_TIMEOUT_MS,
+        client: decisionModel,
+        usageMetering: aiAnalytics?.usageMetering
+          ? { ...aiAnalytics.usageMetering, callId: Bun.randomUUIDv7() }
+          : undefined,
+        generation: {
           dataClass: "customer",
-          id: CONDITION_DECISION_ID,
+          role: "fast",
+          serviceTier: "standard",
           orgAIConfig,
-          state: conditionState({ prompt, values }),
-          question: CONDITION_QUESTION,
+          managedAIResidency,
+          organizationId,
+          admission,
+          tenantWorkspaceIds,
+          analytics: aiAnalytics,
+          maxOutputTokens: AI_CONDITION_MAX_TOKENS,
           abortSignal: operationSignal,
-          timeoutMs: AI_CONDITION_TIMEOUT_MS,
-          client: decisionModel,
-          usageMetering: aiAnalytics?.usageMetering
-            ? { ...aiAnalytics.usageMetering, callId: Bun.randomUUIDv7() }
-            : undefined,
-        });
-        if (decided.state === "decided") {
-          const value = decided.answer.noul > 0.5;
-          return {
+          deadlineMs: AI_CONDITION_TIMEOUT_MS,
+          caching: resolveCaching({
+            promptCachingEnabled: false,
+            role: "fast",
+            scopeKey: organizationId,
+          }),
+          prompt: `You are deciding one yes/no condition of a legal document. Question: ${prompt}\n\nKnown details (JSON):\n${JSON.stringify(values)}`,
+          resolveTextModel,
+          system: skillTools ? SKILL_REF_GENERATOR_GUIDANCE : undefined,
+          ...(skillTools
+            ? {
+                tools: chatToolMapToArray(skillTools),
+                agentLoopStrategy: maxIterations(SKILL_TOOL_MAX_STEPS),
+              }
+            : {}),
+        },
+      });
+      if (decided.state === "undecided") {
+        return { decidedBy: "undecided", reason: decided.reason };
+      }
+      const value = decided.answer.noul > 0.5;
+      return decided.source === "decision-model"
+        ? {
             decidedBy: "decision_model",
             value,
-            // The reading's probability is the yes; on a no the chosen side's
-            // is its complement (same rule the fill form's preview applies).
             probability: value ? decided.probability : 1 - decided.probability,
-          };
-        }
-      }
-      const { decision } = await generateFieldObject({
-        abortSignal: boundedAiSignal(AI_CONDITION_TIMEOUT_MS, operationSignal),
-        aiAnalytics,
-        maxOutputTokens: AI_CONDITION_MAX_TOKENS,
-        orgAIConfig,
-        managedAIResidency,
-        organizationId,
-        admission,
-        outputMode: "generative",
-        outputSchema: conditionDecisionSchema,
-        prompt: `You are deciding one yes/no condition of a legal document. Question: ${prompt}
-
-Known details (JSON):
-${JSON.stringify(values)}
-
-Decide true (yes) or false (no) for this condition.`,
-        skillTools,
-        resolveTextModel,
-        system: skillTools ? SKILL_REF_GENERATOR_GUIDANCE : undefined,
-        tenantWorkspaceIds,
-      });
-      return { decidedBy: "generative_model", value: decision };
+          }
+        : { decidedBy: "generative_model", value };
     } catch (error) {
       aiAnalytics?.captureError(error);
       return undefined;

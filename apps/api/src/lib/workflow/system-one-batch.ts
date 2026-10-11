@@ -242,16 +242,13 @@ export type SystemOneOutcomeOptions = {
 
 export type SystemOneOutcomeResult = {
   output: WorkflowDataOutput;
-  /** Properties the generative model must still answer: unplanned or undecided. */
+  /** Properties outside the typed plan. */
   fallbackPropertyIds: SafeId<"property">[];
 };
 
 /**
- * Settled outcomes as batch output. An undecided property, and one the plan
- * could not ask, falls back to the generative model: a judgment the decision
- * model did not take is not written over an answer the other path could still
- * produce. "Not stated" is an answer, and `null` is how the generative path
- * writes it.
+ * Planned decisions are terminal. Unresolved answers remain null after the
+ * shared generative fallback; only unplanned properties need normal generation.
  */
 export const outputFromSystemOneOutcomes = ({
   properties,
@@ -268,7 +265,7 @@ export const outputFromSystemOneOutcomes = ({
     }
     switch (outcome.state) {
       case "undecided":
-        fallbackPropertyIds.push(property.id);
+        output[property.id] = { answer: null, justification: [] };
         break;
       case "not_stated":
         output[property.id] = { answer: null, justification: [] };

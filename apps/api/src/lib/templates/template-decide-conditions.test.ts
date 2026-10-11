@@ -104,6 +104,9 @@ const decide = async (client: DecisionModel | null) =>
     fields,
     values,
     orgAIConfig: null,
+    generator: async () => {
+      throw new Error("Generation unavailable in this test");
+    },
     client,
   });
 
@@ -174,6 +177,9 @@ describe("decideTemplateConditions request", () => {
       fields: [{ path: "is_signed", inputType: "boolean" }],
       values,
       orgAIConfig: null,
+      generator: async () => {
+        throw new Error("Generation unavailable in this test");
+      },
       client: answering({}),
     });
 
@@ -217,13 +223,55 @@ describe("decideTemplateConditions answers", () => {
     ]);
   });
 
-  test("an answer under the confidence floor stays undecided", async () => {
+  test("a single generative call settles all open preview conditions", async () => {
+    let calls = 0;
+    const preview = await decideTemplateConditions({
+      fields,
+      values,
+      orgAIConfig: null,
+      client: null,
+      generator: async ({ questions, state }) => {
+        calls += 1;
+        expect(Object.keys(questions)).toEqual([
+          "is_consumer",
+          "has_arbitration",
+        ]);
+        expect(state).toEqual({
+          details: JSON.stringify({ party_name: "Acme s.r.o." }),
+        });
+        return {
+          model: "test-generative",
+          output: {
+            answers: [
+              {
+                id: "is_consumer",
+                answer: { type: "noul", noul: 1 },
+                evidence: null,
+              },
+              {
+                id: "has_arbitration",
+                answer: { type: "noul", noul: 0 },
+                evidence: null,
+              },
+            ],
+          },
+        };
+      },
+    });
+    expect(calls).toBe(1);
+    expect(preview.conditions.map(({ decision }) => decision)).toEqual([
+      { state: "decided", decidedBy: "generative_model", value: true },
+      { state: "decided", decidedBy: "generative_model", value: false },
+    ]);
+  });
+
+  test("a generative failure after an answer under the floor stays undecided", async () => {
     const decided = await decide(
       answering({ is_consumer: 0.55, has_arbitration: 0.95 }),
     );
 
     expect(decided.conditions.map(({ decision }) => decision)).toEqual([
-      { state: "undecided", reason: "below-floor" },
+      { state: "undecided", reason: "failed" },
       {
         state: "decided",
         decidedBy: "decision_model",
@@ -234,13 +282,13 @@ describe("decideTemplateConditions answers", () => {
     ]);
   });
 
-  test("with no decision model every condition is no-backend", async () => {
+  test("a generative failure without a decision model leaves every condition undecided", async () => {
     const decided = await decide(null);
 
     expect(decided.model).toBeNull();
     expect(decided.conditions.map(({ decision }) => decision)).toEqual([
-      { state: "undecided", reason: "no-backend" },
-      { state: "undecided", reason: "no-backend" },
+      { state: "undecided", reason: "failed" },
+      { state: "undecided", reason: "failed" },
     ]);
   });
 
@@ -259,6 +307,9 @@ describe("decideTemplateConditions answers", () => {
       fields,
       values: { ...values, is_consumer: false },
       orgAIConfig: null,
+      generator: async () => {
+        throw new Error("Generation unavailable in this test");
+      },
       client: answering({ has_arbitration: 0.9 }),
     });
 
@@ -301,6 +352,9 @@ describe("decideTemplateConditions answers", () => {
       ],
       values: { client: { is_consumer: true } },
       orgAIConfig: null,
+      generator: async () => {
+        throw new Error("Generation unavailable in this test");
+      },
       client: answering({}),
     });
 
@@ -327,6 +381,9 @@ describe("decideTemplateConditions answers", () => {
         has_arbitration: "no",
       },
       orgAIConfig: null,
+      generator: async () => {
+        throw new Error("Generation unavailable in this test");
+      },
       client: answering({}),
     });
 
@@ -372,6 +429,9 @@ describe("templateDecideConditionsLogic access", () => {
       templateId,
       body: { values: {} },
       orgAIConfig: null,
+      generator: async () => {
+        throw new Error("Generation unavailable in this test");
+      },
       abortSignal: new AbortController().signal,
     });
 
@@ -430,6 +490,9 @@ describe("templateDecideConditionsLogic access", () => {
       templateId: toSafeId<"template">("tmpl_conditioned"),
       body: { values },
       orgAIConfig: null,
+      generator: async () => {
+        throw new Error("Generation unavailable in this test");
+      },
       abortSignal: controller.signal,
       client,
     });
@@ -478,6 +541,9 @@ test("linked clauses without markers reuse the cached condition manifest", async
     templateId: toSafeId<"template">("tmpl_cached"),
     body: { values: { is_consumer: true, has_arbitration: false } },
     orgAIConfig: null,
+    generator: async () => {
+      throw new Error("Generation unavailable in this test");
+    },
     client: null,
     abortSignal: new AbortController().signal,
   });
@@ -560,6 +626,9 @@ for (const resolution of [
       organizationId: toSafeId<"organization">("org_preview"),
       body: { values: { applicable: true } },
       orgAIConfig: null,
+      generator: async () => {
+        throw new Error("Generation unavailable in this test");
+      },
       client: null,
       abortSignal: new AbortController().signal,
     });
@@ -605,6 +674,9 @@ test("condition preview reports an incomplete state before reading an excessive 
     organizationId: toSafeId<"organization">("org_preview"),
     body: { values: {} },
     orgAIConfig: null,
+    generator: async () => {
+      throw new Error("Generation unavailable in this test");
+    },
     client: null,
     abortSignal: new AbortController().signal,
   });

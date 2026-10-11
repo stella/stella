@@ -1922,6 +1922,9 @@ test("template discovery and condition preview include clause-only declarations"
     body: { values: { included: false } },
     orgAIConfig: null,
     client: null,
+    generator: async () => {
+      throw new Error("User-supplied condition must not ask a generator");
+    },
     abortSignal: new AbortController().signal,
   });
   expect(preview.unwrap().conditions).toEqual([

@@ -1431,8 +1431,28 @@ describe("MCP template tools", () => {
         organizationId: toSafeId<"organization">("org_1"),
         body: { values: { party_name: "Acme s.r.o." } },
         orgAIConfig: null,
-        client: null,
         abortSignal: expect.any(AbortSignal),
+        generation: expect.objectContaining({
+          dataClass: "customer",
+          role: "fast",
+          orgAIConfig: null,
+          organizationId: toSafeId<"organization">("org_1"),
+          managedAIResidency: "eu",
+          tenantWorkspaceIds: [],
+          admission: expect.objectContaining({
+            type: "organization",
+            organizationId: toSafeId<"organization">("org_1"),
+          }),
+          analytics: expect.objectContaining({
+            usageMetering: expect.objectContaining({
+              actionType: "chat",
+              organizationId: toSafeId<"organization">("org_1"),
+              serviceTier: "standard",
+              userId: toSafeId<"user">("user_1"),
+              workspaceId: null,
+            }),
+          }),
+        }),
         usageMetering: expect.objectContaining({
           actionType: "chat",
           organizationId: toSafeId<"organization">("org_1"),
@@ -1473,6 +1493,75 @@ describe("MCP template tools", () => {
     // Nothing is filled, so nothing is recorded as a use of the template.
     expect(recordTemplateFillMock).not.toHaveBeenCalled();
     expect(recordTemplateUseMock).not.toHaveBeenCalled();
+  });
+
+  test("preview_template_conditions projects generative answers without a decision-model probability", async () => {
+    templateDecideConditionsLogicMock.mockResolvedValue(
+      Result.ok({
+        conditions: [
+          {
+            path: "is_consumer",
+            label: "Consumer contract",
+            decision: {
+              state: "decided",
+              decidedBy: "generative_model",
+              value: true,
+            },
+          },
+        ],
+        model: "test-generative",
+      }),
+    );
+    const result = await handleMcpToolCall({
+      args: { template_id: TEMPLATE_ID, values: {} },
+      context: createContext(),
+      toolName: "preview_template_conditions",
+    });
+    expect(parseToolPayload(result)).toEqual({
+      conditions: [
+        {
+          path: "is_consumer",
+          label: "Consumer contract",
+          state: "decided",
+          value: true,
+          decided_by: "generative_model",
+        },
+      ],
+      model: "test-generative",
+    });
+  });
+
+  test("preview_template_conditions refuses unauthorized callers before model work", async () => {
+    const result = await handleMcpToolCall({
+      args: { template_id: TEMPLATE_ID, values: {} },
+      context: createContext({ memberRole: "external" }),
+      toolName: "preview_template_conditions",
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content).toEqual([{ type: "text", text: "Forbidden" }]);
+    expect(templateDecideConditionsLogicMock).not.toHaveBeenCalled();
+    expect(loadOrgAIConfigMock).not.toHaveBeenCalled();
+  });
+
+  test("preview_template_conditions stops when organization AI configuration cannot be read", async () => {
+    loadOrgAIConfigMock.mockResolvedValue(
+      Result.err(
+        new HandlerError({
+          status: 503,
+          message: "Organization AI configuration unavailable",
+        }),
+      ),
+    );
+    const result = await handleMcpToolCall({
+      args: { template_id: TEMPLATE_ID, values: {} },
+      context: createContext(),
+      toolName: "preview_template_conditions",
+    });
+    expect(result.isError).toBe(true);
+    expect(validationEnvelope(result)).toMatchObject({
+      message: "Organization AI configuration unavailable",
+    });
+    expect(templateDecideConditionsLogicMock).not.toHaveBeenCalled();
   });
 
   test("preview_template_conditions names why a condition stayed undecided", async () => {

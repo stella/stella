@@ -287,6 +287,7 @@ const buildContext = ({
       describeStoredTemplate: describeStoredTemplateMock,
       templateDecideConditionsLogic: templateDecideConditionsLogicMock,
       loadOrgAIConfig: loadOrgAIConfigMock,
+      loadManagedAIResidency: async () => "eu",
       // The corpus gate has its own tests; here the document is reachable.
       resolveAnnotationTarget: async () =>
         await Promise.resolve({
@@ -1289,6 +1290,7 @@ describe("MCP anonymization canary corpus", () => {
     async (tool) => {
       const decidedLabelSeed = mkSeed(tool, 0);
       const undecidedLabelSeed = mkSeed(tool, 1);
+      const generativeLabelSeed = mkSeed(tool, 2);
       templateDecideConditionsLogicMock.mockResolvedValue(
         Result.ok({
           conditions: [
@@ -1308,6 +1310,15 @@ describe("MCP anonymization canary corpus", () => {
               label: undecidedLabelSeed,
               decision: { state: "undecided", reason: "below-floor" },
             },
+            {
+              path: "has_penalty",
+              label: generativeLabelSeed,
+              decision: {
+                state: "decided",
+                decidedBy: "generative_model",
+                value: false,
+              },
+            },
           ],
           model: "jev-1.13.0",
         }),
@@ -1325,7 +1336,7 @@ describe("MCP anonymization canary corpus", () => {
       );
       const result = await finalize(context, response);
 
-      const seeds = [decidedLabelSeed, undecidedLabelSeed];
+      const seeds = [decidedLabelSeed, undecidedLabelSeed, generativeLabelSeed];
       expectNoSeedLeak(result, seeds);
       expectSeedsQueuedForAnonymization(seeds);
     },
