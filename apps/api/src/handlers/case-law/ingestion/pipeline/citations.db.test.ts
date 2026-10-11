@@ -13,6 +13,7 @@ import {
   caseLawDecisions,
   caseLawPolarityRules,
   caseLawSources,
+  systemAuditRuns,
 } from "@/api/db/schema";
 import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
@@ -34,6 +35,7 @@ import {
 import { compileRules } from "@/api/handlers/case-law/polarity/rule-engine";
 import { createSafeId } from "@/api/lib/branded-types";
 import { CITED_PART } from "@/api/lib/case-law/citation-vocabulary";
+import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -307,8 +309,56 @@ test("refreshing a repaired citation preserves its confidence and row identity",
     .update(caseLawCitations)
     .set({ polarity: POLARITY.SUPPORTIVE })
     .where(eq(caseLawCitations.citingDecisionId, repairedDecisionId));
+  const queries: string[] = [];
+  const repairDb = drizzle({
+    client,
+    logger: { logQuery: (query) => queries.push(query) },
+  });
+  const transaction = asTestRaw<CaseLawRootHandle["transaction"]>(
+    repairDb.transaction.bind(repairDb),
+  );
   const scopedDb: ScopedDb = async (run) =>
-    await db.transaction(async (tx) => await run(asTestRaw(tx)));
+    await repairDb.transaction(async (tx) => await run(asTestRaw(tx)));
+  const staleDecisionId = createSafeId<"caseLawDecision">();
+  const staleCitationId = createSafeId<"caseLawCitation">();
+  await db.insert(caseLawDecisions).values({
+    id: staleDecisionId,
+    sourceId,
+    caseNumber: "synthetic stale repair",
+    country: "CZE",
+    court: "Synthetic court",
+    language: "en",
+    sections,
+  });
+  await db.insert(caseLawCitations).values({
+    id: staleCitationId,
+    citingDecisionId: staleDecisionId,
+    citationText,
+    sectionIndex: 0,
+    polarity: POLARITY.SUPPORTIVE,
+    polarityRuleId: formRuleId,
+  });
+  const writeTargets = () =>
+    queries.flatMap((query) => {
+      // Fail closed for SQL outside the statements this operation issues.
+      expect(query).toMatch(
+        /^\s*(?:begin|commit|select|with|insert\s+into|update|delete\s+from)\b/iu,
+      );
+      return Array.from(
+        query.matchAll(
+          /\b(?:insert\s+into|update|delete\s+from)\s+(?:"?\w+"?\.)?"?(\w+)"?/giu,
+        ),
+        (match) => match[1],
+      );
+    });
+  const audits = async () =>
+    await db
+      .select({ actor: systemAuditRuns.actor, counts: systemAuditRuns.counts })
+      .from(systemAuditRuns)
+      .where(eq(systemAuditRuns.actor, "system:case-law-citation-form-repair"))
+      .orderBy(systemAuditRuns.id);
+  const auditBefore = await audits();
+  queries.length = 0;
   const plan = await previewFormRepairs({
     scopedDb,
     language: "en",
@@ -316,11 +366,47 @@ test("refreshing a repaired citation preserves its confidence and row identity",
     after: null,
     limit: 100,
   });
-  expect(plan.rows).toHaveLength(1);
-  expect(await applyFormRepairs({ scopedDb, plan, rules })).toEqual({
+  expect(plan.rows).toHaveLength(2);
+  expect(writeTargets()).toEqual([]);
+  expect(await audits()).toEqual(auditBefore);
+  await db
+    .update(caseLawCitations)
+    .set({ polarity: POLARITY.NEGATIVE })
+    .where(eq(caseLawCitations.id, staleCitationId));
+  queries.length = 0;
+  expect(await applyFormRepairs({ transaction, plan, rules })).toEqual({
     applied: 1,
-    skipped: 0,
+    skipped: 1,
   });
+  expect(writeTargets().toSorted()).toEqual([
+    "case_law_citations",
+    "system_audit_runs",
+  ]);
+  expect(await audits()).toEqual([
+    ...auditBefore,
+    {
+      actor: "system:case-law-citation-form-repair",
+      counts: { attempted: 2, applied: 1, skipped: 1 },
+    },
+  ]);
+  queries.length = 0;
+  expect(await applyFormRepairs({ transaction, plan, rules })).toEqual({
+    applied: 0,
+    skipped: 2,
+  });
+  expect(writeTargets()).toEqual(["system_audit_runs"]);
+  const auditAfterReplay = await audits();
+  expect(auditAfterReplay).toHaveLength(auditBefore.length + 2);
+  expect(auditAfterReplay.at(-1)).toEqual({
+    actor: "system:case-law-citation-form-repair",
+    counts: { attempted: 2, applied: 0, skipped: 2 },
+  });
+  queries.length = 0;
+  expect(
+    await applyFormRepairs({ transaction, plan: { ...plan, rows: [] }, rules }),
+  ).toEqual({ applied: 0, skipped: 0 });
+  expect(writeTargets()).toEqual([]);
+  expect(await audits()).toEqual(auditAfterReplay);
   const read = async () =>
     await db
       .select({

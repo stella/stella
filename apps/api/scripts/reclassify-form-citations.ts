@@ -78,7 +78,7 @@ const main = async () => {
     args.mode === "apply"
       ? v.parse(formRepairPlanSchema, await Bun.file(args.plan).json())
       : null;
-  const { ingestionDb: scopedDb } = await enterCaseLawMaintenanceLane();
+  const { ingestionDb: scopedDb, rootDb } = await enterCaseLawMaintenanceLane();
   switch (args.mode) {
     case "preview": {
       const rules = await loadRules(args.language, scopedDb);
@@ -111,7 +111,11 @@ const main = async () => {
         panic("An apply run requires a validated preview");
       }
       const rules = await loadRules(plan.language, scopedDb);
-      const result = await applyFormRepairs({ scopedDb, plan, rules });
+      const result = await applyFormRepairs({
+        transaction: rootDb.transaction,
+        plan,
+        rules,
+      });
       console.log(JSON.stringify({ mode: "apply", ...result }, null, 2));
       return;
     }

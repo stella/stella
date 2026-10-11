@@ -24,9 +24,12 @@ import {
   selectCitationPolarity,
 } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { CompiledRule } from "@/api/handlers/case-law/polarity/rule-engine";
+import { createSafeId } from "@/api/lib/branded-types";
+import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { numericColumnParam } from "@/api/lib/db/column-storage";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { brandPersistedCaseLawCitationId } from "@/api/lib/safe-id-boundaries";
+import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 const REPAIR_LIMIT = 1000;
 const formRepairRowSchema = v.object({
@@ -230,14 +233,14 @@ export const previewFormRepairs = async ({
 };
 
 type ApplyFormRepairsArgs = {
-  scopedDb: ScopedDb;
+  transaction: CaseLawRootHandle["transaction"];
   plan: FormRepairPlan;
   rules: readonly CompiledRule[];
 };
 
 /** Re-read the preview set and compare-and-swap only unchanged, unreviewed rows. */
 export const applyFormRepairs = async ({
-  scopedDb,
+  transaction,
   plan,
   rules,
 }: ApplyFormRepairsArgs) => {
@@ -245,7 +248,7 @@ export const applyFormRepairs = async ({
     return { applied: 0, skipped: 0 };
   }
   const expected = new Map(plan.rows.map((row) => [row.id, row]));
-  return await scopedDb(async (tx) => {
+  return await transaction(async (tx) => {
     const candidates = await tx
       .select(candidateSelection)
       .from(caseLawCitations)
@@ -287,17 +290,16 @@ export const applyFormRepairs = async ({
       }
       repairs.push({ candidate, current });
     }
-    if (repairs.length === 0) {
-      return { applied: 0, skipped: plan.rows.length };
-    }
     const documents = new Map(
       repairs.map(({ candidate }) => [
         candidate.citingDecisionId,
         candidate.sections,
       ]),
     );
-    // audit: skip — explicit corpus maintenance; the preview records each proposed transition
-    const changed = await tx.execute(sql`
+    const changed =
+      repairs.length === 0
+        ? []
+        : await tx.execute(sql`
       WITH expected_documents(id, sections) AS (VALUES ${sql.join(
         [...documents].map(
           ([id, sections]) =>
@@ -339,6 +341,11 @@ export const applyFormRepairs = async ({
       RETURNING c.id
     `);
     const applied = executedRows(changed).length;
-    return { applied, skipped: plan.rows.length - applied };
+    const skipped = plan.rows.length - applied;
+    await recordSystemAudit(tx, "system:case-law-citation-form-repair", {
+      subject: createSafeId<"systemScriptRun">(),
+      counts: { attempted: plan.rows.length, applied, skipped },
+    });
+    return { applied, skipped };
   });
 };
