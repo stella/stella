@@ -1,6 +1,8 @@
 import type { TokenEndpointAuthMethod } from "@better-auth/oauth-provider";
 import { describe, expect, test } from "bun:test";
 
+import { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract";
+
 import { getVerifiedOAuthOrigins } from "@/api/lib/auth/oauth-consent-info";
 import {
   grantableScopes,
@@ -113,6 +115,23 @@ describe("grantableScopes", () => {
       expect(grantableScopes(client, ALL_SCOPES, policy), clientId).toEqual(
         expected,
       );
+    }
+  });
+
+  test("self-registered clients never obtain personal data export scopes", () => {
+    const exportScopes = new Set<string>(Object.values(ACCOUNT_EXPORT_SCOPES));
+    const exportGrants = (scopes: string[]) =>
+      scopes.filter((scope) => exportScopes.has(scope));
+    for (const client of [
+      registered(ALL_SCOPES),
+      registered([...exportScopes]),
+      documented("https://connector.example/oauth/client.json", ALL_SCOPES),
+    ]) {
+      for (const requested of [undefined, [...exportScopes], ALL_SCOPES]) {
+        expect(
+          exportGrants(grantableScopes(client, requested, policy)),
+        ).toEqual([]);
+      }
     }
   });
 
