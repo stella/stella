@@ -302,7 +302,9 @@
       },
       "devDependencies": {
         "@astrojs/check": "^0.9.9",
+        "@playwright/test": "^1.63.0",
         "@stll/cli": "workspace:*",
+        "@stll/playwright-tools": "workspace:*",
         "@types/react": "catalog:react19",
         "@types/react-dom": "catalog:react19",
         "bun-types": "catalog:",
@@ -516,6 +518,7 @@
       "devDependencies": {
         "@happy-dom/global-registrator": "20.14.5",
         "@playwright/test": "^1.63.0",
+        "@stll/playwright-tools": "workspace:*",
         "@stll/property-testing": "workspace:*",
         "@stll/scripts": "workspace:*",
         "@stll/ssr-testkit": "workspace:^",

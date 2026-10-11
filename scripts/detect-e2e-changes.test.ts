@@ -315,7 +315,7 @@ describe("detect-e2e-changes", () => {
   test("keeps a landing-only change out of app E2E", () => {
     for (const file of [
       "apps/landing/src/pages/index.astro",
-      "apps/web/e2e/marketing/landing-navigation.spec.ts",
+      "apps/landing/e2e/landing-navigation.spec.ts",
     ]) {
       expect(detects("core", [file])).toBe("false");
       expect(detects("landing", [file])).toBe("true");
@@ -323,15 +323,15 @@ describe("detect-e2e-changes", () => {
   });
 
   test("the shared marketing config exercises the landing project", () => {
-    const files = ["apps/web/e2e/playwright.marketing.config.ts"];
+    const files = ["packages/playwright-tools/src/marketing-config.ts"];
     expect(detects("core", files)).toBe("false");
     expect(detects("landing", files)).toBe("true");
   });
 
-  test("the web package manifest exercises its core and landing commands", () => {
+  test("the web package manifest exercises its core commands", () => {
     const files = ["apps/web/package.json"];
     expect(detects("core", files)).toBe("true");
-    expect(detects("landing", files)).toBe("true");
+    expect(detects("landing", files)).toBe("false");
   });
 
   test("routes every input of a product screenshot through the marketing scope", () => {

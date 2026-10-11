@@ -7117,7 +7117,7 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        run: bash scripts/retry.sh bun ci --frozen-lockfile --ignore-scripts --filter @stll/landing... --filter stella
         env:
           NPM_TOKEN: ""
 
@@ -7161,7 +7161,7 @@ jobs:
       - name: Check landing islands
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-landing-islands.json
-        run: E2E_LANDING_URL=http://localhost:4321 bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:landing
+        run: E2E_LANDING_URL=http://localhost:4321 bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/landing test:e2e
 
       - name: Stop landing preview server
         if: always()
