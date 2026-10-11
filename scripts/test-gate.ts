@@ -1250,12 +1250,75 @@ const conditionExpression = (condition: string): string =>
     .replace(/\}\}$/u, "")
     .trim();
 
-const LITERAL_INCLUDE_CHOICE =
-  /^fromJSON\(\s*(?<condition>[\s\S]+?)&&\s*'(?<whenTrue>(?:[^']|'')*)'\s*\|\|\s*'(?<whenFalse>(?:[^']|'')*)'\s*\)$/u;
+type QuotedLiteral = {
+  readonly start: number;
+  readonly end: number;
+  readonly text: string;
+};
+
+// Single-quoted expression literals in order; `''` escapes a quote.
+const quotedLiterals = (expression: string): QuotedLiteral[] | undefined => {
+  const literals: QuotedLiteral[] = [];
+  let index = 0;
+  while (index < expression.length) {
+    if (expression[index] !== "'") {
+      index += 1;
+      continue;
+    }
+    const start = index;
+    let text = "";
+    index += 1;
+    for (;;) {
+      if (index >= expression.length) {
+        return undefined;
+      }
+      if (expression[index] === "'") {
+        if (expression[index + 1] !== "'") {
+          break;
+        }
+        text += "'";
+        index += 2;
+        continue;
+      }
+      text += expression[index];
+      index += 1;
+    }
+    index += 1;
+    literals.push({ start, end: index, text });
+  }
+  return literals;
+};
+
+// Matches `fromJSON(<condition> && '<json>' || '<json>')` and returns both literals.
+const literalIncludeChoice = (
+  include: string,
+): readonly [string, string] | undefined => {
+  const expression = conditionExpression(include);
+  if (!expression.startsWith("fromJSON(") || !expression.endsWith(")")) {
+    return undefined;
+  }
+  const inner = expression.slice("fromJSON(".length, -1);
+  const literals = quotedLiterals(inner);
+  const whenTrue = literals?.at(-2);
+  const whenFalse = literals?.at(-1);
+  if (whenTrue === undefined || whenFalse === undefined) {
+    return undefined;
+  }
+  const condition = inner.slice(0, whenTrue.start).trimEnd();
+  if (
+    !condition.endsWith("&&") ||
+    condition.slice(0, -2).trim().length === 0 ||
+    inner.slice(whenTrue.end, whenFalse.start).trim() !== "||" ||
+    inner.slice(whenFalse.end).trim() !== ""
+  ) {
+    return undefined;
+  }
+  return [whenTrue.text, whenFalse.text];
+};
 
 const literalMatrixEntries = (literal: string): MatrixLeg[] | undefined => {
   try {
-    const value: unknown = JSON.parse(literal.replaceAll("''", "'"));
+    const value: unknown = JSON.parse(literal);
     return Array.isArray(value) && value.every(isRecord) ? value : undefined;
   } catch {
     return undefined;
@@ -1268,9 +1331,9 @@ const literalMatrixEntries = (literal: string): MatrixLeg[] | undefined => {
 const conditionalLiteralInclude = (
   include: string,
 ): MatrixLeg[] | undefined => {
-  const match = LITERAL_INCLUDE_CHOICE.exec(conditionExpression(include));
-  const whenTrue = literalMatrixEntries(match?.groups?.["whenTrue"] ?? "");
-  const whenFalse = literalMatrixEntries(match?.groups?.["whenFalse"] ?? "");
+  const choice = literalIncludeChoice(include);
+  const whenTrue = literalMatrixEntries(choice?.[0] ?? "");
+  const whenFalse = literalMatrixEntries(choice?.[1] ?? "");
   if (whenTrue === undefined || whenFalse === undefined) {
     return undefined;
   }
