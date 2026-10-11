@@ -649,10 +649,42 @@ const shellInvocationGates = (
         (next === "exit" && suffix.at(offset + 1) === "0")
       );
     };
+    // A `||` fallback swallows the runner's failure unless the fallback itself
+    // fails: `false`, or an `exit` with a non-zero literal status.
+    const fallbackFails = (offset: number): boolean => {
+      const grouped = suffix.at(offset) === "{";
+      const start = grouped ? offset + 1 : offset;
+      for (let cursor = start; cursor < suffix.length; cursor += 1) {
+        const word = suffix[cursor];
+        if (
+          word === undefined ||
+          (grouped ? word === "}" : SHELL_OPERATORS.has(word))
+        ) {
+          return false;
+        }
+        if (
+          word === "false" &&
+          (cursor === start || suffix[cursor - 1] === ";")
+        ) {
+          return true;
+        }
+        const status = suffix.at(cursor + 1);
+        if (
+          word === "exit" &&
+          status !== undefined &&
+          /^[1-9]\d*$/u.test(status)
+        ) {
+          return true;
+        }
+      }
+      return false;
+    };
     const end = suffix.findIndex((word) => word === ";" || word === "\n");
     const list = end === -1 ? suffix : suffix.slice(0, end);
     const suppressed =
-      list.some((word, offset) => word === "||" && succeeds(offset + 1)) ||
+      list.some(
+        (word, offset) => word === "||" && !fallbackFails(offset + 1),
+      ) ||
       (end !== -1 && succeeds(end + 1));
     if (!suppressed) {
       return true;
@@ -1469,11 +1501,13 @@ const ignoresFailure = (
   if (continueOnError === false || typeof continueOnError !== "string") {
     return false;
   }
+  // An expression that cannot be resolved statically may allow failures at
+  // runtime, so only a statically false value keeps the step gating.
   return (
     evaluate(
       conditionExpression(continueOnError),
       gatingEventContext(contextOptions, conditionExpression(continueOnError)),
-    ) === true
+    ) !== false
   );
 };
 
@@ -1931,6 +1965,13 @@ const playwrightConfigCollection = (
         )
       ) {
         continue;
+      }
+    }
+    // Title filters select tests inside files; file-level collection cannot
+    // prove that a matched file still runs any of them.
+    for (const filter of ["grep", "grepInvert"]) {
+      if (scope.get(filter) !== undefined) {
+        return unresolved(filter);
       }
     }
     const testDir = scope.get("testDir");

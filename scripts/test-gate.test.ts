@@ -686,6 +686,8 @@ jobs:
     () => {
       for (const run of [
         "bun scripts/test-gate.ts || true",
+        "bun scripts/test-gate.ts || echo failed",
+        "bun scripts/test-gate.ts || { echo failed; exit 0; }",
         "set +e; bun scripts/test-gate.ts",
       ]) {
         const workflow = Bun.YAML.parse(`
@@ -927,6 +929,55 @@ jobs:
         shardedPackages: new Set<string>(),
       }),
     ).toBe("job condition: no gating job executes @stll/orphan test");
+  });
+
+  check("a fallback that fails keeps the runner gating", () => {
+    for (const run of [
+      "bun scripts/test-gate.ts || { echo failed; exit 1; }",
+      "bun scripts/test-gate.ts || false",
+    ]) {
+      const workflow = Bun.YAML.parse(`
+jobs:
+  checks:
+    steps:
+      - run: ${JSON.stringify(run)}
+  ci-result:
+    needs: [checks]
+`);
+      expect(
+        rootCommandExecutionFailure({
+          command: "bun scripts/test-gate.ts",
+          gatingJobs: gatingWorkflowJobs(workflow),
+        }),
+        run,
+      ).toBeUndefined();
+    }
+  });
+
+  check("ignores package commands that may continue on error", () => {
+    for (const [jobOption, stepOption] of [
+      [`continue-on-error: \${{ vars.ALLOW_TEST_FAILURE }}`, ""],
+      ["", `continue-on-error: \${{ vars.ALLOW_TEST_FAILURE }}`],
+    ]) {
+      const workflow = Bun.YAML.parse(`
+jobs:
+  package-check:
+    ${jobOption}
+    steps:
+      - run: bun --filter @stll/orphan test
+        ${stepOption}
+  ci-result:
+    needs: [package-check]
+`);
+      expect(
+        packageTestExecutionFailure({
+          gatingJobs: gatingWorkflowJobs(workflow),
+          packageDirectory: "packages/orphan",
+          packageName: "@stll/orphan",
+          shardedPackages: new Set<string>(),
+        }),
+      ).toBe("job condition: no gating job executes @stll/orphan test");
+    }
   });
 
   check("ignores package commands in jobs that continue on error", () => {
@@ -1341,6 +1392,15 @@ context("Playwright configuration filters", () => {
         "runner config: apps/desktop/playwright.config.ts has unresolved testIgnore",
     });
   });
+  check.each(["grep: /smoke/", "grepInvert: /slow/"])(
+    "a title filter in the config fails closed: %s",
+    (filter) => {
+      expect(collects(filter)).toEqual({
+        type: "unresolved",
+        finding: `runner config: apps/desktop/playwright.config.ts has unresolved ${filter.slice(0, filter.indexOf(":"))}`,
+      });
+    },
+  );
   check("an unresolved RegExp fails closed", () => {
     expect(collects('testMatch: new RegExp(".*")')).toEqual({
       type: "unresolved",
