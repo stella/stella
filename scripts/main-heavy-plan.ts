@@ -101,13 +101,40 @@ export const prDepthJobs = (workflow: unknown) => {
 /** Heavy jobs a thin merge group still runs unless the switch turns them off. */
 export const QUEUE_BROWSER_SUITES_SWITCH = "vars.QUEUE_BROWSER_SUITES";
 
+export const queueGateJobs = (workflow: unknown) => {
+  const jobs = record(record(workflow)["jobs"]);
+  const steps = record(jobs["ci-result"])["steps"];
+  if (!Array.isArray(steps)) {
+    panic("Expected ci-result steps");
+  }
+  const outcome = steps.find(
+    (step: unknown) => record(step)["name"] === "Evaluate CI outcome",
+  );
+  const gatesJson = record(record(outcome)["env"])["QUEUE_GATES"];
+  if (typeof gatesJson !== "string") {
+    panic("Expected QUEUE_GATES JSON");
+  }
+  const gates: unknown = JSON.parse(gatesJson);
+  const heavy = mainHeavyJobs(workflow);
+  if (
+    !Array.isArray(gates) ||
+    !gates.every(
+      (job): job is string => typeof job === "string" && heavy.includes(job),
+    )
+  ) {
+    panic("Queue gates must name existing heavy jobs");
+  }
+  return gates;
+};
+
 export const queueAdmittedJobs = (workflow: unknown) => {
   const jobs = record(record(workflow)["jobs"]);
+  const gates = queueGateJobs(workflow);
   return mainHeavyJobs(workflow).filter((name) => {
     const condition = record(jobs[name])["if"];
     return (
       typeof condition === "string" &&
-      condition.includes(QUEUE_BROWSER_SUITES_SWITCH)
+      (gates.includes(name) || condition.includes(QUEUE_BROWSER_SUITES_SWITCH))
     );
   });
 };

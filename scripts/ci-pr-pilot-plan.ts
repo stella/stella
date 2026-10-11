@@ -9,6 +9,7 @@ export const PILOT_FAST_ROOTS = [
   "ci-tests",
   "code-quality-api",
   "code-quality-web-rest",
+  "query-perf",
 ] as const;
 // Queue-only Docker checks remain deferred on PRs, including the pilot profile.
 export const PILOT_DEFERRED = [

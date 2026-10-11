@@ -19,8 +19,8 @@ import {
   QUERY_PERF_JIT,
 } from "./settings";
 
-export const QUERY_PERF_REPETITIONS = 5;
-export const QUERY_PERF_TIME_FLOOR_MS = 10;
+const QUERY_PERF_REPETITIONS = 5;
+const QUERY_PERF_TIME_FLOOR_MS = 10;
 export type QueryPerfMetrics = {
   sharedBlocks: number;
   executionTimeMs: number;

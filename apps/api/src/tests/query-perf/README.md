@@ -29,7 +29,7 @@ both profiles reject per-row policy subplans.
 
 The baseline records each profile and entry separately and binds the seed and planner
 settings. To record a reviewed new baseline locally, run
-`QUERY_PERF_RECORD_BASELINE=true bun run test:perf`. Recording does not perform
+`QUERY_PERF_BASELINE_MODE=record bun run test:perf`. Recording does not perform
 the planted-policy check; run normal `test:perf` afterward.
 For a hosted re-recording, dispatch `query-perf.yml` on `main`;
 this schedules only `query-perf`.

@@ -4,9 +4,48 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import { parseQueryPerfBaselineFile } from "./baseline";
 import { completeQueryPerfRun } from "./baseline-recording";
+import { QUERY_PERF_PROFILES } from "./profiles";
+import { QUERY_PERF_SEED_ID } from "./seed";
+import { QUERY_PERF_SETTINGS } from "./settings";
+
+test("the committed recording covers both profiles and unchanged measurements complete comparison without recording", async () => {
+  const baseline = parseQueryPerfBaselineFile(
+    await Bun.file(new URL("baseline.json", import.meta.url)).json(),
+  );
+  expect(baseline.seedId).toBe(QUERY_PERF_SEED_ID);
+  expect(baseline.settingsDigest).toBe(
+    sha256Hex(JSON.stringify(QUERY_PERF_SETTINGS)),
+  );
+  expect(
+    QUERY_PERF_PROFILES.filter((profileId) =>
+      Object.keys(baseline.entries).some((id) =>
+        id.startsWith(`${profileId}-`),
+      ),
+    ),
+  ).toEqual([...QUERY_PERF_PROFILES]);
+  const directory = await mkdtemp(path.join(tmpdir(), "query-perf-compare-"));
+  try {
+    const baselinePath = path.join(directory, "baseline.json");
+    const outputPath = path.join(directory, "outputs");
+    await completeQueryPerfRun({
+      mode: "compare",
+      baseline,
+      recorded: baseline.entries,
+      seedId: baseline.seedId,
+      settingsDigest: baseline.settingsDigest,
+      baselinePath,
+      outputPath,
+    });
+    expect(await Bun.file(baselinePath).exists()).toBe(false);
+    expect(await Bun.file(outputPath).exists()).toBe(false);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test("missing baselines produce a validated recording and still fail comparison", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "query-perf-record-"));

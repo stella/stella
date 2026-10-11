@@ -158,14 +158,15 @@ jobs:
 
       - name: Run query performance suite
         id: measurements
-        run: bun run test:perf
+        run: bun scripts/run-perf-tests.ts
         working-directory: apps/api
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           QUERY_PERF_CACHE_SMALL_HIT: ${{ steps.snapshot-small.outputs.cache-hit }}
           QUERY_PERF_CACHE_GROWTH_HIT: ${{ steps.snapshot-growth.outputs.cache-hit }}
           QUERY_PERF_SNAPSHOT_DIRECTORY: ${{ github.workspace }}/.cache/query-perf
-          QUERY_PERF_RECORD_BASELINE: ${{ github.event_name == 'workflow_dispatch' && contains(github.workflow_ref, '/.github/workflows/query-perf.yml@') && 'true' || 'false' }}
+          STELLA_RUN_QUERY_PERF_TESTS: "true"
+          QUERY_PERF_BASELINE_MODE: ${{ github.event_name == 'workflow_dispatch' && contains(github.workflow_ref, '/.github/workflows/query-perf.yml@') && 'record' || 'compare' }}
 
       - name: Validate recorded baseline
         id: validation

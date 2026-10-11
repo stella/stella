@@ -1,11 +1,30 @@
 import { expect, test } from "bun:test";
 
+import { parseQueryPerfBaselineFile } from "./baseline";
 import {
   budgetViolations,
   median,
   metricsFromPlan,
   shapeViolations,
 } from "./measurement";
+
+test("committed profile budgets accept their recording and reject buffer regressions independently of time", async () => {
+  const baseline = parseQueryPerfBaselineFile(
+    await Bun.file(new URL("baseline.json", import.meta.url)).json(),
+  );
+  for (const metrics of Object.values(baseline.entries)) {
+    expect(budgetViolations(metrics, metrics)).toEqual([]);
+    expect(
+      budgetViolations(
+        {
+          sharedBlocks: Math.floor(metrics.sharedBlocks * 1.25) + 1,
+          executionTimeMs: metrics.executionTimeMs,
+        },
+        metrics,
+      ),
+    ).toEqual(["shared buffer budget exceeded"]);
+  }
+});
 
 test("scan shape rules allow small-table scans and reject correlated policies at either scale", () => {
   const scan = { "Node Type": "Seq Scan", "Relation Name": "search_documents" };

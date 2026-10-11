@@ -1221,7 +1221,7 @@ jobs:
 
       - name: Plan query performance scope
         id: query-perf-scope
-        if: steps.changed-files.outcome == 'success'
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.changed-files.outcome == 'success'
         env:
           CHANGED_PATHS: ${{ runner.temp }}/api-test-changed-paths
           SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
@@ -8104,9 +8104,11 @@ jobs:
             {"service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required", "web-build": "browser_spec_selection_required"}
           FAST_REQUIRED: >-
             ["desktop-rust-lint", "ci-browser", "ci-generated-sources", "ci-checks-docs", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-malware", "parser-version-guard", "ci-tests", "e2e-production-shard", "web-build", "query-perf"]
+          # These scoped gates certify the exact queue head even at thin depth.
+          QUEUE_GATES: '["query-perf"]'
         run: |
           if [[ "$QUEUE_DEPTH" == thin ]]; then
-            THIN_JOBS=$(jq -cn --argjson thin "$THIN_JOBS" --argjson required "$QUEUE_REQUIRED_JOBS" '$thin + $required | unique') || exit 1
+            THIN_JOBS=$(jq -cn --argjson thin "$THIN_JOBS" --argjson required "$QUEUE_REQUIRED_JOBS" --argjson gates "$QUEUE_GATES" '$thin + $required + $gates | unique') || exit 1
           fi
           if [[ "$COVERAGE_PROFILE" == pilot-fast-v1 ]]; then
             FAST_REQUIRED="$PILOT_FAST_JOBS"

@@ -23,6 +23,7 @@ const source = readFileSync(
 const stepSchema = v.looseObject({
   name: v.optional(v.string()),
   id: v.optional(v.string()),
+  if: v.optional(v.string()),
   uses: v.optional(v.string()),
   with: v.optional(v.record(v.string(), v.unknown())),
   run: v.optional(v.string()),
@@ -185,9 +186,10 @@ test("dedicated query recording dispatch schedules one measurement job", () => {
   const postgres =
     serviceImages.find(({ name }) => name === "postgres") ??
     panic("Missing canonical PostgreSQL image");
-  expect(
-    `docker.io/library/${queryServices.jobs["query-perf"]?.services?.["postgres"]?.image}`,
-  ).toBe(postgres.source);
+  const queryPostgresImage =
+    queryServices.jobs["query-perf"]?.services?.["postgres"]?.image ??
+    panic("Missing query performance PostgreSQL image");
+  expect(`docker.io/library/${queryPostgresImage}`).toBe(postgres.source);
   expect(
     evaluateExpression(
       services.jobs["service-suites"]?.services?.["postgres"]?.image ??
@@ -200,7 +202,7 @@ test("dedicated query recording dispatch schedules one measurement job", () => {
   const steps = queryWorkflow.jobs["query-perf"]?.steps ?? [];
   const recording =
     steps.find(({ name }) => name === "Run query performance suite")?.env?.[
-      "QUERY_PERF_RECORD_BASELINE"
+      "QUERY_PERF_BASELINE_MODE"
     ] ?? panic("Missing recording mode");
   const value = {
     cancelled: () => false,
@@ -216,7 +218,9 @@ test("dedicated query recording dispatch schedules one measurement job", () => {
         "stella/stella/.github/workflows/query-perf.yml@refs/heads/test",
     },
   };
-  expect(evaluateExpression(recording, contextFromNested(value))).toBe("true");
+  expect(evaluateExpression(recording, contextFromNested(value))).toBe(
+    "record",
+  );
   expect(selected(queryWorkflow.jobs["query-perf"]?.if ?? "true", value)).toBe(
     true,
   );
@@ -243,7 +247,7 @@ test("query budgets select affected changes and explicit recordings", () => {
     panic("Missing query performance steps");
   const recording =
     steps.find(({ name }) => name === "Run query performance suite")?.env?.[
-      "QUERY_PERF_RECORD_BASELINE"
+      "QUERY_PERF_BASELINE_MODE"
     ] ?? panic("Missing query recording mode");
   const validation =
     steps.find(({ name }) => name === "Validate recorded baseline") ??
@@ -287,7 +291,7 @@ test("query budgets select affected changes and explicit recordings", () => {
           },
         };
         expect(evaluateExpression(recording, contextFromNested(called))).toBe(
-          "false",
+          "compare",
         );
         expect(selected(validation.if ?? "true", called)).toBe(false);
         const reused = {

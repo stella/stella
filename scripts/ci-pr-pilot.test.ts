@@ -212,7 +212,9 @@ const DECLARED_NORMAL_PLAN_CHANGES = new Set([
 
 test("off and unset preserve today's job plan across every event and depth", async () => {
   expect(Object.keys(original.jobs).toSorted()).toEqual(
-    Object.keys(workflow.jobs).toSorted(),
+    Object.keys(workflow.jobs)
+      .filter((job) => job !== "query-perf")
+      .toSorted(),
   );
   for (const variable of ["", "off"]) {
     for (const event of [
