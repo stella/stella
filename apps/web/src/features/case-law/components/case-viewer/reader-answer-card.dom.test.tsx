@@ -395,8 +395,9 @@ test("opening the same active answer again expands its minimised thread and focu
   expect(queryByRole("textbox")).toBeNull();
   rerender(tree({ ...props, openRevision: 1 }));
   const composer = getByRole("textbox");
+  // Diffing Happy DOM nodes on each retry blocks the reveal's animation frame.
   await waitFor(() =>
-    expect(container.ownerDocument.activeElement).toBe(composer),
+    expect(container.ownerDocument.activeElement === composer).toBe(true),
   );
 });
 
