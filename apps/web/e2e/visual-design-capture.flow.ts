@@ -249,7 +249,7 @@ const captureVisualDesign = async ({
   ]) {
     await expect
       .poll(
-        () =>
+        async () =>
           root.evaluate((element) => element.scrollWidth - element.clientWidth),
         { message: "mobile generated view has no horizontal overflow" },
       )
@@ -276,7 +276,7 @@ const captureVisualDesign = async ({
     .toBe(true);
   await expect
     .poll(
-      () =>
+      async () =>
         chart.evaluate((element) => {
           const bounds = element.getBoundingClientRect();
           const tiles = Array.from(element.querySelectorAll("svg rect"));
@@ -318,7 +318,7 @@ const captureVisualDesign = async ({
   await expect(page.locator("[data-chat-bottom-fade]")).toBeHidden();
   await page.setViewportSize({ width: 1440, height: 2400 });
   await expect
-    .poll(() =>
+    .poll(async () =>
       transcript.evaluate(
         (element) => element.scrollHeight - element.clientHeight,
       ),

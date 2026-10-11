@@ -100,7 +100,7 @@ test("treemap labels stay legible and tiles fit after narrowing the generated vi
     ),
   );
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.route("https://showcase.test/", (route) =>
+  await page.route("https://showcase.test/", async (route) =>
     route.fulfill({
       contentType: "text/html",
       body: '<style>body{margin:0;padding:64px}</style><iframe title="Showcase" sandbox="allow-scripts" style="display:block;width:100%;height:1800px;border:0"></iframe>',
@@ -150,21 +150,21 @@ test("treemap labels stay legible and tiles fit after narrowing the generated vi
   ).toBe(true);
   await page.setViewportSize({ width: 390, height: 844 });
   await expect
-    .poll(() =>
+    .poll(async () =>
       shell
         .locator("html")
         .evaluate((element) => element.scrollWidth - element.clientWidth),
     )
     .toBeLessThanOrEqual(1);
   await expect
-    .poll(() =>
+    .poll(async () =>
       guest
         .locator("html")
         .evaluate((element) => element.scrollWidth - element.clientWidth),
     )
     .toBeLessThanOrEqual(1);
   await expect
-    .poll(() =>
+    .poll(async () =>
       chart.evaluate((element) => {
         const bounds = element.getBoundingClientRect();
         const tiles = Array.from(element.querySelectorAll("svg rect"));
@@ -181,7 +181,9 @@ test("treemap labels stay legible and tiles fit after narrowing the generated vi
       }),
     )
     .toBe(true);
-  await expect.poll(() => chart.locator("svg text").count()).toBeLessThan(2);
+  await expect
+    .poll(async () => chart.locator("svg text").count())
+    .toBeLessThan(2);
   expect(
     await chart
       .locator("svg text")
