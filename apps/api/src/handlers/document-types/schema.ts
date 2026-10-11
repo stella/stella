@@ -2,6 +2,7 @@ import { t } from "elysia";
 
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
+import { expectedUpdatedAtSchema } from "@/api/lib/optimistic-concurrency";
 
 // `key` is never accepted from the client: it is derived from the label on
 // create and immutable thereafter, so playbook scopes that reference it never
@@ -20,6 +21,7 @@ export const updateDocumentTypeBodySchema = t.Object({
 });
 
 export const reorderDocumentTypesBodySchema = t.Object({
+  expectedUpdatedAt: expectedUpdatedAtSchema,
   orderedIds: t.Array(tSafeId("documentType"), {
     maxItems: LIMITS.documentTypesCount,
   }),

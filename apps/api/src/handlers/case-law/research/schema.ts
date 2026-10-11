@@ -12,6 +12,7 @@ import type { caseLawResearchAnswers } from "@/api/db/schema";
 import { parseStoredAnswerContent } from "@/api/lib/case-law/research-answers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
+import { expectedUpdatedAtSchema } from "@/api/lib/optimistic-concurrency";
 
 export const researchColumnParamsSchema = t.Object({
   columnId: tSafeId("caseLawResearchColumn"),
@@ -76,6 +77,7 @@ export const updateResearchColumnBodySchema = t.Object(
 // organization keeps, and a grandfathered set is larger than what may be added.
 export const reorderResearchColumnsBodySchema = t.Object(
   {
+    expectedUpdatedAt: expectedUpdatedAtSchema,
     columnIds: t.Array(tSafeId("caseLawResearchColumn"), {
       minItems: 1,
       maxItems: LIMITS.caseLawResearchColumnsPerOrganizationMax,

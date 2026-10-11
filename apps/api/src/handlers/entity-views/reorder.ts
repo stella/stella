@@ -5,17 +5,22 @@ import { entityViews } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
+import {
+  enforceWritePrecondition,
+  latestUpdatedAt,
+} from "@/api/lib/write-contract";
 
 import { entityViewReorderBody, viewOwner } from "./shared";
 
 const config = {
   contract: "replace",
   precondition: {
-    type: "deferred",
-    baselineId: "apps/api/src/handlers/entity-views/reorder.ts",
+    type: "updatedAt",
+    field: "expectedUpdatedAt",
   },
   description:
     "Reorder every personal cross-matter view. Supply each of the user's view IDs exactly once.",
@@ -32,7 +37,7 @@ const config = {
 export default createSafeRootHandler(
   config,
   async function* ({
-    body: { viewIds },
+    body: { expectedUpdatedAt, viewIds },
     safeDb,
     session,
     user,
@@ -45,15 +50,24 @@ export default createSafeRootHandler(
     }
     const changed = yield* Result.await(
       safeDb(async (tx) => {
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${session.activeOrganizationId}), hashtext(${user.id}))`,
-        );
+        await withAggregateLock({
+          aggregate: "personalCatalog",
+          id: {
+            organizationId: session.activeOrganizationId,
+            userId: user.id,
+          },
+          tx,
+        });
         const where = viewOwner({
           organizationId: session.activeOrganizationId,
           userId: user.id,
         });
         const existing = await tx
-          .select({ id: entityViews.id, position: entityViews.position })
+          .select({
+            id: entityViews.id,
+            position: entityViews.position,
+            updatedAt: entityViews.updatedAt,
+          })
           .from(entityViews)
           .where(where)
           .limit(LIMITS.viewsCount);
@@ -63,6 +77,16 @@ export default createSafeRootHandler(
           viewIds.some((id) => !ids.has(id))
         ) {
           return false;
+        }
+        const conflict = enforceWritePrecondition({
+          type: "updatedAt",
+          field: "expectedUpdatedAt",
+          storedUpdatedAt: latestUpdatedAt(existing),
+          expectedUpdatedAt,
+          resource: "View order",
+        });
+        if (conflict) {
+          return conflict;
         }
         await tx
           .update(entityViews)
@@ -97,6 +121,9 @@ export default createSafeRootHandler(
         return true;
       }),
     );
+    if (changed instanceof HandlerError) {
+      return Result.err(changed);
+    }
     if (!changed) {
       return Result.err(
         new HandlerError({

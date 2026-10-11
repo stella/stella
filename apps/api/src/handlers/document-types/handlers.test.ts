@@ -131,15 +131,14 @@ const createType = async (context: OrgContext, label: string) =>
     await runHandler(createDocumentType, context, { body: { label } }),
   );
 
-const readOrgRows = async (
-  organizationId: SafeId<"organization">,
-): Promise<DocumentTypeRow[]> =>
+const readOrgRows = async (organizationId: SafeId<"organization">) =>
   await testDb
     .select({
       id: documentTypes.id,
       key: documentTypes.key,
       label: documentTypes.label,
       sortOrder: documentTypes.sortOrder,
+      updatedAt: documentTypes.updatedAt,
     })
     .from(documentTypes)
     .where(eq(documentTypes.organizationId, organizationId))
@@ -249,7 +248,13 @@ describe("document-types write handlers", () => {
     );
 
     const result = await runHandler(reorderDocumentTypes, context, {
-      body: { orderedIds: [c.id, a.id, b.id, foreign.id] },
+      body: {
+        orderedIds: [c.id, a.id, b.id, foreign.id],
+        expectedUpdatedAt: (await readOrgRows(ids.orgA))
+          .map((row) => row.updatedAt.toISOString())
+          .toSorted()
+          .at(-1)!,
+      },
     });
 
     expect(getStatusCode(result)).toBeNull();
@@ -262,6 +267,23 @@ describe("document-types write handlers", () => {
     expect(await readOrgRows(ids.orgB)).toContainEqual(
       expect.objectContaining({ id: foreign.id }),
     );
+  });
+
+  test("reorder: rejects a stale collection revision with VERSION_CONFLICT", async () => {
+    const context = createOrgContext(ids.orgA, ids.userA1);
+    const created = await createType(context, "Stale Reorder Target");
+
+    const result = await runHandler(reorderDocumentTypes, context, {
+      body: {
+        orderedIds: [created.id],
+        expectedUpdatedAt: new Date(0).toISOString(),
+      },
+    });
+
+    expect(result).toMatchObject({
+      code: 409,
+      response: { code: "version_conflict" },
+    });
   });
 
   test("isolation: org B cannot update an org A document type", async () => {

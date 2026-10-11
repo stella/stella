@@ -304,6 +304,25 @@ describe("write contracts cover the mutation route graph", () => {
       );
     }
   });
+  test("propagated safe database callbacks preserve owner enforcement", () => {
+    const config = `{contract: 'replace', precondition: {type: 'updatedAt', field: 'expectedUpdatedAt'}}`;
+    const sources = fixture(config);
+    sources.set(
+      handler,
+      `import { createSafeHandler } from '@/api/lib/api-handlers';
+      import { enforceWritePrecondition } from '@/api/lib/write-contract';
+      export default createSafeHandler(${config}, async function* ({body, safeDb}) {
+        yield* Result.await(safeDb(async (tx) => {
+          const stored = await tx.readForUpdate();
+          const conflict = enforceWritePrecondition({type: 'updatedAt', field: 'expectedUpdatedAt', expectedUpdatedAt: body.expectedUpdatedAt, storedUpdatedAt: stored.updatedAt, resource: 'Example'});
+          if (conflict) return conflict;
+          await tx.replace(body);
+        }));
+        return Result.ok({});
+      });`,
+    );
+    expect(check(sources)).toEqual([]);
+  });
   test("block shadows and uninvoked callback arguments cannot stand in for enforcement", () => {
     const config = `{contract: 'replace', precondition: {type: 'updatedAt', field: 'expectedUpdatedAt'}}`;
     for (const body of [
@@ -374,6 +393,13 @@ describe("write contracts cover the mutation route graph", () => {
       `return ${call};`,
       `const conflict = ${call}; if (conflict) return conflict;`,
       `const conflict = ${call}; if (conflict !== null) { return conflict; }`,
+      `const conflict = ${call}; if (conflict != null) return conflict;`,
+      `const conflict = ${call}; if (null !== conflict) return conflict;`,
+      `const conflict = ${call}; if (null != conflict) return conflict;`,
+      `const conflict = ${call}; if (conflict instanceof HandlerError) return Result.err(conflict);`,
+      `const conflict = ${call}; return conflict;`,
+      `const conflict = ${call}; return Result.err(conflict);`,
+      `return await (${call} as unknown);`,
     ]) {
       sources.set(handler, withBody(body));
       expect(check(sources)).toEqual([]);

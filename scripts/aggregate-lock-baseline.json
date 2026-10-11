@@ -1140,12 +1140,6 @@
     "reason": "builder-for in apps/api/src/handlers/document-reviews/parties.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/handlers/document-types/create.ts",
-    "fingerprint": "05e6c9ec672366ce86861e7edc122c6ef390b58eb41149f27c9fe70a59f8f67c",
-    "count": 1,
-    "reason": "pg_advisory_xact_lock( in apps/api/src/handlers/document-types/create.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
     "file": "apps/api/src/handlers/entities/checkpoint-desktop-edit-session.ts",
     "fingerprint": "833709ab496a851547cd34d4a2bd17c8da071f08cebf4c6f1ee61c7e01182213",
     "count": 1,
@@ -1372,18 +1366,6 @@
     "fingerprint": "12fc18f5a3142a5021788f2ff46e7d34221864eb5e1f35caea3e44702fe79834",
     "count": 1,
     "reason": "pg_advisory_xact_lock( in apps/api/src/handlers/entity-views/delete.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/entity-views/reorder.ts",
-    "fingerprint": "12fc18f5a3142a5021788f2ff46e7d34221864eb5e1f35caea3e44702fe79834",
-    "count": 1,
-    "reason": "pg_advisory_xact_lock( in apps/api/src/handlers/entity-views/reorder.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/entity-views/update.ts",
-    "fingerprint": "d37bc878ed7810b14c5976e72b0e3240a447b7a9597a711a8e654f2426ecf050",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/entity-views/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
     "file": "apps/api/src/handlers/expenses/delete.ts",

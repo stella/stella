@@ -56,6 +56,7 @@ export const AGGREGATE_LOCKS = {
   automatedFlowRunCap: { rank: 700, kind: "advisory" },
   processingClaim: { rank: 600, kind: "row" },
   contactCapacity: { rank: 700, kind: "advisory" },
+  documentTypeCatalog: { rank: 700, kind: "advisory" },
   personalCatalog: { rank: 700, kind: "advisory" },
   searchHistory: { rank: 710, kind: "row" },
   chatMessage: { rank: 810, kind: "row" },
@@ -201,6 +202,7 @@ type AggregateIdentities = {
     workspaceId: SafeId<"workspace">;
   };
   contactCapacity: { organizationId: SafeId<"organization"> };
+  documentTypeCatalog: { organizationId: SafeId<"organization"> };
   personalCatalog: {
     organizationId: SafeId<"organization">;
     userId: SafeId<"user">;
@@ -878,6 +880,12 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
     case "contactCapacity":
       return {
         first: sql`hashtext('contact_capacity')`,
+        second: sql`hashtext(${options.id.organizationId})`,
+        order: [options.aggregate, options.id.organizationId],
+      };
+    case "documentTypeCatalog":
+      return {
+        first: sql`hashtext('document_type_catalog')`,
         second: sql`hashtext(${options.id.organizationId})`,
         order: [options.aggregate, options.id.organizationId],
       };

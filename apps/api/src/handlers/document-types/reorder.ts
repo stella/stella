@@ -5,13 +5,19 @@ import { documentTypes } from "@/api/db/schema";
 import { reorderDocumentTypesBodySchema } from "@/api/handlers/document-types/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
+import {
+  enforceWritePrecondition,
+  latestUpdatedAt,
+} from "@/api/lib/write-contract";
 
 const config = {
   contract: "replace",
   precondition: {
-    type: "deferred",
-    baselineId: "apps/api/src/handlers/document-types/reorder.ts",
+    type: "updatedAt",
+    field: "expectedUpdatedAt",
   },
   description:
     "Set the display order of the organization's document types: each id's " +
@@ -37,21 +43,36 @@ const reorderDocumentTypes = createSafeRootHandler(
   async function* ({ safeDb, session, body }) {
     const organizationId = session.activeOrganizationId;
 
-    yield* Result.await(
+    const writeError = yield* Result.await(
       safeDb(async (tx) => {
         // audit: skip — cosmetic sortOrder reordering only; no
         // governance-relevant field (key/label) changes, so no audit row.
+        await withAggregateLock({
+          aggregate: "documentTypeCatalog",
+          id: { organizationId },
+          tx,
+        });
         const owned = await tx
-          .select({ id: documentTypes.id })
+          .select({ id: documentTypes.id, updatedAt: documentTypes.updatedAt })
           .from(documentTypes)
           .where(eq(documentTypes.organizationId, organizationId));
+        const conflict = enforceWritePrecondition({
+          type: "updatedAt",
+          field: "expectedUpdatedAt",
+          storedUpdatedAt: latestUpdatedAt(owned),
+          expectedUpdatedAt: body.expectedUpdatedAt,
+          resource: "Document type order",
+        });
+        if (conflict) {
+          return conflict;
+        }
         const ownedIds = new Set(owned.map((row) => row.id));
         const orderedOwnedIds = body.orderedIds.filter((id) =>
           ownedIds.has(id),
         );
 
         if (orderedOwnedIds.length === 0) {
-          return;
+          return null;
         }
 
         // Single batched write: one CASE expression sets every row's
@@ -79,8 +100,12 @@ const reorderDocumentTypes = createSafeRootHandler(
               inArray(documentTypes.id, orderedOwnedIds),
             ),
           );
+        return null;
       }),
     );
+    if (writeError instanceof HandlerError) {
+      return Result.err(writeError);
+    }
 
     return Result.ok({});
   },

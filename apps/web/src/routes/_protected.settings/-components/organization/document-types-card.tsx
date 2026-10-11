@@ -13,6 +13,7 @@ import { preserveOffsetOnSource } from "@atlaskit/pragmatic-drag-and-drop/utils/
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 import { useQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -46,6 +47,7 @@ type DocumentType = {
   key: string;
   label: string;
   sortOrder: number;
+  updatedAt: string;
 };
 
 // Shared across the settings list and the playbook editor's Type picker, so
@@ -81,7 +83,19 @@ export const DocumentTypesCard = () => {
 
   const reorderMutation = useSettingsMutation({
     mutationFn: async (orderedIds: SafeId<"documentType">[]) =>
-      unwrapEden(await api["document-types"].reorder.post({ orderedIds })),
+      unwrapEden(
+        await api["document-types"].reorder.post({
+          orderedIds,
+          expectedUpdatedAt:
+            items
+              .map((item) => item.updatedAt)
+              .toSorted()
+              .at(-1) ??
+            panic(
+              "Document type reorder requires the revision returned by document-types.list",
+            ),
+        }),
+      ),
     invalidate: documentTypesInvalidationKey,
     invalidateOn: "settled",
     errorToast: { title: t("errors.actionFailed") },

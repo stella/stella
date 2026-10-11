@@ -10,6 +10,7 @@ import {
   isAvtLayoutVisible,
   projectViewEligibility,
 } from "@/api/lib/auth/feature-access/view-eligibility";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { LIMITS } from "@/api/lib/limits";
 import { extractLangFromRequest, type SupportedLang } from "@/api/lib/locale";
 import {
@@ -49,6 +50,7 @@ const toViewResponse = (
     createdAt: Date;
   },
   lang: SupportedLang,
+  updatedAt: Date,
   layout = parseViewLayoutSafe(view.layout),
 ) => {
   const normalizedLayout = normalizeDefaultViewLayout({
@@ -67,6 +69,7 @@ const toViewResponse = (
     layout: normalizedLayout,
     position: view.position,
     createdAt: view.createdAt.toISOString(),
+    updatedAt: updatedAt.toISOString(),
   };
 };
 
@@ -91,15 +94,29 @@ const readViews = createSafeHandler(
       userId: user.id,
     });
     const lang = extractLangFromRequest(request);
-    const storedViews = yield* Result.await(
-      safeDb((tx) =>
-        tx
+    const { updatedAt, storedViews } = yield* Result.await(
+      safeDb(async (tx) => {
+        await withAggregateLock({
+          aggregate: "workspace",
+          id: { id: workspaceId, organizationId: session.activeOrganizationId },
+          mode: "share",
+          tx,
+        });
+        const row = await tx.query.workspaces.findFirst({
+          where: { id: { eq: workspaceId } },
+          columns: { lastActivityAt: true },
+        });
+        const rows = await tx
           .select()
           .from(workspaceViews)
           .where(eq(workspaceViews.workspaceId, workspaceId))
           .orderBy(workspaceViews.position)
-          .limit(LIMITS.viewsCount),
-      ),
+          .limit(LIMITS.viewsCount);
+        return {
+          updatedAt: row?.lastActivityAt ?? new Date(0),
+          storedViews: rows,
+        };
+      }),
     );
 
     // Clients reconcile an absent identity as a deletion; retain unavailable rows.
@@ -134,7 +151,7 @@ const readViews = createSafeHandler(
           projectAvailable: (availableView) => {
             const layout = parseViewLayoutSafe(availableView.layout);
             cleanStalePropertyIds(layout, propertyIds);
-            return toViewResponse(availableView, lang, layout);
+            return toViewResponse(availableView, lang, updatedAt, layout);
           },
         }),
       ),

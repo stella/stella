@@ -12,12 +12,16 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
+import {
+  enforceWritePrecondition,
+  latestUpdatedAt,
+} from "@/api/lib/write-contract";
 
 const config = {
   contract: "replace",
   precondition: {
-    type: "deferred",
-    baselineId: "apps/api/src/handlers/case-law/research/columns-reorder.ts",
+    type: "updatedAt",
+    field: "expectedUpdatedAt",
   },
   description:
     "Set the order of the organization's question columns. The list must " +
@@ -30,7 +34,12 @@ const config = {
 
 const reorderResearchColumns = createSafeRootHandler(
   config,
-  async function* ({ body: { columnIds }, recordAuditEvent, safeDb, session }) {
+  async function* ({
+    body: { columnIds, expectedUpdatedAt },
+    recordAuditEvent,
+    safeDb,
+    session,
+  }) {
     if (new Set(columnIds).size !== columnIds.length) {
       return Result.err(
         new HandlerError({ status: 400, message: "Columns repeat" }),
@@ -53,6 +62,16 @@ const reorderResearchColumns = createSafeRootHandler(
         if (existingIds.size !== columnIds.length) {
           return { status: "mismatch" as const };
         }
+        const conflict = enforceWritePrecondition({
+          type: "updatedAt",
+          field: "expectedUpdatedAt",
+          storedUpdatedAt: latestUpdatedAt(existing),
+          expectedUpdatedAt,
+          resource: "Question column order",
+        });
+        if (conflict) {
+          return conflict;
+        }
         await tx
           .update(caseLawResearchColumns)
           .set({
@@ -65,6 +84,7 @@ const reorderResearchColumns = createSafeRootHandler(
               // name, so the ELSE only ever renders; it never evaluates.
               fallback: sql`${caseLawResearchColumns.position}`,
             }),
+            updatedAt: new Date(),
           })
           .where(
             and(
@@ -92,6 +112,9 @@ const reorderResearchColumns = createSafeRootHandler(
       }),
     );
 
+    if (outcome instanceof HandlerError) {
+      return Result.err(outcome);
+    }
     switch (outcome.status) {
       case "not-found":
         return Result.err(

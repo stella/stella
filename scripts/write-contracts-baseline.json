@@ -1,11 +1,5 @@
 [
   {
-    "key": "apps/api/src/handlers/case-law/research/routes.ts|PUT|/case/research/columns/order|apps/api/src/handlers/case-law/research/columns-reorder.ts.handler",
-    "count": 1,
-    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
-    "baselineId": "apps/api/src/handlers/case-law/research/columns-reorder.ts"
-  },
-  {
     "key": "apps/api/src/handlers/chat/routes.ts|POST|/chat/threads/:threadId/messages/:messageId/revisions|apps/api/src/handlers/chat/messages/revisions/accept.ts.handler",
     "count": 1,
     "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
@@ -30,12 +24,6 @@
     "baselineId": "apps/api/src/handlers/contacts/update.ts"
   },
   {
-    "key": "apps/api/src/handlers/document-types/routes.ts|POST|/document-types/reorder|apps/api/src/handlers/document-types/reorder.ts.handler",
-    "count": 1,
-    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
-    "baselineId": "apps/api/src/handlers/document-types/reorder.ts"
-  },
-  {
     "key": "apps/api/src/handlers/entities/desktop-edit-sessions-route.ts|POST|/desktop-edit-sessions/:sessionId/checkpoint|async ({ body, params, request, server }) => await checkpointDesktopEditSessionHandler({ body, sessionId: params.sessionId, request, server, })",
     "count": 1,
     "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
@@ -46,18 +34,6 @@
     "count": 1,
     "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
     "baselineId": "apps/api/src/handlers/entities/versions/upload.ts"
-  },
-  {
-    "key": "apps/api/src/handlers/entity-views/routes.ts|PATCH|/entity-views/:viewId|apps/api/src/handlers/entity-views/update.ts.handler",
-    "count": 1,
-    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
-    "baselineId": "apps/api/src/handlers/entity-views/update.ts"
-  },
-  {
-    "key": "apps/api/src/handlers/entity-views/routes.ts|POST|/entity-views/reorder|apps/api/src/handlers/entity-views/reorder.ts.handler",
-    "count": 1,
-    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
-    "baselineId": "apps/api/src/handlers/entity-views/reorder.ts"
   },
   {
     "key": "apps/api/src/handlers/fields/routes.ts|POST|/fields/:workspaceId/|apps/api/src/handlers/fields/upsert.ts.handler",
@@ -178,17 +154,5 @@
     "count": 1,
     "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
     "baselineId": "apps/api/src/handlers/templates/update.ts"
-  },
-  {
-    "key": "apps/api/src/handlers/views/routes.ts|POST|/views/:workspaceId/reorder|apps/api/src/handlers/views/reorder.ts.handler",
-    "count": 1,
-    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
-    "baselineId": "apps/api/src/handlers/views/reorder.ts"
-  },
-  {
-    "key": "apps/api/src/handlers/views/routes.ts|POST|/views/:workspaceId/view/:viewId/|apps/api/src/handlers/views/update.ts.handler",
-    "count": 1,
-    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
-    "baselineId": "apps/api/src/handlers/views/update.ts"
   }
 ]

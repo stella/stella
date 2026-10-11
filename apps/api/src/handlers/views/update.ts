@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
 import { abortableTx } from "@/api/db/safe-db";
-import { workspaceViews } from "@/api/db/schema";
+import { workspaces, workspaceViews } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -14,6 +14,7 @@ import {
   isAvtLayoutVisible,
 } from "@/api/lib/auth/feature-access/view-eligibility";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -34,12 +35,13 @@ import {
   hasDuplicateSorts,
   hasMultipleKindFilters,
 } from "@/api/lib/views/utils";
+import { enforceWritePrecondition } from "@/api/lib/write-contract";
 
 const config = {
   contract: "replace",
   precondition: {
-    type: "deferred",
-    baselineId: "apps/api/src/handlers/views/update.ts",
+    type: "updatedAt",
+    field: "expectedUpdatedAt",
   },
   description:
     "Rename one view of a matter or replace its layout. The layout type " +
@@ -151,6 +153,35 @@ const updateView = createSafeHandler(
 
     const avtRejection = yield* Result.await(
       abortableTx(safeDb, async (tx) => {
+        await withAggregateLock({
+          aggregate: "workspace",
+          id: {
+            id: workspaceId,
+            organizationId: session.activeOrganizationId,
+          },
+          mode: "update",
+          tx,
+        });
+        const locked = (
+          await tx
+            .select({ updatedAt: workspaces.lastActivityAt })
+            .from(workspaces)
+            .where(eq(workspaces.id, workspaceId))
+            .limit(1)
+        ).at(0);
+        if (!locked) {
+          return new HandlerError({ status: 404, message: "View not found" });
+        }
+        const conflict = enforceWritePrecondition({
+          type: "updatedAt",
+          field: "expectedUpdatedAt",
+          storedUpdatedAt: locked.updatedAt,
+          expectedUpdatedAt: body.expectedUpdatedAt,
+          resource: "View",
+        });
+        if (conflict) {
+          return conflict;
+        }
         if (parsedLayout !== undefined) {
           const rejection = await rejectAvtLayout({
             tx,
@@ -198,6 +229,11 @@ const updateView = createSafeHandler(
             ),
           );
 
+        await tx
+          .update(workspaces)
+          .set({ lastActivityAt: new Date() })
+          .where(eq(workspaces.id, workspaceId));
+
         const changes: Record<string, { old: unknown; new: unknown }> = {};
         if (updates.name !== undefined) {
           changes["name"] = { old: existing.name, new: updates.name };
@@ -218,6 +254,9 @@ const updateView = createSafeHandler(
         return null;
       }),
     );
+    if (avtRejection instanceof HandlerError) {
+      return Result.err(avtRejection);
+    }
     if (avtRejection !== null) {
       return Result.err(new HandlerError(avtLayoutErrorDetail(avtRejection)));
     }

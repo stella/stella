@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
-import { workspaceViews } from "@/api/db/schema";
+import { workspaces, workspaceViews } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -13,6 +13,7 @@ import {
   isAvtLayoutVisible,
 } from "@/api/lib/auth/feature-access/view-eligibility";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcastWorkspaceResourceDeleted } from "@/api/lib/resource-realtime";
 import { isRequiredViewLayout } from "@/api/lib/views";
@@ -47,9 +48,15 @@ const deleteView = createSafeHandler(
     session,
     user,
   }) {
-    const allViews = yield* Result.await(
-      safeDb((tx) =>
-        tx
+    const writeError = yield* Result.await(
+      safeDb(async (tx) => {
+        await withAggregateLock({
+          aggregate: "workspace",
+          id: { id: workspaceId, organizationId: session.activeOrganizationId },
+          mode: "update",
+          tx,
+        });
+        const allViews = await tx
           .select({
             id: workspaceViews.id,
             name: workspaceViews.name,
@@ -57,58 +64,47 @@ const deleteView = createSafeHandler(
           })
           .from(workspaceViews)
           .where(eq(workspaceViews.workspaceId, workspaceId))
-          .for("update"),
-      ),
-    );
+          .for("update");
 
-    const target = allViews.find((v) => v.id === viewId);
-    if (!target) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "View not found" }),
-      );
-    }
+        const target = allViews.find((v) => v.id === viewId);
+        if (!target) {
+          return new HandlerError({ status: 404, message: "View not found" });
+        }
 
-    if (
-      !isAvtLayoutVisible(
-        target.layoutType,
-        avtViewAccessStatus({
-          snapshot: featureAccessSnapshot,
-          organizationId: session.activeOrganizationId,
-          userId: user.id,
-        }),
-      )
-    ) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Not found" }),
-      );
-    }
-    if (allViews.length <= 1) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Cannot delete the last view",
-        }),
-      );
-    }
-
-    const targetLayoutType = parseStoredViewLayout(target.layoutType).type;
-    if (isRequiredViewLayout(targetLayoutType)) {
-      const sameLayoutCount = allViews.filter(
-        (v) => parseStoredViewLayout(v.layoutType).type === targetLayoutType,
-      ).length;
-
-      if (sameLayoutCount <= 1) {
-        return Result.err(
-          new HandlerError({
+        if (
+          !isAvtLayoutVisible(
+            target.layoutType,
+            avtViewAccessStatus({
+              snapshot: featureAccessSnapshot,
+              organizationId: session.activeOrganizationId,
+              userId: user.id,
+            }),
+          )
+        ) {
+          return new HandlerError({ status: 404, message: "Not found" });
+        }
+        if (allViews.length <= 1) {
+          return new HandlerError({
             status: 400,
-            message: `Cannot delete the last ${targetLayoutType} view`,
-          }),
-        );
-      }
-    }
+            message: "Cannot delete the last view",
+          });
+        }
 
-    yield* Result.await(
-      safeDb(async (tx) => {
+        const targetLayoutType = parseStoredViewLayout(target.layoutType).type;
+        if (isRequiredViewLayout(targetLayoutType)) {
+          const sameLayoutCount = allViews.filter(
+            (v) =>
+              parseStoredViewLayout(v.layoutType).type === targetLayoutType,
+          ).length;
+
+          if (sameLayoutCount <= 1) {
+            return new HandlerError({
+              status: 400,
+              message: `Cannot delete the last ${targetLayoutType} view`,
+            });
+          }
+        }
+
         await tx
           .delete(workspaceViews)
           .where(
@@ -129,8 +125,16 @@ const deleteView = createSafeHandler(
             },
           },
         });
+        await tx
+          .update(workspaces)
+          .set({ lastActivityAt: new Date() })
+          .where(eq(workspaces.id, workspaceId));
+        return null;
       }),
     );
+    if (writeError) {
+      return Result.err(writeError);
+    }
 
     broadcastWorkspaceResourceDeleted(
       workspaceId,

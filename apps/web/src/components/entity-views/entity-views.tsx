@@ -6,6 +6,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { TASK_STATUSES, VIEW_SORTS_MAX } from "@stll/api-contract";
@@ -142,7 +143,16 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
         : unwrapEden(
             await api["entity-views"]({
               viewId: toSafeId<"workspaceView">(id),
-            }).patch({ name: view.name, layout: view.layout }),
+            }).patch({
+              name: view.name,
+              layout: view.layout,
+              expectedUpdatedAt:
+                savedViews.find((savedView) => savedView.id === id)
+                  ?.updatedAt ??
+                panic(
+                  "Entity view update requires the revision returned by entity-views.list",
+                ),
+            }),
           );
       savedIds.current.set(view.id, result.id);
       return result;
@@ -196,6 +206,14 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
     mutationFn: async (viewIds: string[]) =>
       unwrapEden(
         await api["entity-views"].reorder.post({
+          expectedUpdatedAt:
+            savedViews
+              .map((view) => view.updatedAt)
+              .toSorted()
+              .at(-1) ??
+            panic(
+              "Entity view reorder requires the revision returned by entity-views.list",
+            ),
           viewIds: viewIds.map((id) => toSafeId<"workspaceView">(id)),
         }),
       ),

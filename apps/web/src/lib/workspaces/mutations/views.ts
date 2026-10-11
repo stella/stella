@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 
 import type { ConvertibleViewLayoutType } from "@stll/api-contract";
 
@@ -12,6 +13,7 @@ import type { ViewLayout, ViewTemplateProperty } from "@/lib/types";
 import { propertiesKeys } from "@/lib/workspaces/queries/properties";
 import { viewsKeys, viewsOptions } from "@/lib/workspaces/queries/views";
 import { isWorkspaceViewAvailable } from "@/lib/workspaces/queries/views.logic";
+import type { CachedWorkspaceView } from "@/lib/workspaces/queries/views.logic";
 import { useTableStore } from "@/lib/workspaces/table-store";
 
 import {
@@ -19,6 +21,26 @@ import {
   invalidateViewDerivedQueries,
   viewOrderCache,
 } from "./views.logic";
+
+const latestViewUpdatedAt = (
+  views: readonly CachedWorkspaceView[] | undefined,
+) => {
+  const tokens = views?.flatMap((view) =>
+    isWorkspaceViewAvailable(view) && view.updatedAt !== undefined
+      ? [view.updatedAt]
+      : [],
+  );
+  if (!tokens || tokens.length === 0) {
+    return panic("View mutation requires the revision returned by views.list");
+  }
+  let latest = tokens[0];
+  for (const token of tokens) {
+    if (token > latest) {
+      latest = token;
+    }
+  }
+  return latest;
+};
 
 type CreateViewVars = {
   id: string;
@@ -85,10 +107,19 @@ export const useUpdateView = (workspaceId: string) => {
           viewIds: [viewId],
         }),
       );
+      const views = queryClient.getQueryData(
+        viewsOptions(workspaceId).queryKey,
+      );
+      const target = views?.find((view) => view.id === viewId);
+      if (!target || !isWorkspaceViewAvailable(target) || !target.updatedAt) {
+        return panic(
+          "View update requires the revision returned by views.list",
+        );
+      }
       const response = await api
         .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .view({ viewId: toSafeId<"workspaceView">(viewId) })
-        .post(body);
+        .post({ ...body, expectedUpdatedAt: target.updatedAt });
       return unwrapEden(response);
     },
     onMutate: async ({ viewId, ...body }) => {
@@ -189,6 +220,9 @@ export const useReorderViews = (workspaceId: string) => {
       const response = await api
         .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .reorder.post({
+          expectedUpdatedAt: latestViewUpdatedAt(
+            queryClient.getQueryData(viewsOptions(workspaceId).queryKey),
+          ),
           viewIds: viewIds.map((viewId) => toSafeId<"workspaceView">(viewId)),
         });
       return unwrapEden(response);

@@ -23,6 +23,8 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import listViews from "./list";
+import reorderViews from "./reorder";
+import updateView from "./update";
 
 let testDb: TestDatabase;
 let ids: TestIds;
@@ -97,5 +99,68 @@ describe("entity view owner isolation", () => {
       panic("Expected the entity view list");
     }
     expect(result.items.map((view) => view.name)).toEqual(["A private"]);
+  });
+
+  test("update rejects a stale row revision with VERSION_CONFLICT", async () => {
+    const id = toSafeId<"workspaceView">(Bun.randomUUIDv7());
+    insertedIds.push(id);
+    await testDb.insert(entityViews).values({
+      id,
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      name: "Stale update",
+      layout,
+      position: 1,
+    });
+    const result = await updateView.handler(
+      createTestHandlerContext<Parameters<typeof updateView.handler>[0]>({
+        audit: NO_AUDIT,
+        scopedDb: NO_DB,
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userA1 },
+        safeDb: asTestRaw<SafeDb>(
+          createSafeDb(testDb, [], ids.orgA, ids.userA1),
+        ),
+        params: { viewId: id },
+        body: {
+          name: "Rejected rename",
+          expectedUpdatedAt: new Date(0).toISOString(),
+        },
+      }),
+    );
+
+    expect(result).toMatchObject({
+      code: 409,
+      response: { code: "version_conflict" },
+    });
+  });
+
+  test("reorder rejects a stale collection revision with VERSION_CONFLICT", async () => {
+    const owned = await testDb.query.entityViews.findMany({
+      where: {
+        organizationId: { eq: ids.orgA },
+        userId: { eq: ids.userA1 },
+      },
+    });
+    const result = await reorderViews.handler(
+      createTestHandlerContext<Parameters<typeof reorderViews.handler>[0]>({
+        audit: NO_AUDIT,
+        scopedDb: NO_DB,
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userA1 },
+        safeDb: asTestRaw<SafeDb>(
+          createSafeDb(testDb, [], ids.orgA, ids.userA1),
+        ),
+        body: {
+          viewIds: owned.map((view) => view.id),
+          expectedUpdatedAt: new Date(0).toISOString(),
+        },
+      }),
+    );
+
+    expect(result).toMatchObject({
+      code: 409,
+      response: { code: "version_conflict" },
+    });
   });
 });

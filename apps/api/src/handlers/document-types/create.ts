@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import { documentTypes } from "@/api/db/schema";
 import {
@@ -10,6 +10,7 @@ import { createDocumentTypeBodySchema } from "@/api/handlers/document-types/sche
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -46,9 +47,11 @@ const createDocumentType = createSafeRootHandler(
         // Serialize concurrent creates for the same org so the count check
         // below cannot race past the configured limit (the read + insert are
         // otherwise not atomic).
-        await tx.execute(
-          sql`select pg_advisory_xact_lock(hashtext(${organizationId}))`,
-        );
+        await withAggregateLock({
+          aggregate: "documentTypeCatalog",
+          id: { organizationId },
+          tx,
+        });
         const existing = await tx
           .select({
             key: documentTypes.key,

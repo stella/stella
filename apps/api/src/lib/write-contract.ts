@@ -9,16 +9,12 @@ import {
 
 /** Exact migration identities; the route census binds these to the reasoned baseline. */
 const REPLACE_CONTRACT_DEBT_IDS = [
-  "apps/api/src/handlers/case-law/research/columns-reorder.ts",
   "apps/api/src/handlers/chat/messages/revisions/accept.ts",
   "apps/api/src/handlers/clauses/update.ts",
   "apps/api/src/handlers/clauses/variants/update.ts",
   "apps/api/src/handlers/contacts/update.ts",
-  "apps/api/src/handlers/document-types/reorder.ts",
   "apps/api/src/handlers/entities/desktop-edit-sessions-route.ts|POST|/desktop-edit-sessions/:sessionId/checkpoint",
   "apps/api/src/handlers/entities/versions/upload.ts",
-  "apps/api/src/handlers/entity-views/reorder.ts",
-  "apps/api/src/handlers/entity-views/update.ts",
   "apps/api/src/handlers/fields/upsert.ts",
   "apps/api/src/handlers/flows/update.ts",
   "apps/api/src/handlers/folio-collab/snapshot-store.ts",
@@ -39,8 +35,6 @@ const REPLACE_CONTRACT_DEBT_IDS = [
   "apps/api/src/handlers/tasks/update.ts",
   "apps/api/src/handlers/templates/document/update.ts",
   "apps/api/src/handlers/templates/update.ts",
-  "apps/api/src/handlers/views/reorder.ts",
-  "apps/api/src/handlers/views/update.ts",
 ] as const;
 
 const REVISION_PRECONDITIONS = {
@@ -99,6 +93,16 @@ export const enforceWritePrecondition = (
     default:
       return panic(args satisfies never);
   }
+};
+
+export const latestUpdatedAt = (rows: readonly { updatedAt: Date }[]): Date => {
+  let latest = new Date(0);
+  for (const row of rows) {
+    if (row.updatedAt > latest) {
+      latest = row.updatedAt;
+    }
+  }
+  return latest;
 };
 
 /** Custom transport boundaries declare the same contract without changing handler identities. */

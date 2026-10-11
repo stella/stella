@@ -12,6 +12,7 @@ import { abortableTx } from "@/api/db/safe-db";
 import {
   WORKSPACE_VIEWS_CORRESPONDENCE_INDEX,
   workspaceViews,
+  workspaces,
 } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -20,6 +21,7 @@ import {
   AVT_LAYOUT_FEATURE_ACCESS,
   avtViewAccessStatus,
 } from "@/api/lib/auth/feature-access/view-eligibility";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -106,6 +108,12 @@ const createView = createSafeHandler(
     }
 
     const txAttempt = await abortableTx(safeDb, async (tx) => {
+      await withAggregateLock({
+        aggregate: "workspace",
+        id: { id: workspaceId, organizationId: session.activeOrganizationId },
+        mode: "update",
+        tx,
+      });
       const existing = await tx
         .select({ id: workspaceViews.id, layout: workspaceViews.layout })
         .from(workspaceViews)
@@ -206,6 +214,11 @@ const createView = createSafeHandler(
           },
         },
       });
+
+      await tx
+        .update(workspaces)
+        .set({ lastActivityAt: new Date() })
+        .where(eq(workspaces.id, workspaceId));
 
       return {
         type: "created" as const,

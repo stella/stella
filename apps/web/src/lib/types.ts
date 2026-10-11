@@ -265,6 +265,7 @@ export type WorkspaceView<T extends ViewLayoutType = ViewLayoutType> = {
   layout: Extract<ViewLayout, { type: T }>;
   position: number;
   createdAt: string;
+  updatedAt?: string;
 };
 
 // ── Inline mention types ─────────────────────────────────

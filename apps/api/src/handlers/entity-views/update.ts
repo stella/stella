@@ -5,7 +5,9 @@ import { entityViews } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { enforceWritePrecondition } from "@/api/lib/write-contract";
 
 import {
   entityViewParams,
@@ -18,8 +20,8 @@ import {
 const config = {
   contract: "replace",
   precondition: {
-    type: "deferred",
-    baselineId: "apps/api/src/handlers/entity-views/update.ts",
+    type: "updatedAt",
+    field: "expectedUpdatedAt",
   },
   description:
     "Change the name or layout of one personal cross-matter view. Other users' views cannot be changed.",
@@ -46,6 +48,14 @@ export default createSafeRootHandler(
     }
     const row = yield* Result.await(
       safeDb(async (tx) => {
+        await withAggregateLock({
+          aggregate: "personalCatalog",
+          id: {
+            organizationId: session.activeOrganizationId,
+            userId: user.id,
+          },
+          tx,
+        });
         const where = and(
           eq(entityViews.id, params.viewId),
           viewOwner({
@@ -54,15 +64,20 @@ export default createSafeRootHandler(
           }),
         );
         const before = (
-          await tx
-            .select()
-            .from(entityViews)
-            .where(where)
-            .limit(1)
-            .for("update")
+          await tx.select().from(entityViews).where(where).limit(1)
         ).at(0);
         if (!before) {
           return null;
+        }
+        const conflict = enforceWritePrecondition({
+          type: "updatedAt",
+          field: "expectedUpdatedAt",
+          storedUpdatedAt: before.updatedAt,
+          expectedUpdatedAt: body.expectedUpdatedAt,
+          resource: "View",
+        });
+        if (conflict) {
+          return conflict;
         }
         const updated = (
           await tx
@@ -90,6 +105,9 @@ export default createSafeRootHandler(
         return updated;
       }),
     );
+    if (row instanceof HandlerError) {
+      return Result.err(row);
+    }
     if (!row) {
       return Result.err(
         new HandlerError({ status: 404, message: "View not found" }),

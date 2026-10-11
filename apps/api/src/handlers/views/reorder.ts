@@ -8,7 +8,7 @@ import {
   resourceUpdatedChange,
 } from "@stll/api-contract";
 
-import { workspaceViews } from "@/api/db/schema";
+import { workspaces, workspaceViews } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -19,16 +19,19 @@ import {
   isAvtLayoutVisible,
 } from "@/api/lib/auth/feature-access/view-eligibility";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { expectedUpdatedAtSchema } from "@/api/lib/optimistic-concurrency";
 import { broadcastWorkspaceResourceChanges } from "@/api/lib/resource-realtime";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
+import { enforceWritePrecondition } from "@/api/lib/write-contract";
 
 const config = {
   contract: "replace",
   precondition: {
-    type: "deferred",
-    baselineId: "apps/api/src/handlers/views/reorder.ts",
+    type: "updatedAt",
+    field: "expectedUpdatedAt",
   },
   featureAccess: AVT_LAYOUT_FEATURE_ACCESS,
   description:
@@ -43,6 +46,7 @@ const config = {
     consumesServices: false,
   },
   body: t.Object({
+    expectedUpdatedAt: expectedUpdatedAtSchema,
     viewIds: t.Array(tSafeId("workspaceView"), {
       minItems: 1,
       maxItems: LIMITS.viewsCount,
@@ -55,7 +59,7 @@ const reorderViews = createSafeHandler(
   async function* ({
     safeDb,
     workspaceId,
-    body: { viewIds },
+    body: { expectedUpdatedAt, viewIds },
     recordAuditEvent,
     featureAccessSnapshot,
     session,
@@ -142,8 +146,51 @@ const reorderViews = createSafeHandler(
       }
     }
 
-    yield* Result.await(
+    const writeError = yield* Result.await(
       safeDb(async (tx) => {
+        await withAggregateLock({
+          aggregate: "workspace",
+          id: {
+            id: workspaceId,
+            organizationId: session.activeOrganizationId,
+          },
+          mode: "update",
+          tx,
+        });
+        const lockedWorkspace = (
+          await tx
+            .select({ updatedAt: workspaces.lastActivityAt })
+            .from(workspaces)
+            .where(eq(workspaces.id, workspaceId))
+            .limit(1)
+        ).at(0);
+        if (!lockedWorkspace) {
+          return new HandlerError({ status: 404, message: "Matter not found" });
+        }
+        const locked = await tx
+          .select({ id: workspaceViews.id })
+          .from(workspaceViews)
+          .where(eq(workspaceViews.workspaceId, workspaceId));
+        const lockedIds = new Set(locked.map((view) => view.id));
+        if (
+          locked.length !== viewIds.length ||
+          viewIds.some((id) => !lockedIds.has(id))
+        ) {
+          return new HandlerError({
+            status: 400,
+            message: "View IDs must include all views in the workspace",
+          });
+        }
+        const conflict = enforceWritePrecondition({
+          type: "updatedAt",
+          field: "expectedUpdatedAt",
+          storedUpdatedAt: lockedWorkspace.updatedAt,
+          expectedUpdatedAt,
+          resource: "View order",
+        });
+        if (conflict) {
+          return conflict;
+        }
         await tx
           .update(workspaceViews)
           .set({
@@ -157,8 +204,17 @@ const reorderViews = createSafeHandler(
           .where(eq(workspaceViews.workspaceId, workspaceId));
 
         await recordAuditEvent(tx, movedEvents);
+        await tx
+          .update(workspaces)
+          .set({ lastActivityAt: new Date() })
+          .where(eq(workspaces.id, workspaceId));
+        return null;
       }),
     );
+
+    if (writeError) {
+      return Result.err(writeError);
+    }
 
     broadcastWorkspaceResourceChanges(
       workspaceId,

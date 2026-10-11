@@ -17,6 +17,7 @@ import {
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { logger } from "@/api/lib/observability/logger";
+import { expectedUpdatedAtSchema } from "@/api/lib/optimistic-concurrency";
 import { PROPERTY_DEPENDENCY_LIMITS } from "@/api/lib/properties/dependency-limits";
 import { brandPersistedLegalListId } from "@/api/lib/safe-id-boundaries";
 
@@ -433,6 +434,7 @@ export const tCreateViewInputSchema = t.Object(
 
 export const tUpdateViewBodySchema = t.Object(
   {
+    expectedUpdatedAt: expectedUpdatedAtSchema,
     name: t.Optional(tDefaultVarchar),
     layout: t.Optional(tViewLayoutSchema),
     templateProperties: t.Optional(t.Array(tViewTemplatePropertySchema)),

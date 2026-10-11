@@ -310,7 +310,18 @@ describe("an organization holding more columns than it may add", () => {
     expect(asTestRaw<{ items: unknown[] }>(looked).items).toHaveLength(HELD);
 
     const reordered = await call(reorderResearchColumns, ids.orgA, ids.userA1, {
-      body: { columnIds: [...columnIds].toReversed() },
+      body: {
+        columnIds: [...columnIds].toReversed(),
+        expectedUpdatedAt: (
+          await testDb
+            .select({ updatedAt: caseLawResearchColumns.updatedAt })
+            .from(caseLawResearchColumns)
+            .where(eq(caseLawResearchColumns.organizationId, ids.orgA))
+        )
+          .map((row) => row.updatedAt.toISOString())
+          .toSorted()
+          .at(-1)!,
+      },
     });
     expect(statusOf(reordered)).toBeNull();
     const { columns } = asTestRaw<{ columns: { id: string }[] }>(reordered);
@@ -318,6 +329,21 @@ describe("an organization holding more columns than it may add", () => {
     expect(columns.map((column) => column.id)).toEqual(
       [...columnIds].toReversed(),
     );
+  });
+
+  test("reorder rejects a stale collection revision with VERSION_CONFLICT", async () => {
+    const columnId = await addColumn(ids.orgA, ids.userA1, "Stale order");
+    const result = await call(reorderResearchColumns, ids.orgA, ids.userA1, {
+      body: {
+        columnIds: [columnId],
+        expectedUpdatedAt: new Date(0).toISOString(),
+      },
+    });
+
+    expect(result).toMatchObject({
+      code: 409,
+      response: { code: "version_conflict" },
+    });
   });
 
   test("one more column is still refused", async () => {

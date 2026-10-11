@@ -42,6 +42,7 @@ const listDocumentTypes = createSafeRootHandler(
             key: documentTypes.key,
             label: documentTypes.label,
             sortOrder: documentTypes.sortOrder,
+            updatedAt: documentTypes.updatedAt,
           })
           .from(documentTypes)
           .where(eq(documentTypes.organizationId, organizationId))
@@ -53,7 +54,12 @@ const listDocumentTypes = createSafeRootHandler(
       ),
     );
 
-    return Result.ok({ items: rows });
+    return Result.ok({
+      items: rows.map((row) => ({
+        ...row,
+        updatedAt: row.updatedAt.toISOString(),
+      })),
+    });
   },
 );
 
