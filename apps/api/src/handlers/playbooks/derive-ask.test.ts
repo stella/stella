@@ -23,6 +23,7 @@ import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
 import type { TierStandardPosition } from "@/api/lib/workflow/position-runtime";
 import { testModelActionAdmitter } from "@/api/tests/helpers/model-dispatch-admission";
+import { effectiveRequest } from "@/api/tests/helpers/provider-wire-replay";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -149,7 +150,7 @@ describe("deriveAutoAsks — save resilience", () => {
       ],
       usage: {
         input_tokens: 20,
-        input_tokens_details: { cached_tokens: 0 },
+        input_tokens_details: { cached_tokens: 0, cache_write_tokens: 0 },
         output_tokens: 10,
         output_tokens_details: { reasoning_tokens: 0 },
         total_tokens: 30,
@@ -181,7 +182,7 @@ describe("deriveAutoAsks — save resilience", () => {
           input: Parameters<typeof globalThis.fetch>[0],
           init?: RequestInit,
         ) => {
-          const request = new Request(input, init);
+          const request = effectiveRequest(input, init);
           expect(new URL(request.url).pathname).toBe("/v1/responses");
           const body = v.parse(
             v.object({ model: v.string(), stream: v.literal(true) }),

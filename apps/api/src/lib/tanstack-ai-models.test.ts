@@ -1009,7 +1009,10 @@ describe("tanStackModelOptionsForTask", () => {
       },
     } satisfies Record<
       (typeof TANSTACK_AI_PROVIDERS)[number],
-      { routine: unknown; reasoning: unknown; fast: unknown }
+      Record<
+        "routine" | "reasoning" | "fast",
+        ReturnType<typeof tanStackModelOptionsForTask>
+      >
     >;
     const modeByGroup = {
       fast: "fast",
