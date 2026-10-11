@@ -20,6 +20,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { SCOUT_KEY } from "@stll/api-contract/signals";
 import { mapWithConcurrency } from "@stll/concurrency";
+import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import type { rootDb } from "@/api/db/root";
@@ -185,8 +186,21 @@ const REPAIR_SCAN_CURSOR_CAS_SCRIPT = `
 const SOURCE_SUPERSEDED_CANCELLATION_CODE = "source_superseded";
 
 type OcrDerivativeStore = (
-  input: FileUsageInput & { write: () => Promise<void> },
+  input: FileUsageInput & {
+    content: Uint8Array;
+    write: (checked: {
+      objectKey: string;
+      sizeBytes: number;
+      content: Uint8Array;
+    }) => Promise<void>;
+  },
 ) => Promise<Result<void, OrganizationFileUsageError>>;
+
+type OcrDerivativeWrite = (checked: {
+  objectKey: string;
+  sizeBytes: number;
+  content: Uint8Array;
+}) => Promise<void>;
 
 export const storeOcrSearchablePdfDerivative = async ({
   objectKey,
@@ -200,17 +214,22 @@ export const storeOcrSearchablePdfDerivative = async ({
   organizationId: SafeId<"organization">;
   pdfBytes: Uint8Array;
   usageLimitsEnabled: boolean;
-  writePdf: () => Promise<void>;
+  writePdf: OcrDerivativeWrite;
   writeMetered?: OcrDerivativeStore;
 }): Promise<Result<void, OrganizationFileUsageError>> => {
   if (!usageLimitsEnabled) {
-    await writePdf();
+    await writePdf({
+      objectKey,
+      sizeBytes: pdfBytes.byteLength,
+      content: pdfBytes,
+    });
     return Result.ok();
   }
   return await writeMetered({
     objectKey,
     organizationId,
     sizeBytes: pdfBytes.byteLength,
+    content: pdfBytes,
     write: writePdf,
   });
 };
@@ -279,11 +298,14 @@ const writeOcrSearchablePdfDerivative = async ({
         workspaceId: run.workspaceId,
         runId: run.id,
       });
-      const writePdf = async () =>
+      const writePdf: OcrDerivativeWrite = async ({
+        content,
+        objectKey: checkedObjectKey,
+      }) =>
         await writeTenantS3Object({
           contentType: PDF_MIME_TYPE,
-          data: searchablePdf.value,
-          key: objectKey,
+          data: content,
+          key: checkedObjectKey,
           scope,
           signal: lifecycleSignal,
         });
@@ -1349,20 +1371,26 @@ const markRunFailed = async ({
   // and stays a structured log; capturing every attempt reported the same
   // defect up to AUTOMATIC_OCR_MAX_ATTEMPTS times.
   if (outcome.retryScheduled) {
-    logger.warn("document_processing.attempt_failed", {
-      ...documentProcessingFailureFields(error),
-      attempt: String(outcome.attemptCount),
-      errorCode: failureCode,
-      runId: run.id,
-    });
+    logger.warn(
+      "document_processing.attempt_failed",
+      sanitizeErrorAttributesForOutput({
+        ...documentProcessingFailureFields(error),
+        attempt: String(outcome.attemptCount),
+        errorCode: failureCode,
+        runId: run.id,
+      }),
+    );
     return "settled";
   }
   captureError(error, { runId: run.id });
-  logger.error("document_processing.run_failed", {
-    ...documentProcessingFailureFields(error),
-    errorCode: failureCode,
-    runId: run.id,
-  });
+  logger.error(
+    "document_processing.run_failed",
+    sanitizeErrorAttributesForOutput({
+      ...documentProcessingFailureFields(error),
+      errorCode: failureCode,
+      runId: run.id,
+    }),
+  );
   return "settled";
 };
 
@@ -2839,10 +2867,13 @@ const handleDocumentProcessingFailure = ({
       });
       return;
     case DOCUMENT_PROCESSING_FAILURE_REPORT.MACHINERY:
-      logger.error("document_processing.failed", {
-        ...documentProcessingFailureFields(error),
-        runId: job?.data.runId ?? "",
-      });
+      logger.error(
+        "document_processing.failed",
+        sanitizeErrorAttributesForOutput({
+          ...documentProcessingFailureFields(error),
+          runId: job?.data.runId ?? "",
+        }),
+      );
       return;
     default:
       report satisfies never;

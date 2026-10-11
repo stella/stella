@@ -1,55 +1,42 @@
-import { useState } from "react";
-
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
-import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
+import {
+  AlertDialog,
+  AlertDialogPopup,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogClose,
+} from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
-import { Frame, FramePanel } from "@stll/ui/frame";
-import { Trash2Icon } from "@stll/ui/icons";
-import { stellaToast } from "@stll/ui/toast";
 
-import { AIConfigProvidersEditor } from "@/components/ai-config-providers-editor";
-import { AIConfigRoleModelPicker } from "@/components/ai-config-role-model-picker";
-import {
-  createProviderCredentialDraft,
-  createDefaultRoleModels,
-  ensureRoleModelsForProviders,
-  getProviderValues,
-  hasUsableDecisionModel,
-  hasUsableProviderDrafts,
-  providerDraftsFromStoredProviders,
-  roleModelsFromOverrideModels,
-  serializeDecisionModel,
-  serializeOverrideModels,
-  serializeProviderDrafts,
-  isProviderValue,
-  PROVIDER_LABELS,
-} from "@/components/ai-config-role-models.logic";
-import type {
-  DecisionModelState,
-  ModelSelection,
-  ProviderCredentialDraft,
-  RoleModelSelections,
-  RoleValue,
-  StoredDecisionModel,
-} from "@/components/ai-config-role-models.logic";
-import { useAnalytics } from "@/lib/analytics/provider";
-import { api } from "@/lib/api";
+import { getProviderValues } from "@/components/ai-config-role-models.logic";
+import { CopyActionButton } from "@/components/copy-action-button";
+import { env } from "@/env";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
-import { invalidateAIConfigurationCaches } from "@/lib/organization/ai-config-cache";
-import {
-  aiAvailabilityOptions,
-  aiConfigOptions,
-  updateCachedAIAvailability,
-} from "@/lib/organization/ai-config-queries";
-import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
-import { AIConfigDecisionModel } from "@/routes/_protected.settings/-components/organization/ai-config-decision-model";
+import { providerSetupGuidance } from "@/lib/errors/provider-setup-guidance";
+import { aiConfigOptions } from "@/lib/organization/ai-config-queries";
+import { AIProviderRows } from "@/routes/_protected.settings/-components/organization/ai-provider-rows";
+
+import { SettingsPageHeader } from "../settings-page-header";
+import { AIConfigAdvanced } from "./ai-config-advanced";
+import { hasCustomAIModels } from "./ai-config-form.logic";
+import type { AIConfigFeedback } from "./ai-config-form.logic";
+import { AISettingsSectionFeedback } from "./ai-settings-section";
+import { DeepLKeyCard } from "./deepl-key-card";
+import { DocumentProcessingCard } from "./document-processing-card";
+import { MemoryExtractionCard } from "./memory-extraction-card";
+import { PromptCachingCard } from "./prompt-caching-card";
+import { useAIConfigForm } from "./use-ai-config-form";
+import type { AIConfigReadState } from "./use-ai-config-form";
+import { WebSearchKeysCard } from "./web-search-keys-card";
 
 export const AIConfigCard = () => {
+  const t = useTranslations();
   const activeOrganizationId = useRouteContext({
     from: "/_protected",
     select: (ctx) => ctx.user.activeOrganizationId,
@@ -60,341 +47,248 @@ export const AIConfigCard = () => {
     refetch,
   } = useQuery(aiConfigOptions({ organizationId: activeOrganizationId }));
 
-  // The read fails closed when the stored config cannot be decrypted, and the
-  // form below is the only place the stored config can be removed. Rendering
-  // nothing would strand an administrator with no way back, so the failure gets
-  // its own state carrying the same remove action.
   if (isError) {
     return (
-      <AIConfigUnreadable
-        onRetry={() => {
-          detached(refetch(), "ai-config-card.refetch");
-        }}
+      <AIConfigForm
+        key={activeOrganizationId}
         organizationId={activeOrganizationId}
+        readState={{
+          status: "unreadable",
+          onRetry: () => detached(refetch(), "ai-config-card.refetch"),
+        }}
       />
     );
   }
 
   if (!config) {
-    return null;
+    return (
+      <SettingsPageHeader
+        title={t("settings.organization.ai")}
+        description={t("settings.organization.aiDescription")}
+      />
+    );
   }
 
   return (
     <AIConfigForm
-      config={config}
+      readState={{ status: "ready", config }}
       key={activeOrganizationId}
       organizationId={activeOrganizationId}
     />
   );
 };
 
-type AIConfigUnreadableProps = {
-  onRetry: () => void;
+type AIConfigFormProps = {
+  readState: AIConfigReadState;
   organizationId: string;
 };
 
-const AIConfigUnreadable = ({
-  onRetry,
-  organizationId,
-}: AIConfigUnreadableProps) => {
-  const tCommon = useTranslations("common");
-  const tErrors = useTranslations("errors");
-  const tSuccess = useTranslations("success");
-  const analytics = useAnalytics();
-  const queryClient = useQueryClient();
+type AIConfigFormState = ReturnType<typeof useAIConfigForm>;
 
-  const deleteMutation = useMutation({
-    mutationFn: async () => {
-      const response = await api["organization-settings"]["ai-config"].delete(
-        {},
-      );
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-    },
-    onSuccess: async () => {
-      await invalidateAIConfigurationCaches(queryClient, organizationId);
-      stellaToast.add({
-        title: tSuccess("aiConfigDeleted"),
-        type: "success",
-      });
-    },
-    onError: (error) => {
-      analytics.captureError(error);
-      notifyUserError(error, tErrors("actionFailed"));
-    },
-  });
+type UnreadableRecoveryProps = {
+  form: AIConfigFormState;
+  onRetry: () => void;
+};
 
+const UnreadableRecovery = ({ form, onRetry }: UnreadableRecoveryProps) => {
+  const common = useTranslations("common");
   return (
-    <div className="flex items-center justify-between gap-3 py-4">
-      <p className="text-destructive text-sm">
-        {tCommon("somethingWentWrong")}
-      </p>
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <p className="text-destructive text-sm">{common("somethingWentWrong")}</p>
       <div className="flex items-center gap-2">
-        <Button onClick={onRetry} size="sm" variant="outline">
-          {tCommon("retry")}
+        <Button
+          disabled={form.saving}
+          onClick={onRetry}
+          size="sm"
+          variant="outline"
+        >
+          {common("retry")}
         </Button>
         <Button
-          loading={deleteMutation.isPending}
-          onClick={() => deleteMutation.mutate()}
+          disabled={form.saving}
+          onClick={form.toggleRecovery}
           size="sm"
           variant="ghost"
         >
-          <Trash2Icon className="size-4" />
-          {tCommon("remove")}
+          {common(form.recoveryAction === "keep" ? "remove" : "cancel")}
         </Button>
       </div>
+      {form.recoveryAction === "remove" && (
+        <p className="text-muted-foreground text-xs">
+          {common("unsavedChanges")}
+        </p>
+      )}
     </div>
   );
 };
 
-type AIConfigFormProps = {
-  config: OrganizationAIConfig;
-  organizationId: string;
+type SettingsErrorProps = {
+  error: Extract<AIConfigFeedback, { status: "error" }>;
 };
 
-const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
-  const t = useTranslations("organization");
-  const tCommon = useTranslations("common");
-  const tSuccess = useTranslations("success");
-  const tErrors = useTranslations("errors");
-  const analytics = useAnalytics();
-  const queryClient = useQueryClient();
+const SettingsError = ({ error }: SettingsErrorProps) => {
+  const translate = useTranslations();
+  const setupGuidance =
+    error.code === undefined ? undefined : providerSetupGuidance(error.code);
+  return (
+    <div
+      role="alert"
+      className="text-destructive flex items-start gap-2 text-sm"
+    >
+      <div className="min-w-0 flex-1 wrap-anywhere whitespace-pre-wrap">
+        <p>{error.message}</p>
+        {setupGuidance && (
+          <p>
+            {translate(setupGuidance.guidance)}{" "}
+            <a
+              className="underline"
+              href={sanitizeHref(setupGuidance.url)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {translate(setupGuidance.linkLabel)}
+            </a>
+          </p>
+        )}
+      </div>
+      <CopyActionButton text={error.message} />
+    </div>
+  );
+};
 
-  const initialProviders =
-    config.configured && config.providers.length > 0
-      ? providerDraftsFromStoredProviders(config.providers)
-      : [createProviderCredentialDraft()];
-  const initialProviderValues = getProviderValues(initialProviders);
-  const initialRoleModels = config.configured
-    ? roleModelsFromOverrideModels({
-        overrideModels: config.overrideModels,
-        providers: initialProviderValues,
-      })
-    : createDefaultRoleModels(initialProviderValues);
+type LeaveGuardProps = {
+  blocker: AIConfigFormState["blocker"];
+};
 
-  const [providers, setProviders] =
-    useState<ProviderCredentialDraft[]>(initialProviders);
-  const [roleModels, setRoleModels] =
-    useState<RoleModelSelections>(initialRoleModels);
-  // The decision model merges on its own terms, so the form tracks what the
-  // user did to it rather than a value: untouched keeps the stored one.
-  const [decisionState, setDecisionState] = useState<DecisionModelState>({
-    kind: "untouched",
-  });
-  const [storedDecision, setStoredDecision] =
-    useState<StoredDecisionModel | null>(
-      config.configured ? config.decision : null,
-    );
+const LeaveGuard = ({ blocker }: LeaveGuardProps) => {
+  const common = useTranslations("common");
+  return (
+    <AlertDialog
+      open={blocker.status === "blocked"}
+      onOpenChange={(open) => {
+        if (!open && blocker.status === "blocked") {
+          blocker.reset();
+        }
+      }}
+    >
+      <AlertDialogPopup>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{common("confirmAction")}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {common("unsavedLeaveConfirm")}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogClose render={<Button variant="ghost" />}>
+            {common("goBackToEditing")}
+          </AlertDialogClose>
+          <Button
+            onClick={() => {
+              if (blocker.status === "blocked") {
+                blocker.proceed();
+              }
+            }}
+          >
+            {common("confirm")}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogPopup>
+    </AlertDialog>
+  );
+};
 
-  const updateProviders = (nextProviders: ProviderCredentialDraft[]) => {
-    const providerValues = getProviderValues(nextProviders);
-    setProviders(nextProviders);
-    setRoleModels((prev) =>
-      ensureRoleModelsForProviders({
-        providers: providerValues,
-        roleModels: prev,
-      }),
-    );
-  };
+type AuxiliaryCardsProps = {
+  form: AIConfigFormState;
+};
 
-  const setRoleModel = (role: RoleValue, model: ModelSelection | null) => {
-    setRoleModels((prev) => ({
-      ...prev,
-      [role]: model,
-    }));
-  };
+const AuxiliaryCards = ({
+  form: { toggleSections, keySections, saving },
+}: AuxiliaryCardsProps) => (
+  <>
+    <PromptCachingCard {...toggleSections.promptCaching} disabled={saving} />
+    <DocumentProcessingCard
+      {...toggleSections.documentProcessing}
+      disabled={saving}
+    />
+    {env.VITE_FEATURE_AI_MEMORY && (
+      <MemoryExtractionCard
+        {...toggleSections.memoryExtraction}
+        disabled={saving}
+      />
+    )}
+    <div className="my-8 border-t" />
+    <DeepLKeyCard {...keySections.deepl} disabled={saving} />
+    <div className="my-8 border-t" />
+    <WebSearchKeysCard
+      search={{ ...keySections.search, disabled: saving }}
+      fetch={{ ...keySections.fetch, disabled: saving }}
+    />
+  </>
+);
 
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      const providerValues = getProviderValues(providers);
-      const overrideModels = serializeOverrideModels({
-        providers: providerValues,
-        roleModels,
-      });
-      if (!overrideModels) {
-        // The Save button is disabled when `canSave` is false, which checks
-        // the same `serializeOverrideModels(...) !== null` invariant. The
-        // inline message at the field below renders the translated guidance.
-        panic("ai-config save fired with no valid override models");
-      }
-
-      // An absent `decision` is what keeps the stored one, so the field is
-      // omitted rather than sent as undefined.
-      const decision = serializeDecisionModel(decisionState);
-      const response = await api["organization-settings"]["ai-config"].post({
-        providers: serializeProviderDrafts(providers),
-        overrideModels,
-        ...(decision === undefined ? {} : { decision }),
-      });
-      return unwrapEden(response);
-    },
-    onSuccess: async (data) => {
-      const nextProviders = providerDraftsFromStoredProviders(data.providers);
-      setProviders(nextProviders);
-      setRoleModels(
-        roleModelsFromOverrideModels({
-          overrideModels: data.overrideModels,
-          providers: getProviderValues(nextProviders),
-        }),
-      );
-      setStoredDecision(data.decision);
-      setDecisionState({ kind: "untouched" });
-      queryClient.setQueryData(
-        aiAvailabilityOptions({ organizationId }).queryKey,
-        (current) =>
-          updateCachedAIAvailability({
-            current,
-            instanceProvisioned: config.instanceProvisioned,
-            orgConfigured: true,
-          }),
-      );
-      await invalidateAIConfigurationCaches(queryClient, organizationId);
-      stellaToast.add({
-        title: tSuccess("aiConfigUpdated"),
-        type: "success",
-      });
-    },
-    onError: (error) => {
-      analytics.captureError(error);
-      notifyUserError(error, tErrors("actionFailed"));
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: async () => {
-      const response = await api["organization-settings"]["ai-config"].delete(
-        {},
-      );
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-    },
-    onSuccess: async () => {
-      const nextProviders = [createProviderCredentialDraft()];
-      setProviders(nextProviders);
-      setRoleModels(createDefaultRoleModels(getProviderValues(nextProviders)));
-      setStoredDecision(null);
-      setDecisionState({ kind: "untouched" });
-      queryClient.setQueryData(
-        aiAvailabilityOptions({ organizationId }).queryKey,
-        (current) =>
-          updateCachedAIAvailability({
-            current,
-            instanceProvisioned: config.instanceProvisioned,
-            orgConfigured: false,
-          }),
-      );
-      await invalidateAIConfigurationCaches(queryClient, organizationId);
-      stellaToast.add({
-        title: tSuccess("aiConfigDeleted"),
-        type: "success",
-      });
-    },
-    onError: (error) => {
-      analytics.captureError(error);
-      notifyUserError(error, tErrors("actionFailed"));
-    },
-  });
-
-  const providerValues = getProviderValues(providers);
-  const removeLabel = tCommon("remove");
-  const rolesReady =
-    hasUsableProviderDrafts(providers) &&
-    serializeOverrideModels({ providers: providerValues, roleModels }) !== null;
-  const decisionReady = hasUsableDecisionModel({
-    state: decisionState,
-    stored: storedDecision,
-  });
-  const canSave = rolesReady && decisionReady;
-
+export const AIConfigForm = ({
+  readState,
+  organizationId,
+}: AIConfigFormProps) => {
+  const common = useTranslations("common");
+  const page = useTranslations("settings.organization");
+  const form = useAIConfigForm({ readState, organizationId });
+  const settingsError = form.feedback.status === "error" ? form.feedback : null;
+  const providerValues = getProviderValues(form.providers);
   return (
     <div className="flex flex-col gap-4">
-      {config.configured && (
-        <div className="flex items-center justify-between gap-2">
-          <div className="bg-muted flex flex-wrap items-center gap-2 rounded border px-3 py-2">
-            <span className="text-muted-foreground text-xs">
-              {tCommon("active")}:
-            </span>
-            {config.providers.map((providerConfig) => (
-              <span
-                className="text-xs"
-                key={`${providerConfig.provider}-${providerConfig.apiKeyMasked}`}
-              >
-                <span className="font-medium">
-                  {isProviderValue(providerConfig.provider)
-                    ? PROVIDER_LABELS[providerConfig.provider]
-                    : providerConfig.provider}
-                </span>{" "}
-                <span className="text-muted-foreground font-mono">
-                  {providerConfig.apiKeyMasked}
-                </span>
-              </span>
-            ))}
-          </div>
+      <SettingsPageHeader
+        title={page("ai")}
+        description={page("aiDescription")}
+        action={
           <Button
-            aria-label={removeLabel}
-            loading={deleteMutation.isPending}
-            onClick={() => deleteMutation.mutate()}
             size="sm"
-            variant="ghost"
+            disabled={!form.canClickSave || form.saving}
+            loading={form.saving}
+            onClick={() =>
+              detached(form.saveSettings(), "ai-config.save-settings")
+            }
           >
-            <Trash2Icon className="size-4" />
+            {common("saveChanges")}
           </Button>
-        </div>
+        }
+      />
+      {readState.status === "unreadable" ? (
+        <UnreadableRecovery form={form} onRetry={readState.onRetry} />
+      ) : (
+        <AIProviderRows
+          storedProviders={form.storedProviders}
+          providers={form.providers}
+          disabled={form.saving}
+          setupErrorCode={settingsError?.code}
+          onChange={form.changeProviders}
+          onRemove={form.removeProvider}
+        />
       )}
-      <Frame>
-        <FramePanel>
-          <div className="flex flex-col gap-5 p-1">
-            <AIConfigProvidersEditor
-              disabled={saveMutation.isPending}
-              onProvidersChange={updateProviders}
-              providers={providers}
-            />
-
-            <div className="border-t" />
-
-            <AIConfigRoleModelPicker
-              disabled={saveMutation.isPending}
-              onModelChange={setRoleModel}
-              providers={providerValues}
-              roleModels={roleModels}
-            />
-
-            <div className="border-t" />
-
-            <AIConfigDecisionModel
-              disabled={saveMutation.isPending}
-              instanceProvisioned={config.decisionInstanceProvisioned}
-              onStateChange={setDecisionState}
-              state={decisionState}
-              stored={storedDecision}
-            />
-          </div>
-        </FramePanel>
-      </Frame>
-
-      {!rolesReady && (
-        <p className="text-destructive-foreground text-xs">
-          {t("aiConfig.selectModelForEachRole")}
-        </p>
+      {readState.status === "ready" &&
+        form.providers.length > 0 &&
+        form.storedProviders.length > 0 && (
+          <AIConfigAdvanced
+            disabled={form.saving}
+            providers={providerValues}
+            roleModels={form.roleModels}
+            onRoleChange={form.changeRole}
+            onRoleReset={form.resetRole}
+            decisionState={form.decisionState}
+            storedDecision={form.storedDecision}
+            onDecisionChange={form.changeDecision}
+            decisionInstanceProvisioned={
+              form.config?.decisionInstanceProvisioned ?? false
+            }
+            custom={hasCustomAIModels(form)}
+          />
+        )}
+      {settingsError && <SettingsError error={settingsError} />}
+      {form.feedback.status !== "error" && (
+        <AISettingsSectionFeedback feedback={form.feedback} />
       )}
-
-      {!decisionReady && (
-        <p className="text-destructive-foreground text-xs">
-          {t("aiConfig.decision.incomplete")}
-        </p>
-      )}
-
-      <Button
-        className="self-start"
-        disabled={!canSave}
-        loading={saveMutation.isPending}
-        onClick={() => saveMutation.mutate()}
-        size="sm"
-      >
-        {config.configured ? tCommon("saveChanges") : t("aiConfig.configure")}
-      </Button>
+      <AuxiliaryCards form={form} />
+      <LeaveGuard blocker={form.blocker} />
     </div>
   );
 };

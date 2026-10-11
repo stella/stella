@@ -36,6 +36,7 @@ const { resolveServerFollow, draftToAdopt } =
   await import("./playbook-editor-sync.logic");
 const { usePlaybookSaveQueue } = await import("./use-playbook-save-queue");
 const { useMountEffect } = await import("@/hooks/use-effect");
+const { hasUnsavedWork } = await import("@/hooks/use-unsaved-work");
 const { useState } = await import("react");
 const { PLAYBOOK_DRAFT_VIEW } =
   await import("@/lib/knowledge/playbook-draft-view");
@@ -535,4 +536,134 @@ test("a completed hidden save cannot recreate closed parking or replace a newer 
     updatedAt: "2026-10-08T08:01:00.000Z",
   });
   expect(readParkedPlaybookPane(tabId, "playbook")).toBe(newer);
+});
+
+test("discarding a failed parked draft clears only its playbook and removes its unload guard", async () => {
+  const store = makeStore();
+  const tabId = "failed-discard";
+  openPlaybook(store, tabId, "first");
+  openPlaybook(store, "other-tab", "first");
+  const failed = {
+    ...parkedState("first", true),
+    leaveState: "save-failed",
+  } as const satisfies ParkedPlaybookPane;
+  const second = parkedState("second");
+  const other = parkedState("first");
+  park(store, tabId, failed);
+  park(store, tabId, second);
+  park(store, "other-tab", other);
+  const view = await renderConfirmation();
+  expect(hasUnsavedWork()).toBe(true);
+  const retarget = () =>
+    store.getState().updateView({
+      id: tabId,
+      label: "second",
+      payload: { type: "playbook", playbookId: "second" },
+    });
+  await act(async () => {
+    retarget();
+  });
+  await act(async () => {
+    fireEvent.click(
+      view.getByRole("button", { name: messages.common.goBackToEditing }),
+    );
+  });
+  expect(readParkedPlaybookPane(tabId, "first")).toBe(failed);
+  expect(hasUnsavedWork()).toBe(true);
+  await act(async () => {
+    retarget();
+  });
+  await act(async () => {
+    fireEvent.click(
+      view.getByRole("button", { name: messages.clauses.leaveAndDiscard }),
+    );
+  });
+  expect(store.getState().tabs.find((tab) => tab.id === tabId)).toMatchObject({
+    payload: { playbookId: "second" },
+  });
+  expect(readParkedPlaybookPane(tabId, "first")).toBeNull();
+  expect(readParkedPlaybookPane(tabId, "second")).toBe(second);
+  expect(readParkedPlaybookPane("other-tab", "first")).toBe(other);
+  expect(hasUnsavedWork()).toBe(false);
+});
+
+test("a live failed draft mounted during discard confirmation must retry before the tab can close", async () => {
+  const store = makeStore();
+  const tabId = "failed-live-race";
+  openPlaybook(store, tabId, "playbook");
+  const failed = {
+    ...parkedState("playbook", true),
+    leaveState: "save-failed",
+  } as const satisfies ParkedPlaybookPane;
+  park(store, tabId, failed);
+  const view = await renderConfirmation();
+  await act(async () => {
+    store.getState().closeTab(tabId);
+  });
+  let retries = 0;
+  await act(async () => {
+    unregisterGuards.push(
+      registerPlaybookPaneLeaveGuard({
+        tabId,
+        playbookId: "playbook",
+        leaveState: "save-failed",
+        saveBeforeLeave: async () => {
+          retries += 1;
+          return false;
+        },
+      }),
+    );
+    fireEvent.click(
+      view.getByRole("button", { name: messages.clauses.leaveAndDiscard }),
+    );
+  });
+  expect(retries).toBe(0);
+  expect(store.getState().tabs).toHaveLength(1);
+  expect(readParkedPlaybookPane(tabId, "playbook")).toBe(failed);
+  expect(
+    view.queryByRole("button", { name: messages.clauses.leaveAndDiscard }),
+  ).toBeNull();
+  await act(async () => {
+    fireEvent.click(view.getByRole("button", { name: messages.common.save }));
+  });
+  expect(retries).toBe(1);
+  expect(store.getState().tabs).toHaveLength(1);
+  expect(readParkedPlaybookPane(tabId, "playbook")).toBe(failed);
+  expect(hasUnsavedWork()).toBe(true);
+});
+
+test("discard confirmation must be renewed for a newer failed parked draft", async () => {
+  const store = makeStore();
+  const tabId = "failed-parking-race";
+  openPlaybook(store, tabId, "playbook");
+  const failed = {
+    ...parkedState("playbook", true),
+    leaveState: "save-failed",
+  } as const satisfies ParkedPlaybookPane;
+  park(store, tabId, failed);
+  const view = await renderConfirmation();
+  await act(async () => {
+    store.getState().closeTab(tabId);
+  });
+  const newer = {
+    ...failed,
+    draft: { ...failed.draft, description: "New local work" },
+  };
+  await act(async () => {
+    park(store, tabId, newer);
+    fireEvent.click(
+      view.getByRole("button", { name: messages.clauses.leaveAndDiscard }),
+    );
+  });
+  expect(store.getState().tabs).toHaveLength(1);
+  expect(readParkedPlaybookPane(tabId, "playbook")).toBe(newer);
+  expect(hasUnsavedWork()).toBe(true);
+  await act(async () => {
+    fireEvent.click(
+      view.getByRole("button", { name: messages.clauses.leaveAndDiscard }),
+    );
+  });
+  expect(store.getState().tabs).toHaveLength(0);
+  expect(readParkedPlaybookPane(tabId, "playbook")).toBeNull();
+  expect(hasUnsavedWork()).toBe(false);
 });

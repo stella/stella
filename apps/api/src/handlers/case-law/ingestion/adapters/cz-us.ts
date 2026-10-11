@@ -9,6 +9,8 @@ import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifi
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import {
@@ -59,7 +61,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import {
   adapterCatch,
-  hashContent,
   parseCeDate,
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";

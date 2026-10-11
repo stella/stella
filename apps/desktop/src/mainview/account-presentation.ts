@@ -25,6 +25,14 @@ export const accountPresentation = (state: DesktopAccountState) => {
         webDescriptionKey: "connectToStellaDescription",
         webTitleKey: "reconnectToStella",
       } as const;
+    case "reconnectRequired":
+      return {
+        actionKey: "reconnectToStella",
+        status: "not-linked",
+        statusKey: "notConnected",
+        webDescriptionKey: "connectToStellaDescription",
+        webTitleKey: "reconnectToStella",
+      } as const;
     case "disconnected":
       return {
         actionKey: "connectToStella",

@@ -497,6 +497,7 @@ export const PromptBar = (props: PromptBarProps) => {
     isEmpty,
     openFilePicker,
     removeFile,
+    expandPastedText,
   } = editorController;
 
   const {
@@ -759,6 +760,7 @@ export const PromptBar = (props: PromptBarProps) => {
               <ChatDraftAttachmentChips
                 files={attachments}
                 onRemove={removeFile}
+                onExpand={expandPastedText}
               />
             </div>
           )}

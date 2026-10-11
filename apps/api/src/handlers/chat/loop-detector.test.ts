@@ -1,6 +1,9 @@
 import type { ModelMessage } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 
+import { sha256Hex as legacyHex } from "@stll/sha256/node";
+import { stableStringify } from "@stll/stable-stringify";
+
 import {
   createLoopRecoverySystemPrompt,
   detectModelLoop,
@@ -328,3 +331,34 @@ describe("model loop detection", () => {
     expect(recovery).toContain("searchMatter");
   });
 });
+
+for (const text of ["", "abc", "Příliš žluťoučký kůň 📄", "e\u0301"]) {
+  test(`tool loop signatures retain legacy canonical input bytes: ${JSON.stringify(text)}`, () => {
+    const input = { query: text, filters: { z: text, a: "" } };
+    const messages = Array.from({ length: 5 }, () =>
+      toolCallMessage({ toolName: "searchMatter", input }),
+    );
+    const detection = detectModelLoop(messages);
+    expect(detection.type).toBe("tool-call-loop");
+    if (detection.type !== "tool-call-loop") {
+      expect.unreachable();
+    }
+    expect(detection.signature).toBe(
+      legacyHex(`searchMatter:${stableStringify(input)}`),
+    );
+  });
+}
+
+for (const text of ["", "ordinary", "Žluťoučký kůň 📄", "e\u0301"]) {
+  test(`content loop signatures retain legacy UTF-8 chunk bytes: ${JSON.stringify(text)}`, () => {
+    const chunk = text.padEnd(50, "x");
+    const detection = detectModelLoop([
+      { role: "assistant", content: chunk.repeat(14) },
+    ]);
+    expect(detection.type).toBe("content-loop");
+    if (detection.type !== "content-loop") {
+      expect.unreachable();
+    }
+    expect(detection.signature).toBe(legacyHex(chunk));
+  });
+}

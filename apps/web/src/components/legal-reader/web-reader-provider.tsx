@@ -17,7 +17,7 @@ import { CitedStatuteLink } from "@/components/legal-reader/cited-statute-link";
 import { useWebReaderPresentationAdapters } from "@/components/legal-reader/web-reader-presentation";
 import { DecisionBodyUnavailable } from "@/features/case-law/components/case-viewer/decision-body-state";
 import { createProvisionViewTab } from "@/features/statutes/provision-inspector.logic";
-import { provisionPreviewOptions } from "@/features/statutes/queries/provision-preview";
+import { provisionPreviewOptions } from "@/lib/statutes/provision-preview";
 
 export const WebReaderProvider = ({ children }: { children: ReactNode }) => {
   const inspector = useInspectorView();

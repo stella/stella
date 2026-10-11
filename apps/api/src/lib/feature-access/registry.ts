@@ -1,3 +1,5 @@
+// parser-output-unchanged: registering desktop activity access leaves existing ingestion features and parsed records unchanged.
+import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
@@ -45,6 +47,11 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
     },
   },
 
+  // The desktop client gates this feature from its desktop feature access
+  // decision; no API source belongs to it.
+  "activity-timeline": {
+    enrolment: "invitation",
+  },
   [GENERATED_VIEWS_FEATURE_ID]: {
     enrolment: "invitation",
     deploymentFeature: "FEATURE_GENERATED_VIEWS",
@@ -161,5 +168,9 @@ true satisfies Exclude<
   SelfServeFeatureId,
   (typeof SELF_SERVE_FEATURE_IDS)[number]
 > extends never
+  ? true
+  : never;
+
+true satisfies Exclude<DesktopFeatureId, FeatureId> extends never
   ? true
   : never;

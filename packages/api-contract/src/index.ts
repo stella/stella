@@ -25,6 +25,16 @@ export type { ChatSkillContextNeed, ChatSkillDocument } from "./agent-skills";
 export { AI_ERROR_KINDS } from "./ai-errors";
 export type { AIErrorKind } from "./ai-errors";
 export {
+  CASE_LAW_ANALYSIS_FAILURE_CODES,
+  CASE_LAW_ANALYSIS_KEY_SOURCES,
+  CASE_LAW_ANALYSIS_UNAVAILABLE_CODES,
+} from "./case-law-analysis";
+export type {
+  CaseLawAnalysisFailureCode,
+  CaseLawAnalysisKeySource,
+  CaseLawAnalysisUnavailableCode,
+} from "./case-law-analysis";
+export {
   BROWSER_CONTROL_ACTION,
   BROWSER_CONTROL_CONTENT_TRUST,
   BROWSER_CONTROL_ERROR_CODE,
@@ -385,6 +395,8 @@ export {
 } from "./matter-reference";
 export type { MatterReferenceToken } from "./matter-reference";
 export {
+  MCP_ADVANCED_HTTP_PATH,
+  MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_HTTP_PATH,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE,
@@ -394,12 +406,14 @@ export {
   MCP_LAW_HTTP_PATH,
   MCP_OAUTH_PROTOCOL_SCOPES,
   MCP_WRITE_ONLY_RESOURCE_SCOPES,
+  VERIFIED_OAUTH_CLIENT_BRANDS,
 } from "./mcp";
 export type {
   McpAnonymizedResourceScope,
   McpDefaultResourceScope,
   McpOAuthScope,
   McpWriteOnlyResourceScope,
+  VerifiedOAuthClientBrand,
 } from "./mcp";
 export { OCR_EXPORT_STATUSES } from "./ocr-export";
 export type { OcrExportStatus } from "./ocr-export";
