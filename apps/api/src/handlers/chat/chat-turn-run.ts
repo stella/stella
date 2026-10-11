@@ -473,7 +473,9 @@ export class ChatTurnRun {
           ? output
           : this.trackUpstream(output),
         {
-          abortController: this.control.abortController,
+          // Run cancellation reaches the provider and persistence bridge through
+          // their source signals. Let that bridge deliver its final timing and
+          // outcome; aborting the transport would discard those cleanup events.
           durability: { adapter: durability },
           headers: { [CHAT_TURN_ID_HEADER]: this.execution.id },
         },

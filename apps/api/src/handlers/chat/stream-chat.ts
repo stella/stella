@@ -79,7 +79,7 @@ import {
 import type { CutShortOutcome } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import {
-  prepareChatTurnTimingBatch,
+  createChatTurnTimingDurability,
   withChatTurnTiming,
 } from "@/api/handlers/chat/chat-turn-timing-stream";
 import { compactModelMessagesForModel } from "@/api/handlers/chat/compaction";
@@ -923,48 +923,20 @@ export const streamChat = async ({
         getPhase: () => timingPhase.status,
         readTiming,
       }),
-      {
-        ...log,
-        append: async (chunks) => {
-          const phase = prepareChatTurnTimingBatch({
-            chunks,
-            terminal:
-              settlement.event === undefined ||
-              settlement.terminalChunk === undefined
-                ? undefined
-                : {
-                    chunk: settlement.terminalChunk,
-                    messageId: settlement.event.responseMessage.id,
-                  },
-          });
-          const offsets = await log.append(chunks);
-          if (phase === "finishing") {
-            // Append while fenced; persist the transcript before returning the
-            // offsets that allow the SDK to deliver the final terminal event.
-            await finishSettlement();
-            const timing = await readTiming();
-            // The settlement transaction finalizes these same metadata events in
-            // the log. Update the live batch before the SDK forwards its offsets.
-            for (const chunk of chunks) {
-              if (
-                chunk.type === EventType.TEXT_MESSAGE_END &&
-                chunk.metadata !== undefined &&
-                "turnTiming" in chunk.metadata
-              ) {
-                chunk.metadata["turnTiming"] =
-                  timing.type === "present" ? timing.value : null;
-              }
-            }
-          }
-          return offsets;
-        },
-        close: async () => {
-          // A producer cutoff can return its generator without emitting a
-          // terminal. The SDK flushes its cleanup batch before this callback.
-          await finishSettlement();
-          await log.close();
-        },
-      },
+      createChatTurnTimingDurability({
+        log,
+        getTerminal: () =>
+          settlement.event === undefined ||
+          settlement.terminalChunk === undefined
+            ? undefined
+            : {
+                chunk: settlement.terminalChunk,
+                messageId: settlement.event.responseMessage.id,
+              },
+        getPhase: () => timingPhase.status,
+        finishSettlement,
+        readTiming,
+      }),
     ),
   };
 };

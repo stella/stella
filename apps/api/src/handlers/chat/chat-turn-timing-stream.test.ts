@@ -1,5 +1,10 @@
-import { EventType, toServerSentEventsResponse } from "@tanstack/ai";
+import {
+  EventType,
+  memoryStream,
+  toServerSentEventsResponse,
+} from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -8,12 +13,13 @@ import {
 } from "@stll/api-contract/chat-turn-duration";
 
 import {
-  prepareChatTurnTimingBatch,
+  createChatTurnTimingDurability,
   withChatTurnTiming,
 } from "@/api/handlers/chat/chat-turn-timing-stream";
 import type { ChatTurnTiming } from "@/api/handlers/chat/types";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import { readPresent, readUnavailable } from "@/api/lib/errors/read-outcome";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { buildWireSnapshot } from "@/api/tests/helpers/chat-fixtures";
 
 const running = {
@@ -552,40 +558,40 @@ for (const batchSize of [1, 2, 32]) {
       {
         durability: {
           batch: batchSize,
-          adapter: {
-            resumeFrom: () => null,
-            append: async (chunks) => {
-              const phase = prepareChatTurnTimingBatch({
-                chunks,
-                terminal: { chunk: runEnd, messageId: "answer" },
-              });
-              if (phase === "finishing") {
-                expect(chunks.at(-1)).toBe(runEnd);
-                const timingEnd = chunks.at(-2);
-                expect(timingEnd?.type).toBe(EventType.TEXT_MESSAGE_END);
-                if (timingEnd?.type !== EventType.TEXT_MESSAGE_END) {
-                  throw new Error("Missing terminal timing event");
+          adapter: createChatTurnTimingDurability({
+            getTerminal: () => ({ chunk: runEnd, messageId: "answer" }),
+            getPhase: () => "settled",
+            readTiming: async () => readPresent(finished),
+            finishSettlement: async () => {
+              expect(stored.at(-1)).toEqual(runEnd);
+              for (const chunk of stored) {
+                if (chunk.type === EventType.TEXT_MESSAGE_END) {
+                  chunk.metadata = { turnTiming: finished };
                 }
-                timingEnd.metadata = { turnTiming: finished };
-              }
-              const offsets = chunks.map((_chunk, index) =>
-                String(stored.length + index + 1),
-              );
-              stored.push(...structuredClone(chunks));
-              return offsets;
-            },
-            async *read() {
-              for (const [index, chunk] of stored.entries()) {
-                yield { offset: String(index + 1), chunk };
               }
             },
-            close: async () => {},
-            snapshot: async () =>
-              stored.map((chunk, index) => ({
-                offset: String(index + 1),
-                chunk: structuredClone(chunk),
-              })),
-          },
+            log: {
+              resumeFrom: () => null,
+              append: async (chunks) => {
+                const offsets = chunks.map((_chunk, index) =>
+                  String(stored.length + index + 1),
+                );
+                stored.push(...structuredClone(chunks));
+                return offsets;
+              },
+              async *read() {
+                for (const [index, chunk] of stored.entries()) {
+                  yield { offset: String(index + 1), chunk };
+                }
+              },
+              close: async () => {},
+              snapshot: async () =>
+                stored.map((chunk, index) => ({
+                  offset: String(index + 1),
+                  chunk: structuredClone(chunk),
+                })),
+            },
+          }),
         },
       },
     );
@@ -607,3 +613,43 @@ for (const batchSize of [1, 2, 32]) {
     ).toHaveLength(1);
   });
 }
+
+test("a failed cleanup append still settles once and closes durability", async () => {
+  const log = memoryStream({ runId: "cleanup-failure" });
+  let writes = 0;
+  let settlements = 0;
+  let closes = 0;
+  const failure = new HandlerError({
+    status: 500,
+    message: "Cleanup write failed",
+  });
+  const adapter = createChatTurnTimingDurability({
+    log: {
+      ...log,
+      append: async (chunks) => {
+        if (++writes > 1) {
+          throw failure;
+        }
+        return await log.append(chunks);
+      },
+      close: async () => {
+        closes += 1;
+        await log.close();
+      },
+    },
+    getTerminal: () => undefined,
+    getPhase: () => "running",
+    readTiming: async () => readPresent(finished),
+    finishSettlement: async () => {
+      settlements += 1;
+    },
+  });
+  await adapter.append([starts[0]]);
+  const closed = await Result.tryPromise(async () => await adapter.close());
+  expect(Result.isError(closed)).toBe(true);
+  if (Result.isError(closed)) {
+    expect(closed.error.cause).toBe(failure);
+  }
+  expect(settlements).toBe(1);
+  expect(closes).toBe(1);
+});

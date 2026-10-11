@@ -132,6 +132,13 @@ const createRunLogReader = ({
       return undefined;
     }
     if (
+      log.tailChunk?.type === EventType.TEXT_MESSAGE_END &&
+      log.tailChunk.metadata !== undefined &&
+      "turnTiming" in log.tailChunk.metadata
+    ) {
+      return log.nextSeq - 2n;
+    }
+    if (
       log.tailChunk?.type !== EventType.RUN_FINISHED &&
       log.tailChunk?.type !== EventType.RUN_ERROR
     ) {
@@ -370,16 +377,16 @@ export const createChatRunLogReplay = async ({
         final?.chunk.type === EventType.RUN_ERROR
       ) {
         prefix.pop();
-        const timingEnd = prefix.at(-1)?.chunk;
-        if (
-          timingEnd?.type === EventType.TEXT_MESSAGE_END &&
-          timingEnd.metadata !== undefined &&
-          "turnTiming" in timingEnd.metadata
-        ) {
-          // The terminal append precedes settlement. Replay the final timing
-          // through the tail fence rather than compacting its placeholder.
-          prefix.pop();
-        }
+      }
+      const timingEnd = prefix.at(-1)?.chunk;
+      if (
+        timingEnd?.type === EventType.TEXT_MESSAGE_END &&
+        timingEnd.metadata !== undefined &&
+        "turnTiming" in timingEnd.metadata
+      ) {
+        // The terminal append precedes settlement. Replay the final timing
+        // through the tail fence rather than compacting its placeholder.
+        prefix.pop();
       }
       const last = prefix.at(-1);
       if (last === undefined) {

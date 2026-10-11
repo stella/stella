@@ -1,5 +1,6 @@
 import {
   EventType,
+  RUN_CANCEL_REASON,
   toServerSentEventsResponse,
   type StreamChunk,
 } from "@tanstack/ai";
@@ -31,7 +32,19 @@ import {
   USER_STOP_OUTCOME,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
+import {
+  ChatTurnOwnership,
+  ChatTurnRun,
+} from "@/api/handlers/chat/chat-turn-run";
+import {
+  createChatTurnTimingDurability,
+  withChatTurnTiming,
+} from "@/api/handlers/chat/chat-turn-timing-stream";
 import { joinChatTurn } from "@/api/handlers/chat/turns/resume";
+import type {
+  ChatTurnTiming,
+  ChatTurnOutcome,
+} from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -40,6 +53,9 @@ import {
   sweepClosedChatRunLogs,
 } from "@/api/lib/chat/run-log";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
+import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
+import { readPresent, readUnavailable } from "@/api/lib/errors/read-outcome";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -340,73 +356,251 @@ describe("chat run log database contract", () => {
     expect(header?.closedAt).toBeInstanceOf(Date);
   });
 
-  test("final replay timing and terminal wait for the transaction that stores the turn outcome", async () => {
-    const run = await seedRunningTurn();
-    const log = logFor(run);
-    const terminal = {
-      type: EventType.RUN_FINISHED,
-      threadId: run.threadId,
-      runId: run.runId,
-    } satisfies StreamChunk;
-    const timingEnd = {
-      type: EventType.TEXT_MESSAGE_END,
-      messageId: "answer",
-      metadata: { turnTiming: null },
-    } satisfies StreamChunk;
-    await log.append([chunk("prefix"), timingEnd, terminal]);
-    expect((await log.snapshot()).map(({ chunk: entry }) => entry)).toEqual([
-      chunk("prefix"),
-      timingEnd,
-      terminal,
-    ]);
-    const reader = log.read("1")[Symbol.asyncIterator]();
-    const nowReader = log.read("now")[Symbol.asyncIterator]();
-    const nowPending = nowReader.next();
-    const received: { value: unknown } = { value: null };
-    const pending = reader.next().then((next) => {
-      received.value = next;
-      return next;
-    });
-    await Bun.sleep(50);
-    expect(received.value).toBeNull();
-    await scopedDbA(
-      async (tx) =>
-        await settleChatTurnOnTx({
-          assistantMessageId: null,
-          execution: run.execution,
-          outcome: USER_STOP_OUTCOME,
-          tx,
+  test.each(["drain", "abort", "error", "throw", "unavailable"] as const)(
+    "durable %s finalizes live and persisted timing before close",
+    async (exit) => {
+      const seeded = await seedRunningTurn();
+      const log = logFor(seeded);
+      const safeDb = toSafeDbMock(scopedDbA);
+      const run = new ChatTurnRun({
+        connectors: undefined,
+        deadlineMs: 60_000,
+        heartbeat: { intervalMs: 60_000, renewEvery: 1000 },
+        mode: "raw",
+        ownership: new ChatTurnOwnership(),
+        owner: {
+          execution: seeded.execution,
+          threadId: seeded.threadId,
+          userId: ids.userA1,
+          workspaceId: ids.wsA1,
+          owningAssistantMessage: undefined,
+          safeDb,
+          indexThread: async () => {},
+          recordAuditEvent: async () => {},
+        },
+      });
+      const phase: { status: "running" | "settled" } = { status: "running" };
+      const messageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
+      await testDb.insert(chatMessages).values({
+        id: messageId,
+        threadId: seeded.threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+        role: "assistant",
+        content: { data: [{ text: "Partial", type: "text" }], version: 1 },
+      });
+      const terminal = {
+        type: EventType.RUN_ERROR,
+        message: "Synthetic provider failure",
+      } as const satisfies StreamChunk;
+      const outcome =
+        exit === "error" || exit === "throw"
+          ? ({
+              type: "failed",
+              error: "unknown",
+            } as const satisfies ChatTurnOutcome)
+          : USER_STOP_OUTCOME;
+      let settlements = 0;
+      const readTiming = async (): Promise<
+        ReadOutcome<ChatTurnTiming | null>
+      > => {
+        if (exit === "unavailable" && settlements > 0) {
+          return readUnavailable({ kind: "status", status: 503 });
+        }
+        const timing = await readChatTurnTiming({
+          execution: seeded.execution,
+          safeDb,
+        });
+        if (Result.isError(timing)) {
+          panic("Could not read test timing", timing.error);
+        }
+        return readPresent(timing.value);
+      };
+      const source = (async function* (): AsyncIterable<StreamChunk> {
+        yield {
+          type: EventType.RUN_STARTED,
+          runId: seeded.runId,
+          threadId: seeded.threadId,
+        };
+        yield {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId,
+          role: "assistant",
+        };
+        yield {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId,
+          delta: "Partial",
+        };
+        if (exit === "throw") {
+          throw new HandlerError({
+            status: 500,
+            message: "Synthetic source failure",
+          });
+        }
+        if (exit === "abort") {
+          run.control.abortController.abort(RUN_CANCEL_REASON);
+        }
+        phase.status = "settled";
+        if (exit === "error") {
+          yield terminal;
+        }
+      })();
+      const response = run.produce(
+        withChatTurnTiming({
+          source,
+          getPhase: () => phase.status,
+          readTiming,
         }),
-    );
-    const timing = await readChatTurnTiming({
-      execution: run.execution,
-      safeDb: toSafeDbMock(scopedDbA),
-    });
-    if (Result.isError(timing)) {
-      panic("Could not read settled test timing", timing.error);
-    }
-    expect(timing.value?.status).toBe("finished");
-    expect(await pending).toEqual({
-      done: false,
-      value: {
-        offset: "2",
-        chunk: { ...timingEnd, metadata: { turnTiming: timing.value } },
-      },
-    });
-    expect(await nowPending).toEqual({
-      done: false,
-      value: {
-        offset: "2",
-        chunk: { ...timingEnd, metadata: { turnTiming: timing.value } },
-      },
-    });
-    expect(await reader.next()).toEqual({
-      done: false,
-      value: { offset: "3", chunk: terminal },
-    });
-    await nowReader.return?.();
-    await reader.return?.();
-  });
+        createChatTurnTimingDurability({
+          log,
+          getPhase: () => phase.status,
+          getTerminal: () =>
+            exit === "error" ? { chunk: terminal, messageId } : undefined,
+          readTiming,
+          finishSettlement: async () => {
+            settlements += 1;
+            await run.settle(async () => {
+              const settled = await scopedDbA(
+                async (tx) =>
+                  await settleChatTurnOnTx({
+                    assistantMessageId: messageId,
+                    execution: seeded.execution,
+                    outcome,
+                    tx,
+                  }),
+              );
+              expect(settled).toBe("settled");
+              return { type: "stored", outcome };
+            });
+          },
+        }),
+      );
+      const capture = createStreamMessageCapture({
+        initialMessages: [],
+        capture: (message) => message,
+      });
+      const body = await response.text();
+      for (const line of body.split("\n")) {
+        if (line.startsWith("data: ")) {
+          capture.processor.processChunk(JSON.parse(line.slice(6)));
+        }
+      }
+      capture.processor.finalizeStream();
+      const persistedTiming = await readChatTurnTiming({
+        execution: seeded.execution,
+        safeDb,
+      });
+      if (Result.isError(persistedTiming)) {
+        panic("Could not read persisted test timing", persistedTiming.error);
+      }
+      expect(persistedTiming.value?.status).toBe("finished");
+      expect(settlements).toBe(1);
+      expect(await run.settled).toBe("stored");
+      const liveTiming = capture.message()?.metadata?.["turnTiming"];
+      expect(liveTiming).toEqual(
+        exit === "throw" || exit === "unavailable"
+          ? null
+          : persistedTiming.value,
+      );
+      expect(capture.message()?.parts).toEqual([
+        { type: "text", content: "Partial" },
+      ]);
+      const replay = createStreamMessageCapture({
+        initialMessages: [],
+        capture: (message) => message,
+      });
+      for await (const { chunk: entry } of log.read("-1")) {
+        replay.processor.processChunk(entry);
+      }
+      replay.processor.finalizeStream();
+      expect(replay.message()?.metadata?.["turnTiming"]).toEqual(
+        persistedTiming.value,
+      );
+      const [header] = await testDb
+        .select({ closedAt: chatRunLogs.closedAt })
+        .from(chatRunLogs)
+        .where(eq(chatRunLogs.runId, seeded.runId));
+      expect(header?.closedAt).toBeInstanceOf(Date);
+    },
+  );
+
+  test.each(["terminal", "drain"] as const)(
+    "final replay timing waits for settlement after %s",
+    async (terminalMode) => {
+      const run = await seedRunningTurn();
+      const log = logFor(run);
+      const terminal = {
+        type: EventType.RUN_FINISHED,
+        threadId: run.threadId,
+        runId: run.runId,
+      } satisfies StreamChunk;
+      const timingEnd = {
+        type: EventType.TEXT_MESSAGE_END,
+        messageId: "answer",
+        metadata: { turnTiming: null },
+      } satisfies StreamChunk;
+      const batch =
+        terminalMode === "terminal"
+          ? [chunk("prefix"), timingEnd, terminal]
+          : [chunk("prefix"), timingEnd];
+      await log.append(batch);
+      expect((await log.snapshot()).map(({ chunk: entry }) => entry)).toEqual(
+        batch,
+      );
+      const reader = log.read("1")[Symbol.asyncIterator]();
+      const nowReader = log.read("now")[Symbol.asyncIterator]();
+      const nowPending = nowReader.next();
+      const received: { value: unknown } = { value: null };
+      const pending = reader.next().then((next) => {
+        received.value = next;
+        return next;
+      });
+      await Bun.sleep(50);
+      expect(received.value).toBeNull();
+      await scopedDbA(
+        async (tx) =>
+          await settleChatTurnOnTx({
+            assistantMessageId: null,
+            execution: run.execution,
+            outcome: USER_STOP_OUTCOME,
+            tx,
+          }),
+      );
+      const timing = await readChatTurnTiming({
+        execution: run.execution,
+        safeDb: toSafeDbMock(scopedDbA),
+      });
+      if (Result.isError(timing)) {
+        panic("Could not read settled test timing", timing.error);
+      }
+      expect(timing.value?.status).toBe("finished");
+      expect(await pending).toEqual({
+        done: false,
+        value: {
+          offset: "2",
+          chunk: { ...timingEnd, metadata: { turnTiming: timing.value } },
+        },
+      });
+      expect(await nowPending).toEqual({
+        done: false,
+        value: {
+          offset: "2",
+          chunk: { ...timingEnd, metadata: { turnTiming: timing.value } },
+        },
+      });
+      expect(await reader.next()).toEqual(
+        terminalMode === "terminal"
+          ? {
+              done: false,
+              value: { offset: "3", chunk: terminal },
+            }
+          : { done: true, value: undefined },
+      );
+      await nowReader.return?.();
+      await reader.return?.();
+    },
+  );
 
   test("rejoin reloads the transcript when its cursor belongs to a previous run", async () => {
     const run = await seedRunningTurn();
