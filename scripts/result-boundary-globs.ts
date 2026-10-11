@@ -158,6 +158,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/routes/dev/**/*.{ts,tsx}",
   "apps/web/src/routes/sitemaps/**/*.{ts,tsx}",
   "apps/web/src/stores/**/*.{ts,tsx}",
+  "apps/web/src/testing/**/*.{ts,tsx}",
   "packages/agent-input/src/**/*.ts",
   "packages/mcp-kit/src/**/*.ts",
   "packages/ai-catalog/src/**/*.ts",
