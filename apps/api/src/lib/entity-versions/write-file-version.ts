@@ -263,13 +263,13 @@ const lockFileVersionParents = async ({
   workspaceId,
   mode,
 }: LockFileVersionParentsOptions) => {
-  await withAggregateParentBatch({
-    tx,
-    organizationIds: [organizationId],
-    workspaceIds: mode === "update" ? [] : [workspaceId],
-    mode: "key share",
-  });
   if (mode === "key share") {
+    await withAggregateParentBatch({
+      tx,
+      organizationIds: [],
+      workspaceIds: [workspaceId],
+      mode,
+    });
     return null;
   }
   const workspaceLock = await withAggregateRowQuery({

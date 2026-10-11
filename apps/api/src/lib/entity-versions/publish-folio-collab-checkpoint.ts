@@ -22,7 +22,6 @@ import {
   lockObjectCleanupIntentsForWriter,
   retirePublishedObjectCleanupIntentsInTransaction,
 } from "@/api/lib/buffer-intent-reconciliation";
-import { withAggregateParentBatch } from "@/api/lib/db/aggregate-lock";
 import { COLLABORATION_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
@@ -445,11 +444,6 @@ export const publishCheckpointInTransaction = async ({
   workspaceId,
 }: PublishCheckpointOptions) => {
   const { description, label, roomId } = body;
-  await withAggregateParentBatch({
-    tx,
-    organizationIds: [organizationId],
-    mode: "key share",
-  });
   await lockActiveWorkspaceForBufferIntent({
     tx,
     workspaceId,

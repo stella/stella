@@ -14,10 +14,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  withAggregateParentBatch,
-  withAggregateRowQuery,
-} from "@/api/lib/db/aggregate-lock";
+import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 
@@ -56,11 +53,6 @@ export const archiveWorkspaceHandler = async function* ({
         return "archived" as const;
       }
       const organizationId = brandPersistedOrganizationId(scope.organizationId);
-      await withAggregateParentBatch({
-        tx,
-        organizationIds: [organizationId],
-        mode: "key share",
-      });
       // Timer starts take this advisory lock before inserting. Acquire it
       // before the workspace row lock to keep lock ordering acyclic, then hold
       // it through the active-timer check so archive cannot strand a timer
