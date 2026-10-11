@@ -20,6 +20,7 @@ const MAX_DIMENSION_AREA: u32 = 40_000_000;
 const MAX_DESKEW_TENTHS: i32 = 60;
 const DESKEW_TENTHS: f32 = 0.1;
 const MIN_FOREGROUND_CONTRAST: u8 = 15;
+const MIN_FLATTENING_PROTECTION_CONTRAST: u8 = 64;
 const ADAPTIVE_THRESHOLD_OFFSET: i32 = 5;
 const CROP_PADDING_MM: f32 = 3.0;
 
@@ -494,10 +495,18 @@ pub fn clean_scan(
         RotatedImage { image: rectified }
     };
     let straight = rotated.image;
+    let page_white = page_background(&straight);
+    let protected_maximum = page_white.saturating_sub(MIN_FLATTENING_PROTECTION_CONTRAST);
     // Radius 32 produces the requested 65 by 65 local background window.
     let background = box_filter(&straight, 32, 32);
     let flattened = GrayImage::from_fn(straight.width(), straight.height(), |x, y| {
-        let value = f32::from(straight.get_pixel(x, y)[0]);
+        let source_value = straight.get_pixel(x, y)[0];
+        // Pixels far below the global page-white mode are content, not illumination. Leaving
+        // them unchanged prevents a local background window inside a large mark from erasing it.
+        if source_value <= protected_maximum {
+            return Luma([source_value]);
+        }
+        let value = f32::from(source_value);
         let base = f32::from(background.get_pixel(x, y)[0].max(1));
         Luma([(value * 245.0 / base).min(255.0).round() as u8])
     });

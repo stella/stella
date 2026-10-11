@@ -338,6 +338,37 @@ fn flattening_removes_a_background_gradient_without_losing_text() {
 }
 
 #[test]
+fn flattening_preserves_large_nonblack_dark_regions_in_each_output_mode() {
+    let mut source = GrayImage::from_pixel(500, 500, Luma([245]));
+    for (left, value) in [(70, 25), (310, 80)] {
+        for y in 190..310 {
+            for x in left..left + 120 {
+                source.put_pixel(x, y, Luma([value]));
+            }
+        }
+    }
+
+    for output in [CleanOutput::Binary, CleanOutput::Grayscale] {
+        let result = clean_scan(&source, options(output)).expect("dark regions should clean");
+        for (left, value) in [(70, 25), (310, 80)] {
+            let expected_maximum = match output {
+                CleanOutput::Binary => 0,
+                CleanOutput::Grayscale => value,
+            };
+            assert!(result.image.get_pixel(left + 60, 250)[0] <= expected_maximum);
+            let dark_interior = (205..295)
+                .flat_map(|y| (left + 25..left + 95).map(move |x| (x, y)))
+                .filter(|(x, y)| result.image.get_pixel(*x, *y)[0] <= expected_maximum)
+                .count();
+            assert!(
+                dark_interior >= 70 * 90 * 95 / 100,
+                "{output:?} output retained {dark_interior} dark pixels for value {value}"
+            );
+        }
+    }
+}
+
+#[test]
 fn binary_output_preserves_the_interior_of_a_solid_dark_region() {
     let mut source = GrayImage::from_pixel(300, 300, Luma([255]));
     for y in 100..200 {
