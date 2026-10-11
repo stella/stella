@@ -80,7 +80,8 @@ afterEach(() => {
 });
 
 test("worktree Compose commands build that checkout's Postgres image", async () => {
-  const worktree = "/tmp/stella-worktree";
+  // Resolved, so Windows compares drive-qualified paths on both sides.
+  const worktree = path.resolve("/tmp/stella-worktree");
   const command = dockerComposeCommand({
     args: ["up", "-d", "--build"],
     composeFile: path.resolve(worktree, "docker-compose.yml"),
