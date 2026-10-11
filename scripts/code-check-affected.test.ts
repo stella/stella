@@ -1289,9 +1289,9 @@ describe("check failure reporting", () => {
       "code-check: failed (exit 2): bun turbo typecheck\n",
     );
   });
-  test.each([[], ["--leg", "api"]])(
+  test.each([{ args: [] }, { args: ["--leg", "api"] }])(
     "delegated full-check failures report the command without replaying task diagnostics (%j)",
-    async (args) => {
+    async ({ args }) => {
       const command = ["bun", "run", "code-check", ...args];
       const output: string[] = [];
       expect(
