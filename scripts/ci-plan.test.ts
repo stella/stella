@@ -3483,6 +3483,34 @@ test("direct web compiler package scripts generate before inspecting types", () 
   expect(consumers).toBeGreaterThan(0);
 });
 
+test("folded suites are expected only from producers that run in this mode", () => {
+  const thin = new Set(thinJobs({ jobs: ciJobs }));
+  const excluded = Object.keys(foldedSuites).filter((job) => thin.has(job));
+  expect(excluded.length).toBeGreaterThan(0);
+  for (const job of excluded) {
+    const silent = {
+      results: { [job]: "skipped" },
+      suiteResults: Object.fromEntries(
+        Object.keys(foldedSuites[job] ?? {}).map((suite) => [suite, ""]),
+      ),
+    };
+    // Heavy runs leave thin producers out entirely, so their suites cannot be owed.
+    expect(
+      evaluateResult({
+        event: EVENT.workflowDispatch,
+        heavyOnly: true,
+        ...silent,
+      }),
+      `${job} heavy`,
+    ).toBe(0);
+    // A full run that planned the producer still fails when it stays silent.
+    expect(
+      evaluateResult({ event: EVENT.workflowDispatch, ...silent }),
+      `${job} full`,
+    ).toBe(1);
+  }
+});
+
 test("folded Docker suites keep their scopes and fail independently, including missing or cancelled verdicts", () => {
   expect(foldedSuites["docker-checks"]).toEqual({
     "agent-sandbox-docker": "agent_sandbox_docker_required",
@@ -3838,7 +3866,7 @@ test("Bun cache saves are main-only and queue Turbo caches remain readable", () 
     Bun.YAML.parse(workflow),
   );
   expect(configured.env["TURBO_CACHE"]).toBe(
-    `\${{ github.event_name == 'merge_group' && 'local:rw,remote:r' || 'local:rw,remote:rw' }}`,
+    `\${{ github.ref == 'refs/heads/main' && 'local:rw,remote:rw' || 'local:rw,remote:r' }}`,
   );
   const cacheSteps = Object.values(ciJobs)
     .flatMap(
