@@ -29,6 +29,8 @@
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
-    "bun-types": "catalog:"
+    "bun-types": "catalog:",
+    "oxfmt": "catalog:",
+    "tailwindcss": "catalog:"
   }
 }

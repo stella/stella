@@ -17,9 +17,7 @@
         "eslint",
         "oxlint-tsgolint",
         "oxlint",
-        "squawk-cli",
-        // .oxfmtrc.json reads tailwindcss/theme.css by path.
-        "tailwindcss"
+        "squawk-cli"
       ],
       "ignoreBinaries": ["scripts/dev.sh"]
     },
@@ -189,7 +187,10 @@
     },
     "packages/scan-engine": {
       "entry": ["src/scan-engine.ts", "src/**/*.test.ts"],
-      "ignore": ["generated/**"]
+      "ignore": ["generated/**"],
+      // scripts/build-wasm.sh formats the bindings after a filtered install;
+      // the formatter and its Tailwind stylesheet must be installed here.
+      "ignoreDependencies": ["oxfmt", "tailwindcss"]
     },
     "packages/scripts": {
       "entry": ["src/i18n-check.ts", "src/i18n-typegen.ts"]

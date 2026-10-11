@@ -1,5 +1,5 @@
 {
   "metric": "direct-third-party-declarations",
-  "delta": 1,
-  "reason": "The root formatter configuration sorts classes against tailwindcss/theme.css, so the root declares tailwindcss (catalog version) instead of relying on a workspace hoisting it; filtered installs that format generated files then have it."
+  "delta": 2,
+  "reason": "The scan engine build formats its generated bindings after a filtered install, which excludes root dependencies, so the scan-engine workspace declares the formatter and its Tailwind stylesheet (catalog versions)."
 }
