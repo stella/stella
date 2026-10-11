@@ -199,7 +199,7 @@ const PUBLIC_DECISION_READ_GATES = {
   "apps/api/src/handlers/case-law/decisions/citation-passages.ts": {
     gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
   },
-  "apps/api/src/handlers/case-law/polarity/text-revision.ts": {
+  "apps/api/src/lib/case-law/text-revision.ts": {
     gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
   },
   [READ_DECISION_FILE]: { gate: PUBLIC_DECISION_READ_GATE.SUBJECT },

@@ -1,16 +1,20 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
 import {
   citationPassageIn,
   citationTextFields,
+  readDecisionTextByDecision,
   readCitationDecisionText,
   polarityExcerptIn,
 } from "@/api/handlers/case-law/decisions/citation-passages";
+import type { DecisionTextCompletionSnapshot } from "@/api/handlers/case-law/decisions/text-completion";
 import { createSafeId } from "@/api/lib/branded-types";
+import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 
 const astOf = (
@@ -239,8 +243,10 @@ test("a text-eligibility failure returns no citation text and an incomplete reas
       textEligibilityFingerprint: "synthetic-revision",
     },
     columns: {
+      textIncompleteReason: null,
       textWithheldReason: null,
       contentHash: "synthetic-hash",
+      textRevisionFingerprint: "synthetic-revision-content",
       textEligibilityFingerprint: "synthetic-revision",
       documentAst: ast,
       sections: [
@@ -264,6 +270,117 @@ test("a text-eligibility failure returns no citation text and an incomplete reas
     passage: null,
     evidenceExcerpt: null,
     textIncompleteReason: "gate_failed",
+  });
+});
+
+const citationFieldsAfterCompletionChangesDuringAstRead = async (
+  currentAfterRead: DecisionTextCompletionSnapshot,
+) => {
+  const id = createSafeId<"caseLawDecision">();
+  const citationText = "21 Cdo 500/2019";
+  const paragraph = `Synthetic reasoning in ${citationText}.`;
+  const ast = astOf([{ anchorId: "p1", text: paragraph }]);
+  const pointer = {
+    id,
+    astS3Key: "synthetic/ast",
+    contentHash: "synthetic-hash",
+    textEligibilityFingerprint: "eligible-revision",
+  };
+  const eligible = {
+    textEligibilityFingerprint: pointer.textEligibilityFingerprint,
+    textWithheldReason: null,
+    textIncompleteReason: null,
+    textRevisionFingerprint: "synthetic-revision",
+  };
+  let current: DecisionTextCompletionSnapshot = eligible;
+  const textByDecision = await readDecisionTextByDecision({
+    caseLawDb: caseLawPublicReadDb,
+    pointers: [pointer],
+    readColumns: async () =>
+      new Map([
+        [
+          String(id),
+          {
+            ...eligible,
+            contentHash: pointer.contentHash,
+            documentAst: ast,
+            sections: [
+              { index: 0, text: paragraph, type: "argumentation", title: null },
+            ],
+          },
+        ],
+      ]),
+    readAst: async () => {
+      current = currentAfterRead;
+      return ast;
+    },
+    readTombstones: async () => new Set(),
+    readCurrentCompletions: async () => new Map([[String(id), current]]),
+  });
+
+  const text = textByDecision.get(String(id));
+  const fields = citationTextFields({
+    text,
+    textWithheldReason: text?.type === "withheld" ? text.reason : null,
+    citationText,
+    sectionIndex: 0,
+    windowStart: 0,
+    windowEnd: paragraph.length,
+  });
+  return fields;
+};
+
+test("a descriptor change during the AST read suppresses citation text and excerpts", async () => {
+  expect(
+    await citationFieldsAfterCompletionChangesDuringAstRead({
+      textEligibilityFingerprint: "withheld-revision",
+      textWithheldReason: DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE,
+      textIncompleteReason: null,
+      textRevisionFingerprint: "synthetic-revision",
+    }),
+  ).toEqual({
+    citationText: null,
+    passage: null,
+    evidenceExcerpt: null,
+    textIncompleteReason: null,
+  });
+});
+
+test("a text revision change during the AST read suppresses citation text and excerpts", async () => {
+  expect(
+    await citationFieldsAfterCompletionChangesDuringAstRead({
+      textEligibilityFingerprint: "changed-text-revision",
+      textWithheldReason: null,
+      textIncompleteReason: null,
+      textRevisionFingerprint: "changed-revision",
+    }),
+  ).toEqual({
+    citationText: null,
+    passage: null,
+    evidenceExcerpt: null,
+    textIncompleteReason: "text_changed",
+  });
+});
+
+test("an unchanged completion during the AST read retains citation text and excerpts", async () => {
+  const citationText = "21 Cdo 500/2019";
+  const paragraph = `Synthetic reasoning in ${citationText}.`;
+  const fields = await citationFieldsAfterCompletionChangesDuringAstRead({
+    textEligibilityFingerprint: "eligible-revision",
+    textWithheldReason: null,
+    textIncompleteReason: null,
+    textRevisionFingerprint: "synthetic-revision",
+  });
+  expect(fields).toEqual({
+    citationText,
+    passage: {
+      anchorId: "p1",
+      text: paragraph,
+      truncated: false,
+      mention: "sole",
+    },
+    evidenceExcerpt: paragraph,
+    textIncompleteReason: null,
   });
 });
 

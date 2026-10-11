@@ -1,3 +1,4 @@
+// parser-output-unchanged: revision fences moved from the polarity handler owner; hashes are unchanged.
 import { sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 
@@ -39,6 +40,11 @@ export const citationTextRevisionFence = ({
     AND citation_text_revision.sections IS NOT DISTINCT FROM ${expectedSections}`,
   });
 
+type CitationTextRevisionFingerprintFenceArgs = {
+  citingDecisionId: SQLWrapper;
+  expectedFingerprint: SQLWrapper;
+};
+
 type CitationTextRevisionFingerprintArgs = {
   contentHash: SQLWrapper;
   sections: SQLWrapper;
@@ -50,11 +56,6 @@ export const citationTextRevisionFingerprintSql = ({
   sections,
 }: CitationTextRevisionFingerprintArgs) =>
   sql<string>`encode(sha256(convert_to(jsonb_build_array(${contentHash}, ${sections})::text, 'UTF8')), 'hex')`;
-
-type CitationTextRevisionFingerprintFenceArgs = {
-  citingDecisionId: SQLWrapper;
-  expectedFingerprint: SQLWrapper;
-};
 
 export const citationTextRevisionFingerprintFence = ({
   citingDecisionId,

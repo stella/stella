@@ -27,13 +27,13 @@ import type {
   ReviewablePolarity,
 } from "@/api/handlers/case-law/polarity/consts";
 import { reviewTextEligibleSql } from "@/api/handlers/case-law/polarity/reviews";
-import { citationTextRevisionFingerprintFence } from "@/api/handlers/case-law/polarity/text-revision";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   assertCitationStorageField,
   fitsCitationStorageField,
 } from "@/api/lib/case-law/citation-storage-bounds";
+import { citationTextRevisionFingerprintFence } from "@/api/lib/case-law/text-revision";
 import type { ConstantMap } from "@/api/lib/constant-map";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";

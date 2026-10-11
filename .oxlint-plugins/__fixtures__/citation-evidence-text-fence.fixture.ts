@@ -3,7 +3,7 @@ import type { SQL } from "drizzle-orm";
 
 import { caseLawCitations } from "@/api/db/schema";
 import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
-import { citationTextRevisionFence as fence } from "@/api/handlers/case-law/polarity/text-revision";
+import { citationTextRevisionFence as fence } from "@/api/lib/case-law/text-revision";
 
 type FixtureTx = {
   execute: (statement: SQL) => Promise<unknown>;

@@ -49,7 +49,7 @@ test("citation evidence accepts fenced writes and clearing derived fields", asyn
   const source = [
     'import { caseLawCitations } from "@/api/db/schema";',
     'import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";',
-    'import { citationTextRevisionFence } from "@/api/handlers/case-law/polarity/text-revision";',
+    'import { citationTextRevisionFence } from "@/api/lib/case-law/text-revision";',
     "export const persist = (transaction, evidence) => runCitationGraphTransaction(transaction, (tx) => tx.update(caseLawCitations).set({ polarityWindowStart: evidence.start }).where(citationTextRevisionFence(evidence.revision)));",
     "export const clear = (tx) => tx.update(caseLawCitations).set({ polarityWindowStart: null, polarityConfidence: null, citedPart: 'not-stated' });",
   ].join("\n");

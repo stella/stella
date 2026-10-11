@@ -19,6 +19,8 @@ import {
   type OnDemandDocumentDeps,
 } from "./document-on-demand";
 
+const TEXT_ELIGIBILITY_FINGERPRINT = "synthetic-text-eligibility";
+
 const decision = (): PendingDocument => ({
   id: createSafeId<"caseLawDecision">(),
   caseNumber: "1/2026",
@@ -81,6 +83,8 @@ test("a read consumes one shared source reservation", async () => {
   const pending = decision();
   expect(
     await readThroughDeferredDocument({
+      textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+      textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
       decision: pending,
       adapterKey: "sk-courts",
       deps,
@@ -97,6 +101,8 @@ for (const state of [{ tokens: 0 }, { tokens: 1, backoff: true }]) {
     const pending = decision();
     expect(
       await readThroughDeferredDocument({
+        textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+        textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
         decision: pending,
         adapterKey: "sk-courts",
         deps,
@@ -112,6 +118,8 @@ test("an inline source does not reserve or fetch a document", async () => {
   const { deps, fetched, reservations } = pacedDeps({ tokens: 1 });
   expect(
     await readThroughDeferredDocument({
+      textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+      textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
       decision: decision(),
       adapterKey: "cz-ns",
       deps,
@@ -136,6 +144,8 @@ test("concurrent reads resolve within the shared source budget", async () => {
               await Promise.resolve();
             }
             return await readThroughDeferredDocument({
+              textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+              textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
               decision: decision(),
               adapterKey: "sk-courts",
               deps,
@@ -211,6 +221,8 @@ for (const mode of ["throws", "rejects", "pending", "connecting"] as const) {
     };
     try {
       const read = readThroughDeferredDocument({
+        textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+        textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
         decision: decision(),
         adapterKey: "sk-courts",
         deps,
@@ -251,6 +263,8 @@ test("a pacing capture failure still resolves the read", async () => {
   };
   expect(
     await readThroughDeferredDocument({
+      textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+      textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
       decision: decision(),
       adapterKey: "sk-courts",
       deps,

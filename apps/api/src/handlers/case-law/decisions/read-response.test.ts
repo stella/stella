@@ -24,6 +24,8 @@ const citationId = toSafeId<"caseLawCitation">(UUID);
 const decisionWithText = (text: string) => {
   const textField = { type: TEXT_FIELD_TYPE.PRESENT, text } as const;
   return {
+    textIncompleteReason: null,
+    textWithheldReason: null,
     documentPending: false,
     hasDocument: true,
     documentReadFailed: false,

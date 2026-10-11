@@ -40,14 +40,14 @@ import type {
   ValidRuleKindPolarity,
 } from "@/api/handlers/case-law/polarity/rule-engine";
 import { classifyWithSystemOne } from "@/api/handlers/case-law/polarity/system-one-classifier";
-import type { CitationTextRevision } from "@/api/handlers/case-law/polarity/text-revision";
-import { citationTextRevisionFence } from "@/api/handlers/case-law/polarity/text-revision";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CitedPart,
   CitationPolaritySource,
 } from "@/api/lib/case-law/citation-vocabulary";
+import type { CitationTextRevision } from "@/api/lib/case-law/text-revision";
+import { citationTextRevisionFence } from "@/api/lib/case-law/text-revision";
 import type { DecisionGenerator } from "@/api/lib/workflow/decisions/decide";
 import type { SystemOneClient } from "@/api/lib/workflow/decisions/system-one";
 

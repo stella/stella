@@ -22,6 +22,7 @@ import {
 } from "@/api/db/schema";
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
 import type { SafeId } from "@/api/lib/branded-types";
+import { citationTextRevisionFingerprintSql } from "@/api/lib/case-law/text-revision";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
 import {
@@ -188,6 +189,25 @@ if (!databaseUrl || !runPostgresTests) {
           documentFetchAttempts: true,
         },
       });
+
+    const textRevisionFingerprintFor = async (
+      id: SafeId<"caseLawDecision">,
+    ) => {
+      const [row] = await db
+        .select({
+          fingerprint: citationTextRevisionFingerprintSql({
+            contentHash: caseLawDecisions.contentHash,
+            sections: caseLawDecisions.sections,
+          }),
+        })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, id))
+        .limit(1);
+      if (!row) {
+        throw new Error("expected text revision fingerprint");
+      }
+      return row.fingerprint;
+    };
 
     beforeAll(async () => {
       // The queue resolves its source by adapter key, so the source must
@@ -506,10 +526,21 @@ if (!databaseUrl || !runPostgresTests) {
         fulltext: null,
         documentUrl: "https://example.test/request.pdf",
       });
+      const textRevisionFingerprint = await textRevisionFingerprintFor(id);
 
-      await recordDocumentFetchRequest(id, scopedDb);
+      await recordDocumentFetchRequest({
+        decisionId: id,
+        textRevisionFingerprint,
+        documentUrl: "https://example.test/request.pdf",
+        scopedDb,
+      });
       const firstRequest = await readFetchState(id);
-      await recordDocumentFetchRequest(id, scopedDb);
+      await recordDocumentFetchRequest({
+        decisionId: id,
+        textRevisionFingerprint,
+        documentUrl: "https://example.test/request.pdf",
+        scopedDb,
+      });
       const afterRepeat = await readFetchState(id);
 
       // A second reader must not push the decision back down its tier.
@@ -517,6 +548,58 @@ if (!databaseUrl || !runPostgresTests) {
         firstRequest?.documentFetchRequestedAt ?? null,
       );
     });
+
+    for (const changed of ["text revision", "document URL"] as const) {
+      test(`a stale ${changed} cannot prioritize the refreshed decision`, async () => {
+        const oldDocumentUrl = `https://example.test/stale-${suffix}.pdf`;
+        const currentDocumentUrl = `https://example.test/current-${suffix}.pdf`;
+        const expectedCurrentDocumentUrl =
+          changed === "text revision" ? oldDocumentUrl : currentDocumentUrl;
+        const id = await insertDecision({
+          caseNumber: `stale-request-${changed}-${suffix}`,
+          fulltext: null,
+          documentUrl: oldDocumentUrl,
+          contentHash: "old-content-revision",
+        });
+        const oldTextRevisionFingerprint = await textRevisionFingerprintFor(id);
+
+        await db
+          .update(caseLawDecisions)
+          .set(
+            changed === "text revision"
+              ? { contentHash: "current-content-revision" }
+              : { documentUrl: currentDocumentUrl },
+          )
+          .where(eq(caseLawDecisions.id, id));
+        await recordDocumentFetchRequest({
+          decisionId: id,
+          textRevisionFingerprint: oldTextRevisionFingerprint,
+          documentUrl: oldDocumentUrl,
+          scopedDb,
+        });
+        expect((await readFetchState(id))?.documentFetchRequestedAt).toBeNull();
+
+        const currentTextRevisionFingerprint =
+          await textRevisionFingerprintFor(id);
+        await recordDocumentFetchRequest({
+          decisionId: id,
+          textRevisionFingerprint: currentTextRevisionFingerprint,
+          documentUrl: expectedCurrentDocumentUrl,
+          scopedDb,
+        });
+        const currentRequest = await readFetchState(id);
+        expect(currentRequest?.documentFetchRequestedAt).toBeInstanceOf(Date);
+        await recordDocumentFetchRequest({
+          decisionId: id,
+          textRevisionFingerprint: currentTextRevisionFingerprint,
+          documentUrl: expectedCurrentDocumentUrl,
+          scopedDb,
+        });
+        expect((await readFetchState(id))?.documentFetchRequestedAt).toEqual(
+          currentRequest?.documentFetchRequestedAt,
+        );
+      });
+    }
 
     test("one claim at a time; the loser skips instead of downloading", async () => {
       const id = await insertDecision({

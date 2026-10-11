@@ -50,6 +50,8 @@ export const TEXT_ABSENCE_REASONS = [
   "parse_failed",
   "publisher_placeholder",
   "redistribution_withheld",
+  "missing_text",
+  "text_changed",
 ] as const;
 
 export type TextAbsenceReason = (typeof TEXT_ABSENCE_REASONS)[number];
@@ -59,6 +61,8 @@ export const TEXT_ABSENCE_REASON = {
   PARSE_FAILED: "parse_failed",
   PUBLISHER_PLACEHOLDER: "publisher_placeholder",
   REDISTRIBUTION_WITHHELD: "redistribution_withheld",
+  MISSING_TEXT: "missing_text",
+  TEXT_CHANGED: "text_changed",
 } as const satisfies Record<Uppercase<TextAbsenceReason>, TextAbsenceReason>;
 
 export type TextField =
