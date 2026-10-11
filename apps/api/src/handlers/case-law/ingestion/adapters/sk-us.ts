@@ -1,3 +1,4 @@
+// parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: array partitions use the shared owner with identical items and boundaries; parsed content is unchanged.
 // parser-output-unchanged: Crawl listing availability controls checkpoints; stored decision parsing is unchanged.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
@@ -135,6 +136,8 @@ import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+
+import { logDocumentParseFailure } from "./document-parse-failure";
 
 // ── Constants ─────────────────────────────────────────────
 
@@ -1637,10 +1640,10 @@ const assembleSkUsDecision = ({
       // Reported rather than swallowed: a parser that starts failing across
       // a whole page is otherwise indistinguishable from decisions that
       // genuinely carry no text.
-      logger.warn("case_law.ingestion.document_parse_failed", {
+      logDocumentParseFailure({
         adapterKey: ADAPTER_KEYS.SK_US,
         caseNumber,
-        "error.type": errorTag(error),
+        error: errorTag(error),
       });
     }
   }

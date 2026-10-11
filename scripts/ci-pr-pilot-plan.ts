@@ -38,6 +38,7 @@ export const PILOT_DEFERRED = [
   "api-image-smoke",
   "legal-atlas-image",
   "windows-scripts",
+  "desktop-windows-dry-run",
   "desktop-rust-tests",
   "dependency-malware",
   "api-test-durations",

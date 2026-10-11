@@ -18,6 +18,7 @@ import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { compareCodeUnit } from "@stll/collation";
+import { printError } from "@stll/errors";
 import { createSha256 } from "@stll/sha256/bun";
 
 const SNAPSHOT_FORMAT = "1";
@@ -34,6 +35,11 @@ export class SnapshotBuildError extends TaggedError("SnapshotBuildError")<{
   message: string;
   exitCode: number;
 }> {}
+
+export const exitAfterSnapshotFailure = (error: unknown): never => {
+  printError(error);
+  process.exit(error instanceof SnapshotBuildError ? error.exitCode : 1);
+};
 
 class SnapshotInputsChangedError extends TaggedError(
   "SnapshotInputsChangedError",

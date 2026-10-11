@@ -285,10 +285,17 @@ const handledMemberTables = async (omittedDelete?: PgTable) => {
     if (table !== undefined) {
       handled.add(table);
     }
+    if (query.includes("AS aggregate_context")) {
+      return { rows: [["fixture_owner", "", "", "", "", ""]] };
+    }
     return { rows: query.startsWith("select count(*)") ? [[0]] : [] };
   });
   const transaction = new Proxy(database, {
     get: (target, property, receiver) => {
+      if (property === "transaction") {
+        return async (run: (savepoint: typeof database) => Promise<unknown>) =>
+          await run(transaction);
+      }
       if (property === "delete") {
         return (table: PgTable) =>
           table === omittedDelete

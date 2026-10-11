@@ -22,6 +22,14 @@ export const FAILURE_REASON_GRADE = {
   // The provider's stream stopped before its answer finished: a dropped
   // connection or a provider-side cut, not a fault of this service.
   provider_stream_incomplete: "transient",
+  // parser-output-unchanged: model output and deadline reasons grade observed failures only; no parser reads them.
+  // The model's answer ended before it was whole: it hit its output budget, or
+  // the structured output it produced was cut off and does not parse. A fresh
+  // run usually answers in full.
+  model_output_incomplete: "transient",
+  // A run the caller bounded with a deadline outlived it: the provider was
+  // too slow for the caller's budget, not a fault of this service.
+  model_deadline_exceeded: "transient",
   quota_exhausted: "transient",
   pg_connection_lifecycle: "transient",
   // 40001: the designed outcome of a serializable or repeatable-read
@@ -49,6 +57,9 @@ export const FAILURE_REASON_GRADE = {
   provider_billing: "anticipated",
   provider_credentials_rejected: "anticipated",
   model_unavailable: "anticipated",
+  // A complete structured answer that does not match the requested schema:
+  // the model's choice, which this service rejects rather than stores.
+  model_output_invalid: "anticipated",
   credentials_token_unreadable: "anticipated",
   client_disconnected: "anticipated",
   optional_file_absent: "anticipated",
