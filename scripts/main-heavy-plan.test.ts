@@ -12,7 +12,13 @@ import {
   evaluate as evaluateExpression,
   UNKNOWN,
 } from "./github-expression";
-import { mainHeavyJobs, prDepthJobs, thinJobs } from "./main-heavy-plan";
+import {
+  mainHeavyJobs,
+  MERGE_GROUP_EXCEPTIONS,
+  prDepthJobs,
+  queueAdmittedJobs,
+  thinJobs,
+} from "./main-heavy-plan";
 
 const root = new URL("../", import.meta.url).pathname;
 const source = readFileSync(
@@ -194,6 +200,73 @@ test("main heavy scheduling equals the gated jobs minus thin checks", () => {
     'git show "$WORKFLOW_SHA:scripts/main-heavy-plan.ts"',
   );
   expect(planner?.env?.["WORKFLOW_SHA"]).toBe(`\${{ github.workflow_sha }}`);
+});
+
+const assertMergeGroupCoverage = (definition: typeof workflow) => {
+  const admitted = queueAdmittedJobs(definition);
+  for (const name of admitted) {
+    const body = definition.jobs[name];
+    if (!body) {
+      panic(`Missing merge-group job: ${name}`);
+    }
+    for (const queueDepth of ["thin", "full"]) {
+      expect(
+        selected(
+          body.if ?? "true",
+          context("merge_group", false, {
+            ...heavyPlan,
+            queue_depth: queueDepth,
+            ci_browser_required: "true",
+          }),
+        ),
+        `${name}/${queueDepth}`,
+      ).toBe(true);
+    }
+  }
+  for (const [name, reason] of Object.entries(MERGE_GROUP_EXCEPTIONS)) {
+    expect(ciNeeds, name).toContain(name);
+    expect(reason.trim().length, name).toBeGreaterThan(0);
+  }
+};
+
+test("every gated code job certifies affected merge groups at both queue depths", () => {
+  assertMergeGroupCoverage(workflow);
+});
+
+test("unaffected merge groups skip every scoped code job at both depths", () => {
+  for (const queueDepth of ["thin", "full"]) {
+    const unaffected = context("merge_group", false, {
+      ...heavyPlan,
+      ...Object.fromEntries(
+        Object.keys(allPlanned).map((scope) => [scope, "false"]),
+      ),
+      package_checks_required: "false",
+      queue_depth: queueDepth,
+    });
+    for (const name of queueAdmittedJobs(workflow)) {
+      if (scopes[name] === null) {
+        continue;
+      }
+      expect(
+        selected(workflow.jobs[name]?.if ?? "true", unaffected),
+        `${name}/${queueDepth}`,
+      ).toBe(false);
+    }
+  }
+});
+
+test("a thin-depth skip on any gated code job violates merge-group coverage", () => {
+  for (const name of queueAdmittedJobs(workflow)) {
+    const mutated = structuredClone(workflow);
+    const job = mutated.jobs[name];
+    if (!job) {
+      panic(`Missing mutation job: ${name}`);
+    }
+    job.if = `needs.ci-plan.outputs.queue_depth != 'thin' && (${job.if ?? "true"})`;
+    expect(() => assertMergeGroupCoverage(mutated), name).toThrow(
+      `${name}/thin`,
+    );
+  }
 });
 
 test("production web artifacts have at most one selected producer", () => {
@@ -574,3 +647,150 @@ test("every main heavy event requires the planned compiler to succeed", () => {
     ).toBe(0);
   }
 }, 30_000);
+
+test("heavy failures require a successful queue job with every executed step", async () => {
+  const { classifyMainHeavyFailures } =
+    await import("./main-heavy-classification.mjs");
+  const job = {
+    name: "suites / postgres-service-suites (1)",
+    conclusion: "failure",
+    steps: [
+      { name: "Checkout", conclusion: "success" },
+      { name: "Run suites", conclusion: "failure" },
+    ],
+  };
+  const queueJob = {
+    name: "postgres-service-suites (1)",
+    conclusion: "success",
+    steps: job.steps.map(({ name }) => ({ name, conclusion: "success" })),
+  };
+  for (const conclusion of [
+    "failure",
+    "cancelled",
+    "timed_out",
+    "action_required",
+    "startup_failure",
+    "stale",
+  ]) {
+    const failures = classifyMainHeavyFailures({
+      jobs: [{ ...job, conclusion }],
+      queueJobs: [queueJob],
+    });
+    expect(
+      failures.map(({ type }) => type),
+      conclusion,
+    ).toEqual(["INFRA"]);
+  }
+  const insufficientEvidence = [
+    [],
+    [{ ...queueJob, name: "postgres-service-suites (2)" }],
+    [{ ...queueJob, conclusion: "failure" }],
+    [
+      {
+        ...queueJob,
+        steps: queueJob.steps.filter(({ name }) => name !== "Run suites"),
+      },
+    ],
+    [
+      {
+        ...queueJob,
+        steps: queueJob.steps.map((step) =>
+          step.name === "Run suites"
+            ? { ...step, conclusion: "skipped" }
+            : step,
+        ),
+      },
+    ],
+  ];
+  for (const queueJobs of insufficientEvidence) {
+    expect(
+      classifyMainHeavyFailures({ jobs: [job], queueJobs }).map(
+        ({ type }) => type,
+      ),
+    ).toEqual(["CODE"]);
+  }
+  expect(
+    classifyMainHeavyFailures({
+      jobs: [{ ...job, steps: [] }],
+      queueJobs: [queueJob],
+    }).map(({ type }) => type),
+  ).toEqual(["CODE"]);
+  expect(
+    classifyMainHeavyFailures({
+      jobs: [{ ...job, conclusion: "success" }],
+      queueJobs: [queueJob],
+    }),
+  ).toEqual([]);
+});
+
+test("heavy queue evidence follows Git tree identity and remains conservative when unavailable", async () => {
+  const { collectMainHeavyFailures } =
+    await import("./main-heavy-classification.mjs");
+  const job = {
+    name: "suites / code-check",
+    conclusion: "failure",
+    steps: [{ name: "Check", conclusion: "failure" }],
+  };
+  const queueJob = {
+    name: "code-check",
+    conclusion: "success",
+    steps: [{ name: "Check", conclusion: "success" }],
+  };
+  for (const evidence of [
+    "matching-tree",
+    "different-tree",
+    "unavailable",
+    "no-run",
+  ]) {
+    const warnings: string[] = [];
+    const github = {
+      paginate: async (_method: unknown, options: { run_id: number }) =>
+        options.run_id === 100 ? [job] : [queueJob],
+      rest: {
+        actions: {
+          listJobsForWorkflowRun: "current-jobs",
+          listJobsForWorkflowRunAttempt: "queue-jobs",
+          listWorkflowRuns: async () => ({
+            data: {
+              workflow_runs:
+                evidence === "no-run"
+                  ? []
+                  : [{ id: 200, head_sha: "queue-commit", run_attempt: 1 }],
+            },
+          }),
+        },
+        repos: {
+          getCommit: async ({ ref }: { ref: string }) => {
+            if (evidence === "unavailable") {
+              throw new TypeError("Evidence unavailable");
+            }
+            return {
+              data: {
+                commit: {
+                  tree: {
+                    sha:
+                      ref === "tested-commit" || evidence === "matching-tree"
+                        ? "same-tree"
+                        : "other-tree",
+                  },
+                },
+              },
+            };
+          },
+        },
+      },
+    };
+    const failures = await collectMainHeavyFailures({
+      github,
+      context: { repo: { owner: "stella", repo: "stella" }, runId: 100 },
+      sha: "tested-commit",
+      results: { suites: { result: "failure" } },
+      warn: (message: string) => warnings.push(message),
+    });
+    expect(
+      failures.map(({ type }) => type),
+      evidence,
+    ).toEqual([evidence === "matching-tree" ? "INFRA" : "CODE"]);
+    expect(warnings.length, evidence).toBe(evidence === "unavailable" ? 1 : 0);
+  }
+});

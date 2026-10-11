@@ -2000,14 +2000,14 @@ test("Docker checks are required at every selected merge-group depth", () => {
 });
 
 test("desktop Rust tests select classified merge-group changes at every queue depth", () => {
-  const job = v.parse(
-    v.object({
-      strategy: v.object({ matrix: v.object({ include: v.string() }) }),
-    }),
-    ciJobs["desktop-rust-tests"],
-  );
   const platforms = v.array(
     v.object({ os: v.string(), runner: v.string(), target: v.string() }),
+  );
+  const job = v.parse(
+    v.object({
+      strategy: v.object({ matrix: v.object({ include: platforms }) }),
+    }),
+    ciJobs["desktop-rust-tests"],
   );
   const lintPlatforms = v.parse(
     v.object({
@@ -2047,30 +2047,19 @@ test("desktop Rust tests select classified merge-group changes at every queue de
               required === "true" &&
               runRequired === "true",
           );
-          const selected = v.parse(
-            platforms,
-            evaluate(job.strategy.matrix.include, context),
-          );
-          expect(selected.map(({ os }) => os)).toEqual(
-            queueDepth === "thin" ? ["macos"] : ["macos", "windows"],
-          );
-          expect(selected).toEqual(
-            lintPlatforms.filter(
-              ({ os }) => queueDepth !== "thin" || os === "macos",
-            ),
-          );
+          const selected = job.strategy.matrix.include;
+          expect(selected.map(({ os }) => os)).toEqual(["macos", "windows"]);
+          expect(selected).toEqual(lintPlatforms);
           expect(selected.at(0)).toEqual({
             os: "macos",
             runner: "macos-14",
             target: "aarch64-apple-darwin",
           });
-          if (queueDepth === "full") {
-            expect(selected.at(1)).toEqual({
-              os: "windows",
-              runner: "windows-latest",
-              target: "x86_64-pc-windows-msvc",
-            });
-          }
+          expect(selected.at(1)).toEqual({
+            os: "windows",
+            runner: "windows-latest",
+            target: "x86_64-pc-windows-msvc",
+          });
         }
       }
     }
@@ -3761,7 +3750,7 @@ test("split service suites preserve their scopes and independent verdicts", () =
     ["Run cross-replica collaboration suite", "collaboration_suite_required"],
   ] as const;
   const nonCorpusGate =
-    "(github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && needs.ci-plan.outputs.queue_depth != 'thin' && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))";
+    "(github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))";
   for (const suite of suites) {
     const scope = suiteScopes.find(([name]) => name === suite.name)?.[1];
     if (scope === undefined) {
@@ -4711,7 +4700,7 @@ test("each split service step follows its own dependency scope and execution dep
     ({ name }) => name === "Run cross-replica collaboration suite",
   );
   expect(collaboration?.if).toBe(
-    `\${{ !cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && needs.ci-plan.outputs.queue_depth != 'thin' && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true')) }}`,
+    `\${{ !cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true')) }}`,
   );
   const planned = Object.fromEntries(
     scopes.map((scope, index) => [scope, timePlan.at(index)]),
@@ -4818,19 +4807,19 @@ test("corpus bypasses non-corpus service depth and PR opt-in gates", () => {
       values: thinMergeGroup,
       status: { cancelled: false },
     }),
-  ).toBe(false);
+  ).toBe(true);
   expect(
     evaluate(conditions["Run Valkey-gated API suites"] ?? "false", {
       values: thinMergeGroup,
       status: { cancelled: false },
     }),
-  ).toBe(false);
+  ).toBe(true);
   expect(
     evaluate(conditions["Run cross-replica collaboration suite"] ?? "false", {
       values: thinMergeGroup,
       status: { cancelled: false },
     }),
-  ).toBe(false);
+  ).toBe(true);
 
   const pullRequest = {
     ...commonValues,
@@ -5165,7 +5154,7 @@ test("path-scoped lint and test areas have required pre-merge coverage", () => {
       )
       .map(([scope]) => scope),
   );
-  const thin = thinJobs({ jobs: ciJobs });
+  const admitted = queueAdmittedJobs({ jobs: ciJobs });
   const checks = Object.entries(ciJobs).flatMap(([name, body]) => {
     const scope = jobScopes[name];
     if (typeof scope !== "string" || !scopes.has(scope)) {
@@ -5201,7 +5190,7 @@ test("path-scoped lint and test areas have required pre-merge coverage", () => {
         scope,
         condition: jobIf(body),
         requiredOnPr: fastRequired.includes(name),
-        requiredOnThin: thin.includes(name),
+        requiredOnThin: admitted.includes(name),
       },
     ];
   });
@@ -5224,7 +5213,7 @@ test("path-scoped coverage rejects event and queue-depth exclusions", () => {
     scopedCoverageViolations([
       {
         ...check,
-        condition: `github.event_name != 'pull_request' && needs.ci-plan.outputs.queue_depth != 'thin' && (${scoped})`,
+        condition: `github.event_name != 'pull_request' && (${scoped})`,
       },
     ]),
   ).toEqual([check.scope]);
@@ -5376,8 +5365,7 @@ test("parity rejects new queue-only jobs, ungated PR paths and stale exemptions"
   ).toThrow("Unknown CI predicate context");
 });
 
-test("thin merge groups intentionally skip heavy jobs while full parity stays enforced", () => {
-  const heavy = new Set(mainHeavyJobs({ jobs: ciJobs }));
+test("thin merge groups require every scoped code job while full parity stays enforced", () => {
   const admitted = new Set(queueAdmittedJobs({ jobs: ciJobs }));
   for (const { name, condition } of parityJobs) {
     const full = runsAtDepth(condition, {
@@ -5399,12 +5387,8 @@ test("thin merge groups intentionally skip heavy jobs while full parity stays en
         queueDepth: "thin",
       }),
       name,
-    ).toBe(
-      heavy.has(name) && !admitted.has(name) && name !== "desktop-rust-tests"
-        ? false
-        : full,
-    );
-    // The off switch restores the thin skip for the admitted browser suites.
+    ).toBe(admitted.has(name) ? full : false);
+    // Browser configuration cannot disable a planned queue gate.
     expect(
       runsAtDepth(condition, {
         event: EVENT.mergeGroup,
@@ -5413,7 +5397,7 @@ test("thin merge groups intentionally skip heavy jobs while full parity stays en
         queueBrowserSuites: "off",
       }),
       `${name}/off`,
-    ).toBe(heavy.has(name) && name !== "desktop-rust-tests" ? false : full);
+    ).toBe(admitted.has(name) ? full : false);
     for (const event of [EVENT.pullRequest, EVENT.workflowDispatch]) {
       expect(
         runsAtDepth(condition, {
@@ -6390,7 +6374,7 @@ test("browser planning, scheduling and result gates agree across events and dept
         options.event === EVENT.workflowDispatch) &&
       (options.event === EVENT.pullRequest
         ? options.desktopRequired === "true"
-        : options.depth === SUITE_DEPTH.full && options.queueDepth !== "thin");
+        : options.depth === SUITE_DEPTH.full);
     expect(planned, JSON.stringify(options)).toBe(expected ? "true" : "false");
     expect(
       evaluate(jobIf(ciJobs["ci-browser"]), {
