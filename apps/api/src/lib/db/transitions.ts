@@ -602,12 +602,7 @@ export const defineNullableScopedTransitions = <
 export const transitionNullableScopedCount = async <
   TTx extends TransitionTransaction,
   TTable extends ScopedStateTable,
-  TKey extends ColumnKey<TTable>,
-  TScope extends readonly ColumnKey<TTable>[],
   TState extends ColumnKey<TTable>,
-  const TEdges extends Readonly<
-    Record<StateValue<TTable, TState>, readonly StateValue<TTable, TState>[]>
-  >,
 >({
   tx,
   spec,
@@ -616,7 +611,15 @@ export const transitionNullableScopedCount = async <
   recordTransitionAuditEvent,
 }: {
   tx: TTx;
-  spec: ScopedTransitionSpec<TTable, TKey, TScope, TState, TEdges> & {
+  spec: ScopedTransitionSpec<
+    TTable,
+    ColumnKey<TTable>,
+    readonly ColumnKey<TTable>[],
+    TState,
+    Readonly<
+      Record<StateValue<TTable, TState>, readonly StateValue<TTable, TState>[]>
+    >
+  > & {
     nullTransitions: {
       fromNull: readonly StateValue<TTable, TState>[];
       toNull: readonly StateValue<TTable, TState>[];
