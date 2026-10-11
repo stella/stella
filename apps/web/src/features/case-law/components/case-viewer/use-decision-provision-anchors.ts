@@ -7,6 +7,11 @@ import {
   DECISION_DATE_VERSION_BASIS,
   provisionVersionAsOf,
 } from "@stll/api-contract/provision-version-basis";
+import {
+  pickVersionAt,
+  referencesOutsideVersion,
+  versionCoversDate,
+} from "@stll/api-contract/statute-version";
 import { locateAbbreviatedProvisionCitations } from "@stll/decision-reader/fallback-legal-anchors";
 import { provisionOccurrenceContexts } from "@stll/decision-reader/provision-anchors";
 import type { DecisionProvisionAnchor } from "@stll/decision-reader/reader-types";
@@ -27,11 +32,6 @@ import {
   statuteVersionsOptions,
 } from "@/features/case-law/queries/provisions";
 import type { ResolvedCitedStatute } from "@/features/case-law/queries/provisions";
-import {
-  pickVersionAt,
-  referencesOutsideVersion,
-  versionCoversDate,
-} from "@/features/case-law/statute-version";
 import { useProvisionPartRenderer } from "@/features/case-law/use-provision-part-renderer";
 import { useProvisionPlacementTelemetry } from "@/features/case-law/use-provision-placement-telemetry";
 import { useExternalSyncEffect } from "@/hooks/use-effect";

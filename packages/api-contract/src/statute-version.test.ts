@@ -3,13 +3,12 @@ import { describe, expect, test } from "bun:test";
 import type {
   LegislationExpressionKind,
   LegislationWindowDisposition,
-} from "@stll/api-contract/legislation-expression";
-
+} from "./legislation-expression";
 import {
   pickVersionAt,
   referencesOutsideVersion,
   versionCoversDate,
-} from "@/features/case-law/statute-version";
+} from "./statute-version";
 
 const version = (
   versionValidFrom: string | null,

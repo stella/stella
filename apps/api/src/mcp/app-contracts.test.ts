@@ -10,6 +10,10 @@ import {
 } from "@stll/api-contract/mcp-app.fixtures";
 import { UI_LOCALES } from "@stll/locales";
 
+import type {
+  READ_PROVISION_HISTORY_PROJECTION,
+  READ_STATUTE_PROVISIONS_PROJECTION,
+} from "../lib/chat/legislation-result-projections";
 import { MCP_APP_CONSUMED_FIELDS } from "./app-consumed-fields";
 import { MCP_APP_OUTPUT_SCHEMAS } from "./app-contracts";
 import { inspectAppManifest, inspectAppSchemas } from "./app-guards";
@@ -32,9 +36,80 @@ import {
 } from "./static-tool-definitions";
 import { serializeToolResult, untypedToolDataResult } from "./tool-utils";
 
+type ProvisionHistoryFixture = v.InferInput<
+  typeof READ_PROVISION_HISTORY_PROJECTION
+>;
+type StatuteProvisionsFixture = v.InferInput<
+  typeof READ_STATUTE_PROVISIONS_PROJECTION
+>;
+
 APP_SEARCH_FIXTURE satisfies SearchResults;
 APP_LOOKUP_FIXTURE satisfies LookupResults;
 APP_UNAVAILABLE_FIXTURE satisfies SearchResults & LookupResults;
+
+const PROVISION_HISTORY_FIXTURE = {
+  eli: "cz:act:2012:89",
+  anchor: "par_1",
+  items: [
+    {
+      appUrl: null,
+      url: null,
+      documentId: "history-version-found",
+      resourceName:
+        "stella://resource/legislation_document/id=history-version-found",
+      versionValidFrom: "2020-01-01",
+      versionValidTo: "2020-12-31",
+      expressionKind: "consolidation",
+      windowDisposition: "effective",
+      windowDispositionBasis: null,
+      status: "found",
+      text: "The provision wording.",
+      truncated: false,
+    },
+    {
+      appUrl: null,
+      url: null,
+      documentId: "history-version-withheld",
+      resourceName:
+        "stella://resource/legislation_document/id=history-version-withheld",
+      versionValidFrom: null,
+      versionValidTo: "2019-12-31",
+      expressionKind: "consolidation",
+      windowDisposition: "effective",
+      windowDispositionBasis: null,
+      status: "text_withheld",
+      message: "The source does not permit displaying this wording.",
+    },
+  ],
+  nextCursor: "history-next-page",
+} satisfies ProvisionHistoryFixture;
+
+const STATUTE_PROVISIONS_FIXTURE = {
+  items: [
+    {
+      eli: "cz:act:2012:89",
+      anchor: "par_1",
+      appUrl: null,
+      url: null,
+      documentId: "provision-version-found",
+      resourceName:
+        "stella://resource/legislation_document/id=provision-version-found",
+      status: "found",
+      text: "The full provision wording.",
+      truncated: false,
+      versionValidFrom: "2020-01-01",
+      versionValidTo: "2020-12-31",
+    },
+    {
+      eli: "cz:act:2012:89",
+      anchor: "par_1",
+      appUrl: null,
+      url: null,
+      status: "text_withheld",
+      message: "The source does not permit displaying this wording.",
+    },
+  ],
+} satisfies StatuteProvisionsFixture;
 
 const appRoot = path.resolve(import.meta.dirname, "apps");
 const directories = [...new Bun.Glob("*/app.html").scanSync(appRoot)].map(
@@ -519,6 +594,8 @@ describe("MCP app registry and contracts", () => {
     for (const [name, fixtures] of [
       ["search_case_law", [APP_SEARCH_FIXTURE, APP_UNAVAILABLE_FIXTURE]],
       ["lookup_case_law", [APP_LOOKUP_FIXTURE, APP_UNAVAILABLE_FIXTURE]],
+      ["read_provision_history", [PROVISION_HISTORY_FIXTURE]],
+      ["read_statute_provisions", [STATUTE_PROVISIONS_FIXTURE]],
     ] as const) {
       for (const fixture of fixtures) {
         const result = serializeToolResult(

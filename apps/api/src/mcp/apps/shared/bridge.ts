@@ -15,11 +15,14 @@ import { createDetached } from "@stll/errors";
 import type { PresentationApp } from "../manifest";
 import { appLocale } from "./locale";
 
-const applyHostPresentation = (context: McpUiHostContext) => {
+const applyHostPresentation = (
+  context: McpUiHostContext,
+  title: string | undefined,
+) => {
   const locale = appLocale(context.locale);
   document.documentElement.lang = locale.locale;
   document.documentElement.dir = locale.direction;
-  document.title = locale.messages.title;
+  document.title = title ?? locale.messages.title;
   if (context.theme !== undefined) {
     applyDocumentTheme(context.theme);
     document.documentElement.classList.toggle("dark", context.theme === "dark");
@@ -69,6 +72,7 @@ type AppSnapshot<View> = {
 type ReadCall = { name: ToolName; arguments: Record<string, unknown> };
 
 type PresentationBridgeOptions<View> = {
+  title?: (context: McpUiHostContext) => string;
   manifest: PresentationApp;
   parse: (payload: unknown, input: Record<string, unknown>) => View | undefined;
 };
@@ -101,6 +105,7 @@ const requestPresentationTool = async ({
 export const createPresentationBridge = <View>({
   manifest,
   parse,
+  title,
 }: PresentationBridgeOptions<View>) => {
   const app = new App(
     { name: `stella ${manifest.directory}`, version: "1.0.0" },
@@ -155,7 +160,7 @@ export const createPresentationBridge = <View>({
             snapshot.tool),
       result: snapshot.result,
     };
-    applyHostPresentation(merged);
+    applyHostPresentation(merged, title?.(merged));
     for (const listener of listeners) {
       listener();
     }

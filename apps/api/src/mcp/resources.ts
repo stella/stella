@@ -48,7 +48,12 @@ import { unlistedToolNames } from "@/api/mcp/tool-mentions";
 import { isMcpAppAvailable } from "./app-policy";
 import caseLawResultsAppHtml from "./apps/case-law-results/generated/app.html.txt" with { type: "text" };
 import decisionReaderAppHtml from "./apps/decision-reader/generated/app.html.txt" with { type: "text" };
-import { CASE_LAW_RESULTS_APP, DECISION_READER_APP } from "./apps/manifest";
+import {
+  STATUTE_TIMELINE_APP,
+  CASE_LAW_RESULTS_APP,
+  DECISION_READER_APP,
+} from "./apps/manifest";
+import statuteTimelineAppHtml from "./apps/statute-timeline/generated/app.html.txt" with { type: "text" };
 
 /**
  * MCP resources are static, no-argument documents (the textbook fit for a
@@ -132,6 +137,21 @@ const buildProductIdentity = (): string =>
   JSON.stringify(STELLA_PRODUCT_IDENTITY, null, 2);
 
 const STATIC_RESOURCES: readonly StaticResource[] = [
+  {
+    uri: STATUTE_TIMELINE_APP.uri,
+    name: "statute-timeline",
+    title: "Provision history",
+    description: "View provision version windows and compare adjacent wording.",
+    mimeType: MCP_APP_RESOURCE_MIME_TYPE,
+    listed: false,
+    read: () => statuteTimelineAppHtml,
+    resourceMeta: () => ({
+      ui: {
+        csp: { connectDomains: [], resourceDomains: [] },
+        prefersBorder: true,
+      },
+    }),
+  },
   {
     uri: DECISION_READER_APP.uri,
     name: "decision-reader",

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { diffWords } from "@/components/ai-suggestions/review-word-diff";
+import { diffWords } from "./review-word-diff";
 
 describe("word diff", () => {
   test("identical text is entirely equal", () => {

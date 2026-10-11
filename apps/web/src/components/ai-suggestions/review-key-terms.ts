@@ -13,7 +13,7 @@
 
 import { panic } from "better-result";
 
-import { diffWords } from "@/components/ai-suggestions/review-word-diff";
+import { diffWords } from "@stll/ui/review-word-diff";
 
 export const KEY_TERM_KIND = {
   /** A run the word diff says the other side words differently. */

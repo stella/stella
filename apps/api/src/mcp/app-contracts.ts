@@ -4,6 +4,10 @@ import {
   LOOKUP_CASE_LAW_PROJECTION,
   SEARCH_CASE_LAW_PROJECTION,
 } from "../lib/chat/case-law-result-projections";
+import {
+  READ_PROVISION_HISTORY_PROJECTION,
+  READ_STATUTE_PROVISIONS_PROJECTION,
+} from "../lib/chat/legislation-result-projections";
 import { MCP_APPS } from "./apps/manifest";
 import type { PresentationApp } from "./apps/manifest";
 import {
@@ -32,6 +36,8 @@ type AppManifest = {
 MCP_APPS satisfies readonly AppManifest[];
 
 export const MCP_APP_OUTPUT_SCHEMAS = {
+  read_provision_history: READ_PROVISION_HISTORY_PROJECTION,
+  read_statute_provisions: READ_STATUTE_PROVISIONS_PROJECTION,
   open_case_law_decision: openDecisionOutput,
   read_case_law_decision_blocks: blocksDecisionOutput,
   preview_cited_provision: provisionPreviewOutput,
