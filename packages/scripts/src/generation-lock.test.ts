@@ -52,7 +52,7 @@ const fixture = () => {
     for (const child of children) {
       child.kill();
     }
-    await Promise.all(children.map((child) => child.exited));
+    await Promise.all(children.map(async (child) => child.exited));
     rmSync(directory, { recursive: true, force: true });
   };
   return { directory, spawn, cleanup };
@@ -72,7 +72,9 @@ test("independent generation processes never overlap", async () => {
   const { directory, spawn, cleanup } = fixture();
   try {
     const children = Array.from({ length: 4 }, () => spawn());
-    const exits = await Promise.all(children.map((child) => child.exited));
+    const exits = await Promise.all(
+      children.map(async (child) => child.exited),
+    );
     expect(exits).toEqual([0, 0, 0, 0]);
     expect(readFileSync(path.join(directory, "events"), "utf-8")).toBe(
       "enter\nexit\n".repeat(4),
