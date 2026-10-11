@@ -52,6 +52,28 @@ describe("e2e spec shard selection", () => {
     }
   });
 
+  test.each(["spec", "helper"])(
+    "a changed geometry %s keeps both production shards",
+    (kind) => {
+      const { root, write } = fixture();
+      try {
+        const spec = "apps/web/e2e/specs/docked-chat-geometry.spec.ts";
+        const helper = "apps/web/e2e/helpers/geometry.ts";
+        write(helper, "export const fixture = true;\n");
+        write(spec, 'import "../helpers/geometry";\n');
+        const changed = kind === "spec" ? spec : helper;
+        expect(selectE2eSpecs([changed], root)).toEqual([spec]);
+        expect(selectedE2ePlan([changed], root)).toEqual({
+          status: "full",
+          matrix: allE2eMatrix(),
+          specs: [],
+        });
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
+
   test("every Playwright test file suffix consumes a changed helper", () => {
     const { root, write } = fixture();
     try {
