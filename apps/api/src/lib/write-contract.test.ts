@@ -55,18 +55,21 @@ describe("replacement writes require the state the caller read", () => {
       updatedAt: new Date("2026-01-02T00:00:00.000Z"),
       values: ["original"],
     };
-    const conflict = enforceWritePrecondition({
-      type: "updatedAt",
-      field: "expectedUpdatedAt",
-      storedUpdatedAt: row.updatedAt,
-      expectedUpdatedAt: "2026-01-02T01:00:00.000+01:00",
-      resource: "Record",
-    });
-    expect(conflict).toBeNull();
-    if (conflict !== null) {
-      return conflict;
-    }
-    row.values = ["replacement"];
+    const replace = () => {
+      const conflict = enforceWritePrecondition({
+        type: "updatedAt",
+        field: "expectedUpdatedAt",
+        storedUpdatedAt: row.updatedAt,
+        expectedUpdatedAt: "2026-01-02T01:00:00.000+01:00",
+        resource: "Record",
+      });
+      if (conflict !== null) {
+        return conflict;
+      }
+      row.values = ["replacement"];
+      return null;
+    };
+    expect(replace()).toBeNull();
     expect(row.values).toEqual(["replacement"]);
   });
 
@@ -103,18 +106,21 @@ describe("replacement writes require the state the caller read", () => {
   test("matching numeric and string revisions allow the replacement", () => {
     for (const revision of [2, "current"]) {
       const row = { values: ["original"] };
-      const conflict = enforceWritePrecondition({
-        type: "revision",
-        field: "revision",
-        storedRevision: revision,
-        expectedRevision: revision,
-        resource: "Record",
-      });
-      expect(conflict).toBeNull();
-      if (conflict !== null) {
-        return conflict;
-      }
-      row.values = ["replacement"];
+      const replace = () => {
+        const conflict = enforceWritePrecondition({
+          type: "revision",
+          field: "revision",
+          storedRevision: revision,
+          expectedRevision: revision,
+          resource: "Record",
+        });
+        if (conflict !== null) {
+          return conflict;
+        }
+        row.values = ["replacement"];
+        return null;
+      };
+      expect(replace()).toBeNull();
       expect(row.values).toEqual(["replacement"]);
     }
   });
