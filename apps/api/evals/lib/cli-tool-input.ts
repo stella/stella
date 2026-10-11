@@ -35,8 +35,12 @@ export const composeCliToolInput = async ({
       ? await parseInputObject({
           inputRaw,
           writers: {
-            stdout: (message) => messages.push(message),
-            stderr: (message) => messages.push(message),
+            stdout: (message) => {
+              messages.push(message);
+            },
+            stderr: (message) => {
+              messages.push(message);
+            },
           },
         })
       : {};
