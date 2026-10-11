@@ -43,7 +43,10 @@ import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-in
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 const processExtractionMock = mock(async () => {});
 const enqueueImageThumbnailOrMarkFailedMock = mock(async () => {});
@@ -305,10 +308,8 @@ const buildTx = ({
               toSQL: () => query.toSQL(),
               as: (alias: string) => query.as(alias),
               where: (predicate: SQL) =>
-                Object.assign(Promise.resolve(rows), {
+                Object.assign(createSelectQueryMock(rows).from().where(), {
                   toSQL: () => query.where(predicate).toSQL(),
-                  for: async () => rows,
-                  limit: async (count: number) => rows.slice(0, count),
                 }),
             };
           },
