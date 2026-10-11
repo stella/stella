@@ -76,6 +76,7 @@ import {
 import { withProviderImageInput } from "@/api/lib/chat/provider-image-input";
 import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
 import { validateDataUrl } from "@/api/lib/data-url";
+import { registerProviderDiagnosticCredentials } from "@/api/lib/errors/redacted-provider-diagnostic";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import {
@@ -1998,7 +1999,7 @@ const resolveByokTextModel = ({
   assertTanStackBYOKModelTaskSupport({ provider, modelId, task });
 
   const factory = getCachedFactory(providerConfig);
-  return buildResolvedTextModel({
+  const resolved = buildResolvedTextModel({
     adapter: factory(modelId),
     keySource: "byok",
     provider,
@@ -2009,6 +2010,8 @@ const resolveByokTextModel = ({
     reasoningEffort,
     useTaskReasoningDefault,
   });
+  registerProviderDiagnosticCredentials(resolved, [providerConfig.apiKey]);
+  return resolved;
 };
 
 /**
