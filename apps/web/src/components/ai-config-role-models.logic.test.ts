@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -710,9 +709,6 @@ describe("provider credential changes", () => {
 test("only explicit role overrides are serialized, even when equal to a default", () => {
   const defaults = GOOGLE_DEFAULTS;
   const chat = defaults.chat;
-  if (chat === null) {
-    panic("Google chat fixture requires a default");
-  }
   expect(
     serializeRoleOverrides({ providers: ["google"], overrides: {} }),
   ).toEqual({ kind: "valid", overrides: null });
@@ -751,9 +747,6 @@ test("role comparison ignores insertion order while preserving default and expli
       }),
     ).toBe(false);
     const selection = baseline[role];
-    if (selection === null) {
-      panic("Google supports every role");
-    }
     expect(
       haveSameRoleModelSelections({
         current: {

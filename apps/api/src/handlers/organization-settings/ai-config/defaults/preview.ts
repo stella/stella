@@ -25,9 +25,9 @@ const config = {
 // organization records participate in this calculation.
 const previewAIConfigDefaults = createSafeRootHandler(
   config,
+  // oxlint-disable-next-line require-yield, typescript/require-await -- safe handlers must remain async generators for Result.gen error capture.
   async function* ({ body }) {
-    const defaults = yield* Result.ok(resolveAIConfigDefaults(body.providers));
-    return Result.ok(defaults);
+    return Result.ok(resolveAIConfigDefaults(body.providers));
   },
 );
 

@@ -2,8 +2,6 @@ import { panic } from "better-result";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
-
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 
 import { createCassetteFetch } from "./ai-provider-cassette";
@@ -50,8 +48,9 @@ const run = async () => {
   });
   const { generateTanStackTextForTask } =
     await import("@/api/lib/tanstack-ai-generate");
+  // The cassette hashes this recorded model request; defaults may change independently.
   const selection = {
-    modelId: MODEL_DEFAULTS_LEDGER["short-text"].openrouter.candidate.modelId,
+    modelId: "openai/gpt-6-luna",
     provider: "openrouter",
   } as const;
   const output = await generateTanStackTextForTask({

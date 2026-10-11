@@ -1174,7 +1174,7 @@ const runModelTaskProbe = async ({
             null,
           task,
         };
-  if (selection === null || selection.modelId === null) {
+  if (!selection?.modelId) {
     throw new CanaryError({
       message: "Canary resolved an unexpected provider model.",
     });
