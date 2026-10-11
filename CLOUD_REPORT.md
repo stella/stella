@@ -2997,21 +2997,35 @@ $ bun scripts/test-subject-reachability.ts --base origin/main
 test subject reachability ledger: OK. 45 entries, none new vs origin/main.
 
 $ bun check --no-pretty --all --project=tsconfig.oxlint-plugins.json
-No type errors in 553 files.
+✓ No type errors in 553 files [3.96s]
 $ bun check --no-pretty --all --project=packages/text-normalize/tsconfig.json
-No type errors in 28 files.
+✓ No type errors in 28 files [235.23ms]
 $ bun check --no-pretty --all --project=packages/api-contract/tsconfig.json
-No type errors in 263 files.
+✓ No type errors in 263 files [442.41ms]
 $ bun check --no-pretty --all --project=apps/api/tsconfig.json
-No type errors in 6,894 files.
+✓ No type errors in 6,894 files [80.71s]
 
 $ bun --bun oxlint -c oxlint.config.ts --type-aware <12 changed rule/owner/consumer files>
 Found 0 warnings and 0 errors.
 Finished in 2.9s on 12 files with 816 rules using 10 threads.
 ```
 
-The scoped rule, publish-order, and Unicode owner tests are queued; their outcome
-will be recorded when available. Consumer and PostgreSQL tests remain for CI.
+The scoped rule, publish-order, and Unicode owner tests passed:
+
+```text
+$ bun test ./.oxlint-plugins/__tests__/no-direct-unicode-normalize.test.ts ./scripts/publish-package-selection.test.ts ./packages/text-normalize/src/unicode.test.ts
+20 pass
+0 fail
+1633 expect() calls
+Ran 20 tests across 3 files.
+
+$ bun scripts/ratchet.ts --check
+ratchet --check: OK. 92 metric(s) at or below the measured base tree or exactly funded.
+```
+
+Removing the per-file binding reset made the new regression fail by missing the
+second-file native call. Restoring the reset passed the same single-worker test
+(1 pass, 0 fail). Consumer and PostgreSQL tests remain for CI.
 Local MCP bundle generation was unavailable. The two generated bundle conflicts
 use main versions; CI Autofix regenerates those outputs from the merged sources.
 No baseline additions, allowances, or diagnostic suppressions were added.
