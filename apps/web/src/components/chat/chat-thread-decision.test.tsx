@@ -37,6 +37,8 @@ describe("chat thread decision label", () => {
     const html = render(DECISION);
 
     expect(html).toContain('data-slot="court-badge"');
+    expect(html).toContain("leading-3.5");
+    expect(html).not.toContain("py-0.5");
     expect(html).toContain(">NS<");
     expect(html).toContain("25 Cdo 1234/2021");
     expect(html).toContain("Mar 12, 2021");
