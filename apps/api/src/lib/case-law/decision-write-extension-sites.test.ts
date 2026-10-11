@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
-const apiRoot = path.resolve(import.meta.dir, "../..");
+const apiRoot = path.resolve(import.meta.dir, "../../..");
 const INPUT_COLUMNS = new Set([
   "country",
   "language",
@@ -266,6 +266,10 @@ describe("decision write extension ownership", () => {
         !file.includes("/db/schema/") &&
         !file.includes("/db/migrations/") &&
         file !== "src/scripts/seed-migration-rehearsal-plan.ts",
+    );
+    expect(files.length).toBeGreaterThan(0);
+    expect(files).toContain(
+      "src/handlers/case-law/ingestion/pipeline/decision-row.ts",
     );
     const failures = files.flatMap((file) =>
       problems(file.slice(4), readFileSync(path.join(apiRoot, file), "utf-8")),
