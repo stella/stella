@@ -1812,7 +1812,8 @@ describe("capability executor workspace resolution", () => {
         },
         context: createContext(database),
       });
-      expect(parseToolPayload(result)).toMatchObject({
+      const payload = parseToolPayload(result);
+      expect(payload).toMatchObject({
         links: [
           {
             ...link,
