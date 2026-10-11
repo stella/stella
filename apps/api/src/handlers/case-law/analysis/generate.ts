@@ -664,8 +664,9 @@ const config = {
     "made; answer_incomplete, timed_out, provider_refused, " +
     "provider_unavailable or failed when the last run failed, with key " +
     "naming whose AI key it used (the organization's own, or the platform's). " +
-    "A failed run answers until the call passes retry=true, which starts a " +
-    "new one. Generation runs in the background and a call made while one " +
+    "A failed run answers callers using the same key for 15 minutes; within " +
+    "that window a call passing retry=true starts a new run, and after it the " +
+    "next call starts one on its own. Generation runs in the background and a call made while one " +
     "is already running does not start a second.",
   permissions: { workspace: ["read"], chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
