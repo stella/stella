@@ -15,7 +15,7 @@ import en from "@/i18n/langs/en.json";
 GlobalRegistrator.register();
 const { act, cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
-const { IntlProvider, createTranslator } = await import("use-intl");
+const { IntlProvider } = await import("use-intl");
 const { ProviderDiagnosticMessage } =
   await import("./provider-diagnostic-message");
 const { providerSetupGuidance } =
@@ -52,7 +52,6 @@ for (const [locale, messages] of Object.entries(messagesByLocale)) {
       const copy = spyOn(navigator.clipboard, "writeText").mockResolvedValue(
         undefined,
       );
-      const t = createTranslator({ locale, messages });
       render(
         <IntlProvider locale={locale} messages={messages}>
           <ProviderDiagnosticMessage diagnostic={diagnostic} />
@@ -62,10 +61,10 @@ for (const [locale, messages] of Object.entries(messagesByLocale)) {
       const alert = screen.getByRole("alert");
       expect(alert.textContent).toContain(fullMessage);
       expect(alert.textContent).toContain(
-        t(
+        messages.organization.aiConfig[
           (providerSetupGuidance(code) ?? panic("Missing provider guidance"))
-            .guidance,
-        ),
+            .guidance
+        ],
       );
       expect(screen.getByRole("link").getAttribute("href")).toBe(catalogue.url);
       expect(alert.querySelector("bdi")?.textContent).toBe(diagnostic.provider);

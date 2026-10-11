@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, expectTypeOf, test } from "bun:test";
 
 import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
@@ -11,6 +11,7 @@ import {
   ProviderDiagnosticError,
   providerDiagnosticFromThrown,
 } from "./provider-diagnostic";
+import type { ProviderSetupGuidance } from "./provider-setup-guidance";
 
 const diagnostic = {
   provider: "anthropic",
@@ -72,4 +73,13 @@ test("telemetry drops provider diagnostic messages and payloads", () => {
   expect(JSON.stringify(redacted)).not.toContain(diagnostic.message);
   expect(JSON.stringify(redacted)).not.toContain("diagnostic");
   expect(redacted?.stack ?? "").not.toContain(diagnostic.message);
+});
+
+test("guidance keys are checked against the organization.aiConfig catalogue", () => {
+  expectTypeOf<"notAProviderGuidanceKey">().not.toExtend<
+    ProviderSetupGuidance["guidance"]
+  >();
+  expectTypeOf<"notAProviderLinkLabel">().not.toExtend<
+    ProviderSetupGuidance["linkLabel"]
+  >();
 });

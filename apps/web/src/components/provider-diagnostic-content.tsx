@@ -13,7 +13,7 @@ type ProviderDiagnosticMessageProps = {
 export const ProviderDiagnosticContent = ({
   diagnostic,
 }: ProviderDiagnosticMessageProps) => {
-  const t = useTranslations();
+  const t = useTranslations("organization.aiConfig");
   const guidance = providerSetupGuidance(diagnostic.code ?? undefined);
   return (
     <div className="min-w-0 space-y-2" role="alert">
@@ -48,15 +48,15 @@ export const ProviderDiagnosticToast = ({
   diagnostic,
   onCopy,
 }: ProviderDiagnosticToastProps) => {
-  const t = useTranslations();
+  const t = useTranslations("common");
   return (
     <div className="space-y-2">
       <ProviderDiagnosticContent diagnostic={diagnostic} />
       <CopyButton
         size="xs"
         variant="ghost"
-        label={t("common.copy")}
-        copiedLabel={t("common.copied")}
+        label={t("copy")}
+        copiedLabel={t("copied")}
         onCopy={onCopy}
       />
     </div>
