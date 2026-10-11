@@ -82,6 +82,7 @@ type OpenClientOptions = {
   readonly idleTimeout?: number;
   /** PostgreSQL settings sent when each connection opens. */
   readonly connection?: {
+    readonly application_name?: string;
     readonly statement_timeout?: number;
     readonly lock_timeout?: number;
   };
