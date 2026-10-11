@@ -5,6 +5,7 @@ import path from "node:path";
 
 import {
   apiTestPartitionIssues,
+  apiTestPartitionInputs,
   deriveApiTestPartition,
 } from "./api-typecheck-partition";
 
@@ -39,6 +40,16 @@ test("API test ownership follows transitive imports and fails when its derived p
       "apps/api/tsconfig.tests.json",
       JSON.stringify({ files: ["src/alpha.test.ts"] }),
     );
+    const inputs = apiTestPartitionInputs(["src/alpha.test.ts"]);
+    write(
+      "turbo.json",
+      JSON.stringify({
+        tasks: {
+          "@stll/api#typecheck:src": { inputs: inputs.source },
+          "@stll/api#typecheck:tests": { inputs: inputs.tests },
+        },
+      }),
+    );
     write("apps/api/src/safe.ts", "export type Value = string;\n");
     write("apps/api/src/hidden.ts", "export type Value = number;\n");
     write(
@@ -63,6 +74,31 @@ test("API test ownership follows transitive imports and fails when its derived p
       coupled: ["src/beta.test.ts", "src/dynamic.test.ts", "src/gamma.test.ts"],
     });
     expect(apiTestPartitionIssues(root)).toEqual([]);
+    write(
+      "turbo.json",
+      JSON.stringify({
+        tasks: {
+          "@stll/api#typecheck:src": {
+            inputs: [...inputs.source, "!src/**/*.test.ts"],
+          },
+          "@stll/api#typecheck:tests": { inputs: inputs.tests },
+        },
+      }),
+    );
+    expect(
+      apiTestPartitionIssues(root).map(({ message }) => message),
+    ).toContain(
+      "typecheck:src cache inputs must match derived API test ownership; regenerate API test partition",
+    );
+    write(
+      "turbo.json",
+      JSON.stringify({
+        tasks: {
+          "@stll/api#typecheck:src": { inputs: inputs.source },
+          "@stll/api#typecheck:tests": { inputs: inputs.tests },
+        },
+      }),
+    );
     write(
       "apps/api/src/hidden.ts",
       "import './alpha.test';\nexport type Value = number;\n",

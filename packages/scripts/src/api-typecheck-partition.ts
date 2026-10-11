@@ -180,6 +180,31 @@ export const deriveApiTestPartition = (root: string) => {
   };
 };
 
+export const apiTestPartitionInputs = (independent: readonly string[]) => {
+  const common = [
+    "$TURBO_ROOT$/.npmrc",
+    "$TURBO_ROOT$/bunfig.toml",
+    "$TURBO_ROOT$/package.json",
+    "$TURBO_ROOT$/bun.lock",
+    "$TURBO_ROOT$/patches/**",
+    "$TURBO_ROOT$/packages/**",
+    "$TURBO_ROOT$/types/**",
+    "package.json",
+    "tsconfig*.json",
+  ];
+  return {
+    source: [
+      "src/**",
+      ...independent.map((file) => `!${file}`),
+      "!src/mcp/apps/**",
+      "!src/handlers/visual-sandbox/browser/**",
+      "drizzle.config.ts",
+      ...common,
+    ],
+    tests: [...independent, ...common],
+  };
+};
+
 export const apiTestPartitionIssues = (root: string) => {
   const { independent, coupled } = deriveApiTestPartition(root);
   const api = path.join(root, "apps/api");
@@ -216,6 +241,23 @@ export const apiTestPartitionIssues = (root: string) => {
         path: file,
         message:
           "Tests project has a stale or unsafe root; regenerate API test partition",
+      });
+    }
+  }
+  const turbo: { tasks: Record<string, { inputs?: string[] }> } =
+    Bun.JSONC.parse(readFileSync(path.join(root, "turbo.json"), "utf-8"));
+  const inputs = apiTestPartitionInputs(independent);
+  for (const [task, expected] of [
+    ["typecheck:src", inputs.source],
+    ["typecheck:tests", inputs.tests],
+  ] as const) {
+    if (
+      JSON.stringify(turbo.tasks[`@stll/api#${task}`]?.inputs) !==
+      JSON.stringify(expected)
+    ) {
+      issues.push({
+        path: "turbo.json",
+        message: `${task} cache inputs must match derived API test ownership; regenerate API test partition`,
       });
     }
   }
@@ -347,6 +389,45 @@ if (import.meta.main) {
       path.join(api, "tsconfig.tests.json"),
       `${JSON.stringify(tests, null, 2)}\n`,
     );
+    const turboPath = path.join(root, "turbo.json");
+    const text = readFileSync(turboPath, "utf-8");
+    const document = ts.parseJsonText(turboPath, text);
+    const inputs = apiTestPartitionInputs(partition.independent);
+    const edits: { start: number; end: number; text: string }[] = [];
+    const visit = (node: ts.Node) => {
+      if (ts.isPropertyAssignment(node) && ts.isStringLiteral(node.name)) {
+        const expected = new Map([
+          ["@stll/api#typecheck:src", inputs.source],
+          ["@stll/api#typecheck:tests", inputs.tests],
+        ]).get(node.name.text);
+        if (expected && ts.isObjectLiteralExpression(node.initializer)) {
+          for (const property of node.initializer.properties) {
+            if (
+              ts.isPropertyAssignment(property) &&
+              ts.isStringLiteral(property.name) &&
+              property.name.text === "inputs"
+            ) {
+              edits.push({
+                start: property.initializer.getStart(document),
+                end: property.initializer.end,
+                text: JSON.stringify(expected, null, 2),
+              });
+            }
+          }
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(document);
+    if (edits.length !== 2) {
+      panic("Missing split API Turbo task inputs");
+    }
+    let updated = text;
+    for (const edit of edits.toSorted((a, b) => b.start - a.start)) {
+      updated =
+        updated.slice(0, edit.start) + edit.text + updated.slice(edit.end);
+    }
+    writeFileSync(turboPath, updated);
   }
   process.stdout.write(
     `API test partition: ${partition.independent.length} declaration-safe, ${partition.coupled.length} coupled\n`,

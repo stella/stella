@@ -351,3 +351,197 @@ test("declaration consumers run after emission and invalidate with API source ch
     rmSync(directory, { recursive: true, force: true });
   }
 }, 30_000);
+
+test("each API test owner invalidates cached checking and rejects a newly introduced type error", () => {
+  const api = path.join(ROOT, "apps/api");
+  const tests = readObject(path.join(api, "tsconfig.tests.json"))["files"];
+  const sourceExcludes = readObject(path.join(api, "tsconfig.src.json"))[
+    "exclude"
+  ];
+  if (!Array.isArray(tests) || !Array.isArray(sourceExcludes)) {
+    panic("Missing API ownership roots");
+  }
+  const safe = tests.find(
+    (file): file is string =>
+      typeof file === "string" && file.endsWith(".test.ts"),
+  );
+  const coupled = [...new Bun.Glob("src/**/*.test.ts").scanSync(api)].find(
+    (file) =>
+      !sourceExcludes.includes(file) &&
+      !file.startsWith("src/mcp/apps/") &&
+      !file.startsWith("src/handlers/visual-sandbox/browser/"),
+  );
+  if (!safe || !coupled) {
+    panic("Both API test ownership classes must have members");
+  }
+  const tasks = readObject(path.join(ROOT, "turbo.json"))["tasks"];
+  if (!isRecord(tasks)) {
+    panic("Missing Turbo tasks");
+  }
+  const sourceTask = tasks["@stll/api#typecheck:src"];
+  const testsTask = tasks["@stll/api#typecheck:tests"];
+  if (
+    !isRecord(sourceTask) ||
+    !Array.isArray(sourceTask["inputs"]) ||
+    !isRecord(testsTask) ||
+    !Array.isArray(testsTask["inputs"])
+  ) {
+    panic("Missing split checker inputs");
+  }
+  // Use production inputs; the separate graph fixture covers prerequisite edges.
+  const fixtureTasks = {
+    "@stll/api#typecheck:src": { inputs: sourceTask["inputs"], outputs: [] },
+    "@stll/api#typecheck:tests": { inputs: testsTask["inputs"], outputs: [] },
+  };
+  const directory = mkdtempSync(path.join(tmpdir(), "api-test-owner-cache-"));
+  const write = (filename: string, content: string) => {
+    const target = path.join(directory, filename);
+    mkdirSync(path.dirname(target), { recursive: true });
+    writeFileSync(target, content);
+  };
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => !key.startsWith("TURBO_")),
+  );
+  const command = [
+    path.join(ROOT, "node_modules/.bin/turbo"),
+    "run",
+    "typecheck:src",
+    "typecheck:tests",
+    "--cache=local:rw",
+    "--cache-dir=.turbo/cache",
+  ];
+  const run = () =>
+    Bun.spawnSync(command, {
+      cwd: directory,
+      env: { ...env, TURBO_TELEMETRY_DISABLED: "1" },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+  const check = (status: number) => {
+    const result = run();
+    expect(
+      result.exitCode,
+      result.stdout.toString() + result.stderr.toString(),
+    ).toBe(status);
+  };
+  const executions = () =>
+    readFileSync(path.join(directory, "runs.log"), "utf-8").trim().split("\n");
+  const writeTasks = () =>
+    write("turbo.json", JSON.stringify({ tasks: fixtureTasks }));
+  const valid = "export const value: number = 1;\n";
+  const invalid = "export const value: number = 'changed';\n";
+  try {
+    write(
+      "package.json",
+      JSON.stringify({
+        name: "test-owner-cache",
+        private: true,
+        packageManager: readObject(path.join(ROOT, "package.json"))[
+          "packageManager"
+        ],
+        workspaces: ["apps/*"],
+      }),
+    );
+    write(
+      "apps/api/package.json",
+      JSON.stringify({
+        name: "@stll/api",
+        scripts: {
+          "typecheck:src": "bun ../../check.ts source tsconfig.src.json",
+          "typecheck:tests": "bun ../../check.ts tests tsconfig.tests.json",
+        },
+      }),
+    );
+    write(
+      "bun.lock",
+      JSON.stringify({
+        lockfileVersion: 3,
+        configVersion: 1,
+        workspaces: {
+          "": { name: "test-owner-cache" },
+          "apps/api": { name: "@stll/api" },
+        },
+        packages: {},
+      }),
+    );
+    write(".gitignore", "node_modules/\n.turbo/\nruns.log\n");
+    symlinkSync(
+      path.join(ROOT, "node_modules"),
+      path.join(directory, "node_modules"),
+      "dir",
+    );
+    for (const [project, file] of [
+      ["src", coupled],
+      ["tests", safe],
+    ]) {
+      write(
+        `apps/api/tsconfig.${project}.json`,
+        JSON.stringify({
+          compilerOptions: { strict: true, noEmit: true, types: [] },
+          files: [file],
+        }),
+      );
+      write(`apps/api/${file}`, valid);
+    }
+    write(
+      "check.ts",
+      [
+        "import { appendFileSync } from 'node:fs';",
+        "import path from 'node:path';",
+        "appendFileSync(path.join(import.meta.dir, 'runs.log'), process.argv[2] + '\\n');",
+        "const child = Bun.spawnSync([process.execPath, 'check', '--no-pretty', '--all', '--project=' + process.argv[3]], { stdout: 'inherit', stderr: 'inherit' });",
+        "process.exit(child.exitCode);",
+      ].join("\n"),
+    );
+    writeTasks();
+    const init = Bun.spawnSync(["git", "init", "--quiet"], { cwd: directory });
+    expect(init.exitCode).toBe(0);
+    expect(
+      Bun.spawnSync(["git", "add", "."], { cwd: directory }).exitCode,
+    ).toBe(0);
+    check(0);
+    const cold = executions();
+    expect(cold.toSorted()).toEqual(["source", "tests"]);
+    check(0);
+    expect(executions()).toEqual(cold);
+    write(`apps/api/${coupled}`, invalid);
+    check(1);
+    expect(executions().slice(cold.length)).toEqual(["source"]);
+    write(`apps/api/${coupled}`, valid);
+    check(0);
+    const beforeSafe = executions().length;
+    write(`apps/api/${safe}`, invalid);
+    check(1);
+    expect(executions().slice(beforeSafe)).toEqual(["tests"]);
+    write(`apps/api/${safe}`, valid);
+    check(0);
+    // The previous blanket exclusion hides a real coupled-test type error.
+    fixtureTasks["@stll/api#typecheck:src"].inputs = [
+      ...sourceTask["inputs"],
+      "!src/**/*.test.ts",
+      "!src/**/*.test.tsx",
+    ];
+    writeTasks();
+    check(0);
+    const beforeMutation = executions();
+    write(`apps/api/${coupled}`, invalid);
+    check(0);
+    expect(executions()).toEqual(beforeMutation);
+    const direct = Bun.spawnSync(
+      [
+        process.execPath,
+        "check",
+        "--no-pretty",
+        "--all",
+        "--project=tsconfig.src.json",
+      ],
+      { cwd: path.join(directory, "apps/api"), stdout: "pipe", stderr: "pipe" },
+    );
+    expect(direct.exitCode).toBe(1);
+    expect(direct.stdout.toString() + direct.stderr.toString()).toContain(
+      coupled,
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}, 30_000);
