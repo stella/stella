@@ -20,10 +20,6 @@
     "reason": "pending gate classification"
   },
   {
-    "key": "flagged-capability:case-law.matter-links.list@apps/api/src/handlers/case-law/routes.ts",
-    "reason": "pending gate classification"
-  },
-  {
     "key": "flagged-capability:legislation.boe.law-structure.get@apps/api/src/handlers/legislation/routes.ts",
     "reason": "pending gate classification"
   },

@@ -261,10 +261,12 @@ describe("public statute routes", () => {
       readHandlerSource("search.ts"),
     ]);
     const getWrapper = getSource.slice(
-      getSource.indexOf("const readLegislation = createSafeRootHandler"),
+      getSource.indexOf("export const createReadLegislationHandler"),
     );
     const searchWrapper = searchSource.slice(
-      searchSource.indexOf("const searchLegislation = createSafeRootHandler"),
+      searchSource.indexOf(
+        "const searchLegislation = createSafeLawReadRootHandler",
+      ),
     );
 
     expect(getWrapper).toContain("readPublicLegislationHandler(");

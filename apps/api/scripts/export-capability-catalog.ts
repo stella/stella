@@ -524,7 +524,10 @@ const capabilityDeploymentFeature = ({
 }: CapabilityDeploymentFeatureOptions): string | undefined =>
   config["lawRead"] === "conditional"
     ? undefined
-    : (inheritedFeature ?? DOMAIN_FEATURE[domain]);
+    : (inheritedFeature ??
+      (Object.hasOwn(DOMAIN_FEATURE, domain)
+        ? DOMAIN_FEATURE[domain]
+        : undefined));
 
 type CapabilityMcp =
   | { type: "tool"; name: string }

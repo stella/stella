@@ -93,6 +93,7 @@ describe("custom oxlint guardrails", () => {
       factoriesWhere(({ context }) => context !== "anonymous").toSorted(),
     ).toEqual([
       "createSafeHandler",
+      "createSafeLawReadRootHandler",
       "createSafeRootHandler",
       "createSafeSessionHandler",
       "createSafeTokenHandler",

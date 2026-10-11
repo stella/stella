@@ -334,14 +334,14 @@ const COMPAT_TOOL_DEFINITIONS = [
         "Search anonymized knowledge across accessible matters using the " +
         "OpenAI-compatible search tool shape. Where this deployment enables the public legal " +
         "corpus, the same query also returns case-law decisions and statutes, which are " +
-        `published law and are returned as written. corpusOutcome reports whether law was available and carries refusal codes while matter results remain readable. ${COMPAT_ID_VOCABULARY} Pass an id back to fetch verbatim. ${LAW_READ_REFUSAL_DESCRIPTION}`,
+        `published law and are returned as written. corpusOutcome gives law status and refusal codes. ${COMPAT_ID_VOCABULARY} Pass an id back to fetch verbatim. ${LAW_READ_REFUSAL_DESCRIPTION}`,
     },
     description:
       "Search knowledge across accessible matters using the OpenAI-compatible " +
       "search tool shape. Where this deployment enables the public legal corpus, the same " +
       "query also returns case-law decisions and statutes from every jurisdiction the corpus " +
       `holds, the organization's practice jurisdictions first. ${COMPAT_ID_VOCABULARY} Pass an id back to fetch verbatim. ` +
-      "corpusOutcome reports whether law was available and carries refusal codes while matter results remain readable. " +
+      "corpusOutcome gives law status and refusal codes. " +
       `Use legal citation \`url\` for the reader and \`source_url\` for the publisher. ${LAW_READ_REFUSAL_DESCRIPTION}`,
     inputSchema: compatSearchArgsSchema,
     name: "search",

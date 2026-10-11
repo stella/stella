@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -14,7 +15,7 @@ import {
   legislationDocuments,
   legislationSources,
 } from "@/api/db/schema";
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type {
@@ -42,6 +43,7 @@ import {
   PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
 } from "@/api/lib/public-law-relations";
+import { admitLawRead } from "@/api/lib/usage/law-read-admission";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { DECISION_READER_TOOL_SET } from "@/api/mcp/decision-reader-tools";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
@@ -502,7 +504,14 @@ describe("public decision reader database boundary", () => {
       await DECISION_READER_TOOL_SET.handlers.read_case_law_decision_blocks({
         args: { decision_id: withheldId },
         context: asTestRaw<McpRequestContext>({
+          organizationId: toSafeId<"organization">("law-reader-fixture-org"),
           testDependencies: {
+            admitLawRead: async (options: Parameters<typeof admitLawRead>[0]) =>
+              await admitLawRead({
+                ...options,
+                publicLawEnabled: () => true,
+                mayReadPublicLaw: async () => Result.ok(true),
+              }),
             readDecisionReaderSource: async (options: ReaderSourceOptions) =>
               await readDecisionReaderSource({
                 ...options,

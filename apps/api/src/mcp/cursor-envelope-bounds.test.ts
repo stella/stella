@@ -28,7 +28,6 @@ import {
   GLOBAL_SEARCH_RESULT_LIMIT,
 } from "@/api/lib/search/pagination";
 import { isRecord } from "@/api/lib/type-guards";
-import { LAW_COMPAT_TOOL_SET } from "@/api/mcp/compat-law-tools";
 import { encodeCompatSearchCursor } from "@/api/mcp/compat-shared";
 import {
   encodeReaderCursor,
@@ -37,6 +36,7 @@ import {
 import capabilityCatalog from "@/api/mcp/generated/capability-catalog";
 import {
   ALL_MCP_TOOL_DEFINITIONS,
+  getStaticMcpToolDefinition,
   getStaticMcpToolOutputContract,
 } from "@/api/mcp/static-tool-definitions";
 import { cursorInput } from "@/api/mcp/tool-utils";
@@ -223,11 +223,19 @@ describe("every registered pagination envelope fits its own next-call input", ()
     const exercised = new Set<string>();
     const failures: string[] = [];
     for (const definition of ALL_MCP_TOOL_DEFINITIONS) {
-      const mode = LAW_COMPAT_TOOL_SET.definitions.some(
-        (lawDefinition) => lawDefinition === definition,
-      )
-        ? "law"
-        : "advanced";
+      const lawDefinition = getStaticMcpToolDefinition(definition.name, "law");
+      const lawOutput = getStaticMcpToolOutputContract(definition.name, "law");
+      const advancedOutput = getStaticMcpToolOutputContract(
+        definition.name,
+        "advanced",
+      );
+      const mode =
+        lawDefinition !== undefined &&
+        "inputSchemaSource" in lawDefinition &&
+        lawDefinition.inputSchemaSource === definition.inputSchemaSource &&
+        lawOutput !== advancedOutput
+          ? "law"
+          : "advanced";
       const output = getStaticMcpToolOutputContract(definition.name, mode);
       if (output === undefined) {
         failures.push(`${mode}.${definition.name}: missing output contract`);
@@ -244,7 +252,6 @@ describe("every registered pagination envelope fits its own next-call input", ()
         const property =
           path === "versionsNextCursor" ? "versions_cursor" : "cursor";
         if (
-          !("inputSchemaSource" in definition) ||
           !acceptsCursor({
             schema: definition.inputSchemaSource,
             property,

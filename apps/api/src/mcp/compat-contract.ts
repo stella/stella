@@ -50,7 +50,7 @@ const compatFetchOutput = <const TMetadata extends v.GenericSchema>(
     metadata,
   });
 
-export const COMPAT_SEARCH_CORPUS_OUTCOME_SCHEMA = v.variant("status", [
+const COMPAT_SEARCH_CORPUS_OUTCOME_SCHEMA = v.variant("status", [
   v.strictObject({
     status: v.literal("available"),
     paginationOutcome: SEARCH_PAGINATION_OUTCOME_SCHEMA,

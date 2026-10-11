@@ -43,7 +43,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `case-law.matter-links.batch.create` | write | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law matter-links-batch-create` |
 | `case-law.matter-links.create` | write | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law matter-links-create` |
 | `case-law.matter-links.delete` | write, destructive | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law matter-links-delete` |
-| `case-law.matter-links.list` | read | stella:read | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law matter-links-list` |
+| `case-law.matter-links.list` | read | stella:read | — | generic invoke → `stella capability case-law matter-links-list` |
 
 ## catalogue
 

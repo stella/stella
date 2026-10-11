@@ -43,16 +43,14 @@ const DESCRIPTION_HEAD =
   "across them.";
 
 const DESCRIPTION_TAIL =
-  " Filters: court, language, dates, decision type, " +
-  "source_id (a `facets.source` bucket's `value`). Facets describe the " +
-  "first phrasing on page one, null later. Total is uncounted for " +
-  "multiple phrasings. Function words are not required terms; " +
-  "`searches[]` gives each phrasing's `queryUsed` and warnings, and " +
-  "`strict` requires every word. Hits carry citationAuthority " +
-  "(blended into ranking), matchingPassages, resourceName and caseNumber " +
-  "(a citable reference, not always a docket). read_case_law_decision " +
-  "types it; read_case_law_citations " +
-  "gives citing polarity.";
+  " Filter by court, language, date, decision type, or source_id " +
+  "(`facets.source.value`). Facets cover phrasing one only, then are null; " +
+  "multi-phrasing total is uncounted. Function words are optional; " +
+  "`searches[]` shows `queryUsed` and warnings; `strict` requires all " +
+  "words. Hits include citationAuthority, matchingPassages, resourceName " +
+  "and caseNumber (not always a docket). Type is in " +
+  "`read_case_law_decision`; citing polarity is in " +
+  "`read_case_law_citations`.";
 
 const QUERIES_TAIL =
   "Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call.";

@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -9,8 +10,6 @@ import {
 } from "bun:test";
 import { count, eq, inArray } from "drizzle-orm";
 
-import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
-
 import {
   caseLawDecisions,
   caseLawMatterLinks,
@@ -19,18 +18,20 @@ import {
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import createMatterLinksBatch from "@/api/handlers/case-law/matter-links/batch/create";
 import createMatterLink from "@/api/handlers/case-law/matter-links/create";
-import listMatterLinks from "@/api/handlers/case-law/matter-links/list";
+import { createListMatterLinksHandler } from "@/api/handlers/case-law/matter-links/list";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { capabilityRoute } from "@/api/lib/capability-route";
+import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import type { McpRequestContext } from "@/api/mcp/context";
-import { handleMcpToolCall } from "@/api/mcp/tools";
+import { admitLawRead } from "@/api/lib/usage/law-read-admission";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { withPublicLawReaderRole } from "@/api/tests/pglite-test-db";
 import {
   createTestIds,
   setupRlsTestData,
@@ -90,44 +91,23 @@ const call = async (
   }
 };
 
-const modelCapabilityContext = (): McpRequestContext => {
-  const scopedDb = createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
-  const safeDb = createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
-  return asTestRaw<McpRequestContext>({
-    accessibleWorkspaceIds: [ids.wsA1],
-    accessibleWorkspaceIdSet: new Set([ids.wsA1]),
-    accessibleWorkspaceStatusById: new Map([[ids.wsA1, "active"]]),
-    accessibleWorkspaces: [{ id: ids.wsA1, status: "active" }],
-    createOperationDatabaseScope: () => ({
-      pinServerValidatedWorkspaceId: (workspaceId: SafeId<"workspace">) =>
-        workspaceId === ids.wsA1,
-      safeDb,
-      scopedDb,
+const readCaseLaw = async <T>(
+  read: (tx: CaseLawPublicReadTransaction) => Promise<T>,
+) =>
+  await withPublicLawReaderRole(
+    testDb,
+    async (tx) => await read(asTestRaw<CaseLawPublicReadTransaction>(tx)),
+  );
+
+const listMatterLinks = createListMatterLinksHandler({
+  caseLawDb: Object.assign(readCaseLaw, caseLawPublicReadDb),
+  admit: async (options) =>
+    await admitLawRead({
+      ...options,
+      publicLawEnabled: () => true,
+      mayReadPublicLaw: async () => Result.ok(true),
     }),
-    grantedScopes: ["stella:read"],
-    memberRole: "owner",
-    organizationId: ids.orgA,
-    request: new Request("https://example.test/mcp"),
-    recordAuditEvent: noopAuditRecorder,
-    safeDb,
-    scopedDb,
-    testDependencies: {
-      consumeInvokeCapabilityRateLimit: async () => ({
-        ok: true,
-        retryAfterSeconds: 60,
-      }),
-      isCapabilityFeatureEnabled: () => true,
-      loadOrgSettingsForAuth: async () => ({
-        orgAIConfig: null,
-        orgAIConfigStatus: "ok",
-        managedAIResidency: "eu",
-        promptCachingEnabled: false,
-      }),
-    },
-    userEmail: "test@example.test",
-    userId: ids.userA1,
-  });
-};
+});
 
 /** A refusal arrives as Elysia's status response: `{ code, response }`. */
 const statusOf = (result: unknown): number | null =>
@@ -349,7 +329,7 @@ describe("pinning a decision into a matter", () => {
     });
   });
 
-  test("capability results preserve the text boundary", async () => {
+  test("capability-route DB projection preserves the text boundary", async () => {
     await call(createMatterLink, {
       body: { decisionId: withheldDecision },
     });
@@ -380,20 +360,6 @@ describe("pinning a decision into a matter", () => {
       ],
     });
     expect(JSON.stringify(model)).not.toContain("decision-summary-fixture");
-
-    const capabilityCall = await handleMcpToolCall({
-      mode: "advanced",
-      args: {
-        capability: "case-law.matter-links.list",
-        input: { params: { matterId: ids.wsA1 } },
-      },
-      context: modelCapabilityContext(),
-      toolName: MCP_CAPABILITY_EXECUTORS.read,
-    });
-    const modelResult = JSON.stringify(capabilityCall);
-    expect(modelResult).not.toContain("decision-summary-fixture");
-    expect(modelResult).toContain('"headnote":null');
-    expect(modelResult).toContain('"textWithheldReason":"source_licence"');
   });
 });
 

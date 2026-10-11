@@ -74,4 +74,4 @@ export const admitLawReadOrError = async (options: AdmitLawReadOptions) =>
   );
 
 export const LAW_READ_REFUSAL_DESCRIPTION =
-  "Organization law reads may return not_entitled (403), missing_scope (403; public law disabled), or access_unavailable (503; retry later).";
+  "Law access codes: not_entitled, missing_scope, access_unavailable.";

@@ -416,8 +416,8 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       "the publisher's own dates are inconsistent), " +
       "`provision_not_found` (that consolidation has no such anchor) and " +
       "`text_withheld` (the source bars AI use of its wording) each carry a " +
-      "message. One batched call accepts multiple provisions. " +
-      "Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
+      "message. `url` opens the reader when available, else the " +
+      "publisher; `source_url` is the publisher URL.",
     inputSchema: readStatuteProvisionsArgsSchema,
     // Each entry is answered on its own, so an ELI no spelling rescues is that
     // entry's `not_found`, not a refusal of the whole batch.

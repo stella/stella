@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
@@ -24,6 +24,7 @@ import {
   publisherKeywordsMetadataSql,
 } from "@/api/lib/case-law/publisher-summary";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import {
   decisionTextWithheldReason,
   isRedistributable,
@@ -50,48 +51,59 @@ const readMatterLinkDecisions = async ({
   decisionIds,
   audience,
 }: ReadMatterLinkDecisionsOptions) => {
-  const fetchedRows = await caseLawDb(
+  const fetched = await caseLawDb(
     async (tx) =>
-      await tx
-        .select({
-          decisionId: caseLawDecisions.id,
-          caseNumber: caseLawDecisions.caseNumber,
-          slug: caseLawDecisions.slug,
-          ecli: caseLawDecisions.ecli,
-          court: caseLawDecisions.court,
-          country: caseLawDecisions.country,
-          language: caseLawDecisions.language,
-          languageGroupKey: caseLawDecisions.languageGroupKey,
-          decisionDate: caseLawDecisions.decisionDate,
-          decisionType: caseLawDecisions.decisionType,
-          citationCount: caseLawDecisions.citationCount,
-          descriptor: caseLawSources.descriptor,
-          // Publisher text follows the source's terms, exactly as the search
-          // hit does: a source that withholds redistribution contributes the
-          // row's own facts and no borrowed prose.
-          headnote: sql<string | null>`CASE WHEN ${redistributableCaseLawSource}
+      await readBounded(
+        tx
+          .select({
+            decisionId: caseLawDecisions.id,
+            caseNumber: caseLawDecisions.caseNumber,
+            slug: caseLawDecisions.slug,
+            ecli: caseLawDecisions.ecli,
+            court: caseLawDecisions.court,
+            country: caseLawDecisions.country,
+            language: caseLawDecisions.language,
+            languageGroupKey: caseLawDecisions.languageGroupKey,
+            decisionDate: caseLawDecisions.decisionDate,
+            decisionType: caseLawDecisions.decisionType,
+            citationCount: caseLawDecisions.citationCount,
+            descriptor: caseLawSources.descriptor,
+            // Publisher text follows the source's terms, exactly as the search
+            // hit does: a source that withholds redistribution contributes the
+            // row's own facts and no borrowed prose.
+            headnote: sql<
+              string | null
+            >`CASE WHEN ${redistributableCaseLawSource}
           THEN ${publisherHeadnoteMetadataSql(caseLawDecisions.metadata)}
         END`,
-          keywords: sql<
-            string[] | null
-          >`CASE WHEN ${redistributableCaseLawSource}
+            keywords: sql<
+              string[] | null
+            >`CASE WHEN ${redistributableCaseLawSource}
           THEN ${publisherKeywordsMetadataSql(caseLawDecisions.metadata)}
         END`,
-        })
-        .from(caseLawDecisions)
-        .innerJoin(
-          caseLawSources,
-          eq(caseLawSources.id, caseLawDecisions.sourceId),
-        )
-        .where(
-          and(
-            inArray(caseLawDecisions.id, decisionIds),
-            publishedCaseLawDecision,
+          })
+          .from(caseLawDecisions)
+          .innerJoin(
+            caseLawSources,
+            eq(caseLawSources.id, caseLawDecisions.sourceId),
+          )
+          .where(
+            and(
+              inArray(caseLawDecisions.id, decisionIds),
+              publishedCaseLawDecision,
+            ),
           ),
-        )
-        .limit(LIMITS.caseLawMatterLinksPerWorkspace),
+        LIMITS.caseLawMatterLinksPerWorkspace,
+      ),
   );
-  const rows = fetchedRows.filter((row) => isPublicCaseLawCountry(row.country));
+  if (fetched.type === "overflow") {
+    return panic(
+      "Matter link decision hydration exceeded the workspace link cap",
+    );
+  }
+  const rows = fetched.rows.filter((row) =>
+    isPublicCaseLawCountry(row.country),
+  );
 
   // The versions of each linked decision, through the same helper the search
   // hit uses: a multilingual decision the client cannot tell apart from a
@@ -240,27 +252,40 @@ const config = {
   access: "read",
 } satisfies WorkspaceHandlerConfig;
 
-const listMatterLinks = createSafeHandler(
-  config,
-  async function* ({ route, scopedDb, workspaceId, session }) {
-    const response = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await listMatterLinksHandler({
-            organizationId: session.activeOrganizationId,
-            workspaceId,
-            scopedDb,
-            caseLawDb: caseLawPublicReadDb,
-            audience:
-              route === capabilityRoute(MATTER_LINKS_LIST_CAPABILITY)
-                ? "model"
-                : "human",
-          }),
-      ),
-    );
+type CreateListMatterLinksHandlerOptions = {
+  caseLawDb: CaseLawPublicReadDb;
+  admit: typeof admitLawRead;
+};
 
-    return Result.ok(response);
-  },
-);
+export const createListMatterLinksHandler = ({
+  caseLawDb,
+  admit,
+}: CreateListMatterLinksHandlerOptions) =>
+  createSafeHandler(
+    config,
+    async function* ({ route, scopedDb, workspaceId, session }) {
+      const response = yield* Result.await(
+        Result.tryPromise(
+          async () =>
+            await listMatterLinksHandler({
+              organizationId: session.activeOrganizationId,
+              workspaceId,
+              scopedDb,
+              caseLawDb,
+              admit,
+              audience:
+                route === capabilityRoute(MATTER_LINKS_LIST_CAPABILITY)
+                  ? "model"
+                  : "human",
+            }),
+        ),
+      );
 
-export default listMatterLinks;
+      return Result.ok(response);
+    },
+  );
+
+export default createListMatterLinksHandler({
+  caseLawDb: caseLawPublicReadDb,
+  admit: admitLawRead,
+});

@@ -1144,18 +1144,17 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Resolve case references to decisions: docket numbers as the courts " +
-      "write them and ECLIs. Matches identity columns, not ranked text or citations. Each " +
+      "Resolve references by docket as written or ECLI; matches identity " +
+      "fields, not text or citations. Each " +
       "`identifiers[]` entry is answered on its own, in input order, under " +
       "`status`: `found` carries that decision's id, resourceName, appUrl, " +
       "caseNumber (citable, not always a docket), court, date and " +
       "ECLI; `incomplete_identifier` names the missing docket components; " +
       "`ambiguous` carries several real candidates: a docket is unique per " +
-      "court, so none is picked; `not_found` says what to " +
-      "call instead; `lookup_failed`: retry that " +
-      "entry. Use this when the user names a case; use search_case_law when " +
-      "they describe one. Pass a `found` decisionId to " +
-      "read_case_law_decision for the text and typed identifiers. " +
+      "court, so none is picked; `not_found` suggests the next call; " +
+      "`lookup_failed`: retry. Use for named cases; use search_case_law " +
+      "for described cases. Pass a found `decisionId` to " +
+      "read_case_law_decision for text and typed identifiers. " +
       "Use `url` for the reader and `source_url` for the publisher.",
     inputSchema: lookupCaseLawArgsSchema,
     inputNormalization: {
@@ -1257,19 +1256,19 @@ export const STELLA_TOOL_DEFINITIONS = [
     // polarity vocabulary and the two readings a model would otherwise guess
     // at, the passage's bounds, and the next call spelled out.
     description:
-      "Read how citing decisions stood to one, or what it cited. One page, " +
-      "each citation with a polarity and an excerpt of its paragraph. " +
-      "`cited_by` returns the decisions that cite this one, `cites` the ones " +
-      "it cites; neither means agreement. " +
+      "Read citing decisions and what this decision cited. Each page has " +
+      "citations, polarity and paragraph excerpt. " +
+      "`cited_by` lists citing decisions; `cites` lists cited ones; neither " +
+      "implies agreement. " +
       `\`polarity\` is one of ${CITATION_TREATMENTS.join(", ")}: a stance, ` +
-      "not a doctrinal act, so it never says followed, distinguished or " +
-      "overruled. 'unclassified' means none was read, 'mixed' that mentions " +
+      "not a doctrinal act: it does not mean followed, distinguished or " +
+      "overruled. 'unclassified': no polarity assigned; 'mixed': mentions " +
       "disagreed. `passage.text` is at most " +
-      `${LIMITS.caseLawCitationPassageChars} characters centred on the citation, cut when ` +
+      `${LIMITS.caseLawCitationPassageChars} characters centred on citation; cut when ` +
       "`passage.truncated`; `passage.mention` is 'sole', " +
-      "'classified_section' (the mention the polarity came from), or " +
+      "'classified_section' (polarity source), or " +
       "'latest_of_several' (it may not be). Pass nextCursor back as cursor. " +
-      "Use `url` for the reader and `source_url` for the publisher.",
+      "`url` opens the reader; `source_url` opens the publisher.",
     inputSchema: readCaseLawCitationsArgsSchema,
     access: "read",
     readClass: "public",
