@@ -197,6 +197,8 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "eu_completion_controls",
   "action_cost_records",
   "action_cost_calls",
+  // Chat content repair receipts are evidence the owner-run backfill writes.
+  "chat_content_v3_backfill_receipts",
   // Search backfill retries are ingestion control state, not request data.
   "case_law_search_backfill_failures",
   // A reader's failed analysis run: written and read only by the owner

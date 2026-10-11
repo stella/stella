@@ -392,6 +392,11 @@ describe("policy coverage", () => {
     // every privilege is revoked from stella (asserted in
     // rls-table-grants.test.ts), so there is no org policy to require.
     "feedback_reports",
+    // Chat content repair receipts: organization_id lets the receipts cascade
+    // with their organization and is never a tenant scope. RLS is enabled with
+    // no policy and every privilege is revoked from stella (asserted in
+    // rls-table-grants.test.ts), so there is no org policy to require.
+    "chat_content_v3_backfill_receipts",
     // A notification is addressed to a person, not to a matter: recipient and
     // organization are what admit the row, and its nullable workspace_id is a
     // link pointer the client resolves through the ordinary authorized routes,

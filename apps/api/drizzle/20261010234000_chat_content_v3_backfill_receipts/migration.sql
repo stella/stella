@@ -21,6 +21,7 @@ CREATE INDEX "chat_content_v3_receipts_org_idx" ON "chat_content_v3_backfill_rec
 
 -- No policies: ordinary application roles cannot read or write repair receipts.
 ALTER TABLE "chat_content_v3_backfill_receipts" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+REVOKE ALL PRIVILEGES ON TABLE "chat_content_v3_backfill_receipts" FROM stella;--> statement-breakpoint
 
 CREATE INDEX "chat_content_v3_backfill_receipts_message_idx"
   ON "chat_content_v3_backfill_receipts" ("message_id");--> statement-breakpoint
