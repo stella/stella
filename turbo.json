@@ -736,6 +736,13 @@
     "@stll/legal-atlas-runner#typecheck": {
       "dependsOn": ["transit", "@stll/api#typecheck:declarations"]
     },
+    "@stll/legal-atlas-runner#lint": {
+      "dependsOn": [
+        "transit",
+        "^generate:capability-runtime",
+        "@stll/api#typecheck:declarations"
+      ]
+    },
     "@stll/api#typecheck": {
       "cache": true,
       "dependsOn": [
