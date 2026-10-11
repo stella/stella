@@ -45,8 +45,10 @@ import {
 } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import type { ServingCorpusIndexGeneration } from "@/api/lib/legal-search/corpus-index-generation-store";
+import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
+import type { CorpusProjectionRevision } from "@/api/lib/legal-search/corpus-index-revision-clause";
 import {
   corpusFreeTextClause,
   quoteCorpusValue,
@@ -77,6 +79,7 @@ import {
 } from "@/api/lib/legal-search/index-naming";
 import {
   currentLegislationCorpusProjection,
+  legislationCorpusAppliedRevision,
   legislationCorpusWorkCanRecur,
 } from "@/api/lib/legal-search/legislation-corpus-projection";
 import { isCurrentVersionOfWork } from "@/api/lib/legal-search/legislation-current-version";
@@ -452,6 +455,9 @@ export const legislationCandidateRowsStatement = (
       sourceUrl: legislationDocuments.sourceUrl,
       citationAuthority: legislationDocuments.citationAuthority,
       canRecur: legislationCorpusWorkCanRecur(generation).as("can_recur"),
+      // The copy a page's snippet is read from.
+      appliedRevision:
+        legislationCorpusAppliedRevision(generation).as("applied_revision"),
     })
     .from(legislationDocuments)
     .innerJoin(
@@ -561,6 +567,12 @@ export const rehydrateLegislationCandidates = async ({
   const authorityById = new Map(
     read.rows.map((row) => [String(row.id), row.citationAuthority]),
   );
+  const revisionById = new Map<string, CorpusProjectionRevision>();
+  for (const { id, appliedRevision } of read.rows) {
+    if (appliedRevision !== null) {
+      revisionById.set(String(id), appliedRevision);
+    }
+  }
   const rankedCandidates =
     ranking === "authority"
       ? blendStableCitationAuthority({ candidates, authorityById })
@@ -617,6 +629,7 @@ export const rehydrateLegislationCandidates = async ({
 
   return {
     context: { byId },
+    revisionById,
     ranked: collapsed.ranked,
     groups: collapsed.workTokens.filter((token) => recurringTokens.has(token)),
   };
@@ -1082,6 +1095,10 @@ const corpusIndexSearch = async ({
           }
         : {}),
       snippetFields: ["text"],
+      projectionRevisionField: requireCorpusIndexManifest(
+        "legislation",
+        generation,
+      ).projection.projectionRevisionField,
       extractId: (hit) => {
         const id = hit["document_id"];
         return typeof id === "string" && isUuid(id) ? id : null;
