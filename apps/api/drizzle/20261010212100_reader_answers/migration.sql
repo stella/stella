@@ -64,6 +64,16 @@ CREATE POLICY "author_delete" ON "legal_reader_answers" AS PERMISSIVE FOR DELETE
   USING (organization_id = (SELECT current_setting('app.organization_id', true))
     AND user_id = (SELECT current_setting('app.user_id', true)));--> statement-breakpoint
 
+-- The review reset clears every author's threads as the table owner; messages go by cascade.
+CREATE POLICY "review_reset_owner_select" ON "legal_reader_answers" FOR SELECT TO PUBLIC USING (
+  current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legal_reader_answers'::regclass)
+  AND organization_id = nullif(current_setting('app.correspondence_review_reset_organization_id', true), '')
+);--> statement-breakpoint
+CREATE POLICY "review_reset_owner_delete" ON "legal_reader_answers" FOR DELETE TO PUBLIC USING (
+  current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legal_reader_answers'::regclass)
+  AND organization_id = nullif(current_setting('app.correspondence_review_reset_organization_id', true), '')
+);--> statement-breakpoint
+
 -- Parent RLS and explicit tenant/author checks govern the whole thread.
 CREATE POLICY "answer_select" ON "legal_reader_answer_messages" AS PERMISSIVE FOR SELECT TO stella
   USING (EXISTS (SELECT 1 FROM legal_reader_answers answer
