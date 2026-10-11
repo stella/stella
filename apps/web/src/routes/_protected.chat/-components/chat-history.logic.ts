@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { isUuid } from "@stll/api-contract/safe-id";
 import { Temporal, todayFor } from "@stll/time";
 
 import { APIError } from "@/lib/errors/api";
@@ -7,11 +8,15 @@ import { APIError } from "@/lib/errors/api";
 /**
  * The history page's filters live in the URL, so a reader who opens a chat
  * and comes back lands on the same search and matter. A malformed value falls
- * back to no filter instead of failing the route.
+ * back to no filter instead of failing the route; the matter must be an id in
+ * the format the API accepts, so a mistyped URL never reaches it.
  */
 export const chatHistorySearchSchema = v.object({
   q: v.fallback(v.optional(v.string()), undefined),
-  matter: v.fallback(v.optional(v.string()), undefined),
+  matter: v.fallback(
+    v.optional(v.pipe(v.string(), v.check(isUuid))),
+    undefined,
+  ),
 });
 
 export type ChatHistorySearch = v.InferOutput<typeof chatHistorySearchSchema>;

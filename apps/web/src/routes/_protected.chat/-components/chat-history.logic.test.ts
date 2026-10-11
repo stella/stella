@@ -180,6 +180,24 @@ describe("history search params", () => {
     });
   });
 
+  test("keeps only a matter id in the format the API accepts", () => {
+    const matterId = "00000000-0000-7000-8000-0000000000a1";
+    expect(v.parse(chatHistorySearchSchema, { matter: matterId })).toEqual({
+      q: undefined,
+      matter: matterId,
+    });
+    for (const malformed of [
+      "",
+      "invalid",
+      `${matterId}x`,
+      "not-a-uuid-at-all",
+    ]) {
+      expect(
+        v.parse(chatHistorySearchSchema, { matter: malformed, q: "lease" }),
+      ).toEqual({ q: "lease", matter: undefined });
+    }
+  });
+
   test("a blank search is not a filter; a matter or a term is", () => {
     expect(hasChatHistoryFilter({ q: "   " })).toBe(false);
     expect(hasChatHistoryFilter({})).toBe(false);
