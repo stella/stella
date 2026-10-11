@@ -93,7 +93,10 @@ export const createGraphController = (bridge: GraphBridge) => {
     if (
       parsed === undefined ||
       parsed.decisionId !== decisionId ||
-      parsed.direction !== model.direction
+      parsed.direction !== model.direction ||
+      (page !== undefined &&
+        parsed.nextCursor !== null &&
+        parsed.nextCursor === page.nextCursor)
     ) {
       fail(result?.content.find((part) => part.type === "text")?.text ?? null);
       return;

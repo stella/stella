@@ -144,6 +144,54 @@ const startWithPage = (
 };
 
 describe("citation graph controller", () => {
+  test.each(["synthetic-subject", "synthetic-target"])(
+    "rejects a non-advancing cursor without merging or losing retry state for %s",
+    async (decisionId) => {
+      const bridge = createBridge();
+      const controller = startWithPage(
+        bridge,
+        page({ nextCursor: "synthetic-cursor" }),
+      );
+      if (decisionId !== "synthetic-subject") {
+        const expansion = controller.read(decisionId);
+        bridge.resolveNext(
+          toolResult(page({ decisionId, nextCursor: "synthetic-cursor" })),
+        );
+        await expansion;
+      }
+      const originalModel = controller.getSnapshot().model;
+      const reading = controller.read(decisionId);
+      bridge.resolveNext(
+        toolResult(
+          page({
+            decisionId,
+            nextCursor: "synthetic-cursor",
+            citations: [citation("synthetic-repeated-page-edge")],
+          }),
+        ),
+      );
+      await reading;
+      expect(controller.getSnapshot().model).toBe(originalModel);
+      expect(controller.getSnapshot().request.status).toBe("error");
+
+      const retry = controller.read(decisionId);
+      expect(bridge.requests.at(-1)?.arguments).toEqual({
+        decision_id: decisionId,
+        direction: "cites",
+        cursor: "synthetic-cursor",
+      });
+      bridge.resolveNext(toolResult(page({ decisionId })));
+      await retry;
+      expect(controller.getSnapshot().request.status).toBe("idle");
+      expect(
+        controller
+          .getSnapshot()
+          .model?.pages.find((entry) => entry.decisionId === decisionId)
+          ?.nextCursor,
+      ).toBeNull();
+    },
+  );
+
   test("serializes opening and paging so a late opening cannot release a pending read", async () => {
     const bridge = createBridge({ linkError: null });
     const controller = startWithPage(

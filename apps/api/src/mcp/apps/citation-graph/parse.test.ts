@@ -24,6 +24,29 @@ const validPage = {
 } satisfies CitationPage;
 
 describe("citation page parsing", () => {
+  test("accepts resolved docket decisions with the default identifier type omitted", () => {
+    const payload = {
+      ...validPage,
+      citations: [
+        {
+          ...validCitation,
+          decision: {
+            appUrl: "https://example.org/decision",
+            url: "https://example.org/decision",
+            caseNumber: "Synthetic docket",
+            citationAuthority: 1,
+            court: "Synthetic court",
+            decisionDate: null,
+            decisionId: "synthetic-target",
+            decisionType: null,
+            resourceName: "case-law/synthetic-target",
+          },
+        },
+      ],
+    } satisfies CitationPage;
+    expect(parseCitationPage(payload)).toEqual(payload);
+  });
+
   test("accepts the public citation shape and preserves withheld markers", () => {
     const payload = {
       ...validPage,

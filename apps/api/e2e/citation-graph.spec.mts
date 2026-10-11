@@ -270,7 +270,7 @@ const mountGraph = async ({
             const direction = args["direction"];
             const cursor = args["cursor"];
             const decisionId = args["decision_id"];
-            let result = initialPage;
+            let result: CitationPage = initialPage;
             if (decisionId === subjectId && cursor === "fixture-cites-more") {
               result = pagedResult;
             } else if (decisionId === decisionIds[0]) {
