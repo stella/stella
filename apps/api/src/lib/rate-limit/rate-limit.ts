@@ -13,6 +13,7 @@ import { resolveResponseStatus } from "@/api/lib/observability/response-status";
 import { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability";
 import type {
   RateLimitBudget,
+  RateLimitContext,
   RateLimitContextConfig,
   RateLimitErrorResponse,
   RateLimitGenerator,
