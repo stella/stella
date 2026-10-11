@@ -245,6 +245,14 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     annotations.clearActive();
     answers.setActiveAnswerId(id);
     setOpenRevision((revision) => revision + 1);
+    // Expansion and gutter placement must commit before revealing the card.
+    requestAnimationFrame(() => {
+      mainRef.current
+        ?.querySelector<HTMLElement>(
+          `[data-reader-answer-id="${CSS.escape(id)}"]`,
+        )
+        ?.scrollIntoView({ behavior: "instant", block: "nearest" });
+    });
   });
   const activateMark = (id: string | null) => {
     if (
