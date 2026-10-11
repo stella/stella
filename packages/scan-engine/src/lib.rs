@@ -24,8 +24,24 @@ const ADAPTIVE_THRESHOLD_OFFSET: i32 = 5;
 const MIN_INK_RETENTION_PERCENT: usize = 75;
 const INK_TILE_SIDE: u32 = 8;
 const MIN_TILE_INK_PIXELS: usize = 16;
-const PAGE_REFERENCE_TOLERANCE: u8 = 30;
+const PAGE_REFERENCE_TOLERANCE: u8 = 50;
+const SOURCE_TILE_RETENTION_PERCENT: usize = 95;
 const SOURCE_TILE_INK_FRACTION_DIVISOR: usize = 200;
+const MIN_QUAD_SCORE: f32 = 0.70;
+const QUAD_MARGIN_REFERENCE: f32 = 0.15;
+const QUAD_MARGIN_WEIGHT: f32 = 0.20;
+const QUAD_AREA_RANK_WEIGHT: f32 = 0.10;
+const QUAD_CLUSTER_FRAME_FRACTION: f32 = 0.08;
+const SOURCE_CONTEXT_FRACTION: f32 = 0.25;
+const PAPER_COVERAGE_STEP: usize = 4;
+const MAX_NATIVE_GUARD_PIXEL_CHECKS: u64 = 320_000_000;
+
+fn quad_score(geometry: f32, support: f32, enclosure: f32, margin: f32) -> f32 {
+    geometry.powf(0.20)
+        * support.powf(0.35)
+        * enclosure.powf(0.25)
+        * margin.powf(QUAD_MARGIN_WEIGHT)
+}
 const CROP_PADDING_MM: f32 = 3.0;
 const MIN_EDGE_CONTRAST: u8 = 10;
 
@@ -191,37 +207,38 @@ fn side_length(a: Point, b: Point) -> f32 {
     ((b.0 - a.0).powi(2) + (b.1 - a.1).powi(2)).sqrt()
 }
 
-/// Broad projective bounds around Letter, A-series and Legal paper. These reject
-/// extreme desk fragments without assuming one country's paper format.
-fn plausible_geometry(quad: Quad, whole: f32) -> bool {
+/// Continuous projective plausibility around Letter, A-series and Legal paper.
+/// Convexity is an invariant; perspective and format departures reduce confidence.
+fn geometry_score(quad: Quad, whole: f32) -> f32 {
     let area_fraction = polygon_area(&quad) / whole;
-    if !(0.06..=0.94).contains(&area_fraction) {
-        return false;
-    }
+    let mut score = (area_fraction / 0.06)
+        .min((1.0 - area_fraction) / 0.06)
+        .clamp(0.0, 1.0);
     let sides = std::array::from_fn::<_, 4, _>(|i| side_length(quad[i], quad[(i + 1) % 4]));
     for i in 0..4 {
-        if cross(quad[i], quad[(i + 1) % 4], quad[(i + 2) % 4]) <= 0.0 {
-            return false;
+        if sides[i] <= 0.0 || cross(quad[i], quad[(i + 1) % 4], quad[(i + 2) % 4]) <= 0.0 {
+            return 0.0;
         }
         let previous = quad[(i + 3) % 4];
         let next = quad[(i + 1) % 4];
         let cosine = ((previous.0 - quad[i].0) * (next.0 - quad[i].0)
             + (previous.1 - quad[i].1) * (next.1 - quad[i].1))
             / (sides[(i + 3) % 4] * sides[i]);
-        // Angles between 45 and 135 degrees; stronger perspective is ambiguous.
-        if !cosine.is_finite() || cosine.abs() > std::f32::consts::FRAC_1_SQRT_2 {
-            return false;
+        if !cosine.is_finite() {
+            return 0.0;
         }
-        let opposite_ratio = sides[i] / sides[(i + 2) % 4];
-        if !(0.5..=2.0).contains(&opposite_ratio) {
-            return false;
-        }
+        score = score
+            .min(((1.0 - cosine.abs()) / (1.0 - std::f32::consts::FRAC_1_SQRT_2)).clamp(0.0, 1.0));
+        let ratio = sides[i] / sides[(i + 2) % 4];
+        score = score.min((ratio.min(1.0 / ratio) / 0.5).clamp(0.0, 1.0));
     }
     let ratio = (sides[0] + sides[2]) / (sides[1] + sides[3]);
     let aspect = ratio.max(1.0 / ratio);
-    [1.294_f32, std::f32::consts::SQRT_2, 1.647]
+    let format_error = [1.294_f32, std::f32::consts::SQRT_2, 1.647]
         .iter()
-        .any(|paper| (aspect / paper - 1.0).abs() <= 0.28)
+        .map(|paper| (aspect / paper - 1.0).abs())
+        .fold(f32::INFINITY, f32::min);
+    score.min(((0.40 - format_error) / 0.12).clamp(0.0, 1.0))
 }
 
 // Move each reduced hull side outward to contain the complete contour. Dropping
@@ -257,7 +274,7 @@ fn enclosing_quad(envelope: &[Point]) -> Option<Quad> {
 
 /// Find a sharp boundary in a bounded perpendicular band along every quarter
 /// of a side. Curved paper need not coincide with its enclosing straight quad.
-fn side_support(gray: &GrayImage, a: Point, b: Point) -> Option<f32> {
+fn side_support(gray: &GrayImage, a: Point, b: Point) -> f32 {
     let length = side_length(a, b);
     let normal = (-(b.1 - a.1) / length, (b.0 - a.0) / length);
     let band = (length * 0.08).clamp(4.0, 24.0) as i32;
@@ -301,7 +318,9 @@ fn side_support(gray: &GrayImage, a: Point, b: Point) -> Option<f32> {
         }
     }
     let total = quarters.iter().sum::<u32>() as f32 / 64.0;
-    (total >= 0.6 && quarters.iter().all(|count| *count >= 6)).then_some(total)
+    let weakest_quarter = quarters.into_iter().min().unwrap_or(0) as f32 / 16.0;
+    // Every quarter contributes: corners alone cannot stand in for a whole edge.
+    (total * weakest_quarter).sqrt()
 }
 
 // A blank rectangle can be furniture or a solid illustration. Require sparse
@@ -326,17 +345,70 @@ fn has_page_ink(gray: &GrayImage, quad: Quad) -> bool {
     samples > 0 && (0.01..=0.50).contains(&(ink as f32 / samples as f32))
 }
 
+fn paper_coverage(gray: &GrayImage, quad: Quad) -> f32 {
+    let mut histogram = [0_u32; 256];
+    let mut samples = Vec::new();
+    for y in (0..gray.height()).step_by(PAPER_COVERAGE_STEP) {
+        for x in (0..gray.width()).step_by(PAPER_COVERAGE_STEP) {
+            if !(0..4).all(|i| cross(quad[i], quad[(i + 1) % 4], (x as f32, y as f32)) >= 0.0) {
+                continue;
+            }
+            let value = gray.get_pixel(x, y)[0];
+            histogram[usize::from(value)] += 1;
+            samples.push((x, y, value));
+        }
+    }
+    if samples.is_empty() {
+        return 0.0;
+    }
+    let floor = high_histogram_level(&histogram, samples.len() as u32)
+        .saturating_sub(PAGE_REFERENCE_TOLERANCE);
+    let paper = samples
+        .iter()
+        .filter(|&&(x, y, value)| {
+            if value >= floor {
+                return true;
+            }
+            let background = stroke_background(gray, x, y);
+            background >= floor && background.saturating_sub(value) >= MIN_FOREGROUND_CONTRAST
+        })
+        .count();
+    paper as f32 / samples.len() as f32
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum QuadBoundary {
+    Enclosing,
+    Tight,
+}
+
+#[derive(Clone, Copy)]
+struct QuadCandidate {
+    quad: Quad,
+    score: f32,
+    rank: f32,
+}
+
+struct QuadCluster {
+    best: QuadCandidate,
+    enclosing: Option<QuadCandidate>,
+}
+
 /// Detects a page surrounded by a contrasting background, of either polarity.
 /// Ambiguous candidates leave the original geometry untouched.
 #[must_use]
 pub fn detect_page_quad(gray: &GrayImage) -> Option<Quad> {
+    detect_page_quad_with_budget(gray, MAX_NATIVE_GUARD_PIXEL_CHECKS)
+}
+
+fn detect_page_quad_with_budget(gray: &GrayImage, mut native_pixel_budget: u64) -> Option<Quad> {
     let scale = (750.0 / gray.width().max(gray.height()) as f32).min(1.0);
     let width = ((gray.width() as f32 * scale).round() as u32).max(1);
     let height = ((gray.height() as f32 * scale).round() as u32).max(1);
     let small = imageops::resize(gray, width, height, imageops::FilterType::Triangle);
     let smooth = box_filter(&small, 2, 2);
     let whole = width as f32 * height as f32;
-    let mut candidates: Vec<(Quad, f32)> = Vec::new();
+    let mut clusters: Vec<QuadCluster> = Vec::new();
     let mut inverted = smooth.clone();
     imageops::invert(&mut inverted);
     for image in [&smooth, &inverted] {
@@ -345,82 +417,261 @@ pub fn detect_page_quad(gray: &GrayImage) -> Option<Quad> {
                 if contour.parent.is_some() || contour.points.len() < 60 {
                     continue;
                 }
-                let envelope = hull(
-                    contour
-                        .points
-                        .iter()
-                        .map(|p| (p.x as f32, p.y as f32))
-                        .collect(),
-                );
-                let area = polygon_area(&envelope);
-                let Some(quad) = enclosing_quad(&envelope) else {
-                    continue;
-                };
-                if !plausible_geometry(quad, whole) || area / polygon_area(&quad) < 0.78 {
-                    continue;
-                }
-                if quad.iter().any(|p| {
-                    p.0 < 3.0 || p.1 < 3.0 || p.0 > width as f32 - 4.0 || p.1 > height as f32 - 4.0
-                }) {
-                    continue;
-                }
-                let supports: Option<Vec<_>> = (0..4)
-                    .map(|i| side_support(&small, quad[i], quad[(i + 1) % 4]))
-                    .collect();
-                let Some(supports) = supports else {
-                    continue;
-                };
-                if !has_page_ink(&small, quad) {
-                    continue;
-                }
-                let score = (area / whole).sqrt() * supports.iter().sum::<f32>() / 4.0
-                    * (area / polygon_area(&quad)).powi(3);
-                // Thresholds produce repeated contours of the same physical sheet.
-                // Cluster near-identical corners before measuring runner-up confidence.
-                let duplicate = candidates.iter_mut().find(|(existing, _)| {
-                    existing
-                        .iter()
-                        .zip(quad)
-                        .map(|(a, b)| side_length(*a, b))
-                        .sum::<f32>()
-                        / 4.0
-                        < width.max(height) as f32 * 0.04
+                let points = contour
+                    .points
+                    .iter()
+                    .map(|p| (p.x as f32, p.y as f32))
+                    .collect::<Vec<_>>();
+                // A hull can turn sparse connected texture into a convincing rectangle.
+                // Score the occupied contour, not the empty area added by its convex hull.
+                let area = polygon_area(&points);
+                let envelope = hull(points);
+                let enclosing = enclosing_quad(&envelope);
+                let reduced = reduce_quad(envelope.clone()).filter(|reduced| {
+                    enclosing.is_none_or(|enclosing| {
+                        enclosing
+                            .iter()
+                            .zip(reduced)
+                            .map(|(a, b)| side_length(*a, *b))
+                            .sum::<f32>()
+                            / 4.0
+                            >= 1.0
+                    })
                 });
-                if let Some(existing) = duplicate {
-                    if score > existing.1 {
-                        *existing = (quad, score);
+                for (quad, boundary) in [
+                    (enclosing, QuadBoundary::Enclosing),
+                    (reduced, QuadBoundary::Tight),
+                ]
+                .into_iter()
+                .filter_map(|(quad, boundary)| quad.map(|quad| (quad, boundary)))
+                {
+                    let geometry = geometry_score(quad, whole);
+                    let enclosure = (area / polygon_area(&quad)).clamp(0.0, 1.0);
+                    // Reject only when perfect edge evidence cannot reach acceptance.
+                    if quad_score(geometry, 1.0, enclosure, 1.0) < MIN_QUAD_SCORE {
+                        continue;
                     }
-                } else {
-                    candidates.push((quad, score));
+                    if quad.iter().any(|p| {
+                        p.0 < 0.0
+                            || p.1 < 0.0
+                            || p.0 > width as f32 - 1.0
+                            || p.1 > height as f32 - 1.0
+                    }) {
+                        continue;
+                    }
+                    let frame_corners = quad
+                        .iter()
+                        .filter(|p| {
+                            p.0 < 3.0
+                                || p.1 < 3.0
+                                || p.0 > width as f32 - 4.0
+                                || p.1 > height as f32 - 4.0
+                        })
+                        .count();
+                    if frame_corners > 1 {
+                        continue;
+                    }
+                    let support = (0..4)
+                        .map(|i| side_support(&small, quad[i], quad[(i + 1) % 4]))
+                        .fold(1.0_f32, f32::min);
+                    let score = quad_score(geometry, support, enclosure, 1.0);
+                    if score < MIN_QUAD_SCORE {
+                        continue;
+                    }
+                    let rank = score * (polygon_area(&quad) / whole).powf(QUAD_AREA_RANK_WEIGHT);
+                    // Thresholds produce repeated contours of the same physical sheet.
+                    // Cluster near-identical corners before measuring runner-up confidence.
+                    let duplicate = clusters.iter_mut().find(|cluster| {
+                        cluster
+                            .best
+                            .quad
+                            .iter()
+                            .zip(quad)
+                            .map(|(a, b)| side_length(*a, b))
+                            .sum::<f32>()
+                            / 4.0
+                            < width.max(height) as f32 * QUAD_CLUSTER_FRAME_FRACTION
+                    });
+                    let can_improve = duplicate.as_ref().is_none_or(|cluster| {
+                        rank > cluster.best.rank
+                            || (boundary == QuadBoundary::Enclosing
+                                && cluster
+                                    .enclosing
+                                    .is_none_or(|existing| rank > existing.rank))
+                    });
+                    if !can_improve || !has_page_ink(&small, quad) {
+                        continue;
+                    }
+                    let score = quad_score(
+                        geometry,
+                        support,
+                        enclosure * paper_coverage(&small, quad),
+                        1.0,
+                    );
+                    if score < MIN_QUAD_SCORE {
+                        continue;
+                    }
+                    let rank = score * (polygon_area(&quad) / whole).powf(QUAD_AREA_RANK_WEIGHT);
+                    let candidate = QuadCandidate { quad, score, rank };
+                    if let Some(cluster) = duplicate {
+                        if rank > cluster.best.rank {
+                            cluster.best = candidate;
+                        }
+                        if boundary == QuadBoundary::Enclosing
+                            && cluster
+                                .enclosing
+                                .is_none_or(|existing| rank > existing.rank)
+                        {
+                            cluster.enclosing = Some(candidate);
+                        }
+                    } else {
+                        let enclosing = match boundary {
+                            QuadBoundary::Enclosing => Some(candidate),
+                            QuadBoundary::Tight => None,
+                        };
+                        clusters.push(QuadCluster {
+                            best: candidate,
+                            enclosing,
+                        });
+                    }
                 }
             }
         }
     }
-    candidates.sort_by(|a, b| b.1.total_cmp(&a.1));
-    let (best, score) = candidates.first()?;
-    // A 15% lead over a distinct alternative is required to commit to a crop.
-    if candidates
-        .get(1)
-        .is_some_and(|(_, runner_up)| *score < runner_up * 1.15)
-    {
+    if clusters.is_empty() {
         return None;
     }
-    let quad = best.map(|p| (p.0 / scale, p.1 / scale));
-    // Bright source valleys add evidence of separate printed regions without
-    // treating dark carpet/wood texture as paper. The post-warp guard still
-    // checks all strokes, including dim text, in the selected region.
-    let ink = InkEstimate::from_image_with_floor(
-        gray,
-        high_page_level(gray).saturating_sub(PAGE_REFERENCE_TOLERANCE),
-    );
-    let minimum_tile_ink = ink
-        .count
-        .div_ceil(SOURCE_TILE_INK_FRACTION_DIVISOR)
-        .max(MIN_TILE_INK_PIXELS);
-    ink.retained_where(minimum_tile_ink, |x, y| {
-        (0..4).all(|i| cross(quad[i], quad[(i + 1) % 4], (x as f32, y as f32)) >= 0.0)
-    })
-    .then_some(quad)
+    clusters.sort_by(|a, b| b.best.rank.total_cmp(&a.best.rank));
+    let source_evidence = SourceContentEvidence::new(gray);
+    let source_pixels = u64::from(gray.width()) * u64::from(gray.height());
+    let mut candidates: Vec<QuadCandidate> = Vec::new();
+    for cluster in clusters {
+        // Later clusters cannot outrank an already validated runner-up.
+        if candidates
+            .get(1)
+            .is_some_and(|runner_up| cluster.best.rank <= runner_up.rank)
+        {
+            break;
+        }
+        for candidate in [Some(cluster.best), cluster.enclosing]
+            .into_iter()
+            .flatten()
+        {
+            native_pixel_budget = native_pixel_budget.checked_sub(source_pixels)?;
+            if source_evidence.retains(candidate.quad.map(|p| (p.0 / scale, p.1 / scale))) {
+                candidates.push(candidate);
+                candidates.sort_by(|a, b| b.rank.total_cmp(&a.rank));
+                candidates.truncate(2);
+                break;
+            }
+            if cluster
+                .enclosing
+                .is_none_or(|enclosing| enclosing.quad == cluster.best.quad)
+            {
+                break;
+            }
+        }
+    }
+    let best = candidates.first()?;
+    let margin = candidates.get(1).map_or(1.0, |runner_up| {
+        ((1.0 - runner_up.rank / best.rank) / QUAD_MARGIN_REFERENCE).clamp(0.0, 1.0)
+    });
+    if best.score * margin.powf(QUAD_MARGIN_WEIGHT) < MIN_QUAD_SCORE {
+        return None;
+    }
+    Some(best.quad.map(|p| (p.0 / scale, p.1 / scale)))
+}
+
+struct SourceContentEvidence<'a> {
+    gray: &'a GrayImage,
+    backgrounds: Vec<u8>,
+    page_level: u8,
+}
+
+impl<'a> SourceContentEvidence<'a> {
+    fn new(gray: &'a GrayImage) -> Self {
+        let backgrounds = gray
+            .enumerate_pixels()
+            .map(|(x, y, pixel)| {
+                let background = stroke_background(gray, x, y);
+                if background.saturating_sub(pixel[0]) >= MIN_FOREGROUND_CONTRAST {
+                    background
+                } else {
+                    0
+                }
+            })
+            .collect();
+        Self {
+            gray,
+            backgrounds,
+            page_level: high_page_level(gray, None),
+        }
+    }
+
+    fn retains(&self, quad: Quad) -> bool {
+        let gray = self.gray;
+        // Bright source valleys add evidence of separate printed regions without
+        // treating dark carpet/wood texture as paper. The post-warp guard still
+        // checks all strokes, including dim text, in the selected region.
+        let floor = high_page_level(gray, Some(quad))
+            .max(self.page_level)
+            .saturating_sub(PAGE_REFERENCE_TOLERANCE);
+        let pixels = self
+            .backgrounds
+            .iter()
+            .map(|background| *background > 0 && *background >= floor)
+            .collect::<Vec<_>>();
+        let count = pixels.iter().filter(|ink| **ink).count();
+        let mut ink = InkEstimate {
+            pixels,
+            count,
+            width: gray.width(),
+            height: gray.height(),
+        };
+        // Nearby print may be a clipped continuation of this sheet. Distant bright
+        // objects (for example a screen) are not evidence about its content.
+        let context = (0..4)
+            .map(|i| side_length(quad[i], quad[(i + 1) % 4]))
+            .fold(0.0_f32, f32::max)
+            * SOURCE_CONTEXT_FRACTION;
+        let original_ink_count = ink.count;
+        let source_width = ink.width as usize;
+        let in_context = |index: usize| {
+            let point = ((index % source_width) as f32, (index / source_width) as f32);
+            (0..4).all(|i| {
+                cross(quad[i], quad[(i + 1) % 4], point)
+                    >= -context * side_length(quad[i], quad[(i + 1) % 4])
+            })
+        };
+        let distant = ink
+            .pixels
+            .iter()
+            .enumerate()
+            .filter(|(index, pixel)| **pixel && !in_context(*index))
+            .count();
+        // Distant objects may veto a genuinely wrong crop when they contain most
+        // of the printed evidence; only a minor distant region can be excluded.
+        if distant * 100 <= ink.count * (100 - MIN_INK_RETENTION_PERCENT) {
+            for (index, pixel) in ink.pixels.iter_mut().enumerate() {
+                if *pixel && !in_context(index) {
+                    *pixel = false;
+                }
+            }
+            ink.count -= distant;
+        }
+        let minimum_tile_ink = ink
+            .count
+            .div_ceil(SOURCE_TILE_INK_FRACTION_DIVISOR)
+            .max(MIN_TILE_INK_PIXELS);
+        ink.retained_where(
+            InkRetentionOptions {
+                minimum_tile_ink,
+                original_ink_count,
+                minimum_tile_retention_percent: SOURCE_TILE_RETENTION_PERCENT,
+            },
+            |x, y| (0..4).all(|i| cross(quad[i], quad[(i + 1) % 4], (x as f32, y as f32)) >= 0.0),
+        )
+    }
 }
 
 /// Returns the clockwise angle of the page content in degrees.
@@ -523,12 +774,23 @@ fn page_background(gray: &GrayImage) -> u8 {
         .map_or(255, |(value, _)| value as u8)
 }
 
-fn high_page_level(gray: &GrayImage) -> u8 {
+fn high_page_level(gray: &GrayImage, quad: Option<Quad>) -> u8 {
     let mut counts = [0_u32; 256];
-    for pixel in gray.pixels() {
+    let mut samples = 0_u32;
+    for (x, y, pixel) in gray.enumerate_pixels() {
+        if quad.is_some_and(|quad| {
+            !(0..4).all(|i| cross(quad[i], quad[(i + 1) % 4], (x as f32, y as f32)) >= 0.0)
+        }) {
+            continue;
+        }
         counts[usize::from(pixel[0])] += 1;
+        samples += 1;
     }
-    let target = gray.width().saturating_mul(gray.height()).saturating_mul(9) / 10;
+    high_histogram_level(&counts, samples)
+}
+
+fn high_histogram_level(counts: &[u32; 256], samples: u32) -> u8 {
+    let target = samples.saturating_mul(9) / 10;
     let mut cumulative = 0;
     counts
         .iter()
@@ -629,18 +891,19 @@ struct InkEstimate {
     height: u32,
 }
 
+struct InkRetentionOptions {
+    minimum_tile_ink: usize,
+    original_ink_count: usize,
+    minimum_tile_retention_percent: usize,
+}
+
 impl InkEstimate {
     fn from_image(source: &GrayImage) -> Self {
-        Self::from_image_with_floor(source, 0)
-    }
-
-    fn from_image_with_floor(source: &GrayImage, minimum_background: u8) -> Self {
         let pixels: Vec<bool> = source
             .enumerate_pixels()
             .map(|(x, y, pixel)| {
                 let background = stroke_background(source, x, y);
-                background >= minimum_background
-                    && background.saturating_sub(pixel[0]) >= MIN_FOREGROUND_CONTRAST
+                background.saturating_sub(pixel[0]) >= MIN_FOREGROUND_CONTRAST
             })
             .collect();
         let count = pixels.iter().filter(|ink| **ink).count();
@@ -658,24 +921,37 @@ impl InkEstimate {
         mode: CleanOutput,
         bounds: ContentBox,
     ) -> bool {
-        self.retained_where(MIN_TILE_INK_PIXELS, |x, y| {
-            if x < bounds.x
-                || y < bounds.y
-                || x >= bounds.x + bounds.width
-                || y >= bounds.y + bounds.height
-            {
-                return false;
-            }
-            match mode {
-                CleanOutput::Binary => output.get_pixel(x, y)[0] == 0,
-                CleanOutput::Grayscale => stroke_contrast(output, x, y) >= MIN_FOREGROUND_CONTRAST,
-            }
-        })
+        self.retained_where(
+            InkRetentionOptions {
+                minimum_tile_ink: MIN_TILE_INK_PIXELS,
+                original_ink_count: self.count,
+                minimum_tile_retention_percent: MIN_INK_RETENTION_PERCENT,
+            },
+            |x, y| {
+                if x < bounds.x
+                    || y < bounds.y
+                    || x >= bounds.x + bounds.width
+                    || y >= bounds.y + bounds.height
+                {
+                    return false;
+                }
+                match mode {
+                    CleanOutput::Binary => output.get_pixel(x, y)[0] == 0,
+                    CleanOutput::Grayscale => {
+                        stroke_contrast(output, x, y) >= MIN_FOREGROUND_CONTRAST
+                    }
+                }
+            },
+        )
     }
 
     fn retained_where(
         &self,
-        minimum_tile_ink: usize,
+        InkRetentionOptions {
+            minimum_tile_ink,
+            original_ink_count,
+            minimum_tile_retention_percent,
+        }: InkRetentionOptions,
         preserved: impl Fn(u32, u32) -> bool,
     ) -> bool {
         let mut source_tiles = [0_usize; (INK_TILE_SIDE * INK_TILE_SIDE) as usize];
@@ -695,13 +971,13 @@ impl InkEstimate {
                 retained_tiles[tile] += 1;
             }
         }
-        retained * 100 >= self.count * MIN_INK_RETENTION_PERCENT
+        retained * 100 >= original_ink_count * MIN_INK_RETENTION_PERCENT
             && source_tiles
                 .iter()
                 .zip(retained_tiles)
                 .all(|(source, retained)| {
                     *source < minimum_tile_ink
-                        || retained * 100 >= source * MIN_INK_RETENTION_PERCENT
+                        || retained * 100 >= source * minimum_tile_retention_percent
                 })
     }
 
@@ -721,15 +997,24 @@ fn retains_ink(source: &GrayImage, output: &GrayImage, mode: CleanOutput) -> boo
     InkEstimate::from_image(source).retained_in(output, mode)
 }
 
-fn threshold_document(flattened: &GrayImage) -> Result<GrayImage, UnrecognizedReason> {
+fn threshold_document(flattened: &GrayImage, offset: i32) -> Result<GrayImage, UnrecognizedReason> {
     let local_mean = box_filter_scaled(flattened, 20)?;
     let mut output = bounded_image(flattened.width(), flattened.height(), 0)?;
     for (x, y, pixel) in output.enumerate_pixels_mut() {
         let value = flattened.get_pixel(x, y)[0];
-        let foreground = i32::from(value)
-            < i32::from(local_mean.get_pixel(x, y)[0]) - ADAPTIVE_THRESHOLD_OFFSET
+        let foreground = i32::from(value) < i32::from(local_mean.get_pixel(x, y)[0]) - offset
             && stroke_contrast(flattened, x, y) >= MIN_FOREGROUND_CONTRAST;
         *pixel = Luma([if foreground { 0 } else { 255 }]);
+    }
+    Ok(output)
+}
+
+fn threshold_strokes(source: &GrayImage) -> Result<GrayImage, UnrecognizedReason> {
+    let mut output = bounded_image(source.width(), source.height(), 255)?;
+    for (x, y, pixel) in output.enumerate_pixels_mut() {
+        if stroke_contrast(source, x, y) >= MIN_FOREGROUND_CONTRAST {
+            *pixel = Luma([0]);
+        }
     }
     Ok(output)
 }
@@ -911,7 +1196,7 @@ fn flattening_background(gray: &GrayImage) -> Result<GrayImage, UnrecognizedReas
         reachable = largest_open_region(&barrier, width, height);
     }
     if !reachable.iter().any(|value| *value) {
-        return bounded_image(width, height, high_page_level(gray));
+        return bounded_image(width, height, high_page_level(gray, None));
     }
 
     let mut inpainted = gray.clone();
@@ -1065,9 +1350,18 @@ pub fn clean_scan(
     if !ink.retained_in(&flattened, CleanOutput::Grayscale) {
         flattened = straight.clone();
     }
-    let mut binary = threshold_document(&flattened)?;
+    let mut binary = threshold_document(&flattened, ADAPTIVE_THRESHOLD_OFFSET)?;
     if !ink.retained_in(&binary, CleanOutput::Binary) {
-        binary = threshold_document(&straight)?;
+        binary = threshold_document(&straight, ADAPTIVE_THRESHOLD_OFFSET)?;
+    }
+    if !ink.retained_in(&binary, CleanOutput::Binary) {
+        binary = threshold_document(&straight, 0)?;
+    }
+    if !ink.retained_in(&binary, CleanOutput::Binary) {
+        // Dense or faint text can lower the adaptive mean beneath its stroke fringes. After
+        // dropping flattening, retain local stroke contrast alone; opposing samples still
+        // exclude broad shadows and filled interiors. The requested output remains binary.
+        binary = threshold_strokes(&straight)?;
     }
     if options.output == CleanOutput::Binary && !ink.retained_in(&binary, CleanOutput::Binary) {
         return Err(UnrecognizedReason::ContentLoss);
@@ -1174,4 +1468,10 @@ mod property_tests;
 mod tests;
 
 #[cfg(test)]
+mod content_tests;
+
+#[cfg(test)]
 mod preservation_tests;
+
+#[cfg(test)]
+mod quad_tests;

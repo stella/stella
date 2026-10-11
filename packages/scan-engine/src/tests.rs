@@ -457,7 +457,8 @@ fn binary_output_whitens_the_interior_of_a_solid_dark_region() {
             source.put_pixel(x, y, Luma([0]));
         }
     }
-    let binary = threshold_document(&source).expect("test image should fit");
+    let binary = threshold_document(&source, crate::ADAPTIVE_THRESHOLD_OFFSET)
+        .expect("test image should fit");
     assert_eq!(binary.get_pixel(150, 150)[0], 255);
 }
 
@@ -643,14 +644,28 @@ fn darker_paper_in_a_wide_bright_scene_is_detected() {
 }
 #[test]
 fn concave_and_extreme_corner_quads_are_rejected() {
-    assert!(!crate::plausible_geometry(
-        [(20.0, 20.0), (200.0, 20.0), (90.0, 80.0), (20.0, 200.0)],
-        60000.0
-    ));
-    assert!(!crate::plausible_geometry(
-        [(20.0, 20.0), (250.0, 20.0), (30.0, 200.0), (20.0, 200.0)],
-        60000.0
-    ));
+    assert!(
+        crate::quad_score(
+            crate::geometry_score(
+                [(20.0, 20.0), (200.0, 20.0), (90.0, 80.0), (20.0, 200.0)],
+                60000.0
+            ),
+            1.0,
+            1.0,
+            1.0
+        ) < crate::MIN_QUAD_SCORE
+    );
+    assert!(
+        crate::quad_score(
+            crate::geometry_score(
+                [(20.0, 20.0), (250.0, 20.0), (30.0, 200.0), (20.0, 200.0)],
+                60000.0
+            ),
+            1.0,
+            1.0,
+            1.0
+        ) < crate::MIN_QUAD_SCORE
+    );
 }
 #[test]
 fn partial_side_support_cannot_be_replaced_by_strong_corners() {
@@ -660,7 +675,7 @@ fn partial_side_support_cannot_be_replaced_by_strong_corners() {
             source.put_pixel(x, y, Luma([30]));
         }
     }
-    assert!(crate::side_support(&source, (40.0, 90.0), (260.0, 90.0)).is_none());
+    assert!(crate::side_support(&source, (40.0, 90.0), (260.0, 90.0)) == 0.0);
 }
 
 #[test]
@@ -686,9 +701,9 @@ fn quiet_low_contrast_and_curved_edges_are_supported_but_gradients_are_not() {
         let boundary = 85 + (x.abs_diff(150) / 20).pow(2) / 3;
         Luma([if y < boundary { 180 } else { 175 }])
     });
-    assert!(crate::side_support(&curved, (30.0, 85.0), (270.0, 85.0)).is_some());
+    assert!(crate::side_support(&curved, (30.0, 85.0), (270.0, 85.0)) > 0.7);
     let gradient = GrayImage::from_fn(300, 200, |_, y| Luma([y as u8]));
-    assert!(crate::side_support(&gradient, (30.0, 85.0), (270.0, 85.0)).is_none());
+    assert!(crate::side_support(&gradient, (30.0, 85.0), (270.0, 85.0)) == 0.0);
 }
 
 #[test]

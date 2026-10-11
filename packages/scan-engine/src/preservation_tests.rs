@@ -14,7 +14,8 @@ fn binary_retains_thin_strokes_across_smooth_shadow_levels() {
                     source.put_pixel(x, y, Luma([shade.saturating_sub(35)]));
                 }
             }
-            let binary = threshold_document(&source).expect("bounded fixture");
+            let binary = threshold_document(&source, crate::ADAPTIVE_THRESHOLD_OFFSET)
+                .expect("bounded fixture");
             assert!(
                 retains_ink(&source, &binary, CleanOutput::Binary),
                 "shade {shade}, width {stroke_width}"
@@ -28,7 +29,8 @@ fn binary_retains_thin_strokes_across_smooth_shadow_levels() {
 #[test]
 fn broad_smooth_fold_valleys_do_not_become_black_blocks() {
     let source = GrayImage::from_fn(240, 120, |x, _| Luma([60 + (x.abs_diff(120) / 2) as u8]));
-    let binary = threshold_document(&source).expect("bounded fixture");
+    let binary =
+        threshold_document(&source, crate::ADAPTIVE_THRESHOLD_OFFSET).expect("bounded fixture");
     assert!(binary.pixels().all(|pixel| pixel[0] == 255));
 }
 
@@ -40,7 +42,8 @@ fn retention_guard_detects_erasure_and_enforces_the_documented_fraction() {
             source.put_pixel(x, y, Luma([30]));
         }
     }
-    let mut output = threshold_document(&source).expect("bounded fixture");
+    let mut output =
+        threshold_document(&source, crate::ADAPTIVE_THRESHOLD_OFFSET).expect("bounded fixture");
     assert!(retains_ink(&source, &output, CleanOutput::Binary));
     for y in [20, 40, 60, 80] {
         for x in (20..100).step_by(4) {
@@ -144,7 +147,8 @@ fn dominant_desk_strokes_cannot_hide_erasure_in_a_separate_text_region() {
             }
         }
         let estimate = InkEstimate::from_image(&source);
-        let mut binary = threshold_document(&source).expect("bounded fixture");
+        let mut binary =
+            threshold_document(&source, crate::ADAPTIVE_THRESHOLD_OFFSET).expect("bounded fixture");
         let erased = (0..minor_strokes)
             .flat_map(|row| (200..224).map(move |x| (x, 202 + row * 4)))
             .filter(|(x, y)| binary.get_pixel(*x, *y)[0] == 0)
@@ -160,7 +164,8 @@ fn dominant_desk_strokes_cannot_hide_erasure_in_a_separate_text_region() {
             }
         }
         assert!(!estimate.retained_in(&binary, CleanOutput::Binary));
-        let intact_binary = threshold_document(&source).expect("bounded fixture");
+        let intact_binary =
+            threshold_document(&source, crate::ADAPTIVE_THRESHOLD_OFFSET).expect("bounded fixture");
         assert!(!estimate.retained_in_bounds(
             &intact_binary,
             CleanOutput::Binary,
