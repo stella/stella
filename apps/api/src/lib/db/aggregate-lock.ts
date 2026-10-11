@@ -22,7 +22,6 @@ import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
@@ -1548,26 +1547,31 @@ type DecisionCitationStatsLocksOptions = {
   decisionIds: readonly SafeId<"caseLawDecision">[];
 };
 
-/** Lock before comparing so a concurrent writer cannot create false drift. */
+/**
+ * Lock before comparing so a concurrent writer cannot create false drift.
+ * Every existing batch row, published or listing-only, is locked before any
+ * stripe: refresh rebuilds each supplied decision, and a visibility update
+ * holds its own row while it waits for stripes.
+ */
 export const withDecisionCitationStatsLocks = async ({
   tx,
   decisionIds,
 }: DecisionCitationStatsLocksOptions) => {
   await tx.execute(sql`
-    SELECT id FROM case_law_decisions decision
+    SELECT id FROM case_law_decisions
     WHERE id IN (${sql.join(
       decisionIds.map((id) => sql`${id}::uuid`),
       sql`, `,
-    )}) AND ${sql.raw(publishedCaseLawDecisionSqlFor("decision"))}
+    )})
     ORDER BY id FOR NO KEY UPDATE
   `);
   await tx.execute(sql`
     SELECT pg_advisory_xact_lock(19053, key) FROM (
       SELECT DISTINCT (hashtextextended('decision-citation-stats:' || id::text, 0) & 127)::integer AS key
-      FROM case_law_decisions decision WHERE id IN (${sql.join(
+      FROM case_law_decisions WHERE id IN (${sql.join(
         decisionIds.map((id) => sql`${id}::uuid`),
         sql`, `,
-      )}) AND ${sql.raw(publishedCaseLawDecisionSqlFor("decision"))}
+      )})
       ORDER BY key
     ) anchors
   `);

@@ -609,6 +609,97 @@ if (!databaseUrl || !runPostgresTests) {
       20_000,
     );
 
+    test("a mixed published and listing-only refresh batch serializes with publishing its listing-only endpoint", async () => {
+      if (!databaseUrl) {
+        return;
+      }
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { sql: observer, db } = openClient();
+        const source = caseLawSourceRow({
+          adapterKey: `citation-mixed-batch-${Bun.randomUUIDv7()}`,
+        });
+        const published = createSafeId<"caseLawDecision">();
+        const listingOnly = createSafeId<"caseLawDecision">();
+        const ids = [published, listingOnly];
+        try {
+          await db.insert(caseLawSources).values(source);
+          for (const id of ids) {
+            await db.insert(caseLawDecisions).values({
+              id,
+              sourceId: source.id,
+              country: "CZE",
+              court: "Court",
+              language: "cs",
+              caseNumber: id,
+              decisionDate: "2020-01-01",
+              metadata:
+                id === listingOnly
+                  ? { _stellaPartialObservation: { isListingOnly: true } }
+                  : {},
+            });
+            await observer`SELECT refresh_decision_citation_stats(${id}::uuid)`;
+          }
+          await insertEdge(observer, {
+            citing: published,
+            cited: listingOnly,
+          });
+          await withInterleaving({
+            databaseUrl,
+            a: {
+              steps: [
+                {
+                  name: "refresh-batch",
+                  run: (tx) =>
+                    refreshDecisionCitationStats({ tx, decisionIds: ids }),
+                },
+              ],
+            },
+            b: {
+              steps: [
+                {
+                  name: "lock-listing-only-row",
+                  run: (tx) =>
+                    tx.execute(
+                      sql`SELECT id FROM case_law_decisions WHERE id = ${listingOnly}::uuid FOR NO KEY UPDATE`,
+                    ),
+                },
+                {
+                  name: "publish-listing-only",
+                  run: (tx) =>
+                    tx.execute(
+                      sql`UPDATE case_law_decisions SET metadata = '{}'::jsonb WHERE id = ${listingOnly}::uuid`,
+                    ),
+                },
+              ],
+            },
+            // The batch must wait on the listing-only row before it owns any
+            // stripe the visibility trigger needs; both then commit.
+            schedules: [
+              [
+                "b.lock-listing-only-row",
+                "a.refresh-batch",
+                "b.publish-listing-only",
+                "b.commit",
+                "a.commit",
+              ],
+            ],
+            reset: async () => {},
+            readState: async () => compareProjection(observer, ids),
+            invariant: ({ outcomes, blocked, state }) => {
+              expect(blocked).toContain("a.refresh-batch");
+              expect(outcomes.a.status).toBe("committed");
+              expect(outcomes.b.status).toBe("committed");
+              expect(state.actual).toEqual(state.expected);
+            },
+            timeoutMs: 10_000,
+          });
+        } finally {
+          await observer`DELETE FROM case_law_decisions WHERE source_id = ${source.id}::uuid`;
+          await observer`DELETE FROM case_law_sources WHERE id = ${source.id}::uuid`;
+        }
+      });
+    }, 20_000);
+
     test("decision deletion and an edge tuple writer recover from a deadlock without projection drift", async () => {
       if (!databaseUrl) {
         return;
