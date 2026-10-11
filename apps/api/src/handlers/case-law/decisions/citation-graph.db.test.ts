@@ -1058,6 +1058,9 @@ test("outgoing citations through a retired UUID retain canonical passages and ev
     direction: "cites",
     limit: 10,
   });
+  if (canonical === null) {
+    panic("Expected public canonical citation page");
+  }
   expect(canonical).toMatchObject({
     type: "page",
     page: {
