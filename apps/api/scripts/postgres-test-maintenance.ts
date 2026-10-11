@@ -1,5 +1,6 @@
 import { panic } from "better-result";
-import { SQL } from "bun";
+
+import { openBoundedDatabaseObserver } from "../src/db/online-index-observer";
 
 // Disable automatic maintenance only on this migrated fixture's tables. Tests
 // of real autovacuum create fresh databases whose defaults remain enabled.
@@ -24,19 +25,23 @@ if (import.meta.main) {
   if (url.hostname !== "127.0.0.1" || url.pathname !== "/stella") {
     panic("Postgres test maintenance requires the ephemeral CI database");
   }
-  const client = new SQL({ url: databaseUrl, max: 1 });
+  const client = await openBoundedDatabaseObserver({
+    url: databaseUrl,
+    statementTimeoutMs: 30_000,
+    lockTimeoutMs: 1000,
+  });
   try {
-    await client.unsafe(POSTGRES_TEST_MAINTENANCE_SQL);
+    await client.execute(POSTGRES_TEST_MAINTENANCE_SQL);
     console.log(
       "Postgres fixture table autovacuum disabled; fresh database defaults retained.",
     );
     console.log(
       JSON.stringify(
-        await client`SELECT name, setting, unit, source FROM pg_settings
-          WHERE name IN ('autovacuum', 'deadlock_timeout', 'lock_timeout') ORDER BY name`,
+        await client.query(`SELECT name, setting, unit, source FROM pg_settings
+          WHERE name IN ('autovacuum', 'deadlock_timeout', 'lock_timeout') ORDER BY name`),
       ),
     );
   } finally {
-    await client.close();
+    await client.release();
   }
 }

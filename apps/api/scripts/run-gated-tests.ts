@@ -255,6 +255,6 @@ export const runGatedTests = async ({
     cwd: apiRoot,
     gate: runner.gate,
     gateValue: runner.gateValue,
-    spawn: spawnTestProcess,
+    ...(spawnTestProcess === undefined ? {} : { spawn: spawnTestProcess }),
   });
 };

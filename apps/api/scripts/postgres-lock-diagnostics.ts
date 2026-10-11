@@ -1,5 +1,6 @@
-import { Result } from "better-result";
-import { SQL } from "bun";
+import { panic, Result } from "better-result";
+
+import { openBoundedDatabaseObserver } from "../src/db/online-index-observer";
 
 const SAMPLE_INTERVAL_MS = 100;
 const MAX_SAMPLES = 4;
@@ -156,7 +157,7 @@ export const observePostgresTestProcess = ({
 }: ObservePostgresTestProcessOptions) => {
   const monitor = startLockMonitor({
     capture,
-    intervalMs,
+    ...(intervalMs === undefined ? {} : { intervalMs }),
   });
   let lockTimeoutObserved = false;
   const forward = async (
@@ -193,19 +194,35 @@ export const observePostgresTestProcess = ({
 export const spawnPostgresTestProcess = (
   options: PostgresTestProcessOptions,
 ) => {
-  const observer = new SQL({
-    url: options.env["DATABASE_URL"],
-    max: 1,
-    connection: {
-      application_name: "stella_test_lock_observer",
-      statement_timeout: 1000,
-      lock_timeout: 100,
-    },
-  });
+  const databaseUrl =
+    options.env["DATABASE_URL"] ?? panic("Missing DATABASE_URL");
+  const observer = Result.tryPromise(
+    async () =>
+      await openBoundedDatabaseObserver({
+        url: databaseUrl,
+        applicationName: "stella_test_lock_observer",
+        statementTimeoutMs: 1000,
+        lockTimeoutMs: 100,
+      }),
+  );
   const child = Bun.spawn({ ...options, stdout: "pipe", stderr: "pipe" });
   const exited = observePostgresTestProcess({
     child,
-    capture: () => observer.unsafe(POSTGRES_LOCK_SNAPSHOT_SQL),
+    capture: async () => {
+      const connection = (await observer).unwrap();
+      const rows = await connection.query(POSTGRES_LOCK_SNAPSHOT_SQL);
+      return rows.map((row) => {
+        if (
+          typeof row !== "object" ||
+          row === null ||
+          !("snapshot" in row) ||
+          typeof row.snapshot !== "string"
+        ) {
+          return panic("Expected a PostgreSQL lock snapshot string");
+        }
+        return { snapshot: row.snapshot };
+      });
+    },
     writeStdout: (chunk) => {
       process.stdout.write(chunk);
     },
@@ -216,7 +233,10 @@ export const spawnPostgresTestProcess = (
       console.error(report);
     },
   }).finally(async () => {
-    await observer.close({ timeout: 0 });
+    const connection = await observer;
+    if (connection.isOk()) {
+      await connection.value.release();
+    }
   });
   return {
     exited,
