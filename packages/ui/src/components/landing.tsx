@@ -81,7 +81,7 @@ export const LandingGreeting = ({ icon, children }: LandingGreetingProps) => (
 
 /** A column's heading: an icon and a sentence-case label, as a link or a trigger. */
 export const LANDING_SECTION_HEADING_CLASS =
-  "text-muted-foreground hover:text-foreground focus-visible:ring-ring flex items-center gap-2 rounded-md px-2 text-sm font-medium outline-none focus-visible:ring-2";
+  "text-foreground hover:bg-accent/50 focus-visible:ring-ring [&>svg]:text-muted-foreground flex items-center gap-2 rounded-md px-2 py-0.5 text-sm font-semibold outline-none focus-visible:ring-2";
 
 /** A row of a column, as a link or a button. Its text lines up with the
  *  heading's label; the icon slot under the heading icon stays empty unless

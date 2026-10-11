@@ -1277,6 +1277,9 @@ type Messages = {
       "noMatters": "No matters yet";
       "noRecentChats": "No recent chats";
       "noSkills": "No skills yet";
+      "openAllMatters": "Open all matters";
+      "openChatHistory": "Open chat history";
+      "openSkillsLibrary": "Open the skills library";
       "pinnedMatters": "Pinned matters";
       "recentChats": "Recent chats";
       "skillEditedBy": "Edited by {name} · {time}";
