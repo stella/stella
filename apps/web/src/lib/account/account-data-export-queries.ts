@@ -8,7 +8,7 @@ import { unwrapEden } from "@/lib/errors/api";
 const ACCOUNT_DATA_EXPORT_POLL_INTERVAL_MS = 2000;
 const ACCOUNT_DATA_EXPORT_READY_REFRESH_MAX_INTERVAL_MS = 60_000;
 
-export const accountDataExportKeys = {
+const accountDataExportKeys = {
   latest: (userId: string) => ["me", "data-exports", userId] as const,
 };
 
