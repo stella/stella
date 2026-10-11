@@ -4,7 +4,11 @@ import { stripVTControlCharacters } from "node:util";
 import ts from "typescript";
 import * as v from "valibot";
 
-import { DOC_SOURCE_FILE, type DatedWaiver } from "./dated-waivers";
+import {
+  DOC_SOURCE_FILE,
+  ZERO_AGE_OVERRIDE,
+  type DatedWaiver,
+} from "./dated-waivers";
 import {
   collectLintDirectives,
   resolveDirectiveAnchors,
@@ -13,12 +17,6 @@ import {
 import { parseLedger } from "./suppression-waivers";
 
 export type RemovalChange = { source: string; before: string; after: string };
-
-/**
- * The documented zero-age override, as one separate argument. Detection and
- * removal share it, so any spelling detection accepts is one removal removes.
- */
-const ZERO_AGE_OVERRIDE = /[ \t]--minimum-release-age[= ]0\b/u;
 
 // Offsets must come from a parseable owner, never from regex over source text.
 const parseOwner = (source: string, file: string): ts.SourceFile => {

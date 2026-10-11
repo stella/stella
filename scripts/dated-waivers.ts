@@ -27,6 +27,14 @@ export const WARNING_DAYS = 5;
 export const NETWORK_ATTEMPTS = 3;
 export const TEST_ATTEMPTS = 20;
 export type WaiverProbe = { command: readonly string[]; attempts: number };
+/**
+ * The documented zero-age override as one complete argument: `=` or any
+ * spaces or tabs, then a zero that ends the argument (so `0.5` is not one).
+ * Inventory and removal share it, so every inventoried spelling is removable.
+ */
+export const ZERO_AGE_OVERRIDE =
+  /[ \t]--minimum-release-age(?:=|[ \t]+)0(?=$|[\s"'`;&|)])/u;
+
 export const DOC_SOURCE_FILE = ".claude/mcp/doc-sources.ts";
 
 export const RECHECK_INSTRUCTIONS = {
@@ -192,11 +200,7 @@ export const collectWaivers = ({
       ?.split("\n")
       .at(entry.line - 2)
       ?.trim();
-    if (
-      entry.line < 2 ||
-      !command ||
-      !/--minimum-release-age(?:=|\s+)0\b/u.test(command)
-    ) {
+    if (entry.line < 2 || !command || !ZERO_AGE_OVERRIDE.test(command)) {
       panic(
         `Release-age exception has no covered zero-age command: ${entry.source}:${entry.line}`,
       );

@@ -12,7 +12,11 @@ import {
   PROBE_PHASE_BUDGET_MS,
   PROBE_TIMEOUT_MS,
 } from "./dated-waiver-probes";
-import { readTestQuarantines, type DatedWaiver } from "./dated-waivers";
+import {
+  readTestQuarantines,
+  ZERO_AGE_OVERRIDE,
+  type DatedWaiver,
+} from "./dated-waivers";
 
 const waiver = (
   kind: DatedWaiver["kind"],
@@ -575,4 +579,30 @@ test("release-age exception removal requires an integral line within its owner",
       reader({ [entry.source]: contents }),
     ),
   ).toThrow("Release-age exception anchor missing");
+});
+
+test.each([
+  "bun install --minimum-release-age  0",
+  "bun install --minimum-release-age\t0",
+  "bun install --minimum-release-age=0 --frozen-lockfile",
+])("a zero-age override spelled %j is inventoried and removed", (command) => {
+  expect(ZERO_AGE_OVERRIDE.test(` ${command}`)).toBe(true);
+  const entry = waiver(
+    "release-age-exception",
+    "docker-compose.yml",
+    `command: ${command}`,
+  );
+  const content = `command: ${command}\n# release-age-quarantine-exception: 2026-10-05T00:00:00.000Z`;
+  const changed =
+    removeWaiver(entry, reader({ [entry.source]: content })).at(0)?.after ?? "";
+  expect(changed).not.toMatch(/--minimum-release-age/u);
+  expect(changed).toContain("command: bun install");
+});
+
+test.each([
+  "bun install --minimum-release-age 0.5",
+  "bun install --minimum-release-age=0.5",
+  "bun install --minimum-release-age 01",
+])("a nonzero release age %j is not a zero-age override", (command) => {
+  expect(ZERO_AGE_OVERRIDE.test(` ${command}`)).toBe(false);
 });
