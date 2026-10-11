@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * What the organization's models say about a template's AI-decided
  * conditions, before anything is filled.
@@ -8,8 +9,6 @@
  * single call so the form can show the answer and its confidence while the
  * values are still being typed, and let the person override it.
  */
-
-import { panic, Result } from "better-result";
 import type { Result as ResultType } from "better-result";
 import * as v from "valibot";
 
@@ -28,6 +27,11 @@ import {
   conditionQuestion,
   conditionsState,
 } from "@/api/lib/docx/ai-condition-question";
+import {
+  conditionSkillCapability,
+  prepareConditionSkills,
+  type SkillToolsContext,
+} from "@/api/lib/docx/ai-skill-tools";
 import { omitSourceBoundValues } from "@/api/lib/docx/ai-visible-values";
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import { discoverContainerFields } from "@/api/lib/docx/discover-template";
@@ -147,6 +151,7 @@ export type DecideTemplateConditionsOptions = {
   abortSignal?: AbortSignal | undefined;
   /** Injected by tests; the org's resolved decision model otherwise. */
   client?: DecisionModel | null | undefined;
+  skillContext?: SkillToolsContext | undefined;
   usageMetering?: DecisionUsageMetering | undefined;
 } & TemplateDecisionRuntime;
 
@@ -172,7 +177,10 @@ const planTemplateConditions = (
       supplied.set(path, evaluateCondition(path, values));
       continue;
     }
-    questions[path] = conditionQuestion(prompt);
+    questions[path] = {
+      ...conditionQuestion(prompt),
+      ...conditionSkillCapability(prompt),
+    };
   }
 
   if (supplied.size === conditions.length) {
@@ -210,6 +218,7 @@ export const decideTemplateConditions = async ({
   abortSignal,
   client,
   usageMetering,
+  skillContext,
   generation,
   generator,
 }: DecideTemplateConditionsOptions): Promise<TemplateConditionDecisions> => {
@@ -218,6 +227,16 @@ export const decideTemplateConditions = async ({
     return plan.value;
   }
   const { conditions, supplied, questions } = plan;
+  const skills = await prepareConditionSkills(
+    conditions
+      .filter(({ path }) => !supplied.has(path))
+      .map(({ prompt }) => prompt)
+      .join("\n"),
+    skillContext,
+  );
+  if (Result.isError(skills)) {
+    throw skills.error;
+  }
 
   const runtime =
     generation === undefined
@@ -225,6 +244,10 @@ export const decideTemplateConditions = async ({
       : {
           generation: {
             ...generation,
+            ...skills.value.generation,
+            system: [generation.system, skills.value.generation.system]
+              .filter(Boolean)
+              .join("\n"),
             deadlineMs: DECIDE_CONDITIONS_TIMEOUT_MS,
           },
           generator,

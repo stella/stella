@@ -99,7 +99,7 @@ const previewFixture = ({
         orgAIConfigStatus,
       }),
     );
-  return { run, authorizeUsage, createAdmitter, decideConditions };
+  return { run, authorizeUsage, createAdmitter, decideConditions, safeDb };
 };
 
 describe("condition preview conditional AI gates", () => {
@@ -134,6 +134,11 @@ describe("condition preview conditional AI gates", () => {
         managedAIResidency: "eu",
         organizationId: "org_test",
         admission: expect.anything(),
+      },
+      skillContext: {
+        organizationId: "org_test",
+        userId: "user_test",
+        safeDb: fixture.safeDb,
       },
       usageMetering: {
         organizationId: "org_test",

@@ -9,7 +9,7 @@ import { listSkillMetadata, readSkillRequiredTools } from "@stll/skills";
 import type { SafeDb } from "@/api/db/safe-db";
 import type { agentSkills } from "@/api/db/schema";
 import { env } from "@/api/env";
-import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   buildAiConditionDecider,
@@ -18,6 +18,7 @@ import {
 } from "@/api/lib/docx/ai-field-generator";
 import { admitModelDispatch } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
+import { decideTemplateConditions } from "@/api/lib/templates/template-decide-conditions";
 import { resolveDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import { createSystemOneClient } from "@/api/lib/workflow/decisions/system-one";
@@ -781,6 +782,155 @@ describe("buildAiConditionDecider decision tier", () => {
     expect(loadedSkill).toBe(true);
     expect(decision).toEqual({ decidedBy: "generative_model", value: true });
   });
+
+  test.each(["no-backend", "confident"] as const)(
+    "a condition preview loads the same skill content with %s",
+    async (mode) => {
+      const skill = {
+        id: toSafeId<"agentSkill">("skl_condition"),
+        scope: "team",
+        name: "Condition methodology",
+        slug: "condition-methodology",
+        description: "Decide the condition using the supplied company details.",
+        version: "1",
+        license: null,
+        compatibility: null,
+        metadata: {},
+        body: "Treat a named limited company as a company for this condition.",
+        origin: "authored",
+      } as const satisfies Pick<
+        typeof agentSkills.$inferSelect,
+        | "id"
+        | "scope"
+        | "name"
+        | "slug"
+        | "description"
+        | "version"
+        | "license"
+        | "compatibility"
+        | "metadata"
+        | "body"
+        | "origin"
+      >;
+      const { safeDb: skillDb } = createScopedDbMock({
+        select: (selection: Record<string, unknown>) =>
+          createSelectQueryMock(
+            Object.hasOwn(selection, "skillId") ? [] : [skill],
+          ),
+      });
+      let primaryCalls = 0;
+      let requestedSkill = false;
+      let loadedSkill = false;
+      const model = modelWith(COMPLETE_RUN);
+      const adapter: AnyTextAdapter = {
+        ...model.adapter,
+        structuredOutput: async ({ chatOptions }) => {
+          captureRequest(chatOptions);
+          const data = {
+            answers: [
+              {
+                id: "is_company",
+                answer: { type: "noul", noul: 1 },
+                evidence: null,
+              },
+            ],
+          };
+          return { data, rawText: JSON.stringify(data) };
+        },
+        async *chatStream(options) {
+          if (requestedSkill) {
+            loadedSkill =
+              options.messages?.some(
+                (message) =>
+                  message.role === "tool" &&
+                  typeof message.content === "string" &&
+                  message.content.includes(skill.body),
+              ) ?? false;
+            expect(loadedSkill).toBe(true);
+            yield* model.adapter.chatStream(options);
+            return;
+          }
+          requestedSkill = true;
+          captureRequest(options);
+          yield {
+            type: EventType.RUN_STARTED,
+            runId: "skill-run",
+            threadId: "skill-thread",
+          } satisfies StreamChunk;
+          yield {
+            type: EventType.TOOL_CALL_START,
+            toolCallId: "skill-call",
+            toolCallName: "load-skill",
+            timestamp: 1,
+          } satisfies StreamChunk;
+          yield {
+            type: EventType.TOOL_CALL_ARGS,
+            toolCallId: "skill-call",
+            delta: JSON.stringify({ skillName: skill.slug }),
+            timestamp: 1,
+          } satisfies StreamChunk;
+          yield {
+            type: EventType.TOOL_CALL_END,
+            toolCallId: "skill-call",
+            timestamp: 1,
+          } satisfies StreamChunk;
+          yield {
+            type: EventType.RUN_FINISHED,
+            runId: "skill-run",
+            threadId: "skill-thread",
+            finishReason: "tool_calls",
+          } satisfies StreamChunk;
+        },
+      };
+      const decision = await decideTemplateConditions({
+        fields: [
+          {
+            path: "is_company",
+            inputType: "boolean",
+            aiPrompt: `Decide whether the principal is a company [Methodology](#stella-skill-ref=${skill.slug}).`,
+          },
+        ],
+        values: input.values,
+        client:
+          mode === "no-backend"
+            ? null
+            : decisionModel(0.94, () => {
+                primaryCalls += 1;
+              }),
+        orgAIConfig,
+        skillContext: { organizationId, userId, safeDb: skillDb },
+        generation: {
+          dataClass: "customer",
+          role: "fast",
+          serviceTier: "standard",
+          orgAIConfig,
+          managedAIResidency: "eu",
+          organizationId,
+          admission: testModelAdmission(organizationId),
+          tenantWorkspaceIds: [],
+          caching: resolveCaching({
+            promptCachingEnabled: false,
+            role: "fast",
+            scopeKey: organizationId,
+          }),
+          prompt: "Decide the template conditions from their current values.",
+          resolveTextModel: () => ({ ...model, adapter }),
+        },
+      });
+      expect(primaryCalls).toBe(0);
+      expect(capturedRequests.at(0)?.toolNames).toEqual([
+        "load-skill",
+        "read-skill-resource",
+      ]);
+      expect(requestedSkill).toBe(true);
+      expect(loadedSkill).toBe(true);
+      expect(decision.conditions.at(0)?.decision).toEqual({
+        state: "decided",
+        decidedBy: "generative_model",
+        value: true,
+      });
+    },
+  );
 
   test("an answer under the floor hands the condition to the generative model", async () => {
     const decideCondition = buildAiConditionDecider({

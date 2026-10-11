@@ -122,6 +122,11 @@ export const createConditionPreviewHandler = ({
                     fields,
                     values,
                     orgAIConfig,
+                    skillContext: {
+                      organizationId: session.activeOrganizationId,
+                      userId: user.id,
+                      safeDb,
+                    },
                     abortSignal: AbortSignal.any([abortSignal, signal]),
                     generation: {
                       dataClass: "customer",

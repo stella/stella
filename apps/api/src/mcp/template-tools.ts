@@ -3094,6 +3094,11 @@ const handlePreviewTemplateConditionsTool: TypedMcpToolHandler<
           fields,
           values,
           orgAIConfig,
+          skillContext: {
+            organizationId: context.organizationId,
+            userId: context.userId,
+            safeDb: context.safeDb,
+          },
           abortSignal: AbortSignal.any([
             signal,
             abortSignal,

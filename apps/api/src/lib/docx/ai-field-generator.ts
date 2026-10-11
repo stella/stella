@@ -38,6 +38,7 @@ import {
 } from "@/api/lib/docx/ai-condition-question";
 import {
   maybeSkillTools,
+  prepareConditionSkills,
   SKILL_REF_GENERATOR_GUIDANCE,
   type SkillToolsContext,
 } from "@/api/lib/docx/ai-skill-tools";
@@ -485,22 +486,23 @@ export const buildAiConditionDecider = ({
   }
   return async ({ prompt, values }) => {
     try {
-      const skillToolsResult = await maybeSkillTools(prompt, skillContext);
+      const skillToolsResult = await prepareConditionSkills(
+        prompt,
+        skillContext,
+      );
       if (Result.isError(skillToolsResult)) {
         observeFailure(skillToolsResult.error, {
           sink: SKILL_CATALOG_LOAD_SINK,
         });
         return undefined;
       }
-      const skillTools = skillToolsResult.value;
+      const skills = skillToolsResult.value;
       const decided = await decide({
         dataClass: "customer",
         id: CONDITION_DECISION_ID,
         orgAIConfig,
         state: conditionState({ prompt, values }),
-        question: skillTools
-          ? { ...CONDITION_QUESTION, requiredCapability: "tools" }
-          : CONDITION_QUESTION,
+        question: { ...CONDITION_QUESTION, ...skills.question },
         abortSignal: operationSignal,
         timeoutMs: AI_CONDITION_TIMEOUT_MS,
         client: decisionModel,
@@ -527,13 +529,7 @@ export const buildAiConditionDecider = ({
           }),
           prompt: `You are deciding one yes/no condition of a legal document. Question: ${prompt}\n\nKnown details (JSON):\n${JSON.stringify(values)}`,
           resolveTextModel,
-          system: skillTools ? SKILL_REF_GENERATOR_GUIDANCE : undefined,
-          ...(skillTools
-            ? {
-                tools: chatToolMapToArray(skillTools),
-                agentLoopStrategy: maxIterations(SKILL_TOOL_MAX_STEPS),
-              }
-            : {}),
+          ...skills.generation,
         },
       });
       if (decided.state === "undecided") {

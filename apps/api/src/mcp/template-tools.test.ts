@@ -1451,6 +1451,11 @@ describe("MCP template tools", () => {
     expect(decideTemplateConditionsMock).toHaveBeenCalledWith(
       expect.objectContaining({
         values: { party_name: "Acme s.r.o." },
+        skillContext: {
+          organizationId: toSafeId<"organization">("org_1"),
+          userId: toSafeId<"user">("user_1"),
+          safeDb: expect.any(Function),
+        },
         orgAIConfig: null,
         abortSignal: expect.any(AbortSignal),
         generation: expect.objectContaining({

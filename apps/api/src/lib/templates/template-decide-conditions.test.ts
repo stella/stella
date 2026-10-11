@@ -758,3 +758,49 @@ test("condition preview reports an incomplete state before reading an excessive 
     preview: { state: "incomplete", reason: "clause-limit" },
   });
 });
+
+test("mixed preview conditions reserve tools only for the referenced methodology", async () => {
+  const result = await decideTemplateConditions({
+    fields: [
+      {
+        path: "ordinary",
+        inputType: "boolean",
+        aiPrompt: "Is the principal a company?",
+      },
+      {
+        path: "methodology",
+        inputType: "boolean",
+        aiPrompt:
+          "Apply [Methodology](#stella-skill-ref=condition-methodology).",
+      },
+    ],
+    values: { party_name: "Acme s.r.o." },
+    orgAIConfig: null,
+    client: answering({ ordinary: 0.94 }),
+    generator: async ({ questions }) => {
+      expect(Object.keys(questions)).toEqual(["methodology"]);
+      expect(questions["methodology"]).toMatchObject({
+        requiredCapability: "tools",
+      });
+      return {
+        model: "test-generative",
+        output: {
+          answers: [
+            {
+              id: "methodology",
+              answer: { type: "noul", noul: 1 },
+              evidence: null,
+            },
+          ],
+        },
+      };
+    },
+  });
+  expect(sent).toEqual([
+    expect.objectContaining({ questions: { ordinary: expect.anything() } }),
+  ]);
+  expect(result.conditions.map(({ decision }) => decision)).toEqual([
+    expect.objectContaining({ state: "decided", decidedBy: "decision_model" }),
+    { state: "decided", decidedBy: "generative_model", value: true },
+  ]);
+});
