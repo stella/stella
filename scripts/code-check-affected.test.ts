@@ -17,6 +17,7 @@ import {
 } from "../packages/scripts/src/code-quality-partition";
 import {
   ALL_WORKSPACE_CACHE_INPUTS,
+  CODE_CHECK_EXECUTION_BUDGET_MS,
   CommandFailedError,
   codeCheckConcurrency,
   prioritizeWebLint,
@@ -36,6 +37,7 @@ import {
   scopedCommands,
   summarizeCheckFailure,
 } from "./code-check-affected";
+import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
 import { isChangedLintPath } from "./lint-paths";
 
 const WORKSPACES = new Set([
@@ -950,18 +952,41 @@ describe("parallel code-quality legs", () => {
       .filter((step) => /^Code quality(?: \((?:web|rest)\))?\n/u.test(step));
     expect(steps).toHaveLength(3);
     const assertDeadline = (step: string) => {
-      if (!/^ {8}timeout-minutes: 8$/mu.test(step)) {
-        throw new Error("Code-quality step must have an eight-minute deadline");
+      const minutes = Number(
+        step.match(/^ {8}timeout-minutes: (\d+)$/mu)?.at(1),
+      );
+      if (
+        !Number.isSafeInteger(minutes) ||
+        minutes * 60_000 <= CODE_CHECK_EXECUTION_BUDGET_MS ||
+        minutes * 60_000 > CODE_CHECK_EXECUTION_BUDGET_MS + 60_000
+      ) {
+        throw new Error(
+          "Code-quality step must exceed the measured critical-path deadline by at most one minute",
+        );
       }
     };
     for (const step of steps) {
       assertDeadline(step);
       expect(() =>
         assertDeadline(
-          step.replace("timeout-minutes: 8", "timeout-minutes: 50"),
+          step.replace("timeout-minutes: 17", "timeout-minutes: 8"),
         ),
-      ).toThrow("eight-minute deadline");
+      ).toThrow("measured critical-path deadline");
     }
+  });
+
+  test("the hard deadline covers the API serial critical path and cold full-leg measurement", () => {
+    expect(turboTasks()["@stll/api#lint"]?.["dependsOn"]).toContain(
+      "typecheck",
+    );
+    const criticalPath =
+      configuredBudgets.overrides["@stll/api#typecheck"] +
+      configuredBudgets.overrides["@stll/api#lint"] +
+      configuredBudgets.defaultSeconds * 2;
+    expect(CODE_CHECK_EXECUTION_BUDGET_MS).toBeGreaterThan(criticalPath * 1000);
+    // Completed cold API leg, including generator overhead and scheduling.
+    expect(CODE_CHECK_EXECUTION_BUDGET_MS).toBeGreaterThan(340_183 * 2);
+    expect(290_000).toBeLessThan(340_183);
   });
 
   test("web lint starts first without duplicating it or selecting an unrelated workspace", () => {

@@ -15,6 +15,7 @@ import {
   runBudgetedCheck,
   TaskBudgetInputError,
 } from "./code-quality-task-budget";
+import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
 
 // Shape serialized by Turbo v2.11.6's RunSummary and TaskExecutionSummary.
 const task = (
@@ -39,11 +40,16 @@ const summary = (...tasks: unknown[]) => ({
 test("cache-miss execution milliseconds enforce the central web and default budgets", () => {
   expect(DEFAULT_TASK_BUDGETS).toEqual({
     defaultSeconds: 90,
-    overrides: { "@stll/web#lint": 240 },
+    overrides: {
+      "@stll/api#lint": 390,
+      "@stll/api#typecheck": 330,
+      "@stll/web#lint": 240,
+    },
   });
   for (const [taskId, budget] of [
     ["@stll/web#lint", 240],
-    ["@stll/api#lint", 90],
+    ["@stll/api#lint", 390],
+    ["@stll/api#typecheck", 330],
     ["//#typecheck:repo", 90],
   ] as const) {
     const positive = summary(task(taskId, budget * 1000));
@@ -62,6 +68,47 @@ test("cache-miss execution milliseconds enforce the central web and default budg
     expect(report.markdown).toContain("OVER BUDGET");
     expect(report.markdown).toContain(`${budget + 0.001}s`);
   }
+});
+
+test("budgets cover measured cold p95 and twice the uncached measurement", () => {
+  const { default: defaultSamples, ...taskSamples } =
+    configuredBudgets.coldSamplesSeconds;
+  expect(Object.keys(taskSamples).toSorted()).toEqual(
+    Object.keys(DEFAULT_TASK_BUDGETS.overrides).toSorted(),
+  );
+  for (const [taskId, samples] of Object.entries({
+    default: defaultSamples,
+    ...taskSamples,
+  })) {
+    const sorted = samples.toSorted((left, right) => left - right);
+    const p95 = sorted.at(Math.ceil(sorted.length * 0.95) - 1);
+    const largest = sorted.at(-1);
+    if (p95 === undefined || largest === undefined) {
+      throw new Error("Missing cold measurements");
+    }
+    const floor = Math.max(p95 * 1.5, largest * 2);
+    const budget =
+      taskId === "default"
+        ? DEFAULT_TASK_BUDGETS.defaultSeconds
+        : DEFAULT_TASK_BUDGETS.overrides[taskId];
+    expect(budget).toBeGreaterThanOrEqual(floor);
+    if (taskId !== "default") {
+      expect(budget).toBeGreaterThanOrEqual(floor + 30);
+    }
+  }
+  const coldApi = parseTurboRunSummary(
+    summary(
+      task("@stll/api#lint", 178_600),
+      task("@stll/api#typecheck", 148_427),
+    ),
+  );
+  expect(evaluateTaskBudgets({ summary: coldApi }).violations).toEqual([]);
+  expect(
+    evaluateTaskBudgets({
+      summary: coldApi,
+      budgets: { defaultSeconds: 90, overrides: {} },
+    }).violations,
+  ).toHaveLength(2);
 });
 
 test("cached replay and unexecuted dependencies never consume task execution budgets", () => {
@@ -382,14 +429,14 @@ test("leader exit audits and terminates an inherited-pipe descendant without wai
 
 test("owned process audits retain live descendants and ignore unrelated groups or exited zombies", () => {
   const snapshot =
-    "100 100 S leader\n101 100 S child --watch\n102 100 Z+ zombie\n103 999 S unrelated\n";
+    "  100 100 S leader\n101 100 S    child --watch \n102 100 Z+ zombie\n103 999 S unrelated\n104 100 S \n";
   expect(ownedProcessGroupMembers(snapshot, 100)).toEqual([
-    { pid: "101", command: "child --watch" },
+    { pid: "101", command: "child --watch " },
   ]);
   const mutation = snapshot.replace("102 100 Z+", "102 100 S+");
   expect(mutation).not.toBe(snapshot);
   expect(ownedProcessGroupMembers(mutation, 100)).toEqual([
-    { pid: "101", command: "child --watch" },
+    { pid: "101", command: "child --watch " },
     { pid: "102", command: "zombie" },
   ]);
 });
@@ -421,6 +468,26 @@ test("unannounced or out-of-interval concurrent summaries cannot validate the su
           : "announced by this command",
       );
     }
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test("summary announcement and filename must occupy the same output line", async () => {
+  const cwd = await scratch();
+  try {
+    await mkdir(path.join(cwd, ".turbo/runs"), { recursive: true });
+    const file = path.join(cwd, "turbo");
+    await writeFile(
+      file,
+      `const fs=require('fs'); const report=${JSON.stringify(summary(task("@stll/web#lint", 1)))};
+      report.execution={startTime:Date.now(),endTime:Date.now(),exitCode:0};
+      fs.writeFileSync('.turbo/runs/separate-line.json',JSON.stringify(report));
+      console.log('Summary:'); console.log(require('path').resolve('.turbo/runs/separate-line.json'));`,
+    );
+    const rejected = await run([process.execPath, file], cwd).result;
+    expect(rejected.exitCode, rejected.output).toBe(1);
+    expect(rejected.output).toContain("announced by this command, found 0");
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }

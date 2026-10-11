@@ -25,6 +25,7 @@ import {
   type CodeCheckLeg,
 } from "../packages/scripts/src/code-quality-partition";
 import { runBudgetedCheck } from "./code-quality-task-budget";
+import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
 import { isChangedLintPath } from "./lint-paths";
 import { measureResultBoundaryDebt } from "./ratchet";
 import {
@@ -34,7 +35,14 @@ import {
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const DEFAULT_BASE = "origin/main";
-const CODE_CHECK_EXECUTION_BUDGET_MS = 290_000;
+// API lint follows typecheck; allow both measured task budgets, two generator
+// stages and a minute for planning/cleanup. The workflow adds another minute.
+export const CODE_CHECK_EXECUTION_BUDGET_MS =
+  (configuredBudgets.overrides["@stll/api#typecheck"] +
+    configuredBudgets.overrides["@stll/api#lint"] +
+    configuredBudgets.defaultSeconds * 2 +
+    60) *
+  1000;
 const WORKSPACE_PARENTS = ["apps", "packages"] as const;
 export const DEPENDENCY_CACHE_INPUTS = [
   "$TURBO_ROOT$/.npmrc",

@@ -1,6 +1,22 @@
 {
   "defaultSeconds": 90,
   "overrides": {
+    "@stll/api#lint": 390,
+    "@stll/api#typecheck": 330,
     "@stll/web#lint": 240
-  }
+  },
+  "coldSamplesSeconds": {
+    "default": [32.95, 32.797],
+    "@stll/api#lint": [135.859, 178.6],
+    "@stll/api#typecheck": [148.42668],
+    "@stll/web#lint": [83.3, 88.0]
+  },
+  "measurementNotes": "Only cache misses. Historical samples are reported tool-phase totals (lower bounds on composite tasks); API lint 135.859 is a complete summary duration and root 32.797 bounds a complete task. Budgets include at least 30 seconds above max(1.5 x empirical p95, 2 x largest cold sample), except the unchanged default bucket. Sparse-sample p95 is not a population estimate. Cached replay is excluded.",
+  "sourceJobs": [
+    "https://github.com/stella/stella/actions/runs/38160179511/job/114532014924",
+    "https://github.com/stella/stella/actions/runs/38166117550/job/114551251727",
+    "https://github.com/stella/stella/actions/runs/38151726653/job/114509400478",
+    "https://github.com/stella/stella/actions/runs/38160179511/job/114532014949",
+    "https://github.com/stella/stella/actions/runs/38166117550/job/114551251772"
+  ]
 }

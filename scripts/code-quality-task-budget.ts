@@ -46,7 +46,10 @@ export const parseTaskBudgets = (value: unknown): TaskBudgets => {
   );
   return { defaultSeconds: value["defaultSeconds"], overrides };
 };
-export const DEFAULT_TASK_BUDGETS = parseTaskBudgets(configuredBudgets);
+export const DEFAULT_TASK_BUDGETS = parseTaskBudgets({
+  defaultSeconds: configuredBudgets.defaultSeconds,
+  overrides: configuredBudgets.overrides,
+});
 
 type TaskExecution = {
   startTime: number;
@@ -272,16 +275,19 @@ type RunBudgetedCheckOptions = {
 
 export const ownedProcessGroupMembers = (snapshot: string, group: number) =>
   snapshot.split(/\r?\n/u).flatMap((line) => {
-    const match = /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(.+)$/u.exec(line);
+    const trimmed = line.trimStart();
+    const match = /^(\d+)\s+(\d+)\s+(\S+)\s/u.exec(trimmed);
     const pid = match?.[1];
     const pgid = match?.[2];
     const state = match?.[3];
-    const command = match?.[4];
+    const command =
+      match === null ? undefined : trimmed.slice(match[0].length).trimStart();
     // Zombies have exited; init reaps adopted grandchildren, not this supervisor.
     if (
       pid === undefined ||
       Number(pgid) !== group ||
       command === undefined ||
+      command.length === 0 ||
       Number(pid) === group ||
       state?.startsWith("Z")
     ) {
@@ -573,13 +579,16 @@ const finishBudgetedCheck = async ({
 }: FinishBudgetedCheckOptions) => {
   let output = initialOutput;
   const completedReport = async () => {
-    const announced = [
-      ...stripVTControlCharacters(initialOutput).matchAll(
-        /^\s*Summary:\s+(.+\.json)\s*$/gmu,
-      ),
-    ]
-      .map((match) => match[1])
-      .filter((file) => file !== undefined)
+    const announced = stripVTControlCharacters(initialOutput)
+      .split("\n")
+      .flatMap((source) => {
+        const line = source.trim();
+        if (!/^Summary:\s/u.test(line)) {
+          return [];
+        }
+        const file = line.slice("Summary:".length).trim();
+        return file.endsWith(".json") ? [file] : [];
+      })
       .map((file) => path.resolve(runDirectory, "..", "..", file));
     const candidates: string[] = [];
     if (announced.length > 0) {
