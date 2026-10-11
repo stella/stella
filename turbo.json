@@ -757,6 +757,7 @@
         "!src/mcp/apps/**",
         "!src/handlers/visual-sandbox/browser/**",
         "drizzle.config.ts",
+        "src/handlers/visual-sandbox/browser/presentation-css.ts",
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/package.json",

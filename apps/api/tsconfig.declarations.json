@@ -1,5 +1,6 @@
 {
   "extends": "./tsconfig.src.json",
+  "files": ["src/handlers/visual-sandbox/browser/presentation-css.ts"],
   "compilerOptions": {
     "composite": true,
     "noCheck": true,
