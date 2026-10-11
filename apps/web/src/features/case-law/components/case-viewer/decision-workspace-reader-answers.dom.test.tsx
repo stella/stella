@@ -304,7 +304,7 @@ const fakeReaderServer = (initialAnswers: ReaderAnswer[] = [answer]) => {
           type: "started",
           answerId: answer.id,
           messageId: toSafeId<"legalReaderAnswerMessage">(
-            "00000000-0000-4000-8000-000000000005",
+            "00000000-0000-4000-8000-000000000006",
           ),
         });
         return new Response(body, {
@@ -346,7 +346,7 @@ const fakeReaderServer = (initialAnswers: ReaderAnswer[] = [answer]) => {
       emit({
         type: "complete",
         messageId: toSafeId<"legalReaderAnswerMessage">(
-          "00000000-0000-4000-8000-000000000005",
+          "00000000-0000-4000-8000-000000000006",
         ),
         content: "An explanation.",
         citations: [],
