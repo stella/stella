@@ -61,6 +61,7 @@ import type {
   PersistedChatMessageContent,
   PersistedChatMessageContentV3,
 } from "@/api/handlers/chat/types";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   registeredChatTool,
@@ -791,7 +792,7 @@ const validateIncomingChatParts = ({
           content: persistedMessage.content,
         })
       : null;
-  const persistedParts = canonicalMessage?.parts ?? [];
+  const persistedParts = arrayOrEmpty(canonicalMessage?.parts);
   if (canonicalMessage !== null) {
     const continuationResult = validateContinuationToolCallIntegrity({
       incomingParts: validatedParts,
@@ -941,10 +942,7 @@ const validateContinuationToolCallIntegrity = ({
     validatedCallsById.set(incomingCall.id, validatedCallResult.value);
   }
 
-  const awaitedInteractions = getAwaitingUserInteractions(
-    persistedMessage,
-    tools,
-  );
+  const awaitedInteractions = getAwaitingUserInteractions(persistedMessage);
   const awaitedCallIds = new Set(
     awaitedInteractions.map(({ toolCallId }) => toolCallId),
   );
@@ -1175,7 +1173,7 @@ const validateContinuationToolCallTransition = ({
     }
     case "input-complete": {
       if (
-        isServerChatToolCall(canonicalCall, tool) ||
+        isServerChatToolCall(canonicalCall) ||
         (incomingCall.state !== "complete" && incomingCall.state !== "error")
       ) {
         return invalidContinuationToolCall();
@@ -1477,9 +1475,7 @@ export const validateToolCallParts = ({
   const serverAuthoredCallIds = new Set<string>();
   const parts: ChatPart[] = [];
   const awaitedCallIds = new Set(
-    getAwaitingUserInteractions(message, tools).map(
-      ({ toolCallId }) => toolCallId,
-    ),
+    getAwaitingUserInteractions(message).map(({ toolCallId }) => toolCallId),
   );
   const firstAwaitedIndex = message.parts.findIndex(
     (part) => part.type === "tool-call" && awaitedCallIds.has(part.id),
@@ -1574,7 +1570,7 @@ const validateToolCallPart = ({
       (part.state === "awaiting-input" || part.state === "input-streaming")) ||
     (allowDeferredServerInput &&
       part.state === "input-complete" &&
-      isServerChatToolCall(part, tool) &&
+      isServerChatToolCall(part) &&
       part.output === undefined)
   ) {
     if (allowDeferredServerInput && part.input !== undefined) {

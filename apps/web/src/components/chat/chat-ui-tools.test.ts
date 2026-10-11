@@ -5,6 +5,7 @@ import {
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 
 import {
   consumeDocumentDeletionToolCalls,
@@ -790,7 +791,10 @@ describe("hasRunningToolCallInLatestAssistantMessage", () => {
 
 describe("isUnresolvedFolioAgentDocToolCallPart", () => {
   test("idle watchers select client folio calls and never deferred server calls", () => {
-    for (const name of ["read_document", "suggest_changes"]) {
+    for (const name of [
+      FOLIO_AGENT_TOOL_NAMES.readDocument,
+      FOLIO_AGENT_TOOL_NAMES.suggestChanges,
+    ]) {
       const client = {
         arguments: "{}",
         id: `client-${name}`,
@@ -803,8 +807,11 @@ describe("isUnresolvedFolioAgentDocToolCallPart", () => {
         ...client,
         id: `server-${name}`,
         metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
-      };
+      } as const;
       expect(isUnresolvedFolioAgentDocToolCallPart(server)).toBe(false);
+      if (!isUnresolvedFolioAgentDocToolCallPart(client)) {
+        expect.unreachable("The client fixture must be actionable");
+      }
       expect(
         selectUnresolvedFolioAgentDocToolCallParts([server, client], new Set()),
       ).toEqual([client]);

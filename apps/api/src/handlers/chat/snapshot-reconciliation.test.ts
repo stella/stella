@@ -585,7 +585,7 @@ test("unsigned snapshots own segmentation while signed blocks retain authenticat
       preservesPartLayout: true,
       parseResultOutput: (content) => content,
     });
-    expect(parts).toEqual(signed ? initial : incoming);
+    expect(parts).toEqual(signed ? initial : [...incoming]);
     expect(owner.failure).toBeUndefined();
   }
 });

@@ -703,32 +703,35 @@ describe("validateMessage", () => {
       arguments: "{}",
       input: {},
       id: "gate",
-      name: "gate",
+      name: "mcp__external__gate",
       state: "approval-requested",
       type: "tool-call",
       approval: { id: "approval-gate", needsApproval: true },
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
     } as const;
+    const call = {
+      arguments: '{"unexpected":true}',
+      id: "tool-call-deferred",
+      name: "list_templates",
+      state: "input-complete",
+      type: "tool-call",
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
+    } satisfies ChatParts[number];
     const message = {
       id: chatMessageId("msg_deferred_server_input"),
       role: "assistant",
-      parts: [
-        gate,
-        {
-          arguments: '{"unexpected":true}',
-          id: "tool-call-deferred",
-          name: "list_templates",
-          state: "input-complete",
-          type: "tool-call",
-        },
-      ],
-    } as const satisfies ChatMessage;
+      parts: [gate, call],
+    } satisfies ChatMessage;
     const clientTool = {
       name: "list_templates",
       description: "List templates",
       inputSchema: toTanStackToolSchema(v.strictObject({})),
     };
     const serverTools = {
-      gate: { name: "gate", description: "Approval gate" },
+      mcp__external__gate: {
+        name: "mcp__external__gate",
+        description: "Approval gate",
+      },
       list_templates: { ...clientTool, execute: async () => [] },
     } satisfies ChatToolMap;
 
@@ -748,12 +751,23 @@ describe("validateMessage", () => {
       Result.isError(
         validateToolCallParts({
           allowDeferredServerInput: true,
-          message,
-          tools: { gate: serverTools.gate, list_templates: clientTool },
+          message: {
+            ...message,
+            parts: [
+              gate,
+              {
+                ...call,
+                metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
+              },
+            ],
+          },
+          tools: {
+            mcp__external__gate: serverTools.mcp__external__gate,
+            list_templates: clientTool,
+          },
         }),
       ),
     ).toBe(true);
-    const call = message.parts[1];
     for (const parts of [
       [call],
       [call, gate],
@@ -774,9 +788,10 @@ describe("validateMessage", () => {
 
   test("retains server-owned calls during an approval continuation", async () => {
     const gate = {
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
       type: "tool-call",
       id: "gate",
-      name: "gate",
+      name: "mcp__external__gate",
       arguments: "{}",
       input: {},
       state: "approval-requested",
@@ -820,7 +835,10 @@ describe("validateMessage", () => {
       threadId: chatThreadId("thread_server_continuation"),
       userId: userId("user_server_continuation"),
       tools: {
-        gate: { name: "gate", description: "Approval gate" },
+        mcp__external__gate: {
+          name: "mcp__external__gate",
+          description: "Approval gate",
+        },
         list_templates: {
           name: "list_templates",
           description: "List templates",
@@ -839,9 +857,10 @@ describe("validateMessage", () => {
   test("accepts a stored client answer beside an approval after the tool definition changes", async () => {
     const id = chatMessageId("msg_client_approval_continuation");
     const gate = {
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
       type: "tool-call",
       id: "gate",
-      name: "gate",
+      name: "mcp__external__gate",
       arguments: "{}",
       input: {},
       state: "approval-requested",
@@ -904,7 +923,10 @@ describe("validateMessage", () => {
       threadId: chatThreadId("thread_client_approval_continuation"),
       userId: userId("user_client_approval_continuation"),
       tools: {
-        gate: { name: "gate", description: "Approval gate" },
+        mcp__external__gate: {
+          name: "mcp__external__gate",
+          description: "Approval gate",
+        },
         list_templates: {
           name: "list_templates",
           description: "List templates",
@@ -931,6 +953,7 @@ describe("validateMessage", () => {
   test("requires a pending interaction for a client continuation", async () => {
     const id = chatMessageId("msg_non_awaited_answer");
     const call = {
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
       type: "tool-call",
       id: "client",
       name: "list_templates",
@@ -993,6 +1016,7 @@ describe("validateMessage", () => {
           id: "tool-call-1",
           name: "ask-user",
           state: "input-streaming",
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: "tool-call",
         },
       ],
@@ -1034,6 +1058,7 @@ describe("validateMessage", () => {
       input,
       name: "ask-user",
       state: "input-complete",
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
       type: "tool-call",
     } as const satisfies ChatMessage["parts"][number];
     const messageWith = (part: ChatMessage["parts"][number]): ChatMessage => ({
@@ -1332,6 +1357,7 @@ describe("validateMessage", () => {
   test("rebuilds assistant continuations from persisted content and validated transitions", async () => {
     const id = chatMessageId("msg_immutable_continuation");
     const completedAskUserCall = {
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
       type: "tool-call",
       id: "ask-user-complete",
       name: "ask-user",
@@ -1361,6 +1387,7 @@ describe("validateMessage", () => {
       state: "complete",
     } satisfies ChatParts[number];
     const pendingAskUserCall = {
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
       type: "tool-call",
       id: "ask-user-1",
       name: "ask-user",
@@ -1525,6 +1552,7 @@ describe("validateMessage", () => {
         role: "assistant",
         parts: [
           {
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             type: "tool-call",
             id: "ask-1",
             name: "ask-user",
@@ -1550,6 +1578,7 @@ describe("validateMessage", () => {
           version: 2,
           data: [
             {
+              metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
               type: "tool-call",
               id: "ask-1",
               name: "ask-user",
@@ -1617,6 +1646,7 @@ describe("validateMessage", () => {
       ],
     };
     const metadata = {
+      [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client",
       tanstack: { index: 0, model: "google/gemini-3.7-flash" },
     };
     const persistedCall: unknown = {
@@ -1744,6 +1774,7 @@ describe("validateMessage", () => {
         role: "assistant",
         parts: [
           {
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             type: "tool-call",
             id: callId,
             name: "suggest_changes",
@@ -1763,6 +1794,7 @@ describe("validateMessage", () => {
         // provider's raw `arguments` string and re-parses `input` from it.
         parts: [
           {
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             type: "tool-call",
             id: callId,
             name: "suggest_changes",
@@ -1815,6 +1847,7 @@ describe("validateMessage", () => {
           role: "assistant",
           parts: [
             {
+              metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
               type: "tool-call",
               id: callId,
               name: "mcp__external__set_note",
@@ -1831,6 +1864,7 @@ describe("validateMessage", () => {
           role: "assistant",
           parts: [
             {
+              metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
               type: "tool-call",
               id: callId,
               name: "mcp__external__set_note",
@@ -1936,6 +1970,7 @@ describe("validateMessage", () => {
     const id = chatMessageId("msg_second_approval_continuation");
     const canonicalParts = [
       {
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
         approval: { id: "approval-1", needsApproval: true },
         id: "approval-1",
@@ -1945,6 +1980,7 @@ describe("validateMessage", () => {
         state: "approval-requested",
       },
       {
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
         approval: { id: "approval-2", needsApproval: true },
         id: "approval-2",
@@ -2119,6 +2155,7 @@ describe("validateMessage", () => {
       source: "workspace-opaque",
     };
     const canonicalCall = {
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
       type: "tool-call",
       approval: { id: "approval-snapshot", needsApproval: true },
       id: "approval-snapshot",
@@ -2174,6 +2211,7 @@ describe("validateMessage", () => {
   test("accepts the canonical ask-user call completing with its answer", async () => {
     const id = chatMessageId("msg_ask_user_completion");
     const canonicalCall = {
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
       type: "tool-call",
       id: "ask-user-1",
       name: "ask-user",
@@ -2359,6 +2397,7 @@ describe("validateMessage", () => {
         role: "assistant",
         parts: [
           {
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             type: "tool-call",
             id: "tool-call-1",
             name: "search-documents",
@@ -2384,6 +2423,7 @@ describe("validateMessage", () => {
         role: "assistant",
         parts: [
           {
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             type: "tool-call",
             id: "tool-call-1",
             name: "search-documents",
@@ -2411,6 +2451,7 @@ describe("validateMessage", () => {
         role: "assistant",
         parts: [
           {
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             type: "tool-call",
             id: "tool-call-1",
             name: "search-documents",
@@ -2444,6 +2485,7 @@ describe("validateMessage", () => {
         role: "assistant",
         parts: [
           {
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             type: "tool-call",
             id: "tool-call-1",
             name: "search-documents",
@@ -2468,6 +2510,7 @@ describe("validateMessage", () => {
         role: "assistant",
         parts: [
           {
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             type: "tool-call",
             id: "tool-call-1",
             name: "search-documents",
@@ -2494,6 +2537,7 @@ describe("validateMessage", () => {
         role: "assistant",
         parts: [
           {
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             type: "tool-call",
             id: "tool-call-1",
             name: "search-documents",
@@ -2528,6 +2572,7 @@ describe("validateMessage", () => {
         role: "assistant",
         parts: [
           {
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             type: "tool-call",
             id: "tool-call-1",
             name: "search-documents",
@@ -2559,6 +2604,7 @@ describe("validateMessage", () => {
     role: "assistant",
     parts: [
       {
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
         id: "tool-call-1",
         name: "mcp__external__create_document",
@@ -2686,6 +2732,7 @@ describe("validateMessage", () => {
         role: "assistant",
         parts: [
           {
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             type: "tool-call",
             id: "tool-call-1",
             name: "search-documents",
@@ -2730,6 +2777,7 @@ describe("validateMessage", () => {
     (_label, name, sentArguments, stored) => {
       const error = "Input validation failed";
       const sentCall: unknown = {
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
         id: "tool-call-1",
         name,
@@ -2762,6 +2810,7 @@ describe("validateMessage", () => {
       // A name outside the registered catalog is not a typed chat part, so
       // the stored calls are compared as plain values.
       const expected: unknown = {
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
         id: "tool-call-1",
         name,
@@ -2795,6 +2844,7 @@ describe("validateMessage", () => {
         role: "assistant",
         parts: [
           {
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             type: "tool-call",
             id: "tool-call-1",
             name: "search-documents",
@@ -2850,6 +2900,7 @@ describe("validateMessage", () => {
         role: "assistant",
         parts: [
           {
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             type: "tool-call",
             id: "tool-call-1",
             name: "search-documents",
@@ -2882,6 +2933,7 @@ describe("validateMessage", () => {
         role: "assistant",
         parts: [
           {
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             type: "tool-call",
             id: "tool-call-1",
             name: "search-documents",

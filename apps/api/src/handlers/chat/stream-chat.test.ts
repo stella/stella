@@ -31,6 +31,7 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import {
   VISUAL_PREVIEW_TOOL_NAME,
   visualPreviewToolOutputSchema,
@@ -334,6 +335,7 @@ const createScriptedAdapter = (
       } satisfies AdapterYieldChunk;
     }
     yield {
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
       type: EventType.TOOL_CALL_START,
       toolCallId: callId,
       toolCallName: toolName,
@@ -605,6 +607,7 @@ describe("snapshot tool-result reconciliation", () => {
     for (const withResult of [false, true]) {
       test(`snapshot-only ${approved ? "approval" : "denial"} survives reconciliation ${withResult ? "with" : "without"} a result and stale replay`, async () => {
         const requested = {
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: "tool-call",
           id: "snapshot-call",
           name: "lookup",
@@ -661,6 +664,7 @@ describe("snapshot tool-result reconciliation", () => {
               delta: "Checking the request.",
             },
             {
+              metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
               type: EventType.TOOL_CALL_START,
               parentMessageId: initial.id,
               toolCallId: requested.id,
@@ -749,6 +753,7 @@ describe("snapshot tool-result reconciliation", () => {
   for (const terminal of [false, true]) {
     test(`streaming snapshot progress persists its latest content${terminal ? " without downgrading a terminal result" : ""}`, async () => {
       const call = {
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
         id: "snapshot-call",
         name: "lookup",
@@ -874,6 +879,7 @@ describe("snapshot tool-result reconciliation", () => {
 
   test("snapshot completion replaces partial call arguments without deltas", async () => {
     const partial = {
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
       type: "tool-call",
       id: "snapshot-call",
       name: "lookup",
@@ -884,7 +890,7 @@ describe("snapshot tool-result reconciliation", () => {
       ...partial,
       arguments: '{"query":"complete"}',
       input: { query: "complete" },
-      metadata: { provider: "snapshot" },
+      metadata: { ...partial.metadata, provider: "snapshot" },
       state: "input-complete",
     } as const satisfies ToolCallPart;
     const snapshots = [partial, complete].map((call) => {
@@ -1159,6 +1165,7 @@ describe("snapshot tool-result reconciliation", () => {
             ? incoming
             : previous;
         const toolCall = {
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
           type: "tool-call",
           id: "snapshot-call",
           name: "lookup",
@@ -1505,6 +1512,7 @@ describe("transient visual preview fault persistence", () => {
               role: "assistant",
             };
             yield {
+              metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
               type: EventType.TOOL_CALL_START,
               toolCallId: "preview-call",
               toolCallName: VISUAL_PREVIEW_TOOL_NAME,
@@ -1688,6 +1696,7 @@ const createAbortedAfterToolCallAdapter = (cut: () => void): AnyTextAdapter => {
         timestamp,
       } satisfies AdapterYieldChunk;
       yield {
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: EventType.TOOL_CALL_START,
         toolCallId: "call-1",
         toolCallName: "run-code",
@@ -2218,6 +2227,7 @@ describe("admission lost before continuation production retains the original che
         role: "assistant",
         parts: [
           {
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             type: "tool-call",
             id: "original_call",
             name: "web_search",
@@ -2303,6 +2313,7 @@ describe("native interrupt boundary persistence", () => {
         input: { name: "NDA", source: "@title NDA" },
         name: "create-document",
         state: "input-complete",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
       },
     ]);
@@ -2343,6 +2354,7 @@ describe("native interrupt boundary persistence", () => {
         id: "call-1",
         name: "mcp__external__delete",
         state: "approval-requested",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
       },
     ]);
@@ -2503,6 +2515,7 @@ describe("native interrupt boundary persistence", () => {
         id: "call-1",
         name: SUGGEST_CHANGES_TOOL_NAME,
         state: "approval-requested",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
       },
     ]);
@@ -2587,6 +2600,7 @@ describe("native interrupt boundary persistence", () => {
         input: { subagents: [{ title: "List matters", task: "list matters" }] },
         name: SPAWN_SUBAGENTS_TOOL_NAME,
         state: "approval-requested",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
       },
     ]);
@@ -2706,6 +2720,7 @@ describe("native continuation persistence", () => {
         input: { name: "Repro", source: "@title Repro" },
         name: "save_playbook",
         state: "approval-responded",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
       },
     ],
@@ -2803,6 +2818,7 @@ describe("native continuation persistence", () => {
         name: "save_playbook",
         output: { playbookId: "playbook-1" },
         state: "complete",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
       },
       { state: "complete", toolCallId: "call-1", type: "tool-result" },
@@ -2890,6 +2906,7 @@ describe("native continuation persistence", () => {
             name: "list_templates",
             output: { templates: [] },
             state: "complete",
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             type: "tool-call",
           },
           {
@@ -2966,6 +2983,7 @@ describe("outgoing chat stream message ids", () => {
     const askUserCallSequences = [
       [
         {
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: EventType.TOOL_CALL_START,
           parentMessageId: "provider-message",
           toolCallId: "ask-awaiting-input",
@@ -2974,6 +2992,7 @@ describe("outgoing chat stream message ids", () => {
       ],
       [
         {
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: EventType.TOOL_CALL_START,
           parentMessageId: "provider-message",
           toolCallId: "ask-input-complete",
@@ -2992,6 +3011,7 @@ describe("outgoing chat stream message ids", () => {
       ],
       [
         {
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: EventType.TOOL_CALL_START,
           parentMessageId: "provider-message",
           toolCallId: "ask-input-streaming",
@@ -3101,6 +3121,7 @@ describe("outgoing chat stream message ids", () => {
               value: { messageId: "openrouter-responses-a" },
             },
             {
+              metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
               type: EventType.TOOL_CALL_START,
               parentMessageId: "openrouter-responses-b",
               toolCallId: "tool-1",
@@ -3136,6 +3157,7 @@ describe("outgoing chat stream message ids", () => {
         value: { messageId: firstId },
       },
       {
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: EventType.TOOL_CALL_START,
         parentMessageId: firstId,
         toolCallId: "tool-1",
@@ -3218,6 +3240,7 @@ describe("outgoing chat stream message ids", () => {
             toolCallId: "tool-existing",
           },
           {
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             type: EventType.TOOL_CALL_START,
             parentMessageId: "assistant-previous",
             toolCallId: "tool-follow-up",
@@ -3280,6 +3303,7 @@ describe("outgoing chat stream message ids", () => {
         toolCallId: "tool-existing",
       },
       {
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: EventType.TOOL_CALL_START,
         parentMessageId: "assistant-previous",
         toolCallId: "tool-follow-up",
@@ -3341,6 +3365,7 @@ describe("outgoing chat stream message ids", () => {
             },
           ]),
           {
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             type: EventType.TOOL_CALL_START,
             parentMessageId: "provider-message-2",
             toolCallId: "call-2",
@@ -3368,6 +3393,7 @@ describe("outgoing chat stream message ids", () => {
         },
       ]),
       {
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: EventType.TOOL_CALL_START,
         parentMessageId: owningMessageId,
         toolCallId: "call-2",
@@ -3399,6 +3425,7 @@ describe("outgoing chat stream message ids", () => {
               id: "tool-1",
               name: "ask-user",
               state: "input-complete",
+              metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
               type: "tool-call",
             },
           ],
@@ -3418,6 +3445,7 @@ describe("outgoing chat stream message ids", () => {
             id: "tool-1",
             name: "ask-user",
             state: "input-complete",
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             type: "tool-call",
           },
         ],
@@ -3750,6 +3778,7 @@ describe("outgoing chat stream message ids", () => {
           threadId: "thread-1",
         },
         {
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: EventType.TOOL_CALL_START,
           parentMessageId: "provider-list-message",
           toolCallId: "list-call",
@@ -3782,6 +3811,7 @@ describe("outgoing chat stream message ids", () => {
           threadId: "thread-1",
         },
         {
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: EventType.TOOL_CALL_START,
           parentMessageId: "provider-ask-message",
           toolCallId: "ask-call",
@@ -3902,6 +3932,7 @@ describe("outgoing chat stream message ids", () => {
       source: streamChunks([
         { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
         {
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: EventType.TOOL_CALL_START,
           parentMessageId: "provider-message",
           toolCallId: "tool-1",
@@ -4508,6 +4539,7 @@ describe("interrupt snapshot assistant message identity", () => {
     input: { question: "Which side?" },
     name: "ask-user",
     state: "input-complete",
+    metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
     type: "tool-call",
   });
 
@@ -4520,6 +4552,7 @@ describe("interrupt snapshot assistant message identity", () => {
       name: "ask-user",
       output: { answers: [{ answer: id, question: "Which side?" }] },
       state: "complete",
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
       type: "tool-call",
     },
     {
@@ -4696,7 +4729,7 @@ describe("interrupt snapshot assistant message identity", () => {
           id: "provider-message-2",
           role: "assistant",
           parts: [
-            { ...askTwo, metadata: { signature: "ask-2" } },
+            { ...askTwo, metadata: { ...askTwo.metadata, signature: "ask-2" } },
             askTwoResult,
           ],
         },
@@ -4704,7 +4737,13 @@ describe("interrupt snapshot assistant message identity", () => {
           id: "provider-message-3",
           role: "assistant",
           parts: [
-            { ...pendingCall("ask-3"), metadata: { signature: "ask-3" } },
+            {
+              ...pendingCall("ask-3"),
+              metadata: {
+                [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client",
+                signature: "ask-3",
+              },
+            },
           ],
         },
       ],
@@ -4719,10 +4758,28 @@ describe("interrupt snapshot assistant message identity", () => {
         ),
       ),
     ).toEqual([
-      { id: "load-skill", metadata: undefined },
-      { id: "ask-1", metadata: undefined },
-      { id: "ask-2", metadata: { signature: "ask-2" } },
-      { id: "ask-3", metadata: { signature: "ask-3" } },
+      {
+        id: "load-skill",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
+      },
+      {
+        id: "ask-1",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
+      },
+      {
+        id: "ask-2",
+        metadata: {
+          [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client",
+          signature: "ask-2",
+        },
+      },
+      {
+        id: "ask-3",
+        metadata: {
+          [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client",
+          signature: "ask-3",
+        },
+      },
     ]);
   });
 
@@ -4926,6 +4983,7 @@ describe("chat stream client-disconnect persistence", () => {
       source: streamChunks([
         { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
         {
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: EventType.TOOL_CALL_START,
           parentMessageId: "provider-message",
           toolCallId: "search-call",
@@ -4964,6 +5022,7 @@ describe("chat stream client-disconnect persistence", () => {
         id: "search-call",
         name: "ask-user",
         state: "input-streaming",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
       },
     ]);
@@ -5453,6 +5512,7 @@ describe("chat stream refs", () => {
       source: streamChunks([
         { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
         {
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: EventType.TOOL_CALL_START,
           parentMessageId: "provider-message",
           toolCallId: "tool-1",
@@ -5545,6 +5605,7 @@ describe("chat stream refs", () => {
             input: { name: `[NDA](${ref})` },
             name: "mcp__external__delete",
             state: "approval-responded",
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             type: "tool-call",
           },
         ],
@@ -5781,6 +5842,7 @@ describe("chat stream refs", () => {
     const matterRef = registry.toMatterRef(workspaceId);
     const chunks: StreamChunk[] = [
       {
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: EventType.TOOL_CALL_START,
         toolCallId: "tool_1",
         toolCallName: "list_matters",
@@ -5837,6 +5899,7 @@ describe("chat stream refs", () => {
         restorationPairs: [],
         source: streamChunks([
           {
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             type: EventType.TOOL_CALL_START,
             toolCallId: "tool_1",
             toolCallName: "mcp__external__opaque",
@@ -6341,6 +6404,7 @@ describe("a superseded client-tool call in the engine's history", () => {
           id: "call-ask",
           name: "ask-user",
           state: "error",
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: "tool-call",
         },
       ],
@@ -6413,6 +6477,7 @@ describe("native visual stream persistence", () => {
         threadId: "visual-thread",
       },
       {
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: EventType.TOOL_CALL_START,
         parentMessageId: messageId,
         toolCallId: "visual-call",
@@ -6420,6 +6485,7 @@ describe("native visual stream persistence", () => {
       },
       { type: EventType.CUSTOM, name: "ui-resource", value: part },
       {
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: EventType.TOOL_CALL_START,
         parentMessageId: messageId,
         toolCallId: "client-call",
@@ -6567,12 +6633,13 @@ test("an error after a snapshot reasserts its assistant owner without opening an
         messageId: "snapshot-owner",
         delta: "Saved answer",
       },
-      {
-        type: EventType.MESSAGES_SNAPSHOT,
-        messages: [
-          { id: "snapshot-owner", role: "assistant", content: "Saved answer" },
-        ],
-      },
+      buildWireSnapshot([
+        {
+          id: "snapshot-owner",
+          role: "assistant",
+          parts: [{ type: "text", content: "Saved answer" }],
+        },
+      ]),
       {
         type: EventType.RUN_ERROR,
         message: "Provider failed",

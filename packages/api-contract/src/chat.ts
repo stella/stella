@@ -45,18 +45,15 @@ export const isChatPastedTextPart = (
 /** Executor recorded from the tool definition, independent of input readiness. */
 export const CHAT_TOOL_EXECUTOR_METADATA_KEY = "stellaToolExecutor";
 
-/** Stored ownership wins; an untagged call uses the available tool definition. */
-export const isServerChatToolCall = (
-  part: unknown,
-  tool?: { execute?: unknown },
-): boolean => {
+/** Ownership is recorded by the runtime and does not depend on later tool sets. */
+export const chatToolExecutor = (part: unknown): "server" | "client" | null => {
   if (
     typeof part !== "object" ||
     part === null ||
     !("type" in part) ||
     part.type !== "tool-call"
   ) {
-    return false;
+    return null;
   }
   if (
     "metadata" in part &&
@@ -66,15 +63,18 @@ export const isServerChatToolCall = (
   ) {
     switch (part.metadata[CHAT_TOOL_EXECUTOR_METADATA_KEY]) {
       case "server":
-        return true;
+        return "server";
       case "client":
-        return false;
+        return "client";
       default:
         break;
     }
   }
-  return tool?.execute !== undefined;
+  return null;
 };
+
+export const isServerChatToolCall = (part: unknown): boolean =>
+  chatToolExecutor(part) === "server";
 
 /**
  * Title a thread is persisted with until its first message generates a real

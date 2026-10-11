@@ -9,6 +9,7 @@ import type {
   AnyTextAdapter,
   ModelMessage,
   StreamChunk,
+  UIMessage,
 } from "@tanstack/ai";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
@@ -378,6 +379,82 @@ test("SDK-resolved MCP tools retain server ownership behind approval, including 
       starts.find((chunk) => chunk.toolCallId === "mcp-read")?.metadata,
     ).toMatchObject({ [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" });
     expect(executed).toBe(0);
+  }
+});
+
+test("snapshots retain a stored executor when its tool definition changes", async () => {
+  for (const executor of ["client", "server"] as const) {
+    const historical = {
+      id: "historical",
+      role: "assistant",
+      parts: [
+        {
+          type: "tool-call",
+          id: "history-call",
+          name: "history",
+          arguments: "{}",
+          input: {},
+          output: {},
+          state: "complete",
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: executor },
+        },
+      ],
+    } satisfies UIMessage;
+    const adapter: AnyTextAdapter = {
+      ...scriptedAdapterBase,
+      async *chatStream({ model, runId, threadId }) {
+        yield* scriptedTurnChunks(
+          {
+            type: "step",
+            toolCalls: [
+              {
+                toolCallId: "gate",
+                toolName: "gate",
+                arguments: "{}",
+              },
+            ],
+          },
+          {
+            index: 0,
+            model,
+            runId: runId ?? "run",
+            threadId: threadId ?? "thread",
+          },
+        );
+      },
+      structuredOutput: () => panic("No structured output in this test"),
+    };
+    const definition = toolDefinition({
+      name: "history",
+      description: "Historical call",
+    });
+    const capture = createStreamMessageCapture({
+      initialMessages: [historical],
+      capture: (message) => message,
+    });
+    for await (const chunk of streamChatChunks({
+      adapter,
+      messages: [historical],
+      tools: [
+        toolDefinition({
+          name: "gate",
+          description: "Approval gate",
+          needsApproval: true,
+        }).server(() => ({})),
+        executor === "client"
+          ? definition.server(() => ({}))
+          : definition.client(),
+      ],
+    })) {
+      capture.processor.processChunk(chunk);
+    }
+    const call = capture.processor
+      .getMessages()
+      .flatMap(({ parts }) => parts)
+      .find((part) => part.type === "tool-call" && part.id === "history-call");
+    expect(call).toMatchObject({
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: executor },
+    });
   }
 });
 

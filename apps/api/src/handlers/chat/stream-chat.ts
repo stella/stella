@@ -2796,6 +2796,28 @@ const failedRunDetails = ({ chunk, sourceChunk }: FailedRunDetailsOptions) => {
   };
 };
 
+const createClientAssistantOwner = (responseMessageId: string) => {
+  let state: "active" | "inactive" = "inactive";
+  return {
+    announceBeforeFailure: (): StreamChunk[] =>
+      state === "active" ? [] : [assistantMessageStartChunk(responseMessageId)],
+    observeChunk: (chunk: PublicStreamChunk) => {
+      if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
+        state = "inactive";
+        return;
+      }
+      if (
+        chunk.type === EventType.TEXT_MESSAGE_START ||
+        chunk.type === EventType.TEXT_MESSAGE_CONTENT ||
+        chunk.type === EventType.REASONING_MESSAGE_CONTENT ||
+        chunk.type === EventType.TOOL_CALL_START
+      ) {
+        state = "active";
+      }
+    },
+  };
+};
+
 export const processServerChatStream = async function* ({
   abortSignal,
   runSignal = abortSignal,
@@ -2815,6 +2837,8 @@ export const processServerChatStream = async function* ({
   const responseMessageId = mapMessageId(
     ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL,
   );
+  // Snapshots clear the SDK owner; failures must reassert the same message.
+  const clientAssistantOwner = createClientAssistantOwner(responseMessageId);
   const initialResponseMessage = initialMessages.find(
     ({ id }) => id === responseMessageId,
   );
@@ -2857,20 +2881,9 @@ export const processServerChatStream = async function* ({
     toolCallsWithCompleteInput,
     getUsage: () => usage,
     getProducedAnswer: () => producedAnswer,
-    announceBeforeFailure: () => announceBeforeFailure(),
+    announceBeforeFailure: clientAssistantOwner.announceBeforeFailure,
     terminal,
   });
-  let clientAssistantState: "active" | "inactive" = "inactive";
-  // Snapshots clear the SDK's active-message state. Reassert the owner before
-  // a later failure so RUN_ERROR cannot create a second assistant placeholder.
-  const announceBeforeFailure = (): StreamChunk[] =>
-    clientAssistantState === "active"
-      ? []
-      : [
-          assistantMessageStartChunk(
-            mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
-          ),
-        ];
   try {
     const normalizedSource = ensureAssistantMessageStart({
       getOrCreateMessageId: () =>
@@ -2903,9 +2916,7 @@ export const processServerChatStream = async function* ({
           ? cutShortOutcome()
           : admissionLossOutcome();
         await terminalize({ flushProcessor: admissionCutByControl(), outcome });
-        for (const finish of deferredRunFinishedChunks.splice(0)) {
-          yield finish;
-        }
+        yield* deferredRunFinishedChunks.splice(0);
         yield* admissionFailureChunks(outcome);
         return;
       }
@@ -2941,20 +2952,11 @@ export const processServerChatStream = async function* ({
           flushProcessor: true,
           outcome: failure.outcome,
         });
-        yield* announceBeforeFailure();
+        yield* clientAssistantOwner.announceBeforeFailure();
         yield failure.chunk;
         return;
       }
-      if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
-        clientAssistantState = "inactive";
-      } else if (
-        chunk.type === EventType.TEXT_MESSAGE_START ||
-        chunk.type === EventType.TEXT_MESSAGE_CONTENT ||
-        chunk.type === EventType.REASONING_MESSAGE_CONTENT ||
-        chunk.type === EventType.TOOL_CALL_START
-      ) {
-        clientAssistantState = "active";
-      }
+      clientAssistantOwner.observeChunk(chunk);
       yield chunk;
     }
 
@@ -2963,9 +2965,7 @@ export const processServerChatStream = async function* ({
         ? cutShortOutcome()
         : admissionLossOutcome();
       await terminalize({ flushProcessor: admissionCutByControl(), outcome });
-      for (const chunk of deferredRunFinishedChunks.splice(0)) {
-        yield chunk;
-      }
+      yield* deferredRunFinishedChunks.splice(0);
       yield* admissionFailureChunks(outcome);
       return;
     }
@@ -2995,16 +2995,12 @@ export const processServerChatStream = async function* ({
       flushProcessor: CUT_SHORT_OUTCOME[outcome.type],
       outcome,
     });
-    for (const chunk of finalRunFinishedChunks) {
-      yield chunk;
-    }
+    yield* finalRunFinishedChunks;
   } catch (error) {
     if (admissionLost()) {
       const outcome = admissionLossOutcome();
       await terminalize({ outcome });
-      for (const finish of deferredRunFinishedChunks.splice(0)) {
-        yield finish;
-      }
+      yield* deferredRunFinishedChunks.splice(0);
       yield* admissionFailureChunks(outcome);
       return;
     }
@@ -3025,7 +3021,7 @@ export const processServerChatStream = async function* ({
         outcome: { type: "failed", error: kind },
       });
     }
-    yield* announceBeforeFailure();
+    yield* clientAssistantOwner.announceBeforeFailure();
     yield {
       type: EventType.RUN_ERROR,
       message: kind,
@@ -3943,7 +3939,7 @@ const restoreRecordProperty = (
 ): void => {
   const value = record[key];
   if (value !== undefined) {
-    record[key] = restoreValue(value);
+    Object.assign(record, Object.fromEntries([[key, restoreValue(value)]]));
   }
 };
 

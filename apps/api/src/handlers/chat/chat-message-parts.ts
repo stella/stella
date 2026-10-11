@@ -10,7 +10,10 @@ import {
   isBoundedBase64Content,
   MCP_APP_RESOURCE_MIME_TYPE,
 } from "@stll/api-contract";
-import { isServerChatToolCall } from "@stll/api-contract/chat";
+import {
+  chatToolExecutor,
+  isServerChatToolCall,
+} from "@stll/api-contract/chat";
 import {
   GENERATED_VISUAL_MIME_TYPE,
   generatedVisualPartSchema,
@@ -43,16 +46,12 @@ import type { VisualResourceOrigin } from "@/api/handlers/visual-sandbox/resourc
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  registeredChatTool,
-  type ChatToolMap,
-} from "@/api/lib/chat/chat-tool-types";
-import {
   isPersistedJsonValue,
   proveParsedToolInput,
   proveParsedToolOutput,
   provePersistedChatMessageContentV3,
   provePersistedJsonArray,
-  provePersistedJsonValue,
+  provePersistedToolCallMetadata,
 } from "@/api/lib/chat/persisted-message-content";
 import type {
   PersistedToolInput,
@@ -307,6 +306,9 @@ const normalizeLegacyPersistedToolInputs = (
 ): ChatPart[] => parts.map(normalizeLegacyPersistedToolInput);
 
 const normalizeLegacyPersistedToolInput = (part: ChatPart): ChatPart => {
+  if (part.type === "tool-call" && chatToolExecutor(part) === null) {
+    panic("Stored tool call has no executor ownership");
+  }
   if (
     part.type !== "tool-call" ||
     part.input !== undefined ||
@@ -373,7 +375,10 @@ const persistedV3PartToChatPart = ({
     const persistedInput = decodePersistedToolInput(part.input);
     const input = persistedToolInputToChatInput(persistedInput);
     const output = outputByToolCallId.get(part.id);
-    if (part.metadata !== undefined && !isPersistedJsonValue(part.metadata)) {
+    if (
+      chatToolExecutor(part) === null ||
+      !isPersistedJsonValue(part.metadata)
+    ) {
       panic("Stored v3 tool call has invalid metadata");
     }
     const candidate: unknown = {
@@ -384,7 +389,7 @@ const persistedV3PartToChatPart = ({
           : stringifyPersistedJsonValue(persistedInput.value),
       id: part.id,
       ...(input === undefined ? {} : { input }),
-      ...(part.metadata === undefined ? {} : { metadata: part.metadata }),
+      metadata: part.metadata,
       name: part.name,
       ...(part.output === undefined ? {} : { output }),
       state: part.state,
@@ -752,7 +757,6 @@ export const cancelPendingChatToolCalls = (
  */
 export const getAwaitingUserInteractions = (
   message: Pick<ChatMessage, "metadata" | "parts" | "role"> | null,
-  tools?: ChatToolMap,
 ): AwaitingUserInteraction[] => {
   const turnOutcome = message?.metadata?.turnOutcome;
   if (
@@ -772,10 +776,7 @@ export const getAwaitingUserInteractions = (
     }
     if (
       CLIENT_TOOL_STATE_AWAITS_RESOLUTION[part.state] &&
-      !isServerChatToolCall(
-        part,
-        tools === undefined ? undefined : registeredChatTool(tools, part.name),
-      )
+      !isServerChatToolCall(part)
     ) {
       interactions.push({
         type: clientToolInteractionType(part.name),
@@ -1441,14 +1442,15 @@ const chatPartToPersistedV3Part = ({
   if (part.type === "tool-call") {
     const approval = "approval" in part ? part.approval : undefined;
     const metadata = "metadata" in part ? part.metadata : undefined;
+    if (chatToolExecutor(part) === null) {
+      panic("Cannot persist a tool call without executor ownership");
+    }
     const input = persistedToolInputFromChatPart(part);
     return {
       ...(approval === undefined ? {} : { approval }),
       id: part.id,
       input,
-      ...(metadata === undefined
-        ? {}
-        : { metadata: provePersistedJsonValue(metadata) }),
+      metadata: provePersistedToolCallMetadata(metadata),
       name: part.name,
       ...(part.output === undefined
         ? {}
@@ -1505,7 +1507,11 @@ const persistedToolResultContentFromChatContent = (
 
 const isPersistedV3Part = (part: PersistedV3Part): boolean => {
   if (part.type === "tool-call") {
-    return part.id.length > 0 && part.name.length > 0;
+    return (
+      part.id.length > 0 &&
+      part.name.length > 0 &&
+      chatToolExecutor(part) !== null
+    );
   }
   if (part.type === "tool-result") {
     return (

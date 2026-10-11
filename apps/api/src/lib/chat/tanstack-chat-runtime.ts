@@ -20,8 +20,12 @@ import type {
 } from "@tanstack/ai";
 import { panic } from "better-result";
 
-import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+import {
+  CHAT_TOOL_EXECUTOR_METADATA_KEY,
+  chatToolExecutor,
+} from "@stll/api-contract/chat";
 
+import { arrayOrEmpty } from "@/api/lib/array";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -218,13 +222,19 @@ const providerToolMetadata = (metadata: unknown) => {
   return Object.keys(provider).length === 0 ? undefined : provider;
 };
 
+type ToolCallExecutorOptions = { id: string; name: string };
+
 export const streamChatChunks = async function* (
   options: StreamChatChunksOptions,
 ): AsyncIterable<PublicStreamChunk> {
   const executors = new Map<string, "server" | "client">();
+  const storedExecutors = new Map<string, "server" | "client">();
+  // The SDK owns error results for unknown model-emitted tool names too.
+  const executorForCall = ({ id, name }: ToolCallExecutorOptions) =>
+    storedExecutors.get(id) ?? executors.get(name) ?? "server";
   // Input-complete server calls can wait behind an approval. Their executor
   // must survive snapshots so the browser does not offer a client resolution.
-  const messages = (options.messages ?? []).map((message) => {
+  const messages = arrayOrEmpty(options.messages).map((message) => {
     if ("parts" in message) {
       return {
         ...message,
@@ -233,6 +243,10 @@ export const streamChatChunks = async function* (
             return part;
           }
           const { metadata, ...call } = part;
+          const executor = chatToolExecutor(part);
+          if (executor !== null) {
+            storedExecutors.set(part.id, executor);
+          }
           const provider = providerToolMetadata(metadata);
           return {
             ...call,
@@ -247,6 +261,10 @@ export const streamChatChunks = async function* (
     return {
       ...message,
       toolCalls: message.toolCalls.map(({ metadata, ...call }) => {
+        const executor = chatToolExecutor({ type: "tool-call", metadata });
+        if (executor !== null) {
+          storedExecutors.set(call.id, executor);
+        }
         const provider = providerToolMetadata(metadata);
         return {
           ...call,
@@ -255,34 +273,34 @@ export const streamChatChunks = async function* (
       }),
     };
   });
+  const middleware = [...arrayOrEmpty(options.middleware)];
+  middleware.push({
+    name: "stella-tool-executors",
+    onConfig: (_context, config) => {
+      // The final SDK configuration includes MCP and discovered lazy tools.
+      for (const tool of config.tools) {
+        executors.set(tool.name, tool.execute ? "server" : "client");
+      }
+    },
+  });
   for await (const chunk of chat({
     ...options,
     messages,
     toolExecution: "sequential",
-    middleware: [
-      ...(options.middleware ?? []),
-      {
-        name: "stella-tool-executors",
-        onConfig: (_context, config) => {
-          // The final SDK configuration includes MCP and discovered lazy tools.
-          for (const tool of config.tools) {
-            executors.set(tool.name, tool.execute ? "server" : "client");
-          }
-        },
-      },
-    ],
+    middleware,
   })) {
     if (chunk.type === "TOOL_CALL_START") {
-      const executor = executors.get(chunk.toolCallName);
-      yield executor === undefined
-        ? chunk
-        : {
-            ...chunk,
-            metadata: {
-              ...chunk.metadata,
-              [CHAT_TOOL_EXECUTOR_METADATA_KEY]: executor,
-            },
-          };
+      const executor = executorForCall({
+        id: chunk.toolCallId,
+        name: chunk.toolCallName,
+      });
+      yield {
+        ...chunk,
+        metadata: {
+          ...chunk.metadata,
+          [CHAT_TOOL_EXECUTOR_METADATA_KEY]: executor,
+        },
+      };
       continue;
     }
     if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
@@ -306,7 +324,10 @@ export const streamChatChunks = async function* (
                 ...tanstack,
                 toolCallMetadata: Object.fromEntries(
                   message.toolCalls.map((call) => {
-                    const executor = executors.get(call.function.name);
+                    const executor = executorForCall({
+                      id: call.id,
+                      name: call.function.name,
+                    });
                     const previous = previousMetadata[call.id];
                     const metadata = isRecord(previous)
                       ? previous
@@ -315,9 +336,7 @@ export const streamChatChunks = async function* (
                       call.id,
                       {
                         ...metadata,
-                        ...(executor === undefined
-                          ? {}
-                          : { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: executor }),
+                        [CHAT_TOOL_EXECUTOR_METADATA_KEY]: executor,
                       },
                     ];
                   }),

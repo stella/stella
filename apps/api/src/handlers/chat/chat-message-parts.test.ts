@@ -140,6 +140,7 @@ describe("persisted chat message parts", () => {
         name: "mcp__external__search",
         output,
         state: "complete",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
       },
       {
@@ -182,6 +183,7 @@ describe("persisted chat message parts", () => {
       id: "search-streaming",
       name: "mcp__external__search",
       state: "input-streaming",
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
       type: "tool-call",
     } as const satisfies ChatPart;
 
@@ -195,6 +197,7 @@ describe("persisted chat message parts", () => {
         input: { rawArguments: '{"query":"nd', status: "raw" },
         name: "mcp__external__search",
         state: "input-streaming",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
       },
     ]);
@@ -247,6 +250,7 @@ describe("persisted chat message parts", () => {
         name: "mcp__external__evidence",
         output,
         state: "complete",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
       },
       {
@@ -280,6 +284,7 @@ describe("persisted chat message parts", () => {
         name: "mcp__external__list",
         output,
         state: "complete",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
       },
       {
@@ -310,6 +315,7 @@ describe("persisted chat message parts", () => {
           id: "legacy-search",
           name: "mcp__external__search",
           state: "input-complete",
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: "tool-call",
         },
       ],
@@ -323,6 +329,7 @@ describe("persisted chat message parts", () => {
         input: { query: "contract" },
         name: "mcp__external__search",
         state: "input-complete",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
       },
     ]);
@@ -337,6 +344,7 @@ describe("persisted chat message parts", () => {
           name: "mcp__external__search",
           output: { error: "Invalid arguments" },
           state: "error",
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: "tool-call",
         },
       ],
@@ -357,6 +365,7 @@ describe("persisted chat message parts", () => {
           name: "mcp__external__search",
           output: { error: "Invalid arguments" },
           state: "error",
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: "tool-call",
         },
       ],
@@ -366,6 +375,7 @@ describe("persisted chat message parts", () => {
       id: "failed-input",
       input: { rawArguments: '{"query":', status: "raw" },
       state: "error",
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
       type: "tool-call",
     });
   });
@@ -379,6 +389,7 @@ describe("persisted chat message parts", () => {
         name: "mcp__external__search",
         output: { value: "canonical" },
         state: "complete",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
       },
       {
@@ -412,6 +423,7 @@ describe("persisted chat message parts", () => {
           name: "mcp__external__search",
           output: [{ content: "canonical", type: "text" }],
           state: "complete",
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: "tool-call",
         },
         {
@@ -441,6 +453,7 @@ describe("persisted chat message parts", () => {
           input: {},
           name: "mcp__external__search",
           state: "input-complete",
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: "tool-call",
         },
       ],
@@ -469,6 +482,7 @@ describe("persisted chat message parts", () => {
               name: "mcp__external__search",
               output: new Date("2026-01-01T00:00:00.000Z"),
               state: "complete",
+              metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
               type: "tool-call",
             },
           ],
@@ -487,6 +501,7 @@ describe("persisted chat message parts", () => {
         id: `ask-${state}`,
         name: "ask-user",
         state,
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
       } satisfies ChatPart;
 
@@ -534,6 +549,7 @@ describe("persisted chat message parts", () => {
         id: "approval-first",
         name: "create-document",
         state: "approval-requested",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
       },
       {
@@ -541,6 +557,7 @@ describe("persisted chat message parts", () => {
         id: "approval-second",
         name: "create-document",
         state: "approval-requested",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
       },
     ] as const satisfies ChatPart[];
@@ -583,44 +600,37 @@ describe("persisted chat message parts", () => {
     ]);
   });
 
-  test("stored ownership and untagged tool definitions select the same pending calls", () => {
+  test("stored calls require an executor and preserve both ownership tags", () => {
     const call = {
       arguments: "{}",
-      id: "untagged",
+      input: {},
+      id: "call",
       name: "list_templates",
       state: "input-complete",
       type: "tool-call",
     } as const;
-    const client = {
-      ...call,
-      id: "client",
-      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
-    };
-    const server = {
-      ...call,
-      id: "server",
-      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
-    };
-    const message = {
-      role: "assistant",
-      parts: [call, client, server],
-    } as const;
-    const tool = { name: call.name, description: "List templates" };
-    expect(
-      getAwaitingUserInteractions(
-        { ...message, parts: [...message.parts] },
-        { [tool.name]: tool },
-      ),
-    ).toEqual([
-      { toolCallId: "untagged", type: "client-tool" },
-      { toolCallId: "client", type: "client-tool" },
-    ]);
-    expect(
-      getAwaitingUserInteractions(
-        { ...message, parts: [...message.parts] },
-        { [tool.name]: { ...tool, execute: async () => [] } },
-      ),
-    ).toEqual([{ toolCallId: "client", type: "client-tool" }]);
+    expect(() => toPersistedChatMessageContentV3({ data: [call] })).toThrow(
+      "Cannot persist a tool call without executor ownership",
+    );
+    for (const executor of ["client", "server"] as const) {
+      const tagged = {
+        ...call,
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: executor },
+      };
+      const content = toPersistedChatMessageContentV3({ data: [tagged] });
+      const parts = normalizePersistedChatMessageContent(content).parts;
+      expect(parts).toEqual([tagged]);
+      expect(getAwaitingUserInteractions({ role: "assistant", parts })).toEqual(
+        executor === "client"
+          ? [{ toolCallId: call.id, type: "client-tool" }]
+          : [],
+      );
+      expect(() =>
+        normalizePersistedChatMessageContent(
+          toChatMessageContent({ version: 2, data: [call] }),
+        ),
+      ).toThrow("Stored tool call has no executor ownership");
+    }
   });
 
   test("prefers an explicit approval response over an unchanged ask-user call", () => {
@@ -640,6 +650,7 @@ describe("persisted chat message parts", () => {
         },
         name: "ask-user",
         state: "input-complete",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
       },
       {
@@ -648,6 +659,7 @@ describe("persisted chat message parts", () => {
         input: { name: "Agreement", source: "@title Agreement" },
         name: "create-document",
         state: "approval-responded",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
       },
     ] as const satisfies ChatPart[];
@@ -675,6 +687,7 @@ describe("persisted chat message parts", () => {
         name: "mcp__external__search",
         output: { matters: [] },
         state: "complete",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
       },
       {
@@ -683,6 +696,7 @@ describe("persisted chat message parts", () => {
         input: { name: "NDA", source: "@title NDA" },
         name: "create-document",
         state: "input-complete",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
       },
     ] as const satisfies ChatPart[];
@@ -705,6 +719,7 @@ describe("persisted chat message parts", () => {
       name: "create-document",
       output: { destination: "draft", fileName: "NDA.docx", success: true },
       state: "complete",
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
       type: "tool-call",
     } as const satisfies ChatPart;
     // A completed server tool after the awaited call is not an answer.
@@ -715,6 +730,7 @@ describe("persisted chat message parts", () => {
       name: "mcp__external__search",
       output: { matters: [] },
       state: "complete",
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
       type: "tool-call",
     } as const satisfies ChatPart;
 

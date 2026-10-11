@@ -3,12 +3,16 @@ import { inArray } from "drizzle-orm";
 import { readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { chatToolExecutor } from "@stll/api-contract/chat";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { decodeMessagePageCursor } from "@/api/handlers/chat/message-page";
+import { arrayOrEmpty } from "@/api/lib/array";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { provePersistedToolCallMetadata } from "@/api/lib/chat/persisted-message-content";
 import { createApprovalHarness } from "@/api/tests/helpers/chat-approval-harness";
 import type { ChatHarness } from "@/api/tests/helpers/chat-approval-harness";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
@@ -521,6 +525,24 @@ describe("a thread an earlier release stored", () => {
 
   for (const fixture of FIXTURES) {
     const label = `${fixture.release ?? "main"} (${fixture.sourceCommit.slice(0, 10)})`;
+    const unownedCalls = arrayOrEmpty(fixture.rows.chat_messages)
+      .flatMap(storedPartsOf)
+      .filter(
+        (part) =>
+          (part["type"] === "tool-call" ||
+            part["type"] === "tool-invocation") &&
+          chatToolExecutor(part) === null,
+      );
+    if (unownedCalls.length > 0) {
+      test(`${label} requires recorded executor ownership`, () => {
+        for (const part of unownedCalls) {
+          expect(() =>
+            provePersistedToolCallMetadata(part["metadata"]),
+          ).toThrow("Tool call metadata must record executor ownership");
+        }
+      });
+      continue;
+    }
 
     test(`${label} reloads, takes its approval, a follow-up and a retry`, async () => {
       const { executions, violations } = await continueSavedThread(

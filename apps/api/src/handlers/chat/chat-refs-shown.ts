@@ -44,7 +44,7 @@ export const chatRefsWrittenIn = ({
   isServerTool,
   parts,
 }: {
-  isServerTool: (toolName: string) => boolean;
+  isServerTool: (part: Extract<ChatPart, { type: "tool-call" }>) => boolean;
   parts: readonly ChatPart[];
 }): ChatRefsWritten => {
   const values: unknown[] = [];
@@ -59,7 +59,7 @@ export const chatRefsWrittenIn = ({
     if ("input" in part) {
       values.push(part.input);
     }
-    if ("output" in part && isServerTool(part.name)) {
+    if ("output" in part && isServerTool(part)) {
       values.push(part.output);
     }
   }
