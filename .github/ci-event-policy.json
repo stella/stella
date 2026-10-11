@@ -142,6 +142,7 @@
     "ci.yml/api-image-smoke": "queue",
     "ci.yml/legal-atlas-image": "queue",
     "ci.yml/windows-scripts": "queue",
+    "ci.yml/desktop-windows-dry-run": "queue",
     "ci.yml/desktop-rust-tests": "queue",
     "ci.yml/desktop-rust-lint": "pr-fast",
     "ci.yml/dependency-malware": "pr-fast",

@@ -1419,6 +1419,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CANARY_SERVER_URL",
   "CANARY_SIGNING_SECRET",
   "CANARY_STATE_PATH",
+  // Desktop release stamping receives these values from its workflow steps.
+  "CHANNEL",
   "CHAT_SAVED_STATE_WRITE",
   "CHAT_TRANSCRIPTS_WRITE",
   // Exact-base CI rehearsal: loopback URL for the separate disposable clean cluster.
@@ -1577,6 +1579,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "TURN_OUTCOME_SHARD",
   "UPDATE_CHAT_PROMPT_BASELINE",
   "UPDATE_PROVIDER_REQUEST_PATHS",
+  "VERSION",
   // Release dependency-audit gate: a reasoned waiver and the remediation branch.
   "WAIVE_DEPENDENCY_AUDIT",
   "WAIVER_REASON",
