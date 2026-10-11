@@ -426,6 +426,7 @@ export {
   parseWorkspaceRealtimeEvent,
   REALTIME_EVENT_TYPE,
   RESOURCE_CHANGE_TYPE,
+  RESOURCE_DELETION_OWNERSHIP,
   resourceDeletedChange,
   resourceDeletedRealtimeEvent,
   resourceSetUpdatedRealtimeEvent,
@@ -433,6 +434,7 @@ export {
   resourceUpdatedRealtimeEvent,
   resourcesChangedRealtimeEvent,
 } from "./realtime-events";
+export type { ResourceDeletion } from "./realtime-events";
 export { encodeRfc3986Component } from "./rfc3986";
 export {
   CASE_LAW_RESEARCH_ANSWER_FAILURE_REASONS,

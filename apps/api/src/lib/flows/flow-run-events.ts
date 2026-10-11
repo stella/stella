@@ -5,6 +5,7 @@ import { alias } from "drizzle-orm/pg-core";
 import {
   REALTIME_EVENT_TYPE,
   RESOURCE_CHANGE_TYPE,
+  RESOURCE_DELETION_OWNERSHIP,
   RESOURCE_TYPE,
   resourcesChangedRealtimeEvent,
   type WorkspaceRealtimeEvent,
@@ -60,17 +61,34 @@ export const deliverFlowRunWorkspaceEvent = async ({
     let ordinaryEvent: WorkspaceRealtimeEvent | undefined;
     if (event.type !== FLOW_RUN_UPDATE_EVENT_TYPE) {
       const entityIds = [];
+      const linkedIds = new Set<string>();
       switch (event.type) {
         case REALTIME_EVENT_TYPE.RESOURCE_UPDATED:
-        case REALTIME_EVENT_TYPE.RESOURCE_DELETED:
           if (event.resource.type === RESOURCE_TYPE.ENTITY) {
             entityIds.push(event.resource.id);
           }
           break;
+        case REALTIME_EVENT_TYPE.RESOURCE_DELETED:
+          if (
+            event.resource.type === RESOURCE_TYPE.ENTITY &&
+            event.deletionOwnership ===
+              RESOURCE_DELETION_OWNERSHIP.FLOW_REVIEW_TASK
+          ) {
+            linkedIds.add(event.resource.id);
+          }
+          break;
         case REALTIME_EVENT_TYPE.RESOURCES_CHANGED:
-          for (const { resource } of event.changes) {
-            if (resource.type === RESOURCE_TYPE.ENTITY) {
-              entityIds.push(resource.id);
+          for (const change of event.changes) {
+            if (change.resource.type !== RESOURCE_TYPE.ENTITY) {
+              continue;
+            }
+            if (change.change === RESOURCE_CHANGE_TYPE.UPDATED) {
+              entityIds.push(change.resource.id);
+            } else if (
+              change.deletionOwnership ===
+              RESOURCE_DELETION_OWNERSHIP.FLOW_REVIEW_TASK
+            ) {
+              linkedIds.add(change.resource.id);
             }
           }
           break;
@@ -78,46 +96,25 @@ export const deliverFlowRunWorkspaceEvent = async ({
         case REALTIME_EVENT_TYPE.WORKFLOW_EXTRACTION_PREVIEW:
           break;
       }
-      if (entityIds.length === 0) {
-        deliver(new Set(userIds), event);
-        return;
-      }
-      const linked = await tx
-        .select({ entityId: flowRunSteps.reviewTaskEntityId })
-        .from(flowRunSteps)
-        .where(
-          and(
-            eq(flowRunSteps.workspaceId, workspaceId),
-            inArray(flowRunSteps.reviewTaskEntityId, entityIds),
-          ),
-        )
-        .groupBy(flowRunSteps.reviewTaskEntityId)
-        .limit(entityIds.length);
-      const linkedIds = new Set(
-        linked.map(
-          ({ entityId }) =>
+      if (entityIds.length !== 0) {
+        const linked = await tx
+          .select({ entityId: flowRunSteps.reviewTaskEntityId })
+          .from(flowRunSteps)
+          .where(
+            and(
+              eq(flowRunSteps.workspaceId, workspaceId),
+              inArray(flowRunSteps.reviewTaskEntityId, entityIds),
+            ),
+          )
+          .groupBy(flowRunSteps.reviewTaskEntityId)
+          .limit(entityIds.length);
+        for (const { entityId } of linked) {
+          linkedIds.add(
             entityId ??
-            panic("Linked resource predicate returned a null entity identity"),
-        ),
-      );
-      // Deletion clears review links. Without a pre-delete classification,
-      // identity-bearing deletion events require admission even if lookup misses.
-      // Future identity-bearing entity delete producers must classify ownership
-      // inside their deleting transaction, before emitting the event.
-      if (
-        event.type === REALTIME_EVENT_TYPE.RESOURCE_DELETED &&
-        event.resource.type === RESOURCE_TYPE.ENTITY
-      ) {
-        linkedIds.add(event.resource.id);
-      }
-      if (event.type === REALTIME_EVENT_TYPE.RESOURCES_CHANGED) {
-        for (const { resource, change } of event.changes) {
-          if (
-            resource.type === RESOURCE_TYPE.ENTITY &&
-            change === RESOURCE_CHANGE_TYPE.DELETED
-          ) {
-            linkedIds.add(resource.id);
-          }
+              panic(
+                "Linked resource predicate returned a null entity identity",
+              ),
+          );
         }
       }
       if (linkedIds.size === 0) {
@@ -126,9 +123,12 @@ export const deliverFlowRunWorkspaceEvent = async ({
       }
       if (event.type === REALTIME_EVENT_TYPE.RESOURCES_CHANGED) {
         const ordinaryChanges = event.changes.filter(
-          ({ resource }) =>
-            resource.type !== RESOURCE_TYPE.ENTITY ||
-            !linkedIds.has(resource.id),
+          (change) =>
+            change.resource.type !== RESOURCE_TYPE.ENTITY ||
+            (change.change === RESOURCE_CHANGE_TYPE.DELETED
+              ? change.deletionOwnership ===
+                RESOURCE_DELETION_OWNERSHIP.ORDINARY
+              : !linkedIds.has(change.resource.id)),
         );
         if (ordinaryChanges.length !== 0) {
           ordinaryEvent = resourcesChangedRealtimeEvent(ordinaryChanges);

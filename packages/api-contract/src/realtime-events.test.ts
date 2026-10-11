@@ -8,7 +8,9 @@ import {
   parseUserRealtimeEvent,
   parseWorkspaceRealtimeEvent,
   REALTIME_EVENT_TYPE,
+  RESOURCE_DELETION_OWNERSHIP,
   resourceDeletedRealtimeEvent,
+  resourceDeletedChange,
   resourceSetUpdatedRealtimeEvent,
   resourceUpdatedChange,
   resourceUpdatedRealtimeEvent,
@@ -24,9 +26,16 @@ const ENTITY_RESOURCE = resourceRef({
 });
 
 const RESOURCE_UPDATED_EVENT = resourceUpdatedRealtimeEvent(ENTITY_RESOURCE);
-const RESOURCE_DELETED_EVENT = resourceDeletedRealtimeEvent(ENTITY_RESOURCE);
+const RESOURCE_DELETED_EVENT = resourceDeletedRealtimeEvent({
+  resource: ENTITY_RESOURCE,
+  deletionOwnership: RESOURCE_DELETION_OWNERSHIP.ORDINARY,
+});
 const RESOURCES_CHANGED_EVENT = resourcesChangedRealtimeEvent([
   resourceUpdatedChange(ENTITY_RESOURCE),
+  resourceDeletedChange({
+    resource: ENTITY_RESOURCE,
+    deletionOwnership: RESOURCE_DELETION_OWNERSHIP.ORDINARY,
+  }),
 ]);
 const RESOURCE_SET_UPDATED_EVENT = resourceSetUpdatedRealtimeEvent(
   RESOURCE_TYPE.ENTITY,
@@ -110,6 +119,68 @@ describe("realtime event contracts", () => {
       parseWorkspaceRealtimeEvent({
         type: REALTIME_EVENT_TYPE.WORKFLOW_EXTRACTION_PREVIEW,
         data: { entityId: "entity-1" },
+      }),
+    ).toBeNull();
+  });
+
+  test("requires a named ownership classification for every entity deletion", () => {
+    for (const deletionOwnership of Object.values(
+      RESOURCE_DELETION_OWNERSHIP,
+    )) {
+      expect(
+        parseWorkspaceRealtimeEvent({
+          type: REALTIME_EVENT_TYPE.RESOURCE_DELETED,
+          resource: ENTITY_RESOURCE,
+          deletionOwnership,
+        }),
+      ).toEqual({
+        type: REALTIME_EVENT_TYPE.RESOURCE_DELETED,
+        resource: ENTITY_RESOURCE,
+        deletionOwnership,
+      });
+      expect(
+        parseWorkspaceRealtimeEvent({
+          type: REALTIME_EVENT_TYPE.RESOURCES_CHANGED,
+          changes: [
+            {
+              change: "deleted",
+              resource: ENTITY_RESOURCE,
+              deletionOwnership,
+            },
+          ],
+        }),
+      ).not.toBeNull();
+    }
+
+    expect(
+      parseWorkspaceRealtimeEvent({
+        type: REALTIME_EVENT_TYPE.RESOURCE_DELETED,
+        resource: ENTITY_RESOURCE,
+      }),
+    ).toBeNull();
+    expect(
+      parseWorkspaceRealtimeEvent({
+        type: REALTIME_EVENT_TYPE.RESOURCE_DELETED,
+        resource: ENTITY_RESOURCE,
+        deletionOwnership: "unknown",
+      }),
+    ).toBeNull();
+    expect(
+      parseWorkspaceRealtimeEvent({
+        type: REALTIME_EVENT_TYPE.RESOURCES_CHANGED,
+        changes: [{ change: "deleted", resource: ENTITY_RESOURCE }],
+      }),
+    ).toBeNull();
+    expect(
+      parseWorkspaceRealtimeEvent({
+        type: REALTIME_EVENT_TYPE.RESOURCES_CHANGED,
+        changes: [
+          {
+            change: "deleted",
+            resource: ENTITY_RESOURCE,
+            deletionOwnership: "unknown",
+          },
+        ],
       }),
     ).toBeNull();
   });

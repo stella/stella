@@ -21,6 +21,7 @@ import {
 import { resolveFlowReviewGate } from "@/api/lib/flows/flow-executor";
 import type { FlowRunActionResult } from "@/api/lib/flows/flow-executor";
 import type { FlowReviewDecision } from "@/api/lib/flows/flow-types";
+import { classifyEntityResourceDeletions } from "@/api/lib/flows/visibility";
 import { isRecord } from "@/api/lib/type-guards";
 import { WORK_OBLIGATION_TRANSITION_ACTION } from "@/api/lib/work-obligations/transitions";
 import type { WorkObligationTransitionAction } from "@/api/lib/work-obligations/transitions";
@@ -132,19 +133,11 @@ export const admitFlowReviewTaskDeletion = async (
   tx: Transaction,
   { workspaceId, taskEntityIds, userId }: AdmitFlowReviewTaskDeletionOptions,
 ): Promise<Result<void, HandlerError>> => {
-  const gates = await tx
-    .select({ organizationId: workspaces.organizationId })
-    .from(flowRunSteps)
-    .innerJoin(workspaces, eq(workspaces.id, flowRunSteps.workspaceId))
-    .where(
-      and(
-        eq(flowRunSteps.workspaceId, workspaceId),
-        inArray(flowRunSteps.reviewTaskEntityId, taskEntityIds),
-      ),
-    )
-    .limit(1);
-  const gate = gates.at(0);
-  if (!gate) {
+  const { linkedOrganizationId } = await classifyEntityResourceDeletions(tx, {
+    workspaceId,
+    entityIds: taskEntityIds,
+  });
+  if (linkedOrganizationId === undefined) {
     return Result.ok(undefined);
   }
   // Deletion owners already hold entity locks; never wait on the inverse
@@ -152,14 +145,14 @@ export const admitFlowReviewTaskDeletion = async (
   if (
     !(await tryLockFeatureRecoveryAdmission({
       tx,
-      organizationId: gate.organizationId,
+      organizationId: linkedOrganizationId,
       featureId: "flows",
     }))
   ) {
     return Result.err(new HandlerError({ status: 404, message: "Not found" }));
   }
   const admission = await admitLinkedFlowAccess(tx, {
-    organizationId: gate.organizationId,
+    organizationId: linkedOrganizationId,
     userId,
     access: "read",
   });

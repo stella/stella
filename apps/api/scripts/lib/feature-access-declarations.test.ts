@@ -317,6 +317,132 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
       message: "source ownership requires featureAccess fixture",
     });
   });
+  test("registered feature-id constants that collide with table names remain metadata", () => {
+    const file = "apps/api/src/routes/ordinary.ts";
+    const registryFile = "apps/api/src/feature/registry.ts";
+    const collisionRegistry = {
+      signals: {
+        enrolment: "invitation",
+        ownership: {
+          handlerDirectories: [],
+          tableSchemaFiles: [],
+          conditionalTableSchemas: {
+            "apps/api/src/db/schema/signals.ts": ["signals"],
+          },
+          coreModules: ["apps/api/src/feature/core.ts"],
+          conditionalModules: ["apps/api/src/feature/layout.ts"],
+        },
+      },
+    } as const;
+    const sources = new Map([
+      ...baseSources,
+      [
+        "apps/api/src/db/schema/signals.ts",
+        'export const signals = p.pgTable("signals", {});',
+      ],
+      [
+        registryFile,
+        `const SIGNALS_FEATURE_ID = "signals";
+const defineFeatureRegistry = <T>(entries: T) => entries;
+export const FEATURE_REGISTRY = defineFeatureRegistry({
+  [SIGNALS_FEATURE_ID]: {
+    ownership: {
+      handlerDirectories: ["apps/api/src/handlers/signals"],
+      conditionalTableSchemas: {
+        "apps/api/src/db/schema/signals.ts": ["signals"],
+      },
+    },
+  },
+});`,
+      ],
+      [
+        file,
+        'import { FEATURE_REGISTRY } from "../feature/registry"; export const read = () => FEATURE_REGISTRY;',
+      ],
+    ]);
+    const validate = () =>
+      validateFeatureAccessDeclarations({
+        registry: collisionRegistry,
+        endpoints: [{ file, config: {} }],
+        sources,
+      });
+    expect(validate()).toEqual([]);
+    sources.set(
+      registryFile,
+      'const defineFeatureRegistry = <T>(entries: T) => entries; export const FEATURE_REGISTRY = defineFeatureRegistry({ "signals": { ownership: { conditionalTableSchemas: { "apps/api/src/db/schema/signals.ts": ["signals"] } } } });',
+    );
+    expect(validate()).toEqual([]);
+
+    sources.set(
+      registryFile,
+      `const SIGNALS_FEATURE_ID = "signals";
+const UNBOUND_SIGNAL_TABLE_NAME = "signals";
+const defineFeatureRegistry = <T>(entries: T) => entries;
+export const FEATURE_REGISTRY = defineFeatureRegistry({
+  [SIGNALS_FEATURE_ID]: {
+    ownership: {
+      handlerDirectories: ["apps/api/src/handlers/signals"],
+      conditionalTableSchemas: {
+        "apps/api/src/db/schema/signals.ts": ["signals"],
+      },
+    },
+  },
+});`,
+    );
+    expect(validate()).toContainEqual({
+      file,
+      message: "source ownership requires featureAccess signals",
+    });
+
+    sources.set(
+      registryFile,
+      `const SIGNALS_FEATURE_ID = "signals";
+const defineFeatureRegistry = <T>(entries: T) => entries;
+export const FEATURE_REGISTRY = defineFeatureRegistry({
+  [SIGNALS_FEATURE_ID]: {
+    ownership: {
+      handlerDirectories: ["apps/api/src/handlers/signals"],
+      conditionalTableSchemas: {
+        "apps/api/src/db/schema/signals.ts": ["signals"],
+      },
+      runtime: [lookup("signals"), () => "signals", sql\`select * from signals\`],
+    },
+  },
+});`,
+    );
+    sources.set(
+      file,
+      'import { FEATURE_REGISTRY } from "../feature/registry"; export const read = () => FEATURE_REGISTRY;',
+    );
+    expect(validate()).toContainEqual({
+      file,
+      message: "source ownership requires featureAccess signals",
+    });
+
+    sources.set(
+      registryFile,
+      `const SIGNALS_FEATURE_ID = "signals";
+const defineFeatureRegistry = <T>(entries: T) => entries;
+export const FEATURE_REGISTRY = defineFeatureRegistry({
+  [SIGNALS_FEATURE_ID]: {
+    ownership: {
+      handlerDirectories: ["apps/api/src/handlers/signals"],
+      conditionalTableSchemas: {
+        "apps/api/src/db/schema/signals.ts": ["signals"],
+      },
+    },
+  },
+});`,
+    );
+    sources.set(
+      file,
+      'import { FEATURE_REGISTRY } from "../feature/registry"; export const read = () => [FEATURE_REGISTRY, sql`select * from signals`];',
+    );
+    expect(validate()).toContainEqual({
+      file,
+      message: "source ownership requires featureAccess signals",
+    });
+  });
   test("generated capability feature bindings remain metadata when feature and table names coincide", () => {
     const file = "apps/api/src/routes/ordinary.ts";
     const bindings =
@@ -450,10 +576,18 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
   test("generic aggregate locking attributes table ownership to the selected resource", () => {
     const engine = "apps/api/src/lib/db/aggregate-lock.ts";
     const source = `
+      const ordinaryResource = function (options) {
+        return { table: "ordinary_rows" };
+      };
+      const featureResource = (options) => finalResource(options);
+      const finalResource = (options) => {
+        if (options.depth > 0) return featureResource({ depth: 0 });
+        return { table: "fixture_rows" };
+      };
       const rowResource = (options) => {
         switch (options.aggregate) {
-          case "ordinary": return { table: "ordinary_rows" };
-          case "feature": return { table: "fixture_rows" };
+          case "ordinary": return ordinaryResource(options);
+          case "feature": return featureResource(options);
         }
       };
       export const lock = (options) => rowResource(options);

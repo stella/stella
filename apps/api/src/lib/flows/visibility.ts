@@ -1,6 +1,12 @@
-import { and, notInArray, or, sql } from "drizzle-orm";
+import { and, eq, inArray, notInArray, or, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 
+import {
+  RESOURCE_DELETION_OWNERSHIP,
+  RESOURCE_TYPE,
+  resourceRef,
+  type ResourceDeletion,
+} from "@stll/api-contract";
 import {
   NOTIFICATION_ENTITY_TYPE,
   NOTIFICATION_KIND,
@@ -8,11 +14,58 @@ import {
 } from "@stll/api-contract/notifications";
 import type { NotificationKind } from "@stll/api-contract/notifications";
 
+import type { Transaction } from "@/api/db/root";
 import type { entityLinks } from "@/api/db/schema";
-import { entities, flowRunSteps, notifications } from "@/api/db/schema";
+import {
+  entities,
+  flowRunSteps,
+  notifications,
+  workspaces,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { backgroundFeatureActorExists } from "@/api/lib/feature-access/background";
+
+type ClassifyEntityResourceDeletionsOptions = {
+  workspaceId: SafeId<"workspace">;
+  entityIds: readonly SafeId<"entity">[];
+};
+
+/** Read before DELETE clears review-task foreign keys, inside the deleting transaction. */
+export const classifyEntityResourceDeletions = async (
+  tx: Pick<Transaction, "select">,
+  { workspaceId, entityIds }: ClassifyEntityResourceDeletionsOptions,
+) => {
+  const linked =
+    entityIds.length === 0
+      ? []
+      : await tx
+          .select({
+            entityId: flowRunSteps.reviewTaskEntityId,
+            organizationId: workspaces.organizationId,
+          })
+          .from(flowRunSteps)
+          .innerJoin(workspaces, eq(workspaces.id, flowRunSteps.workspaceId))
+          .where(
+            and(
+              eq(flowRunSteps.workspaceId, workspaceId),
+              inArray(flowRunSteps.reviewTaskEntityId, [...entityIds]),
+            ),
+          )
+          .groupBy(flowRunSteps.reviewTaskEntityId, workspaces.organizationId)
+          .limit(entityIds.length);
+  const linkedIds = new Set(linked.map(({ entityId }) => entityId));
+  const deletions = entityIds.map(
+    (id) =>
+      ({
+        resource: resourceRef({ type: RESOURCE_TYPE.ENTITY, id }),
+        deletionOwnership: linkedIds.has(id)
+          ? RESOURCE_DELETION_OWNERSHIP.FLOW_REVIEW_TASK
+          : RESOURCE_DELETION_OWNERSHIP.ORDINARY,
+      }) as const satisfies ResourceDeletion,
+  );
+  return { deletions, linkedOrganizationId: linked.at(0)?.organizationId };
+};
 
 type FlowFeatureActorVisibilityOptions = {
   organizationId: SafeId<"organization">;

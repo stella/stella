@@ -1185,11 +1185,154 @@ const isCapabilityFeatureBindingMetadata = (
   );
 };
 
+const canonicalFeatureRegistryEntries = (ast: ts.SourceFile) => {
+  for (const statement of ast.statements) {
+    if (!ts.isVariableStatement(statement) || !exported(statement)) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        !ts.isVariableDeclaration(declaration) ||
+        !ts.isIdentifier(declaration.name) ||
+        declaration.name.text !== "FEATURE_REGISTRY" ||
+        declaration.initializer === undefined
+      ) {
+        continue;
+      }
+      const initializer = unwrapExpression(declaration.initializer);
+      if (
+        !ts.isCallExpression(initializer) ||
+        !ts.isIdentifier(initializer.expression) ||
+        initializer.expression.text !== "defineFeatureRegistry"
+      ) {
+        continue;
+      }
+      const entries = initializer.arguments.at(0);
+      if (entries !== undefined && ts.isObjectLiteralExpression(entries)) {
+        return entries;
+      }
+    }
+  }
+  return undefined;
+};
+
+const isFeatureRegistryIdMetadata = (
+  node: ts.StringLiteralLike,
+  registry: FeatureRegistry,
+) => {
+  const declaration = node.parent;
+  if (
+    ts.isPropertyAssignment(declaration) &&
+    declaration.name === node &&
+    Object.hasOwn(registry, node.text) &&
+    canonicalFeatureRegistryEntries(node.getSourceFile())?.properties.includes(
+      declaration,
+    )
+  ) {
+    return true;
+  }
+  if (
+    !ts.isVariableDeclaration(declaration) ||
+    declaration.initializer !== node ||
+    !ts.isIdentifier(declaration.name) ||
+    !Object.hasOwn(registry, node.text)
+  ) {
+    return false;
+  }
+  const declarationList = declaration.parent;
+  if (
+    !ts.isVariableDeclarationList(declarationList) ||
+    declarationList.getFirstToken()?.kind !== ts.SyntaxKind.ConstKeyword ||
+    !ts.isVariableStatement(declarationList.parent) ||
+    !ts.isSourceFile(declarationList.parent.parent)
+  ) {
+    return false;
+  }
+
+  const featureIdName = declaration.name.text;
+  return (
+    canonicalFeatureRegistryEntries(node.getSourceFile())?.properties.some(
+      (property) =>
+        ts.isPropertyAssignment(property) &&
+        ts.isComputedPropertyName(property.name) &&
+        ts.isIdentifier(property.name.expression) &&
+        property.name.expression.text === featureIdName,
+    ) ?? false
+  );
+};
+
+const isFeatureOwnershipDataMetadata = (node: ts.StringLiteralLike) => {
+  let child: ts.Node = node;
+  let parent = child.parent;
+  while (!ts.isSourceFile(parent)) {
+    const currentChild = child;
+    if (
+      ts.isPropertyAssignment(parent) &&
+      (parent.name === child || parent.initializer === child)
+    ) {
+      if (
+        ts.isIdentifier(parent.name) &&
+        parent.name.text === "ownership" &&
+        parent.initializer === child &&
+        ts.isObjectLiteralExpression(child)
+      ) {
+        const entry = parent.parent;
+        if (!ts.isObjectLiteralExpression(entry)) {
+          return false;
+        }
+        const registryEntry = entry.parent;
+        return (
+          ts.isPropertyAssignment(registryEntry) &&
+          registryEntry.initializer === entry &&
+          (canonicalFeatureRegistryEntries(
+            node.getSourceFile(),
+          )?.properties.includes(registryEntry) ??
+            false)
+        );
+      }
+      child = parent;
+      parent = parent.parent;
+      continue;
+    }
+    if (
+      ts.isObjectLiteralExpression(parent) &&
+      parent.properties.some((property) => property === currentChild)
+    ) {
+      child = parent;
+      parent = parent.parent;
+      continue;
+    }
+    if (
+      ts.isArrayLiteralExpression(parent) &&
+      parent.elements.some((element) => element === currentChild)
+    ) {
+      child = parent;
+      parent = parent.parent;
+      continue;
+    }
+    if (
+      ts.isComputedPropertyName(parent) &&
+      parent.expression === child &&
+      ts.isStringLiteralLike(child)
+    ) {
+      child = parent;
+      parent = parent.parent;
+      continue;
+    }
+    return false;
+  }
+  return false;
+};
+
 const isFeatureIdentityMetadata = (
   node: ts.StringLiteralLike,
   registry: FeatureRegistry,
 ): boolean => {
-  if (isCapabilityFeatureBindingMetadata(node, registry)) {
+  if (
+    isCapabilityFeatureBindingMetadata(node, registry) ||
+    isFeatureRegistryIdMetadata(node, registry) ||
+    isFeatureOwnershipDataMetadata(node)
+  ) {
     return true;
   }
   if (!Object.hasOwn(registry, node.text)) {
@@ -1208,11 +1351,121 @@ const AGGREGATE_LOCK_MODULE = "apps/api/src/lib/db/aggregate-lock.ts";
 
 // The generic lock engine selects a table only when a caller selects an aggregate.
 // Derive that selection from its authoritative switch rather than hand-listing tables.
+type AggregateTableSelections = {
+  namesByAggregate: ReadonlyMap<string, ReadonlySet<string>>;
+  tableNodes: ReadonlySet<ts.StringLiteralLike>;
+};
 const aggregateTableNames = (ast: ts.SourceFile | undefined) => {
-  const names = new Map<string, Set<string>>();
+  const namesByAggregate = new Map<string, Set<string>>();
+  const tableNodes = new Set<ts.StringLiteralLike>();
   if (ast === undefined) {
-    return names;
+    return { namesByAggregate, tableNodes } satisfies AggregateTableSelections;
   }
+  type LocalHelperBody =
+    | { status: "missing" }
+    | { status: "shadowed" }
+    | { status: "callable"; body: ts.Node };
+  const declarationBody = (
+    statement: ts.Statement,
+    name: string,
+  ): LocalHelperBody => {
+    if (ts.isFunctionDeclaration(statement) && statement.name?.text === name) {
+      return statement.body === undefined
+        ? { status: "shadowed" }
+        : { status: "callable", body: statement.body };
+    }
+    if (!ts.isVariableStatement(statement)) {
+      return { status: "missing" };
+    }
+    const declaration = statement.declarationList.declarations.find(
+      (item) => ts.isIdentifier(item.name) && item.name.text === name,
+    );
+    if (declaration === undefined) {
+      return { status: "missing" };
+    }
+    if (declaration.initializer === undefined) {
+      return { status: "shadowed" };
+    }
+    const initializer = unwrapExpression(declaration.initializer);
+    return ts.isArrowFunction(initializer) ||
+      ts.isFunctionExpression(initializer)
+      ? { status: "callable", body: initializer.body }
+      : { status: "shadowed" };
+  };
+  const scopeStatements = (scope: ts.Node) => {
+    if (ts.isBlock(scope) || ts.isSourceFile(scope)) {
+      return scope.statements;
+    }
+    if (ts.isCaseBlock(scope)) {
+      return scope.clauses.flatMap((clause) => clause.statements);
+    }
+    return undefined;
+  };
+  const helperBody = (call: ts.CallExpression, name: string) => {
+    let scope: ts.Node = call.parent;
+    while (true) {
+      if (
+        ts.isFunctionLike(scope) &&
+        scope.parameters.some(
+          (parameter) =>
+            ts.isIdentifier(parameter.name) && parameter.name.text === name,
+        )
+      ) {
+        return undefined;
+      }
+      const statements = scopeStatements(scope);
+      if (statements !== undefined) {
+        for (const statement of statements) {
+          const declaration = declarationBody(statement, name);
+          switch (declaration.status) {
+            case "missing":
+              break;
+            case "shadowed":
+              return undefined;
+            case "callable":
+              return declaration.body;
+            default:
+              declaration satisfies never;
+              return panic("Unknown local helper resolution");
+          }
+        }
+      }
+      if (ts.isSourceFile(scope)) {
+        return undefined;
+      }
+      scope = scope.parent;
+    }
+  };
+  const collectTables = (
+    root: ts.Node,
+    names: Set<string>,
+    selectedNodes: Set<ts.StringLiteralLike>,
+  ) => {
+    const visitedHelpers = new Set<ts.Node>();
+    const visit = (node: ts.Node, rootNode: boolean) => {
+      if (!rootNode && ts.isFunctionLike(node)) {
+        return;
+      }
+      if (
+        ts.isPropertyAssignment(node) &&
+        ts.isIdentifier(node.name) &&
+        node.name.text === "table" &&
+        ts.isStringLiteral(node.initializer)
+      ) {
+        names.add(node.initializer.text);
+        selectedNodes.add(node.initializer);
+      }
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+        const body = helperBody(node, node.expression.text);
+        if (body !== undefined && !visitedHelpers.has(body)) {
+          visitedHelpers.add(body);
+          visit(body, true);
+        }
+      }
+      ts.forEachChild(node, (child) => visit(child, false));
+    };
+    visit(root, true);
+  };
   const visit = (node: ts.Node) => {
     if (
       ts.isCaseClause(node) &&
@@ -1222,66 +1475,32 @@ const aggregateTableNames = (ast: ts.SourceFile | undefined) => {
       node.parent.parent.expression.name.text === "aggregate"
     ) {
       const tables = new Set<string>();
-      const collect = (child: ts.Node) => {
-        if (
-          ts.isPropertyAssignment(child) &&
-          ts.isIdentifier(child.name) &&
-          child.name.text === "table" &&
-          ts.isStringLiteral(child.initializer)
-        ) {
-          tables.add(child.initializer.text);
-        }
-        ts.forEachChild(child, collect);
-      };
+      const selectedNodes = new Set<ts.StringLiteralLike>();
       for (const statement of node.statements) {
-        collect(statement);
+        collectTables(statement, tables, selectedNodes);
       }
       if (tables.size > 0) {
-        names.set(node.expression.text, tables);
+        namesByAggregate.set(node.expression.text, tables);
+        for (const tableNode of selectedNodes) {
+          tableNodes.add(tableNode);
+        }
       }
     }
     ts.forEachChild(node, visit);
   };
   visit(ast);
-  return names;
+  return { namesByAggregate, tableNodes } satisfies AggregateTableSelections;
 };
 
 const isAggregateTableSelection = (
   node: ts.StringLiteralLike,
-  aggregateTables: ReadonlyMap<string, ReadonlySet<string>>,
-) => {
-  if (node.getSourceFile().fileName !== AGGREGATE_LOCK_MODULE) {
-    return false;
-  }
-  const property = node.parent;
-  if (
-    !ts.isPropertyAssignment(property) ||
-    !ts.isIdentifier(property.name) ||
-    property.name.text !== "table" ||
-    property.initializer !== node
-  ) {
-    return false;
-  }
-  let parent: ts.Node = property;
-  while (!ts.isSourceFile(parent)) {
-    if (
-      ts.isVariableDeclaration(parent) &&
-      ts.isIdentifier(parent.name) &&
-      parent.name.text === "rowResource"
-    ) {
-      return Array.from(aggregateTables.values()).some((tables) =>
-        tables.has(node.text),
-      );
-    }
-    parent = parent.parent;
-  }
-  return false;
-};
+  aggregateTables: AggregateTableSelections,
+) => aggregateTables.tableNodes.has(node);
 
 type AggregateSelectorUsesOptions = {
   node: ts.Node;
   tables: TableOwnership;
-  aggregateTables: ReadonlyMap<string, ReadonlySet<string>>;
+  aggregateTables: AggregateTableSelections;
 };
 const aggregateSelectorUses = ({
   node,
@@ -1297,7 +1516,9 @@ const aggregateSelectorUses = ({
     return [];
   }
   const uses: ModuleUse[] = [];
-  for (const name of aggregateTables.get(node.initializer.text) ?? []) {
+  for (const name of aggregateTables.namesByAggregate.get(
+    node.initializer.text,
+  ) ?? []) {
     for (const { matcher, owners } of tables) {
       if (matcher.test(name)) {
         uses.push(...owners);
@@ -1311,7 +1532,7 @@ const collectModuleUses = (
   ast: ts.SourceFile,
   registry: FeatureRegistry,
   tables: TableOwnership,
-  aggregateTables: ReadonlyMap<string, ReadonlySet<string>>,
+  aggregateTables: AggregateTableSelections,
 ): ModuleUse[] => {
   const uses: ModuleUse[] = [];
   const visit = (node: ts.Node) => {

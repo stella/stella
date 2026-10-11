@@ -27,6 +27,20 @@ export const RESOURCE_CHANGE_TYPE = {
   UPDATED: "updated",
 } as const;
 
+export const RESOURCE_DELETION_OWNERSHIP = {
+  ORDINARY: "ordinary",
+  FLOW_REVIEW_TASK: "flow-review-task",
+} as const;
+
+const resourceDeletionOwnershipSchema = v.picklist(
+  Object.values(RESOURCE_DELETION_OWNERSHIP),
+);
+
+export type ResourceDeletion = Omit<
+  Extract<ResourceChange, { change: typeof RESOURCE_CHANGE_TYPE.DELETED }>,
+  "change"
+>;
+
 export const MAX_RESOURCE_CHANGES_PER_EVENT = 100;
 
 const nonEmptyStringSchema = v.pipe(v.string(), v.minLength(1));
@@ -41,6 +55,7 @@ const resourceUpdatedEventSchema = v.object({
 const resourceDeletedEventSchema = v.object({
   type: v.literal(REALTIME_EVENT_TYPE.RESOURCE_DELETED),
   resource: resourceRefSchema,
+  deletionOwnership: resourceDeletionOwnershipSchema,
 });
 
 const resourceChangeSchema = v.variant("change", [
@@ -51,6 +66,7 @@ const resourceChangeSchema = v.variant("change", [
   v.object({
     change: v.literal(RESOURCE_CHANGE_TYPE.DELETED),
     resource: resourceRefSchema,
+    deletionOwnership: resourceDeletionOwnershipSchema,
   }),
 ]);
 
@@ -159,10 +175,14 @@ export const resourceUpdatedRealtimeEvent = (resource: ResourceRef) =>
     resource,
   }) as const satisfies ResourceRealtimeEvent;
 
-export const resourceDeletedRealtimeEvent = (resource: ResourceRef) =>
+export const resourceDeletedRealtimeEvent = ({
+  resource,
+  deletionOwnership,
+}: ResourceDeletion) =>
   ({
     type: REALTIME_EVENT_TYPE.RESOURCE_DELETED,
     resource,
+    deletionOwnership,
   }) as const satisfies ResourceRealtimeEvent;
 
 export const resourceUpdatedChange = (resource: ResourceRef) =>
@@ -171,10 +191,14 @@ export const resourceUpdatedChange = (resource: ResourceRef) =>
     resource,
   }) as const satisfies ResourceChange;
 
-export const resourceDeletedChange = (resource: ResourceRef) =>
+export const resourceDeletedChange = ({
+  resource,
+  deletionOwnership,
+}: ResourceDeletion) =>
   ({
     change: RESOURCE_CHANGE_TYPE.DELETED,
     resource,
+    deletionOwnership,
   }) as const satisfies ResourceChange;
 
 export const resourcesChangedRealtimeEvent = (

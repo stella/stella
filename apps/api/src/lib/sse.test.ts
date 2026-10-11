@@ -7,6 +7,7 @@ import {
   resourceUpdatedChange,
   resourceDeletedChange,
   RESOURCE_TYPE,
+  RESOURCE_DELETION_OWNERSHIP,
   REALTIME_EVENT_TYPE,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
@@ -474,12 +475,13 @@ describe("recipient feature delivery", () => {
           id: toSafeId<"entity">("ordinary-batch-entity"),
         }),
       );
-      const hiddenChange = resourceDeletedChange(
-        resourceRef({
+      const hiddenChange = resourceDeletedChange({
+        resource: resourceRef({
           type: RESOURCE_TYPE.ENTITY,
           id: toSafeId<"entity">("restricted-batch-entity"),
         }),
-      );
+        deletionOwnership: RESOURCE_DELETION_OWNERSHIP.FLOW_REVIEW_TASK,
+      });
       const fullBatch = resourcesChangedRealtimeEvent([
         ordinaryChange,
         hiddenChange,

@@ -4,6 +4,7 @@ import {
   resourceUpdatedRealtimeEvent,
   resourcesChangedRealtimeEvent,
   type ResourceChange,
+  type ResourceDeletion,
   type ResourceRef,
   type ResourceType,
 } from "@stll/api-contract";
@@ -26,9 +27,9 @@ export const broadcastWorkspaceResourceUpdated = (
 
 export const broadcastWorkspaceResourceDeleted = (
   workspaceId: SafeId<"workspace">,
-  resource: ResourceRef,
+  deletion: ResourceDeletion,
 ): void => {
-  broadcast(workspaceId, resourceDeletedRealtimeEvent(resource));
+  broadcast(workspaceId, resourceDeletedRealtimeEvent(deletion));
 };
 
 export const broadcastWorkspaceResourceChanges = (

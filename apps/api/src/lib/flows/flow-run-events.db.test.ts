@@ -1,5 +1,6 @@
+import { panic } from "better-result";
 import { afterAll, describe, expect, test } from "bun:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import {
   REALTIME_EVENT_TYPE,
@@ -9,7 +10,6 @@ import {
   resourceSetUpdatedRealtimeEvent,
   resourceDeletedRealtimeEvent,
   resourceDeletedChange,
-  resourceUpdatedChange,
   resourcesChangedRealtimeEvent,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
@@ -28,6 +28,7 @@ import { env } from "@/api/env";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { deliverFlowRunWorkspaceEvent } from "@/api/lib/flows/flow-run-events";
+import { classifyEntityResourceDeletions } from "@/api/lib/flows/visibility";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { createTestState } from "@/api/tests/helpers/test-state";
@@ -298,22 +299,25 @@ test("committed task deletions preserve recipient-specific single and mixed chan
       status: "awaiting_review",
       reviewTaskEntityId: taskEntityId,
     });
-    const ordinary = resourceRef({
-      type: RESOURCE_TYPE.ENTITY,
-      id: ordinaryEntityId,
+    const classified = await db.transaction(async (tx) => {
+      const classification = await classifyEntityResourceDeletions(tx, {
+        workspaceId,
+        entityIds: [taskEntityId, ordinaryEntityId],
+      });
+      await tx
+        .delete(entities)
+        .where(
+          and(
+            eq(entities.workspaceId, workspaceId),
+            inArray(entities.id, [taskEntityId, ordinaryEntityId]),
+          ),
+        );
+      return classification.deletions;
     });
-    const linked = resourceRef({
-      type: RESOURCE_TYPE.ENTITY,
-      id: taskEntityId,
-    });
-    await db
-      .delete(entities)
-      .where(
-        and(
-          eq(entities.workspaceId, workspaceId),
-          eq(entities.id, taskEntityId),
-        ),
-      );
+    const linkedDeletion =
+      classified.at(0) ?? panic("Missing linked deletion classification");
+    const ordinaryDeletion =
+      classified.at(1) ?? panic("Missing ordinary deletion classification");
     expect(
       (
         await db
@@ -323,10 +327,10 @@ test("committed task deletions preserve recipient-specific single and mixed chan
           .limit(1)
       ).at(0)?.entityId,
     ).toBeNull();
-    const ordinaryChange = resourceUpdatedChange(ordinary);
+    const ordinaryChange = resourceDeletedChange(ordinaryDeletion);
     const fullBatch = resourcesChangedRealtimeEvent([
       ordinaryChange,
-      resourceDeletedChange(linked),
+      resourceDeletedChange(linkedDeletion),
     ]);
     const filteredBatch = resourcesChangedRealtimeEvent([ordinaryChange]);
     const delivered = await observeDeliveryEvents(fullBatch, recipients);
@@ -336,13 +340,11 @@ test("committed task deletions preserve recipient-specific single and mixed chan
         [ungrantedUserId, [filteredBatch]],
       ]),
     );
-    expect(delivered.get(enrolledUserId)?.at(0)).not.toHaveProperty(
-      "deletedEntityOwnership",
+    const ordinarySingle = resourceDeletedRealtimeEvent(ordinaryDeletion);
+    expect(await observeDeliveryEvents(ordinarySingle, recipients)).toEqual(
+      new Map(recipients.map((id) => [id, [ordinarySingle]])),
     );
-    expect(delivered.get(ungrantedUserId)?.at(0)).not.toHaveProperty(
-      "deletedEntityOwnership",
-    );
-    const single = resourceDeletedRealtimeEvent(linked);
+    const single = resourceDeletedRealtimeEvent(linkedDeletion);
     expect(await observeDeliveryEvents(single, recipients)).toEqual(
       new Map([[enrolledUserId, [single]]]),
     );
@@ -354,6 +356,9 @@ test("committed task deletions preserve recipient-specific single and mixed chan
       ]),
     );
     expect(await observeDeliveryEvents(single, recipients)).toEqual(new Map());
+    expect(await observeDeliveryEvents(ordinarySingle, recipients)).toEqual(
+      new Map(recipients.map((id) => [id, [ordinarySingle]])),
+    );
   } finally {
     await db.delete(flowRuns).where(eq(flowRuns.id, runId));
     await db.delete(entities).where(eq(entities.id, taskEntityId));
