@@ -15,7 +15,7 @@ import type { ChatHistorySearch } from "@/routes/_protected.chat/-components/cha
 
 export const Route = createFileRoute("/_protected/chat/history")({
   validateSearch: chatHistorySearchSchema,
-  loaderDeps: ({ search }) => ({ q: search.q }),
+  loaderDeps: ({ search }) => ({ matter: search.matter, q: search.q }),
   loader: ({ context, deps }) => {
     const onPrefetchError = (error: unknown) => {
       getAnalytics().captureError(error);
@@ -28,6 +28,7 @@ export const Route = createFileRoute("/_protected/chat/history")({
             activeOrganizationId: context.user.activeOrganizationId,
             search: deps.q,
             userId: context.user.id,
+            workspaceId: deps.matter,
           }),
           onPrefetchError,
         ),

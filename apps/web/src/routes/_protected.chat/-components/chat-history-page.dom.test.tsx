@@ -31,7 +31,7 @@ type ChatHistorySearch = Parameters<typeof ChatHistoryPage>[0]["search"];
 type ThreadsPage = WebApiRoutes["chat"]["threads"]["get"]["response"][200];
 type ThreadSlice = ThreadsPage["global"][number];
 
-// Sunday noon, UTC: "today" is 2026-10-11 for the reader below.
+// "Today" is 2026-10-11 for the reader below, whose time zone is UTC.
 const NOW = new Date("2026-10-11T12:00:00.000Z");
 
 const user = {
@@ -120,27 +120,68 @@ const deleteRequests: URL[] = [];
 const unexpected: string[] = [];
 const clients: InstanceType<typeof query.QueryClient>[] = [];
 
-/** Serves the history list (search matches titles) and thread deletes. */
-const serve = (server: Server) => {
+type ServedThread = {
+  slice: ThreadSlice;
+  workspace: { workspaceId: string; workspaceName: string } | null;
+};
+
+/**
+ * One page of the list the way the API cuts it: newest first, search (titles)
+ * and the matter filter applied before the page, the cursor an offset.
+ */
+const listPage = (server: Server, url: URL, pageSize: number): ThreadsPage => {
+  const term = url.searchParams.get("search")?.toLowerCase() ?? "";
+  const matterId = url.searchParams.get("workspaceId");
+  const all: ServedThread[] = [
+    ...server.global.map((slice) => ({ slice, workspace: null })),
+    ...server.workspaces.flatMap(({ threads, ...workspace }) =>
+      threads.map((slice) => ({ slice, workspace })),
+    ),
+  ]
+    .filter(({ slice }) => slice.title.toLowerCase().includes(term))
+    .filter(
+      ({ workspace }) =>
+        matterId === null || workspace?.workspaceId === matterId,
+    )
+    .toSorted(
+      (left, right) =>
+        Date.parse(right.slice.updatedAt) - Date.parse(left.slice.updatedAt),
+    );
+  const offset = Number(url.searchParams.get("cursor") ?? "0");
+  const page = all.slice(offset, offset + pageSize);
+  const workspaces: ThreadsPage["workspaces"] = [];
+  for (const { slice, workspace } of page) {
+    if (workspace === null) {
+      continue;
+    }
+    const group = workspaces.find(
+      ({ workspaceId }) => workspaceId === workspace.workspaceId,
+    );
+    if (group === undefined) {
+      workspaces.push({ ...workspace, threads: [slice] });
+      continue;
+    }
+    group.threads.push(slice);
+  }
+  return {
+    global: page
+      .filter(({ workspace }) => workspace === null)
+      .map(({ slice }) => slice),
+    nextCursor:
+      offset + pageSize < all.length ? String(offset + pageSize) : null,
+    workspaces,
+  };
+};
+
+/** Serves the history list and thread deletes. */
+const serve = (server: Server, { pageSize = 50 } = {}) => {
   globalThis.fetch = Object.assign(
     async (input: string | URL | Request, init?: RequestInit) => {
       const request = new Request(input, init);
       const url = new URL(request.url);
       if (url.pathname.endsWith("/chat/threads") && request.method === "GET") {
         listRequests.push(url);
-        const term = url.searchParams.get("search")?.toLowerCase() ?? "";
-        const matches = (slice: ThreadSlice) =>
-          slice.title.toLowerCase().includes(term);
-        return Response.json({
-          global: server.global.filter(matches),
-          nextCursor: null,
-          workspaces: server.workspaces
-            .map((group) => ({
-              ...group,
-              threads: group.threads.filter(matches),
-            }))
-            .filter((group) => group.threads.length > 0),
-        } satisfies ThreadsPage);
+        return Response.json(listPage(server, url, pageSize));
       }
       const deleted = /\/chat\/threads\/([^/]+)$/u.exec(url.pathname);
       if (deleted !== null && request.method === "DELETE") {
@@ -341,6 +382,25 @@ describe("chat history page", () => {
     expect(
       ui.getByRole("combobox", { name: messages.common.matter }),
     ).toHaveProperty("value", MATTER_A.name);
+  });
+
+  test("the matter filter reaches the server, so a matter chat past the first unfiltered page shows at once", async () => {
+    // Unfiltered, the first page holds only the two newer, unrelated chats;
+    // the matter's chat would sit on the second page.
+    serve(fullServer(), { pageSize: 2 });
+    const { ui } = await openHistory({ matter: MATTER_B.id });
+
+    await testing.waitFor(() =>
+      expect(threadLink(ui, OLDER_IN_B.title)).toBeDefined(),
+    );
+    expect(ui.queryByText(messages.common.noResults)).toBeNull();
+    expect(
+      ui.queryByRole("button", { name: messages.common.loadMore }),
+    ).toBeNull();
+    expect(listRequests.length).toBeGreaterThan(0);
+    expect(
+      listRequests.map((url) => url.searchParams.get("workspaceId")),
+    ).toEqual(listRequests.map(() => MATTER_B.id));
   });
 
   test("clearing the filters brings every chat back", async () => {

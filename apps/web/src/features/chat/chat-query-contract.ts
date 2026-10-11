@@ -97,6 +97,8 @@ export type GroupedChatThreadsKey = {
   activeOrganizationId: string;
   search?: string | undefined;
   userId: string;
+  /** Only the threads that live in this matter. */
+  workspaceId?: string | undefined;
 };
 
 export const SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE =
@@ -195,6 +197,7 @@ export const chatKeys = {
     activeOrganizationId,
     search,
     userId,
+    workspaceId,
   }: GroupedChatThreadsKey) => [
     ...chatKeys.all,
     activeOrganizationId,
@@ -202,6 +205,7 @@ export const chatKeys = {
     "threads",
     "grouped",
     search ?? "",
+    workspaceId ?? "",
   ],
   modelOptions: (activeOrganizationId: string) => [
     ...chatKeys.all,

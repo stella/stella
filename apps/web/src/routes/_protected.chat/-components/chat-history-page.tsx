@@ -73,7 +73,6 @@ import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 import {
   CHAT_HISTORY_PERIOD,
-  filterChatHistoryByMatter,
   groupChatHistoryByPeriod,
   hasChatHistoryFilter,
 } from "./chat-history.logic";
@@ -106,8 +105,8 @@ type DeleteDialog =
 
 /**
  * Every chat the reader has started, newest first, grouped by when it was
- * last active. Search runs on the server (title, matter, pinned matters);
- * the matter filter narrows the loaded pages to chats that live in a matter.
+ * last active. Search (title, matter, pinned matters) and the matter filter
+ * (chats that live in that matter) both run on the server, before paging.
  */
 export const ChatHistoryPage = ({
   search,
@@ -137,6 +136,7 @@ export const ChatHistoryPage = ({
       activeOrganizationId,
       search: search.q,
       userId,
+      workspaceId: search.matter,
     }),
     // Typing refines the list in place instead of blanking it per keystroke.
     placeholderData: keepPreviousData,
@@ -213,11 +213,8 @@ export const ChatHistoryPage = ({
         {threadsView.type === "items" ? (
           <ChatHistoryResults
             hasFilter={hasChatHistoryFilter(search)}
-            items={filterChatHistoryByMatter(
-              listChatHistoryItems(
-                mergeGroupedChatThreadPages(threadsView.items.pages),
-              ),
-              search.matter,
+            items={listChatHistoryItems(
+              mergeGroupedChatThreadPages(threadsView.items.pages),
             )}
             onClearFilters={clearFilters}
             onDelete={(thread) => setDeleteDialog({ type: "confirm", thread })}

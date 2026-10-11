@@ -105,21 +105,6 @@ export const groupChatHistoryByPeriod = <
   });
 };
 
-type MatterFilterableItem =
-  | { scope: "global" }
-  | { scope: "workspace"; workspaceId: string };
-
-/** The chats that live in one matter; every chat when no matter is chosen. */
-export const filterChatHistoryByMatter = <TItem extends MatterFilterableItem>(
-  items: readonly TItem[],
-  matterId: string | undefined,
-): TItem[] =>
-  matterId === undefined
-    ? [...items]
-    : items.filter(
-        (item) => item.scope === "workspace" && item.workspaceId === matterId,
-      );
-
 /** Whether the page shows a filtered view rather than the whole history. */
 export const hasChatHistoryFilter = ({ matter, q }: ChatHistorySearch) =>
   matter !== undefined || (q?.trim() ?? "").length > 0;

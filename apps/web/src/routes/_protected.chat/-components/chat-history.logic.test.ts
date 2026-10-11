@@ -6,7 +6,6 @@ import { Temporal } from "@stll/time";
 import {
   chatHistoryPeriod,
   chatHistorySearchSchema,
-  filterChatHistoryByMatter,
   groupChatHistoryByPeriod,
   hasChatHistoryFilter,
 } from "./chat-history.logic";
@@ -34,8 +33,8 @@ describe("chat history periods", () => {
   });
 
   test("the day boundary follows the reader's time zone", () => {
-    // 23:30 UTC on the 10th is already the 11th in Prague (UTC+2 in October)
-    // and still the 10th in New York.
+    // Late on the 10th in UTC is already the 11th in Prague, which is ahead
+    // of UTC.
     const now = instant("2026-10-11T06:00:00Z");
     const updatedAt = "2026-10-10T23:30:00.000Z";
     expect(
@@ -44,8 +43,8 @@ describe("chat history periods", () => {
     expect(chatHistoryPeriod({ now, timeZone: "UTC", updatedAt })).toBe(
       "previous7Days",
     );
-    // At 02:00 in New York it is still the 11th there too, so the same
-    // activity (19:30 on the 10th locally) is yesterday.
+    // New York is behind UTC: "now" is already the 11th there, but the
+    // activity falls on the 10th locally, so it is yesterday.
     expect(
       chatHistoryPeriod({ now, timeZone: "America/New_York", updatedAt }),
     ).toBe("previous7Days");
@@ -76,7 +75,7 @@ describe("chat history periods", () => {
       chatHistoryPeriod({
         now,
         timeZone: "Europe/Prague",
-        // 2026-10-25 00:30 in Prague (UTC+2 before the change).
+        // Early on 2026-10-25 in Prague, seven dates before "now".
         updatedAt: "2026-10-24T22:30:00.000Z",
       }),
     ).toBe("previous7Days");
@@ -84,7 +83,7 @@ describe("chat history periods", () => {
       chatHistoryPeriod({
         now,
         timeZone: "Europe/Prague",
-        // 2026-10-24 23:30 in Prague.
+        // Late on 2026-10-24 in Prague, eight dates before "now".
         updatedAt: "2026-10-24T21:30:00.000Z",
       }),
     ).toBe("older");
@@ -144,24 +143,6 @@ describe("grouping chat history", () => {
     expect(
       groupChatHistoryByPeriod({ items: [], now, timeZone: "UTC" }),
     ).toEqual([]);
-  });
-});
-
-describe("filtering chat history by matter", () => {
-  const items = [
-    { id: "global", scope: "global" as const },
-    { id: "in-a", scope: "workspace" as const, workspaceId: "matter-a" },
-    { id: "in-b", scope: "workspace" as const, workspaceId: "matter-b" },
-  ];
-
-  test("keeps only the chats that live in the chosen matter", () => {
-    expect(
-      filterChatHistoryByMatter(items, "matter-a").map((item) => item.id),
-    ).toEqual(["in-a"]);
-  });
-
-  test("keeps every chat when no matter is chosen", () => {
-    expect(filterChatHistoryByMatter(items, undefined)).toEqual(items);
   });
 });
 
