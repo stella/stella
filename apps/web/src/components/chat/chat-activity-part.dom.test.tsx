@@ -47,7 +47,17 @@ const activityMessage = (activityType: string) =>
     ],
   }) satisfies ChatUIMessage;
 
-const activityView = (message: ChatUIMessage, analytics: Analytics) => (
+type ActivityViewOptions = {
+  message: ChatUIMessage;
+  analytics: Analytics;
+  activitySession: object;
+};
+
+const activityView = ({
+  message,
+  analytics,
+  activitySession,
+}: ActivityViewOptions) => (
   <StrictMode>
     <ChatThreadTestRouter>
       <QueryClientProvider client={new QueryClient()}>
@@ -59,6 +69,7 @@ const activityView = (message: ChatUIMessage, analytics: Analytics) => (
               <ChatApprovalContext value={testChatApprovalContextValue}>
                 <ChatEditorProvider>
                   <ChatThreadMessages
+                    activitySession={activitySession}
                     approvalPendingMessageId={null}
                     messages={[message]}
                     onAskUserSubmit={() => {}}
@@ -86,9 +97,16 @@ test("unknown chat activities report once per type across remounts without rende
     ...noopAnalytics,
     captureError: (error: unknown) => errors.push(error),
   };
+  const activitySession = {};
   const message = activityMessage("private-activity-type");
-  const view = render(activityView(message, analytics));
-  view.rerender(activityView(structuredClone(message), analytics));
+  const view = render(activityView({ message, analytics, activitySession }));
+  view.rerender(
+    activityView({
+      message: structuredClone(message),
+      analytics,
+      activitySession,
+    }),
+  );
 
   expect(
     errors,
@@ -106,41 +124,65 @@ test("unknown chat activities report once per type across remounts without rende
   expect(view.container.textContent).not.toContain("private-payload");
 
   view.unmount();
-  const remounted = render(activityView(structuredClone(message), analytics));
+  const remounted = render(
+    activityView({
+      message: structuredClone(message),
+      analytics,
+      activitySession,
+    }),
+  );
   expect(errors).toHaveLength(1);
 
   remounted.rerender(
-    activityView(activityMessage("another-private-type"), analytics),
+    activityView({
+      message: activityMessage("another-private-type"),
+      analytics,
+      activitySession,
+    }),
   );
   expect(errors).toHaveLength(2);
   expect(JSON.stringify(errors)).not.toContain("another-private-type");
 
-  remounted.rerender(activityView(structuredClone(message), analytics));
+  remounted.rerender(
+    activityView({
+      message: structuredClone(message),
+      analytics,
+      activitySession,
+    }),
+  );
   expect(errors).toHaveLength(2);
 });
 
-test("a new analytics session reports an unknown activity again", () => {
-  const firstSessionErrors: unknown[] = [];
-  const secondSessionErrors: unknown[] = [];
-  const firstAnalytics = {
+test("a new chat session reports an unknown activity again with the same analytics owner", () => {
+  const errors: unknown[] = [];
+  const analytics = {
     ...noopAnalytics,
-    captureError: (error: unknown) => firstSessionErrors.push(error),
+    captureError: (error: unknown) => errors.push(error),
   };
-  const secondAnalytics = {
-    ...noopAnalytics,
-    captureError: (error: unknown) => secondSessionErrors.push(error),
-  };
+  const firstActivitySession = {};
+  const secondActivitySession = {};
   const message = activityMessage("session-scoped-private-type");
-  const firstSession = render(activityView(message, firstAnalytics));
-  expect(firstSessionErrors).toHaveLength(1);
+  const firstSession = render(
+    activityView({ message, analytics, activitySession: firstActivitySession }),
+  );
+  expect(errors).toHaveLength(1);
   firstSession.unmount();
 
-  const secondSession = render(activityView(message, secondAnalytics));
-  secondSession.rerender(
-    activityView(structuredClone(message), secondAnalytics),
+  const secondSession = render(
+    activityView({
+      message,
+      analytics,
+      activitySession: secondActivitySession,
+    }),
   );
-  expect(firstSessionErrors).toHaveLength(1);
-  expect(secondSessionErrors).toHaveLength(1);
+  secondSession.rerender(
+    activityView({
+      message: structuredClone(message),
+      analytics,
+      activitySession: secondActivitySession,
+    }),
+  );
+  expect(errors).toHaveLength(2);
 });
 
 test("review activities use the dedicated translated chat label without telemetry", () => {
@@ -149,7 +191,13 @@ test("review activities use the dedicated translated chat label without telemetr
     ...noopAnalytics,
     captureError: (error: unknown) => errors.push(error),
   };
-  const view = render(activityView(activityMessage("review"), analytics));
+  const view = render(
+    activityView({
+      message: activityMessage("review"),
+      analytics,
+      activitySession: {},
+    }),
+  );
   expect(view.getByText(messages.chat.activity.review)).toBeDefined();
   expect(view.container.textContent).not.toContain("private-payload");
   expect(errors).toEqual([]);

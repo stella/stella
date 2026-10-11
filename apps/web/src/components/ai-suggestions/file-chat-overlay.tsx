@@ -1533,6 +1533,7 @@ const FileChatOverlayInner = ({
   ]);
 
   const {
+    activitySession,
     clientStatus,
     error,
     messages,
@@ -2536,6 +2537,7 @@ const FileChatOverlayInner = ({
             }
           >
             <ChatThreadMessages
+              activitySession={activitySession}
               onAnswerEdited={refreshAnswers}
               answerRewriteAvailability={
                 data.usedAnonymization ? "anonymized" : "available"

@@ -1,4 +1,12 @@
-import { Fragment, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  Fragment,
+  use,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { ComponentProps, ReactNode, RefObject } from "react";
 
 import { panic } from "better-result";
@@ -114,7 +122,6 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useMaybeStickToBottomContext } from "@/hooks/use-stick-to-bottom";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
-import type { Analytics } from "@/lib/analytics/types";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { detached } from "@/lib/detached";
@@ -128,7 +135,18 @@ import {
 } from "@/lib/user-files";
 import { downloadFile } from "@/lib/utils";
 
-export const ChatThreadMessages = ({
+export const ChatThreadMessages = (props: ChatThreadMessagesProps) => {
+  const [localActivitySession] = useState(() => ({}));
+  return (
+    <ChatActivitySessionContext
+      value={props.activitySession ?? localActivitySession}
+    >
+      <ChatThreadMessagesContent {...props} />
+    </ChatActivitySessionContext>
+  );
+};
+
+const ChatThreadMessagesContent = ({
   activeFileName,
   assistantTextDensity = "default",
   approvalPendingMessageId,
@@ -1240,6 +1258,7 @@ const getRetryableAssistantMessageId = (
 };
 
 type ChatThreadMessagesProps = {
+  activitySession?: object;
   /**
    * The active file's display name, when one is open (the DOCX/PDF file
    * overlay). Threaded down to `ToolApprovalCard` so a `suggest_changes`
@@ -1491,15 +1510,19 @@ const TextMessageParts = ({
   </>
 );
 
-const reportedUnknownActivityTypes = new WeakMap<Analytics, Set<string>>();
+const ChatActivitySessionContext = createContext<object | null>(null);
+const reportedUnknownActivityTypes = new WeakMap<object, Set<string>>();
 
 const UnknownChatActivity = ({ activityType }: { activityType: string }) => {
   const analytics = useAnalytics();
+  const activitySession =
+    use(ChatActivitySessionContext) ??
+    panic("Chat activities require a session owner");
   useExternalSyncEffect(() => {
-    let reportedTypes = reportedUnknownActivityTypes.get(analytics);
+    let reportedTypes = reportedUnknownActivityTypes.get(activitySession);
     if (!reportedTypes) {
       reportedTypes = new Set<string>();
-      reportedUnknownActivityTypes.set(analytics, reportedTypes);
+      reportedUnknownActivityTypes.set(activitySession, reportedTypes);
     }
     if (reportedTypes.has(activityType)) {
       return;
@@ -1511,7 +1534,7 @@ const UnknownChatActivity = ({ activityType }: { activityType: string }) => {
         message: "A chat activity has no registered renderer",
       }),
     );
-  }, [activityType, analytics]);
+  }, [activitySession, activityType, analytics]);
   return null;
 };
 

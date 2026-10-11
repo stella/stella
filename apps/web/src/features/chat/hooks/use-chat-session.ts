@@ -1778,6 +1778,7 @@ export const useChatSession = ({
   ]);
 
   return {
+    activitySession: chat,
     clientStatus: status,
     reconnecting,
     refreshAnswers,

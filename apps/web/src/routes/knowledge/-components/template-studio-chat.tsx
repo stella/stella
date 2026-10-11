@@ -653,6 +653,7 @@ const TemplateStudioChatInner = ({
   });
 
   const {
+    activitySession,
     error,
     messages,
     refreshAnswers,
@@ -1348,6 +1349,7 @@ const TemplateStudioChatInner = ({
             scrollRef={threadScrollRef}
           >
             <ChatThreadMessages
+              activitySession={activitySession}
               onAnswerEdited={refreshAnswers}
               answerRewriteAvailability={
                 data.usedAnonymization ? "anonymized" : "available"
