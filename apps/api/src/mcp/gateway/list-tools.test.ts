@@ -1,5 +1,9 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { Transaction } from "@/api/db/root";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import { toSafeId } from "@/api/lib/branded-types";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
   getGatewayMcpToolDefinition,
@@ -59,6 +63,25 @@ const hasLookupTool = (definitions: readonly McpToolDefinition[]): boolean =>
   definitions.some(
     (definition) => definition.name === "lookup_business_registry",
   );
+
+const tenantlessSkillContext = (): McpRequestContext => {
+  const builder = {
+    from: () => builder,
+    where: () => builder,
+    orderBy: () => builder,
+    limit: async () => [],
+  };
+  const safeDb: McpRequestContext["safeDb"] = async (run) =>
+    Result.ok(await run(asTestRaw<Transaction>({ select: () => builder })));
+  return asTestRaw<McpRequestContext>({
+    grantedScopes: ["stella:skills", "stella:knowledge_write"],
+    memberRole: "owner",
+    organizationId: toSafeId<"organization">("org_no_skills"),
+    recordAuditEvent: asTestRaw<AuditRecorder>(async () => undefined),
+    safeDb,
+    userId: toSafeId<"user">("user_no_skills"),
+  });
+};
 
 const definitionWithSchema = (
   inputSchema: McpToolDefinition["inputSchema"],
@@ -143,6 +166,20 @@ describe("listGatewayMcpToolDefinitions restricted surfaces", () => {
 
     expect(definitions.map(({ name }) => name)).toEqual(
       DOCUMENTS_MCP_TOOL_DEFINITIONS.map(({ name }) => name),
+    );
+  });
+});
+
+describe("listGatewayMcpToolDefinitions skill guidance", () => {
+  test("does not expose shipped skills as tools", async () => {
+    const definitions = await listGatewayMcpToolDefinitions({
+      context: tenantlessSkillContext(),
+      mode: "default",
+      scopes: ["stella:skills", "stella:knowledge_write"],
+    });
+
+    expect(definitions.some(({ name }) => name.startsWith("skill__"))).toBe(
+      false,
     );
   });
 });

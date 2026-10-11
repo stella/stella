@@ -16,7 +16,6 @@ import {
   loadVisibleSkillTools,
   resolveSkillTool,
 } from "@/api/mcp/gateway/skills";
-import type { ResolvedSkillTool } from "@/api/mcp/gateway/skills";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -97,11 +96,6 @@ const createContext = ({
   });
 };
 
-// Every organization also has the shipped built-in skills, with no row; these
-// cases are about the stored rows.
-const installedOnly = (tools: readonly ResolvedSkillTool[]) =>
-  tools.filter((tool) => tool.source === CHAT_SKILL_SOURCE.installed);
-
 describe("MCP gateway skill tools", () => {
   let analytics: RecordingAnalytics;
 
@@ -118,7 +112,7 @@ describe("MCP gateway skill tools", () => {
       rows: [skillRow({ slug: "alpha" }), skillRow({ slug: "beta" })],
     });
 
-    const tools = installedOnly(await loadVisibleSkillTools({ context }));
+    const tools = await loadVisibleSkillTools({ context });
 
     expect(tools.map((tool) => tool.exposedName)).toEqual([
       "skill__alpha",
@@ -145,7 +139,7 @@ describe("MCP gateway skill tools", () => {
       ],
     });
 
-    const tools = installedOnly(await loadVisibleSkillTools({ context }));
+    const tools = await loadVisibleSkillTools({ context });
 
     expect(tools).toHaveLength(1);
     expect(tools.at(0)).toMatchObject({
@@ -164,7 +158,7 @@ describe("MCP gateway skill tools", () => {
       ],
     });
 
-    const tools = installedOnly(await loadVisibleSkillTools({ context }));
+    const tools = await loadVisibleSkillTools({ context });
 
     const names = tools.map((tool) => tool.exposedName);
     expect(names).toHaveLength(2);
@@ -189,6 +183,27 @@ describe("MCP gateway skill tools", () => {
     );
 
     expect(exposeSkillTools(catalog)).toHaveLength(catalog.length);
+  });
+
+  test("does not expose shipped skills as tools", async () => {
+    const builtIn = {
+      description: "Built-in guidance",
+      displayName: "Built-in guidance",
+      name: "playbook-builder",
+      source: CHAT_SKILL_SOURCE.builtIn,
+      version: null,
+    } as const;
+
+    expect(exposeSkillTools([builtIn])).toEqual([]);
+
+    const context = createContext();
+    expect(await loadVisibleSkillTools({ context })).toEqual([]);
+    expect(
+      await resolveSkillTool({
+        context,
+        toolName: "skill__playbook_builder",
+      }),
+    ).toBeNull();
   });
 
   test("propagates a load fault (captured, not swallowed) instead of an empty list when the DB read fails", async () => {

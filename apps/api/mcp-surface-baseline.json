@@ -1,9 +1,9 @@
 {
   "instructions": {
-    "anonymized": 1005,
-    "default": 1606,
-    "documents": 888,
-    "law": 1299
+    "anonymized": 1016,
+    "default": 1515,
+    "documents": 963,
+    "law": 1297
   },
   "tools": {
     "case_law_coverage": {
