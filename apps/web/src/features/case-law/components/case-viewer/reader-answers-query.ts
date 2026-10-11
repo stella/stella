@@ -114,6 +114,12 @@ export const streamReaderAnswer = async ({
     !response.body ||
     !response.headers.get("content-type")?.includes("text/event-stream")
   ) {
+    const cancelled = await Result.tryPromise(
+      async () => await response.body?.cancel(),
+    );
+    if (cancelled.isErr()) {
+      return Result.err(cancelled.error);
+    }
     return Result.err(
       new ReaderAnswerFailure({
         kind: "protocol",

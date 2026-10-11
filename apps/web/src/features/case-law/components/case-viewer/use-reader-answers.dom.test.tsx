@@ -200,6 +200,47 @@ const fakeServer = (
   return { bodies };
 };
 
+test("a response with the wrong stream content type cancels its body and releases creation", async () => {
+  let cancelled = false;
+  globalThis.fetch = Object.assign(
+    async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      const request = new Request(input, init);
+      if (request.method === "GET") {
+        return Response.json({ items: [], nextCursor: null, limit: 50 });
+      }
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode("Unexpected response"));
+          },
+          cancel() {
+            cancelled = true;
+          },
+        }),
+        { headers: { "Content-Type": "text/plain" } },
+      );
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const { wrapper } = setup();
+  const hook = renderHook(
+    () =>
+      useReaderAnswers({ decisionId: "decision-1", generationMode: "enabled" }),
+    { wrapper },
+  );
+  await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
+  await act(async () => {
+    await hook.result.current.createExplain(anchor);
+  });
+  expect(cancelled).toBe(true);
+  expect(hook.result.current.errors.get("create")).toMatchObject({
+    kind: "protocol",
+    message: "Missing reader answer stream",
+  });
+  expect(hook.result.current.isCreating).toBe(false);
+  expect(hook.result.current.busyAnswerIds.size).toBe(0);
+});
+
 test("reader answers create, follow up, regenerate, share, reload and delete through the HTTP boundary", async () => {
   const server = fakeServer();
   const { wrapper } = setup();
