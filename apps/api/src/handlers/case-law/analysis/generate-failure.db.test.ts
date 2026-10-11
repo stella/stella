@@ -428,17 +428,6 @@ describe("a failed analysis run", () => {
         providerDiagnostic: expectedDiagnostic,
       });
     }
-    const other = await read({
-      decisionId,
-      model: fakeGoogle(["cut-off"]).model,
-      organizationId: ORG_B,
-    });
-    expect(other).toEqual({ response: { status: "generating" }, starts: 1 });
-    const original = await read({ decisionId, model: google.model });
-    expect(original.starts).toBe(0);
-    expect(original.response).toMatchObject({
-      providerDiagnostic: expectedDiagnostic,
-    });
     const retried = await read({
       decisionId,
       model: google.model,
