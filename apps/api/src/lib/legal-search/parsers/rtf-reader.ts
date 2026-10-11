@@ -1026,19 +1026,13 @@ const readRtfInto = (
         pushRunContent({ type: "tab" });
         break;
       case "u": {
-        // RTF writes a code point above 0x7fff as a negative 16-bit value, so
-        // the escape's own range is one 16-bit word. Anything outside it is a
-        // number `String.fromCodePoint` throws on, and a throw here would lose
-        // the whole document to one malformed escape.
+        // Invalid code points must fail the structured parse: adapters retain
+        // their source-text fallback instead of publishing a partial document.
         if (parameter === undefined) {
           unknownWords.add("u");
           break;
         }
         const codePoint = parameter < 0 ? parameter + 0x1_00_00 : parameter;
-        if (codePoint < 0 || codePoint > 0x10_ff_ff) {
-          unknownWords.add(`u${parameter}`);
-          break;
-        }
         appendText(String.fromCodePoint(codePoint));
         // The escape is followed by `\ucN` replacement characters for
         // readers that cannot decode it.
@@ -1267,7 +1261,7 @@ export const readRtf = (
   return {
     package: {
       document: { content: blocks },
-      ...(footnotes.length === 0 ? {} : { footnotes }),
+      footnotes,
     },
     ...(warnings.length === 0 ? {} : { warnings }),
   };

@@ -20,11 +20,13 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
+  assembleHuBhgyDecision,
   encodeHuBhgyCursor,
   huBhgyAdapter,
   huBhgyCoveredByFrontier,
   huBhgyDocumentOf,
   huBhgyListingIdentity,
+  huBhgyRawPartsOf,
   huBhgySearchBody,
   huBhgySlice,
   huKollegiumsOf,
@@ -41,6 +43,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { isRecord } from "@/api/lib/type-guards";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
@@ -56,6 +59,57 @@ const listingFixture = async (): Promise<Record<string, unknown>[]> => {
   }
   return read.rows;
 };
+
+test("an unreadable RTF retains the Hungarian listing and raw document without partial body text", async () => {
+  const row = (await listingFixture()).at(0);
+  expect(row).toBeDefined();
+  if (row === undefined) {
+    return;
+  }
+  const bytes = new TextEncoder().encode(
+    String.raw`{\rtf1\u1179648 Partial body}`,
+  );
+  const document = huBhgyDocumentOf(bytes);
+  expect(document).toBeDefined();
+  if (document === undefined) {
+    return;
+  }
+  const rawParts = huBhgyRawPartsOf(row, document);
+  const logs = installRecordingLogger();
+  try {
+    const result = await assembleHuBhgyDecision({
+      row: normalizeHuBhgyRow(row),
+      document,
+      rawParts,
+    });
+    expect(result.type).toBe("built");
+    if (result.type !== "built") {
+      return;
+    }
+    expect(result.decision.caseNumber === row["Azonosito"]).toBe(true);
+    expect(result.decision.fulltext ?? "").toBe("");
+    expect(result.decision.documentAst).toEqual({});
+    expect(decodeSourceRawEnvelope(result.decision.sourceRaw ?? "")).toEqual(
+      rawParts,
+    );
+    expect(
+      logs
+        .at("WARN")
+        .filter(
+          ({ message }) =>
+            message === "case_law.ingestion.document_parse_failed",
+        )
+        .map(({ attributes }) => attributes),
+    ).toEqual([
+      expect.objectContaining({
+        adapterKey: "hu-bhgy",
+        "error.type": "RangeError",
+      }),
+    ]);
+  } finally {
+    logs.restore();
+  }
+});
 
 const searchResponse = (
   rows: readonly Record<string, unknown>[],

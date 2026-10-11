@@ -21,10 +21,10 @@ type InlineContent =
  * only at its first anchor. Unreferenced package entries are not body content.
  * RTF and DOCX share these paragraph-local footnoteRef anchors.
  */
-export const createParagraphFootnoteReader = (document: Document) => {
-  const notes = new Map(
-    (document.package.footnotes ?? []).map((note) => [note.id, note]),
-  );
+export const createParagraphFootnoteReader = ({
+  package: { footnotes = [] },
+}: Document) => {
+  const notes = new Map(footnotes.map((note) => [note.id, note]));
   const emitted = new Set<number>();
   return (paragraph: Paragraph): Footnote[] => {
     const anchored: Footnote[] = [];

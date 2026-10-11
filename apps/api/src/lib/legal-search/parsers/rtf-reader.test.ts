@@ -96,6 +96,24 @@ const paragraphsOf = (rtf: string): string[] =>
 
 const HEADER = String.raw`{\rtf1\ansi\ansicpg1250\deff0{\fonttbl{\f0\froman Times;}}{\colortbl ;\red0\green0\blue0;\red0\green0\blue0;}\viewkind4\uc1\pard\qj\f0\fs24 `;
 
+test("invalid Unicode code points fail RTF parsing instead of publishing partial text", () => {
+  assertProperty(
+    "invalid Unicode code points fail RTF parsing instead of publishing partial text",
+    fc.property(
+      fc.oneof(
+        fc.integer({ min: 0x11_00_00, max: 0x7f_ff_ff_ff }),
+        fc.integer({ min: -0x7f_ff_ff_ff, max: -65_537 }),
+      ),
+      (parameter) => {
+        expect(() =>
+          readRtfString(`{\\rtf1 before\\u${parameter} after}`),
+        ).toThrow(RangeError);
+      },
+    ),
+    { numRuns: 100 },
+  );
+});
+
 test("generated RTF retains plain text without markup residue", () => {
   const plainText = fc
     .array(fc.constantFrom("alpha", "beta", "gamma", "delta", "šťáva😀"), {

@@ -19,6 +19,15 @@ const paragraphOf = (ids: readonly number[]): Paragraph => ({
   ],
 });
 
+test("a document without a footnote part still emits its body paragraph", () => {
+  const paragraph = paragraphOf([]);
+  const readLines = createParagraphLineReader(
+    { package: { document: { content: [paragraph] } } },
+    (value) => value,
+  );
+  expect(readLines(paragraph)).toEqual([{ kind: "body", value: paragraph }]);
+});
+
 test("note placement follows paragraph reference order, independently of package order", () => {
   assertProperty(
     "note placement follows paragraph reference order, independently of package order",
