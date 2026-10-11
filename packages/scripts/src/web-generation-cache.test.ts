@@ -44,6 +44,14 @@ test("one package script and Turbo task own API type generation", () => {
     }
   }
   expect(owners).toEqual(["@stll/web#generate:api-types"]);
+  const entrypoint = readFileSync(
+    path.join(root, "apps/api/scripts/generate-web-api-types.ts"),
+    "utf-8",
+  );
+  expect(entrypoint).toMatch(
+    /if \(import\.meta\.main\)\s*\{\s*await withGenerationLock\(\{[^}]*run: main,/u,
+  );
+  expect(entrypoint).not.toMatch(/\bmain\(\)/u);
   const config: unknown = Bun.JSONC.parse(
     readFileSync(path.join(root, "turbo.json"), "utf-8"),
   );
