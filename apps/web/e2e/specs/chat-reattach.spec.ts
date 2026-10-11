@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { EXPECTS_DEV_RUNTIME } from "../helpers/runtime-mode";
 import { expect, test } from "../helpers/test";
 
-// The installed mock provider holds this reply open at word boundaries.
+// The installed mock provider delays this reply at word boundaries.
 const SLOW_STREAM_PROMPT = "Stream slowly please";
 const ANSWER_START = "This mock reply streams back";
 
@@ -27,13 +27,15 @@ test("reloading a running turn rejoins its answer without duplication", async ({
   const uninterrupted = await answer.textContent();
   assert.ok(uninterrupted !== null, "The completed answer must contain text");
 
-  await composer.fill(SLOW_STREAM_PROMPT);
+  // Keep the provider running through reload and hydration. A finite slow
+  // reply can finish before the resume probe and correctly skip joining.
+  await composer.fill("Stream until stopped please");
   await page.getByRole("button", { name: "Send message" }).click();
   await expect(stop).toBeVisible();
   await expect(answer).toHaveCount(2);
-  const partial = await answer.last().textContent();
-  assert.ok(partial !== null, "The streaming answer must contain text");
-  expect(partial.length).toBeLessThan(uninterrupted.length);
+  const heldAnswer =
+    "This mock reply streams back while awaiting an explicit cancellation.";
+  await expect(answer.last()).toHaveText(heldAnswer);
   await page.screenshot({ path: test.info().outputPath("before-reload.png") });
   const join = page.waitForResponse(
     (response) =>
@@ -43,15 +45,20 @@ test("reloading a running turn rejoins its answer without duplication", async ({
   await page.reload({ waitUntil: "commit" });
   expect((await join).ok()).toBe(true);
   await expect(answer).toHaveCount(2);
-  await expect(answer.last()).toHaveText(uninterrupted, { timeout: 30_000 });
+  await expect(answer.first()).toHaveText(uninterrupted);
+  await expect(answer.last()).toHaveText(heldAnswer, { timeout: 30_000 });
   await page.screenshot({ path: test.info().outputPath("after-catchup.png") });
+  await expect(stop).toBeVisible();
+  await stop.click();
   await expect(stop).toBeHidden({ timeout: 30_000 });
+  await expect(transcript).toContainText("Stopped");
   await expect(transcript.getByRole("button", { name: "Resend" })).toHaveCount(
     0,
   );
   await page.reload({ waitUntil: "commit" });
   await expect(answer).toHaveCount(2);
-  await expect(answer.last()).toHaveText(uninterrupted);
+  await expect(answer.first()).toHaveText(uninterrupted);
+  await expect(answer.last()).toHaveText(heldAnswer);
 });
 
 test("a pending question survives reload and continues its original turn", async ({

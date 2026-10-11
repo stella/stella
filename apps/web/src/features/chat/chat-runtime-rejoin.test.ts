@@ -112,6 +112,25 @@ test("a missing running turn refreshes settled history once after its loader pro
   expect(page.runtime.getSnapshot().turnAbandoned).toBe(true);
 });
 
+test("a turn completed between history loading and the resume probe refreshes without joining", async () => {
+  const requests: string[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      requests.push(url);
+      return Response.json({ type: "transcript", turnId: "turn-rejoin" });
+    },
+    { preconnect: () => undefined },
+  );
+  const page = openLoadedTurn();
+  await awaitProbe(page.runtime);
+  expect(requests).toHaveLength(1);
+  expect(requests.at(0)).toContain("/resume");
+  expect(page.reloads()).toBe(1);
+  expect(page.errors).toEqual([]);
+  expect(page.runtime.getSnapshot().turnAbandoned).toBe(true);
+});
+
 test("unauthorized rejoin probes stop immediately without retrying or presenting a settled transcript", async () => {
   for (const status of [401, 403]) {
     let probes = 0;
