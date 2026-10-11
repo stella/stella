@@ -41,7 +41,7 @@ const unexported = p.pgTable("hidden", { id: p.text() });
 
 const tables = indexSchemaSource({ fileName: "chat.ts", source: SOURCE });
 
-test("indexes each exported table with its SQL name, export, line and summary", () => {
+test("indexes each exported relation with its SQL name, export, line and summary", () => {
   expect(
     tables.map(({ exportName, line, rls, sqlName, summary }) => ({
       exportName,
@@ -63,6 +63,13 @@ test("indexes each exported table with its SQL name, export, line and summary", 
       line: 26,
       rls: true,
       sqlName: "locks",
+      summary: "",
+    },
+    {
+      exportName: "threadView",
+      line: 30,
+      rls: false,
+      sqlName: "chat_threads_view",
       summary: "",
     },
   ]);

@@ -220,7 +220,7 @@ describe("pglite role grants mirror the committed migrations", () => {
       return (
         !COLUMN_UNSCOPED_ROLES.has(role) &&
         !MIGRATION_REPLAYED_ROLES.has(role) &&
-        schemaTableNames.has(table)
+        schemaRelationNames.has(table)
       );
     };
     const migrationColumns = [

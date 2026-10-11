@@ -1,7 +1,9 @@
 import { PGlite } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
+import { panic } from "better-result";
 import { getTableName, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
+import { getViewConfig, isPgView, PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
 import * as agentAuthSchema from "@/api/db/agent-auth-schema";
@@ -65,6 +67,28 @@ const allSchema = {
   ...agentAuthSchema,
   ...rlsExports,
 };
+
+const securityBarrierViews = Object.values(allSchema).flatMap((entity) => {
+  if (!isPgView(entity)) {
+    return [];
+  }
+  const config = getViewConfig(entity);
+  if (config.isExisting || config.with === undefined) {
+    return [];
+  }
+  if (
+    config.with.securityBarrier !== true ||
+    Object.keys(config.with).some((key) => key !== "securityBarrier")
+  ) {
+    panic(`Unsupported PGlite view options for ${config.name}`);
+  }
+  return [entity];
+});
+const pglitePushSchema = Object.fromEntries(
+  Object.entries(allSchema).filter(
+    ([, entity]) => !securityBarrierViews.some((view) => view === entity),
+  ),
+);
 
 const quoteSqlIdentifier = (identifier: string) =>
   `"${identifier.replaceAll('"', '""')}"`;
@@ -664,11 +688,33 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteSchemaPrerequisites(db);
 
   // drizzle-kit is a heavyweight dev dependency; import it only on this
-  // build path so snapshot-booted test processes never load it.
+  // build path so snapshot-booted test processes never load it. RC4's API
+  // converter crashes on view WITH options because its String helper is only
+  // initialized by the CLI path, so barrier views are rendered from Drizzle's
+  // existing query config below.
   const { pushSchema } = await import("drizzle-kit/api-postgres");
-  const { sqlStatements } = await pushSchema(allSchema, pushSchemaDb);
+  const { sqlStatements } = await pushSchema(pglitePushSchema, pushSchemaDb);
   for (const statement of sqlStatements) {
     await db.execute(sql.raw(statement));
+  }
+  const dialect = new PgDialect();
+  for (const view of securityBarrierViews) {
+    const config = getViewConfig(view);
+    const query = config.query;
+    if (query === undefined) {
+      panic(`Security-barrier view ${config.name} has no query`);
+    }
+    const rendered = dialect.sqlToQuery(query);
+    if (rendered.params.length > 0) {
+      panic(`Security-barrier view ${config.name} query has bound parameters`);
+    }
+    await db.execute(sql`
+      CREATE VIEW ${sql.identifier(config.schema ?? "public")}.${sql.identifier(
+        config.name,
+      )}
+      WITH (security_barrier = true)
+      AS (${sql.raw(rendered.sql)})
+    `);
   }
   await installPgliteFlowTransitions(db);
   await installPgliteWorkspaceAccessObjects(db);

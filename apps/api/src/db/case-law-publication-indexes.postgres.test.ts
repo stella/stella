@@ -9,9 +9,11 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { ONLINE_MIGRATION_INDEXES } from "./online-migrations";
 
 const databaseUrl = process.env["DATABASE_URL"];
-const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+const enabled =
+  process.env["STELLA_RUN_POSTGRES_TESTS"] === "true" &&
+  databaseUrl !== undefined;
 
-describe.skipIf(!enabled || databaseUrl === undefined)(
+describe.skipIf(!enabled)(
   "case-law publication index definitions (postgres)",
   () => {
     test("installed definitions match the canonical publication predicate", async () => {
@@ -31,7 +33,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
         await db.execute(sql`CREATE SCHEMA ${schema}`);
         try {
           await db.execute(sql`
-            CREATE TABLE ${schema}.case_law_decisions (
+            CREATE TABLE ${schema}.publication_index_fixture (
               id uuid NOT NULL,
               country text NOT NULL,
               court text NOT NULL,
@@ -59,7 +61,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
               .replace(`"${definition.name}"`, () => `"${fixtureIndexName}"`)
               .replace(
                 'ON public."case_law_decisions"',
-                () => `ON ${schemaName}."case_law_decisions"`,
+                () => `ON ${schemaName}."publication_index_fixture"`,
               );
             await db.execute(sql.raw(fixtureCreateSql));
 
@@ -85,15 +87,11 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
             if (typeof actual !== "string" || typeof expected !== "string") {
               panic(`Index definition is missing for ${fixtureIndexName}`);
             }
-            const normalized = actual
-              .replace(/^CREATE INDEX \S+ /u, "")
-              .replace(
-                `ON ${schemaName}.case_law_decisions`,
-                "ON public.case_law_decisions",
-              );
+            const normalized = actual.replace(/^CREATE INDEX \S+ ON \S+ /u, "");
+            const expectedBody = expected.replace(/^ON \S+ /u, "");
             expect(index["valid"]).toBe(true);
             expect(index["ready"]).toBe(true);
-            expect(normalized).toBe(expected);
+            expect(normalized).toBe(expectedBody);
           }
         } finally {
           await db.execute(sql`DROP SCHEMA ${schema} CASCADE`);

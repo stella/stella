@@ -443,14 +443,14 @@ if (!databaseUrl || !runPostgresTests) {
         const unredactedViewRows = await tx.execute<{ id: string }>(
           sql`SELECT id FROM case_law_unredacted_decisions`,
         );
-        expect(new Set(publishedViewRows.rows.map(({ id }) => id))).toEqual(
+        expect(new Set(publishedViewRows.map(({ id }) => id))).toEqual(
           new Set(
             rows
               .filter((_, index) => states[index]?.visibility === true)
               .map(({ id }) => id),
           ),
         );
-        expect(new Set(unredactedViewRows.rows.map(({ id }) => id))).toEqual(
+        expect(new Set(unredactedViewRows.map(({ id }) => id))).toEqual(
           new Set(
             rows.filter((row) => row.redactedAt === null).map(({ id }) => id),
           ),

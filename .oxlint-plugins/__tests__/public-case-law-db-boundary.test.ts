@@ -132,7 +132,10 @@ describe.serial("public-law relation scan", () => {
   test("public and mixed reads import runtime schema tables by name", async () => {
     for (const modulePath of [
       "@/api/db/schema",
-      "../../../../../.oxlint-plugins/__fixtures__/case-law-schema-barrel-chain.fixture.ts",
+      path.resolve(
+        import.meta.dir,
+        "../__fixtures__/case-law-schema-barrel-chain.fixture.ts",
+      ),
     ]) {
       for (const binding of ["* as schema", "schema"]) {
         for (const mode of ["public-law", "decision-surface"]) {
@@ -209,8 +212,8 @@ describe.serial("public-law relation scan", () => {
   });
 
   test("helper classification identifies the restricted schema bindings", () => {
-    const baseDecision = new Set(["caseLawDecisions"]);
-    const unredactedDecision = new Set(["unredactedCaseLawDecisions"]);
+    const baseDecision = new Set(["caseLawDecisions"] as const);
+    const unredactedDecision = new Set(["unredactedCaseLawDecisions"] as const);
     expect(
       moduleRestrictedSchemaReads(
         ".oxlint-plugins/__fixtures__/case-law-base-helper.fixture",
@@ -389,7 +392,7 @@ describe.serial("public-law relation scan", () => {
     ]) {
       const source = [
         'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
-        `import { ${binding.name} as rows } from "../../../../../.oxlint-plugins/__fixtures__/${binding.fixture}.fixture.ts";`,
+        `import { ${binding.name} as rows } from ${JSON.stringify(path.resolve(import.meta.dir, `../__fixtures__/${binding.fixture}.fixture.ts`))};`,
         "void caseLawPublicReadDb;",
         "void rows;",
       ].join("\n");

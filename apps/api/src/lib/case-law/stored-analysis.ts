@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
+import type { Column } from "drizzle-orm";
 /**
  * What a stored decision analysis is worth for the document as it reads
  * now, and how a new generation run takes the row. Pure over the row's
@@ -18,7 +19,6 @@ import {
 } from "@stll/legal-ast/analysis";
 import { Temporal } from "@stll/time";
 
-import type { caseLawDecisions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 
@@ -96,9 +96,8 @@ export type AnalysisStoreKey = {
   fingerprint: AnalysisInputFingerprint;
 };
 
-export const storedAnalysisFingerprintFor = (
-  table: Pick<typeof caseLawDecisions, "analysis">,
-) => sql`${table.analysis}->>'inputFingerprint'`;
+export const storedAnalysisFingerprintFor = (table: { analysis: Column }) =>
+  sql`${table.analysis}->>'inputFingerprint'`;
 
 /**
  * The row a run may take: the one that still holds exactly the value this
@@ -112,7 +111,7 @@ export const storedAnalysisFingerprintFor = (
  * returned the value in does not matter.
  */
 export const claimableAnalysisRowFor = (
-  table: Pick<typeof caseLawDecisions, "id" | "analysis">,
+  table: { id: Column; analysis: Column },
   {
     decisionId,
     observed,

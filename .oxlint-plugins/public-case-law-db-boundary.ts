@@ -100,9 +100,17 @@ const PUBLIC_LAW_BOUNDARY_OWNERS: readonly string[] = [
 ];
 
 const SCHEMA_MODULE = "apps/api/src/db/schema";
-const isSchemaModule = (moduleId: string | null): boolean =>
-  moduleId === SCHEMA_MODULE ||
-  (moduleId !== null && moduleId.startsWith(`${SCHEMA_MODULE}/`));
+const isSchemaModule = (moduleId: string | null): boolean => {
+  if (moduleId === null) {
+    return false;
+  }
+  const normalized = path.isAbsolute(moduleId)
+    ? path.relative(REPOSITORY_ROOT, moduleId)
+    : moduleId;
+  return (
+    normalized === SCHEMA_MODULE || normalized.startsWith(`${SCHEMA_MODULE}/`)
+  );
+};
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("../", import.meta.url));
 const RESTRICTED_SCHEMA_IMPORTS = {
@@ -127,7 +135,9 @@ const restrictedSchemaCache = new Map<
 
 const moduleSourcePath = (moduleId: string): string | null => {
   for (const extension of [".ts", ".tsx"] as const) {
-    const candidate = path.join(REPOSITORY_ROOT, `${moduleId}${extension}`);
+    const candidate = path.isAbsolute(moduleId)
+      ? `${moduleId}${extension}`
+      : path.join(REPOSITORY_ROOT, `${moduleId}${extension}`);
     if (existsSync(candidate)) {
       return candidate;
     }
@@ -251,7 +261,7 @@ export const moduleRestrictedSchemaReadsFromSources = (
     for (const identity of moduleRestrictedSchemaReadsFromSources(dependency, {
       readSource,
       seen,
-      exportName: name,
+      ...(name === undefined ? {} : { exportName: name }),
     })) {
       identities.add(identity);
     }
@@ -261,7 +271,7 @@ export const moduleRestrictedSchemaReadsFromSources = (
       const clause = statement.importClause;
       if (
         clause === undefined ||
-        clause.isTypeOnly ||
+        clause.phaseModifier === ts.SyntaxKind.TypeKeyword ||
         !ts.isStringLiteral(statement.moduleSpecifier)
       ) {
         continue;
@@ -341,7 +351,7 @@ export const moduleRestrictedSchemaReads = (
   }
   const identities = moduleRestrictedSchemaReadsFromSources(moduleId, {
     readSource: readLocalModuleSource,
-    exportName,
+    ...(exportName === undefined ? {} : { exportName }),
   });
   restrictedSchemaCache.set(key, identities);
   return identities;
@@ -1587,7 +1597,7 @@ export default eslintCompatPlugin({
               }
             }
             const reportRestrictedIdentities = (
-              binding: AstNode,
+              binding: typeof node | (typeof node.specifiers)[number],
               exportName?: string,
             ) => {
               if (importedModule === null) {
@@ -1596,7 +1606,7 @@ export default eslintCompatPlugin({
               for (const identity of moduleRestrictedSchemaReads(
                 importedModule,
                 {
-                  exportName,
+                  ...(exportName === undefined ? {} : { exportName }),
                 },
               )) {
                 const policy = RESTRICTED_SCHEMA_IMPORTS[identity];
