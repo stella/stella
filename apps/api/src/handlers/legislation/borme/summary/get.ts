@@ -21,7 +21,7 @@ const bormeSummary = createSafeRootHandler(
       type: "capability",
       readClass: "public",
       reason: "legal_corpus_admin",
-      consumesServices: true,
+      consumesServices: false,
     },
     access: "read",
     params: paramsSchema,
