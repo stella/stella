@@ -1,3 +1,4 @@
+// parser-output-unchanged: [us-courtlistener] named declaration types leave emitted runtime unchanged.
 /**
  * What a CourtListener cluster becomes, before its text is read: identity,
  * court, references, dates, judges, metadata and the stored raw. Pure: no
