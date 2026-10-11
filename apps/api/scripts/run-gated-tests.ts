@@ -27,6 +27,7 @@ type RunGatedTestsOptions = {
   script: GatedTestScript;
   selection?: string | undefined;
   exclusiveTestPaths?: ReadonlySet<string> | undefined;
+  spawnTestProcess?: RunTestBatchesOptions["spawn"];
   shardTestFiles?:
     | ((testFiles: readonly string[]) => readonly string[])
     | undefined;
@@ -169,6 +170,7 @@ export const runGatedTests = async ({
   script,
   selection,
   exclusiveTestPaths = new Set(),
+  spawnTestProcess,
   validateTestPlan,
   shardTestFiles,
 }: RunGatedTestsOptions): Promise<number> => {
@@ -253,5 +255,6 @@ export const runGatedTests = async ({
     cwd: apiRoot,
     gate: runner.gate,
     gateValue: runner.gateValue,
+    spawn: spawnTestProcess,
   });
 };
