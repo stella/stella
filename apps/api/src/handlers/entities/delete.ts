@@ -14,7 +14,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { entityFileRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError, detached } from "@/api/lib/analytics/capture";
+import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -39,23 +39,15 @@ import {
 } from "@/api/lib/flows/review-gate-task";
 import { collectFolioCollabStoredRoomFiles } from "@/api/lib/folio-collab-rooms";
 import { LIMITS } from "@/api/lib/limits";
-import { failureSink } from "@/api/lib/observability/failure";
-import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   forEachOcrDerivativePage,
   ocrDerivativeCursorFilter,
   ocrDerivativePageOrder,
 } from "@/api/lib/ocr-derivative-pages";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
-import { upsertSearchDocument } from "@/api/lib/search/index-entity";
-import { getSearchMaintenance } from "@/api/lib/search/pg-fts-maintenance";
+import { syncWorkspaceSearchActivity } from "@/api/lib/search/workspace-search-activity";
 
 import { selectCanonicalFileContents } from "./delete-file-snapshot";
-
-const searchRepairFailure = failureSink({
-  event: "entities.delete_search_repair_failed",
-  expected: [],
-});
 
 const deleteEntitiesBodySchema = t.Object({
   entityIds: t.Array(tSafeId("entity"), {
@@ -308,6 +300,8 @@ export const deleteEntitiesHandler = async function* ({
         .set({ lastActivityAt: new Date() })
         .where(eq(workspaces.id, workspaceId));
 
+      await syncWorkspaceSearchActivity(workspaceId, tx);
+
       await recordAuditEvent(
         tx,
         deleted.map((entity) => {
@@ -339,14 +333,12 @@ export const deleteEntitiesHandler = async function* ({
       return {
         status: "deleted" as const,
         cleanupRequestIds,
-        entities: deleted,
       };
     }),
   );
   if (txOutcome.status === "rejected") {
     return Result.err(txOutcome.error);
   }
-  const deletedEntities = txOutcome.entities;
   // Accelerate only a bounded prefix. The requests are already committed and
   // the reconciler claims every `pending` row on its own schedule, so a
   // deletion that produced many pages must not fan out an unbounded number of
@@ -356,32 +348,6 @@ export const deleteEntitiesHandler = async function* ({
     enqueueCleanup,
     requestIds: txOutcome.cleanupRequestIds,
   });
-
-  // Explicit removal for non-PG providers (CASCADE handles PG)
-  for (const entity of deletedEntities) {
-    detached(
-      Result.tryPromise(
-        async () =>
-          // db-await-in-loop: non-PG repair removes each committed entity through the provider's single-entity API.
-          await safeDb(
-            async (tx) =>
-              await getSearchMaintenance(tx, upsertSearchDocument).removeEntity(
-                {
-                  entityId: entity.id,
-                  workspaceId,
-                },
-              ),
-          ),
-      ).then((searchAttempt) => {
-        const result = searchAttempt.andThen((value) => value);
-        if (result.isErr()) {
-          observeFailure(result.error, { sink: searchRepairFailure });
-        }
-        return result;
-      }),
-      "entities-delete.search-repair",
-    );
-  }
 
   return Result.ok({});
 };

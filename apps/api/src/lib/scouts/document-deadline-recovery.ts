@@ -5,12 +5,13 @@ import { SCOUT_KEY } from "@stll/api-contract/signals";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { Temporal } from "@stll/time";
 
-import type { rootDb, Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
 import {
   documentProcessingRuns,
   SCOUT_RUN_STATUS,
   scoutRuns,
 } from "@/api/db/schema";
+import type { AnyDrizzle } from "@/api/db/scoped";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
@@ -143,7 +144,7 @@ export type DeadlineScoutClaimSettlement =
   | { status: "stale_claim" };
 
 type PauseDocumentDeadlineScoutOptions = {
-  database: Pick<typeof rootDb, "select" | "transaction">;
+  database: Pick<Transaction, "select"> & AnyDrizzle<Transaction>;
   sourceRunId: SafeId<"documentProcessingRun">;
 } & (
   | { from: "pending" }
@@ -211,7 +212,7 @@ export const pauseDocumentDeadlineScoutAfterGrantLoss = async ({
 };
 
 type ReconcileDeadlineAdmissionOptions = {
-  database: typeof rootDb;
+  database: Pick<Transaction, "select"> & AnyDrizzle<Transaction>;
   direction: "pause" | "resume";
 };
 
@@ -310,7 +311,7 @@ const reconcileDeadlineAdmission = async ({
  *  assembling the whole reconciliation set and a test can drive it with a
  *  stubbed queue. */
 type RecoverDocumentDeadlineScoutDispatchesOptions = {
-  database: typeof rootDb;
+  database: Pick<Transaction, "select"> & AnyDrizzle<Transaction>;
   enqueueDocumentDeadlineScout?: typeof enqueueDocumentDeadlineScout;
 };
 

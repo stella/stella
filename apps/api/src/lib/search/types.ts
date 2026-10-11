@@ -161,11 +161,6 @@ export type ContentSearchResult = {
   totalCount: number;
 };
 
-export type RemoveEntityOptions = {
-  entityId: SafeId<"entity">;
-  workspaceId: SafeId<"workspace">;
-};
-
 /** Tenant reads, bound to one request's scoped database handle. */
 export type SearchReader = {
   search: (query: SearchQuery) => Promise<SearchResult>;
@@ -175,7 +170,6 @@ export type SearchReader = {
 /** Index upkeep, run by trusted server code outside any request scope. */
 export type SearchMaintenance = {
   indexEntity: (entityId: SafeId<"entity">) => Promise<void>;
-  removeEntity: (options: RemoveEntityOptions) => Promise<void>;
   rebuildIndex: (orgId: SafeId<"organization">) => Promise<void>;
 };
 

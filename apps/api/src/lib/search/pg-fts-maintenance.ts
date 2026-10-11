@@ -1,18 +1,13 @@
 import { and, asc, eq, gt } from "drizzle-orm";
 
 import type { ScopedTransaction } from "@/api/db/safe-db";
-import { entities, searchDocuments } from "@/api/db/schema";
+import { entities } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
-import { writeSearchBookkeeping } from "@/api/lib/db/recovery-bookkeeping/search";
 import { LIMITS } from "@/api/lib/limits";
 import { iterateCursorPages } from "@/api/lib/pagination";
-import type {
-  RemoveEntityOptions,
-  SearchMaintenance,
-} from "@/api/lib/search/types";
-import { syncWorkspaceSearchActivity } from "@/api/lib/search/workspace-search-activity";
+import type { SearchMaintenance } from "@/api/lib/search/types";
 
 const REINDEX_BATCH_SIZE = 100;
 
@@ -25,20 +20,6 @@ export const getSearchMaintenance = (
   database: SearchMaintenanceDatabase,
   indexEntity: SearchMaintenance["indexEntity"],
 ): SearchMaintenance => {
-  const removeEntity = async ({
-    entityId,
-    workspaceId,
-  }: RemoveEntityOptions): Promise<void> => {
-    await writeSearchBookkeeping({
-      type: "remove-entity",
-      db: database,
-      table: searchDocuments,
-      entityId,
-    });
-
-    await syncWorkspaceSearchActivity(workspaceId, database);
-  };
-
   // Upsert all entities without deleting first to avoid search
   // blackout. CASCADE FK handles deleted entities' search docs.
   const rebuildIndex = async (orgId: SafeId<"organization">): Promise<void> => {
@@ -77,7 +58,6 @@ export const getSearchMaintenance = (
 
   return {
     indexEntity,
-    removeEntity,
     rebuildIndex,
   };
 };

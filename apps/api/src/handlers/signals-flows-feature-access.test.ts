@@ -292,6 +292,7 @@ for (const feature of FEATURES) {
               context,
             );
             const listed = await handleMcpToolCall({
+              mode: "advanced",
               toolName: "list_capabilities",
               args: { domain: feature.id, limit: 100 },
               context,
@@ -310,6 +311,7 @@ for (const feature of FEATURES) {
                 !enabled && enrolled,
               );
               const result = await handleMcpToolCall({
+                mode: "advanced",
                 toolName:
                   MCP_CAPABILITY_EXECUTORS[
                     catalogEntries.find(({ id }) => id === capability)
