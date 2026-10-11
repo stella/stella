@@ -12,6 +12,45 @@ import {
 const lastSqlToken = (text: string, pattern: RegExp): number =>
   Math.max(-1, ...[...text.matchAll(pattern)].map((match) => match.index));
 
+const SQL_RELATION_BOUNDARIES = new Set([
+  "WHERE",
+  "JOIN",
+  "ON",
+  "LEFT",
+  "RIGHT",
+  "FULL",
+  "CROSS",
+  "INNER",
+  "UNION",
+  "INTERSECT",
+  "EXCEPT",
+  "GROUP",
+  "ORDER",
+  "LIMIT",
+  "OFFSET",
+  "FETCH",
+  "FOR",
+  "HAVING",
+  "WINDOW",
+  "RETURNING",
+]);
+
+const rawDecisionAliases = (query: string): string[] =>
+  [
+    ...query.matchAll(
+      /\b(?:from|join)\s+case_law_decisions\b(?:\s+(?:as\s+)?("[^"]+"|[a-z_][\w$]*))?/giu,
+    ),
+  ].map((match) => {
+    const alias = match.at(1);
+    if (
+      alias === undefined ||
+      SQL_RELATION_BOUNDARIES.has(alias.toUpperCase())
+    ) {
+      return CASE_LAW_DECISION_TABLE;
+    }
+    return alias.startsWith('"') ? alias.slice(1, -1) : alias.toLowerCase();
+  });
+
 const ROOT = path.resolve(import.meta.dir, "..");
 const OWNER_MODULES = new Set([
   "@/api/lib/case-law/published-decisions",
@@ -1025,13 +1064,13 @@ const inspectFileReads = (
     if (site.kind === "raw") {
       visitJoins(site.node);
     }
-    const aliases = [
-      ...rawQuery.matchAll(
-        /\b(?:from|join)\s+case_law_decisions\s+(?:as\s+)?([a-z_][\w$]*)/giu,
-      ),
-    ]
-      .map((match) => match[1])
-      .filter((alias) => alias !== undefined);
+    const aliases = site.kind === "raw" ? rawDecisionAliases(rawQuery) : [];
+    const label = `${file}:${site.line}`;
+    reads.push(label);
+    if (new Set(aliases).size !== aliases.length) {
+      errors.push(`${label}: give each decision table its own alias`);
+      continue;
+    }
     const maintenanceWrite =
       MAINTENANCE_WRITE_SQL.has(file) &&
       rawQuery.includes(
@@ -1053,8 +1092,6 @@ const inspectFileReads = (
         joinedAliases.includes(alias) ||
         allowedMaintenanceAliases?.has(alias),
     );
-    const label = `${file}:${site.line}`;
-    reads.push(label);
     const target = site.kind === "builder" ? tableOf(site.target) : undefined;
     const builderOwned =
       site.kind !== "builder" ||

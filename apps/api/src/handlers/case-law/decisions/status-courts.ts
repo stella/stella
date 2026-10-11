@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 
 import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
 import {
@@ -193,10 +193,10 @@ export const readCaseLawCourtActivityQuery = definePublicLawSharedQuery(
     const sinceDay = new Date(now.getTime() - DAY_IN_MS);
     const sinceWeek = new Date(now.getTime() - WEEK_IN_MS);
     const scanFrom = new Date(sinceWeek.getTime() - CLOCK_SKEW_MARGIN_MS);
-    const admitted =
+    const admitted = (sourceId: SQL) =>
       excludedSourceIds.length === 0
         ? sql`TRUE`
-        : sql`d.source_id <> ALL(
+        : sql`${sourceId} <> ALL(
               SELECT value::uuid
               FROM jsonb_array_elements_text(${JSON.stringify([...excludedSourceIds])}::text::jsonb) AS value
             )`;
@@ -214,25 +214,25 @@ export const readCaseLawCourtActivityQuery = definePublicLawSharedQuery(
       FROM jsonb_array_elements_text(${JSON.stringify([...courts])}::text::jsonb)
         WITH ORDINALITY AS named(court, ordinality)
       LEFT JOIN LATERAL (
-        SELECT d.updated_at
-        FROM case_law_decisions d
-        WHERE d.country = ${country}
-          AND d.court = named.court
-          AND ${sql.raw(publishedCaseLawDecisionSqlFor("d"))}
-          AND ${admitted}
-        ORDER BY d.updated_at DESC
+        SELECT latest_decision.updated_at
+        FROM case_law_decisions latest_decision
+        WHERE latest_decision.country = ${country}
+          AND latest_decision.court = named.court
+          AND ${sql.raw(publishedCaseLawDecisionSqlFor("latest_decision"))}
+          AND ${admitted(sql`latest_decision.source_id`)}
+        ORDER BY latest_decision.updated_at DESC
         LIMIT 1
       ) latest ON true
       LEFT JOIN LATERAL (
         SELECT
-          count(*) FILTER (WHERE d.created_at >= ${sinceDay}::timestamptz) AS added_last_day,
-          count(*) FILTER (WHERE d.created_at >= ${sinceWeek}::timestamptz) AS added_last_week
-        FROM case_law_decisions d
-        WHERE d.country = ${country}
-          AND d.court = named.court
-          AND d.updated_at >= ${scanFrom}::timestamptz
-          AND ${sql.raw(publishedCaseLawDecisionSqlFor("d"))}
-          AND ${admitted}
+          count(*) FILTER (WHERE recent_decision.created_at >= ${sinceDay}::timestamptz) AS added_last_day,
+          count(*) FILTER (WHERE recent_decision.created_at >= ${sinceWeek}::timestamptz) AS added_last_week
+        FROM case_law_decisions recent_decision
+        WHERE recent_decision.country = ${country}
+          AND recent_decision.court = named.court
+          AND recent_decision.updated_at >= ${scanFrom}::timestamptz
+          AND ${sql.raw(publishedCaseLawDecisionSqlFor("recent_decision"))}
+          AND ${admitted(sql`recent_decision.source_id`)}
       ) recent ON true
       ORDER BY named.ordinality
     `),

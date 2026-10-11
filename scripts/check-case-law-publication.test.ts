@@ -199,6 +199,26 @@ test("the publication exception budget can only shrink", () => {
   ]);
 });
 
+test("each raw decision table has its own alias", () => {
+  const inspect = (aliases: readonly string[]) =>
+    inspectCaseLawPublication([
+      {
+        file: "apps/api/src/lib/legal-search/decision-aliases.ts",
+        source: `import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+        import { sql } from "drizzle-orm";
+        import { publishedCaseLawDecisionSqlFor as eligible } from "@/api/lib/case-law/published-decisions";
+        declare const db: CaseLawPublicReadDb;
+        const query = db.execute(sql\`${aliases.map((alias) => `SELECT ${alias}.id FROM case_law_decisions ${alias} WHERE \${sql.raw(eligible("${alias}"))}`).join(" UNION ALL ")}\`);`,
+      },
+    ]);
+  const repeated = inspect(["d", "d"]);
+  expect(repeated.errors).toHaveLength(1);
+  expect(repeated.errors.at(0)).toContain(
+    "give each decision table its own alias",
+  );
+  expect(inspect(["d1", "d2"]).errors).toEqual([]);
+});
+
 test("the publication predicate is checked as a top-level condition", () => {
   const report = inspectCaseLawPublication([
     {
