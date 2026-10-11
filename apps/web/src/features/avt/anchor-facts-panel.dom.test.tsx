@@ -305,9 +305,14 @@ test("Not stated clears an existing confidence while preserving scoring", async 
       { button: 0 },
     );
   });
-  fireEvent.click(
-    await screen.findByRole("option", { name: messages.common.notStated }),
-  );
+  const notStated = await screen.findByRole("option", {
+    name: messages.common.notStated,
+  });
+  await act(async () => {
+    fireEvent.pointerDown(notStated, { button: 0, pointerType: "mouse" });
+    fireEvent.pointerUp(notStated, { button: 0, pointerType: "mouse" });
+    fireEvent.click(notStated, { button: 0, detail: 1 });
+  });
   await waitFor(() => {
     expect(requests).toEqual([
       {
