@@ -82,9 +82,6 @@ export const claimDocumentProcessingAttempt = async ({
         ),
       ) ?? panic("Missing document processing claim predicate"),
   });
-  if (locked.status === "busy") {
-    return panic("Blocking document processing claim lock was busy");
-  }
   const owned = locked.rows.at(0);
   if (!owned) {
     return null;
@@ -177,9 +174,6 @@ export const failDocumentProcessingAttempt = async ({
             : sql`${documentProcessingRuns.claimedAt} < ${staleBefore}::timestamptz`,
         ) ?? panic("Missing document processing failure predicate"),
     });
-    if (locked.status === "busy") {
-      return panic("Blocking document processing failure lock was busy");
-    }
     const owned = locked.rows.at(0);
     if (!owned) {
       return null;

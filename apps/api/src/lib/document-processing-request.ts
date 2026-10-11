@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
 
 import type { rootDb } from "@/api/db/root";
@@ -249,9 +248,6 @@ export const persistManualOcrRun = async ({
             select: (queryTx) => queryTx.select().from(documentProcessingRuns),
           })
         : null;
-      if (locked?.status === "busy") {
-        return panic("Blocking manual OCR processing claim lock was busy");
-      }
       const existing = locked?.rows.at(0);
       const projectionRows =
         existing?.status === "running" || existing?.status === "succeeded"

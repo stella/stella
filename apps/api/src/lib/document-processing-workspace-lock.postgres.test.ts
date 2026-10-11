@@ -30,7 +30,10 @@ import {
   persistMissingNativeExtractionRuns,
   persistOcrProjection,
 } from "@/api/lib/document-processing-queue";
-import { DocumentProcessingJobError } from "@/api/lib/document-processing-queue-policy";
+import {
+  DocumentProcessingJobError,
+  SEARCH_INDEX_FAILURE_CODE,
+} from "@/api/lib/document-processing-queue-policy";
 import { persistManualOcrRun } from "@/api/lib/document-processing-request";
 import { restoreManualOcrRunAfterProjectionLoss } from "@/api/lib/search/document-processing-manual-ocr-restore";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
@@ -723,7 +726,7 @@ if (!databaseUrl || !runPostgresTests) {
   );
 
   test.each([
-    { errorCode, retryScheduled: true },
+    { errorCode: SEARCH_INDEX_FAILURE_CODE, retryScheduled: true },
     { errorCode: "processing_failed", retryScheduled: false },
   ] as const)(
     "failure settlement observes the locked claim for $errorCode",

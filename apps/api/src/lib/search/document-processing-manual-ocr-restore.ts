@@ -176,9 +176,6 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
             panic("Missing manual OCR restore predicate"),
         })
       : null;
-    if (locked?.status === "busy") {
-      panic("Blocking manual OCR processing claim lock was busy");
-    }
     const existing = locked?.rows.at(0);
     if (!existing) {
       return;
