@@ -199,6 +199,10 @@ jobs:
               if (!["opened", "synchronize"].includes(context.payload.action)) return "normal-v1";
               const certifiedUntil = process.env.CI_PR_DEPTH_PILOT_CERTIFIED_UNTIL ?? "";
               if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(certifiedUntil)) return "normal-v1";
+              const calendarDate = certifiedUntil.slice(0, 10);
+              const calendarTimestamp = Date.parse(`${calendarDate}T00:00:00Z`);
+              if (!Number.isFinite(calendarTimestamp)
+                  || new Date(calendarTimestamp).toISOString().slice(0, 10) !== calendarDate) return "normal-v1";
               const expiresAt = Date.parse(certifiedUntil);
               const now = Date.now();
               if (!Number.isFinite(expiresAt) || expiresAt <= now

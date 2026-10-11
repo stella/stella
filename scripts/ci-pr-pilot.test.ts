@@ -58,22 +58,24 @@ const fastJobs = (input: unknown) => {
   }
   return result.jobs;
 };
-const now = Date.parse("2026-10-09T12:00:00Z");
-class FixedDate extends Date {
-  static override now = () => now;
-}
 type Options = {
   variable?: string;
   certifiedUntil?: string;
+  currentTime?: string;
   event?: string;
   action?: string;
 };
 const decide = async ({
   variable = "on",
   certifiedUntil = "2026-10-10T12:00:00Z",
+  currentTime = "2026-10-09T12:00:00Z",
   event = "pull_request",
   action = "synchronize",
 }: Options = {}) => {
+  const now = Date.parse(currentTime);
+  class FixedDate extends Date {
+    static override now = () => now;
+  }
   const outputs = new Map<string, string>();
   const notices: string[] = [];
   await new Script(`(async () => {${policy}\n})()`).runInNewContext({
@@ -116,6 +118,11 @@ test("coverage profile requires a current repository certification", async () =>
       expected: "normal-v1",
     },
     {
+      name: "certification expires now",
+      options: { certifiedUntil: "2026-10-09T12:00:00Z" },
+      expected: "normal-v1",
+    },
+    {
       name: "certification too distant",
       options: { certifiedUntil: "2026-10-11T12:00:01Z" },
       expected: "normal-v1",
@@ -123,6 +130,14 @@ test("coverage profile requires a current repository certification", async () =>
     {
       name: "certification valid",
       options: { certifiedUntil: "2026-10-11T12:00:00Z" },
+      expected: "pilot-fast-v1",
+    },
+    {
+      name: "certification with timezone offset",
+      options: {
+        certifiedUntil: "2026-10-10T14:00:00+02:00",
+        action: "opened",
+      },
       expected: "pilot-fast-v1",
     },
     {
@@ -140,6 +155,37 @@ test("coverage profile requires a current repository certification", async () =>
     const { outputs, notices } = await decide(options);
     expect(outputs.get("coverage_profile"), name).toBe(expected);
     expect(notices, name).toEqual([`coverage_profile=${expected}`]);
+  }
+});
+
+test("nonexistent calendar dates cannot certify fast coverage", async () => {
+  for (const [currentTime, certifiedUntil] of [
+    ["2026-02-28T12:00:00Z", "2026-02-29T12:00:00Z"],
+    ["2026-02-28T12:00:00Z", "2026-02-30T00:00:00Z"],
+    ["2024-02-29T12:00:00Z", "2024-02-30T12:00:00Z"],
+    ["2100-02-28T12:00:00Z", "2100-02-29T12:00:00Z"],
+    ["2026-04-30T12:00:00Z", "2026-04-31T12:00:00+02:00"],
+    ["2026-06-30T12:00:00Z", "2026-06-31T12:00:00Z"],
+    ["2026-09-30T12:00:00Z", "2026-09-31T12:00:00Z"],
+    ["2026-11-30T12:00:00Z", "2026-11-31T12:00:00Z"],
+  ] as const) {
+    const expiresAt = Date.parse(certifiedUntil);
+    const now = Date.parse(currentTime);
+    expect(expiresAt).toBeGreaterThan(now);
+    expect(expiresAt).toBeLessThanOrEqual(now + 48 * 60 * 60 * 1000);
+    const { outputs, notices } = await decide({ currentTime, certifiedUntil });
+    expect(outputs.get("coverage_profile"), certifiedUntil).toBe("normal-v1");
+    expect(notices).toEqual(["coverage_profile=normal-v1"]);
+  }
+  for (const year of [2000, 2024]) {
+    expect(
+      (
+        await decide({
+          currentTime: `${year}-02-28T12:00:00Z`,
+          certifiedUntil: `${year}-02-29T12:00:00Z`,
+        })
+      ).outputs.get("coverage_profile"),
+    ).toBe("pilot-fast-v1");
   }
 });
 
