@@ -300,49 +300,43 @@ export const readCitationDecisionText = async ({
       }),
     };
   }
-  // The AST reader may recover an object read with its database copy. A
-  // failed denial-list check must still forbid that fallback's text.
-  const eligibilityFailures: CitationTextGateError[] = [];
+  // Check denial before the AST reader can recover an object read with its
+  // database copy. The reader only fetches this pointer's AST location.
+  const locations = pointer.astS3Key === null ? [] : [pointer.astS3Key];
+  const tombstones = await Result.tryPromise({
+    try: async () => await readTombstones(locations),
+    catch: (cause) =>
+      new CitationTextGateError({
+        message: "Citation decision denial list could not be read",
+        reason: "gate_failed",
+        cause,
+      }),
+  });
+  if (Result.isError(tombstones)) {
+    return { type: "gate-failed", error: tombstones.error };
+  }
+  if (locations.some((location) => tombstones.value.has(location))) {
+    return {
+      type: "gate-failed",
+      error: new CitationTextGateError({
+        message: "Citation decision text has been erased",
+        reason: "gate_failed",
+      }),
+    };
+  }
   const read = await Result.tryPromise(
     async () =>
-      await readAst(
-        { ...pointer, documentAst: columns.documentAst },
-        async (locations) => {
-          const tombstones = await Result.tryPromise({
-            try: async () => await readTombstones(locations),
-            catch: (cause) =>
-              new CitationTextGateError({
-                message: "Citation decision denial list could not be read",
-                reason: "gate_failed",
-                cause,
-              }),
-          });
-          if (Result.isError(tombstones)) {
-            const error = tombstones.error;
-            eligibilityFailures.push(error);
-            throw error;
-          }
-          if (locations.some((location) => tombstones.value.has(location))) {
-            const error = new CitationTextGateError({
-              message: "Citation decision text has been erased",
-              reason: "gate_failed",
-            });
-            eligibilityFailures.push(error);
-            throw error;
-          }
-          return tombstones.value;
-        },
+      await readAst({ ...pointer, documentAst: columns.documentAst }, () =>
+        Promise.resolve(tombstones.value),
       ),
   );
-  const failedEligibility = eligibilityFailures.at(0);
-  if (failedEligibility !== undefined || Result.isError(read)) {
+  if (Result.isError(read)) {
     return {
       type: "gate-failed",
       error: new CitationTextGateError({
         message: "Citation decision text eligibility could not be read",
         reason: "gate_failed",
-        cause:
-          failedEligibility ?? (Result.isError(read) ? read.error : undefined),
+        cause: read.error,
       }),
     };
   }

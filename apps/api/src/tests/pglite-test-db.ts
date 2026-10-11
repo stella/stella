@@ -10,6 +10,7 @@ import * as rlsExports from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
 import type { AnyDrizzle } from "@/api/db/scoped";
 import {
+  CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
   ROLLOUT_CASE_LAW_SOURCE_RELATION,
@@ -283,7 +284,12 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
  * harness mirrors the migrations, so it leaves them ungranted too.
  */
 const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
-  new Set(["case_law_decisions.docket_family_key"]);
+  new Set([
+    "case_law_decisions.docket_family_key",
+    ...Object.keys(
+      CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION.case_law_citations,
+    ).map((column) => `case_law_citations.${column}`),
+  ]);
 
 /**
  * Role grants the harness runs after `stella`'s table privileges are set from

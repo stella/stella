@@ -59,3 +59,22 @@ test("citation evidence accepts fenced writes and clearing derived fields", asyn
     }),
   ).toEqual([]);
 });
+
+test("synthetic citation fixtures stay outside the production writer guard", async () => {
+  const source = [
+    'import { sql } from "drizzle-orm";',
+    'import { caseLawCitations } from "@/api/db/schema";',
+    "export const seed = (tx, rows) => tx.insert(caseLawCitations).values(rows);",
+    "export const rawSeed = (tx) => tx.execute(sql`INSERT INTO case_law_citations (citation_text) VALUES ('fixture')`);",
+  ].join("\n");
+  for (const sourcePath of [
+    "apps/api/src/tests/security/public-law-search-census.ts",
+    "apps/api/src/tests/query-plans/seed.ts",
+  ]) {
+    expect(
+      await lintSingleRule("citation-evidence-text-fence", source, {
+        sourcePath,
+      }),
+    ).toEqual([]);
+  }
+});

@@ -8,6 +8,7 @@ import {
   isAstNode,
   isIdentifier,
   isFileIn,
+  isTestFile,
   resolveImport,
   unwrapExpression,
 } from "./utils.ts";
@@ -145,7 +146,7 @@ export default eslintCompatPlugin({
           before() {
             writers.length = 0;
             guarded.clear();
-            return !/\.(?:test|spec)\.tsx?$/u.test(filenameForContext(context));
+            return !isTestFile(filenameForContext(context));
           },
           CallExpression(node) {
             if (!isAstNode(node)) {
@@ -208,12 +209,11 @@ export default eslintCompatPlugin({
               if (
                 !isAstNode(part) ||
                 typeof part.value !== "object" ||
-                part.value === null ||
                 !("raw" in part.value)
               ) {
                 return;
               }
-              parts.push(String(part.value.raw));
+              parts.push(part.value.raw);
               parts.push(
                 isCitationTable(quasi.expressions.at(index))
                   ? "case_law_citations"

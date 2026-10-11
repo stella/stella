@@ -1251,34 +1251,20 @@ export const STELLA_TOOL_DEFINITIONS = [
       readOnlyHint: true,
       openWorldHint: false,
     },
-    // Against a per-tool character ceiling, so each clause earns its place:
-    // what the tool answers, what a direction does not imply, the closed
-    // polarity vocabulary and the two readings a model would otherwise guess
-    // at, the passage's bounds, and the next call spelled out.
     description:
-      "Read how citing decisions stood to one, or what it cited. One page, " +
-      "each citation with a polarity and an excerpt of its paragraph. " +
-      "`cited_by` returns the decisions that cite this one, `cites` the ones " +
-      "it cites; neither means agreement. " +
-      `\`polarity\` is one of ${CITATION_TREATMENTS.join(", ")}: a stance, ` +
-      "not a doctrinal act, so it never says followed, distinguished or " +
-      "overruled. 'unclassified' means none was read, 'mixed' that mentions " +
-      "disagreed. Polarity concerns the cited decision as a whole unless " +
-      "`citedPart` names majority, dissent or concurrence; 'not-stated' means " +
-      "the citing text did not identify a part. `polarityEvidence` gives source, " +
-      "ruleId, classifierVersion and the recorded classifier window as excerpt " +
-      "(null when no offsets are known or text is withheld; long windows omit " +
-      `the middle as […], capped at ${LIMITS.caseLawCitationPassageChars} characters). ` +
-      "`passage.text` is at most " +
-      `${LIMITS.caseLawCitationPassageChars} characters centred on the citation, cut when ` +
-      "`passage.truncated`; `passage.mention` is 'sole', " +
-      "'classified_section' (the mention the polarity came from), or " +
-      "'latest_of_several' (it may not be). `evidenceIncompleteReason` names " +
-      "missing grants; then polarityEvidence and citedPart are null. " +
-      "`textIncompleteReason` separately names missing AST/text, a failed " +
-      "publication gate or changed text; null otherwise. " +
-      "Pass nextCursor back as cursor. " +
-      "Use `url` for the reader and `source_url` for the publisher.",
+      "Citation stances: `cited_by` lists citing decisions; `cites` lists " +
+      "cited ones. No implied agreement. " +
+      `Polarity: ${CITATION_TREATMENTS.join(", ")}; never a doctrinal act. ` +
+      "'unclassified': unread; 'mixed': conflicting mentions. Whole-decision " +
+      "unless citedPart names majority/dissent/concurrence ('not-stated': " +
+      "unspecified). polarityEvidence: source, ruleId, classifierVersion, excerpt " +
+      "window (null without offsets/text; middle omitted as […]). " +
+      `Excerpt/passage.text cap: ${LIMITS.caseLawCitationPassageChars} chars. ` +
+      "passage.truncated marks cuts; mention: 'sole', 'classified_section', " +
+      "'latest_of_several' (may differ from polarity). evidenceIncompleteReason: " +
+      "missing grants, evidence/part null. textIncompleteReason: absent AST/text, " +
+      "gate failure or text change. nextCursor → cursor; url: reader; " +
+      "source_url: publisher.",
     inputSchema: readCaseLawCitationsArgsSchema,
     access: "read",
     readClass: "public",

@@ -32,7 +32,10 @@ import {
 } from "@/api/handlers/case-law/polarity/text-revision";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { fitsCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
+import {
+  assertCitationStorageField,
+  fitsCitationStorageField,
+} from "@/api/lib/case-law/citation-storage-bounds";
 import type { ConstantMap } from "@/api/lib/constant-map";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
@@ -603,8 +606,12 @@ const settleDuplicateLabels = (
 const labelValues = (labels: readonly ReviewedCitationLabel[]): SQL => sql`(
   VALUES ${sql.join(
     labels.map((label, ord) => {
+      const checked = assertCitationStorageField("key", label.citationKey);
+      if (checked.isErr()) {
+        throw checked.error;
+      }
       const columns = provenanceColumns(label.provenance);
-      return sql`(${ord}::int, ${label.citingDecisionId}::uuid, ${label.citationKey}::varchar, ${label.polarity}::varchar, ${label.reviewRef}::varchar, ${columns.origin}::text, ${columns.model}::text, ${columns.promptVersion}::text, ${columns.promptSha256}::text, ${columns.evidenceSha256}::text, ${columns.textRevisionSha256}::varchar, ${columns.runId}::text, ${columns.producedAt}::timestamptz, ${createSafeId<"caseLawCitationReview">()}::uuid)`;
+      return sql`(${ord}::int, ${label.citingDecisionId}::uuid, ${checked.value}::varchar, ${label.polarity}::varchar, ${label.reviewRef}::varchar, ${columns.origin}::text, ${columns.model}::text, ${columns.promptVersion}::text, ${columns.promptSha256}::text, ${columns.evidenceSha256}::text, ${columns.textRevisionSha256}::varchar, ${columns.runId}::text, ${columns.producedAt}::timestamptz, ${createSafeId<"caseLawCitationReview">()}::uuid)`;
     }),
     sql`, `,
   )}

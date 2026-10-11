@@ -30,6 +30,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { numericColumnParam } from "@/api/lib/db/column-storage";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { brandPersistedCaseLawCitationId } from "@/api/lib/safe-id-boundaries";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
@@ -253,28 +254,36 @@ export const applyFormRepairs = async ({
   }
   const expected = new Map(plan.rows.map((row) => [row.id, row]));
   return await runCitationGraphTransaction(transaction, async (tx) => {
-    const candidates = await tx
-      .select(candidateSelection)
-      .from(caseLawCitations)
-      .innerJoin(
-        caseLawDecisions,
-        eq(caseLawDecisions.id, caseLawCitations.citingDecisionId),
-      )
-      .innerJoin(
-        caseLawPolarityRules,
-        eq(caseLawPolarityRules.id, caseLawCitations.polarityRuleId),
-      )
-      .where(
-        and(
-          ...eligibleConditions(),
-          eq(caseLawDecisions.language, plan.language),
-          inArray(
-            caseLawCitations.id,
-            plan.rows.map((row) => brandPersistedCaseLawCitationId(row.id)),
+    const read = await readBounded(
+      tx
+        .select(candidateSelection)
+        .from(caseLawCitations)
+        .innerJoin(
+          caseLawDecisions,
+          eq(caseLawDecisions.id, caseLawCitations.citingDecisionId),
+        )
+        .innerJoin(
+          caseLawPolarityRules,
+          eq(caseLawPolarityRules.id, caseLawCitations.polarityRuleId),
+        )
+        .where(
+          and(
+            ...eligibleConditions(),
+            eq(caseLawDecisions.language, plan.language),
+            inArray(
+              caseLawCitations.id,
+              plan.rows.map((row) => brandPersistedCaseLawCitationId(row.id)),
+            ),
           ),
         ),
-      )
-      .limit(REPAIR_LIMIT);
+      expected.size,
+    );
+    if (read.type === "overflow") {
+      panic("Repair reread exceeded its unique citation IDs", {
+        cap: read.cap,
+      });
+    }
+    const candidates = read.rows;
     const repairs: {
       candidate: (typeof candidates)[number];
       current: Extract<ReturnType<typeof planFormRepair>, { status: "repair" }>;

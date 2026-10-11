@@ -15,8 +15,6 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
-import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
-
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -37,6 +35,10 @@ import {
   citationKeyOf,
   normalizeDecisionIdentifier,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import {
+  citationContent,
+  citationRowOf,
+} from "@/api/handlers/case-law/ingestion/pipeline/citations";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { planDecisionWrite } from "@/api/handlers/case-law/ingestion/pipeline/decision-plan";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
@@ -383,22 +385,6 @@ const seedHolders = async (holders: readonly Holder[]): Promise<void> => {
   }
 };
 
-/** The columns the document, the rules and the reviews decide. */
-const contentOf = (row: {
-  citationText: string;
-  citationKey: string | null;
-  identifierType: DecisionIdentifierType | null;
-  normalizedIdentifierValue: string | null;
-  citedDecisionTypeHint: string | null;
-  citedCourtHint: string | null;
-  citedSheetNumber: string | null;
-  citedDecisionDate: string | null;
-  kind: string;
-  sectionIndex: number | null;
-  polarity: string | null;
-  polarityRuleId: string | null;
-}): string => JSON.stringify(Object.values(row));
-
 /**
  * The rows the planner's references are published as: the stored columns in
  * one fixed order, with a review's polarity in place of the rules' where one
@@ -435,26 +421,24 @@ const plannedContent = async (
   }
   expect(plan.citations.citingDecisionId).toBe(citingDecisionId);
   return plan.citations.references
-    .map(({ reference, verdict }) => {
-      const [identifier] = reference.identifiers;
+    .map((reference) => {
+      const row = citationRowOf(citingDecisionId, reference).unwrap();
       const review =
-        reference.citationKey === null
-          ? undefined
-          : reviews.get(reference.citationKey);
-      return contentOf({
-        citationText: reference.printed,
-        citationKey: reference.citationKey,
-        identifierType: identifier.type,
-        normalizedIdentifierValue: identifier.normalizedValue,
-        citedDecisionTypeHint: reference.hints.decisionType,
-        citedCourtHint: reference.hints.court,
-        citedSheetNumber: reference.hints.sheetNumber,
-        citedDecisionDate: reference.hints.decisionDate,
-        kind: reference.kind,
-        sectionIndex: reference.sectionIndex,
-        polarity: review ?? verdict?.polarity ?? null,
-        polarityRuleId: review === undefined ? (verdict?.ruleId ?? null) : null,
-      });
+        row.citationKey === null ? undefined : reviews.get(row.citationKey);
+      return citationContent(
+        review === undefined
+          ? row
+          : {
+              ...row,
+              polarity: review,
+              polarityRuleId: null,
+              polaritySource: "review",
+              polarityClassifierVersion: null,
+              polarityWindowStart: null,
+              polarityWindowEnd: null,
+              polarityConfidence: null,
+            },
+      );
     })
     .toSorted();
 };
@@ -468,24 +452,7 @@ const storedRows = async (citingDecisionId: SafeId<"caseLawDecision">) =>
 type StoredRow = Awaited<ReturnType<typeof storedRows>>[number];
 
 const storedContent = (rows: readonly StoredRow[]): string[] =>
-  rows
-    .map((row) =>
-      contentOf({
-        citationText: row.citationText,
-        citationKey: row.citationKey,
-        identifierType: row.identifierType,
-        normalizedIdentifierValue: row.normalizedIdentifierValue,
-        citedDecisionTypeHint: row.citedDecisionTypeHint,
-        citedCourtHint: row.citedCourtHint,
-        citedSheetNumber: row.citedSheetNumber,
-        citedDecisionDate: row.citedDecisionDate,
-        kind: row.kind,
-        sectionIndex: row.sectionIndex,
-        polarity: row.polarity,
-        polarityRuleId: row.polarityRuleId,
-      }),
-    )
-    .toSorted();
+  rows.map(citationContent).toSorted();
 
 /** Each row's resolution against what its holders make of it. */
 const expectResolutionsAgree = async (
@@ -706,7 +673,12 @@ const expectRowsFollowReferences = async (
 
   // Exactly the rows whose content both texts share survive, by id.
   const shared = sharedContent(firstPlanned, changedPlanned);
-  expect(shared.length).toBeGreaterThan(0);
+  expect(
+    sharedContent(
+      firstRows.map(({ citationText }) => citationText),
+      changedRows.map(({ citationText }) => citationText),
+    ).length,
+  ).toBeGreaterThan(0);
   const firstIds = new Set(firstRows.map((row) => row.id));
   const kept = changedRows.filter((row) => firstIds.has(row.id));
   expect(storedContent(kept)).toEqual(shared);

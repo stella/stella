@@ -1,8 +1,10 @@
+import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
+import { compareCodeUnit } from "@stll/collation";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -296,16 +298,14 @@ test("refreshing a repaired citation preserves its confidence and row identity",
       },
     ],
   } as const satisfies CitationPlan;
-  await runCitationGraphTransaction(
-    db.transaction.bind(db),
-    async (tx) =>
-      await writeDecisionCitations(asTestRaw(tx), {
-        decisionId: repairedDecisionId,
-        citations,
-        stored: false,
-        observedAt: new Date("2026-10-01T00:00:00Z"),
-      }),
-  );
+  await runCitationGraphTransaction(db.transaction.bind(db), async (tx) => {
+    await writeDecisionCitations(asTestRaw(tx), {
+      decisionId: repairedDecisionId,
+      citations,
+      stored: false,
+      observedAt: new Date("2026-10-01T00:00:00Z"),
+    });
+  });
   await db
     .update(caseLawCitations)
     .set({ polarity: POLARITY.SUPPORTIVE })
@@ -313,7 +313,11 @@ test("refreshing a repaired citation preserves its confidence and row identity",
   const queries: string[] = [];
   const repairDb = drizzle({
     client,
-    logger: { logQuery: (query) => queries.push(query) },
+    logger: {
+      logQuery: (query) => {
+        queries.push(query);
+      },
+    },
   });
   const transaction = asTestRaw<CaseLawRootHandle["transaction"]>(
     repairDb.transaction.bind(repairDb),
@@ -349,7 +353,7 @@ test("refreshing a repaired citation preserves its confidence and row identity",
         query.matchAll(
           /\b(?:insert\s+into|update|delete\s+from)\s+(?:"?\w+"?\.)?"?(\w+)"?/giu,
         ),
-        (match) => match[1],
+        (match) => match[1] ?? panic("Citation repair write has no table name"),
       );
     });
   const audits = async () =>
@@ -379,7 +383,7 @@ test("refreshing a repaired citation preserves its confidence and row identity",
     applied: 1,
     skipped: 1,
   });
-  expect(writeTargets().toSorted()).toEqual([
+  expect(writeTargets().toSorted(compareCodeUnit)).toEqual([
     "case_law_citations",
     "system_audit_runs",
   ]);
@@ -430,16 +434,14 @@ test("refreshing a repaired citation preserves its confidence and row identity",
   expect(repaired).toHaveLength(1);
   expect(repaired.at(0)?.confidence).toBe(confidence);
   expect(repaired.at(0)?.polarity).toBe(POLARITY.NEUTRAL);
-  await runCitationGraphTransaction(
-    db.transaction.bind(db),
-    async (tx) =>
-      await writeDecisionCitations(asTestRaw(tx), {
-        decisionId: repairedDecisionId,
-        citations,
-        stored: true,
-        observedAt: new Date("2026-10-01T00:00:00Z"),
-      }),
-  );
+  await runCitationGraphTransaction(db.transaction.bind(db), async (tx) => {
+    await writeDecisionCitations(asTestRaw(tx), {
+      decisionId: repairedDecisionId,
+      citations,
+      stored: true,
+      observedAt: new Date("2026-10-01T00:00:00Z"),
+    });
+  });
   expect(await read()).toEqual(repaired);
   expect(await rowHeaders()).toEqual(repairedHeaders);
 });

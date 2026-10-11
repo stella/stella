@@ -43,9 +43,9 @@ const clear = (tx: FixtureTx) => {
   // expect-clean: citation-evidence-text-fence/citation-evidence-text-fence
   tx.update(caseLawCitations).set({ polarityWindowStart: null });
 };
-const raw = (tx: FixtureTx, start: number) => {
+const raw = async (tx: FixtureTx, start: number) => {
   // oxlint-disable-next-line citation-evidence-text-fence/citation-evidence-text-fence -- fixture: raw SQL requires the same owner fence
   const mutation = sql`UPDATE case_law_citations SET polarity_window_start = ${start}`;
-  tx.execute(mutation);
+  await tx.execute(mutation);
 };
 export { unguarded, guarded, separateGraphCall, clear, raw };

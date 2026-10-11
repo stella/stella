@@ -196,6 +196,9 @@ const PUBLIC_DECISION_READ_GATES = {
   "apps/api/src/handlers/case-law/decisions/citations.ts": {
     gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
   },
+  "apps/api/src/handlers/case-law/decisions/citation-passages.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.SUBJECT,
+  },
   [READ_DECISION_FILE]: { gate: PUBLIC_DECISION_READ_GATE.SUBJECT },
   [DECISION_PROVISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.SUBJECT },
   [LATEST_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
@@ -220,6 +223,11 @@ const PUBLIC_DECISION_READ_GATES = {
   [CITING_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   "apps/api/src/handlers/case-law/provisions/previews-for-decision.ts": {
     gate: PUBLIC_DECISION_READ_GATE.SUBJECT,
+  },
+  "apps/api/src/lib/case-law/decision-analysis.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason:
+      "The public graph imports only readDecisionAnalysisAst, which reads a supplied AST or corpus object. The decision-row query is internal to analysis.",
   },
   "apps/api/src/lib/case-law/citation-storage-bounds.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
@@ -806,6 +814,15 @@ describe("public case-law route boundary", () => {
     expect([...readers.keys()].toSorted()).toEqual(
       Object.keys(PUBLIC_DECISION_READ_GATES).toSorted(),
     );
+
+    // The AST owner also exports an internal row reader. Public callers may
+    // use only its supplied AST path, so that export cannot become a public
+    // decision read without acquiring its own admission gate.
+    for (const [path, source] of readers) {
+      if (path !== "apps/api/src/lib/case-law/decision-analysis.ts") {
+        expect(source).not.toMatch(/\breadDecisionAnalysis\b/u);
+      }
+    }
 
     const gates = new Map<string, PublicDecisionReadEntry>(
       Object.entries(PUBLIC_DECISION_READ_GATES),
