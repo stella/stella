@@ -2,7 +2,6 @@ import { expect, test } from "bun:test";
 
 import {
   findDependencyProblems,
-  findCoverageDrift,
   findTotalityProblems,
   findUncharacterisedGrowth,
   findVersionDrift,
@@ -148,29 +147,4 @@ test("in-process dependency classifications require a non-empty reason and a uni
       inProcess: { "@example/sdk": "Parser implementation." },
     }).join("\n"),
   ).toContain("Dependency @example/sdk: classify it");
-});
-
-test("new owner and SDK scope cannot inherit an existing fixture receipt", () => {
-  const receipt = {
-    system: "example",
-    fixture: "example.source.json",
-    owners: ["old.ts"],
-    sdks: ["old-sdk"],
-    coveredOwners: ["old.ts"],
-    coveredSdks: ["old-sdk"],
-  };
-  expect(findCoverageDrift(receipt)).toEqual([]);
-  expect(
-    findCoverageDrift({ ...receipt, owners: ["old.ts", "new.ts"] }).join("\n"),
-  ).toContain("re-characterise example");
-  expect(
-    findCoverageDrift({ ...receipt, sdks: ["old-sdk", "new-sdk"] }).join("\n"),
-  ).toContain("re-characterise example");
-  expect(
-    findCoverageDrift({
-      ...receipt,
-      owners: ["old.ts", "new.ts"],
-      coveredOwners: ["old.ts", "old.ts"],
-    }).join("\n"),
-  ).toContain("different owners or SDKs");
 });

@@ -50,19 +50,10 @@
     "bun.lock#@smithy/fetch-http-handler": "@smithy/fetch-http-handler@5.8.0"
   },
   "coveredOwners": [
-    "apps/api/scripts/ai-provider-cassette-probe.ts",
-    "apps/api/scripts/mcp-surface-token-calibration.ts",
-    "apps/api/scripts/record-provider-cassettes.ts",
-    "apps/api/scripts/replay-provider-events-performer.ts",
-    "apps/api/scripts/chat-orientation-eval.ts",
-    "apps/api/scripts/provider-request-schemas.ts",
     "apps/api/src/lib/chat/openrouter-credential.ts",
     "apps/api/src/lib/chat/provider-data-policy.ts",
     "apps/api/src/lib/stella-openrouter-text-adapter.ts",
-    "apps/api/src/lib/tanstack-ai-models.ts",
-    "packages/scripts/src/model-catalog-benchmarks-gen.ts",
-    "packages/scripts/src/model-catalog-snapshot.ts",
-    "packages/scripts/src/model-catalog-upstream.ts"
+    "apps/api/src/lib/tanstack-ai-models.ts"
   ],
   "coveredSdks": [
     "@tanstack/ai",

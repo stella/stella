@@ -94,7 +94,7 @@ export const findVersionDrift = ({
     );
   }
   for (const source of Object.keys(characterisedAt)) {
-    if (source in current) {
+    if (Object.hasOwn(current, source)) {
       continue;
     }
     problems.push(
@@ -131,7 +131,7 @@ export const findDependencyProblems = ({
     const matches = Object.values(registry).filter((entry) =>
       entry.sdks.includes(name),
     ).length;
-    if (matches + (name in inProcess ? 1 : 0) === 1) {
+    if (matches + (Object.hasOwn(inProcess, name) ? 1 : 0) === 1) {
       continue;
     }
     problems.push(
@@ -151,36 +151,4 @@ export const findDependencyProblems = ({
     }
   }
   return problems;
-};
-
-type CoverageDriftOptions = {
-  readonly system: string;
-  readonly fixture: string;
-  readonly owners: readonly string[];
-  readonly sdks: readonly string[];
-  readonly coveredOwners: readonly string[];
-  readonly coveredSdks: readonly string[];
-};
-
-export const findCoverageDrift = ({
-  system,
-  fixture,
-  owners,
-  sdks,
-  coveredOwners,
-  coveredSdks,
-}: CoverageDriftOptions): string[] => {
-  const sameSet = (
-    expected: readonly string[],
-    recorded: readonly string[],
-  ): boolean =>
-    expected.length === recorded.length &&
-    new Set(recorded).size === recorded.length &&
-    expected.every((value) => recorded.includes(value));
-  if (sameSet(owners, coveredOwners) && sameSet(sdks, coveredSdks)) {
-    return [];
-  }
-  return [
-    `${fixture}: re-characterise ${system} at its current pins; the fixture receipt covers different owners or SDKs.`,
-  ];
 };

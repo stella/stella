@@ -39,8 +39,7 @@ const repositorySource = (root: string, file: string) =>
 const localSpecifier = (specifier: string) =>
   specifier.startsWith(".") ||
   path.isAbsolute(specifier) ||
-  specifier.startsWith("@/") ||
-  specifier.startsWith("@stll/");
+  specifier.startsWith("@/");
 
 type EvidenceResolverOptions = {
   repositoryRoot: string;
@@ -194,7 +193,11 @@ const createEvidenceResolver = ({
     resolutions.set(key, resolved);
     return resolved;
   };
-  return resolveImport;
+  const workspaceSpecifier = (specifier: string) => {
+    const identity = packageIdentity(specifier);
+    return identity !== undefined && workspacePackages.has(identity);
+  };
+  return { resolveImport, workspaceSpecifier };
 };
 
 const typeOnlyImport = (clause: ts.ImportClause | undefined) => {
@@ -280,13 +283,74 @@ type FixtureEvidenceOptions = {
   root: string;
   replayFiles: readonly string[];
   sdkNames: readonly string[];
+  claims?: { owners: readonly string[]; sdks: readonly string[] };
 };
 
-/** Static runtime reachability; modules are resolved and parsed, never executed. */
+type ReplayRootOptions = {
+  repositoryRoot: string;
+  replayFiles: readonly string[];
+  label: (file: string) => string;
+};
+
+const readReplayRoots = ({
+  repositoryRoot,
+  replayFiles,
+  label,
+}: ReplayRootOptions) => {
+  const problems: string[] = [];
+  const pending: { file: string; depth: number }[] = [];
+  for (const replayFile of replayFiles) {
+    const source = path.resolve(repositoryRoot, replayFile);
+    const canonical = Result.try(() => {
+      const file = realpathSync(source);
+      return statSync(file).isFile() ? file : undefined;
+    });
+    if (canonical.isErr() || canonical.value === undefined) {
+      problems.push(`Cannot read replay/runtime source ${label(source)}`);
+      continue;
+    }
+    pending.push({ file: canonical.value, depth: 0 });
+  }
+  return { pending, problems };
+};
+
+type ClaimedReachabilityOptions = {
+  claims: NonNullable<FixtureEvidenceOptions["claims"]>;
+  owners: ReadonlySet<string>;
+  sdks: ReadonlySet<string>;
+};
+
+const missingClaims = ({
+  claims,
+  owners,
+  sdks,
+}: ClaimedReachabilityOptions) => {
+  const problems: string[] = [];
+  for (const [kind, requested, reached] of [
+    ["owner", claims.owners, owners],
+    ["SDK", claims.sdks, sdks],
+  ] as const) {
+    for (const target of requested) {
+      if (!reached.has(target)) {
+        problems.push(
+          `Cannot prove runtime reachability for claimed ${kind} ${target}`,
+        );
+      }
+    }
+  }
+  return problems;
+};
+
+/**
+ * Static runtime reachability; modules are resolved and parsed, never executed.
+ * Claims request positive paths only: unrelated graph diagnostics cannot refute a completed proof.
+ * Every replay root is still checked, including roots unused by the successful paths.
+ */
 export const readFixtureEvidence = ({
   root,
   replayFiles,
   sdkNames,
+  claims,
 }: FixtureEvidenceOptions) => {
   const owners = new Set<string>();
   const sdks = new Set<string>();
@@ -313,27 +377,34 @@ export const readFixtureEvidence = ({
   };
   const label = (file: string) =>
     inside(repositoryRoot, file) ? path.relative(repositoryRoot, file) : file;
-  const resolveImport = createEvidenceResolver({
+  const { pending, problems: rootProblems } = readReplayRoots({
+    repositoryRoot,
+    replayFiles,
+    label,
+  });
+  problems.push(...rootProblems);
+  const proved = () =>
+    claims !== undefined &&
+    claims.owners.every((owner) => owners.has(owner)) &&
+    claims.sdks.every((sdk) => sdks.has(sdk));
+  if (proved()) {
+    return { owners, sdks, problems: rootProblems };
+  }
+  const { resolveImport, workspaceSpecifier } = createEvidenceResolver({
     repositoryRoot,
     read,
     label,
     problems,
   });
-  const pending = replayFiles.map((file) => ({
-    file: path.resolve(repositoryRoot, file),
-    depth: 0,
-  }));
-  while (pending.length > 0) {
-    const entry = pending.pop();
+  let cursor = 0;
+  // Breadth-first search finds short proof paths before unrelated application branches.
+  while (cursor < pending.length) {
+    const entry = pending.at(cursor);
+    cursor += 1;
     if (entry === undefined) {
       break;
     }
-    const canonical = Result.try(() => realpathSync(entry.file));
-    if (canonical.isErr()) {
-      problems.push(`Cannot read replay/runtime source ${label(entry.file)}`);
-      continue;
-    }
-    const file = canonical.value;
+    const file = entry.file;
     if (visited.has(file) || DECLARATION_SOURCE.test(file)) {
       continue;
     }
@@ -346,6 +417,9 @@ export const readFixtureEvidence = ({
     }
     if (repositorySource(repositoryRoot, file)) {
       owners.add(path.relative(repositoryRoot, file));
+    }
+    if (proved()) {
+      return { owners, sdks, problems: rootProblems };
     }
     if (!RUNTIME_SOURCE.test(file)) {
       continue;
@@ -380,7 +454,11 @@ export const readFixtureEvidence = ({
       const target = identity !== undefined && targets.has(identity);
       const resolved = resolveImport(specifier, file);
       if (resolved === undefined) {
-        if (localSpecifier(specifier) || target) {
+        if (
+          localSpecifier(specifier) ||
+          workspaceSpecifier(specifier) ||
+          target
+        ) {
           problems.push(
             `Cannot resolve runtime import ${JSON.stringify(specifier)} from ${label(file)}`,
           );
@@ -398,11 +476,23 @@ export const readFixtureEvidence = ({
       ) {
         return;
       }
+      if (
+        entry.depth < MAX_DEPTH &&
+        repositorySource(repositoryRoot, resolved)
+      ) {
+        owners.add(path.relative(repositoryRoot, resolved));
+      }
       pending.push({ file: resolved, depth: entry.depth + 1 });
     };
     for (const specifier of runtimeSpecifiers(file, text)) {
       follow(specifier);
     }
+    if (proved()) {
+      return { owners, sdks, problems: rootProblems };
+    }
+  }
+  if (claims !== undefined) {
+    problems.push(...missingClaims({ claims, owners, sdks }));
   }
   return { owners, sdks, problems };
 };

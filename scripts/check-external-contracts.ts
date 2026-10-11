@@ -270,6 +270,28 @@ const provenanceSchema = v.variant("capture", [
   }),
 ]);
 
+const readFixtureReceipts = (root: string, fixture: FixtureSet) => {
+  const metadata =
+    "metadata" in fixture
+      ? v.parse(pinMetadataSchema, json(root, fixture.metadata))
+      : undefined;
+  const files =
+    fixture.provenance.type === "authored"
+      ? []
+      : filesBelow(root, fixture.path);
+  const schemas =
+    fixture.provenance.type === "sidecars" &&
+    fixture.provenance.format === "provider-request-schemas"
+      ? files
+          .filter((file) => file.endsWith(".source.json"))
+          .map((file) => ({
+            file,
+            receipt: v.parse(providerSchemaSourceSchema, json(root, file)),
+          }))
+      : [];
+  return { metadata, files, schemas };
+};
+
 type FixtureCheckOptions = {
   root: string;
   system: string;
@@ -294,10 +316,22 @@ const checkFixture = ({
     problems.push(`${system}: missing fixture set ${fixture.path}.`);
     return result;
   }
+  const { metadata, files, schemas } = readFixtureReceipts(root, fixture);
+  const receipts = schemas.map(({ receipt }) => ({
+    coveredOwners: receipt.coveredOwners,
+    coveredSdks: receipt.coveredSdks,
+  }));
+  if (metadata !== undefined) {
+    receipts.push(metadata);
+  }
   const evidence = readFixtureEvidence({
     root,
     replayFiles: fixture.replayFiles,
     sdkNames: sdks,
+    claims: {
+      owners: receipts.flatMap((receipt) => receipt.coveredOwners),
+      sdks: receipts.flatMap((receipt) => receipt.coveredSdks),
+    },
   });
   problems.push(
     ...evidence.problems.map(
@@ -341,8 +375,7 @@ const checkFixture = ({
       }
     }
   };
-  if ("metadata" in fixture) {
-    const metadata = v.parse(pinMetadataSchema, json(root, fixture.metadata));
+  if ("metadata" in fixture && metadata !== undefined) {
     recordReceipt({ file: fixture.metadata, receipt: metadata });
     if (
       metadata.fixtureSet !== fixture.path ||
@@ -364,7 +397,6 @@ const checkFixture = ({
   if (fixture.provenance.type === "authored") {
     return result;
   }
-  const files = filesBelow(root, fixture.path);
   switch (fixture.provenance.format) {
     case "provider-wire": {
       const cassettes = files.filter((file) => file.endsWith(".json"));
@@ -383,15 +415,10 @@ const checkFixture = ({
       return result;
     }
     case "provider-request-schemas": {
-      const sidecars = files.filter((file) => file.endsWith(".source.json"));
-      if (sidecars.length === 0) {
+      if (schemas.length === 0) {
         problems.push(`${system}: no request schema sidecars.`);
       }
-      for (const file of sidecars) {
-        const provenance = v.parse(
-          providerSchemaSourceSchema,
-          json(root, file),
-        );
+      for (const { file, receipt: provenance } of schemas) {
         recordReceipt({ file, receipt: provenance });
         problems.push(
           ...findVersionDrift({

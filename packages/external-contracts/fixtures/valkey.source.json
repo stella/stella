@@ -13,9 +13,7 @@
   },
   "coveredOwners": [
     "apps/api/src/lib/redis-client.ts",
-    "apps/api/src/lib/scheduler/bullmq.ts",
-    "apps/api/src/lib/bullmq-queue.ts",
-    "apps/api/src/lib/workflow-queue.ts"
+    "apps/api/src/lib/bullmq-queue.ts"
   ],
   "coveredSdks": ["bullmq", "ioredis"]
 }

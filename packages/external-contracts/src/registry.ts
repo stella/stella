@@ -190,7 +190,56 @@ export const EXTERNAL_CONTRACTS = {
       "model-catalog-check",
     ],
     status: "characterised",
-    uncharacterisedScope: { owners: [], sdks: [] },
+    uncharacterisedScope: {
+      owners: [
+        {
+          path: "apps/api/scripts/ai-provider-cassette-probe.ts",
+          reason:
+            "The provider wire and request-schema replay files do not import this transport owner.",
+        },
+        {
+          path: "apps/api/scripts/mcp-surface-token-calibration.ts",
+          reason:
+            "The provider wire and request-schema replay files do not import this transport owner.",
+        },
+        {
+          path: "apps/api/scripts/record-provider-cassettes.ts",
+          reason:
+            "The provider wire and request-schema replay files do not import this transport owner.",
+        },
+        {
+          path: "apps/api/scripts/replay-provider-events-performer.ts",
+          reason:
+            "The provider wire and request-schema replay files do not import this transport owner.",
+        },
+        {
+          path: "apps/api/scripts/chat-orientation-eval.ts",
+          reason:
+            "The provider wire and request-schema replay files do not import this transport owner.",
+        },
+        {
+          path: "apps/api/scripts/provider-request-schemas.ts",
+          reason:
+            "The provider wire and request-schema replay files do not import this transport owner.",
+        },
+        {
+          path: "packages/scripts/src/model-catalog-benchmarks-gen.ts",
+          reason:
+            "The provider wire and request-schema replay files do not import this transport owner.",
+        },
+        {
+          path: "packages/scripts/src/model-catalog-snapshot.ts",
+          reason:
+            "The provider wire and request-schema replay files do not import this transport owner.",
+        },
+        {
+          path: "packages/scripts/src/model-catalog-upstream.ts",
+          reason:
+            "The provider wire and request-schema replay files do not import this transport owner.",
+        },
+      ],
+      sdks: [],
+    },
     fixtures: [
       {
         path: "apps/api/src/tests/fixtures/provider-wire",
@@ -253,7 +302,41 @@ export const EXTERNAL_CONTRACTS = {
     pinSources: [],
     driftTriggers: ["upstream-response-change"],
     status: "characterised",
-    uncharacterisedScope: { owners: [], sdks: [] },
+    uncharacterisedScope: {
+      owners: [
+        {
+          path: "apps/api/scripts/capture-parser-fixture.ts",
+          reason:
+            "The enrolled captured-fixture replays do not import this publisher transport owner.",
+        },
+        {
+          path: "apps/api/scripts/record-eu-ecj-fixtures.ts",
+          reason:
+            "The enrolled captured-fixture replays do not import this publisher transport owner.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/decisions/dev-reparse.ts",
+          reason:
+            "The enrolled captured-fixture replays do not import this publisher transport owner.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/ingestion/adapters/cz-us-throttle.ts",
+          reason:
+            "The enrolled captured-fixture replays do not import this publisher transport owner.",
+        },
+        {
+          path: "apps/api/src/handlers/soft-law/publisher-access.ts",
+          reason:
+            "The enrolled captured-fixture replays do not import this publisher transport owner.",
+        },
+        {
+          path: "apps/api/src/scripts/citation-probe.ts",
+          reason:
+            "The enrolled captured-fixture replays do not import this publisher transport owner.",
+        },
+      ],
+      sdks: [],
+    },
     fixtures: [
       {
         path: "apps/api/src/handlers/case-law/ingestion/adapters/__fixtures__",
@@ -440,7 +523,61 @@ export const EXTERNAL_CONTRACTS = {
     ],
     driftTriggers: ["pin-bump"],
     status: "characterised",
-    uncharacterisedScope: { owners: [], sdks: [] },
+    uncharacterisedScope: {
+      owners: [
+        {
+          path: "apps/api/src/lib/email/inbound/ses.ts",
+          reason:
+            "The S3 fake and presign replays do not import this storage transport owner.",
+        },
+        {
+          path: "apps/api/src/handlers/entities/zip/download.ts",
+          reason:
+            "The S3 fake and presign replays do not import this storage transport owner.",
+        },
+        {
+          path: "apps/api/src/handlers/files/get.ts",
+          reason:
+            "The S3 fake and presign replays do not import this storage transport owner.",
+        },
+        {
+          path: "apps/api/src/mcp/apps/document-upload/app.ts",
+          reason:
+            "The S3 fake and presign replays do not import this storage transport owner.",
+        },
+        {
+          path: "apps/web/src/components/inspector/file-download-service.ts",
+          reason:
+            "The S3 fake and presign replays do not import this storage transport owner.",
+        },
+        {
+          path: "apps/web/src/lib/files/storage-fetch.ts",
+          reason:
+            "The S3 fake and presign replays do not import this storage transport owner.",
+        },
+        {
+          path: "apps/web/src/lib/files/upload-entity-version.ts",
+          reason:
+            "The S3 fake and presign replays do not import this storage transport owner.",
+        },
+        {
+          path: "apps/web/src/lib/knowledge/queries.ts",
+          reason:
+            "The S3 fake and presign replays do not import this storage transport owner.",
+        },
+        {
+          path: "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-pdf-download-button.tsx",
+          reason:
+            "The S3 fake and presign replays do not import this storage transport owner.",
+        },
+        {
+          path: "packages/cli/src/upload-document.ts",
+          reason:
+            "The S3 fake and presign replays do not import this storage transport owner.",
+        },
+      ],
+      sdks: [],
+    },
     fixtures: [
       {
         path: "apps/api/src/tests/helpers/fake-s3.test.ts",
@@ -696,7 +833,10 @@ export const EXTERNAL_CONTRACTS = {
     ],
     driftTriggers: ["pin-bump"],
     status: "characterised",
-    uncharacterisedScope: { owners: [], sdks: [] },
+    uncharacterisedScope: {
+      owners: [],
+      sdks: [],
+    },
     fixtures: [
       {
         path: "apps/api/src/lib/legal-search/corpus-index-query-features.contract.test.ts",
@@ -1020,7 +1160,81 @@ export const EXTERNAL_CONTRACTS = {
     ],
     driftTriggers: ["pin-bump"],
     status: "characterised",
-    uncharacterisedScope: { owners: [], sdks: [] },
+    uncharacterisedScope: {
+      owners: [
+        {
+          path: "apps/api/src/lib/public-law-read-db.ts",
+          reason:
+            "The lock-for-write replay does not import this database transport owner.",
+        },
+        {
+          path: "apps/api/src/db/long-running-connection.ts",
+          reason:
+            "The lock-for-write replay does not import this database transport owner.",
+        },
+        {
+          path: "apps/api/src/db/migrate.ts",
+          reason:
+            "The lock-for-write replay does not import this database transport owner.",
+        },
+        {
+          path: "apps/api/src/db/root.ts",
+          reason:
+            "The lock-for-write replay does not import this database transport owner.",
+        },
+        {
+          path: "apps/api/src/db/online-index-observer.ts",
+          reason:
+            "The lock-for-write replay does not import this database transport owner.",
+        },
+        {
+          path: "apps/api/scripts/seed-reset.ts",
+          reason:
+            "The lock-for-write replay does not import this database transport owner.",
+        },
+        {
+          path: "apps/api/src/scripts/decision-analysis.db.ts",
+          reason:
+            "The lock-for-write replay does not import this database transport owner.",
+        },
+        {
+          path: "apps/api/src/scripts/better-auth-migration-audit.ts",
+          reason:
+            "The lock-for-write replay does not import this database transport owner.",
+        },
+        {
+          path: "apps/api/src/scripts/seed-migration-rehearsal.ts",
+          reason:
+            "The lock-for-write replay does not import this database transport owner.",
+        },
+        {
+          path: "apps/api/src/scripts/better-auth-17-backfill.ts",
+          reason:
+            "The lock-for-write replay does not import this database transport owner.",
+        },
+        {
+          path: "apps/api/src/scripts/database-census.ts",
+          reason:
+            "The lock-for-write replay does not import this database transport owner.",
+        },
+        {
+          path: "apps/api/src/scripts/better-auth-microsoft-identity-map.ts",
+          reason:
+            "The lock-for-write replay does not import this database transport owner.",
+        },
+        {
+          path: "apps/api/src/lib/health/database-login-probe.ts",
+          reason:
+            "The lock-for-write replay does not import this database transport owner.",
+        },
+        {
+          path: "apps/api/src/lib/case-law/maintenance-lane.ts",
+          reason:
+            "The lock-for-write replay does not import this database transport owner.",
+        },
+      ],
+      sdks: [],
+    },
     fixtures: [
       {
         path: "apps/api/src/lib/db/lock-for-write.postgres.test.ts",
@@ -1074,7 +1288,21 @@ export const EXTERNAL_CONTRACTS = {
     ],
     driftTriggers: ["pin-bump"],
     status: "characterised",
-    uncharacterisedScope: { owners: [], sdks: [] },
+    uncharacterisedScope: {
+      owners: [
+        {
+          path: "apps/api/src/lib/scheduler/bullmq.ts",
+          reason:
+            "The Redis client-policy replay does not import this queue transport owner.",
+        },
+        {
+          path: "apps/api/src/lib/workflow-queue.ts",
+          reason:
+            "The Redis client-policy replay does not import this queue transport owner.",
+        },
+      ],
+      sdks: [],
+    },
     fixtures: [
       {
         path: "apps/api/src/lib/redis-client-policy.valkey.test.ts",

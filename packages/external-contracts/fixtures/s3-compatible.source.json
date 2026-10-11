@@ -13,20 +13,7 @@
     "type": "authored",
     "kind": "synthetic-from-spec"
   },
-  "coveredOwners": [
-    "apps/api/src/lib/email/inbound/ses.ts",
-    "apps/api/src/lib/s3-presign.ts",
-    "apps/api/src/lib/s3.ts",
-    "apps/api/src/handlers/entities/zip/download.ts",
-    "apps/api/src/handlers/files/get.ts",
-    "apps/api/src/mcp/apps/document-upload/app.ts",
-    "apps/web/src/components/inspector/file-download-service.ts",
-    "apps/web/src/lib/files/storage-fetch.ts",
-    "apps/web/src/lib/files/upload-entity-version.ts",
-    "apps/web/src/lib/knowledge/queries.ts",
-    "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-pdf-download-button.tsx",
-    "packages/cli/src/upload-document.ts"
-  ],
+  "coveredOwners": ["apps/api/src/lib/s3-presign.ts", "apps/api/src/lib/s3.ts"],
   "coveredSdks": [
     "@aws-sdk/client-s3",
     "@aws-sdk/client-sts",

@@ -176,3 +176,90 @@ test("deep runtime graphs fail explicitly at their traversal bound", () => {
     },
   });
 });
+
+test("positive claims use resolved paths despite unrelated missing runtime branches", () => {
+  withProject({
+    files: {
+      ...sdkFiles,
+      "replay.ts":
+        'import "./missing"; import "./unrelated"; import "./owner";',
+      "unrelated.ts": 'import "./also-missing";',
+      "owner.ts": 'import "@example/sdk";',
+    },
+    run: (root) => {
+      const claims = { owners: ["owner.ts"], sdks: ["@example/sdk"] };
+      const evidence = readFixtureEvidence({
+        root,
+        replayFiles: ["replay.ts"],
+        sdkNames: ["@example/sdk"],
+        claims,
+      });
+      expect(evidence.problems).toEqual([]);
+      expect(evidence.owners.has("owner.ts")).toBe(true);
+      expect(evidence.sdks.has("@example/sdk")).toBe(true);
+      const incomplete = readFixtureEvidence({
+        root,
+        replayFiles: ["replay.ts"],
+        sdkNames: ["@example/sdk"],
+        claims: { owners: ["unreachable.ts"], sdks: ["@example/sdk"] },
+      });
+      expect(incomplete.problems.join("\n")).toContain(
+        'Cannot resolve runtime import "./missing"',
+      );
+      expect(incomplete.problems.join("\n")).toContain(
+        "Cannot prove runtime reachability for claimed owner unreachable.ts",
+      );
+    },
+  });
+});
+
+test("all replay roots must exist even when the claims already have positive paths", () => {
+  withProject({
+    files: {
+      "replay.ts": 'import "./owner";',
+      "owner.ts": "export const owner = 1;",
+    },
+    run: (root) => {
+      const evidence = readFixtureEvidence({
+        root,
+        replayFiles: ["replay.ts", "missing-root.ts"],
+        sdkNames: [],
+        claims: { owners: ["owner.ts"], sdks: [] },
+      });
+      expect(evidence.owners.has("owner.ts")).toBe(true);
+      expect(evidence.problems).toEqual([
+        "Cannot read replay/runtime source missing-root.ts",
+      ]);
+      const emptyClaims = readFixtureEvidence({
+        root,
+        replayFiles: ["replay.ts", "other-missing.ts"],
+        sdkNames: [],
+        claims: { owners: [], sdks: [] },
+      });
+      expect(emptyClaims.problems).toEqual([
+        "Cannot read replay/runtime source other-missing.ts",
+      ]);
+      expect([...emptyClaims.owners]).toEqual([]);
+    },
+  });
+});
+
+test("optional foreign packages with workspace-like names do not become local runtime claims", () => {
+  withProject({
+    files: {
+      ...sdkFiles,
+      "replay.ts": 'import "@example/sdk";',
+      "node_modules/@example/sdk/runtime.js":
+        'import "@stll/nonexistent-native-platform"; export const client = 1;',
+    },
+    run: (root) => {
+      const evidence = readFixtureEvidence({
+        root,
+        replayFiles: ["replay.ts"],
+        sdkNames: ["@example/sdk"],
+      });
+      expect(evidence.problems).toEqual([]);
+      expect([...evidence.sdks]).toEqual(["@example/sdk"]);
+    },
+  });
+});
