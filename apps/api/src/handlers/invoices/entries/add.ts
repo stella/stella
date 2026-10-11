@@ -293,6 +293,7 @@ const validateAttachmentInputs = async (
 
 const addEntries = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Attach approved, billable, not-yet-invoiced time entries and expenses " +
       "to a draft invoice as invoice lines without VAT, marking them billed " +

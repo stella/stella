@@ -66,6 +66,13 @@ const outsiderId = mintAuthProviderId<"user">();
 const workspaceId = createSafeId<"workspace">();
 const otherWorkspaceId = createSafeId<"workspace">();
 let db: GatedTestDb;
+const fixtureScoped = () =>
+  createScopedDb(
+    markRlsDatabase(db),
+    [workspaceId, otherWorkspaceId],
+    organizationId,
+    uploaderId,
+  );
 
 const unverifiedOriginal: typeof verifyOriginalSignature = async () =>
   Result.ok({ status: "unverified" });
@@ -118,15 +125,21 @@ const processUpload = async ({
   });
 
 const records = async () =>
-  await db
-    .select()
-    .from(correspondence)
-    .where(eq(correspondence.organizationId, organizationId));
+  await fixtureScoped()(
+    async (tx) =>
+      await tx
+        .select()
+        .from(correspondence)
+        .where(eq(correspondence.organizationId, organizationId)),
+  );
 const filers = async () =>
-  await db
-    .select()
-    .from(correspondenceFilers)
-    .where(eq(correspondenceFilers.organizationId, organizationId));
+  await fixtureScoped()(
+    async (tx) =>
+      await tx
+        .select()
+        .from(correspondenceFilers)
+        .where(eq(correspondenceFilers.organizationId, organizationId)),
+  );
 
 const causeChainText = (error: unknown): string => {
   const parts: string[] = [];
@@ -246,9 +259,12 @@ if (!databaseUrl || !runPostgresTests) {
     }, 60_000);
 
     beforeEach(async () => {
-      await db
-        .delete(correspondence)
-        .where(eq(correspondence.organizationId, organizationId));
+      await fixtureScoped()(
+        async (tx) =>
+          await tx
+            .delete(correspondence)
+            .where(eq(correspondence.organizationId, organizationId)),
+      );
       await db.delete(entities).where(eq(entities.workspaceId, workspaceId));
       await db
         .delete(entities)
@@ -307,10 +323,13 @@ if (!databaseUrl || !runPostgresTests) {
         },
       ]);
       expect(
-        await db
-          .select({ id: correspondenceAttachments.id })
-          .from(correspondenceAttachments)
-          .where(eq(correspondenceAttachments.correspondenceId, record.id)),
+        await fixtureScoped()(
+          async (tx) =>
+            await tx
+              .select({ id: correspondenceAttachments.id })
+              .from(correspondenceAttachments)
+              .where(eq(correspondenceAttachments.correspondenceId, record.id)),
+        ),
       ).toHaveLength(0);
 
       // The uploader reads the record through the matter's row policies, and
@@ -461,30 +480,33 @@ if (!databaseUrl || !runPostgresTests) {
         mimeType: MSG_MIME_TYPE,
       });
       expect(msgOutcome.isOk() && msgOutcome.value.status).toBe("filed");
-      const content = (sourceEntityId: SafeId<"entity">) =>
-        db
-          .select({
-            direction: correspondence.direction,
-            subject: correspondence.subject,
-            from: correspondence.from,
-            to: correspondence.to,
-            cc: correspondence.cc,
-            sentAt: correspondence.sentAt,
-            messageId: correspondence.messageId,
-            inReplyTo: correspondence.inReplyTo,
-            references: correspondence.references,
-            bodyText: correspondence.bodyText,
-            bodyHtml: correspondence.bodyHtml,
-            contentHash: correspondence.contentHash,
-            originalSignature: correspondence.originalSignature,
-          })
-          .from(correspondence)
-          .where(
-            and(
-              eq(correspondence.workspaceId, workspaceId),
-              eq(correspondence.sourceEntityId, sourceEntityId),
-            ),
-          );
+      const content = async (sourceEntityId: SafeId<"entity">) =>
+        fixtureScoped()(
+          async (tx) =>
+            await tx
+              .select({
+                direction: correspondence.direction,
+                subject: correspondence.subject,
+                from: correspondence.from,
+                to: correspondence.to,
+                cc: correspondence.cc,
+                sentAt: correspondence.sentAt,
+                messageId: correspondence.messageId,
+                inReplyTo: correspondence.inReplyTo,
+                references: correspondence.references,
+                bodyText: correspondence.bodyText,
+                bodyHtml: correspondence.bodyHtml,
+                contentHash: correspondence.contentHash,
+                originalSignature: correspondence.originalSignature,
+              })
+              .from(correspondence)
+              .where(
+                and(
+                  eq(correspondence.workspaceId, workspaceId),
+                  eq(correspondence.sourceEntityId, sourceEntityId),
+                ),
+              ),
+        );
       const [emlRecord] = await content(emlEntity);
       const [msgRecord] = await content(msgEntity);
       expect(emlRecord).toBeDefined();
@@ -703,40 +725,46 @@ if (!databaseUrl || !runPostgresTests) {
     test("an email file attached to a delivered record is not filed again", async () => {
       const entityId = await storeEmailFile({ createdBy: uploaderId });
       const deliveredId = createSafeId<"correspondence">();
-      await db.insert(correspondence).values({
-        id: deliveredId,
-        organizationId,
-        workspaceId,
-        direction: "in",
-        channel: "email",
-        source: "delivery",
-        intake: "direct",
-        authenticatedSenderAddress: "uploader@example.test",
-        originalSignature: null,
-        contentHash: "a".repeat(64),
-        dedupKey: "b".repeat(64),
-        from: { address: "uploader@example.test", name: null },
-        to: [],
-        cc: [],
-        subject: "Delivered",
-        receivedAt: new Date(),
-        references: [],
-        bodyText: "Delivered",
-        spf: "pass",
-        dkim: "none",
-        dmarc: "pass",
-      });
-      await db.insert(correspondenceAttachments).values({
-        organizationId,
-        workspaceId,
-        correspondenceId: deliveredId,
-        entityId,
-        ordinal: 0,
-        filename: "letter.eml",
-        mediaType: EML_MIME_TYPE,
-        byteSize: 1,
-        scanVerdict: "clean",
-      });
+      await fixtureScoped()(
+        async (tx) =>
+          await tx.insert(correspondence).values({
+            id: deliveredId,
+            organizationId,
+            workspaceId,
+            direction: "in",
+            channel: "email",
+            source: "delivery",
+            intake: "direct",
+            authenticatedSenderAddress: "uploader@example.test",
+            originalSignature: null,
+            contentHash: "a".repeat(64),
+            dedupKey: "b".repeat(64),
+            from: { address: "uploader@example.test", name: null },
+            to: [],
+            cc: [],
+            subject: "Delivered",
+            receivedAt: new Date(),
+            references: [],
+            bodyText: "Delivered",
+            spf: "pass",
+            dkim: "none",
+            dmarc: "pass",
+          }),
+      );
+      await fixtureScoped()(
+        async (tx) =>
+          await tx.insert(correspondenceAttachments).values({
+            organizationId,
+            workspaceId,
+            correspondenceId: deliveredId,
+            entityId,
+            ordinal: 0,
+            filename: "letter.eml",
+            mediaType: EML_MIME_TYPE,
+            byteSize: 1,
+            scanVerdict: "clean",
+          }),
+      );
       const outcome = await processUpload({
         entityId,
         bytes: emlFile(GOLDEN_MESSAGE),
@@ -834,9 +862,12 @@ if (!databaseUrl || !runPostgresTests) {
         const entityId = await storeEmailFile({ createdBy: uploaderId });
         const written = await Result.tryPromise(
           async () =>
-            await db
-              .insert(correspondence)
-              .values({ ...recordRow(), ...provenance(entityId) }),
+            await fixtureScoped()(
+              async (tx) =>
+                await tx
+                  .insert(correspondence)
+                  .values({ ...recordRow(), ...provenance(entityId) }),
+            ),
         );
         expect(Result.isError(written)).toBe(true);
         expect(
@@ -847,14 +878,20 @@ if (!databaseUrl || !runPostgresTests) {
 
     test("the schema refuses a second record for one file and a file from another matter", async () => {
       const entityId = await storeEmailFile({ createdBy: uploaderId });
-      await db
-        .insert(correspondence)
-        .values({ ...recordRow(), ...uploadProvenance(entityId) });
-      const duplicate = await Result.tryPromise(
-        async () =>
-          await db
+      await fixtureScoped()(
+        async (tx) =>
+          await tx
             .insert(correspondence)
             .values({ ...recordRow(), ...uploadProvenance(entityId) }),
+      );
+      const duplicate = await Result.tryPromise(
+        async () =>
+          await fixtureScoped()(
+            async (tx) =>
+              await tx
+                .insert(correspondence)
+                .values({ ...recordRow(), ...uploadProvenance(entityId) }),
+          ),
       );
       expect(
         causeChainText(Result.isError(duplicate) ? duplicate.error : null),
@@ -866,9 +903,13 @@ if (!databaseUrl || !runPostgresTests) {
       });
       const foreign = await Result.tryPromise(
         async () =>
-          await db
-            .insert(correspondence)
-            .values({ ...recordRow(), ...uploadProvenance(foreignEntityId) }),
+          await fixtureScoped()(
+            async (tx) =>
+              await tx.insert(correspondence).values({
+                ...recordRow(),
+                ...uploadProvenance(foreignEntityId),
+              }),
+          ),
       );
       expect(
         causeChainText(Result.isError(foreign) ? foreign.error : null),

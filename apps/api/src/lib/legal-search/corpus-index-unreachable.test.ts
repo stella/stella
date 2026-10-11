@@ -17,6 +17,7 @@ import {
   SEARCH_INDEX_UNAVAILABLE_HINT,
   SEARCH_INDEX_UNAVAILABLE_MESSAGE,
 } from "@/api/lib/legal-search/search-index-unavailable";
+import { testRevisionsFor } from "@/api/tests/helpers/corpus-projection-revisions";
 
 /**
  * Where "the search index is unavailable" is decided: at the client, from
@@ -129,6 +130,7 @@ const readPage = async () =>
     order: RELEVANCE_ORDER,
     parsedCursor: null,
     snippetFields: ["text"],
+    projectionRevisionField: "projection_revision",
     extractId: (hit) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: () => null,
@@ -145,6 +147,7 @@ const readPage = async () =>
           lexicalScore: candidate.score,
           citationAuthority: 0,
         })),
+        revisionById: testRevisionsFor(candidates),
       }),
   });
 

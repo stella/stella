@@ -634,6 +634,7 @@ describe("duplicate entity", () => {
       };
       let entityLookupCount = 0;
       const tx = {
+        execute: async () => [{ id: workspaceId }],
         query: {
           entities: {
             findFirst: async () => {
@@ -707,6 +708,7 @@ describe("duplicate entity", () => {
     let entityLookupCount = 0;
     let replayQuery: unknown;
     const tx = {
+      execute: async () => [{ id: workspaceId }],
       query: {
         entities: {
           findFirst: async (query: unknown) => {
@@ -798,6 +800,7 @@ describe("duplicate entity", () => {
     let commitState: "pending" | "written" | "acknowledgement-lost" = "pending";
     const replayFieldId = toSafeId<"field">("committed_copy_field");
     const tx = {
+      execute: async () => [{ id: workspaceId }],
       query: {
         entities: {
           findFirst: async () => {
@@ -920,6 +923,7 @@ describe("duplicate entity", () => {
     let siblingReads = 0;
 
     const tx = {
+      execute: async () => [{ id: workspaceId }],
       query: {
         entities: {
           findFirst: async () => sources.at(0),
@@ -1093,6 +1097,7 @@ describe("duplicate entity", () => {
     ];
 
     const tx = {
+      execute: async () => [{ id: workspaceId }],
       query: {
         entities: {
           findFirst: async () => brokenSubtree.at(0),

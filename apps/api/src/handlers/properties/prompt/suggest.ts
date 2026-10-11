@@ -46,6 +46,7 @@ const suggestPromptBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   actionAdmission: { type: "handler", actionKind: "properties.suggest-prompt" },
   description:
     "Draft or refine a column's extraction prompt with the model, from the " +

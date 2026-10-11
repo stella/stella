@@ -7,7 +7,7 @@ services:
     # mounted at /var/lib/postgresql, not /var/lib/postgresql/data.
     # After switching from the old layout, recreate local pgdata with
     # `bun run --cwd apps/api docker:reset-dev`.
-    # Send only public seed files to the Docker host; no checkout mounts.
+    # Send only public database seed/config files to the Docker host.
     build:
       context: .
       dockerfile: docker/postgres/Dockerfile

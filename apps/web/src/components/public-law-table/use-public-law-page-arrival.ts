@@ -50,11 +50,11 @@ type UsePublicLawPageArrivalInput = {
 };
 
 /**
- * A step to another page moves the reader there: once the page they asked
- * for is drawn, its first row is at the top and focused, rather than the
- * reader left at the pager under rows that changed beneath them.
+ * A step to another page moves the reader there: once the next page is
+ * drawn (including a redirect), its first row is at the top and focused,
+ * rather than the reader left at the pager under rows that changed beneath them.
  *
- * Only a page the reader asked for moves them. A filter, a sort or a fresh
+ * Only a pager request moves them. A filter, a sort or a fresh
  * arrival also draws a page, and taking focus from the control the reader is
  * using would be the opposite of help. Returns what the pager calls when the
  * reader follows a link to a page.
@@ -71,10 +71,10 @@ export const usePublicLawPageArrival = ({
       return;
     }
     const requested = requestedPageRef.current;
-    // Any drawn page settles the request: one that drew another page (a
-    // redirect past the end) must not take focus on a later arrival.
+    // The next drawn page settles the request, including a redirect past
+    // the end. Clear it before moving focus so later draws cannot reuse it.
     requestedPageRef.current = null;
-    if (requested === shownPage) {
+    if (requested !== null) {
       moveToFirstResult(region);
     }
   }, [regionRef, shownPage]);

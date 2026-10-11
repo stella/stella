@@ -35,6 +35,7 @@ const splitEntryBodySchema = t.Object({
 
 const splitEntry = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Split one time entry across several work items by percentage, between " +
       "2 and 10 parts totalling 100. The original entry is deleted and " +
