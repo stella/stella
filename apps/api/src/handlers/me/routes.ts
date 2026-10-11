@@ -35,6 +35,10 @@ export const meRoute = new Elysia({ prefix: "/me" })
         rateLimit({
           duration: API_RATE_LIMITS.deleteAccountOtp.duration,
           max: API_RATE_LIMITS.deleteAccountOtp.max,
+          budget: {
+            name: "api.delete_account_otp.address",
+            keyKind: "address",
+          },
           ...createRedisRateLimit({
             failurePolicy: "fail_open_local",
             scope: "delete-account-otp",
@@ -53,6 +57,10 @@ export const meRoute = new Elysia({ prefix: "/me" })
         rateLimit({
           duration: API_RATE_LIMITS.twoFactorManageOtp.duration,
           max: API_RATE_LIMITS.twoFactorManageOtp.max,
+          budget: {
+            name: "api.two_factor_manage_otp.address",
+            keyKind: "address",
+          },
           ...createRedisRateLimit({
             failurePolicy: "fail_open_local",
             scope: "two-factor-manage-otp",

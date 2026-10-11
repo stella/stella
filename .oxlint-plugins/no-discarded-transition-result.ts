@@ -4,7 +4,7 @@ import {
   canonicalModuleId,
   isAstNode,
   repoRelativeFilename,
-  resolveImportedExpression,
+  resolveImportedExpressionForEnforcement,
   unwrapExpression,
 } from "./utils.ts";
 
@@ -29,7 +29,10 @@ export default eslintCompatPlugin({
           if (value?.type !== "CallExpression") {
             return false;
           }
-          const imported = resolveImportedExpression(context, value.callee);
+          const imported = resolveImportedExpressionForEnforcement(
+            context,
+            value.callee,
+          );
           return (
             imported?.imported === "transition" &&
             canonicalModuleId(

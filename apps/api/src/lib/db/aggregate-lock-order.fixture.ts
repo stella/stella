@@ -26,6 +26,15 @@ export const aggregateFences = () => {
       id: { id: Bun.randomUUIDv7(), userId },
       mode: "share",
     },
+    signingSession: {
+      aggregate: "signingSession",
+      id: {
+        id: createSafeId<"pdfSigningSession">(),
+        workspaceId,
+        organizationId,
+      },
+      mode: "update",
+    },
     organization: {
       aggregate: "organization",
       id: organizationId,
