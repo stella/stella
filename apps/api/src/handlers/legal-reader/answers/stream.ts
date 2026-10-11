@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq, exists } from "drizzle-orm";
+import { and, eq, exists, sql } from "drizzle-orm";
 
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import type {
@@ -8,7 +8,10 @@ import type {
   ReaderAnswerStreamEvent,
   ReaderAnswerUsage,
 } from "@stll/api-contract/reader-answers";
-import { READER_ANSWER_ERROR_CODES } from "@stll/api-contract/reader-answers";
+import {
+  READER_ANSWER_DEADLINE_MS,
+  READER_ANSWER_ERROR_CODES,
+} from "@stll/api-contract/reader-answers";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -25,7 +28,10 @@ import {
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { timestampMatchesCasToken } from "@/api/lib/db/timestamp-cas";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transitionScopedCount } from "@/api/lib/db/transitions";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -121,29 +127,73 @@ const persistReaderAnswerSettlement = async ({
   invalidCitationCount,
 }: PersistReaderAnswerSettlementOptions) =>
   await scope.safeDb(async (tx) => {
-    const rows = await tx
-      .update(legalReaderAnswerMessages)
-      .set({ ...settlement, invalidCitationCount, updatedAt: new Date() })
-      .where(streamOwnerPredicate({ tx, scope, prepared }))
-      .returning({
-        id: legalReaderAnswerMessages.id,
-        status: legalReaderAnswerMessages.status,
-        content: legalReaderAnswerMessages.content,
-        citations: legalReaderAnswerMessages.citations,
-        model: legalReaderAnswerMessages.model,
-        usage: legalReaderAnswerMessages.usage,
-        errorCode: legalReaderAnswerMessages.errorCode,
-        invalidCitationCount: legalReaderAnswerMessages.invalidCitationCount,
-      });
-    const saved = rows.at(0);
-    if (saved === undefined) {
+    const ownerPredicate =
+      streamOwnerPredicate({ tx, scope, prepared }) ??
+      panic("Reader answer settlement requires its owner predicate");
+    // An UPDATE can evaluate its predicate before waiting on an unchanged row.
+    // Acquire the claim lock first so the execution clock is checked after the wait.
+    const locked = await withAggregateLock({
+      tx,
+      aggregate: "readerAnswerMessage",
+      id: { id: prepared.messageId, answerId: prepared.answer.id },
+      mode: "update",
+    });
+    switch (locked.status) {
+      case "missing":
+        return null;
+      case "locked":
+        break;
+      case "busy":
+        return panic("A blocking reader message lock cannot be busy");
+      default:
+        locked satisfies never;
+        return panic("Unknown reader message lock outcome");
+    }
+    const claimDeadline = sql`${legalReaderAnswerMessages.updatedAt} + ${READER_ANSWER_DEADLINE_MS}::double precision * interval '1 millisecond'`;
+    const deadlinePredicate =
+      settlement.status === "failed" && settlement.errorCode === "timeout"
+        ? sql`${claimDeadline} <= clock_timestamp()`
+        : sql`${claimDeadline} > clock_timestamp()`;
+    const { status, ...metadata } = settlement;
+    const count = await transitionScopedCount({
+      tx,
+      spec: TRANSITIONS.legalReaderAnswerMessages,
+      where:
+        and(ownerPredicate, deadlinePredicate) ??
+        panic("Reader settlement requires its deadline fence"),
+      options: {
+        from: ["streaming"],
+        to: status,
+        set: { ...metadata, invalidCitationCount, updatedAt: new Date() },
+      },
+      recordTransitionAuditEvent: async (auditTx) =>
+        await scope.recordAuditEvent(auditTx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_READER_ANSWER,
+          resourceId: prepared.answer.id,
+        }),
+    });
+    if (count === 0) {
       return null;
     }
-    await scope.recordAuditEvent(tx, {
-      action: AUDIT_ACTION.UPDATE,
-      resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_READER_ANSWER,
-      resourceId: prepared.answer.id,
-    });
+    const saved =
+      (
+        await tx
+          .select({
+            id: legalReaderAnswerMessages.id,
+            status: legalReaderAnswerMessages.status,
+            content: legalReaderAnswerMessages.content,
+            citations: legalReaderAnswerMessages.citations,
+            model: legalReaderAnswerMessages.model,
+            usage: legalReaderAnswerMessages.usage,
+            errorCode: legalReaderAnswerMessages.errorCode,
+            invalidCitationCount:
+              legalReaderAnswerMessages.invalidCitationCount,
+          })
+          .from(legalReaderAnswerMessages)
+          .where(eq(legalReaderAnswerMessages.id, prepared.messageId))
+          .limit(1)
+      ).at(0) ?? panic("A transitioned reader message must exist");
     const evidence = {
       messageId: saved.id,
       content: saved.content,
@@ -194,17 +244,33 @@ const failReaderAnswerStream = async ({
 }: FailReaderAnswerStreamOptions) => {
   observeFailure(error, { sink: READER_ANSWER_GENERATION_FAILURE });
   const partial = validateReaderAnswerCitations({ content, allowed });
-  const failed = await persistReaderAnswerSettlement({
+  const failureCode = readerAnswerFailureCode(error, fallbackCode);
+  let failed = await persistReaderAnswerSettlement({
     scope,
     prepared,
     invalidCitationCount: partial.invalidCitationCount,
     settlement: {
       status: "failed",
-      errorCode: readerAnswerFailureCode(error, fallbackCode),
+      errorCode: failureCode,
       content: partial.content,
       citations: partial.citations,
     },
   });
+  if (failed.isOk() && failed.value === null && failureCode !== "timeout") {
+    // An ordinary failure can wait past expiry too; only the expired claim may
+    // persist the timeout, and a newer owner or a terminal row still matches nothing.
+    failed = await persistReaderAnswerSettlement({
+      scope,
+      prepared,
+      invalidCitationCount: partial.invalidCitationCount,
+      settlement: {
+        status: "failed",
+        errorCode: "timeout",
+        content: partial.content,
+        citations: partial.citations,
+      },
+    });
+  }
   if (failed.isErr()) {
     observeFailure(failed.error, { sink: READER_ANSWER_PERSISTENCE_FAILURE });
     // Storage is unavailable; the claim remains reclaimable at its deadline.
@@ -308,6 +374,10 @@ export const streamReaderAnswer = ({
                                 { role: "user", content: prompt.context },
                                 ...prepared.history
                                   .filter(({ status }) => status === "complete")
+                                  .toSorted(
+                                    (left, right) =>
+                                      left.sequence - right.sequence,
+                                  )
                                   .map(({ role, content }) => ({
                                     role,
                                     content,
@@ -371,9 +441,10 @@ export const streamReaderAnswer = ({
                               },
                             }),
                           );
-                          if (saved !== null) {
-                            emit(saved);
+                          if (saved === null) {
+                            return Result.err(interrupted());
                           }
+                          emit(saved);
                           return Result.ok(undefined);
                         }),
                     ),

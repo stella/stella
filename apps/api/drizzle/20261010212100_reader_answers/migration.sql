@@ -1,3 +1,5 @@
+-- requires: 20260429152450_entity-version-ai-summaries
+-- requires: 20260510140000_document_rls_role_bootstrap
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 

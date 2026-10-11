@@ -1,5 +1,9 @@
 name: Dependency Audit
 
+defaults:
+  run:
+    shell: bash
+
 on:
   pull_request:
   push:

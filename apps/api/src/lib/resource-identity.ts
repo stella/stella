@@ -227,6 +227,9 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   legalListItemSource: { type: "non_resource", reason: "subresource" },
   legalListSection: { type: "non_resource", reason: "subresource" },
   legalReaderAnnotation: { type: "non_resource", reason: "subresource" },
+  // Passage-bound conversations and their messages have no portable ResourceRef.
+  legalReaderAnswer: { type: "non_resource", reason: "subresource" },
+  legalReaderAnswerMessage: { type: "non_resource", reason: "subresource" },
   matter: { type: "alias", resourceType: RESOURCE_TYPE.WORKSPACE },
   matterCounter: { type: "non_resource", reason: "projection" },
   mcpConnector: {

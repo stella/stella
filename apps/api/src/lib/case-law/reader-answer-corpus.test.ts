@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -86,6 +87,8 @@ describe("private reader answer corpus excerpts", () => {
     }
     expect(result.value).toEqual({
       decisionId,
+      decisionDate: "2026-01-01",
+      court: "Test court",
       paragraphs: [{ paragraphId: "paragraph-0", text: "Civil liability" }],
     });
   });
@@ -94,7 +97,10 @@ describe("private reader answer corpus excerpts", () => {
     const decisionId = createSafeId<"caseLawDecision">();
     const candidates = Array.from(
       { length: READER_ANSWER_RELATED_LIMITS.decisions + 4 },
-      () => createSafeId<"caseLawDecision">(),
+      (_, index) => ({
+        decisionId: createSafeId<"caseLawDecision">(),
+        direction: index % 2 === 0 ? ("cited" as const) : ("citing" as const),
+      }),
     );
     const reads: SafeId<"caseLawDecision">[] = [];
     const result = await readReaderAnswerRelated(
@@ -105,7 +111,7 @@ describe("private reader answer corpus excerpts", () => {
         query: "damages",
       },
       {
-        readRelatedIds: async (id, direction) => {
+        readRelatedCandidates: async (id, direction) => {
           expect(id).toBe(decisionId);
           expect(direction).toBe("both");
           return candidates;
@@ -130,7 +136,9 @@ describe("private reader answer corpus excerpts", () => {
     }
     expect(reads).toEqual([
       decisionId,
-      ...candidates.slice(0, READER_ANSWER_RELATED_LIMITS.decisions),
+      ...candidates
+        .slice(0, READER_ANSWER_RELATED_LIMITS.decisions)
+        .map((candidate) => candidate.decisionId),
     ]);
     expect(result.value).toHaveLength(READER_ANSWER_RELATED_LIMITS.paragraphs);
     for (const excerpt of result.value) {
@@ -139,7 +147,9 @@ describe("private reader answer corpus excerpts", () => {
         READER_ANSWER_RELATED_LIMITS.excerptChars,
       );
       expect(
-        candidates.slice(0, READER_ANSWER_RELATED_LIMITS.decisions),
+        candidates
+          .slice(0, READER_ANSWER_RELATED_LIMITS.decisions)
+          .map((candidate) => candidate.decisionId),
       ).toContain(excerpt.decisionId);
     }
   });
@@ -160,7 +170,10 @@ describe("private reader answer corpus excerpts", () => {
         query: "damages negligence",
       },
       {
-        readRelatedIds: async () => [relatedId],
+        readRelatedCandidates: async (_id, direction) => {
+          expect(direction).toBe("cited");
+          return [{ decisionId: relatedId, direction: "cited" }];
+        },
         readDecision: async ({ decisionId: id }) =>
           source({
             decisionId: id,
@@ -174,6 +187,11 @@ describe("private reader answer corpus excerpts", () => {
     expect(result.value).toHaveLength(1);
     expect(result.value.at(0)?.decisionId).toBe(relatedId);
     expect(result.value.at(0)?.paragraphId).toBe("paragraph-0");
+    expect(result.value.at(0)).toMatchObject({
+      direction: "cited",
+      decisionDate: "2026-01-01",
+      court: "Test court",
+    });
     expect(result.value.at(0)?.text).toContain(relevant);
     expect(result.value.at(0)?.text.length).toBeLessThanOrEqual(
       READER_ANSWER_RELATED_LIMITS.excerptChars,
@@ -192,7 +210,7 @@ describe("private reader answer corpus excerpts", () => {
       },
       {
         readDecision: async () => source({ decisionId, texts: ["Passage"] }),
-        readRelatedIds: async () => {
+        readRelatedCandidates: async () => {
           graphReads++;
           return [];
         },
@@ -217,7 +235,13 @@ describe("private reader answer corpus excerpts", () => {
         query: "liability",
       },
       {
-        readRelatedIds: async () => [withheld, readable, readable],
+        readRelatedCandidates: async (_id, direction) => {
+          expect(direction).toBe("cited");
+          return [withheld, readable, readable].map((candidate) => ({
+            decisionId: candidate,
+            direction: "cited" as const,
+          }));
+        },
         readDecision: async ({ decisionId: id }) =>
           id === withheld
             ? {
@@ -234,11 +258,149 @@ describe("private reader answer corpus excerpts", () => {
     expect(result.value).toEqual([
       {
         decisionId: readable,
+        direction: "cited",
+        decisionDate: "2026-01-01",
+        court: "Test court",
         paragraphId: "paragraph-0",
         text: "Civil liability",
       },
     ]);
   });
+
+  test.each(["cited", "citing"] as const)(
+    "opposite high-scoring candidates cannot crowd the requested %s direction",
+    async (direction) => {
+      const decisionId = createSafeId<"caseLawDecision">();
+      const requestedId = createSafeId<"caseLawDecision">();
+      const oppositeDirection =
+        direction === "cited" ? ("citing" as const) : ("cited" as const);
+      const opposite = Array.from(
+        { length: READER_ANSWER_RELATED_LIMITS.decisions + 2 },
+        () => ({
+          decisionId: createSafeId<"caseLawDecision">(),
+          direction: oppositeDirection,
+        }),
+      );
+      expect(opposite.length).toBeGreaterThan(
+        READER_ANSWER_RELATED_LIMITS.decisions,
+      );
+      const reads: SafeId<"caseLawDecision">[] = [];
+      const result = await readReaderAnswerRelated(
+        {
+          decisionId,
+          paragraphId: "paragraph-0",
+          direction,
+          query: "liability damages negligence remedy",
+        },
+        {
+          readRelatedCandidates: async (_id, requestedDirection) => {
+            expect(requestedDirection).toBe(direction);
+            return [...opposite, { decisionId: requestedId, direction }];
+          },
+          readDecision: async ({ decisionId: id }) => {
+            reads.push(id);
+            if (id === decisionId) {
+              return source({ decisionId: id, texts: ["Liability"] });
+            }
+            if (id === requestedId) {
+              return source({ decisionId: id, texts: ["Liability rule"] });
+            }
+            return source({
+              decisionId: id,
+              texts: ["Liability damages negligence remedy"],
+            });
+          },
+        },
+      );
+      if (result.isErr()) {
+        throw result.error;
+      }
+      expect(reads).toEqual([decisionId, requestedId]);
+      expect(result.value).toEqual([
+        {
+          decisionId: requestedId,
+          direction,
+          decisionDate: "2026-01-01",
+          court: "Test court",
+          paragraphId: "paragraph-0",
+          text: "Liability rule",
+        },
+      ]);
+    },
+  );
+
+  test.each(["cited", "citing"] as const)(
+    "the both-direction cap reserves the strongest paragraph outside the dominant %s direction",
+    async (dominantDirection) => {
+      const decisionId = createSafeId<"caseLawDecision">();
+      const dominantId = createSafeId<"caseLawDecision">();
+      const otherId = createSafeId<"caseLawDecision">();
+      const otherDirection =
+        dominantDirection === "cited"
+          ? ("citing" as const)
+          : ("cited" as const);
+      const dominantParagraphs = Array.from(
+        { length: READER_ANSWER_RELATED_LIMITS.paragraphs + 2 },
+        (_, index) => `Liability damages negligence remedy ${String(index)}`,
+      );
+      expect(dominantParagraphs.length).toBeGreaterThan(
+        READER_ANSWER_RELATED_LIMITS.paragraphs,
+      );
+      const result = await readReaderAnswerRelated(
+        {
+          decisionId,
+          paragraphId: "paragraph-0",
+          direction: "both",
+          query: "damages negligence remedy",
+        },
+        {
+          readRelatedCandidates: async (_id, direction) => {
+            expect(direction).toBe("both");
+            return [
+              { decisionId: dominantId, direction: dominantDirection },
+              { decisionId: otherId, direction: otherDirection },
+            ];
+          },
+          readDecision: async ({ decisionId: id }) => {
+            if (id === decisionId) {
+              return source({ decisionId: id, texts: ["Liability"] });
+            }
+            if (id === dominantId) {
+              return source({ decisionId: id, texts: dominantParagraphs });
+            }
+            return source({
+              decisionId: id,
+              texts: ["Unrelated appeal", "Liability damages"],
+            });
+          },
+        },
+      );
+      if (result.isErr()) {
+        throw result.error;
+      }
+      expect(result.value).toHaveLength(
+        READER_ANSWER_RELATED_LIMITS.paragraphs,
+      );
+      expect(result.value).toContainEqual({
+        decisionId: dominantId,
+        direction: dominantDirection,
+        decisionDate: "2026-01-01",
+        court: "Test court",
+        paragraphId: "paragraph-0",
+        text:
+          dominantParagraphs.at(0) ??
+          panic("Dominant paragraph fixture is empty"),
+      });
+      expect(result.value).toContainEqual({
+        decisionId: otherId,
+        direction: otherDirection,
+        decisionDate: "2026-01-01",
+        court: "Test court",
+        paragraphId: "paragraph-1",
+        text: "Liability damages",
+      });
+    },
+  );
 
   test("read failures remain typed failures rather than empty tool results", async () => {
     const decisionId = createSafeId<"caseLawDecision">();
@@ -255,7 +417,7 @@ describe("private reader answer corpus excerpts", () => {
       },
       {
         readDecision: async () => source({ decisionId, texts: ["Passage"] }),
-        readRelatedIds: async () => {
+        readRelatedCandidates: async () => {
           throw failure;
         },
       },

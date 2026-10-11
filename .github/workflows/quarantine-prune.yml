@@ -1,5 +1,9 @@
 name: Quarantine Exclude Prune
 
+defaults:
+  run:
+    shell: bash
+
 # A temporary `minimumReleaseAgeExcludes` entry stops being needed at a
 # wall-clock instant, and stops being safe at the same moment: it would let the
 # next version of that package publish straight past the release-age gate. So

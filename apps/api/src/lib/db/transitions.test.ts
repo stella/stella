@@ -13,6 +13,7 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import { timestamptz } from "@/api/db/columns";
+import { READER_ANSWER_TRANSITION_IDENTITIES } from "@/api/lib/db/reader-answer-transition-identities";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import {
   defineFixedLifecycle,
@@ -71,7 +72,10 @@ test("state-column ownership covers every scoped runtime transition", () => {
     return 0;
   };
   expect(registered.toSorted(order)).toEqual(
-    Object.values(SANCTIONS_MONITORING_TRANSITION_IDENTITIES).toSorted(order),
+    [
+      ...Object.values(SANCTIONS_MONITORING_TRANSITION_IDENTITIES),
+      ...Object.values(READER_ANSWER_TRANSITION_IDENTITIES),
+    ].toSorted(order),
   );
 });
 const jobs = pgTable("transition_test_jobs", {

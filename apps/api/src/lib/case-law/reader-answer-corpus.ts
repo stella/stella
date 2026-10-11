@@ -23,17 +23,23 @@ export class ReaderAnswerCorpusError extends TaggedError(
   "ReaderAnswerCorpusError",
 )<{ message: string; cause: unknown }> {}
 
-export type ReaderAnswerParagraph = { paragraphId: string; text: string };
+type ReaderAnswerParagraph = { paragraphId: string; text: string };
 export type ReaderAnswerDecision = {
   decisionId: SafeId<"caseLawDecision">;
   paragraphs: ReaderAnswerParagraph[];
+  decisionDate: string | null;
+  court: string | null;
 };
 export type ReaderAnswerRelatedDirection = "cited" | "citing" | "both";
-export type ReaderAnswerRelatedExcerpt = ReaderAnswerParagraph & {
+type ReaderAnswerRelatedCandidate = {
   decisionId: SafeId<"caseLawDecision">;
+  direction: Exclude<ReaderAnswerRelatedDirection, "both">;
 };
+export type ReaderAnswerRelatedExcerpt = ReaderAnswerParagraph &
+  ReaderAnswerRelatedCandidate &
+  Pick<ReaderAnswerDecision, "court" | "decisionDate">;
 
-const readRelatedDecisionIds = async (
+const readRelatedDecisionCandidates = async (
   decisionId: SafeId<"caseLawDecision">,
   direction: ReaderAnswerRelatedDirection,
   caseLawDb = caseLawPublicReadDb,
@@ -69,42 +75,62 @@ const readRelatedDecisionIds = async (
         );
       }
       // Interleave both directions so an outgoing page cannot crowd out citing decisions.
-      const ids = new Set<SafeId<"caseLawDecision">>();
-      const outgoingIds =
+      const candidates: ReaderAnswerRelatedCandidate[] = [];
+      const seen = new Set<string>();
+      const outgoingCandidates =
         outgoing === null
           ? []
           : outgoing.items.flatMap((row) =>
-              row.citedDecisionId === null ? [] : [row.citedDecisionId],
+              row.citedDecisionId === null
+                ? []
+                : [
+                    {
+                      decisionId: row.citedDecisionId,
+                      direction: "cited" as const,
+                    },
+                  ],
             );
-      const incomingIds =
+      const incomingCandidates =
         incoming === null
           ? []
-          : incoming.items.map((row) => row.citingDecisionId);
+          : incoming.items.map((row) => ({
+              decisionId: row.citingDecisionId,
+              direction: "citing" as const,
+            }));
       for (
         let index = 0;
-        index < Math.max(outgoingIds.length, incomingIds.length);
+        index < Math.max(outgoingCandidates.length, incomingCandidates.length);
         index++
       ) {
         for (const candidate of [
-          outgoingIds.at(index),
-          incomingIds.at(index),
+          outgoingCandidates.at(index),
+          incomingCandidates.at(index),
         ]) {
-          if (candidate !== undefined && candidate !== id) {
-            ids.add(candidate);
+          if (candidate === undefined || candidate.decisionId === id) {
+            continue;
           }
-          if (ids.size === READER_ANSWER_RELATED_LIMITS.decisions) {
-            return [...ids];
+          const key = JSON.stringify([
+            candidate.decisionId,
+            candidate.direction,
+          ]);
+          if (seen.has(key)) {
+            continue;
+          }
+          seen.add(key);
+          candidates.push(candidate);
+          if (candidates.length === READER_ANSWER_RELATED_LIMITS.decisions) {
+            return candidates;
           }
         }
       }
-      return [...ids];
+      return candidates;
     },
   );
 
 export type ReaderAnswerCorpusDependencies = {
   caseLawDb?: CaseLawPublicReadDb;
   readDecision?: typeof readDecisionReaderSource;
-  readRelatedIds?: typeof readRelatedDecisionIds;
+  readRelatedCandidates?: typeof readRelatedDecisionCandidates;
 };
 
 /** The ordinary model reader applies publication, tombstones and derived-AI admission. */
@@ -128,6 +154,8 @@ export const readReaderAnswerDecision = async (
       }
       return {
         decisionId: read.decision.id,
+        court: read.decision.court,
+        decisionDate: read.decision.decisionDate,
         paragraphs: read.ast.blocks.flatMap((block) =>
           block.type === "paragraph"
             ? [
@@ -166,7 +194,7 @@ const queryTerms = (text: string) =>
 export const readReaderAnswerRelated = async (
   { decisionId, paragraphId, direction, query }: ReadReaderAnswerRelatedOptions,
   {
-    readRelatedIds = readRelatedDecisionIds,
+    readRelatedCandidates = readRelatedDecisionCandidates,
     ...dependencies
   }: ReaderAnswerCorpusDependencies = {},
 ) =>
@@ -182,12 +210,16 @@ export const readReaderAnswerRelated = async (
       if (anchor === undefined) {
         return Result.ok([]);
       }
-      const ids = yield* await Result.tryPromise({
+      const candidates = yield* await Result.tryPromise({
         try: async () =>
-          await readRelatedIds(decisionId, direction, dependencies.caseLawDb),
+          await readRelatedCandidates(
+            decisionId,
+            direction,
+            dependencies.caseLawDb,
+          ),
         catch: (cause) => cause,
       });
-      if (ids === null) {
+      if (candidates === null) {
         return Result.ok([]);
       }
       const terms = queryTerms(
@@ -199,8 +231,16 @@ export const readReaderAnswerRelated = async (
         order: number;
       }[] = [];
       // Only the fixed candidate budget enters the reader; every target is admitted independently.
-      for (const id of ids.slice(0, READER_ANSWER_RELATED_LIMITS.decisions)) {
-        const read = yield* await readReaderAnswerDecision(id, dependencies);
+      for (const candidate of candidates
+        .filter(
+          ({ direction: candidateDirection }) =>
+            direction === "both" || candidateDirection === direction,
+        )
+        .slice(0, READER_ANSWER_RELATED_LIMITS.decisions)) {
+        const read = yield* await readReaderAnswerDecision(
+          candidate.decisionId,
+          dependencies,
+        );
         if (read === null) {
           continue;
         }
@@ -271,6 +311,9 @@ export const readReaderAnswerRelated = async (
           ranked.push({
             excerpt: {
               decisionId: read.decisionId,
+              direction: candidate.direction,
+              court: read.court,
+              decisionDate: read.decisionDate,
               paragraphId: paragraph.paragraphId,
               text: paragraph.text.slice(
                 excerptStart,
@@ -286,22 +329,50 @@ export const readReaderAnswerRelated = async (
         (left, right) => right.score - left.score || left.order - right.order,
       );
       const seen = new Set<string>();
-      return Result.ok(
-        ranked
-          .filter(({ excerpt }) => {
-            const key = JSON.stringify([
-              excerpt.decisionId,
-              excerpt.paragraphId,
-            ]);
-            if (seen.has(key)) {
-              return false;
-            }
-            seen.add(key);
-            return true;
-          })
-          .slice(0, READER_ANSWER_RELATED_LIMITS.paragraphs)
-          .map(({ excerpt }) => excerpt),
+      const unique = ranked.filter(({ excerpt }) => {
+        const key = JSON.stringify([
+          excerpt.decisionId,
+          excerpt.paragraphId,
+          excerpt.direction,
+        ]);
+        if (seen.has(key)) {
+          return false;
+        }
+        seen.add(key);
+        return true;
+      });
+      if (direction !== "both") {
+        return Result.ok(
+          unique
+            .slice(0, READER_ANSWER_RELATED_LIMITS.paragraphs)
+            .map(({ excerpt }) => excerpt),
+        );
+      }
+      // Rank within each direction before interleaving: strong precedent matches
+      // cannot consume the entire excerpt budget and hide later citing decisions.
+      const cited = unique.filter(
+        ({ excerpt }) => excerpt.direction === "cited",
       );
+      const citing = unique.filter(
+        ({ excerpt }) => excerpt.direction === "citing",
+      );
+      const excerpts: ReaderAnswerRelatedExcerpt[] = [];
+      for (
+        let index = 0;
+        index < Math.max(cited.length, citing.length);
+        index++
+      ) {
+        for (const candidate of [cited.at(index), citing.at(index)]) {
+          if (candidate === undefined) {
+            continue;
+          }
+          excerpts.push(candidate.excerpt);
+          if (excerpts.length === READER_ANSWER_RELATED_LIMITS.paragraphs) {
+            return Result.ok(excerpts);
+          }
+        }
+      }
+      return Result.ok(excerpts);
     })
   ).mapError(
     (cause) =>

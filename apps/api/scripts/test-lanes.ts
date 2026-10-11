@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { printError } from "@stll/errors";
+
 import { TEST_BATCH_KIND, type TestBatchKind } from "./test-batch-plan";
 import { testFileDurationWeights } from "./test-timings";
 
@@ -62,11 +64,11 @@ export const deriveTestLaneCount = ({
 };
 
 /**
- * Heavy-logic batches carry the largest peak-RSS budget; running one at a time
+ * Heavy batches carry the largest peak-RSS budget; running one at a time
  * keeps the worst concurrent footprint at one heavy budget plus ordinary ones.
  */
 export const isExclusiveTestBatch = (kind: TestBatchKind): boolean =>
-  kind === TEST_BATCH_KIND.heavyLogic;
+  kind === TEST_BATCH_KIND.heavyLogic || kind === TEST_BATCH_KIND.heavyDb;
 
 type LaneBatch = { readonly kind: TestBatchKind };
 
@@ -153,7 +155,7 @@ export const runInLanes = async <TBatch extends LaneBatch>({
     try {
       return await runBatch(batch, lane);
     } catch (error) {
-      console.error(error);
+      printError(error);
       return 1;
     }
   };

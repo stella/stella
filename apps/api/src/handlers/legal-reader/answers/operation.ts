@@ -21,7 +21,10 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readReaderAnswerDecision } from "@/api/lib/case-law/reader-answer-corpus";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transitionScopedCount } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type {
   UnprojectedColumns,
@@ -141,6 +144,7 @@ const regenerateLastReaderAnswer = async ({
         .values({
           id: messageId,
           answerId,
+          sequence: last.sequence,
           role: "assistant",
           content: "",
           status: "streaming",
@@ -261,6 +265,30 @@ const readReaderAnswerContext = async ({
     return Result.ok({ decision, anchor, answerId });
   });
 
+/** A thread past the message cap is refused rather than read truncated. */
+const readReaderAnswerThread = async (
+  tx: Transaction,
+  answerId: SafeId<"legalReaderAnswer">,
+) => {
+  const thread = await readBounded(
+    tx
+      .select()
+      .from(legalReaderAnswerMessages)
+      .where(eq(legalReaderAnswerMessages.answerId, answerId))
+      .orderBy(asc(legalReaderAnswerMessages.sequence)),
+    READER_ANSWER_MAX_MESSAGES,
+  );
+  if (thread.type === "overflow") {
+    return abortTransaction(
+      new HandlerError({
+        status: 409,
+        message: "Reader answer thread has reached its message limit",
+      }),
+    );
+  }
+  return thread.rows;
+};
+
 /** Validation and corpus I/O finish before the locked turn transaction. */
 export const prepareReaderAnswer = async (
   options: PrepareReaderAnswerOptions,
@@ -316,15 +344,7 @@ export const prepareReaderAnswer = async (
         }),
       );
     }
-    const messages = await tx
-      .select()
-      .from(legalReaderAnswerMessages)
-      .where(eq(legalReaderAnswerMessages.answerId, answerId))
-      .orderBy(
-        asc(legalReaderAnswerMessages.createdAt),
-        asc(legalReaderAnswerMessages.id),
-      )
-      .limit(READER_ANSWER_MAX_MESSAGES);
+    const messages = await readReaderAnswerThread(tx, answerId);
     const streaming = messages.find(({ status }) => status === "streaming");
     const now = new Date();
     if (
@@ -339,15 +359,26 @@ export const prepareReaderAnswer = async (
       );
     }
     if (streaming !== undefined) {
-      await tx
-        .update(legalReaderAnswerMessages)
-        .set({ status: "failed", errorCode: "owner-lost", updatedAt: now })
-        .where(
+      await transitionScopedCount({
+        tx,
+        spec: TRANSITIONS.legalReaderAnswerMessages,
+        where:
           and(
             eq(legalReaderAnswerMessages.answerId, answerId),
             eq(legalReaderAnswerMessages.status, "streaming"),
-          ),
-        );
+          ) ?? panic("Reader answer transition requires its owner predicate"),
+        options: {
+          from: ["streaming"],
+          to: "failed",
+          set: { errorCode: "owner-lost", updatedAt: now },
+        },
+        recordTransitionAuditEvent: async (auditTx) =>
+          await scope.recordAuditEvent(auditTx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_READER_ANSWER,
+            resourceId: answerId,
+          }),
+      });
     }
     if (command.type === "regenerate") {
       return await regenerateLastReaderAnswer({
@@ -383,21 +414,28 @@ export const prepareReaderAnswer = async (
       );
     }
     const messageId = createSafeId<"legalReaderAnswerMessage">();
+    // The parent lock serializes sequence allocation across turn claims.
+    let nextSequence = 1;
+    for (const { sequence } of messages) {
+      nextSequence = Math.max(nextSequence, sequence + 1);
+    }
     const inserted = await tx
       .insert(legalReaderAnswerMessages)
       .values([
         {
           id: createSafeId<"legalReaderAnswerMessage">(),
           answerId,
+          sequence: nextSequence,
           role: "user",
           content: question,
           status: "complete",
-          createdAt: new Date(now.getTime() - 1),
+          createdAt: now,
           updatedAt: now,
         },
         {
           id: messageId,
           answerId,
+          sequence: nextSequence + 1,
           role: "assistant",
           content: "",
           status: "streaming",

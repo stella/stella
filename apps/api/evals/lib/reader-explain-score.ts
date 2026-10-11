@@ -28,6 +28,7 @@ export const explainCorpusCaptureSchema = v.object({
 });
 
 export const explainLocalResultSchema = v.object({
+  runId: v.pipe(v.string(), v.uuid()),
   caseId: v.string(),
   harness: v.pipe(v.string(), v.minLength(1)),
   answer: v.pipe(v.string(), v.minLength(1)),
@@ -38,6 +39,7 @@ type CorpusCapture = v.InferOutput<typeof explainCorpusCaptureSchema>;
 type ExplainLocalResult = v.InferOutput<typeof explainLocalResultSchema>;
 
 export const explainToolTraceSchema = v.object({
+  runId: v.pipe(v.string(), v.uuid()),
   caseId: v.string(),
   citations: v.array(citationSchema),
 });
@@ -90,32 +92,53 @@ export const resolveExplainCase = (
       `Missing captured ${scenario.direction} edge for ${scenario.id}`,
     );
   }
-  const adjacentIds = new Set(
-    corpus.edges.flatMap(({ citingDecisionId, citedDecisionId }) => {
-      if (citingDecisionId === selection.decisionId) {
-        return [citedDecisionId];
+  const adjacentDecisions = corpus.edges.flatMap(
+    ({ citingDecisionId, citedDecisionId }) => {
+      if (
+        citingDecisionId !== selection.decisionId &&
+        citedDecisionId !== selection.decisionId
+      ) {
+        return [];
       }
-      if (citedDecisionId === selection.decisionId) {
-        return [citingDecisionId];
-      }
-      return [];
-    }),
+      return [
+        {
+          decisionId:
+            citingDecisionId === selection.decisionId
+              ? citedDecisionId
+              : citingDecisionId,
+          direction:
+            citingDecisionId === selection.decisionId
+              ? ("cited" as const)
+              : ("citing" as const),
+        },
+      ];
+    },
   );
-  const excerpts = corpus.decisions
-    .filter(({ decisionId }) => adjacentIds.has(decisionId))
-    .flatMap(({ decisionId, ecli, paragraphs }) =>
-      paragraphs.map((paragraph) => ({ decisionId, ecli, ...paragraph })),
+  const excerpts = adjacentDecisions
+    .flatMap(({ decisionId, direction }) =>
+      corpus.decisions
+        .filter((decision) => decision.decisionId === decisionId)
+        .flatMap(({ ecli, paragraphs }) =>
+          paragraphs.map((paragraph) => ({
+            decisionId,
+            direction,
+            ecli,
+            ...paragraph,
+          })),
+        ),
     )
     .toSorted(
       (left, right) =>
+        Number(right.direction === scenario.direction) -
+          Number(left.direction === scenario.direction) ||
         Number(
           right.decisionId === expected.decisionId &&
             right.paragraphId === expected.paragraphId,
         ) -
-        Number(
-          left.decisionId === expected.decisionId &&
-            left.paragraphId === expected.paragraphId,
-        ),
+          Number(
+            left.decisionId === expected.decisionId &&
+              left.paragraphId === expected.paragraphId,
+          ),
     )
     .slice(0, MAX_EXCERPTS);
   const context = corpus.decisions
@@ -131,16 +154,21 @@ type ScoreExplainCaseOptions = {
   scenario: ExplainEvalCase;
   corpus: CorpusCapture;
   result: ExplainLocalResult;
-  toolReturnedCitations: v.InferOutput<typeof citationSchema>[];
+  toolTraces: v.InferOutput<typeof explainToolTraceSchema>[];
 };
 
 export const scoreExplainCase = ({
   scenario,
   corpus,
   result,
-  toolReturnedCitations,
+  toolTraces,
 }: ScoreExplainCaseOptions) => {
   const resolved = resolveExplainCase(scenario, corpus);
+  const toolReturnedCitations = toolTraces
+    .filter(
+      ({ caseId, runId }) => caseId === scenario.id && runId === result.runId,
+    )
+    .flatMap(({ citations }) => citations);
   const sameCitation = (
     left: v.InferOutput<typeof citationSchema>,
     right: v.InferOutput<typeof citationSchema>,

@@ -67,12 +67,12 @@ import Tooltip from "@/components/tooltip";
 import { UserIdentityAvatar } from "@/components/user-avatar";
 import { MatterContextMenu } from "@/components/workspaces/matter-context-menu";
 import { chatKeys } from "@/features/chat/chat-query-contract";
+import { acquireChatRuntime } from "@/features/chat/chat-runtime-registry";
 import { useChatDraftMeta } from "@/features/chat/hooks/use-chat-draft-meta";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import {
-  acquireChatRuntime,
   applyChatModelChange,
   chatThreadOptions,
   groupedChatThreadsOptions,

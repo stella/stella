@@ -66,6 +66,7 @@ describe("reader answer storage", () => {
     await database.insert(legalReaderAnswers).values(answer);
     await database.insert(legalReaderAnswerMessages).values({
       answerId: answer.id,
+      sequence: 1,
       role: "assistant",
       content: "An explanation",
       status: "complete",
@@ -109,8 +110,8 @@ describe("reader answer storage", () => {
     const result = await Result.tryPromise(
       async () =>
         await database.execute(sql`
-      INSERT INTO legal_reader_answer_messages (id, answer_id, role, content, status)
-      VALUES (${Bun.randomUUIDv7()}, ${answer.id}, 'assistant', '', 'unknown')
+      INSERT INTO legal_reader_answer_messages (id, answer_id, sequence, role, content, status)
+      VALUES (${Bun.randomUUIDv7()}, ${answer.id}, 1, 'assistant', '', 'unknown')
     `),
     );
     expect(Result.isError(result)).toBe(true);
@@ -150,6 +151,7 @@ describe("reader answer storage", () => {
       .insert(legalReaderAnswerMessages)
       .values({
         answerId: answer.id,
+        sequence: 1,
         role: "assistant",
         content: "",
         status: "failed",
@@ -160,8 +162,9 @@ describe("reader answer storage", () => {
     const diagnostics = await database
       .insert(legalReaderAnswerMessages)
       .values(
-        READER_ANSWER_ERROR_CODES.map((errorCode) => ({
+        READER_ANSWER_ERROR_CODES.map((errorCode, index) => ({
           answerId: answer.id,
+          sequence: index + 2,
           role: "assistant" as const,
           content: "",
           status: "failed" as const,
@@ -184,8 +187,8 @@ describe("reader answer storage", () => {
     const invalidCode = await Result.tryPromise(
       async () =>
         await database.execute(sql`
-      INSERT INTO legal_reader_answer_messages (id, answer_id, role, content, status, error_code)
-      VALUES (${Bun.randomUUIDv7()}, ${answer.id}, 'assistant', '', 'failed', 'unknown')
+      INSERT INTO legal_reader_answer_messages (id, answer_id, sequence, role, content, status, error_code)
+      VALUES (${Bun.randomUUIDv7()}, ${answer.id}, 1, 'assistant', '', 'failed', 'unknown')
     `),
     );
     expect(invalidCode.isErr()).toBe(true);
@@ -195,8 +198,8 @@ describe("reader answer storage", () => {
     const invalidCount = await Result.tryPromise(
       async () =>
         await database.execute(sql`
-      INSERT INTO legal_reader_answer_messages (id, answer_id, role, content, status, invalid_citation_count)
-      VALUES (${Bun.randomUUIDv7()}, ${answer.id}, 'assistant', '', 'complete', -1)
+      INSERT INTO legal_reader_answer_messages (id, answer_id, sequence, role, content, status, invalid_citation_count)
+      VALUES (${Bun.randomUUIDv7()}, ${answer.id}, 1, 'assistant', '', 'complete', -1)
     `),
     );
     expect(invalidCount.isErr()).toBe(true);
@@ -205,5 +208,52 @@ describe("reader answer storage", () => {
     ).toContain(
       "legal_reader_answer_messages_invalid_citation_count_nonnegative",
     );
+  });
+
+  test("requires a positive unique message position within each thread", async () => {
+    const testDatabase = database;
+    const answer = answerRow();
+    const another = answerRow();
+    await testDatabase.insert(legalReaderAnswers).values([answer, another]);
+    const message = {
+      answerId: answer.id,
+      role: "assistant" as const,
+      content: "An explanation",
+      status: "complete" as const,
+    };
+    await testDatabase
+      .insert(legalReaderAnswerMessages)
+      .values({ ...message, sequence: 1 });
+    for (const sequence of [0, -1]) {
+      const rejected = await Result.tryPromise(
+        async () =>
+          await testDatabase
+            .insert(legalReaderAnswerMessages)
+            .values({ ...message, sequence }),
+      );
+      expect(rejected.isErr()).toBe(true);
+      expect(causeText(rejected.isErr() ? rejected.error : null)).toContain(
+        "legal_reader_answer_messages_sequence_positive",
+      );
+    }
+    const duplicate = await Result.tryPromise(
+      async () =>
+        await testDatabase
+          .insert(legalReaderAnswerMessages)
+          .values({ ...message, sequence: 1 }),
+    );
+    expect(duplicate.isErr()).toBe(true);
+    expect(causeText(duplicate.isErr() ? duplicate.error : null)).toContain(
+      "legal_reader_answer_messages_answer_sequence_idx",
+    );
+    const otherThread = await testDatabase
+      .insert(legalReaderAnswerMessages)
+      .values({
+        ...message,
+        answerId: another.id,
+        sequence: 1,
+      })
+      .returning();
+    expect(otherThread.at(0)?.sequence).toBe(1);
   });
 });

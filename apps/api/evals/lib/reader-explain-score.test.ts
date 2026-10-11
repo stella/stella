@@ -8,6 +8,7 @@ import {
   SCHREMS_I,
   SCHREMS_II,
 } from "./reader-explain-cases";
+import type { ExplainEvalCase } from "./reader-explain-cases";
 import { resolveExplainCase, scoreExplainCase } from "./reader-explain-score";
 
 const corpus = {
@@ -42,11 +43,17 @@ if (!scenario) {
   throw new TypeError("Explain eval cases are empty");
 }
 const result = {
+  runId: "11111111-1111-4111-8111-111111111111",
   caseId: scenario.id,
   harness: "local",
   answer: "Explanation grounded in the returned precedent.",
   citations: [{ decisionId: "precedent", paragraphId: "returned" }],
-  toolReturnedCitations: [{ decisionId: "precedent", paragraphId: "returned" }],
+};
+
+const trace = {
+  runId: result.runId,
+  caseId: scenario.id,
+  citations: result.citations,
 };
 
 describe("Explain local corpus evaluation", () => {
@@ -111,11 +118,11 @@ describe("Explain local corpus evaluation", () => {
         scenario,
         corpus,
         result,
-        toolReturnedCitations: result.toolReturnedCitations,
+        toolTraces: [trace],
       }).citationPass,
     ).toBe(true);
     expect(
-      scoreExplainCase({ scenario, corpus, result, toolReturnedCitations: [] })
+      scoreExplainCase({ scenario, corpus, result, toolTraces: [] })
         .citationPass,
     ).toBe(false);
     expect(
@@ -126,7 +133,7 @@ describe("Explain local corpus evaluation", () => {
           ...result,
           citations: [{ decisionId: "precedent", paragraphId: "invented" }],
         },
-        toolReturnedCitations: result.toolReturnedCitations,
+        toolTraces: [trace],
       }).citationPass,
     ).toBe(false);
     expect(
@@ -134,8 +141,11 @@ describe("Explain local corpus evaluation", () => {
         scenario,
         corpus,
         result,
-        toolReturnedCitations: [
-          { decisionId: "other", paragraphId: "returned" },
+        toolTraces: [
+          {
+            ...trace,
+            citations: [{ decisionId: "other", paragraphId: "returned" }],
+          },
         ],
       }).citationPass,
     ).toBe(false);
@@ -144,7 +154,7 @@ describe("Explain local corpus evaluation", () => {
         scenario,
         corpus,
         result: { ...result, caseId: "different" },
-        toolReturnedCitations: result.toolReturnedCitations,
+        toolTraces: [trace],
       }).citationPass,
     ).toBe(false);
     expect(
@@ -152,7 +162,7 @@ describe("Explain local corpus evaluation", () => {
         scenario,
         corpus,
         result,
-        toolReturnedCitations: result.toolReturnedCitations,
+        toolTraces: [trace],
       }).contentReview,
     ).toBe("required");
   });
@@ -174,5 +184,99 @@ describe("Explain local corpus evaluation", () => {
         decisions: [...corpus.decisions, first],
       }),
     ).toThrow("Capture must contain exactly one decision");
+  });
+
+  test.each(["cited", "citing"] as const)(
+    "keeps the expected paragraph and %s direction ahead of competing excerpts",
+    (direction) => {
+      const expectedDecision = corpus.decisions.find(
+        ({ decisionId }) => decisionId === "precedent",
+      );
+      expect(expectedDecision).toBeDefined();
+      if (!expectedDecision) {
+        throw new TypeError("Synthetic precedent is missing");
+      }
+      const competingParagraphs = Array.from({ length: 12 }, (_, index) => ({
+        paragraphId: `competing-${String(index)}`,
+        publisherParagraph: 200 + index,
+        text: "Competing related passage",
+      }));
+      expect(competingParagraphs.length).toBeGreaterThan(8);
+      const targetScenario = {
+        ...scenario,
+        direction,
+      } satisfies ExplainEvalCase;
+      const crowdedCorpus = {
+        decisions: [
+          ...corpus.decisions.filter(
+            ({ decisionId }) => decisionId !== "precedent",
+          ),
+          {
+            decisionId: "opposite",
+            ecli: "ECLI:EU:C:2021:1",
+            paragraphs: competingParagraphs,
+          },
+          {
+            ...expectedDecision,
+            paragraphs: [
+              ...competingParagraphs,
+              ...expectedDecision.paragraphs,
+            ],
+          },
+        ],
+        edges:
+          direction === "cited"
+            ? [
+                { citingDecisionId: "opposite", citedDecisionId: "source" },
+                { citingDecisionId: "source", citedDecisionId: "precedent" },
+              ]
+            : [
+                { citingDecisionId: "source", citedDecisionId: "opposite" },
+                { citingDecisionId: "precedent", citedDecisionId: "source" },
+              ],
+      };
+      const { excerpts } = resolveExplainCase(targetScenario, crowdedCorpus);
+      expect(excerpts).toHaveLength(8);
+      expect(excerpts.every((excerpt) => excerpt.direction === direction)).toBe(
+        true,
+      );
+      expect(excerpts.at(0)).toMatchObject({
+        decisionId: "precedent",
+        paragraphId: "returned",
+        direction,
+      });
+      expect(
+        scoreExplainCase({
+          scenario: targetScenario,
+          corpus: crowdedCorpus,
+          result,
+          toolTraces: [{ ...trace, citations: excerpts }],
+        }).citationPass,
+      ).toBe(true);
+    },
+  );
+
+  test("a previous run's tool trace cannot satisfy a new run's citation", () => {
+    const newResult = {
+      ...result,
+      runId: "22222222-2222-4222-8222-222222222222",
+    };
+    expect(newResult.runId).not.toBe(trace.runId);
+    const staleScore = scoreExplainCase({
+      scenario,
+      corpus,
+      result: newResult,
+      toolTraces: [trace],
+    });
+    expect(staleScore.citationPass).toBe(false);
+    expect(staleScore.unreturnedCitations).toEqual(result.citations);
+    expect(
+      scoreExplainCase({
+        scenario,
+        corpus,
+        result: newResult,
+        toolTraces: [trace, { ...trace, runId: newResult.runId }],
+      }).citationPass,
+    ).toBe(true);
   });
 });

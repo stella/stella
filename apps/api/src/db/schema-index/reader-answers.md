@@ -31,14 +31,15 @@ Message access follows the parent's current author and sharing scope.
 ```text
 legal_reader_answer_messages.id                      pUuid        pk,not null       reader-answers.ts:95
 legal_reader_answer_messages.answer_id               safeUuid     not null          reader-answers.ts:96
-legal_reader_answer_messages.role                    text         not null          reader-answers.ts:97
-legal_reader_answer_messages.content                 text         not null          reader-answers.ts:98
-legal_reader_answer_messages.citations               jsonb        default,not null  reader-answers.ts:99
-legal_reader_answer_messages.model                   text         null              reader-answers.ts:103
-legal_reader_answer_messages.usage                   jsonb        null              reader-answers.ts:104
-legal_reader_answer_messages.status                  text         not null          reader-answers.ts:105
-legal_reader_answer_messages.error_code              text         null              reader-answers.ts:109  Stable failure code preserved when the reader reloads a message.
-legal_reader_answer_messages.invalid_citation_count  integer      default,not null  reader-answers.ts:111  Number of generated citations withheld by validation.
-legal_reader_answer_messages.created_at              timestamptz  default,not null  reader-answers.ts:115
-legal_reader_answer_messages.updated_at              timestamptz  default,not null  reader-answers.ts:116
+legal_reader_answer_messages.sequence                integer      not null          reader-answers.ts:98   Stable conversational order assigned while the parent answer is locked.
+legal_reader_answer_messages.role                    text         not null          reader-answers.ts:99
+legal_reader_answer_messages.content                 text         not null          reader-answers.ts:100
+legal_reader_answer_messages.citations               jsonb        default,not null  reader-answers.ts:101
+legal_reader_answer_messages.model                   text         null              reader-answers.ts:105
+legal_reader_answer_messages.usage                   jsonb        null              reader-answers.ts:106
+legal_reader_answer_messages.status                  text         not null          reader-answers.ts:107
+legal_reader_answer_messages.error_code              text         null              reader-answers.ts:111  Stable failure code preserved when the reader reloads a message.
+legal_reader_answer_messages.invalid_citation_count  integer      default,not null  reader-answers.ts:113  Number of generated citations withheld by validation.
+legal_reader_answer_messages.created_at              timestamptz  default,not null  reader-answers.ts:117
+legal_reader_answer_messages.updated_at              timestamptz  default,not null  reader-answers.ts:118
 ```

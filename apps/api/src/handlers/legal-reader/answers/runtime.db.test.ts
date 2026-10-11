@@ -8,13 +8,14 @@ import {
   setSystemTime,
   test,
 } from "bun:test";
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import {
   READER_ANSWER_DEADLINE_MS,
   READER_ANSWER_ERROR_CODES,
+  READER_ANSWER_MAX_MESSAGES,
 } from "@stll/api-contract/reader-answers";
 import { sleep } from "@stll/concurrency/sleep";
 
@@ -93,6 +94,8 @@ const prepare = async (
     readDecision: async () =>
       Result.ok({
         decisionId,
+        court: "Test court",
+        decisionDate: "2026-01-01",
         paragraphs: [{ paragraphId: "p-1", text: "The holding follows." }],
       }),
   });
@@ -143,7 +146,9 @@ const message = async (prepared: ReaderAnswerStreamOptions["prepared"]) =>
       .where(eq(legalReaderAnswerMessages.id, prepared.messageId))
   ).at(0);
 
-const reload = async (prepared: ReaderAnswerStreamOptions["prepared"]) => {
+const reloadThread = async (
+  prepared: ReaderAnswerStreamOptions["prepared"],
+) => {
   const result = await Result.gen(async function* () {
     return yield* listReaderAnswersHandler({
       ...scope(),
@@ -154,6 +159,11 @@ const reload = async (prepared: ReaderAnswerStreamOptions["prepared"]) => {
     throw result.error;
   }
   const thread = result.value.items.find(({ id }) => id === prepared.answer.id);
+  expect(thread).toBeDefined();
+  return thread;
+};
+const reload = async (prepared: ReaderAnswerStreamOptions["prepared"]) => {
+  const thread = await reloadThread(prepared);
   const assistant = thread?.messages.find(
     ({ id }) => id === prepared.messageId,
   );
@@ -268,7 +278,12 @@ describe("reader answer turn lifecycle", () => {
           },
         },
         readDecision: async () =>
-          Result.ok({ decisionId, paragraphs: [{ paragraphId: "p-1", text }] }),
+          Result.ok({
+            decisionId,
+            court: "Test court",
+            decisionDate: "2026-01-01",
+            paragraphs: [{ paragraphId: "p-1", text }],
+          }),
       });
       expect(Result.isError(result)).toBe(true);
       if (Result.isError(result)) {
@@ -300,6 +315,8 @@ describe("reader answer turn lifecycle", () => {
         readDecision: async () =>
           Result.ok({
             decisionId,
+            court: "Test court",
+            decisionDate: "2026-01-01",
             paragraphs: [{ paragraphId: "p-1", text: "The holding follows." }],
           }),
       });
@@ -321,6 +338,59 @@ describe("reader answer turn lifecycle", () => {
       content: "",
     });
     await complete(prepared);
+  });
+
+  test("a thread holding more messages than the cap refuses regeneration instead of reading a truncated history", async () => {
+    const prepared = await create();
+    await complete(prepared);
+    const extra = Array.from(
+      { length: READER_ANSWER_MAX_MESSAGES - 1 },
+      (_, index) => ({
+        id: createSafeId<"legalReaderAnswerMessage">(),
+        answerId: prepared.answer.id,
+        sequence: index + 3,
+        role: index % 2 === 0 ? ("user" as const) : ("assistant" as const),
+        content: `Message ${index + 3}`,
+        status: "complete" as const,
+      }),
+    );
+    await database.insert(legalReaderAnswerMessages).values(extra);
+    const before = await database
+      .select()
+      .from(legalReaderAnswerMessages)
+      .where(eq(legalReaderAnswerMessages.answerId, prepared.answer.id))
+      .orderBy(asc(legalReaderAnswerMessages.sequence));
+    expect(before).toHaveLength(READER_ANSWER_MAX_MESSAGES + 1);
+
+    const result = await prepareReaderAnswer({
+      ...scope(),
+      command: {
+        type: "regenerate",
+        answerId: prepared.answer.id,
+        body: { locale: "cs-CZ" },
+      },
+      readDecision: async () =>
+        Result.ok({
+          decisionId,
+          court: "Test court",
+          decisionDate: "2026-01-01",
+          paragraphs: [{ paragraphId: "p-1", text: "The holding follows." }],
+        }),
+    });
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toMatchObject({
+        status: 409,
+        message: "Reader answer thread has reached its message limit",
+      });
+    }
+    expect(
+      await database
+        .select()
+        .from(legalReaderAnswerMessages)
+        .where(eq(legalReaderAnswerMessages.answerId, prepared.answer.id))
+        .orderBy(asc(legalReaderAnswerMessages.sequence)),
+    ).toEqual(before);
   });
 
   test("creating and regenerating an explanation write only reader thread storage", async () => {
@@ -348,7 +418,9 @@ describe("reader answer turn lifecycle", () => {
     ).toBe(true);
     expect(
       statements.some((statement) =>
-        statement.includes('update "legal_reader_answer_messages"'),
+        statement
+          .toLowerCase()
+          .includes('update "legal_reader_answer_messages"'),
       ),
     ).toBe(true);
     expect(
@@ -857,6 +929,148 @@ describe("reader answer turn lifecycle", () => {
       invalidCitationCount: 1,
       citations: [{ decisionId: relatedId, paragraphId: "p-7" }],
     });
+  });
+
+  test("frozen timestamps preserve turn order in prompts and list reload across regeneration", async () => {
+    const frozenAt = new Date();
+    setSystemTime(frozenAt);
+    const first = await prepare({
+      type: "create",
+      body: {
+        kind: "ask",
+        question: "Question one",
+        decisionId,
+        anchor,
+        locale: "cs-CZ",
+      },
+    });
+    type RunFrozenTurnOptions = {
+      prepared: ReaderAnswerStreamOptions["prepared"];
+      expectedHistory: Pick<
+        ReaderAnswerStreamOptions["prepared"]["history"][number],
+        "role" | "content"
+      >[];
+      content: string;
+    };
+    const runTurn = async ({
+      prepared,
+      expectedHistory,
+      content,
+    }: RunFrozenTurnOptions) => {
+      expect(
+        prepared.history.map(({ role, content: text }) => ({
+          role,
+          content: text,
+        })),
+      ).toEqual(expectedHistory);
+      await complete(prepared, {
+        runModel: async (input) => {
+          expect(
+            input.messages
+              .slice(1)
+              .map(({ role, content: text }) => ({ role, content: text })),
+          ).toEqual(expectedHistory);
+          return Result.ok({ content, model: "fixture", usage: null });
+        },
+      });
+    };
+    await runTurn({
+      prepared: first,
+      expectedHistory: [{ role: "user", content: "Question one" }],
+      content: "Answer one",
+    });
+    const pair = await database
+      .select()
+      .from(legalReaderAnswerMessages)
+      .where(eq(legalReaderAnswerMessages.answerId, first.answer.id));
+    const firstUser = pair.find(({ role }) => role === "user");
+    const firstAssistant = pair.find(({ role }) => role === "assistant");
+    if (firstUser === undefined || firstAssistant === undefined) {
+      throw new HandlerError({
+        status: 500,
+        message: "Missing frozen-clock fixture turn",
+      });
+    }
+    // Pin UUID order opposite turn order; random UUID ordering must not decide this test.
+    if (firstUser.id < firstAssistant.id) {
+      const temporaryId = createSafeId<"legalReaderAnswerMessage">();
+      await database.transaction(async (tx) => {
+        await tx
+          .update(legalReaderAnswerMessages)
+          .set({ id: temporaryId })
+          .where(eq(legalReaderAnswerMessages.id, firstUser.id));
+        await tx
+          .update(legalReaderAnswerMessages)
+          .set({ id: firstUser.id })
+          .where(eq(legalReaderAnswerMessages.id, firstAssistant.id));
+        await tx
+          .update(legalReaderAnswerMessages)
+          .set({ id: firstAssistant.id })
+          .where(eq(legalReaderAnswerMessages.id, temporaryId));
+      });
+    }
+    const followUp = await prepare({
+      type: "follow-up",
+      answerId: first.answer.id,
+      body: { question: "Question two", locale: "cs-CZ" },
+    });
+    const history = [
+      { role: "user", content: "Question one" },
+      { role: "assistant", content: "Answer one" },
+      { role: "user", content: "Question two" },
+    ] satisfies RunFrozenTurnOptions["expectedHistory"];
+    await runTurn({
+      prepared: followUp,
+      expectedHistory: history,
+      content: "Answer two",
+    });
+    const expected = [
+      ...history,
+      { role: "assistant", content: "Answer two" },
+    ] satisfies RunFrozenTurnOptions["expectedHistory"];
+    const listed = await reloadThread(followUp);
+    expect(
+      listed?.messages.map(({ role, content }) => ({ role, content })),
+    ).toEqual(expected);
+    const legacy = await database
+      .select()
+      .from(legalReaderAnswerMessages)
+      .where(eq(legalReaderAnswerMessages.answerId, first.answer.id))
+      .orderBy(
+        asc(legalReaderAnswerMessages.createdAt),
+        asc(legalReaderAnswerMessages.id),
+      );
+    expect(
+      legacy.every(
+        ({ createdAt }) => createdAt.getTime() === frozenAt.getTime(),
+      ),
+    ).toBe(true);
+    expect(legacy.map(({ role, content }) => ({ role, content }))).not.toEqual(
+      expected,
+    );
+    const oldSequence = (await message(followUp))?.sequence;
+    const regenerated = await prepare({
+      type: "regenerate",
+      answerId: first.answer.id,
+      body: { locale: "cs-CZ" },
+    });
+    expect(regenerated.messageId).not.toBe(followUp.messageId);
+    expect((await message(regenerated))?.sequence).toBe(oldSequence);
+    await runTurn({
+      prepared: regenerated,
+      expectedHistory: history,
+      content: "Answer two regenerated",
+    });
+    expect(
+      (await reloadThread(regenerated))?.messages.map(({ role, content }) => ({
+        role,
+        content,
+      })),
+    ).toEqual([
+      ...history,
+      { role: "assistant", content: "Answer two regenerated" },
+    ]);
+    expect(await message(followUp)).toBeUndefined();
   });
 
   test("follow-up preserves history and regeneration replaces the final assistant message", async () => {

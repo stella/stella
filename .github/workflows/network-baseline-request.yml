@@ -1,5 +1,9 @@
 name: Request network baseline
 
+defaults:
+  run:
+    shell: bash
+
 # A pull request's own route and budget changes are exempt from its network
 # baseline check, so main needs a fresh recording once one merges. Label
 # requests and merged route changes both dispatch trusted main, never PR source.

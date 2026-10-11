@@ -1,5 +1,9 @@
 name: Deploy Landing
 
+defaults:
+  run:
+    shell: bash
+
 # Deploys the landing site after every main merge that changes what the
 # landing build reads. The public repo cannot call private reusable workflows
 # directly, so this dispatches it and leaves the deploy result to that repo.
