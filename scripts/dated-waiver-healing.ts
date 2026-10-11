@@ -1011,9 +1011,7 @@ const main = async (): Promise<void> => {
           body: renderRemovalEvidence(outcome.evidence),
           repo: process.env["GITHUB_REPOSITORY"],
           request: githubRequest,
-          ...(process.env["MERGE_HOLD"]
-            ? { disarmExisting: disarmRemoval }
-            : {}),
+          disarmExisting: disarmRemoval,
         }),
       retireRemoval: async (entry) =>
         retireRemoval({

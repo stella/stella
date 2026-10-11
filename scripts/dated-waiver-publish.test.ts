@@ -26,6 +26,9 @@ import {
 } from "./dated-waiver-publish";
 import type { DatedWaiver } from "./dated-waivers";
 
+/** Publication with no existing proposal never disarms. */
+const noDisarm = async (): Promise<void> => {};
+
 const BRANCH = "chore/dated-waiver-0123456789abcdef01234567";
 const API = "repos/stella/stella";
 const FILE = "scripts/fixture.ts";
@@ -223,6 +226,7 @@ const fakeGithub = ({ failure }: FakeOptions = {}) => {
   };
   const publish = async (body = BODY) =>
     publishRemoval({
+      disarmExisting: noDisarm,
       branch: BRANCH,
       baseSha: "base-sha",
       baseFiles: { [FILE]: BEFORE },
@@ -265,6 +269,7 @@ const healingPublication = async ({
   const actions = {
     openRemoval: async ({ outcome }) =>
       publishRemoval({
+        disarmExisting: noDisarm,
         branch: BRANCH,
         baseSha: "base-sha",
         baseFiles: outcome.baseFiles,
@@ -443,58 +448,80 @@ describe("the complete removal proposal inventory", () => {
 });
 
 describe("dated waiver removal publication", () => {
-  test("a held armed proposal is disarmed before any branch update", async () => {
-    const github = fakeGithub();
-    github.prs.push({ number: 42, title: REMOVAL_TITLE, body: BODY });
-    github.refs.set(BRANCH, "previous-head");
-    const calls: string[] = [];
-    const proposal: { state: "armed" | "unarmed" } = { state: "unarmed" };
-    const run = async (command: string[]) => {
-      if (command.at(-1) === "--disable-auto") {
-        expect(command).toEqual([
-          "gh",
-          "pr",
-          "merge",
-          "42",
-          "--repo",
-          "stella/stella",
-          "--disable-auto",
-        ]);
-        calls.push("disarm");
-        proposal.state = "unarmed";
-      } else {
-        calls.push("arm");
-        proposal.state = "armed";
-      }
-      return { exitCode: 0, stderr: "" };
-    };
-    await armRemoval({ number: 42, headSha: "a".repeat(40) }, run);
-    expect(proposal.state).toBe("armed");
-    calls.length = 0;
-    const published = await publishRemoval({
-      branch: BRANCH,
-      baseSha: "base-sha",
-      baseFiles: { [FILE]: BEFORE },
-      body: BODY,
-      files: { [FILE]: AFTER },
-      repo: "stella/stella",
-      disarmExisting: async (number) => disarmRemoval(number, run),
-      request: async (args, input) => {
-        if (input !== undefined && args.at(0)?.startsWith(`${API}/git/refs`)) {
-          calls.push("branch-update");
-          expect(proposal.state).toBe("unarmed");
+  test.each<[string, string | undefined, boolean]>([
+    ["held", "1", false],
+    ["unheld", undefined, true],
+  ])(
+    "an armed %s proposal is disarmed before any branch update",
+    async (_label, hold, rearmed) => {
+      const github = fakeGithub();
+      github.prs.push({ number: 42, title: REMOVAL_TITLE, body: BODY });
+      github.refs.set(BRANCH, "previous-head");
+      const calls: string[] = [];
+      const proposal: { state: "armed" | "unarmed" } = { state: "unarmed" };
+      const run = async (command: string[]) => {
+        if (command.at(-1) === "--disable-auto") {
+          expect(command).toEqual([
+            "gh",
+            "pr",
+            "merge",
+            "42",
+            "--repo",
+            "stella/stella",
+            "--disable-auto",
+          ]);
+          calls.push("disarm");
+          proposal.state = "unarmed";
+        } else {
+          calls.push("arm");
+          proposal.state = "armed";
         }
-        return github.request(args, input);
-      },
-    });
-    if (!published) {
-      throw new TypeError("Expected refreshed proposal");
-    }
-    await armRemovalUnlessHeld({ removal: published, mergeHold: "1", run });
-    expect(calls).toEqual(["disarm", "branch-update", "branch-update"]);
-    expect(published.number).toBe(42);
-    expect(proposal.state).toBe("unarmed");
-  });
+        return { exitCode: 0, stderr: "" };
+      };
+      await armRemoval({ number: 42, headSha: "a".repeat(40) }, run);
+      expect(proposal.state).toBe("armed");
+      calls.length = 0;
+      const published = await publishRemoval({
+        branch: BRANCH,
+        baseSha: "base-sha",
+        baseFiles: { [FILE]: BEFORE },
+        body: BODY,
+        files: { [FILE]: AFTER },
+        repo: "stella/stella",
+        disarmExisting: async (number) => disarmRemoval(number, run),
+        request: async (args, input) => {
+          if (
+            input !== undefined &&
+            args.at(0)?.startsWith(`${API}/git/refs`)
+          ) {
+            calls.push("branch-update");
+            expect(proposal.state).toBe("unarmed");
+          }
+          return github.request(args, input);
+        },
+      });
+      if (!published) {
+        throw new TypeError("Expected refreshed proposal");
+      }
+      // A prerequisite that fails after publication never reaches arming, so
+      // the refreshed proposal stays unarmed.
+      expect(proposal.state).toBe("unarmed");
+      // The fake signs with short ids; arming pins a full head SHA.
+      await armRemovalUnlessHeld({
+        removal: { number: published.number, headSha: "b".repeat(40) },
+        mergeHold: hold,
+        run,
+      });
+      expect(calls).toEqual([
+        "disarm",
+        "branch-update",
+        "branch-update",
+        ...(rearmed ? ["arm"] : []),
+      ]);
+      expect(published.number).toBe(42);
+      expect(proposal.state).toBe(rearmed ? "armed" : "unarmed");
+    },
+  );
 
   test("a hold disarm failure prevents every publication write", async () => {
     const github = fakeGithub();
@@ -601,6 +628,7 @@ describe("dated waiver removal publication", () => {
     const body = "Verified 20/20 probes at new-main-sha.";
     const publishFresh = async () =>
       publishRemoval({
+        disarmExisting: noDisarm,
         branch: BRANCH,
         baseSha: "new-main-sha",
         baseFiles: { [FILE]: BEFORE },
@@ -638,6 +666,7 @@ describe("dated waiver removal publication", () => {
     const github = fakeGithub();
     expect(
       await publishRemoval({
+        disarmExisting: noDisarm,
         branch: BRANCH,
         baseSha: "base-sha",
         baseFiles: { [FILE]: AFTER },
@@ -655,6 +684,7 @@ describe("dated waiver removal publication", () => {
     await github.publish();
     const publishNoop = async () =>
       publishRemoval({
+        disarmExisting: noDisarm,
         branch: BRANCH,
         baseSha: "base-sha",
         baseFiles: { [FILE]: AFTER },
@@ -685,6 +715,7 @@ describe("dated waiver removal publication", () => {
     expect(
       await rejectionOf(
         publishRemoval({
+          disarmExisting: noDisarm,
           branch: BRANCH,
           baseSha: "base-sha",
           baseFiles: { [FILE]: AFTER },
@@ -731,6 +762,7 @@ describe("dated waiver removal publication", () => {
       expect(
         await rejectionOf(
           publishRemoval({
+            disarmExisting: noDisarm,
             branch: BRANCH,
             baseSha: "base-sha",
             baseFiles: {},
@@ -849,6 +881,7 @@ describe("dated waiver removal publication", () => {
       expect(
         await rejectionOf(
           publishRemoval({
+            disarmExisting: noDisarm,
             ...fixture,
             baseSha: "base-sha",
             baseFiles: {},
@@ -888,6 +921,7 @@ describe("independent proposal file failures", () => {
       let githubCalls = 0;
       const failure = await rejectionOf(
         publishRemoval({
+          disarmExisting: noDisarm,
           branch: BRANCH,
           baseSha: "base-sha",
           baseFiles: {},
