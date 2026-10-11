@@ -126,7 +126,7 @@ describe("chat thread messages", () => {
             }}
           />,
         );
-        expect(renderedText(html)).toContain("Document review");
+        expect(renderedText(html)).toContain(messages.chat.activity.review);
         expect(
           renderedText(html),
           JSON.stringify({ oracle: "chat.render.cards-match-stored" }),

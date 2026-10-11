@@ -114,124 +114,295 @@ test("sequential gated and ungated calls execute in document order after approva
         },
       ),
       async (prefix, siblings) => {
-        // Every case reaches the gate before a dependent read and mutation.
-        const names = [
-          ...prefix,
-          "approved_write",
-          "read_document",
-          "write_document",
-          ...siblings,
-        ];
-        const calls = names.map((toolName, index) => ({
-          toolCallId: `call-${index}`,
-          toolName,
-          arguments: "{}",
-        }));
-        const executed: string[] = [];
-        const versions: number[] = [];
-        let documentVersion = 0;
-        let iteration = 0;
-        const adapter: AnyTextAdapter = {
-          ...scriptedAdapterBase,
-          async *chatStream({ model, runId, threadId }) {
-            const index = iteration++;
-            yield* scriptedTurnChunks(
-              index === 0
-                ? { type: "step", toolCalls: calls }
-                : { type: "step", text: "Document updated", toolCalls: [] },
-              {
-                index,
-                model,
-                runId: runId ?? "run",
-                threadId: threadId ?? "thread",
-              },
-            );
-          },
-          structuredOutput: () => panic("No structured output in this test"),
-        };
-        const tools = [
-          toolDefinition({
-            name: "approved_write",
-            description: "Approved document write",
-            needsApproval: true,
-          }).server(async () => {
-            await sleep(0);
-            executed.push("approved_write");
-            versions.push(++documentVersion);
-            return { version: documentVersion };
-          }),
-          toolDefinition({
-            name: "write_document",
-            description: "Document write",
-          }).server(async () => {
-            await sleep(0);
-            executed.push("write_document");
-            versions.push(++documentVersion);
-            return { version: documentVersion };
-          }),
-          toolDefinition({
-            name: "read_document",
-            description: "Document read",
-          }).server(() => {
-            executed.push("read_document");
-            versions.push(documentVersion);
-            return { version: documentVersion };
-          }),
-        ];
-        const { processor } = createStreamMessageCapture({
-          initialMessages: [],
-          capture: (message) => message,
-        });
-        for await (const chunk of streamChatChunks({
-          adapter,
-          messages: [],
-          tools,
-        })) {
-          processor.processChunk(chunk);
-        }
-        expect(iteration).toBe(1);
-        expect(executed).toEqual(prefix);
-        const pending = processor
-          .getMessages()
-          .flatMap(({ parts }) => parts)
-          .filter(
-            (part) => part.type === "tool-call" && part.approval !== undefined,
-          );
-        expect(pending).toHaveLength(
-          names.filter((name) => name === "approved_write").length,
-        );
-        for (const part of pending) {
-          if (part.type !== "tool-call" || part.approval === undefined) {
-            return panic("Approval part lost its approval");
+        for (const approved of [true, false]) {
+          // Every case reaches the gate before a dependent read and mutation.
+          const names = [
+            ...prefix,
+            "approved_write",
+            "read_document",
+            "write_document",
+            ...siblings,
+          ];
+          const calls = names.map((toolName, index) => ({
+            toolCallId: `call-${index}`,
+            toolName,
+            arguments: "{}",
+          }));
+          const executed: string[] = [];
+          const versions: number[] = [];
+          let documentVersion = 0;
+          let iteration = 0;
+          const adapter: AnyTextAdapter = {
+            ...scriptedAdapterBase,
+            async *chatStream({ model, runId, threadId }) {
+              const index = iteration++;
+              yield* scriptedTurnChunks(
+                index === 0
+                  ? { type: "step", toolCalls: calls }
+                  : { type: "step", text: "Document updated", toolCalls: [] },
+                {
+                  index,
+                  model,
+                  runId: runId ?? "run",
+                  threadId: threadId ?? "thread",
+                },
+              );
+            },
+            structuredOutput: () => panic("No structured output in this test"),
+          };
+          const tools = [
+            toolDefinition({
+              name: "approved_write",
+              description: "Approved document write",
+              needsApproval: true,
+            }).server(async () => {
+              await sleep(0);
+              executed.push("approved_write");
+              versions.push(++documentVersion);
+              return { version: documentVersion };
+            }),
+            toolDefinition({
+              name: "write_document",
+              description: "Document write",
+            }).server(async () => {
+              await sleep(0);
+              executed.push("write_document");
+              versions.push(++documentVersion);
+              return { version: documentVersion };
+            }),
+            toolDefinition({
+              name: "read_document",
+              description: "Document read",
+            }).server(() => {
+              executed.push("read_document");
+              versions.push(documentVersion);
+              return { version: documentVersion };
+            }),
+          ];
+          const { processor } = createStreamMessageCapture({
+            initialMessages: [],
+            capture: (message) => message,
+          });
+          for await (const chunk of streamChatChunks({
+            adapter,
+            messages: [],
+            tools,
+          })) {
+            processor.processChunk(chunk);
           }
-          processor.addToolApprovalResponse(part.approval.id, true);
-        }
-        for await (const chunk of streamChatChunks({
-          adapter,
-          messages: processor.getMessages(),
-          tools,
-        })) {
-          processor.processChunk(chunk);
-        }
-        expect(iteration).toBe(2);
-        expect(executed).toEqual(names);
-        let expectedVersion = 0;
-        expect(versions).toEqual(
-          names.map((name) =>
-            name === "read_document" ? expectedVersion : ++expectedVersion,
-          ),
-        );
-        expect(
-          processor
+          expect(iteration).toBe(1);
+          expect(executed).toEqual(prefix);
+          const pending = processor
             .getMessages()
             .flatMap(({ parts }) => parts)
-            .filter((part) => part.type === "tool-call")
-            .every((part) => part.state === "complete"),
-        ).toBe(true);
+            .filter(
+              (part) =>
+                part.type === "tool-call" && part.approval !== undefined,
+            );
+          expect(pending).toHaveLength(
+            names.filter((name) => name === "approved_write").length,
+          );
+          for (const part of pending) {
+            if (part.type !== "tool-call" || part.approval === undefined) {
+              return panic("Approval part lost its approval");
+            }
+            processor.addToolApprovalResponse(part.approval.id, approved);
+          }
+          for await (const chunk of streamChatChunks({
+            adapter,
+            messages: processor.getMessages(),
+            tools,
+          })) {
+            processor.processChunk(chunk);
+          }
+          expect(iteration).toBe(2);
+          const executableNames = names.filter(
+            (name) => approved || name !== "approved_write",
+          );
+          expect(executed).toEqual(executableNames);
+          let expectedVersion = 0;
+          expect(versions).toEqual(
+            executableNames.map((name) =>
+              name === "read_document" ? expectedVersion : ++expectedVersion,
+            ),
+          );
+          const settledCalls = processor
+            .getMessages()
+            .flatMap(({ parts }) => parts)
+            .filter((part) => part.type === "tool-call");
+          expect(settledCalls).toHaveLength(names.length);
+          const settledResults = processor
+            .getMessages()
+            .flatMap(({ parts }) => parts)
+            .filter((part) => part.type === "tool-result");
+          expect(settledResults).toHaveLength(names.length);
+          for (const part of settledCalls) {
+            const result = settledResults.find(
+              ({ toolCallId }) => toolCallId === part.id,
+            );
+            if (!approved && part.name === "approved_write") {
+              expect(part.approval?.approved).toBe(false);
+              expect(result).toMatchObject({
+                state: "error",
+                outcome: "denied",
+              });
+            } else {
+              expect(part.state).toBe("complete");
+              expect(result?.state).toBe("complete");
+            }
+          }
+        }
       },
     ),
     { numRuns: 20 },
   );
+});
+
+test("a plain client request after a pending gate can finish while server successors wait", async () => {
+  let iteration = 0;
+  let documentVersion = 0;
+  const executed: string[] = [];
+  const versions: number[] = [];
+  const adapter: AnyTextAdapter = {
+    ...scriptedAdapterBase,
+    async *chatStream({ model, runId, threadId }) {
+      const index = iteration++;
+      yield* scriptedTurnChunks(
+        index === 0
+          ? {
+              type: "step",
+              toolCalls: [
+                "approved_write",
+                "client_lookup",
+                "write_document",
+                "read_document",
+              ].map((toolName, at) => ({
+                toolCallId: `client-order-${at}`,
+                toolName,
+                arguments: "{}",
+              })),
+            }
+          : { type: "step", text: "Document updated", toolCalls: [] },
+        { index, model, runId: runId ?? "run", threadId: threadId ?? "thread" },
+      );
+    },
+    structuredOutput: () => panic("No structured output in this test"),
+  };
+  const tools = [
+    toolDefinition({
+      name: "approved_write",
+      description: "Approved write",
+      needsApproval: true,
+    }).server(async () => {
+      await sleep(0);
+      executed.push("approved_write");
+      versions.push(++documentVersion);
+      return { version: documentVersion };
+    }),
+    toolDefinition({
+      name: "client_lookup",
+      description: "Client lookup",
+    }).client(),
+    toolDefinition({
+      name: "write_document",
+      description: "Document write",
+    }).server(async () => {
+      await sleep(0);
+      executed.push("write_document");
+      versions.push(++documentVersion);
+      return { version: documentVersion };
+    }),
+    toolDefinition({
+      name: "read_document",
+      description: "Document read",
+    }).server(() => {
+      executed.push("read_document");
+      versions.push(documentVersion);
+      return { version: documentVersion };
+    }),
+  ];
+  const { processor } = createStreamMessageCapture({
+    initialMessages: [],
+    capture: (message) => message,
+  });
+  const interrupts: string[] = [];
+  for await (const chunk of streamChatChunks({
+    adapter,
+    messages: [],
+    tools,
+  })) {
+    processor.processChunk(chunk);
+    if (
+      chunk.type === EventType.RUN_FINISHED &&
+      chunk.outcome?.type === "interrupt"
+    ) {
+      interrupts.push(
+        ...chunk.outcome.interrupts.map(
+          (interrupt) => `${interrupt.toolCallId}:${interrupt.reason}`,
+        ),
+      );
+    }
+  }
+  expect(iteration).toBe(1);
+  expect(interrupts).toEqual([
+    "client-order-0:tool_call",
+    "client-order-1:tanstack:client_tool_execution",
+  ]);
+  expect(executed).toEqual([]);
+  const owningMessageId = processor
+    .getMessages()
+    .find(({ parts }) =>
+      parts.some(
+        (part) => part.type === "tool-call" && part.id === "client-order-1",
+      ),
+    )?.id;
+  expect(owningMessageId).toBeDefined();
+  const clientOutput = { value: "Client lookup finished" };
+  processor.addToolResult("client-order-1", clientOutput);
+  const completedClient = processor
+    .getMessages()
+    .find(({ id }) => id === owningMessageId)
+    ?.parts.find(
+      (part) => part.type === "tool-call" && part.id === "client-order-1",
+    );
+  expect(completedClient).toMatchObject({
+    type: "tool-call",
+    state: "complete",
+    output: clientOutput,
+  });
+  expect(executed).toEqual([]);
+  const pending = processor
+    .getMessages()
+    .flatMap(({ parts }) => parts)
+    .find((part) => part.type === "tool-call" && part.id === "client-order-0");
+  if (pending?.type !== "tool-call" || pending.approval === undefined) {
+    return panic("The gate must remain pending while the client finishes");
+  }
+  expect(pending.state).toBe("approval-requested");
+  processor.addToolApprovalResponse(pending.approval.id, true);
+  for await (const chunk of streamChatChunks({
+    adapter,
+    messages: processor.getMessages(),
+    tools,
+  })) {
+    processor.processChunk(chunk);
+  }
+  expect(iteration).toBe(2);
+  expect(executed).toEqual([
+    "approved_write",
+    "write_document",
+    "read_document",
+  ]);
+  expect(versions).toEqual([1, 2, 2]);
+  const settledCalls = processor
+    .getMessages()
+    .flatMap(({ parts }) => parts)
+    .filter((part) => part.type === "tool-call");
+  expect(settledCalls).toHaveLength(4);
+  expect(settledCalls.every((part) => part.state === "complete")).toBe(true);
+  expect(
+    settledCalls.find((part) => part.id === "client-order-1"),
+  ).toMatchObject({ output: clientOutput });
 });
 
 type StrippedChunkType = keyof typeof STRIPPED_CHUNK_KEYS;

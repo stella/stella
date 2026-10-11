@@ -282,6 +282,114 @@ type SnapshotTextOptions = {
   textSelections: Map<MessagePart, MessagePart[]>;
 };
 
+type CanonicalTextRange = {
+  canonical: Extract<MessagePart, { type: "text" | "thinking" }>;
+  start: number;
+  end: number;
+};
+type IncomingTextRange = {
+  incoming: Extract<MessagePart, { type: "text" | "thinking" }>;
+  start: number;
+  end: number;
+};
+type EmptyTextOptions = {
+  canonicalRanges: CanonicalTextRange[];
+  incomingRanges: IncomingTextRange[];
+};
+type SignedTextBoundariesOptions = {
+  canonicalRanges: CanonicalTextRange[];
+  incomingRanges: IncomingTextRange[];
+  boundaries: Set<number>;
+};
+const preserveSignedTextBoundaries = ({
+  canonicalRanges,
+  incomingRanges,
+  boundaries,
+}: SignedTextBoundariesOptions) => {
+  // A signature authenticates the entire provider block, never a slice.
+  // Signed snapshots own their boundaries; unsigned snapshots cannot split
+  // an already signed canonical block or copy its signature onto new bytes.
+  const incomingSignedRanges = incomingRanges.filter(
+    ({ incoming }) =>
+      incoming.type === "thinking" && incoming.signature !== undefined,
+  );
+  const signedRanges = [
+    ...incomingSignedRanges,
+    ...canonicalRanges.filter(
+      ({ canonical, start, end }) =>
+        canonical.type === "thinking" &&
+        canonical.signature !== undefined &&
+        !incomingSignedRanges.some(
+          (incoming) => incoming.start < end && incoming.end > start,
+        ),
+    ),
+  ];
+  for (const range of signedRanges) {
+    boundaries.add(range.start);
+    boundaries.add(range.end);
+  }
+  for (const boundary of boundaries) {
+    if (
+      signedRanges.some(
+        (range) => range.start < boundary && boundary < range.end,
+      )
+    ) {
+      boundaries.delete(boundary);
+    }
+  }
+};
+
+type TextualSnapshotMetadataOptions = {
+  canonical: Extract<MessagePart, { type: "text" | "thinking" }>;
+  incoming: Extract<MessagePart, { type: "text" | "thinking" }>;
+  content: string;
+};
+
+// Completion snapshots own newly supplied replay metadata; an unsigned replay
+// cannot erase the provider artefact already attached to compatible content.
+const mergeTextualSnapshotMetadata = ({
+  canonical,
+  incoming,
+  content,
+}: TextualSnapshotMetadataOptions) => {
+  switch (incoming.type) {
+    case "text": {
+      if (canonical.type !== "text") {
+        return panic("Textual snapshot metadata compared different part types");
+      }
+      const metadata =
+        incoming.metadata === undefined
+          ? canonical.metadata
+          : incoming.metadata;
+      return {
+        ...canonical,
+        ...incoming,
+        content,
+        ...(metadata === undefined ? {} : { metadata }),
+      };
+    }
+    case "thinking": {
+      if (canonical.type !== "thinking") {
+        return panic("Textual snapshot metadata compared different part types");
+      }
+      const signature = incoming.signature ?? canonical.signature;
+      const stepId = incoming.stepId ?? canonical.stepId;
+      const redacted = incoming.redacted ?? canonical.redacted;
+      return {
+        ...canonical,
+        ...incoming,
+        content,
+        ...(signature === undefined ? {} : { signature }),
+        ...(stepId === undefined ? {} : { stepId }),
+        ...(redacted === undefined ? {} : { redacted }),
+      };
+    }
+    default:
+      incoming satisfies never;
+      return panic("Unhandled textual snapshot metadata");
+  }
+};
+
 type DeltaPartsOptions = {
   before: UIMessage["parts"];
   after: UIMessage["parts"];
@@ -444,6 +552,55 @@ export class SnapshotPartReconciler {
     return parts;
   }
 
+  reconcileEmptyText({ canonicalRanges, incomingRanges }: EmptyTextOptions) {
+    const fragments = [];
+    const emptySelections = new Map<MessagePart, MessagePart[]>();
+    const consumedEmpty = new Set<MessagePart>();
+    for (const range of incomingRanges) {
+      if (range.start !== range.end) {
+        continue;
+      }
+      const canonical = canonicalRanges.find(
+        (candidate) =>
+          candidate.start === range.start &&
+          candidate.start === candidate.end &&
+          !consumedEmpty.has(candidate.canonical),
+      )?.canonical;
+      const selected =
+        canonical === undefined
+          ? this.snapshot(range.incoming)
+          : this.inherit(
+              mergeTextualSnapshotMetadata({
+                canonical,
+                incoming: range.incoming,
+                content: "",
+              }),
+              canonical,
+            );
+      if (canonical !== undefined) {
+        consumedEmpty.add(canonical);
+      }
+      fragments.push({
+        canonical: canonical ?? range.incoming,
+        selected,
+        start: range.start,
+        end: range.end,
+      });
+      emptySelections.set(range.incoming, [selected]);
+    }
+    for (const range of canonicalRanges) {
+      if (range.start === range.end && !consumedEmpty.has(range.canonical)) {
+        fragments.push({
+          canonical: range.canonical,
+          selected: range.canonical,
+          start: range.start,
+          end: range.end,
+        });
+      }
+    }
+    return { fragments, emptySelections };
+  }
+
   reconcileText({
     previousParts,
     snapshotParts,
@@ -507,11 +664,12 @@ export class SnapshotPartReconciler {
     const boundaries = new Set<number>();
     let offset = 0;
     const canonicalRanges = sameKind.map((canonical) => {
+      const start = offset;
       offset += canonical.content.length;
       if (canonical !== last) {
         boundaries.add(offset);
       }
-      return { canonical, end: offset };
+      return { canonical, start, end: offset };
     });
     offset = 0;
     let previousIndex = -1;
@@ -532,8 +690,16 @@ export class SnapshotPartReconciler {
       previousIndex = index;
     }
     boundaries.add(snapshotContent.length);
+    preserveSignedTextBoundaries({
+      canonicalRanges,
+      incomingRanges,
+      boundaries,
+    });
     let start = 0;
-    const fragments = [];
+    const { fragments, emptySelections } = this.reconcileEmptyText({
+      canonicalRanges,
+      incomingRanges,
+    });
     for (const end of [...boundaries].toSorted((left, right) => left - right)) {
       if (end <= start) {
         continue;
@@ -542,13 +708,37 @@ export class SnapshotPartReconciler {
       const canonical =
         canonicalRanges.find((range) => fragmentStart < range.end)?.canonical ??
         last;
+      const incoming = incomingRanges.find(
+        (range) => fragmentStart < range.end,
+      )?.incoming;
+      if (incoming === undefined) {
+        panic("Textual snapshot fragment has no incoming range");
+      }
+      const metadataOwner =
+        canonical.type === "thinking" &&
+        canonical.signature !== undefined &&
+        !canonicalRanges.some(
+          (range) =>
+            range.canonical === canonical &&
+            range.start === fragmentStart &&
+            range.end === end,
+        )
+          ? incoming
+          : canonical;
       const selected = this.inherit(
-        { ...canonical, content: snapshotContent.slice(start, end) },
+        mergeTextualSnapshotMetadata({
+          canonical: metadataOwner,
+          incoming,
+          content: snapshotContent.slice(start, end),
+        }),
         canonical,
       );
       fragments.push({ canonical, selected, start, end });
       start = end;
     }
+    fragments.sort(
+      (left, right) => left.start - right.start || left.end - right.end,
+    );
     for (const canonical of sameKind) {
       const index = parts.indexOf(canonical);
       if (index === -1) {
@@ -565,12 +755,13 @@ export class SnapshotPartReconciler {
     for (const range of incomingRanges) {
       textSelections.set(
         range.incoming,
-        fragments
-          .filter(
-            (fragment) =>
-              fragment.start < range.end && fragment.end > range.start,
-          )
-          .map((fragment) => fragment.selected),
+        emptySelections.get(range.incoming) ??
+          fragments
+            .filter(
+              (fragment) =>
+                fragment.start < range.end && fragment.end > range.start,
+            )
+            .map((fragment) => fragment.selected),
       );
     }
   }

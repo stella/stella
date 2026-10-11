@@ -419,3 +419,108 @@ test("SDK snapshot normalization detects removed slots and empty projections", (
     }),
   ).toEqual([]);
 });
+
+const textualMetadataCases = [
+  {
+    name: "a signed snapshot merges unsigned thinking segments into one provider block",
+    initial: [
+      { type: "thinking", content: "A", stepId: "streamed-step" },
+      { type: "thinking", content: "B", stepId: "streamed-step" },
+    ],
+    incoming: [
+      { type: "thinking", content: "AB", signature: "opaque-signature" },
+    ],
+    replay: [
+      { type: "thinking", content: "A" },
+      { type: "thinking", content: "B" },
+    ],
+    expected: [
+      {
+        type: "thinking",
+        content: "AB",
+        stepId: "streamed-step",
+        signature: "opaque-signature",
+      },
+    ],
+  },
+  {
+    name: "unsigned snapshot segments cannot split a canonical signed thinking block",
+    initial: [
+      {
+        type: "thinking",
+        content: "AB",
+        stepId: "streamed-step",
+        signature: "opaque-signature",
+      },
+    ],
+    incoming: [
+      { type: "thinking", content: "A" },
+      { type: "thinking", content: "B" },
+    ],
+    replay: [{ type: "thinking", content: "AB" }],
+    expected: [
+      {
+        type: "thinking",
+        content: "AB",
+        stepId: "streamed-step",
+        signature: "opaque-signature",
+      },
+    ],
+  },
+  {
+    name: "an empty redacted thinking snapshot retains its provider artefact",
+    initial: [{ type: "thinking", content: "", stepId: "streamed-step" }],
+    incoming: [
+      {
+        type: "thinking",
+        content: "",
+        signature: "opaque-redacted-data",
+        redacted: true,
+      },
+    ],
+    replay: [{ type: "thinking", content: "" }],
+    expected: [
+      {
+        type: "thinking",
+        content: "",
+        stepId: "streamed-step",
+        signature: "opaque-redacted-data",
+        redacted: true,
+      },
+    ],
+  },
+  {
+    name: "supplied null text metadata replaces canonical metadata and survives an absent replay field",
+    initial: [{ type: "text", content: "AB", metadata: { provider: "old" } }],
+    incoming: [{ type: "text", content: "AB", metadata: null }],
+    replay: [{ type: "text", content: "AB" }],
+    expected: [{ type: "text", content: "AB", metadata: null }],
+  },
+] satisfies {
+  name: string;
+  initial: UIMessage["parts"];
+  incoming: UIMessage["parts"];
+  replay: UIMessage["parts"];
+  expected: UIMessage["parts"];
+}[];
+
+for (const scenario of textualMetadataCases) {
+  test(scenario.name, () => {
+    const failures: SnapshotReconciliationError[] = [];
+    const owner = new SnapshotPartReconciler(scenario.initial, (error) =>
+      failures.push(error),
+    );
+    let parts: UIMessage["parts"] = scenario.initial;
+    for (const incoming of [scenario.incoming, scenario.replay]) {
+      parts = owner.reconcile({
+        previous: { id: "answer", role: "assistant", parts },
+        snapshot: { id: "answer", role: "assistant", parts: incoming },
+        preservesPartLayout: true,
+        parseResultOutput: (content) => content,
+      });
+      expect(parts).toEqual(scenario.expected);
+    }
+    expect(failures).toEqual([]);
+    expect(owner.failure).toBeUndefined();
+  });
+}

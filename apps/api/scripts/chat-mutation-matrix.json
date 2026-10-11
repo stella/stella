@@ -4,6 +4,34 @@
     {
       "fix": "#5256",
       "status": "active",
+      "id": "textual-snapshot-retains-provider-metadata",
+      "behaviour": "A signed snapshot enriches streamed thinking; later unsigned snapshots retain its final signature and provider fields.",
+      "file": "src/handlers/chat/snapshot-reconciliation.ts",
+      "search": "mergeTextualSnapshotMetadata({\n          canonical: metadataOwner,\n          incoming,\n          content: snapshotContent.slice(start, end),\n        })",
+      "replace": "{ ...canonical, content: snapshotContent.slice(start, end) }",
+      "scenario": {
+        "file": "src/handlers/chat/snapshot-reconciliation.property.test.ts",
+        "test": "signed thinking snapshots enrich streamed content and survive later unsigned snapshots"
+      },
+      "oracle": "chat.live.equals-reload"
+    },
+    {
+      "fix": "#5256",
+      "status": "active",
+      "id": "unknown-activities-are-observed",
+      "behaviour": "Unknown activity renderers report one structural client telemetry error without displaying internal data.",
+      "file": "../web/src/components/chat/chat-thread-messages.tsx",
+      "search": "    analytics.captureError(\n      new ClientTelemetryError({\n        area: \"chat-unknown-activity\",\n        message: \"A chat activity has no registered renderer\",\n      }),\n    );",
+      "replace": "    return;",
+      "scenario": {
+        "file": "../web/src/components/chat/chat-activity-part.dom.test.tsx",
+        "test": "unknown chat activities report once without rendering or reporting private payloads"
+      },
+      "oracle": "chat.client.no-errors"
+    },
+    {
+      "fix": "#5256",
+      "status": "active",
       "id": "denied-approval-has-no-failure-details",
       "behaviour": "A snapshot denial shows one denial status and no tool failure details.",
       "file": "../web/src/components/chat/tool-approval-card.tsx",
@@ -35,7 +63,7 @@
       "id": "unknown-activities-are-omitted",
       "behaviour": "Unknown activity types do not render a user-facing activity card.",
       "file": "../web/src/components/chat/chat-thread-messages.tsx",
-      "search": "    default:\n      return null;\n  }\n\n  return (\n    <figure",
+      "search": "    default:\n      return <UnknownChatActivity key={part.activityType} />;\n  }\n\n  return (\n    <figure",
       "replace": "    default:\n      labelKey = \"chat.thinking\";\n  }\n\n  return (\n    <figure",
       "scenario": {
         "file": "../web/src/components/chat/chat-thread-messages.test.tsx",

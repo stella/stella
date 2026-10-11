@@ -1526,6 +1526,8 @@ const introducedAnchorsArbitrary = fc.record({
   kind: fc.constantFrom("text", "thinking"),
   streamed: segmentTokenArbitrary,
   completion: segmentTokenArbitrary,
+  snapshotMetadata: fc.boolean(),
+  metadataToken: segmentTokenArbitrary,
   positions: fc.array(fc.nat({ max: 100 }), { minLength: 4, maxLength: 4 }),
 });
 
@@ -1618,6 +1620,82 @@ test("streamed text completion stays after its newly introduced call", async () 
   expect(sdkParts(reload)).toEqual(expected);
 });
 
+test("signed thinking snapshots enrich streamed content and survive later unsigned snapshots", async () => {
+  const answer = { type: "text", content: "Answer" } as const;
+  const initial = {
+    type: "thinking",
+    content: "Reason",
+    stepId: "initial-step",
+    signature: "initial-signature",
+    redacted: false,
+  } as const;
+  const final = {
+    type: "thinking",
+    content: "Reason",
+    stepId: "final-step",
+    signature: "final-signature",
+    redacted: false,
+  } as const;
+  const expected = [answer, final];
+  const chunks: StreamChunk[] = [
+    {
+      type: EventType.RUN_STARTED,
+      runId: "signed-run",
+      threadId: "signed-thread",
+    },
+    {
+      type: EventType.TEXT_MESSAGE_START,
+      messageId: MESSAGE_ID,
+      role: "assistant",
+    },
+    {
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId: MESSAGE_ID,
+      delta: "Answer",
+    },
+    {
+      type: EventType.REASONING_MESSAGE_CONTENT,
+      messageId: "unsigned-reasoning",
+      delta: "Reason",
+    },
+    snapshot([answer, initial]),
+    snapshot(expected),
+    snapshot([answer, { type: "thinking", content: "Reason" }]),
+    {
+      type: EventType.RUN_FINISHED,
+      runId: "signed-run",
+      threadId: "signed-thread",
+      finishReason: "stop",
+    },
+  ];
+  const { reload, emitted } = await collectTurn(chunks, (parts) => {
+    expect(
+      parts,
+      JSON.stringify({ oracle: CHAT_ORACLE.liveEqualsReload }),
+    ).toEqual(expected);
+  });
+  expect(
+    sdkParts(reload),
+    JSON.stringify({ oracle: CHAT_ORACLE.liveEqualsReload }),
+  ).toEqual(expected);
+  const live = createStreamMessageCapture({
+    initialMessages: [],
+    capture: (message) => message,
+  });
+  const expectedSnapshots = [[answer, initial], expected, expected];
+  let index = 0;
+  for (const chunk of emitted) {
+    live.processor.processChunk(chunk);
+    if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
+      expect(
+        live.processor.getMessages().flatMap(({ parts }) => parts),
+        JSON.stringify({ oracle: CHAT_ORACLE.liveEqualsReload }),
+      ).toEqual(expectedSnapshots.at(index++));
+    }
+  }
+  expect(index).toBe(expectedSnapshots.length);
+});
+
 test(
   "streamed textual completions preserve newly introduced lifecycle anchors",
   async () => {
@@ -1626,14 +1704,44 @@ test(
       fc.asyncProperty(introducedAnchorsArbitrary, async (scenario) => {
         for (const completion of [scenario.completion, ""]) {
           const content = scenario.streamed + completion;
-          const expected = anchoredText(
+          const layout = anchoredText(
             scenario.kind,
             content,
             scenario.positions,
           );
           if (scenario.kind === "thinking") {
-            expected.unshift({ type: "text", content: "Answer" });
+            layout.unshift({ type: "text", content: "Answer" });
           }
+          const withMetadata = (phase: "initial" | "final") =>
+            layout.map((part) => {
+              if (!scenario.snapshotMetadata || part.type !== scenario.kind) {
+                return part;
+              }
+              switch (part.type) {
+                case "text":
+                  return {
+                    ...part,
+                    metadata: {
+                      provider: `${phase}:${scenario.metadataToken}`,
+                    },
+                  };
+                case "thinking":
+                  return {
+                    ...part,
+                    signature: `${phase}:${scenario.metadataToken}:${part.content}`,
+                    redacted: false,
+                  };
+                default:
+                  return panic("Generated metadata targeted a nontextual part");
+              }
+            });
+          const expected = withMetadata("final");
+          const unsigned = layout.map((part) => {
+            if (part.type === "thinking") {
+              return { type: part.type, content: part.content };
+            }
+            return part;
+          });
           const chunks: StreamChunk[] = [
             {
               type: EventType.RUN_STARTED,
@@ -1666,12 +1774,17 @@ test(
               delta: scenario.streamed,
             });
           }
-          chunks.push(snapshot(expected), {
-            type: EventType.RUN_FINISHED,
-            runId: "introduced-run",
-            threadId: "introduced-thread",
-            finishReason: "stop",
-          });
+          chunks.push(
+            snapshot(withMetadata("initial")),
+            snapshot(expected),
+            snapshot(unsigned),
+            {
+              type: EventType.RUN_FINISHED,
+              runId: "introduced-run",
+              threadId: "introduced-thread",
+              finishReason: "stop",
+            },
+          );
           // Explicit snapshots describe both retained or completed bytes
           // and the positions of newly introduced lifecycle parts.
           const { reload, emitted } = await collectTurn(chunks, (parts) => {

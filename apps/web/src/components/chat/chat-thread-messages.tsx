@@ -109,16 +109,17 @@ import {
   mentionTagAttrs,
 } from "@/components/references/reference.logic";
 import type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useMaybeStickToBottomContext } from "@/hooks/use-stick-to-bottom";
 import type { TranslationKey } from "@/i18n/types";
-import { getAnalytics } from "@/lib/analytics/provider";
+import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { chatRefusal } from "@/lib/errors/api";
+import { ClientTelemetryError } from "@/lib/errors/telemetry";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   getUserFileContentUrl,
@@ -1489,6 +1490,24 @@ const TextMessageParts = ({
   </>
 );
 
+const UnknownChatActivity = () => {
+  const analytics = useAnalytics();
+  const reported = useRef(false);
+  useMountEffect(() => {
+    if (reported.current) {
+      return;
+    }
+    reported.current = true;
+    analytics.captureError(
+      new ClientTelemetryError({
+        area: "chat-unknown-activity",
+        message: "A chat activity has no registered renderer",
+      }),
+    );
+  });
+  return null;
+};
+
 type ChatActivityPartProps = {
   part: Extract<ChatUIPart, { type: "activity" }>;
 };
@@ -1501,10 +1520,10 @@ const ChatActivityPart = ({ part }: ChatActivityPartProps) => {
       labelKey = "chat.thinking";
       break;
     case "review":
-      labelKey = "navigation.shortcutCategories.review";
+      labelKey = "chat.activity.review";
       break;
     default:
-      return null;
+      return <UnknownChatActivity key={part.activityType} />;
   }
 
   return (
