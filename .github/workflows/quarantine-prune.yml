@@ -91,12 +91,16 @@ jobs:
 
           armed_pr="$(gh pr list --repo "$GITHUB_REPOSITORY" \
             --state open --base main --head "$PRUNE_BRANCH" \
-            --json number,autoMergeRequest \
-            --jq 'map(select(.autoMergeRequest != null))[0].number // empty')"
+            --json number,isCrossRepository,autoMergeRequest \
+            --jq 'map(select(.isCrossRepository == false and .autoMergeRequest != null))[0].number // empty')"
           if [[ -z "$armed_pr" ]]; then
             echo "Existing quarantine removal proposal is not armed."
             exit 0
           fi
+
+          # A proposal already in the merge queue leaves it when the refresh
+          # pushes a new head, and under a merge hold the queue's required
+          # result refuses it, so disarming is what remains to do here.
 
           gh pr merge "$armed_pr" --repo "$GITHUB_REPOSITORY" --disable-auto
 

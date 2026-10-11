@@ -33,7 +33,7 @@ cat > "$fixture_root/gh" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
 if [[ "$1 $2" == 'pr list' ]]; then
-  if [[ "$*" == 'pr list --repo stella/stella --state open --base main --head chore/prune-quarantine-excludes --json number,autoMergeRequest --jq map(select(.autoMergeRequest != null))[0].number // empty' ]]; then
+  if [[ "$*" == 'pr list --repo stella/stella --state open --base main --head chore/prune-quarantine-excludes --json number,isCrossRepository,autoMergeRequest --jq map(select(.isCrossRepository == false and .autoMergeRequest != null))[0].number // empty' ]]; then
     echo disarm-list >> "$CALLS"
     printf '%s\n' "$ARMED_NUMBER"
     exit 0
