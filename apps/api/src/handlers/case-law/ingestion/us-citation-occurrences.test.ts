@@ -827,7 +827,7 @@ describe("case captions", () => {
 
   test("prose particles before government parties preserve repeated captions", () => {
     assertProperty(
-      "us-citation-caption-prose-particles",
+      "prose particles before government parties preserve repeated captions",
       fc.property(
         fc.constantFrom("de", "la", "du", "von", "van"),
         fc.constantFrom("People", "State", "United States"),

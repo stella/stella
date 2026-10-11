@@ -196,7 +196,7 @@ test("every exact table spelling proves a next-volume boundary", () => {
     assertBoundary({ spelling, volume: 9137, page: 9246 });
   }
   assertProperty(
-    "exact table spelling proves numeric role despite identity ambiguity",
+    "every exact table spelling proves a next-volume boundary",
     fc.property(
       fc.record({
         spelling: fc.constantFrom(...spellings),
