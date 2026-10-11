@@ -19,3 +19,17 @@ test("allows platform identifiers and unrelated package names", async () => {
     ),
   ).toEqual([]);
 });
+
+test("recognizes an imported module loader", async () => {
+  expect(
+    await lintSingleRule(
+      "no-nanoid",
+      [
+        'import { createRequire } from "node:module";',
+        "const loadModule = createRequire(import.meta.url);",
+        'loadModule("node:fs");',
+        'loadModule("nanoid");',
+      ].join("\n"),
+    ),
+  ).toEqual([4]);
+});

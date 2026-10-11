@@ -1,5 +1,9 @@
 name: Update marketing screenshots
 
+defaults:
+  run:
+    shell: bash
+
 # When a PR fails the `marketing-screenshots` check because its UI change is
 # intended, dispatch this workflow on the default branch and name the PR's
 # branch:
