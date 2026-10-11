@@ -234,6 +234,43 @@ test("the measured base overrides stale headroom and explicit merge-group bases"
   });
 }, 30_000);
 
+test("--head refreshes main and selects its base independently of the checkout", () => {
+  withClone((root) => {
+    const fork = git(root, "rev-parse", "HEAD");
+    const origin = git(root, "remote", "get-url", "origin");
+    write({ root: origin, relative: FIRST, contents: casts(1) });
+    commit(origin, "main improvement");
+    git(root, "fetch", "origin", "main");
+    const main = git(root, "rev-parse", "origin/main");
+    git(root, "checkout", "-b", "selected-head", main);
+    write({ root, relative: FIRST, contents: casts(2) });
+    commit(root, "selected head increase");
+    const head = git(root, "rev-parse", "HEAD");
+    git(root, "checkout", "-b", "other-branch", fork);
+    git(root, "update-ref", "refs/remotes/origin/main", fork);
+
+    expect(check(root).code).toBe(0);
+    expect(git(root, "rev-parse", "origin/main")).toBe(fork);
+    for (const branch of ["other-branch", "selected-head"]) {
+      git(root, "checkout", branch);
+      const checkout = git(root, "rev-parse", "HEAD");
+      const result = check(root, "--head", head);
+      expect(result.code, result.output).toBe(1);
+      expect(result.output).toContain("as-casts: 5 -> 6");
+      expect(result.output).toContain(`(${main})`);
+      expect(git(root, "rev-parse", "origin/main")).toBe(main);
+      expect(git(root, "rev-parse", "HEAD")).toBe(checkout);
+    }
+
+    git(root, "checkout", "other-branch");
+    write({ root, relative: FIRST, contents: casts(3) });
+    const worktree = check(root);
+    expect(worktree.code, worktree.output).toBe(1);
+    expect(worktree.output).toContain("as-casts: 6 -> 7");
+    expect(worktree.output).toContain(`(${fork})`);
+  });
+}, 30_000);
+
 test("--head measures a commit as data with that commit's allowances", () => {
   withClone((root) => {
     const base = git(root, "rev-parse", "HEAD");

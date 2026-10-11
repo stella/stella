@@ -4144,12 +4144,19 @@ const revisionOption = (flag: "--base" | "--head"): string | undefined => {
 const resolveCommit = (ref: string): string =>
   readGit(["rev-parse", "--verify", "--end-of-options", `${ref}^{commit}`]);
 
-const comparisonBase = (): string =>
-  resolveCommit(
-    revisionOption("--base") ??
-      process.env["RATCHET_BASE_REF"] ??
-      readGit(["merge-base", "origin/main", "HEAD"]),
+const comparisonBase = (headRef?: string): string => {
+  const explicitBase =
+    revisionOption("--base") ?? process.env["RATCHET_BASE_REF"];
+  if (explicitBase !== undefined) {
+    return resolveCommit(explicitBase);
+  }
+  if (headRef !== undefined) {
+    readGit(["fetch", "--no-tags", "origin", "main"]);
+  }
+  return resolveCommit(
+    readGit(["merge-base", "origin/main", headRef ?? "HEAD"]),
   );
+};
 
 const ALLOWANCE_DIRECTORY = "scripts/ratchet-allowances";
 
@@ -4423,7 +4430,7 @@ const runCheck = (): number => {
   const head = scanCheckedHead(headRef);
   const current = head.snapshot;
   const headFinished = performance.now();
-  const base = comparisonBase();
+  const base = comparisonBase(headRef);
   const baseline = scanMergeBase({ ref: base, previous: head });
   console.log(
     `ratchet timing: head ${(headFinished - started).toFixed(0)}ms; base export + scan ${(performance.now() - headFinished).toFixed(0)}ms (${base})`,
