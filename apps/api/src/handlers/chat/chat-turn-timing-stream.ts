@@ -80,14 +80,15 @@ export const withChatTurnTiming = async function* ({
       const step = await Result.tryPromise(async () => await iterator.next());
       if (Result.isError(step)) {
         sourceState = "ended";
+        observeFailure(step.error.cause, { sink: SOURCE_FAILED_SINK });
         if (getPhase() === "settled") {
-          const { error } = step;
-          throw error;
+          // Settlement is final; the SDK must not append a new error after
+          // the execution fence has been released.
+          return;
         }
         // SDK cleanup appends thrown errors without forwarding that batch.
         // Emit the terminal error here so durability can settle its timing
         // while fenced and forward both events to the live reader.
-        observeFailure(step.error.cause, { sink: SOURCE_FAILED_SINK });
         const kind = classifyAIError(step.error.cause);
         yield {
           type: EventType.RUN_ERROR,

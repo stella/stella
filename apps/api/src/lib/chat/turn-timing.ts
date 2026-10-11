@@ -6,8 +6,8 @@ import type { ChatTurnTiming } from "@stll/api-contract/chat";
 import {
   CHAT_TURN_STATUSES,
   CHAT_TURN_TIMING_DISPOSITION,
-} from "@/api/lib/chat/turn-status";
-import type { ChatTurnStatus } from "@/api/lib/chat/turn-status";
+} from "@/api/lib/chat-turn-status";
+import type { ChatTurnStatus } from "@/api/lib/chat-turn-status";
 
 const timingStatuses = (
   disposition: (typeof CHAT_TURN_TIMING_DISPOSITION)[ChatTurnStatus],

@@ -2673,9 +2673,7 @@ export const processServerChatStream = async function* ({
           ? cutShortOutcome()
           : admissionLossOutcome();
         await terminalize({ flushProcessor: admissionCutByControl(), outcome });
-        for (const finish of deferredRunFinishedChunks.splice(0)) {
-          yield finish;
-        }
+        yield* deferredRunFinishedChunks.splice(0);
         yield* admissionFailureChunks(outcome);
         return;
       }
@@ -2713,9 +2711,7 @@ export const processServerChatStream = async function* ({
         ? cutShortOutcome()
         : admissionLossOutcome();
       await terminalize({ flushProcessor: admissionCutByControl(), outcome });
-      for (const chunk of deferredRunFinishedChunks.splice(0)) {
-        yield chunk;
-      }
+      yield* deferredRunFinishedChunks.splice(0);
       yield* admissionFailureChunks(outcome);
       return;
     }
@@ -2745,16 +2741,12 @@ export const processServerChatStream = async function* ({
       flushProcessor: CUT_SHORT_OUTCOME[outcome.type],
       outcome,
     });
-    for (const chunk of finalRunFinishedChunks) {
-      yield chunk;
-    }
+    yield* finalRunFinishedChunks;
   } catch (error) {
     if (admissionLost()) {
       const outcome = admissionLossOutcome();
       await terminalize({ outcome });
-      for (const finish of deferredRunFinishedChunks.splice(0)) {
-        yield finish;
-      }
+      yield* deferredRunFinishedChunks.splice(0);
       yield* admissionFailureChunks(outcome);
       return;
     }

@@ -888,46 +888,65 @@ test("durability rejects a second assistant id before writing it", async () => {
   expect(await log.snapshot()).toHaveLength(1);
 });
 
-test("source failure is observed while only its classification reaches the wire", async () => {
-  const logs = installRecordingLogger();
-  const analytics = installRecordingAnalytics();
-  const sentinel = "Synthetic private source sentinel";
-  const observed = spyOn(failureObservation, "observeFailure");
-  const failure = new HandlerError({ status: 500, message: sentinel });
-  try {
-    const source = async function* () {
-      yield starts[0];
-      throw failure;
-    };
-    const chunks: StreamChunk[] = [];
-    for await (const chunk of withChatTurnTiming({
-      source: source(),
-      getPhase: () => "running",
-      readTiming: async () => readPresent(running),
-    })) {
-      chunks.push(chunk);
+test.each(["running", "settled"] as const)(
+  "source failure is observed without changing a %s turn's wire outcome",
+  async (phase) => {
+    const logs = installRecordingLogger();
+    const analytics = installRecordingAnalytics();
+    const sentinel = "Synthetic private source sentinel";
+    const observed = spyOn(failureObservation, "observeFailure");
+    const failure = new HandlerError({ status: 500, message: sentinel });
+    try {
+      const source = async function* () {
+        yield starts[0];
+        if (phase === "settled") {
+          yield runEnd;
+        }
+        throw failure;
+      };
+      const chunks: StreamChunk[] = [];
+      for await (const chunk of withChatTurnTiming({
+        source: source(),
+        getPhase: () => phase,
+        readTiming: async () =>
+          readPresent(phase === "running" ? running : finished),
+      })) {
+        chunks.push(chunk);
+      }
+      expect(
+        logs.records.some(
+          (record) => record.message === "chat.turn.timing_source_failed",
+        ),
+      ).toBe(true);
+      expect(observed).toHaveBeenCalledWith(failure, {
+        sink: expect.objectContaining({
+          event: "chat.turn.timing_source_failed",
+        }),
+      });
+      expect(failure.message).toBe(sentinel);
+      expect(JSON.stringify(chunks)).not.toContain(sentinel);
+      const errors = chunks.filter(
+        (chunk) => chunk.type === EventType.RUN_ERROR,
+      );
+      expect(errors).toEqual(
+        phase === "running"
+          ? [
+              expect.objectContaining({
+                type: EventType.RUN_ERROR,
+                message: "unknown",
+                code: "unknown",
+                error: { message: "unknown", code: "unknown" },
+              }),
+            ]
+          : [],
+      );
+      if (phase === "settled") {
+        expect(chunks.at(-1)).toEqual(runEnd);
+      }
+    } finally {
+      observed.mockRestore();
+      logs.restore();
+      analytics.restore();
     }
-    expect(
-      logs.records.some(
-        (record) => record.message === "chat.turn.timing_source_failed",
-      ),
-    ).toBe(true);
-    expect(observed).toHaveBeenCalledWith(failure, {
-      sink: expect.objectContaining({
-        event: "chat.turn.timing_source_failed",
-      }),
-    });
-    expect(failure.message).toBe(sentinel);
-    expect(JSON.stringify(chunks)).not.toContain(sentinel);
-    expect(chunks.at(-1)).toMatchObject({
-      type: EventType.RUN_ERROR,
-      message: "unknown",
-      code: "unknown",
-      error: { message: "unknown", code: "unknown" },
-    });
-  } finally {
-    observed.mockRestore();
-    logs.restore();
-    analytics.restore();
-  }
-});
+  },
+);

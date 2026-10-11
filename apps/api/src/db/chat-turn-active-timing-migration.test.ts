@@ -6,7 +6,7 @@ import { chatTurns } from "@/api/db/schema";
 import {
   CHAT_TURN_STATUSES,
   CHAT_TURN_TIMING_DISPOSITION,
-} from "@/api/lib/chat/turn-status";
+} from "@/api/lib/chat-turn-status";
 
 const TIMING_CHECK = "chat_turns_active_timing_check";
 
