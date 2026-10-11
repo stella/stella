@@ -22,6 +22,24 @@ const db = {
   select: () => panic("Injected archive sources must not access the database"),
 } satisfies AccountExportDataDb;
 const userId = toSafeId<"user">("archive-account");
+const organizationId = toSafeId<"organization">("archive-organization");
+const encoder = new TextEncoder();
+
+const streamOf = (text: string) =>
+  new ReadableStream<Uint8Array>({
+    start: (controller) => {
+      controller.enqueue(encoder.encode(text));
+      controller.close();
+    },
+  });
+
+const readJson = async (zip: JSZip, name: string): Promise<unknown> => {
+  const text = await zip.file(name)?.async("string");
+  if (text === undefined) {
+    panic(`Archive entry ${name} required`);
+  }
+  return JSON.parse(text);
+};
 
 const emptyRows = async function* () {
   yield* [];
@@ -105,7 +123,6 @@ describe("account export archive", () => {
 
   test("streams projected rows and file chunks without changing their contents", async () => {
     const { deps, published } = fixture();
-    const encoder = new TextEncoder();
     const chunks = [encoder.encode("first "), encoder.encode("second")];
     const injected = {
       ...deps,
@@ -115,7 +132,8 @@ describe("account export archive", () => {
       },
       async *files() {
         yield {
-          path: "files/attachment",
+          organizationId,
+          data: { archivePath: "files/attachment" },
           key: testFileKey("stored-attachment"),
           sizeBytes: 12,
         };
@@ -153,6 +171,9 @@ describe("account export archive", () => {
     }
     const zip = await JSZip.loadAsync(publication.bytes);
     for (const table of EXPORTED_ACCOUNT_TABLE_NAMES) {
+      if (table === "user_files") {
+        continue;
+      }
       expect(await zip.file(`${table}.json`)?.async("string")).toBe(
         JSON.stringify([
           { table, ordinal: 1 },
@@ -160,17 +181,16 @@ describe("account export archive", () => {
         ]),
       );
     }
+    expect(await readJson(zip, "user_files.json")).toEqual([
+      { organizationId, data: { archivePath: "files/attachment" } },
+    ]);
     expect(await zip.file("files/attachment")?.async("string")).toBe(
       "first second",
     );
-    const manifestText = await zip.file("manifest.json")?.async("string");
-    if (manifestText === undefined) {
-      panic("Manifest required");
-    }
-    expect(JSON.parse(manifestText)).toMatchObject({
+    expect(await readJson(zip, "manifest.json")).toMatchObject({
       tables: EXPORTED_ACCOUNT_TABLE_NAMES.map((table) => ({
         table,
-        count: 2,
+        count: table === "user_files" ? 1 : 2,
       })),
     });
   });
@@ -227,13 +247,81 @@ describe("account export archive", () => {
     expect(published).toEqual([]);
   });
 
+  test("file metadata and bodies both come from the one inventory read", async () => {
+    const { deps, published } = fixture();
+    const fileRecord = (id: string) => ({
+      organizationId,
+      data: { archivePath: `files/${id}` },
+      key: testFileKey(`stored-${id}`),
+      sizeBytes: id.length,
+    });
+    // The account's files as stored now: the inventory read sees `kept` and
+    // `deleted`; by the time bodies are read, `deleted` is gone and `added`
+    // has arrived. A second inventory read would therefore disagree.
+    let current = [fileRecord("kept"), fileRecord("deleted")];
+    let inventoryReads = 0;
+    const opened: string[] = [];
+    const injected = {
+      ...deps,
+      async *files() {
+        inventoryReads += 1;
+        const snapshot = current;
+        current = [fileRecord("kept"), fileRecord("added")];
+        yield* snapshot;
+      },
+      openObject: async (key) => {
+        opened.push(key);
+        const present = current.find((file) => file.key === key);
+        if (present === undefined) {
+          return null;
+        }
+        const id = key.replace("stored-", "");
+        return { contentLength: id.length, body: streamOf(id) };
+      },
+    } satisfies AccountExportArchiveDeps;
+    await buildAccountExportArchive({
+      projections: ACCOUNT_EXPORT_PROJECTIONS,
+      db,
+      userId,
+      objectKey: "archive-key",
+      signal: new AbortController().signal,
+      deps: injected,
+    });
+    expect(inventoryReads).toBe(1);
+    expect(opened).toEqual(["stored-kept", "stored-deleted"]);
+    const publication = published.at(0);
+    if (publication === undefined) {
+      panic("Archive publication required");
+    }
+    const zip = await JSZip.loadAsync(publication.bytes);
+    expect(await readJson(zip, "user_files.json")).toEqual([
+      { organizationId, data: { archivePath: "files/kept" } },
+      {
+        organizationId,
+        data: {
+          archivePath: null,
+          unavailable: { reason: "object_missing" },
+        },
+      },
+    ]);
+    // Every archivePath resolves to bytes, and every body has metadata.
+    expect(
+      Object.keys(zip.files).filter((name) => name.startsWith("files/")),
+    ).toEqual(["files/kept"]);
+    expect(await zip.file("files/kept")?.async("string")).toBe("kept");
+    expect(await readJson(zip, "manifest.json")).toMatchObject({
+      tables: expect.arrayContaining([{ table: "user_files", count: 2 }]),
+    });
+  });
+
   test("rejects an oversized file before opening its stream", async () => {
     const { deps, published } = fixture();
     const injected = {
       ...deps,
       async *files() {
         yield {
-          path: "files/oversized",
+          organizationId,
+          data: { archivePath: "files/oversized" },
           key: testFileKey("oversized"),
           sizeBytes: ACCOUNT_EXPORT_ARCHIVE_LIMITS.archiveBytes + 1,
         };

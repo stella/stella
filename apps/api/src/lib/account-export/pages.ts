@@ -67,7 +67,7 @@ type ExportOrganizationPageOptions = {
   userId: SafeId<"user">;
   table: Exclude<
     ExportedAccountTableName,
-    "user" | "member" | "feedback_reports"
+    "user" | "member" | "feedback_reports" | "user_files"
   >;
   cursor: string | null;
 };
@@ -447,35 +447,6 @@ const readWorkspaceViewTemplatesPage = async ({
     return projectRows(rows, projections.workspace_view_templates);
   });
 
-const readUserFilesPage = async ({
-  projections,
-  scopedDb,
-  organizationId,
-  userId,
-  cursor,
-}: OrganizationPageQueryOptions) =>
-  await scopedDb(async (tx) => {
-    const rows = await tx
-      .select({ row: userFiles })
-      .from(userFiles)
-      .innerJoin(chatThreads, eq(chatThreads.id, userFiles.threadId))
-      .where(
-        and(
-          eq(chatThreads.organizationId, organizationId),
-          eq(userFiles.userId, userId),
-          personalThread(userId),
-          stillMember(organizationId, userId),
-          after(userFiles.id, cursor),
-        ),
-      )
-      .orderBy(asc(userFiles.id))
-      .limit(ACCOUNT_EXPORT_PAGE_SIZE);
-    return projectRows(
-      rows.map(({ row }) => row),
-      projections.user_files,
-    );
-  });
-
 // Every page runs under the requesting user's RLS scope with an empty matter
 // set. Table-specific readers preserve the matching owner and membership filters.
 const readOrganizationPage = async ({
@@ -507,8 +478,6 @@ const readOrganizationPage = async ({
       return await readTemplateDefaultsPage(options);
     case "workspace_view_templates":
       return await readWorkspaceViewTemplatesPage(options);
-    case "user_files":
-      return await readUserFilesPage(options);
     default: {
       table satisfies never;
       return panic("Unhandled account export table");
@@ -520,7 +489,8 @@ type AccountExportRowsOptions = {
   projections: AccountExportProjections;
   db: AccountExportDataDb;
   userId: SafeId<"user">;
-  table: ExportedAccountTableName;
+  // File metadata and bytes come from one inventory: exportAccountFiles.
+  table: Exclude<ExportedAccountTableName, "user_files">;
   scopedDatabase?: typeof rlsDb;
   signal: AbortSignal;
 };
@@ -661,13 +631,26 @@ const readUserFileObjectsPage = async ({
   });
 
 type AccountExportFilesOptions = Omit<AccountExportRowsOptions, "table">;
+export type AccountExportFile = {
+  organizationId: SafeId<"organization">;
+  data: ReturnType<AccountExportProjections["user_files"]>;
+  key: string;
+  sizeBytes: number;
+};
+/**
+ * The account's file inventory: each row's exported metadata together with
+ * the object that holds its bytes. The archive reads it once and derives both
+ * user_files.json and the file entries from that single read.
+ *
+ * @yields One inventoried file per user_files row, in id order per organization.
+ */
 export async function* exportAccountFiles({
   projections,
   db,
   userId,
   signal,
   scopedDatabase,
-}: AccountExportFilesOptions) {
+}: AccountExportFilesOptions): AsyncGenerator<AccountExportFile> {
   const database = scopedDatabase ?? (await resolveScopedDatabase());
   for await (const membership of accountMemberships({ db, userId, signal })) {
     const organizationId = brandPersistedOrganizationId(
@@ -688,7 +671,8 @@ export async function* exportAccountFiles({
       }
       for (const row of rows) {
         yield {
-          path: projections.user_files(row).archivePath,
+          organizationId,
+          data: projections.user_files(row),
           key: row.s3Key,
           sizeBytes: row.sizeBytes,
         };

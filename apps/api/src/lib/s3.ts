@@ -1195,6 +1195,18 @@ export const openS3ObjectStreamWithSignal = async (
     };
   });
 
+/**
+ * Stream one object, or `null` when the store confirms it holds no such key.
+ * Every other failure is raised: see {@link isMissingS3ObjectError}.
+ */
+export const openS3ObjectStreamIfPresent = async (
+  key: string,
+  signal: AbortSignal,
+) =>
+  await presentOrNull(
+    async () => await openS3ObjectStreamWithSignal(key, signal),
+  );
+
 type ListS3ObjectKeysOptions = {
   bucket: string;
   prefix: string;
