@@ -10,6 +10,8 @@ export const PILOT_FAST_ROOTS = [
   "code-quality-api",
   "code-quality-web-rest",
 ] as const;
+/** Jobs every profile runs: wall-clock checks no plan scope can skip. */
+export const PILOT_ALWAYS = ["dated-waiver-expiry"] as const;
 // Queue-only Docker checks remain deferred on PRs, including the pilot profile.
 export const PILOT_DEFERRED = [
   "docker-checks",
@@ -56,6 +58,7 @@ export const pilotFastJobs = (workflow: unknown) => {
   const declared = new Set<string>([
     "ci-plan",
     "ci-result",
+    ...PILOT_ALWAYS,
     ...PILOT_FAST_ROOTS,
     ...PILOT_DEFERRED,
   ]);

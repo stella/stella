@@ -424,3 +424,38 @@ describe("registry lookup", () => {
     expect(peak).toBe(2);
   });
 });
+
+test("a waiver probe checks unchanged selected pins and fails an absent package", async () => {
+  const registry = fakeRegistry({
+    "young-excluded": { "1.0.0": daysBefore(1) },
+  });
+  const lockfile = rootLockfile(
+    {},
+    { "young-excluded": npm("young-excluded", "1.0.0") },
+  );
+  const removed = {
+    ...lockfile,
+    baseText: undefined,
+    bunfigText: ROOT_BUNFIG.replace(
+      '  "young-excluded", # quarantine-expires: 2026-09-30T00:00:00.000Z\n',
+      "",
+    ),
+  };
+  const report = await checkLockfileReleaseAges({
+    lockfiles: [removed],
+    lookup: registry.lookup,
+    now: NOW,
+    packageName: "young-excluded",
+  });
+  expect(report.quarantined).toHaveLength(1);
+  expect(registry.requested).toEqual(["young-excluded"]);
+  const missing = await checkLockfileReleaseAges({
+    lockfiles: [removed],
+    lookup: registry.lookup,
+    now: NOW,
+    packageName: "absent",
+  });
+  expect(missing.errors).toContain(
+    "No registry pins found for requested package: absent",
+  );
+});
