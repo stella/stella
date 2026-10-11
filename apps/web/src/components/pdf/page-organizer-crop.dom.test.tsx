@@ -87,12 +87,12 @@ const makePage = ({
     },
     pageInfo: {
       proxy: {
-        getViewport: ({ scale, rotation: viewportRotation = rotation }) =>
+        getViewport: (options) =>
           makeViewport({
             widthMm,
             heightMm,
-            scale,
-            rotation: viewportRotation,
+            scale: options?.scale ?? 1,
+            rotation: options?.rotation ?? rotation,
           }),
         render: () => {
           calls.renders += 1;
