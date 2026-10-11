@@ -556,7 +556,8 @@ const createOwnerQueryChecks = ({
           const ownerContext =
             filterAt > clauseAt &&
             lastSqlToken(prefix.slice(clauseAt + 1), /\bor\b/giu) < 0 &&
-            !/\bnot\s*\(?\s*$/iu.test(prefix) &&
+            !/\bnot\s*$/iu.test(prefix) &&
+            !/\bnot\s*\(\s*$/iu.test(prefix) &&
             !/\bor\b/iu.test(
               span.literal.text
                 .split(/\b(?:select|from|where|group|order|returning)\b/iu)
