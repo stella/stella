@@ -13,7 +13,7 @@ pub(crate) const PROTOCOL_VERSION: u32 = 1;
 const REDEEM_TIMEOUT: Duration = Duration::from_secs(20);
 /// `DESKTOP_HANDOFF_LIFETIME_SECONDS` in the API contract. Counted from when
 /// the deep link arrives, so a parked handoff never outlives its token.
-const HANDOFF_LIFETIME: Duration = Duration::from_secs(120);
+pub(crate) const HANDOFF_LIFETIME: Duration = Duration::from_secs(120);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Target {
@@ -445,7 +445,7 @@ pub(crate) struct ParkedHandoff {
   pub target: Target,
   pub api_base_url: String,
   pub token: zeroize::Zeroizing<String>,
-  expires: std::time::Instant,
+  pub expires: std::time::Instant,
 }
 
 static PARKED: std::sync::Mutex<Option<ParkedHandoff>> = std::sync::Mutex::new(None);
@@ -506,6 +506,7 @@ pub(crate) async fn expire_parked(token: &str) -> Resumable {
 pub(crate) enum AccountWait {
   Parked,
   AccountAvailable,
+  Expired,
 }
 
 pub(crate) async fn park_if_unlinked(
@@ -513,25 +514,38 @@ pub(crate) async fn park_if_unlinked(
   target: Target,
   api_base_url: &str,
   token: &str,
+  expires: std::time::Instant,
 ) -> Result<AccountWait, String> {
+  if std::time::Instant::now() >= expires {
+    return Ok(AccountWait::Expired);
+  }
   // Linking shares this lease: it either publishes before this check, or
   // publishes after the handoff is parked and its completion can resume it.
   let _lease = crate::account::lock_requests().await;
-  if crate::account::current(state).await?.is_some() {
+  let account = crate::account::current(state).await?;
+  if std::time::Instant::now() >= expires {
+    return Ok(AccountWait::Expired);
+  }
+  if account.is_some() {
     return Ok(AccountWait::AccountAvailable);
   }
-  park_at(target, api_base_url, token, std::time::Instant::now());
+  park_until(target, api_base_url, token, expires);
   Ok(AccountWait::Parked)
 }
 
-fn park_at(target: Target, api_base_url: &str, token: &str, now: std::time::Instant) {
+fn park_until(
+  target: Target,
+  api_base_url: &str,
+  token: &str,
+  expires: std::time::Instant,
+) {
   *PARKED
     .lock()
     .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(ParkedHandoff {
     target,
     api_base_url: api_base_url.into(),
     token: zeroize::Zeroizing::new(token.into()),
-    expires: now + HANDOFF_LIFETIME,
+    expires,
   });
 }
 
@@ -1186,9 +1200,15 @@ mod tests {
       assert!(matches!(arrived, Err(Stop::AccountRequired)));
       assert_eq!(redeems.load(std::sync::atomic::Ordering::SeqCst), 0);
       assert_eq!(
-        park_if_unlinked(&state, target, &origin, &token)
-          .await
-          .unwrap(),
+        park_if_unlinked(
+          &state,
+          target,
+          &origin,
+          &token,
+          std::time::Instant::now() + HANDOFF_LIFETIME
+        )
+        .await
+        .unwrap(),
         AccountWait::Parked
       );
 
@@ -1236,9 +1256,15 @@ mod tests {
       }
       assert_eq!(take_parked(), Resumable::Nothing);
       assert_eq!(
-        park_if_unlinked(&state, target, &origin, &token)
-          .await
-          .unwrap(),
+        park_if_unlinked(
+          &state,
+          target,
+          &origin,
+          &token,
+          std::time::Instant::now() + HANDOFF_LIFETIME
+        )
+        .await
+        .unwrap(),
         AccountWait::AccountAvailable,
         "a completed link must resume immediately without another connection offer"
       );
@@ -1264,10 +1290,20 @@ mod tests {
     // A replacement owns the next offer; cancelling the old dialog cannot
     // strand it. Poll the queued lease once to deterministically hold the dialog.
     let now = std::time::Instant::now();
-    park_at(Target::DesktopEdit, &origin, "first", now);
+    park_until(
+      Target::DesktopEdit,
+      &origin,
+      "first",
+      now + HANDOFF_LIFETIME,
+    );
     let first_offer = account_offer("first").await;
     assert!(matches!(first_offer.pending(), Resumable::Ready(_)));
-    park_at(Target::PdfSigning, &origin, "second", now);
+    park_until(
+      Target::PdfSigning,
+      &origin,
+      "second",
+      now + HANDOFF_LIFETIME,
+    );
     let mut second_offer = std::pin::pin!(account_offer("second"));
     assert!(
       std::future::poll_fn(|cx| std::task::Poll::Ready(
@@ -1291,9 +1327,14 @@ mod tests {
 
     // Completion during the old dialog resumes the replacement exactly once;
     // neither the old response nor its queued offer may act on the resumed token.
-    park_at(Target::DesktopEdit, &origin, "first", now);
+    park_until(
+      Target::DesktopEdit,
+      &origin,
+      "first",
+      now + HANDOFF_LIFETIME,
+    );
     let first_offer = account_offer("first").await;
-    park_at(Target::PdfSigning, &origin, &token, now);
+    park_until(Target::PdfSigning, &origin, &token, now + HANDOFF_LIFETIME);
     let mut second_offer = std::pin::pin!(account_offer(&token));
     assert!(
       std::future::poll_fn(|cx| std::task::Poll::Ready(
@@ -1337,9 +1378,19 @@ mod tests {
     *state.lock().await = crate::account::AccountStore::Memory(None);
 
     // A queued replacement that has expired gets one notice instead of an offer.
-    park_at(Target::DesktopEdit, &origin, "first", now);
+    park_until(
+      Target::DesktopEdit,
+      &origin,
+      "first",
+      now + HANDOFF_LIFETIME,
+    );
     let first_offer = account_offer("first").await;
-    park_at(Target::PdfSigning, &origin, "second", now);
+    park_until(
+      Target::PdfSigning,
+      &origin,
+      "second",
+      now + HANDOFF_LIFETIME,
+    );
     drop(first_offer);
     let second_offer = account_offer("second").await;
     assert_eq!(
@@ -1351,6 +1402,46 @@ mod tests {
       Resumable::Nothing
     );
     drop(second_offer);
+
+    // Parking an aged link preserves its arrival deadline, including across
+    // a resumed handoff; no new account offer may renew the server token.
+    for target in [Target::DesktopEdit, Target::PdfSigning] {
+      let arrived = std::time::Instant::now() - Duration::from_secs(115);
+      let original_expiry = arrived + HANDOFF_LIFETIME;
+      assert_eq!(
+        park_if_unlinked(&state, target, &origin, &token, original_expiry)
+          .await
+          .unwrap(),
+        AccountWait::Parked
+      );
+      let offer = account_offer(&token).await;
+      let Resumable::Ready(aged) =
+        offer.pending_at(original_expiry - Duration::from_nanos(1))
+      else {
+        panic!("an aged handoff keeps only its remaining lifetime");
+      };
+      assert_eq!(
+        aged.expires, original_expiry,
+        "parking must preserve the original deadline"
+      );
+      assert_eq!(offer.pending_at(original_expiry), Resumable::Expired);
+      drop(offer);
+      assert_eq!(take_parked(), Resumable::Nothing);
+      assert_eq!(
+        park_if_unlinked(
+          &state,
+          target,
+          &origin,
+          &token,
+          std::time::Instant::now() - Duration::from_nanos(1)
+        )
+        .await
+        .unwrap(),
+        AccountWait::Expired,
+        "an already-expired handoff must go to its notice without an account offer"
+      );
+      assert_eq!(take_parked(), Resumable::Nothing);
+    }
 
     // A saved credential the API rejects is dropped before any redeem.
     *state.lock().await = crate::account::AccountStore::fixture(linked_fixture(
@@ -1374,12 +1465,22 @@ mod tests {
 
     // One slot, newest wins, and it lapses with the handoff's lifetime.
     let now = std::time::Instant::now();
-    park_at(Target::DesktopEdit, &origin, "first", now);
-    park_at(Target::PdfSigning, &origin, "second", now);
+    park_until(
+      Target::DesktopEdit,
+      &origin,
+      "first",
+      now + HANDOFF_LIFETIME,
+    );
+    park_until(
+      Target::PdfSigning,
+      &origin,
+      "second",
+      now + HANDOFF_LIFETIME,
+    );
     assert!(!unpark("first"));
     assert!(unpark("second"));
     assert_eq!(take_parked_at(now), Resumable::Nothing);
-    park_at(Target::PdfSigning, &origin, "late", now);
+    park_until(Target::PdfSigning, &origin, "late", now + HANDOFF_LIFETIME);
     assert_eq!(take_parked_at(now + HANDOFF_LIFETIME), Resumable::Expired);
     assert_eq!(take_parked_at(now), Resumable::Nothing);
     server.abort();

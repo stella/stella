@@ -212,6 +212,7 @@ pub fn handle_url(
   manager: Arc<Mutex<SessionManager>>,
   app_handle: AppHandle,
 ) {
+  let handoff_expires = std::time::Instant::now() + crate::handoff::HANDOFF_LIFETIME;
   match parse_deep_link(raw_url) {
     Some(DeepLinkAction::ConnectAccount {
       api_base_url,
@@ -324,6 +325,7 @@ pub fn handle_url(
           target: crate::handoff::Target::DesktopEdit,
           api_base_url,
           token: handoff_token,
+          expires: handoff_expires,
         },
         manager,
         app_handle,
@@ -339,6 +341,7 @@ pub fn handle_url(
           target: crate::handoff::Target::PdfSigning,
           api_base_url,
           token: handoff_token,
+          expires: handoff_expires,
         },
         manager,
         app_handle,
@@ -354,6 +357,7 @@ struct HandoffRun {
   target: crate::handoff::Target,
   api_base_url: String,
   token: String,
+  expires: std::time::Instant,
 }
 
 /// Every handoff ends in front of the user: in its own window, in a notice,
@@ -389,6 +393,9 @@ async fn redeem_handoff(
   manager: &Arc<Mutex<SessionManager>>,
   app: &AppHandle,
 ) -> Result<(), crate::handoff::Stop> {
+  if std::time::Instant::now() >= run.expires {
+    return Err(crate::handoff::Failure::Expired.into());
+  }
   let trusted = match run.target {
     crate::handoff::Target::DesktopEdit => {
       is_trusted_api_base_url(manager, &run.api_base_url).await
@@ -443,6 +450,7 @@ async fn offer_account_link(
     run.target,
     &run.api_base_url,
     &run.token,
+    run.expires,
   )
   .await
   {
@@ -451,6 +459,10 @@ async fn offer_account_link(
       return;
     }
     Ok(crate::handoff::AccountWait::Parked) => {}
+    Ok(crate::handoff::AccountWait::Expired) => {
+      present_handoff_failure(&app, &crate::handoff::Failure::Expired).await;
+      return;
+    }
     Err(error) => {
       present_handoff_failure(&app, &crate::handoff::Failure::Terminal(error)).await;
       return;
@@ -542,6 +554,7 @@ fn resume_parked_handoff(manager: Arc<Mutex<SessionManager>>, app: AppHandle) {
           target: parked.target,
           api_base_url: parked.api_base_url.clone(),
           token: parked.token.to_string(),
+          expires: parked.expires,
         },
         manager,
         app,
