@@ -1,16 +1,11 @@
 #!/usr/bin/env bun
 import { panic } from "better-result";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
 import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
+import { readTurboTypecheckInputs } from "./turbo-typecheck-inputs";
 
 export const typescriptModuleReferences = (text: string, filename: string) => {
   const imports = new Set<string>();
@@ -141,8 +136,7 @@ export const missingDeclarationCacheInputs = (
   if (!existsSync(turbo)) {
     return [];
   }
-  const config: { tasks: Record<string, { inputs: string[] }> } =
-    Bun.JSONC.parse(readFileSync(turbo, "utf-8"));
+  const config = readTurboTypecheckInputs(turbo);
   const inputs = config.tasks["@stll/api#typecheck:declarations"]?.inputs ?? [];
   const exact = new Set(
     inputs

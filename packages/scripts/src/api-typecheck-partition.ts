@@ -10,6 +10,7 @@ import {
 } from "./api-typecheck-declarations";
 import { childExitStatus } from "./child-exit-status";
 import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
+import { readTurboTypecheckInputs } from "./turbo-typecheck-inputs";
 
 const isTest = (filename: string) => /\.test\.tsx?$/u.test(filename);
 
@@ -247,8 +248,7 @@ export const apiTestPartitionIssues = (root: string) => {
       });
     }
   }
-  const turbo: { tasks: Record<string, { inputs?: string[] }> } =
-    Bun.JSONC.parse(readFileSync(path.join(root, "turbo.json"), "utf-8"));
+  const turbo = readTurboTypecheckInputs(path.join(root, "turbo.json"));
   const inputs = apiTestPartitionInputs(independent);
   const declarations = apiDeclarationCacheInputs(
     path.join(api, "tsconfig.declarations.json"),
