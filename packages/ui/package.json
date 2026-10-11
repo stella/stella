@@ -79,6 +79,7 @@
     "./option-color": "./src/lib/option-color.ts",
     "./outline-rail": "./src/components/outline-rail.tsx",
     "./overlay-layer": "./src/lib/overlay-layer.ts",
+    "./panel-inset": "./src/lib/panel-inset.ts",
     "./pagination": "./src/components/pagination.tsx",
     "./popover": "./src/components/popover.tsx",
     "./positioner-sizing": "./src/lib/positioner-sizing.ts",

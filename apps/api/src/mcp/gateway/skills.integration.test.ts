@@ -123,7 +123,10 @@ describe("MCP skill tools against the database", () => {
     });
 
     const listing = createRecordingContext(ids.userA1);
-    const tools = await loadVisibleSkillTools({ context: listing.context });
+    const tools = await loadVisibleSkillTools({
+      context: listing.context,
+      mode: "default",
+    });
     expect(tools.map((tool) => tool.exposedName)).toContain(
       namespaceSkillToolName(calledSlug),
     );
@@ -284,6 +287,7 @@ describe("MCP skill tools against the database", () => {
     const { context } = createRecordingContext(ids.userA1);
     const resolved = await resolveSkillTool({
       context,
+      mode: "default",
       toolName: namespaceSkillToolName(slug),
     });
     if (resolved?.source !== "installed" || resolved.id !== privateSkillId) {

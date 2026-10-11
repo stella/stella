@@ -707,6 +707,15 @@
     },
     "writeOff": "Mahakandmine"
   },
+  "capabilityActions": {
+    "aiMissing": "Tehisintellekt pole seadistatud.",
+    "availabilityUnknown": "Saadavust ei õnnestunud kinnitada.",
+    "deeplMissing": "DeepL pole seadistatud.",
+    "desktopUnavailable": "Ühendage või uuendage stella desktopi.",
+    "featureUnavailable": "See funktsioon pole saadaval.",
+    "ocrUnavailable": "OCR pole saadaval.",
+    "translationMissing": "Tõlketeenus pole seadistatud."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "Kokkuvõte",
@@ -717,6 +726,13 @@
         "holding": "Lahend",
         "procedural-history": "Menetluskäik",
         "reasoning": "Arutlus"
+      },
+      "errors": {
+        "answerIncomplete": "{source, select, organization {Sinu organisatsiooni {provider}-võti andis puuduliku vastuse.} other {AI-mudel andis puuduliku vastuse.}}",
+        "providerRefused": "{source, select, organization {{provider} lükkas sinu organisatsiooni võtmega tehtud päringu tagasi. Kontrolli võtit, selle limiiti ja arveldust organisatsiooni seadetes.} other {AI-teenusepakkuja lükkas päringu tagasi.}}",
+        "providerUnavailable": "{source, select, organization {{provider} pole sinu organisatsiooni võtmega praegu saadaval.} other {AI-teenusepakkuja pole praegu saadaval.}}",
+        "timedOut": "{source, select, organization {{provider} ei vastanud sinu organisatsiooni võtmega õigel ajal.} other {AI-mudel ei vastanud õigel ajal.}}",
+        "unavailable": "Selle lahendi AI-analüüs pole saadaval."
       },
       "generate": "Koosta AI lühikokkuvõtted",
       "holdingAnchor": "Mine lõigu juurde",
@@ -748,6 +764,7 @@
     "citation": {
       "citedAtLeast": "Viidatud vähemalt {count} korda",
       "citedSummary": "{count, plural, =0 {Viitamata} one {Viidatud üks kord} other {Viidatud # korda}}",
+      "dateUnavailable": "Kuupäev pole saadaval",
       "decisionCount": "{count, plural, =0 {Lahendeid pole} one {# lahend} other {# lahendit}}",
       "lastNegative": "viimane negatiivne viide aastal {year}",
       "negativeCount": "{count, plural, one {# negatiivne} other {# negatiivset}}",
@@ -757,6 +774,7 @@
       "partialSummary": "Viidete koguarvud ja ajajoon on osalised.",
       "passageNotFound": "Viitavat lõiku tekstist ei leitud",
       "positiveCount": "{count, plural, one {# positiivne} other {# positiivset}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
       "showAll": "{count, plural, one {Näita # lahendit} other {Näita kõiki # lahendit}}",
       "stripLabel": "Viited aastate kaupa",
       "treatment": {
@@ -977,10 +995,14 @@
     "viewer": {
       "abstract": "Kokkuvõte",
       "appliedVersionNotStated": "Kohaldatud redaktsiooni pole märgitud",
+      "appliedVersionNotStatedCompact": "Redaktsioon märkimata",
       "appliedVersionStatedAmendment": "Redaktsioon muudatuse <reference>{amendment}</reference> järgi",
+      "appliedVersionStatedAmendmentCompact": "Märgitud: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Kuupäeval {date} kehtinud redaktsioon} until {Kuni {date} kehtinud redaktsioon} from {Alates {date} kehtinud redaktsioon} other {Kuupäeval {date} kehtinud redaktsioon}}",
+      "appliedVersionStatedDateCompact": "{relation, select, on {Märgitud: {date}} until {Märgitud: kuni {date}} from {Märgitud: alates {date}} other {Märgitud: {date}}}",
       "caseFileMayHoldOthers": "Selles toimikus võib olla ka teisi lahendeid.",
       "citedBy": "Viidatud",
+      "citedDecisionPassage": "Lõik lahendis",
       "cites": "Viitab",
       "dissentByline": "Eriarvamus: <bdi>{names}</bdi>",
       "judgeRole": {
@@ -1007,7 +1029,9 @@
       "textPending": "Lahendi teksti alles hangitakse",
       "textReadFailed": "Lahendi teksti ei õnnestunud laadida",
       "textUnavailable": "Selle lahendi teksti ei ole saadaval",
-      "versionAtDecisionDateInferred": "Otsuse kuupäeval kehtinud redaktsioon (tuletatud)"
+      "versionAtDecisionDateInferred": "Otsuse kuupäeval kehtinud redaktsioon (tuletatud)",
+      "versionBasisInferredCompact": "Lahendi kuupäev · tuletatud",
+      "versionBasisInferredExplanation": "Redaktsioon on tuletatud lahendi kuupäevast. Lahendis ei ole märgitud, milline redaktsioon kohaldub."
     }
   },
   "catalogue": {
@@ -1073,6 +1097,18 @@
     "anonymizedModeEnabled": "Anonüümitud AI režiim on sees",
     "anonymizedSpan": {
       "tooltip": "Mudelile saadeti kujul {placeholder}."
+    },
+    "answerEdit": {
+      "acceptFailed": "Muudatust ei saanud salvestada. Proovige uuesti.",
+      "ask": "Taotle muudatusi",
+      "failed": "Muudatust ei saanud ette valmistada. Proovige uuesti.",
+      "instruction": "Kirjeldage muudatust",
+      "instructionRequired": "Kirjeldage, kuidas valitud teksti muuta.",
+      "invalidSelection": "Seda valikut ei saa muuta. Valige järjestikune tekstilõik.",
+      "proposal": "Soovitatud muudatus",
+      "requesting": "Muudatuste ettevalmistamine…",
+      "stale": "See vastus on muutunud. Valige tekst uuesti.",
+      "submit": "Taotle muudatust"
     },
     "applyMode": {
       "description": "Word salvestab, kes iga muudatuse tegi. Jätame sinu valiku meelde.",
@@ -1185,6 +1221,13 @@
       "previewWaiting": "Sisu ootamine…",
       "savePendingReview": "Enne dokumendi salvestamist lahendage ülevaatust ootavad AI soovitused."
     },
+    "credentialPasteAction": "Kasuta privaatset kaarti",
+    "credentialPasteDescription": "See tekst näib olevat mandaat. Kasuta privaatset kaarti, et see vestlusesse ei satuks. Kui kaart ilmub, kleebi väärtus sinna uuesti.",
+    "credentialPasteRequest": "Paluge seda mandaati privaatse kaardi kaudu.",
+    "credentialPasteTitle": "Mandaadi kleepimine peatati",
+    "credentialSendAction": "Saada siiski",
+    "credentialSendDescription": "Saada see ainult siis, kui soovid seda väärtust vestluses jagada.",
+    "credentialSendTitle": "See sõnum võib sisaldada mandaati",
     "deleteThread": "Kustuta vestlus",
     "editMode": {
       "autoDirect": "Automaatne · kirjuta ümber",
@@ -1290,7 +1333,9 @@
     "pastedText": {
       "expand": "Näita kogu teksti",
       "fromClipboard": "Kleebitud {count, plural, one {# märk} other {# märki}}",
-      "fromPromptFallback": "Oskus"
+      "fromPromptFallback": "Oskus",
+      "showInTextField": "Kuva tekstiväljal",
+      "title": "Kleebitud tekst"
     },
     "placeholder": "Kirjutage oma küsimus siia, / oskuste jaoks, @ konteksti lisamiseks",
     "promptImprovementStrategies": {
@@ -1323,6 +1368,31 @@
     "removeSuggestion": "(eemalda)",
     "renameThread": "Nimeta vestlus ümber",
     "renameUnavailableEmptyThread": "Saada esmalt sõnum, seejärel saab vestluse ümber nimetada.",
+    "requestSecret": {
+      "checkingTarget": "Kontrollin ühenduse üksikasju…",
+      "connectionDisposition": "Ühendus: {disposition}",
+      "continuationError": "Teie vastus salvestati, kuid vestlust ei saanud jätkata.",
+      "declined": "Keeldutud",
+      "description": "Assistent vajab seda jätkamiseks",
+      "error": "Mandaadi saatmine ebaõnnestus. Proovi uuesti.",
+      "kind": {
+        "token": "Juurdepääsutõend"
+      },
+      "normalConnection": "Tavaline ühendus",
+      "private": "Assistent seda väärtust ei näe.",
+      "provideAction": "Anna",
+      "provided": "Antud",
+      "purposeByAi": "Tehisintellekti kirjutatud eesmärk: {purpose}",
+      "receiptOnlyConnection": "Ainult privaatne ühendus",
+      "replaceOrdinaryConnection": "Asenda tavaline ühendus ainult privaatse kasutusega",
+      "retryContinuationAction": "Jätka vestlust",
+      "saveForFuture": "Salvesta tulevaste vestluste jaoks",
+      "savedAvailabilityError": "Salvestatud mandaadi olemasolu ei saanud kontrollida.",
+      "target": "Sihtkoht: {target}",
+      "title": "Küsi privaatset mandaati",
+      "useSavedAction": "Kasuta salvestatud mandaati",
+      "valueLabel": "Mandaat"
+    },
     "resend": "Saada uuesti",
     "resizeThread": "Muuda vestluse suurust",
     "richContentLoading": "Interaktiivse sisu laadimine…",
@@ -1446,6 +1516,7 @@
       "read_story": "Dokumendi osa lugemine",
       "remember": "Mällu salvestamine",
       "reply_comment": "Kommentaarile vastamine",
+      "request_secret": "Privaatse mandaadi küsimine",
       "resolve_comment": "Kommentaari lahendamine",
       "review_folder_consistency": "Kausta kooskõla kontrollimine",
       "run-stella-query": "Toimiku andmete lugemine",
@@ -1479,6 +1550,7 @@
       "update-entity-fields": "Metaandmete uuendamine",
       "update_reader_annotation": "Muuda esiletõstu või kommentaari",
       "use-browser": "Teie brauseri kasutamine",
+      "use_connector_secret": "Konnektori mandaadi kasutamine",
       "web_search": "Veebist otsimine"
     },
     "toolCall": {
@@ -1631,6 +1703,7 @@
     "actions": "Toimingud",
     "active": "Aktiivne",
     "add": "Lisa",
+    "advanced": "Täpsemad seaded",
     "all": "Kõik",
     "and": "Ja",
     "anonymizationLabels": {
@@ -1697,6 +1770,7 @@
     "createdAt": "Loodud {date}",
     "currency": "Valuuta",
     "currentPage": "Praegune lehekülg",
+    "custom": "Kohandatud",
     "date": "Kuupäev",
     "datePicker": {
       "label": "Kuupäevavalija",
@@ -1717,6 +1791,7 @@
     "description": "Kirjeldus",
     "details": "Üksikasjad",
     "detailsHiddenFeatureUnavailable": "Üksikasjad on peidetud: funktsioon pole lubatud",
+    "detailsUnavailable": "Üksikasjad pole saadaval",
     "disconnect": "Katkesta ühendus",
     "dismiss": "Jäta kõrvale",
     "displayName": "Kuvatav nimi",
@@ -1883,6 +1958,7 @@
     "rename": "Nimeta ümber",
     "required": "Kohustuslik",
     "reset": "Lähtesta",
+    "resetToDefault": "Lähtesta vaikeväärtusele",
     "resetZoom": "Lähtesta suum",
     "restore": "Taasta",
     "retry": "Proovi uuesti",
@@ -1936,6 +2012,7 @@
     "unexpectedError": "Ilmnes ootamatu viga. Palun pöörduge klienditoe poole.",
     "unknownUser": "Tundmatu kasutaja",
     "unpin": "Eemalda kinnitamine",
+    "unsavedChanges": "Salvestamata muudatused",
     "unsavedChangesEscape": "Salvestamata muudatused. Loobumiseks vajuta uuesti Esc",
     "unsavedLeaveConfirm": "Teil on salvestamata muudatusi. Kas lahkuda salvestamata?",
     "unverified": "Kontrollimata",
@@ -1983,6 +2060,7 @@
     "scopeExternalMcps": "Teie ühendatud väliste tööriistade kasutamine",
     "scopeFeedback": "Tootetagasiside saatmine stella hooldajatele",
     "scopeKnowledgeWrite": "Luua, muuta ja kustutada teie klausleid ja käivitada playbooke",
+    "scopeLawRead": "Lugeda avalikke õigusakte ja kohtupraktikat",
     "scopeMattersWrite": "Luua ja muuta teie toimikuid ja ülesandeid",
     "scopeOfflineAccess": "Hoida teid sisse logituna ilma korduva nõusolekuta",
     "scopeOnboarding": "Seadistada teie organisatsiooni praktikajurisdiktsioonid",
@@ -1994,11 +2072,38 @@
     "scopeSkills": "Teie salvestatud stella oskuste kasutamine",
     "scopeTemplates": "Dokumendimallide loend, täitmine ja loomine",
     "scopeTemplatesAnonymized": "Loendada, täita ja luua teie dokumendimallide anonüümitud versioone",
+    "sensitiveAccess": "Sisaldab juurdepääsu, mis võib andmeid kustutada või teie organisatsiooni muuta",
+    "showAllPermissions": "{count, plural, one {Näita õigust} other {Näita kõiki # õigust}}",
     "signedInAs": "Sisse logitud kui <email>{accountEmail}</email>",
+    "summaryAdminRead": "auditilogi",
+    "summaryAdminWrite": "organisatsiooni liikmed ja seaded, sealhulgas nende kustutamine",
+    "summaryBillingWrite": "ajakirjed, sealhulgas nende kustutamine",
+    "summaryChat": "vestlused, sealhulgas nende kustutamine",
+    "summaryContactsWrite": "kontaktid, sealhulgas nende kustutamine",
+    "summaryDocumentsWrite": "dokumendid, sealhulgas nende kustutamine",
+    "summaryExternalMcps": "ühendatud välised tööriistad",
+    "summaryFeedback": "tagasiside",
+    "summaryKnowledgeWrite": "klauslid ja playbookid, sealhulgas klauslite kustutamine",
+    "summaryLawRead": "avalikke õigusakte ja kohtupraktikat",
+    "summaryLineChange": "<group>Saab muuta:</group> {items} ({count})",
+    "summaryLineOther": "<group>Lisaks:</group> {items}",
+    "summaryLineRead": "<group>Saab lugeda:</group> {items} ({count})",
+    "summaryMattersWrite": "toimikud ja ülesanded, sealhulgas nende kustutamine",
+    "summaryOfflineAccess": "sisselogituks jäämine",
+    "summaryOnboarding": "praktikajurisdiktsioonid",
+    "summaryProfile": "profiil",
+    "summaryRead": "dokumendid, toimikud ja kontaktid",
+    "summaryReadAnonymized": "anonüümitud dokumendid ja toimikud",
+    "summarySearch": "otsing",
+    "summarySearchAnonymized": "anonüümitud otsing",
+    "summarySkills": "oskused, sealhulgas nende kustutamine",
+    "summaryTemplates": "dokumendimallid, sealhulgas nende kustutamine",
+    "summaryTemplatesAnonymized": "anonüümitud dokumendimallid",
     "title": "Anna juurdepääs",
     "unverifiedApp": "Kinnitamata rakendus",
     "unverifiedExplanation": "stella pole kontrollinud, kes selle rakenduse avaldab.",
-    "useAnotherAccount": "Kasuta teist kontot"
+    "useAnotherAccount": "Kasuta teist kontot",
+    "verifiedPublisher": "Kinnitatud rakendus, väljaandja {publisher}"
   },
   "contacts": {
     "alsoPartyIn": "Esineb osapoolena ka {count, plural, one {# teises toimikus} other {# teises toimikus}}",
@@ -2817,6 +2922,12 @@
     "editSessionReleased": "See dokument avati mujal muutmiseks, seega on see kaart ainult lugemiseks.",
     "editSessionReleasedUnsaved": "Teie salvestamata muudatused säilivad siin.",
     "editSessionReopen": "Ava uuesti muutmiseks",
+    "editor": {
+      "outlineDepthAll": "Kõik tasemed",
+      "outlineDepthLabel": "Pealkirjade sügavus",
+      "outlineDepthThree": "1–3",
+      "outlineDepthTwo": "1–2"
+    },
     "evidenceReferences": "Tõendiviited",
     "evidenceUnavailable": "Seda tõendiviidet ei saa selles toimikus avada.",
     "findReplace": {
@@ -3745,7 +3856,6 @@
         "fallback": "Alternatiiv",
         "notAcceptable": "Vastuvõetamatu"
       },
-      "unsavedChanges": "Salvestamata muudatused",
       "untitledPosition": "Pealkirjata seisukoht",
       "updated": "Playbook uuendatud",
       "updatedAt": "Uuendatud {date}",
@@ -3834,7 +3944,9 @@
   },
   "lawHome": {
     "clearRecent": "Kustuta hiljutised",
+    "clearRecentConfirmation": "Kas kustutada kõik teie hiljutised otsingud, kohtulahendid ja õigusaktid selles organisatsioonis? Seda ei saa tagasi võtta.",
     "enteringIntoForce": "Peagi jõustuv",
+    "importFailed": "Kohalikku ajalugu ei saanud importida. See on endiselt selles seadmes alles.",
     "inForceFrom": "Jõustub {date}",
     "noRecent": "Hiljutisi tegevusi pole",
     "noSignals": "Signaale veel pole",
@@ -3954,7 +4066,6 @@
       "invalidBinding": "Lisage klahv, mis pole muuteklahv",
       "notRebindable": "Seda otseteed ei saa muuta",
       "pressKeys": "Vajutage uued klahvid…",
-      "resetToDefault": "Lähtesta vaikeväärtusele",
       "title": "Klaviatuuri otseteed"
     },
     "showShortcuts": "Kuva klaviatuuri otseteed",
@@ -4044,6 +4155,9 @@
     "aiConfig": {
       "addProvider": "Lisa teenusepakkuja",
       "addProviderFirst": "Lisa esmalt teenusepakkuja",
+      "anthropicWorkspaceId": "Tööruumi ID",
+      "anthropicWorkspaceRequired": "See Anthropic API-võti vajab tööruumi. Sisestage tööruumi ID Anthropic Console’ist ja salvestage uuesti.",
+      "anthropicWorkspaces": "Ava Anthropic tööruumid",
       "apiKey": "API-võti",
       "apiKeyConfiguredPlaceholder": "Seadistatud: {key}. Sisesta uus võti, et see asendada.",
       "apiKeyPlaceholder": "Sisestage oma API võti",
@@ -4056,25 +4170,27 @@
       "customModelBadge": "Kohandatud · {provider}",
       "customModelDescription": "Seda mudeli ID-d stella kataloogis ei ole. See saadetakse valitud teenusepakkujale sisestatud kujul.",
       "customModelHint": "Kataloogis vastet pole. Sisesta ükskõik milline mudeli ID; kohandatud ID salvestatakse sisestatud kujul.",
-      "dataRegion": "Andmepiirkond",
-      "dataRegionDescription": "Suunab AI päringud valitud piirkonna kaudu andmesuveräänsuse tagamiseks.",
-      "dataRegionUnsupported": "Piirkondlik marsruutimine on saadaval ainult Google AI (Vertex AI) puhul.",
       "decision": {
-        "add": "Lisa otsustusmudel",
-        "description": "Kindla vastusega küsimused, näiteks dokumendikategooriad või viidete polaarsus, suunatakse sellele mudelile; ilma selleta vastab neile generatiivne mudel.",
+        "description": "Kindla vastusega küsimused (dokumendikategooriad, viidete polaarsus)",
+        "generativeFallback": "Kasutab ülesande jaoks generatiivset mudelit.",
         "incomplete": "Sisesta otsustusmudeli jaoks API-võti ja mudel või eemalda see.",
         "instanceProvided": "stella pakub juba otsustusmudelit; lisa oma ainult siis, kui soovid mõnda teist kasutada.",
-        "label": "Otsustusmudel",
-        "modelId": "Mudeli ID"
+        "label": "Otsustamine"
       },
       "defaultModel": "Vaikimisi: {model}",
       "defaultModelOption": "Vaikimisi",
+      "defaultRationale": {
+        "chat": "Vestlusteks ja igapäevasteks küsimusteks.",
+        "fast": "Lühikesteks tavapärasteks ülesanneteks.",
+        "pdf": "PDF-dokumentide lugemiseks ja analüüsimiseks.",
+        "reasoning": "Keerukateks ülesanneteks, mis nõuavad põhjalikku arutlemist."
+      },
       "deploymentNamePlaceholder": "Juurutuse nimi",
-      "description": "Kasutage oma API võtit või seadistage andmesuveräänsuse piirkond.",
       "editProviders": "Muuda teenusepakkujaid",
       "endpoint": "Lõpp-punkt",
       "endpointDescription": "Kasuta Azure OpenAI või Azure Foundry /openai/v1 endpointi. stella salvestab normaliseeritud endpointi.",
       "keepSavedKey": "Hoia salvestatud võti alles",
+      "keyFormatHint": "Selle võtme vorming on teenusepakkuja {provider} puhul ebatavaline. Salvestage võti, et seda teenusepakkujaga kontrollida.",
       "modelForRole": "Rolli {role} mudel",
       "modelIdPlaceholder": "Otsi mudeleid",
       "modelsDescription": "Vali iga AI-kategooria jaoks teenusepakkuja ja üks pakutud multimodaalne mudel.",
@@ -4103,13 +4219,11 @@
       "providerKeyInvalidShort": "Vigane",
       "providersDescription": "Lisa nende teenusepakkujate mandaadid, mida stella peaks kasutama.",
       "providersPanel": "Teenusepakkujad",
-      "regions": {
-        "ch": "Šveits (europe-west6)",
-        "eu": "EL (europe-west4)",
-        "global": "Globaalne"
-      },
+      "removeLastProviderConfirm": "Kas eemaldada {provider}? See lähtestab ka kohandatud tehisintellektimudelite valikud.",
       "removeProvider": "Eemalda teenusepakkuja",
+      "removeProviderConfirm": "Kas eemaldada {provider} ja salvestatud autentimisandmed?",
       "replaceKey": "Asenda võti",
+      "roleUnavailable": "{provider} ei toeta seda rolli.",
       "roles": {
         "chat": "Vestlus",
         "fast": "Kiire",
@@ -4119,7 +4233,8 @@
       "selectAtLeastOneRole": "Vali selle võtme jaoks vähemalt üks roll.",
       "selectModelForEachRole": "Lisa teenusepakkuja ja vali iga kategooria jaoks mudel.",
       "selectedProvider": "{provider}",
-      "title": "AI seadistus"
+      "title": "AI seadistus",
+      "usingDefaults": "Kasutusel on vaikeseaded"
     },
     "invitations": {
       "cancelInvitation": "Tühista kutse",
@@ -4149,7 +4264,6 @@
       "patternMustContainSeq": "Muster peab sisaldama '{'SEQ'}'",
       "patternRequired": "Muster on kohustuslik",
       "presets": {
-        "custom": "Kohandatud",
         "sequential": "Järjestikune (001)",
         "yearMonthSequential": "Aasta-kuu / Järjestikune (2026-02/001)",
         "yearSequential": "Aasta / Järjestikune (2026/001)"
@@ -4181,7 +4295,6 @@
       "member": "Liige",
       "owner": "Omanik"
     },
-    "settings": "Organisatsiooni seaded",
     "settingsDescription": "Muutke oma organisatsiooni nime ja slugi",
     "switchOrganization": "Vaheta organisatsiooni"
   },
@@ -4548,6 +4661,7 @@
       "noMatches": "Päringule „{query}“ ei vasta ükski ühendus",
       "notConnected": "Ühendamata",
       "permissionCount": "{count, plural, one {# õigus} other {# õigust}}",
+      "privateCredentialOnly": "Ainult privaatne mandaat",
       "searchPlaceholder": "Otsi ühendusi",
       "title": "Ühendused",
       "turnedOff": "Välja lülitatud"
@@ -4555,7 +4669,7 @@
     "organization": {
       "activeMembers": "Aktiivsed liikmed",
       "ai": "AI seadistus",
-      "aiDescription": "Kasutage oma API võtit või seadistage andmesuveräänsuse piirkond",
+      "aiDescription": "Ühendage oma tehisintellekti teenusepakkujate võtmed.",
       "anonymization": {
         "addPlaceholder": "Termin, mida alati maskeerida (nt meeskonna nimi)",
         "deleteAction": "Kustuta termin",
@@ -4720,7 +4834,17 @@
     "amendedTimes": "{count, plural, =0 {Muutmata} one {Muudetud # kord} other {Muudetud # korda}}",
     "asOf": "Kehtinud tekst kuupäeval",
     "backToList": "Kõik õigusaktid",
+    "citingDecisionHideSnippet": "Ahenda lõik",
+    "citingDecisionMentionCount": "viidatud {count}×",
+    "citingDecisionOlderVersion": "Varasem redaktsioon",
+    "citingDecisionShowSnippet": "Näita kogu lõiku",
+    "citingDecisionsCourtPlaceholder": "Kõik kohtud",
     "citingDecisionsFilterPlaceholder": "Filtreeri laaditud lahendeid",
+    "citingDecisionsSnapshotCapped": "Kuvatakse {count} lahendit (kuni {limit} kõige rohkem seda sätet maininud lahendit).",
+    "citingDecisionsSortCitations": "Viited sellele sättele",
+    "citingDecisionsSortDate": "Lahendi kuupäev",
+    "citingDecisionsYear": "Lahendi aasta",
+    "citingDecisionsYearPlaceholder": "Kõik aastad",
     "columns": {
       "act": "Õigusakt",
       "amendments": "Muudatused",
@@ -4762,6 +4886,7 @@
     "inForceSince": "Kehtib alates {date}",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecisions": "Juhtivad lahendid",
+    "leadingDecisionsExplanation": "Iga lahendi esimene viide, järjestatud viite kaalukuse järgi: kaalutud saabuvad viited, arvestades kohtu taset, viite polaarsust ja vanust.",
     "noVersionInForce": "Valitud kuupäeval ei kehtinud ükski selle õigusakti redaktsioon.",
     "openEnded": "praeguseni",
     "openProvision": "Ava säte",
@@ -5399,11 +5524,7 @@
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx",
       "currentKey": "Salvestatud võti",
       "description": "Seadistage DeepL-i API-võti, et lubada dokumentide tõlkimine. Toetatud on nii Free- kui ka Pro-võtmed.",
-      "removed": "DeepL-i võti eemaldatud",
-      "removedDescription": "Tõlkimine on keelatud, kuni lisatakse uus võti.",
       "removing": "Eemaldan…",
-      "saved": "DeepL-i võti salvestatud",
-      "savedDescription": "Tõlked on nüüd saadaval.",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "DeepL-i tõlge"
@@ -6187,7 +6308,6 @@
     "views": {
       "addAdvancedFilter": "Lisa täpsem filter",
       "addFields": "Lisa väljad",
-      "advancedFilter": "Täpsem",
       "advancedFilterCount": "{count, plural, =0 {suvaline} one {# reegel} other {# reeglit}}",
       "aiGenerated": "Tehisintellektiga loodud",
       "calendar": {

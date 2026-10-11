@@ -31,6 +31,8 @@
 
 import { Result } from "better-result";
 
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
+
 import { applyAnalysisUpdate } from "@/api/handlers/case-law/analysis/analysis-update";
 import { createDbAnalysisStore } from "@/api/lib/case-law/analysis-store-core";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
@@ -83,69 +85,71 @@ if (Result.isError(url)) {
 const db = openAnalysisDatabase(url.value);
 const tombstones = analysisTombstoneReader(db);
 const store = createDbAnalysisStore(db);
-await prepareCorpusReads();
+await runScriptWithErrorOutput(async () => {
+  await prepareCorpusReads();
 
-const outcomes: string[] = [];
-const report = (decisionId: string, outcome: string) => {
-  outcomes.push(outcome);
-  console.log(`${decisionId} ${outcome}`);
-};
+  const outcomes: string[] = [];
+  const report = (decisionId: string, outcome: string) => {
+    outcomes.push(outcome);
+    console.log(`${decisionId} ${outcome}`);
+  };
 
-// Parse the whole file first, so the rows every accepted record needs are
-// read in one statement rather than one per record.
-const parsedRecords = parsedFile.value.map(parseSubmissionRecord);
-const rowsById = await readDecisionRows(
-  db,
-  parsedRecords.flatMap((parsed) =>
-    parsed.status === "ok"
-      ? [brandPersistedCaseLawDecisionId(parsed.record.decisionId)]
-      : [],
-  ),
-);
+  // Parse the whole file first, so the rows every accepted record needs are
+  // read in one statement rather than one per record.
+  const parsedRecords = parsedFile.value.map(parseSubmissionRecord);
+  const rowsById = await readDecisionRows(
+    db,
+    parsedRecords.flatMap((parsed) =>
+      parsed.status === "ok"
+        ? [brandPersistedCaseLawDecisionId(parsed.record.decisionId)]
+        : [],
+    ),
+  );
 
-for (const parsed of parsedRecords) {
-  if (parsed.status === "rejected") {
-    report(parsed.decisionId, rejectionLine(parsed.reason));
-    continue;
+  for (const parsed of parsedRecords) {
+    if (parsed.status === "rejected") {
+      report(parsed.decisionId, rejectionLine(parsed.reason));
+      continue;
+    }
+    const { record } = parsed;
+    const decisionId = brandPersistedCaseLawDecisionId(record.decisionId);
+
+    const row = rowsById.get(decisionId);
+    if (row === undefined) {
+      report(record.decisionId, rejectionLine(ANALYSIS_REJECTION.notFound));
+      continue;
+    }
+    const resolved = await resolveRowAnalysisInput({
+      readAst: async () => await readRowAst(row, tombstones),
+      row,
+    });
+    if (resolved.status === "rejected") {
+      report(record.decisionId, rejectionLine(resolved.reason));
+      continue;
+    }
+
+    const outcome = await applyAnalysisUpdate({
+      anchorIds: resolved.ast.blocks.map((block) => block.anchorId),
+      decision: row,
+      decisionId,
+      input: resolved.input,
+      now: new Date(),
+      store,
+      submission: {
+        fingerprint: record.fingerprint,
+        contentHash: record.contentHash,
+        model: record.model,
+        ...record.output,
+      },
+    });
+    report(record.decisionId, describeUpdateOutcome(outcome));
   }
-  const { record } = parsed;
-  const decisionId = brandPersistedCaseLawDecisionId(record.decisionId);
 
-  const row = rowsById.get(decisionId);
-  if (row === undefined) {
-    report(record.decisionId, rejectionLine(ANALYSIS_REJECTION.notFound));
-    continue;
-  }
-  const resolved = await resolveRowAnalysisInput({
-    readAst: async () => await readRowAst(row, tombstones),
-    row,
-  });
-  if (resolved.status === "rejected") {
-    report(record.decisionId, rejectionLine(resolved.reason));
-    continue;
+  for (const line of summariseOutcomes(outcomes)) {
+    console.error(line);
   }
 
-  const outcome = await applyAnalysisUpdate({
-    anchorIds: resolved.ast.blocks.map((block) => block.anchorId),
-    decision: row,
-    decisionId,
-    input: resolved.input,
-    now: new Date(),
-    store,
-    submission: {
-      fingerprint: record.fingerprint,
-      contentHash: record.contentHash,
-      model: record.model,
-      ...record.output,
-    },
-  });
-  report(record.decisionId, describeUpdateOutcome(outcome));
-}
-
-for (const line of summariseOutcomes(outcomes)) {
-  console.error(line);
-}
-
-process.exit(
-  outcomes.some((outcome) => outcome.startsWith("rejected:")) ? 1 : 0,
-);
+  process.exit(
+    outcomes.some((outcome) => outcome.startsWith("rejected:")) ? 1 : 0,
+  );
+});

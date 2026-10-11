@@ -7,7 +7,9 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
+import * as v from "valibot";
 
+import { env } from "@/api/env";
 import {
   DESKTOP_REGISTRY_KEY_CONFIG,
   DESKTOP_REGISTRY_KEY_PREFIX,
@@ -15,6 +17,9 @@ import {
   desktopRegistryKeyConfig,
   parseDesktopRegistryMetadata,
 } from "@/api/lib/business-registries/desktop/config";
+import { rateLimitBudgetEnvSchema } from "@/api/lib/rate-limit/budget-config-schema";
+
+const DEFAULT_BUDGETS = v.parse(v.object(rateLimitBudgetEnvSchema), {});
 
 const createTestAuth = (sessionForKeys = false) =>
   betterAuth({
@@ -33,6 +38,13 @@ const createTestAuth = (sessionForKeys = false) =>
       apiKey([
         {
           ...desktopRegistryKeyConfig,
+          // The harness pins the schema default so an ambient budget cannot
+          // rate-limit its repeated verifications.
+          rateLimit: {
+            enabled: true,
+            maxRequests: DEFAULT_BUDGETS.RATE_LIMIT_API_KEY_DESKTOP_MAX,
+            timeWindow: DEFAULT_BUDGETS.RATE_LIMIT_API_KEY_DESKTOP_WINDOW_MS,
+          },
           enableSessionForAPIKeys: sessionForKeys,
         },
         {
@@ -204,6 +216,11 @@ const assertIssuanceCall = (
   ) {
     throw new TypeError(`${filename}: inactivity metadata must be explicit`);
   }
+  if (!issuanceProperty(metadata.initializer, "deviceJkt")) {
+    throw new TypeError(
+      `${filename}: issuance must persist its device key binding`,
+    );
+  }
   return true;
 };
 const censusIssuanceSource = ({
@@ -260,6 +277,11 @@ const assertDesktopIssuance = (
 
 describe("desktop registry API-key configuration", () => {
   test("keeps the registry credential separate and sessionless", async () => {
+    expect(desktopRegistryKeyConfig.rateLimit).toEqual({
+      enabled: true,
+      maxRequests: env.RATE_LIMIT_API_KEY_DESKTOP_MAX,
+      timeWindow: env.RATE_LIMIT_API_KEY_DESKTOP_WINDOW_MS,
+    });
     const auth = createTestAuth();
     const signedUp = await auth.api.signUpEmail({
       body: {
@@ -277,6 +299,7 @@ describe("desktop registry API-key configuration", () => {
         metadata: {
           purpose: DESKTOP_REGISTRY_KEY_CONFIG,
           organizationId: "00000000-0000-4000-8000-000000000001",
+          deviceJkt: "A".repeat(43),
           inactivityExpiresAt: new Date(
             Date.now() + DESKTOP_REGISTRY_KEY_SECONDS * 1000,
           ).toISOString(),
@@ -370,6 +393,7 @@ describe("desktop registry API-key configuration", () => {
       panic("Desktop credential issuer must exist");
     }
     expect(issuer.source).toContain("expiresIn: null");
+    expect(issuer.source).toContain("deviceJkt: identity.deviceJkt,");
     expect(() =>
       assertDesktopIssuance(
         sources.map((entry) =>
@@ -400,6 +424,21 @@ describe("desktop registry API-key configuration", () => {
         ),
       ),
     ).toThrow("issuance must persist its inactivity deadline");
+    expect(() =>
+      assertDesktopIssuance(
+        sources.map((entry) =>
+          entry === issuer
+            ? {
+                ...entry,
+                source: entry.source.replace(
+                  "deviceJkt: identity.deviceJkt,",
+                  "",
+                ),
+              }
+            : entry,
+        ),
+      ),
+    ).toThrow("issuance must persist its device key binding");
     expect(() =>
       assertDesktopIssuance([
         ...sources,
@@ -446,6 +485,7 @@ describe("desktop registry API-key configuration", () => {
     const metadata = {
       purpose: DESKTOP_REGISTRY_KEY_CONFIG,
       organizationId: "00000000-0000-4000-8000-000000000001",
+      deviceJkt: "A".repeat(43),
       inactivityExpiresAt: "2026-11-05T12:00:00.000Z",
     };
     expect(parseDesktopRegistryMetadata(metadata).success).toBe(true);
@@ -466,8 +506,17 @@ describe("desktop registry API-key configuration", () => {
       { purpose: metadata.purpose, organizationId: metadata.organizationId },
       { ...metadata, inactivityExpiresAt: "not-a-date" },
       { ...metadata, inactivityExpiresAt: 123 },
-      { ...metadata, inactivityExpiresAt: new Date(Number.NaN) },
       { ...metadata, purpose: "machine" },
+      ...[
+        undefined,
+        "",
+        "A".repeat(42),
+        "A".repeat(44),
+        `${"A".repeat(42)}=`,
+        `${"A".repeat(42)}+`,
+        `${"A".repeat(42)}/`,
+      ].map((deviceJkt) => ({ ...metadata, deviceJkt })),
+      { ...metadata, inactivityExpiresAt: new Date(Number.NaN) },
       { ...metadata, providerExpiresAt: metadata.inactivityExpiresAt },
     ]) {
       expect(parseDesktopRegistryMetadata(invalid).success).toBe(false);
@@ -492,6 +541,7 @@ describe("desktop registry API-key configuration", () => {
         metadata: {
           purpose: DESKTOP_REGISTRY_KEY_CONFIG,
           organizationId: "00000000-0000-4000-8000-000000000001",
+          deviceJkt: "A".repeat(43),
           inactivityExpiresAt: new Date(
             Date.now() + DESKTOP_REGISTRY_KEY_SECONDS * 1000,
           ).toISOString(),

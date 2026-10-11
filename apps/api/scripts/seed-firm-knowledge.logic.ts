@@ -1,6 +1,5 @@
-import { createHash } from "node:crypto";
-
 import { compareCodeUnit } from "@stll/collation";
+import { createSha256 } from "@stll/sha256/bun";
 
 type SelectMatterNamesOptions = {
   matterCount: number;
@@ -28,7 +27,7 @@ export const selectMatterNames = ({
   return uniqueNames
     .map((name) => ({
       name,
-      rank: createHash("sha256")
+      rank: createSha256()
         .update(selectionSeed)
         .update("\0")
         .update(name)

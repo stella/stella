@@ -1,3 +1,4 @@
+import { panic, Result, TaggedError } from "better-result";
 /**
  * Backfill image thumbnails + blur placeholders for uploads that predate the
  * thumbnail feature. Two independent passes:
@@ -17,9 +18,9 @@
  *   bun apps/api/scripts/backfill-image-thumbnails.ts entities # entity fields only
  *   bun apps/api/scripts/backfill-image-thumbnails.ts chat     # chat files only
  */
-
-import { panic, Result, TaggedError } from "better-result";
 import { and, inArray, isNull, sql } from "drizzle-orm";
+
+import { printError } from "@stll/errors";
 
 import { userFiles } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -31,6 +32,7 @@ import {
   THUMBNAIL_MIME_TYPE,
 } from "@/api/lib/files/image-derivative";
 import {
+  type CheckedFileWrite,
   removeOrganizationFilesBytes,
   writeOrganizationFiles,
 } from "@/api/lib/files/organization-file-usage";
@@ -242,7 +244,9 @@ const backfillChatFilePage = async (
             panic("Tracked thumbnail has no organization"),
           objectKey: thumbnail.thumbnailKey,
           sizeBytes: thumbnail.webp.byteLength,
-          write: async () => await write(thumbnail),
+          content: thumbnail,
+          write: async ({ content }: CheckedFileWrite<PreparedThumbnail>) =>
+            await write(content),
         })),
       );
     }
@@ -381,6 +385,6 @@ const main = async () => {
 };
 
 main().catch((error: unknown) => {
-  console.error("Image thumbnail backfill failed:", error);
+  printError("Image thumbnail backfill failed:", error);
   process.exit(1);
 });

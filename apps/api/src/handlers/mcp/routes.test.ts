@@ -21,6 +21,7 @@ import {
   STELLA_MCP_API_CONTRACT_VERSION,
 } from "@/api/mcp/constants";
 import { getMcpProtectedResourceMetadata } from "@/api/mcp/metadata";
+import { MCP_LAW_RESOURCE_SCOPES } from "@/api/mcp/resource-policy-contract";
 
 const mcpRoute = createMcpRoute({
   handleMcpHttpRequest: async () => new Response("Unexpected MCP transport"),
@@ -90,7 +91,7 @@ describe("MCP protected resource discovery routes", () => {
     );
   });
 
-  test("serves the two read scopes from the law path", async () => {
+  test("serves the derived law resource scopes from the law path", async () => {
     const response = await mcpRoute.handle(
       new Request(`http://localhost${MCP_LAW_DISCOVERY_PATH}`),
     );
@@ -99,7 +100,7 @@ describe("MCP protected resource discovery routes", () => {
     const metadata = await response.json();
     expect(metadata).toEqual(getMcpProtectedResourceMetadata("law"));
     expect(metadata).toMatchObject({
-      scopes_supported: ["stella:search", "stella:read"],
+      scopes_supported: MCP_LAW_RESOURCE_SCOPES,
     });
   });
 

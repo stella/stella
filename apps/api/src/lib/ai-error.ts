@@ -14,8 +14,16 @@ import type { FailureReason } from "@stll/errors";
 import { isNonNullObject } from "@stll/template-conditions/path";
 
 import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
-import { INCOMPLETE_STREAM_CODE } from "@/api/lib/chat/provider-stream-contract";
-import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
+import {
+  INCOMPLETE_STREAM_CODE,
+  isOutputCeilingStopReport,
+} from "@/api/lib/chat/provider-stream-contract";
+import {
+  ModelDeadlineExceededError,
+  ModelOutputIncompleteError,
+  ModelOutputInvalidError,
+  ProviderCallError,
+} from "@/api/lib/errors/provider-call-error";
 import {
   AIGenerationCancelledError,
   ChatEmptyCompletionError,
@@ -47,6 +55,65 @@ const INCOMPLETE_STREAM_CODES: ReadonlySet<string> = new Set([
   INCOMPLETE_STREAM_CODE,
   "incomplete-stream",
 ]);
+
+/**
+ * The run error codes TanStack's structured-output engine and its adapters
+ * report for an answer that arrived but cannot be used, by what each means.
+ * A cut-off answer is incomplete however it was noticed: the adapter saw the
+ * output ceiling (`max_tokens`), or the JSON it produced stops mid-value and
+ * does not parse (the adapter's `parse-error`, the engine's own
+ * `structured-output-parse-failed`). A complete answer the schema rejects is
+ * invalid. The output-ceiling stop itself is read by
+ * `isOutputCeilingStopReport`, which also knows OpenAI's spelling.
+ */
+const STRUCTURED_OUTPUT_FAILURE_CODE_KIND = {
+  "parse-error": "output_incomplete",
+  "structured-output-parse-failed": "output_incomplete",
+  "structured-output-validation-failed": "output_invalid",
+} as const satisfies Record<string, AIErrorKind>;
+
+// Own keys only, so a code named `toString` reads as unknown.
+const STRUCTURED_OUTPUT_FAILURE_KIND_BY_CODE: ReadonlyMap<string, AIErrorKind> =
+  new Map(Object.entries(STRUCTURED_OUTPUT_FAILURE_CODE_KIND));
+
+const structuredOutputFailureKind = (
+  error: Record<string, unknown>,
+): AIErrorKind | null => {
+  if (
+    isOutputCeilingStopReport({
+      code: error["code"],
+      message: error["message"],
+    })
+  ) {
+    return "output_incomplete";
+  }
+  const code = error["code"];
+  return typeof code === "string"
+    ? (STRUCTURED_OUTPUT_FAILURE_KIND_BY_CODE.get(code) ?? null)
+    : null;
+};
+
+/**
+ * The model-run failures this service names itself, by class. Total over the
+ * classes, so a new named run failure is a compile-time decision here.
+ */
+const NAMED_RUN_FAILURE_KINDS = [
+  [ModelOutputIncompleteError, "output_incomplete"],
+  [ModelOutputInvalidError, "output_invalid"],
+  [ModelDeadlineExceededError, "deadline_exceeded"],
+] as const satisfies readonly (readonly [
+  abstract new (...args: never) => Error,
+  AIErrorKind,
+])[];
+
+const namedRunFailureKind = (error: unknown): AIErrorKind | null => {
+  for (const [ErrorClass, kind] of NAMED_RUN_FAILURE_KINDS) {
+    if (error instanceof ErrorClass) {
+      return kind;
+    }
+  }
+  return null;
+};
 
 // TanStack preserves these provider-owned response-body values when an adapter
 // cannot preserve the numeric status itself (notably OpenAI's 401 response).
@@ -190,6 +257,17 @@ const classifyAIErrorInternal = (
     error["code"] === MANAGED_PROVIDER_UNAVAILABLE_CODE
   ) {
     return "model_unavailable";
+  }
+
+  const namedKind = namedRunFailureKind(error);
+  if (namedKind !== null) {
+    return namedKind;
+  }
+  if (isNonNullObject(error)) {
+    const structuredKind = structuredOutputFailureKind(error);
+    if (structuredKind !== null) {
+      return structuredKind;
+    }
   }
 
   if (ChatLoopDetectedError.is(error)) {
@@ -397,6 +475,9 @@ export const AI_ERROR_KIND_FAILURE_REASON = {
   model_unavailable: "model_unavailable",
   provider_unavailable: "provider_unavailable",
   provider_stream_incomplete: "provider_stream_incomplete",
+  output_incomplete: "model_output_incomplete",
+  output_invalid: "model_output_invalid",
+  deadline_exceeded: "model_deadline_exceeded",
   loop_detected: "chat_loop_detected",
   empty_completion: "chat_empty_completion",
 } as const satisfies Record<Exclude<AIErrorKind, "unknown">, FailureReason>;
@@ -481,6 +562,27 @@ const aiKindHandlerError = (
         status: 502,
         message:
           "The AI model's reply was cut off before it finished. Please try again.",
+        cause: error,
+      });
+    case "output_incomplete":
+      return new HandlerError({
+        status: 502,
+        message:
+          "The AI model's answer was cut off before it was complete. Please try again.",
+        cause: error,
+      });
+    case "output_invalid":
+      return new HandlerError({
+        status: 502,
+        message:
+          "The AI model's answer did not have the expected structure. Please try again.",
+        cause: error,
+      });
+    case "deadline_exceeded":
+      return new HandlerError({
+        status: 502,
+        message:
+          "The AI model did not answer in time. Please try again in a moment.",
         cause: error,
       });
     case "loop_detected":

@@ -370,7 +370,7 @@ describe("MCP resources", () => {
         ({ uri }) => uri === LEGISLATION_WORKFLOW_REFERENCE_URI,
       ),
     );
-    expect(servingModes).toEqual(["default", "anonymized", "law"]);
+    expect(servingModes).toEqual(["advanced", "default", "anonymized", "law"]);
 
     for (const mode of servingModes) {
       const listed = new Set(

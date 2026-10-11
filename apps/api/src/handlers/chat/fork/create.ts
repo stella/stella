@@ -43,7 +43,10 @@ import type { FileKey } from "@/api/lib/file-key";
 import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
 import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
-import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
+import {
+  type CheckedFileCopy,
+  OrganizationFileUsageError,
+} from "@/api/lib/files/organization-file-usage";
 import { createUserFileKey } from "@/api/lib/files/utils";
 import { isMissingS3ObjectError } from "@/api/lib/s3";
 import type { S3PresignError } from "@/api/lib/s3-presign";
@@ -359,11 +362,12 @@ const copyUserFiles = async ({
         organizationId,
         objectKey: destinationKey,
         sizeBytes,
-        copy: async () => {
-          const copied = await copyObject(sourceKey, destinationKey);
+        source: sourceKey,
+        copy: async (checked: CheckedFileCopy<string>) => {
+          const copied = await copyObject(checked.source, checked.objectKey);
           return Result.isError(copied)
             ? Result.err(copied.error)
-            : Result.ok(destinationKey);
+            : Result.ok(checked.objectKey);
         },
         confirmedDestinationAbsentOnCopyError: (error: S3PresignError) =>
           isMissingS3ObjectError(error.cause),

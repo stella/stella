@@ -2,7 +2,6 @@ use aes_gcm::{
   Aes256Gcm, Nonce,
   aead::{Aead, Generate, KeyInit},
 };
-use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
   collections::{BTreeSet, HashSet},
@@ -11,8 +10,8 @@ use std::{
 };
 
 use crate::clipboard::PersistedClipboardState;
+use crate::local_store::{EncryptedJsonFile, create_private_dir, write_private_atomic};
 
-const STORE_VERSION: u8 = 1;
 const IMAGE_BLOB_VERSION: u8 = 1;
 const IMAGE_BLOB_NONCE_BYTES: usize = 12;
 const IMAGE_BLOB_HEADER_BYTES: usize = 1 + IMAGE_BLOB_NONCE_BYTES;
@@ -53,14 +52,6 @@ impl fmt::Display for ClipboardImageValidationError {
   }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct EncryptedClipboardEnvelope {
-  ciphertext: String,
-  nonce: String,
-  version: u8,
-}
-
 #[derive(Clone)]
 pub struct ClipboardStore {
   key: [u8; 32],
@@ -72,35 +63,12 @@ impl ClipboardStore {
     Self { key, path }
   }
 
-  pub fn load(&self) -> Result<Option<PersistedClipboardState>, String> {
-    let raw = match fs::read_to_string(&self.path) {
-      Ok(raw) => raw,
-      Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-      Err(error) => return Err(format!("clipboard store read failed: {error}")),
-    };
-    let envelope: EncryptedClipboardEnvelope = serde_json::from_str(&raw)
-      .map_err(|error| format!("clipboard envelope is invalid: {error}"))?;
-    if envelope.version != STORE_VERSION {
-      return Err("clipboard store version is unsupported".to_string());
-    }
+  fn history_file(&self) -> EncryptedJsonFile {
+    EncryptedJsonFile::new(self.key, self.path.clone(), "clipboard")
+  }
 
-    let nonce = hex::decode(envelope.nonce)
-      .map_err(|error| format!("clipboard nonce is invalid: {error}"))?;
-    if nonce.len() != 12 {
-      return Err("clipboard nonce has an invalid length".to_string());
-    }
-    let nonce = Nonce::try_from(nonce.as_slice())
-      .map_err(|_| "clipboard nonce has an invalid length".to_string())?;
-    let ciphertext = hex::decode(envelope.ciphertext)
-      .map_err(|error| format!("clipboard ciphertext is invalid: {error}"))?;
-    let cipher = Aes256Gcm::new_from_slice(&self.key)
-      .map_err(|_| "clipboard encryption key is invalid".to_string())?;
-    let plaintext = cipher
-      .decrypt(&nonce, ciphertext.as_ref())
-      .map_err(|_| "clipboard history could not be decrypted".to_string())?;
-    serde_json::from_slice(&plaintext)
-      .map(Some)
-      .map_err(|error| format!("clipboard history is invalid: {error}"))
+  pub fn load(&self) -> Result<Option<PersistedClipboardState>, String> {
+    self.history_file().load()
   }
 
   fn image_directory(&self) -> PathBuf {
@@ -167,36 +135,8 @@ impl ClipboardStore {
     associated_data: &[u8],
   ) -> Result<(), String> {
     let encrypted = self.encrypt_blob(plaintext, associated_data)?;
-    let temp_path = path.with_extension(format!(
-      "{}.{}.tmp",
-      std::process::id(),
-      uuid::Uuid::new_v4()
-    ));
-    if let Err(error) = fs::write(&temp_path, encrypted) {
-      let cleanup_error = match fs::remove_file(&temp_path) {
-        Ok(()) => None,
-        Err(cleanup_error) if cleanup_error.kind() == std::io::ErrorKind::NotFound => {
-          None
-        }
-        Err(cleanup_error) => Some(cleanup_error),
-      };
-      return match cleanup_error {
-        Some(cleanup_error) => Err(format!(
-          "clipboard image write failed: {error}; temporary image cleanup failed: {cleanup_error}"
-        )),
-        None => Err(format!("clipboard image write failed: {error}")),
-      };
-    }
-    #[cfg(unix)]
-    {
-      use std::os::unix::fs::PermissionsExt;
-      let _ = fs::set_permissions(&temp_path, fs::Permissions::from_mode(0o600));
-    }
-    if let Err(error) = fs::rename(&temp_path, path) {
-      let _ = fs::remove_file(&temp_path);
-      return Err(format!("clipboard image replace failed: {error}"));
-    }
-    Ok(())
+    write_private_atomic(path, &encrypted)
+      .map_err(|error| format!("clipboard image write failed: {error}"))
   }
 
   pub fn persist_image(
@@ -204,14 +144,8 @@ impl ClipboardStore {
     blob_id: &str,
     payload: ClipboardImagePayload<'_>,
   ) -> Result<ClipboardImagePersistStatus, String> {
-    let directory = self.image_directory();
-    fs::create_dir_all(&directory)
+    create_private_dir(&self.image_directory())
       .map_err(|error| format!("clipboard image directory failed: {error}"))?;
-    #[cfg(unix)]
-    {
-      use std::os::unix::fs::PermissionsExt;
-      let _ = fs::set_permissions(&directory, fs::Permissions::from_mode(0o700));
-    }
     let image_path = self.image_path(blob_id, IMAGE_BLOB_SUFFIX)?;
     let preview_path = self.image_path(blob_id, IMAGE_PREVIEW_SUFFIX)?;
     match (image_path.is_file(), preview_path.is_file()) {
@@ -463,45 +397,7 @@ impl ClipboardStore {
   }
 
   pub fn persist(&self, state: &PersistedClipboardState) -> Result<(), String> {
-    if let Some(parent) = self.path.parent() {
-      fs::create_dir_all(parent)
-        .map_err(|error| format!("clipboard store directory failed: {error}"))?;
-    }
-
-    let plaintext = serde_json::to_vec(state)
-      .map_err(|error| format!("clipboard serialization failed: {error}"))?;
-    let cipher = Aes256Gcm::new_from_slice(&self.key)
-      .map_err(|_| "clipboard encryption key is invalid".to_string())?;
-    let nonce = Nonce::generate();
-    let ciphertext = cipher
-      .encrypt(&nonce, plaintext.as_ref())
-      .map_err(|_| "clipboard encryption failed".to_string())?;
-    let envelope = EncryptedClipboardEnvelope {
-      ciphertext: hex::encode(ciphertext),
-      nonce: hex::encode(nonce),
-      version: STORE_VERSION,
-    };
-    let json = serde_json::to_vec(&envelope)
-      .map_err(|error| format!("clipboard envelope serialization failed: {error}"))?;
-    let temp_path = self.path.with_extension(format!(
-      "{}.{}.tmp",
-      std::process::id(),
-      uuid::Uuid::new_v4()
-    ));
-    fs::write(&temp_path, json)
-      .map_err(|error| format!("clipboard store write failed: {error}"))?;
-
-    #[cfg(unix)]
-    {
-      use std::os::unix::fs::PermissionsExt;
-      let _ = fs::set_permissions(&temp_path, fs::Permissions::from_mode(0o600));
-    }
-
-    if let Err(error) = fs::rename(&temp_path, &self.path) {
-      let _ = fs::remove_file(&temp_path);
-      return Err(format!("clipboard store replace failed: {error}"));
-    }
-    Ok(())
+    self.history_file().persist(state)
   }
 }
 

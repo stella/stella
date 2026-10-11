@@ -1,3 +1,4 @@
+// parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 // parser-output-unchanged: a download the publisher does not serve is reported as an unread item; built decisions are unchanged.
@@ -56,6 +57,8 @@ import type { Document as FolioDocument } from "@stll/docx-core/model";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import {
@@ -102,10 +105,7 @@ import {
   fetchWithRetry,
   rethrowCycleStop,
 } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import {
-  adapterCatch,
-  hashContent,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   huBhgyHeaderLabelsOf,
   parseHuBhgyDecision,
@@ -129,6 +129,8 @@ import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-asse
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
+
+import { logDocumentParseFailure } from "./document-parse-failure";
 
 // ── Publisher boundary ───────────────────────────────────
 
@@ -879,10 +881,10 @@ export const assembleHuBhgyDecision = async ({
           catch: errorTag,
         });
   if (parsed !== null && Result.isError(parsed)) {
-    logger.warn("case_law.ingestion.document_parse_failed", {
+    logDocumentParseFailure({
       adapterKey: ADAPTER_KEYS.HU_BHGY,
       caseNumber,
-      "error.type": parsed.error,
+      error: parsed.error,
     });
   }
   const read = parsed !== null && Result.isOk(parsed) ? parsed.value : null;
