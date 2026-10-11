@@ -51,11 +51,11 @@ const after = (column: AnyPgColumn, cursor: string | null) =>
  *
  * @yields Each page's rows, in reader order.
  */
-const idPages = <Row extends { id: string }>(
-  readPage: (after: Row["id"] | null) => Promise<Row[]>,
+const idPages = <Cursor extends string, Row extends { id: Cursor }>(
+  readPage: (after: Cursor | null) => Promise<Row[]>,
   signal: AbortSignal,
 ) => {
-  let last: Row["id"] | null = null;
+  let last: Cursor | null = null;
   return iterateCursorPages(async () => {
     signal.throwIfAborted();
     const items = await readPage(last);
