@@ -43,6 +43,25 @@ context("test registration census", () => {
     },
   );
 
+  check.each([
+    ["test", "test.only"],
+    ["test.only", "test"],
+    ["test", "test.only.each([1])"],
+    ["describe", "describe.only"],
+  ])(
+    "finds focus in either conditional alias branch: %s / %s",
+    (whenTrue, whenFalse) => {
+      const source = `
+      const selected = enabled ? ${whenTrue} : ${whenFalse};
+      selected("conditional focus", () => {});
+    `;
+      expect(parseTestRegistrations("fixture.test.ts", source)).toEqual([
+        { identity: "fixture.test.ts::conditional focus", type: "disabled" },
+        { identity: "fixture.test.ts::conditional focus", type: "only" },
+      ]);
+    },
+  );
+
   check.each(["&&", "||", "??"])(
     "inventories short-circuit registrations: %s",
     (operator) => {
