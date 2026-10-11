@@ -16,7 +16,7 @@ fi
 cd "${CRATE_DIR}"
 PINNED_RUST_VERSION="$(sed -n 's/^channel = "\([^"]*\)"/\1/p' rust-toolchain.toml)"
 readonly PINNED_RUST_VERSION
-RUSTC_METADATA="$(rustc -vV)"
+RUSTC_METADATA="$("${RUSTC:-rustc}" -vV)"
 readonly RUSTC_METADATA
 RUSTC_HOST="$(printf '%s\n' "${RUSTC_METADATA}" | sed -n 's/^host: //p')"
 readonly RUSTC_HOST
@@ -30,7 +30,7 @@ fi
 
 RESOLVED_CARGO_HOME="$(cd "${CARGO_HOME:-${HOME}/.cargo}" && pwd)"
 readonly RESOLVED_CARGO_HOME
-RUSTC_SYSROOT="$(rustc --print sysroot)"
+RUSTC_SYSROOT="$("${RUSTC:-rustc}" --print sysroot)"
 readonly RUSTC_SYSROOT
 TARGET_DIR="${CARGO_TARGET_DIR:-${CRATE_DIR}/target}"
 if [[ "${TARGET_DIR}" != /* ]]; then

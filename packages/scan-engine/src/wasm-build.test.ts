@@ -13,7 +13,7 @@ if (pinnedVersion === undefined) {
   panic("Missing pinned scan engine Rust version");
 }
 
-const buildWithCompiler = (metadata: string) => {
+const buildWithCompiler = (metadata: string, overrideMetadata?: string) => {
   const directory = mkdtempSync(path.join(tmpdir(), "scan-engine-compiler-"));
   try {
     writeFileSync(
@@ -21,6 +21,14 @@ const buildWithCompiler = (metadata: string) => {
       `#!/bin/sh\nif [ "$1" = "-vV" ]; then\n  printf '%s\\n' '${metadata}'\nelse\n  exit 37\nfi\n`,
       { mode: 0o755 },
     );
+    const overrideCompiler = path.join(directory, "override-rustc");
+    if (overrideMetadata !== undefined) {
+      writeFileSync(
+        overrideCompiler,
+        `#!/bin/sh\nprintf '%s\\n' '${overrideMetadata}'\n`,
+        { mode: 0o755 },
+      );
+    }
     return Bun.spawnSync(
       ["bash", new URL("../scripts/build-wasm.sh", import.meta.url).pathname],
       {
@@ -28,6 +36,7 @@ const buildWithCompiler = (metadata: string) => {
           ...process.env,
           PATH: `${directory}:${process.env["PATH"]}`,
           CARGO_HOME: directory,
+          RUSTC: overrideMetadata === undefined ? "" : overrideCompiler,
         },
         stdout: "pipe",
         stderr: "pipe",
@@ -57,6 +66,15 @@ test("WASM generation rejects every noncanonical compiler before building", () =
   );
   expect(wrongVersion.exitCode).toBe(2);
   expect(wrongVersion.stderr.toString()).toContain(`Rust ${pinnedVersion}`);
+});
+
+test("WASM generation validates Cargo's compiler override", () => {
+  const result = buildWithCompiler(
+    `host: x86_64-unknown-linux-gnu\nrelease: ${pinnedVersion}`,
+    `host: aarch64-apple-darwin\nrelease: ${pinnedVersion}`,
+  );
+  expect(result.exitCode).toBe(2);
+  expect(result.stderr.toString()).toContain("found aarch64-apple-darwin");
 });
 
 test("canonical compiler reaches the build preparation", () => {
