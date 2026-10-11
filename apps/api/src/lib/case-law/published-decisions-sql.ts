@@ -1,3 +1,4 @@
+// parser-output-unchanged: Publication predicates serve database reads and indexes; parsed decision output is unchanged.
 import type { Column, SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 

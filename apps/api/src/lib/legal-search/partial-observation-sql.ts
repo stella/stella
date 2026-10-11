@@ -1,4 +1,4 @@
-// parser-output-unchanged: Pipeline-owned quality ranks and marker writes change; publisher fields and parsed documents are unchanged.
+// parser-output-unchanged: Coverage listing-only SQL is a read predicate; pipeline quality ranks, publisher fields, and parsed documents are unchanged.
 /**
  * The quality marker the ingestion pipeline persists with a partial source
  * observation, and the SQL that reads it.

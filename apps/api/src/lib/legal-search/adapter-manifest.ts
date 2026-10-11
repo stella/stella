@@ -1,4 +1,4 @@
-// parser-output-unchanged: manifest policy and derived deferred-document keys do not change parsed decision output.
+// parser-output-unchanged: Known-gap declarations serve coverage reads only; manifest parser policies and parsed decision output are unchanged.
 import { panic } from "better-result";
 
 import {
