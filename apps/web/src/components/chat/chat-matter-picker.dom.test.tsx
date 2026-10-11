@@ -46,7 +46,9 @@ const workspaces = Array.from({ length: MATTER_COUNT }, (_, index) => ({
   defaultViewId: toSafeId<"workspaceView">(
     `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
   ),
-  id: `workspace_${index}`,
+  id: toSafeId<"workspace">(
+    `00000000-0000-4000-9000-${String(index).padStart(12, "0")}`,
+  ),
   lastActivityAt: new Date("2026-07-30T12:00:00.000Z"),
   name: `Matter ${index}`,
   reference: `MAT-${index}`,
