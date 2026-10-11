@@ -2,12 +2,12 @@ import { Result } from "better-result";
 import { decodeJwt } from "jose";
 
 import { mayReadPublicLawForOrganization } from "@/api/db/root";
-import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
 import { hasLawReadScope } from "@/api/handlers/legal-resolve/scope";
 import { captureRequestError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
+import { admitLawRead } from "@/api/lib/usage/law-read-admission";
 import { authenticateMcpRequest } from "@/api/mcp/auth";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import { resolveMcpSessionContext } from "@/api/mcp/context";

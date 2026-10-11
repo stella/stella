@@ -1659,6 +1659,31 @@ describe("MCP anonymization canary corpus", () => {
     },
   );
 
+  test("listing organization annotations does not require public-law admission", async () => {
+    const admitLawRead = mock(async () => {
+      throw new Error("list must not read the public corpus");
+    });
+    const context = buildContext({
+      tx: { select: () => chainableRows([]) },
+    });
+    context.testDependencies = {
+      ...context.testDependencies,
+      admitLawRead,
+    };
+
+    const response =
+      await READER_ANNOTATION_TOOL_HANDLERS.list_reader_annotations({
+        args: {
+          target_type: "decision",
+          target_id: "00000000-0000-4000-8000-0000000c0010",
+        },
+        context,
+      });
+
+    expect(response).toMatchObject({ egress: "structured" });
+    expect(admitLawRead).not.toHaveBeenCalled();
+  });
+
   // --- knowledge-tools -------------------------------------------------------
 
   const clausesCanary = canaryTestsFor("list_clauses");

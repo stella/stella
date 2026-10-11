@@ -32,6 +32,7 @@ import { cn } from "@stll/ui/utils";
 
 import {
   ChatThreadDecisionLabel,
+  ChatThreadDecisionRefusalLabel,
   drawableChatThreadDecision,
   useOpenChatThreadDecision,
 } from "@/components/chat/chat-thread-decision";
@@ -401,6 +402,9 @@ const ThreadRow = ({
       {decision === null ? null : (
         <ChatThreadDecisionLabel decision={decision} />
       )}
+      {thread.decision?.type === "refused" ? (
+        <ChatThreadDecisionRefusalLabel refusal={thread.decision} />
+      ) : null}
       <ThreadContextLine context={thread.context} />
       <span className="shrink-0 tabular-nums">
         {format.dateTime(new Date(thread.updatedAt).getTime())}

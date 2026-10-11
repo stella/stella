@@ -2,6 +2,7 @@ import type { McpDefaultResourceScope } from "@stll/api-contract";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
 import { unreachable } from "@/api/lib/errors/tagged-errors";
+import { LAW_READ_REFUSAL_DESCRIPTION } from "@/api/lib/usage/law-read-admission";
 import { BILLING_TOOL_SET } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_SET } from "@/api/mcp/capability-tools";
 import { LAW_COMPAT_TOOL_SET } from "@/api/mcp/compat-law-tools";
@@ -54,21 +55,33 @@ export const DEFAULT_MCP_TOOL_SETS = [
 // destroys the exact tool-name union used throughout chat. The bidirectional
 // compile check below makes the explicit projection unable to drift from the
 // canonical tool-set registry.
-export const DEFAULT_MCP_TOOL_DEFINITIONS = [
-  ...COMPAT_TOOL_SET.definitions,
-  ...STELLA_TOOL_SET.definitions,
-  ...DECISION_READER_TOOL_SET.definitions,
-  ...LEGISLATION_TOOL_SET.definitions,
-  ...TEMPLATE_TOOL_SET.definitions,
-  ...DOCUMENT_TOOL_SET.definitions,
-  ...MATTER_TOOL_SET.definitions,
-  ...KNOWLEDGE_TOOL_SET.definitions,
-  ...READER_ANNOTATION_TOOL_SET.definitions,
-  ...BILLING_TOOL_SET.definitions,
-  ...RESEARCH_ADMIN_TOOL_SET.definitions,
-  ...FEEDBACK_TOOL_SET.definitions,
-  ...CAPABILITY_TOOL_SET.definitions,
-] as const satisfies readonly McpToolDefinition[];
+const describeLawReadAdmission = <TTool extends McpToolDefinition>(
+  tool: TTool,
+): TTool =>
+  tool.feature === "FEATURE_PUBLIC_LAW"
+    ? {
+        ...tool,
+        description: `${tool.description} ${LAW_READ_REFUSAL_DESCRIPTION}`,
+      }
+    : tool;
+
+export const DEFAULT_MCP_TOOL_DEFINITIONS = (
+  [
+    ...COMPAT_TOOL_SET.definitions,
+    ...STELLA_TOOL_SET.definitions,
+    ...DECISION_READER_TOOL_SET.definitions,
+    ...LEGISLATION_TOOL_SET.definitions,
+    ...TEMPLATE_TOOL_SET.definitions,
+    ...DOCUMENT_TOOL_SET.definitions,
+    ...MATTER_TOOL_SET.definitions,
+    ...KNOWLEDGE_TOOL_SET.definitions,
+    ...READER_ANNOTATION_TOOL_SET.definitions,
+    ...BILLING_TOOL_SET.definitions,
+    ...RESEARCH_ADMIN_TOOL_SET.definitions,
+    ...FEEDBACK_TOOL_SET.definitions,
+    ...CAPABILITY_TOOL_SET.definitions,
+  ] as const satisfies readonly McpToolDefinition[]
+).map(describeLawReadAdmission);
 
 const PURPOSE_BUILT_MCP_TOOL_DEFINITIONS = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
   ({ name }) =>
@@ -179,8 +192,9 @@ const scopeDefinitionsToSurface = (
     listed: new Set(definitions.map(({ name }) => name)),
   };
   return definitions.map((tool) => {
-    const description =
+    const scopedDescription =
       scopeProseToSurface(tool.description, vocabulary) ?? tool.description;
+    const description = scopedDescription;
     let inputSchemaChanged = false;
     const inputSchema: McpToolDefinition["inputSchema"] = {
       ...tool.inputSchema,
@@ -293,9 +307,11 @@ const LAW_ONLY_MCP_TOOL_SETS = [
   LAW_COMPAT_TOOL_SET,
 ] as const satisfies readonly McpToolSet<readonly McpToolDefinition[]>[];
 
-const LAW_ONLY_MCP_TOOL_DEFINITIONS = [
-  ...LAW_COMPAT_TOOL_SET.definitions,
-] as const satisfies readonly McpToolDefinition[];
+const LAW_ONLY_MCP_TOOL_DEFINITIONS = (
+  [
+    ...LAW_COMPAT_TOOL_SET.definitions,
+  ] as const satisfies readonly McpToolDefinition[]
+).map(describeLawReadAdmission);
 
 const LAW_ONLY_MCP_TOOL_NAMES: ReadonlySet<string> = new Set(
   LAW_ONLY_MCP_TOOL_DEFINITIONS.map((tool) => tool.name),

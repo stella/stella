@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
@@ -7,6 +7,7 @@ import { env } from "@/api/env";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { MemberRole } from "@/api/lib/member-roles";
+import { admitLawRead } from "@/api/lib/usage/law-read-admission";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
@@ -46,6 +47,14 @@ const createContext = (
   scopedDb: throwingScopedDb,
   // The MCP transport holds a permit for every request (`context.ts`).
   thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
+  testDependencies: {
+    admitLawRead: async (options) =>
+      admitLawRead({
+        ...options,
+        mayReadPublicLaw: async () => Result.ok(true),
+        publicLawEnabled: () => true,
+      }),
+  },
   userId: toSafeId<"user">("user_1"),
   userEmail: "standard@example.test",
 });

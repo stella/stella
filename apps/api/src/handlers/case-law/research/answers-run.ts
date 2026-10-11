@@ -5,7 +5,10 @@ import {
   readOrganizationResearchColumns,
 } from "@/api/handlers/case-law/research/column-access";
 import { runResearchAnswersBodySchema } from "@/api/handlers/case-law/research/schema";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafeLawReadRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -43,7 +46,7 @@ const config = {
   },
 } satisfies HandlerConfig;
 
-const runResearchAnswersHandler = createSafeRootHandler(
+const runResearchAnswersHandler = createSafeLawReadRootHandler(
   config,
   async function* ({
     body,

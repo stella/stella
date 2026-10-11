@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -23,6 +23,7 @@ import type {
 } from "@/api/lib/case-law-public-read-db";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
+import { admitLawRead } from "@/api/lib/usage/law-read-admission";
 
 import {
   appendAnonymizedModeHintToChatSafePrompt,
@@ -405,7 +406,13 @@ describe("active decision section", () => {
     const section = await buildActiveDecisionSection({
       activeDecision: { decisionId: DECISION_ID },
       caseLawDb: caseLawReaderHoldingTheDecision(),
-      organizationId: undefined,
+      admission: (
+        await admitLawRead({
+          organizationId: toSafeId<"organization">("org-corpus-policy"),
+          mayReadPublicLaw: async () => Result.ok(true),
+          publicLawEnabled: () => true,
+        })
+      ).unwrap(),
       safeDb: tenantDb,
       userId: undefined,
     });
@@ -420,7 +427,13 @@ describe("active decision section", () => {
     const section = await buildActiveDecisionSection({
       activeDecision: { decisionId: DECISION_ID },
       caseLawDb: caseLawReaderHoldingTheDecision(),
-      organizationId: undefined,
+      admission: (
+        await admitLawRead({
+          organizationId: toSafeId<"organization">("org-corpus-policy"),
+          mayReadPublicLaw: async () => Result.ok(true),
+          publicLawEnabled: () => true,
+        })
+      ).unwrap(),
       safeDb: tenantDb,
       userId: undefined,
     });

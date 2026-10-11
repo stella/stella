@@ -3,11 +3,14 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
+import { LAW_READ_REFUSAL_CODE } from "@stll/api-contract/law-read-admission";
+
 import en from "@/i18n/langs/en.json";
 import { toSafeId } from "@/lib/safe-id";
 
 import {
   ChatThreadDecisionLabel,
+  ChatThreadDecisionRefusalLabel,
   drawableChatThreadDecision,
 } from "./chat-thread-decision";
 import type { ChatThreadDecision } from "./chat-thread-decision";
@@ -79,4 +82,25 @@ describe("drawable chat thread decision", () => {
     ).toBeNull();
     expect(drawableChatThreadDecision({ decision: null })).toBeNull();
   });
+});
+
+describe("refused chat decision preview", () => {
+  for (const code of Object.values(LAW_READ_REFUSAL_CODE)) {
+    test(`shows ${code} while keeping the history row drawable`, () => {
+      const refusal = { type: "refused", code } as const;
+      expect(drawableChatThreadDecision({ decision: refusal })).toBeNull();
+      const html = renderToStaticMarkup(
+        <IntlProvider locale="en" messages={en} timeZone="UTC">
+          <ChatThreadDecisionRefusalLabel refusal={refusal} />
+        </IntlProvider>,
+      );
+      expect(html).toContain("Decision unavailable");
+      expect(html).toContain(
+        code === "access_unavailable"
+          ? "The service is temporarily unavailable"
+          : "Access denied.",
+      );
+      expect(html).not.toContain("25 Cdo 1234/2021");
+    });
+  }
 });

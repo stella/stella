@@ -40,10 +40,7 @@ import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/work
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { RegistryLookupResponse } from "@/api/lib/business-registries/dispatch";
-import {
-  deriveRefMediationEntry,
-  projectForChat,
-} from "@/api/lib/chat/projection-schema";
+import { deriveRefMediationEntry } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { encryptContent } from "@/api/lib/content-encryption";
@@ -51,6 +48,7 @@ import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { SearchResult } from "@/api/lib/search/types";
 import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
 import { isRecord } from "@/api/lib/type-guards";
+import { admitLawRead } from "@/api/lib/usage/law-read-admission";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { LEGISLATION_TOOL_HANDLERS } from "@/api/mcp/legislation-tools";
 import type { READ_CONTACT_COLUMNS } from "@/api/mcp/read-contact-columns";
@@ -220,6 +218,12 @@ const buildContext = (tx: unknown): McpRequestContext => {
     userId: toSafeId<"user">("user_1"),
     userEmail: "standard@example.test",
     testDependencies: {
+      admitLawRead: async (options) =>
+        await admitLawRead({
+          ...options,
+          mayReadPublicLaw: async () => Result.ok(true),
+          publicLawEnabled: () => env.FEATURE_PUBLIC_LAW,
+        }),
       // Billing reads are enrolment-gated; this caller is enrolled so every
       // projectable read runs.
       featureAccessSnapshot: enrolledTimeBillingSnapshot({
@@ -2193,7 +2197,7 @@ beforeEach(() => {
 
 describe("registry projection contract", () => {
   for (const toolName of ["search_case_law", "search_legislation"] as const) {
-    test(`${toolName} projects the publisher as primary when the deployment cannot serve the item`, async () => {
+    test(`${toolName} refuses law reads when public law is disabled`, async () => {
       const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
       const previous = env.FEATURE_PUBLIC_LAW;
       env.FEATURE_PUBLIC_LAW = false;
@@ -2209,45 +2213,19 @@ describe("registry projection contract", () => {
           toolName === "search_case_law"
             ? STELLA_TOOL_HANDLERS.search_case_law
             : LEGISLATION_TOOL_HANDLERS.search_legislation;
-        // The advertised registry hides disabled tools. Exercise the handler's
-        // shared output projection directly to reach its deployment fallback.
+        // Direct registry handlers enforce the same deployment admission as
+        // MCP tools/call, even when called outside the advertised registry.
         const response = await handler({
           args,
           context: contextFor(toolName, {}),
         });
-        if (!("status" in response) || response.status !== "success") {
-          panic("Citation handler failed");
-        }
-        const result = projectForChat({
-          payload: response.data,
-          schema: READ_TOOL_REF_FIELD_MAP[toolName].projection,
-          refRegistry,
-          dehydration: {
-            args,
-            resolvedMatterParams: {},
-            resolvedEntityParams: {},
-            dehydratedEntityRefs: new Map(),
+        expect(response).toMatchObject({
+          status: "error",
+          error: {
+            code: "missing_scope",
+            message: "Public law access is not available in this deployment.",
           },
-          source: "run-registry-tool",
-          toolName,
         });
-        if (Result.isError(result)) {
-          panic("Citation projection failed", result.error);
-        }
-        const payload = result.value;
-        if (!isRecord(payload) || !Array.isArray(payload["results"])) {
-          panic("No citation search results");
-        }
-        expect(payload["results"].length).toBeGreaterThan(0);
-        for (const item of payload["results"]) {
-          if (!isRecord(item)) {
-            panic("Invalid citation result");
-          }
-          expect(item["appUrl"]).toBeNull();
-          expect(item["url"]).toBe(item["sourceUrl"]);
-          expect(item["url"]).toMatch(/^https:/u);
-          expect(item["source_url"]).toBeUndefined();
-        }
       } finally {
         env.FEATURE_PUBLIC_LAW = previous;
         restore();

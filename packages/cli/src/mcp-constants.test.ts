@@ -30,3 +30,11 @@ test.each([
     );
   },
 );
+
+test("law admission outcomes retain their CLI refusal class", () => {
+  expect(resolveMcpErrorCodeExit("not_entitled")).toBe(
+    EXIT_CODES.permissionDenied,
+  );
+  expect(resolveMcpErrorCodeExit("missing_scope")).toBe(EXIT_CODES.auth);
+  expect(resolveMcpErrorCodeExit("access_unavailable")).toBe(EXIT_CODES.server);
+});

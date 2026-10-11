@@ -28,6 +28,7 @@ import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
+import type { LawReadAdmission } from "@/api/lib/usage/law-read-admission";
 import { encodeCompatId } from "@/api/mcp/compat-ids";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
@@ -508,11 +509,13 @@ export type CompatCorpusSearchOutcome =
  * statute hits being present, not by their being first.
  */
 export const searchCompatCorpus = async ({
+  admission: _admission,
   context,
   countries,
   cursors,
   query,
 }: {
+  admission: LawReadAdmission;
   context: McpRequestContext;
   countries: CompatCorpusCountries;
   cursors: CompatCorpusCursors;
@@ -578,9 +581,11 @@ export type CompatCorpusRead =
  * display but not for AI use answers `withheld` rather than with its wording.
  */
 export const readCompatDecision = async ({
+  admission: _admission,
   context,
   decisionId,
 }: {
+  admission: LawReadAdmission;
   context: McpRequestContext;
   decisionId: string;
 }): Promise<CompatCorpusRead> => {
@@ -645,9 +650,11 @@ export const readCompatDecision = async ({
  * accepts and resolved by the one resolver the public routes share.
  */
 export const readCompatStatute = async ({
+  admission: _admission,
   context,
   eli,
 }: {
+  admission: LawReadAdmission;
   context: McpRequestContext;
   eli: string;
 }): Promise<CompatCorpusRead> => {

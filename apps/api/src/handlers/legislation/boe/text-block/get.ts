@@ -2,7 +2,10 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafeLawReadRootHandler,
+} from "@/api/lib/api-handlers";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { boeClient } from "@/api/lib/legal-search/boe-client";
 
@@ -11,7 +14,7 @@ const paramsSchema = t.Object({
   blockId: t.String({ minLength: 1, maxLength: 128 }),
 });
 
-const boeTextBlock = createSafeRootHandler(
+const boeTextBlock = createSafeLawReadRootHandler(
   {
     description:
       "Read the text of one block of a consolidated Spanish BOE law, " +

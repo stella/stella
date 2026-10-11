@@ -12,14 +12,13 @@ import {
   brandPersistedEntityId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
-import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchReader } from "@/api/lib/search/provider";
+import { LAW_READ_REFUSAL_DESCRIPTION } from "@/api/lib/usage/law-read-admission";
 import {
   COMPAT_FETCH_OUTPUT_SCHEMA,
   COMPAT_SEARCH_OUTPUT_SCHEMA,
 } from "@/api/mcp/compat-contract";
 import {
-  EMPTY_CORPUS_CURSORS,
   hasMoreCorpusPages,
   resolveCompatCorpusCountries,
   searchCompatCorpus,
@@ -38,11 +37,9 @@ import {
   decodeCompatSearchCursor,
   encodeCompatSearchCursor,
   invalidCompatIdResult,
-  publicLawDisabledResult,
-  type CompatSearchPosition,
 } from "@/api/mcp/compat-shared";
 import type { McpRequestContext } from "@/api/mcp/context";
-import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
+import { admitMcpLawRead } from "@/api/mcp/law-read-admission";
 import type {
   McpCompatSearchResult,
   McpToolDefinition,
@@ -81,8 +78,6 @@ type CompatFetchPayload = {
   truncated: boolean;
   workspaceId: SafeId<"workspace">;
 };
-
-const PUBLIC_LAW_FEATURE = "FEATURE_PUBLIC_LAW";
 
 const getFetchableEntityMap = async ({
   context,
@@ -339,14 +334,15 @@ const COMPAT_TOOL_DEFINITIONS = [
         "Search anonymized knowledge across accessible matters using the " +
         "OpenAI-compatible search tool shape. Where this deployment enables the public legal " +
         "corpus, the same query also returns case-law decisions and statutes, which are " +
-        `published law and are returned as written. ${COMPAT_ID_VOCABULARY} Pass an id back to fetch verbatim.`,
+        `published law and are returned as written. corpusOutcome reports whether law was available and carries refusal codes while matter results remain readable. ${COMPAT_ID_VOCABULARY} Pass an id back to fetch verbatim. ${LAW_READ_REFUSAL_DESCRIPTION}`,
     },
     description:
       "Search knowledge across accessible matters using the OpenAI-compatible " +
       "search tool shape. Where this deployment enables the public legal corpus, the same " +
       "query also returns case-law decisions and statutes from every jurisdiction the corpus " +
       `holds, the organization's practice jurisdictions first. ${COMPAT_ID_VOCABULARY} Pass an id back to fetch verbatim. ` +
-      "Use legal citation `url` for the reader and `source_url` for the publisher.",
+      "corpusOutcome reports whether law was available and carries refusal codes while matter results remain readable. " +
+      `Use legal citation \`url\` for the reader and \`source_url\` for the publisher. ${LAW_READ_REFUSAL_DESCRIPTION}`,
     inputSchema: compatSearchArgsSchema,
     name: "search",
     scope: "stella:search",
@@ -369,38 +365,19 @@ const COMPAT_TOOL_DEFINITIONS = [
         `shape. ${COMPAT_ID_VOCABULARY} A matter document is returned anonymized; a ` +
         "decision or a statute is published law and is returned as written. Long text is " +
         "returned in windows; pass the returned nextCursor back as cursor to read more. " +
-        "Use legal citation `url` for the reader and `source_url` for the publisher.",
+        `Use legal citation \`url\` for the reader and \`source_url\` for the publisher. ${LAW_READ_REFUSAL_DESCRIPTION}`,
     },
     description:
       "Fetch one search result by id using the OpenAI-compatible fetch tool " +
       `shape. ${COMPAT_ID_VOCABULARY} \`metadata.kind\` says which of the three the ` +
       "answer is. Long text is returned in windows; pass the returned nextCursor back " +
       "as cursor to read more. " +
-      "Use legal citation `url` for the reader and `source_url` for the publisher.",
+      `Use legal citation \`url\` for the reader and \`source_url\` for the publisher. ${LAW_READ_REFUSAL_DESCRIPTION}`,
     inputSchema: compatFetchArgsSchema,
     name: "fetch",
     scope: "stella:read",
   }),
 ] as const satisfies readonly McpToolDefinition[];
-
-/**
- * The position a cursor names with the corpus gate closed: this pair reads
- * matters alone, so the cursor is the knowledge provider's own, exactly as it
- * was before the corpus reached the pair. Rejecting an undecodable one matters
- * either way, because the provider treats a malformed cursor as no cursor and
- * silently returns the first page, which would duplicate hits or loop a
- * paginating client.
- */
-const matterOnlyPosition = (
-  cursor: string | undefined,
-): CompatSearchPosition | null => {
-  if (cursor === undefined) {
-    return { matter: undefined, corpus: EMPTY_CORPUS_CURSORS };
-  }
-  return decodeCursor(cursor) === null
-    ? null
-    : { matter: cursor, corpus: EMPTY_CORPUS_CURSORS };
-};
 
 type MatterSearchPage = {
   /** Passed through as the provider spelled it; absent is its own answer. */
@@ -468,18 +445,14 @@ const handleCompatSearchTool: McpToolHandler<
     return validationErrorResult(parsed.issues);
   }
   const { cursor, query } = parsed.output;
-  const corpusEnabled = isMcpToolFeatureEnabled(PUBLIC_LAW_FEATURE);
+  const lawRead = await admitMcpLawRead(context);
 
-  const position = corpusEnabled
-    ? decodeCompatSearchCursor(cursor)
-    : matterOnlyPosition(cursor);
+  const position = decodeCompatSearchCursor(cursor);
   if (position === null) {
     return compatSearchCursorError(cursor ?? "");
   }
 
-  const pageLimitResult = corpusEnabled
-    ? compatSearchPageLimitResult("tenant")
-    : null;
+  const pageLimitResult = compatSearchPageLimitResult("tenant");
   if (pageLimitResult !== null) {
     return pageLimitResult;
   }
@@ -493,15 +466,36 @@ const handleCompatSearchTool: McpToolHandler<
           query,
         });
 
-  if (!corpusEnabled) {
+  if (lawRead.type === "refused") {
+    const matterNext = matter.nextCursor ?? null;
     return {
       egress: "compatSearch",
-      nextCursor: matter.nextCursor,
+      corpusOutcome: {
+        status: "refused",
+        code: lawRead.code,
+        message: lawRead.result.error.message,
+        ...(lawRead.result.error.type === "structured" &&
+        lawRead.result.error.hint !== undefined
+          ? { hint: lawRead.result.error.hint }
+          : {}),
+        ...(lawRead.result.error.type === "structured" &&
+        lawRead.result.error.retryable !== undefined
+          ? { retryable: lawRead.result.error.retryable }
+          : {}),
+      },
+      nextCursor:
+        matterNext === null
+          ? null
+          : encodeCompatSearchCursor({
+              matter: matterNext,
+              corpus: position.corpus,
+            }),
       results: matter.results,
     };
   }
 
   const corpus = await searchCompatCorpus({
+    admission: lawRead.admission,
     context,
     countries: await resolveCompatCorpusCountries(context),
     cursors: position.corpus,
@@ -525,7 +519,10 @@ const handleCompatSearchTool: McpToolHandler<
   // anonymized mode. The handler never branches on mode.
   return {
     egress: "compatSearch",
-    paginationOutcome: corpus.paginationOutcome,
+    corpusOutcome: {
+      status: "available",
+      paginationOutcome: corpus.paginationOutcome,
+    },
     nextCursor: exhausted
       ? null
       : encodeCompatSearchCursor({
@@ -573,10 +570,16 @@ const handleCompatFetchTool: McpToolHandler<
   }
 
   if (compatId.kind !== "document") {
-    if (!isMcpToolFeatureEnabled(PUBLIC_LAW_FEATURE)) {
-      return publicLawDisabledResult(PUBLIC_LAW_FEATURE);
+    const lawRead = await admitMcpLawRead(context);
+    if (lawRead.type === "refused") {
+      return lawRead.result;
     }
-    return await compatCorpusFetchResponse({ compatId, context, cursor });
+    return await compatCorpusFetchResponse({
+      admission: lawRead.admission,
+      compatId,
+      context,
+      cursor,
+    });
   }
 
   const rawEntityId = compatId.entityId;

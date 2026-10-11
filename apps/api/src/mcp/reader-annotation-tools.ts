@@ -44,8 +44,10 @@ import {
 import { LIMITS } from "@/api/lib/limits";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import { brandPersistedLegalReaderAnnotationId } from "@/api/lib/safe-id-boundaries";
+import { LAW_READ_REFUSAL_DESCRIPTION } from "@/api/lib/usage/law-read-admission";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import { admitMcpLawRead } from "@/api/mcp/law-read-admission";
 import {
   defineTextFieldSpec,
   deriveTextFieldPaths,
@@ -138,11 +140,16 @@ const resolveTargetForAgent = async ({
   targetId: string;
   targetType: ReaderAnnotationTargetType;
 }): Promise<TargetAccessResult> => {
+  const lawRead = await admitMcpLawRead(context);
+  if (lawRead.type === "refused") {
+    return { status: "refused", result: lawRead.result };
+  }
   const resolve =
     context.testDependencies?.resolveAnnotationTarget ??
     resolveAnnotationTarget;
   const access = await Result.tryPromise(
-    async () => await resolve({ targetId, targetType }),
+    async () =>
+      await resolve({ targetId, targetType, admission: lawRead.admission }),
   );
   if (Result.isError(access)) {
     return { status: "refused", result: internalFailureResult(access.error) };
@@ -255,15 +262,6 @@ const handleListTool: TypedMcpToolHandler<
     return validationErrorResult(parsed.issues);
   }
   const { cursor, limit, target_id, target_type } = parsed.output;
-
-  const target = await resolveTargetForAgent({
-    context,
-    targetId: target_id,
-    targetType: target_type,
-  });
-  if (target.status === "refused") {
-    return target.result;
-  }
 
   const listed = await Result.gen(() =>
     listReaderAnnotationsHandler({
@@ -688,7 +686,7 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
       "version, as the user. Quote the words to mark, one passage per " +
       "paragraph, with its anchor when the document text shows one; the mark " +
       "appears in the user's reader. Private unless visibility is shared. " +
-      "Resending the same call returns the mark it already made.",
+      `Resending the same call returns the mark it already made. ${LAW_READ_REFUSAL_DESCRIPTION}`,
     inputSchema: createArgsSchema,
     access: "write",
     accountAccess: "sandbox",

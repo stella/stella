@@ -12,11 +12,11 @@ import {
 } from "@stll/legal-atlas/provision-citation-grammars";
 import { todayFor } from "@stll/time";
 
-import type { LawReadAdmission } from "@/api/handlers/legal-resolve/admission";
 import { resolveStatuteExpression } from "@/api/handlers/legislation/by-eli";
 import { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
 import { readProvisionPreviewHandler } from "@/api/handlers/legislation/provision-preview";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
+import type { LawReadAdmission } from "@/api/lib/usage/law-read-admission";
 
 type LawResolveInput = {
   citation?: string | undefined;

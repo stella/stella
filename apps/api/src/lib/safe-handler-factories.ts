@@ -36,6 +36,11 @@ type SafeHandlerScope = {
 };
 
 export const SAFE_HANDLER_FACTORIES = {
+  createSafeLawReadRootHandler: {
+    kind: "root",
+    context: "authenticated",
+    module: API_HANDLERS_MODULE,
+  },
   createSafeHandler: {
     kind: "workspace",
     context: "authenticated",

@@ -50,6 +50,20 @@ const compatFetchOutput = <const TMetadata extends v.GenericSchema>(
     metadata,
   });
 
+export const COMPAT_SEARCH_CORPUS_OUTCOME_SCHEMA = v.variant("status", [
+  v.strictObject({
+    status: v.literal("available"),
+    paginationOutcome: SEARCH_PAGINATION_OUTCOME_SCHEMA,
+  }),
+  v.strictObject({
+    status: v.literal("refused"),
+    code: v.picklist(["missing_scope", "not_entitled", "access_unavailable"]),
+    message: v.string(),
+    hint: v.optional(v.string()),
+    retryable: v.optional(v.boolean()),
+  }),
+]);
+
 export const COMPAT_SEARCH_OUTPUT_SCHEMA = v.strictObject({
   results: v.array(
     v.strictObject({
@@ -60,7 +74,7 @@ export const COMPAT_SEARCH_OUTPUT_SCHEMA = v.strictObject({
     }),
   ),
   nextCursor: v.optional(v.nullable(v.string())),
-  paginationOutcome: v.optional(SEARCH_PAGINATION_OUTCOME_SCHEMA),
+  corpusOutcome: COMPAT_SEARCH_CORPUS_OUTCOME_SCHEMA,
 });
 
 export const COMPAT_FETCH_OUTPUT_SCHEMA = compatFetchOutput(

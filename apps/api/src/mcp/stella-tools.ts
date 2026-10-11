@@ -165,6 +165,7 @@ import {
 } from "@/api/mcp/case-law-search-guidance";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import { withMcpLawReadAdmission } from "@/api/mcp/law-read-admission";
 import {
   defaultLookupDecisionsByIdentity,
   defaultReadCaseLawCoverageHandler,
@@ -3847,14 +3848,18 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
 };
 
 export const STELLA_TOOL_HANDLERS = {
-  case_law_coverage: handleCaseLawCoverageTool,
+  case_law_coverage: withMcpLawReadAdmission(handleCaseLawCoverageTool),
   list_matters: handleListMattersTool,
-  lookup_case_law: handleLookupCaseLawTool,
-  read_case_law_citations: handleReadCaseLawCitationsTool,
-  read_case_law_decision: handleReadCaseLawDecisionTool,
+  lookup_case_law: withMcpLawReadAdmission(handleLookupCaseLawTool),
+  read_case_law_citations: withMcpLawReadAdmission(
+    handleReadCaseLawCitationsTool,
+  ),
+  read_case_law_decision: withMcpLawReadAdmission(
+    handleReadCaseLawDecisionTool,
+  ),
   read_contact: handleReadContactTool,
   read_content_across_matters: handleReadContentAcrossMattersTool,
-  search_case_law: handleSearchCaseLawTool,
+  search_case_law: withMcpLawReadAdmission(handleSearchCaseLawTool),
   search_across_matters: handleSearchAcrossMattersTool,
   set_practice_jurisdictions: handleSetPracticeJurisdictionsTool,
 } satisfies Record<StellaToolName, McpToolHandler>;

@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -29,6 +29,7 @@ import type {
   LegislationPublicReadDb,
   LegislationReadTransaction,
 } from "@/api/lib/legislation-public-read-db";
+import { admitLawRead } from "@/api/lib/usage/law-read-admission";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
   createTestPglite,
@@ -213,14 +214,28 @@ test.each(fixtures)(
     const decision = await buildActiveDecisionSection({
       activeDecision: { decisionId: fixture.decisionId },
       caseLawDb,
-      organizationId,
+      admission: (
+        await admitLawRead({
+          organizationId:
+            organizationId ?? toSafeId<"organization">("org-corpus-policy"),
+          mayReadPublicLaw: async () => Result.ok(true),
+          publicLawEnabled: () => true,
+        })
+      ).unwrap(),
       safeDb: tenantDb,
       userId,
     });
     const statute = await buildActiveStatuteSection({
       activeStatute: { documentId: fixture.statuteId },
       legislationDb,
-      organizationId,
+      admission: (
+        await admitLawRead({
+          organizationId:
+            organizationId ?? toSafeId<"organization">("org-corpus-policy"),
+          mayReadPublicLaw: async () => Result.ok(true),
+          publicLawEnabled: () => true,
+        })
+      ).unwrap(),
       safeDb: tenantDb,
       userId,
     });
@@ -263,7 +278,13 @@ test("client-provided active decision ids cannot disclose unpublished or missing
     const prompt = await buildActiveDecisionSection({
       activeDecision: { decisionId },
       caseLawDb,
-      organizationId: undefined,
+      admission: (
+        await admitLawRead({
+          organizationId: toSafeId<"organization">("org-corpus-policy"),
+          mayReadPublicLaw: async () => Result.ok(true),
+          publicLawEnabled: () => true,
+        })
+      ).unwrap(),
       safeDb: tenantDb,
       userId: undefined,
     });
@@ -292,7 +313,13 @@ test("statute fallback withholds wording and marks when AI permission changes be
   const result = await buildActiveStatuteSection({
     activeStatute: { documentId: open.statuteId },
     legislationDb: changingReader,
-    organizationId: toSafeId<"organization">("org-corpus-policy"),
+    admission: (
+      await admitLawRead({
+        organizationId: toSafeId<"organization">("org-corpus-policy"),
+        mayReadPublicLaw: async () => Result.ok(true),
+        publicLawEnabled: () => true,
+      })
+    ).unwrap(),
     userId: toSafeId<"user">("user-corpus-policy"),
     safeDb: tenantDb,
   });

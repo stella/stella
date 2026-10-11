@@ -3154,6 +3154,29 @@ describe("capability executor input normalization", () => {
 // --- deployment feature gates -------------------------------------------------
 
 describe("capability executor deployment feature gate", () => {
+  test.each([
+    { code: "not_entitled", status: 403, retryable: undefined },
+    { code: "missing_scope", status: 403, retryable: undefined },
+    { code: "access_unavailable", status: 503, retryable: true },
+  ])(
+    "law refusal $code retains its native MCP outcome",
+    ({ code, status, retryable }) => {
+      const result = mapHandlerResult({
+        id: "legislation.get",
+        access: "read",
+        result: new ElysiaCustomStatusResponse(status, { code, message: code }),
+      });
+      const error = mappedError(result);
+      expect(error).toMatchObject({
+        code,
+        ...(retryable === undefined ? {} : { retryable }),
+      });
+      if (retryable === undefined) {
+        expect(error).not.toHaveProperty("retryable");
+      }
+    },
+  );
+
   test("a gated-off capability is refused on invoke with feature_disabled", async () => {
     disabledFeatures.add("FEATURE_TIME_BILLING");
     const result = await handleCapabilityCall({

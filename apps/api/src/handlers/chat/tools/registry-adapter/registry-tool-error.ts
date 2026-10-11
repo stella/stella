@@ -10,6 +10,8 @@ const MCP_CODE_TO_CHAT_KIND = {
   validation_error: "invalid-input",
   result_too_large: "invalid-input",
   missing_scope: "unavailable",
+  not_entitled: "unavailable",
+  access_unavailable: "transient",
   feature_disabled: "unavailable",
   not_found: "not-found",
   confirmation_required: "invalid-input",

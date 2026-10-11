@@ -5,7 +5,10 @@ import { RELATION_TYPES } from "@stll/boe";
 import type { RelationType } from "@stll/boe";
 
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafeLawReadRootHandler,
+} from "@/api/lib/api-handlers";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { boeClient } from "@/api/lib/legal-search/boe-client";
 
@@ -25,7 +28,7 @@ const querySchema = t.Object({
   ),
 });
 
-const boeRelatedLaws = createSafeRootHandler(
+const boeRelatedLaws = createSafeLawReadRootHandler(
   {
     description:
       "List the Spanish BOE laws related to one law, narrowed by " +

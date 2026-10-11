@@ -17,7 +17,7 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import {
   ACCOUNT_ACCESS,
   configuredModelAdmission,
-  createSafeRootHandler,
+  createSafeLawReadRootHandler,
 } from "@/api/lib/api-handlers";
 import type {
   HandlerConfig,
@@ -59,7 +59,7 @@ const config = {
   requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;
 
-const refineCaseLawSearch = createSafeRootHandler(
+const refineCaseLawSearch = createSafeLawReadRootHandler(
   config,
   async function* ({
     modelAdmission,

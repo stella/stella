@@ -33,6 +33,7 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import { withMcpLawReadAdmission } from "@/api/mcp/law-read-admission";
 import { withThirdPartyOutbound } from "@/api/mcp/third-party-outbound";
 import type {
   McpToolDefinition,
@@ -1140,7 +1141,9 @@ const RESEARCH_ADMIN_TOOL_DEFINITIONS = [
 ] as const satisfies readonly McpToolDefinition[];
 
 export const RESEARCH_ADMIN_TOOL_HANDLERS = {
-  search_boe_legislation: handleSearchBoeLegislationTool,
+  search_boe_legislation: withMcpLawReadAdmission(
+    handleSearchBoeLegislationTool,
+  ),
   list_audit_log: handleListAuditLogTool,
   manage_organization: handleManageOrganizationTool,
 } satisfies Record<ResearchAdminToolName, McpToolHandler>;

@@ -406,9 +406,7 @@ const finalizeCompatSearch = async ({
   return untypedToolDataResult(
     projectionPayload(COMPAT_SEARCH_OUTPUT_SCHEMA, {
       nextCursor: plan.nextCursor,
-      ...(plan.paginationOutcome === undefined
-        ? {}
-        : { paginationOutcome: plan.paginationOutcome }),
+      corpusOutcome: plan.corpusOutcome,
       results,
     }),
   );

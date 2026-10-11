@@ -53,6 +53,7 @@ import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import {
   ChatThreadDecisionLabel,
+  ChatThreadDecisionRefusalLabel,
   drawableChatThreadDecision,
   useOpenChatThreadDecision,
 } from "@/components/chat/chat-thread-decision";
@@ -881,6 +882,14 @@ function ChatIndex() {
 
 /** A decision chat's decision, leading its row's time; nothing for others. */
 const ChatDecisionMetaPrefix = ({ chat }: { chat: ChatHistoryItem }) => {
+  if (chat.decision?.type === "refused") {
+    return (
+      <>
+        <ChatThreadDecisionRefusalLabel refusal={chat.decision} />
+        {" · "}
+      </>
+    );
+  }
   const decision = drawableChatThreadDecision(chat);
   return decision === null ? null : (
     <>

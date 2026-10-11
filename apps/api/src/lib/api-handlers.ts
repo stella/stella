@@ -116,6 +116,11 @@ import {
 import { computeUsageUnitCost } from "@/api/lib/usage/action-weights";
 import { decideChatUsageLane } from "@/api/lib/usage/lane-routing";
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
+import {
+  admitLawReadOrError,
+  LAW_READ_REFUSAL_DESCRIPTION,
+  type LawReadAdmission,
+} from "@/api/lib/usage/law-read-admission";
 import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
 // Type-only: derive the closed tool-name union from the single MCP registry
 // so `mcp: { type: "tool", name }` typechecks against the real tools. The
@@ -421,6 +426,7 @@ export type HandlerConfig = InputSchema &
     requestTimeoutMs?: number;
     requiresUsage?: UsageMeteringConfig;
     featureAccess?: FeatureAccessRequirement;
+    lawRead?: "public";
     /** Finite synchronous work; streaming and queued execution need their own lifetimes. */
     actionAdmission?: { type: "handler"; actionKind: PeriodActionKind };
     /**
@@ -477,10 +483,14 @@ type SandboxAccountAccess = {
  * every factory, so it carries no account decision of its own.
  */
 const safeHandlerAccountAccess = new WeakMap<object, AccountAccess>();
+const admittedLawReadHandlers = new WeakSet<object>();
+
+export const isAdmittedLawReadHandler = (handler: unknown): boolean =>
+  typeof handler === "function" && admittedLawReadHandlers.has(handler);
 
 const recordSafeHandler = <
   TDefinition extends {
-    config: { accountAccess: AccountAccess };
+    config: { accountAccess: AccountAccess; lawRead?: "public" };
     handler: object;
   },
 >(
@@ -490,6 +500,9 @@ const recordSafeHandler = <
     definition.handler,
     definition.config.accountAccess,
   );
+  if (definition.config.lawRead === "public") {
+    admittedLawReadHandlers.add(definition.handler);
+  }
   return definition;
 };
 
@@ -546,6 +559,7 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
     session: {
       activeOrganizationId: SafeId<"organization">;
     };
+    lawReadAdmission?: LawReadAdmission;
     featureAccessSnapshot?: FeatureAccessSnapshot;
     featureAccessProof?: FeatureAccessProof;
     scopedDb: ScopedDb;
@@ -1213,10 +1227,11 @@ export const admitFiniteAction = async function* <
   });
 };
 
-type HandlerAdmissionDependencies = {
+export type HandlerAdmissionDependencies = {
   admit?: typeof withActionAdmission;
   checkAccountOperation?: typeof checkRestrictedAccountOperation;
   announce?: typeof announceResourceSetUpdates;
+  admitPublicLaw?: typeof admitLawReadOrError;
 };
 
 const REALTIME_ANNOUNCEMENT_FAILURE = failureSink({
@@ -1412,6 +1427,7 @@ const createSafeScopedHandler = <
     admit = withActionAdmission,
     checkAccountOperation = checkRestrictedAccountOperation,
     announce = announceResourceSetUpdates,
+    admitPublicLaw = admitLawReadOrError,
   }: HandlerAdmissionDependencies = {},
 ): SafeHandlerDefinition<TConfig, TContext, TResult> =>
   recordSafeHandler({
@@ -1436,6 +1452,20 @@ const createSafeScopedHandler = <
             message: "This operation is unavailable for this account.",
           });
         }
+      }
+      if (config.lawRead === "public") {
+        const admission = await admitPublicLaw({
+          organizationId: ctx.session.activeOrganizationId,
+        });
+        if (Result.isError(admission)) {
+          return toSafeStatusResponse(admission.error.status, {
+            ...(admission.error.code === undefined
+              ? {}
+              : { code: admission.error.code }),
+            message: admission.error.message,
+          });
+        }
+        ctx.lawReadAdmission = admission.value;
       }
       const featureAccessResponse = await admitHandlerFeatureAccess({
         ctx,
@@ -2006,6 +2036,52 @@ export const createSafeHandler = <
     },
     dependencies,
   );
+
+type AdmittedLawReadContext<TContext> = TContext & {
+  lawReadAdmission: LawReadAdmission;
+};
+
+const withLawReadAdmission =
+  <
+    TContext extends { lawReadAdmission?: LawReadAdmission },
+    TResult extends SafeHandlerPayload,
+  >(
+    handler: SafeHandlerFn<AdmittedLawReadContext<TContext>, TResult>,
+  ): SafeHandlerFn<TContext, TResult> =>
+  (ctx) => {
+    const admission = ctx.lawReadAdmission;
+    if (admission === undefined) {
+      panic("Public law handler requires admission");
+    }
+    return handler({ ...ctx, lawReadAdmission: admission });
+  };
+
+export const createSafeLawReadRootHandler = <
+  TConfig extends RootHandlerConfig,
+  TResult extends SafeHandlerPayload,
+>(
+  config: TConfig,
+  handler: SafeHandlerFn<
+    AdmittedLawReadContext<RootHandlerContext<TConfig>>,
+    TResult
+  > &
+    ConfiguredFiniteHandlerGuard<TConfig, TResult>,
+  dependencies?: HandlerAdmissionDependencies,
+) => {
+  const admittedConfig: TConfig = {
+    ...config,
+    lawRead: "public",
+    description:
+      config.description === undefined
+        ? undefined
+        : `${config.description} ${LAW_READ_REFUSAL_DESCRIPTION}`,
+  };
+  return createSafeScopedHandler(
+    admittedConfig,
+    withLawReadAdmission(handler),
+    dependencies,
+  );
+};
 
 type SessionHandlerDependencies = {
   checkAccountOperation?: typeof checkRestrictedAccountOperation;

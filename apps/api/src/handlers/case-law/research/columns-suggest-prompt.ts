@@ -9,7 +9,7 @@ import { suggestResearchColumnPromptBodySchema } from "@/api/handlers/case-law/r
 import {
   ACCOUNT_ACCESS,
   configuredModelAdmission,
-  createSafeRootHandler,
+  createSafeLawReadRootHandler,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -57,7 +57,7 @@ const config = {
   requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;
 
-const suggestResearchColumnPrompt = createSafeRootHandler(
+const suggestResearchColumnPrompt = createSafeLawReadRootHandler(
   config,
   async function* ({
     modelAdmission,

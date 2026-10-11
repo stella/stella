@@ -34,8 +34,14 @@ import {
 } from "@/api/lib/ai-error";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafeLawReadRootHandler,
+} from "@/api/lib/api-handlers";
+import type {
+  HandlerAdmissionDependencies,
+  HandlerConfig,
+} from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   analysisFailureKeyTag,
@@ -69,6 +75,7 @@ import {
   requireTanStackAIAvailableForRole,
   type ResolvedTanStackTextModel,
 } from "@/api/lib/tanstack-ai-models";
+import type { LawReadAdmission } from "@/api/lib/usage/law-read-admission";
 
 import { resolveAnalysisInput } from "./analysis-input";
 import { analysisOutputSchema, buildDecisionAnalysis } from "./analysis-output";
@@ -399,7 +406,7 @@ type GenerateAnalysisOptions = {
   startModelAction: DetachedModelActionStarter;
   decisionId: SafeId<"caseLawDecision">;
   scopedDb: ScopedDb;
-  organizationId: SafeId<"organization">;
+  admission: LawReadAdmission;
   orgAIConfig: OrgAIConfig | null;
   orgAIConfigStatus: OrgAIConfigStatus;
   promptCachingEnabled: boolean;
@@ -427,7 +434,7 @@ export const generateAnalysis = async ({
   startModelAction,
   decisionId,
   scopedDb,
-  organizationId,
+  admission: { organizationId },
   orgAIConfig,
   orgAIConfigStatus,
   promptCachingEnabled,
@@ -682,52 +689,58 @@ const config = {
   query: t.Object({ retry: t.Optional(t.BooleanString()) }),
 } satisfies HandlerConfig;
 
-const generateDecisionAnalysis = createSafeRootHandler(
-  config,
-  async function* ({
-    params: { decisionId },
-    query,
-    session,
-    scopedDb,
-    orgAIConfig,
-    orgAIConfigStatus,
-    promptCachingEnabled,
-    user,
-  }) {
-    // AI availability is enforced inside generateAnalysis, after its stored
-    // and in-flight branches, so finished analyses stay readable when the
-    // fast model role is unavailable.
-    const response = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await generateAnalysis({
-            // Both runs continue after the response, outside its admission.
-            admitModelAction: createModelActionAdmitter({
-              organizationId: session.activeOrganizationId,
-              userId: user.id,
-              organizationStateDb: scopedDb,
-              actionKind: "case-law.analysis",
-              scope: "independent",
+export const createGenerateDecisionAnalysisHandler = (
+  dependencies?: HandlerAdmissionDependencies,
+) =>
+  createSafeLawReadRootHandler(
+    config,
+    async function* ({
+      params: { decisionId },
+      query,
+      session,
+      lawReadAdmission,
+      scopedDb,
+      orgAIConfig,
+      orgAIConfigStatus,
+      promptCachingEnabled,
+      user,
+    }) {
+      // AI availability is enforced inside generateAnalysis, after its stored
+      // and in-flight branches, so finished analyses stay readable when the
+      // fast model role is unavailable.
+      const response = yield* Result.await(
+        Result.tryPromise(
+          async () =>
+            await generateAnalysis({
+              // Both runs continue after the response, outside its admission.
+              admitModelAction: createModelActionAdmitter({
+                organizationId: session.activeOrganizationId,
+                userId: user.id,
+                organizationStateDb: scopedDb,
+                actionKind: "case-law.analysis",
+                scope: "independent",
+              }),
+              startModelAction: createDetachedModelActionStarter({
+                organizationId: session.activeOrganizationId,
+                userId: user.id,
+                organizationStateDb: scopedDb,
+                actionKind: "case-law.analysis",
+              }),
+              decisionId,
+              scopedDb,
+              admission: lawReadAdmission,
+              orgAIConfig,
+              orgAIConfigStatus,
+              promptCachingEnabled,
+              retry: query.retry === true,
             }),
-            startModelAction: createDetachedModelActionStarter({
-              organizationId: session.activeOrganizationId,
-              userId: user.id,
-              organizationStateDb: scopedDb,
-              actionKind: "case-law.analysis",
-            }),
-            decisionId,
-            scopedDb,
-            organizationId: session.activeOrganizationId,
-            orgAIConfig,
-            orgAIConfigStatus,
-            promptCachingEnabled,
-            retry: query.retry === true,
-          }),
-      ),
-    );
+        ),
+      );
 
-    return response;
-  },
-);
+      return response;
+    },
+    dependencies,
+  );
 
+const generateDecisionAnalysis = createGenerateDecisionAnalysisHandler();
 export default generateDecisionAnalysis;

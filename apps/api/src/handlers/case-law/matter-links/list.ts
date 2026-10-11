@@ -1,6 +1,7 @@
 import { Result } from "better-result";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
+import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -17,6 +18,7 @@ import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
+import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import {
   publisherHeadnoteMetadataSql,
   publisherKeywordsMetadataSql,
@@ -27,67 +29,69 @@ import {
   isRedistributable,
 } from "@/api/lib/legal-search/corpus-source";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  admitLawRead,
+  type LawReadAdmission,
+} from "@/api/lib/usage/law-read-admission";
 
 const MATTER_LINKS_LIST_CAPABILITY = "case-law.matter-links.list";
 
 type MatterLinkAudience = "human" | "model";
 
-type ListMatterLinksProps = {
-  scopedDb: ScopedDb;
-  workspaceId: SafeId<"workspace">;
-  /** The public corpus gate the language versions are read through. */
+type ReadMatterLinkDecisionsOptions = {
+  admission: LawReadAdmission;
   caseLawDb: CaseLawPublicReadDb;
-  audience?: MatterLinkAudience;
+  decisionIds: SafeId<"caseLawDecision">[];
+  audience: MatterLinkAudience;
 };
 
-export const listMatterLinksHandler = async ({
+const readMatterLinkDecisions = async ({
   caseLawDb,
-  scopedDb,
-  workspaceId,
-  audience = "human",
-}: ListMatterLinksProps) => {
-  const rows = await scopedDb((tx) =>
-    tx
-      .select({
-        id: caseLawMatterLinks.id,
-        decisionId: caseLawMatterLinks.decisionId,
-        note: caseLawMatterLinks.note,
-        linkedBy: caseLawMatterLinks.linkedBy,
-        createdAt: caseLawMatterLinks.createdAt,
-        caseNumber: caseLawDecisions.caseNumber,
-        slug: caseLawDecisions.slug,
-        ecli: caseLawDecisions.ecli,
-        court: caseLawDecisions.court,
-        country: caseLawDecisions.country,
-        language: caseLawDecisions.language,
-        languageGroupKey: caseLawDecisions.languageGroupKey,
-        decisionDate: caseLawDecisions.decisionDate,
-        decisionType: caseLawDecisions.decisionType,
-        citationCount: caseLawDecisions.citationCount,
-        descriptor: caseLawSources.descriptor,
-        // Publisher text follows the source's terms, exactly as the search
-        // hit does: a source that withholds redistribution contributes the
-        // row's own facts and no borrowed prose.
-        headnote: sql<string | null>`CASE WHEN ${redistributableCaseLawSource}
+  decisionIds,
+  audience,
+}: ReadMatterLinkDecisionsOptions) => {
+  const fetchedRows = await caseLawDb(
+    async (tx) =>
+      await tx
+        .select({
+          decisionId: caseLawDecisions.id,
+          caseNumber: caseLawDecisions.caseNumber,
+          slug: caseLawDecisions.slug,
+          ecli: caseLawDecisions.ecli,
+          court: caseLawDecisions.court,
+          country: caseLawDecisions.country,
+          language: caseLawDecisions.language,
+          languageGroupKey: caseLawDecisions.languageGroupKey,
+          decisionDate: caseLawDecisions.decisionDate,
+          decisionType: caseLawDecisions.decisionType,
+          citationCount: caseLawDecisions.citationCount,
+          descriptor: caseLawSources.descriptor,
+          // Publisher text follows the source's terms, exactly as the search
+          // hit does: a source that withholds redistribution contributes the
+          // row's own facts and no borrowed prose.
+          headnote: sql<string | null>`CASE WHEN ${redistributableCaseLawSource}
           THEN ${publisherHeadnoteMetadataSql(caseLawDecisions.metadata)}
         END`,
-        keywords: sql<string[] | null>`CASE WHEN ${redistributableCaseLawSource}
+          keywords: sql<
+            string[] | null
+          >`CASE WHEN ${redistributableCaseLawSource}
           THEN ${publisherKeywordsMetadataSql(caseLawDecisions.metadata)}
         END`,
-      })
-      .from(caseLawMatterLinks)
-      .innerJoin(
-        caseLawDecisions,
-        eq(caseLawDecisions.id, caseLawMatterLinks.decisionId),
-      )
-      .innerJoin(
-        caseLawSources,
-        eq(caseLawSources.id, caseLawDecisions.sourceId),
-      )
-      .where(eq(caseLawMatterLinks.workspaceId, workspaceId))
-      .orderBy(desc(caseLawMatterLinks.createdAt), desc(caseLawMatterLinks.id))
-      .limit(LIMITS.caseLawMatterLinksPerWorkspace),
+        })
+        .from(caseLawDecisions)
+        .innerJoin(
+          caseLawSources,
+          eq(caseLawSources.id, caseLawDecisions.sourceId),
+        )
+        .where(
+          and(
+            inArray(caseLawDecisions.id, decisionIds),
+            publishedCaseLawDecision,
+          ),
+        )
+        .limit(LIMITS.caseLawMatterLinksPerWorkspace),
   );
+  const rows = fetchedRows.filter((row) => isPublicCaseLawCountry(row.country));
 
   // The versions of each linked decision, through the same helper the search
   // hit uses: a multilingual decision the client cannot tell apart from a
@@ -117,12 +121,8 @@ export const listMatterLinksHandler = async ({
         keywords: row.keywords,
       });
       const shared = {
-        id: row.id,
-        decisionId: row.decisionId,
-        note: row.note,
-        linkedBy: row.linkedBy,
-        createdAt: row.createdAt,
         decision: {
+          type: "read" as const,
           id: row.decisionId,
           caseNumber: row.caseNumber,
           slug: row.slug,
@@ -156,13 +156,78 @@ export const listMatterLinksHandler = async ({
   };
 };
 
+type ListMatterLinksProps = {
+  scopedDb: ScopedDb;
+  workspaceId: SafeId<"workspace">;
+  organizationId: SafeId<"organization">;
+  caseLawDb: CaseLawPublicReadDb;
+  audience?: MatterLinkAudience;
+  admit?: typeof admitLawRead;
+};
+
+export const listMatterLinksHandler = async ({
+  scopedDb,
+  workspaceId,
+  organizationId,
+  caseLawDb,
+  audience = "human",
+  admit = admitLawRead,
+}: ListMatterLinksProps) => {
+  const links = await scopedDb(
+    async (tx) =>
+      await tx
+        .select({
+          id: caseLawMatterLinks.id,
+          decisionId: caseLawMatterLinks.decisionId,
+          note: caseLawMatterLinks.note,
+          linkedBy: caseLawMatterLinks.linkedBy,
+          createdAt: caseLawMatterLinks.createdAt,
+        })
+        .from(caseLawMatterLinks)
+        .where(eq(caseLawMatterLinks.workspaceId, workspaceId))
+        .orderBy(
+          desc(caseLawMatterLinks.createdAt),
+          desc(caseLawMatterLinks.id),
+        )
+        .limit(LIMITS.caseLawMatterLinksPerWorkspace),
+  );
+  if (links.length === 0) {
+    return { links: [] };
+  }
+  const admitted = await admit({ organizationId });
+  if (Result.isError(admitted)) {
+    return {
+      links: links.map((link) => ({
+        ...link,
+        decision: { type: "refused" as const, code: admitted.error.type },
+      })),
+    };
+  }
+  const decisions = await readMatterLinkDecisions({
+    admission: admitted.value,
+    caseLawDb,
+    decisionIds: links.map((link) => link.decisionId),
+    audience,
+  });
+  const byId = new Map(
+    decisions.links.map(({ decision }) => [decision.id, decision]),
+  );
+  return {
+    links: links.map((link) => ({
+      ...link,
+      decision: byId.get(link.decisionId) ?? { type: "not_found" as const },
+    })),
+  };
+};
+
 const config = {
   description:
     "List the case-law decisions linked to the current matter, newest link " +
     "first, each with its note and the decision's row facts: case number, " +
     "slug, ECLI, court, country, language, the decision's other language " +
     "versions, date, type, citation count and headnote preview. Returns the " +
-    "whole set up to the per-matter link cap; there is no pagination.",
+    "whole set up to the per-matter link cap; there is no pagination. " +
+    "Decision payloads require law admission; refusal returns type refused and code not_entitled, missing_scope or access_unavailable while link records remain readable.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
@@ -176,11 +241,12 @@ const config = {
 
 const listMatterLinks = createSafeHandler(
   config,
-  async function* ({ route, scopedDb, workspaceId }) {
+  async function* ({ route, scopedDb, workspaceId, session }) {
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
           await listMatterLinksHandler({
+            organizationId: session.activeOrganizationId,
             workspaceId,
             scopedDb,
             caseLawDb: caseLawPublicReadDb,

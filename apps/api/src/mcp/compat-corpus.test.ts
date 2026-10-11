@@ -1,5 +1,5 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import fc from "fast-check";
 
@@ -17,6 +17,7 @@ import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
+import { admitLawRead } from "@/api/lib/usage/law-read-admission";
 import {
   corpusCountryQuotas,
   readCompatStatute,
@@ -102,9 +103,11 @@ const statuteHit = {
 const createContext = ({
   practiceJurisdictions = null,
   searchProvider = () => ({ search: searchProviderSearchMock }),
+  publicLawEnabled = () => true,
 }: {
   practiceJurisdictions?: { countryCode: string; isPrimary: boolean }[] | null;
   searchProvider?: () => unknown;
+  publicLawEnabled?: () => boolean;
 } = {}): McpRequestContext => {
   const { safeDb, scopedDb } = createScopedDbMock({
     query: {
@@ -148,6 +151,12 @@ const createContext = ({
     scopedDb,
     testDependencies: {
       anonymizeTextFields: asTestRaw(anonymizeTextFieldsMock),
+      admitLawRead: async (options) =>
+        admitLawRead({
+          ...options,
+          mayReadPublicLaw: async () => Result.ok(true),
+          publicLawEnabled,
+        }),
       getSearchReader: asTestRaw(searchProvider),
       loadAnonymizationAllowlistCanonicalsByWorkspace: asTestRaw(
         emptyCatalogsByWorkspace,
@@ -169,6 +178,9 @@ const createContext = ({
 type CompatPayload = {
   results?: { id: string; title: string; url: string; source_url?: string }[];
   nextCursor?: string | null;
+  corpusOutcome?:
+    | { status: "available"; paginationOutcome: unknown }
+    | { status: "refused"; code: string; message?: string; hint?: string };
   id?: string;
   title?: string;
   text?: string;
@@ -480,7 +492,10 @@ describe("compat search reaching the public corpus", () => {
         handler: COMPAT_TOOL_HANDLERS.search,
       });
       expect(payload).toMatchObject({
-        paginationOutcome: SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
+        corpusOutcome: {
+          status: "available",
+          paginationOutcome: SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
+        },
       });
     });
   });
@@ -533,7 +548,9 @@ describe("compat search reaching the public corpus", () => {
 
         const payload = await run({
           args: { query: "promlčení" },
-          context: createContext(),
+          context: createContext({
+            publicLawEnabled: () => env.FEATURE_PUBLIC_LAW,
+          }),
           handler: COMPAT_TOOL_HANDLERS.search,
         });
 
@@ -544,9 +561,11 @@ describe("compat search reaching the public corpus", () => {
             url: `${APP_BASE_URL}/workspaces/${WORKSPACE_ID}/all/pdf?entity=${ENTITY_ID}&field=field_1`,
           },
         ]);
-        // The provider's own cursor, verbatim: with no corpus to merge, nothing
-        // wraps it.
-        expect(payload.nextCursor).toBe("provider-cursor");
+        expect(payload.corpusOutcome).toMatchObject({
+          status: "refused",
+          code: "missing_scope",
+        });
+        expect(payload.nextCursor).not.toBeNull();
         expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
         expect(searchLegislationHandlerMock).not.toHaveBeenCalled();
       },
@@ -788,18 +807,17 @@ describe("compat fetch reaching the public corpus", () => {
     });
   });
 
-  test("a corpus id refuses with feature_disabled while the gate is closed", async () => {
+  test("a corpus id refuses with missing_scope while the gate is closed", async () => {
     await withPublicLaw(
       { featurePublicLaw: false, localDevOpen: false },
       async () => {
         const payload = await run({
           args: { id: `decision:${DECISION_ID}` },
-          context: createContext(),
+          context: createContext({ publicLawEnabled: () => false }),
           handler: COMPAT_TOOL_HANDLERS.fetch,
         });
 
-        expect(payload.error?.code).toBe("feature_disabled");
-        expect(payload.error?.hint).toContain("FEATURE_PUBLIC_LAW");
+        expect(payload.error?.code).toBe("missing_scope");
       },
     );
   });
@@ -963,8 +981,20 @@ test("compat statute read never fabricates an empty citation when no deployment 
         versionValidFrom: "2014-01-01",
         versionValidTo: null,
       });
+      const admissionResult = await admitLawRead({
+        organizationId: toSafeId<"organization">("org_1"),
+        mayReadPublicLaw: async () => Result.ok(true),
+        publicLawEnabled: () => true,
+      });
+      const admission = Result.isOk(admissionResult)
+        ? admissionResult.value
+        : panic("Fixture law read was not admitted");
       expect(
-        await readCompatStatute({ context: createContext(), eli: STATUTE_ELI }),
+        await readCompatStatute({
+          admission,
+          context: createContext(),
+          eli: STATUTE_ELI,
+        }),
       ).toEqual({ type: "not_found" });
     },
   );

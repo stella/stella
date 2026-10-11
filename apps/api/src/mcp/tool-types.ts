@@ -557,7 +557,15 @@ export type InternalToolResult<TData = unknown> =
 export type McpEgressPlan<TPayload = unknown> =
   | {
       egress: "compatSearch";
-      paginationOutcome?: SearchPaginationOutcome;
+      corpusOutcome:
+        | { status: "available"; paginationOutcome: SearchPaginationOutcome }
+        | {
+            status: "refused";
+            code: "missing_scope" | "not_entitled" | "access_unavailable";
+            message: string;
+            hint?: string;
+            retryable?: boolean;
+          };
       nextCursor: string | null | undefined;
       results: readonly McpCompatSearchResult[];
     }

@@ -20,11 +20,11 @@ import {
   lookupDecisionsByIdentity,
 } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
-import type { LawReadAdmission } from "@/api/handlers/legal-resolve/admission";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { buildCaseLawDecisionUrl } from "@/api/lib/legal-search/public-law-app-urls";
 import { LIMITS } from "@/api/lib/limits";
+import type { LawReadAdmission } from "@/api/lib/usage/law-read-admission";
 import {
   MCP_CONTENT_MAX_CHARS,
   resolveTextWindowBounds,

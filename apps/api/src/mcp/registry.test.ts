@@ -7,6 +7,7 @@ import {
   MCP_LAW_RESOURCE_SCOPES,
 } from "@/api/mcp/constants";
 import { DOCUMENT_TOOL_SET } from "@/api/mcp/document-tools";
+import { isAdmittedMcpLawReadHandler } from "@/api/mcp/law-read-admission";
 import { LEGAL_RESOLVE_RESOURCE_ROUTES } from "@/api/mcp/resource-policy-contract";
 import {
   ALL_MCP_TOOL_DEFINITIONS,
@@ -41,6 +42,23 @@ const withoutDescriptions = (value: unknown): unknown => {
 };
 
 describe("MCP tool registry", () => {
+  test("every registered public-law tool dispatches through law-read admission", () => {
+    for (const tool of ALL_MCP_TOOL_DEFINITIONS) {
+      if (!("feature" in tool && tool.feature === "FEATURE_PUBLIC_LAW")) {
+        continue;
+      }
+      expect(
+        isAdmittedMcpLawReadHandler(
+          getStaticMcpToolHandler(
+            tool.name,
+            tool.name === "search" || tool.name === "fetch" ? "law" : "default",
+          ),
+        ),
+        `${tool.name} must be admission wrapped`,
+      ).toBe(true);
+    }
+  });
+
   test("offers generic capability tools only on the advanced surface", () => {
     const executorNames = CAPABILITY_TOOL_SET.definitions.map(
       ({ name }) => name,

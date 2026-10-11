@@ -21,6 +21,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { admitLawRead } from "@/api/lib/usage/law-read-admission";
 import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -128,7 +129,13 @@ describe("generating an analysis for a decision in a language with no prompt", (
       scopedDb: executeRowsScopedDb(
         createScopedDb(db, [], ORGANIZATION_ID, USER_ID),
       ),
-      organizationId: ORGANIZATION_ID,
+      admission: (
+        await admitLawRead({
+          organizationId: ORGANIZATION_ID,
+          mayReadPublicLaw: async () => Result.ok(true),
+          publicLawEnabled: () => true,
+        })
+      ).unwrap(),
       orgAIConfig,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
       promptCachingEnabled: false,

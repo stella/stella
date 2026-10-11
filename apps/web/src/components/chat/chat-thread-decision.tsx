@@ -1,7 +1,7 @@
 import type { MouseEvent } from "react";
 
 import { panic } from "better-result";
-import { useFormatter } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { CourtTierBadge } from "@stll/decision-reader/court-tier-badge";
 import { BidiText } from "@stll/ui/bidi-text";
@@ -39,11 +39,43 @@ export const drawableChatThreadDecision = ({
     case "present":
       return decision.badge;
     case "unavailable":
+    case "refused":
       return null;
     default:
       decision satisfies never;
       return panic(`Unhandled decision state: ${JSON.stringify(decision)}`);
   }
+};
+
+type ChatThreadDecisionRefusal = Extract<
+  NonNullable<ChatHistoryItem["decision"]>,
+  { type: "refused" }
+>;
+
+export const ChatThreadDecisionRefusalLabel = ({
+  refusal,
+}: {
+  refusal: ChatThreadDecisionRefusal;
+}) => {
+  const t = useTranslations();
+  let detail: string;
+  switch (refusal.code) {
+    case "access_unavailable":
+      detail = t("errors.api.serviceUnavailable");
+      break;
+    case "missing_scope":
+    case "not_entitled":
+      detail = t("errors.apiCodes.accessDenied");
+      break;
+    default:
+      refusal.code satisfies never;
+      return panic("Unhandled law admission refusal");
+  }
+  return (
+    <span className="shrink-0" title={detail}>
+      {t("caseLaw.research.answers.failureReasons.decisionUnavailable")}
+    </span>
+  );
 };
 
 /**

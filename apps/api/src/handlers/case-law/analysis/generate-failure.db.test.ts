@@ -1,3 +1,4 @@
+import { EventType } from "@tanstack/ai";
 /**
  * A generation run that fails releases the decision row and files a record of
  * why under its reader's key, and the read answers that record: so a reader
@@ -8,8 +9,6 @@
  * The row is real (the test database through the real row store); only the
  * provider is faked, at the adapter boundary the TanStack engine drives.
  */
-
-import { EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
@@ -46,6 +45,7 @@ import type { DetachedModelActionStarter } from "@/api/lib/rate-limit/model-acti
 import { admitFixtureModelDispatch } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { outputTokensWithinModelLimit } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
+import { admitLawRead } from "@/api/lib/usage/law-read-admission";
 import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -338,7 +338,13 @@ describe("a failed analysis run", () => {
       scopedDb: executeRowsScopedDb(
         createScopedDb(db, [], organizationId, USER_ID),
       ),
-      organizationId,
+      admission: (
+        await admitLawRead({
+          organizationId,
+          mayReadPublicLaw: async () => Result.ok(true),
+          publicLawEnabled: () => true,
+        })
+      ).unwrap(),
       orgAIConfig,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
       promptCachingEnabled: false,

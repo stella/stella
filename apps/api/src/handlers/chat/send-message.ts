@@ -2049,6 +2049,9 @@ const assembleTurnSystemPrompt = ({
 });
 
 export type SendMessageDependencies = {
+  admitLawRead?: Parameters<
+    typeof buildChatSystemPromptParts
+  >[0]["admitLawRead"];
   caseLawDb?: Parameters<typeof buildChatSystemPromptParts>[0]["caseLawDb"];
   startAdmission?: typeof startExecutionAdmission;
   compactMessagesForContext: typeof compactMessagesForContext;
@@ -2808,6 +2811,7 @@ export const createSendMessage = (
           return skillToolNames;
         };
         const chatContextResult = await prepareChatContext({
+          admitLawRead: dependencies.admitLawRead,
           caseLawDb: dependencies.caseLawDb,
           featureAccessSnapshot,
           activeDecision: body.activeDecision,
@@ -3362,6 +3366,7 @@ export const shouldLoadExternalMcpToolsForStreaming = (
 ): boolean => runMode !== CHAT_RUN_MODE.agent;
 
 type PrepareChatContextProps = {
+  admitLawRead?: SendMessageDependencies["admitLawRead"];
   caseLawDb?: SendMessageDependencies["caseLawDb"];
   featureAccessSnapshot: FeatureAccessSnapshot;
   activeDecision: IncomingActiveDecision | undefined;
@@ -3407,10 +3412,11 @@ type PrepareChatContextResult = Result<
     skillMetadata: readonly SkillMetadata[];
     activeSkillContext: ActiveChatSkillContext | null;
   },
-  HandlerError<403 | 404 | 422 | 500> | SafeDbError
+  HandlerError<403 | 404 | 422 | 500 | 503> | SafeDbError
 >;
 
 const prepareChatContext = async ({
+  admitLawRead,
   caseLawDb,
   featureAccessSnapshot,
   activeDecision,
@@ -3451,6 +3457,7 @@ const prepareChatContext = async ({
 
     const promptAndMessagesResult = await Result.allAsync([
       buildChatSystemPromptParts({
+        admitLawRead,
         ...(caseLawDb === undefined ? {} : { caseLawDb }),
         featureAccessContext: { featureAccessSnapshot, organizationId, userId },
         activeDecision,

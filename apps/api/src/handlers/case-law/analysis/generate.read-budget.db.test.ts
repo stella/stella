@@ -11,7 +11,7 @@
  * settings and the one decision read, the same on every call.
  */
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
@@ -33,6 +33,7 @@ import {
   runWithQueryCounter,
 } from "@/api/lib/db-query-counter";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { admitLawRead } from "@/api/lib/usage/law-read-admission";
 import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
 import {
   getTestDb,
@@ -187,7 +188,13 @@ describe("answering a stored or in-flight analysis", () => {
           },
           decisionId,
           scopedDb: scopedDbOf(countedDb),
-          organizationId: ORGANIZATION_ID,
+          admission: (
+            await admitLawRead({
+              organizationId: ORGANIZATION_ID,
+              mayReadPublicLaw: async () => Result.ok(true),
+              publicLawEnabled: () => true,
+            })
+          ).unwrap(),
           orgAIConfig,
           orgAIConfigStatus,
           promptCachingEnabled: false,

@@ -100,6 +100,8 @@ import { LIMITS } from "@/api/lib/limits";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import type { SearchHit, SearchResult } from "@/api/lib/search/types";
 import * as actionCostContext from "@/api/lib/usage/action-costs/context";
+import { admitLawRead } from "@/api/lib/usage/law-read-admission";
+import { OrganizationAccessReadError } from "@/api/lib/usage/public-law-access";
 import type { withTimeout } from "@/api/lib/with-timeout";
 import { decisionTextVersion } from "@/api/mcp/case-law-decision-read";
 import { COMPAT_SEARCH_CURSOR_MAX_LENGTH } from "@/api/mcp/compat-shared";
@@ -1110,6 +1112,12 @@ const createContext = ({
   // The MCP transport holds a permit for every request (`context.ts`).
   thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
   testDependencies: {
+    admitLawRead: async (options) =>
+      admitLawRead({
+        ...options,
+        mayReadPublicLaw: async () => Result.ok(true),
+        publicLawEnabled: () => true,
+      }),
     ...testDependencies,
     anonymizeTextFields: anonymizeTextFieldsMock,
     getSearchReader: () => ({
@@ -1292,6 +1300,27 @@ describe("OpenAI-compatible MCP tools", () => {
       },
       required: ["query"],
       additionalProperties: false,
+    });
+  });
+
+  test("default compatibility search preserves matter results when law is refused", async () => {
+    const { COMPAT_TOOL_HANDLERS } = await import("@/api/mcp/compat-tools");
+    const result = await COMPAT_TOOL_HANDLERS.search({
+      args: { query: "contract" },
+      context: createContext({
+        testDependencies: {
+          admitLawRead: async () => Result.err({ type: "not_entitled" }),
+        },
+      }),
+    });
+
+    expect(result).toMatchObject({
+      egress: "compatSearch",
+      corpusOutcome: {
+        status: "refused",
+        code: "not_entitled",
+      },
+      results: [],
     });
   });
 
@@ -2164,7 +2193,10 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toEqual({
       nextCursor: null,
-      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      corpusOutcome: {
+        status: "available",
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      },
       results: [
         {
           id: "00000000-0000-4000-8000-0000000e0001",
@@ -3804,20 +3836,96 @@ describe("OpenAI-compatible MCP tools", () => {
       async () => {
         const result = await handleMcpToolCall({
           args: { country: "CZE", queries: ["shareholder dispute"] },
-          context: createContext(),
+          context: createContext({
+            testDependencies: {
+              admitLawRead: async (options) =>
+                admitLawRead({
+                  ...options,
+                  mayReadPublicLaw: async () => Result.ok(true),
+                  publicLawEnabled: () => false,
+                }),
+            },
+          }),
           toolName: "search_case_law",
         });
 
         expectErrorEnvelope(result, {
-          code: "feature_disabled",
-          message: "This feature is not enabled on this deployment",
-          hint: featureDisabledHint("FEATURE_PUBLIC_LAW"),
+          code: "missing_scope",
+          message: "Public law access is not available in this deployment.",
+          hint: "Use an organization and deployment where public law access is enabled, then retry.",
         });
         // The gate short-circuits before the backing handler runs, so guessing
         // the tool name cannot reach the corpus.
         expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
       },
     );
+  });
+
+  test("refuses legislation and case-law tools when the organization lacks law entitlement", async () => {
+    const outcomes: readonly {
+      code: "missing_scope" | "not_entitled" | "access_unavailable";
+      message: string;
+      hint: string;
+      retryable?: boolean;
+      mayReadPublicLaw: NonNullable<
+        Parameters<typeof admitLawRead>[0]["mayReadPublicLaw"]
+      >;
+      publicLawEnabled?: () => boolean;
+    }[] = [
+      {
+        code: "missing_scope",
+        message: "Public law access is not available in this deployment.",
+        hint: "Use an organization and deployment where public law access is enabled, then retry.",
+        mayReadPublicLaw: async () => Result.ok(true),
+        publicLawEnabled: () => false,
+      },
+      {
+        code: "not_entitled",
+        message:
+          "This organization is not entitled to read the public law corpus.",
+        hint: "Ask an organization administrator to review public law access for this organization.",
+        mayReadPublicLaw: async () => Result.ok(false),
+      },
+      {
+        code: "access_unavailable",
+        message: "Public law access could not be checked right now.",
+        hint: "Retry the request shortly.",
+        retryable: true,
+        mayReadPublicLaw: async () =>
+          Result.err(
+            new OrganizationAccessReadError({
+              message: "Fixture access read failed",
+              cause: new Error("Fixture access read failed"),
+            }),
+          ),
+      },
+    ] as const;
+
+    for (const toolName of ["read_statute", "read_case_law_decision"]) {
+      for (const outcome of outcomes) {
+        const context = createContext({
+          testDependencies: {
+            admitLawRead: async (options) =>
+              admitLawRead({
+                ...options,
+                mayReadPublicLaw: outcome.mayReadPublicLaw,
+                publicLawEnabled: outcome.publicLawEnabled ?? (() => true),
+              }),
+          },
+        });
+        const result = await handleMcpToolCall({ args: {}, context, toolName });
+        expectErrorEnvelope(result, {
+          code: outcome.code,
+          message: outcome.message,
+          hint: outcome.hint,
+          ...(outcome.retryable === undefined
+            ? {}
+            : { retryable: outcome.retryable }),
+        });
+      }
+    }
+    expect(readPublicLegislationHandlerMock).not.toHaveBeenCalled();
+    expect(readGatedDecisionMock).not.toHaveBeenCalled();
   });
 
   test("dispatches a feature-gated tool once the flag is on", async () => {
@@ -7900,7 +8008,10 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toEqual({
       nextCursor: null,
-      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      corpusOutcome: {
+        status: "available",
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      },
       results: [
         {
           id: "00000000-0000-4000-8000-0000000e0001",
@@ -7973,7 +8084,10 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toEqual({
       nextCursor: null,
-      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      corpusOutcome: {
+        status: "available",
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      },
       results: [
         {
           id: "00000000-0000-4000-8000-0000000e0001",
@@ -8028,7 +8142,10 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toEqual({
       nextCursor: null,
-      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      corpusOutcome: {
+        status: "available",
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      },
       results: [
         {
           id: "00000000-0000-4000-8000-0000000e0001",
@@ -8073,7 +8190,10 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toEqual({
       nextCursor: null,
-      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      corpusOutcome: {
+        status: "available",
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      },
       results: [
         {
           id: "00000000-0000-4000-8000-0000000e0001",

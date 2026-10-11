@@ -10,6 +10,8 @@ import {
   test,
 } from "bun:test";
 
+import { SEARCH_PAGINATION_COMPLETE } from "@stll/api-contract/search";
+
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   resetMetricLineSinkForTesting,
@@ -298,7 +300,15 @@ describe("finalizeMcpEgress", () => {
         await finalizeMcpEgress({
           context: createContext(),
           mode: "default",
-          response: { egress: "compatSearch", nextCursor: null, results },
+          response: {
+            egress: "compatSearch",
+            corpusOutcome: {
+              status: "available",
+              paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+            },
+            nextCursor: null,
+            results,
+          },
         }),
       ),
     );
@@ -319,7 +329,15 @@ describe("finalizeMcpEgress", () => {
         await finalizeMcpEgress({
           context: createContext(),
           mode: "anonymized",
-          response: { egress: "compatSearch", nextCursor: null, results },
+          response: {
+            egress: "compatSearch",
+            corpusOutcome: {
+              status: "available",
+              paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+            },
+            nextCursor: null,
+            results,
+          },
         }),
       ),
     );
@@ -596,7 +614,15 @@ describe("finalizeMcpEgress", () => {
         await finalizeMcpEgress({
           context: createContext(),
           mode: "anonymized",
-          response: { egress: "compatSearch", nextCursor: null, results },
+          response: {
+            egress: "compatSearch",
+            corpusOutcome: {
+              status: "available",
+              paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+            },
+            nextCursor: null,
+            results,
+          },
         }),
       ),
     );
@@ -686,6 +712,10 @@ describe("an anonymizer failure at egress", () => {
     }),
     compatSearch: () => ({
       egress: "compatSearch",
+      corpusOutcome: {
+        status: "available",
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      },
       nextCursor: null,
       results: [
         {
@@ -822,6 +852,10 @@ describe("egress whose anonymization output lost its field structure", () => {
     expectRefusedWithoutRawText(
       await finalizeWithDamagedOutput({
         egress: "compatSearch",
+        corpusOutcome: {
+          status: "available",
+          paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+        },
         nextCursor: null,
         results: [
           {

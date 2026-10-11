@@ -38,6 +38,11 @@ import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
+import { admitLawRead as defaultAdmitLawRead } from "@/api/lib/usage/law-read-admission";
+import type {
+  LawReadAdmission,
+  LawReadAdmissionError,
+} from "@/api/lib/usage/law-read-admission";
 
 /** The matters a thread's pinned or embedded matter ids name, for search. */
 const contextMatterWorkspaces = alias(
@@ -52,7 +57,8 @@ const contextMatterWorkspaces = alias(
  */
 type ChatThreadDecision =
   | { type: "present"; badge: PublicDecisionBadge }
-  | { type: "unavailable" };
+  | { type: "unavailable" }
+  | { type: "refused"; code: LawReadAdmissionError["type"] };
 
 type ChatThreadListItem = {
   context: ChatThreadContext;
@@ -75,17 +81,27 @@ const decisionBadgesUnavailable = failureSink({
   expected: [],
 });
 
-const readThreadDecisions = async (
-  subjectDecisionIds: readonly (SafeId<"caseLawDecision"> | null)[],
-  readDecisionBadges: typeof readPublicDecisionBadges,
-) => {
+type ReadThreadDecisionsOptions = {
+  admission: LawReadAdmission;
+  decisionIds: readonly SafeId<"caseLawDecision">[];
+  readDecisionBadges: typeof readPublicDecisionBadges;
+};
+
+const readThreadDecisions = async ({
+  admission,
+  decisionIds,
+  readDecisionBadges,
+}: ReadThreadDecisionsOptions) => {
   const badges = await readDecisionBadges({
-    decisionIds: subjectDecisionIds.filter((id) => id !== null),
+    decisionIds,
   });
   if (Result.isError(badges)) {
     observeFailure(classifyFailure(badges.error, "upstream_unavailable"), {
       sink: decisionBadgesUnavailable,
-      ctx: { step: "getThreads.readThreadDecisions" },
+      ctx: {
+        organizationId: admission.organizationId,
+        step: "getThreads.readThreadDecisions",
+      },
     });
   }
   return (
@@ -102,6 +118,37 @@ const readThreadDecisions = async (
   };
 };
 
+type ReadThreadDecisionPreviewsOptions = {
+  subjectDecisionIds: readonly (SafeId<"caseLawDecision"> | null)[];
+  organizationId: SafeId<"organization">;
+  admitLawRead: typeof defaultAdmitLawRead;
+  readDecisionBadges: typeof readPublicDecisionBadges;
+};
+
+const readThreadDecisionPreviews = async ({
+  subjectDecisionIds,
+  organizationId,
+  admitLawRead,
+  readDecisionBadges,
+}: ReadThreadDecisionPreviewsOptions): Promise<
+  (id: SafeId<"caseLawDecision"> | null) => ChatThreadDecision | null
+> => {
+  const decisionIds = subjectDecisionIds.filter((id) => id !== null);
+  if (decisionIds.length === 0) {
+    return () => null;
+  }
+  const admitted = await admitLawRead({ organizationId });
+  if (Result.isError(admitted)) {
+    const code = admitted.error.type;
+    return (id) => (id === null ? null : { type: "refused", code });
+  }
+  return await readThreadDecisions({
+    admission: admitted.value,
+    decisionIds,
+    readDecisionBadges,
+  });
+};
+
 const config = {
   description:
     "List your own chat threads, most recently active first, split into " +
@@ -111,7 +158,8 @@ const config = {
     "files it drew on, with their total counts, and the case-law decision " +
     "the chat is about, if any. search matches the thread " +
     "title, the matter it lives in, or a matter pinned to it; paginate with " +
-    "limit and cursor.",
+    "limit and cursor. Decision previews require public law admission; " +
+    "a refused preview has type refused and code not_entitled, missing_scope, or access_unavailable. Thread records remain readable.",
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
@@ -134,6 +182,7 @@ const config = {
 } satisfies HandlerConfig;
 
 type GetThreadsDependencies = {
+  admitLawRead?: typeof defaultAdmitLawRead;
   readDecisionBadges: typeof readPublicDecisionBadges;
 };
 
@@ -142,6 +191,7 @@ const GET_THREADS_DEPENDENCIES = {
 };
 
 export const createGetThreads = ({
+  admitLawRead = defaultAdmitLawRead,
   readDecisionBadges,
 }: GetThreadsDependencies = GET_THREADS_DEPENDENCIES) =>
   createSafeRootHandler(
@@ -281,10 +331,12 @@ export const createGetThreads = ({
 
       // After the tenant transaction, not inside it: decisions live in the
       // public corpus, read through its own gated connection.
-      const decisionOf = await readThreadDecisions(
-        page.map((row) => row.subjectDecisionId),
+      const decisionOf = await readThreadDecisionPreviews({
+        subjectDecisionIds: page.map((row) => row.subjectDecisionId),
+        organizationId: session.activeOrganizationId,
+        admitLawRead,
         readDecisionBadges,
-      );
+      });
 
       const global: ChatThreadListItem[] = [];
 

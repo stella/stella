@@ -8,14 +8,14 @@ import { assertProperty } from "@stll/property-testing";
 
 import type { DecisionIdentityRow } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import type { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
-import {
-  admitLawRead,
-  type LawReadAdmission,
-} from "@/api/handlers/legal-resolve/admission";
 import { resolveDecision } from "@/api/handlers/legal-resolve/decision";
 import { createSafeId } from "@/api/lib/branded-types";
 import { buildCaseLawDecisionUrl } from "@/api/lib/legal-search/public-law-app-urls";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
+import {
+  admitLawRead,
+  type LawReadAdmission,
+} from "@/api/lib/usage/law-read-admission";
 import { MCP_CONTENT_MAX_CHARS, toPlainCorpusText } from "@/api/mcp/tool-utils";
 
 const organizationId =

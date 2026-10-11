@@ -20,6 +20,10 @@ export const MCP_ERROR_CODES = [
   "result_too_large",
   /** The session lacks the OAuth scope the tool requires. */
   "missing_scope",
+  /** The organization has no entitlement for the requested public-law read. */
+  "not_entitled",
+  /** The public-law entitlement could not be checked due to a transient fault. */
+  "access_unavailable",
   /** The tool's backing feature is turned off for this deployment/org. */
   "feature_disabled",
   /** The named resource does not exist or the caller cannot access it. */

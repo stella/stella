@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { status } from "elysia";
 import * as v from "valibot";
@@ -5,10 +6,12 @@ import * as v from "valibot";
 import { blockSchema } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   brandPersistedCaseLawDecisionId,
   brandPersistedLegislationDocumentId,
 } from "@/api/lib/safe-id-boundaries";
+import { admitLawRead } from "@/api/lib/usage/law-read-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import type { McpRequestContext } from "./context";
@@ -106,7 +109,19 @@ const sourceOf = (
   }) satisfies ReaderSource;
 const contextWith = (
   testDependencies: NonNullable<McpRequestContext["testDependencies"]>,
-) => asTestRaw<McpRequestContext>({ testDependencies });
+) =>
+  asTestRaw<McpRequestContext>({
+    organizationId: toSafeId<"organization">("org_reader_test"),
+    testDependencies: {
+      ...testDependencies,
+      admitLawRead: async (options: Parameters<typeof admitLawRead>[0]) =>
+        admitLawRead({
+          ...options,
+          publicLawEnabled: () => true,
+          mayReadPublicLaw: async () => Result.ok(true),
+        }),
+    },
+  });
 
 type HandlerInput = Parameters<McpToolHandler>[0];
 

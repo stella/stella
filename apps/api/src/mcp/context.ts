@@ -100,6 +100,10 @@ import type {
   fillStoredTemplateWithTextStrict,
 } from "@/api/lib/templates/template-fill-service";
 import type { writeStoredTemplate } from "@/api/lib/templates/write-template";
+import type {
+  admitLawRead,
+  LawReadAdmission,
+} from "@/api/lib/usage/law-read-admission";
 import type { withTimeout } from "@/api/lib/with-timeout";
 import type { startWorkflow } from "@/api/lib/workflow-queue";
 import type { materializePlaybookRun } from "@/api/lib/workflow/materialize-playbook-run";
@@ -135,6 +139,7 @@ export type McpRequestContext = {
   /** Explicit seams used by focused MCP tests; production contexts leave these unset. */
   featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
   testDependencies?: {
+    admitLawRead?: typeof admitLawRead;
     featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
     featureAccessBindings?: McpFeatureAccessBindings | undefined;
     /** Replaces the scoped `organization_settings` read, transaction included. */
@@ -266,6 +271,8 @@ export type McpRequestContext = {
   enabledRegistrySlugs?: readonly BusinessRegistrySlug[] | undefined;
   memberRole: MemberRole;
   organizationId: SafeId<"organization">;
+  /** Branded public-law access proof created at the MCP call boundary. */
+  lawReadAdmission?: LawReadAdmission | undefined;
   /**
    * Build an operation-local database scope whose private pinned-ID list can
    * grow only through its access-map-validating pin method. The generic

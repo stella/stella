@@ -25,6 +25,7 @@ import {
   normalizeObjectInputAtBoundary,
 } from "@/api/mcp/input-normalization";
 import { KNOWLEDGE_TOOL_HANDLERS } from "@/api/mcp/knowledge-tools";
+import { admitMcpLawRead } from "@/api/mcp/law-read-admission";
 import { LEGISLATION_TOOL_HANDLERS } from "@/api/mcp/legislation-tools";
 import { MATTER_TOOL_HANDLERS } from "@/api/mcp/matter-tools";
 import { READER_ANNOTATION_TOOL_HANDLERS } from "@/api/mcp/reader-annotation-tools";
@@ -296,6 +297,12 @@ export const runRegistryReadTool = async ({
     );
   }
   if (!isMcpToolFeatureEnabled(staticDefinition.feature)) {
+    if (staticDefinition.feature === "FEATURE_PUBLIC_LAW") {
+      const lawRead = await admitMcpLawRead(context);
+      if (lawRead.type === "refused") {
+        return Result.err(toRegistryChatToolError(lawRead.result.error));
+      }
+    }
     return Result.err(
       new ChatToolError({
         kind: "unavailable",

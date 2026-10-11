@@ -3,10 +3,6 @@ import { describe, expect, expectTypeOf, test } from "bun:test";
 import { status } from "elysia";
 
 import {
-  admitLawRead,
-  type LawReadAdmission,
-} from "@/api/handlers/legal-resolve/admission";
-import {
   resolveCzechLaw,
   resolveLawCitation,
 } from "@/api/handlers/legal-resolve/law";
@@ -19,6 +15,10 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import { buildLegislationDocumentAppUrl } from "@/api/lib/legal-search/public-law-app-urls";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
+import {
+  admitLawRead,
+  type LawReadAdmission,
+} from "@/api/lib/usage/law-read-admission";
 
 const organizationId =
   parseAuthProviderId<"organization">("organization") ??

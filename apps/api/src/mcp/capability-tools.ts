@@ -47,6 +47,7 @@ import {
 } from "@/api/lib/safe-handler-factories";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import { isLawReadAdmissionErrorCode } from "@/api/lib/usage/law-read-admission";
 import { advertisedSchemas } from "@/api/mcp/advertised-schema";
 import { synthesizeCapabilityContext } from "@/api/mcp/capability-context";
 import type { SynthesizedCapabilityContext } from "@/api/mcp/capability-context";
@@ -78,6 +79,7 @@ import {
   normalizeInputAtBoundary,
 } from "@/api/mcp/input-normalization";
 import { plainRecord } from "@/api/mcp/input-schemas";
+import { admitMcpLawRead, lawReadRefusal } from "@/api/mcp/law-read-admission";
 import {
   declaresInternalField,
   INTERNAL_FIELD_NAME,
@@ -714,6 +716,12 @@ const mapStatusResponse = (
   statusCode: number,
   responseBody: unknown,
 ): InternalToolErrorResult => {
+  if (
+    isRecord(responseBody) &&
+    isLawReadAdmissionErrorCode(responseBody["code"])
+  ) {
+    return lawReadRefusal(responseBody["code"]);
+  }
   if (isRecord(responseBody) && isActionAdmissionCode(responseBody["code"])) {
     const code = responseBody["code"];
     const refusal = ACTION_ADMISSION_REFUSALS[code];
@@ -1175,6 +1183,12 @@ const describeCapabilityHandler: McpToolHandler<
     return notFoundWithHint(id, context);
   }
   if (!contextFeatureEnabled(entry.feature, context)) {
+    if (entry.feature === "FEATURE_PUBLIC_LAW") {
+      const lawRead = await admitMcpLawRead(context);
+      if (lawRead.type === "refused") {
+        return lawRead.result;
+      }
+    }
     return featureDisabledResult(entry.feature);
   }
 
@@ -1686,6 +1700,12 @@ const invokeCapabilityHandler = async ({
     return notFoundWithHint(id, context);
   }
   if (!contextFeatureEnabled(entry.feature, context)) {
+    if (entry.feature === "FEATURE_PUBLIC_LAW") {
+      const lawRead = await admitMcpLawRead(context);
+      if (lawRead.type === "refused") {
+        return lawRead.result;
+      }
+    }
     return featureDisabledResult(entry.feature);
   }
 

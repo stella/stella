@@ -143,6 +143,8 @@ import {
   untrustedText,
 } from "@/api/lib/prompt-safety";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
+import { admitLawReadOrError } from "@/api/lib/usage/law-read-admission";
+import type { LawReadAdmission } from "@/api/lib/usage/law-read-admission";
 import type { McpFeatureAccessContext } from "@/api/mcp/feature-access";
 
 const TITLE_MAX_LENGTH = 80;
@@ -665,7 +667,9 @@ export const buildChatPromptCacheKey = (
 };
 
 type BuildChatSystemPromptProps = {
+  legislationDb?: LegislationPublicReadDb;
   caseLawDb?: CaseLawPublicReadDb;
+  admitLawRead?: typeof admitLawReadOrError | undefined;
   featureAccessContext?: McpFeatureAccessContext | undefined;
   activeDecision: IncomingActiveDecision | undefined;
   activeDraft?: IncomingActiveDraft | undefined;
@@ -853,8 +857,69 @@ const resolveActiveFilePromptContext = async ({
   });
 };
 
+type BuildActiveLawSectionsOptions = Pick<
+  BuildChatSystemPromptProps,
+  "activeDecision" | "activeStatute" | "organizationId" | "userId" | "safeDb"
+> & {
+  caseLawDb: CaseLawPublicReadDb;
+  legislationDb: LegislationPublicReadDb;
+  admitLawRead: typeof admitLawReadOrError;
+};
+
+const buildActiveLawSections = async ({
+  activeDecision,
+  activeStatute,
+  organizationId,
+  userId,
+  caseLawDb,
+  legislationDb,
+  admitLawRead,
+  safeDb,
+}: BuildActiveLawSectionsOptions) =>
+  await Result.gen(async function* () {
+    let decisionSection = "";
+    let statuteSection = "";
+    if (activeDecision || activeStatute) {
+      if (organizationId === undefined) {
+        return Result.err(
+          new HandlerError({
+            status: 403,
+            code: "missing_scope",
+            message: "Public law reads require an organization",
+          }),
+        );
+      }
+      const admission = yield* Result.await(admitLawRead({ organizationId }));
+      if (activeDecision) {
+        decisionSection = yield* Result.await(
+          buildActiveDecisionSection({
+            activeDecision,
+            admission,
+            caseLawDb,
+            safeDb,
+            userId,
+          }),
+        );
+      }
+      if (activeStatute) {
+        statuteSection = yield* Result.await(
+          buildActiveStatuteSection({
+            activeStatute,
+            admission,
+            legislationDb,
+            safeDb,
+            userId,
+          }),
+        );
+      }
+    }
+    return Result.ok({ decisionSection, statuteSection });
+  });
+
 export const buildChatSystemPromptParts = async ({
   caseLawDb = caseLawPublicReadDb,
+  legislationDb = legislationPublicReadDb,
+  admitLawRead = admitLawReadOrError,
   featureAccessContext,
   activeDecision,
   activeDraft,
@@ -877,9 +942,22 @@ export const buildChatSystemPromptParts = async ({
   userId,
   workspaceId,
 }: BuildChatSystemPromptProps): Promise<
-  Result<ChatPromptParts, HandlerError<403 | 404 | 500> | SafeDbError>
+  Result<ChatPromptParts, HandlerError<403 | 404 | 500 | 503> | SafeDbError>
 > =>
   await Result.gen(async function* () {
+    const { decisionSection, statuteSection } = yield* Result.await(
+      buildActiveLawSections({
+        activeDecision,
+        activeStatute,
+        organizationId,
+        userId,
+        caseLawDb,
+        legislationDb,
+        admitLawRead,
+        safeDb,
+      }),
+    );
+
     const listedSkills =
       organizationId && userId
         ? yield* Result.await(
@@ -930,24 +1008,6 @@ export const buildChatSystemPromptParts = async ({
             }),
           );
 
-    const decisionSection = yield* Result.await(
-      buildActiveDecisionSection({
-        activeDecision,
-        caseLawDb,
-        organizationId,
-        safeDb,
-        userId,
-      }),
-    );
-    const statuteSection = yield* Result.await(
-      buildActiveStatuteSection({
-        activeStatute,
-        legislationDb: legislationPublicReadDb,
-        organizationId,
-        safeDb,
-        userId,
-      }),
-    );
     const externalSection = buildActiveExternalSection({ activeExternal });
     const activeSkillSection = buildActiveSkillSection(
       activeSkillContext,
@@ -2192,9 +2252,9 @@ const clipAnchoredDecisionText = (text: string): ActiveDecisionText => {
 };
 
 type ActiveDecisionSectionProps = {
-  activeDecision: IncomingActiveDecision | undefined;
+  activeDecision: IncomingActiveDecision;
   caseLawDb: CaseLawPublicReadDb;
-  organizationId: SafeId<"organization"> | undefined;
+  admission: LawReadAdmission;
   safeDb: SafeDb;
   userId: SafeId<"user"> | undefined;
 };
@@ -2202,16 +2262,14 @@ type ActiveDecisionSectionProps = {
 export const buildActiveDecisionSection = async ({
   activeDecision,
   caseLawDb,
-  organizationId,
+  admission,
   safeDb,
   userId,
 }: ActiveDecisionSectionProps): Promise<
   Result<string, HandlerError<500> | SafeDbError>
 > =>
   await Result.gen(async function* () {
-    if (!activeDecision) {
-      return Result.ok("");
-    }
+    const { organizationId } = admission;
 
     // Client-supplied active ids pass the same publication boundary as the
     // reader. The source policy and payload pointers share its snapshot.
@@ -2279,52 +2337,51 @@ export const buildActiveDecisionSection = async ({
         return panic("Unhandled active decision policy");
     }
 
-    // The reader's own marks and what colleagues shared; a visitor has none.
+    // The reader's own marks and what colleagues shared.
     // Author and organization are in the predicate as well as in the row
     // policy, so a private note never reaches another reader's prompt.
-    const annotationRows =
-      organizationId && userId
-        ? yield* Result.await(
-            safeDb((tx) =>
-              tx
-                .select({
-                  blockAnchorId: legalReaderAnnotations.blockAnchorId,
-                  body: legalReaderAnnotations.body,
-                  color: legalReaderAnnotations.color,
-                  groupId: legalReaderAnnotations.groupId,
-                  id: legalReaderAnnotations.id,
-                  kind: legalReaderAnnotations.kind,
-                  mine: sql<boolean>`${legalReaderAnnotations.userId} = ${userId}`,
-                  quote: legalReaderAnnotations.quote,
-                  style: legalReaderAnnotations.style,
-                  visibility: legalReaderAnnotations.visibility,
-                })
-                .from(legalReaderAnnotations)
-                .where(
-                  and(
-                    eq(legalReaderAnnotations.organizationId, organizationId),
-                    eq(
-                      legalReaderAnnotations.targetType,
-                      DECISION_ANNOTATION_TARGET,
-                    ),
-                    eq(
-                      legalReaderAnnotations.targetId,
-                      activeDecision.decisionId,
-                    ),
-                    or(
-                      eq(legalReaderAnnotations.userId, userId),
-                      eq(legalReaderAnnotations.visibility, SHARED_ANNOTATION),
-                    ),
+    const annotationRows = userId
+      ? yield* Result.await(
+          safeDb((tx) =>
+            tx
+              .select({
+                blockAnchorId: legalReaderAnnotations.blockAnchorId,
+                body: legalReaderAnnotations.body,
+                color: legalReaderAnnotations.color,
+                groupId: legalReaderAnnotations.groupId,
+                id: legalReaderAnnotations.id,
+                kind: legalReaderAnnotations.kind,
+                mine: sql<boolean>`${legalReaderAnnotations.userId} = ${userId}`,
+                quote: legalReaderAnnotations.quote,
+                style: legalReaderAnnotations.style,
+                visibility: legalReaderAnnotations.visibility,
+              })
+              .from(legalReaderAnnotations)
+              .where(
+                and(
+                  eq(legalReaderAnnotations.organizationId, organizationId),
+                  eq(
+                    legalReaderAnnotations.targetType,
+                    DECISION_ANNOTATION_TARGET,
                   ),
-                )
-                .orderBy(
-                  asc(legalReaderAnnotations.createdAt),
-                  asc(legalReaderAnnotations.id),
-                )
-                .limit(ACTIVE_READER_ANNOTATIONS_LIMIT),
-            ),
-          )
-        : [];
+                  eq(
+                    legalReaderAnnotations.targetId,
+                    activeDecision.decisionId,
+                  ),
+                  or(
+                    eq(legalReaderAnnotations.userId, userId),
+                    eq(legalReaderAnnotations.visibility, SHARED_ANNOTATION),
+                  ),
+                ),
+              )
+              .orderBy(
+                asc(legalReaderAnnotations.createdAt),
+                asc(legalReaderAnnotations.id),
+              )
+              .limit(ACTIVE_READER_ANNOTATIONS_LIMIT),
+          ),
+        )
+      : [];
 
     const { row, text } = decision;
     const decisionPrompt = buildActiveDecisionPrompt({
@@ -2548,9 +2605,9 @@ const readActiveStatuteFulltext = async (
 };
 
 type ActiveStatuteSectionProps = {
-  activeStatute: IncomingActiveStatute | undefined;
+  activeStatute: IncomingActiveStatute;
   legislationDb: LegislationPublicReadDb;
-  organizationId: SafeId<"organization"> | undefined;
+  admission: LawReadAdmission;
   safeDb: SafeDb;
   userId: SafeId<"user"> | undefined;
 };
@@ -2558,16 +2615,14 @@ type ActiveStatuteSectionProps = {
 export const buildActiveStatuteSection = async ({
   activeStatute,
   legislationDb,
-  organizationId,
+  admission,
   safeDb,
   userId,
 }: ActiveStatuteSectionProps): Promise<
   Result<string, HandlerError<500> | SafeDbError>
 > =>
   await Result.gen(async function* () {
-    if (!activeStatute) {
-      return Result.ok("");
-    }
+    const { organizationId } = admission;
 
     // The corpus is global, and the statute reader serves it through the
     // read-only public-law role behind the publisher's redistribution gate.
@@ -2671,49 +2726,45 @@ export const buildActiveStatuteSection = async ({
     // The decision section's predicate, on the statute target: the author and
     // the organization are in the query as well as in the row policy, so a
     // private note never reaches another reader's prompt.
-    const annotationRows =
-      organizationId && userId
-        ? yield* Result.await(
-            safeDb((tx) =>
-              tx
-                .select({
-                  blockAnchorId: legalReaderAnnotations.blockAnchorId,
-                  body: legalReaderAnnotations.body,
-                  color: legalReaderAnnotations.color,
-                  groupId: legalReaderAnnotations.groupId,
-                  id: legalReaderAnnotations.id,
-                  kind: legalReaderAnnotations.kind,
-                  mine: sql<boolean>`${legalReaderAnnotations.userId} = ${userId}`,
-                  quote: legalReaderAnnotations.quote,
-                  style: legalReaderAnnotations.style,
-                  visibility: legalReaderAnnotations.visibility,
-                })
-                .from(legalReaderAnnotations)
-                .where(
-                  and(
-                    eq(legalReaderAnnotations.organizationId, organizationId),
-                    eq(
-                      legalReaderAnnotations.targetType,
-                      STATUTE_ANNOTATION_TARGET,
-                    ),
-                    eq(
-                      legalReaderAnnotations.targetId,
-                      activeStatute.documentId,
-                    ),
-                    or(
-                      eq(legalReaderAnnotations.userId, userId),
-                      eq(legalReaderAnnotations.visibility, SHARED_ANNOTATION),
-                    ),
+    const annotationRows = userId
+      ? yield* Result.await(
+          safeDb((tx) =>
+            tx
+              .select({
+                blockAnchorId: legalReaderAnnotations.blockAnchorId,
+                body: legalReaderAnnotations.body,
+                color: legalReaderAnnotations.color,
+                groupId: legalReaderAnnotations.groupId,
+                id: legalReaderAnnotations.id,
+                kind: legalReaderAnnotations.kind,
+                mine: sql<boolean>`${legalReaderAnnotations.userId} = ${userId}`,
+                quote: legalReaderAnnotations.quote,
+                style: legalReaderAnnotations.style,
+                visibility: legalReaderAnnotations.visibility,
+              })
+              .from(legalReaderAnnotations)
+              .where(
+                and(
+                  eq(legalReaderAnnotations.organizationId, organizationId),
+                  eq(
+                    legalReaderAnnotations.targetType,
+                    STATUTE_ANNOTATION_TARGET,
                   ),
-                )
-                .orderBy(
-                  asc(legalReaderAnnotations.createdAt),
-                  asc(legalReaderAnnotations.id),
-                )
-                .limit(ACTIVE_READER_ANNOTATIONS_LIMIT),
-            ),
-          )
-        : [];
+                  eq(legalReaderAnnotations.targetId, activeStatute.documentId),
+                  or(
+                    eq(legalReaderAnnotations.userId, userId),
+                    eq(legalReaderAnnotations.visibility, SHARED_ANNOTATION),
+                  ),
+                ),
+              )
+              .orderBy(
+                asc(legalReaderAnnotations.createdAt),
+                asc(legalReaderAnnotations.id),
+              )
+              .limit(ACTIVE_READER_ANNOTATIONS_LIMIT),
+          ),
+        )
+      : [];
 
     const { blocks, fulltext, version } = statute;
     const statutePrompt = buildActiveStatutePrompt({

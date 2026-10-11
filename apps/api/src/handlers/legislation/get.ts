@@ -14,8 +14,14 @@ import {
   statuteCitationCountStateJoin,
 } from "@/api/handlers/legislation/citation-count";
 import { projectStatuteReader } from "@/api/handlers/legislation/reader-response";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafeLawReadRootHandler,
+} from "@/api/lib/api-handlers";
+import type {
+  HandlerAdmissionDependencies,
+  HandlerConfig,
+} from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { legislationExpressionLabelColumns } from "@/api/lib/legal-search/legislation-expression-label";
@@ -143,20 +149,28 @@ const config = {
   params: t.Object({ documentId: tSafeId("legislationDocument") }),
 } satisfies HandlerConfig;
 
-const readLegislation = createSafeRootHandler(
-  config,
-  async function* ({ params: { documentId } }) {
-    const response = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await readPublicLegislationHandler(
-            documentId,
-            legislationPublicReadDb,
-          ),
-      ),
-    );
-    return Result.ok(response);
-  },
-);
+type ReadLegislationHandlerOptions = {
+  admissionDependencies?: HandlerAdmissionDependencies;
+  legislationDb?: LegislationReadDb;
+};
 
+export const createReadLegislationHandler = ({
+  admissionDependencies,
+  legislationDb = legislationPublicReadDb,
+}: ReadLegislationHandlerOptions = {}) =>
+  createSafeLawReadRootHandler(
+    config,
+    async function* ({ params: { documentId } }) {
+      const response = yield* Result.await(
+        Result.tryPromise(
+          async () =>
+            await readPublicLegislationHandler(documentId, legislationDb),
+        ),
+      );
+      return Result.ok(response);
+    },
+    admissionDependencies,
+  );
+
+const readLegislation = createReadLegislationHandler();
 export default readLegislation;

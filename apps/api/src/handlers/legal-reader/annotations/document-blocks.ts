@@ -20,6 +20,7 @@ import {
   brandPersistedCaseLawDecisionId,
   brandPersistedLegislationDocumentId,
 } from "@/api/lib/safe-id-boundaries";
+import type { LawReadAdmission } from "@/api/lib/usage/law-read-admission";
 
 type AnnotationTarget = {
   targetId: string;
@@ -124,7 +125,9 @@ const resolveStatute = async (
 export const resolveAnnotationTarget = async ({
   targetId,
   targetType,
-}: AnnotationTarget): Promise<AnnotationTargetAccess> => {
+}: AnnotationTarget & {
+  admission: LawReadAdmission;
+}): Promise<AnnotationTargetAccess> => {
   switch (targetType) {
     case "decision":
       return await resolveDecision(targetId);

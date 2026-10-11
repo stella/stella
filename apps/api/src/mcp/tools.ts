@@ -39,6 +39,7 @@ import {
   normalizeObjectInputAtBoundary,
   withInputNotes,
 } from "@/api/mcp/input-normalization";
+import { admitMcpLawRead } from "@/api/mcp/law-read-admission";
 import { matterRequiredResult } from "@/api/mcp/matter-requirement";
 import { observeMcpToolCall } from "@/api/mcp/observe-tool-call";
 import {
@@ -435,11 +436,12 @@ const staticToolReferenceRefusal = async ({
 
 const dispatchMcpToolCall = async ({
   args,
-  context,
+  context: initialContext,
   mode = "default",
   toolName,
   dependencies,
 }: McpToolCallArgs): Promise<CallToolResult> => {
+  let context = initialContext;
   const serializeForSurface = createSurfaceSerializer({ context, mode });
   const staticTool = getStaticMcpToolDefinition(toolName, mode);
   if (staticTool) {
@@ -453,6 +455,13 @@ const dispatchMcpToolCall = async ({
     if (toolRefusal !== null) {
       return serializeForSurface(structuredErrorResult(toolRefusal));
     }
+  }
+  if (staticTool?.feature === "FEATURE_PUBLIC_LAW") {
+    const lawRead = await admitMcpLawRead(context);
+    if (lawRead.type === "refused") {
+      return serializeForSurface(lawRead.result);
+    }
+    context = { ...context, lawReadAdmission: lawRead.admission };
   }
   const unavailableResult = featureUnavailableToolResult({
     args,

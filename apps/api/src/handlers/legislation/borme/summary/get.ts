@@ -2,7 +2,10 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafeLawReadRootHandler,
+} from "@/api/lib/api-handlers";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { boeClient } from "@/api/lib/legal-search/boe-client";
 
@@ -10,7 +13,7 @@ const paramsSchema = t.Object({
   date: t.String({ pattern: "^\\d{8}$" }),
 });
 
-const bormeSummary = createSafeRootHandler(
+const bormeSummary = createSafeLawReadRootHandler(
   {
     description:
       "Read the BORME summary the Spanish commercial registry gazette " +

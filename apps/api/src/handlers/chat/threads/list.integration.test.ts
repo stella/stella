@@ -22,6 +22,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createUserFileKey } from "@/api/lib/files/utils";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { admitLawRead } from "@/api/lib/usage/law-read-admission";
+import { OrganizationAccessReadError } from "@/api/lib/usage/public-law-access";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -588,6 +590,82 @@ describe("open chat thread attached files", () => {
 });
 
 describe("chat thread list decision badges", () => {
+  test.each([
+    {
+      code: "not_entitled",
+      status: 403,
+      enabled: true,
+      access: async () => Result.ok(false),
+    },
+    {
+      code: "missing_scope",
+      status: 403,
+      enabled: false,
+      access: async () => panic("Disabled law cannot read access state"),
+    },
+    {
+      code: "access_unavailable",
+      status: 503,
+      enabled: true,
+      access: async () =>
+        Result.err(
+          new OrganizationAccessReadError({
+            message: "Access unavailable",
+            cause: new Error("Access store unavailable"),
+          }),
+        ),
+    },
+  ] as const)(
+    "returns $code instead of reading decision badges",
+    async (refusal) => {
+      const title = `Admission ${refusal.code}`;
+      const decisionThreadId = await seedThread({
+        subjectDecisionId: toSafeId<"caseLawDecision">(Bun.randomUUIDv7()),
+        title,
+      });
+      const gated = createGetThreads({
+        admitLawRead: async ({ organizationId }) =>
+          await admitLawRead({
+            organizationId,
+            publicLawEnabled: () => refusal.enabled,
+            mayReadPublicLaw: refusal.access,
+          }),
+        readDecisionBadges: async () =>
+          panic("Refused badge read reached the public corpus"),
+      });
+      const result = await gated.handler(
+        asTestRaw<ThreadsCtx>({
+          memberRole: sessionMemberRole("owner"),
+          query: { limit: 100, search: title },
+          request: new Request("http://localhost/v1/chat/threads"),
+          safeDb: scopedTo([ids.wsA1, ids.wsA2]),
+          session: { activeOrganizationId: ids.orgA },
+          user: { id: ids.userA1 },
+        }),
+      );
+      if ("code" in result) {
+        panic("Organization history must remain readable");
+      }
+      const thread = findThread(result, decisionThreadId);
+      expect(thread?.title).toBe(title);
+      expect(thread?.context).toBeDefined();
+      expect(thread?.decision).toEqual({ type: "refused", code: refusal.code });
+    },
+  );
+
+  test("history without decision subjects requires no law admission", async () => {
+    const title = "Ordinary history without public law";
+    const plainThreadId = await seedThread({ title });
+    const ungated = createGetThreads({
+      admitLawRead: async () =>
+        panic("Ordinary history cannot require law admission"),
+      readDecisionBadges: async () =>
+        panic("Ordinary history cannot read public law"),
+    });
+    const listed = await listThreads(title, undefined, ungated);
+    expect(findThread(listed, plainThreadId)?.decision).toBeNull();
+  });
+
   test("a failed badge read keeps the history and marks only decision chats", async () => {
     const decisionThreadId = await seedThread({
       subjectDecisionId: toSafeId<"caseLawDecision">(Bun.randomUUIDv7()),
@@ -595,6 +673,12 @@ describe("chat thread list decision badges", () => {
     });
     const plainThreadId = await seedThread({ title: "Plain chat" });
     const failingBadges = createGetThreads({
+      admitLawRead: async ({ organizationId }) =>
+        await admitLawRead({
+          organizationId,
+          mayReadPublicLaw: async () => Result.ok(true),
+          publicLawEnabled: () => true,
+        }),
       readDecisionBadges: async () =>
         Result.err(
           new HandlerError({ status: 500, message: "corpus unavailable" }),

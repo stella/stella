@@ -60,6 +60,8 @@ export const MCP_ERROR_CODES = [
   "validation_error",
   "result_too_large",
   "missing_scope",
+  "not_entitled",
+  "access_unavailable",
   "feature_disabled",
   "not_found",
   "confirmation_required",

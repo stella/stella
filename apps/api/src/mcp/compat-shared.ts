@@ -17,6 +17,7 @@ import {
   normalizeTenantPageLimit as normalizePage,
 } from "@/api/lib/rate-limit/action-size-limits";
 import { encodeCursor } from "@/api/lib/search/cursor";
+import type { LawReadAdmission } from "@/api/lib/usage/law-read-admission";
 import {
   EMPTY_CORPUS_CURSORS,
   readCompatDecision,
@@ -29,8 +30,6 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpToolResponse } from "@/api/mcp/tool-types";
 import {
   invalidCursorResult,
-  FEATURE_DISABLED_MESSAGE,
-  featureDisabledHint,
   MCP_CONTENT_MAX_CHARS,
   notFoundResult,
   structuredErrorResult,
@@ -156,13 +155,6 @@ export const invalidCompatIdResult = (hint: string) =>
     hint,
   });
 
-export const publicLawDisabledResult = (feature: string) =>
-  structuredErrorResult({
-    code: "feature_disabled",
-    message: FEATURE_DISABLED_MESSAGE,
-    hint: featureDisabledHint(feature),
-  });
-
 /**
  * The corpus half of `fetch`. The read is the same gated read the named corpus
  * tools do, and the plan it returns declares the subject kind, which is both
@@ -172,15 +164,21 @@ export const publicLawDisabledResult = (feature: string) =>
 export const compatCorpusFetchResponse = async <TData>({
   compatId,
   context,
+  admission,
   cursor,
 }: {
   compatId: CompatCorpusId;
   context: McpRequestContext;
+  admission: LawReadAdmission;
   cursor: string | undefined;
 }): Promise<McpToolResponse<TData>> => {
   const read = await (compatId.kind === "decision"
-    ? readCompatDecision({ context, decisionId: compatId.decisionId })
-    : readCompatStatute({ context, eli: compatId.eli }));
+    ? readCompatDecision({
+        admission,
+        context,
+        decisionId: compatId.decisionId,
+      })
+    : readCompatStatute({ admission, context, eli: compatId.eli }));
 
   switch (read.type) {
     case "not_found":

@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
@@ -24,6 +25,10 @@ import type {
 import { readPublicDecisionBadges } from "@/api/lib/case-law/decision-badges";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import {
+  admitLawRead,
+  admitLawReadOrError,
+} from "@/api/lib/usage/law-read-admission";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { createChatStreamMock } from "@/api/tests/helpers/chat-stream-mock";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -68,6 +73,12 @@ const loadExternalMcpToolsForTest = async () => {
 };
 
 const sendMessage = createSendMessage({
+  admitLawRead: async ({ organizationId }) =>
+    await admitLawReadOrError({
+      organizationId,
+      mayReadPublicLaw: async () => Result.ok(true),
+      publicLawEnabled: () => true,
+    }),
   caseLawDb: asyncCaseLawDb,
   compactMessagesForContext,
   createRefRegistry: createChatRefRegistry,
@@ -95,6 +106,12 @@ const orgAIConfig = {
 } satisfies OrgAIConfig;
 
 const getThreads = createGetThreads({
+  admitLawRead: async ({ organizationId }) =>
+    await admitLawRead({
+      organizationId,
+      mayReadPublicLaw: async () => Result.ok(true),
+      publicLawEnabled: () => true,
+    }),
   readDecisionBadges: async ({ decisionIds }) =>
     await readPublicDecisionBadges({
       caseLawDb: asyncCaseLawDb,

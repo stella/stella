@@ -25,6 +25,10 @@ import {
   encodeCompatSearchCursor,
   invalidCompatIdResult,
 } from "@/api/mcp/compat-shared";
+import {
+  admitMcpLawRead,
+  withMcpLawReadAdmission,
+} from "@/api/mcp/law-read-admission";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
@@ -135,6 +139,10 @@ const handleLawCompatSearchTool: McpToolHandler<
     return validationErrorResult(parsed.issues);
   }
   const { cursor, query } = parsed.output;
+  const lawRead = await admitMcpLawRead(context);
+  if (lawRead.type === "refused") {
+    return lawRead.result;
+  }
 
   const position = decodeCompatSearchCursor(cursor);
   if (position === null) {
@@ -147,6 +155,7 @@ const handleLawCompatSearchTool: McpToolHandler<
   }
 
   const corpus = await searchCompatCorpus({
+    admission: lawRead.admission,
     context,
     countries: await resolveCompatCorpusCountries(context),
     cursors: position.corpus,
@@ -161,7 +170,10 @@ const handleLawCompatSearchTool: McpToolHandler<
   // serialize the same way.
   return {
     egress: "compatSearch",
-    paginationOutcome: corpus.paginationOutcome,
+    corpusOutcome: {
+      status: "available",
+      paginationOutcome: corpus.paginationOutcome,
+    },
     nextCursor: hasMoreCorpusPages(corpus.cursors)
       ? encodeCompatSearchCursor({ matter: null, corpus: corpus.cursors })
       : null,
@@ -182,12 +194,22 @@ const handleLawCompatFetchTool: McpToolHandler<
     return invalidCompatIdResult(COMPAT_CORPUS_ID_HINT);
   }
 
-  return await compatCorpusFetchResponse({ compatId, context, cursor });
+  const lawRead = await admitMcpLawRead(context);
+  if (lawRead.type === "refused") {
+    return lawRead.result;
+  }
+
+  return await compatCorpusFetchResponse({
+    admission: lawRead.admission,
+    compatId,
+    context,
+    cursor,
+  });
 };
 
 export const LAW_COMPAT_TOOL_HANDLERS = {
-  fetch: handleLawCompatFetchTool,
-  search: handleLawCompatSearchTool,
+  fetch: withMcpLawReadAdmission(handleLawCompatFetchTool),
+  search: withMcpLawReadAdmission(handleLawCompatSearchTool),
 } satisfies Record<LawCompatToolName, McpToolHandler>;
 
 export const LAW_COMPAT_TOOL_SET = defineMcpToolSet(

@@ -13,6 +13,7 @@ import {
   brandPersistedCaseLawDecisionId,
   brandPersistedLegislationDocumentId,
 } from "@/api/lib/safe-id-boundaries";
+import { withMcpLawReadAdmission } from "@/api/mcp/law-read-admission";
 
 import { DECISION_READER_RESOURCE_URI } from "./apps/resource-uri";
 import type { McpRequestContext } from "./context";
@@ -360,9 +361,9 @@ export const DECISION_READER_TOOL_SET = defineMcpToolSet(
     PREVIEW_CITED_PROVISION_TOOL_DEFINITION,
   ] as const satisfies readonly McpToolDefinition[],
   {
-    open_case_law_decision: openTool,
-    read_case_law_decision_blocks: blocksTool,
-    preview_cited_provision: previewTool,
+    open_case_law_decision: withMcpLawReadAdmission(openTool),
+    read_case_law_decision_blocks: withMcpLawReadAdmission(blocksTool),
+    preview_cited_provision: withMcpLawReadAdmission(previewTool),
   },
   {
     open_case_law_decision: defineMcpToolOutput(openDecisionOutput),

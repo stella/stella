@@ -39,6 +39,7 @@ import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
+import { withMcpLawReadAdmission } from "@/api/mcp/law-read-admission";
 import {
   isLegislationSearchSuccess,
   isStatuteDocument,
@@ -1150,10 +1151,14 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
 };
 
 export const LEGISLATION_TOOL_HANDLERS = {
-  search_legislation: handleSearchLegislationTool,
-  read_statute: handleReadStatuteTool,
-  read_statute_provisions: handleReadStatuteProvisionsTool,
-  read_provision_history: handleReadProvisionHistoryTool,
+  search_legislation: withMcpLawReadAdmission(handleSearchLegislationTool),
+  read_statute: withMcpLawReadAdmission(handleReadStatuteTool),
+  read_statute_provisions: withMcpLawReadAdmission(
+    handleReadStatuteProvisionsTool,
+  ),
+  read_provision_history: withMcpLawReadAdmission(
+    handleReadProvisionHistoryTool,
+  ),
 } satisfies Record<LegislationToolName, McpToolHandler>;
 
 export const LEGISLATION_TOOL_SET = defineMcpToolSet(
