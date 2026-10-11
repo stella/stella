@@ -122,9 +122,10 @@ const propagatesConflict = (
     return (
       ts.isReturnStatement(node) &&
       node.expression !== undefined &&
-      ((ts.isIdentifier(unwrap(node.expression)) &&
-        unwrap(node.expression).getText() === name) ||
-        options.returnsValue?.(unwrap(node.expression), name) === true)
+      (options.returnsValue !== undefined
+        ? options.returnsValue(unwrap(node.expression), name)
+        : ts.isIdentifier(unwrap(node.expression)) &&
+          unwrap(node.expression).getText() === name)
     );
   };
   if (next === undefined) {
@@ -138,8 +139,9 @@ const propagatesConflict = (
   }
   const condition = unwrap(next.expression);
   return (
-    (testsNonNullConflict(condition, name) ||
-      options.testsConflict?.(condition, name) === true) &&
+    (options.testsConflict !== undefined
+      ? options.testsConflict(condition, name)
+      : testsNonNullConflict(condition, name)) &&
     returnsConflict(next.thenStatement)
   );
 };
@@ -1117,7 +1119,11 @@ class WriteSourceResolver {
       return false;
     }
     const yielded = bridge.parent;
-    if (!ts.isYieldExpression(yielded) || yielded.asteriskToken === undefined) {
+    if (
+      !ts.isYieldExpression(yielded) ||
+      yielded.asteriskToken === undefined ||
+      !ts.isVariableDeclaration(yielded.parent)
+    ) {
       return false;
     }
     const refersTo = (expression: ts.Expression, name: string) =>

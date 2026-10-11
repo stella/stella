@@ -342,6 +342,14 @@ describe("write contracts cover the mutation route graph", () => {
         "",
       ),
       guarded.replace("@/api/lib/errors/tagged-errors", "./lookalike"),
+      guarded.replace("return Result.err(updated)", "return updated"),
+      guarded.replace("HandlerError.is(updated)", "updated"),
+      guarded
+        .replace("const updated =", "return")
+        .replace(
+          "if (HandlerError.is(updated)) return Result.err(updated);",
+          "",
+        ),
       guarded.replace("better-result", "./lookalike"),
       guarded.replace(
         "const updated =",
