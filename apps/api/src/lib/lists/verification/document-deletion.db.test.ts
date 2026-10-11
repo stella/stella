@@ -12,6 +12,7 @@ import {
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { VERIFICATION_RUN_STATUSES } from "@/api/lib/lists/verification/contract";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { addEntityFeatureFixtureColumns } from "@/api/tests/helpers/entity-feature-fixture-columns";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const migrationName = "20261005120600_verification_document_cascade";
@@ -86,6 +87,13 @@ describe.skipIf(!enabled)("document-owned verification history", () => {
         ]) {
           await applyMigration(name);
         }
+        await addEntityFeatureFixtureColumns(db, [
+          legalListVerificationRuns,
+          legalListClaims,
+          legalListClaimReviewEvents,
+          legalListVerificationBlocks,
+          legalListVerificationReadReceipts,
+        ]);
         await client`INSERT INTO organization VALUES (${organizationId})`;
         await client`INSERT INTO "user" VALUES (${userId})`;
         await client`INSERT INTO workspaces VALUES (${workspaceId}, ${organizationId})`;

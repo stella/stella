@@ -24,8 +24,9 @@ const identityFields = [
 const lookupOptions = lookup.entries.items.item.options;
 const found = lookupOptions[0].pipe[0];
 const ambiguous = lookupOptions[1].pipe[0];
-const missing = lookupOptions[2].pipe[0];
-const failed = lookupOptions[3].pipe[0];
+const incomplete = lookupOptions[2].pipe[0];
+const missing = lookupOptions[3].pipe[0];
+const failed = lookupOptions[4].pipe[0];
 
 export const APP_SEARCH_SCHEMA = v.union([
   unavailable,
@@ -99,6 +100,7 @@ export const APP_LOOKUP_SCHEMA = v.union([
             ),
           ),
         }),
+        v.object(v.pick(incomplete, ["status", "message"]).entries),
         v.object(v.pick(missing, ["status", "message", "hint"]).entries),
         v.object(v.pick(failed, ["status", "message"]).entries),
       ]),

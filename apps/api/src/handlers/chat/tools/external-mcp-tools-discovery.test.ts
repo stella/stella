@@ -58,6 +58,7 @@ type FakeMcpClient = {
 };
 
 const buildRow = (): LoadedMcpConnection => ({
+  responseDisposition: "normal",
   allowedTools: null,
   connectorId: toSafeId<"mcpConnector">("connector-test"),
   description: "Test connector",

@@ -2,6 +2,7 @@ import { Result, TaggedError, panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -192,7 +193,7 @@ export const createEntityVersionFromBuffer = async ({
       ? writePolicy.comparisonVersionId
       : createSafeId<"entityVersion">();
   const fieldId = createSafeId<"field">();
-  const sha256Hex = new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
+  const sha256Hex = hashSha256Hex(bytes);
   const objectKey = dependencies.createFileKey({
     organizationId,
     workspaceId,
@@ -265,10 +266,16 @@ export const createEntityVersionFromBuffer = async ({
           organizationId,
           objectKey,
           sizeBytes: bytes.byteLength,
-          write: async () =>
+          content: bytes,
+          write: async ({ content, objectKey: checkedObjectKey }) =>
             await withTimeout(
               async (signal) =>
-                await putS3ObjectWithSignal(objectKey, bytes, mimeType, signal),
+                await putS3ObjectWithSignal(
+                  checkedObjectKey,
+                  content,
+                  mimeType,
+                  signal,
+                ),
               {
                 label: "buffer-version-writer-put",
                 timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,

@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA } from "./template-condition-decisions";
+import { DECISION_UNDECIDED_REASON_CODES } from "@stll/api-contract/ai-decision-provider";
+
+import {
+  toFillConditionDecision,
+  toPreviewConditionDecision,
+  TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA,
+} from "./template-condition-decisions";
 
 const base = {
   path: "is_consumer",
@@ -54,5 +60,48 @@ describe("TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA", () => {
         reason: "no_decision_model",
       }).success,
     ).toBe(true);
+  });
+});
+
+describe("undecided condition wire contract", () => {
+  test("rejects an unknown wire reason", () => {
+    expect(
+      v.safeParse(TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA, {
+        path: base.path,
+        label: base.label,
+        state: "undecided",
+        reason: "other",
+      }).success,
+    ).toBe(false);
+  });
+
+  for (const code of Object.values(DECISION_UNDECIDED_REASON_CODES)) {
+    test(`accepts wire reason ${code}`, () => {
+      expect(
+        v.safeParse(TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA, {
+          path: base.path,
+          label: base.label,
+          state: "undecided",
+          reason: code,
+        }).success,
+      ).toBe(true);
+    });
+  }
+
+  test("refusals survive both preview and fill without inventing a value", () => {
+    const condition = {
+      path: base.path,
+      label: base.label,
+      state: "undecided",
+      reason: "refusal",
+    } as const;
+    expect(toFillConditionDecision(condition)).toEqual(condition);
+    expect(
+      toPreviewConditionDecision({
+        path: base.path,
+        label: base.label,
+        decision: { state: "undecided", reason: "refusal" },
+      }),
+    ).toEqual(condition);
   });
 });

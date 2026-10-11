@@ -4,14 +4,17 @@ import { and, asc, eq, inArray, or } from "drizzle-orm";
 import {
   listSkillMetadata,
   loadSkill,
-  readDocumentedChatReads,
-  readExcludedChatTools,
-  readSkillDisplayName,
   readSkillRequiredTools,
   readSkillResource,
 } from "@stll/skills";
-import type { SkillMetadata, SkillResource } from "@stll/skills";
-import type { SkillResourceKind } from "@stll/skills/resource-kinds";
+import type { SkillResource } from "@stll/skills";
+import type { SkillResourceKind } from "@stll/skills/format";
+import {
+  readDocumentedChatReads,
+  readExcludedChatTools,
+  readSkillDisplayName,
+} from "@stll/skills/frontmatter";
+import type { SkillMetadata } from "@stll/skills/frontmatter";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {

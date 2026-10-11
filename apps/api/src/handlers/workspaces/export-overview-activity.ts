@@ -105,13 +105,23 @@ const matterActivityJson = ({
 
 const exportOverviewActivity = createSafeHandler(
   config,
-  async function* ({ query, recordAuditEvent, safeDb, session, workspaceId }) {
+  async function* ({
+    query,
+    recordAuditEvent,
+    safeDb,
+    session,
+    workspaceId,
+    user,
+    featureAccessSnapshot,
+  }) {
     const filters = toMatterActivityFilters(query);
     const items = yield* Result.await(
       readOverviewActivityExport({
         filters,
         cap: LIMITS.exportRowLimit,
         organizationId: session.activeOrganizationId,
+        userId: user.id,
+        featureAccessSnapshot,
         safeDb,
         workspaceId,
       }),

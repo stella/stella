@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
-export const hashSessionToken = (token: string) =>
-  createHash("sha256").update(token).digest("hex");
+export const hashSessionToken = (token: string) => hashSha256Hex(token);

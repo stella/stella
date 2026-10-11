@@ -1,7 +1,10 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
-import type { PlaybookSaveMessage } from "@/components/chat/chat-ui-tools";
+import {
+  consumePlaybookSaveToolCalls,
+  type PlaybookSaveMessage,
+} from "@/components/chat/chat-ui-tools";
 import {
   followReconciledPlaybookSave,
   playbookPaneReaction,
@@ -256,6 +259,107 @@ describe("the playbook pane after a save", () => {
 });
 
 describe("following a reconciled playbook save", () => {
+  test.each([null, "already-open-playbook"])(
+    "loading an older save refreshes caches without changing pane %s, while a concurrent live save remains eligible",
+    async (shownPlaybookId) => {
+      const queryClient = seededQueryClient();
+      const handledToolCallIds = new Set<string>();
+      const historicalToolCallIds = new Set<string>();
+      const initialPage: PlaybookSaveMessage[] = [
+        { id: "current-message", role: "assistant", parts: [] },
+      ];
+      const reconcileMessages = (messages: PlaybookSaveMessage[]) =>
+        reconcilePlaybookSaveToolCalls({
+          handledToolCallIds,
+          historicalToolCallIds,
+          messages,
+          organizationId: ORGANIZATION_ID,
+          playbookKeys: knowledgeKeys.playbooks,
+          queryClient,
+          source: "live",
+        });
+      expect(reconcileMessages(initialPage)).toBeNull();
+      let refetches = 0;
+      const unsubscribe = new QueryObserver(queryClient, {
+        queryKey: DETAIL_KEY,
+        queryFn: async () => ({ revision: ++refetches }),
+        staleTime: Infinity,
+      }).subscribe(() => undefined);
+      const olderPage = saveMessages({ output: { playbookId: PLAYBOOK_ID } });
+      // The history loader marks the accepted prepend before publishing it.
+      consumePlaybookSaveToolCalls({
+        handledToolCallIds: historicalToolCallIds,
+        messages: olderPage,
+      });
+      expect(historicalToolCallIds.has("tool-call-1")).toBe(true);
+      const reactions: string[] = [];
+      const follow = (playbookId: string) => {
+        reactions.push(
+          playbookPaneReaction({
+            mode: "auto-open",
+            isMobile: false,
+            openedThisSession: false,
+            shownPlaybookId,
+            savedPlaybookId: playbookId,
+          }),
+        );
+      };
+      // Without provenance this exact saved playbook would open or retarget.
+      expect(
+        playbookPaneReaction({
+          mode: "auto-open",
+          isMobile: false,
+          openedThisSession: false,
+          shownPlaybookId,
+          savedPlaybookId: PLAYBOOK_ID,
+        }),
+      ).toBe(shownPlaybookId === null ? "open" : "update");
+      const historical = reconcileMessages([...olderPage, ...initialPage]);
+      if (historical === null) {
+        throw new Error("Expected historical save cache reconciliation");
+      }
+      await followReconciledPlaybookSave({
+        reconciliation: historical,
+        isCurrent: () => true,
+        follow,
+      });
+      expect(refetches).toBe(1);
+      expect(reactions).toEqual([]);
+
+      const livePage = saveMessages({
+        output: { playbookId: "live-playbook" },
+        callNumber: 2,
+      });
+      const anotherOlderPage = saveMessages({
+        output: { playbookId: "another-historical-playbook" },
+        callNumber: 3,
+      });
+      consumePlaybookSaveToolCalls({
+        handledToolCallIds: historicalToolCallIds,
+        messages: anotherOlderPage,
+      });
+      const live = reconcileMessages([
+        ...anotherOlderPage,
+        ...olderPage,
+        ...initialPage,
+        ...livePage,
+      ]);
+      if (live === null) {
+        throw new Error("Expected live save cache reconciliation");
+      }
+      await followReconciledPlaybookSave({
+        reconciliation: live,
+        isCurrent: () => true,
+        follow,
+      });
+      expect(historicalToolCallIds.has("tool-call-2")).toBe(false);
+      expect(handledToolCallIds.has("tool-call-3")).toBe(true);
+      expect(refetches).toBe(2);
+      expect(reactions).toEqual([shownPlaybookId === null ? "open" : "update"]);
+      unsubscribe();
+    },
+  );
+
   test("reverse live completions refetch both writes while the pane stays on the newer call", async () => {
     const queryClient = seededQueryClient();
     const handledToolCallIds = new Set<string>();

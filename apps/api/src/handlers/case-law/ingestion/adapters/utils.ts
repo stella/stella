@@ -1,3 +1,4 @@
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 // parser-output-unchanged: removes an unused type guard; no adapter calls it.
 /** Shared utilities for case-law ingestion adapters. */
 
@@ -7,13 +8,6 @@ export { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
 
 const CE_DATE_PATTERN =
   /^(?<day>\d{1,2})\.\s*(?<month>\d{1,2})\.\s*(?<year>\d{4})$/;
-
-/** SHA-256 content hash via Bun.CryptoHasher. */
-export const hashContent = (input: string): string => {
-  const hasher = new Bun.CryptoHasher("sha256");
-  hasher.update(input);
-  return hasher.digest("hex");
-};
 
 export const isArrayOf = <T>(
   value: unknown,

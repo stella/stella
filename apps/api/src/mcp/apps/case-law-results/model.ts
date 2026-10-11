@@ -77,6 +77,9 @@ const lookupRows = (items: LookupPage["items"]) => {
         );
         notices.push(item.message);
         break;
+      case "incomplete_identifier":
+        notices.push(item.message);
+        break;
       case "not_found":
         notices.push(`${item.message} ${item.hint}`);
         break;

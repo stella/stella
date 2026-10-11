@@ -15,6 +15,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
+import { templatePackContentIdentity } from "../src/content-identity";
 import { PUBLIC_PACK_IDS } from "../src/public-packs";
 import {
   packIndexSchema,
@@ -39,9 +40,6 @@ const schemaImportPath = useFixtures ? "../schema" : "./schema";
 type EmittedPack = Omit<GeneratedTemplatePack, "templates"> & {
   templates: GeneratedTemplatePackTemplate[];
 };
-
-const sha256Hex = (bytes: Uint8Array): string =>
-  new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
 
 const readJson = (filePath: string): unknown =>
   JSON.parse(readFileSync(filePath, "utf-8"));
@@ -153,7 +151,7 @@ const readPack = ({
           `Missing README ${readmePath} for ${manifest.id}/${template.slug}`,
         );
       }
-      const sha256 = sha256Hex(new Uint8Array(readFileSync(docxPath)));
+      const { sha256 } = templatePackContentIdentity(readFileSync(docxPath));
       const ref = `${manifest.id}/${template.slug}`;
       const indexed = index.get(ref);
       if (indexed && indexed.sha256 !== sha256) {

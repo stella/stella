@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
+import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 
 import {
   decodeSourceRawEnvelope,
@@ -491,8 +492,18 @@ describe("every ingested category, as the service served it", () => {
       rawParts,
       pdfBytes: corrected,
     });
-    expect(first.decision.sourceRaw).toBe(second.decision.sourceRaw);
+    const firstRaw =
+      first.decision.sourceRaw ?? panic("first source envelope missing");
+    const secondRaw =
+      second.decision.sourceRaw ?? panic("second source envelope missing");
+    expect(firstRaw).toBe(secondRaw);
     expect(first.decision.rawHash).toBe(again.decision.rawHash);
+    expect(first.decision.rawHash).toBe(
+      legacySha256Hex(`${firstRaw}\n${legacySha256Hex(pdf)}`),
+    );
+    expect(second.decision.rawHash).toBe(
+      legacySha256Hex(`${secondRaw}\n${legacySha256Hex(corrected)}`),
+    );
     expect(first.decision.rawHash).not.toBe(second.decision.rawHash);
   });
 
@@ -1406,4 +1417,38 @@ describe("declared metadata URLs remain scalar across projection and reload", ()
       }
     });
   }
+});
+
+test("quarantine identities retain the legacy SHA-256 serialization", () => {
+  for (const value of ["", "ordinary", "Žluťoučký koń Łódź", "e\u0301"]) {
+    const row = {
+      SYG: value,
+      DT_WYD: value,
+      KATEGORIA_INFORMACJI: value,
+      AUTOR: value,
+      TEZA: value,
+    };
+    expect(plKisQuarantineId(row)).toBe(
+      `eureka-quarantine:${legacySha256Hex(
+        JSON.stringify({
+          signature: value,
+          issued: value,
+          category: value,
+          authority: value,
+          thesis: value,
+        }),
+      )}`,
+    );
+  }
+  expect(plKisQuarantineId({})).toBe(
+    `eureka-quarantine:${legacySha256Hex(
+      JSON.stringify({
+        signature: null,
+        issued: null,
+        category: null,
+        authority: null,
+        thesis: null,
+      }),
+    )}`,
+  );
 });

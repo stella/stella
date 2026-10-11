@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
 import {
@@ -363,9 +365,7 @@ const observable = (page: PageRead) => {
     return a < b ? -1 : 1;
   };
   const digest = <V>(map: ReadonlyMap<string, V>) =>
-    new Bun.CryptoHasher("sha256")
-      .update(JSON.stringify([...map].toSorted(byKey)))
-      .digest("hex");
+    hashSha256Hex(JSON.stringify([...map].toSorted(byKey)));
   return {
     pageRanked: page.pageRanked,
     nextCursor: page.nextCursor,

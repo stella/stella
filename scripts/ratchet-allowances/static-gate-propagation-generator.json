@@ -1,0 +1,6 @@
+{
+  "metric": "schema-introspection-files",
+  "file": "apps/api/scripts/generate-entity-feature-gate-propagation.ts",
+  "delta": 1,
+  "reason": "The metadata-only generator renders static propagation SQL from the complete gate census. This keeps cached write plans coupled to schema references while allowing migration safety checks to inspect the actual SECURITY DEFINER routine. It performs no database operations."
+}

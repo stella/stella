@@ -1,6 +1,10 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { stripDiacritics } from "@stll/text-normalize";
+
+import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
+import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
+import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 
 /** Inspector view kind for one provision of a consolidated statute. */
 export const PROVISION_VIEW = "statute-provision";
@@ -169,6 +173,38 @@ export const filterCitingDecisions = <T extends CitingDecisionRow>(
       `${decision.caseNumber} ${decision.court} ${decision.sentenceText ?? ""}`,
     ).includes(needle),
   );
+};
+
+type PresentedCitingDecisionRow = CitingDecisionRow & {
+  country: string;
+  courtAbbreviation?: string | null | undefined;
+  decisionId: string;
+  ecli?: string | null | undefined;
+};
+
+/**
+ * The rows the filter leaves, each with the chip size it is shown at. Chips
+ * are sized against the rows on screen, not everything loaded: a shared court
+ * code only needs the expanded chip while both decisions are visible.
+ */
+export const presentedCitingDecisions = <T extends PresentedCitingDecisionRow>(
+  decisions: readonly T[],
+  query: string,
+): { decision: T; presentation: DecisionCitationPresentation }[] => {
+  const visible = filterCitingDecisions(decisions, query);
+  const presentations = decisionCitationPresentationsById(
+    visible.map((decision) => ({
+      decisionId: decision.decisionId,
+      courtShortCode: decisionCitationCourtLabel(decision),
+    })),
+  );
+
+  return visible.map((decision) => ({
+    decision,
+    presentation:
+      presentations.get(decision.decisionId) ??
+      panic("Citing decision missing collected identity"),
+  }));
 };
 
 /**

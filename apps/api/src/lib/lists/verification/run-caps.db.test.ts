@@ -19,6 +19,7 @@ import {
 import { startVerificationRun } from "@/api/lib/lists/verification/start-run";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
+import { addEntityFeatureFixtureColumns } from "@/api/tests/helpers/entity-feature-fixture-columns";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -158,6 +159,7 @@ const withFixture = async (
           }
         });
       }
+      await addEntityFeatureFixtureColumns(db, [legalListVerificationRuns]);
       await fn(
         await createFixture({ db, schema, connect: () => openClient().db }),
       );

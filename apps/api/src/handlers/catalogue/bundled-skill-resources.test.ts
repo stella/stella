@@ -1,76 +1,25 @@
 import { Result } from "better-result";
 import { describe, expect, it } from "bun:test";
 
-import {
-  hashBundledSkillPackage,
-  toParsedBundledSkillPackage,
-  toParsedBundledSkillResources,
-} from "./bundled-skill-resources";
+import { hashSkillPackage } from "@stll/skills/format";
 
-describe("toParsedBundledSkillResources", () => {
-  it("converts catalogue resource files into persisted skill resources", () => {
-    const result = toParsedBundledSkillResources([
-      {
-        content: "Use this checklist.",
-        path: "references/checklist.md",
-        sizeBytes: 19,
-      },
-      {
-        content: "template",
-        path: "templates/base.txt",
-        sizeBytes: 8,
-      },
-    ]);
-
-    expect(Result.isOk(result)).toBe(true);
-    if (Result.isError(result)) {
-      return;
-    }
-    expect(result.value).toEqual([
-      {
-        content: "Use this checklist.",
-        kind: "reference",
-        path: "references/checklist.md",
-        sizeBytes: 19,
-      },
-      {
-        content: "template",
-        kind: "template",
-        path: "templates/base.txt",
-        sizeBytes: 8,
-      },
-    ]);
-  });
-
-  it("rejects unsupported bundled resource paths", () => {
-    const result = toParsedBundledSkillResources([
-      {
-        content: "ignored",
-        path: "unknown/file.md",
-        sizeBytes: 7,
-      },
-    ]);
-
-    expect(Result.isError(result)).toBe(true);
-  });
-});
+import { toParsedBundledSkillPackage } from "./bundled-skill-resources";
 
 describe("toParsedBundledSkillPackage", () => {
   it("parses catalogue skill frontmatter before persistence", () => {
     const resources = [
       {
         content: "Use this reference.",
-        kind: "reference" as const,
         path: "references/checklist.md",
         sizeBytes: 19,
       },
     ];
 
     const result = toParsedBundledSkillPackage({
-      expectedSlug: "contract-review",
-      resources,
+      expectedSlug: "contract-review-anthropic",
+      resourceFiles: resources,
       source: `---
-name: contract-review
+name: contract-review-anthropic
 description: Review contracts using a structured checklist.
 version: 1.2.3
 license: Apache-2.0
@@ -94,7 +43,7 @@ Follow the checklist.`,
       description: "Review contracts using a structured checklist.",
       license: "Apache-2.0",
       metadata: { category: "contracts" },
-      name: "contract-review",
+      name: "contract-review-anthropic",
       resources,
       sourceUrl: null,
       version: "1.2.3",
@@ -104,8 +53,8 @@ Follow the checklist.`,
 
   it("rejects bundled skill frontmatter that does not match the catalogue slug", () => {
     const result = toParsedBundledSkillPackage({
-      expectedSlug: "contract-review",
-      resources: [],
+      expectedSlug: "contract-review-anthropic",
+      resourceFiles: [],
       source: `---
 name: different-skill
 description: Review contracts.
@@ -118,7 +67,7 @@ Instructions.`,
   });
 });
 
-describe("hashBundledSkillPackage", () => {
+describe("skill package hash", () => {
   it("includes bundled resources in the content hash", () => {
     const resources = [
       {
@@ -130,12 +79,12 @@ describe("hashBundledSkillPackage", () => {
     ];
 
     expect(
-      hashBundledSkillPackage({
+      hashSkillPackage({
         resources,
         source: "body",
       }),
     ).not.toBe(
-      hashBundledSkillPackage({
+      hashSkillPackage({
         resources: [],
         source: "body",
       }),

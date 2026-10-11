@@ -21,11 +21,11 @@
     "format": "bun ../../scripts/run-oxfmt.ts ."
   },
   "dependencies": {
+    "@stll/sha256": "workspace:*",
     "better-result": "catalog:",
     "fast-check": "catalog:"
   },
   "devDependencies": {
-    "@stll/sha256": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:"
   }

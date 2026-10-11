@@ -1,8 +1,9 @@
-import type { JSONContent } from "@tiptap/core";
+import type { Editor, JSONContent } from "@tiptap/core";
 
 import { readDecisionPassage } from "./chat-decision-passage";
 import type { DecisionPassage } from "./chat-decision-passage";
 import { shouldChipPaste } from "./chat-pasted-text";
+import { containsCredentialCandidate } from "./chat-secret-candidate.logic";
 
 type PasteClipboard = {
   getData: DataTransfer["getData"];
@@ -14,7 +15,22 @@ type ChatPaste =
   | { type: "files" }
   | { type: "decision"; passage: DecisionPassage }
   | { type: "chip"; text: string }
+  | { type: "credential" }
   | { type: "text"; content: JSONContent[] };
+
+export type CredentialPasteEditor = Pick<Editor, "isDestroyed"> & {
+  commands: { insertContent: (content: string) => boolean };
+};
+
+export const insertCredentialPasteRequest = (
+  editor: CredentialPasteEditor,
+  request: string,
+): boolean => {
+  if (editor.isDestroyed) {
+    return false;
+  }
+  return editor.commands.insertContent(request);
+};
 
 /** Every paste is owned here; HTML must never reach the editor's default parser. */
 export const readChatPaste = (clipboard: PasteClipboard | null): ChatPaste => {
@@ -24,11 +40,14 @@ export const readChatPaste = (clipboard: PasteClipboard | null): ChatPaste => {
   if (Array.from(clipboard.items).some((item) => item.kind === "file")) {
     return { type: "files" };
   }
+  const text = clipboard.getData("text/plain");
+  if (containsCredentialCandidate(text)) {
+    return { type: "credential" };
+  }
   const passage = readDecisionPassage(clipboard);
   if (passage !== null) {
     return { type: "decision", passage };
   }
-  const text = clipboard.getData("text/plain");
   if (text === "") {
     return { type: "ignore" };
   }

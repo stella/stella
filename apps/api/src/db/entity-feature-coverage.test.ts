@@ -188,14 +188,13 @@ test("a record owned by an unfenced parent needs no fence", () => {
 test("the committed migration matches every schema-owned visibility policy", async () => {
   const migration = await Bun.file(
     new URL(
-      "../../drizzle/20261007090200_entity_feature_visibility/migration.sql",
+      "../../drizzle/20261009112500_entity_feature_row_gates/migration.sql",
       import.meta.url,
     ),
   ).text();
-  const statements = migration
-    .split("--> statement-breakpoint")
-    .map((statement) => statement.trim())
-    .filter((statement) => statement.startsWith("CREATE POLICY"));
+  const statements = [
+    ...migration.matchAll(/CREATE POLICY "workspace_entity_feature"[^\n]+/gu),
+  ].map((match) => match[0].trim());
   const tables = Object.values(schema).filter((table) => is(table, PgTable));
   expect(statements).toEqual(entityFeaturePolicyStatements(tables));
   expect(

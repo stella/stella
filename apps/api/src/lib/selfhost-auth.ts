@@ -1,6 +1,8 @@
 import { APIError } from "better-auth/api";
 import { timingSafeEqual } from "node:crypto";
 
+import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/bun";
+
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
 
@@ -34,10 +36,8 @@ export const isBootstrapTokenMatch = ({
   candidate: string;
   expected: string;
 }) => {
-  const candidateHash = new Bun.CryptoHasher("sha256")
-    .update(candidate)
-    .digest();
-  const expectedHash = new Bun.CryptoHasher("sha256").update(expected).digest();
+  const candidateHash = hashSha256Bytes(candidate);
+  const expectedHash = hashSha256Bytes(expected);
   return timingSafeEqual(candidateHash, expectedHash);
 };
 

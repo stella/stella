@@ -28,6 +28,7 @@ import {
   type ChatRunMode,
   type DocxEditRepresentation,
 } from "@stll/api-contract";
+import { isChatPastedTextPart } from "@stll/api-contract/chat";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import type { StoredFileRef } from "@/api/handlers/chat/attachment-validation";
@@ -45,6 +46,7 @@ import {
   isChatTextPart,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
+import { validatePrivateReceipts } from "@/api/handlers/chat/chat-secret-validation";
 import { CHAT_TOOL_SCOPE } from "@/api/handlers/chat/tools/tool-scope";
 import type {
   ChatMention,
@@ -598,6 +600,14 @@ export const validateMessage = async ({
     if (Result.isError(partsResult)) {
       return Result.err(partsResult.error);
     }
+    yield* Result.await(
+      validatePrivateReceipts({
+        parts: partsResult.value.parts,
+        safeDb,
+        threadId,
+        userId,
+      }),
+    );
 
     const metadataResult = validateIncomingChatMetadata(message.metadata);
     if (Result.isError(metadataResult)) {
@@ -1414,6 +1424,7 @@ const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.serverProvenance === undefined &&
   metadata.sourceDocuments === undefined &&
   metadata.turnOutcome === undefined &&
+  metadata.turnModel === undefined &&
   metadata.usage === undefined;
 
 export const validateToolCallParts = ({
@@ -1964,6 +1975,11 @@ export const parseMessage = ({
   const mentions: ChatMention[] = [];
 
   for (const part of message.parts) {
+    // Pasted text is plain text, rather than editor HTML; preserve it verbatim.
+    if (isChatPastedTextPart(part)) {
+      normalizedParts.push(part);
+      continue;
+    }
     if (isChatTextPart(part)) {
       const normalizedText = normalizeChatMessageHtml(
         part.content,

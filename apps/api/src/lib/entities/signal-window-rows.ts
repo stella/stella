@@ -61,6 +61,7 @@ const proposalJoin = sql`LEFT JOIN LATERAL (
 const SIGNAL_ENTITY_COLUMNS = {
   id: sql`${signals.id}`,
   workspaceId: sql`${signals.workspaceId}`,
+  entityFeatureGate: sql`NULL::text`,
   kind: sql`CASE WHEN ${proposalKind} IS NOT NULL THEN 'task'::text END`,
   listItemType: sql`NULL`,
   parentId: sql`NULL`,

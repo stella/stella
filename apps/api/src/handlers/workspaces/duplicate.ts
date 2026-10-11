@@ -51,6 +51,7 @@ import { escapeLike } from "@/api/lib/escape-like";
 import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
 import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
+import type { CheckedFileCopy } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -388,7 +389,9 @@ const copyWorkspaceFiles = async ({
       organizationId,
       objectKey: targetKey,
       sizeBytes: source.value.contentLength,
-      copy: async () => await copyObject(sourceKey, targetKey),
+      source: sourceKey,
+      copy: async (checked: CheckedFileCopy<string>) =>
+        await copyObject(checked.source, checked.objectKey),
     });
   };
   const prepared: Awaited<ReturnType<typeof prepareFile>>[] = [];

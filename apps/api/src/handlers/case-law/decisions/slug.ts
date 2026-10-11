@@ -1,4 +1,6 @@
 import { fitCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { createSha256 } from "@stll/sha256/bun";
 
 const CASE_LAW_DECISION_SLUG_HASH_LENGTH = 16;
 export const CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS = [
@@ -28,7 +30,7 @@ export const createCaseLawDecisionSlugCandidate = ({
     return fitCaseLawDecisionSlug({ baseSlug });
   }
 
-  const digest = new Bun.CryptoHasher("sha256")
+  const digest = createSha256()
     .update(`${identity}\u0000${attempt}`)
     .digest("hex")
     .slice(0, CASE_LAW_DECISION_SLUG_HASH_LENGTH);

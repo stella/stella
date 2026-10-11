@@ -1,14 +1,13 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
+
 import { SK_COURT_REFORM_SOURCE } from "./sk-court-reform-source";
 import {
   getSkCourtSuccessionEdges,
   skCourtSuccessionReferences,
 } from "./sk-court-succession";
-
-const hash = (quote: string) =>
-  new Bun.CryptoHasher("sha256").update(quote).digest("hex");
 
 describe("statute-derived court relationships", () => {
   test("every edge is supported by literal court spans and versioned hashes", () => {
@@ -32,7 +31,7 @@ describe("statute-derived court relationships", () => {
         expect(citation.quote).toBe(
           SK_COURT_REFORM_SOURCE[citation.provision].quote,
         );
-        expect(citation.quotedSpanHash).toBe(hash(citation.quote));
+        expect(citation.quotedSpanHash).toBe(hashSha256Hex(citation.quote));
         expect(citation.url.endsWith(`#${citation.provision}`)).toBe(true);
       }
     }
@@ -93,7 +92,7 @@ describe("statute-derived court relationships", () => {
         },
       });
       expect(exception?.citation.quotedSpanHash).toBe(
-        hash(exception?.citation.quote ?? ""),
+        hashSha256Hex(exception?.citation.quote ?? ""),
       );
       if (edge.scope.subject === "family") {
         expect(edge.scope.statedScope).toContain(

@@ -1,6 +1,8 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 import { API_TEST_TIMEOUT_MS } from "../src/tests/test-timeouts";
 
 let timingSequence = 0;
@@ -22,9 +24,7 @@ export const buildApiTestCommand = ({
     path.join(import.meta.dirname, "../.cache/test-timings"),
 }: BuildApiTestCommandOptions) => {
   mkdirSync(timingsDirectory, { recursive: true });
-  const digest = new Bun.CryptoHasher("sha256")
-    .update(JSON.stringify(testFiles))
-    .digest("hex");
+  const digest = hashSha256Hex(JSON.stringify(testFiles));
   const timingPath = path.join(
     timingsDirectory,
     `${process.pid}-${timingSequence++}-${digest}.json`,

@@ -57,3 +57,13 @@ describe("desktop account presentation", () => {
     });
   });
 });
+
+test("an unavailable device key offers reconnect instead of a lookup retry", () => {
+  expect(accountPresentation({ status: "reconnectRequired" })).toEqual({
+    actionKey: "reconnectToStella",
+    status: "not-linked",
+    statusKey: "notConnected",
+    webDescriptionKey: "connectToStellaDescription",
+    webTitleKey: "reconnectToStella",
+  });
+});

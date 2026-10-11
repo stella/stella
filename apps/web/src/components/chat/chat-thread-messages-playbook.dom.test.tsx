@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { testChatApprovalContextValue } from "@/components/chat/chat-approval-context.test-fixtures";
+
 GlobalRegistrator.register({ url: "https://app.example.test/chat/thread" });
 
 const previousApiUrl = process.env["VITE_API_URL"];
@@ -55,17 +57,7 @@ test("opens the playbook an approved save wrote", async () => {
           <ChatMattersContext
             value={{ createDocumentMattersView: { type: "empty" } }}
           >
-            <ChatApprovalContext
-              value={{
-                activeOrganizationId: "test-active-organization",
-                alwaysApprovedTools: new Set(),
-                conversationApprovedTools: new Set(),
-                handleAllowInConversation: () => {},
-                handleAlwaysAllow: () => {},
-                handleApprove: () => {},
-                handleDeny: () => {},
-              }}
-            >
+            <ChatApprovalContext value={testChatApprovalContextValue}>
               <ChatEditorProvider>
                 <ChatThreadMessages
                   approvalPendingMessageId={null}

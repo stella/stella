@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 
 export const PILOT_FAST_ROOTS = [
+  "desktop-rust-lint",
   "ci-checks-docs",
   "ci-checks-generated",
   "ci-checks-policy",
@@ -9,12 +10,14 @@ export const PILOT_FAST_ROOTS = [
   "code-quality-api",
   "code-quality-web-rest",
 ] as const;
+// Queue-only Docker checks remain deferred on PRs, including the pilot profile.
 export const PILOT_DEFERRED = [
   "docker-checks",
   "parser-version-guard",
   "ci-generated-sources",
   "ci-browser",
   "service-suites",
+  "postgres-service-suites",
   "migration-upgrade-rehearsal",
   "release-typecheck",
   "fix-tests-on-base",
@@ -34,7 +37,8 @@ export const PILOT_DEFERRED = [
   "api-image-smoke",
   "legal-atlas-image",
   "windows-scripts",
-  "desktop-clippy",
+  "desktop-windows-dry-run",
+  "desktop-rust-tests",
   "dependency-malware",
   "api-test-durations",
 ] as const;

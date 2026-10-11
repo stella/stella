@@ -55,6 +55,7 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 
 type AnnotationToolbarProps = {
   /** A mark the reader clicked; the bar edits it instead of the selection. */
@@ -596,20 +597,25 @@ export const AnnotationToolbar = ({
     if (!activeAnnotation.mine) {
       content = (
         <div className="flex flex-wrap items-center gap-1">
-          <Button
-            onClick={() => {
-              askAboutPassage(
-                activeSpans.map((span) => span.quote).join(" "),
-                readerSpansLocator({ spans: activeSpans, target }),
-              );
-              onClearActive();
-            }}
-            size="sm"
-            variant="ghost"
-          >
-            <SparklesIcon className="size-3.5" />
-            {t("common.askAI")}
-          </Button>
+          <CapabilityAction action={{ capability: "ai" }} surface="control">
+            {(capabilityProps) => (
+              <Button
+                onClick={() => {
+                  askAboutPassage(
+                    activeSpans.map((span) => span.quote).join(" "),
+                    readerSpansLocator({ spans: activeSpans, target }),
+                  );
+                  onClearActive();
+                }}
+                size="sm"
+                variant="ghost"
+                {...capabilityProps}
+              >
+                <SparklesIcon className="size-3.5" />
+                {t("common.askAI")}
+              </Button>
+            )}
+          </CapabilityAction>
         </div>
       );
     } else {
@@ -804,17 +810,22 @@ export const AnnotationToolbar = ({
         {mode === "authenticated" && (
           <>
             <span className="bg-border mx-1 h-4 w-px" />
-            <Button
-              onClick={() => {
-                askAboutPassage(selected.text, selected.locator);
-                clearSelection();
-              }}
-              size="sm"
-              variant="ghost"
-            >
-              <SparklesIcon className="size-3.5" />
-              {t("common.askAI")}
-            </Button>
+            <CapabilityAction action={{ capability: "ai" }} surface="control">
+              {(capabilityProps) => (
+                <Button
+                  onClick={() => {
+                    askAboutPassage(selected.text, selected.locator);
+                    clearSelection();
+                  }}
+                  size="sm"
+                  variant="ghost"
+                  {...capabilityProps}
+                >
+                  <SparklesIcon className="size-3.5" />
+                  {t("common.askAI")}
+                </Button>
+              )}
+            </CapabilityAction>
           </>
         )}
         {spans.length > 0 && (

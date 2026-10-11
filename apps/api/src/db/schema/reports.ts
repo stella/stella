@@ -1,6 +1,11 @@
 import { sql } from "drizzle-orm";
 
 import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+  entityFeatureWorkspaceGateColumns,
+} from "../entity-feature-gate-columns";
+import {
   jsonb,
   p,
   pUuid,
@@ -70,6 +75,8 @@ export type ReportTemplateRef =
 export const reportExports = p.pgTable(
   "report_exports",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"reportExport">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
@@ -137,6 +144,7 @@ export const reportExports = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .index("report_exports_workspace_created_idx")
       .on(table.workspaceId, table.createdAt, table.id),
@@ -166,5 +174,6 @@ export const reportExports = p.pgTable(
         [table.resultFieldId, { target: "fields", kind: "owned-content" }],
       ]),
     }),
+    p.index("report_exports_ef_result_entity_id_idx").on(table.resultEntityId),
   ],
 );

@@ -12,7 +12,7 @@ import * as v from "valibot";
 import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";
-import { withReasoningBoundToProvider } from "@/api/lib/chat/provider-bound-reasoning";
+import { buildClosedTranscript } from "@/api/lib/chat/closed-transcript";
 import { findTranscriptProblems } from "@/api/tests/helpers/provider-request-transcript";
 
 const captureAdapter = (sink: ModelMessage[][]): AnyTextAdapter => ({
@@ -57,6 +57,11 @@ const thinking = (id: string) => {
   const part = {
     type: "thinking" as const,
     content: `think ${id}`,
+    provenance: {
+      provider: "openai" as const,
+      model: "gpt-6-sol",
+      format: "openai-encrypted-content" as const,
+    },
     signature: JSON.stringify({ id, encrypted_content: `enc ${id}` }),
   };
   return part;
@@ -97,7 +102,7 @@ const SHAPES: Record<string, ChatPart[]> = {
 
 /** The Responses API input the real OpenAI adapter builds from `messages`. */
 const openAIResponsesInput = (messages: readonly ModelMessage[]): unknown[] => {
-  const adapter = createOpenaiChat("gpt-5.2", "test-key");
+  const adapter = createOpenaiChat("gpt-6-sol", "test-key");
   const convert: unknown = Reflect.get(adapter, "convertMessagesToInput");
   if (typeof convert !== "function") {
     return panic("The OpenAI adapter no longer converts messages to input");
@@ -150,7 +155,11 @@ describe("the request continuing a declined approval", () => {
         // drain
       }
       const items = openAIResponsesInput(
-        withReasoningBoundToProvider(sink[0] ?? [], "openai"),
+        buildClosedTranscript({
+          messages: sink.at(0) ?? [],
+          target: { provider: "openai", modelId: "gpt-6-sol" },
+          onReasoningDropped: () => undefined,
+        }),
       );
       const problems = findTranscriptProblems({
         format: "openai-responses",

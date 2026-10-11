@@ -36,6 +36,8 @@ import { panic } from "better-result";
 import JSZip from "jszip";
 import path from "node:path";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { fetchDecisionsByCelex } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import { INGESTION_USER_AGENT } from "@/api/handlers/case-law/ingestion/adapters/utils";
@@ -51,7 +53,6 @@ import { encodeGzipJson } from "@/api/lib/gzip-json";
 import {
   formatProvenance,
   provenancePathOf,
-  sha256Of,
 } from "../src/tests/fixture-provenance";
 import { seedId } from "./seed-utils";
 
@@ -112,6 +113,9 @@ const SEED_CORPUS = [
   { celex: "62018CJ0311", languages: ["EN"] },
   { celex: "62023CO0786", languages: ["EN", "FR"] },
 ] as const;
+
+export const hashRecordedFixtureBytes = (bytes: Uint8Array) =>
+  hashSha256Hex(bytes);
 
 const PARSER_FIXTURES_DIR = new URL(
   "../src/handlers/case-law/ingestion/parsers/__fixtures__/eu-ecj/",
@@ -406,7 +410,7 @@ const recordParserFixtures = async (): Promise<void> => {
             new URL(provenancePathOf(name), PARSER_FIXTURES_DIR),
             formatProvenance({
               capture: "recorded",
-              sha256: sha256Of(bytes),
+              sha256: hashRecordedFixtureBytes(bytes),
               sourceUrl,
               capturedAt,
             }),
@@ -467,7 +471,7 @@ const recordNotice = async ({
       new URL(provenancePathOf(name), ADAPTER_FIXTURES_DIR),
       formatProvenance({
         capture: "recorded",
-        sha256: sha256Of(bytes),
+        sha256: hashRecordedFixtureBytes(bytes),
         sourceUrl,
         capturedAt: new Date().toISOString(),
         note: `branch notice, Accept-Language: ${cellarLanguage}`,

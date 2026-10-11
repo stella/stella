@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { sha256Base64 as hashSha256Base64 } from "@stll/sha256/node";
 
 import { envBase } from "@/api/env-base";
 import {
@@ -84,6 +85,31 @@ describe("fake S3 carries the real s3 helpers", () => {
     expect(fake.objects.size).toBe(0);
   });
 
+  test.each([
+    new Uint8Array(),
+    new Uint8Array([0, 255, 128, 1]),
+    new TextEncoder().encode("Žluťoučký kůň Łódź e\u0301"),
+  ])(
+    "requested checksum receipts preserve the legacy digest for %j",
+    async (bytes) => {
+      const key = "sha256/exact-bytes";
+      const written = await fetch(`${fake.endpoint}/${bucket}/${key}`, {
+        signal,
+        method: "PUT",
+        headers: { "x-amz-checksum-algorithm": "SHA256" },
+        body: bytes,
+      });
+      expect(written.ok).toBe(true);
+      const expected = hashSha256Base64(bytes);
+      const read = await fetch(`${fake.endpoint}/${bucket}/${key}`, {
+        signal,
+        headers: { "x-amz-checksum-mode": "ENABLED" },
+      });
+      expect(read.headers.get("x-amz-checksum-sha256")).toBe(expected);
+      expect(new Uint8Array(await read.arrayBuffer())).toEqual(bytes);
+    },
+  );
+
   test("copies preserve bytes while validators change and checksums are requested or inherited", async () => {
     const requestSignal = AbortSignal.timeout(5000);
     const bytes = new TextEncoder().encode("same content");
@@ -124,9 +150,7 @@ describe("fake S3 carries the real s3 helpers", () => {
         "x-amz-copy-source-if-match": sourceValidator ?? "",
       },
     });
-    const expected = new Bun.CryptoHasher("sha256")
-      .update(bytes)
-      .digest("base64");
+    const expected = hashSha256Base64(bytes);
     expect(await requested.text()).toContain(
       `<ChecksumSHA256>${expected}</ChecksumSHA256>`,
     );

@@ -4778,6 +4778,7 @@ dependencies = [
  "notify",
  "objc2",
  "objc2-app-kit",
+ "objc2-core-graphics",
  "objc2-foundation",
  "opener",
  "plist",
@@ -4820,11 +4821,13 @@ dependencies = [
 name = "stella-desktop-macos"
 version = "0.0.1"
 dependencies = [
+ "core-foundation 0.10.1",
  "objc2",
  "objc2-app-kit",
  "objc2-foundation",
  "objc2-web-kit",
  "tauri",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

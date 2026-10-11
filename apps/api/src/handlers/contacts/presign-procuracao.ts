@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { sha256HexToBase64 } from "@stll/sha256";
 import { Temporal } from "@stll/time";
 
 import { contactExtractionUploads } from "@/api/db/schema";
@@ -13,10 +14,7 @@ import { resolveUploadMime } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { presignUploadUrl } from "@/api/lib/s3-presign";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
-import {
-  PRESIGN_URL_EXPIRY_SECONDS,
-  sha256HexToBase64,
-} from "@/api/lib/uploads/runtime";
+import { PRESIGN_URL_EXPIRY_SECONDS } from "@/api/lib/uploads/runtime";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const bodySchema = t.Object({

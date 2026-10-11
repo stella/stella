@@ -9,7 +9,8 @@ import { panic, Result, TaggedError } from "better-result";
 import { FILE_COMPARISON_TRANSPORT } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
 
-import "../style.css";
+import { hashUploadFile } from "../file-content-hash";
+import { mountFilePicker } from "../shared/file-picker";
 
 const UPLOAD_TIMEOUT_MS = 1_800_000;
 const INVALID_RESERVATION = "stella returned an invalid comparison reservation";
@@ -25,11 +26,10 @@ const comparisonError = (message: string): ComparisonAppError =>
 const wrapped = ({ message }: { message: string }): ComparisonAppError =>
   comparisonError(message);
 
-const baseInput = document.querySelector<HTMLInputElement>("#base");
-const targetInput = document.querySelector<HTMLInputElement>("#target");
+const picker = mountFilePicker();
 const uploadButton = document.querySelector<HTMLButtonElement>("#upload");
 const statusElement = document.querySelector<HTMLElement>("#status");
-if (!baseInput || !targetInput || !uploadButton || !statusElement) {
+if (!uploadButton || !statusElement) {
   panic("File comparison app markup is incomplete");
 }
 
@@ -52,12 +52,12 @@ const parsePayload = (result: AppToolResult): unknown => {
 
 const setStatus = (message: string, state: "idle" | "error" | "success") => {
   statusElement.textContent = message;
-  statusElement.className = `status-${state}`;
+  statusElement.className = `text-sm empty:hidden status-${state}`;
 };
 
 const refreshUploadEnabled = (): void => {
-  uploadButton.disabled = !(
-    baseInput.files?.item(0) && targetInput.files?.item(0)
+  picker.setUploadEnabled(
+    Boolean(picker.getFile("base") && picker.getFile("target")),
   );
 };
 
@@ -68,7 +68,7 @@ const describeFile = async (
   file: File,
 ): Promise<Result<ComparisonFileInput, ComparisonAppError>> => {
   const digest = await Result.tryPromise(
-    async () => await crypto.subtle.digest("SHA-256", await file.arrayBuffer()),
+    async () => await hashUploadFile(file),
   );
   if (Result.isError(digest)) {
     return Result.err(wrapped(digest.error));
@@ -76,9 +76,7 @@ const describeFile = async (
   return Result.ok({
     name: file.name,
     size: file.size,
-    sha256_hex: Array.from(new Uint8Array(digest.value), (byte) =>
-      byte.toString(16).padStart(2, "0"),
-    ).join(""),
+    sha256_hex: digest.value,
   });
 };
 
@@ -261,12 +259,12 @@ const handOffToModel = async (
 };
 
 const uploadSelectedFiles = async (): Promise<void> => {
-  const base = baseInput.files?.item(0);
-  const target = targetInput.files?.item(0);
+  const base = picker.getFile("base");
+  const target = picker.getFile("target");
   if (!base || !target) {
     return;
   }
-  uploadButton.disabled = true;
+  picker.setActivity("uploading");
   setStatus("Preparing upload…", "idle");
   const reservation = await prepareComparison(base, target);
   if (Result.isError(reservation)) {
@@ -288,8 +286,7 @@ const uploadSelectedFiles = async (): Promise<void> => {
     }
   }
 
-  baseInput.value = "";
-  targetInput.value = "";
+  picker.clearFiles();
   refreshUploadEnabled();
 
   const { next } = reservation.value;
@@ -319,8 +316,10 @@ const applyHostContext = (context: ReturnType<App["getHostContext"]>) => {
   if (!context) {
     return;
   }
+  picker.setLocale(context.locale);
   if (context.theme) {
     applyDocumentTheme(context.theme);
+    document.documentElement.classList.toggle("dark", context.theme === "dark");
   }
   if (context.styles?.variables) {
     applyHostStyleVariables(context.styles.variables);
@@ -331,20 +330,23 @@ const applyHostContext = (context: ReturnType<App["getHostContext"]>) => {
 };
 app.addEventListener("hostcontextchanged", applyHostContext);
 
-for (const input of [baseInput, targetInput]) {
-  input.addEventListener("change", () => {
-    refreshUploadEnabled();
-    setStatus("", "idle");
-  });
-}
+picker.onFilesChanged(() => {
+  refreshUploadEnabled();
+  setStatus("", "idle");
+});
 
 uploadButton.addEventListener("click", () => {
-  uploadSelectedFiles().catch((error: unknown) => {
-    setStatus(
-      error instanceof Error ? error.message : "Upload failed",
-      "error",
-    );
-  });
+  uploadSelectedFiles()
+    .finally(() => {
+      picker.setActivity("idle");
+      refreshUploadEnabled();
+    })
+    .catch((error: unknown) => {
+      setStatus(
+        error instanceof Error ? error.message : "Upload failed",
+        "error",
+      );
+    });
 });
 
 await app.connect();

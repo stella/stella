@@ -2,6 +2,8 @@ import { panic, Result, TaggedError } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
@@ -22,13 +24,15 @@ import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-messag
 import { uploadEntityHandler } from "@/api/handlers/entities/upload";
 import { UPLOAD_ENTITY_ORIGIN } from "@/api/handlers/entities/upload-origin";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { reconcileBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reconciliation";
+import { injectStamp, extractStamp } from "@/api/lib/docx-stamp";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import type { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { LIMITS } from "@/api/lib/limits";
 import { configureS3ForTesting } from "@/api/lib/s3";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -96,6 +100,7 @@ afterAll(async () => {
 });
 
 type UploadTestOptions = {
+  file?: File;
   recordAuditEvent?: AuditRecorder;
   safeDb?: SafeDb;
   generatedDraft?: Parameters<typeof uploadEntityHandler>[0]["generatedDraft"];
@@ -105,6 +110,9 @@ const upload = async ({
   recordAuditEvent = acceptedAudit,
   safeDb = memberSafeDb(),
   generatedDraft,
+  file = new File(["Upload cleanup regression bytes"], "cleanup.txt", {
+    type: "text/plain",
+  }),
 }: UploadTestOptions = {}) =>
   await Result.gen(() =>
     uploadEntityHandler({
@@ -117,10 +125,8 @@ const upload = async ({
       recordAuditEvent,
       ...(generatedDraft === undefined ? {} : { generatedDraft }),
       body: {
-        file: new File(["Upload cleanup regression bytes"], "cleanup.txt", {
-          type: "text/plain",
-        }),
-        name: "cleanup.txt",
+        file,
+        name: file.name,
         propertyId: ids.filePropertyA1,
         origin: UPLOAD_ENTITY_ORIGIN.GENERATED_DOCUMENT,
       },
@@ -485,9 +491,7 @@ const defineFlagTests = (flag: boolean) => {
         messageId,
         toolCallId: "cleanup-draft",
         threadWorkspaceId: ids.wsA1,
-        contentSha256Hex: new Bun.CryptoHasher("sha256")
-          .update("Upload cleanup regression bytes")
-          .digest("hex"),
+        contentSha256Hex: hashSha256Hex("Upload cleanup regression bytes"),
       };
       await testDb.insert(chatThreads).values({
         id: threadId,
@@ -594,34 +598,91 @@ const defineFlagTests = (flag: boolean) => {
       }
     });
 
-    test("a committed entity retires its cleanup intent and keeps its object", async () => {
-      const store = configureStore(flag);
-      const before = await entityCount();
-      let auditCalls = 0;
-      const audited: AuditRecorder = async () => {
-        auditCalls += 1;
-        await Promise.resolve();
-      };
-      try {
-        const result = await upload({ recordAuditEvent: audited });
-        expect(result.isOk()).toBe(true);
-        expect(auditCalls).toBe(1);
-        expect(await entityCount()).toBe(before + 1);
-        expect(await intentRows()).toHaveLength(0);
-        const puts = putRequests(store);
-        expect(puts.length).toBeGreaterThan(0);
-        const sourceKey = puts.at(0)?.key ?? panic("Expected a PUT request");
-        expect(store.objects.has(`${envBase.S3_BUCKET}/${sourceKey}`)).toBe(
-          true,
-        );
-        expect(await reconcile()).toBe(0);
-        expect(
-          store.requests.filter(({ method }) => method === "DELETE"),
-        ).toHaveLength(0);
-      } finally {
-        store.stop();
-      }
-    });
+    test.each([
+      "",
+      "ordinary",
+      "Žluťoučký kůň Łódź",
+      "e\u0301",
+      "stamped-docx",
+    ])(
+      "a committed entity keeps its object and legacy persisted digest: %j",
+      async (input) => {
+        const store = configureStore(flag);
+        const before = await entityCount();
+        let auditCalls = 0;
+        const audited: AuditRecorder = async () => {
+          auditCalls += 1;
+          await Promise.resolve();
+        };
+        try {
+          const stamped = input === "stamped-docx";
+          const submitted = stamped
+            ? new Uint8Array(
+                await injectStamp(
+                  await Bun.file(
+                    new URL(
+                      "../case-law/ingestion/parsers/__fixtures__/hu-bhgy-decision.docx",
+                      import.meta.url,
+                    ),
+                  ).arrayBuffer(),
+                  "TEST-001-1",
+                  "abcdefgh",
+                  "https://example.test",
+                ),
+              )
+            : new TextEncoder().encode(input);
+          const file = new File(
+            [submitted],
+            stamped ? "decision.docx" : "cleanup.txt",
+            {
+              type: stamped ? DOCX_MIME_TYPE : "text/plain",
+            },
+          );
+          const result = await upload({ recordAuditEvent: audited, file });
+          expect(result.isOk()).toBe(true);
+          if (result.isErr()) {
+            panic(`Expected successful upload: ${result.error.message}`);
+          }
+          expect(auditCalls).toBe(1);
+          expect(await entityCount()).toBe(before + 1);
+          expect(await intentRows()).toHaveLength(0);
+          const puts = putRequests(store);
+          expect(puts.length).toBeGreaterThan(0);
+          const sourceKey = puts.at(0)?.key ?? panic("Expected a PUT request");
+          expect(store.objects.has(`${envBase.S3_BUCKET}/${sourceKey}`)).toBe(
+            true,
+          );
+          const stored =
+            store.objects.get(`${envBase.S3_BUCKET}/${sourceKey}`) ??
+            panic("stored upload missing");
+          const field = await testDb.query.fields.findFirst({
+            where: {
+              id: { eq: toSafeId<"field">(result.value.fieldId) },
+            },
+          });
+          if (field?.content.type !== "file") {
+            panic("uploaded file field missing");
+          }
+          expect(field.content.sha256Hex).toBe(hashSha256Hex(stored.bytes));
+          expect(field.content.sizeBytes).toBe(stored.bytes.byteLength);
+          if (stamped) {
+            expect(stored.bytes).not.toEqual(submitted);
+            expect(field.content.sha256Hex).not.toBe(hashSha256Hex(submitted));
+            expect(
+              await extractStamp(Uint8Array.from(stored.bytes).buffer),
+            ).toEqual({ stamp: null, verificationCode: null });
+          } else {
+            expect(stored.bytes).toEqual(submitted);
+          }
+          expect(await reconcile()).toBe(0);
+          expect(
+            store.requests.filter(({ method }) => method === "DELETE"),
+          ).toHaveLength(0);
+        } finally {
+          store.stop();
+        }
+      },
+    );
   });
 };
 

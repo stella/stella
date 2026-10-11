@@ -1,4 +1,6 @@
 import { panic, Result } from "better-result";
+
+import { sanitizeErrorForOutput } from "@stll/errors";
 /**
  * Morphological query expansion for the case-law corpus index.
  *
@@ -20,7 +22,7 @@ import { panic, Result } from "better-result";
  * all produce the query the reader would have gotten anyway. Expansion is
  * allowed to add recall and is never allowed to remove it or to fail a search.
  */
-
+import { createSha256 } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { detached } from "@/api/lib/analytics/capture";
@@ -233,7 +235,7 @@ const readDictionaryPayload = async (
     compressed,
     MORPHOLOGY_DICTIONARY_MAX_BYTES,
   );
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   hasher.update(payload);
   if (hasher.digest("hex") !== contentHash) {
     return { reason: "content_hash_mismatch", status: "rejected" };
@@ -252,11 +254,12 @@ const loadDictionary = async (
   });
 
   if (!Result.isOk(read)) {
+    const safeError = sanitizeErrorForOutput(read.error);
     logger.warn(DICTIONARY_UNAVAILABLE, {
       language,
       reason: "read_failed",
       errorClass:
-        read.error instanceof Error ? read.error.constructor.name : "unknown",
+        safeError instanceof Error ? safeError.constructor.name : "unknown",
     });
     return UNAVAILABLE;
   }

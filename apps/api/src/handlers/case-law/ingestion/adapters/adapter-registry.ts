@@ -44,10 +44,10 @@ import { courtListenerImport } from "./courtlistener/import";
 import { checkedSourceRegistrations } from "./source-registrations";
 
 /**
- * The Slovak document walk's gated fetch, carried here because the registry is
- * how anything outside this slice reaches an adapter.
+ * The deferred-document drains, carried here because the registry is how
+ * anything outside this slice reaches an adapter.
  */
-export { skCourtsDocumentFetch } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
+export { listDeferredDocumentDrains } from "@/api/handlers/case-law/ingestion/adapters/deferred-document-processors";
 
 type AdapterRegistry = {
   readonly [TKey in AdapterKey]: SourceAdapter & { readonly key: TKey };

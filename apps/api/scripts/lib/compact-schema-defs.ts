@@ -18,7 +18,7 @@
 // The same input produces the same artifact, and an unrelated schema change
 // cannot renumber every other def.
 
-import { createHash } from "node:crypto";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import {
   DEFS_KEY,
@@ -93,7 +93,7 @@ const isRecord = (value: unknown): value is JsonRecord =>
  * Same subschema, same name, in this entry and in every future regeneration.
  */
 const defNameFor = (serialized: string): string =>
-  `s_${createHash("sha256").update(serialized).digest("hex").slice(0, DEF_NAME_HASH_LENGTH)}`;
+  `s_${hashSha256Hex(serialized).slice(0, DEF_NAME_HASH_LENGTH)}`;
 
 /**
  * Walk every SCHEMA-POSITION node reachable from `node`. Restricting the walk

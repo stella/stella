@@ -1,253 +1,77 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { LoadedCatalogueResource } from "@stll/catalogue/install-payloads";
 import {
-  getSkillResourceKind,
-  isAllowedResourcePath,
-  normalizeResourcePath,
-  parseSkillFile,
-  type SkillMetadata,
+  hashSkillPackage,
+  validateSkillPackage,
+  type SkillPackageDiagnostic,
 } from "@stll/skills";
-import { SKILL_NAME_PATTERN } from "@stll/skills/package-limits";
 
-import { validateSkillRequiredTools } from "@/api/lib/agent-skills/required-tools-validation";
+import { skillRequirableToolNames } from "@/api/lib/agent-skills/required-tools-validation";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { LIMITS } from "@/api/lib/limits";
-import type {
-  ParsedSkillPackage,
-  ParsedSkillResource,
-} from "@/api/lib/skills/skill-package";
+import type { ParsedSkillPackage } from "@/api/lib/skills/skill-package";
 
-export const toParsedBundledSkillResources = (
-  resourceFiles: readonly LoadedCatalogueResource[],
-): Result<ParsedSkillResource[], HandlerError> => {
-  if (resourceFiles.length > LIMITS.agentSkillResourcesPerSkill) {
-    return Result.err(
-      new HandlerError({
-        status: 500,
-        message: "Bundled skill has too many resources",
-      }),
-    );
-  }
-
-  const resources: ParsedSkillResource[] = [];
-  for (const resourceFile of resourceFiles) {
-    const normalizedPath = normalizeResourcePath(resourceFile.path);
-    if (!isAllowedResourcePath(normalizedPath)) {
-      return Result.err(
-        new HandlerError({
-          status: 500,
-          message: `Bundled skill resource is not allowed: ${normalizedPath}`,
-        }),
-      );
-    }
-
-    if (resourceFile.content.length > LIMITS.agentSkillResourceMaxChars) {
-      return Result.err(
-        new HandlerError({
-          status: 500,
-          message: `Bundled skill resource is too large: ${normalizedPath}`,
-        }),
-      );
-    }
-
-    const kind = getSkillResourceKind(normalizedPath);
-    if (kind === null) {
-      return Result.err(
-        new HandlerError({
-          status: 500,
-          message: `Bundled skill resource kind is not supported: ${normalizedPath}`,
-        }),
-      );
-    }
-
-    resources.push({
-      content: resourceFile.content,
-      kind,
-      path: normalizedPath,
-      sizeBytes: resourceFile.sizeBytes,
-    });
-  }
-
-  // oxlint-disable-next-line require-cached-collator/require-cached-collator -- file path, sorted for deterministic manifest layout, not display text
-  return Result.ok(resources.toSorted((a, b) => a.path.localeCompare(b.path)));
-};
+const encoder = new TextEncoder();
 
 export const toParsedBundledSkillPackage = ({
   expectedSlug,
-  resources,
+  resourceFiles,
   source,
 }: {
   expectedSlug: string;
-  resources: readonly ParsedSkillResource[];
+  resourceFiles: readonly LoadedCatalogueResource[];
   source: string;
 }): Result<ParsedSkillPackage, HandlerError> => {
-  const parsedFile = parseSkillFile(source);
-  if (parsedFile.isErr()) {
-    return Result.err(
-      new HandlerError({
-        status: 500,
-        message: `Bundled skill file is invalid: ${expectedSlug}`,
-        cause: parsedFile.error,
-      }),
-    );
-  }
-  const parsed = parsedFile.value;
-  if (parsed.body.length > LIMITS.agentSkillBodyMaxChars) {
-    return Result.err(
-      new HandlerError({
-        status: 500,
-        message: "Bundled skill instructions are too large",
-      }),
-    );
-  }
-
-  return Result.try({
-    try: () => {
-      assertBundledSkillMetadata({
-        expectedSlug,
-        metadata: parsed.metadata,
-      });
-
-      return {
-        body: parsed.body,
-        compatibility: parsed.metadata.compatibility ?? null,
-        description: parsed.metadata.description,
-        entrypointHash: hashBundledSkillPackage({
-          resources: [],
-          source,
-        }),
-        license: parsed.metadata.license ?? null,
-        metadata: parsed.metadata.metadata ?? {},
-        name: parsed.metadata.name,
-        resources: [...resources],
-        sourceUrl: null,
-        version: parsed.metadata.version,
-      };
-    },
-    catch: (cause) => {
-      if (cause instanceof HandlerError) {
-        return cause;
-      }
-      return new HandlerError({
-        status: 500,
-        message: `Bundled skill file is invalid: ${expectedSlug}`,
-        cause,
-      });
-    },
+  const validated = validateSkillPackage({
+    files: [
+      { content: source, path: "SKILL.md" },
+      ...resourceFiles.map(({ content, path, sizeBytes }) => ({
+        content,
+        path,
+        sizeBytes,
+      })),
+    ],
+    tools: { known: skillRequirableToolNames(), type: "check" },
   });
-};
-
-export const hashBundledSkillPackage = ({
-  resources,
-  source,
-}: {
-  resources: readonly ParsedSkillResource[];
-  source: string;
-}): string => {
-  const hasher = new Bun.CryptoHasher("sha256");
-  hasher.update(source);
-  for (const resource of resources) {
-    hasher.update("\0");
-    hasher.update(resource.path);
-    hasher.update("\0");
-    hasher.update(resource.content);
+  if (validated.isErr()) {
+    return Result.err(toBundledSkillError(validated.error[0]));
   }
-  return hasher.digest("hex");
-};
-
-const assertBundledSkillMetadata = ({
-  expectedSlug,
-  metadata,
-}: {
-  expectedSlug: string;
-  metadata: SkillMetadata;
-}) => {
-  if (!SKILL_NAME_PATTERN.test(metadata.name)) {
-    throw new HandlerError({
-      status: 500,
-      message:
-        "Bundled skill name must use lowercase letters and digits, joined by single hyphens",
-    });
-  }
+  const { body, metadata, resources } = validated.value;
   if (metadata.name !== expectedSlug) {
-    throw new HandlerError({
-      status: 500,
-      message: `Bundled skill name does not match catalogue slug: ${expectedSlug}`,
-    });
+    return Result.err(
+      new HandlerError({
+        status: 500,
+        message: `Bundled skill name does not match catalogue slug: ${expectedSlug}`,
+      }),
+    );
   }
-  assertFrontmatterField({
-    field: "description",
-    limit: LIMITS.agentSkillDescriptionMaxChars,
-    value: metadata.description,
+
+  return Result.ok({
+    body,
+    compatibility: metadata.compatibility ?? null,
+    description: metadata.description,
+    entrypointHash: hashSkillPackage({ resources, source }),
+    license: metadata.license ?? null,
+    metadata: metadata.metadata ?? {},
+    name: metadata.name,
+    resources: resources.map((resource) => ({
+      ...resource,
+      sizeBytes:
+        resource.sizeBytes ?? encoder.encode(resource.content).byteLength,
+    })),
+    sourceUrl: null,
+    version: metadata.version,
   });
-  assertFrontmatterField({
-    field: "version",
-    limit: LIMITS.agentSkillVersionMaxChars,
-    value: metadata.version,
-  });
-  assertFrontmatterField({
-    field: "license",
-    limit: LIMITS.agentSkillLicenseMaxChars,
-    value: metadata.license,
-  });
-  assertFrontmatterField({
-    field: "compatibility",
-    limit: LIMITS.agentSkillCompatibilityMaxChars,
-    value: metadata.compatibility,
-  });
-  assertFrontmatterMetadata(metadata.metadata);
 };
 
-const assertFrontmatterField = ({
-  field,
-  limit,
-  value,
-}: {
-  field: string;
-  limit: number;
-  value: string | null | undefined;
-}) => {
-  if (!value || value.length <= limit) {
-    return;
+const toBundledSkillError = (
+  diagnostic: SkillPackageDiagnostic | undefined,
+): HandlerError => {
+  if (diagnostic === undefined) {
+    return panic("Invalid bundled skill package has at least one diagnostic");
   }
-
-  throw new HandlerError({
+  return new HandlerError({
     status: 500,
-    message: `Bundled skill ${field} is too large`,
+    message: `Bundled skill package is invalid: ${diagnostic.type}`,
   });
-};
-
-const assertFrontmatterMetadata = (
-  metadata: Record<string, string> | undefined,
-) => {
-  const entries = Object.entries(metadata ?? {});
-  if (entries.length > LIMITS.agentSkillMetadataEntriesMax) {
-    throw new HandlerError({
-      status: 500,
-      message: "Bundled skill metadata has too many entries",
-    });
-  }
-
-  for (const [key, value] of entries) {
-    if (key.length > LIMITS.agentSkillMetadataKeyMaxChars) {
-      throw new HandlerError({
-        status: 500,
-        message: "Bundled skill metadata key is too large",
-      });
-    }
-    if (value.length > LIMITS.agentSkillMetadataValueMaxChars) {
-      throw new HandlerError({
-        status: 500,
-        message: "Bundled skill metadata value is too large",
-      });
-    }
-  }
-  const requiredTools = validateSkillRequiredTools(metadata);
-  if (Result.isError(requiredTools)) {
-    throw new HandlerError({
-      status: 500,
-      message: `Bundled skill: ${requiredTools.error.message}`,
-    });
-  }
 };

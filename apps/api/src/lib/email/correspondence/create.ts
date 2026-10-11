@@ -1,6 +1,5 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { createHash } from "node:crypto";
 
 import type {
   ParsedCorrespondence,
@@ -10,6 +9,7 @@ import {
   CORRESPONDENCE_MAX_ATTACHMENTS,
   CORRESPONDENCE_MAX_BODY_CHARACTERS,
 } from "@stll/api-contract/correspondence";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -131,19 +131,17 @@ const validateContent = ({ parsed, attachments }: ValidateContentOptions) => {
 const correspondenceDedupKey = (parsed: ParsedCorrespondence) => {
   switch (parsed.source) {
     case "delivery":
-      return createHash("sha256")
-        .update(
-          JSON.stringify([
-            parsed.intake,
-            parsed.messageId?.trim() ?? null,
-            parsed.contentHash,
-          ]),
-        )
-        .digest("hex");
+      return hashSha256Hex(
+        JSON.stringify([
+          parsed.intake,
+          parsed.messageId?.trim() ?? null,
+          parsed.contentHash,
+        ]),
+      );
     case "upload":
-      return createHash("sha256")
-        .update(JSON.stringify([parsed.source, parsed.sourceEntityId]))
-        .digest("hex");
+      return hashSha256Hex(
+        JSON.stringify([parsed.source, parsed.sourceEntityId]),
+      );
     default:
       parsed satisfies never;
       return panic("Unhandled correspondence source");

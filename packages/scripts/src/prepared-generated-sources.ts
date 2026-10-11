@@ -1,5 +1,4 @@
 import { panic } from "better-result";
-import { createHash } from "node:crypto";
 import {
   lstatSync,
   mkdirSync,
@@ -9,6 +8,8 @@ import {
 } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
+
+import { createSha256, sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { CI_GENERATED_FILES } from "./generated-files";
 
@@ -23,7 +24,7 @@ const preparedManifestSchema = v.strictObject({
 });
 
 export const generatedFileHash = (bytes: Uint8Array | string) =>
-  createHash("sha256").update(bytes).digest("hex");
+  hashSha256Hex(bytes);
 
 const git = (root: string, args: string[]) => {
   const result = Bun.spawnSync(["git", ...args], { cwd: root });
@@ -45,7 +46,7 @@ export const generatedInputIdentity = (root: string) => {
       ),
     ),
   );
-  const hash = createHash("sha256");
+  const hash = createSha256();
   hash.update(JSON.stringify({ bun: Bun.version, compiler: compiler.version }));
   // The full tracked input tree is conservative: generated outputs never hash
   // themselves, and a new generator input is covered without another glob.

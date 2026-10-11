@@ -57,7 +57,7 @@ import {
   isIdentifierReference,
   isStringLiteral,
   memberPropertyName,
-  resolveImportedExpression,
+  resolveImportedExpressionForEnforcement,
   resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
@@ -142,7 +142,7 @@ const testRegistration = (
   const modifiers: string[] = [];
   let current = unwrapExpression(call.callee);
   while (current !== null) {
-    const binding = resolveImportedExpression(context, current);
+    const binding = resolveImportedExpressionForEnforcement(context, current);
     const kind =
       binding?.source === BUN_TEST_MODULE
         ? TEST_FUNCTIONS.get(binding.imported)
@@ -380,7 +380,7 @@ const constructedClient = (
   if (isGlobalBunSql(context, callee)) {
     return "Bun.SQL";
   }
-  const binding = resolveImportedExpression(context, callee);
+  const binding = resolveImportedExpressionForEnforcement(context, callee);
   if (binding === null) {
     return null;
   }
@@ -531,7 +531,10 @@ export default eslintCompatPlugin({
             if (!isAstNode(subject) || subject.type !== "CallExpression") {
               return;
             }
-            const binding = resolveImportedExpression(context, subject.callee);
+            const binding = resolveImportedExpressionForEnforcement(
+              context,
+              subject.callee,
+            );
             if (
               binding?.source !== BUN_TEST_MODULE ||
               binding.imported !== EXPECT_EXPORT

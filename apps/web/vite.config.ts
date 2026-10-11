@@ -448,6 +448,11 @@ export default defineConfig(({ mode, command }) => {
               // chunk so users without MCP App output never download it.
               return "mcp-app";
             }
+            if (id.includes("node_modules/@tanstack/ai-client/")) {
+              // Keep the chat client in the lazy runtime graph instead of the
+              // router/query vendor chunk preloaded alongside the entry.
+              return undefined;
+            }
             if (id.includes("node_modules/@tanstack/start-client-core/")) {
               return "vendor-tanstack-server-fn";
             }

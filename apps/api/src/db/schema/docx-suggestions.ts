@@ -7,6 +7,10 @@ import type {
 
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
 
+import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+} from "../entity-feature-gate-columns";
 import { chatThreads } from "./chat";
 import {
   type AnyPgColumn,
@@ -86,6 +90,7 @@ true satisfies MissingDocxSuggestionApplyMode extends never ? true : never;
 export const docxSuggestions = p.pgTable(
   "docx_suggestions",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"docxSuggestion">().primaryKey(),
     // No direct workspaces FK: the composite FK below binds (entity_id,
     // workspace_id) to entities, and entities already cascade from a
@@ -143,6 +148,7 @@ export const docxSuggestions = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     ...entityFeaturePolicies(
       table,
       new Map([

@@ -3,10 +3,10 @@ import { makeSignature } from "better-auth/crypto";
 import { RedisClient } from "bun";
 import { describe, expect, setSystemTime, spyOn, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
-import { createHash } from "node:crypto";
 
 import { SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry } from "@stll/sanctions";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import {
   sanctionsSources,
@@ -30,8 +30,7 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
-const hash = (value: string) =>
-  createHash("sha256").update(value).digest("hex");
+const hash = (value: string) => hashSha256Hex(value);
 
 describe.skipIf(!runPostgresTests)("production sanctions mount", () => {
   test("production sanctions search is anonymous and independent of signed-in tenant context", async () => {

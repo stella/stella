@@ -17,7 +17,18 @@ export const aggregateFences = () => {
   const organizationId = mintAuthProviderId<"organization">();
   const workspaceId = createSafeId<"workspace">();
   const definitionId = createSafeId<"flowDefinition">();
+  const threadId = createSafeId<"chatThread">();
+  const userId = mintAuthProviderId<"user">();
   return {
+    signingSession: {
+      aggregate: "signingSession",
+      id: {
+        id: createSafeId<"pdfSigningSession">(),
+        workspaceId,
+        organizationId,
+      },
+      mode: "update",
+    },
     organization: {
       aggregate: "organization",
       id: organizationId,
@@ -63,6 +74,21 @@ export const aggregateFences = () => {
       id: { type: "organization-member", id: "member-claim", organizationId },
       mode: "update",
     },
+    chatThread: {
+      aggregate: "chatThread",
+      id: { id: threadId, organizationId, userId },
+      mode: "update",
+    },
+    chatTurn: {
+      aggregate: "chatTurn",
+      id: { threadId, organizationId, userId, toolCallId: "test-call" },
+      mode: "update",
+    },
+    chatSecret: {
+      aggregate: "chatSecret",
+      id: { id: Bun.randomUUIDv7(), threadId, organizationId, userId },
+      mode: "update",
+    },
     run: {
       aggregate: "run",
       id: { id: createSafeId<"flowRun">(), workspaceId },
@@ -83,6 +109,15 @@ export const aggregateFences = () => {
       id: { id: createSafeId<"entity">(), workspaceId },
       mode: "update",
     },
+    signal: {
+      aggregate: "signal",
+      id: { id: createSafeId<"signal">(), organizationId },
+      mode: "update",
+    },
+    automatedFlowRunCap: {
+      aggregate: "automatedFlowRunCap",
+      id: createSafeId<"flowDefinition">(),
+    },
     processingClaim: {
       aggregate: "processingClaim",
       id: { id: createSafeId<"documentProcessingRun">(), workspaceId },
@@ -92,6 +127,16 @@ export const aggregateFences = () => {
     personalCatalog: {
       aggregate: "personalCatalog",
       id: { organizationId, userId: mintAuthProviderId<"user">() },
+    },
+    searchHistory: {
+      aggregate: "searchHistory",
+      id: { organizationId, userId: mintAuthProviderId<"user">() },
+      mode: "update",
+    },
+    chatMessage: {
+      aggregate: "chatMessage",
+      id: { id: createSafeId<"chatMessage">(), threadId },
+      mode: "update",
     },
   } as const satisfies FenceFixtures;
 };
@@ -111,7 +156,7 @@ const hashFixture = (value: unknown) => {
 /** Stable physical keys distinguish namespaces and principals; this is not a PostgreSQL hash oracle. */
 export const aggregateExecutionRows = (statement: SQL, found = true) => {
   const query = new PgDialect().sqlToQuery(statement);
-  if (!query.sql.includes("advisory_xact_lock")) {
+  if (!query.sql.includes("AS key1")) {
     return found ? [{ id: "locked" }] : [];
   }
   const first = query.params.at(0);

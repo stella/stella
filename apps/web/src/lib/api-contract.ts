@@ -7,7 +7,6 @@ import type {
   McpOAuthScope,
   PropertyContentType,
   SafeId,
-  SafeIdType,
   SavedSearchCriteria,
   TemplateRecipeDefinition,
   ViewLayoutType,
@@ -16,6 +15,7 @@ import type { ConditionNode } from "@stll/conditions";
 
 import type {
   ChatAnonRestoration,
+  ChatClientTools,
   ChatMessage,
   ChatPart,
   ChatSourceDocument,
@@ -50,6 +50,7 @@ export type {
   ApprovalRequiredBuiltInChatToolName,
   BuiltInChatToolPolicyKindByName,
   ChatAnonRestoration,
+  ChatClientTools,
   ChatMessage,
   ChatMentionCategory,
   ChatPart,
@@ -63,7 +64,6 @@ export type {
   McpOAuthScope,
   PropertyContentType,
   SafeId,
-  SafeIdType,
   SavedSearchCriteria,
   TemplateRecipeDefinition,
   ViewLayout,

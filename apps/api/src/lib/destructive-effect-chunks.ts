@@ -2,6 +2,7 @@ import { panic } from "better-result";
 
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 const S3_DELETION_EFFECT_TYPE = "s3_delete" as const;
 export const S3_DELETION_EFFECT_CHUNK_SIZE = 50;
@@ -48,9 +49,6 @@ export const consumeInBatches = async <T>({
   await consumeFrom();
 };
 
-const sha256 = (value: string): string =>
-  new Bun.CryptoHasher("sha256").update(value).digest("hex");
-
 /**
  * Canonicalize keys before paging so the same parent intent always produces
  * the same `(chunkIndex, payloadHash)` identities, independent of discovery
@@ -69,7 +67,7 @@ export const createS3DeletionEffectChunks = (
     chunks.push({
       chunkIndex,
       effectType: S3_DELETION_EFFECT_TYPE,
-      payloadHash: sha256(JSON.stringify(s3Keys)),
+      payloadHash: hashSha256Hex(JSON.stringify(s3Keys)),
       s3Keys,
     });
   }
@@ -90,7 +88,7 @@ export const assertValidS3DeletionEffectChunk = ({
   if (s3Keys.length < 1 || s3Keys.length > S3_DELETION_EFFECT_CHUNK_SIZE) {
     panic("Destructive-effect chunk exceeds its key bound");
   }
-  if (payloadHash !== sha256(JSON.stringify(s3Keys))) {
+  if (payloadHash !== hashSha256Hex(JSON.stringify(s3Keys))) {
     panic("Destructive-effect chunk payload hash does not match its keys");
   }
 };
