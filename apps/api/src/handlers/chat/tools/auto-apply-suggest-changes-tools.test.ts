@@ -304,13 +304,15 @@ const buildTx = ({
         return {
           from: () => {
             const query = drizzle.mock().select(selectedFields).from(table);
+            const fixtureQuery = createSelectQueryMock(rows).from().where();
             return {
               toSQL: () => query.toSQL(),
               as: (alias: string) => query.as(alias),
-              where: (predicate: SQL) =>
-                Object.assign(createSelectQueryMock(rows).from().where(), {
-                  toSQL: () => query.where(predicate).toSQL(),
-                }),
+              where: (predicate: SQL) => ({
+                toSQL: () => query.where(predicate).toSQL(),
+                for: fixtureQuery.for,
+                limit: fixtureQuery.limit,
+              }),
             };
           },
         };
