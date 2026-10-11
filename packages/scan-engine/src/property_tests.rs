@@ -121,6 +121,7 @@ fn generated_scans_return_without_panicking() {
                     matches!(
                         reason,
                         UnrecognizedReason::NoContent
+                            | UnrecognizedReason::ContentLoss
                             | UnrecognizedReason::InvalidDimensions
                             | UnrecognizedReason::InvalidPixelBuffer
                             | UnrecognizedReason::InvalidDpi
@@ -180,7 +181,7 @@ fn filled_page(generator: &mut Generator) -> (GrayImage, (u32, u32, u32, u32)) {
     let top = generator.range(height / 5, height - height / 5 - rectangle_height);
     let right = left + rectangle_width;
     let bottom = top + rectangle_height;
-    let source = GrayImage::from_fn(width, height, |x, y| {
+    let mut source = GrayImage::from_fn(width, height, |x, y| {
         let horizontal = x.saturating_mul(18) / width;
         let vertical = y.saturating_mul(12) / height;
         let illumination = background
@@ -193,6 +194,9 @@ fn filled_page(generator: &mut Generator) -> (GrayImage, (u32, u32, u32, u32)) {
             Luma([illumination])
         }
     });
+    for x in width / 5..width * 4 / 5 {
+        source.put_pixel(x, height - 20, Luma([20]));
+    }
     (source, (left, top, right, bottom))
 }
 
@@ -210,7 +214,7 @@ fn mean_region(image: &GrayImage, bounds: (u32, u32, u32, u32)) -> u32 {
 }
 
 #[test]
-fn generated_solid_fill_interiors_remain_darker_than_the_page() {
+fn generated_solid_fill_interiors_follow_the_output_mode() {
     let mut generator = Generator::new(FILL_SEED);
     for case in 0..CASES_PER_PROPERTY {
         let (source, (left, top, right, bottom)) = filled_page(&mut generator);
@@ -232,13 +236,21 @@ fn generated_solid_fill_interiors_remain_darker_than_the_page() {
             );
             let fill_mean = mean_region(&cleaned.image, interior);
             let page_mean = mean_region(&cleaned.image, page);
-            // Bilinear deskew and illumination normalization may narrow the original contrast;
-            // twelve levels still distinguish a retained fill from cleaned page background.
-            assert!(
-                fill_mean + 12 <= page_mean,
-                "seed {FILL_SEED:#x}, case {case}, dimensions {:?}, {output:?}, deskew {deskew}: fill {fill_mean}, page {page_mean}",
-                source.dimensions()
-            );
+            match output {
+                CleanOutput::Grayscale => {
+                    // Twelve levels distinguish a retained fill after illumination normalization.
+                    assert!(
+                        fill_mean + 12 <= page_mean,
+                        "seed {FILL_SEED:#x}, case {case}, grayscale, deskew {deskew}: fill {fill_mean}, page {page_mean}"
+                    );
+                }
+                CleanOutput::Binary => {
+                    assert!(
+                        fill_mean >= 245,
+                        "seed {FILL_SEED:#x}, case {case}, binary, deskew {deskew}: smooth fill {fill_mean}"
+                    );
+                }
+            }
         });
     }
 }

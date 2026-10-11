@@ -21,6 +21,11 @@ const MAX_DESKEW_TENTHS: i32 = 60;
 const DESKEW_TENTHS: f32 = 0.1;
 const MIN_FOREGROUND_CONTRAST: u8 = 15;
 const ADAPTIVE_THRESHOLD_OFFSET: i32 = 5;
+const MIN_INK_RETENTION_PERCENT: usize = 75;
+const INK_TILE_SIDE: u32 = 8;
+const MIN_TILE_INK_PIXELS: usize = 16;
+const PAGE_REFERENCE_TOLERANCE: u8 = 30;
+const SOURCE_TILE_INK_FRACTION_DIVISOR: usize = 200;
 const CROP_PADDING_MM: f32 = 3.0;
 const MIN_EDGE_CONTRAST: u8 = 10;
 
@@ -79,6 +84,7 @@ pub struct CleanedScan {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum UnrecognizedReason {
     NoContent,
+    ContentLoss,
     InvalidDimensions,
     InvalidPixelBuffer,
     InvalidDpi,
@@ -91,6 +97,7 @@ impl UnrecognizedReason {
     pub const fn code(self) -> &'static str {
         match self {
             Self::NoContent => "no-content",
+            Self::ContentLoss => "content-loss",
             Self::InvalidDimensions => "invalid-dimensions",
             Self::InvalidPixelBuffer => "invalid-pixel-buffer",
             Self::InvalidDpi => "invalid-dpi",
@@ -180,10 +187,147 @@ fn reduce_quad(mut points: Vec<Point>) -> Option<Quad> {
     Some(std::array::from_fn(|index| points[(start + index) % 4]))
 }
 
-/// Detects a page surrounded by a contrasting background.
-///
-/// A contour which fills the frame is deliberately ignored: flatbed scans already have the
-/// desired geometry and must not report a spurious applied quadrilateral.
+fn side_length(a: Point, b: Point) -> f32 {
+    ((b.0 - a.0).powi(2) + (b.1 - a.1).powi(2)).sqrt()
+}
+
+/// Broad projective bounds around Letter, A-series and Legal paper. These reject
+/// extreme desk fragments without assuming one country's paper format.
+fn plausible_geometry(quad: Quad, whole: f32) -> bool {
+    let area_fraction = polygon_area(&quad) / whole;
+    if !(0.06..=0.94).contains(&area_fraction) {
+        return false;
+    }
+    let sides = std::array::from_fn::<_, 4, _>(|i| side_length(quad[i], quad[(i + 1) % 4]));
+    for i in 0..4 {
+        if cross(quad[i], quad[(i + 1) % 4], quad[(i + 2) % 4]) <= 0.0 {
+            return false;
+        }
+        let previous = quad[(i + 3) % 4];
+        let next = quad[(i + 1) % 4];
+        let cosine = ((previous.0 - quad[i].0) * (next.0 - quad[i].0)
+            + (previous.1 - quad[i].1) * (next.1 - quad[i].1))
+            / (sides[(i + 3) % 4] * sides[i]);
+        // Angles between 45 and 135 degrees; stronger perspective is ambiguous.
+        if !cosine.is_finite() || cosine.abs() > std::f32::consts::FRAC_1_SQRT_2 {
+            return false;
+        }
+        let opposite_ratio = sides[i] / sides[(i + 2) % 4];
+        if !(0.5..=2.0).contains(&opposite_ratio) {
+            return false;
+        }
+    }
+    let ratio = (sides[0] + sides[2]) / (sides[1] + sides[3]);
+    let aspect = ratio.max(1.0 / ratio);
+    [1.294_f32, std::f32::consts::SQRT_2, 1.647]
+        .iter()
+        .any(|paper| (aspect / paper - 1.0).abs() <= 0.28)
+}
+
+// Move each reduced hull side outward to contain the complete contour. Dropping
+// curved hull vertices must never turn a page envelope into an interior crop.
+fn enclosing_quad(envelope: &[Point]) -> Option<Quad> {
+    let quad = reduce_quad(envelope.to_vec())?;
+    let lines = std::array::from_fn::<_, 4, _>(|i| {
+        let a = quad[i];
+        let b = quad[(i + 1) % 4];
+        let length = side_length(a, b);
+        let normal = (-(b.1 - a.1) / length, (b.0 - a.0) / length);
+        let level = envelope
+            .iter()
+            .map(|p| normal.0 * p.0 + normal.1 * p.1)
+            .fold(f32::INFINITY, f32::min);
+        (normal, level)
+    });
+    let mut corners = [(0.0, 0.0); 4];
+    for i in 0..4 {
+        let (a, ca) = lines[(i + 3) % 4];
+        let (b, cb) = lines[i];
+        let determinant = a.0 * b.1 - a.1 * b.0;
+        if determinant.abs() < 0.001 {
+            return None;
+        }
+        corners[i] = (
+            (ca * b.1 - a.1 * cb) / determinant,
+            (a.0 * cb - ca * b.0) / determinant,
+        );
+    }
+    Some(corners)
+}
+
+/// Find a sharp boundary in a bounded perpendicular band along every quarter
+/// of a side. Curved paper need not coincide with its enclosing straight quad.
+fn side_support(gray: &GrayImage, a: Point, b: Point) -> Option<f32> {
+    let length = side_length(a, b);
+    let normal = (-(b.1 - a.1) / length, (b.0 - a.0) / length);
+    let band = (length * 0.08).clamp(4.0, 24.0) as i32;
+    let mut quarters = [0_u32; 4];
+    let sample = |point: Point| {
+        if point.0 < 0.0
+            || point.1 < 0.0
+            || point.0 >= gray.width() as f32
+            || point.1 >= gray.height() as f32
+        {
+            return None;
+        }
+        Some(gray.get_pixel(point.0 as u32, point.1 as u32)[0])
+    };
+    for i in 0..64 {
+        let t = (i as f32 + 0.5) / 64.0;
+        let p = (a.0 + (b.0 - a.0) * t, a.1 + (b.1 - a.1) * t);
+        let supported = (-band..=band).step_by(2).any(|shift| {
+            [2.0, 4.0, 6.0].into_iter().any(|offset| {
+                let at = |distance: f32| {
+                    sample((
+                        p.0 + normal.0 * (shift as f32 + distance),
+                        p.1 + normal.1 * (shift as f32 + distance),
+                    ))
+                };
+                let (Some(inside), Some(outside), Some(inward), Some(outward)) =
+                    (at(offset), at(-offset), at(2.0 * offset), at(-2.0 * offset))
+                else {
+                    return false;
+                };
+                let contrast = u16::from(inside.abs_diff(outside));
+                let noise =
+                    u16::from(inside.abs_diff(inward)) + u16::from(outside.abs_diff(outward));
+                // Flanks must be quieter than the edge. Smooth illumination
+                // cannot pass by merely accumulating a larger difference.
+                contrast >= 3 && contrast > 2 * noise
+            })
+        });
+        if supported {
+            quarters[i / 16] += 1;
+        }
+    }
+    let total = quarters.iter().sum::<u32>() as f32 / 64.0;
+    (total >= 0.6 && quarters.iter().all(|count| *count >= 6)).then_some(total)
+}
+
+// A blank rectangle can be furniture or a solid illustration. Require sparse
+// text-like valleys away from its boundary before treating it as a page.
+fn has_page_ink(gray: &GrayImage, quad: Quad) -> bool {
+    let mut samples = 0_u32;
+    let mut ink = 0_u32;
+    for y in (0..gray.height()).step_by(2) {
+        for x in (0..gray.width()).step_by(2) {
+            let p = (x as f32, y as f32);
+            if !(0..4).all(|i| {
+                cross(quad[i], quad[(i + 1) % 4], p) > side_length(quad[i], quad[(i + 1) % 4]) * 8.0
+            }) {
+                continue;
+            }
+            samples += 1;
+            if stroke_contrast(gray, x, y) >= MIN_FOREGROUND_CONTRAST {
+                ink += 1;
+            }
+        }
+    }
+    samples > 0 && (0.01..=0.50).contains(&(ink as f32 / samples as f32))
+}
+
+/// Detects a page surrounded by a contrasting background, of either polarity.
+/// Ambiguous candidates leave the original geometry untouched.
 #[must_use]
 pub fn detect_page_quad(gray: &GrayImage) -> Option<Quad> {
     let scale = (750.0 / gray.width().max(gray.height()) as f32).min(1.0);
@@ -191,51 +335,92 @@ pub fn detect_page_quad(gray: &GrayImage) -> Option<Quad> {
     let height = ((gray.height() as f32 * scale).round() as u32).max(1);
     let small = imageops::resize(gray, width, height, imageops::FilterType::Triangle);
     let smooth = box_filter(&small, 2, 2);
-    let whole = smooth.width() as f32 * smooth.height() as f32;
-    let mut best = None;
-    let mut best_score = 0.0;
-    for threshold in [110, 135, 155, 175, 195, 215] {
-        for contour in find_contours_with_threshold::<i32>(&smooth, threshold) {
-            if contour.parent.is_some() || contour.points.len() < 100 {
-                continue;
-            }
-            let points = contour
-                .points
-                .iter()
-                .map(|point| (point.x as f32, point.y as f32))
-                .collect();
-            let envelope = hull(points);
-            let area = polygon_area(&envelope);
-            if area < whole * 0.1 || area > whole * 0.94 {
-                continue;
-            }
-            let Some(quad) = reduce_quad(envelope) else {
-                continue;
-            };
-            let quad_area = polygon_area(&quad);
-            if quad_area / area < 0.86 {
-                continue;
-            }
-            let border_points = quad
-                .iter()
-                .filter(|point| {
-                    point.0 < 3.0
-                        || point.1 < 3.0
-                        || point.0 > smooth.width() as f32 - 4.0
-                        || point.1 > smooth.height() as f32 - 4.0
-                })
-                .count();
-            if border_points > 1 {
-                continue;
-            }
-            let score = quad_area * (quad_area / area).powi(3);
-            if score > best_score {
-                best_score = score;
-                best = Some(quad.map(|point| (point.0 / scale, point.1 / scale)));
+    let whole = width as f32 * height as f32;
+    let mut candidates: Vec<(Quad, f32)> = Vec::new();
+    let mut inverted = smooth.clone();
+    imageops::invert(&mut inverted);
+    for image in [&smooth, &inverted] {
+        for threshold in (70..=220).step_by(5) {
+            for contour in find_contours_with_threshold::<i32>(image, threshold) {
+                if contour.parent.is_some() || contour.points.len() < 60 {
+                    continue;
+                }
+                let envelope = hull(
+                    contour
+                        .points
+                        .iter()
+                        .map(|p| (p.x as f32, p.y as f32))
+                        .collect(),
+                );
+                let area = polygon_area(&envelope);
+                let Some(quad) = enclosing_quad(&envelope) else {
+                    continue;
+                };
+                if !plausible_geometry(quad, whole) || area / polygon_area(&quad) < 0.78 {
+                    continue;
+                }
+                if quad.iter().any(|p| {
+                    p.0 < 3.0 || p.1 < 3.0 || p.0 > width as f32 - 4.0 || p.1 > height as f32 - 4.0
+                }) {
+                    continue;
+                }
+                let supports: Option<Vec<_>> = (0..4)
+                    .map(|i| side_support(&small, quad[i], quad[(i + 1) % 4]))
+                    .collect();
+                let Some(supports) = supports else {
+                    continue;
+                };
+                if !has_page_ink(&small, quad) {
+                    continue;
+                }
+                let score = (area / whole).sqrt() * supports.iter().sum::<f32>() / 4.0
+                    * (area / polygon_area(&quad)).powi(3);
+                // Thresholds produce repeated contours of the same physical sheet.
+                // Cluster near-identical corners before measuring runner-up confidence.
+                let duplicate = candidates.iter_mut().find(|(existing, _)| {
+                    existing
+                        .iter()
+                        .zip(quad)
+                        .map(|(a, b)| side_length(*a, b))
+                        .sum::<f32>()
+                        / 4.0
+                        < width.max(height) as f32 * 0.04
+                });
+                if let Some(existing) = duplicate {
+                    if score > existing.1 {
+                        *existing = (quad, score);
+                    }
+                } else {
+                    candidates.push((quad, score));
+                }
             }
         }
     }
-    best
+    candidates.sort_by(|a, b| b.1.total_cmp(&a.1));
+    let (best, score) = candidates.first()?;
+    // A 15% lead over a distinct alternative is required to commit to a crop.
+    if candidates
+        .get(1)
+        .is_some_and(|(_, runner_up)| *score < runner_up * 1.15)
+    {
+        return None;
+    }
+    let quad = best.map(|p| (p.0 / scale, p.1 / scale));
+    // Bright source valleys add evidence of separate printed regions without
+    // treating dark carpet/wood texture as paper. The post-warp guard still
+    // checks all strokes, including dim text, in the selected region.
+    let ink = InkEstimate::from_image_with_floor(
+        gray,
+        high_page_level(gray).saturating_sub(PAGE_REFERENCE_TOLERANCE),
+    );
+    let minimum_tile_ink = ink
+        .count
+        .div_ceil(SOURCE_TILE_INK_FRACTION_DIVISOR)
+        .max(MIN_TILE_INK_PIXELS);
+    ink.retained_where(minimum_tile_ink, |x, y| {
+        (0..4).all(|i| cross(quad[i], quad[(i + 1) % 4], (x as f32, y as f32)) >= 0.0)
+    })
+    .then_some(quad)
 }
 
 /// Returns the clockwise angle of the page content in degrees.
@@ -416,17 +601,134 @@ fn rotate_centered(gray: &GrayImage, angle: f32) -> Result<RotatedImage, Unrecog
     Ok(RotatedImage { image: output })
 }
 
+// A text-like dark valley has lighter pixels on both sides of a narrow stroke.
+// Opposing samples exclude monotonic fold gradients and broad shaded interiors.
+fn stroke_contrast(gray: &GrayImage, x: u32, y: u32) -> u8 {
+    stroke_background(gray, x, y).saturating_sub(gray.get_pixel(x, y)[0])
+}
+
+fn stroke_background(gray: &GrayImage, x: u32, y: u32) -> u8 {
+    let mut background = 0;
+    for radius in [2, 4, 8] {
+        if x >= radius && x + radius < gray.width() {
+            background = background
+                .max(gray.get_pixel(x - radius, y)[0].min(gray.get_pixel(x + radius, y)[0]));
+        }
+        if y >= radius && y + radius < gray.height() {
+            background = background
+                .max(gray.get_pixel(x, y - radius)[0].min(gray.get_pixel(x, y + radius)[0]));
+        }
+    }
+    background
+}
+
+struct InkEstimate {
+    pixels: Vec<bool>,
+    count: usize,
+    width: u32,
+    height: u32,
+}
+
+impl InkEstimate {
+    fn from_image(source: &GrayImage) -> Self {
+        Self::from_image_with_floor(source, 0)
+    }
+
+    fn from_image_with_floor(source: &GrayImage, minimum_background: u8) -> Self {
+        let pixels: Vec<bool> = source
+            .enumerate_pixels()
+            .map(|(x, y, pixel)| {
+                let background = stroke_background(source, x, y);
+                background >= minimum_background
+                    && background.saturating_sub(pixel[0]) >= MIN_FOREGROUND_CONTRAST
+            })
+            .collect();
+        let count = pixels.iter().filter(|ink| **ink).count();
+        Self {
+            pixels,
+            count,
+            width: source.width(),
+            height: source.height(),
+        }
+    }
+
+    fn retained_in_bounds(
+        &self,
+        output: &GrayImage,
+        mode: CleanOutput,
+        bounds: ContentBox,
+    ) -> bool {
+        self.retained_where(MIN_TILE_INK_PIXELS, |x, y| {
+            if x < bounds.x
+                || y < bounds.y
+                || x >= bounds.x + bounds.width
+                || y >= bounds.y + bounds.height
+            {
+                return false;
+            }
+            match mode {
+                CleanOutput::Binary => output.get_pixel(x, y)[0] == 0,
+                CleanOutput::Grayscale => stroke_contrast(output, x, y) >= MIN_FOREGROUND_CONTRAST,
+            }
+        })
+    }
+
+    fn retained_where(
+        &self,
+        minimum_tile_ink: usize,
+        preserved: impl Fn(u32, u32) -> bool,
+    ) -> bool {
+        let mut source_tiles = [0_usize; (INK_TILE_SIDE * INK_TILE_SIDE) as usize];
+        let mut retained_tiles = [0_usize; (INK_TILE_SIDE * INK_TILE_SIDE) as usize];
+        let mut retained = 0_usize;
+        for (index, ink) in self.pixels.iter().enumerate() {
+            if !*ink {
+                continue;
+            }
+            let x = (index % self.width as usize) as u32;
+            let y = (index / self.width as usize) as u32;
+            let tile = ((y * INK_TILE_SIDE / self.height) * INK_TILE_SIDE
+                + x * INK_TILE_SIDE / self.width) as usize;
+            source_tiles[tile] += 1;
+            if preserved(x, y) {
+                retained += 1;
+                retained_tiles[tile] += 1;
+            }
+        }
+        retained * 100 >= self.count * MIN_INK_RETENTION_PERCENT
+            && source_tiles
+                .iter()
+                .zip(retained_tiles)
+                .all(|(source, retained)| {
+                    *source < minimum_tile_ink
+                        || retained * 100 >= source * MIN_INK_RETENTION_PERCENT
+                })
+    }
+
+    fn retained_in(&self, output: &GrayImage, mode: CleanOutput) -> bool {
+        let bounds = ContentBox {
+            x: 0,
+            y: 0,
+            width: output.width(),
+            height: output.height(),
+        };
+        self.retained_in_bounds(output, mode, bounds)
+    }
+}
+
+#[cfg(test)]
+fn retains_ink(source: &GrayImage, output: &GrayImage, mode: CleanOutput) -> bool {
+    InkEstimate::from_image(source).retained_in(output, mode)
+}
+
 fn threshold_document(flattened: &GrayImage) -> Result<GrayImage, UnrecognizedReason> {
     let local_mean = box_filter_scaled(flattened, 20)?;
-    let absolute_threshold = page_background(flattened).saturating_sub(MIN_FOREGROUND_CONTRAST);
     let mut output = bounded_image(flattened.width(), flattened.height(), 0)?;
     for (x, y, pixel) in output.enumerate_pixels_mut() {
-        // Local contrast preserves fine strokes; the page-background threshold also preserves
-        // solid marks whose interior has no local contrast.
         let value = flattened.get_pixel(x, y)[0];
         let foreground = i32::from(value)
             < i32::from(local_mean.get_pixel(x, y)[0]) - ADAPTIVE_THRESHOLD_OFFSET
-            || value <= absolute_threshold;
+            && stroke_contrast(flattened, x, y) >= MIN_FOREGROUND_CONTRAST;
         *pixel = Luma([if foreground { 0 } else { 255 }]);
     }
     Ok(output)
@@ -751,6 +1053,7 @@ pub fn clean_scan(
         RotatedImage { image: rectified }
     };
     let straight = rotated.image;
+    let ink = InkEstimate::from_image(&straight);
     let background = flattening_background(&straight)?;
     let mut flattened = bounded_image(straight.width(), straight.height(), 0)?;
     for (x, y, pixel) in flattened.enumerate_pixels_mut() {
@@ -759,13 +1062,40 @@ pub fn clean_scan(
         let base = f32::from(background.get_pixel(x, y)[0].max(1));
         *pixel = Luma([(value * 245.0 / base).min(255.0).round() as u8]);
     }
-    let binary = threshold_document(&flattened)?;
-    let content = content_bounds(&binary, options.dpi).ok_or(UnrecognizedReason::NoContent)?;
+    if !ink.retained_in(&flattened, CleanOutput::Grayscale) {
+        flattened = straight.clone();
+    }
+    let mut binary = threshold_document(&flattened)?;
+    if !ink.retained_in(&binary, CleanOutput::Binary) {
+        binary = threshold_document(&straight)?;
+    }
+    if options.output == CleanOutput::Binary && !ink.retained_in(&binary, CleanOutput::Binary) {
+        return Err(UnrecognizedReason::ContentLoss);
+    }
+    let binary_content = content_bounds(&binary, options.dpi);
+    let content = match (binary_content, options.output) {
+        (Some(content), _) => content,
+        (None, CleanOutput::Binary) => return Err(UnrecognizedReason::NoContent),
+        (None, CleanOutput::Grayscale) => {
+            // Grayscale also represents solid illustrations, which deliberately have no binary
+            // stroke mask. Use absolute foreground only for bounds of this preserved output.
+            let threshold = page_background(&flattened).saturating_sub(MIN_FOREGROUND_CONTRAST);
+            let mut mask = bounded_image(flattened.width(), flattened.height(), 255)?;
+            for (x, y, pixel) in mask.enumerate_pixels_mut() {
+                *pixel = Luma([if flattened.get_pixel(x, y)[0] <= threshold {
+                    0
+                } else {
+                    255
+                }]);
+            }
+            content_bounds(&mask, options.dpi).ok_or(UnrecognizedReason::NoContent)?
+        }
+    };
     let selected = match options.output {
         CleanOutput::Grayscale => flattened,
         CleanOutput::Binary => binary,
     };
-    if !options.content_crop {
+    if !options.content_crop || applied_quad.is_none() {
         return Ok(CleanedScan {
             image: selected,
             applied_quad,
@@ -786,6 +1116,20 @@ pub fn clean_scan(
         .saturating_add(content.height)
         .saturating_add(padding)
         .min(selected.height());
+    let crop_bounds = ContentBox {
+        x,
+        y,
+        width: right - x,
+        height: bottom - y,
+    };
+    if !ink.retained_in_bounds(&selected, options.output, crop_bounds) {
+        return Ok(CleanedScan {
+            image: selected,
+            applied_quad,
+            skew_degrees,
+            content_box: content,
+        });
+    }
     let image = imageops::crop_imm(&selected, x, y, right - x, bottom - y).to_image();
     Ok(CleanedScan {
         image,
@@ -828,3 +1172,6 @@ mod property_tests;
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod preservation_tests;
