@@ -16,6 +16,7 @@ const requestBody = t.Object({
 });
 
 const config = {
+  contract: "patch",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.accountControl,
   realtime: sharepointRealtimeUpdates,

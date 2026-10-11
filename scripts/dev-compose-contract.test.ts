@@ -84,7 +84,7 @@ describe("local compose services", () => {
         new URL("../docker/postgres/Dockerfile.dockerignore", import.meta.url),
       ).text(),
     ).toBe(
-      "*\n!docker/\ndocker/*\n!docker/postgres/\ndocker/postgres/*\n!docker/postgres/Dockerfile\n!docker/postgres/init.sql\n",
+      "*\n!docker/\ndocker/*\n!docker/postgres/\ndocker/postgres/*\n!docker/postgres/Dockerfile\n!docker/postgres/init.sql\n!docker/postgres/prod-parity.conf\n!docker/postgres/server.conf\n",
     );
   });
 

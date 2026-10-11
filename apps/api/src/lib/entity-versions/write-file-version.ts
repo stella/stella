@@ -15,6 +15,10 @@ import {
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  withAggregateParentBatch,
+  withAggregateRowQuery,
+} from "@/api/lib/db/aggregate-lock";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import type { DocumentSource } from "@/api/lib/document-source";
 import {
@@ -248,6 +252,44 @@ const replayExistingComparisonVersion = async ({
   };
 };
 
+type LockFileVersionParentsOptions = Pick<
+  WriteFileVersionInput,
+  "tx" | "organizationId" | "workspaceId"
+> & { mode: "key share" | "update" };
+
+const lockFileVersionParents = async ({
+  tx,
+  organizationId,
+  workspaceId,
+  mode,
+}: LockFileVersionParentsOptions) => {
+  if (mode === "key share") {
+    await withAggregateParentBatch({
+      tx,
+      organizationIds: [],
+      workspaceIds: [workspaceId],
+      mode,
+    });
+    return null;
+  }
+  const workspaceLock = await withAggregateRowQuery({
+    tx,
+    aggregate: "workspace",
+    id: { id: workspaceId, organizationId },
+    mode: "update",
+    select: (lockTx) =>
+      lockTx
+        .select({
+          id: workspaces.id,
+          organizationId: workspaces.organizationId,
+          reference: workspaces.reference,
+          status: workspaces.status,
+        })
+        .from(workspaces),
+  });
+  return workspaceLock.rows.at(0) ?? null;
+};
+
 /**
  * Canonical transaction for writing an entity file version.
  *
@@ -277,6 +319,17 @@ export const writeFileVersion = async ({
   writePolicy,
   afterWrite,
 }: WriteFileVersionInput): Promise<WriteFileVersionResult> => {
+  const locksFileProperty =
+    writePolicy.type === "automatic-docx-edit" ||
+    writePolicy.type === "collaboration-room-publish" ||
+    writePolicy.type === "pdf-signature";
+  const lockedWorkspace = await lockFileVersionParents({
+    tx,
+    organizationId,
+    workspaceId,
+    mode: locksFileProperty ? "update" : "key share",
+  });
+
   switch (writePolicy.type) {
     case "replace-current-file": {
       break;
@@ -335,40 +388,30 @@ export const writeFileVersion = async ({
     }
   }
 
-  const locksFileProperty =
-    writePolicy.type === "automatic-docx-edit" ||
-    writePolicy.type === "collaboration-room-publish" ||
-    writePolicy.type === "pdf-signature";
   const targetsFileProperty =
     locksFileProperty ||
     writePolicy.type === "append-derived-file-from-version";
-  const lockedWorkspace = locksFileProperty
-    ? await tx
-        .select({ reference: workspaces.reference, status: workspaces.status })
-        .from(workspaces)
-        .where(eq(workspaces.id, workspaceId))
-        .limit(1)
-        .for("update")
-        .then((rows) => rows.at(0))
-    : null;
   if (locksFileProperty && lockedWorkspace?.status !== "active") {
     return { status: "workspace-not-active" };
   }
-
-  const entityRows = await tx
-    .select({
-      currentVersionId: entities.currentVersionId,
-      docSequence: entities.docSequence,
-      kind: entities.kind,
-      readOnly: entities.readOnly,
-    })
-    .from(entities)
-    .where(
-      and(eq(entities.id, entityId), eq(entities.workspaceId, workspaceId)),
-    )
-    .limit(1)
-    .for("update");
-  const lockedEntity = entityRows.at(0);
+  const entityLock = await withAggregateRowQuery({
+    tx,
+    aggregate: "entity",
+    id: { id: entityId, workspaceId },
+    mode: "update",
+    select: (lockTx) =>
+      lockTx
+        .select({
+          id: entities.id,
+          workspaceId: entities.workspaceId,
+          currentVersionId: entities.currentVersionId,
+          docSequence: entities.docSequence,
+          kind: entities.kind,
+          readOnly: entities.readOnly,
+        })
+        .from(entities),
+  });
+  const lockedEntity = entityLock.rows.at(0);
 
   if (!lockedEntity?.currentVersionId) {
     return { status: "entity-not-found" };

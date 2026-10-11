@@ -31,6 +31,8 @@ const PUBLIC_SUBJECT_MODULE =
 type SafeHandlerScope = {
   kind: HandlerKind;
   context: HandlerContextTrust;
+  /** Whether the factory accepts its config directly or inside an options object. */
+  configArgument: "direct" | "options";
   /** The import specifier that defines the factory; a same-named import from elsewhere is not it. */
   module: typeof API_HANDLERS_MODULE | typeof PUBLIC_SUBJECT_MODULE;
 };
@@ -40,46 +42,55 @@ export const SAFE_HANDLER_FACTORIES = {
     kind: "workspace",
     context: "authenticated",
     module: API_HANDLERS_MODULE,
+    configArgument: "direct",
   },
   createSafeRootHandler: {
     kind: "root",
     context: "authenticated",
     module: API_HANDLERS_MODULE,
+    configArgument: "direct",
   },
   createSafeSessionHandler: {
     kind: "session",
     context: "authenticated",
     module: API_HANDLERS_MODULE,
+    configArgument: "direct",
   },
   createSafeTokenHandler: {
     kind: "token",
     context: "self-authorized",
     module: API_HANDLERS_MODULE,
+    configArgument: "direct",
   },
   createSafePublicHandler: {
     kind: "public",
     context: "anonymous",
     module: API_HANDLERS_MODULE,
+    configArgument: "direct",
   },
   createSafeBoundedPublicHandler: {
     kind: "public",
     context: "anonymous",
     module: API_HANDLERS_MODULE,
+    configArgument: "direct",
   },
   createSafeUncheckedBoundedPublicHandler: {
     kind: "public",
     context: "anonymous",
     module: API_HANDLERS_MODULE,
+    configArgument: "direct",
   },
   createSafePublicSubjectHandler: {
     kind: "public",
     context: "anonymous",
     module: PUBLIC_SUBJECT_MODULE,
+    configArgument: "options",
   },
   createSafePublicSubjectFollowUpHandler: {
     kind: "public",
     context: "anonymous",
     module: PUBLIC_SUBJECT_MODULE,
+    configArgument: "options",
   },
 } as const satisfies Record<`createSafe${string}Handler`, SafeHandlerScope>;
 
