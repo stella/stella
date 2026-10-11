@@ -364,6 +364,29 @@ context("test registration census", () => {
     15_000,
   );
 
+  check("credits a file collected only by a later runner", () => {
+    for (const scripts of [
+      { test: "bun test src/unit && bun test src/integration" },
+      {
+        test: "bun run test:unit && bun run test:integration",
+        "test:unit": "bun test src/unit",
+        "test:integration": "bun test src/integration",
+      },
+    ]) {
+      const failure = (candidate: string) =>
+        packageTestCollectionFailure({
+          candidate,
+          packageDirectory: "packages/fixture",
+          scripts,
+        });
+      expect(failure("packages/fixture/src/unit/a.test.ts")).toBeUndefined();
+      expect(
+        failure("packages/fixture/src/integration/b.test.ts"),
+      ).toBeUndefined();
+      expect(failure("packages/fixture/src/other/c.test.ts")).toBeDefined();
+    }
+  });
+
   check("rejects a collectable package absent from gating jobs", () => {
     const scripts = { test: "bun test" };
     expect(

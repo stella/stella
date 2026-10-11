@@ -1052,6 +1052,25 @@ type PackageTestCollectionOptions = {
   readonly visited?: ReadonlySet<string>;
 };
 
+const testWrapperCollectionFailure = (
+  packageDirectory: string,
+  candidate: string,
+): string | undefined => {
+  if (packageDirectory === "apps/api") {
+    return ["src", "evals", "scripts"].some((root) =>
+      candidate.startsWith(`${packageDirectory}/${root}/`),
+    )
+      ? undefined
+      : "runner glob: API wrapper does not collect the file";
+  }
+  if (packageDirectory === "apps/web") {
+    return /\.test\.[cm]?[jt]sx?$/u.test(candidate)
+      ? undefined
+      : "runner glob: web wrapper does not collect the file";
+  }
+  return "runner command: unrecognized test wrapper";
+};
+
 export const packageTestCollectionFailure = ({
   forwardedArguments = [],
   candidate,
@@ -1069,6 +1088,9 @@ export const packageTestCollectionFailure = ({
   }
   const normalizedCommand = command.replaceAll(/\\\r?\n/gu, " ");
   const words = shellWords(normalizedCommand, "include");
+  // Every gating runner in the script counts: the file is collected when any
+  // of them collects it, and the first failure is reported only when none do.
+  let firstFailure: string | undefined;
   for (let index = 0; index < words.length; index += 1) {
     if (
       words[index] !== "bun" ||
@@ -1085,7 +1107,7 @@ export const packageTestCollectionFailure = ({
       const boundary = remaining.findIndex((word) => SHELL_OPERATORS.has(word));
       const delegatedArguments =
         boundary === -1 ? remaining : remaining.slice(0, boundary);
-      return packageTestCollectionFailure({
+      const delegatedFailure = packageTestCollectionFailure({
         candidate,
         packageDirectory,
         scriptName: delegatedScript,
@@ -1098,6 +1120,11 @@ export const packageTestCollectionFailure = ({
         ],
         visited: new Set([...visited, scriptName]),
       });
+      if (delegatedFailure === undefined) {
+        return undefined;
+      }
+      firstFailure ??= delegatedFailure;
+      continue;
     }
     if (words[index + 1]?.endsWith("scripts/run-tests.ts")) {
       const remaining = words.slice(index + 2);
@@ -1109,22 +1136,13 @@ export const packageTestCollectionFailure = ({
           ...(boundary === -1 ? forwardedArguments : []),
         ],
       );
-      if (failure !== undefined) {
-        return failure;
+      const wrapperFailure =
+        failure ?? testWrapperCollectionFailure(packageDirectory, candidate);
+      if (wrapperFailure === undefined) {
+        return undefined;
       }
-      if (packageDirectory === "apps/api") {
-        return ["src", "evals", "scripts"].some((root) =>
-          candidate.startsWith(`${packageDirectory}/${root}/`),
-        )
-          ? undefined
-          : "runner glob: API wrapper does not collect the file";
-      }
-      if (packageDirectory === "apps/web") {
-        return /\.test\.[cm]?[jt]sx?$/u.test(candidate)
-          ? undefined
-          : "runner glob: web wrapper does not collect the file";
-      }
-      return "runner command: unrecognized test wrapper";
+      firstFailure ??= wrapperFailure;
+      continue;
     }
     if (words[index + 1] !== "test") {
       continue;
@@ -1140,9 +1158,12 @@ export const packageTestCollectionFailure = ({
     if (failure === undefined) {
       return undefined;
     }
-    return failure;
+    firstFailure ??= failure;
   }
-  return "runner command: test script does not invoke a gating test runner";
+  return (
+    firstFailure ??
+    "runner command: test script does not invoke a gating test runner"
+  );
 };
 
 const isTypeScriptTest = (file: string): boolean =>
