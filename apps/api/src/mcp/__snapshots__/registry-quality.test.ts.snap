@@ -1355,7 +1355,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Resolve a case-law citation is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions. Returns the legal resolve API envelope: resolved carries decisionId, readerUrl and readable, licence-withheld or unavailable text. Readable text has extent complete or partial; for partial call read_case_law_decision with decisionId to continue, or open readerUrl. Ambiguous lists candidates without choosing; open only an explicitly chosen readerUrl. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason: use search_case_law. Country_unavailable means no resolver: use case_law_coverage. Add missing stella:search for search or stella:read for the reader and coverage through OAuth consent before recovery calls.",
+    "description": "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions. Returns the legal resolve API envelope: resolved carries decisionId, readerUrl and readable, licence-withheld or unavailable text. Readable text has extent complete or partial; for partial call read_case_law_decision with decisionId to continue, or open readerUrl. Ambiguous lists candidates without choosing; open only an explicitly chosen readerUrl. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason: use search_case_law. Country_unavailable: unrecognized or unsupported country; use case_law_coverage. Add missing stella:search for search or stella:read for the reader and coverage through OAuth consent before recovery calls.",
     "annotations": {
       "title": "Resolve a case-law citation",
       "destructiveHint": false,
@@ -1373,7 +1373,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Country of the deciding court; alpha-2, alpha-3 or country name. Unsupported countries return country_unavailable; unrecognized country text returns not_found. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Country of the deciding court; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
             "kind": "country",
             "country": {
@@ -1401,7 +1401,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Resolve a statute provision is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve one statute provision from a citation or structured gazette identity and section. Supports Czech statutes; other countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.",
+    "description": "Resolve one statute provision from a citation or structured gazette identity and section. Supports Czech statutes; unrecognized or unsupported countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.",
     "annotations": {
       "title": "Resolve a statute provision",
       "destructiveHint": false,
@@ -1420,7 +1420,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Country of the cited law; alpha-2, alpha-3 or country name. Unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Country of the cited law; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
             "kind": "country",
             "country": {
@@ -7823,7 +7823,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Resolve a case-law citation is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions. Returns the legal resolve API envelope: resolved carries decisionId, readerUrl and readable, licence-withheld or unavailable text. Readable text has extent complete or partial; for partial call read_case_law_decision with decisionId to continue, or open readerUrl. Ambiguous lists candidates without choosing; open only an explicitly chosen readerUrl. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason: use search_case_law. Country_unavailable means no resolver: use case_law_coverage. Add missing stella:search for search or stella:read for the reader and coverage through OAuth consent before recovery calls.",
+    "description": "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions. Returns the legal resolve API envelope: resolved carries decisionId, readerUrl and readable, licence-withheld or unavailable text. Readable text has extent complete or partial; for partial call read_case_law_decision with decisionId to continue, or open readerUrl. Ambiguous lists candidates without choosing; open only an explicitly chosen readerUrl. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason: use search_case_law. Country_unavailable: unrecognized or unsupported country; use case_law_coverage. Add missing stella:search for search or stella:read for the reader and coverage through OAuth consent before recovery calls.",
     "annotations": {
       "title": "Resolve a case-law citation",
       "destructiveHint": false,
@@ -7841,7 +7841,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Country of the deciding court; alpha-2, alpha-3 or country name. Unsupported countries return country_unavailable; unrecognized country text returns not_found. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Country of the deciding court; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
             "kind": "country",
             "country": {
@@ -7869,7 +7869,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Resolve a statute provision is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve one statute provision from a citation or structured gazette identity and section. Supports Czech statutes; other countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.",
+    "description": "Resolve one statute provision from a citation or structured gazette identity and section. Supports Czech statutes; unrecognized or unsupported countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.",
     "annotations": {
       "title": "Resolve a statute provision",
       "destructiveHint": false,
@@ -7888,7 +7888,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Country of the cited law; alpha-2, alpha-3 or country name. Unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Country of the cited law; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
             "kind": "country",
             "country": {
@@ -14763,7 +14763,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Resolve a case-law citation is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions. Returns the legal resolve API envelope: resolved carries decisionId, readerUrl and readable, licence-withheld or unavailable text. Readable text has extent complete or partial; for partial call read_case_law_decision with decisionId to continue, or open readerUrl. Ambiguous lists candidates without choosing; open only an explicitly chosen readerUrl. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason: use search_case_law. Country_unavailable means no resolver: use case_law_coverage. Add missing stella:search for search or stella:read for the reader and coverage through OAuth consent before recovery calls.",
+    "description": "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions. Returns the legal resolve API envelope: resolved carries decisionId, readerUrl and readable, licence-withheld or unavailable text. Readable text has extent complete or partial; for partial call read_case_law_decision with decisionId to continue, or open readerUrl. Ambiguous lists candidates without choosing; open only an explicitly chosen readerUrl. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason: use search_case_law. Country_unavailable: unrecognized or unsupported country; use case_law_coverage. Add missing stella:search for search or stella:read for the reader and coverage through OAuth consent before recovery calls.",
     "annotations": {
       "title": "Resolve a case-law citation",
       "destructiveHint": false,
@@ -14781,7 +14781,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Country of the deciding court; alpha-2, alpha-3 or country name. Unsupported countries return country_unavailable; unrecognized country text returns not_found. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Country of the deciding court; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
             "kind": "country",
             "country": {
@@ -14809,7 +14809,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Resolve a statute provision is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve one statute provision from a citation or structured gazette identity and section. Supports Czech statutes; other countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.",
+    "description": "Resolve one statute provision from a citation or structured gazette identity and section. Supports Czech statutes; unrecognized or unsupported countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.",
     "annotations": {
       "title": "Resolve a statute provision",
       "destructiveHint": false,
@@ -14828,7 +14828,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Country of the cited law; alpha-2, alpha-3 or country name. Unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Country of the cited law; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
             "kind": "country",
             "country": {
@@ -16657,7 +16657,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Resolve a case-law citation is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions. Returns the legal resolve API envelope: resolved carries decisionId, readerUrl and readable, licence-withheld or unavailable text. Readable text has extent complete or partial; for partial call read_case_law_decision with decisionId to continue, or open readerUrl. Ambiguous lists candidates without choosing; open only an explicitly chosen readerUrl. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason: use search_case_law. Country_unavailable means no resolver: use case_law_coverage. Add missing stella:search for search or stella:read for the reader and coverage through OAuth consent before recovery calls.",
+    "description": "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions. Returns the legal resolve API envelope: resolved carries decisionId, readerUrl and readable, licence-withheld or unavailable text. Readable text has extent complete or partial; for partial call read_case_law_decision with decisionId to continue, or open readerUrl. Ambiguous lists candidates without choosing; open only an explicitly chosen readerUrl. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason: use search_case_law. Country_unavailable: unrecognized or unsupported country; use case_law_coverage. Add missing stella:search for search or stella:read for the reader and coverage through OAuth consent before recovery calls.",
     "annotations": {
       "title": "Resolve a case-law citation",
       "destructiveHint": false,
@@ -16675,7 +16675,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Country of the deciding court; alpha-2, alpha-3 or country name. Unsupported countries return country_unavailable; unrecognized country text returns not_found. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Country of the deciding court; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
             "kind": "country",
             "country": {
@@ -16703,7 +16703,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Resolve a statute provision is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve one statute provision from a citation or structured gazette identity and section. Supports Czech statutes; other countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.",
+    "description": "Resolve one statute provision from a citation or structured gazette identity and section. Supports Czech statutes; unrecognized or unsupported countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.",
     "annotations": {
       "title": "Resolve a statute provision",
       "destructiveHint": false,
@@ -16722,7 +16722,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Country of the cited law; alpha-2, alpha-3 or country name. Unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Country of the cited law; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
             "kind": "country",
             "country": {
