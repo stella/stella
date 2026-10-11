@@ -836,10 +836,10 @@ describe("case captions", () => {
             readingOf([
               paragraph(
                 "p",
-                `En el caso ${particle} ${party} v. Arbor, 137 N.Y. 246. ${party} v. Arbor, 137 N.Y.,246.`,
+                `En el caso ${particle} ${party} v. Qorvix, 9137 N.Y. 9246. ${party} v. Qorvix, 9137 N.Y.,9246.`,
               ),
             ]).occurrences.map((reading) => reading.at(2)),
-          ).toEqual([["137 N.Y. 246"], ["137 N.Y. 246"]]);
+          ).toEqual([["9137 N.Y. 9246"], ["9137 N.Y. 9246"]]);
         },
       ),
       config(30),
@@ -847,11 +847,12 @@ describe("case captions", () => {
   });
 
   test("surname particles remain part of distinct party names", () => {
+    // Re exercises the grammatical-word boundary; Zulnax is a fictional party.
     expect(
       readingOf([
         paragraph(
           "p",
-          "de Re v. Birch, 137 N.Y. 246. Re v. Birch, 137 N.Y. 246.",
+          "de Re v. Zulnax, 9137 N.Y. 9246. Re v. Zulnax, 9137 N.Y. 9246.",
         ),
       ]).occurrences.map((reading) => reading.at(2)),
     ).toEqual(["conflicting-parallels", "conflicting-parallels"]);

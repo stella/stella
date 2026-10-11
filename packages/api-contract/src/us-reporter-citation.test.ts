@@ -15,13 +15,13 @@ const pinsOf = (text: string) => {
 
 describe("full citations", () => {
   test("a comma can separate a reporter from its first page", () => {
-    for (const text of ["8 U.S., 229", "8 U.S.,229", "8 U.S. , 229"]) {
-      expect(canonicalUsReporterCitation(text)).toBe("8 U.S. 229");
+    for (const text of ["987 U.S., 9229", "987 U.S.,9229", "987 U.S. , 9229"]) {
+      expect(canonicalUsReporterCitation(text)).toBe("987 U.S. 9229");
     }
-    expect(parseUsReporterReference("8 Cranch,229")?.type).toBe("full");
-    expect(canonicalUsReporterCitation("8 Cranch,229")).toBeNull();
-    expect(canonicalUsReporterCitation("8 Cranch, at 229")).toBeNull();
-    expect(parseUsReporterReference("8 Cranch, at 229")?.type).toBe("short");
+    expect(parseUsReporterReference("987 Cranch,9229")?.type).toBe("full");
+    expect(canonicalUsReporterCitation("987 Cranch,9229")).toBeNull();
+    expect(canonicalUsReporterCitation("987 Cranch, at 9229")).toBeNull();
+    expect(parseUsReporterReference("987 Cranch, at 9229")?.type).toBe("short");
   });
   test("volume, reporter and first page are the identity", () => {
     expect(parseUsReporterReference("347 U.S. 483")).toEqual({

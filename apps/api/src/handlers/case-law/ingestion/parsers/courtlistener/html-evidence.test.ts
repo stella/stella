@@ -5,16 +5,16 @@ import { opinionRow } from "@/api/handlers/case-law/ingestion/adapters/courtlist
 import { composeCourtListenerText } from "./compose";
 
 for (const citationMarkup of [
-  "<cross_reference>123 U.S. 456</cross_reference>",
-  '<cross_reference><span class="citation"><a href="/opinion/example/">123 U.S. 456</a></span></cross_reference>',
-  "<em><cross_reference>123 U.S. 456</cross_reference></em>",
+  "<cross_reference>9123 U.S. 9456</cross_reference>",
+  '<cross_reference><span class="citation"><a href="/opinion/example/">9123 U.S. 9456</a></span></cross_reference>',
+  "<em><cross_reference>9123 U.S. 9456</cross_reference></em>",
 ]) {
   test(`citation links alone do not prove HTML note boundaries: ${citationMarkup}`, () => {
     const result = composeCourtListenerText([
       {
         row: opinionRow({
           xml_harvard: "",
-          html_with_citations: `<p>We follow ${citationMarkup}.</p><p>Id. at 460.</p><p>NOTE. See ${citationMarkup}.</p>`,
+          html_with_citations: `<p>We follow ${citationMarkup}.</p><p>Id. at 9460.</p><p>NOTE. See ${citationMarkup}.</p>`,
         }),
         type: "020lead",
       },
@@ -23,9 +23,9 @@ for (const citationMarkup of [
       throw new TypeError(`expected parsed: ${result.status}`);
     }
     expect(result.blocks.map(({ plainText }) => plainText)).toEqual([
-      "We follow 123 U.S. 456.",
-      "Id. at 460.",
-      "NOTE. See 123 U.S. 456.",
+      "We follow 9123 U.S. 9456.",
+      "Id. at 9460.",
+      "NOTE. See 9123 U.S. 9456.",
     ]);
     expect(result.citationScopes).toHaveLength(3);
     expect(

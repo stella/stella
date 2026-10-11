@@ -11,14 +11,14 @@ const scan = (text: string, budget: CitationWorkBudget) =>
 
 test("table-supported typography names the same reporter citation", () => {
   const cases = [
-    ["137 F3d 246", "137 F.3d 246"],
-    ["137 F.Supp.3D 246", "137 F. Supp. 3d 246"],
-    ["137 NW2d 246", "137 N.W.2d 246"],
-    ["137 P.[2nd] 246", "137 P.2d 246"],
-    ["137 S.W.,SecondSeries, 246", "137 S.W.2d 246"],
-    ["137   U.\n  S.\t 246", "137 U.S. 246"],
-    ["8 U.S., 229", "8 U.S. 229"],
-    ["8 U.S.,229", "8 U.S. 229"],
+    ["9137 F3d 9246", "9137 F.3d 9246"],
+    ["9137 F.Supp.3D 9246", "9137 F. Supp. 3d 9246"],
+    ["9137 NW2d 9246", "9137 N.W.2d 9246"],
+    ["9137 P.[2nd] 9246", "9137 P.2d 9246"],
+    ["9137 S.W.,SecondSeries, 9246", "9137 S.W.2d 9246"],
+    ["9137   U.\n  S.\t 9246", "9137 U.S. 9246"],
+    ["987 U.S., 9229", "987 U.S. 9229"],
+    ["987 U.S.,9229", "987 U.S. 9229"],
   ] as const;
   for (const [text, canonical] of cases) {
     const result = scan(text, { limit: 10_000, spent: 0 });
@@ -36,7 +36,7 @@ test("table-supported typography names the same reporter citation", () => {
 });
 
 test("a page delimiter keeps an ambiguous reporter unresolved", () => {
-  const result = scan("8 Cranch,229", { limit: 10_000, spent: 0 });
+  const result = scan("987 Cranch,9229", { limit: 10_000, spent: 0 });
   if (Result.isError(result)) {
     throw result.error;
   }
@@ -51,12 +51,12 @@ test("a page delimiter keeps an ambiguous reporter unresolved", () => {
 
 test("a next reference volume never becomes a missing first page", () => {
   const cases = [
-    ["137 F.2d 246 F.2d 975", ["246 F.2d 975"]],
-    ["319 U.S., 8 U.S. (8 Cranch) 229", ["8 U.S. 229"]],
-    ["137 S.W. 246 S.Ct. 2017", ["246 S. Ct. 2017"]],
-    ["137 S.W.3d 137 S.W.3d 975", ["137 S.W.3d 975"]],
-    ["_ U.S. _, 137 S.Ct. 246 L.Ed.2d 975", ["246 L. Ed. 2d 975"]],
-    ["137 U.S.\n246 S.Ct. at 975", []],
+    ["9137 F.2d 9246 F.2d 9975", ["9246 F.2d 9975"]],
+    ["9319 U.S., 987 U.S. (987 Cranch) 9229", ["987 U.S. 9229"]],
+    ["9137 S.W. 9246 S.Ct. 9017", ["9246 S. Ct. 9017"]],
+    ["9137 S.W.3d 9137 S.W.3d 9975", ["9137 S.W.3d 9975"]],
+    ["_ U.S. _, 9137 S.Ct. 9246 L.Ed.2d 9975", ["9246 L. Ed. 2d 9975"]],
+    ["9137 U.S.\n9246 S.Ct. at 9975", []],
   ] as const;
   for (const [text, expected] of cases) {
     const result = scan(text, { limit: 10_000, spent: 0 });
@@ -74,7 +74,7 @@ test("a next reference volume never becomes a missing first page", () => {
 });
 
 test("an ambiguous next reporter volume is never a pin", () => {
-  const result = scan("137 U.S. 246, 8 Cranch at 975", {
+  const result = scan("9137 U.S. 9246, 987 Cranch at 9975", {
     limit: 10_000,
     spent: 0,
   });
@@ -96,7 +96,7 @@ test("an ambiguous next reporter volume is never a pin", () => {
 });
 
 test("case-folded footnote pins retain their note kind", () => {
-  const result = scan("137 F3d 246, 247 N. 8", {
+  const result = scan("9137 F3d 9246, 9247 N. 87", {
     limit: 10_000,
     spent: 0,
   });
@@ -112,10 +112,10 @@ test("case-folded footnote pins retain their note kind", () => {
   ).toEqual([
     {
       type: "pin",
-      raw: "247 N. 8",
+      raw: "9247 N. 87",
       parts: [
-        { kind: "page", start: "247" },
-        { kind: "footnote", start: "8" },
+        { kind: "page", start: "9247" },
+        { kind: "footnote", start: "87" },
       ],
     },
   ]);
