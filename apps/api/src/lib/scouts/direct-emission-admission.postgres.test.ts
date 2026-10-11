@@ -12,13 +12,16 @@ import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import { abortableTx } from "@/api/db/safe-db";
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import { abortableTx, safeDbFromScoped } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   documentProcessingRuns,
   documentReviewFindings,
   documentReviewRuns,
   entities,
+  entityVersions,
+  fields,
+  properties,
   featureEnrolments,
   pendingScoutEmissions,
   scoutRuns,
@@ -42,6 +45,7 @@ import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
@@ -50,6 +54,8 @@ import {
 } from "./document-review";
 import { emitInfoSoudHearingSignals } from "./infosoud-hearings";
 import type { HearingRecord } from "./infosoud-hearings.logic";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const NOW = new Date("2030-01-01T12:00:00.000Z");
@@ -121,6 +127,27 @@ const fixtureFor = async (db: GatedTestDb) => {
     workspaceId,
     name: "review.pdf",
     createdBy: userId,
+  });
+  await db.insert(entityVersions).values({
+    id: entityVersionId,
+    workspaceId,
+    entityId,
+  });
+  const propertyId = createSafeId<"property">();
+  await db.insert(properties).values({
+    id: propertyId,
+    workspaceId,
+    name: "Source file",
+    status: "fresh",
+    content: { type: "file", version: 1 },
+    tool: { type: "manual-input", version: 1 },
+  });
+  await db.insert(fields).values({
+    id: fileFieldId,
+    workspaceId,
+    entityVersionId,
+    propertyId,
+    content: { type: "pending", version: 1 },
   });
   await db.insert(documentReviewRuns).values({
     id: runId,
@@ -226,8 +253,8 @@ describe.skipIf(!enabled)(
         const previous = env.FEATURE_SIGNALS;
         const previousScouts = env.FEATURE_INBOX_DOCUMENT_SCOUTS;
         const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-        env.FEATURE_SIGNALS = true;
-        env.FEATURE_INBOX_DOCUMENT_SCOUTS = true;
+        testState.setConfig("FEATURE_SIGNALS", true);
+        testState.setConfig("FEATURE_INBOX_DOCUMENT_SCOUTS", true);
         try {
           await withGatedTestClients(
             process.env["DATABASE_URL"] ?? panic("Missing PostgreSQL test URL"),
@@ -385,8 +412,8 @@ describe.skipIf(!enabled)(
             },
           );
         } finally {
-          env.FEATURE_SIGNALS = previous;
-          env.FEATURE_INBOX_DOCUMENT_SCOUTS = previousScouts;
+          testState.setConfig("FEATURE_SIGNALS", previous);
+          testState.setConfig("FEATURE_INBOX_DOCUMENT_SCOUTS", previousScouts);
           restore();
         }
       });
@@ -395,7 +422,7 @@ describe.skipIf(!enabled)(
     test("revocation after emission commit cannot refund or reopen an accepted deadline claim", async () => {
       const previous = env.FEATURE_SIGNALS;
       const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-      env.FEATURE_SIGNALS = true;
+      testState.setConfig("FEATURE_SIGNALS", true);
       try {
         await withGatedTestClients(
           process.env["DATABASE_URL"] ?? panic("Missing PostgreSQL test URL"),
@@ -519,7 +546,7 @@ describe.skipIf(!enabled)(
           },
         );
       } finally {
-        env.FEATURE_SIGNALS = previous;
+        testState.setConfig("FEATURE_SIGNALS", previous);
         restore();
       }
     });
@@ -538,12 +565,14 @@ describe.skipIf(!enabled)(
                 organizationId: fixture.organizationId,
                 featureId: "signals",
               });
-              const safeDb = asTestRaw<SafeDb>(
-                async (operation: (tx: Transaction) => Promise<unknown>) =>
-                  await reader.db.transaction(
-                    async (attempt) =>
-                      await operation(asTestRaw<Transaction>(attempt)),
-                  ),
+              const safeDb = safeDbFromScoped(
+                asTestRaw<ScopedDb>(
+                  async (operation: (tx: Transaction) => Promise<unknown>) =>
+                    await reader.db.transaction(
+                      async (attempt) =>
+                        await operation(asTestRaw<Transaction>(attempt)),
+                    ),
+                ),
               );
               const refused = await abortableTx(
                 safeDb,
@@ -587,7 +616,7 @@ describe.skipIf(!enabled)(
       test(`${race}: scout effect and census settlement respect the live grant and original claim`, async () => {
         const previous = env.FEATURE_SIGNALS;
         const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-        env.FEATURE_SIGNALS = true;
+        testState.setConfig("FEATURE_SIGNALS", true);
         try {
           await withGatedTestClients(
             process.env["DATABASE_URL"] ?? panic("Missing PostgreSQL test URL"),
@@ -679,7 +708,7 @@ describe.skipIf(!enabled)(
             },
           );
         } finally {
-          env.FEATURE_SIGNALS = previous;
+          testState.setConfig("FEATURE_SIGNALS", previous);
           restore();
         }
       });

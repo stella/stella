@@ -2409,6 +2409,17 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
         createSafeDb(testDb, [workspaceId], organizationId, userId),
       );
       const started = await startFlowRun({
+        admit: async () =>
+          await authorizeHandlerRunSize({
+            metering: null,
+            orgAIConfig: null,
+            organizationId,
+            workspaceId,
+            userId,
+            safeDb,
+            estimatedUnits: 0,
+            confirmedUnits: undefined,
+          }),
         safeDb,
         organizationId,
         workspaceId,

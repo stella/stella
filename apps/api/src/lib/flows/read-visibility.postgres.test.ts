@@ -102,6 +102,7 @@ if (!databaseUrl || !enabled) {
             ...principal,
             workspaceId: fixture.workspaceId,
             safeDb,
+            featureAccessSnapshot: undefined,
             filters: toMatterActivityFilters({}),
           };
           const context = {

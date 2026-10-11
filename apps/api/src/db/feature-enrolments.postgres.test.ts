@@ -14,6 +14,11 @@ import getFeatureEnrolments from "@/api/handlers/organization-settings/feature-e
 import unenrolFeature from "@/api/handlers/organization-settings/feature-enrolments/unenrol";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import {
+  FEATURE_REGISTRY,
+  SELF_SERVE_FEATURE_IDS,
+} from "@/api/lib/feature-access/registry";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
@@ -124,7 +129,14 @@ describe.skipIf(!runPostgresTests)(
                   }),
                 ),
               ).toEqual({
-                features: [{ featureId: "time-billing", enrolled: owns }],
+                features: SELF_SERVE_FEATURE_IDS.filter((featureId) =>
+                  isDeploymentFeatureEnabled(
+                    FEATURE_REGISTRY[featureId].deploymentFeature,
+                  ),
+                ).map((featureId) => ({
+                  featureId,
+                  enrolled: featureId === "time-billing" && owns,
+                })),
               });
               await client.begin(async (tx) => {
                 await tx`SELECT set_config('role', 'stella', true), set_config(${SETTING_ORGANIZATION_ID}, ${orgId}, true), set_config(${SETTING_USER_ID}, ${userId}, true)`;

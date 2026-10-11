@@ -54,7 +54,9 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   staticRoute("/knowledge/styles"),
   staticRoute("/knowledge/templates"),
   staticRoute("/knowledge/tools"),
-  staticRoute("/knowledge/workflows"),
+  staticRoute("/knowledge/workflows", {
+    expectation: { kind: "redirectsTo", to: "/knowledge" },
+  }),
   staticRoute("/settings", {
     expectation: { kind: "redirectsTo", to: "/settings/account/profile" },
   }),

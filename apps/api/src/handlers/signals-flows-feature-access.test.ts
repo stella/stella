@@ -293,6 +293,7 @@ for (const feature of FEATURES) {
             );
             const listed = await handleMcpToolCall({
               toolName: "list_capabilities",
+              mode: "advanced",
               args: { domain: feature.id, limit: 100 },
               context,
             });
@@ -308,6 +309,7 @@ for (const feature of FEATURES) {
             for (const capability of expectedCapabilities) {
               expect(omittedCapabilities).not.toContain(capability);
               const result = await handleMcpToolCall({
+                mode: "advanced",
                 toolName:
                   MCP_CAPABILITY_EXECUTORS[
                     catalogEntries.find(({ id }) => id === capability)

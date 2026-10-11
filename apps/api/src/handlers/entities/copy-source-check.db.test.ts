@@ -17,7 +17,7 @@ import {
   timeEntries,
   workspaces,
 } from "@/api/db/schema";
-import { createSafeDb } from "@/api/db/scoped";
+import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -223,6 +223,12 @@ const seed = async (folder: boolean) => {
         request: new Request("https://example.test/transfer"),
         route: "/v1/workspaces/:workspaceId/entities/copy-to-workspace",
         safeDb,
+        scopedDb: createScopedDb(
+          db,
+          [sourceWorkspaceId, targetWorkspaceId],
+          organizationId,
+          userId,
+        ),
         recordAuditEvent: noAudit,
         createAuditRecorder: () => noAudit,
         getWorkspaceAccess: async () => ({

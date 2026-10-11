@@ -10,6 +10,7 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type {
   createEntityFromBuffer,
   CreateEntityFromBufferResult,
@@ -18,6 +19,7 @@ import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { executeFlowStep, FlowStepError } from "@/api/lib/flows/flow-executor";
+import { FLOW_STEP_LEASE_MS } from "@/api/lib/flows/flow-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
@@ -50,9 +52,12 @@ if (!databaseUrl || !enabled) {
           });
           const release = Promise.withResolvers<undefined>();
           const reached = Promise.withResolvers<undefined>();
+          const claimed = Promise.withResolvers<TimestampCasToken>();
+          const firstCreation = Promise.withResolvers<undefined>();
           const attemptedIds: ReturnType<typeof createSafeId<"entity">>[] = [];
           const launched: Promise<unknown>[] = [];
           let creations = 0;
+          let now = Date.now();
           const cleanupFailure = new HandlerError({
             status: 500,
             message: "Document cleanup failed",
@@ -113,6 +118,7 @@ if (!databaseUrl || !enabled) {
               fileName,
             }) => {
               creations += 1;
+              firstCreation.resolve(undefined);
               if (winner !== "duplicate" || creations === 2) {
                 reached.resolve(undefined);
               }
@@ -151,10 +157,20 @@ if (!databaseUrl || !enabled) {
             };
             const start = async (connection: typeof worker) =>
               await executeFlowStep(
-                { runId: f.runId, stepIndex: 1 },
+                {
+                  runId: f.runId,
+                  stepIndex: 1,
+                  ...(connection === duplicate
+                    ? { claimedStartedAt: await claimed.promise }
+                    : {}),
+                },
                 new AbortController().signal,
                 {
+                  onClaim: (token) => {
+                    claimed.resolve(token);
+                  },
                   admission: testModelAdmission(f.organizationId),
+                  now: () => new Date(now),
                   database: connection.db,
                   makeScopedDb: () =>
                     createScopedDb(
@@ -172,6 +188,13 @@ if (!databaseUrl || !enabled) {
             const running = start(worker);
             launched.push(running);
             if (winner === "duplicate") {
+              await Promise.race([
+                firstCreation.promise,
+                running.then(() =>
+                  panic("Document worker missed its first creation barrier"),
+                ),
+              ]);
+              now += FLOW_STEP_LEASE_MS;
               launched.push(start(duplicate));
             }
             await Promise.race([

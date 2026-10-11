@@ -552,10 +552,11 @@ describe("review organization sender reset", () => {
               );
               expect(executedRows(removed)).toEqual([{ n: 1 }]);
             } else {
-              const removed = await sweepReviewOrganization(
-                asTestRaw<Transaction>(tx),
-                fixture.reviewOrgId,
-              );
+              const removed = await sweepReviewOrganization({
+                tx: asTestRaw<Transaction>(tx),
+                organizationId: fixture.reviewOrgId,
+                subject: createSafeId<"schedulerJobRun">(),
+              });
               expect(removed.get("correspondence_allowed_senders")).toBe(1);
             }
             expect(await senders()).toEqual([{ id: foreignSenderId }]);

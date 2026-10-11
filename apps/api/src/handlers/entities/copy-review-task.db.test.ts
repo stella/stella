@@ -13,7 +13,7 @@ import {
   workspaces,
   workspaceMembers,
 } from "@/api/db/schema";
-import { createSafeDb } from "@/api/db/scoped";
+import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { createSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -174,6 +174,12 @@ test("refuses moving an active review task and retains both matters", async () =
           request: new Request("https://example.test/transfer"),
           route: "/v1/workspaces/:workspaceId/entities/copy-to-workspace",
           safeDb: createSafeDb(
+            db,
+            [workspaceId, targetWorkspaceId],
+            organizationId,
+            userId,
+          ),
+          scopedDb: createScopedDb(
             db,
             [workspaceId, targetWorkspaceId],
             organizationId,

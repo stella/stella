@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { flowDefinitions } from "@/api/db/schema";
@@ -53,6 +53,10 @@ const withAdmission = async (run: () => Promise<void>) => {
 };
 
 describe("flow kickoff acceptance", () => {
+  beforeEach(() => {
+    testState.setConfig("FEATURE_FLOWS", true);
+  });
+
   test("pending automated admission retains its definition and execution input", async () => {
     const entered = Promise.withResolvers<undefined>();
     const proceed = Promise.withResolvers<undefined>();
@@ -75,6 +79,7 @@ describe("flow kickoff acceptance", () => {
       },
       {
         findDefinition: async () => loadedDefinition,
+        featureEnabled: async () => true,
         resolveAuthorization: async () => {
           entered.resolve(undefined);
           await proceed.promise;
@@ -116,13 +121,33 @@ describe("flow kickoff acceptance", () => {
       ...definition,
       steps: definition.steps.map((step) => ({ ...step })),
     };
+    const persistedDefinition = structuredClone(loadedDefinition);
+    let definitionReads = 0;
     const written: unknown[] = [];
     const safeDb = safeDbFromScoped(
       async (run) =>
         await run(
           asTestRaw({
+            execute: async () => [{ key1: 1, key2: 1, acquired: true }],
+            select: (projection: Record<string, unknown>) => {
+              const chain = {
+                from: () => chain,
+                innerJoin: () => chain,
+                where: () => chain,
+                limit: async () =>
+                  "email" in projection
+                    ? [{ email: "flow@example.test", emailVerified: true }]
+                    : [{ featureId: "flows", organizationId, userId }],
+              };
+              return chain;
+            },
             query: {
-              flowDefinitions: { findFirst: async () => loadedDefinition },
+              flowDefinitions: {
+                findFirst: async () =>
+                  definitionReads++ === 0
+                    ? loadedDefinition
+                    : persistedDefinition,
+              },
             },
             insert: () => ({
               values: async (rows: unknown) => {
