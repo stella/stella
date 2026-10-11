@@ -27,6 +27,7 @@ const EXPORT_URL_TTL_SECONDS = 300;
 export const createInvoicePdfExport = (writeObject = writeS3ObjectWithRetry) =>
   createSafeHandler(
     {
+      contract: "patch",
       contentDelivery: { type: "audited" },
       description:
         "Download an invoice, advance invoice or credit note as PDF, including its parties, lines, VAT breakdown and payment QR. Drafts have no document number. Returns a short-lived downloadUrl, fileName and expiresAt; hand the URL to the user without reading the file bytes.",

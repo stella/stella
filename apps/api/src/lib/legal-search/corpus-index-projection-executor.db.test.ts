@@ -138,7 +138,7 @@ const runLegislationCycle = async ({
   return await executeCorpusProjectionAppendCycle({
     runInTransaction,
     client: {
-      ingestCommittedBatch: async (indexId, ndjson) => {
+      ingestCommittedBatch: async ({ indexId, ndjson }) => {
         const result = await ingest(indexId, ndjson);
         if (result.isErr() || presence === "missing") {
           return result;

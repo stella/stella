@@ -22,6 +22,7 @@ import { logger } from "@/api/lib/observability/logger";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const config = {
+  contract: "patch",
   description:
     "Publish one announcement to every member of the caller's active " +
     "organization as an unread notification. Requires operator " +

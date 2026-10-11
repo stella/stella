@@ -1,10 +1,12 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/bun-sql";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
+import { entities, workspaces } from "@/api/db/schema";
 import type { documentProcessingRuns } from "@/api/db/schema";
 import { requestManualOcrHandler } from "@/api/handlers/entities/ocr/create";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -49,6 +51,31 @@ const executeParentLock = async (query: SQL) => {
   expect(compiled.sql).toContain('FROM "workspaces"');
   expect(compiled.params).toEqual([workspaceId]);
   return [{ id: workspaceId }];
+};
+
+const createSourceLockSelect = (selectCount: number) => {
+  if (selectCount === 1) {
+    const query = drizzle
+      .mock()
+      .select({ id: workspaces.id, organizationId: workspaces.organizationId })
+      .from(workspaces);
+    return {
+      from: () =>
+        Object.assign(query, {
+          for: async () => [{ id: workspaceId, organizationId }],
+        }),
+    };
+  }
+  const query = drizzle
+    .mock()
+    .select({ id: entities.id, workspaceId: entities.workspaceId })
+    .from(entities);
+  return {
+    from: () =>
+      Object.assign(query, {
+        for: async () => [{ id: entityId, workspaceId }],
+      }),
+  };
 };
 
 const createSafeDb =
@@ -205,13 +232,7 @@ describe("requestManualOcrHandler", () => {
         select: () => {
           selectCount += 1;
           if (selectCount <= 2) {
-            return {
-              from: () => ({
-                where: () => ({
-                  limit: () => ({ for: async () => [{ id: entityId }] }),
-                }),
-              }),
-            };
+            return createSourceLockSelect(selectCount);
           }
           if (selectCount === 3) {
             return {
@@ -331,13 +352,7 @@ describe("requestManualOcrHandler", () => {
         select: () => {
           selectCount += 1;
           if (selectCount <= 2) {
-            return {
-              from: () => ({
-                where: () => ({
-                  limit: () => ({ for: async () => [{ id: entityId }] }),
-                }),
-              }),
-            };
+            return createSourceLockSelect(selectCount);
           }
           if (selectCount === 3) {
             return {
@@ -447,13 +462,7 @@ describe("requestManualOcrHandler", () => {
         select: () => {
           selectCount += 1;
           if (selectCount <= 2) {
-            return {
-              from: () => ({
-                where: () => ({
-                  limit: () => ({ for: async () => [{ id: entityId }] }),
-                }),
-              }),
-            };
+            return createSourceLockSelect(selectCount);
           }
           if (selectCount === 3) {
             return {
@@ -571,13 +580,7 @@ describe("requestManualOcrHandler", () => {
       select: () => {
         selectCount += 1;
         if (selectCount <= 2) {
-          return {
-            from: () => ({
-              where: () => ({
-                limit: () => ({ for: async () => [{ id: entityId }] }),
-              }),
-            }),
-          };
+          return createSourceLockSelect(selectCount);
         }
         return {
           from: () => ({
@@ -665,13 +668,7 @@ describe("requestManualOcrHandler", () => {
       select: () => {
         selectCount += 1;
         if (selectCount <= 2) {
-          return {
-            from: () => ({
-              where: () => ({
-                limit: () => ({ for: async () => [{ id: entityId }] }),
-              }),
-            }),
-          };
+          return createSourceLockSelect(selectCount);
         }
         return {
           from: () => ({
@@ -714,26 +711,25 @@ describe("requestManualOcrHandler", () => {
   });
 
   test("locks the source only while its workspace is active", async () => {
-    let selectCount = 0;
-    let workspaceWhere: SQL | undefined;
+    let workspaceQuery: { sql: string; params: unknown[] } | undefined;
     const tx = asTestRaw<Transaction>({
       execute: executeParentLock,
       select: () => {
-        selectCount += 1;
+        const query = drizzle
+          .mock()
+          .select({
+            id: workspaces.id,
+            organizationId: workspaces.organizationId,
+          })
+          .from(workspaces);
         return {
-          from: () => ({
-            where: (condition: SQL) => {
-              if (selectCount === 2) {
-                workspaceWhere = condition;
-              }
-              return {
-                limit: () => ({
-                  for: async () =>
-                    selectCount === 1 ? [{ id: entityId }] : [],
-                }),
-              };
-            },
-          }),
+          from: () =>
+            Object.assign(query, {
+              for: async () => {
+                workspaceQuery = query.toSQL();
+                return [];
+              },
+            }),
         };
       },
     });
@@ -758,11 +754,10 @@ describe("requestManualOcrHandler", () => {
     });
 
     expect(run).toBeNull();
-    expect(workspaceWhere).toBeDefined();
-    if (workspaceWhere) {
-      const compiled = new PgDialect().sqlToQuery(workspaceWhere);
-      expect(compiled.sql).toContain('"workspaces"."status" =');
-      expect(compiled.params).toContain("active");
+    expect(workspaceQuery).toBeDefined();
+    if (workspaceQuery) {
+      expect(workspaceQuery.sql).toContain('"workspaces"."status" =');
+      expect(workspaceQuery.params).toContain("active");
     }
   });
 });

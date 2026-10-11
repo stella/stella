@@ -38,6 +38,11 @@ const updateSkillProposalBodySchema = t.Object({
 });
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/skills/proposals/update.ts",
+  },
   description:
     "Edit a change proposal for an agent skill: its proposed body, its " +
     "summary, or whether it is still a draft or now up for review. Only the " +

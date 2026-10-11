@@ -26,6 +26,7 @@ const rateTableCursor = createTimestampIdCursorCodec({
 
 const readRateTables = createSafeHandler(
   {
+    contract: "patch",
     description:
       "List a matter's rate tables oldest first with cursor pagination, " +
       "returning each table's name, currency, default flag, and how many " +

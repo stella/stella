@@ -15,6 +15,7 @@ import { toSavedSearchResponse } from "./response";
 import { savedSearchListQuerySchema } from "./schema";
 
 const config = {
+  contract: "patch",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",

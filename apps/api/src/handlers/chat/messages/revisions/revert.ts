@@ -15,6 +15,7 @@ import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declar
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 
 const config = {
+  contract: "patch",
   description:
     "Restore a retained assistant answer snapshot as a new revision; require the current base revision.",
   permissions: CHAT_TURN_PERMISSIONS,
