@@ -1,5 +1,9 @@
 name: Dated waiver healing
 
+defaults:
+  run:
+    shell: bash
+
 on:
   schedule:
     - cron: "41 4 * * *"
