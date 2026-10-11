@@ -36,7 +36,7 @@ for (const [name, mutation] of mutations) {
       expect(customLintTestTimeoutViolations({ directory })).toEqual([]);
       writeFileSync(file, `${IMPORTS}${mutation}`);
       expect(customLintTestTimeoutViolations({ directory })).toEqual([
-        "fixture.test.ts: timeout override is not allow-listed",
+        "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
       ]);
       writeFileSync(file, CLEAN);
       expect(customLintTestTimeoutViolations({ directory })).toEqual([]);
@@ -68,7 +68,7 @@ for (const api of ["test", "it", "describe"]) {
             `${IMPORTS}const BUDGET = 60_000; const timeout = BUDGET; ${api}${variant}("case", () => {}, ${timeout});`,
           );
           expect(customLintTestTimeoutViolations({ directory })).toEqual([
-            "fixture.test.ts: timeout override is not allow-listed",
+            "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
           ]);
         });
       });
@@ -87,7 +87,7 @@ for (const source of [
     withFixture((directory, file) => {
       writeFileSync(file, source);
       expect(customLintTestTimeoutViolations({ directory })).toEqual([
-        "fixture.test.ts: timeout override is not allow-listed",
+        "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
       ]);
     });
   });
@@ -118,7 +118,9 @@ test("an override requires a nonempty measured allow-list reason", () => {
         directory,
         allowlist: { "fixture.test.ts": "  " },
       }),
-    ).toEqual(["fixture.test.ts: timeout override is not allow-listed"]);
+    ).toEqual([
+      "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
+    ]);
     expect(
       customLintTestTimeoutViolations({
         directory,
@@ -134,37 +136,51 @@ for (const [name, source, expected] of [
   [
     "named retry-only options",
     'const options = { retry: 2 }; test("case", () => {}, options);',
-    [],
+    [
+      "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
+    ],
   ],
   [
     "named timeout options",
     'const options = { timeout: 60_000 }; test("case", () => {}, options);',
-    ["fixture.test.ts: timeout override is not allow-listed"],
+    [
+      "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
+    ],
   ],
   [
     "imported options",
     'import { options } from "./options"; test("case", () => {}, options);',
-    ["fixture.test.ts: timeout override is not allow-listed"],
+    [
+      "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
+    ],
   ],
   [
     "computed options",
     'const options = { [key]: 2 }; test("case", () => {}, options);',
-    ["fixture.test.ts: timeout override is not allow-listed"],
+    [
+      "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
+    ],
   ],
   [
     "call-result options",
     'const options = getOptions(); test("case", () => {}, options);',
-    ["fixture.test.ts: timeout override is not allow-listed"],
+    [
+      "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
+    ],
   ],
   [
     "mutable options",
     'let options = { retry: 2 }; test("case", () => {}, options);',
-    ["fixture.test.ts: timeout override is not allow-listed"],
+    [
+      "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
+    ],
   ],
   [
     "unresolved spread options",
     'const options = { ...getOptions() }; test("case", () => {}, options);',
-    ["fixture.test.ts: timeout override is not allow-listed"],
+    [
+      "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
+    ],
   ],
 ] as const) {
   test(`${name} are classified before applying the timeout policy`, () => {
@@ -179,26 +195,55 @@ for (const signature of ["options-first", "callback-first"]) {
   for (const [name, setup, options, expected] of [
     ["inline retry", "", "{ retry: 2 }", []],
     [
+      "mutated named options",
+      "const options = { retry: 2 }; options.timeout = 60_000;",
+      "options",
+      [
+        "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
+      ],
+    ],
+    [
+      "inline spread",
+      "",
+      "{ ...{ retry: 2 } }",
+      [
+        "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
+      ],
+    ],
+    [
       "inline timeout",
       "",
       "{ timeout: 60_000 }",
-      ["fixture.test.ts: timeout override is not allow-listed"],
+      [
+        "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
+      ],
     ],
-    ["named retry", "const options = { retry: 2 };", "options", []],
+    [
+      "named retry",
+      "const options = { retry: 2 };",
+      "options",
+      [
+        "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
+      ],
+    ],
     [
       "named timeout",
       "const options = { timeout: 60_000 };",
       "options",
-      ["fixture.test.ts: timeout override is not allow-listed"],
+      [
+        "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
+      ],
     ],
     [
       "imported options",
       'import { options } from "./options";',
       "options",
-      ["fixture.test.ts: timeout override is not allow-listed"],
+      [
+        "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
+      ],
     ],
   ] as const) {
-    for (const callback of ["() => {}", "function () {} "]) {
+    for (const callback of ["() => {}", "function () {}", "callback"]) {
       test(`${signature} classifies ${name} with ${callback}`, () => {
         withFixture((directory, file) => {
           const argumentsSource =
@@ -207,7 +252,7 @@ for (const signature of ["options-first", "callback-first"]) {
               : `${callback}, ${options}`;
           writeFileSync(
             file,
-            `${IMPORTS}${setup}test("case", ${argumentsSource});`,
+            `${IMPORTS}const callback = () => {}; ${setup}test("case", ${argumentsSource});`,
           );
           expect(customLintTestTimeoutViolations({ directory })).toEqual(
             expected,
@@ -225,7 +270,7 @@ test("shared test helpers cannot change the central budget", () => {
       `${IMPORTS}setDefaultTimeout(60_000);`,
     );
     expect(customLintTestTimeoutViolations({ directory })).toEqual([
-      "helper.ts: timeout override is not allow-listed",
+      "helper.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
     ]);
   });
 });

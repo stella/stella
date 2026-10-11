@@ -44,7 +44,6 @@ const memberPath = (expression: ts.Expression): string[] => {
 const hasTimeoutOverride = (file: ts.SourceFile): boolean => {
   const bindings = new Map<string, string>();
   const namespaces = new Set<string>();
-  const values = new Map<string, ts.Expression>();
   for (const statement of file.statements) {
     if (
       !ts.isImportDeclaration(statement) ||
@@ -68,46 +67,11 @@ const hasTimeoutOverride = (file: ts.SourceFile): boolean => {
       );
     }
   }
-  const collectValues = (node: ts.Node) => {
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isVariableDeclarationList(node.parent) &&
-      node.parent.getFirstToken(file)?.kind === ts.SyntaxKind.ConstKeyword &&
-      ts.isIdentifier(node.name) &&
-      node.initializer !== undefined
-    ) {
-      values.set(node.name.text, node.initializer);
-    }
-    ts.forEachChild(node, collectValues);
-  };
-  collectValues(file);
-
-  const isTimeoutFreeOptions = (
-    expression: ts.Expression,
-    seen = new Set<string>(),
-  ): boolean => {
-    if (
-      ts.isParenthesizedExpression(expression) ||
-      ts.isAsExpression(expression) ||
-      ts.isSatisfiesExpression(expression)
-    ) {
-      return isTimeoutFreeOptions(expression.expression, seen);
-    }
-    if (ts.isIdentifier(expression)) {
-      if (seen.has(expression.text)) {
-        return false;
-      }
-      seen.add(expression.text);
-      const value = values.get(expression.text);
-      return value !== undefined && isTimeoutFreeOptions(value, seen);
-    }
+  const isTimeoutFreeOptions = (expression: ts.Expression): boolean => {
     if (!ts.isObjectLiteralExpression(expression)) {
       return false;
     }
     return expression.properties.every((property) => {
-      if (ts.isSpreadAssignment(property)) {
-        return isTimeoutFreeOptions(property.expression, new Set(seen));
-      }
       const name = property.name;
       return (
         name !== undefined &&
@@ -136,10 +100,9 @@ const hasTimeoutOverride = (file: ts.SourceFile): boolean => {
         const optionsFirst =
           secondArgument !== undefined &&
           (ts.isObjectLiteralExpression(secondArgument) ||
-            ts.isIdentifier(secondArgument)) &&
-          thirdArgument !== undefined &&
-          (ts.isArrowFunction(thirdArgument) ||
-            ts.isFunctionExpression(thirdArgument));
+            (thirdArgument !== undefined &&
+              (ts.isArrowFunction(thirdArgument) ||
+                ts.isFunctionExpression(thirdArgument))));
         const optionsArgument = optionsFirst ? secondArgument : thirdArgument;
         if (
           api === "setDefaultTimeout" ||
@@ -180,7 +143,9 @@ export const customLintTestTimeoutViolations = ({
     }
     const reason = allowlist[filename];
     if (reason === undefined || reason.trim() === "") {
-      violations.push(`${filename}: timeout override is not allow-listed`);
+      violations.push(
+        `${filename}: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason`,
+      );
     }
   }
   return violations.toSorted();
