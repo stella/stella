@@ -24,6 +24,26 @@ const ADAPTIVE_THRESHOLD_OFFSET: i32 = 5;
 const CROP_PADDING_MM: f32 = 3.0;
 const MIN_EDGE_CONTRAST: u8 = 10;
 
+fn checked_pixel_count(width: u32, height: u32) -> Result<usize, UnrecognizedReason> {
+    if width == 0 || height == 0 {
+        return Err(UnrecognizedReason::InvalidDimensions);
+    }
+    width
+        .checked_mul(height)
+        .filter(|area| *area <= MAX_DIMENSION_AREA)
+        .and_then(|area| usize::try_from(area).ok())
+        .ok_or(UnrecognizedReason::TooLarge)
+}
+
+fn bounded_image(width: u32, height: u32, value: u8) -> Result<GrayImage, UnrecognizedReason> {
+    checked_pixel_count(width, height)?;
+    Ok(GrayImage::from_pixel(width, height, Luma([value])))
+}
+
+fn bounded_vec<T: Clone>(width: u32, height: u32, value: T) -> Result<Vec<T>, UnrecognizedReason> {
+    Ok(vec![value; checked_pixel_count(width, height)?])
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CleanOutput {
     Grayscale,
@@ -81,14 +101,10 @@ impl UnrecognizedReason {
 }
 
 pub fn gray_image(width: u32, height: u32, pixels: &[u8]) -> Result<GrayImage, UnrecognizedReason> {
-    if width < 64
-        || height < 64
-        || width
-            .checked_mul(height)
-            .is_none_or(|area| area > MAX_DIMENSION_AREA)
-    {
+    if width < 64 || height < 64 {
         return Err(UnrecognizedReason::InvalidDimensions);
     }
+    checked_pixel_count(width, height).map_err(|_| UnrecognizedReason::InvalidDimensions)?;
     GrayImage::from_raw(width, height, pixels.to_vec())
         .ok_or(UnrecognizedReason::InvalidPixelBuffer)
 }
@@ -289,7 +305,7 @@ pub fn perspective(
     }
     let projection = Projection::from_control_points(corners, destination)
         .ok_or(UnrecognizedReason::DegeneratePageQuad)?;
-    let mut output = GrayImage::new(width, height);
+    let mut output = bounded_image(width, height, 0)?;
     warp_into(
         gray,
         projection,
@@ -377,12 +393,7 @@ fn rotation_geometry(gray: &GrayImage, angle: f32) -> Result<RotationGeometry, U
         + 1.0;
     let width = (max_x - min_x) as u32;
     let height = (max_y - min_y) as u32;
-    if width
-        .checked_mul(height)
-        .is_none_or(|area| area > MAX_DIMENSION_AREA)
-    {
-        return Err(UnrecognizedReason::TooLarge);
-    }
+    checked_pixel_count(width, height)?;
     let projection = Projection::translate(-min_x, -min_y) * rotation;
     Ok(RotationGeometry {
         projection,
@@ -394,7 +405,7 @@ fn rotation_geometry(gray: &GrayImage, angle: f32) -> Result<RotationGeometry, U
 fn rotate_centered(gray: &GrayImage, angle: f32) -> Result<RotatedImage, UnrecognizedReason> {
     let geometry = rotation_geometry(gray, angle)?;
     let background = page_background(gray);
-    let mut output = GrayImage::from_pixel(geometry.width, geometry.height, Luma([background]));
+    let mut output = bounded_image(geometry.width, geometry.height, background)?;
     warp_into(
         gray,
         geometry.projection,
@@ -405,24 +416,26 @@ fn rotate_centered(gray: &GrayImage, angle: f32) -> Result<RotatedImage, Unrecog
     Ok(RotatedImage { image: output })
 }
 
-fn threshold_document(flattened: &GrayImage) -> GrayImage {
-    let local_mean = box_filter_scaled(flattened, 20);
+fn threshold_document(flattened: &GrayImage) -> Result<GrayImage, UnrecognizedReason> {
+    let local_mean = box_filter_scaled(flattened, 20)?;
     let absolute_threshold = page_background(flattened).saturating_sub(MIN_FOREGROUND_CONTRAST);
-    GrayImage::from_fn(flattened.width(), flattened.height(), |x, y| {
+    let mut output = bounded_image(flattened.width(), flattened.height(), 0)?;
+    for (x, y, pixel) in output.enumerate_pixels_mut() {
         // Local contrast preserves fine strokes; the page-background threshold also preserves
         // solid marks whose interior has no local contrast.
         let value = flattened.get_pixel(x, y)[0];
         let foreground = i32::from(value)
             < i32::from(local_mean.get_pixel(x, y)[0]) - ADAPTIVE_THRESHOLD_OFFSET
             || value <= absolute_threshold;
-        Luma([if foreground { 0 } else { 255 }])
-    })
+        *pixel = Luma([if foreground { 0 } else { 255 }]);
+    }
+    Ok(output)
 }
 
-fn box_filter_scaled(gray: &GrayImage, radius: u32) -> GrayImage {
+fn box_filter_scaled(gray: &GrayImage, radius: u32) -> Result<GrayImage, UnrecognizedReason> {
     let width = gray.width();
     let height = gray.height();
-    let mut horizontal = GrayImage::new(width, height);
+    let mut horizontal = bounded_image(width, height, 0)?;
     for y in 0..height {
         let mut sum = (0..=radius.min(width - 1))
             .map(|x| u64::from(gray.get_pixel(x, y)[0]))
@@ -441,7 +454,7 @@ fn box_filter_scaled(gray: &GrayImage, radius: u32) -> GrayImage {
         }
     }
 
-    let mut filtered = GrayImage::new(width, height);
+    let mut filtered = bounded_image(width, height, 0)?;
     for x in 0..width {
         let mut sum = (0..=radius.min(height - 1))
             .map(|y| u64::from(horizontal.get_pixel(x, y)[0]))
@@ -459,16 +472,16 @@ fn box_filter_scaled(gray: &GrayImage, radius: u32) -> GrayImage {
             }
         }
     }
-    filtered
+    Ok(filtered)
 }
 
-fn edge_barrier(gray: &GrayImage, scale_reference: u32) -> Vec<bool> {
+fn edge_barrier(gray: &GrayImage, scale_reference: u32) -> Result<Vec<bool>, UnrecognizedReason> {
     let width = gray.width();
     let height = gray.height();
     let edge_scale = (scale_reference / 500).max(1);
     let edge_dilation = (scale_reference / 250).max(1);
-    let smooth = box_filter_scaled(gray, edge_scale);
-    let mut strong_edge = vec![false; (width * height) as usize];
+    let smooth = box_filter_scaled(gray, edge_scale)?;
+    let mut strong_edge = bounded_vec(width, height, false)?;
     for y in 0..height {
         for x in 0..width {
             let left = smooth.get_pixel(x.saturating_sub(edge_scale), y)[0];
@@ -480,7 +493,7 @@ fn edge_barrier(gray: &GrayImage, scale_reference: u32) -> Vec<bool> {
         }
     }
     let stride = width as usize + 1;
-    let mut edge_sum = vec![0_u32; stride * (height as usize + 1)];
+    let mut edge_sum = bounded_vec(width + 1, height + 1, 0_u32)?;
     for y in 0..height {
         for x in 0..width {
             let sum_index = (y as usize + 1) * stride + x as usize + 1;
@@ -490,7 +503,7 @@ fn edge_barrier(gray: &GrayImage, scale_reference: u32) -> Vec<bool> {
                 - edge_sum[sum_index - stride - 1];
         }
     }
-    let mut barrier = vec![false; strong_edge.len()];
+    let mut barrier = bounded_vec(width, height, false)?;
     for y in 0..height {
         for x in 0..width {
             let left = x.saturating_sub(edge_dilation);
@@ -507,7 +520,7 @@ fn edge_barrier(gray: &GrayImage, scale_reference: u32) -> Vec<bool> {
                 > 0;
         }
     }
-    barrier
+    Ok(barrier)
 }
 
 fn largest_open_region(barrier: &[bool], width: u32, height: u32) -> Vec<bool> {
@@ -552,7 +565,7 @@ fn largest_open_region(barrier: &[bool], width: u32, height: u32) -> Vec<bool> {
     selected
 }
 
-fn flattening_background(gray: &GrayImage) -> GrayImage {
+fn flattening_background(gray: &GrayImage) -> Result<GrayImage, UnrecognizedReason> {
     let width = gray.width();
     let height = gray.height();
     let longest_side = width.max(height);
@@ -561,7 +574,7 @@ fn flattening_background(gray: &GrayImage) -> GrayImage {
     // the page boundary. If a frame blocks that boundary (or leaves only a tiny leak), the largest
     // region outside the edge barrier is the page background; smaller enclosed regions remain
     // content. If no open pixel exists, the robust page level is the only safe illumination seed.
-    let barrier = edge_barrier(gray, longest_side);
+    let barrier = edge_barrier(gray, longest_side)?;
     let illumination_radius = (longest_side / 12).max(1);
 
     let mut reachable = vec![false; barrier.len()];
@@ -596,7 +609,7 @@ fn flattening_background(gray: &GrayImage) -> GrayImage {
         reachable = largest_open_region(&barrier, width, height);
     }
     if !reachable.iter().any(|value| *value) {
-        return GrayImage::from_pixel(width, height, Luma([high_page_level(gray)]));
+        return bounded_image(width, height, high_page_level(gray));
     }
 
     let mut inpainted = gray.clone();
@@ -711,6 +724,7 @@ pub fn clean_scan(
     if !options.dpi.is_finite() || options.dpi <= 0.0 {
         return Err(UnrecognizedReason::InvalidDpi);
     }
+    checked_pixel_count(gray.width(), gray.height())?;
     let applied_quad = detect_page_quad(gray);
     let rectified = if let Some(quad) = applied_quad {
         let edge_length = |start: Point, end: Point| {
@@ -737,14 +751,15 @@ pub fn clean_scan(
         RotatedImage { image: rectified }
     };
     let straight = rotated.image;
-    let background = flattening_background(&straight);
-    let flattened = GrayImage::from_fn(straight.width(), straight.height(), |x, y| {
+    let background = flattening_background(&straight)?;
+    let mut flattened = bounded_image(straight.width(), straight.height(), 0)?;
+    for (x, y, pixel) in flattened.enumerate_pixels_mut() {
         let source_value = straight.get_pixel(x, y)[0];
         let value = f32::from(source_value);
         let base = f32::from(background.get_pixel(x, y)[0].max(1));
-        Luma([(value * 245.0 / base).min(255.0).round() as u8])
-    });
-    let binary = threshold_document(&flattened);
+        *pixel = Luma([(value * 245.0 / base).min(255.0).round() as u8]);
+    }
+    let binary = threshold_document(&flattened)?;
     let content = content_bounds(&binary, options.dpi).ok_or(UnrecognizedReason::NoContent)?;
     let selected = match options.output {
         CleanOutput::Grayscale => flattened,
@@ -787,6 +802,8 @@ pub fn clean_scan(
 
 #[cfg(any(target_arch = "wasm32", test))]
 fn rgba_to_gray(width: u32, height: u32, pixels: &[u8]) -> Result<GrayImage, UnrecognizedReason> {
+    let pixel_count =
+        checked_pixel_count(width, height).map_err(|_| UnrecognizedReason::InvalidDimensions)?;
     let expected = width
         .checked_mul(height)
         .and_then(|count| count.checked_mul(4))
@@ -795,16 +812,14 @@ fn rgba_to_gray(width: u32, height: u32, pixels: &[u8]) -> Result<GrayImage, Unr
     if pixels.len() != expected {
         return Err(UnrecognizedReason::InvalidPixelBuffer);
     }
-    let gray = pixels
-        .chunks_exact(4)
-        .map(|pixel| {
-            let alpha = f32::from(pixel[3]) / 255.0;
-            let luminance = 0.2126 * f32::from(pixel[0])
-                + 0.7152 * f32::from(pixel[1])
-                + 0.0722 * f32::from(pixel[2]);
-            (luminance * alpha + 255.0 * (1.0 - alpha)).round() as u8
-        })
-        .collect::<Vec<_>>();
+    let mut gray = Vec::with_capacity(pixel_count);
+    for pixel in pixels.chunks_exact(4) {
+        let alpha = f32::from(pixel[3]) / 255.0;
+        let luminance = 0.2126 * f32::from(pixel[0])
+            + 0.7152 * f32::from(pixel[1])
+            + 0.0722 * f32::from(pixel[2]);
+        gray.push((luminance * alpha + 255.0 * (1.0 - alpha)).round() as u8);
+    }
     gray_image(width, height, &gray)
 }
 

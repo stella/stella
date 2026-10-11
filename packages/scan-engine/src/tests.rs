@@ -355,7 +355,7 @@ fn scaled_edge_barrier_detects_a_physical_fill_boundary_at_each_resolution() {
             Luma([value])
         });
 
-        let barrier = edge_barrier(&source, scale_reference);
+        let barrier = edge_barrier(&source, scale_reference).expect("test image should fit");
         assert!(
             (boundary - edge_scale..=boundary + edge_scale)
                 .any(|x| barrier[(40 * source.width() + x) as usize]),
@@ -466,7 +466,7 @@ fn binary_output_preserves_the_interior_of_a_solid_dark_region() {
         }
     }
 
-    let binary = threshold_document(&source);
+    let binary = threshold_document(&source).expect("test image should fit");
     assert_eq!(binary.get_pixel(150, 150)[0], 0);
     let dark_interior = (110..190)
         .flat_map(|y| (110..190).map(move |x| (x, y)))
@@ -482,6 +482,71 @@ fn expanded_rotation_rejects_an_area_above_the_input_limit() {
     let result = rotation_geometry(&source, 6.0);
 
     assert!(matches!(result, Err(UnrecognizedReason::TooLarge)));
+}
+
+#[test]
+fn clean_scan_rejects_oversized_narrow_quad_with_or_without_deskew() {
+    let mut source = GrayImage::from_pixel(16_000, 1_000, Luma([20]));
+    for y in 150_u32..=850 {
+        let distance = y.abs_diff(500);
+        let half_width = 7_700 * (350 - distance) / 350;
+        let start = (8_000 - half_width + y * source.width()) as usize;
+        let end = (8_000 + half_width + y * source.width()) as usize;
+        source.as_mut()[start..=end].fill(245);
+    }
+
+    let expected_quad = [
+        (300.0, 500.0),
+        (8_000.0, 150.0),
+        (15_700.0, 500.0),
+        (8_000.0, 850.0),
+    ];
+    let edge_length = |start: (f32, f32), end: (f32, f32)| {
+        ((end.0 - start.0).powi(2) + (end.1 - start.1).powi(2)).sqrt()
+    };
+    let rectified_width = ((edge_length(expected_quad[0], expected_quad[1])
+        + edge_length(expected_quad[3], expected_quad[2]))
+        * 0.5)
+        .round() as u32;
+    let rectified_height = ((edge_length(expected_quad[0], expected_quad[3])
+        + edge_length(expected_quad[1], expected_quad[2]))
+        * 0.5)
+        .round() as u32;
+    assert!(
+        rectified_width * rectified_height > super::MAX_DIMENSION_AREA,
+        "detected rectification is {rectified_width}x{rectified_height}"
+    );
+    assert!(matches!(
+        perspective(&source, expected_quad, rectified_width, rectified_height),
+        Err(UnrecognizedReason::TooLarge)
+    ));
+
+    for deskew in [false, true] {
+        let result = clean_scan(
+            &source,
+            CleanOptions {
+                deskew,
+                ..options(CleanOutput::Grayscale)
+            },
+        );
+        assert!(matches!(result, Err(UnrecognizedReason::TooLarge)));
+    }
+}
+
+#[test]
+fn image_allocations_use_the_bounded_constructor() {
+    let source = include_str!("lib.rs");
+    assert_eq!(source.matches("GrayImage::from_pixel(").count(), 1);
+    for forbidden in [
+        "GrayImage::new(",
+        "GrayImage::from_fn(",
+        "ImageBuffer::new(",
+    ] {
+        assert!(
+            !source.contains(forbidden),
+            "raw image allocation {forbidden} must use bounded_image"
+        );
+    }
 }
 
 #[test]
