@@ -46,7 +46,7 @@ const readFixture = (name: string): unknown =>
 
 test("snapshot fixture advertises the native bridge contract revision", () => {
   expect(
-    readFixtureRecord("app-snapshot.json").bridgeVersion,
+    readFixtureRecord("app-snapshot.json")["bridgeVersion"],
     "apps/desktop/fixtures/rpc/app-snapshot.json bridgeVersion must match BRIDGE_VERSION in apps/desktop/src-tauri/src/types.rs; update the recorded fixture after a bridge version bump",
   ).toBe(BRIDGE_VERSION);
 });
