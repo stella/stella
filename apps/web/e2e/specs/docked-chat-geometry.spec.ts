@@ -1,9 +1,8 @@
 import type { Page } from "@playwright/test";
 import path from "node:path";
 
-import { E2E_SHARD_COUNT } from "../../../../scripts/e2e-spec-shards-core";
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
-import { partitionRoundRobin } from "../execution-profile";
+import { E2E_SHARD_COUNT, partitionRoundRobin } from "../execution-profile";
 import {
   createDockedChatWorld,
   deleteDockedChatWorld,

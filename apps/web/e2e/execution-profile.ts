@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+export const E2E_SHARD_COUNT = 2;
+
 export const E2E_EXECUTION_PROFILE = {
   standard: "standard",
   networkBaseline: "network-baseline",

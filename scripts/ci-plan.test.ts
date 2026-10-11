@@ -3290,7 +3290,7 @@ const runPlaywrightSelection = ({
 };
 
 test.each([1, 2])(
-  "full Playwright depth shards tests without a spec list: %s",
+  "full Playwright depth shards general and geometry projects independently: %s",
   (shard) => {
     const result = runPlaywrightSelection({ mode: "full", specs: "[]", shard });
     expect(result.exitCode, result.stderr.toString()).toBe(0);
@@ -3302,6 +3302,16 @@ test.each([1, 2])(
       "test:e2e",
       "--",
       "--grep-invert=route-smoke",
+      "--project=chromium",
+      "--project=heap-growth-canary",
+      `--shard=${shard}/2`,
+      `${nodePath.resolve(import.meta.dir, "..")}/.github/actions/setup-playwright/run-in-image.sh`,
+      "bun",
+      "--filter",
+      "@stll/web",
+      "test:e2e",
+      "--",
+      "--project=docked-chat-geometry",
       `--shard=${shard}/2`,
     ]);
   },

@@ -52,7 +52,7 @@ const listGeometry = (args: string[]) => {
   );
   const result = Bun.spawnSync(
     [
-      process.execPath,
+      "node",
       path.join(root, "node_modules/@playwright/test/cli.js"),
       "test",
       "--config=apps/web/e2e/playwright.config.ts",

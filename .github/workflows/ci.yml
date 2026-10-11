@@ -3785,7 +3785,11 @@ jobs:
 
       - name: Test changed e2e shard selection
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun test scripts/e2e-spec-shards.test.ts scripts/e2e-geometry-shards.test.ts
+        run: bun test scripts/e2e-spec-shards.test.ts
+
+      - name: Test geometry shard plan
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/e2e-geometry-shards.test.ts
 
       - name: Validate CI service image mirror inventory
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
