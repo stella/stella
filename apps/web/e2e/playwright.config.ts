@@ -17,6 +17,7 @@ const executionProfile = resolveE2eExecutionProfile(
 );
 
 const ROUTE_SMOKE_SPEC = /route-smoke\.spec\.ts$/u;
+const DOCKED_CHAT_GEOMETRY_SPEC = /docked-chat-geometry\.spec\.ts$/u;
 const HEAP_GROWTH_CANARY_SPEC = /heap-growth-canary\.spec\.ts$/u;
 
 export default defineConfig({
@@ -65,7 +66,17 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      testIgnore: [ROUTE_SMOKE_SPEC, HEAP_GROWTH_CANARY_SPEC],
+      testIgnore: [
+        ROUTE_SMOKE_SPEC,
+        HEAP_GROWTH_CANARY_SPEC,
+        DOCKED_CHAT_GEOMETRY_SPEC,
+      ],
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      // CI shards this uniform-cost matrix independently from the general suite.
+      name: "docked-chat-geometry",
+      testMatch: DOCKED_CHAT_GEOMETRY_SPEC,
       use: { ...devices["Desktop Chrome"] },
     },
     {
