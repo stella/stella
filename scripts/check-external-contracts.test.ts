@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import {
   mkdtempSync,
@@ -337,6 +338,9 @@ const expectedUncoveredScope = (
         ...entry.owners.map(({ path: owner }) => `${system}#owners:${owner}`),
         ...entry.sdks.map((sdk) => `${system}#sdks:${sdk}`),
       ];
+    default:
+      entry satisfies never;
+      return panic("Unhandled external contract status");
   }
 };
 
