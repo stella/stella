@@ -58,7 +58,7 @@ describe.skipIf(!enabled)("account deletion storage deadlines", () => {
             })
             .from(accountDeletionEffectChunks)
             .where(eq(accountDeletionEffectChunks.requestId, requestId));
-        expect(await readChunks()).toEqual([{ nextAttemptAt: notBefore }]);
+        expect(await readChunks()).toEqual([{ nextAttemptAt: null }]);
         expect(
           await claimNextAccountDeletionEffectChunk(requestId, db),
         ).toBeNull();
@@ -66,14 +66,16 @@ describe.skipIf(!enabled)("account deletion storage deadlines", () => {
           .delete(accountDeletionEffectChunks)
           .where(eq(accountDeletionEffectChunks.requestId, requestId));
         expect(await ensureAccountDeletionEffectChunks(requestId, db)).toBe(1);
-        expect(await readChunks()).toEqual([{ nextAttemptAt: notBefore }]);
+        expect(await readChunks()).toEqual([{ nextAttemptAt: null }]);
         expect(
           await claimNextAccountDeletionEffectChunk(requestId, db),
         ).toBeNull();
         await db
-          .update(accountDeletionEffectChunks)
-          .set({ nextAttemptAt: sql`clock_timestamp() - INTERVAL '1 second'` })
-          .where(eq(accountDeletionEffectChunks.requestId, requestId));
+          .update(accountDeletionRequests)
+          .set({
+            storageCleanup: sql`jsonb_set(${accountDeletionRequests.storageCleanup}, '{notBefore}', to_jsonb((clock_timestamp() - INTERVAL '1 second')::text))`,
+          })
+          .where(eq(accountDeletionRequests.id, requestId));
         expect(
           await claimNextAccountDeletionEffectChunk(requestId, db),
         ).not.toBeNull();

@@ -1331,7 +1331,6 @@ export const recordAccountDeletionRequest = async ({
             payloadHash: chunk.payloadHash,
             requestId: deletionRequestId,
             s3Keys: chunk.s3Keys,
-            nextAttemptAt: storageCleanupNotBefore ?? null,
           })),
         );
       },

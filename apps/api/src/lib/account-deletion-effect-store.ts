@@ -1,5 +1,4 @@
-import { panic } from "better-result";
-import { and, asc, eq, gte, isNull, lt, notExists, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, lt, notExists, or, sql } from "drizzle-orm";
 
 import type { rootDb, Transaction } from "@/api/db/root";
 import {
@@ -47,13 +46,7 @@ const eligibleChunkPredicate = () =>
       ACCOUNT_DELETION_EFFECT_MAX_ATTEMPTS,
     ),
     or(
-      and(
-        eq(accountDeletionEffectChunks.status, "pending"),
-        or(
-          isNull(accountDeletionEffectChunks.nextAttemptAt),
-          sql`${accountDeletionEffectChunks.nextAttemptAt} <= clock_timestamp()`,
-        ),
-      ),
+      eq(accountDeletionEffectChunks.status, "pending"),
       and(
         eq(accountDeletionEffectChunks.status, "failed"),
         sql`${accountDeletionEffectChunks.nextAttemptAt} <= CURRENT_TIMESTAMP`,
@@ -203,13 +196,6 @@ export const ensureAccountDeletionEffectChunks = async (
       return 0;
     }
     const chunks = createS3DeletionEffectChunks(request.storageCleanup.s3Keys);
-    const notBefore =
-      request.storageCleanup.notBefore === undefined
-        ? null
-        : new Date(request.storageCleanup.notBefore);
-    if (notBefore !== null && !Number.isFinite(notBefore.getTime())) {
-      panic("Invalid persisted storage cleanup deadline");
-    }
     if (chunks.length > 0) {
       await consumeInBatches({
         batchSize: DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE,
@@ -224,7 +210,6 @@ export const ensureAccountDeletionEffectChunks = async (
               payloadHash: chunk.payloadHash,
               requestId,
               s3Keys: chunk.s3Keys,
-              nextAttemptAt: notBefore,
             })),
           );
         },
@@ -237,11 +222,30 @@ export const ensureAccountDeletionEffectChunks = async (
     return chunks.length;
   });
 
+// The deadline is fixed when the request is recorded. No object is deleted
+// before it, so no export attempt can still publish an object it removes.
+const storageCleanupDeferred = async (
+  requestId: SafeId<"accountDeletionRequest">,
+  db: AccountDeletionEffectDb,
+): Promise<boolean> => {
+  const deadlines = await db
+    .select({
+      deferred: sql<boolean>`coalesce((${accountDeletionRequests.storageCleanup} ->> 'notBefore')::timestamptz > clock_timestamp(), false)`,
+    })
+    .from(accountDeletionRequests)
+    .where(eq(accountDeletionRequests.id, requestId))
+    .limit(1);
+  return deadlines.at(0)?.deferred === true;
+};
+
 export const claimNextAccountDeletionEffectChunk = async (
   requestId: SafeId<"accountDeletionRequest">,
   db: AccountDeletionEffectDb,
-): Promise<AccountDeletionEffectClaim | null> =>
-  await db.transaction(async (tx) => {
+): Promise<AccountDeletionEffectClaim | null> => {
+  if (await storageCleanupDeferred(requestId, db)) {
+    return null;
+  }
+  return await db.transaction(async (tx) => {
     const candidate = (
       await tx
         .select({
@@ -344,6 +348,7 @@ export const claimNextAccountDeletionEffectChunk = async (
       s3Keys: claimed.s3Keys,
     };
   });
+};
 
 export const completeAccountDeletionEffectChunk = async (
   claim: AccountDeletionEffectClaim,
