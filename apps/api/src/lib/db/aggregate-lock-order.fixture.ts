@@ -20,6 +20,15 @@ export const aggregateFences = () => {
   const threadId = createSafeId<"chatThread">();
   const userId = mintAuthProviderId<"user">();
   return {
+    clauseVariant: {
+      aggregate: "clauseVariant",
+      id: {
+        id: createSafeId<"clauseVariant">(),
+        clauseId: createSafeId<"clause">(),
+        organizationId,
+      },
+      mode: "update",
+    },
     organization: {
       aggregate: "organization",
       id: organizationId,

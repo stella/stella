@@ -12,7 +12,6 @@ const REPLACE_CONTRACT_DEBT_IDS = [
   "apps/api/src/handlers/case-law/research/columns-reorder.ts",
   "apps/api/src/handlers/chat/messages/revisions/accept.ts",
   "apps/api/src/handlers/clauses/update.ts",
-  "apps/api/src/handlers/clauses/variants/update.ts",
   "apps/api/src/handlers/contacts/update.ts",
   "apps/api/src/handlers/document-types/reorder.ts",
   "apps/api/src/handlers/entities/desktop-edit-sessions-route.ts|POST|/desktop-edit-sessions/:sessionId/checkpoint",

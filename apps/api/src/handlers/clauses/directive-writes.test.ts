@@ -62,7 +62,10 @@ for (const operation of [
             ...common,
             clauseId,
             variantId,
-            body: { body: malformed },
+            body: {
+              body: malformed,
+              expectedUpdatedAt: "2026-10-11T10:00:00.000Z",
+            },
           });
         case "csv-import":
           return yield* importHandler({

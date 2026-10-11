@@ -12,8 +12,11 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
 import { validateClauseBodyDirectives } from "@/api/lib/clauses/clause-directives";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { expectedUpdatedAtSchema } from "@/api/lib/optimistic-concurrency";
 import { pickDefined } from "@/api/lib/pick-defined";
+import { enforceWritePrecondition } from "@/api/lib/write-contract";
 
 import { insertClauseVariants } from "./variant-insert";
 import { clauseVariantReadLimit } from "./variant-read";
@@ -26,6 +29,7 @@ export const createVariantBodySchema = t.Object({
 });
 
 export const updateVariantBodySchema = t.Object({
+  expectedUpdatedAt: expectedUpdatedAtSchema,
   label: t.Optional(tDefaultVarchar),
   body: t.Optional(clauseBodySchema),
   sortOrder: t.Optional(t.Integer({ minimum: 0 })),
@@ -195,32 +199,49 @@ export const updateVariantHandler = async function* ({
     );
   }
 
-  const existing = yield* Result.await(
-    safeDb((tx) =>
-      tx.query.clauseVariants.findFirst({
-        where: {
-          id: { eq: variantId },
-          clauseId: { eq: clauseId },
-          organizationId: { eq: organizationId },
-        },
-        columns: { id: true, label: true, body: true, sortOrder: true },
-      }),
-    ),
-  );
-
-  if (!existing) {
-    return Result.err(
-      new HandlerError({ status: 404, message: "Variant not found" }),
-    );
-  }
-
-  const updates = {
-    ...pickDefined(body, ["label", "body", "sortOrder"]),
-    updatedAt: new Date(),
-  };
-
   const updated = yield* Result.await(
     safeDb(async (tx) => {
+      await withAggregateLock({
+        tx,
+        aggregate: "clauseVariant",
+        id: { id: variantId, clauseId, organizationId },
+        mode: "update",
+      });
+      const rows = await tx
+        .select({
+          id: clauseVariants.id,
+          label: clauseVariants.label,
+          body: clauseVariants.body,
+          sortOrder: clauseVariants.sortOrder,
+          updatedAt: clauseVariants.updatedAt,
+        })
+        .from(clauseVariants)
+        .where(
+          and(
+            eq(clauseVariants.id, variantId),
+            eq(clauseVariants.clauseId, clauseId),
+            eq(clauseVariants.organizationId, organizationId),
+          ),
+        )
+        .limit(1);
+      const existing = rows.at(0);
+      if (!existing) {
+        return new HandlerError({ status: 404, message: "Variant not found" });
+      }
+      const conflict = enforceWritePrecondition({
+        type: "updatedAt",
+        field: "expectedUpdatedAt",
+        storedUpdatedAt: existing.updatedAt,
+        expectedUpdatedAt: body.expectedUpdatedAt,
+        resource: "Clause variant",
+      });
+      if (conflict) {
+        return conflict;
+      }
+      const updates = {
+        ...pickDefined(body, ["label", "body", "sortOrder"]),
+        updatedAt: new Date(),
+      };
       const [row] = await tx
         .update(clauseVariants)
         .set(updates)
@@ -252,6 +273,10 @@ export const updateVariantHandler = async function* ({
       return row;
     }),
   );
+
+  if (HandlerError.is(updated)) {
+    return Result.err(updated);
+  }
 
   if (!updated) {
     panic("Failed to update clause variant");

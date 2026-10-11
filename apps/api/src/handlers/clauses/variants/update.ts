@@ -14,12 +14,13 @@ const updateVariantParamsSchema = t.Object({
 const config = {
   contract: "replace",
   precondition: {
-    type: "deferred",
-    baselineId: "apps/api/src/handlers/clauses/variants/update.ts",
+    type: "updatedAt",
+    field: "expectedUpdatedAt",
   },
   description:
     "Change one variant's label, body, or position within its clause; only " +
-    "the fields you pass are written.",
+    "the fields you pass are written. Send expectedUpdatedAt from clauses.get " +
+    "or clauses.variants.list; reload that resource after a version conflict.",
   permissions: { clause: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {

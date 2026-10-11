@@ -12,12 +12,6 @@
     "baselineId": "apps/api/src/handlers/chat/messages/revisions/accept.ts"
   },
   {
-    "key": "apps/api/src/handlers/clauses/routes.ts|POST|/clauses/:clauseId/variants/:variantId|apps/api/src/handlers/clauses/variants/update.ts.handler",
-    "count": 1,
-    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
-    "baselineId": "apps/api/src/handlers/clauses/variants/update.ts"
-  },
-  {
     "key": "apps/api/src/handlers/clauses/routes.ts|POST|/clauses/:clauseId|apps/api/src/handlers/clauses/update.ts.handler",
     "count": 1,
     "reason": "Existing replacement awaits required schema precondition and caller enrollment.",

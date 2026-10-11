@@ -59,6 +59,7 @@ export const AGGREGATE_LOCKS = {
   personalCatalog: { rank: 700, kind: "advisory" },
   searchHistory: { rank: 710, kind: "row" },
   chatMessage: { rank: 810, kind: "row" },
+  clauseVariant: { rank: 820, kind: "row" },
 } as const;
 
 export type AggregateName = keyof typeof AGGREGATE_LOCKS;
@@ -112,6 +113,7 @@ export const AGGREGATE_CHAINS = {
   personalCatalog: ["personalCatalog"],
   searchHistory: ["desktopMembership", "searchHistory"],
   chatRevision: ["chatThread", "chatMessage"],
+  clauseVariant: ["clauseVariant"],
 } as const satisfies Record<string, readonly AggregateName[]>;
 
 export const ROW_LOCK_MODES = [
@@ -137,6 +139,11 @@ const modeCovers = (
     : MODE_COVERS[held].some((mode) => mode === requested);
 
 type AggregateIdentities = {
+  clauseVariant: {
+    id: SafeId<"clauseVariant">;
+    clauseId: SafeId<"clause">;
+    organizationId: SafeId<"organization">;
+  };
   organization: SafeId<"organization">;
   desktopMembership: {
     organizationId: SafeId<"organization">;
@@ -556,6 +563,14 @@ type RowResource = {
 };
 const rowResource = (options: RowIdentityOptions): RowResource => {
   switch (options.aggregate) {
+    case "clauseVariant":
+      return {
+        table: "clause_variants",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["clause_id", "organization_id"],
+        scopeValues: [options.id.clauseId, options.id.organizationId],
+      };
     case "organization":
       return {
         table: "organization",

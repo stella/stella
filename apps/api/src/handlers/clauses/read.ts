@@ -220,6 +220,7 @@ export const getClauseHandler = async function* ({
               body: true,
               sortOrder: true,
               createdAt: true,
+              updatedAt: true,
             },
             orderBy: { sortOrder: "asc", createdAt: "asc", id: "asc" },
             limit: variantLimit,

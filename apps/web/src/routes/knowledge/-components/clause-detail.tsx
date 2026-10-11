@@ -123,6 +123,7 @@ type VariantItem = {
   body: unknown;
   sortOrder: number;
   createdAt: string;
+  updatedAt: string;
 };
 
 type VersionItem = {
@@ -1296,14 +1297,14 @@ const VariantRow = ({
       // Swap sortOrder with the neighbor; the list query orders by
       // sortOrder asc so the rows visually exchange places.
       const [first, second] = await Promise.all([
-        api
-          .clauses({ clauseId })
-          .variants({ variantId: variant.id })
-          .post({ sortOrder: neighbor.sortOrder }),
-        api
-          .clauses({ clauseId })
-          .variants({ variantId: neighbor.id })
-          .post({ sortOrder: variant.sortOrder }),
+        api.clauses({ clauseId }).variants({ variantId: variant.id }).post({
+          sortOrder: neighbor.sortOrder,
+          expectedUpdatedAt: variant.updatedAt,
+        }),
+        api.clauses({ clauseId }).variants({ variantId: neighbor.id }).post({
+          sortOrder: variant.sortOrder,
+          expectedUpdatedAt: neighbor.updatedAt,
+        }),
       ]);
 
       setReordering(false);
@@ -1318,7 +1319,16 @@ const VariantRow = ({
 
       onChanged();
     },
-    [clauseId, index, variant.id, variant.sortOrder, variants, t, onChanged],
+    [
+      clauseId,
+      index,
+      variant.id,
+      variant.sortOrder,
+      variant.updatedAt,
+      variants,
+      t,
+      onChanged,
+    ],
   );
 
   const body = isClauseParagraphs(variant.body) ? variant.body : [];
@@ -1488,7 +1498,8 @@ const VariantFormDialogBody = ({
   variant: VariantItem | undefined;
 }) => {
   const t = useTranslations();
-  const isEdit = !!variant;
+  const [initialVariant] = useState(variant);
+  const isEdit = !!initialVariant;
   const [label, setLabel] = useState(() => variant?.label ?? "");
   const [bodyText, setBodyText] = useState(() =>
     variant ? variantBodyToText(variant.body) : "",
@@ -1506,11 +1517,11 @@ const VariantFormDialogBody = ({
     const payload = { label: label.trim(), body };
 
     const response =
-      variant !== undefined
+      initialVariant !== undefined
         ? await api
             .clauses({ clauseId })
-            .variants({ variantId: variant.id })
-            .post(payload)
+            .variants({ variantId: initialVariant.id })
+            .post({ ...payload, expectedUpdatedAt: initialVariant.updatedAt })
         : await api.clauses({ clauseId }).variants.put(payload);
 
     setSaving(false);
