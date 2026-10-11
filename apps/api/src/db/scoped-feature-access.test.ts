@@ -199,7 +199,7 @@ test("the database scope and the request snapshot make the same decision", async
   }
 });
 
-test("enrolled member decisions agree across request and database scope", async () => {
+test("snapshot-less scopes do not read or admit self-serve enrolments", async () => {
   testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
   const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
   try {
@@ -236,15 +236,11 @@ test("enrolled member decisions agree across request and database scope", async 
           organizationId: grant.organizationId,
           userId: "fixture-user",
         });
-        expect(scoped).toEqual(
-          [...snapshot.decisions]
-            .filter(([, decision]) => decision.status === "enabled")
-            .map(([id]) => id),
+        expect(snapshot.decisions.get("time-billing")?.status).toBe(
+          deployed && identity?.emailVerified ? "enabled" : "hidden",
         );
-        expect(scoped).toEqual(
-          deployed && identity?.emailVerified ? ["time-billing"] : [],
-        );
-        expect(queries).toBe(deployed ? 1 : 0);
+        expect(scoped).toEqual([]);
+        expect(queries).toBe(0);
       }
     }
   } finally {
@@ -260,17 +256,21 @@ test("request transactions reuse their authenticated feature snapshot", async ()
       featureIds: [LEGAL_LISTS_FEATURE_ID],
     },
     async () => {
+      testState.setConfig("FEATURE_TIME_BILLING", true);
       const organizationId = toSafeId<"organization">(grant.organizationId);
       const userId = toSafeId<"user">("fixture-user");
       const featureAccessSnapshot = buildFeatureAccessSnapshot({
         organizationId,
         userId,
         identity: memberIdentity,
-        enrolments: [],
+        enrolments: [{ featureId: "time-billing", organizationId, userId }],
       });
       expect(
         featureAccessSnapshot.decisions.get(LEGAL_LISTS_FEATURE_ID)?.status,
       ).toBe("enabled");
+      expect(featureAccessSnapshot.decisions.get("time-billing")?.status).toBe(
+        "enabled",
+      );
       const dialect = new PgDialect();
       let queries = 0;
       const tx = {
@@ -287,7 +287,7 @@ test("request transactions reuse their authenticated feature snapshot", async ()
             );
           expect(setting).not.toBeNull();
           expect(rendered.params.at(Number(setting?.at(1)) - 1)).toBe(
-            JSON.stringify([LEGAL_LISTS_FEATURE_ID]),
+            JSON.stringify([LEGAL_LISTS_FEATURE_ID, "time-billing"]),
           );
           return [];
         },
@@ -316,7 +316,7 @@ test("request transactions reuse their authenticated feature snapshot", async ()
 test("scopes without a possible feature perform no identity or enrolment read", async () => {
   const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
   try {
-    testState.setConfig("FEATURE_TIME_BILLING", false);
+    testState.setConfig("FEATURE_TIME_BILLING", true);
     testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
     let queries = 0;
     expect(
@@ -340,7 +340,7 @@ test("scopes without a possible feature perform no identity or enrolment read", 
 test("invitation scopes read identity without touching self-serve enrolments", async () => {
   const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
   try {
-    testState.setConfig("FEATURE_TIME_BILLING", false);
+    testState.setConfig("FEATURE_TIME_BILLING", true);
     testState.setConfig("FEATURE_LEGAL_LISTS", true);
     testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
       [LEGAL_LISTS_FEATURE_ID]: [grant],
@@ -364,6 +364,9 @@ test("invitation scopes read identity without touching self-serve enrolments", a
     expect(actual).toEqual([LEGAL_LISTS_FEATURE_ID]);
     expect(statements).toHaveLength(1);
     expect(statements.at(0)).not.toContain("feature_enrolments");
+    expect(statements.at(0)).toContain(
+      'FROM public.member m INNER JOIN public."user" u',
+    );
   } finally {
     restoreMode();
   }

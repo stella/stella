@@ -17,6 +17,7 @@ import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
 
 type FeatureAccessReadPlanOptions = {
   organizationId: string;
+  enrolmentSource?: "database" | "none";
   registry?: FeatureRegistry;
   grants?: FeatureAccessGrants;
 };
@@ -24,6 +25,7 @@ type FeatureAccessReadPlanOptions = {
 /** Identity is needed only for a feature that can admit this organization. */
 export const featureAccessReadPlan = ({
   organizationId,
+  enrolmentSource = "database",
   registry = FEATURE_REGISTRY,
   grants = envFeatureAccess.API_FEATURE_ACCESS_GRANTS,
 }: FeatureAccessReadPlanOptions) => {
@@ -34,12 +36,12 @@ export const featureAccessReadPlan = ({
   const candidates = Object.keys(registry).filter(
     (id) =>
       isFeatureDeployed(registry, id) &&
-      [...featurePrerequisiteClosure(registry, id)].every(
-        (required) =>
-          enrolmentKind(required) === "self-serve" ||
-          grants[required]?.some(
-            (grant) => grant.organizationId === organizationId,
-          ) === true,
+      [...featurePrerequisiteClosure(registry, id)].every((required) =>
+        enrolmentKind(required) === "self-serve"
+          ? enrolmentSource === "database"
+          : grants[required]?.some(
+              (grant) => grant.organizationId === organizationId,
+            ) === true,
       ),
   );
   const enrolmentFeatureIds = [

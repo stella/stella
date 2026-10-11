@@ -2,16 +2,13 @@ import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 
-import { member, user as authUser } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import { featureEnrolments } from "@/api/db/schema";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   buildFeatureAccessSnapshot,
   featureAccessReadPlan,
 } from "@/api/lib/feature-access/snapshot";
-import { typedPgArray } from "@/api/lib/search/sql";
-import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import { isRecord } from "@/api/lib/type-guards";
 
 type ScopedFeatureAccessOptions = {
   tx: { execute: (query: SQLWrapper | string) => PromiseLike<unknown> };
@@ -27,25 +24,22 @@ export const resolveScopedFeatureIds = async ({
   if (userId === null) {
     return [];
   }
-  const { candidates, enrolmentFeatureIds } = featureAccessReadPlan({
+  // Request scopes reuse their authenticated snapshot. Snapshot-less scopes
+  // retain invitation-only admission, including under restricted owner roles
+  // and migration schemas that cannot read feature enrolments.
+  const { candidates } = featureAccessReadPlan({
     organizationId,
+    enrolmentSource: "none",
   });
   if (candidates.length === 0) {
     return [];
   }
-  const enrolments =
-    enrolmentFeatureIds.length === 0
-      ? sql`'{}'::text[]`
-      : sql`coalesce((SELECT array_agg(${featureEnrolments.featureId}) FROM ${featureEnrolments}
-        WHERE ${featureEnrolments.organizationId} = ${member.organizationId} AND ${featureEnrolments.userId} = ${member.userId}
-          AND ${featureEnrolments.featureId} = ANY(${typedPgArray(enrolmentFeatureIds, "text")})), '{}')`;
   const identity = executedRows(
     await tx.execute(sql`
-    SELECT ${authUser.email} AS email, ${authUser.emailVerified} AS "emailVerified",
-      ${enrolments} AS "enrolledFeatureIds"
-    FROM ${member} INNER JOIN ${authUser} ON ${authUser.id} = ${member.userId}
-    WHERE ${member.organizationId} = ${organizationId} AND ${member.userId} = ${userId}
-      AND ${authUser.deletedAt} IS NULL
+    SELECT u.email, u.email_verified AS "emailVerified"
+    FROM public.member m INNER JOIN public."user" u ON u.id = m.user_id
+    WHERE m.organization_id = ${organizationId} AND m.user_id = ${userId}
+      AND u.deleted_at IS NULL
     LIMIT 1
   `),
   ).at(0);
@@ -55,9 +49,7 @@ export const resolveScopedFeatureIds = async ({
   if (
     !isRecord(identity) ||
     typeof identity["email"] !== "string" ||
-    typeof identity["emailVerified"] !== "boolean" ||
-    !isUnknownArray(identity["enrolledFeatureIds"]) ||
-    !identity["enrolledFeatureIds"].every((id) => typeof id === "string")
+    typeof identity["emailVerified"] !== "boolean"
   ) {
     return panic("Feature access requires a verified identity row");
   }
@@ -69,11 +61,7 @@ export const resolveScopedFeatureIds = async ({
     organizationId,
     userId,
     identity: user,
-    enrolments: identity["enrolledFeatureIds"].map((featureId) => ({
-      featureId,
-      organizationId,
-      userId,
-    })),
+    enrolments: [],
   });
   return [...snapshot.decisions]
     .filter(([, decision]) => decision.status === "enabled")
