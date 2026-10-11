@@ -110,15 +110,30 @@ test("Stop in another tab cancels a detached turn and settles both viewers", asy
     ).toBeVisible({
       timeout: 30_000,
     });
-    await composer.fill(SLOW_STREAM_PROMPT);
+    // This turn ends only through cancellation, so reload cannot race a
+    // finite mock reply finishing and morphing Stop into disabled Send.
+    await composer.fill("Stream until stopped please");
     await page.getByRole("button", { name: "Send message" }).click();
     await expect(
       page.getByRole("log").getByText(ANSWER_START, { exact: false }),
     ).toBeVisible();
-    await page.reload({ waitUntil: "commit" });
-    await observer.reload({ waitUntil: "commit" });
+    const joins = [page, observer].map(async (viewer) =>
+      viewer.waitForResponse(
+        (response) =>
+          /\/turns\/[^/]+\/join/u.test(response.url()) &&
+          response.request().method() === "GET",
+      ),
+    );
+    await Promise.all([
+      page.reload({ waitUntil: "commit" }),
+      observer.reload({ waitUntil: "commit" }),
+    ]);
+    for (const join of joins) {
+      expect((await join).ok()).toBe(true);
+    }
     const stop = observer.getByRole("button", { name: "Stop", exact: true });
     await expect(stop).toBeVisible({ timeout: 30_000 });
+    await expect(stop).toBeEnabled();
     await stop.click();
     await expect(stop).toBeHidden({ timeout: 30_000 });
     await expect(
