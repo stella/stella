@@ -26,6 +26,8 @@
 
 import { Result } from "better-result";
 
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
+
 import { ANALYSIS_OUTPUT_JSON_SCHEMA } from "@/api/handlers/case-law/analysis/analysis-output";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
@@ -97,71 +99,73 @@ type InputRecord =
 
 // One statement for the whole batch: a run over a candidate list is the
 // normal case, and a query per id would be a query per candidate.
-const rowsById = await readDecisionRows(
-  db,
-  ids.map((id) => brandPersistedCaseLawDecisionId(id)),
-);
+await runScriptWithErrorOutput(async () => {
+  const rowsById = await readDecisionRows(
+    db,
+    ids.map((id) => brandPersistedCaseLawDecisionId(id)),
+  );
 
-await prepareCorpusReads();
+  await prepareCorpusReads();
 
-const records: InputRecord[] = [];
-for (const id of ids) {
-  const row = rowsById.get(id);
-  if (row === undefined) {
+  const records: InputRecord[] = [];
+  for (const id of ids) {
+    const row = rowsById.get(id);
+    if (row === undefined) {
+      records.push({
+        decisionId: id,
+        status: "rejected",
+        reason: ANALYSIS_REJECTION.notFound,
+      });
+      continue;
+    }
+    // Sequentially, one corpus object at a time: a batch is an operator's
+    // pass over the corpus, not a request, and the object store is shared
+    // with the serving path.
+    const resolved = await resolveRowAnalysisInput({
+      readAst: async () => await readRowAst(row, tombstones),
+      row,
+    });
+    if (resolved.status === "rejected") {
+      records.push({
+        decisionId: id,
+        status: "rejected",
+        reason: resolved.reason,
+      });
+      continue;
+    }
     records.push({
       decisionId: id,
-      status: "rejected",
-      reason: ANALYSIS_REJECTION.notFound,
+      status: "ok",
+      language: resolved.input.language,
+      systemPrompt: resolved.input.systemPrompt,
+      userMessage: resolved.input.userMessage,
+      fingerprint: resolved.input.fingerprint,
+      contentHash: row.contentHash,
     });
-    continue;
   }
-  // Sequentially, one corpus object at a time: a batch is an operator's
-  // pass over the corpus, not a request, and the object store is shared
-  // with the serving path.
-  const resolved = await resolveRowAnalysisInput({
-    readAst: async () => await readRowAst(row, tombstones),
-    row,
-  });
-  if (resolved.status === "rejected") {
-    records.push({
-      decisionId: id,
-      status: "rejected",
-      reason: resolved.reason,
-    });
-    continue;
+
+  // One schema for the whole run: it is a property of the analysis, not of any
+  // decision, and repeating it per record would bury the inputs.
+  console.log(
+    JSON.stringify(
+      { outputSchema: ANALYSIS_OUTPUT_JSON_SCHEMA, decisions: records },
+      null,
+      2,
+    ),
+  );
+
+  // The tally goes to stderr, so stdout stays a single JSON document a
+  // producer can pipe straight into its own tooling.
+  for (const line of summariseOutcomes(
+    records.map((record) =>
+      record.status === "ok" ? "ok" : `rejected:${record.reason}`,
+    ),
+  )) {
+    console.error(line);
   }
-  records.push({
-    decisionId: id,
-    status: "ok",
-    language: resolved.input.language,
-    systemPrompt: resolved.input.systemPrompt,
-    userMessage: resolved.input.userMessage,
-    fingerprint: resolved.input.fingerprint,
-    contentHash: row.contentHash,
-  });
-}
 
-// One schema for the whole run: it is a property of the analysis, not of any
-// decision, and repeating it per record would bury the inputs.
-console.log(
-  JSON.stringify(
-    { outputSchema: ANALYSIS_OUTPUT_JSON_SCHEMA, decisions: records },
-    null,
-    2,
-  ),
-);
-
-// The tally goes to stderr, so stdout stays a single JSON document a
-// producer can pipe straight into its own tooling.
-for (const line of summariseOutcomes(
-  records.map((record) =>
-    record.status === "ok" ? "ok" : `rejected:${record.reason}`,
-  ),
-)) {
-  console.error(line);
-}
-
-const rejected = records.filter(
-  (record) => record.status === "rejected",
-).length;
-process.exit(rejected === records.length && rejected > 0 ? 1 : 0);
+  const rejected = records.filter(
+    (record) => record.status === "rejected",
+  ).length;
+  process.exit(rejected === records.length && rejected > 0 ? 1 : 0);
+});

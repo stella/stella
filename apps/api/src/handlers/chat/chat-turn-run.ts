@@ -1,5 +1,5 @@
 import { RUN_CANCEL_REASON, toServerSentEventsResponse } from "@tanstack/ai";
-import type { StreamChunk } from "@tanstack/ai";
+import type { StreamChunk, StreamDurability } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 
 import type { AIProvider } from "@stll/ai-catalog";
@@ -142,7 +142,7 @@ type ChatTurnRunConnectors = { close: () => void | Promise<void> };
 
 /** What cuts a run's producer short. */
 type ChatTurnRunControl = {
-  /** The run's own abort: its deadline, a stop, or its response closing. */
+  /** The run's own abort: its deadline, a stop, or ownership loss. */
   abortController: AbortController;
   /** The SDK provider also stops on admission loss without ending the transport. */
   providerAbortController: AbortController;
@@ -455,10 +455,13 @@ export class ChatTurnRun {
 
   /**
    * Start producing `output`, built against `control`, and serve it. The
-   * response is the run's one transport: closing it aborts the run, which is
-   * how a closed connection still ends the turn.
+   * response is a viewer: closing it detaches delivery while the producer
+   * keeps draining into the log under its existing deadlines and ownership.
    */
-  produce(output: AsyncIterable<StreamChunk>): Response {
+  produce(
+    output: AsyncIterable<StreamChunk>,
+    durability: StreamDurability,
+  ): Response {
     if (this.state.status !== "handed-over") {
       return panic(`A chat turn run cannot produce once ${this.state.status}`);
     }
@@ -471,6 +474,7 @@ export class ChatTurnRun {
           : this.trackUpstream(output),
         {
           abortController: this.control.abortController,
+          durability: { adapter: durability },
           headers: { [CHAT_TURN_ID_HEADER]: this.execution.id },
         },
       ),
@@ -592,6 +596,30 @@ export class ChatTurnRun {
     if (status !== "handed-over") {
       return;
     }
+    await this.closeConnectors();
+    this.release();
+  }
+
+  /** The durable pump ended without a persistence event; no later iterator
+   * callback can release this producing run. */
+  async failProduction(source: "not-started" | "started"): Promise<void> {
+    if (this.state.status !== "producing") {
+      return panic(`Cannot fail a producer once ${this.state.status}`);
+    }
+    try {
+      await this.fail("internal", true);
+      if (source === "not-started") {
+        // trackUpstream prepares a completion promise before the iterator is
+        // pulled. An unused iterator has no finally to resolve that promise.
+        this.upstream = { status: "closed" };
+        await this.closeConnectors();
+      }
+    } finally {
+      this.release();
+    }
+  }
+
+  private async closeConnectors(): Promise<void> {
     const { connectors } = this.options;
     if (connectors !== undefined) {
       const closed = await Result.tryPromise(
@@ -600,11 +628,10 @@ export class ChatTurnRun {
       if (Result.isError(closed)) {
         observeFailure(closed.error, {
           sink: CONNECTOR_CLOSE_FAILED_SINK,
-          ctx: { threadId: owner.threadId },
+          ctx: { threadId: this.options.owner.threadId },
         });
       }
     }
-    this.release();
   }
 
   /** Stop the run as the user's cancel; resolves once it is over. */

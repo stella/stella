@@ -33,6 +33,7 @@ import type {
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { logErrorOutput, printError } from "@stll/errors";
 import { deriveBlockId } from "@stll/folio-core/server";
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
@@ -6426,10 +6427,13 @@ export async function seed(organizationId?: string, userId?: string) {
   try {
     await seedCaseLaw();
   } catch (error) {
-    console.warn(
-      "  Case-law seed skipped (non-fatal — likely local schema drift):",
-      error instanceof Error ? error.message : error,
-    );
+    logErrorOutput({
+      level: "warn",
+      values: [
+        "  Case-law seed skipped (non-fatal — likely local schema drift):",
+        error,
+      ],
+    });
   }
 
   console.log("\nDone. Dev data seeded successfully.");
@@ -6611,7 +6615,7 @@ if (import.meta.main) {
       process.exit(0);
     })
     .catch((error: unknown) => {
-      console.error("Seed failed:", error);
+      printError("Seed failed:", error);
       process.exit(1);
     });
 }

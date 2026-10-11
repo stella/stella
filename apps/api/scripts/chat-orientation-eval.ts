@@ -1,3 +1,4 @@
+import { printError } from "@stll/errors";
 /**
  * Chat orientation benchmark: can a (weak) model complete simple workspace
  * tasks through Stella's chat without tool-call failures?
@@ -1268,7 +1269,7 @@ const main = async (): Promise<void> => {
     } else {
       console.log("Deleting eval matter ...");
       await deleteFixture(client, fixture).catch((error: unknown) => {
-        console.error(`Fixture cleanup failed: ${String(error)}`);
+        printError("Fixture cleanup failed:", error);
       });
     }
   }
@@ -1326,9 +1327,7 @@ const main = async (): Promise<void> => {
 
 if (import.meta.main) {
   main().catch((error: unknown) => {
-    console.error(
-      error instanceof Error ? `${error.name}: ${error.message}` : error,
-    );
+    printError(error);
     process.exit(1);
   });
 }

@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * Seed the database with case-law decisions for local testing of the Case
  * Law feature: recorded production decisions, plus the synthetic decisions
@@ -17,14 +18,13 @@
  * Usage:
  *   bun apps/api/scripts/seed-case-law.ts
  */
-
-import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
+import { logErrorOutput, printError } from "@stll/errors";
 import type { PersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
@@ -319,9 +319,13 @@ const seedFixtures = async ({ rootDb, ingestionDb }: CaseLawWriteHandles) => {
       ).andThen((indexResult) => indexResult);
       if (Result.isError(indexed)) {
         const indexError = indexed.error;
-        console.warn(
-          `  search-index skipped for ${adapterKey} ${d.case_number} (${d.language}): ${indexError instanceof Error ? indexError.message : String(indexError)}`,
-        );
+        logErrorOutput({
+          level: "warn",
+          values: [
+            `  search-index skipped for ${adapterKey} ${d.case_number} (${d.language}):`,
+            indexError,
+          ],
+        });
       }
 
       if (result.length > 0) {
@@ -370,7 +374,7 @@ if (import.meta.main) {
   seedCaseLaw()
     .then(() => process.exit(0))
     .catch((error: unknown) => {
-      console.error("Seed failed:", error);
+      printError("Seed failed:", error);
       process.exit(1);
     });
 }

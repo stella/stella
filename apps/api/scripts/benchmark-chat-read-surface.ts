@@ -1,3 +1,4 @@
+import { EventType, maxIterations, toolDefinition } from "@tanstack/ai";
 /**
  * Benchmark the chat readonly data surface with a cheap model.
  *
@@ -8,11 +9,11 @@
  *   bun apps/api/scripts/benchmark-chat-read-surface.ts --surface new-inline
  *   bun apps/api/scripts/benchmark-chat-read-surface.ts --json
  */
-
-import { EventType, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { AnyServerTool, TokenUsage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import * as v from "valibot";
+
+import { printError } from "@stll/errors";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { resolveCaching } from "@/api/lib/ai-config";
@@ -1107,7 +1108,6 @@ const main = async () => {
 };
 
 main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(`Benchmark failed: ${message}`);
+  printError("Benchmark failed:", error);
   process.exitCode = 1;
 });
