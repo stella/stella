@@ -36,7 +36,7 @@ const Content = ({ runtime }: DocumentUploadProps) => {
           file={snapshot.file}
           onFileChange={runtime.selectFile}
           chooseLabel={t("chooseFile")}
-          emptyLabel={t("noFile")}
+          emptyLabel={t("noFileChosen")}
         />
       </section>
 

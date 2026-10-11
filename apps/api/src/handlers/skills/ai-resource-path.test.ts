@@ -8,8 +8,8 @@ describe("AI resource path", () => {
       "references/checklist.md",
       "references/cz/act-110.md",
       "references/case-law/supreme.md",
-      "knowledge/01-foundations.md",
-      "prompts/review.prompt.md",
+      "assets/01-foundations.md",
+      "scripts/review.md",
     ]) {
       expect(isAiResourcePath(path)).toBe(true);
     }
@@ -20,6 +20,10 @@ describe("AI resource path", () => {
       "assets/logo.png",
       "scripts/run.sh",
       "secret.md",
+      "knowledge/01-foundations.md",
+      "prompts/review.prompt.md",
+      "reference/citations.md",
+      "templates/draft.md",
       "references/../etc/passwd.md",
       "references/notes.txt",
       "references/.md",

@@ -31,10 +31,17 @@
 //   expanded). The identity check runs on the same printout with `Date` kept.
 
 import { panic } from "better-result";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { withGenerationLock } from "../../../packages/scripts/src/generation-lock";
 import { hasPreparedGeneratedSources } from "../../../packages/scripts/src/prepared-generated-sources";
 import { withoutTsgoOnlyOptionDiagnostics } from "../../../packages/scripts/src/tsgo-compiler-options";
 import {
@@ -1319,7 +1326,13 @@ const main = () => {
     );
   }
   mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
-  writeFileSync(OUTPUT_PATH, output);
+  const temporary = `${OUTPUT_PATH}.${process.pid}.tmp`;
+  try {
+    writeFileSync(temporary, output);
+    renameSync(temporary, OUTPUT_PATH);
+  } finally {
+    rmSync(temporary, { force: true });
+  }
   console.log(
     `generate-web-api-types: ${check ? "verified deterministic" : "wrote"} ${path.relative(REPO_ROOT, OUTPUT_PATH)} ` +
       `(${Buffer.byteLength(output)} bytes) in ${Math.round(performance.now() - started)} ms`,
@@ -1327,5 +1340,9 @@ const main = () => {
 };
 
 if (import.meta.main) {
-  main();
+  const generated = await withGenerationLock({
+    lockPath: path.join(REPO_ROOT, ".cache/web-api-generation.sqlite"),
+    run: main,
+  });
+  generated.unwrap("API type generation failed");
 }

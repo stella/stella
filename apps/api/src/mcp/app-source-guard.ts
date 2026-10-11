@@ -1,3 +1,5 @@
+import { load } from "cheerio";
+import { isText } from "domhandler";
 import path from "node:path";
 import ts from "typescript";
 
@@ -7,6 +9,41 @@ const SDK_OWNERS: ReadonlySet<string> = new Set([
   "document-upload/runtime.ts",
   "file-comparison/runtime.ts",
 ]);
+
+const VISIBLE_ATTRIBUTES = ["title", "aria-label", "placeholder", "alt"];
+
+export const inspectAppHtmlSources = (
+  sources: Readonly<Record<string, string>>,
+): string[] => {
+  const issues: string[] = [];
+  for (const [file, text] of Object.entries(sources)) {
+    const html = load(text);
+    html("script, style").remove();
+    const report = (value: string) => {
+      const normalized = value.replace(/\s+/gu, " ").trim();
+      if (normalized === "stella" || !/\p{L}/u.test(normalized)) {
+        return;
+      }
+      issues.push(
+        `App HTML copy requires the shared catalog: ${file}: ${normalized}`,
+      );
+    };
+    html("*").each((_, element) => {
+      for (const child of html(element).contents()) {
+        if (isText(child)) {
+          report(child.data);
+        }
+      }
+      for (const attribute of VISIBLE_ATTRIBUTES) {
+        const value = html(element).attr(attribute);
+        if (value !== undefined) {
+          report(value);
+        }
+      }
+    });
+  }
+  return issues;
+};
 
 const importSpecifier = (node: ts.Node) => {
   if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {

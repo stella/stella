@@ -1,21 +1,55 @@
-import { App } from "@modelcontextprotocol/ext-apps";
+import { App, EventDispatcher } from "@modelcontextprotocol/ext-apps";
+import type { AppEventMap } from "@modelcontextprotocol/ext-apps";
 import { TaggedError } from "better-result";
 import { afterEach, expect, mock, spyOn, test } from "bun:test";
 
 import { FILE_COMPARISON_TRANSPORT } from "@stll/api-contract";
 
+import { appLocale } from "../shared/locale";
 import { createFileComparisonRuntime } from "./runtime";
 
 class ComparisonHost extends App {
+  events = new EventDispatcher<AppEventMap>();
   response =
     Promise.withResolvers<Awaited<ReturnType<App["callServerTool"]>>>();
   calls = 0;
+
+  override addEventListener<K extends keyof AppEventMap>(
+    event: K,
+    listener: (value: AppEventMap[K]) => void,
+  ) {
+    this.events.addEventListener(event, listener);
+  }
 
   override async callServerTool() {
     this.calls += 1;
     return await this.response.promise;
   }
 }
+
+test("stored comparison reservation errors follow host locale changes", async () => {
+  const app = new ComparisonHost({
+    name: "comparison-locale-host",
+    version: "1.0.0",
+  });
+  const runtime = createFileComparisonRuntime(app);
+  app.events.dispatch("hostcontextchanged", { locale: "en" });
+  runtime.selectBase(new File(["original"], "original.docx"));
+  runtime.selectTarget(new File(["revised"], "revised.docx"));
+  app.response.resolve({ content: [], structuredContent: {} });
+  await runtime.upload();
+  const english = runtime.getSnapshot().message;
+  expect(english).toBe(appLocale("en").t("invalidComparisonReservation"));
+  for (const locale of ["cs-CZ", "ar", "en-GB"]) {
+    app.events.dispatch("hostcontextchanged", { locale });
+    const expected = appLocale(locale).t("invalidComparisonReservation");
+    if (locale !== "en-GB") {
+      expect(expected).not.toBe(english);
+    }
+    expect(runtime.getSnapshot().message).toBe(expected);
+    expect(runtime.getSnapshot().status).toBe("error");
+  }
+});
 
 test("comparison rejects selection changes and duplicate uploads until the pending upload settles", async () => {
   const app = new ComparisonHost({ name: "comparison-host", version: "1.0.0" });

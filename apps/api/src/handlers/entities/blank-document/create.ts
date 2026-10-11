@@ -15,6 +15,7 @@ const bodySchema = t.Object({
 
 export default createSafeHandler(
   {
+    contract: "patch",
     contentDelivery: {
       type: "none",
       reason:

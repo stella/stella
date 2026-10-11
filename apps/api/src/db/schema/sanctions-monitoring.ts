@@ -6,6 +6,7 @@ import {
 } from "@/api/lib/lists/sanctions/monitoring-vocabulary";
 import type { SanctionsPossibleMatch } from "@/api/lib/lists/sanctions/screening-service";
 
+import { reviewResetOwnerCheck } from "../review-reset-policies";
 import {
   orgPolicies,
   globalCaseLawPolicies,
@@ -390,7 +391,7 @@ export const sanctionsScreeningEvents = p.pgTable(
       as: "restrictive",
       for: "delete",
       to: "public",
-      using: sql`false`,
+      using: reviewResetOwnerCheck("sanctions_screening_events"),
     }),
   ],
 );

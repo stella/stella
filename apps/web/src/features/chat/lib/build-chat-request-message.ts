@@ -1,5 +1,8 @@
 import type { MultimodalContent } from "@tanstack/ai-client";
 
+import { createChatPastedTextPart } from "@stll/api-contract/chat";
+import type { ChatPastedTextPart } from "@stll/api-contract/chat";
+
 import type { ChatInputDraft } from "@/components/chat-editor-provider";
 import type {
   ChatAttachmentPart,
@@ -44,29 +47,37 @@ export const buildChatRequestMessage = async ({
     return { id, content: html };
   }
 
-  const fileParts: ChatAttachmentPart[] = await Promise.all(
-    files.map(async (file): Promise<ChatAttachmentPart> => {
-      const source = {
-        type: "url" as const,
-        value: await toDataUrl(file.file),
-        mimeType: file.mimeType,
-      };
-      const metadata = { filename: file.filename };
+  const attachmentParts = await Promise.all(
+    files.map(
+      async (file): Promise<ChatAttachmentPart | ChatPastedTextPart> => {
+        if (file.type === "pasted_text") {
+          return createChatPastedTextPart(file.text);
+        }
+        const source = {
+          type: "url" as const,
+          value: await toDataUrl(file.file),
+          mimeType: file.mimeType,
+        };
+        const metadata = { filename: file.filename };
 
-      if (file.mimeType.startsWith(IMAGE_MIME_PREFIX)) {
-        return { type: "image", source, metadata };
-      }
+        if (file.mimeType.startsWith(IMAGE_MIME_PREFIX)) {
+          return { type: "image", source, metadata };
+        }
 
-      return { type: "document", source, metadata };
-    }),
+        return { type: "document", source, metadata };
+      },
+    ),
   );
 
   if (!html) {
-    return { id, content: fileParts };
+    return { id, content: attachmentParts };
   }
 
   return {
     id,
-    content: [{ type: "text", content: html } satisfies ChatPart, ...fileParts],
+    content: [
+      { type: "text", content: html } satisfies ChatPart,
+      ...attachmentParts,
+    ],
   };
 };

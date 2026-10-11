@@ -26,26 +26,26 @@ const Content = ({ runtime }: FileComparisonProps) => {
       </h1>
       <p className="text-muted-foreground text-sm">{t("comparisonNote")}</p>
       <section className="grid gap-2">
-        <Label id="base-label">{t("originalFile")}</Label>
+        <Label id="base-label">{t("original")}</Label>
         <FileInput
           aria-labelledby="base-label"
           disabled={snapshot.uploadPhase === "active"}
           file={snapshot.base}
           onFileChange={runtime.selectBase}
           chooseLabel={t("chooseFile")}
-          emptyLabel={t("noFile")}
+          emptyLabel={t("noFileChosen")}
           accept=".docx"
         />
       </section>
       <section className="grid gap-2">
-        <Label id="target-label">{t("revisedFile")}</Label>
+        <Label id="target-label">{t("revised")}</Label>
         <FileInput
           aria-labelledby="target-label"
           disabled={snapshot.uploadPhase === "active"}
           file={snapshot.target}
           onFileChange={runtime.selectTarget}
           chooseLabel={t("chooseFile")}
-          emptyLabel={t("noFile")}
+          emptyLabel={t("noFileChosen")}
           accept=".docx"
         />
       </section>

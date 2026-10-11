@@ -16,8 +16,21 @@ import { createDetached } from "@stll/errors";
 import type { PresentationApp } from "../manifest";
 import { setAppDocumentLocale } from "./locale";
 
-const applyHostPresentation = (context: McpUiHostContext) => {
-  setAppDocumentLocale(context.locale);
+type AppToolResult = Awaited<ReturnType<App["callServerTool"]>>;
+
+export const parseAppToolPayload = (result: AppToolResult): unknown => {
+  if (result.structuredContent !== undefined) {
+    return result.structuredContent;
+  }
+  const text = result.content.find((part) => part.type === "text")?.text;
+  if (text === undefined) {
+    return undefined;
+  }
+  const parsed = Result.try((): unknown => JSON.parse(text));
+  return Result.isError(parsed) ? undefined : parsed.value;
+};
+
+const applyHostStyles = (context: McpUiHostContext) => {
   if (context.theme !== undefined) {
     applyDocumentTheme(context.theme);
     document.documentElement.classList.toggle("dark", context.theme === "dark");
@@ -25,6 +38,14 @@ const applyHostPresentation = (context: McpUiHostContext) => {
   if (context.styles?.variables !== undefined) {
     applyHostStyleVariables(context.styles.variables);
   }
+  if (context.styles?.css?.fonts !== undefined) {
+    applyHostFonts(context.styles.css.fonts);
+  }
+};
+
+const applyHostPresentation = (context: McpUiHostContext) => {
+  setAppDocumentLocale(context.locale);
+  applyHostStyles(context);
 };
 
 export const applyUploadHostStyles = (
@@ -33,16 +54,7 @@ export const applyUploadHostStyles = (
   if (!context) {
     return;
   }
-  if (context.theme) {
-    applyDocumentTheme(context.theme);
-    document.documentElement.classList.toggle("dark", context.theme === "dark");
-  }
-  if (context.styles?.variables) {
-    applyHostStyleVariables(context.styles.variables);
-  }
-  if (context.styles?.css?.fonts) {
-    applyHostFonts(context.styles.css.fonts);
-  }
+  applyHostStyles(context);
 };
 
 type OpenPresentationLinkOptions = {
@@ -152,7 +164,7 @@ export const createPresentationBridge = <View>({
       });
       return;
     }
-    const view = parse(result.structuredContent, snapshot.input);
+    const view = parse(parseAppToolPayload(result), snapshot.input);
     publish(
       view === undefined
         ? { status: "error", message: null }
@@ -279,6 +291,7 @@ export const createPresentationBridge = <View>({
     await openPresentationLink({ app, url, fail });
   };
   const connect = async (): Promise<void> => {
+    applyHostPresentation(snapshot.context);
     const connected = await Result.tryPromise(async () => app.connect());
     if (Result.isError(connected)) {
       publish({ status: "error", message: connected.error.message });

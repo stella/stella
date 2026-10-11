@@ -24,7 +24,7 @@ type AuthorizeDesktopHandoffOptions = {
 
 type DesktopHandoffAuthorizationResult = Result<
   InferOk<Awaited<ReturnType<typeof authorizeDesktopAccount>>>,
-  HandlerError<401 | 426 | 503>
+  HandlerError<401 | 403 | 426 | 503>
 >;
 
 const DEFAULT_DEPENDENCIES = {

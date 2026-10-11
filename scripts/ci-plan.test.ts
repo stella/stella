@@ -21,6 +21,10 @@ import { compareCodeUnit } from "@stll/collation";
 import { drawPropertySamples, propertyConfig } from "@stll/property-testing";
 
 import eventPolicies from "../.github/ci-event-policy.json" with { type: "json" };
+import {
+  POSTGRES_SHARD_TEST_BUDGET_SECONDS,
+  POSTGRES_TEST_SHARD_IDS,
+} from "../apps/api/scripts/postgres-test-shards";
 import queuedJob from "./__fixtures__/ci-cancellation/queued-job.json" with { type: "json" };
 import supersessionAnnotations from "./__fixtures__/ci-cancellation/supersession.json" with { type: "json" };
 import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json" with { type: "json" };
@@ -440,6 +444,9 @@ test("everything the API image is built from requires the API image smoke", () =
     "apps/web/package.json",
     "apps/landing/public/fonts/CabinetGrotesk-Regular.otf",
     "docker/postgres/init.sql",
+    "docker/postgres/prod-parity.conf",
+    "docker/postgres/server.conf",
+    "scripts/configure-test-postgres.sh",
     ".gitmodules",
     "bun.lock",
     "bunfig.toml",
@@ -569,6 +576,19 @@ test("the lockfile release-age guard follows every tracked lockfile", () => {
       "false",
     ]);
   }
+});
+
+test("desktop Windows dry run follows release inputs and skips unrelated changes", () => {
+  const output = "desktop_windows_dry_run_required";
+  for (const file of [
+    ".github/workflows/release-desktop.yml",
+    ".github/actions/desktop-windows-build/action.yml",
+    "scripts/desktop-release-step.ts",
+    "apps/desktop/src-tauri/tauri.conf.json",
+  ]) {
+    expect(runSelector([file], [output]), file).toEqual(["true"]);
+  }
+  expect(runSelector(["docs/guide.md"], [output])).toEqual(["false"]);
 });
 
 const MatrixEntry = v.object({ runner: v.string(), platform: v.string() });
@@ -1292,7 +1312,9 @@ test("each job's plan scope is the ci-plan output its `if:` selects it by", () =
     expect(selectedBy, job).toEqual([
       ...(scope === null ? [] : [scope]),
       ...(additionalScope === undefined ? [] : [additionalScope]),
-      ...(fastJobScopes[job] ? [fastJobScopes[job]] : []),
+      ...(fastJobScopes[job] && fastJobScopes[job] !== scope
+        ? [fastJobScopes[job]]
+        : []),
     ]);
   }
 });
@@ -1975,6 +1997,117 @@ test("Docker checks are required at every selected merge-group depth", () => {
   expect(
     evaluateResult({ event: EVENT.mergeGroup, results: { [job]: "skipped" } }),
   ).toBe(1);
+});
+
+test("desktop Rust tests select classified merge-group changes at every queue depth", () => {
+  const job = v.parse(
+    v.object({
+      strategy: v.object({ matrix: v.object({ include: v.string() }) }),
+    }),
+    ciJobs["desktop-rust-tests"],
+  );
+  const platforms = v.array(
+    v.object({ os: v.string(), runner: v.string(), target: v.string() }),
+  );
+  const lintPlatforms = v.parse(
+    v.object({
+      strategy: v.object({ matrix: v.object({ include: platforms }) }),
+    }),
+    ciJobs["desktop-rust-lint"],
+  ).strategy.matrix.include;
+  for (const event of [EVENT.mergeGroup, EVENT.pullRequest]) {
+    for (const file of ["apps/desktop/src-tauri/src/lib.rs", "docs/guide.md"]) {
+      const [required] = runSelector(
+        [file],
+        ["desktop_rust_checks_required"],
+        "full",
+        "false",
+        event,
+      );
+      expect(required, file).toBe(String(file.endsWith(".rs")));
+      for (const queueDepth of ["thin", "full"]) {
+        for (const runRequired of ["true", "false"]) {
+          const context = {
+            values: {
+              "github.event_name": event,
+              "inputs.pr_depth_only": false,
+              "needs.ci-plan.outputs.run_required": runRequired,
+              "needs.ci-plan.outputs.queue_depth": queueDepth,
+              "needs.ci-plan.outputs.trusted": "true",
+              "needs.ci-plan.outputs.desktop_rust_checks_required":
+                required ?? "",
+            },
+            status: { cancelled: false },
+          };
+          expect(
+            evaluate(jobIf(ciJobs["desktop-rust-tests"]), context),
+            `${event}/${file}/${queueDepth}/${runRequired}`,
+          ).toBe(
+            event === EVENT.mergeGroup &&
+              required === "true" &&
+              runRequired === "true",
+          );
+          const selected = v.parse(
+            platforms,
+            evaluate(job.strategy.matrix.include, context),
+          );
+          expect(selected.map(({ os }) => os)).toEqual(
+            queueDepth === "thin" ? ["macos"] : ["macos", "windows"],
+          );
+          expect(selected).toEqual(
+            lintPlatforms.filter(
+              ({ os }) => queueDepth !== "thin" || os === "macos",
+            ),
+          );
+          expect(selected.at(0)).toEqual({
+            os: "macos",
+            runner: "macos-14",
+            target: "aarch64-apple-darwin",
+          });
+          if (queueDepth === "full") {
+            expect(selected.at(1)).toEqual({
+              os: "windows",
+              runner: "windows-latest",
+              target: "x86_64-pc-windows-msvc",
+            });
+          }
+        }
+      }
+    }
+  }
+});
+
+test("thin merge groups require planned desktop Rust tests to succeed", () => {
+  const cases = ["true", "false"].flatMap((required) =>
+    ["success", "skipped", "failure", "cancelled"].map((result) => ({
+      required,
+      result,
+    })),
+  );
+  for (const { item, exitCode } of runBashBatch(
+    cases,
+    ({ required, result }) => {
+      const base = resultGateCase({
+        event: EVENT.mergeGroup,
+        results: { "desktop-rust-tests": result },
+        unplannedScopes:
+          required === "false" ? ["desktop_rust_checks_required"] : [],
+      });
+      return {
+        ...base,
+        env: {
+          ...base.env,
+          QUEUE_DEPTH: "thin",
+          THIN_JOBS: JSON.stringify(thinJobs({ jobs: ciJobs })),
+        },
+      };
+    },
+  )) {
+    const accepted =
+      item.result === "success" ||
+      (item.required === "false" && item.result === "skipped");
+    expect(exitCode, `${item.required}/${item.result}`).toBe(accepted ? 0 : 1);
+  }
 });
 
 test("desktop Rust lint is required on PRs and every merge-group depth", () => {
@@ -3350,6 +3483,34 @@ test("direct web compiler package scripts generate before inspecting types", () 
   expect(consumers).toBeGreaterThan(0);
 });
 
+test("folded suites are expected only from producers that run in this mode", () => {
+  const thin = new Set(thinJobs({ jobs: ciJobs }));
+  const excluded = Object.keys(foldedSuites).filter((job) => thin.has(job));
+  expect(excluded.length).toBeGreaterThan(0);
+  for (const job of excluded) {
+    const silent = {
+      results: { [job]: "skipped" },
+      suiteResults: Object.fromEntries(
+        Object.keys(foldedSuites[job] ?? {}).map((suite) => [suite, ""]),
+      ),
+    };
+    // Heavy runs leave thin producers out entirely, so their suites cannot be owed.
+    expect(
+      evaluateResult({
+        event: EVENT.workflowDispatch,
+        heavyOnly: true,
+        ...silent,
+      }),
+      `${job} heavy`,
+    ).toBe(0);
+    // A full run that planned the producer still fails when it stays silent.
+    expect(
+      evaluateResult({ event: EVENT.workflowDispatch, ...silent }),
+      `${job} full`,
+    ).toBe(1);
+  }
+});
+
 test("folded Docker suites keep their scopes and fail independently, including missing or cancelled verdicts", () => {
   expect(foldedSuites["docker-checks"]).toEqual({
     "agent-sandbox-docker": "agent_sandbox_docker_required",
@@ -3548,7 +3709,35 @@ test("every parallel quality and guard leg fails closed at full depth", () => {
   }
 });
 
-test("folded service suites preserve both scopes and independent verdicts", () => {
+test("Postgres service shards bind every matrix leg to a distinct runner partition", () => {
+  const job = v.parse(
+    v.object({
+      "timeout-minutes": v.number(),
+      strategy: v.object({
+        "fail-fast": v.boolean(),
+        matrix: v.object({ shard: v.array(v.number()) }),
+      }),
+    }),
+    ciJobs["postgres-service-suites"],
+  );
+  const shards = job.strategy.matrix.shard;
+  expect(shards.length).toBeGreaterThanOrEqual(2);
+  expect(shards.length).toBeLessThanOrEqual(3);
+  expect(shards).toEqual([...POSTGRES_TEST_SHARD_IDS]);
+  expect(POSTGRES_SHARD_TEST_BUDGET_SECONDS).toBeLessThanOrEqual(
+    job["timeout-minutes"] * 60 * 0.7,
+  );
+  expect(job.strategy["fail-fast"]).toBe(false);
+  expect(job["timeout-minutes"]).toBe(15);
+  const runner = jobSteps(ciJobs["postgres-service-suites"]).find(
+    (step) => step.name === "Run Postgres-gated API suites",
+  );
+  expect(runner?.env?.["CI_POSTGRES_TEST_SHARD"]).toBe(
+    `\${{ matrix.shard }}/${shards.length}`,
+  );
+});
+
+test("split service suites preserve their scopes and independent verdicts", () => {
   const plan = v.parse(
     v.object({ outputs: v.record(v.string(), v.string()) }),
     ciJobs["ci-plan"],
@@ -3557,6 +3746,12 @@ test("folded service suites preserve both scopes and independent verdicts", () =
     `\${{ steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true' }}`,
   );
   expect(jobScopes["service-suites"]).toBe("service_suites_required");
+  expect(jobScopes["postgres-service-suites"]).toBe(
+    "postgres_service_suites_required",
+  );
+  expect(fastJobScopes["postgres-service-suites"]).toBe(
+    "postgres_service_suites_required",
+  );
   expect(ciJobs).not.toHaveProperty("collab-redis");
   const services = v.parse(
     v.object({
@@ -3572,10 +3767,13 @@ test("folded service suites preserve both scopes and independent verdicts", () =
     }),
     ciJobs["service-suites"],
   );
-  const suites = services.steps.filter(
+  const suites = [
+    ...jobSteps(ciJobs["postgres-service-suites"]),
+    ...services.steps,
+  ].filter(
     ({ run }) =>
-      run?.includes("test:") ||
-      run?.includes(" test ") ||
+      run?.includes("bun run test:") ||
+      run?.includes("@stll/collab test ") ||
       run === "bun scripts/run-corpus-engine-suites.ts",
   );
   expect(suites.map(({ name }) => name)).toEqual([
@@ -3595,7 +3793,7 @@ test("folded service suites preserve both scopes and independent verdicts", () =
   for (const suite of suites) {
     const scope = suiteScopes.find(([name]) => name === suite.name)?.[1];
     if (scope === undefined) {
-      throw new TypeError(`No service scope for ${suite.name}`);
+      throw new TypeError("No service scope for suite");
     }
     const predicate = `needs.ci-plan.outputs.${scope} == 'true'`;
     if (scope === "corpus_suites_required") {
@@ -3621,21 +3819,44 @@ test("folded service suites preserve both scopes and independent verdicts", () =
   expect(services.services["redis"]?.ports).toEqual([`${collabPort}:6379`]);
   expect(services.services["valkey"]?.ports).toEqual([`${valkeyPort}:6379`]);
   for (const event of FULL_DEPTH_EVENTS) {
-    for (const result of ["failure", "cancelled", "skipped"]) {
-      expect(
-        evaluateResult({ event, results: { "service-suites": result } }),
-      ).toBe(1);
+    for (const job of ["postgres-service-suites", "service-suites"]) {
+      for (const result of ["failure", "cancelled", "skipped"]) {
+        expect(evaluateResult({ event, results: { [job]: result } })).toBe(1);
+      }
     }
     expect(
       evaluateResult({
         event,
-        results: { "service-suites": "skipped" },
+        results: {
+          "service-suites": "skipped",
+          "postgres-service-suites": "skipped",
+        },
         unplannedScopes: [
           "service_suites_required",
           "service_suites_pr_required",
+          "postgres_service_suites_required",
         ],
       }),
     ).toBe(0);
+  }
+  for (const event of [EVENT.pullRequest, ...FULL_DEPTH_EVENTS]) {
+    for (const scope of [
+      "corpus_suites_required",
+      "collaboration_suite_required",
+    ]) {
+      expect(
+        evaluateResult({
+          event,
+          results: { "postgres-service-suites": "skipped" },
+          plannedOutputs: {
+            [scope]: "true",
+            postgres_suites_required: "false",
+            postgres_service_suites_required: "false",
+          },
+        }),
+        `${event} ${scope}`,
+      ).toBe(0);
+    }
   }
 });
 
@@ -3645,7 +3866,7 @@ test("Bun cache saves are main-only and queue Turbo caches remain readable", () 
     Bun.YAML.parse(workflow),
   );
   expect(configured.env["TURBO_CACHE"]).toBe(
-    `\${{ github.event_name == 'merge_group' && 'local:rw,remote:r' || 'local:rw,remote:rw' }}`,
+    `\${{ github.ref == 'refs/heads/main' && 'local:rw,remote:rw' || 'local:rw,remote:r' }}`,
   );
   const cacheSteps = Object.values(ciJobs)
     .flatMap(
@@ -4500,7 +4721,7 @@ test("image scopes remain planned while pull requests skip execution", () => {
   }
 }, 30_000);
 
-test("each folded service step follows its own dependency scope and execution depth", () => {
+test("each split service step follows its own dependency scope and execution depth", () => {
   const scopes = [
     "postgres_suites_required",
     "corpus_suites_required",
@@ -4553,8 +4774,13 @@ test("each folded service step follows its own dependency scope and execution de
     ["Run cross-replica collaboration suite", "collaboration_suite_required"],
   ] as const) {
     const predicate =
-      jobSteps(ciJobs["service-suites"]).find((step) => step.name === name)
-        ?.if ?? "false";
+      jobSteps(
+        ciJobs[
+          name === "Run Postgres-gated API suites"
+            ? "postgres-service-suites"
+            : "service-suites"
+        ],
+      ).find((step) => step.name === name)?.if ?? "false";
     for (const selected of scopes) {
       const values = Object.fromEntries(
         scopes.map((key) => [key, String(key === selected)]),
@@ -4579,7 +4805,10 @@ test("each folded service step follows its own dependency scope and execution de
 });
 
 test("corpus bypasses non-corpus service depth and PR opt-in gates", () => {
-  const steps = jobSteps(ciJobs["service-suites"]);
+  const steps = [
+    ...jobSteps(ciJobs["postgres-service-suites"]),
+    ...jobSteps(ciJobs["service-suites"]),
+  ];
   const conditions = Object.fromEntries(
     [
       "Run Postgres-gated API suites",
@@ -4787,13 +5016,16 @@ const queueOnlyJobs = Object.fromEntries(
   Object.entries(eventPolicies.jobs)
     .filter(
       ([key, policy]) =>
-        (policy === "queue" || key === "ci.yml/service-suites") &&
+        (policy === "queue" ||
+          key === "ci.yml/service-suites" ||
+          key === "ci.yml/postgres-service-suites") &&
         key.startsWith("ci.yml/") &&
         gatedJobs.includes(key.slice("ci.yml/".length)),
     )
     .map(([key]) => [
       key.slice("ci.yml/".length),
-      key === "ci.yml/service-suites"
+      key === "ci.yml/service-suites" ||
+      key === "ci.yml/postgres-service-suites"
         ? "Postgres PR switch is off by default"
         : "queue-only because its declared event policy certifies the merged tree",
     ]),
@@ -4832,6 +5064,7 @@ const runsAtDepth = (
         "github.event.pull_request.labels.*.name": proveFix
           ? ["prove-fix"]
           : [],
+        "github.event.pull_request.draft": false,
         "inputs.heavy_only": heavyOnly === true,
         "inputs.pr_depth_only": false,
         "needs.ci-plan.outputs.coverage_profile": "normal-v1",
@@ -5194,7 +5427,11 @@ test("thin merge groups intentionally skip heavy jobs while full parity stays en
         queueDepth: "thin",
       }),
       name,
-    ).toBe(heavy.has(name) && !admitted.has(name) ? false : full);
+    ).toBe(
+      heavy.has(name) && !admitted.has(name) && name !== "desktop-rust-tests"
+        ? false
+        : full,
+    );
     // The off switch restores the thin skip for the admitted browser suites.
     expect(
       runsAtDepth(condition, {
@@ -5204,7 +5441,7 @@ test("thin merge groups intentionally skip heavy jobs while full parity stays en
         queueBrowserSuites: "off",
       }),
       `${name}/off`,
-    ).toBe(heavy.has(name) ? false : full);
+    ).toBe(heavy.has(name) && name !== "desktop-rust-tests" ? false : full);
     for (const event of [EVENT.pullRequest, EVENT.workflowDispatch]) {
       expect(
         runsAtDepth(condition, {
@@ -5456,7 +5693,8 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
           },
         }) !== false,
     );
-    expect(scheduled).toEqual(["ci-checks-docs"]);
+    // The wall-clock expiry check runs on every candidate, docs-only included.
+    expect(scheduled).toEqual(["dated-waiver-expiry", "ci-checks-docs"]);
     expect(resultJob.needs).toContain("ci-checks-docs");
     expect(fastRequired).toContain("ci-checks-docs");
     expect(
@@ -5465,7 +5703,7 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
         suiteDepth: depth,
         results: Object.fromEntries(
           gatedJobs
-            .filter((job) => job !== "ci-checks-docs")
+            .filter((job) => !scheduled.includes(job))
             .map((job) => [job, "skipped"]),
         ),
         unplannedScopes: Object.keys(plan).filter(
@@ -5892,13 +6130,20 @@ test("Postgres plans are visible on PRs while execution requires explicit opt-in
   const planner = steps.find(
     (step) => step.name === "Select affected Postgres test files",
   );
-  const runner = jobSteps(ciJobs["service-suites"]).find(
+  const runner = jobSteps(ciJobs["postgres-service-suites"]).find(
     (step) => step.name === "Run Postgres-gated API suites",
   );
   const runnerSelection =
     runner?.env?.["CI_POSTGRES_TEST_SELECTION"] ??
     panic("Missing Postgres selection wiring");
-  const jobCondition = jobIf(ciJobs["service-suites"]);
+  const jobCondition = jobIf(ciJobs["postgres-service-suites"]);
+  const plan = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  const eligibility =
+    plan.outputs["postgres_service_suites_required"] ??
+    panic("Missing Postgres service eligibility output");
   for (const mode of ["selected", "all", "none"] as const) {
     const selection = JSON.stringify(
       mode === "selected"
@@ -5920,6 +6165,7 @@ test("Postgres plans are visible on PRs while execution requires explicit opt-in
           "needs.ci-plan.outputs.run_required": "true",
           "needs.ci-plan.outputs.queue_depth": "full",
           "needs.ci-plan.outputs.service_suites_required": "true",
+          "needs.ci-plan.outputs.package_checks_required": "true",
           "needs.ci-plan.outputs.service_suites_pr_required": "true",
           "needs.ci-plan.outputs.corpus_suites_required": "false",
           "needs.ci-plan.outputs.postgres_suites_required": "true",
@@ -5929,10 +6175,38 @@ test("Postgres plans are visible on PRs while execution requires explicit opt-in
           "needs.ci-plan.outputs.postgres_pr_required": String(enabled),
           "needs.ci-plan.outputs.postgres_test_selection": selection,
         };
+        const eligible = evaluate(eligibility, {
+          values: {
+            ...values,
+            "steps.depth.outputs.suite_depth":
+              values["needs.ci-plan.outputs.suite_depth"],
+            "steps.depth.outputs.queue_depth":
+              values["needs.ci-plan.outputs.queue_depth"],
+            ...Object.fromEntries(
+              Object.entries(values).map(([key, value]) => [
+                key.replace(
+                  "needs.ci-plan.outputs.",
+                  "steps.changed-files.outputs.",
+                ),
+                value,
+              ]),
+            ),
+          },
+        });
+        const jobValues = {
+          ...values,
+          "needs.ci-plan.outputs.postgres_service_suites_required": v.parse(
+            v.boolean(),
+            eligible,
+          )
+            ? "true"
+            : "false",
+        };
+        expect(eligible).toBe(event !== EVENT.pullRequest || enabled);
         expect(evaluate(planner?.if ?? "false", { values })).toBe(
           event === EVENT.mergeGroup || event === EVENT.pullRequest,
         );
-        expect(evaluate(jobCondition, { values })).toBe(
+        expect(evaluate(jobCondition, { values: jobValues })).toBe(
           event !== EVENT.pullRequest || enabled,
         );
         expect(evaluate(runner?.if ?? "false", { values })).toBe(
@@ -5957,7 +6231,7 @@ test("Postgres plans are visible on PRs while execution requires explicit opt-in
     expect(
       evaluateResult({
         event: EVENT.pullRequest,
-        results: { "service-suites": result },
+        results: { "postgres-service-suites": result },
         plannedOutputs: { postgres_pr_required: "true" },
       }),
     ).toBe(result === "success" ? 0 : 1);
@@ -6023,7 +6297,7 @@ ${planner?.run ?? panic("Missing Postgres planner")}`,
 });
 
 test("full Postgres failures trigger selector replay only on main-heavy", () => {
-  const steps = jobSteps(ciJobs["service-suites"]);
+  const steps = jobSteps(ciJobs["postgres-service-suites"]);
   const runner = steps.find(
     (step) => step.name === "Run Postgres-gated API suites",
   );

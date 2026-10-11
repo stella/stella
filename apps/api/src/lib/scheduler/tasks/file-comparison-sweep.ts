@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
 
+import { sanitizeErrorAttributesForOutput } from "@stll/errors";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
@@ -54,16 +56,22 @@ export const createSweepFileComparisonUploadsTask =
         }),
       catch: (cause) => cause,
     });
-    logger.info("scheduler.file_comparison_uploads_swept", {
-      "fileComparisonUploads.swept": sweptUploads,
-      "fileComparisonUploads.scanned": summary.scanned,
-      "fileComparisonUploads.failed": summary.failed,
-    });
+    logger.info(
+      "scheduler.file_comparison_uploads_swept",
+      sanitizeErrorAttributesForOutput({
+        "fileComparisonUploads.swept": sweptUploads,
+        "fileComparisonUploads.scanned": summary.scanned,
+        "fileComparisonUploads.failed": summary.failed,
+      }),
+    );
     if (Result.isError(outcome)) {
       if (Result.isError(audit)) {
-        logger.warn("file_comparison.sweep_audit_failed", {
-          "error.type": errorTag(audit.error),
-        });
+        logger.warn(
+          "file_comparison.sweep_audit_failed",
+          sanitizeErrorAttributesForOutput({
+            "error.type": errorTag(audit.error),
+          }),
+        );
       }
       return Result.err(
         new SchedulerTaskFailure({

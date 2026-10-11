@@ -1,5 +1,9 @@
 name: Agent sandbox canary
 
+defaults:
+  run:
+    shell: bash
+
 on:
   schedule:
     # Off the top of the hour to reduce GitHub-hosted runner scheduling delay.

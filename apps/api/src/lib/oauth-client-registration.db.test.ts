@@ -169,6 +169,7 @@ describe("OAuth dynamic client registration", () => {
       redirectHosts: ["connector.example"],
       clientIdHost: null,
       unverified: true,
+      verifiedBrand: null,
     });
   });
 

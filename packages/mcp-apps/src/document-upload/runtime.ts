@@ -11,11 +11,11 @@ import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-exec
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { hashUploadFile } from "../file-content-hash";
-import { applyUploadHostStyles } from "../shared/bridge";
+import { formatAppError, LocalizedAppError } from "../shared/app-error";
+import { applyUploadHostStyles, parseAppToolPayload } from "../shared/bridge";
 import { appLocale, setAppDocumentLocale } from "../shared/locale";
 import {
   isUploadRecord,
-  parseUploadToolPayload,
   createUploadTranslator,
   connectUploadApp,
   createUploadSubscriptions,
@@ -30,6 +30,8 @@ class UploadAppError extends TaggedError("UploadAppError")<{
   message: string;
 }> {}
 
+type UploadError = UploadAppError | LocalizedAppError;
+
 type UploadSnapshot = {
   file: File | null;
   uploadTarget: UploadTarget | null;
@@ -40,30 +42,27 @@ type UploadSnapshot = {
   locale: ReturnType<typeof appLocale>;
 };
 
-type AppTranslator = (
-  key: keyof ReturnType<typeof appLocale>["messages"],
-  values?: Record<string, string | number>,
-) => string;
+type AppTranslator = ReturnType<typeof createUploadTranslator>;
 type UploadSelectedFileOptions = {
   app: App;
   getSnapshot: () => UploadSnapshot;
   targetController: ReturnType<typeof createUploadTargetController>;
   publish: (patch: Partial<UploadSnapshot>) => void;
-  setStatus: (message: string, status: UploadSnapshot["status"]) => void;
+  setStatus: (message: () => string, status: UploadSnapshot["status"]) => void;
   t: AppTranslator;
   callCapability: (
     app: App,
     capability: string,
     input: Record<string, unknown>,
     confirm?: true,
-  ) => Promise<Result<unknown, UploadAppError>>;
+  ) => Promise<Result<unknown, UploadError>>;
   parseReservation: (value: unknown) => Result<
     {
       headers: Record<string, string>;
       uploadId: string;
       url: string;
     },
-    UploadAppError
+    UploadError
   >;
 };
 const uploadSelectedFile = async ({
@@ -82,7 +81,7 @@ const uploadSelectedFile = async ({
     return;
   }
   publish({ uploadPhase: "active" });
-  setStatus(t("preparingUpload"), "idle");
+  setStatus(() => t("preparingUpload"), "idle");
   let uploadId: string | undefined;
   const attempted = await Result.tryPromise(async () => {
     const reserved = await callCapability(
@@ -108,7 +107,7 @@ const uploadSelectedFile = async ({
     }
     const reservation = parsed.value;
     uploadId = reservation.uploadId;
-    setStatus(t("uploading"), "idle");
+    setStatus(() => t("uploading"), "idle");
     const put = await fetchWithTimeout(reservation.url, {
       method: "PUT",
       headers: reservation.headers,
@@ -117,13 +116,14 @@ const uploadSelectedFile = async ({
     });
     if (!put.ok) {
       return Result.err(
-        new UploadAppError({
-          message: t("storageRejected", { status: put.status }),
+        new LocalizedAppError({
+          key: "storageRejected",
+          values: { status: put.status },
         }),
       );
     }
 
-    setStatus(t("savingUpload"), "idle");
+    setStatus(() => t("scanningSaving"), "idle");
     const finalized = await callCapability(
       app,
       DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.finalize,
@@ -137,14 +137,15 @@ const uploadSelectedFile = async ({
     }
     uploadId = undefined;
     publish({ file: null });
-    setStatus(t("uploadComplete"), "success");
+    setStatus(() => t("versionUploaded"), "success");
     return Result.ok();
   });
   const uploaded = Result.isError(attempted)
     ? Result.err(new UploadAppError({ message: attempted.error.message }))
     : attempted.value;
   if (Result.isError(uploaded)) {
-    let message = uploaded.error.message;
+    const error = uploaded.error;
+    let message = () => formatAppError(error, t, "uploadFailed");
     if (uploadId !== undefined) {
       const failedUploadId = uploadId;
       const cleanup = await callCapability(
@@ -157,8 +158,12 @@ const uploadSelectedFile = async ({
         true,
       );
       if (Result.isError(cleanup)) {
-        const cleanupMessage = cleanup.error.message;
-        message = t("cleanupAlsoFailed", { message, cleanupMessage });
+        const cleanupError = cleanup.error;
+        message = () =>
+          t("uploadCleanupFailed", {
+            message: formatAppError(error, t, "uploadFailed"),
+            cleanupMessage: formatAppError(cleanupError, t, "cleanupFailed"),
+          });
       }
     }
     setStatus(message, "error");
@@ -194,8 +199,13 @@ export const createDocumentUploadRuntime = (
     },
   });
 
-  const setStatus = (message: string, state: "idle" | "error" | "success") => {
-    publish({ message, status: state });
+  let statusMessage = () => "";
+  const setStatus = (
+    message: () => string,
+    state: "idle" | "error" | "success",
+  ) => {
+    statusMessage = message;
+    publish({ message: statusMessage(), status: state });
   };
 
   const callCapability = async (
@@ -203,7 +213,7 @@ export const createDocumentUploadRuntime = (
     capability: string,
     input: Record<string, unknown>,
     confirm?: true,
-  ): Promise<Result<unknown, UploadAppError>> => {
+  ): Promise<Result<unknown, UploadError>> => {
     const called = await Result.tryPromise(
       async () =>
         await protocol.callServerTool({
@@ -222,12 +232,15 @@ export const createDocumentUploadRuntime = (
     if (result.isError === true) {
       const message = result.content.find((part) => part.type === "text")?.text;
       return Result.err(
-        new UploadAppError({
-          message: message ?? t("capabilityFailed"),
-        }),
+        message === undefined
+          ? new LocalizedAppError({
+              key: "capabilityFailed",
+              values: { capability },
+            })
+          : new UploadAppError({ message }),
       );
     }
-    const payload = parseUploadToolPayload(result);
+    const payload = parseAppToolPayload(result);
     return Result.ok(
       isUploadRecord(payload) && "result" in payload
         ? payload["result"]
@@ -239,13 +252,11 @@ export const createDocumentUploadRuntime = (
     value: unknown,
   ): Result<
     { headers: Record<string, string>; uploadId: string; url: string },
-    UploadAppError
+    UploadError
   > => {
     if (!isUploadRecord(value)) {
       return Result.err(
-        new UploadAppError({
-          message: t("invalidUploadReservation"),
-        }),
+        new LocalizedAppError({ key: "invalidUploadReservation" }),
       );
     }
     const { headers, uploadId, url } = value;
@@ -255,18 +266,14 @@ export const createDocumentUploadRuntime = (
       !isUploadRecord(headers)
     ) {
       return Result.err(
-        new UploadAppError({
-          message: t("invalidUploadReservation"),
-        }),
+        new LocalizedAppError({ key: "invalidUploadReservation" }),
       );
     }
     const headerEntries: [string, string][] = [];
     for (const [key, headerValue] of Object.entries(headers)) {
       if (typeof headerValue !== "string") {
         return Result.err(
-          new UploadAppError({
-            message: t("invalidUploadHeaders"),
-          }),
+          new LocalizedAppError({ key: "invalidUploadHeaders" }),
         );
       }
       headerEntries.push([key, headerValue]);
@@ -281,7 +288,7 @@ export const createDocumentUploadRuntime = (
   const applyHostContext = (context: ReturnType<App["getHostContext"]>) => {
     locale = appLocale(context?.locale);
     setAppDocumentLocale(context?.locale, t("uploadTitle"));
-    publish({ locale });
+    publish({ locale, message: statusMessage() });
     const target = targetController.snapshot();
     publish({
       targetLabel: target
@@ -315,7 +322,7 @@ export const createDocumentUploadRuntime = (
         return;
       }
       publish({ file });
-      setStatus("", "idle");
+      setStatus(() => "", "idle");
     },
     upload: async () => {
       if (snapshot.uploadPhase === "active") {
@@ -335,7 +342,10 @@ export const createDocumentUploadRuntime = (
           }),
       );
       if (Result.isError(uploaded)) {
-        setStatus(uploaded.error.message, "error");
+        setStatus(
+          () => formatAppError(uploaded.error, t, "uploadFailed"),
+          "error",
+        );
       }
       publish({ uploadPhase: "idle" });
     },
@@ -343,7 +353,7 @@ export const createDocumentUploadRuntime = (
       await connectUploadApp({
         app,
         onContext: applyHostContext,
-        onError: (message) => setStatus(message, "error"),
+        onError: (message) => setStatus(() => message, "error"),
       }),
   };
 };

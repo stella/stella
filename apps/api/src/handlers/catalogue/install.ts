@@ -34,6 +34,7 @@ const installSkillBody = t.Object({
 });
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason: "Installs a bundled skill without returning stored-file bytes.",

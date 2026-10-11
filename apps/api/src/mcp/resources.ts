@@ -302,6 +302,7 @@ const uploadAppResourceMeta = (): Record<string, unknown> => {
  * states, not a default it inherits.
  */
 const MCP_RESOURCE_URIS_BY_MODE = {
+  advanced: "all",
   default: "all",
   documents: "all",
   anonymized: "all",

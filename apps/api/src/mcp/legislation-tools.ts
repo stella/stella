@@ -331,7 +331,7 @@ const readProvisionHistoryArgsSchema = nullAsAbsent(
 
 const LEGISLATION_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Search legislation",
       destructiveHint: false,
@@ -369,7 +369,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     scope: "stella:search",
   }),
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Read statute",
       destructiveHint: false,
@@ -397,7 +397,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Read statute provisions",
       destructiveHint: false,
@@ -415,7 +415,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       "the publisher's own dates are inconsistent), " +
       "`provision_not_found` (that consolidation has no such anchor) and " +
       "`text_withheld` (the source bars AI use of its wording) each carry a " +
-      "message. Prefer one batched call over one call per provision. " +
+      "message. One batched call accepts multiple provisions. " +
       "Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
     inputSchema: readStatuteProvisionsArgsSchema,
     // Each entry is answered on its own, so an ELI no spelling rescues is that
@@ -434,7 +434,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Read provision history",
       destructiveHint: false,

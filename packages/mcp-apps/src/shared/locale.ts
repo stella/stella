@@ -1,9 +1,9 @@
 import { panic } from "better-result";
+import { createTranslator } from "use-intl";
 
 import { normalizeLocale } from "@stll/agent-input";
+import messages from "@stll/api-contract/mcp-app-messages";
 import { getUiLocaleDirection, resolveUiLocale } from "@stll/locales";
-
-import messages from "./generated/messages.json";
 
 type BrowserLocale = {
   documentLanguage: string | undefined;
@@ -64,6 +64,10 @@ export const appLocale = (
       formattingLocale: canonical.value,
       direction: getUiLocaleDirection(locale),
       messages: messages[locale],
+      t: createTranslator({
+        locale: canonical.value,
+        messages: messages[locale],
+      }),
     };
   }
   return panic("MCP app source locale is unavailable");
@@ -79,3 +83,5 @@ export const setAppDocumentLocale = (
   document.title = title ?? resolved.messages.title;
   return resolved;
 };
+
+export type AppMessageKey = keyof typeof messages.en;

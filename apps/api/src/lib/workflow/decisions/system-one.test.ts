@@ -78,6 +78,43 @@ const wireAnswers = {
 };
 
 describe("System One client", () => {
+  test.each([
+    {
+      type: "choice",
+      question: choice("How is the citation treated?", {
+        negative: "departs",
+        positive: "follows",
+        neutral: null,
+      }),
+      answer: { ...wireAnswers.answers.treatment, extra: "unrecognized" },
+    },
+    {
+      type: "noul",
+      question: noul("Is it urgent?"),
+      answer: { ...wireAnswers.answers.urgent, extra: "unrecognized" },
+    },
+  ])(
+    "rejects an extra property in a $type answer at the transport boundary",
+    async ({ question, answer }) => {
+      const { client: systemOne, calls } = client([
+        jsonResponse({
+          model: wireAnswers.model,
+          answers: { answer },
+          usage: wireAnswers.usage,
+        }),
+      ]);
+      const result = await systemOne.ask({
+        state: "text",
+        questions: { answer: question },
+      });
+      expect(calls).toHaveLength(1);
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error.kind).toBe("invalid_response");
+      }
+    },
+  );
+
   test("sends the state, model and questions and reads every answer under its id", async () => {
     const { client: systemOne, calls } = client([jsonResponse(wireAnswers)]);
     const asked = await systemOne.ask({
@@ -97,9 +134,14 @@ describe("System One client", () => {
       return;
     }
     expect(asked.value.model).toBe("jev-1.13.0");
-    expect(asked.value.answers.treatment.choice).toBe("negative");
-    expect(asked.value.answers.treatment.probabilities.positive).toBe(0.15);
-    expect(asked.value.answers.urgent.noul).toBe(0.91);
+    expect(asked.value.answers.treatment).toMatchObject({
+      type: "choice",
+      choice: "negative",
+    });
+    expect(asked.value.answers.treatment).toMatchObject({
+      probabilities: { positive: 0.15 },
+    });
+    expect(asked.value.answers.urgent).toEqual({ type: "noul", noul: 0.91 });
     expect(asked.value.usage).toEqual({ inputTokens: 120, outputTokens: 3 });
 
     const [call] = calls;

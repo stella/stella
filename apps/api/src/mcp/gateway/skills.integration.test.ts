@@ -123,7 +123,10 @@ describe("MCP skill tools against the database", () => {
     });
 
     const listing = createRecordingContext(ids.userA1);
-    const tools = await loadVisibleSkillTools({ context: listing.context });
+    const tools = await loadVisibleSkillTools({
+      context: listing.context,
+      mode: "default",
+    });
     expect(tools.map((tool) => tool.exposedName)).toContain(
       namespaceSkillToolName(calledSlug),
     );
@@ -151,8 +154,7 @@ describe("MCP skill tools against the database", () => {
       id: testId(),
       organizationId: ids.orgA,
       skillId,
-      path: "knowledge/checklist.md",
-      kind: "knowledge",
+      path: "references/checklist.md",
       content: "1. Parties\n2. Term",
       sizeBytes: 19,
     });
@@ -166,11 +168,11 @@ describe("MCP skill tools against the database", () => {
       body: "Follow the checklist.",
       id: skillId,
       name: slug,
-      resources: [{ kind: "knowledge", path: "knowledge/checklist.md" }],
+      resources: [{ path: "references/checklist.md" }],
     });
 
     const resourceRead = await handleMcpToolCall({
-      args: { resource: "knowledge/checklist.md" },
+      args: { resource: "references/checklist.md" },
       context,
       toolName,
     });
@@ -179,13 +181,12 @@ describe("MCP skill tools against the database", () => {
       type: "resource",
       content: "1. Parties\n2. Term",
       id: skillId,
-      kind: "knowledge",
       name: slug,
-      path: "knowledge/checklist.md",
+      path: "references/checklist.md",
     });
 
     const missingRead = await handleMcpToolCall({
-      args: { resource: "knowledge/absent.md" },
+      args: { resource: "references/absent.md" },
       context,
       toolName,
     });
@@ -208,7 +209,7 @@ describe("MCP skill tools against the database", () => {
 
     await handleMcpToolCall({ args: {}, context, toolName });
     await handleMcpToolCall({
-      args: { resource: "knowledge/absent.md" },
+      args: { resource: "references/absent.md" },
       context,
       toolName,
     });
@@ -241,7 +242,7 @@ describe("MCP skill tools against the database", () => {
         {
           action: "access",
           outcome: "error",
-          path: "knowledge/absent.md",
+          path: "references/absent.md",
           resourceType: "agent_skill",
           surface: "mcp",
         },
@@ -276,14 +277,14 @@ describe("MCP skill tools against the database", () => {
       id: testId(),
       organizationId: ids.orgA,
       skillId: teamSkillId,
-      path: "knowledge/team.md",
-      kind: "knowledge",
+      path: "references/team.md",
       content: "team only",
       sizeBytes: 9,
     });
     const { context } = createRecordingContext(ids.userA1);
     const resolved = await resolveSkillTool({
       context,
+      mode: "default",
       toolName: namespaceSkillToolName(slug),
     });
     if (resolved?.source !== "installed" || resolved.id !== privateSkillId) {
@@ -305,7 +306,7 @@ describe("MCP skill tools against the database", () => {
     expect(
       await readSkillTool({
         context,
-        resourcePath: "knowledge/team.md",
+        resourcePath: "references/team.md",
         skill: resolved,
       }),
     ).toBeNull();

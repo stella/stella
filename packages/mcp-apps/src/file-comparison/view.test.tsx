@@ -37,7 +37,7 @@ test("comparison labels both files and enables the handoff only when ready", () 
   ).toBeTruthy();
   expect(
     screen
-      .getByRole("button", { name: "Nahrát pro porovnání" })
+      .getByRole("button", { name: "Nahrát pro porovnání redline" })
       .hasAttribute("disabled"),
   ).toBe(true);
   snapshot = {
@@ -46,7 +46,9 @@ test("comparison labels both files and enables the handoff only when ready", () 
     target: new File(["revised"], "upravený.docx"),
   };
   view.rerender(<FileComparison runtime={runtime} />);
-  fireEvent.click(screen.getByRole("button", { name: "Nahrát pro porovnání" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Nahrát pro porovnání redline" }),
+  );
   expect(uploads).toBe(1);
   snapshot = {
     ...snapshot,

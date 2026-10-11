@@ -1,6 +1,9 @@
 name: Release Artifacts
 
 # release-chain-alert
+defaults:
+  run:
+    shell: bash
 
 on:
   push:

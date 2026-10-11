@@ -40,6 +40,10 @@ import {
 } from "@/api/lib/feature-access/registry";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import { encodePaginationCursor } from "@/api/lib/pagination";
+import {
+  ACTION_KINDS,
+  ACTION_SERVICE_CREDENTIALS,
+} from "@/api/lib/rate-limit/action-kinds";
 import { isRecord } from "@/api/lib/type-guards";
 import type { AdvertisedSchemas } from "@/api/mcp/advertised-schema";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
@@ -285,7 +289,12 @@ const createContext = ({
 };
 
 const call = async (toolName: string, args: Record<string, unknown>) =>
-  await handleMcpToolCall({ args, context: createContext(), toolName });
+  await handleMcpToolCall({
+    mode: "advanced",
+    args,
+    context: createContext(),
+    toolName,
+  });
 
 const capabilityExecutorFor = (args: Record<string, unknown>) => {
   const entry = capabilityCatalog.find(
@@ -300,6 +309,7 @@ const handleCapabilityCall = async (
   options: Omit<Parameters<typeof handleMcpToolCall>[0], "toolName">,
 ) =>
   await handleMcpToolCall({
+    mode: "advanced",
     ...options,
     toolName: capabilityExecutorFor(options.args),
   });
@@ -565,6 +575,7 @@ describe("list verification access grants across MCP tools", () => {
     const listed: string[] = [];
     for (const domain of ["lists"]) {
       const result = await handleMcpToolCall({
+        mode: "advanced",
         toolName: "list_capabilities",
         context,
         args: { domain, limit: MAX_LIST_LIMIT },
@@ -578,6 +589,7 @@ describe("list verification access grants across MCP tools", () => {
     for (const capability of Object.keys(inputs)) {
       expect(listed).not.toContain(capability);
       const described = await handleMcpToolCall({
+        mode: "advanced",
         toolName: "describe_capability",
         context,
         args: { capability },
@@ -639,11 +651,13 @@ describe("list verification access grants across MCP tools", () => {
         entry.featureAccess === "conditional",
     )) {
       const enabled = await handleMcpToolCall({
+        mode: "advanced",
         toolName: "describe_capability",
         context: granted,
         args: { capability: id },
       });
       const hidden = await handleMcpToolCall({
+        mode: "advanced",
         toolName: "describe_capability",
         context: denied,
         args: { capability: id },
@@ -768,6 +782,7 @@ describe("list verification access grants across MCP tools", () => {
     const listed: string[] = [];
     for (const domain of ["lists"]) {
       const result = await handleMcpToolCall({
+        mode: "advanced",
         toolName: "list_capabilities",
         context: fixture.context,
         args: { domain, limit: MAX_LIST_LIMIT },
@@ -781,6 +796,7 @@ describe("list verification access grants across MCP tools", () => {
     for (const [capability, input] of Object.entries(inputs)) {
       expect(listed).toContain(capability);
       const described = await handleMcpToolCall({
+        mode: "advanced",
         toolName: "describe_capability",
         context: fixture.context,
         args: { capability },
@@ -810,6 +826,7 @@ describe("list verification access grants across MCP tools", () => {
     ] as const satisfies readonly VerificationContextOptions[]) {
       const fixture = verificationContext(options);
       const listed = await handleMcpToolCall({
+        mode: "advanced",
         toolName: "list_capabilities",
         context: fixture.context,
         args: { domain: "lists", limit: MAX_LIST_LIMIT },
@@ -820,6 +837,7 @@ describe("list verification access grants across MCP tools", () => {
       for (const [capability, input] of Object.entries(inputs)) {
         expect(ids).not.toContain(capability);
         const described = await handleMcpToolCall({
+          mode: "advanced",
           toolName: "describe_capability",
           context: fixture.context,
           args: { capability },
@@ -1555,6 +1573,7 @@ describe("capability executor gates", () => {
       do {
         const page: CapabilityPage = parseToolPayload<CapabilityPage>(
           await handleMcpToolCall({
+            mode: "advanced",
             args: {
               limit: MAX_LIST_LIMIT,
               ...(cursor === null ? {} : { cursor }),
@@ -2019,6 +2038,7 @@ describe("capability executor execution", () => {
       input: { params: { categoryId } },
     };
     const unconfirmed = await handleMcpToolCall({
+      mode: "advanced",
       toolName: MCP_CAPABILITY_EXECUTORS.write,
       args,
       context,
@@ -2029,6 +2049,7 @@ describe("capability executor execution", () => {
     expect(auditRows).not.toHaveBeenCalled();
 
     const confirmed = await handleMcpToolCall({
+      mode: "advanced",
       toolName: MCP_CAPABILITY_EXECUTORS.write,
       args: { ...args, confirm: true },
       context,
@@ -2391,6 +2412,54 @@ describe("capability executor validate_only permission preflight", () => {
 
 // --- fix-3: gateway rate limit ----------------------------------------------
 
+describe("public-law capability service classification", () => {
+  test("public content capabilities never consume organization service budgets", () => {
+    const contentCapabilities = capabilityCatalog.filter(
+      (entry) =>
+        entry.access === "read" &&
+        entry.readClass === "public" &&
+        // Operator ingestion health is not a corpus content read.
+        entry.id !== "case-law.ingestion.get",
+    );
+    expect(contentCapabilities.map(({ id }) => id)).toContain(
+      "legislation.get",
+    );
+    for (const entry of contentCapabilities) {
+      expect(entry.consumesServices, entry.id).toBe(false);
+    }
+  });
+
+  test("model actions and public-law AI capabilities retain service classification", () => {
+    const modelActions = Object.entries(ACTION_KINDS).filter(
+      ([, definition]) =>
+        definition.serviceCredentials ===
+        ACTION_SERVICE_CREDENTIALS.organizationModel,
+    );
+    expect(modelActions.map(([kind]) => kind)).toEqual(
+      expect.arrayContaining([
+        "case-law.analysis",
+        "case-law.search-refine",
+        "case-law.search-expand",
+        "case-law.research-answers",
+      ]),
+    );
+    for (const [kind, definition] of modelActions) {
+      expect(definition.consumesServices, kind).toBe(true);
+    }
+    const aiCapabilities = capabilityCatalog.filter(
+      (entry) =>
+        entry.feature === "FEATURE_PUBLIC_LAW" &&
+        modelActions.some(([kind]) => entry.id.startsWith(`${kind}.`)),
+    );
+    expect(aiCapabilities.map(({ id }) => id)).toContain(
+      "case-law.analysis.generate",
+    );
+    for (const entry of aiCapabilities) {
+      expect(entry.consumesServices, entry.id).toBe(true);
+    }
+  });
+});
+
 describe("capability executor rate limit (fix-3)", () => {
   test("an exhausted budget -> rate_limited with a retry hint", async () => {
     consumeRateLimitMock.mockResolvedValueOnce({
@@ -2409,6 +2478,26 @@ describe("capability executor rate limit (fix-3)", () => {
     expect(error.hint).toContain("60 seconds");
     // Refused before the handler ran: the org-settings loader was not consulted.
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+  });
+
+  test("public-law content still exhausts the MCP gateway rate limit", async () => {
+    consumeRateLimitMock.mockResolvedValueOnce({
+      ok: false,
+      retryAfterSeconds: 60,
+    });
+    const result = await handleCapabilityCall({
+      args: {
+        capability: "legislation.get",
+        input: {
+          params: { documentId: "00000000-0000-4000-8000-000000000001" },
+        },
+      },
+      context: createContext(),
+    });
+    expect(errorEnvelope(result)).toMatchObject({ code: "rate_limited" });
+    expect(consumeRateLimitMock).toHaveBeenCalledWith(
+      expect.objectContaining({ capabilityId: "legislation.get" }),
+    );
   });
 
   test("the limiter is consulted per (organization, capability)", async () => {
@@ -3361,6 +3450,7 @@ describe("feature access discovery guard: real capability catalog", () => {
     async (userId, organizationId) => {
       const context = fixtureContext(userId, organizationId);
       const list = await handleMcpToolCall({
+        mode: "advanced",
         toolName: "list_capabilities",
         args: { limit: 50 },
         context,
@@ -3374,6 +3464,7 @@ describe("feature access discovery guard: real capability catalog", () => {
         }
         expect(listedIds).not.toContain(id);
         const described = await handleMcpToolCall({
+          mode: "advanced",
           toolName: "describe_capability",
           args: { capability: id },
           context,
@@ -3387,6 +3478,7 @@ describe("feature access discovery guard: real capability catalog", () => {
       }
       expect(loadOrgSettingsMock).not.toHaveBeenCalled();
       const typo = await handleMcpToolCall({
+        mode: "advanced",
         toolName: "describe_capability",
         args: { capability: "time-entries.creat" },
         context,
@@ -3397,6 +3489,7 @@ describe("feature access discovery guard: real capability catalog", () => {
   test("caller grant permits real catalog and live schema discovery", async () => {
     const context = fixtureContext("user_1", "org_1");
     const list = await handleMcpToolCall({
+      mode: "advanced",
       toolName: "list_capabilities",
       args: { limit: 50 },
       context,
@@ -3405,6 +3498,7 @@ describe("feature access discovery guard: real capability catalog", () => {
       parseToolPayload<{ items: unknown[] }>(list).items.length,
     ).toBeGreaterThan(0);
     const described = await handleMcpToolCall({
+      mode: "advanced",
       toolName: "describe_capability",
       args: { capability: "time-entries.create" },
       context,
@@ -3607,6 +3701,7 @@ for (const grants of [
     );
     expect(entries.length).toBeGreaterThan(0);
     const list = await handleMcpToolCall({
+      mode: "advanced",
       toolName: "list_capabilities",
       args: { domain: "lists", limit: MAX_LIST_LIMIT },
       context,
@@ -3623,6 +3718,7 @@ for (const grants of [
           : grants.length === 2;
       expect(listed.includes(entry.id)).toBe(enabled);
       const schema = await handleMcpToolCall({
+        mode: "advanced",
         toolName: "describe_capability",
         args: { capability: entry.id },
         context,
@@ -3651,6 +3747,7 @@ for (const grants of [
         for (const validate_only of [false, true]) {
           expectUnknownId(
             await handleMcpToolCall({
+              mode: "advanced",
               toolName,
               args: { capability: entry.id, validate_only },
               context,
@@ -3722,6 +3819,7 @@ describe("capability executor access isolation", () => {
           ? MCP_CAPABILITY_EXECUTORS.write
           : MCP_CAPABILITY_EXECUTORS.read;
       const result = await handleMcpToolCall({
+        mode: "advanced",
         args: { capability: entry.id, validate_only: true, input: {} },
         context,
         toolName,
@@ -3738,7 +3836,13 @@ describe("capability executor access isolation", () => {
   });
 
   test("the retired mixed executor is absent from every exposed audience", async () => {
-    for (const mode of ["default", "documents", "anonymized", "law"] as const) {
+    for (const mode of [
+      "advanced",
+      "default",
+      "documents",
+      "anonymized",
+      "law",
+    ] as const) {
       const definitions = listStaticMcpToolDefinitions(mode);
       expect(definitions.some(({ name }) => name === "invoke_capability")).toBe(
         false,
