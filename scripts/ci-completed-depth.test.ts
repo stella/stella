@@ -10,9 +10,9 @@ import * as v from "valibot";
 import { assertProperty } from "@stll/property-testing";
 import { createSha256 } from "@stll/sha256/node";
 
-import { PILOT_ALWAYS, pilotQueueJobs } from "./ci-pr-pilot-plan";
+import { PILOT_ALWAYS } from "./ci-pr-pilot-plan";
 import { contextWithPlanOutputs, evaluate } from "./github-expression";
-import { prDepthJobs, thinJobs } from "./main-heavy-plan";
+import { prDepthJobs, queueAdmittedJobs, thinJobs } from "./main-heavy-plan";
 
 // Wall-clock checks: no reused or queued plan can certify them, so they run.
 const ALWAYS_RUN: readonly string[] = PILOT_ALWAYS;
@@ -1075,13 +1075,10 @@ test("thin groups certify only normal-profile completion on a head included in t
   }
 });
 
-test("thin groups run and require every deferred normal PR check unless normal completion is certified", async () => {
-  const deferred = pilotQueueJobs(workflow);
-  if (deferred.status !== "valid") {
-    throw new Error(deferred.message);
-  }
-  expect(deferred.jobs).toContain("ci-browser");
-  expect(deferred.jobs).toContain("dependency-malware");
+test("thin groups require queued code checks regardless of normal PR completion", async () => {
+  const admitted = queueAdmittedJobs(workflow);
+  expect(admitted).toContain("ci-browser");
+  expect(admitted).toContain("dependency-malware");
   const aggregation = result.steps.find(
     (step) => step.name === "Evaluate CI outcome",
   );
@@ -1127,9 +1124,7 @@ test("thin groups run and require every deferred normal PR check unless normal c
           "vars.QUEUE_BROWSER_SUITES": "on",
           "inputs.heavy_only": false,
           "steps.completed-depth.outputs.normal_completion": completion,
-          "steps.pilot-queue-plan.outputs.queue_jobs": JSON.stringify(
-            deferred.jobs,
-          ),
+          "steps.heavy-plan.outputs.queue_jobs": JSON.stringify(admitted),
           "needs.ci-plan.outputs.run_required": "true",
           "needs.ci-plan.outputs.coverage_profile": "normal-v1",
           "needs.ci-plan.outputs.trusted": "true",
@@ -1162,7 +1157,7 @@ test("thin groups run and require every deferred normal PR check unless normal c
         ),
       ),
     );
-    expect(queueJobs).toEqual(completion === "complete" ? [] : deferred.jobs);
+    expect(queueJobs).toEqual(admitted);
     const dependencies = Object.fromEntries(
       Object.entries(scopes).map(([name]) => [
         name,
@@ -1212,18 +1207,16 @@ test("thin groups run and require every deferred normal PR check unless normal c
         `desktop-rust-tests/${completion}/${outcome}`,
       ).toBe(1);
     }
-    for (const job of deferred.jobs) {
+    for (const job of admitted) {
       const scheduled = evaluate(jobs[job]?.if ?? "true", context);
       expect(typeof scheduled, job).toBe("boolean");
-      if (completion !== "complete") {
-        expect(scheduled, job).toBe(true);
-        for (const outcome of ["skipped", "failure"]) {
-          expect(
-            runAggregation({ ...dependencies, [job]: { result: outcome } })
-              .exitCode,
-            `${job}/${outcome}`,
-          ).toBe(1);
-        }
+      expect(scheduled, job).toBe(true);
+      for (const outcome of ["skipped", "failure"]) {
+        expect(
+          runAggregation({ ...dependencies, [job]: { result: outcome } })
+            .exitCode,
+          `${job}/${outcome}`,
+        ).toBe(1);
       }
     }
   }

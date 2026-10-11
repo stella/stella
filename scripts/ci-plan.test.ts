@@ -51,6 +51,7 @@ import {
   mainHeavyJobs,
   prDepthJobs,
   queueAdmittedJobs,
+  MERGE_GROUP_EXCEPTIONS,
   thinJobs,
 } from "./main-heavy-plan";
 import { TEST_JOB_SHARDS, type TestShardId } from "./test-shards";
@@ -1147,7 +1148,7 @@ const resultGateCase = ({
       COVERAGE_PROFILE: "normal-v1",
       PILOT_FAST_JOBS: "[]",
       QUEUE_VALIDATION: "false",
-      QUEUE_REQUIRED_JOBS: "[]",
+      QUEUE_REQUIRED_JOBS: JSON.stringify(queueAdmittedJobs({ jobs: ciJobs })),
       PR_ACTION: "synchronize",
       PR_DEPTH_ONLY: "false",
       PR_DEPTH_REUSED: plannedOutputs["pr_depth_reused"] ?? "false",
@@ -5123,19 +5124,20 @@ const scopedCoverageViolations = (checks: readonly ScopedCheck[]) => {
       !checks.some(
         (check) =>
           check.scope === scope &&
-          ((check.requiredOnPr &&
+          (check.requiredOnPr || check.requiredOnThin) &&
+          (!check.requiredOnPr ||
             runsAtDepth(check.condition, {
               event: EVENT.pullRequest,
               depth: SUITE_DEPTH.fast,
-            })) ||
-            (check.requiredOnThin &&
-              ["thin", "full"].every((queueDepth) =>
-                runsAtDepth(check.condition, {
-                  event: EVENT.mergeGroup,
-                  depth: SUITE_DEPTH.full,
-                  queueDepth: queueDepth === "thin" ? "thin" : "full",
-                }),
-              ))),
+            })) &&
+          (!check.requiredOnThin ||
+            ["thin", "full"].every((queueDepth) =>
+              runsAtDepth(check.condition, {
+                event: EVENT.mergeGroup,
+                depth: SUITE_DEPTH.full,
+                queueDepth: queueDepth === "thin" ? "thin" : "full",
+              }),
+            )),
       ),
   );
 };
@@ -5387,7 +5389,11 @@ test("thin merge groups require every scoped code job while full parity stays en
         queueDepth: "thin",
       }),
       name,
-    ).toBe(admitted.has(name) ? full : false);
+    ).toBe(
+      admitted.has(name) || Object.hasOwn(MERGE_GROUP_EXCEPTIONS, name)
+        ? full
+        : false,
+    );
     // Browser configuration cannot disable a planned queue gate.
     expect(
       runsAtDepth(condition, {
@@ -5397,7 +5403,11 @@ test("thin merge groups require every scoped code job while full parity stays en
         queueBrowserSuites: "off",
       }),
       `${name}/off`,
-    ).toBe(admitted.has(name) ? full : false);
+    ).toBe(
+      admitted.has(name) || Object.hasOwn(MERGE_GROUP_EXCEPTIONS, name)
+        ? full
+        : false,
+    );
     for (const event of [EVENT.pullRequest, EVENT.workflowDispatch]) {
       expect(
         runsAtDepth(condition, {

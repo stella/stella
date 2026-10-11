@@ -262,7 +262,8 @@ test("a thin-depth skip on any gated code job violates merge-group coverage", ()
     if (!job) {
       panic(`Missing mutation job: ${name}`);
     }
-    job.if = `needs.ci-plan.outputs.queue_depth != 'thin' && (${job.if ?? "true"})`;
+    const condition = (job.if ?? "true").replace(/^\$\{\{|\}\}$/gu, "");
+    job.if = `\${{ needs.ci-plan.outputs.queue_depth != 'thin' && (${condition}) }}`;
     expect(() => assertMergeGroupCoverage(mutated), name).toThrow(
       `${name}/thin`,
     );
@@ -715,12 +716,15 @@ test("heavy failures require a successful queue job with every executed step", a
       queueJobs: [queueJob],
     }).map(({ type }) => type),
   ).toEqual(["CODE"]);
-  expect(
-    classifyMainHeavyFailures({
-      jobs: [{ ...job, conclusion: "success" }],
-      queueJobs: [queueJob],
-    }),
-  ).toEqual([]);
+  for (const conclusion of ["success", "skipped", "neutral", null]) {
+    expect(
+      classifyMainHeavyFailures({
+        jobs: [{ ...job, conclusion }],
+        queueJobs: [queueJob],
+      }),
+      conclusion ?? "pending",
+    ).toEqual([]);
+  }
 });
 
 test("heavy queue evidence follows Git tree identity and remains conservative when unavailable", async () => {
@@ -785,7 +789,9 @@ test("heavy queue evidence follows Git tree identity and remains conservative wh
       context: { repo: { owner: "stella", repo: "stella" }, runId: 100 },
       sha: "tested-commit",
       results: { suites: { result: "failure" } },
-      warn: (message: string) => warnings.push(message),
+      warn: (message: string) => {
+        warnings.push(message);
+      },
     });
     expect(
       failures.map(({ type }) => type),

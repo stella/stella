@@ -18,9 +18,9 @@
  * }} EvidenceClient
  */
 
-/** @param {string} name */
+/** @param {string} name Workflow job display name. */
 const jobName = (name) => name.replace(/^suites \/ /u, "");
-/** @param {Job} job */
+/** @param {Job} job Completed or pending workflow job. */
 const failed = ({ conclusion }) =>
   conclusion !== null &&
   [
@@ -33,7 +33,7 @@ const failed = ({ conclusion }) =>
   ].includes(conclusion);
 
 // A matching job name alone cannot prove that a scoped step ran in the queue.
-/** @param {{ jobs: Job[], queueJobs: Job[] }} options */
+/** @param {{ jobs: Job[], queueJobs: Job[] }} options Main and queue execution evidence. */
 export const classifyMainHeavyFailures = ({ jobs, queueJobs }) =>
   jobs.filter(failed).map((job) => {
     const executed = (job.steps ?? []).filter(
@@ -63,7 +63,7 @@ export const classifyMainHeavyFailures = ({ jobs, queueJobs }) =>
 
 /**
  * @param {{ github: EvidenceClient, context: { repo: Repository, runId: number },
- * sha: string, results: Record<string, { result: string }>, warn: (message: string) => void }} options
+ * sha: string, results: Record<string, { result: string }>, warn: (message: string) => void }} options Workflow context and evidence client.
  */
 export const collectMainHeavyFailures = async ({
   github,

@@ -102,7 +102,7 @@ export const prDepthJobs = (workflow: unknown) => {
 // revision or duplicate a producer selected for an ordinary merge group.
 export const MERGE_GROUP_EXCEPTIONS = {
   "ci-checks-docs":
-    "Pull-request-only documentation checks; package checks certify the queued tree.",
+    "Documentation-only checks; package checks certify queued code.",
   "fix-tests-on-base":
     "Negative proof against the pull request base, rather than the queued tree.",
   "heavy-web-build":
