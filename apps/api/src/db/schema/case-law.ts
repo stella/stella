@@ -9,6 +9,7 @@ import {
 } from "@stll/api-contract";
 import type { CaseLawResearchColumnTool } from "@stll/api-contract";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
+import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
   APPLIED_VERSION_BASES,
   STATED_DATE_RELATIONS,
@@ -3083,6 +3084,10 @@ export const caseLawAnalysisFailures = p.pgTable.withRLS(
       .text("key_source", { enum: CASE_LAW_ANALYSIS_KEY_SOURCES })
       .notNull(),
     provider: p.text(),
+    /** Redacted provider reason, visible only to the organization whose run failed. */
+    providerDiagnostic: p
+      .jsonb("provider_diagnostic")
+      .$type<ProviderDiagnostic>(),
     recordedAt: timestamptz("recorded_at").notNull(),
   },
   (t) => [

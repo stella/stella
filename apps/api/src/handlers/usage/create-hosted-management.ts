@@ -12,6 +12,7 @@ import { getApiCredentials } from "@/api/lib/hosted-usage-provider/config";
 /** Create a hosted usage-management session for the caller's organisation. */
 
 const config = {
+  contract: "patch",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "hosted_billing" },

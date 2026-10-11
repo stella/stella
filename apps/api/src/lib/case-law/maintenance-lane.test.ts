@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
@@ -8,6 +8,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import type { createEuCompletionStore } from "@/api/handlers/case-law/ingestion/eu-completion-store";
 import {
   CASE_LAW_MAINTENANCE_LANE,
+  createMaintenanceLaneSession,
   enterCaseLawMaintenanceLane,
   holdCaseLawMaintenanceLane,
 } from "@/api/lib/case-law/maintenance-lane";
@@ -331,6 +332,53 @@ describe("case-law maintenance lane", () => {
     expect(calls.at(-1)).toBe("end");
   });
 
+  test("connection admission is timed and warned before the advisory lock", async () => {
+    let clock = 0;
+    const schedule = spyOn(globalThis, "setTimeout");
+    const clear = spyOn(globalThis, "clearTimeout");
+    const fake = {
+      unsafe: async () => [{ released: true }],
+      end: async () => {},
+    };
+    try {
+      const hold = await holdCaseLawMaintenanceLane({
+        now: () => clock,
+        openConnection: async () => {
+          expect(schedule).toHaveBeenCalledWith(expect.any(Function), 30_000);
+          clock = 250;
+          return fake;
+        },
+      });
+      expect(hold.waitedMs).toBe(250);
+      expect(clear).toHaveBeenCalledTimes(1);
+      await hold.release();
+    } finally {
+      schedule.mockRestore();
+      clear.mockRestore();
+    }
+  });
+
+  test("failed connection admission clears the wait warning", async () => {
+    const schedule = spyOn(globalThis, "setTimeout");
+    const clear = spyOn(globalThis, "clearTimeout");
+    const failure = new TypeError("Connection admission failed");
+    try {
+      const rejected = await rejectionOf(
+        holdCaseLawMaintenanceLane({
+          openConnection: async () => {
+            expect(schedule).toHaveBeenCalledWith(expect.any(Function), 30_000);
+            throw failure;
+          },
+        }),
+      );
+      expect(rejected).toBe(failure);
+      expect(clear).toHaveBeenCalledTimes(1);
+    } finally {
+      schedule.mockRestore();
+      clear.mockRestore();
+    }
+  });
+
   test("a release the server does not confirm panics", async () => {
     const fake = {
       unsafe: async (statement: string) =>
@@ -347,4 +395,63 @@ describe("case-law maintenance lane", () => {
       expect.stringContaining("Maintenance lane was not held"),
     );
   });
+
+  test("a failed lane acquisition closes its session", async () => {
+    const failure = new TypeError("Lane acquisition failed");
+    let closed = 0;
+    const result = await rejectionOf(
+      holdCaseLawMaintenanceLane({
+        sql: {
+          unsafe: async () => {
+            throw failure;
+          },
+          end: async () => {
+            closed += 1;
+          },
+        },
+      }),
+    );
+    expect(result).toBe(failure);
+    expect(closed).toBe(1);
+  });
+
+  test("a failed unlock closes its session", async () => {
+    const failure = new TypeError("Lane unlock failed");
+    let closed = 0;
+    const hold = await holdCaseLawMaintenanceLane({
+      sql: {
+        unsafe: async (statement) => {
+          if (statement.includes("unlock")) {
+            throw failure;
+          }
+          return [];
+        },
+        end: async () => {
+          closed += 1;
+        },
+      },
+    });
+    expect(await rejectionOf(hold.release())).toBe(failure);
+    expect(closed).toBe(1);
+  });
+});
+
+test("failed handle initialization releases the held maintenance session", async () => {
+  let released = 0;
+  const failure = new TypeError("handle initialization failed");
+  const result = await rejectionOf(
+    createMaintenanceLaneSession({
+      hold: async () => ({
+        waitedMs: 0,
+        release: async () => {
+          released += 1;
+        },
+      }),
+      loadHandles: async () => {
+        throw failure;
+      },
+    }),
+  );
+  expect(result).toBe(failure);
+  expect(released).toBe(1);
 });

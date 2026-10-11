@@ -7,10 +7,7 @@ import type { SkillMetadata } from "@stll/skills/frontmatter";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
-import {
-  RESOURCE_PATH_PATTERN,
-  inferResourceKind,
-} from "@/api/lib/agent-skills/resource-path";
+import { RESOURCE_PATH_PATTERN } from "@/api/lib/agent-skills/resource-path";
 import {
   recordSkillReadAudit,
   SKILL_READ_OUTCOME,
@@ -32,6 +29,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { CHAT_TOOL_SET_PURPOSE } from "@/api/lib/chat/chat-tool-types";
 import type { ChatToolSetPurpose } from "@/api/lib/chat/chat-tool-types";
+import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { toTanStackValibotSchema as toTanStackToolSchema } from "@/api/lib/tanstack-ai-schema";
@@ -176,7 +174,7 @@ export const createSkillTools = ({
           path: v.pipe(
             v.string(),
             v.description(
-              "Resource path from load-skill, such as knowledge/01-example.md.",
+              "Resource path from load-skill, such as references/01-example.md.",
             ),
           ),
         }),
@@ -353,7 +351,7 @@ const createCurrentSkillEditTools = ({
             v.minLength(1),
             v.maxLength(512),
             v.description(
-              "New resource path inside the current skill, such as knowledge/checklist.md.",
+              "New resource path inside the current skill, such as references/checklist.md.",
             ),
           ),
           content: v.pipe(
@@ -396,7 +394,7 @@ const updateCurrentSkillBody = async ({
 }: UpdateCurrentSkillBodyProps) => {
   const result = await safeDb(
     async (tx) =>
-      await tx.transaction(async (innerTx) => {
+      await withAggregateSavepoint(tx, async (innerTx) => {
         // The content hash covers the body and goes out in the same write:
         // the revision trigger snapshots whatever hash the row carries.
         await innerTx
@@ -499,7 +497,7 @@ const updateCurrentSkillResource = async ({
   const nextSizeBytes = new TextEncoder().encode(content).byteLength;
   const result = await safeDb(
     async (tx) =>
-      await tx.transaction(async (innerTx) => {
+      await withAggregateSavepoint(tx, async (innerTx) => {
         const lockedSkill = await lockSkillForResourceWrite(
           innerTx,
           activeSkillContext.id,
@@ -608,11 +606,10 @@ const createCurrentSkillResource = async ({
     });
   }
 
-  const kind = inferResourceKind(trimmedPath);
   const sizeBytes = new TextEncoder().encode(content).byteLength;
   const result = await safeDb(
     async (tx) =>
-      await tx.transaction(async (innerTx) => {
+      await withAggregateSavepoint(tx, async (innerTx) => {
         const lockedSkill = await lockSkillForResourceWrite(
           innerTx,
           activeSkillContext.id,
@@ -623,7 +620,6 @@ const createCurrentSkillResource = async ({
             organizationId,
             skillId: activeSkillContext.id,
             path: trimmedPath,
-            kind,
             content,
             sizeBytes,
           })
@@ -638,7 +634,7 @@ const createCurrentSkillResource = async ({
             changes: {
               resource: {
                 old: null,
-                new: { path: trimmedPath, kind, sizeBytes },
+                new: { path: trimmedPath, sizeBytes },
               },
             },
             metadata: {

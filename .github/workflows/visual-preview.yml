@@ -1,4 +1,8 @@
 name: Visual preview
+defaults:
+  run:
+    shell: bash
+
 on:
   pull_request:
     paths:

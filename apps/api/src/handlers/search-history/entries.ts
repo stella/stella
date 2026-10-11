@@ -378,9 +378,6 @@ export const holdSearchHistoryOwnerAccess = async (
         })
         .from(member),
   });
-  if (membership.status === "busy") {
-    return panic("Blocking search history membership lock was busy");
-  }
   const currentMember = membership.rows.at(0);
   if (currentMember === undefined) {
     abortTransaction(
@@ -413,9 +410,6 @@ export const lockSearchHistoryOwner = async (
         })
         .from(searchHistoryOwners),
   });
-  if (locked.status === "busy") {
-    return panic("Blocking search history owner lock was busy");
-  }
   const state = locked.rows.at(0);
   if (state === undefined) {
     panic("Search history owner mutex was not created");

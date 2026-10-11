@@ -21,6 +21,7 @@ const coverageAnswerSchema = t.Union([
 ]);
 
 const config = {
+  contract: "patch",
   cache: { kind: "public", maxAge: 900, swr: 3600 },
   response:
     safePublicHandlerResponseSchemasWithStatusText(coverageAnswerSchema),

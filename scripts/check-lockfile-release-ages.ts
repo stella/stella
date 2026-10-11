@@ -346,7 +346,9 @@ export const checkLockfileReleaseAges = async ({
   lockfiles,
   lookup,
   now,
+  packageName,
 }: {
+  packageName?: string;
   lockfiles: readonly LockfileInput[];
   lookup: LookupPublishTime;
   now: Date;
@@ -359,6 +361,7 @@ export const checkLockfileReleaseAges = async ({
     unverified: [],
   };
 
+  let selectedPins = 0;
   for (const lockfile of lockfiles) {
     const head = readLockfilePins(lockfile.headText, lockfile.path);
     const base =
@@ -367,7 +370,12 @@ export const checkLockfileReleaseAges = async ({
         : readLockfilePins(lockfile.baseText, `${lockfile.path} (base)`);
     report.errors.push(...head.errors);
     const known = new Set((base?.pins ?? []).map(pinKey));
-    const added = head.pins.filter((pin) => !known.has(pinKey(pin)));
+    const added = head.pins.filter(
+      (pin) =>
+        !known.has(pinKey(pin)) &&
+        (packageName === undefined || pin.name === packageName),
+    );
+    selectedPins += added.length;
     const knownExternal = new Set(base?.external);
     for (const ident of head.external) {
       if (!knownExternal.has(ident)) {
@@ -434,6 +442,11 @@ export const checkLockfileReleaseAges = async ({
       );
     }
   }
+  if (packageName !== undefined && selectedPins === 0) {
+    report.errors.push(
+      `No registry pins found for requested package: ${packageName}`,
+    );
+  }
   return report;
 };
 
@@ -471,6 +484,8 @@ const main = async () => {
   const args = Bun.argv.slice(2);
   const baseRef = optionValue(args, "--base") ?? "origin/main";
   const headRef = optionValue(args, "--head");
+  const all = args.includes("--all");
+  const packageName = optionValue(args, "--package");
   const nowText = optionValue(args, "--now");
   const now = nowText === undefined ? new Date() : new Date(nowText);
   if (Number.isNaN(now.getTime())) {
@@ -514,12 +529,12 @@ const main = async () => {
 
   const lockfiles = tracked.flatMap((file): LockfileInput[] => {
     const headText = readHead(file);
-    if (!changed.has(file) || headText === undefined) {
+    if ((!all && !changed.has(file)) || headText === undefined) {
       return [];
     }
     return [
       {
-        baseText: readAtRef(mergeBase, file),
+        baseText: all ? undefined : readAtRef(mergeBase, file),
         bunfigText: readHead(governingBunfigPath(file)),
         headText,
         path: file,
@@ -536,6 +551,7 @@ const main = async () => {
     lockfiles,
     lookup: createRegistryLookup(),
     now,
+    ...(packageName === undefined ? {} : { packageName }),
   });
 
   console.log(

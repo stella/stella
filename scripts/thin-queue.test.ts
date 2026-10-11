@@ -18,7 +18,12 @@ import {
   evaluate as evaluateExpression,
   UNKNOWN,
 } from "./github-expression";
-import { mainHeavyJobs, queueAdmittedJobs, thinJobs } from "./main-heavy-plan";
+import {
+  mainHeavyJobs,
+  queueAdmittedJobs,
+  queueGateJobs,
+  thinJobs,
+} from "./main-heavy-plan";
 
 const root = new URL("../", import.meta.url).pathname;
 const stepSchema = v.looseObject({
@@ -62,6 +67,8 @@ const THIN_JOBS = thinJobs(ci);
 const main = readWorkflow("main-heavy.yml");
 const heavy = mainHeavyJobs(ci);
 const admitted = queueAdmittedJobs(ci);
+const gates = queueGateJobs(ci);
+const browserAdmitted = admitted.filter((job) => !gates.includes(job));
 const eventPolicy = v.parse(
   v.object({ jobs: v.record(v.string(), v.string()) }),
   JSON.parse(
@@ -131,6 +138,7 @@ const plan = {
   queue_required_jobs: "[]",
   suite_depth: "full",
   service_suites_pr_required: "false",
+  postgres_suites_required: "true",
   corpus_suites_required: "false",
   fix_tests_on_base_required: "false",
   browser_spec_selection_required: "true",
@@ -296,6 +304,7 @@ type ExpectedPrSelectionOptions = {
 const DECLARED_PR_PLAN_CHANGES = new Set([
   "ci-browser",
   "e2e-production-shard",
+  "scan-engine-wasm-drift",
   "web-build",
 ]);
 const expectedPrSelection = ({
@@ -312,6 +321,13 @@ const expectedPrSelection = ({
     return (
       value.needs["ci-plan"]?.outputs["trusted"] === "true" &&
       value.needs["ci-plan"].outputs["desktop_browser_required"] === "true"
+    );
+  }
+  if (job === "scan-engine-wasm-drift") {
+    expect(DECLARED_PR_PLAN_CHANGES.has(job)).toBe(true);
+    return (
+      value.needs["ci-plan"]?.outputs["trusted"] === "true" &&
+      value.needs["ci-plan"].outputs["scan_engine_wasm_required"] === "true"
     );
   }
   if (job === "web-build") {
@@ -372,6 +388,25 @@ const expectedServiceSelection = (value: ReturnType<typeof context>) => {
   );
 };
 
+const expectedPostgresSelection = (value: ReturnType<typeof context>) => {
+  const outputs = value.needs["ci-plan"]?.outputs;
+  if (!outputs) {
+    panic("Missing Postgres planner context");
+  }
+  return (
+    outputs["run_required"] !== "false" &&
+    (outputs["trusted"] === "true" ||
+      value.github.event_name === "workflow_dispatch") &&
+    outputs["postgres_suites_required"] === "true" &&
+    outputs["queue_depth"] !== "thin" &&
+    (value.github.event_name !== "pull_request" ||
+      value.vars.CI_POSTGRES_PR_SELECTION === "on") &&
+    (outputs["suite_depth"] === "full" ||
+      (outputs["suite_depth"] === "fast" &&
+        outputs["service_suites_pr_required"] === "true"))
+  );
+};
+
 test("declared Postgres selection preserves every scope, depth, trust and PR opt-in gate", () => {
   for (const event of events) {
     for (const suiteDepth of ["full", "fast", "unknown"]) {
@@ -391,6 +426,7 @@ test("declared Postgres selection preserves every scope, depth, trust and PR opt
                     suite_depth: suiteDepth,
                     trusted,
                     package_checks_required: required,
+                    postgres_suites_required: required,
                     collab_redis_required: "false",
                     service_suites_pr_required: prRequired,
                     run_required: runRequired,
@@ -408,6 +444,9 @@ test("declared Postgres selection preserves every scope, depth, trust and PR opt
                       runRequired,
                     }),
                   ).toBe(expectedServiceSelection(value));
+                  expect(
+                    selected(ci.jobs["postgres-service-suites"]?.if, value),
+                  ).toBe(expectedPostgresSelection(value));
                 }
               }
             }
@@ -783,18 +822,23 @@ test("unset and full preserve historical predicates except declared PR, Postgres
           (id) => id !== "merge-group-fail-fast" && !collapsedJobs.has(id),
         ),
         "api-test-durations",
+        "postgres-service-suites",
         "marketing-screenshots-cancel",
         "ci-generated-sources",
         "ci-checks-docs",
         "code-quality-web-rest",
+        "dated-waiver-expiry",
         "desktop-rust-tests",
         "desktop-rust-lint",
+        "query-perf",
+        "scan-engine-wasm-drift",
       ]),
     ].toSorted(),
   );
   expect([...DECLARED_PR_PLAN_CHANGES].toSorted()).toEqual([
     "ci-browser",
     "e2e-production-shard",
+    "scan-engine-wasm-drift",
     "web-build",
   ]);
   for (const event of events) {
@@ -816,6 +860,8 @@ test("unset and full preserve historical predicates except declared PR, Postgres
             "true";
         } else if (job === "service-suites") {
           expected = expectedServiceSelection(value);
+        } else if (job === "postgres-service-suites") {
+          expected = expectedPostgresSelection(value);
         } else if (job === "route-smoke") {
           expected = expectedRouteSelection(value);
         } else if (event.event === "pull_request") {
@@ -887,15 +933,17 @@ test("one variable moves only derived heavy jobs from merge groups to ordinary m
         }
         if (
           resolved.exitCode !== 0 ||
-          (thinQueue && heavy.includes(job) && !admitted.includes(job))
+          (thinQueue &&
+            heavy.includes(job) &&
+            !admitted.includes(job) &&
+            job !== "desktop-rust-tests")
         ) {
           expect(runs, `${event.event}/${variable}/${job}`).toBe(false);
           continue;
         }
-        // An admitted browser suite keeps its full-depth queue selection in a
-        // thin group while the switch is unset.
+        // Browser suites and macOS desktop tests retain full-depth selection in thin groups.
         const certified =
-          thinQueue && admitted.includes(job)
+          thinQueue && (admitted.includes(job) || job === "desktop-rust-tests")
             ? {
                 ...value,
                 needs: {
@@ -914,6 +962,8 @@ test("one variable moves only derived heavy jobs from merge groups to ordinary m
             "true";
         } else if (job === "service-suites") {
           expected = expectedServiceSelection(value);
+        } else if (job === "postgres-service-suites") {
+          expected = expectedPostgresSelection(value);
         } else if (job === "route-smoke") {
           expected = expectedRouteSelection(value);
         } else if (event.event === "pull_request") {
@@ -1018,7 +1068,12 @@ const evaluate = ({
   );
   const dependencies = Object.fromEntries(
     needs.map((name) => {
-      let jobResult = heavy.includes(name) ? "skipped" : "success";
+      let jobResult =
+        heavy.includes(name) &&
+        !gates.includes(name) &&
+        name !== "desktop-rust-tests"
+          ? "skipped"
+          : "success";
       if (name === job) {
         jobResult = result ?? "missing";
       }
@@ -1078,7 +1133,7 @@ test("thin aggregation accepts only intended heavy skips and still requires ever
       ).toBe(1);
     }
   }
-  for (const job of THIN_JOBS) {
+  for (const job of [...THIN_JOBS, ...gates, "desktop-rust-tests"]) {
     expect(evaluate({ queueDepth: "thin", job, result: "skipped" }), job).toBe(
       1,
     );
@@ -1275,10 +1330,10 @@ test("main release and scheduled runs execute the planned version compiler in ei
 }, 30_000);
 
 test("thin merge groups admit exactly the planned browser suites until the switch turns them off", () => {
-  expect([...admitted].toSorted()).toEqual(
+  expect([...browserAdmitted].toSorted()).toEqual(
     ["e2e-production-shard", "route-smoke"].toSorted(),
   );
-  for (const job of admitted) {
+  for (const job of browserAdmitted) {
     // Main-heavy keeps certifying them after merge as well.
     expect(heavy, job).toContain(job);
     const scope = scopes[job];
@@ -1329,7 +1384,7 @@ test("a browser suite without the queue switch drops out of thin merge groups", 
 });
 
 test("the queue switch admits browser suites only in merge groups", () => {
-  for (const job of admitted) {
+  for (const job of browserAdmitted) {
     const scope = scopes[job];
     if (!scope) {
       panic(`Missing planner scope for ${job}`);

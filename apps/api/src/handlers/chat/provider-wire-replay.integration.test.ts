@@ -214,9 +214,178 @@ const rateLimitedTurn = async (provider: ProviderWireProvider) => {
   }
 };
 
+/** Where a field sits in a JSON value: its keys and indexes from the root. */
+type FieldPath = readonly (number | string)[];
+
+const samePath = (left: FieldPath, right: FieldPath) =>
+  left.length === right.length &&
+  left.every((segment, index) => segment === right[index]);
+
+/** `value` with the field at each of `paths` left out, everything else kept. */
+const withoutFields = (
+  value: unknown,
+  paths: readonly FieldPath[],
+  at: FieldPath = [],
+): unknown => {
+  if (Array.isArray(value)) {
+    return value.map((item: unknown, index: number) =>
+      withoutFields(item, paths, [...at, index]),
+    );
+  }
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => !paths.some((path) => samePath(path, [...at, key])))
+        .map(([key, item]: [string, unknown]) => [
+          key,
+          withoutFields(item, paths, [...at, key]),
+        ]),
+    );
+  }
+  return value;
+};
+
+const parsedJson = (text: string): unknown => JSON.parse(text);
+
+/**
+ * The events of an SSE body: each event's other lines (`id:` and the like)
+ * as written, and its `data:` payload parsed.
+ */
+const sseEvents = (body: string) =>
+  body
+    .split("\n\n")
+    .filter((block) => block.length > 0)
+    .map((block) => {
+      const lines = block.split("\n");
+      const data = lines
+        .filter((line) => line.startsWith("data: "))
+        .map((line) => line.slice("data: ".length))
+        .join("\n");
+      return {
+        lines: lines.filter((line) => !line.startsWith("data: ")),
+        data: data === "" || data === "[DONE]" ? data : parsedJson(data),
+      };
+    });
+
+const isRunError = (event: unknown) =>
+  typeof event === "object" &&
+  event !== null &&
+  "type" in event &&
+  event.type === EventType.RUN_ERROR;
+
+/**
+ * A failed turn's stored thread and stream as JSON, minus the only fields
+ * allowed to carry the provider's redacted reason: the last assistant
+ * message's turn outcome diagnostic, and each run error's diagnostic.
+ */
+const outsideDiagnosticFields = ({
+  stored,
+  body,
+}: {
+  stored: readonly { role: string }[];
+  body: string;
+}) => {
+  const assistantIndex = stored.findLastIndex(
+    ({ role }) => role === "assistant",
+  );
+  const events = sseEvents(body);
+  return {
+    stored: JSON.stringify(
+      withoutFields(stored, [
+        [
+          assistantIndex,
+          "metadata",
+          "turnOutcome",
+          "providerDiagnostic",
+          "message",
+        ],
+      ]),
+    ),
+    stream: JSON.stringify(
+      withoutFields(
+        events,
+        events.flatMap(({ data }, index) =>
+          isRunError(data)
+            ? [[index, "data", "metadata", "providerDiagnostic", "message"]]
+            : [],
+        ),
+      ),
+    ),
+  };
+};
+
 describe("a replayed provider through the chat pipeline", () => {
   test("offers the wire tool under the harness's approval tool name", () => {
     expect(WIRE_TOOL_NAME).toBe(APPROVAL_TOOL_NAME);
+  });
+
+  test("the diagnostic check finds the provider's reason outside its own fields", () => {
+    const reason = "Quota exceeded: SENTINEL_DIAGNOSTIC_CHECK";
+    const diagnostic = { provider: "openrouter", message: reason };
+    const assistant = {
+      id: "assistant-1",
+      role: "assistant",
+      parts: [{ type: "text", content: "" }],
+      metadata: {
+        turnOutcome: {
+          type: "failed",
+          error: "rate_limit",
+          providerDiagnostic: diagnostic,
+        },
+      },
+    };
+    const runError = {
+      type: EventType.RUN_ERROR,
+      message: "rate_limit",
+      code: "rate_limit",
+      metadata: { providerDiagnostic: diagnostic },
+    };
+    const sse = (...events: unknown[]) =>
+      events
+        .map(
+          (event, index) =>
+            `id: ${index + 1}\ndata: ${JSON.stringify(event)}\n\n`,
+        )
+        .join("");
+    const user = { id: "user-1", role: "user", parts: [] };
+
+    // Only in its own fields: nothing is left.
+    const kept = outsideDiagnosticFields({
+      stored: [user, assistant],
+      body: sse(runError),
+    });
+    expect(kept.stored).not.toContain(reason);
+    expect(kept.stream).not.toContain(reason);
+    // The fields themselves are what was left out, not the whole message.
+    expect(kept.stored).toContain("rate_limit");
+    expect(kept.stream).toContain("rate_limit");
+
+    // Copied into another field of the same message, or of the same event.
+    const annotated = {
+      ...assistant,
+      metadata: { ...assistant.metadata, note: reason },
+    };
+    const sameRecord = outsideDiagnosticFields({
+      stored: [user, annotated],
+      body: sse({ ...runError, message: reason }),
+    });
+    expect(sameRecord.stored).toContain(reason);
+    expect(sameRecord.stream).toContain(reason);
+
+    // Copied into another message's diagnostic path, or another event.
+    const elsewhere = outsideDiagnosticFields({
+      stored: [{ ...user, ...assistant, role: "user" }, assistant],
+      body: sse(
+        {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: "assistant-1",
+          delta: reason,
+        },
+        runError,
+      ),
+    });
+    expect(elsewhere.stored).toContain(reason);
+    expect(elsewhere.stream).toContain(reason);
   });
 
   test.each(providerCallErrorCassettes())(
@@ -247,14 +416,24 @@ describe("a replayed provider through the chat pipeline", () => {
         );
         expect(logs.records.length).toBeGreaterThan(0);
         expect(analytics.exceptions()).toEqual([]);
+        const sentinel = providerCallErrorSentinel(cassette);
+        // The provider's raw reply never reaches logs, product analytics or
+        // the error tracker.
         expect(
           JSON.stringify({
-            stored,
-            recording,
             logs: logs.records,
             analytics: analytics.events,
           }),
-        ).not.toContain(providerCallErrorSentinel(cassette));
+        ).not.toContain(sentinel);
+        // The reader keeps the provider's reason, redacted, as part of the
+        // turn: in the stored turn outcome's diagnostic and in the stream's
+        // run error diagnostic. Nowhere else in either does the reply appear.
+        const outside = outsideDiagnosticFields({
+          stored,
+          body: recording.at(0)?.response.body ?? "",
+        });
+        expect(outside.stored).not.toContain(sentinel);
+        expect(outside.stream).not.toContain(sentinel);
       } finally {
         logs.restore();
         analytics.restore();

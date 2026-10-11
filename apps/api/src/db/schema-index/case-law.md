@@ -641,94 +641,72 @@ case_law_search_backfill_failures.last_failed_at     timestamptz  not null     c
 How a reader's last analysis run of a decision failed, one row per decision and reader key.
 
 ```text
-case_law_analysis_failures.decision_id        safeUuid     not null  case-law.ts:3078
-case_law_analysis_failures.key_tag            text         not null  case-law.ts:3079
-case_law_analysis_failures.input_fingerprint  text         not null  case-law.ts:3080
-case_law_analysis_failures.code               text         not null  case-law.ts:3081
-case_law_analysis_failures.key_source         text         not null  case-law.ts:3082
-case_law_analysis_failures.provider           text         null      case-law.ts:3085
-case_law_analysis_failures.recorded_at        timestamptz  not null  case-law.ts:3086
+case_law_analysis_failures.decision_id          safeUuid     not null  case-law.ts:3078
+case_law_analysis_failures.key_tag              text         not null  case-law.ts:3079
+case_law_analysis_failures.input_fingerprint    text         not null  case-law.ts:3080
+case_law_analysis_failures.code                 text         not null  case-law.ts:3081
+case_law_analysis_failures.key_source           text         not null  case-law.ts:3082
+case_law_analysis_failures.provider             text         null      case-law.ts:3085
+case_law_analysis_failures.provider_diagnostic  jsonb        null      case-law.ts:3087  Redacted provider reason, visible only to the organization whose run failed.
+case_law_analysis_failures.recorded_at          timestamptz  not null  case-law.ts:3090
 ```
 
-## case_law_search_document_preview_passages · `caseLawSearchDocumentPreviewPassages` · case-law.ts:3118 · rls
+## case_law_search_document_preview_passages · `caseLawSearchDocumentPreviewPassages` · case-law.ts:3122 · rls
 
 ```text
-case_law_search_document_preview_passages.decision_id  safeUuid  fk,not null  case-law.ts:3121
-case_law_search_document_preview_passages.generation   uuid      not null     case-law.ts:3126
-case_law_search_document_preview_passages.ordinal      integer   not null     case-law.ts:3127
-case_law_search_document_preview_passages.content      text      not null     case-law.ts:3128
-case_law_search_document_preview_passages.tsv          tsvector  not null     case-law.ts:3129
+case_law_search_document_preview_passages.decision_id  safeUuid  fk,not null  case-law.ts:3125
+case_law_search_document_preview_passages.generation   uuid      not null     case-law.ts:3130
+case_law_search_document_preview_passages.ordinal      integer   not null     case-law.ts:3131
+case_law_search_document_preview_passages.content      text      not null     case-law.ts:3132
+case_law_search_document_preview_passages.tsv          tsvector  not null     case-law.ts:3133
 ```
 
-## case_law_ingestion_events · `caseLawIngestionEvents` · case-law.ts:3148 · rls
+## case_law_ingestion_events · `caseLawIngestionEvents` · case-law.ts:3152 · rls
 
 --------------------------------------------------------------------------- Case Law — Ingestion observability ------------------------------------------------…
 
 ```text
-case_law_ingestion_events.id                      pUuid        pk,not null       case-law.ts:3151
-case_law_ingestion_events.source_id               safeUuid     fk,not null       case-law.ts:3152
-case_law_ingestion_events.status                  varchar      not null          case-law.ts:3155
-case_law_ingestion_events.inserted                integer      default,not null  case-law.ts:3156
-case_law_ingestion_events.skipped                 integer      default,not null  case-law.ts:3157
-case_law_ingestion_events.search_vector_failures  integer      default,not null  case-law.ts:3158
-case_law_ingestion_events.pages_processed         integer      default,not null  case-law.ts:3162
-case_law_ingestion_events.cursor_before           text         null              case-law.ts:3163
-case_law_ingestion_events.cursor_after            text         null              case-law.ts:3164
-case_law_ingestion_events.duration_ms             integer      not null          case-law.ts:3165
-case_law_ingestion_events.error_message           varchar      null              case-law.ts:3166
-case_law_ingestion_events.started_at              timestamptz  not null          case-law.ts:3167
-case_law_ingestion_events.finished_at             timestamptz  default,not null  case-law.ts:3168
+case_law_ingestion_events.id                      pUuid        pk,not null       case-law.ts:3155
+case_law_ingestion_events.source_id               safeUuid     fk,not null       case-law.ts:3156
+case_law_ingestion_events.status                  varchar      not null          case-law.ts:3159
+case_law_ingestion_events.inserted                integer      default,not null  case-law.ts:3160
+case_law_ingestion_events.skipped                 integer      default,not null  case-law.ts:3161
+case_law_ingestion_events.search_vector_failures  integer      default,not null  case-law.ts:3162
+case_law_ingestion_events.pages_processed         integer      default,not null  case-law.ts:3166
+case_law_ingestion_events.cursor_before           text         null              case-law.ts:3167
+case_law_ingestion_events.cursor_after            text         null              case-law.ts:3168
+case_law_ingestion_events.duration_ms             integer      not null          case-law.ts:3169
+case_law_ingestion_events.error_message           varchar      null              case-law.ts:3170
+case_law_ingestion_events.started_at              timestamptz  not null          case-law.ts:3171
+case_law_ingestion_events.finished_at             timestamptz  default,not null  case-law.ts:3172
 ```
 
-## case_law_ingestion_failures · `caseLawIngestionFailures` · case-law.ts:3180 · rls
+## case_law_ingestion_failures · `caseLawIngestionFailures` · case-law.ts:3184 · rls
 
 ```text
-case_law_ingestion_failures.id               pUuid        pk,not null       case-law.ts:3183
-case_law_ingestion_failures.source_id        safeUuid     fk,not null       case-law.ts:3184
-case_law_ingestion_failures.case_number      varchar      not null          case-law.ts:3187
-case_law_ingestion_failures.language         varchar      null              case-law.ts:3188
-case_law_ingestion_failures.error_type       varchar      not null          case-law.ts:3189
-case_law_ingestion_failures.error_message    varchar      not null          case-law.ts:3190
-case_law_ingestion_failures.cursor           text         null              case-law.ts:3191
-case_law_ingestion_failures.record_identity  varchar      null              case-law.ts:3196  The failing record's stable identity where its caller names one; a record written again with the same identity keeps its one row.
-case_law_ingestion_failures.created_at       timestamptz  default,not null  case-law.ts:3197
+case_law_ingestion_failures.id               pUuid        pk,not null       case-law.ts:3187
+case_law_ingestion_failures.source_id        safeUuid     fk,not null       case-law.ts:3188
+case_law_ingestion_failures.case_number      varchar      not null          case-law.ts:3191
+case_law_ingestion_failures.language         varchar      null              case-law.ts:3192
+case_law_ingestion_failures.error_type       varchar      not null          case-law.ts:3193
+case_law_ingestion_failures.error_message    varchar      not null          case-law.ts:3194
+case_law_ingestion_failures.cursor           text         null              case-law.ts:3195
+case_law_ingestion_failures.record_identity  varchar      null              case-law.ts:3200  The failing record's stable identity where its caller names one; a record written again with the same identity keeps its one row.
+case_law_ingestion_failures.created_at       timestamptz  default,not null  case-law.ts:3201
 ```
 
-## case_law_index_jobs · `caseLawIndexJobs` · case-law.ts:3218 · rls
+## case_law_index_jobs · `caseLawIndexJobs` · case-law.ts:3222 · rls
 
 Append-only audit trail for search-index mutations across the object-store + corpus index boundary.
 
 ```text
-case_law_index_jobs.id             pUuid        pk,not null       case-law.ts:3221
-case_law_index_jobs.decision_id    safeUuid     fk,null           case-law.ts:3222
-case_law_index_jobs.generation     varchar      null              case-law.ts:3231  The generation an operation targeted, where it targeted one.
-case_law_index_jobs.operation      varchar      not null          case-law.ts:3232
-case_law_index_jobs.status         varchar      not null          case-law.ts:3236
-case_law_index_jobs.content_hash   varchar      null              case-law.ts:3237
-case_law_index_jobs.error_message  varchar      null              case-law.ts:3238
-case_law_index_jobs.detail         varchar      null              case-law.ts:3245  Why a succeeded operation was performed, in the caller's own words.
-case_law_index_jobs.created_at     timestamptz  default,not null  case-law.ts:3246
-```
-
-## case_law_decision_citation_stats · `caseLawDecisionCitationStats` · case-law.ts:3286 · rls
-
-Aggregates retain the far source and country so read policy changes are immediate.
-
-```text
-case_law_decision_citation_stats.decision_id        safeUuid  not null  case-law.ts:3289
-case_law_decision_citation_stats.direction          text      not null  case-law.ts:3290
-case_law_decision_citation_stats.related_year       integer   not null  case-law.ts:3291
-case_law_decision_citation_stats.related_country    varchar   null      case-law.ts:3292
-case_law_decision_citation_stats.related_source_id  uuid      null      case-law.ts:3293
-case_law_decision_citation_stats.polarity           varchar   not null  case-law.ts:3294
-case_law_decision_citation_stats.count              bigint    not null  case-law.ts:3295
-```
-
-## case_law_decision_citation_stats_state · `caseLawDecisionCitationStatsState` · case-law.ts:3355 · rls
-
-Missing state means pending; an empty exact projection is a truthful zero.
-
-```text
-case_law_decision_citation_stats_state.decision_id  safeUuid  pk,not null       case-law.ts:3358
-case_law_decision_citation_stats_state.status       text      default,not null  case-law.ts:3359
+case_law_index_jobs.id             pUuid        pk,not null       case-law.ts:3225
+case_law_index_jobs.decision_id    safeUuid     fk,null           case-law.ts:3226
+case_law_index_jobs.generation     varchar      null              case-law.ts:3235  The generation an operation targeted, where it targeted one.
+case_law_index_jobs.operation      varchar      not null          case-law.ts:3236
+case_law_index_jobs.status         varchar      not null          case-law.ts:3240
+case_law_index_jobs.content_hash   varchar      null              case-law.ts:3241
+case_law_index_jobs.error_message  varchar      null              case-law.ts:3242
+case_law_index_jobs.detail         varchar      null              case-law.ts:3249  Why a succeeded operation was performed, in the caller's own words.
+case_law_index_jobs.created_at     timestamptz  default,not null  case-law.ts:3250
 ```

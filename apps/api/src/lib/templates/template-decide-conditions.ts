@@ -1,5 +1,6 @@
+import { panic, Result } from "better-result";
 /**
- * What the organization's decision model says about a template's AI-decided
+ * What the organization's models say about a template's AI-decided
  * conditions, before anything is filled.
  *
  * The fill decides each condition as it reaches it and writes the answer into
@@ -7,18 +8,11 @@
  * decided, let alone disagree. This asks every condition of one template in a
  * single call so the form can show the answer and its confidence while the
  * values are still being typed, and let the person override it.
- *
- * The decision model only: no generative fallback here. The fill keeps its
- * cascade (decide, then the generative model when the answer is under the
- * floor), so a condition this reports as undecided may still be answered at
- * fill time. With no decision model configured every condition comes back
- * `no-backend`, which is the ordinary state of a self-hosted instance.
  */
-
-import { panic, Result } from "better-result";
 import type { Result as ResultType } from "better-result";
 import * as v from "valibot";
 
+import type { DecisionUndecidedReason } from "@stll/api-contract/ai-decision-provider";
 import { evaluateCondition, resolvePath } from "@stll/template-conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -33,6 +27,12 @@ import {
   conditionQuestion,
   conditionsState,
 } from "@/api/lib/docx/ai-condition-question";
+import {
+  conditionSkillCapability,
+  prepareConditionSkills,
+  SKILL_CATALOG_LOAD_SINK,
+  type SkillToolsContext,
+} from "@/api/lib/docx/ai-skill-tools";
 import { omitSourceBoundValues } from "@/api/lib/docx/ai-visible-values";
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import { discoverContainerFields } from "@/api/lib/docx/discover-template";
@@ -41,11 +41,13 @@ import { resolveClauseSlotSources } from "@/api/lib/docx/resolve-clause-slots";
 import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { loadStoredTemplateSource } from "@/api/lib/templates/template-fill-service";
 import { decideMany } from "@/api/lib/workflow/decisions/decide";
 import type {
   Decision,
-  DecisionUndecidedReason,
+  DecisionGenerationOptions,
+  DecisionGenerator,
 } from "@/api/lib/workflow/decisions/decide";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import type { DecisionUsageMetering } from "@/api/lib/workflow/decisions/decision-usage";
@@ -76,6 +78,7 @@ type TemplateConditionDecision =
       decidedBy: "user";
       value: boolean;
     }
+  | { state: "decided"; decidedBy: "generative_model"; value: boolean }
   | { state: "undecided"; reason: DecisionUndecidedReason };
 
 export type TemplateConditionAnswer = {
@@ -117,6 +120,9 @@ const toConditionDecision = (
       return { state: "undecided", reason: decision.reason };
     case "decided": {
       const value = decision.answer.noul > 0.5;
+      if (decision.source === "generative") {
+        return { state: "decided", decidedBy: "generative_model", value };
+      }
       return {
         state: "decided",
         decidedBy: "decision_model",
@@ -133,6 +139,13 @@ const toConditionDecision = (
   }
 };
 
+type TemplateDecisionRuntime =
+  | {
+      generation: Extract<DecisionGenerationOptions, { dataClass: "customer" }>;
+      generator?: DecisionGenerator | undefined;
+    }
+  | { generation?: never; generator: DecisionGenerator };
+
 export type DecideTemplateConditionsOptions = {
   fields: readonly FieldMeta[];
   values: Record<string, unknown>;
@@ -140,7 +153,59 @@ export type DecideTemplateConditionsOptions = {
   abortSignal?: AbortSignal | undefined;
   /** Injected by tests; the org's resolved decision model otherwise. */
   client?: DecisionModel | null | undefined;
+  skillContext?: SkillToolsContext | undefined;
   usageMetering?: DecisionUsageMetering | undefined;
+} & TemplateDecisionRuntime;
+
+type TemplateConditionPlan =
+  | { type: "complete"; value: TemplateConditionDecisions }
+  | {
+      type: "model";
+      conditions: TemplateAiCondition[];
+      supplied: Map<string, boolean>;
+      questions: Record<string, NoulQuestion>;
+    };
+
+const planTemplateConditions = (
+  fields: readonly FieldMeta[],
+  values: Record<string, unknown>,
+): TemplateConditionPlan => {
+  const conditions = templateAiConditions(fields);
+  const supplied = new Map<string, boolean>();
+  const questions: Record<string, NoulQuestion> = {};
+  for (const { path, prompt } of conditions) {
+    const existing = resolvePath(path, values);
+    if (existing !== undefined && existing !== "") {
+      supplied.set(path, evaluateCondition(path, values));
+      continue;
+    }
+    questions[path] = {
+      ...conditionQuestion(prompt),
+      ...conditionSkillCapability(prompt),
+    };
+  }
+
+  if (supplied.size === conditions.length) {
+    return {
+      type: "complete",
+      value: {
+        conditions: conditions.map(({ path, label }) => ({
+          path,
+          label,
+          decision: {
+            state: "decided",
+            decidedBy: "user",
+            value:
+              supplied.get(path) ??
+              panic(`Supplied decision missing for condition "${path}"`),
+          },
+        })),
+        model: null,
+      },
+    };
+  }
+
+  return { type: "model", conditions, supplied, questions };
 };
 
 /**
@@ -155,36 +220,54 @@ export const decideTemplateConditions = async ({
   abortSignal,
   client,
   usageMetering,
+  skillContext,
+  generation,
+  generator,
 }: DecideTemplateConditionsOptions): Promise<TemplateConditionDecisions> => {
-  const conditions = templateAiConditions(fields);
-  const supplied = new Map<string, boolean>();
-  const questions: Record<string, NoulQuestion> = {};
-  for (const { path, prompt } of conditions) {
-    const existing = resolvePath(path, values);
-    if (existing !== undefined && existing !== "") {
-      supplied.set(path, evaluateCondition(path, values));
-      continue;
-    }
-    questions[path] = conditionQuestion(prompt);
+  const plan = planTemplateConditions(fields, values);
+  if (plan.type === "complete") {
+    return plan.value;
   }
-
-  if (supplied.size === conditions.length) {
+  const { conditions, supplied, questions } = plan;
+  const skills = await prepareConditionSkills(
+    conditions
+      .filter(({ path }) => !supplied.has(path))
+      .map(({ prompt }) => prompt)
+      .join("\n"),
+    skillContext,
+  );
+  if (Result.isError(skills)) {
+    observeFailure(skills.error, { sink: SKILL_CATALOG_LOAD_SINK });
     return {
-      conditions: conditions.map(({ path, label }) => ({
-        path,
-        label,
-        decision: {
-          state: "decided",
-          decidedBy: "user",
-          value:
-            supplied.get(path) ??
-            panic(`Supplied decision missing for condition "${path}"`),
-        },
-      })),
+      conditions: conditions.map(({ path, label }) => {
+        const value = supplied.get(path);
+        return {
+          path,
+          label,
+          decision:
+            value === undefined
+              ? { state: "undecided", reason: "failed" }
+              : { state: "decided", decidedBy: "user", value },
+        };
+      }),
       model: null,
     };
   }
 
+  const runtime =
+    generation === undefined
+      ? { generator }
+      : {
+          generation: {
+            ...generation,
+            ...skills.value.generation,
+            system: [generation.system, skills.value.generation.system]
+              .filter(Boolean)
+              .join("\n"),
+            deadlineMs: DECIDE_CONDITIONS_TIMEOUT_MS,
+          },
+          generator,
+        };
   const { decisions, model } = await decideMany({
     dataClass: "customer",
     id: CONDITION_DECISION_ID,
@@ -198,6 +281,7 @@ export const decideTemplateConditions = async ({
     abortSignal,
     client,
     usageMetering,
+    ...runtime,
   });
 
   return {
@@ -224,16 +308,21 @@ export const decideTemplateConditions = async ({
   };
 };
 
+type TemplatePreviewError = HandlerError<
+  402 | 403 | 404 | 422 | 429 | 500 | 503
+>;
+
 export type TemplateDecideConditionsProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   templateId: SafeId<"template">;
   body: { values: Record<string, unknown> };
-  orgAIConfig: OrgAIConfig | null;
   abortSignal: AbortSignal;
-  /** Injected by tests; the org's resolved decision model otherwise. */
-  client?: DecisionModel | null | undefined;
-  usageMetering?: DecisionUsageMetering | undefined;
+  runDecisions: (input: {
+    fields: readonly FieldMeta[];
+    values: Record<string, unknown>;
+    abortSignal: AbortSignal;
+  }) => Promise<ResultType<TemplateConditionDecisions, TemplatePreviewError>>;
 };
 
 type DerivedManifestFieldsOptions = Pick<
@@ -294,12 +383,10 @@ export const templateDecideConditionsLogic = async ({
   organizationId,
   templateId,
   body: { values },
-  orgAIConfig,
   abortSignal,
-  client,
-  usageMetering,
+  runDecisions,
 }: TemplateDecideConditionsProps): Promise<
-  ResultType<TemplateConditionDecisions, HandlerError<404 | 422 | 500 | 503>>
+  ResultType<TemplateConditionDecisions, TemplatePreviewError>
 > => {
   // The organization predicate is redundant with RLS on `scopedDb` and stays
   // anyway, for the reason `loadStoredTemplateSource` states: a cross-tenant
@@ -387,20 +474,9 @@ export const templateDecideConditionsLogic = async ({
   }
   fields = [...clauseFields.values()];
 
-  // A template with no AI-decided condition asks nothing, so it neither reads
-  // the org's AI config nor reaches a model.
-  if (templateAiConditions(fields).length === 0) {
-    return Result.ok({ conditions: [], model: null });
+  const plan = planTemplateConditions(fields, values);
+  if (plan.type === "complete") {
+    return Result.ok(plan.value);
   }
-
-  return Result.ok(
-    await decideTemplateConditions({
-      fields,
-      values,
-      orgAIConfig,
-      abortSignal,
-      client,
-      usageMetering,
-    }),
-  );
+  return await runDecisions({ fields, values, abortSignal });
 };
