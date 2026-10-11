@@ -1,4 +1,9 @@
-import { EventType, maxIterations, RUN_CANCEL_REASON } from "@tanstack/ai";
+import {
+  EventType,
+  maxIterations,
+  RUN_CANCEL_REASON,
+  uiMessagesToWire,
+} from "@tanstack/ai";
 import type {
   AnyServerTool,
   ChatMiddleware,
@@ -152,6 +157,7 @@ import type { AIErrorKind } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
@@ -2345,6 +2351,249 @@ type PersistenceChunkResult =
       resumeChunks: PublicStreamChunk[];
     };
 
+type SnapshotProcessorOptions = Pick<
+  ProcessPersistenceChunkOptions,
+  "responseMessageId" | "processor" | "partProvenance"
+>;
+
+type ProcessSnapshotChunkOptions = SnapshotProcessorOptions & {
+  chunk: Extract<PublicStreamChunk, { type: EventType.MESSAGES_SNAPSHOT }>;
+};
+
+const processPersistenceSnapshot = ({
+  chunk: sourceChunk,
+  processor,
+  responseMessageId,
+  partProvenance,
+}: ProcessSnapshotChunkOptions) => {
+  let chunk = sourceChunk;
+  const preservesPartLayout = chunk.messages.some(
+    (message) => message.id === responseMessageId && "parts" in message,
+  );
+  const previous = processor
+    .getMessages()
+    .find(({ id }) => id === responseMessageId);
+  // History-only snapshots must preserve the in-flight response on both
+  // processors. Feed its streamed parts through the same reconciliation
+  // path as a snapshot that already includes this turn.
+  if (
+    previous?.role === "assistant" &&
+    !chunk.messages.some(
+      ({ id, role }) => id === responseMessageId && role === "assistant",
+    )
+  ) {
+    chunk = {
+      ...chunk,
+      messages: [
+        ...chunk.messages,
+        { ...previous, role: "assistant", content: "" },
+      ],
+    };
+  }
+  // A snapshot can carry resumed results without corresponding deltas.
+  // Only a snapshot with this turn can reactivate the owning response.
+  if (
+    chunk.messages.some(
+      ({ id, role }) => id === responseMessageId && role === "assistant",
+    )
+  ) {
+    processor.processChunk(chunk);
+    const snapshot = processor
+      .getMessages()
+      .find(({ id }) => id === responseMessageId);
+    if (previous !== undefined && snapshot !== undefined) {
+      // Model history cannot reconstruct the streamed transcript's text,
+      // reasoning placement. Keep that transcript
+      // and reconcile the presentation state available only in snapshots.
+      const parts = partProvenance.reconcile({
+        previous,
+        snapshot,
+        preservesPartLayout,
+        parseResultOutput: (content) => parseToolResultContent(content).value,
+      });
+      chunk = {
+        ...chunk,
+        messages: chunk.messages.flatMap((message, index, messages) => {
+          // These results are now in the assistant's UI parts. Keeping the
+          // wire tool rows would make the SDK append them a second time.
+          if (
+            message.role === "tool" &&
+            parts.some(
+              (part) =>
+                part.type === "tool-result" &&
+                part.toolCallId === message.toolCallId,
+            )
+          ) {
+            return [];
+          }
+          if (
+            message.role === "reasoning" &&
+            messages
+              .slice(index + 1)
+              .find((candidate) => candidate.role !== "reasoning")?.id ===
+              responseMessageId
+          ) {
+            return [];
+          }
+          return [
+            message.id === responseMessageId && message.role === "assistant"
+              ? { ...message, parts }
+              : message,
+          ];
+        }),
+      };
+      processor.processChunk(chunk);
+      partProvenance.adoptSnapshot(
+        parts,
+        processor.getMessages().find(({ id }) => id === responseMessageId)
+          ?.parts ?? panic("Reconciled snapshot lost its response"),
+      );
+    } else if (snapshot !== undefined) {
+      for (const part of snapshot.parts) {
+        partProvenance.snapshot(part);
+      }
+    }
+    // Snapshots reset run state; the deferred finish still needs the
+    // owning assistant active to capture the complete turn. An empty delta
+    // resumes the SDK's accumulator from the retained parts; START would
+    // create an empty accumulator that truncates the next text delta.
+    const beforeResume = arrayOrEmpty(
+      processor.getMessages().find(({ id }) => id === responseMessageId)?.parts,
+    );
+    processor.processChunk({
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId: responseMessageId,
+      delta: "",
+    });
+    partProvenance.observe(
+      beforeResume,
+      arrayOrEmpty(
+        processor.getMessages().find(({ id }) => id === responseMessageId)
+          ?.parts,
+      ),
+    );
+  }
+  return chunk;
+};
+
+type ProcessDeltaChunkOptions = SnapshotProcessorOptions & {
+  chunk: PublicStreamChunk;
+};
+
+const processPersistenceDelta = ({
+  chunk: sourceChunk,
+  processor,
+  responseMessageId,
+  partProvenance,
+}: ProcessDeltaChunkOptions) => {
+  let chunk = sourceChunk;
+  const resumeChunks: PublicStreamChunk[] = [];
+  const before = arrayOrEmpty(
+    processor.getMessages().find(({ id }) => id === responseMessageId)?.parts,
+  );
+  // Snapshots clear SDK transient routing maps. Rehydrate only a call
+  // that is still collecting input, immediately before its next delta;
+  // send the same repair to the client so live and persistence agree.
+  if (
+    (chunk.type === EventType.TOOL_CALL_ARGS ||
+      chunk.type === EventType.TOOL_CALL_END) &&
+    !processor.getState().toolCalls.has(chunk.toolCallId)
+  ) {
+    const { toolCallId } = chunk;
+    const call = before.find(
+      (part) => part.type === "tool-call" && part.id === toolCallId,
+    );
+    if (
+      call?.type === "tool-call" &&
+      (call.state === "awaiting-input" || call.state === "input-streaming")
+    ) {
+      resumeChunks.push({
+        type: EventType.TOOL_CALL_START,
+        parentMessageId: responseMessageId,
+        toolCallId: call.id,
+        toolCallName: call.name,
+        ...(isRecord(call.metadata) ? { metadata: call.metadata } : {}),
+      });
+      if (call.arguments.length > 0) {
+        resumeChunks.push({
+          type: EventType.TOOL_CALL_ARGS,
+          toolCallId: call.id,
+          delta: call.arguments,
+        });
+      }
+    }
+  }
+  for (const resume of resumeChunks) {
+    processor.processChunk(resume);
+  }
+  processor.processChunk(chunk);
+  const after = arrayOrEmpty(
+    processor.getMessages().find(({ id }) => id === responseMessageId)?.parts,
+  );
+  const parts = partProvenance.reconcileDelta({ before, after, chunk });
+  partProvenance.observe(before, parts);
+  if (parts !== after) {
+    // Publish the corrected projection atomically instead of a delta whose
+    // SDK accumulation dropped or repeated previously visible content.
+    chunk = {
+      type: EventType.MESSAGES_SNAPSHOT,
+      messages: processor.getMessages().flatMap((message) => {
+        const partsForMessage =
+          message.id === responseMessageId ? parts : message.parts;
+        switch (message.role) {
+          case "activity":
+            return uiMessagesToWire([message], { includeActivity: true }).map(
+              (wire) => ({
+                ...wire,
+                parts: partsForMessage,
+              }),
+            );
+          case "assistant":
+          case "system":
+          case "user":
+            return [
+              {
+                ...message,
+                role: message.role,
+                content: partsForMessage
+                  .flatMap((part) =>
+                    part.type === "text" ? [part.content] : [],
+                  )
+                  .join(""),
+                parts: partsForMessage,
+              },
+            ];
+          default:
+            message.role satisfies never;
+            return panic("Unhandled UI message role in a reconciled snapshot");
+        }
+      }),
+    };
+    processor.processChunk(chunk);
+    partProvenance.adoptSnapshot(
+      parts,
+      processor.getMessages().find(({ id }) => id === responseMessageId)
+        ?.parts ?? panic("Delta reconciliation lost its response"),
+    );
+    const beforeResume = arrayOrEmpty(
+      processor.getMessages().find(({ id }) => id === responseMessageId)?.parts,
+    );
+    processor.processChunk({
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId: responseMessageId,
+      delta: "",
+    });
+    partProvenance.observe(
+      beforeResume,
+      arrayOrEmpty(
+        processor.getMessages().find(({ id }) => id === responseMessageId)
+          ?.parts,
+      ),
+    );
+  }
+  return { chunk, resumeChunks };
+};
+
 const processPersistenceChunk = ({
   responseMessageId,
   sourceChunk,
@@ -2381,9 +2630,9 @@ const processPersistenceChunk = ({
         chunk.type === EventType.RUN_FINISHED &&
         chunk.runId === sourceChunk.runId,
     );
-    const before =
-      processor.getMessages().find(({ id }) => id === responseMessageId)
-        ?.parts ?? [];
+    const before = arrayOrEmpty(
+      processor.getMessages().find(({ id }) => id === responseMessageId)?.parts,
+    );
     processor.processChunk(sourceChunk);
     if (!isSameRunIteration) {
       for (const chunk of priorRunFinishedChunks) {
@@ -2392,20 +2641,21 @@ const processPersistenceChunk = ({
     }
     partProvenance.observe(
       before,
-      processor.getMessages().find(({ id }) => id === responseMessageId)
-        ?.parts ?? [],
+      arrayOrEmpty(
+        processor.getMessages().find(({ id }) => id === responseMessageId)
+          ?.parts,
+      ),
     );
     return {
       type: "iteration",
       chunks: [...priorRunFinishedChunks, sourceChunk],
     };
   }
-  let chunk =
+  const chunk =
     sourceChunk.type === EventType.RUN_ERROR
       ? normalizeRunErrorChunk(sourceChunk)
       : sourceChunk;
   const lifecycle = tanStackStreamEventLifecycle(chunk);
-  const resumeChunks: PublicStreamChunk[] = [];
   if (isRunFinishedOutcome(lifecycle)) {
     runState.cancelled ||= lifecycle === "cancelled";
     if (chunk.type !== EventType.RUN_FINISHED) {
@@ -2425,188 +2675,57 @@ const processPersistenceChunk = ({
     deferredRunFinishedChunks.push(chunk);
     return { type: "deferred" };
   }
-  if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
-    const preservesPartLayout = chunk.messages.some(
-      (message) => message.id === responseMessageId && "parts" in message,
-    );
-    const previous = processor
-      .getMessages()
-      .find(({ id }) => id === responseMessageId);
-    // History-only snapshots must preserve the in-flight response on both
-    // processors. Feed its streamed parts through the same reconciliation
-    // path as a snapshot that already includes this turn.
-    if (
-      previous?.role === "assistant" &&
-      !chunk.messages.some(
-        ({ id, role }) => id === responseMessageId && role === "assistant",
-      )
-    ) {
-      chunk = {
-        ...chunk,
-        messages: [
-          ...chunk.messages,
-          { ...previous, role: "assistant", content: "" },
-        ],
-      };
-    }
-    // A snapshot can carry resumed results without corresponding deltas.
-    // Only a snapshot with this turn can reactivate the owning response.
-    if (
-      chunk.messages.some(
-        ({ id, role }) => id === responseMessageId && role === "assistant",
-      )
-    ) {
-      processor.processChunk(chunk);
-      const snapshot = processor
-        .getMessages()
-        .find(({ id }) => id === responseMessageId);
-      if (previous !== undefined && snapshot !== undefined) {
-        // Model history cannot reconstruct the streamed transcript's text,
-        // reasoning placement. Keep that transcript
-        // and reconcile the presentation state available only in snapshots.
-        const parts = partProvenance.reconcile({
-          previous,
-          snapshot,
-          preservesPartLayout,
-          parseResultOutput: (content) => parseToolResultContent(content).value,
-        });
-        chunk = {
-          ...chunk,
-          messages: chunk.messages.flatMap((message, index, messages) => {
-            // These results are now in the assistant's UI parts. Keeping the
-            // wire tool rows would make the SDK append them a second time.
-            if (
-              message.role === "tool" &&
-              parts.some(
-                (part) =>
-                  part.type === "tool-result" &&
-                  part.toolCallId === message.toolCallId,
-              )
-            ) {
-              return [];
-            }
-            if (
-              message.role === "reasoning" &&
-              messages
-                .slice(index + 1)
-                .find((candidate) => candidate.role !== "reasoning")?.id ===
-                responseMessageId
-            ) {
-              return [];
-            }
-            return [
-              message.id === responseMessageId && message.role === "assistant"
-                ? { ...message, parts }
-                : message,
-            ];
+  const reconciled =
+    chunk.type === EventType.MESSAGES_SNAPSHOT
+      ? {
+          chunk: processPersistenceSnapshot({
+            chunk,
+            processor,
+            responseMessageId,
+            partProvenance,
           }),
-        };
-        processor.processChunk(chunk);
-        partProvenance.adoptSnapshot(
-          parts,
-          processor.getMessages().find(({ id }) => id === responseMessageId)
-            ?.parts ?? panic("Reconciled snapshot lost its response"),
-        );
-      } else if (snapshot !== undefined) {
-        for (const part of snapshot.parts) {
-          partProvenance.snapshot(part);
+          resumeChunks: [],
         }
-      }
-      // Snapshots reset run state; the deferred finish still needs the
-      // owning assistant active to capture the complete turn. An empty delta
-      // resumes the SDK's accumulator from the retained parts; START would
-      // create an empty accumulator that truncates the next text delta.
-      const beforeResume =
-        processor.getMessages().find(({ id }) => id === responseMessageId)
-          ?.parts ?? [];
-      processor.processChunk({
-        type: EventType.TEXT_MESSAGE_CONTENT,
-        messageId: responseMessageId,
-        delta: "",
-      });
-      partProvenance.observe(
-        beforeResume,
-        processor.getMessages().find(({ id }) => id === responseMessageId)
-          ?.parts ?? [],
-      );
-    }
-  } else {
-    const before =
-      processor.getMessages().find(({ id }) => id === responseMessageId)
-        ?.parts ?? [];
-    // Snapshots clear SDK transient routing maps. Rehydrate only a call
-    // that is still collecting input, immediately before its next delta;
-    // send the same repair to the client so live and persistence agree.
-    if (
-      (chunk.type === EventType.TOOL_CALL_ARGS ||
-        chunk.type === EventType.TOOL_CALL_END) &&
-      !processor.getState().toolCalls.has(chunk.toolCallId)
-    ) {
-      const call = before.find(
-        (part) => part.type === "tool-call" && part.id === chunk.toolCallId,
-      );
-      if (
-        call?.type === "tool-call" &&
-        (call.state === "awaiting-input" || call.state === "input-streaming")
-      ) {
-        resumeChunks.push({
-          type: EventType.TOOL_CALL_START,
-          parentMessageId: responseMessageId,
-          toolCallId: call.id,
-          toolCallName: call.name,
-          ...(call.metadata === undefined ? {} : { metadata: call.metadata }),
+      : processPersistenceDelta({
+          chunk,
+          processor,
+          responseMessageId,
+          partProvenance,
         });
-        if (call.arguments.length > 0) {
-          resumeChunks.push({
-            type: EventType.TOOL_CALL_ARGS,
-            toolCallId: call.id,
-            delta: call.arguments,
-          });
-        }
-      }
-    }
-    for (const resume of resumeChunks) {
-      processor.processChunk(resume);
-    }
-    processor.processChunk(chunk);
-    const after =
-      processor.getMessages().find(({ id }) => id === responseMessageId)
-        ?.parts ?? [];
-    const parts = partProvenance.reconcileDelta({ before, after, chunk });
-    partProvenance.observe(before, parts);
-    if (parts !== after) {
-      // Publish the corrected projection atomically instead of a delta whose
-      // SDK accumulation dropped or repeated previously visible content.
-      chunk = {
-        type: EventType.MESSAGES_SNAPSHOT,
-        messages: processor
-          .getMessages()
-          .map((message) =>
-            message.id === responseMessageId ? { ...message, parts } : message,
-          ),
-      };
-      processor.processChunk(chunk);
-      partProvenance.adoptSnapshot(
-        parts,
-        processor.getMessages().find(({ id }) => id === responseMessageId)
-          ?.parts ?? panic("Delta reconciliation lost its response"),
-      );
-      const beforeResume =
-        processor.getMessages().find(({ id }) => id === responseMessageId)
-          ?.parts ?? [];
-      processor.processChunk({
-        type: EventType.TEXT_MESSAGE_CONTENT,
-        messageId: responseMessageId,
-        delta: "",
-      });
-      partProvenance.observe(
-        beforeResume,
-        processor.getMessages().find(({ id }) => id === responseMessageId)
-          ?.parts ?? [],
-      );
-    }
+  return { type: "chunk", lifecycle, ...reconciled };
+};
+
+type ObserveSnapshotAnswerOptions = Pick<
+  ProcessPersistenceChunkOptions,
+  "sourceChunk" | "responseMessageId" | "processor"
+> & {
+  producedAnswer: boolean;
+  initial: UIMessage | undefined;
+};
+
+const observeSnapshotAnswer = ({
+  producedAnswer,
+  sourceChunk,
+  responseMessageId,
+  processor,
+  initial,
+}: ObserveSnapshotAnswerOptions) => {
+  if (producedAnswer || sourceChunk.type !== EventType.MESSAGES_SNAPSHOT) {
+    return producedAnswer;
   }
-  return { type: "chunk", chunk, lifecycle, resumeChunks };
+  if (
+    !sourceChunk.messages.some(
+      (message) => message.id === responseMessageId && "parts" in message,
+    )
+  ) {
+    return false;
+  }
+  const message = processor
+    .getMessages()
+    .find(({ id }) => id === responseMessageId);
+  return (
+    message !== undefined && snapshotMessageAddsAnswer({ message, initial })
+  );
 };
 
 type FailedRunDetailsOptions = {
@@ -2653,7 +2772,7 @@ export const processServerChatStream = async function* ({
     ({ id }) => id === responseMessageId,
   );
   const partProvenance = new SnapshotPartReconciler(
-    initialResponseMessage?.parts ?? [],
+    arrayOrEmpty(initialResponseMessage?.parts),
   );
   // Source deltas or new content in an explicit UI snapshot establish an
   // answer. Continuation history alone cannot make an empty run successful.
@@ -2765,22 +2884,13 @@ export const processServerChatStream = async function* ({
         continue;
       }
       const { chunk, lifecycle, resumeChunks } = processed;
-      if (
-        sourceChunk.type === EventType.MESSAGES_SNAPSHOT &&
-        sourceChunk.messages.some(
-          (message) => message.id === responseMessageId && "parts" in message,
-        )
-      ) {
-        const message = processor
-          .getMessages()
-          .find(({ id }) => id === responseMessageId);
-        if (message !== undefined) {
-          producedAnswer ||= snapshotMessageAddsAnswer({
-            message,
-            initial: initialResponseMessage,
-          });
-        }
-      }
+      producedAnswer = observeSnapshotAnswer({
+        producedAnswer,
+        sourceChunk,
+        responseMessageId,
+        processor,
+        initial: initialResponseMessage,
+      });
       yield* resumeChunks;
       if (lifecycle === "failed") {
         const failure = failedRunDetails({ chunk, sourceChunk });

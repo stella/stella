@@ -10,6 +10,8 @@ import { EventType } from "@tanstack/ai";
 import type { StreamChunk, UIMessage } from "@tanstack/ai";
 import { panic } from "better-result";
 
+import { arrayOrEmpty } from "@/api/lib/array";
+
 /** What each chunk says about an answer. `text` answers only when its delta
  *  holds more than whitespace. */
 const CHUNK_ANSWER_POLICY = {
@@ -86,7 +88,10 @@ export const snapshotMessageAddsAnswer = ({
       .flatMap((part) => (part.type === "text" ? [part.content] : []))
       .join("");
   const text = textContent(message.parts);
-  if (text.trim().length > 0 && text !== textContent(initial?.parts ?? [])) {
+  if (
+    text.trim().length > 0 &&
+    text !== textContent(arrayOrEmpty(initial?.parts))
+  ) {
     return true;
   }
   return message.parts.some((part) => {

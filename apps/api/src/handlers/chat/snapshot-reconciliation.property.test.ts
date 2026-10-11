@@ -10,6 +10,7 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { MCP_APP_RESOURCE_MIME_TYPE } from "@stll/api-contract";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import { toSafeId } from "@/api/lib/branded-types";
@@ -20,20 +21,31 @@ import { diffLiveAgainstReload } from "@/api/tests/helpers/chat-live-reload-inva
 import {
   chatMessageContentFromMessage,
   chatMessageFromPersisted,
+  classifyChatPartForPersistence,
+  toPersistableChatMessage,
 } from "./chat-message-parts";
 import { SnapshotPartReconciler } from "./snapshot-reconciliation";
 import { processServerChatStream, toChatMessage } from "./stream-chat";
 import { createChatMessageIdMapper } from "./stream-message-identity";
 
+// Compare the SDK union, including synthetic tool names outside Stella's registry.
+const sdkParts = (message: UIMessage) => message.parts;
+
 const MESSAGE_ID = "11111111-1111-4111-8111-111111111111";
-const snapshot = (parts: UIMessage["parts"]): StreamChunk =>
-  unsafeFixture(
+const snapshot = (parts: UIMessage["parts"]): StreamChunk => {
+  const message = {
+    id: MESSAGE_ID,
+    role: "assistant",
+    parts,
+  } as const satisfies UIMessage;
+  return unsafeFixture(
     "Generated lifecycle permutations exercise the server's UI-parts snapshot extension",
     {
       type: EventType.MESSAGES_SNAPSHOT,
-      messages: [{ id: MESSAGE_ID, role: "assistant", parts }],
+      messages: [message],
     } satisfies StreamChunk,
   );
+};
 
 const scheduleArbitrary = fc.record({
   token: fc.string({ minLength: 1, maxLength: 12 }),
@@ -181,7 +193,10 @@ const collectTurn = async (
   for (const chunk of emitted) {
     live.processor.processChunk(chunk);
   }
-  const persisted = terminal.response;
+  const persisted = toPersistableChatMessage({
+    ...terminal.response,
+    id: toSafeId<"chatMessage">(terminal.response.id),
+  });
   assertPersisted?.(persisted.parts);
   const reload = chatMessageFromPersisted({
     id: persisted.id,
@@ -195,7 +210,15 @@ const collectTurn = async (
     }),
   ).toEqual([]);
   expect(
-    view(live.processor.getMessages().flatMap(({ parts }) => parts)),
+    view(
+      live.processor
+        .getMessages()
+        .flatMap(({ parts }) => parts)
+        .flatMap((part) => {
+          const decision = classifyChatPartForPersistence(part);
+          return decision.type === "persist" ? [decision.part] : [];
+        }),
+    ),
   ).toEqual(view(reload.parts));
   return { emitted, persisted, reload };
 };
@@ -572,19 +595,23 @@ test(
               activityType: "review",
               content: { progress: expectedProgress },
             },
-          ];
+          ] satisfies UIMessage["parts"];
           expect(parts).toEqual(expected);
           for (const part of parts) {
             expect(owner.provenanceOf(part)).toBe(origin);
           }
-          const persisted = toChatMessage({
+          const projected = toChatMessage({
             id: MESSAGE_ID,
             role: "assistant",
             parts,
           });
-          if (persisted === null) {
+          if (projected === null) {
             panic("Activity projection did not persist");
           }
+          const persisted = toPersistableChatMessage({
+            ...projected,
+            id: toSafeId<"chatMessage">(projected.id),
+          });
           const reload = chatMessageFromPersisted({
             id: persisted.id,
             role: persisted.role,
@@ -600,7 +627,7 @@ test(
               .getMessages()
               .flatMap(({ parts: messageParts }) => messageParts),
           ).toEqual(expected);
-          expect(reload.parts).toEqual(expected);
+          expect(sdkParts(reload)).toEqual(expected);
         }
       }),
       { numRuns: 100 },
@@ -707,7 +734,7 @@ test("snapshot-derived text and reasoning merge without retaining obsolete slots
     },
   );
   expect(persisted.parts).toEqual(merged);
-  expect(reload.parts).toEqual(merged);
+  expect(sdkParts(reload)).toEqual(merged);
 });
 
 const resegmentationAncillary = (token: string) => {
@@ -1029,7 +1056,7 @@ for (const append of [false, true]) {
         expect(parts).toEqual(expected);
       },
     );
-    expect(reload.parts).toEqual(expected);
+    expect(sdkParts(reload)).toEqual(expected);
   });
 }
 
@@ -1074,7 +1101,7 @@ test(
             expect(parts).toEqual(expected);
           },
         );
-        expect(reload.parts).toEqual(expected);
+        expect(sdkParts(reload)).toEqual(expected);
         const live = createStreamMessageCapture({
           initialMessages: [],
           capture: (message) => message,
@@ -1221,7 +1248,7 @@ test(
             expect(persistedParts).toEqual(expected);
           },
         );
-        expect(reload.parts).toEqual(expected);
+        expect(sdkParts(reload)).toEqual(expected);
         const live = createStreamMessageCapture({
           initialMessages: [],
           capture: (message) => message,
@@ -1311,7 +1338,7 @@ for (const terminal of ["complete", "error"] as const) {
         expect(parts).toEqual(expected);
       },
     );
-    expect(reload.parts).toEqual(expected);
+    expect(sdkParts(reload)).toEqual(expected);
   });
 }
 
@@ -1358,7 +1385,7 @@ test(
                 expect(parts).toEqual(expected);
               },
             );
-            expect(reload.parts).toEqual(expected);
+            expect(sdkParts(reload)).toEqual(expected);
             const live = createStreamMessageCapture({
               initialMessages: [],
               capture: (message) => message,
@@ -1479,7 +1506,7 @@ test("streamed text completion stays after its newly introduced call", async () 
       expect(parts).toEqual(expected);
     },
   );
-  expect(reload.parts).toEqual(expected);
+  expect(sdkParts(reload)).toEqual(expected);
 });
 
 test(
@@ -1541,7 +1568,7 @@ test(
           const { reload, emitted } = await collectTurn(chunks, (parts) => {
             expect(parts).toEqual(expected);
           });
-          expect(reload.parts).toEqual(expected);
+          expect(sdkParts(reload)).toEqual(expected);
           const live = createStreamMessageCapture({
             initialMessages: [],
             capture: (message) => message,
@@ -1604,7 +1631,11 @@ const occurrenceFixtures = (token: string) =>
       type: "ui-resource",
       toolCallId: "occurrence-call",
       toolName: "lookup",
-      resource: { uri: "ui://occurrence", mimeType: "text/html", text: token },
+      resource: {
+        uri: "ui://occurrence",
+        mimeType: MCP_APP_RESOURCE_MIME_TYPE,
+        text: token,
+      },
     },
     image: {
       type: "image",
@@ -1661,7 +1692,7 @@ test("identical image occurrences survive repeated snapshots", async () => {
       expect(parts).toEqual(expected);
     },
   );
-  expect(reload.parts).toEqual(expected);
+  expect(sdkParts(reload)).toEqual(expected);
 });
 
 test(
@@ -1711,13 +1742,19 @@ test(
           }
           // Identity keys describe content, not cardinality. Each repeated
           // snapshot slot remains a distinct ordered transcript occurrence.
+          // Persistence deliberately drops SDK subagent cards. Reconciliation
+          // still preserves every kind below; compare storage through its policy.
+          const expectedPersisted = expected.flatMap((part) => {
+            const decision = classifyChatPartForPersistence(part);
+            return decision.type === "persist" ? [decision.part] : [];
+          });
           const { reload, emitted } = await collectTurn(
             orderedTurn([initial, expected, structuredClone(expected)]),
             (parts) => {
-              expect(parts).toEqual(expected);
+              expect(parts).toEqual(expectedPersisted);
             },
           );
-          expect(reload.parts).toEqual(expected);
+          expect(sdkParts(reload)).toEqual(expectedPersisted);
           const live = createStreamMessageCapture({
             initialMessages: [],
             capture: (message) => message,
