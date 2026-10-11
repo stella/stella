@@ -4745,6 +4745,8 @@ describe("OpenAI-compatible MCP tools", () => {
     );
     expect(payload).toMatchObject({ items: [{ status: "invalid" }] });
     expect(resolveStatuteExpressionMock).not.toHaveBeenCalled();
+    expect(readLegislationProvisionVersionsMock).not.toHaveBeenCalled();
+    expect(readVersionBlocksMock).not.toHaveBeenCalled();
   });
 
   test("read_statute_provisions pages text to exact reconstruction", async () => {
@@ -4794,7 +4796,8 @@ describe("OpenAI-compatible MCP tools", () => {
           : undefined;
     } while (textCursor !== undefined);
 
-    expect(chunks.join("")).toBe(`§ 1729\n\n${LONG_PROVISION_BODY}`);
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.join("")).toBe(`§ 1729\n${LONG_PROVISION_BODY}`);
   });
 
   test("read_statute_provisions refuses an invalid text cursor", async () => {
@@ -4806,7 +4809,7 @@ describe("OpenAI-compatible MCP tools", () => {
       createProvisionVersionRow(),
     ]);
     readVersionBlocksMock.mockResolvedValue(createStatuteBlocks());
-    expectErrorEnvelope(
+    const error = validationEnvelope(
       await handleMcpToolCall({
         args: {
           items: [
@@ -4820,7 +4823,18 @@ describe("OpenAI-compatible MCP tools", () => {
         context: createContext(),
         toolName: "read_statute_provisions",
       }),
-      { code: "invalid_cursor", message: "Invalid cursor" },
+    );
+    expect(error["code"]).toBe("validation_error");
+    expect(error["message"]).toBe("Invalid cursor");
+    expect(error["issues"]).toEqual([
+      {
+        path: "cursor",
+        message:
+          '"ptw1.invalid" is not a cursor read_statute_provisions issued.',
+      },
+    ]);
+    expect(error["hint"]).toBe(
+      "This cursor does not decode, so the position it held is lost. Call read_statute_provisions again without cursor to start from the first page, or pass nextCursor exactly as the previous response returned it.",
     );
   });
 
@@ -4969,6 +4983,7 @@ describe("OpenAI-compatible MCP tools", () => {
           resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
           status: "found",
           text: "\u00a7 1729 as amended",
+          nextTextCursor: null,
           truncated: false,
           versionValidFrom: "2014-01-01",
           versionValidTo: null,
@@ -4984,6 +4999,7 @@ describe("OpenAI-compatible MCP tools", () => {
           text: "\u00a7 1729 as enacted",
           truncated: false,
           versionValidFrom: "2012-03-22",
+          nextTextCursor: null,
           versionValidTo: "2013-12-31",
           ...EFFECTIVE_LABEL,
         },
@@ -5049,6 +5065,7 @@ describe("OpenAI-compatible MCP tools", () => {
           text: "\u00a7 1729 as amended",
           truncated: false,
           versionValidFrom: "2014-01-01",
+          nextTextCursor: null,
           versionValidTo: null,
           ...EFFECTIVE_LABEL,
         },

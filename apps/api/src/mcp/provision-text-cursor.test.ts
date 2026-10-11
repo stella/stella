@@ -92,7 +92,7 @@ describe.each(TOOLS)("%s provision text cursor boundary", (toolName) => {
         text,
       });
       if (window.type !== "window") {
-        return panic("Expected a provision text window");
+        panic("Expected a provision text window");
       }
       chunks.push(window.text);
       if (window.nextTextCursor === null) {
