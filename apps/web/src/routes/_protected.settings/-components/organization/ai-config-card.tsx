@@ -130,7 +130,7 @@ type SettingsErrorProps = {
 };
 
 const SettingsError = ({ error }: SettingsErrorProps) => {
-  const translate = useTranslations();
+  const translate = useTranslations("organization.aiConfig");
   const setupGuidance =
     error.code === undefined ? undefined : providerSetupGuidance(error.code);
   return (
