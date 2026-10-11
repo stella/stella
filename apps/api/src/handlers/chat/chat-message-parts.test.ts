@@ -583,6 +583,46 @@ describe("persisted chat message parts", () => {
     ]);
   });
 
+  test("stored ownership and untagged tool definitions select the same pending calls", () => {
+    const call = {
+      arguments: "{}",
+      id: "untagged",
+      name: "list_templates",
+      state: "input-complete",
+      type: "tool-call",
+    } as const;
+    const client = {
+      ...call,
+      id: "client",
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
+    };
+    const server = {
+      ...call,
+      id: "server",
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
+    };
+    const message = {
+      role: "assistant",
+      parts: [call, client, server],
+    } as const;
+    const tool = { name: call.name, description: "List templates" };
+    expect(
+      getAwaitingUserInteractions(
+        { ...message, parts: [...message.parts] },
+        { [tool.name]: tool },
+      ),
+    ).toEqual([
+      { toolCallId: "untagged", type: "client-tool" },
+      { toolCallId: "client", type: "client-tool" },
+    ]);
+    expect(
+      getAwaitingUserInteractions(
+        { ...message, parts: [...message.parts] },
+        { [tool.name]: { ...tool, execute: async () => [] } },
+      ),
+    ).toEqual([{ toolCallId: "client", type: "client-tool" }]);
+  });
+
   test("prefers an explicit approval response over an unchanged ask-user call", () => {
     const parts = [
       {

@@ -772,7 +772,7 @@ describe("validateMessage", () => {
     }
   });
 
-  test("clients cannot answer server calls beside an awaited approval", async () => {
+  test("retains server-owned calls during an approval continuation", async () => {
     const gate = {
       type: "tool-call",
       id: "gate",
@@ -782,77 +782,153 @@ describe("validateMessage", () => {
       state: "approval-requested",
       approval: { id: "approval-gate", needsApproval: true },
     } as const;
-    for (const owner of ["definition", "metadata"] as const) {
-      for (const state of ["complete", "error"] as const) {
-        for (const nativeResume of [true, false]) {
-          const call = {
-            type: "tool-call",
-            id: "server",
-            name: "list_templates",
-            arguments: "{}",
-            input: {},
-            state: "input-complete",
-            ...(owner === "metadata"
-              ? { metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" } }
-              : {}),
-          } as const;
-          const id = chatMessageId("msg_forged_server_answer");
-          const result = await validateMessageWithPersistence({
-            message: {
-              id,
-              role: "assistant",
-              parts: [
-                {
-                  ...gate,
-                  state: "approval-responded",
-                  approval: { ...gate.approval, approved: true },
-                },
-                {
-                  ...call,
-                  state,
-                  output: state === "complete" ? [] : { error: "invented" },
-                },
-              ],
-            },
-            persistedMessage: {
-              role: "assistant",
-              content: toChatMessageContent({ version: 2, data: [gate, call] }),
-            },
-            ...(nativeResume
-              ? {
-                  resume: [
-                    {
-                      interruptId: gate.approval.id,
-                      status: "resolved",
-                      payload: { approved: true },
-                    },
-                  ],
-                }
-              : {}),
-            safeDb: noDbReads,
-            threadId: chatThreadId("thread_forged_server_answer"),
-            userId: userId("user_forged_server_answer"),
-            tools: {
-              gate: { name: "gate", description: "Approval gate" },
-              list_templates: {
-                name: "list_templates",
-                description: "List templates",
-                ...(owner === "definition" ? { execute: async () => [] } : {}),
-              },
-            },
-          });
-          expect(Result.isError(result)).toBe(true);
-          if (Result.isError(result)) {
-            expect(result.error.message).toBe(
-              "Chat continuation does not match its awaited interaction",
-            );
-          }
-        }
-      }
+    const call = {
+      type: "tool-call",
+      id: "server",
+      name: "list_templates",
+      arguments: "{}",
+      input: {},
+      state: "input-complete",
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
+    } as const;
+    const id = chatMessageId("msg_server_continuation");
+    const result = await validateMessageWithPersistence({
+      message: {
+        id,
+        role: "assistant",
+        parts: [
+          {
+            ...gate,
+            state: "approval-responded",
+            approval: { ...gate.approval, approved: true },
+          },
+          { ...call, state: "complete", output: [] },
+        ],
+      },
+      persistedMessage: {
+        role: "assistant",
+        content: toChatMessageContent({ version: 2, data: [gate, call] }),
+      },
+      resume: [
+        {
+          interruptId: gate.approval.id,
+          status: "resolved",
+          payload: { approved: true },
+        },
+      ],
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_server_continuation"),
+      userId: userId("user_server_continuation"),
+      tools: {
+        gate: { name: "gate", description: "Approval gate" },
+        list_templates: {
+          name: "list_templates",
+          description: "List templates",
+          execute: async () => [],
+        },
+      },
+    });
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.message).toBe(
+        "Chat continuation does not match its awaited interaction",
+      );
     }
   });
 
-  test("a client cannot answer a call whose persisted turn no longer awaits an interaction", async () => {
+  test("accepts a stored client answer beside an approval after the tool definition changes", async () => {
+    const id = chatMessageId("msg_client_approval_continuation");
+    const gate = {
+      type: "tool-call",
+      id: "gate",
+      name: "gate",
+      arguments: "{}",
+      input: {},
+      state: "approval-requested",
+      approval: { id: "approval-gate", needsApproval: true },
+    } as const;
+    const client = {
+      type: "tool-call",
+      id: "client",
+      name: "list_templates",
+      arguments: "{}",
+      input: {},
+      state: "input-complete",
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
+    } as const;
+    const result = await validateMessageWithPersistence({
+      message: {
+        id,
+        role: "assistant",
+        parts: [
+          {
+            ...gate,
+            state: "approval-responded",
+            approval: { ...gate.approval, approved: true },
+          },
+          { ...client, state: "complete", output: [] },
+          {
+            type: "tool-result",
+            toolCallId: client.id,
+            content: "[]",
+            state: "complete",
+          },
+        ],
+      },
+      persistedMessage: {
+        role: "assistant",
+        content: toChatMessageContent({
+          version: 2,
+          data: [gate, client],
+          metadata: {
+            turnOutcome: {
+              type: "awaiting-user",
+              interaction: { type: "approval", toolCallId: gate.id },
+            },
+          },
+        }),
+      },
+      resume: [
+        {
+          interruptId: gate.approval.id,
+          status: "resolved",
+          payload: { approved: true },
+        },
+        {
+          interruptId: `client_tool_${client.id}`,
+          status: "resolved",
+          payload: [],
+        },
+      ],
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_client_approval_continuation"),
+      userId: userId("user_client_approval_continuation"),
+      tools: {
+        gate: { name: "gate", description: "Approval gate" },
+        list_templates: {
+          name: "list_templates",
+          description: "List templates",
+          execute: async () => [],
+        },
+      },
+    });
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isOk(result)) {
+      expect(result.value.message.parts).toContainEqual({
+        ...client,
+        state: "complete",
+        output: [],
+      });
+      expect(result.value.message.parts).toContainEqual({
+        type: "tool-result",
+        toolCallId: client.id,
+        content: "[]",
+        state: "complete",
+      });
+    }
+  });
+
+  test("requires a pending interaction for a client continuation", async () => {
     const id = chatMessageId("msg_non_awaited_answer");
     const call = {
       type: "tool-call",

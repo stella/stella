@@ -45,23 +45,35 @@ export const isChatPastedTextPart = (
 /** Executor recorded from the tool definition, independent of input readiness. */
 export const CHAT_TOOL_EXECUTOR_METADATA_KEY = "stellaToolExecutor";
 
-export const isServerChatToolCall = (part: unknown): boolean => {
+/** Stored ownership wins; an untagged call uses the available tool definition. */
+export const isServerChatToolCall = (
+  part: unknown,
+  tool?: { execute?: unknown },
+): boolean => {
   if (
     typeof part !== "object" ||
     part === null ||
     !("type" in part) ||
-    part.type !== "tool-call" ||
-    !("metadata" in part)
+    part.type !== "tool-call"
   ) {
     return false;
   }
-  const { metadata } = part;
-  return (
-    typeof metadata === "object" &&
-    metadata !== null &&
-    CHAT_TOOL_EXECUTOR_METADATA_KEY in metadata &&
-    metadata[CHAT_TOOL_EXECUTOR_METADATA_KEY] === "server"
-  );
+  if (
+    "metadata" in part &&
+    typeof part.metadata === "object" &&
+    part.metadata !== null &&
+    CHAT_TOOL_EXECUTOR_METADATA_KEY in part.metadata
+  ) {
+    switch (part.metadata[CHAT_TOOL_EXECUTOR_METADATA_KEY]) {
+      case "server":
+        return true;
+      case "client":
+        return false;
+      default:
+        break;
+    }
+  }
+  return tool?.execute !== undefined;
 };
 
 /**

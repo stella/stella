@@ -941,7 +941,10 @@ const validateContinuationToolCallIntegrity = ({
     validatedCallsById.set(incomingCall.id, validatedCallResult.value);
   }
 
-  const awaitedInteractions = getAwaitingUserInteractions(persistedMessage);
+  const awaitedInteractions = getAwaitingUserInteractions(
+    persistedMessage,
+    tools,
+  );
   const awaitedCallIds = new Set(
     awaitedInteractions.map(({ toolCallId }) => toolCallId),
   );
@@ -1172,8 +1175,7 @@ const validateContinuationToolCallTransition = ({
     }
     case "input-complete": {
       if (
-        tool?.execute !== undefined ||
-        isServerChatToolCall(canonicalCall) ||
+        isServerChatToolCall(canonicalCall, tool) ||
         (incomingCall.state !== "complete" && incomingCall.state !== "error")
       ) {
         return invalidContinuationToolCall();
@@ -1475,7 +1477,9 @@ export const validateToolCallParts = ({
   const serverAuthoredCallIds = new Set<string>();
   const parts: ChatPart[] = [];
   const awaitedCallIds = new Set(
-    getAwaitingUserInteractions(message).map(({ toolCallId }) => toolCallId),
+    getAwaitingUserInteractions(message, tools).map(
+      ({ toolCallId }) => toolCallId,
+    ),
   );
   const firstAwaitedIndex = message.parts.findIndex(
     (part) => part.type === "tool-call" && awaitedCallIds.has(part.id),
@@ -1570,7 +1574,7 @@ const validateToolCallPart = ({
       (part.state === "awaiting-input" || part.state === "input-streaming")) ||
     (allowDeferredServerInput &&
       part.state === "input-complete" &&
-      tool.execute !== undefined &&
+      isServerChatToolCall(part, tool) &&
       part.output === undefined)
   ) {
     if (allowDeferredServerInput && part.input !== undefined) {

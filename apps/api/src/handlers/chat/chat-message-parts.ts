@@ -43,6 +43,10 @@ import type { VisualResourceOrigin } from "@/api/handlers/visual-sandbox/resourc
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  registeredChatTool,
+  type ChatToolMap,
+} from "@/api/lib/chat/chat-tool-types";
+import {
   isPersistedJsonValue,
   proveParsedToolInput,
   proveParsedToolOutput,
@@ -748,6 +752,7 @@ export const cancelPendingChatToolCalls = (
  */
 export const getAwaitingUserInteractions = (
   message: Pick<ChatMessage, "metadata" | "parts" | "role"> | null,
+  tools?: ChatToolMap,
 ): AwaitingUserInteraction[] => {
   const turnOutcome = message?.metadata?.turnOutcome;
   if (
@@ -767,7 +772,10 @@ export const getAwaitingUserInteractions = (
     }
     if (
       CLIENT_TOOL_STATE_AWAITS_RESOLUTION[part.state] &&
-      !isServerChatToolCall(part)
+      !isServerChatToolCall(
+        part,
+        tools === undefined ? undefined : registeredChatTool(tools, part.name),
+      )
     ) {
       interactions.push({
         type: clientToolInteractionType(part.name),

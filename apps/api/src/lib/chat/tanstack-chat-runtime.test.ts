@@ -213,7 +213,9 @@ test("sequential gated and ungated calls execute in document order after approva
               ),
             );
           expect(deferredCalls.length).toBeGreaterThan(0);
-          expect(deferredCalls.every(isServerChatToolCall)).toBe(true);
+          expect(
+            deferredCalls.every((part) => isServerChatToolCall(part)),
+          ).toBe(true);
           const pending = processor
             .getMessages()
             .flatMap(({ parts }) => parts)
