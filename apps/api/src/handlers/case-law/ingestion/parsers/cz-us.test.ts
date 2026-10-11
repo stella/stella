@@ -26,6 +26,7 @@ import {
   assertNotePath,
 } from "./document-note-paths.fixtures";
 import { assertHtmlRtfLineParity } from "./rtf-line-parity.fixtures";
+import { inlinesToPlainText } from "./shared-inlines";
 
 // ── Helpers ─────────────────────────────────────────────────
 
@@ -55,6 +56,65 @@ const findAllByType = (blocks: Block[], type: string) =>
   blocks.filter((b) => b.type === type);
 
 // ── RTF-based decision (post-2007) ──────────────────────────
+
+const numberedRtfBlocks = (leading: string, number: number, body: string) => {
+  const whitespace = leading
+    .replaceAll("\t", "\\tab ")
+    .replaceAll("\u00a0", "\\~");
+  return classifyUsDocumentLines(
+    usDocumentLinesOf(
+      readRtfString(
+        `{\\rtf1\\ansi \\pard {\\b ${whitespace}${number}}. {\\b ${body}}  \\par}`,
+      ),
+    ),
+  );
+};
+
+test.each(["  ", "\t", "\u00a0", " \t\u00a0"])(
+  "CZ numbered RTF paragraphs preserve text and formatting after leading %j",
+  (leading) => {
+    const block = numberedRtfBlocks(leading, 1, "Body").at(0);
+    expect(block?.type).toBe("paragraph");
+    expect(block?.plainText).toBe("Body");
+    expect(
+      block && hasBlockInlines(block)
+        ? inlinesToPlainText(block.inlines)
+        : undefined,
+    ).toBe("Body");
+    expect(block && hasBlockInlines(block) ? block.inlines : undefined).toEqual(
+      [{ type: "bold", children: [{ type: "text", text: "Body" }] }],
+    );
+  },
+);
+
+test("CZ numbered prefixes share normalized offsets with rendered inline text", () => {
+  assertProperty(
+    "CZ numbered prefixes share normalized offsets with rendered inline text",
+    fc.property(
+      fc.array(fc.constantFrom(" ", "\t", "\u00a0"), {
+        minLength: 1,
+        maxLength: 12,
+      }),
+      fc.integer({ min: 1, max: 999 }),
+      fc.array(fc.constantFrom("Body", "text", "žluťoučký", "😀"), {
+        minLength: 1,
+        maxLength: 5,
+      }),
+      (whitespace, number, words) => {
+        const body = words.join(" ");
+        const block = numberedRtfBlocks(whitespace.join(""), number, body).at(
+          0,
+        );
+        expect(block?.plainText).toBe(body);
+        expect(
+          block && hasBlockInlines(block)
+            ? inlinesToPlainText(block.inlines)
+            : undefined,
+        ).toBe(body);
+      },
+    ),
+  );
+});
 
 const rtfContent = [
   "\\pard\\b Ústavní soud rozhodl v senátu složeném z předsedy senátu",

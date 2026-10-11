@@ -53,8 +53,8 @@ import type {
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import {
-  inlinesToPlainText,
-  stripInlinePrefix,
+  normalizeInlineLine,
+  stripInlineLinePrefix,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
@@ -1291,29 +1291,31 @@ export const parseHuBhgyDecision = (
     // A footnote returned above, so a note's date-shaped line never dates the
     // decision; nor does the kiadmány's, which opens the closing region first.
     softBreakDate ??= closingDateAfterSoftBreak(line.text);
-    const numbered = COURT_PARAGRAPH_NUMBER.exec(line.text);
-    const inlines = inlinesOf(line.runs);
+    const normalized = normalizeInlineLine(inlinesOf(line.runs));
+    const { match: numbered, line: unnumbered } = stripInlineLinePrefix(
+      normalized,
+      COURT_PARAGRAPH_NUMBER,
+    );
     const number = numbered?.groups?.["number"];
     const role: ParagraphRole = BODY_ROLE[region];
     if (numbered === null || number === undefined) {
       builder.paragraph({
         type: "paragraph",
         role,
-        inlines,
-        plainText: line.text,
+        inlines: normalized.inlines,
+        plainText: normalized.plainText,
       });
       return;
     }
     // The bracketed number is the citable paragraph number, so it is kept as
     // structure: a citation names `[31]`, and a prefix inside the text would
     // make every search for the paragraph's words find the number too.
-    const rest = stripInlinePrefix(inlines, numbered[0].length);
     builder.paragraph({
       type: "paragraph",
       role,
       number: Number(number),
-      inlines: rest,
-      plainText: inlinesToPlainText(rest),
+      inlines: unnumbered.inlines,
+      plainText: unnumbered.plainText,
     });
   };
 

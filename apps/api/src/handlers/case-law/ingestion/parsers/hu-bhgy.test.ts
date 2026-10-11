@@ -46,6 +46,7 @@ import {
   assertNotePath,
 } from "./document-note-paths.fixtures";
 import { assertRtfLineParity } from "./rtf-line-parity.fixtures";
+import { inlinesToPlainText } from "./shared-inlines";
 
 const readRtf = (input: Uint8Array) => {
   const document = readRtfDocument(input);
@@ -112,6 +113,28 @@ const parseDocument = (document: FolioDocument) =>
 
 const parse = (lines: readonly LineSpec[], footnotes?: readonly Footnote[]) =>
   parseDocument(documentOf(lines, footnotes));
+
+test.each(["  ", "\t", "\u00a0", " \t\u00a0"])(
+  "HU numbered paragraphs use the same normalized text axis after leading %j",
+  (leading) => {
+    const result = parse([
+      { text: "Indokolás" },
+      { text: `${leading}[31] Body  `, bold: true },
+    ]);
+    const block = result.documentAst.blocks.find(
+      (candidate) => candidate.type === "paragraph" && candidate.number === 31,
+    );
+    expect(block?.plainText).toBe("Body");
+    expect(
+      block?.type === "paragraph"
+        ? inlinesToPlainText(block.inlines)
+        : undefined,
+    ).toBe("Body");
+    expect(block?.type === "paragraph" ? block.inlines : undefined).toEqual([
+      { type: "bold", children: [{ type: "text", text: "Body" }] },
+    ]);
+  },
+);
 
 /** One paragraph whose lines a soft break joins, as a DOCX `w:br` does. */
 const softBrokenParagraph = (lines: readonly string[]): Paragraph => ({

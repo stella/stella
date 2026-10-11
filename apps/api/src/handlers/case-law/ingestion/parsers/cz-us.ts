@@ -76,10 +76,10 @@ import { RTF_SOURCE_OPTIONS } from "@/api/lib/legal-search/rtf-source-registry";
 import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
 
 import {
-  inlinesToPlainText,
   visibleHtmlText,
   stripFurniturePrefix,
-  stripInlinePrefix,
+  normalizeInlineLine,
+  stripInlineLinePrefix,
 } from "./shared-inlines";
 
 // ── Public API ─────────────────────────────────────────────
@@ -237,10 +237,7 @@ const extractCrossReferences = ($: cheerio.CheerioAPI): CrossReference[] => {
 /** Create a simple text inline helper. */
 const textInline = (text: string): Inline[] => [{ type: "text", text }];
 
-type ParsedLineData = {
-  inlines: Inline[];
-  plainText: string;
-};
+type ParsedLineData = ReturnType<typeof normalizeInlineLine>;
 type ParsedLine = DocumentLine<ParsedLineData>;
 
 // ── RTF reading ───────────────────────────────────────────
@@ -352,10 +349,9 @@ export const usDocumentLinesOf = (
   document: ReturnType<typeof readRtfString>,
 ): ParsedLine[] => {
   const lines: ParsedLine[] = [];
-  const readLines = createParagraphLineReader(document, (paragraph) => {
-    const inlines = rtfInlinesOf(paragraph);
-    return { inlines, plainText: inlinesToPlainText(inlines).trim() };
-  });
+  const readLines = createParagraphLineReader(document, (paragraph) =>
+    normalizeInlineLine(rtfInlinesOf(paragraph)),
+  );
   const visit = (blocks: readonly FolioBlockContent[]): void => {
     for (const block of blocks) {
       switch (block.type) {
@@ -413,10 +409,7 @@ const extractLinesFromDocContent = ($: cheerio.CheerioAPI): ParsedLine[] => {
     }
     lines.push({
       kind: "body",
-      value: {
-        inlines: [{ type: "text", text: trimmed }],
-        plainText: trimmed,
-      },
+      value: normalizeInlineLine(textInline(trimmed)),
     });
   }
 
@@ -564,8 +557,10 @@ const classifyUsBodyLine = ({
 
   // Peel the emblem rather than dropping the line it is glued to, then skip
   // what turns out to have been decoration and nothing else.
-  const inlines = stripFurniturePrefix(line.inlines, EMBLEM_PREFIX_RE);
-  const plainText = inlinesToPlainText(inlines).trim();
+  const normalized = normalizeInlineLine(
+    stripFurniturePrefix(line.inlines, EMBLEM_PREFIX_RE),
+  );
+  const { inlines, plainText } = normalized;
   if (!plainText || DECORATIVE_LINE_RE.test(plainText)) {
     return;
   }
@@ -624,9 +619,11 @@ const classifyUsBodyLine = ({
   // The court numbers some of these headings. The number is stripped for
   // the match alone: the heading block below carries the line the court
   // printed, because what the heading is does not change what it says.
-  const numberPrefix = NUMBERED_PARA_RE.exec(plainText)?.[0] ?? "";
-  const unnumberedText = plainText.slice(numberPrefix.length);
-  const unnumberedInlines = stripInlinePrefix(inlines, numberPrefix.length);
+  const { match: numberPrefix, line: unnumbered } = stripInlineLinePrefix(
+    normalized,
+    NUMBERED_PARA_RE,
+  );
+  const unnumberedText = unnumbered.plainText;
   if (
     unnumberedText.length <= DISSENT_HEADING_MAX_CHARS &&
     DISSENT_HEADING_RE.test(unnumberedText)
@@ -778,19 +775,15 @@ const classifyUsBodyLine = ({
   }
 
   // Numbered paragraphs: "1. ...", "2. ..."
-  if (numberPrefix.length > 0) {
-    const strippedText = unnumberedText.trim();
+  if (numberPrefix !== null) {
     state.blockIndex += 1;
     blocks.push({
       id: makeUsBlockId(state),
       anchorId: makeAnchorId("p", state.blockIndex),
       type: "paragraph",
       role: state.inDissent ? "dissent" : undefined,
-      inlines:
-        unnumberedInlines.length > 0
-          ? unnumberedInlines
-          : textInline(strippedText),
-      plainText: strippedText,
+      inlines: unnumbered.inlines,
+      plainText: unnumbered.plainText,
     });
     return;
   }
