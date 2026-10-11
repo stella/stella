@@ -105,6 +105,10 @@ import {
   requireEmailOtpResetConfirmation,
 } from "@/api/lib/auth/email-otp-reset-confirmation";
 import { buildFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
+import type {
+  MemberAuthorization,
+  MemberAuthorizationLookup,
+} from "@/api/lib/auth/member-authorization";
 import {
   createOAuthConsentInfoPlugin,
   getVerifiedOAuthOrigins,
@@ -2467,32 +2471,6 @@ export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
  * pass their PGlite database without importing a test-only type here.
  */
 type MemberAuthorizationDb = Pick<typeof rootDb, "select">;
-
-/**
- * Resolve the user's organization role and, when the route already carries a
- * workspace ID, that single workspace's status. Both branches are bounded to
- * one row; request authentication never expands the full access set.
- */
-type MemberAuthorizationLookup = {
-  organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
-  workspaceId?: SafeId<"workspace"> | undefined;
-};
-
-type MemberAuthorization = {
-  memberId: string;
-  email: string;
-  /** Raw DB value; callers validate it with isMemberRole. */
-  role: string;
-  workspace: AccessibleWorkspace | null;
-  /**
-   * Feature-access facts read in the same statement, so gated routes decide
-   * feature access without a query of their own.
-   */
-  emailVerified: boolean;
-  userDeleted: boolean;
-  enrolledFeatureIds: readonly string[];
-};
 
 // Bounded by the enrolment primary key (user, organization, feature) and the
 // feature registry. The caller is read as the table owner, which the

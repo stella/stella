@@ -225,6 +225,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
+import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getOrganizationRegistryDispatch } from "@/api/lib/business-registries/credentials";
@@ -2062,7 +2063,7 @@ export type SendMessageDependencies = {
    * Reads the caller's membership when an approved write tool runs. Defaults
    * to the credential-boundary read; tests bind it to their own database.
    */
-  resolveCurrentMembership?: typeof resolveCredentialMemberAuthorization;
+  resolveCurrentMembership?: ResolveCredentialMemberAuthorization;
   rollbackSideEffects: typeof rollbackUnpersistedChatSideEffects;
   streamResponse: typeof streamChat;
   uploadMessageFiles: typeof uploadMessageFilesWithRollback;
@@ -2103,7 +2104,7 @@ const readOwnedTurnThreadNames = async ({
 
 const currentMembershipReader = (
   dependencies: SendMessageDependencies,
-): typeof resolveCredentialMemberAuthorization =>
+): ResolveCredentialMemberAuthorization =>
   dependencies.resolveCurrentMembership ?? resolveCredentialMemberAuthorization;
 
 export const createSendMessage = (

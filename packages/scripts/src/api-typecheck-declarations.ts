@@ -56,6 +56,58 @@ export const typescriptModuleReferences = (text: string, filename: string) => {
   return { imports, dynamic };
 };
 
+// Route and server contracts belong to the source checker, never to the
+// declaration surface consumed by secondary compiler programs.
+const isApiRuntimeBoundary = (source: ts.SourceFile) => {
+  const relative = source.fileName
+    .replaceAll(path.sep, "/")
+    .split("/apps/api/src/")[1];
+  if (!relative) {
+    return false;
+  }
+  if (
+    relative === "lib/auth.ts" ||
+    /(?:^|[-/])(?:routes?|server)(?:[-.]|$)/u.test(relative)
+  ) {
+    return true;
+  }
+  const constructors = new Set<string>();
+  for (const statement of source.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteralLike(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== "elysia"
+    ) {
+      continue;
+    }
+    const clause = statement.importClause;
+    if (clause?.name) {
+      constructors.add(clause.name.text);
+    }
+    if (clause?.namedBindings && ts.isNamedImports(clause.namedBindings)) {
+      for (const binding of clause.namedBindings.elements) {
+        if ((binding.propertyName?.text ?? binding.name.text) === "Elysia") {
+          constructors.add(binding.name.text);
+        }
+      }
+    }
+  }
+  let route = false;
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isNewExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      constructors.has(node.expression.text)
+    ) {
+      route = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return route;
+};
+
 // Emit the explicit public roots and their declaration dependencies. Runtime
 // imports erased from declarations do not require serializing their exports.
 export const emitApiTypecheckDeclarations = (project: string) => {
@@ -96,6 +148,7 @@ export const emitApiTypecheckDeclarations = (project: string) => {
     parsed.options,
   );
   const queue = [...parsed.fileNames];
+  const parents = new Map<string, string>();
   const emitted = new Set<string>();
   const outputs = new Map<string, string>();
   for (const filename of queue) {
@@ -105,6 +158,17 @@ export const emitApiTypecheckDeclarations = (project: string) => {
     const source = program.getSourceFile(filename);
     if (!source) {
       panic(`Missing declaration source: ${filename}`);
+    }
+    if (isApiRuntimeBoundary(source)) {
+      const chain = [filename];
+      let parent = parents.get(filename);
+      while (parent) {
+        chain.unshift(parent);
+        parent = parents.get(parent);
+      }
+      panic(
+        `Forbidden API runtime declaration dependency: ${chain.join(" -> ")}`,
+      );
     }
     emitted.add(filename);
     const result = program.emit(
@@ -128,6 +192,12 @@ export const emitApiTypecheckDeclarations = (project: string) => {
             panic(
               `Missing declaration dependency: ${specifier} in ${filename}`,
             );
+          }
+          if (
+            !parents.has(dependency.fileName) &&
+            !parsed.fileNames.includes(dependency.fileName)
+          ) {
+            parents.set(dependency.fileName, filename);
           }
           queue.push(dependency.fileName);
         }

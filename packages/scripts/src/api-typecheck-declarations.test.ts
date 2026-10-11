@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -89,3 +90,59 @@ test("declarations follow public type imports without serializing runtime-only r
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test.each([
+  "lib/auth.ts",
+  "server.ts",
+  "handlers/example/routes.ts",
+  "handlers/example/run-route.ts",
+  "handlers/example/events.ts",
+  "mcp/server-core.ts",
+])(
+  "declarations reject retained runtime boundaries and report the import chain: %s",
+  (module) => {
+    const directory = mkdtempSync(
+      path.join(tmpdir(), "api-declaration-boundary-"),
+    );
+    try {
+      const sourceRoot = path.join(directory, "apps/api/src");
+      const forbidden = path.join(sourceRoot, module);
+      mkdirSync(path.dirname(forbidden), { recursive: true });
+      writeFileSync(
+        forbidden,
+        module.endsWith("events.ts")
+          ? 'import Application from "elysia"; export const route = new Application(); export interface View { count: number }\n'
+          : "export interface View { count: number }\n",
+      );
+      const bridge = path.join(sourceRoot, "bridge.ts");
+      writeFileSync(
+        bridge,
+        `export type { View } from "./${module.replace(/\.ts$/u, "")}";\n`,
+      );
+      const surface = path.join(sourceRoot, "surface.ts");
+      writeFileSync(surface, 'export type { View } from "./bridge";\n');
+      const project = path.join(directory, "tsconfig.json");
+      writeFileSync(
+        project,
+        JSON.stringify({
+          compilerOptions: {
+            noCheck: true,
+            noEmit: false,
+            declaration: true,
+            emitDeclarationOnly: true,
+            rootDir: directory,
+            outDir: path.join(directory, "declarations"),
+            types: [],
+          },
+          files: [surface],
+        }),
+      );
+      expect(() => emitApiTypecheckDeclarations(project)).toThrow(
+        `Forbidden API runtime declaration dependency: ${surface} -> ${bridge} -> ${forbidden}`,
+      );
+      expect(existsSync(path.join(directory, "declarations"))).toBe(false);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  },
+);
