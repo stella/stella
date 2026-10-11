@@ -377,7 +377,7 @@ describe("createTaskHandler validation", () => {
       }),
     );
 
-    expect(Result.isOk(result)).toBe(true);
+    expect(result).toMatchObject({ status: "ok" });
     expect(obligationRows).toEqual([
       expect.objectContaining({
         ownerUserId: null,
@@ -454,7 +454,7 @@ describe("createTaskHandler validation", () => {
       }),
     );
 
-    expect(Result.isOk(result)).toBe(true);
+    expect(result).toMatchObject({ status: "ok" });
     expect(obligationRows).toEqual([]);
   });
 
