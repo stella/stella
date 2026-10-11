@@ -1,10 +1,54 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import ts from "typescript";
 
 import { customLintRunnerViolations } from "./check-custom-lint-test-runners";
 import { customLintTestCommand } from "./run-custom-lint-tests";
+
+test("the runner census preserves standard array join types", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "runner-census-types-"));
+  const filename = path.join(directory, "fixture.ts");
+  try {
+    writeFileSync(
+      filename,
+      `import ${JSON.stringify(path.join(import.meta.dir, "check-custom-lint-test-runners"))};
+const fields = ["type", "display_name"] as const;
+const rows = [fields.join(",")];
+declare const dataRow: string;
+rows.push(dataRow);
+`,
+    );
+    const program = ts.createProgram({
+      rootNames: [filename],
+      options: {
+        noEmit: true,
+        strict: true,
+        skipLibCheck: true,
+        esModuleInterop: true,
+        target: ts.ScriptTarget.ESNext,
+        module: ts.ModuleKind.Preserve,
+        moduleResolution: ts.ModuleResolutionKind.Bundler,
+        types: [],
+      },
+    });
+    const fixture = program.getSourceFile(filename);
+    if (fixture === undefined) {
+      panic("The array join type fixture was not loaded");
+    }
+    expect(
+      program
+        .getSemanticDiagnostics(fixture)
+        .map((diagnostic) =>
+          ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+        ),
+    ).toEqual([]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 for (const args of [
   [],

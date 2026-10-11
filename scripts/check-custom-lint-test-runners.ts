@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { parse } from "shell-quote";
+import parse from "shell-quote/parse";
 import ts from "typescript";
 
 import { isRecord, repoRoot, trackedRepoFiles } from "./oxlint-config-scopes";
