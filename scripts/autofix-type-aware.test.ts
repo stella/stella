@@ -11,6 +11,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
+
 const cases = [
   { name: "complete types", failure: "none", extra: "" },
   { name: "excluded source", failure: "coverage", extra: "" },
@@ -123,6 +125,7 @@ test.each(cases)(
         `#!/bin/bash
 if [[ "$1" == scripts/ci-generated-sources.ts && "$2" == prepare ]]; then touch prepared; exit "$PREPARE_EXIT"; fi
 if [[ "$1" == run && "$2" == format:guard ]]; then exit 0; fi
+if [[ "$1" == scripts/autofix-plan.ts && "$2" == run ]]; then cp changed.ts generated.html.txt; exit 0; fi
 if [[ "$2" == oxlint && ! -f prepared ]]; then exit 2; fi
 if [[ "$1" == scripts/typecheck-coverage.ts && "$2" == --autofix ]]; then touch compiler_checked; printf '%s\\n' "$@" > compiler_args; fi
 if [[ "$*" == *" --fix "* ]]; then touch fixer_ran; fi
@@ -134,20 +137,29 @@ exec '${process.execPath}' "$@"
         new URL("../.github/workflows/autofix.yml", import.meta.url),
         "utf-8",
       );
-      const step = workflow.slice(
-        workflow.indexOf("      - name: Fix changed files"),
-        workflow.indexOf("      - name: Restrict autofix changes"),
+      const steps = workflowJobSteps(
+        Bun.YAML.parse(workflow),
+        "regenerate-derived-files",
       );
-      const command = step
-        .slice(step.indexOf("        run: |\n") + "        run: |\n".length)
-        .split("\n")
-        .map((line) => line.replace(/^ {10}/u, ""))
+      const pipeline = steps.filter(
+        (step) =>
+          step === workflowStepByName(steps, "Fix changed files") ||
+          step === workflowStepByName(steps, "Regenerate selected files"),
+      );
+      const command = pipeline
+        .map((step) => {
+          if (typeof step["run"] !== "string") {
+            throw new TypeError("Autofix step requires a run command");
+          }
+          return step["run"];
+        })
         .join("\n");
       const fixed = Bun.spawnSync(["bash", "-c", command], {
         cwd: root,
         env: {
           ...process.env,
           RUNNER_TEMP: root,
+          GENERATOR_IDS: "fixture",
           PREPARE_EXIT: failure === "prepare" ? "1" : "0",
           PATH: `${path.join(root, "bin")}:${process.env["PATH"] ?? ""}`,
         },
@@ -191,6 +203,17 @@ exec '${process.execPath}' "$@"
         expect(
           readFileSync(path.join(root, "compiler_args"), "utf-8"),
         ).not.toContain("generated.html.txt");
+      }
+      const generated = readFileSync(
+        path.join(root, "generated.html.txt"),
+        "utf-8",
+      );
+      if (failure === "none") {
+        const rewritten = readFileSync(path.join(root, "changed.ts"), "utf-8");
+        expect(rewritten).not.toBe(source);
+        expect(generated).toBe(rewritten);
+      } else {
+        expect(generated).toBe("fixture");
       }
       expect(readFileSync(path.join(root, "unchanged.ts"), "utf-8")).toBe(
         source,
