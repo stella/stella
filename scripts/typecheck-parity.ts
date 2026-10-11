@@ -32,7 +32,13 @@ for (const parent of ["apps", "packages"]) {
       continue;
     }
     const directory = path.join(root, parent, entry.name);
-    collect(directory, manifest(directory).scripts?.["typecheck"] ?? "");
+    for (const [name, command] of Object.entries(
+      manifest(directory).scripts ?? {},
+    )) {
+      if (name === "typecheck" || name.startsWith("typecheck:")) {
+        collect(directory, command);
+      }
+    }
   }
 }
 if (projects.size === 0) {
@@ -41,6 +47,17 @@ if (projects.size === 0) {
 // Match the ordinary task prerequisites before comparing identical inputs.
 for (const [cwd, command] of [
   [root, [process.execPath, "scripts/ci-generated-sources.ts", "prepare"]],
+  [
+    root,
+    [
+      "bunx",
+      "--no-install",
+      "turbo",
+      "run",
+      "typecheck:declarations",
+      "--filter=@stll/api",
+    ],
+  ],
   [
     path.join(root, "apps/extension"),
     ["bunx", "--no-install", "wxt", "prepare"],

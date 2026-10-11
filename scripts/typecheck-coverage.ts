@@ -971,6 +971,15 @@ const main = (): void => {
     return;
   }
 
+  run([
+    "bunx",
+    "--no-install",
+    "turbo",
+    "run",
+    "typecheck:declarations",
+    "--filter=@stll/api",
+  ]);
+
   const projects = typecheckProjects();
   assertOxcProjectDiscovery(projects);
   assertIncrementalProjectConfigs(projects);
