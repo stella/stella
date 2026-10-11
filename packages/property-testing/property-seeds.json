@@ -24,6 +24,22 @@
       "date": "2026-10-03"
     }
   ],
+  "apps/api/src/handlers/chat/snapshot-reconciliation.property.test.ts::mixed provenance preserves exact delta placement and snapshot insertions": [
+    {
+      "seed": 20260901,
+      "path": "0:0:0:0:0:0:0:0:0:0:0:0:0:0",
+      "note": "Mixed source placement and snapshot insertions",
+      "date": "2026-10-11"
+    }
+  ],
+  "apps/api/src/handlers/chat/snapshot-reconciliation.property.test.ts::snapshot reconciliation preserves exact ordered parts around lifecycle anchors": [
+    {
+      "seed": 20260901,
+      "path": "0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0",
+      "note": "Snapshot placement around lifecycle anchors",
+      "date": "2026-10-11"
+    }
+  ],
   "apps/api/src/handlers/chat/snapshot-reconciliation.property.test.ts::snapshot reconciliation preserves generated interleavings across live persistence and reload": [
     {
       "seed": 20260901,

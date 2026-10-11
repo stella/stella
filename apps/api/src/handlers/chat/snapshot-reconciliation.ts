@@ -132,7 +132,13 @@ export const createSnapshotActivityReconciler = (
     }
     consumed.add(match.index);
     if (shouldReplace(match.part, snapshot)) {
-      parts[match.index] = snapshot;
+      // Textual snapshot segments may have changed the array's length or
+      // positions since candidates were captured. The part owns the slot.
+      const index = parts.indexOf(match.part);
+      if (index === -1) {
+        panic("Snapshot activity lost its canonical slot");
+      }
+      parts[index] = snapshot;
     }
   };
 };
@@ -162,6 +168,7 @@ const SUBAGENT_FINALITY = {
 } as const satisfies Record<SubagentPart["subagent"]["status"], number>;
 
 type PartProvenance = "delta-streamed" | "snapshot-derived";
+type PartSource = { provenance: PartProvenance; anchor: MessagePart };
 
 // SDK additions must choose the same ownership boundary as every existing part.
 const PART_SNAPSHOT_POLICY = {
@@ -210,6 +217,12 @@ type SnapshotCallPartsOptions = Omit<
   parts: UIMessage["parts"];
 };
 
+type SnapshotLayoutOptions = {
+  previous: UIMessage;
+  snapshot: UIMessage;
+  parts: UIMessage["parts"];
+};
+
 type SnapshotPartsOptions = {
   previous: UIMessage;
   snapshot: UIMessage;
@@ -219,21 +232,25 @@ type SnapshotPartsOptions = {
 
 /** One turn owns provenance; snapshots and synthetic resume events cannot claim deltas. */
 export class SnapshotPartReconciler {
-  private readonly sources = new WeakMap<MessagePart, PartProvenance>();
+  private readonly sources = new WeakMap<MessagePart, PartSource>();
 
   constructor(initial: UIMessage["parts"]) {
     // Completed history is canonical transcript content on a continuation.
     for (const part of initial) {
-      this.record(part, "delta-streamed");
+      this.record(part, { provenance: "delta-streamed", anchor: part });
     }
   }
 
-  private record(part: MessagePart, provenance: PartProvenance) {
-    this.sources.set(part, provenance);
+  private record(part: MessagePart, source: PartSource) {
+    this.sources.set(part, source);
+  }
+
+  private sourceOf(part: MessagePart) {
+    return this.sources.get(part) ?? panic("Reconciled part has no provenance");
   }
 
   provenanceOf(part: MessagePart) {
-    return this.sources.get(part) ?? panic("Reconciled part has no provenance");
+    return this.sourceOf(part).provenance;
   }
 
   reconcileDelta({ before, after, chunk }: DeltaPartsOptions) {
@@ -308,46 +325,37 @@ export class SnapshotPartReconciler {
         (existing) => existing.type === "text" || existing.type === "thinking",
       )
       .filter((existing) => existing.type === part.type);
-    if (sameKind.length === 0) {
-      parts.push(this.snapshot(part));
-      return;
-    }
-    const incoming = snapshotParts
-      .filter(
-        (candidate) =>
-          candidate.type === "text" || candidate.type === "thinking",
-      )
-      .filter((candidate) => candidate.type === part.type);
-    if (incoming.at(0) !== part) {
-      return;
-    }
-    const content = sameKind.map((candidate) => candidate.content).join("");
-    const snapshotContent = incoming
-      .map((candidate) => candidate.content)
-      .join("");
     const hasDeltas = sameKind.some(
       (candidate) => this.provenanceOf(candidate) === "delta-streamed",
     );
+    const firstIncoming = snapshotParts.find(
+      (candidate) => candidate.type === part.type,
+    );
     if (!hasDeltas) {
-      // A snapshot owns the whole textual sequence, including its segmentation.
-      // Replacing ordinal slots would retain obsolete segments after a merge.
-      const first = sameKind.at(0);
-      if (first === undefined) {
-        panic("Snapshot text sequence has no canonical slot");
-      }
-      const insertionIndex = parts.indexOf(first);
-      for (let index = parts.length - 1; index >= 0; index -= 1) {
-        if (parts.at(index)?.type === part.type) {
-          parts.splice(index, 1);
+      if (firstIncoming === part) {
+        for (let index = parts.length - 1; index >= 0; index -= 1) {
+          if (parts.at(index)?.type === part.type) {
+            parts.splice(index, 1);
+          }
         }
       }
-      parts.splice(
-        insertionIndex,
-        0,
-        ...incoming.map((candidate) => this.snapshot(candidate)),
-      );
+      // Content selection is separate from placement: the ordered snapshot
+      // projection places each segment beside its actual neighboring parts.
+      parts.push(this.snapshot(part));
       return;
     }
+    if (firstIncoming !== part) {
+      return;
+    }
+    const content = sameKind.map((candidate) => candidate.content).join("");
+    const snapshotContent = snapshotParts
+      .flatMap((candidate) =>
+        (candidate.type === "text" || candidate.type === "thinking") &&
+        candidate.type === part.type
+          ? [candidate.content]
+          : [],
+      )
+      .join("");
     // Explicit UI snapshots may complete a streamed sequence even when their
     // segments split or merge. Compare whole content and retain delta placement.
     if (
@@ -549,11 +557,15 @@ export class SnapshotPartReconciler {
           panic("Unhandled snapshot message part");
       }
     }
-    return this.reconcileCalls({
-      parts,
+    return this.reconcileLayout({
       previous,
       snapshot,
-      parseResultOutput,
+      parts: this.reconcileCalls({
+        parts,
+        previous,
+        snapshot,
+        parseResultOutput,
+      }),
     });
   }
 
@@ -581,13 +593,13 @@ export class SnapshotPartReconciler {
 
   snapshot(part: MessagePart) {
     if (!this.sources.has(part)) {
-      this.record(part, "snapshot-derived");
+      this.record(part, { provenance: "snapshot-derived", anchor: part });
     }
     return part;
   }
 
   inherit(part: MessagePart, previous: MessagePart) {
-    this.record(part, this.provenanceOf(previous));
+    this.record(part, this.sourceOf(previous));
     return part;
   }
 
@@ -597,12 +609,16 @@ export class SnapshotPartReconciler {
         continue;
       }
       const previous = before.at(index);
-      this.record(
-        part,
-        previous !== undefined && deepEquals(previous, part)
-          ? this.provenanceOf(previous)
-          : "delta-streamed",
-      );
+      this.record(part, {
+        provenance:
+          previous !== undefined && deepEquals(previous, part)
+            ? this.provenanceOf(previous)
+            : "delta-streamed",
+        anchor:
+          previous !== undefined && previous.type === part.type
+            ? this.sourceOf(previous).anchor
+            : part,
+      });
     }
   }
 
@@ -612,8 +628,126 @@ export class SnapshotPartReconciler {
       if (previous === undefined || previous.type !== part.type) {
         panic("SDK snapshot normalization changed reconciled part slots");
       }
-      this.record(part, this.provenanceOf(previous));
+      this.record(part, this.sourceOf(previous));
     }
+  }
+
+  private sameSnapshotSlot(candidate: MessagePart, incoming: MessagePart) {
+    switch (incoming.type) {
+      case "text":
+      case "thinking":
+        return candidate === incoming;
+      case "tool-call":
+        return candidate.type === "tool-call" && candidate.id === incoming.id;
+      case "tool-result":
+        return (
+          candidate.type === "tool-result" &&
+          candidate.toolCallId === incoming.toolCallId
+        );
+      case "activity":
+        return (
+          candidate.type === "activity" &&
+          candidate.activityType === incoming.activityType &&
+          candidate.subagentRunId === incoming.subagentRunId
+        );
+      case "structured-output":
+        return candidate.type === "structured-output";
+      case "subagent":
+        return (
+          candidate.type === "subagent" &&
+          candidate.subagent.id === incoming.subagent.id
+        );
+      case "ui-resource":
+        return (
+          candidate.type === "ui-resource" &&
+          candidate.toolCallId === incoming.toolCallId &&
+          candidate.resource.uri === incoming.resource.uri
+        );
+      case "image":
+      case "audio":
+      case "video":
+      case "document":
+        return (
+          candidate.type === incoming.type &&
+          deepEquals(candidate.source, incoming.source)
+        );
+      default:
+        incoming satisfies never;
+        return panic("Unhandled snapshot layout slot");
+    }
+  }
+
+  private reconcileLayout({
+    previous,
+    snapshot,
+    parts,
+  }: SnapshotLayoutOptions) {
+    const used = new Set<MessagePart>();
+    const layout: { incoming: MessagePart; selected: MessagePart }[] = [];
+    for (const [index, incoming] of snapshot.parts.entries()) {
+      let selected: MessagePart | undefined;
+      if (
+        (incoming.type === "text" || incoming.type === "thinking") &&
+        previous.parts.some(
+          (part) =>
+            part.type === incoming.type &&
+            this.provenanceOf(part) === "delta-streamed",
+        )
+      ) {
+        // Snapshot segmentation cannot identify streamed segments. Retained
+        // segments are layout anchors, never replacements for their deltas.
+        const ordinal = snapshot.parts
+          .slice(0, index)
+          .filter((part) => part.type === incoming.type).length;
+        const retained = parts.filter((part) => part.type === incoming.type);
+        selected = retained.at(Math.min(ordinal, retained.length - 1));
+      } else {
+        selected = parts.find(
+          (part) => !used.has(part) && this.sameSnapshotSlot(part, incoming),
+        );
+      }
+      if (selected === undefined) {
+        panic("Snapshot layout has no selected part");
+      }
+      if (!used.has(selected)) {
+        used.add(selected);
+        layout.push({ incoming, selected });
+      }
+    }
+    const ordered = parts.filter(
+      (part) => !used.has(part) || this.provenanceOf(part) === "delta-streamed",
+    );
+    const previousPositions = new Map(
+      previous.parts.map((part, index) => [this.sourceOf(part).anchor, index]),
+    );
+    let cursor = ordered.length;
+    for (const { incoming, selected } of layout) {
+      const previousIndex = previous.parts.findIndex(
+        (part) =>
+          this.sourceOf(part).anchor === this.sourceOf(selected).anchor ||
+          (incoming.type === "text" || incoming.type === "thinking"
+            ? part.type === incoming.type
+            : this.sameSnapshotSlot(part, incoming)),
+      );
+      if (previousIndex === -1) {
+        continue;
+      }
+      cursor = ordered.filter((part) => {
+        const position = previousPositions.get(this.sourceOf(part).anchor);
+        return position !== undefined && position < previousIndex;
+      }).length;
+      break;
+    }
+    for (const { selected } of layout) {
+      const retainedIndex = ordered.indexOf(selected);
+      if (retainedIndex !== -1) {
+        cursor = Math.max(cursor, retainedIndex + 1);
+      } else {
+        ordered.splice(cursor, 0, selected);
+        cursor += 1;
+      }
+    }
+    return ordered;
   }
 
   private reconcileCalls({

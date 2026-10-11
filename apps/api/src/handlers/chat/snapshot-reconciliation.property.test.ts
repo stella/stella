@@ -973,3 +973,270 @@ test(
   },
   propertyTestTimeout(15_000),
 );
+
+const orderedGapArbitrary = fc.record({
+  text: segmentTokenArbitrary,
+  thinking: segmentTokenArbitrary,
+  textCuts: fc.array(fc.nat({ max: 30 }), { maxLength: 4 }),
+  thinkingCuts: fc.array(fc.nat({ max: 30 }), { maxLength: 4 }),
+  thinkingFirst: fc.boolean(),
+});
+const orderedSnapshotsArbitrary = fc.array(
+  fc.array(orderedGapArbitrary, { minLength: 5, maxLength: 5 }),
+  { minLength: 2, maxLength: 8 },
+);
+
+const orderedTurn = (snapshots: UIMessage["parts"][]): StreamChunk[] => [
+  {
+    type: EventType.RUN_STARTED,
+    runId: "ordered-run",
+    threadId: "ordered-thread",
+  },
+  {
+    type: EventType.TEXT_MESSAGE_START,
+    messageId: MESSAGE_ID,
+    role: "assistant",
+  },
+  ...snapshots.map(snapshot),
+  {
+    type: EventType.RUN_FINISHED,
+    runId: "ordered-run",
+    threadId: "ordered-thread",
+    finishReason: "stop",
+  },
+];
+
+for (const append of [false, true]) {
+  test(`snapshot text stays after its intervening call when ${append ? "appended" : "unchanged"}`, async () => {
+    const call = {
+      type: "tool-call",
+      id: "ordered-call",
+      name: "lookup",
+      arguments: "{}",
+      input: {},
+      state: "input-complete",
+    } as const satisfies ToolCallPart;
+    const expected = [
+      { type: "text", content: "A" },
+      call,
+      { type: "text", content: "B" },
+    ] satisfies UIMessage["parts"];
+    const initial = append ? expected.slice(0, 2) : expected;
+    const { reload } = await collectTurn(
+      orderedTurn([initial, expected]),
+      (parts) => {
+        expect(parts).toEqual(expected);
+      },
+    );
+    expect(reload.parts).toEqual(expected);
+  });
+}
+
+test(
+  "snapshot reconciliation preserves exact ordered parts around lifecycle anchors",
+  async () => {
+    await assertProperty(
+      "snapshot reconciliation preserves exact ordered parts around lifecycle anchors",
+      fc.asyncProperty(orderedSnapshotsArbitrary, async (layouts) => {
+        const anchors = resegmentationAncillary("ordered").expected;
+        const snapshots = layouts.map((gaps) => {
+          const parts: UIMessage["parts"] = [];
+          for (const [index, gap] of gaps.entries()) {
+            const text = partitionContent(gap.text, gap.textCuts).map(
+              (content) => ({ type: "text", content }) as const,
+            );
+            const thinking = partitionContent(
+              gap.thinking,
+              gap.thinkingCuts,
+            ).map((content) => ({ type: "thinking", content }) as const);
+            parts.push(
+              ...(gap.thinkingFirst
+                ? [...thinking, ...text]
+                : [...text, ...thinking]),
+            );
+            const anchor = anchors.at(index);
+            if (anchor !== undefined) {
+              parts.push(anchor);
+            }
+          }
+          return parts;
+        });
+        const expected = snapshots.at(-1);
+        if (expected === undefined) {
+          panic("Ordered snapshot generator produced no layouts");
+        }
+        // A complete snapshot owns both content and placement. The reference
+        // is its exact sequence, including every intervening lifecycle anchor.
+        const { reload, emitted } = await collectTurn(
+          orderedTurn(snapshots),
+          (parts) => {
+            expect(parts).toEqual(expected);
+          },
+        );
+        expect(reload.parts).toEqual(expected);
+        const live = createStreamMessageCapture({
+          initialMessages: [],
+          capture: (message) => message,
+        });
+        for (const chunk of emitted) {
+          live.processor.processChunk(chunk);
+        }
+        expect(
+          live.processor.getMessages().flatMap(({ parts }) => parts),
+        ).toEqual(expected);
+        expectTerminalMonotonicity(emitted);
+      }),
+      { numRuns: 100 },
+    );
+  },
+  propertyTestTimeout(15_000),
+);
+
+const orderedMixedArbitrary = fc.record({
+  prefix: segmentTokenArbitrary,
+  suffix: segmentTokenArbitrary,
+  completion: segmentTokenArbitrary,
+  extends: fc.boolean(),
+  gaps: fc.array(segmentTokenArbitrary, { minLength: 4, maxLength: 4 }),
+});
+
+test(
+  "mixed provenance preserves exact delta placement and snapshot insertions",
+  async () => {
+    await assertProperty(
+      "mixed provenance preserves exact delta placement and snapshot insertions",
+      fc.asyncProperty(orderedMixedArbitrary, async (scenario) => {
+        const call = {
+          type: "tool-call",
+          id: "mixed-call",
+          name: "lookup",
+          arguments: "{}",
+          input: {},
+          state: "input-complete",
+        } as const satisfies ToolCallPart;
+        const producer = createStreamMessageCapture({
+          initialMessages: [],
+          capture: (message) => message,
+        });
+        const owner = new SnapshotPartReconciler([]);
+        let parts: UIMessage["parts"] = [];
+        const chunks: StreamChunk[] = [
+          {
+            type: EventType.TEXT_MESSAGE_START,
+            messageId: MESSAGE_ID,
+            role: "assistant",
+          },
+          {
+            type: EventType.TEXT_MESSAGE_CONTENT,
+            messageId: MESSAGE_ID,
+            delta: scenario.prefix,
+          },
+          ...callEvents(call),
+          {
+            type: EventType.TEXT_MESSAGE_CONTENT,
+            messageId: MESSAGE_ID,
+            delta: scenario.suffix,
+          },
+        ];
+        for (const chunk of chunks) {
+          producer.processor.processChunk(chunk);
+          const after = producer.processor
+            .getMessages()
+            .flatMap(({ parts: messageParts }) => messageParts);
+          const reconciled = owner.reconcileDelta({
+            before: parts,
+            after,
+            chunk,
+          });
+          owner.observe(parts, reconciled);
+          parts = reconciled;
+        }
+        const initial = [
+          { type: "text", content: scenario.prefix },
+          call,
+          { type: "text", content: scenario.suffix },
+        ] satisfies UIMessage["parts"];
+        expect(parts).toEqual(initial);
+        const completion = scenario.extends ? scenario.completion : "";
+        const incomingText = scenario.extends ? scenario.prefix : "stale";
+        const incomingSuffix = scenario.extends
+          ? scenario.suffix + completion
+          : "snapshot";
+        const incoming: UIMessage["parts"] = [];
+        const expected: UIMessage["parts"] = [];
+        for (const [index, content] of scenario.gaps.entries()) {
+          const thinking = { type: "thinking", content } as const;
+          incoming.push(thinking);
+          expected.push(thinking);
+          switch (index) {
+            case 0:
+              incoming.push({
+                type: "text",
+                content: incomingText,
+              });
+              expected.push({ type: "text", content: scenario.prefix });
+              break;
+            case 1:
+              incoming.push(call);
+              expected.push(call);
+              break;
+            case 2:
+              incoming.push({ type: "text", content: incomingSuffix });
+              expected.push({
+                type: "text",
+                content: scenario.suffix + completion,
+              });
+              break;
+            case 3:
+              break;
+            default:
+              panic("Unexpected ordered mixed gap");
+          }
+        }
+        const actual = owner.reconcile({
+          previous: { id: MESSAGE_ID, role: "assistant", parts },
+          snapshot: { id: MESSAGE_ID, role: "assistant", parts: incoming },
+          preservesPartLayout: true,
+          parseResultOutput: (content) => content,
+        });
+        expect(actual).toEqual(expected);
+        const { reload, emitted } = await collectTurn(
+          [
+            {
+              type: EventType.RUN_STARTED,
+              runId: "mixed-run",
+              threadId: "mixed-thread",
+            },
+            ...chunks,
+            snapshot(incoming),
+            {
+              type: EventType.RUN_FINISHED,
+              runId: "mixed-run",
+              threadId: "mixed-thread",
+              finishReason: "stop",
+            },
+          ],
+          (persistedParts) => {
+            expect(persistedParts).toEqual(expected);
+          },
+        );
+        expect(reload.parts).toEqual(expected);
+        const live = createStreamMessageCapture({
+          initialMessages: [],
+          capture: (message) => message,
+        });
+        for (const chunk of emitted) {
+          live.processor.processChunk(chunk);
+        }
+        expect(
+          live.processor
+            .getMessages()
+            .flatMap(({ parts: messageParts }) => messageParts),
+        ).toEqual(expected);
+        expectTerminalMonotonicity(emitted);
+      }),
+      { numRuns: 100 },
+    );
+  },
+  propertyTestTimeout(15_000),
+);
