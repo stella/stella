@@ -1372,19 +1372,24 @@ const RTF_CONTROL_WORDS = RTF_CONTROLS.filter((control) =>
   .map(escapeRegExp)
   .join("|");
 const RTF_CONTROL_SYMBOLS = RTF_CONTROLS.filter(
-  (control) => !/^[a-zA-Z]+$/u.test(control),
+  (control) => !/^[a-zA-Z]+$/u.test(control) && control !== "\\",
 )
   .map((control) =>
     control === "'" ? "'[a-fA-F0-9]{2}" : escapeRegExp(control),
   )
   .join("|");
-const RTF_CONTROL = String.raw`\\(?:${RTF_CONTROL_WORDS})(?![a-zA-Z])-?\d{0,10}|\\(?:${RTF_CONTROL_SYMBOLS})`;
+// A control is a complete lexical token. Path/escape-shaped prefixes cannot
+// supply its boundary, even when a path segment is also a control word.
+const RTF_CONTROL_PREFIX = String.raw`(?<![\p{L}\p{N}:\\/._\-"'\x60])`;
+const RTF_CONTROL_DELIMITER = String.raw`(?=[ {}\\]|$)`;
+const RTF_CONTROL_WORD = String.raw`\\(?:${RTF_CONTROL_WORDS})(?:-?\d{1,10}(?=[^\p{L}\p{N}]|$)|${RTF_CONTROL_DELIMITER})`;
+const RTF_CONTROL_SYMBOL = String.raw`\\(?:${RTF_CONTROL_SYMBOLS}|\\${RTF_CONTROL_DELIMITER})`;
 
 // parser-output-unchanged: [cz-us] Expanding the residue vocabulary does not change RTF decoding.
 // parser-output-unchanged: [hu-bhgy] Expanding the residue vocabulary does not change RTF decoding.
 /** Recognize leaked RTF syntax without decoding or changing source text. */
 export const rtfControlResiduePattern = (): RegExp =>
   new RegExp(
-    String.raw`\{\\\*|\{\\rtf\d{1,10}(?!\d)|(?:${RTF_CONTROL})[\s{}]{0,4}(?:${RTF_CONTROL})`,
+    String.raw`\{\\\*|\{\\rtf\d{1,10}(?!\d)|${RTF_CONTROL_PREFIX}(?:${RTF_CONTROL_WORD}|${RTF_CONTROL_SYMBOL})`,
     "gu",
   );

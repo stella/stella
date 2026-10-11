@@ -77,25 +77,32 @@ test("actual RTF control residue is still refused", () => {
   ).toBe(true);
 });
 
-test("font association controls in the sole candidate are refused as residue", () => {
-  const result = selectOpinionText({
-    row: opinionRow({
-      xml_harvard: "",
-      html_with_citations: String.raw`<p>Text \loch\hich continues.</p>`,
-    }),
-    type: "020lead",
-    budget: createTextBudget(),
-  });
-  expect(result.status).toBe("no-usable-text");
-  expect(result.attempts).toContainEqual({
-    format: "html_with_citations",
-    structure: "html",
-    reason: "markup-residue",
-  });
-});
+test.each([
+  String.raw`Text \loch\hich continues.`,
+  String.raw`Judgment. \pard Continued text.`,
+  String.raw`Judgment. \fs24 Continued text.`,
+])(
+  "RTF controls in the sole candidate are refused as residue: %s",
+  (wording) => {
+    const result = selectOpinionText({
+      row: opinionRow({
+        xml_harvard: "",
+        html_with_citations: `<p>${wording}</p>`,
+      }),
+      type: "020lead",
+      budget: createTextBudget(),
+    });
+    expect(result.status).toBe("no-usable-text");
+    expect(result.attempts).toContainEqual({
+      format: "html_with_citations",
+      structure: "html",
+      reason: "markup-residue",
+    });
+  },
+);
 
 test("ordinary backslash prose in the sole candidate remains usable", () => {
-  const wording = String.raw`The exhibit is at C:\records\exhibits; the literal \n is quoted.`;
+  const wording = String.raw`The exhibit is at C:\file\temp; the literal "\n" is quoted.`;
   const result = selectOpinionText({
     row: opinionRow({
       xml_harvard: "",
