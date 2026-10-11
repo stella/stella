@@ -59,13 +59,12 @@ const callCapability = async (
   });
   if (result.isError === true) {
     const message = result.content.find((part) => part.type === "text")?.text;
-    if (message !== undefined) {
-      throw new UploadAppError({ message });
-    }
-    throw new LocalizedAppError({
-      key: "capabilityFailed",
-      values: { capability },
-    });
+    throw message === undefined
+      ? new LocalizedAppError({
+          key: "capabilityFailed",
+          values: { capability },
+        })
+      : new UploadAppError({ message });
   }
   const payload = parseAppToolPayload(result);
   return isRecord(payload) && "result" in payload ? payload["result"] : payload;
