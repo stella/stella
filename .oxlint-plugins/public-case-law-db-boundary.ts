@@ -127,6 +127,61 @@ const readLocalModuleSource: LocalModuleSourceReader = (moduleId) => {
     : { filename, source: readFileSync(filename, "utf-8") };
 };
 
+const schemaReexportCache = new Map<string, boolean>();
+
+const moduleReexportsSchema = (
+  moduleId: string,
+  seen = new Set<string>(),
+): boolean => {
+  if (isSchemaModule(moduleId)) {
+    return true;
+  }
+  if (seen.has(moduleId)) {
+    return false;
+  }
+  seen.add(moduleId);
+  const source = readLocalModuleSource(moduleId);
+  if (source === null) {
+    return false;
+  }
+  const file = ts.createSourceFile(
+    source.filename,
+    source.source,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  return file.statements.some((statement) => {
+    if (
+      !ts.isExportDeclaration(statement) ||
+      statement.isTypeOnly ||
+      statement.moduleSpecifier === undefined ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      (statement.exportClause !== undefined &&
+        ts.isNamedExports(statement.exportClause) &&
+        statement.exportClause.elements.every((element) => element.isTypeOnly))
+    ) {
+      return false;
+    }
+    return moduleReexportsSchema(
+      canonicalModuleId(statement.moduleSpecifier.text, moduleId),
+      seen,
+    );
+  });
+};
+
+const isSchemaOrReexportModule = (moduleId: string | null): boolean => {
+  if (moduleId === null) {
+    return false;
+  }
+  const cached = schemaReexportCache.get(moduleId);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const result = moduleReexportsSchema(moduleId);
+  schemaReexportCache.set(moduleId, result);
+  return result;
+};
+
 export const moduleHasRuntimeSchemaReadFromSources = (
   moduleId: string,
   {
@@ -1329,6 +1384,7 @@ export default eslintCompatPlugin({
             "The unredacted decisions view is reserved for the public subject lookup.",
           baseCaseLawHelper:
             "Public case-law reads cannot import a runtime helper that reads the base decision schema.",
+          namedSchemaImport: "Import schema tables by name.",
         },
       },
       createOnce(context) {
@@ -1461,6 +1517,20 @@ export default eslintCompatPlugin({
               return;
             }
             const importedModule = declaredModule(node, importerRepoPath);
+            if (isSchemaOrReexportModule(importedModule)) {
+              const indirectBinding = node.specifiers.find(
+                (specifier) =>
+                  specifier.type === "ImportNamespaceSpecifier" ||
+                  specifier.type === "ImportDefaultSpecifier",
+              );
+              if (indirectBinding !== undefined) {
+                context.report({
+                  node: indirectBinding,
+                  messageId: "namedSchemaImport",
+                });
+                return;
+              }
+            }
             if (node.importKind !== "type" && !isSchemaModule(importedModule)) {
               const hasRuntimeBindings = node.specifiers.some(
                 (specifier) =>

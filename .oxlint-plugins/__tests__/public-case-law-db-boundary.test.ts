@@ -117,6 +117,38 @@ describe.serial("public-law relation scan", () => {
     ).toEqual([]);
   });
 
+  test("public and mixed reads import runtime schema tables by name", async () => {
+    for (const modulePath of [
+      "@/api/db/schema",
+      "../../../../../.oxlint-plugins/__fixtures__/case-law-schema-barrel-chain.fixture.ts",
+    ]) {
+      for (const binding of ["* as schema", "schema"]) {
+        for (const mode of ["public-law", "decision-surface"]) {
+          const source = [
+            'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
+            `import ${binding} from "${modulePath}";`,
+            "void caseLawPublicReadDb;",
+            "void schema;",
+          ].join("\n");
+          expect(
+            await lint(source, "apps/api/src/handlers/chat/chat-prompt.ts", {
+              scope: mode,
+            }),
+          ).toEqual([2]);
+          expect(
+            await lint(
+              source
+                .replace(`import ${binding}`, () => `import type ${binding}`)
+                .replace("void schema;", "export type Schema = typeof schema;"),
+              "apps/api/src/handlers/chat/chat-prompt.ts",
+              { scope: mode },
+            ),
+          ).toEqual([]);
+        }
+      }
+    }
+  });
+
   test("decision-surface config covers each mixed public-law module", () => {
     const configPath = path.resolve(import.meta.dir, "../../oxlint.config.ts");
     const configSource = readFileSync(configPath, "utf-8");
