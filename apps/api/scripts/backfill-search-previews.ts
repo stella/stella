@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 /**
  * Backfill persisted preview passages for existing supplemental and chat
  * search projections after the search-preview-passage migration.
@@ -8,7 +9,7 @@
  *   bun --filter @stll/api db:backfill-search-previews
  */
 
-import { sql } from "drizzle-orm";
+import { printError } from "@stll/errors";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
@@ -70,6 +71,6 @@ const main = async (): Promise<void> => {
 main()
   .then(() => process.exit(0))
   .catch((error: unknown) => {
-    console.error("Search preview backfill failed:", error);
+    printError("Search preview backfill failed:", error);
     process.exit(1);
   });

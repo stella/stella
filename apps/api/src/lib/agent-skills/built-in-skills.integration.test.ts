@@ -156,7 +156,7 @@ describe("shipped built-in skills in chat", () => {
       const read = unwrap(
         await readAvailableChatSkillResource({
           ...callerWithoutRows(),
-          path: "knowledge/not-shipped.md",
+          path: "references/not-shipped.md",
           skillName: name,
         }),
       );

@@ -1,5 +1,9 @@
 name: Publish product media
 
+defaults:
+  run:
+    shell: bash
+
 # Bootstrap and recovery publisher for immutable landing-page recordings.
 # The public repository cannot assume the deployment role from main, so this
 # dispatches the private publisher and watches the resulting run.

@@ -58,7 +58,16 @@ describe.skipIf(!runPostgresTests)("migrated public sanctions reader", () => {
       const contacts = [Bun.randomUUIDv7(), Bun.randomUUIDv7()];
       const workspaces = [Bun.randomUUIDv7(), Bun.randomUUIDv7()];
       try {
-        await admin.unsafe(`CREATE ROLE "${application}" NOLOGIN`);
+        const password = Bun.randomUUIDv7();
+        const applicationUrl = new URL(url);
+        applicationUrl.username = application;
+        applicationUrl.password = password;
+        await admin.unsafe(
+          `CREATE ROLE "${application}" LOGIN PASSWORD '${password}'`,
+        );
+        const applicationDb = openClient({
+          databaseUrl: applicationUrl.href,
+        }).db;
         await admin.unsafe(
           `GRANT ${readerRole} TO "${application}" WITH SET TRUE, INHERIT FALSE`,
         );
@@ -75,15 +84,7 @@ describe.skipIf(!runPostgresTests)("migrated public sanctions reader", () => {
           await admin`INSERT INTO entities (id, workspace_id, kind, name) VALUES (${Bun.randomUUIDv7()}, ${workspaces.at(index)}, 'file', 'Private reader file')`;
         }
         const reader = createSanctionsPublicReadDb(
-          markRlsDatabase({
-            transaction: async (fn) =>
-              await db.transaction(async (tx) => {
-                await tx.execute(
-                  sql.raw(`SET LOCAL SESSION AUTHORIZATION "${application}"`),
-                );
-                return await fn(tx);
-              }),
-          }),
+          markRlsDatabase(applicationDb),
         );
         expect((await reader.validateRole()).isOk()).toBe(true);
         const posture = await reader(

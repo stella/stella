@@ -1,5 +1,9 @@
 name: Database Migrations
 
+defaults:
+  run:
+    shell: bash
+
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
@@ -167,6 +171,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Test Postgres owner replacement and helper replay
+        run: |
+          bash scripts/configure-test-postgres.integration.sh "${{ job.services.postgres.id }}" stella_owner
+          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776

@@ -555,6 +555,7 @@ describe("review organization sender reset", () => {
               const removed = await sweepReviewOrganization(
                 asTestRaw<Transaction>(tx),
                 fixture.reviewOrgId,
+                fixture.reviewUserId,
               );
               expect(removed.get("correspondence_allowed_senders")).toBe(1);
             }

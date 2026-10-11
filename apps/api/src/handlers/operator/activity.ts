@@ -20,6 +20,7 @@ export type OperatorActivityOptions = {
 };
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "health_infra" },
   query: permissiveRouteSchema({ keys: [] }),

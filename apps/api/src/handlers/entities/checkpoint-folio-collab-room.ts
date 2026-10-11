@@ -148,6 +148,7 @@ export const writeFolioCollabCheckpointObject = async ({
 
 const checkpointFolioCollabRoom = createSafeHandler(
   {
+    contract: "patch",
     contentDelivery: {
       type: "none",
       reason: "Processes collaboration content without returning stored files.",
@@ -392,7 +393,11 @@ const checkpointFolioCollabRoom = createSafeHandler(
 
     const checkpointedAt = new Date();
     const storedResult = await safeDb(async (tx) => {
-      await lockActiveWorkspaceForBufferIntent(tx, workspaceId);
+      await lockActiveWorkspaceForBufferIntent({
+        tx,
+        workspaceId,
+        mode: "share",
+      });
       const rooms = await tx
         .select({
           baseVersionId: folioCollabRooms.baseVersionId,
