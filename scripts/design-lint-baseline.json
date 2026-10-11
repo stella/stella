@@ -195,7 +195,7 @@
     "packages/ui/src/review/review-comment-card.tsx": 1
   },
   "shadcn/no-arbitrary-values": {
-    "apps/desktop/src/clipboard/ClipboardApp.tsx": 4,
+    "apps/desktop/src/clipboard/ClipboardApp.tsx": 3,
     "apps/desktop/src/clipboard/ClipboardEditor.tsx": 2,
     "apps/desktop/src/mainview/App.tsx": 2,
     "apps/landing/src/components/react/AnonymizeLiveDemo.tsx": 2,
