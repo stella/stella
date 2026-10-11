@@ -270,18 +270,18 @@ const mountGraph = async ({
             const direction = args["direction"];
             const cursor = args["cursor"];
             const decisionId = args["decision_id"];
-            const result =
-              decisionId === subjectId && cursor === "fixture-cites-more"
-                ? pagedResult
-                : decisionId === decisionIds[0]
-                  ? expandedResult
-                  : direction === "cited_by"
-                    ? {
-                        ...initialPage,
-                        direction: "cited_by",
-                        nextCursor: null,
-                      }
-                    : initialPage;
+            let result = initialPage;
+            if (decisionId === subjectId && cursor === "fixture-cites-more") {
+              result = pagedResult;
+            } else if (decisionId === decisionIds[0]) {
+              result = expandedResult;
+            } else if (direction === "cited_by") {
+              result = {
+                ...initialPage,
+                direction: "cited_by",
+                nextCursor: null,
+              };
+            }
             reply({ jsonrpc: "2.0", id, result: toolResult(result) });
             break;
           }
@@ -363,7 +363,11 @@ test("citation graph renders the subject, six treatments, unresolved citations, 
   ] as const) {
     await expect(
       app.getByTestId("citation-list").locator(`[data-polarity="${polarity}"]`),
-    ).toContainText(EN_MESSAGES[polarity]);
+    ).toHaveText(
+      firstCitations
+        .filter((entry) => entry.polarity === polarity)
+        .map(() => `${EN_MESSAGES.cites} · ${EN_MESSAGES[polarity]}`),
+    );
   }
   await expect(
     app.locator('article[data-citation-id="fixture-citation-0"] blockquote'),
@@ -382,7 +386,7 @@ test("citation graph pagination deduplicates an edge and expansion loads the sel
   const firstRow = app.locator(
     'article[data-citation-id="fixture-citation-0"]',
   );
-  const expand = firstRow.getByRole("button", { name: /Expand citations/ });
+  const expand = firstRow.getByRole("button", { name: /Expand citations/u });
   await expand.focus();
   await expect(expand).toBeFocused();
   await page.keyboard.press("Enter");

@@ -716,6 +716,29 @@ test("CI determinism selectors cover the cached generators' input contracts", ()
   }
 });
 
+test("autofix regenerates selected outputs after source fixes before restricting changes", () => {
+  const steps = workflowJobSteps(
+    Bun.YAML.parse(
+      readFileSync(
+        new URL("../.github/workflows/autofix.yml", import.meta.url),
+        "utf-8",
+      ),
+    ),
+    "regenerate-derived-files",
+  );
+  const regenerate = workflowStepByName(steps, "Regenerate fixed sources");
+  const initial = workflowStepByName(steps, "Regenerate selected files");
+  expect(regenerate["run"]).toBe(initial["run"]);
+  expect(regenerate["if"]).toBe(initial["if"]);
+  expect(regenerate["env"]).toEqual(initial["env"]);
+  expect(steps.indexOf(regenerate)).toBeGreaterThan(
+    steps.indexOf(workflowStepByName(steps, "Fix changed files")),
+  );
+  expect(steps.indexOf(regenerate)).toBeLessThan(
+    steps.indexOf(workflowStepByName(steps, "Restrict autofix changes")),
+  );
+});
+
 test("CI diff path guards stay pinned to manifest outputs", () => {
   const cli = ciGeneratedStepRun(
     "CLI sharded registry and derived runtime guard",
