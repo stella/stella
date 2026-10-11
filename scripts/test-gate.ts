@@ -604,6 +604,8 @@ const gatingCommandExecutionFailure = ({
     ? undefined
     : missingMessage;
 
+const SHELL_OPERATORS = new Set(["||", "&&", ";", "&", "|", "(", ")", "\n"]);
+
 const shellInvocationGates = (
   command: string,
   matches: (words: readonly string[], index: number) => boolean,
@@ -780,9 +782,16 @@ export const packageTestCollectionFailure = ({
   if (typeof command !== "string") {
     return `runner command: package script ${scriptName} is missing`;
   }
-  const words = shellWords(command);
+  const normalizedCommand = command.replaceAll(/\\\r?\n/gu, " ");
+  const words = shellWords(normalizedCommand, "include");
   for (let index = 0; index < words.length; index += 1) {
-    if (words[index] !== "bun") {
+    if (
+      words[index] !== "bun" ||
+      !shellInvocationGates(
+        normalizedCommand,
+        (_words, cursor) => cursor === index,
+      )
+    ) {
       continue;
     }
     const delegatedScript = words[index + 2];
@@ -813,7 +822,9 @@ export const packageTestCollectionFailure = ({
     if (words[index + 1] !== "test") {
       continue;
     }
-    const arguments_ = words.slice(index + 2);
+    const remaining = words.slice(index + 2);
+    const end = remaining.findIndex((word) => SHELL_OPERATORS.has(word));
+    const arguments_ = end === -1 ? remaining : remaining.slice(0, end);
     const ignorePatternIndex = arguments_.indexOf("--path-ignore-patterns");
     const relativeCandidate = path.posix.relative(packageDirectory, candidate);
     if (
@@ -846,7 +857,7 @@ export const packageTestCollectionFailure = ({
     }
     return "runner glob: test command does not collect the file";
   }
-  return "runner command: test script does not invoke a test runner";
+  return "runner command: test script does not invoke a gating test runner";
 };
 
 const isTypeScriptTest = (file: string): boolean =>
@@ -1406,74 +1417,93 @@ export const firstCollectionFailure = ({
     const pluginGlob = ".oxlint-plugins/__tests__/*.test.ts";
     const pluginRunner =
       "find ./.oxlint-plugins/__tests__ -maxdepth 1 -name '*.test.ts' -print0 | sort -z | xargs -0 bun test";
-    return gatingCommandExecutionFailure({
-      commandMatches: (command) => {
+    const commandMatches = (command: string): boolean =>
+      shellInvocationGates(command, (words, index) => {
+        if (words[index] === "bash" && words[index + 1] === "-c") {
+          const body = words[index + 2];
+          return body !== undefined && commandMatches(body);
+        }
         if (
           isUnlistedScript &&
-          command.includes("bun scripts/run-unlisted-script-tests.ts")
+          words[index] === "bun" &&
+          words[index + 1] === "scripts/run-unlisted-script-tests.ts"
         ) {
           return true;
         }
         if (
           new Bun.Glob(pluginGlob).match(file) &&
-          command.includes(pluginRunner)
+          shellWords(pluginRunner, "include").every(
+            (word, offset) => words[index + offset] === word,
+          )
         ) {
           return true;
         }
-        return command
-          .replaceAll(/\\\r?\n/gu, " ")
-          .split("\n")
-          .some((line) => {
-            if (line.includes("|")) {
-              return false;
-            }
-            if (
-              packageTestCollectionFailure({
-                candidate: file,
-                packageDirectory: ".",
-                scripts: { test: line },
-              }) === undefined
-            ) {
-              return true;
-            }
-            const words = shellWords(line);
-            const cwdIndex = words.indexOf("--cwd");
-            if (
-              cwdIndex === -1 ||
-              (words[cwdIndex - 1] !== "bun" &&
-                !(
-                  words[cwdIndex - 1] === "run" && words[cwdIndex - 2] === "bun"
-                )) ||
-              words[cwdIndex + 2] !== "test"
-            ) {
-              return false;
-            }
-            const packageDirectory = words[cwdIndex + 1];
-            if (packageDirectory === undefined) {
-              return false;
-            }
-            const manifest = path.posix.join(packageDirectory, "package.json");
-            if (!existsSync(path.join(ROOT, manifest))) {
-              return false;
-            }
-            const scripts = packageScripts(manifest);
-            const testCommand = scripts?.["test"];
-            if (typeof testCommand !== "string") {
-              return false;
-            }
-            const arguments_ = words
-              .slice(cwdIndex + 3)
-              .map((word) => JSON.stringify(word))
-              .join(" ");
-            return (
-              packageTestCollectionFailure({
-                candidate: file,
-                packageDirectory,
-                scripts: { ...scripts, test: `${testCommand} ${arguments_}` },
-              }) === undefined
-            );
-          });
-      },
+        if (words[index] !== "bun") {
+          return false;
+        }
+        const start = words.findLastIndex(
+          (word, cursor) =>
+            cursor < index &&
+            (word === ";" || word === "\n" || word === "&&" || word === "||"),
+        );
+        if (words.slice(start + 1, index).includes("|")) {
+          return false;
+        }
+        const remaining = words.slice(index);
+        const end = remaining.findIndex((word) => SHELL_OPERATORS.has(word));
+        if (end !== -1 && remaining[end] === "|") {
+          return false;
+        }
+        const invocation = end === -1 ? remaining : remaining.slice(0, end);
+        const line = invocation.map((word) => JSON.stringify(word)).join(" ");
+        if (
+          packageTestCollectionFailure({
+            candidate: file,
+            packageDirectory: ".",
+            scripts: { test: line },
+          }) === undefined
+        ) {
+          return true;
+        }
+        const cwdIndex = invocation.indexOf("--cwd");
+        if (
+          cwdIndex === -1 ||
+          (invocation[cwdIndex - 1] !== "bun" &&
+            !(
+              invocation[cwdIndex - 1] === "run" &&
+              invocation[cwdIndex - 2] === "bun"
+            )) ||
+          invocation[cwdIndex + 2] !== "test"
+        ) {
+          return false;
+        }
+        const packageDirectory = invocation[cwdIndex + 1];
+        if (packageDirectory === undefined) {
+          return false;
+        }
+        const manifest = path.posix.join(packageDirectory, "package.json");
+        if (!existsSync(path.join(ROOT, manifest))) {
+          return false;
+        }
+        const scripts = packageScripts(manifest);
+        const testCommand = scripts?.["test"];
+        if (typeof testCommand !== "string") {
+          return false;
+        }
+        const arguments_ = invocation
+          .slice(cwdIndex + 3)
+          .map((word) => JSON.stringify(word))
+          .join(" ");
+        return (
+          packageTestCollectionFailure({
+            candidate: file,
+            packageDirectory,
+            scripts: { ...scripts, test: `${testCommand} ${arguments_}` },
+          }) === undefined
+        );
+      });
+    return gatingCommandExecutionFailure({
+      commandMatches,
       gatingJobs: topology.gatingJobs,
       missingMessage: `job condition: no gating job collects ${file}`,
     });

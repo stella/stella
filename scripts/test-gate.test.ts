@@ -812,6 +812,11 @@ context("root test runner coverage", () => {
 context("root runner command shapes", () => {
   const cases = [
     {
+      file: "scripts/network-baseline-coverage.test.ts",
+      command:
+        "timeout 30s bash -c 'bun test scripts/network-baseline-coverage.test.ts && bun scripts/network-baseline-scope.ts validate'",
+    },
+    {
       file: "scripts/check-api-cli-contract.test.ts",
       command: String.raw`bun test --preload ./apps/api/src/tests/setup-env.ts \
   scripts/check-api-cli-contract.test.ts`,
@@ -846,6 +851,82 @@ context("root runner command shapes", () => {
           condition === ""
             ? undefined
             : `job condition: no gating job collects ${file}`,
+        );
+      }
+    });
+  }
+});
+
+context("suppressed collection", () => {
+  const shapes = [
+    "RUNNER || true",
+    "RUNNER || :",
+    "RUNNER || exit 0",
+    "RUNNER; true",
+    "RUNNER; exit 0",
+    "set +e; RUNNER",
+  ];
+  for (const shape of shapes) {
+    for (const runner of [
+      "bun scripts/run-unlisted-script-tests.ts",
+      "bun test scripts/named.test.ts",
+      "timeout 30s bash -c 'bun test scripts/named.test.ts'",
+    ]) {
+      check(
+        `rejects root collector ${shape.replace("RUNNER", () => runner)}`,
+        () => {
+          const command = shape.replace("RUNNER", () => runner);
+          const workflow = `jobs:
+  root-tests:
+    steps:
+      - run: ${command}
+  ci-result:
+    needs: [root-tests]
+`;
+          expect(
+            firstCollectionFailure({
+              file: "scripts/named.test.ts",
+              nonGatingFiles: new Set(),
+              topology: {
+                gatingJobs: new Map([["root-tests", [command]]]),
+                shardedPackages: new Set(),
+                workflow,
+              },
+            }),
+          ).toBe("job condition: no gating job collects scripts/named.test.ts");
+        },
+      );
+    }
+    check(`rejects a package script body ${shape}`, () => {
+      expect(
+        packageTestExecutionFailure({
+          gatingJobs: new Map([
+            ["package-tests", ["bun --filter @stll/orphan test"]],
+          ]),
+          packageDirectory: "packages/orphan",
+          packageName: "@stll/orphan",
+          shardedPackages: new Set(),
+        }),
+      ).toBeUndefined();
+      for (const scripts of [
+        { test: shape.replace("RUNNER", "bun test") },
+        {
+          test: "bun run test:unit",
+          "test:unit": shape.replace("RUNNER", "bun test"),
+        },
+        {
+          test: shape.replace("RUNNER", "bun run test:unit"),
+          "test:unit": "bun test",
+        },
+      ]) {
+        expect(
+          packageTestCollectionFailure({
+            candidate: "packages/orphan/src/orphan.test.ts",
+            packageDirectory: "packages/orphan",
+            scripts,
+          }),
+        ).toBe(
+          "runner command: test script does not invoke a gating test runner",
         );
       }
     });
