@@ -24,6 +24,7 @@ import { apiUrl } from "@/lib/api-url";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 export const PersonalDataExportCard = () => {
@@ -80,7 +81,7 @@ export const PersonalDataExportCard = () => {
           )}
           {latestView.type === "empty" &&
             requestButton(t("settings.account.personalDataExportRequest"))}
-          {latestView.type === "items" && (
+          {latestView.type === "items" && latestView.items !== null && (
             <>
               <QueryViewFeedback view={latestView} />
               <PersonalDataExportStatus
@@ -90,10 +91,7 @@ export const PersonalDataExportCard = () => {
                 formatExpiresAt={(instant) =>
                   format.dateTime(
                     new Date(Temporal.Instant.from(instant).epochMilliseconds),
-                    {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    },
+                    MEDIUM_DATE_SHORT_TIME_FORMAT,
                   )
                 }
               />

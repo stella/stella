@@ -5,16 +5,26 @@ import {
   accountExportStatus,
   requestAccountExport,
 } from "@/api/lib/account-export/store";
-import { captureError } from "@/api/lib/analytics/capture";
 import {
   ACCOUNT_ACCESS,
   createSafeSessionHandler,
 } from "@/api/lib/api-handlers";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
+
+const ACCOUNT_EXPORT_ENQUEUE_FAILED = failureSink({
+  event: "account_export.enqueue_failed",
+  expected: [],
+});
 
 const requestPersonalDataExport = createSafeSessionHandler(
   {
     accountAccess: ACCOUNT_ACCESS.accountControl,
     access: "write",
+    realtime: noResourceSetUpdates(
+      "Account-scoped export state refreshes through the caller-owned query",
+    ),
     mcp: {
       type: "capability",
       reason: "reporting_export",
@@ -23,15 +33,21 @@ const requestPersonalDataExport = createSafeSessionHandler(
     description:
       "Request an asynchronous export of your own personal data across current organization memberships. Organization and matter content are excluded. One active export is reused. Poll account-exports.status.get with the returned id as exportId, then call account-exports.download.get when ready. Pass nextCall to read_capability. Downloads require your authenticated account and expire after one hour.",
   },
-  async function* ({ user }) {
-    const row = yield* Result.await(requestAccountExport(user.id));
+  async function* ({ user, request }) {
+    const row = yield* Result.await(
+      Result.tryPromise(async () => await requestAccountExport(user.id)),
+    );
     // Queue transport is reconstructible from the committed ledger. A failed
     // enqueue must not turn an accepted request into an ambiguous refusal.
     const queued = await Result.tryPromise(
       async () => await enqueueAccountExport(row.id),
     );
     if (Result.isError(queued)) {
-      captureError(queued.error, { exportId: row.id });
+      observeFailure(queued.error, {
+        sink: ACCOUNT_EXPORT_ENQUEUE_FAILED,
+        ctx: { jobId: row.id },
+        request,
+      });
     }
     return Result.ok({
       ...accountExportStatus(row),

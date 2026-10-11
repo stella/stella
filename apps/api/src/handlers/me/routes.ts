@@ -1,10 +1,5 @@
 import Elysia from "elysia";
 
-import requestPersonalDataExport from "@/api/handlers/account-exports/create";
-import downloadPersonalDataExport from "@/api/handlers/account-exports/download";
-import personalDataExportDownloadLink from "@/api/handlers/account-exports/download/get";
-import latestPersonalDataExport from "@/api/handlers/account-exports/get";
-import personalDataExportStatus from "@/api/handlers/account-exports/status/get";
 import disconnectOAuthConnection from "@/api/handlers/me/disconnect-oauth-connection";
 import listOAuthConnections from "@/api/handlers/me/list-oauth-connections";
 import deleteAccountPendingTasks from "@/api/handlers/me/pending-tasks";
@@ -12,7 +7,7 @@ import deleteAccountSendOtp from "@/api/handlers/me/send-otp";
 import twoFactorSendManageOtp from "@/api/handlers/me/two-factor-send-manage-otp";
 import updateGuideProgress from "@/api/handlers/me/update-guide-progress";
 import deleteAccountVerify from "@/api/handlers/me/verify-delete";
-import { accountExportAuthMacro, sessionAuthMacro } from "@/api/lib/auth";
+import { sessionAuthMacro } from "@/api/lib/auth";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
@@ -24,28 +19,6 @@ const isTwoFactorManageOtpSendPath = (pathname: string): boolean =>
   pathname === "/v1/me/two-factor/send-otp";
 
 export const meRoute = new Elysia({ prefix: "/me" })
-  .group("/data-exports", (app) =>
-    app
-      .use(accountExportAuthMacro)
-      .get("/", latestPersonalDataExport.handler, {
-        validateAccountExport: "read",
-      })
-      .post("/", requestPersonalDataExport.handler, {
-        validateAccountExport: "write",
-      })
-      .get("/:exportId", personalDataExportStatus.handler, {
-        validateAccountExport: "read",
-        params: personalDataExportStatus.config.params,
-      })
-      .get("/:exportId/download-link", personalDataExportDownloadLink.handler, {
-        validateAccountExport: "read",
-        params: personalDataExportDownloadLink.config.params,
-      })
-      .get("/:exportId/download", downloadPersonalDataExport.handler, {
-        validateAccountExport: "read",
-        params: downloadPersonalDataExport.config.params,
-      }),
-  )
   .use(sessionAuthMacro)
   .guard({ validateSession: true })
   .get("/oauth-connections", listOAuthConnections.handler)

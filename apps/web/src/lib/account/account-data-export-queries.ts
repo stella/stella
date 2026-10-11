@@ -16,7 +16,8 @@ export const accountDataExportLatestOptions = (userId: string) =>
   queryOptions({
     queryKey: accountDataExportKeys.latest(userId),
     queryFn: async ({ signal }) =>
-      unwrapEden(await api.me["data-exports"].get({ fetch: { signal } })),
+      unwrapEden(await api.me["data-exports"].get({ fetch: { signal } }))
+        .latest,
     refetchInterval: (query) => {
       const status = query.state.data;
       if (status?.status === "requested" || status?.status === "processing") {

@@ -641,6 +641,14 @@ const MEMBERSHIP_REMOVAL_FAILED = failureSink({
   event: "auth.membership_removal_failed",
   expected: [],
 });
+const ACCOUNT_EXPORT_VERIFICATION_FAILED = failureSink({
+  event: "auth.account_export_verification_failed",
+  expected: [],
+});
+const ACCOUNT_EXPORT_MEMBERSHIP_READ_FAILED = failureSink({
+  event: "auth.account_export_membership_read_failed",
+  expected: [],
+});
 
 /** Session lifetime in seconds (7 days). */
 const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
@@ -2441,8 +2449,9 @@ export const createAccountExportAuthMacro = ({
           const authenticated = await authenticateToken(token);
           if (Result.isError(authenticated)) {
             if (McpTokenVerificationError.is(authenticated.error)) {
-              captureError(authenticated.error, {
-                source: "account-export-auth",
+              observeFailure(authenticated.error, {
+                sink: ACCOUNT_EXPORT_VERIFICATION_FAILED,
+                request,
               });
               return status(500, AUTH_REJECTION_BODY[500]);
             }
@@ -2473,7 +2482,10 @@ export const createAccountExportAuthMacro = ({
               }),
           );
           if (Result.isError(memberResult)) {
-            captureError(memberResult.error, { source: "account-export-auth" });
+            observeFailure(memberResult.error, {
+              sink: ACCOUNT_EXPORT_MEMBERSHIP_READ_FAILED,
+              request,
+            });
             return status(500, AUTH_REJECTION_BODY[500]);
           }
           const memberAuthorization = memberResult.value;

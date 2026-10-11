@@ -34,9 +34,13 @@ const downloadPersonalDataExport = createSafeSessionHandler(
   },
   async function* ({ user, params: { exportId }, request }) {
     const row = yield* Result.await(
-      recordAccountExportDownload({ id: exportId, userId: user.id }),
+      Result.tryPromise(
+        async () =>
+          await recordAccountExportDownload({ id: exportId, userId: user.id }),
+      ),
     );
-    if (row === null || row.objectKey === null) {
+    const objectKey = row?.objectKey ?? null;
+    if (row === null || objectKey === null) {
       return Result.err(
         new HandlerError({
           status: 404,
@@ -44,7 +48,6 @@ const downloadPersonalDataExport = createSafeSessionHandler(
         }),
       );
     }
-    const objectKey = row.objectKey;
     const source = yield* Result.await(
       Result.tryPromise(
         async () =>
@@ -57,7 +60,9 @@ const downloadPersonalDataExport = createSafeSessionHandler(
         contentType: "application/zip",
         disposition: "attachment",
         fileName: sanitizeFilename(`personal-data-${row.id}.zip`),
-        contentLength: source.contentLength,
+        ...(source.contentLength === undefined
+          ? {}
+          : { contentLength: source.contentLength }),
         additionalHeaders: { [CACHE_CONTROL_HEADER]: PRIVATE_CACHE_CONTROL },
       }),
     );

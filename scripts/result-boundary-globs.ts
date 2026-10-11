@@ -33,6 +33,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/visual-preview/src/**/*.ts",
   "apps/api/src/handlers/realtime-resource-sets.ts",
   "apps/api/src/lib/auth/**/*.ts",
+  "apps/api/src/handlers/account-exports/**/*.ts",
   "apps/api/src/handlers/agent-auth/**/*.ts",
   "apps/api/src/handlers/ai-config/**/*.ts",
   "apps/api/src/handlers/audit-logs/**/*.ts",

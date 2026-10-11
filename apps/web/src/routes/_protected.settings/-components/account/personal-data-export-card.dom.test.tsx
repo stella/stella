@@ -20,15 +20,22 @@ const { PersonalDataExportCard } = await import("./personal-data-export-card");
 let latestExport: AccountDataExportStatus | null = null;
 const requestedPaths: string[] = [];
 
+const requestUrl = (input: RequestInfo | URL): string => {
+  if (input instanceof Request) {
+    return input.url;
+  }
+  return input instanceof URL ? input.href : input;
+};
+
 globalThis.fetch = Object.assign(
   async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = input instanceof Request ? input : undefined;
-    const url = new URL(request?.url ?? String(input));
+    const url = new URL(requestUrl(input));
     const method = init?.method ?? request?.method ?? "GET";
     requestedPaths.push(`${method} ${url.pathname}`);
 
     if (url.pathname === "/v1/me/data-exports" && method === "GET") {
-      return Response.json(latestExport);
+      return Response.json({ latest: latestExport });
     }
     if (url.pathname === "/v1/me/data-exports" && method === "POST") {
       latestExport = {
@@ -96,7 +103,7 @@ const renderAccountCard = () => {
 test("a person requests, waits for, and downloads their account export", async () => {
   renderAccountCard();
 
-  await fireEvent.click(
+  fireEvent.click(
     await screen.findByRole("button", { name: "Request export" }),
   );
   expect(await screen.findByText("Preparing your export…")).toBeTruthy();
@@ -131,9 +138,7 @@ test("a failed export offers a replacement request", async () => {
 
   const failure = await screen.findByRole("alert");
   expect(failure.textContent).toBe("Your export could not be prepared.");
-  await fireEvent.click(
-    screen.getByRole("button", { name: "Request a new export" }),
-  );
+  fireEvent.click(screen.getByRole("button", { name: "Request a new export" }));
   expect(await screen.findByText("Preparing your export…")).toBeTruthy();
   expect(requestedPaths).toContain("POST /v1/me/data-exports");
 });
@@ -146,9 +151,7 @@ test("an expired export offers a replacement request", async () => {
   renderAccountCard();
 
   expect(await screen.findByText("This export has expired.")).toBeTruthy();
-  await fireEvent.click(
-    screen.getByRole("button", { name: "Request a new export" }),
-  );
+  fireEvent.click(screen.getByRole("button", { name: "Request a new export" }));
   expect(await screen.findByText("Preparing your export…")).toBeTruthy();
   expect(requestedPaths).toContain("POST /v1/me/data-exports");
 });

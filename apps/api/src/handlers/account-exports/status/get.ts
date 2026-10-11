@@ -27,7 +27,9 @@ const personalDataExportStatus = createSafeSessionHandler(
   },
   async function* ({ user, params: { exportId } }) {
     const row = yield* Result.await(
-      readAccountExport({ id: exportId, userId: user.id }),
+      Result.tryPromise(
+        async () => await readAccountExport({ id: exportId, userId: user.id }),
+      ),
     );
     if (row === null) {
       return Result.err(

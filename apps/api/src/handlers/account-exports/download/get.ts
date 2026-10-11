@@ -30,10 +30,12 @@ const personalDataExportDownloadLink = createSafeSessionHandler(
   },
   async function* ({ user, params: { exportId } }) {
     const row = yield* Result.await(
-      readAccountExport({ id: exportId, userId: user.id }),
+      Result.tryPromise(
+        async () => await readAccountExport({ id: exportId, userId: user.id }),
+      ),
     );
     const status = row === null ? null : accountExportStatus(row);
-    if (status === null || status.status !== "ready") {
+    if (status?.status !== "ready") {
       return Result.err(
         new HandlerError({
           status: 404,
