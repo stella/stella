@@ -165,6 +165,7 @@
     "oxlint-tsgolint": "7.0.2003",
     "react": "catalog:react19",
     "scslre": "0.3.0",
+    "shell-quote": "1.11.0",
     "sherif": "catalog:",
     "squawk-cli": "2.66.0",
     "stylelint": "catalog:",
