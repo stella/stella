@@ -1384,3 +1384,178 @@ test(
   },
   propertyTestTimeout(15_000),
 );
+
+const introducedAnchorsArbitrary = fc.record({
+  kind: fc.constantFrom("text", "thinking"),
+  streamed: segmentTokenArbitrary,
+  completion: segmentTokenArbitrary,
+  positions: fc.array(fc.nat({ max: 100 }), { minLength: 4, maxLength: 4 }),
+});
+
+const anchoredText = (
+  kind: TextualKind,
+  content: string,
+  positions: number[],
+) => {
+  const anchors = resegmentationAncillary("anchor").expected;
+  const markers = anchors.map((part, index) => ({
+    part,
+    index,
+    position:
+      (positions.at(index) ?? panic("Missing generated anchor position")) %
+      (content.length + 1),
+  }));
+  markers.sort(
+    (left, right) => left.position - right.position || left.index - right.index,
+  );
+  const parts: UIMessage["parts"] = [];
+  let cursor = 0;
+  for (const marker of markers) {
+    if (marker.position > cursor) {
+      parts.push(
+        kind === "thinking"
+          ? {
+              type: kind,
+              content: content.slice(cursor, marker.position),
+              stepId: MESSAGE_ID,
+            }
+          : { type: kind, content: content.slice(cursor, marker.position) },
+      );
+    }
+    parts.push(marker.part);
+    cursor = marker.position;
+  }
+  if (cursor < content.length) {
+    parts.push(
+      kind === "thinking"
+        ? { type: kind, content: content.slice(cursor), stepId: MESSAGE_ID }
+        : { type: kind, content: content.slice(cursor) },
+    );
+  }
+  return parts;
+};
+
+test("streamed text completion stays after its newly introduced call", async () => {
+  const call = {
+    type: "tool-call",
+    id: "introduced-call",
+    name: "lookup",
+    arguments: "{}",
+    input: {},
+    state: "input-complete",
+  } as const satisfies ToolCallPart;
+  const expected = [
+    { type: "text", content: "A" },
+    call,
+    { type: "text", content: "B" },
+  ] satisfies UIMessage["parts"];
+  const { reload } = await collectTurn(
+    [
+      {
+        type: EventType.RUN_STARTED,
+        runId: "introduced-run",
+        threadId: "introduced-thread",
+      },
+      {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId: MESSAGE_ID,
+        role: "assistant",
+      },
+      {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: MESSAGE_ID,
+        delta: "A",
+      },
+      snapshot(expected),
+      {
+        type: EventType.RUN_FINISHED,
+        runId: "introduced-run",
+        threadId: "introduced-thread",
+        finishReason: "stop",
+      },
+    ],
+    (parts) => {
+      expect(parts).toEqual(expected);
+    },
+  );
+  expect(reload.parts).toEqual(expected);
+});
+
+test(
+  "streamed textual completions preserve newly introduced lifecycle anchors",
+  async () => {
+    await assertProperty(
+      "streamed textual completions preserve newly introduced lifecycle anchors",
+      fc.asyncProperty(introducedAnchorsArbitrary, async (scenario) => {
+        for (const completion of [scenario.completion, ""]) {
+          const content = scenario.streamed + completion;
+          const expected = anchoredText(
+            scenario.kind,
+            content,
+            scenario.positions,
+          );
+          if (scenario.kind === "thinking") {
+            expected.unshift({ type: "text", content: "Answer" });
+          }
+          const chunks: StreamChunk[] = [
+            {
+              type: EventType.RUN_STARTED,
+              runId: "introduced-run",
+              threadId: "introduced-thread",
+            },
+            {
+              type: EventType.TEXT_MESSAGE_START,
+              messageId: MESSAGE_ID,
+              role: "assistant",
+            },
+          ];
+          if (scenario.kind === "thinking") {
+            chunks.push(
+              {
+                type: EventType.TEXT_MESSAGE_CONTENT,
+                messageId: MESSAGE_ID,
+                delta: "Answer",
+              },
+              {
+                type: EventType.REASONING_MESSAGE_CONTENT,
+                messageId: "introduced-reasoning",
+                delta: scenario.streamed,
+              },
+            );
+          } else {
+            chunks.push({
+              type: EventType.TEXT_MESSAGE_CONTENT,
+              messageId: MESSAGE_ID,
+              delta: scenario.streamed,
+            });
+          }
+          chunks.push(snapshot(expected), {
+            type: EventType.RUN_FINISHED,
+            runId: "introduced-run",
+            threadId: "introduced-thread",
+            finishReason: "stop",
+          });
+          // Explicit snapshots describe both retained or completed bytes
+          // and the positions of newly introduced lifecycle parts.
+          const { reload, emitted } = await collectTurn(chunks, (parts) => {
+            expect(parts).toEqual(expected);
+          });
+          expect(reload.parts).toEqual(expected);
+          const live = createStreamMessageCapture({
+            initialMessages: [],
+            capture: (message) => message,
+          });
+          for (const chunk of emitted) {
+            live.processor.processChunk(chunk);
+          }
+          expect(
+            live.processor.getMessages().flatMap(({ parts }) => parts),
+          ).toEqual(expected);
+          expectTerminalMonotonicity(emitted);
+        }
+      }),
+      { numRuns: 100 },
+    );
+  },
+  propertyTestTimeout(15_000),
+);

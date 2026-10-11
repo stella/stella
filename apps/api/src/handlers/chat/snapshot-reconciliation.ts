@@ -217,6 +217,7 @@ type SnapshotTextOptions = {
   parts: UIMessage["parts"];
   part: Extract<MessagePart, { type: "text" | "thinking" }>;
   preservesPartLayout: boolean;
+  textSelections: Map<MessagePart, MessagePart[]>;
 };
 
 type DeltaPartsOptions = {
@@ -236,6 +237,7 @@ type SnapshotLayoutOptions = {
   previous: UIMessage;
   snapshot: UIMessage;
   parts: UIMessage["parts"];
+  textSelections: Map<MessagePart, MessagePart[]>;
 };
 
 type SnapshotPartsOptions = {
@@ -335,6 +337,7 @@ export class SnapshotPartReconciler {
     parts,
     part,
     preservesPartLayout,
+    textSelections,
   }: SnapshotTextOptions) {
     const sameKind = previousParts
       .filter(
@@ -376,7 +379,7 @@ export class SnapshotPartReconciler {
     // segments split or merge. Compare whole content and retain delta placement.
     if (
       !preservesPartLayout ||
-      snapshotContent.length <= content.length ||
+      snapshotContent.length < content.length ||
       !snapshotContent.startsWith(content)
     ) {
       return;
@@ -385,13 +388,78 @@ export class SnapshotPartReconciler {
     if (last === undefined) {
       panic("Streamed text sequence has no final slot");
     }
-    parts[parts.indexOf(last)] = this.inherit(
-      {
-        ...last,
-        content: last.content + snapshotContent.slice(content.length),
-      },
-      last,
-    );
+    // Preserve canonical boundaries and add snapshot boundaries only where
+    // another part interrupts the textual sequence. Completion bytes belong
+    // beside the snapshot anchor, even when it was absent from the stream.
+    const boundaries = new Set<number>();
+    let offset = 0;
+    const canonicalRanges = sameKind.map((canonical) => {
+      offset += canonical.content.length;
+      if (canonical !== last) {
+        boundaries.add(offset);
+      }
+      return { canonical, end: offset };
+    });
+    offset = 0;
+    let previousIndex = -1;
+    const incomingRanges = [];
+    for (const [index, incoming] of snapshotParts.entries()) {
+      if (
+        (incoming.type !== "text" && incoming.type !== "thinking") ||
+        incoming.type !== part.type
+      ) {
+        continue;
+      }
+      if (previousIndex !== -1 && index !== previousIndex + 1) {
+        boundaries.add(offset);
+      }
+      const start = offset;
+      offset += incoming.content.length;
+      incomingRanges.push({ incoming, start, end: offset });
+      previousIndex = index;
+    }
+    boundaries.add(snapshotContent.length);
+    let start = 0;
+    const fragments = [];
+    for (const end of [...boundaries].toSorted((left, right) => left - right)) {
+      if (end <= start) {
+        continue;
+      }
+      const fragmentStart = start;
+      const canonical =
+        canonicalRanges.find((range) => fragmentStart < range.end)?.canonical ??
+        last;
+      const selected = this.inherit(
+        { ...canonical, content: snapshotContent.slice(start, end) },
+        canonical,
+      );
+      fragments.push({ canonical, selected, start, end });
+      start = end;
+    }
+    for (const canonical of sameKind) {
+      const index = parts.indexOf(canonical);
+      if (index === -1) {
+        panic("Streamed text lost its canonical slot");
+      }
+      parts.splice(
+        index,
+        1,
+        ...fragments
+          .filter((fragment) => fragment.canonical === canonical)
+          .map((fragment) => fragment.selected),
+      );
+    }
+    for (const range of incomingRanges) {
+      textSelections.set(
+        range.incoming,
+        fragments
+          .filter(
+            (fragment) =>
+              fragment.start < range.end && fragment.end > range.start,
+          )
+          .map((fragment) => fragment.selected),
+      );
+    }
   }
 
   reconcile({
@@ -401,6 +469,7 @@ export class SnapshotPartReconciler {
     parseResultOutput,
   }: SnapshotPartsOptions): UIMessage["parts"] {
     const parts = [...previous.parts];
+    const textSelections = new Map<MessagePart, MessagePart[]>();
     const reconcileActivity = createSnapshotActivityReconciler(
       parts,
       (canonical, updatedActivity) =>
@@ -420,6 +489,7 @@ export class SnapshotPartReconciler {
             parts,
             part,
             preservesPartLayout,
+            textSelections,
           });
           break;
         case "tool-call":
@@ -576,6 +646,7 @@ export class SnapshotPartReconciler {
     return this.reconcileLayout({
       previous,
       snapshot,
+      textSelections,
       parts: this.reconcileCalls({
         parts,
         previous,
@@ -697,10 +768,21 @@ export class SnapshotPartReconciler {
     previous,
     snapshot,
     parts,
+    textSelections,
   }: SnapshotLayoutOptions) {
     const used = new Set<MessagePart>();
     const layout: { incoming: MessagePart; selected: MessagePart }[] = [];
     for (const [index, incoming] of snapshot.parts.entries()) {
+      const textual = textSelections.get(incoming);
+      if (textual !== undefined) {
+        for (const selected of textual) {
+          if (!used.has(selected)) {
+            used.add(selected);
+            layout.push({ incoming, selected });
+          }
+        }
+        continue;
+      }
       let selected: MessagePart | undefined;
       if (
         (incoming.type === "text" || incoming.type === "thinking") &&

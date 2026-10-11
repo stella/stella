@@ -72,6 +72,14 @@
       "date": "2026-10-11"
     }
   ],
+  "apps/api/src/handlers/chat/snapshot-reconciliation.property.test.ts::streamed textual completions preserve newly introduced lifecycle anchors": [
+    {
+      "seed": 20260901,
+      "path": "0:0:0:0:0:0:0:0:1:0",
+      "note": "Streamed completion around newly introduced parts",
+      "date": "2026-10-11"
+    }
+  ],
   "apps/api/src/handlers/chat/snapshot-reconciliation.property.test.ts::terminal calls without sibling results preserve settled payloads across later result snapshots": [
     {
       "seed": 20260901,
