@@ -146,7 +146,16 @@
     "handoffFailed": "Neizdevās atvērt dokumentu",
     "handoffUnavailable": "Neizdevās atvērt dokumentu. Sāciet no jauna no Stella.",
     "handoffRetry": "Mēģināt vēlreiz",
-    "unsavedChangesEscape": "Nesaglabātas izmaiņas. Vēlreiz nospiediet Esc, lai tās atmestu"
+    "unsavedChangesEscape": "Nesaglabātas izmaiņas. Vēlreiz nospiediet Esc, lai tās atmestu",
+    "handoffConnectToSign": "Pievienojiet stella desktop, lai parakstītu šo dokumentu",
+    "handoffConnectToOpen": "Pievienojiet stella desktop, lai atvērtu šo dokumentu",
+    "handoffConnectDetail": "Pievienojiet savu stella kontu. Dokuments tiks atvērts automātiski pēc pievienošanas.",
+    "handoffUntrustedServer": "stella desktop neuzticas serverim, no kura nāk šī dokumenta saite.",
+    "handoffAccountMismatch": "Šis dokuments pieder citam kontam, nevis tam, kas pievienots stella desktop.",
+    "handoffServerMismatch": "Stella Desktop ir savienots ar {linkedServer}, taču šim dokumentam nepieciešams {requestedServer}. Iestatījumos atvienojiet pašreizējo kontu un pēc tam savienojieties ar {requestedServer}, lai atvērtu dokumentu.",
+    "handoffAccountChanged": "Dokumenta atvēršanas laikā mainījās stella desktop konts. Sāciet no jauna stella.",
+    "handoffAlreadyOpen": "Jau ir atvērts cits parakstīšanas logs. Pabeidziet vai aizveriet to un mēģiniet vēlreiz.",
+    "handoffExpired": "Dokumenta saites derīgums beidzās, pirms stella desktop tika pievienots. Sāciet no jauna stella."
   },
   "settings": {
     "about": "Par",
@@ -314,6 +323,8 @@
     "registryErrorConnect": "Neizdevās savienot kontu.",
     "registryRetry": "Mēģināt vēlreiz",
     "registryErrorSearch": "Meklēšana reģistrā neizdevās.",
+    "registryErrorKeychain": "stella desktop neizdevās noņemt atvienoto kontu no atslēgu saišķa. Mēģiniet vēlreiz.",
+    "registryErrorRole": "Reģistra meklēšana jūsu lomai nav pieejama.",
     "registryErrorFormat": "Rezultāta formātu neizdevās mainīt.",
     "registryErrorSetDefaultFormat": "Noklusējuma formātu neizdevās saglabāt.",
     "registryErrorCopy": "Rezultātu neizdevās nokopēt.",

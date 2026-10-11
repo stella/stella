@@ -146,7 +146,16 @@
     "handoffFailed": "Dokument se nepodařilo otevřít",
     "handoffUnavailable": "Dokument se nepodařilo otevřít. Začněte znovu ze Stelly.",
     "handoffRetry": "Zkusit znovu",
-    "unsavedChangesEscape": "Neuložené změny. Dalším stisknutím Esc je zahodíte"
+    "unsavedChangesEscape": "Neuložené změny. Dalším stisknutím Esc je zahodíte",
+    "handoffConnectToSign": "Pro podepsání tohoto dokumentu připojte stella desktop",
+    "handoffConnectToOpen": "Pro otevření tohoto dokumentu připojte stella desktop",
+    "handoffConnectDetail": "Připojte svůj účet stella. Dokument se po připojení otevře automaticky.",
+    "handoffUntrustedServer": "stella desktop nedůvěřuje serveru, ze kterého odkaz na dokument pochází.",
+    "handoffAccountMismatch": "Tento dokument patří jinému účtu, než který je připojen ke stella desktop.",
+    "handoffServerMismatch": "Stella Desktop je připojen k serveru {linkedServer}, ale tento dokument vyžaduje server {requestedServer}. V nastavení odpojte aktuální účet a poté se připojte k serveru {requestedServer}, abyste mohli dokument otevřít.",
+    "handoffAccountChanged": "Během otevírání dokumentu se změnil účet stella desktop. Začněte znovu ze stelly.",
+    "handoffAlreadyOpen": "Jiné okno pro podpis je již otevřené. Dokončete ho nebo zavřete a zkuste to znovu.",
+    "handoffExpired": "Platnost odkazu na dokument vypršela dříve, než byl stella desktop připojen. Začněte znovu ze stelly."
   },
   "settings": {
     "about": "O aplikaci",
@@ -314,6 +323,8 @@
     "registryErrorConnect": "Účet se nepodařilo připojit.",
     "registryRetry": "Zkusit znovu",
     "registryErrorSearch": "Vyhledávání v rejstříku se nezdařilo.",
+    "registryErrorKeychain": "stella desktop nemohl odebrat odpojený účet z Klíčenky. Zkuste to znovu.",
+    "registryErrorRole": "Vyhledávání v rejstříku není pro vaši roli dostupné.",
     "registryErrorFormat": "Formát výsledku se nepodařilo změnit.",
     "registryErrorSetDefaultFormat": "Výchozí formát se nepodařilo uložit.",
     "registryErrorCopy": "Výsledek se nepodařilo zkopírovat.",

@@ -146,7 +146,16 @@
     "handoffFailed": "Could not open the document",
     "handoffUnavailable": "Could not open the document. Start again from Stella.",
     "handoffRetry": "Retry",
-    "unsavedChangesEscape": "Unsaved changes. Press Esc again to discard"
+    "unsavedChangesEscape": "Unsaved changes. Press Esc again to discard",
+    "handoffConnectToSign": "Connect stella desktop to sign this document",
+    "handoffConnectToOpen": "Connect stella desktop to open this document",
+    "handoffConnectDetail": "Connect your stella account. The document opens automatically once you're connected.",
+    "handoffUntrustedServer": "stella desktop doesn't trust the server this document link came from.",
+    "handoffAccountMismatch": "This document belongs to a different account than the one connected to stella desktop.",
+    "handoffServerMismatch": "Stella Desktop is connected to {linkedServer}, but this document requires {requestedServer}. Disconnect the current account in Settings, then connect to {requestedServer} to open this document.",
+    "handoffAccountChanged": "The stella desktop account changed while the document was opening. Start again from stella.",
+    "handoffAlreadyOpen": "Another signing dialog is already open. Finish or close it, then try again.",
+    "handoffExpired": "The document link expired before stella desktop was connected. Start again from stella."
   },
   "settings": {
     "about": "About",
@@ -314,6 +323,8 @@
     "registryErrorConnect": "Account could not be connected.",
     "registryRetry": "Try again",
     "registryErrorSearch": "Registry search failed.",
+    "registryErrorKeychain": "stella desktop couldn't remove the disconnected account from the Keychain. Try again.",
+    "registryErrorRole": "Registry search isn't available for your role.",
     "registryErrorFormat": "Result format could not be changed.",
     "registryErrorSetDefaultFormat": "Default format could not be saved.",
     "registryErrorCopy": "Result could not be copied.",

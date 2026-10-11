@@ -506,7 +506,7 @@ pub async fn redeem_and_sign(
   app_handle: AppHandle,
   api_base_url: String,
   handoff_token: String,
-) -> Result<(), String> {
+) -> Result<(), crate::handoff::Stop> {
   // The handoff token travels in the request body; a redirect would replay it
   // to another origin, so handoff requests never follow one.
   let client = DesktopHttpClient::new(HttpClientOptions {
@@ -526,7 +526,7 @@ pub async fn redeem_and_sign(
     .await?;
   crate::deep_link::ensure_handoff_identity(&redeemed.identity, &account.identity)?;
   if !is_safe_session_id(&redeemed.session_id) {
-    return Err("Invalid PDF signing session payload.".to_string());
+    return Err(String::from("Invalid PDF signing session payload.").into());
   }
   // The API names the origin the session lives on; it only counts if the user
   // already trusts it, exactly as the deep link's own origin had to.
@@ -534,10 +534,10 @@ pub async fn redeem_and_sign(
     config::normalize_self_host_api_base_url(&redeemed.api_base_url)
       .map_err(|_| "Invalid PDF signing API URL.".to_string())?;
   if session_api_base_url != api_base_url {
-    return Err("PDF signing session names a different account server.".to_string());
+    return Err(crate::handoff::Failure::AccountMismatch.into());
   }
   if !api_trusted_for_signing(&manager, &session_api_base_url).await {
-    return Err("PDF signing session names an untrusted API URL.".to_string());
+    return Err(crate::handoff::Failure::UntrustedServer.into());
   }
 
   let session = SigningSession {
@@ -579,7 +579,7 @@ pub async fn redeem_and_sign(
   .is_err()
   {
     session.cancel(REASON_USER_CANCELLED).await;
-    return Err("A PDF signing dialog is already open.".to_string());
+    return Err(crate::handoff::Failure::AlreadyOpen.into());
   }
 
   let content = DialogContent {
@@ -597,7 +597,7 @@ pub async fn redeem_and_sign(
     Err(error) => {
       cancel_dialog();
       session.cancel(REASON_USER_CANCELLED).await;
-      return Err(error);
+      return Err(error.into());
     }
   };
 
@@ -641,7 +641,10 @@ pub async fn redeem_and_sign(
       SigningErrorCode::KeyNotFound.as_str(),
       None,
     ));
-    return Err("stella desktop no longer has the chosen certificate.".to_string());
+    // The dialog already shows the failure it was sent.
+    return Err(crate::handoff::Stop::Presented(
+      "stella desktop no longer has the chosen certificate.".into(),
+    ));
   };
 
   if let Err(error) =

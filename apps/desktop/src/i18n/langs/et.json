@@ -146,7 +146,16 @@
     "handoffFailed": "Dokumenti ei saanud avada",
     "handoffUnavailable": "Dokumenti ei saanud avada. Alustage uuesti Stella kaudu.",
     "handoffRetry": "Proovi uuesti",
-    "unsavedChangesEscape": "Salvestamata muudatused. Loobumiseks vajuta uuesti Esc"
+    "unsavedChangesEscape": "Salvestamata muudatused. Loobumiseks vajuta uuesti Esc",
+    "handoffConnectToSign": "Ühendage stella desktop, et seda dokumenti allkirjastada",
+    "handoffConnectToOpen": "Ühendage stella desktop, et seda dokumenti avada",
+    "handoffConnectDetail": "Ühendage oma stella konto. Dokument avaneb pärast ühendamist automaatselt.",
+    "handoffUntrustedServer": "stella desktop ei usalda serverit, kust see dokumendilink pärineb.",
+    "handoffAccountMismatch": "See dokument kuulub teisele kontole kui see, mis on stella desktopiga ühendatud.",
+    "handoffServerMismatch": "Stella Desktop on ühendatud serveriga {linkedServer}, kuid see dokument vajab serverit {requestedServer}. Ühendage praegune konto seadetes lahti ja seejärel looge ühendus serveriga {requestedServer}, et dokument avada.",
+    "handoffAccountChanged": "stella desktopi konto muutus dokumendi avamise ajal. Alustage uuesti stellast.",
+    "handoffAlreadyOpen": "Teine allkirjastamise aken on juba avatud. Lõpetage või sulgege see ja proovige uuesti.",
+    "handoffExpired": "Dokumendilink aegus enne, kui stella desktop ühendati. Alustage uuesti stellast."
   },
   "settings": {
     "about": "Teave",
@@ -314,6 +323,8 @@
     "registryErrorConnect": "Konto ühendamine ebaõnnestus.",
     "registryRetry": "Proovige uuesti",
     "registryErrorSearch": "Registriotsing ebaõnnestus.",
+    "registryErrorKeychain": "stella desktop ei saanud lahtiühendatud kontot võtmehoidjast eemaldada. Proovige uuesti.",
+    "registryErrorRole": "Registriotsing pole teie rollile saadaval.",
     "registryErrorFormat": "Tulemuse vormingut ei saanud muuta.",
     "registryErrorSetDefaultFormat": "Vaikevormingut ei saanud salvestada.",
     "registryErrorCopy": "Tulemust ei saanud kopeerida.",

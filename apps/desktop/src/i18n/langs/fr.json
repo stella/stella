@@ -146,7 +146,16 @@
     "handoffFailed": "Impossible d’ouvrir le document",
     "handoffUnavailable": "Impossible d’ouvrir le document. Recommencez depuis Stella.",
     "handoffRetry": "Réessayer",
-    "unsavedChangesEscape": "Modifications non enregistrées. Appuyez à nouveau sur Échap pour les abandonner"
+    "unsavedChangesEscape": "Modifications non enregistrées. Appuyez à nouveau sur Échap pour les abandonner",
+    "handoffConnectToSign": "Connectez stella desktop pour signer ce document",
+    "handoffConnectToOpen": "Connectez stella desktop pour ouvrir ce document",
+    "handoffConnectDetail": "Connectez votre compte stella. Le document s'ouvrira automatiquement une fois la connexion établie.",
+    "handoffUntrustedServer": "stella desktop ne fait pas confiance au serveur d'où provient ce lien de document.",
+    "handoffAccountMismatch": "Ce document appartient à un autre compte que celui connecté à stella desktop.",
+    "handoffServerMismatch": "Stella Desktop est connecté à {linkedServer}, mais ce document nécessite {requestedServer}. Déconnectez le compte actuel dans les paramètres, puis connectez-vous à {requestedServer} pour ouvrir le document.",
+    "handoffAccountChanged": "Le compte stella desktop a changé pendant l'ouverture du document. Recommencez depuis stella.",
+    "handoffAlreadyOpen": "Une autre fenêtre de signature est déjà ouverte. Terminez-la ou fermez-la, puis réessayez.",
+    "handoffExpired": "Le lien du document a expiré avant la connexion de stella desktop. Recommencez depuis stella."
   },
   "settings": {
     "about": "À propos",
@@ -314,6 +323,8 @@
     "registryErrorConnect": "Impossible de connecter le compte.",
     "registryRetry": "Réessayer",
     "registryErrorSearch": "La recherche dans le registre a échoué.",
+    "registryErrorKeychain": "stella desktop n'a pas pu retirer le compte déconnecté du trousseau. Réessayez.",
+    "registryErrorRole": "La recherche dans le registre n'est pas disponible pour votre rôle.",
     "registryErrorFormat": "Impossible de modifier le format du résultat.",
     "registryErrorSetDefaultFormat": "Impossible d’enregistrer le format par défaut.",
     "registryErrorCopy": "Le résultat n’a pas pu être copié.",

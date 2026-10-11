@@ -11,6 +11,7 @@ import createPdfSigningHandoff from "@/api/handlers/entities/pdf-signing-handoff
 import {
   authorizeDesktopAccount,
   authorizeDesktopRegistry,
+  desktopMemberDenial,
 } from "@/api/lib/business-registries/desktop/auth";
 import {
   DESKTOP_ACCOUNT_PERMISSION,
@@ -184,4 +185,25 @@ test("desktop request authorization follows each operation", () => {
   expect(desktopRequestAuthorization.setDefaultFormat).toBe(
     authorizeDesktopRegistry,
   );
+});
+
+test("a role without the permission is forbidden, not disconnected", () => {
+  expect(desktopMemberDenial(null, DESKTOP_ACCOUNT_PERMISSION)?.status).toBe(
+    401,
+  );
+  expect(
+    desktopMemberDenial({ role: "not-a-role" }, DESKTOP_ACCOUNT_PERMISSION)
+      ?.status,
+  ).toBe(401);
+  // External members may link the desktop but not search registries.
+  expect(
+    desktopMemberDenial({ role: "external" }, DESKTOP_ACCOUNT_PERMISSION),
+  ).toBeNull();
+  expect(
+    desktopMemberDenial({ role: "external" }, DESKTOP_REGISTRY_PERMISSION)
+      ?.status,
+  ).toBe(403);
+  expect(
+    desktopMemberDenial({ role: "owner" }, DESKTOP_REGISTRY_PERMISSION),
+  ).toBeNull();
 });
