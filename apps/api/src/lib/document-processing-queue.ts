@@ -2610,8 +2610,12 @@ const recoverFailedOcrSearchIndexes = async (
               AND ${searchIndexProjectionSourceFields.content}->>'sha256Hex' = ${extractedContent.sourceSha256Hex}`,
           ),
         ),
-        isNotNull(documentProcessingRuns.nextAttemptAt),
-        lte(documentProcessingRuns.nextAttemptAt, now),
+        // Pre-schedule stale-lease recovery left null schedules. The attempt
+        // cap still fences those rows; their replay persists the next schedule.
+        or(
+          isNull(documentProcessingRuns.nextAttemptAt),
+          lte(documentProcessingRuns.nextAttemptAt, now),
+        ),
       ),
     )
     .orderBy(

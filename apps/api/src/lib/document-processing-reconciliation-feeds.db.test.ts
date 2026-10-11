@@ -190,13 +190,13 @@ const FIXTURES = [
     },
   },
   {
-    label: "reindex replays a failed search index",
+    label: "reindex recovers a pre-schedule failed search index",
     producer: "reindex",
     seed: async () => {
       await insertRun({
         attemptCount: 0,
         errorCode: "search_index_failed",
-        nextAttemptAt: past(1000),
+        nextAttemptAt: null,
         status: "failed",
       });
     },

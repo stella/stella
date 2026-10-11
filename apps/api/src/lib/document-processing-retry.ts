@@ -138,7 +138,7 @@ type FailDocumentProcessingAttemptOptions = {
   staleBefore?: Date;
 };
 
-/** Failed + no next attempt is the dead letter; only scheduled failures recover. */
+/** Exhausted failures are dead letters; search replay also recovers legacy null schedules. */
 export const failDocumentProcessingAttempt = async ({
   database,
   runId,

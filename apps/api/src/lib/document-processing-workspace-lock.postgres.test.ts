@@ -19,9 +19,13 @@ import {
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { requestAutomaticDocumentOcr } from "@/api/lib/document-processing-automatic-request";
-import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
+import {
+  DOCUMENT_PROCESSING_MAX_ATTEMPTS,
+  DOCUMENT_OCR_PROCESSOR_VERSION,
+} from "@/api/lib/document-processing-contract";
 import { restoreManualOcrRunAfterProjectionLoss } from "@/api/lib/document-processing-manual-ocr-restore";
 import {
+  createDocumentProcessingReconciliationPhases,
   processDocumentProcessingRun,
   persistMissingNativeExtractionRuns,
   persistOcrProjection,
@@ -184,6 +188,95 @@ const withSourceBarrier = (tx: Transaction, options: SourceBarrierOptions) => {
   return wrap(tx);
 };
 
+// Pause only the unlocked identity lookup, after it has read its rows.
+// A replay can then commit before the manual path takes the claim lock.
+const withRunReadBarrier = (tx: Transaction, options: SourceBarrierOptions) => {
+  let paused = false;
+  const wrap = <T extends object>(target: T, readsRun = false): T =>
+    new Proxy(target, {
+      get: (object, key) => {
+        const member: unknown = Reflect.get(object, key);
+        if (typeof member !== "function") {
+          return member;
+        }
+        return (...args: unknown[]) => {
+          const result: unknown = Reflect.apply(member, object, args);
+          const isRun =
+            readsRun ||
+            (key === "from" && args.at(0) === documentProcessingRuns);
+          if (key === "limit" && isRun && !paused) {
+            paused = true;
+            return (async () => {
+              const rows = await result;
+              options.ready();
+              await options.release;
+              return rows;
+            })();
+          }
+          if (
+            ["select", "from", "where"].includes(String(key)) &&
+            typeof result === "object" &&
+            result !== null
+          ) {
+            return wrap(result, isRun);
+          }
+          return result;
+        };
+      },
+    });
+  return wrap(tx);
+};
+
+const searchReplayPhase = (db: GatedTestDb, indexEntity: () => Promise<void>) =>
+  createDocumentProcessingReconciliationPhases({
+    database: asTestRaw<typeof rootDb>(db),
+    broadcastWorkspaceResourceUpdated: () => undefined,
+    enqueueDocumentDeadlineScout: async () => undefined,
+    enqueueDocumentProcessingRun: async () => undefined,
+    indexEntity,
+    now: () => Date.now(),
+    readRepairScanCursor: async () => null,
+    readyRepairCursor: async () => undefined,
+    repairPassMemo: {
+      completedAt: () => null,
+      recordCompleted: () => undefined,
+    },
+    writeRepairScanCursor: async () => true,
+  }).find(({ name }) => name === "reindex") ??
+  panic("Search replay phase missing");
+
+const seedFailedSearchReplay = async (
+  db: GatedTestDb,
+  fixture: Awaited<ReturnType<typeof seedOcrFixture>>,
+  attemptCount: number,
+) => {
+  const { organizationId, workspaceId, userId, source } = fixture;
+  const id = createSafeId<"documentProcessingRun">();
+  await db.insert(documentProcessingRuns).values({
+    id,
+    organizationId,
+    workspaceId,
+    ...source,
+    kind: "ocr",
+    processorVersion: DOCUMENT_OCR_PROCESSOR_VERSION,
+    requestSource: "manual",
+    requestedBy: userId,
+    status: "failed",
+    errorCode: "search_index_failed",
+    attemptCount,
+    nextAttemptAt: null,
+  });
+  await db.insert(extractedContent).values({
+    entityId: source.entityId,
+    organizationId,
+    workspaceId,
+    ciphertext: Buffer.from("text"),
+    iv: Buffer.alloc(12),
+    charCount: 4,
+  });
+  return id;
+};
+
 const queuePaths = ["projection", "dispatch", "native-repair"] as const;
 type QueuePath = (typeof queuePaths)[number];
 type OcrFixture = Awaited<ReturnType<typeof seedOcrFixture>>;
@@ -264,6 +357,158 @@ if (!databaseUrl || !runPostgresTests) {
     });
   });
 } else {
+  test("pre-schedule search failures recover and exhaust the bounded replay budget", async () => {
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db } = openClient();
+      const fixture = await seedOcrFixture(db);
+      let calls = 0;
+      const phase = searchReplayPhase(db, async () => {
+        calls += 1;
+        throw new Error("index unavailable");
+      });
+      try {
+        const id = await seedFailedSearchReplay(db, fixture, 0);
+        for (
+          let count = 1;
+          count <= DOCUMENT_PROCESSING_MAX_ATTEMPTS;
+          count += 1
+        ) {
+          await phase.run();
+          const row = (
+            await db
+              .select()
+              .from(documentProcessingRuns)
+              .where(eq(documentProcessingRuns.id, id))
+          ).at(0);
+          expect(row?.attemptCount).toBe(count);
+          expect(row?.status).toBe("failed");
+          expect(calls).toBe(count);
+          if (count === DOCUMENT_PROCESSING_MAX_ATTEMPTS) {
+            expect(row?.nextAttemptAt).toBeNull();
+          } else {
+            expect(row?.nextAttemptAt).not.toBeNull();
+            await db
+              .update(documentProcessingRuns)
+              .set({ nextAttemptAt: new Date(Date.now() - 1000) })
+              .where(eq(documentProcessingRuns.id, id));
+          }
+        }
+        await phase.run();
+        expect(calls).toBe(DOCUMENT_PROCESSING_MAX_ATTEMPTS);
+      } finally {
+        await fixture.cleanup();
+      }
+    });
+  }, 15_000);
+
+  test.each(
+    (["request", "restore"] as const).flatMap((path) =>
+      [1, DOCUMENT_PROCESSING_MAX_ATTEMPTS - 1].map((attemptCount) => ({
+        path,
+        attemptCount,
+      })),
+    ),
+  )(
+    "$path preserves concurrent search replay attempts starting at $attemptCount",
+    async ({ path, attemptCount }) => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const manual = openClient({ connection: { statement_timeout: 5000 } });
+        const replay = openClient({
+          max: 1,
+          connection: { statement_timeout: 5000 },
+        });
+        const fixture = await seedOcrFixture(replay.db);
+        const { organizationId, workspaceId, userId, source } = fixture;
+        const ready = Promise.withResolvers<undefined>();
+        const release = Promise.withResolvers<undefined>();
+        let pending: Promise<unknown> | undefined;
+        try {
+          const id = await seedFailedSearchReplay(
+            replay.db,
+            fixture,
+            attemptCount,
+          );
+          // Use a scheduled row here so the concurrency guard also reaches the
+          // old replay predicate independently of the null-schedule regression.
+          await replay.db
+            .update(documentProcessingRuns)
+            .set({ nextAttemptAt: new Date(Date.now() - 1000) })
+            .where(eq(documentProcessingRuns.id, id));
+          const db = {
+            transaction: async <T>(run: (tx: Transaction) => Promise<T>) =>
+              await manual.db.transaction(
+                async (tx) =>
+                  await run(
+                    withRunReadBarrier(tx, {
+                      ready: () => ready.resolve(undefined),
+                      release: release.promise,
+                    }),
+                  ),
+              ),
+          };
+          pending =
+            path === "request"
+              ? persistManualOcrRun({
+                  db,
+                  organizationId,
+                  workspaceId,
+                  userId,
+                  source,
+                  recordAuditEvent: async () => undefined,
+                })
+              : restoreManualOcrRunAfterProjectionLoss({
+                  db,
+                  organizationId,
+                  workspaceId,
+                  ...source,
+                });
+          await withTimeout(async () => await ready.promise, {
+            label: "manual OCR identity read",
+            timeoutMs: 5000,
+          });
+          // Isolate the claim-row invariant from the feature-gate trigger's
+          // incidental parent SHARE lock. Only this dedicated replay session
+          // bypasses triggers; the real replay claim and failure still run.
+          await replay.sql`SET session_replication_role = replica`;
+          try {
+            await searchReplayPhase(replay.db, async () => {
+              throw new Error("index unavailable");
+            }).run();
+          } finally {
+            await replay.sql`SET session_replication_role = origin`;
+          }
+          const before = (
+            await replay.db
+              .select()
+              .from(documentProcessingRuns)
+              .where(eq(documentProcessingRuns.id, id))
+          ).at(0);
+          expect(before?.attemptCount).toBe(attemptCount + 1);
+          expect(before?.status).toBe("failed");
+          release.resolve(undefined);
+          await pending;
+          const after = (
+            await replay.db
+              .select()
+              .from(documentProcessingRuns)
+              .where(eq(documentProcessingRuns.id, id))
+          ).at(0);
+          expect(after?.attemptCount).toBe(attemptCount + 1);
+          expect(after?.status).toBe(
+            attemptCount + 1 === DOCUMENT_PROCESSING_MAX_ATTEMPTS
+              ? "failed"
+              : "queued",
+          );
+        } finally {
+          release.resolve(undefined);
+          await Promise.allSettled(pending ? [pending] : []);
+          await fixture.cleanup();
+        }
+      });
+    },
+    15_000,
+  );
+
   test.each(schedules)(
     "$path remains compatible with repair when $first starts first",
     async ({ path, first }) => {

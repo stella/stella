@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, eq, inArray, lt, ne, or } from "drizzle-orm";
 
 import type { rootDb } from "@/api/db/root";
@@ -15,6 +16,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import {
   withAggregateLock,
   withAggregateParentBatch,
+  withAggregateRowQuery,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
@@ -226,11 +228,7 @@ export const persistManualOcrRun = async ({
     if (!run) {
       const existingRows = await tx
         .select({
-          attemptCount: documentProcessingRuns.attemptCount,
-          errorCode: documentProcessingRuns.errorCode,
           id: documentProcessingRuns.id,
-          requestSource: documentProcessingRuns.requestSource,
-          status: documentProcessingRuns.status,
         })
         .from(documentProcessingRuns)
         .where(
@@ -250,15 +248,20 @@ export const persistManualOcrRun = async ({
           ),
         )
         .limit(1);
-      const existing = existingRows.at(0);
-      if (existing) {
-        await withAggregateLock({
-          tx,
-          aggregate: "processingClaim",
-          id: { id: existing.id, workspaceId },
-          mode: "update",
-        });
+      const identity = existingRows.at(0);
+      const locked = identity
+        ? await withAggregateRowQuery({
+            tx,
+            aggregate: "processingClaim",
+            id: { id: identity.id, workspaceId },
+            mode: "update",
+            select: (queryTx) => queryTx.select().from(documentProcessingRuns),
+          })
+        : null;
+      if (locked?.status === "busy") {
+        return panic("Blocking manual OCR processing claim lock was busy");
       }
+      const existing = locked?.rows.at(0);
       const projectionRows =
         existing?.status === "running" || existing?.status === "succeeded"
           ? await tx
