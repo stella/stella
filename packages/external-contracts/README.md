@@ -12,9 +12,9 @@ explicitly because the transport census also contains those surfaces.
 
 Every direct dependency name in the root catalog and workspace manifests is
 partitioned between registry SDKs and reasoned in-process packages, including
-workspace packages and optional or peer dependencies. The in-process ledger is
-shrink-only after initial enrollment; a new name must receive an explicit
-contract or a package-specific reason. The transport census independently
+workspace packages and optional or peer dependencies. New in-process entries
+require a non-empty, package-specific reason; each dependency must still appear
+in exactly one classification. The transport census independently
 classifies owner paths and SDKs, so SDK naming conventions cannot hide a client.
 
 Current pins come from the actual manifests, resolved SDK versions in

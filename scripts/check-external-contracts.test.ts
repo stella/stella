@@ -219,7 +219,7 @@ test("a planted receipt cannot claim an owner outside its replay graph", () => {
   }
 });
 
-test("literal classification sources bind shrink-only keys without executing modules", () => {
+test("literal classification sources bind dependency and uncovered keys without executing modules", () => {
   const ledger =
     'export const IN_PROCESS_DEPENDENCIES = { "local-one": "Local parsing." } as const;';
   const registry = `export const EXTERNAL_CONTRACTS = {
@@ -238,27 +238,11 @@ test("literal classification sources bind shrink-only keys without executing mod
   ]);
   expect(
     findShrinkOnlyGrowth({
-      current: ["local-one", "new-client"],
-      baseline: inProcessFromSource(ledger),
-      label: "In-process dependency",
-    }),
-  ).toEqual([
-    "In-process dependency new-client: classification keys only shrink; add runtime characterisation instead of expanding the exemption.",
-  ]);
-  expect(
-    findShrinkOnlyGrowth({
       current: ["fixture#owners:new.ts"],
       baseline: uncharacterisedScopeFromSource(registry),
       label: "Uncharacterised scope",
     }).join("\n"),
   ).toContain("Uncharacterised scope fixture#owners:new.ts");
-  expect(
-    findShrinkOnlyGrowth({
-      current: [],
-      baseline: inProcessFromSource(ledger),
-      label: "In-process dependency",
-    }),
-  ).toEqual([]);
   expect(
     uncharacterisedScopeFromSource(
       'export const EXTERNAL_CONTRACTS = { fixture: { status: "characterised" } } as const;',
@@ -478,4 +462,26 @@ test("pin readers observe edits to manifests, images, API constants, locks and p
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("new in-process dependencies require reasons and stay in the closed dependency census", () => {
+  const dependencies = [...readDirectDependencies(ROOT), "@stll/new-local"];
+  for (const reason of ["Local workspace implementation.", "", "  "]) {
+    const problems = checkExternalContracts(ROOT, {
+      dependencies,
+      inProcess: { ...IN_PROCESS_DEPENDENCIES, "@stll/new-local": reason },
+    });
+    expect(problems).toEqual(
+      reason.trim() === ""
+        ? [
+            "@stll/new-local: non-external dependency classification requires a reason.",
+          ]
+        : [],
+    );
+  }
+  const unclassified = checkExternalContracts(ROOT, { dependencies });
+  expect(unclassified.join("\n")).toContain(
+    "Dependency @stll/new-local: classify it",
+  );
+  expect(unclassified.join("\n")).toContain("SDK @stll/new-local maps to 0");
 });

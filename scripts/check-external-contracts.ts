@@ -701,6 +701,7 @@ const checkScopePartition = ({
 type ExternalContractCheckOptions = {
   registry?: Readonly<Record<ExternalSystemId, ExternalContractEntry>>;
   dependencies?: readonly string[];
+  inProcess?: Readonly<Record<string, string>>;
   census?: readonly OutboundTransportCensusEntry[];
   sdks?: readonly string[];
 };
@@ -710,18 +711,17 @@ export const checkExternalContracts = (
   {
     registry = EXTERNAL_CONTRACTS,
     dependencies = readDirectDependencies(root),
+    inProcess = IN_PROCESS_DEPENDENCIES,
     census = OUTBOUND_TRANSPORT_CENSUS,
-    sdks = dependencies.filter(
-      (name) => !Object.hasOwn(IN_PROCESS_DEPENDENCIES, name),
-    ),
+    sdks = dependencies.filter((name) => !Object.hasOwn(inProcess, name)),
   }: ExternalContractCheckOptions = {},
 ): string[] => {
   const catalogProblems = findDependencyProblems({
     registry,
     packages: dependencies,
-    inProcess: IN_PROCESS_DEPENDENCIES,
+    inProcess,
   });
-  for (const name of Object.keys(IN_PROCESS_DEPENDENCIES)) {
+  for (const name of Object.keys(inProcess)) {
     if (!name.startsWith("@stll/") && isOutboundTransportModule(name)) {
       catalogProblems.push(
         `Dependency ${name}: a transport SDK cannot be classified as in-process.`,
@@ -817,7 +817,7 @@ if (import.meta.main) {
     );
   }
   const problems = checkExternalContracts(ROOT);
-  for (const file of [REGISTRY_PATH, DEPENDENCY_DISPOSITIONS_PATH]) {
+  for (const file of [REGISTRY_PATH]) {
     const tree = spawnSync(
       "git",
       ["ls-tree", "--name-only", mergeBase.stdout.trim(), "--", file],
@@ -839,16 +839,6 @@ if (import.meta.main) {
       panic(`Cannot read external classification baseline: ${baseline.stderr}`);
     }
     const currentSource = readFileSync(path.join(ROOT, file), "utf-8");
-    if (file === DEPENDENCY_DISPOSITIONS_PATH) {
-      problems.push(
-        ...findShrinkOnlyGrowth({
-          current: inProcessFromSource(currentSource),
-          baseline: inProcessFromSource(baseline.stdout),
-          label: "In-process dependency",
-        }),
-      );
-      continue;
-    }
     problems.push(
       ...findUncharacterisedGrowth(
         uncharacterisedFromSource(currentSource),
