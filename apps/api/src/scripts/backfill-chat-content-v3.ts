@@ -1,5 +1,4 @@
 import { panic } from "better-result";
-import { SQL } from "bun";
 
 import { resolveDatabaseUrl } from "../db-url";
 import {
@@ -7,7 +6,7 @@ import {
   countChatContentVersions,
   resetChatContentV3Checkpoints,
 } from "../db/chat-content-v3-backfill";
-import type { OnlineMigrationConnection } from "../db/online-migration-connection";
+import { openOnlineRepairConnection } from "../db/online-index-observer";
 import {
   acquireOnlineMigrationLock,
   releaseOnlineMigrationLock,
@@ -30,46 +29,33 @@ const run = async (): Promise<void> => {
   if (!url) {
     panic("Chat content backfill requires a database connection");
   }
-  const client = new SQL({ url, max: 1 });
+  const connection = await openOnlineRepairConnection(url);
   try {
-    const session = await client.reserve();
-    const connection = {
-      execute: async (query, params = []) => {
-        await session.unsafe(query, [...params]);
-      },
-      query: async (query, params = []) =>
-        await session.unsafe<unknown[]>(query, [...params]),
-      release: () => session.release(),
-    } satisfies OnlineMigrationConnection;
-    try {
-      if (!args.includes("--apply")) {
-        await connection.execute("BEGIN READ ONLY");
-        try {
-          const counts = await countChatContentVersions(connection);
-          process.stdout.write(
-            `${JSON.stringify({ mode: "dry-run", wouldConvertVersions: [1, 2], counts })}\n`,
-          );
-        } finally {
-          await connection.execute("ROLLBACK");
-        }
-      } else {
-        // Serialize with deploy's online repair, including checkpoint reset.
-        await acquireOnlineMigrationLock(connection);
-        try {
-          if (args.includes("--retry-failed")) {
-            await resetChatContentV3Checkpoints(connection);
-          }
-          await CHAT_CONTENT_V3_REPAIR.repair(connection);
-          process.stdout.write("Chat content v3 backfill complete\n");
-        } finally {
-          await releaseOnlineMigrationLock(connection);
-        }
+    if (!args.includes("--apply")) {
+      await connection.execute("BEGIN READ ONLY");
+      try {
+        const counts = await countChatContentVersions(connection);
+        process.stdout.write(
+          `${JSON.stringify({ mode: "dry-run", wouldConvertVersions: [1, 2], counts })}\n`,
+        );
+      } finally {
+        await connection.execute("ROLLBACK");
       }
-    } finally {
-      connection.release();
+    } else {
+      // Serialize with deploy's online repair, including checkpoint reset.
+      await acquireOnlineMigrationLock(connection);
+      try {
+        if (args.includes("--retry-failed")) {
+          await resetChatContentV3Checkpoints(connection);
+        }
+        await CHAT_CONTENT_V3_REPAIR.repair(connection);
+        process.stdout.write("Chat content v3 backfill complete\n");
+      } finally {
+        await releaseOnlineMigrationLock(connection);
+      }
     }
   } finally {
-    await client.end();
+    await connection.release();
   }
 };
 
