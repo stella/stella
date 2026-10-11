@@ -10,6 +10,7 @@ export const PILOT_FAST_ROOTS = [
   "ci-tests",
   "code-quality-api",
   "code-quality-web-rest",
+  "query-perf",
 ] as const;
 /** Jobs every profile runs: wall-clock checks no plan scope can skip. */
 export const PILOT_ALWAYS = ["dated-waiver-expiry"] as const;
