@@ -70,9 +70,7 @@ const eventSchemas = {
 };
 const eventSchema = v.variant("type", Object.values(eventSchemas));
 
-export const parseReaderAnswerEvent = (
-  frame: SSEEvent,
-): ReaderAnswerStreamEvent => {
+const parseReaderAnswerEvent = (frame: SSEEvent): ReaderAnswerStreamEvent => {
   const decoded = Result.try((): unknown => JSON.parse(frame.data));
   if (decoded.isErr()) {
     throw new ReaderAnswerFailure({
