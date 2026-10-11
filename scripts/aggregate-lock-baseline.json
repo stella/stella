@@ -87,13 +87,13 @@
     "file": "apps/api/scripts/seed-case-law.ts",
     "fingerprint": "4144ff311f6619bb3cb10410aa2dacffc7e9f3fba082c2bcd590ab4965a9f65b",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/seed-case-law.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
+    "reason": "Existing seed insert transaction; extracting the row builder changes its fingerprint without changing the transaction boundary."
   },
   {
     "file": "apps/api/scripts/seed-case-law.ts",
     "fingerprint": "8755477f4c724d507cca15dfb1ad2d285ca9378b148757897e378a6afc8ae420",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/seed-case-law.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
+    "reason": "Existing seed insert transaction; extracting the row builder changes its fingerprint without changing the transaction boundary."
   },
   {
     "file": "apps/api/scripts/seed-case-law.ts",
@@ -1270,12 +1270,6 @@
     "fingerprint": "fc684ec88fe925f177b7be34f6023c7a3691a844d43e034b88cd22448703bc51",
     "count": 1,
     "reason": "builder-for in apps/api/src/handlers/entities/open-desktop-edit-session.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/entity-versions/publish-folio-collab-checkpoint.ts",
-    "fingerprint": "b87643ed7b53cb1bf7c9ef00d4557560a9d60d8b6b3acede149feb369654c7fe",
-    "count": 1,
-    "reason": "Collaboration room uses UPDATE after aggregate parent acquisition; retained as room publication coordination."
   },
   {
     "file": "apps/api/src/handlers/entities/release-desktop-edit-lock.ts",
@@ -2640,22 +2634,10 @@
     "reason": "Existing processing-run identity is discovered under source locks and uses UPDATE; retained as automatic request coordination."
   },
   {
-    "file": "apps/api/src/lib/document-processing-manual-ocr-restore.ts",
-    "fingerprint": "63e3748f1ba5823de50a49662469e44a0671ed0c171e4ca0b4b732521456dfcc",
-    "count": 1,
-    "reason": "Existing processing-run identity is discovered under source locks and uses UPDATE; retained as restore coordination."
-  },
-  {
     "file": "apps/api/src/lib/document-processing-queue.ts",
     "fingerprint": "ce70ea606611387780f4bd6f8fe2a17e84c8c36106321e3fcaf7def64fe822ec",
     "count": 1,
     "reason": "Organization settings use UPDATE after workspace and entity acquisition; retained as OCR policy coordination."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-request.ts",
-    "fingerprint": "6574904ed3880e17af23e7095c9faacf42c28b50245e1665847f017f1c71d36e",
-    "count": 1,
-    "reason": "Existing processing-run identity is discovered under source locks and uses UPDATE; retained as request coordination."
   },
   {
     "file": "apps/api/src/lib/document-review/suggestion-finding-sync.ts",
@@ -2830,6 +2812,12 @@
     "fingerprint": "32926171d96c6201ad4e99a743aa597ca989f855d36cedccd952ed43044100a6",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/entity-versions/insert-entity-version.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+  },
+  {
+    "file": "apps/api/src/lib/entity-versions/publish-folio-collab-checkpoint.ts",
+    "fingerprint": "b87643ed7b53cb1bf7c9ef00d4557560a9d60d8b6b3acede149feb369654c7fe",
+    "count": 1,
+    "reason": "Relocate the existing room publication lock to its library owner without changing the acquisition or count."
   },
   {
     "file": "apps/api/src/lib/entity-versions/write-file-version.ts",
