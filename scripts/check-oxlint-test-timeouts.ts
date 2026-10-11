@@ -71,6 +71,8 @@ const hasTimeoutOverride = (file: ts.SourceFile): boolean => {
   const collectValues = (node: ts.Node) => {
     if (
       ts.isVariableDeclaration(node) &&
+      ts.isVariableDeclarationList(node.parent) &&
+      node.parent.getFirstToken(file)?.kind === ts.SyntaxKind.ConstKeyword &&
       ts.isIdentifier(node.name) &&
       node.initializer !== undefined
     ) {
@@ -79,6 +81,41 @@ const hasTimeoutOverride = (file: ts.SourceFile): boolean => {
     ts.forEachChild(node, collectValues);
   };
   collectValues(file);
+
+  const isTimeoutFreeOptions = (
+    expression: ts.Expression,
+    seen = new Set<string>(),
+  ): boolean => {
+    if (
+      ts.isParenthesizedExpression(expression) ||
+      ts.isAsExpression(expression) ||
+      ts.isSatisfiesExpression(expression)
+    ) {
+      return isTimeoutFreeOptions(expression.expression, seen);
+    }
+    if (ts.isIdentifier(expression)) {
+      if (seen.has(expression.text)) {
+        return false;
+      }
+      seen.add(expression.text);
+      const value = values.get(expression.text);
+      return value !== undefined && isTimeoutFreeOptions(value, seen);
+    }
+    if (!ts.isObjectLiteralExpression(expression)) {
+      return false;
+    }
+    return expression.properties.every((property) => {
+      if (ts.isSpreadAssignment(property)) {
+        return isTimeoutFreeOptions(property.expression, new Set(seen));
+      }
+      const name = property.name;
+      return (
+        name !== undefined &&
+        (ts.isIdentifier(name) || ts.isStringLiteral(name)) &&
+        name.text !== "timeout"
+      );
+    });
+  };
 
   const hasTimeoutOption = (
     expression: ts.Expression,
@@ -138,7 +175,7 @@ const hasTimeoutOverride = (file: ts.SourceFile): boolean => {
         if (
           api === "setDefaultTimeout" ||
           (thirdArgument !== undefined &&
-            !ts.isObjectLiteralExpression(thirdArgument)) ||
+            !isTimeoutFreeOptions(thirdArgument)) ||
           node.arguments.some((argument) => hasTimeoutOption(argument))
         ) {
           return true;

@@ -130,6 +130,51 @@ test("an override requires a nonempty measured allow-list reason", () => {
   });
 });
 
+for (const [name, source, expected] of [
+  [
+    "named retry-only options",
+    'const options = { retry: 2 }; test("case", () => {}, options);',
+    [],
+  ],
+  [
+    "named timeout options",
+    'const options = { timeout: 60_000 }; test("case", () => {}, options);',
+    ["fixture.test.ts: timeout override is not allow-listed"],
+  ],
+  [
+    "imported options",
+    'import { options } from "./options"; test("case", () => {}, options);',
+    ["fixture.test.ts: timeout override is not allow-listed"],
+  ],
+  [
+    "computed options",
+    'const options = { [key]: 2 }; test("case", () => {}, options);',
+    ["fixture.test.ts: timeout override is not allow-listed"],
+  ],
+  [
+    "call-result options",
+    'const options = getOptions(); test("case", () => {}, options);',
+    ["fixture.test.ts: timeout override is not allow-listed"],
+  ],
+  [
+    "mutable options",
+    'let options = { retry: 2 }; test("case", () => {}, options);',
+    ["fixture.test.ts: timeout override is not allow-listed"],
+  ],
+  [
+    "unresolved spread options",
+    'const options = { ...getOptions() }; test("case", () => {}, options);',
+    ["fixture.test.ts: timeout override is not allow-listed"],
+  ],
+] as const) {
+  test(`${name} are classified before applying the timeout policy`, () => {
+    withFixture((directory, file) => {
+      writeFileSync(file, `${IMPORTS}${source}`);
+      expect(customLintTestTimeoutViolations({ directory })).toEqual(expected);
+    });
+  });
+}
+
 test("shared test helpers cannot change the central budget", () => {
   withFixture((directory) => {
     writeFileSync(
