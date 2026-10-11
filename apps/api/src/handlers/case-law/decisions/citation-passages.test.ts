@@ -264,3 +264,21 @@ test("a text-eligibility failure returns no citation text and an incomplete reas
     textIncompleteReason: "gate_failed",
   });
 });
+
+test("an absent analysis retains eligible citation text without excerpts", () => {
+  expect(
+    citationTextFields({
+      text: { type: "absent-ast" },
+      textWithheldReason: null,
+      citationText: "21 Cdo 500/2019",
+      sectionIndex: 0,
+      windowStart: 0,
+      windowEnd: 10,
+    }),
+  ).toEqual({
+    citationText: "21 Cdo 500/2019",
+    passage: null,
+    evidenceExcerpt: null,
+    textIncompleteReason: "absent_ast",
+  });
+});

@@ -4,6 +4,10 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type {
+  CitationTextIncompleteReason,
+  DecisionTextWithheldReason,
+} from "@stll/api-contract/case-law-text-field";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { ChevronRightIcon } from "@stll/ui/icons";
@@ -370,6 +374,51 @@ export const DecisionCitations = ({
   );
 };
 
+const CITATION_TEXT_EMPTY_MESSAGE = {
+  absent_ast: "caseLaw.viewer.textPending",
+  gate_failed: "caseLaw.viewer.textReadFailed",
+  missing_text: "inspector.review.passageUnavailable",
+  source_licence: "inspector.review.passageUnavailable",
+  text_changed: "caseLaw.viewer.textReadFailed",
+} as const satisfies Record<
+  CitationTextIncompleteReason | DecisionTextWithheldReason,
+  TranslationKey
+>;
+
+export const UnresolvedCitationRow = ({
+  item,
+}: {
+  item: Pick<
+    DecisionCitation,
+    "citationText" | "textIncompleteReason" | "textWithheldReason"
+  >;
+}) => {
+  const t = useTranslations();
+  const reason = item.textWithheldReason ?? item.textIncompleteReason;
+
+  return (
+    <li className="text-foreground-strong-muted flex items-baseline gap-2 text-xs">
+      {item.citationText === null ? (
+        <span
+          className="text-muted-foreground"
+          data-text-unavailable-reason={reason ?? undefined}
+        >
+          {t(
+            reason === null
+              ? "inspector.review.passageUnavailable"
+              : CITATION_TEXT_EMPTY_MESSAGE[reason],
+          )}
+        </span>
+      ) : (
+        <BidiText as="span">{item.citationText}</BidiText>
+      )}
+      <span className="text-muted-foreground text-[calc(0.7rem*var(--reader-text-scale))]">
+        {t("caseLaw.citation.unresolved")}
+      </span>
+    </li>
+  );
+};
+
 const CitationRow = ({
   decision,
   direction,
@@ -381,18 +430,10 @@ const CitationRow = ({
   direction: CitationDirection;
   item: DecisionCitation;
 }) => {
-  const t = useTranslations();
   const format = useFormatter();
 
   if (item.decision === null) {
-    return (
-      <li className="text-foreground-strong-muted flex items-baseline gap-2 text-xs">
-        <BidiText as="span">{item.citationText}</BidiText>
-        <span className="text-muted-foreground text-[calc(0.7rem*var(--reader-text-scale))]">
-          {t("caseLaw.citation.unresolved")}
-        </span>
-      </li>
-    );
+    return <UnresolvedCitationRow item={item} />;
   }
 
   const decided = formatDecisionDate(item.decision.decisionDate, format);

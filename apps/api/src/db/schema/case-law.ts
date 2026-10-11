@@ -2688,7 +2688,10 @@ export const caseLawPolarityRules = p.pgTable(
   {
     id: pUuid<"caseLawPolarityRule">().primaryKey(),
     pattern: p.varchar("pattern", { length: 512 }).notNull(),
-    kind: p.text("kind", { enum: POLARITY_RULE_KINDS }).notNull(),
+    kind: p
+      .text("kind", { enum: POLARITY_RULE_KINDS })
+      .default(POLARITY_RULE_KIND.STANCE)
+      .notNull(),
     polarity: p.varchar("polarity", { length: 16 }).$type<Polarity>().notNull(),
     language: p.varchar("language", { length: 8 }).notNull(),
     source: p

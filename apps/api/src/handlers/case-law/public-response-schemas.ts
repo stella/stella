@@ -6,6 +6,7 @@ import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdiction
 import {
   CITATION_EVIDENCE_INCOMPLETE_REASONS,
   CITATION_TEXT_INCOMPLETE_REASONS,
+  DECISION_TEXT_WITHHELD_REASON,
 } from "@stll/api-contract/case-law-text-field";
 import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-identifier";
 
@@ -244,6 +245,10 @@ const citation = t.Object(
   {
     id: tSafeId("caseLawCitation"),
     citationText: nullableBoundedString(16_384),
+    textWithheldReason: t.Union([
+      t.Literal(DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE),
+      t.Null(),
+    ]),
     textIncompleteReason: t.Union([
       t.UnionEnum(CITATION_TEXT_INCOMPLETE_REASONS),
       t.Null(),
@@ -257,10 +262,7 @@ const citation = t.Object(
     polarityEvidence: t.Union([polarityEvidence, t.Null()]),
     citedPart: t.Union([t.UnionEnum(CITED_PARTS), t.Null()]),
     decision: t.Union([relatedDecision, t.Null()]),
-  } satisfies Record<
-    keyof Omit<CitationWithPassage, "passage" | "textWithheldReason">,
-    TSchema
-  >,
+  } satisfies Record<keyof Omit<CitationWithPassage, "passage">, TSchema>,
   { additionalProperties: false },
 );
 // A leading citation always names a held decision; only the general list

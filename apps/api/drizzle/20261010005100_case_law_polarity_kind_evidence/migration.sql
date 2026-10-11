@@ -4,6 +4,8 @@ SET statement_timeout = '5s';--> statement-breakpoint
 
 -- The bounded rule registry is small. Unmatched manual and model rules remain
 -- stance; inventory them with the operator query documented in the handover.
+-- Retain the stance default until the previous release has drained: its
+-- writers omit kind. Remove the default in a later contract migration.
 ALTER TABLE "case_law_polarity_rules"
   ADD COLUMN "kind" text NOT NULL DEFAULT 'stance';--> statement-breakpoint
 
@@ -85,7 +87,6 @@ FROM (VALUES
 WHERE rules.language = seeds.language AND rules.pattern = seeds.pattern;
 --> statement-breakpoint
 
-ALTER TABLE "case_law_polarity_rules" ALTER COLUMN "kind" DROP DEFAULT;--> statement-breakpoint
 ALTER TABLE "case_law_polarity_rules"
   ADD CONSTRAINT "polarity_rules_kind_values" CHECK ("kind" IN ('stance', 'form')) NOT VALID,
   ADD CONSTRAINT "polarity_rules_form_neutral" CHECK ("kind" <> 'form' OR "polarity" = 'neutral') NOT VALID;--> statement-breakpoint

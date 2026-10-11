@@ -53,9 +53,7 @@ const listDecisionCitations = createSafePublicSubjectFollowUpHandler({
     }
     return projectResponseText(
       {
-        items: read.page.items.map(
-          ({ passage: _passage, textWithheldReason: _reason, ...item }) => item,
-        ),
+        items: read.page.items.map(({ passage: _passage, ...item }) => item),
         limit: prepared.page.limit,
         nextCursor: read.page.nextCursor,
       },

@@ -158,12 +158,6 @@ describe.skipIf(!enabled)("persisted polarity rule kinds", () => {
           VALUES ('invalid-kind', 'xx', 'other', 'neutral')`),
         ).toHaveProperty("constraint", "polarity_rules_kind_values");
         await tx`ROLLBACK TO SAVEPOINT rejected_kind`;
-        await tx`SAVEPOINT missing_kind`;
-        expect(
-          await rejectionOf(tx`INSERT INTO case_law_polarity_rules (pattern, language, polarity)
-          VALUES ('missing-kind', 'xx', 'neutral')`),
-        ).toMatchObject({ code: "23502", column: "kind" });
-        await tx`ROLLBACK TO SAVEPOINT missing_kind`;
         await tx`INSERT INTO case_law_polarity_rules (pattern, language, kind, polarity)
           VALUES ('valid-form', 'xx', 'form', 'neutral'), ('valid-stance', 'xx', 'stance', 'supportive')`;
       });

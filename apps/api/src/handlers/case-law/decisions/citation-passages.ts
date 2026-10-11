@@ -709,7 +709,7 @@ export const citationTextFields = ({
       };
     case "absent-ast":
       return {
-        citationText: null,
+        citationText,
         passage: null,
         evidenceExcerpt: null,
         textIncompleteReason: "absent_ast" as const,
