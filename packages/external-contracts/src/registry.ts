@@ -1278,6 +1278,10 @@ export const EXTERNAL_CONTRACTS = {
         role: "primary",
       },
       {
+        path: "apps/collab/src/server-test-process.ts",
+        role: "primary",
+      },
+      {
         path: "apps/web/src/boot-prefetch.ts",
         role: "primary",
       },

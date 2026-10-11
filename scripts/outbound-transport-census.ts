@@ -838,6 +838,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     ],
   },
   {
+    path: "apps/collab/src/server-test-process.ts",
+    class: "vendor-sdk",
+    reason:
+      "Runs the collaboration Redis pub/sub adapter in a local server process.",
+    transports: ["module:@hocuspocus/extension-redis"],
+  },
+  {
     path: "apps/web/src/boot-prefetch.ts",
     class: "operator-configured-infrastructure",
     reason:
