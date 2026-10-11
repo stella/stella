@@ -317,7 +317,7 @@ describe("MCP app registry and contracts", () => {
     }
     expect(absent.results.at(0)?.keywords).toBeNull();
     const resolution = resolveView(APP_RESOLVE_FIXTURE);
-    if (resolution.type !== "resolve") {
+    if (resolution.status !== "resolved") {
       throw new Error("Expected resolve view");
     }
     expect(resolution.rows).not.toHaveLength(0);
