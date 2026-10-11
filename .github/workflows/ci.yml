@@ -7374,7 +7374,7 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        run: bash scripts/retry.sh bun ci --frozen-lockfile --ignore-scripts --filter @stll/playwright-tools --filter '!stella'
         env:
           NPM_TOKEN: ""
 
@@ -7386,7 +7386,7 @@ jobs:
           merge-multiple: true
 
       - name: Merge Playwright reports
-        run: cd apps/web && bunx playwright merge-reports --reporter html all-blob-reports
+        run: bun --filter @stll/playwright-tools report
 
       - name: Upload merged Playwright report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

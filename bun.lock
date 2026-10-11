@@ -1038,6 +1038,15 @@
         "bun-types": "catalog:",
       },
     },
+    "packages/playwright-tools": {
+      "name": "@stll/playwright-tools",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@playwright/test": "^1.63.0",
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+      },
+    },
     "packages/property-testing": {
       "name": "@stll/property-testing",
       "version": "0.0.0",
@@ -3070,6 +3079,8 @@
     "@stll/permissions": ["@stll/permissions@workspace:packages/permissions"],
 
     "@stll/playground": ["@stll/playground@workspace:apps/playground"],
+
+    "@stll/playwright-tools": ["@stll/playwright-tools@workspace:packages/playwright-tools"],
 
     "@stll/property-testing": ["@stll/property-testing@workspace:packages/property-testing"],
 
