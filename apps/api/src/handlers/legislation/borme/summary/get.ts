@@ -12,6 +12,7 @@ const paramsSchema = t.Object({
 
 const bormeSummary = createSafeRootHandler(
   {
+    contract: "patch",
     description:
       "Read the BORME summary the Spanish commercial registry gazette " +
       "published on one date, given as YYYYMMDD.",

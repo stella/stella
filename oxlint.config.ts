@@ -514,6 +514,9 @@ const fixtureRuleOverrides = [
     "require-safe-route-handlers/no-direct-handler-config",
     "require-safe-route-handlers/require-safe-route-handlers",
   ]),
+  fixtureRuleOverride("require-write-contract.fixture.ts", [
+    "require-write-contract/require-write-contract",
+  ]),
   fixtureRuleOverride("require-workspace-handler-config.fixture.ts", [
     "require-workspace-handler-config/require-workspace-handler-config",
   ]),
@@ -1393,6 +1396,9 @@ const config = defineConfig({
     "apps/web/public/**",
     // Declaration files carry no runtime code; skip product-code rules.
     "**/*.d.ts",
+    // wasm-bindgen glue is committed verbatim and checked by rebuilding it;
+    // product-code rewrites would be replaced by the next generation.
+    "packages/scan-engine/generated/scan_engine.js",
     // Snowball stemmers: generated output plus the upstream JS runtime,
     // transcribed verbatim. Product-code rules would rewrite the algorithm
     // (prefer-code-point changes UTF-16 semantics; no-bitwise has no
@@ -1492,6 +1498,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-beforeload-redirect.ts",
     "./.oxlint-plugins/require-safe-route-handlers.ts",
     "./.oxlint-plugins/require-workspace-handler-config.ts",
+    "./.oxlint-plugins/require-write-contract.ts",
     "./.oxlint-plugins/no-inline-endpoint-in-routes.ts",
     "./.oxlint-plugins/security-guards.ts",
     "./.oxlint-plugins/no-unbranded-ownership-id-param.ts",
@@ -1631,6 +1638,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-detached-label-shape.ts",
     "./.oxlint-plugins/no-awaited-builder-union.ts",
     "./.oxlint-plugins/confine-owner.ts",
+    "./.oxlint-plugins/no-unanchored-footnotes.ts",
     "./.oxlint-plugins/confine-aggregate-lock.ts",
     "./.oxlint-plugins/no-direct-status-set.ts",
     "./.oxlint-plugins/no-discarded-transition-result.ts",
@@ -3448,6 +3456,16 @@ const config = defineConfig({
       },
     },
     {
+      files: ["apps/api/src/mcp/apps/**/*.tsx"],
+      excludeFiles: ["**/*.test.tsx"],
+      rules: {
+        "no-untranslated-jsx-literal/no-untranslated-jsx-literal": [
+          "error",
+          { allowedText: ["stella"] },
+        ],
+      },
+    },
+    {
       // Web element registrations share one owner and conflict registry.
       files: ["apps/web/src/lib/drag-and-drop/element-registration.ts"],
       rules: {
@@ -4844,6 +4862,16 @@ const config = defineConfig({
     },
     {
       files: [
+        "apps/api/src/handlers/case-law/ingestion/parsers/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-unanchored-footnotes.fixture.ts",
+      ],
+      excludeFiles: ["apps/api/src/**/*.test.ts"],
+      rules: {
+        "no-unanchored-footnotes/no-unanchored-footnotes": "error",
+      },
+    },
+    {
+      files: [
         "apps/api/src/**/*.ts",
         ".oxlint-plugins/__fixtures__/no-raw-cache-control.fixture.ts",
       ],
@@ -5178,6 +5206,10 @@ const config = defineConfig({
         "require-file-transport-disposition/require-file-transport-disposition":
           "error",
       },
+    },
+    {
+      files: ["apps/api/src/**/*.ts"],
+      rules: { "require-write-contract/require-write-contract": "error" },
     },
     {
       // A workspace-scoped config must name the type that requires its params

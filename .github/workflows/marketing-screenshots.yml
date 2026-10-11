@@ -1,5 +1,9 @@
 name: Marketing screenshots
 
+defaults:
+  run:
+    shell: bash
+
 # Both directions of the marketing screenshot baselines, driven by one
 # capture body (`.github/actions/marketing-capture`) so "what CI compares" and
 # "what CI regenerates" can never be produced by two drifting definitions:

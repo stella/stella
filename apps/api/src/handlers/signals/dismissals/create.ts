@@ -21,6 +21,7 @@ import {
 } from "@/api/lib/signals/read";
 
 const config = {
+  contract: "patch",
   description:
     "Dismiss an inbox signal with an optional reason; the reason is kept " +
     "for tuning the producer that emitted it.",

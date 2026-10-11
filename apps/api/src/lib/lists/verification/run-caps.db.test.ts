@@ -486,7 +486,9 @@ describe.skipIf(!enabled)(
         );
         try {
           await fixture.db.execute(
-            sql.raw(`GRANT USAGE ON SCHEMA ${fixture.schema} TO ${owner}`),
+            sql.raw(
+              `GRANT ${owner} TO CURRENT_USER WITH INHERIT TRUE, SET TRUE; GRANT USAGE, CREATE ON SCHEMA ${fixture.schema} TO ${owner}`,
+            ),
           );
           await fixture.db.execute(
             sql.raw(
@@ -527,7 +529,9 @@ describe.skipIf(!enabled)(
             ),
           );
           await fixture.db.execute(
-            sql.raw(`REVOKE USAGE ON SCHEMA ${fixture.schema} FROM ${owner}`),
+            sql.raw(
+              `REVOKE USAGE, CREATE ON SCHEMA ${fixture.schema} FROM ${owner}`,
+            ),
           );
           await fixture.db.execute(sql.raw(`DROP ROLE ${owner}`));
         }

@@ -1,5 +1,9 @@
 name: Label Sync
 
+defaults:
+  run:
+    shell: bash
+
 # Applies stella/.github/labels.yml to this repository. Manual only: labels
 # should not drift under a push, and a run that writes is a decision.
 on:

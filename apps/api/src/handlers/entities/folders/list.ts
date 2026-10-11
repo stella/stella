@@ -79,6 +79,7 @@ const listFoldersHandler = async function* ({
 };
 
 const config = {
+  contract: "patch",
   description:
     "List the folders of a matter, oldest first with cursor pagination, each " +
     "with its id, name, and parent folder. Documents and tasks are left out; " +

@@ -31,6 +31,7 @@ import type { DocumentReviewFindingFlag } from "@/api/lib/document-review/run-co
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contract: "patch",
   description:
     "Record a reviewer's decision on one review finding, the flags they put beside it, and, when requested, the durable application of its proposed edit.",
   // entity:update because deciding a finding can durably apply its proposed
