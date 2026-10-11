@@ -5,19 +5,17 @@ import type { PersistedChatMessageContentV3 } from "@/api/handlers/chat/types";
 
 const MAX_SPAN_REPLACEMENT_LENGTH = 32_000;
 
-type FindAnchoredSpanOptions = {
+type FindRevisionSpanOptions = {
   content: PersistedChatMessageContentV3;
   start: number;
   end: number;
-  selectedTextHash: string;
 };
 
-export const findAnchoredSpan = ({
+export const findRevisionSpan = ({
   content,
   start,
   end,
-  selectedTextHash,
-}: FindAnchoredSpanOptions) => {
+}: FindRevisionSpanOptions) => {
   if (start < 0 || start >= end) {
     return null;
   }
@@ -32,19 +30,30 @@ export const findAnchoredSpan = ({
     if (localStart < 0 || localEnd > part.content.length) {
       continue;
     }
-    const selected = part.content.slice(localStart, localEnd);
-    if (sha256Hex(selected) !== selectedTextHash) {
-      return null;
-    }
     return {
       partIndex,
       source: part.content,
       start: localStart,
       end: localEnd,
-      selected,
+      selected: part.content.slice(localStart, localEnd),
     };
   }
   return null;
+};
+
+type FindAnchoredSpanOptions = FindRevisionSpanOptions & {
+  selectedTextHash: string;
+};
+
+export const findAnchoredSpan = ({
+  selectedTextHash,
+  ...span
+}: FindAnchoredSpanOptions) => {
+  const anchor = findRevisionSpan(span);
+  if (anchor === null || sha256Hex(anchor.selected) !== selectedTextHash) {
+    return null;
+  }
+  return anchor;
 };
 
 export const isSpanReplacementBalanced = ({

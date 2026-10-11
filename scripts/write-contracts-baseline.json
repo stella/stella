@@ -6,12 +6,6 @@
     "baselineId": "apps/api/src/handlers/case-law/research/columns-reorder.ts"
   },
   {
-    "key": "apps/api/src/handlers/chat/routes.ts|POST|/chat/threads/:threadId/messages/:messageId/revisions|apps/api/src/handlers/chat/messages/revisions/accept.ts.handler",
-    "count": 1,
-    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
-    "baselineId": "apps/api/src/handlers/chat/messages/revisions/accept.ts"
-  },
-  {
     "key": "apps/api/src/handlers/clauses/routes.ts|POST|/clauses/:clauseId|apps/api/src/handlers/clauses/update.ts.handler",
     "count": 1,
     "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
@@ -112,12 +106,6 @@
     "count": 1,
     "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
     "baselineId": "apps/api/src/handlers/properties/update.ts"
-  },
-  {
-    "key": "apps/api/src/handlers/rates/routes.ts|PUT|/rates/:workspaceId/arrangement|apps/api/src/handlers/rates/arrangement/update.ts.handler",
-    "count": 1,
-    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
-    "baselineId": "apps/api/src/handlers/rates/arrangement/update.ts"
   },
   {
     "key": "apps/api/src/handlers/saved-searches/routes.ts|PATCH|/saved-searches/:savedSearchId|apps/api/src/handlers/saved-searches/update.ts.handler",

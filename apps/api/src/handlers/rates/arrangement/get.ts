@@ -47,7 +47,7 @@ const readBillingArrangement = createSafeHandler(
   {
     contract: "patch",
     description:
-      "Read the matter's current hourly or flat-fee billing arrangement. The arrangement field is null for the existing hourly rate-table behavior; call rates.arrangement.update to configure it. Issued invoices retain their own snapshots.",
+      "Read the matter's current hourly or flat-fee billing arrangement. The arrangement field is null for the existing hourly rate-table behavior; call rates.arrangement.update with the returned revision (0 when absent) to configure it. Issued invoices retain their own snapshots.",
     permissions: { rate: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
@@ -71,6 +71,7 @@ const readBillingArrangement = createSafeHandler(
     const arrangement = rows.at(0);
     return Result.ok({
       arrangement: arrangement ? billingArrangementResponse(arrangement) : null,
+      revision: arrangement?.revision ?? 0,
     });
   },
 );

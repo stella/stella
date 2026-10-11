@@ -3,6 +3,7 @@ import { deepEquals } from "bun";
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { ChatMessageAcceptedEdit } from "@stll/api-contract/chat-message-revisions";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -18,14 +19,20 @@ import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/handlers/chat/chat-turn-state";
 import { normalizeRevisionContent } from "@/api/handlers/chat/messages/revisions/normalize-revision-content";
 import { hasUnsettledRevisionContent } from "@/api/handlers/chat/messages/revisions/revision-settlement";
 import { isRevisionEditSpanValid } from "@/api/handlers/chat/messages/revisions/revision-span";
-import { findAnchoredSpan } from "@/api/handlers/chat/messages/revisions/span-proposal";
+import { findRevisionSpan } from "@/api/handlers/chat/messages/revisions/span-proposal";
 import { reconcileChatCompactionChainOnTx } from "@/api/handlers/chat/persistent-compaction";
-import type { PersistedChatMessageContentV3 } from "@/api/handlers/chat/types";
+import type {
+  PersistedChatMessageContent,
+  PersistedChatMessageContentV3,
+} from "@/api/handlers/chat/types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { provePersistedChatMessageContentV3 } from "@/api/lib/chat/persisted-message-content";
 import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { VERSION_CONFLICT_ERROR_CODE } from "@/api/lib/optimistic-concurrency";
+import { enforceWritePrecondition } from "@/api/lib/write-contract";
 
 export type ChatMessageRevisionChange =
   | {
@@ -36,6 +43,31 @@ export type ChatMessageRevisionChange =
       edit: ChatMessageAcceptedEdit;
     }
   | { type: "revert"; baseRevision: number; toRevision: number };
+
+const checkSelectedTextPrecondition = (
+  content: PersistedChatMessageContentV3,
+  change: Extract<ChatMessageRevisionChange, { type: "accept" }>,
+) => {
+  const anchor = findRevisionSpan({
+    content,
+    start: change.edit.start,
+    end: change.edit.end,
+  });
+  if (anchor === null) {
+    return new HandlerError({
+      status: 409,
+      code: VERSION_CONFLICT_ERROR_CODE,
+      message: "Message revision changed; reload the message before editing",
+    });
+  }
+  return enforceWritePrecondition({
+    type: "revision",
+    field: "selectedTextHash",
+    storedRevision: sha256Hex(anchor.selected),
+    expectedRevision: change.selectedTextHash,
+    resource: "Chat message selection",
+  });
+};
 
 type WriteChatMessageRevisionOptions = {
   tx: Transaction;
@@ -48,18 +80,21 @@ type WriteChatMessageRevisionOptions = {
   getWorkspaceAccess: ChatWorkspaceAccess;
 };
 
+type ReadRevisionMessageOptions = Omit<
+  WriteChatMessageRevisionOptions,
+  "change" | "recordAuditEvent"
+>;
+
 // Turn acceptance and settlement lock the thread before touching messages.
 // Keeping that order also prevents a turn from starting during an edit.
-export const writeChatMessageRevisionOnTx = async ({
+export const readRevisionMessageOnTx = async ({
   tx,
   threadId,
   messageId,
   userId,
   organizationId,
-  change,
-  recordAuditEvent,
   getWorkspaceAccess,
-}: WriteChatMessageRevisionOptions) => {
+}: ReadRevisionMessageOptions) => {
   const threadLock = await withAggregateRowQuery({
     tx,
     aggregate: "chatThread",
@@ -86,7 +121,11 @@ export const writeChatMessageRevisionOnTx = async ({
       getWorkspaceAccess,
     }))
   ) {
-    return { type: "not-found" } as const;
+    return {
+      type: "refused",
+      status: 404,
+      message: "Chat message not found",
+    } as const;
   }
   const messageLock = await withAggregateRowQuery({
     tx,
@@ -100,10 +139,18 @@ export const writeChatMessageRevisionOnTx = async ({
   }
   const message = messageLock.rows.at(0);
   if (!message) {
-    return { type: "not-found" } as const;
+    return {
+      type: "refused",
+      status: 404,
+      message: "Chat message not found",
+    } as const;
   }
   if (message.role !== "assistant") {
-    return { type: "not-assistant" } as const;
+    return {
+      type: "refused",
+      status: 400,
+      message: "Only assistant answers can be edited",
+    } as const;
   }
   const active = (
     await tx
@@ -121,89 +168,99 @@ export const writeChatMessageRevisionOnTx = async ({
     message.content,
   );
   if (active || hasUnsettledRevisionContent(normalized)) {
-    return { type: "unsettled" } as const;
+    return {
+      type: "refused",
+      status: 409,
+      message: "Wait for the assistant turn to settle before editing",
+    } as const;
   }
-  if (message.revision !== change.baseRevision) {
-    return { type: "stale" } as const;
-  }
+  return { type: "ready", message, original } as const;
+};
 
-  const edit =
-    change.type === "accept"
-      ? change.edit
-      : { type: "revert" as const, toRevision: change.toRevision };
-  let content: typeof message.content;
-  if (change.type === "revert") {
-    const target = (
-      await tx
-        .select({ content: chatMessageRevisions.content })
-        .from(chatMessageRevisions)
-        .where(
-          and(
-            eq(chatMessageRevisions.messageId, messageId),
-            eq(chatMessageRevisions.threadId, threadId),
-            eq(chatMessageRevisions.revision, change.toRevision),
-          ),
-        )
-        .limit(1)
-    ).at(0);
-    if (!target) {
-      return { type: "revision-not-found" } as const;
-    }
-    // Do not decode/re-encode a snapshot: a revert restores the stored JSONB.
-    content = target.content;
-  } else {
-    const candidate = change.content;
-    if (
-      !deepEquals(candidate.metadata, original.metadata) ||
-      candidate.data.length !== original.data.length
-    ) {
-      return { type: "invalid-content" } as const;
-    }
-    const data: PersistedChatMessageContentV3["data"] = [];
-    for (const [index, part] of candidate.data.entries()) {
-      const old = original.data.at(index);
-      if (old?.type === "text") {
-        if (!isChatPart(part) || part.type !== "text") {
-          return { type: "invalid-content" } as const;
-        }
-        data.push(part);
-        continue;
-      }
-      if (!old || !deepEquals(part, old)) {
-        return { type: "invalid-content" } as const;
-      }
-      data.push(old);
-    }
-    if (
-      !isRevisionEditSpanValid({
-        originalParts: original.data,
-        candidateParts: data,
-        edit: change.edit,
-      })
-    ) {
-      return { type: "invalid-edit" } as const;
-    }
-    const anchor = findAnchoredSpan({
-      content: original,
-      start: change.edit.start,
-      end: change.edit.end,
-      selectedTextHash: change.selectedTextHash,
-    });
-    if (anchor === null) {
-      return { type: "stale" } as const;
-    }
-    content = provePersistedChatMessageContentV3(
-      {
-        version: 3,
-        data,
-        ...(original.metadata === undefined
-          ? {}
-          : { metadata: original.metadata }),
-      },
-      (part) =>
-        isChatPart(part) || original.data.some((old) => deepEquals(part, old)),
-    );
+const prepareAcceptedRevisionContent = (
+  original: PersistedChatMessageContentV3,
+  change: Extract<ChatMessageRevisionChange, { type: "accept" }>,
+) => {
+  const candidate = change.content;
+  if (
+    !deepEquals(candidate.metadata, original.metadata) ||
+    candidate.data.length !== original.data.length
+  ) {
+    return {
+      type: "refused",
+      status: 400,
+      message: "Answer edits must preserve metadata and non-text parts",
+    } as const;
   }
+  const data: PersistedChatMessageContentV3["data"] = [];
+  for (const [index, part] of candidate.data.entries()) {
+    const old = original.data.at(index);
+    if (old?.type === "text") {
+      if (!isChatPart(part) || part.type !== "text") {
+        return {
+          type: "refused",
+          status: 400,
+          message: "Answer edits must preserve metadata and non-text parts",
+        } as const;
+      }
+      data.push(part);
+      continue;
+    }
+    if (!old || !deepEquals(part, old)) {
+      return {
+        type: "refused",
+        status: 400,
+        message: "Answer edits must preserve metadata and non-text parts",
+      } as const;
+    }
+    data.push(old);
+  }
+  if (
+    !isRevisionEditSpanValid({
+      originalParts: original.data,
+      candidateParts: data,
+      edit: change.edit,
+    })
+  ) {
+    return {
+      type: "refused",
+      status: 400,
+      message: "Edit range must refer to text in the current answer",
+    } as const;
+  }
+  const content = provePersistedChatMessageContentV3(
+    {
+      version: 3,
+      data,
+      ...(original.metadata === undefined
+        ? {}
+        : { metadata: original.metadata }),
+    },
+    (part) =>
+      isChatPart(part) || original.data.some((old) => deepEquals(part, old)),
+  );
+  return { type: "prepared", content } as const;
+};
+
+type PersistRevisionOptions = Pick<
+  WriteChatMessageRevisionOptions,
+  "tx" | "threadId" | "messageId" | "userId" | "recordAuditEvent"
+> & {
+  message: typeof chatMessages.$inferSelect;
+  content: PersistedChatMessageContent;
+  edit: ChatMessageAcceptedEdit | { type: "revert"; toRevision: number };
+};
+
+const persistRevisionOnTx = async ({
+  tx,
+  threadId,
+  messageId,
+  userId,
+  recordAuditEvent,
+  message,
+  content,
+  edit,
+}: PersistRevisionOptions) => {
   const revision = message.revision + 1;
   await tx.insert(chatMessageRevisions).values({
     messageId,
@@ -245,4 +302,127 @@ export const writeChatMessageRevisionOnTx = async ({
     metadata: { editType: edit.type, revision },
   });
   return { type: "ok", revision, edited: true } as const;
+};
+type WriteLoadedRevisionOptions = Pick<
+  WriteChatMessageRevisionOptions,
+  "tx" | "threadId" | "messageId" | "userId" | "recordAuditEvent"
+> & {
+  loaded: Awaited<ReturnType<typeof readRevisionMessageOnTx>>;
+};
+
+type AcceptRevisionOptions = WriteLoadedRevisionOptions & {
+  change: Extract<ChatMessageRevisionChange, { type: "accept" }>;
+};
+
+export const writeAcceptedChatMessageRevisionOnTx = async ({
+  loaded,
+  change,
+  ...options
+}: AcceptRevisionOptions) => {
+  if (loaded.type === "refused") {
+    return new HandlerError({ status: loaded.status, message: loaded.message });
+  }
+  const revisionConflict = enforceWritePrecondition({
+    type: "revision",
+    field: "baseRevision",
+    storedRevision: loaded.message.revision,
+    expectedRevision: change.baseRevision,
+    resource: "Chat message",
+  });
+  if (revisionConflict) {
+    return revisionConflict;
+  }
+  const prepared = prepareAcceptedRevisionContent(loaded.original, change);
+  if (prepared.type === "refused") {
+    return new HandlerError({
+      status: prepared.status,
+      message: prepared.message,
+    });
+  }
+  const selectionConflict = checkSelectedTextPrecondition(
+    loaded.original,
+    change,
+  );
+  if (selectionConflict) {
+    return selectionConflict;
+  }
+  return await persistRevisionOnTx({
+    ...options,
+    message: loaded.message,
+    content: prepared.content,
+    edit: change.edit,
+  });
+};
+
+type RevertRevisionOptions = WriteLoadedRevisionOptions & {
+  change: Extract<ChatMessageRevisionChange, { type: "revert" }>;
+};
+
+export const writeRevertedChatMessageRevisionOnTx = async ({
+  loaded,
+  change,
+  ...options
+}: RevertRevisionOptions) => {
+  if (loaded.type === "refused") {
+    return new HandlerError({ status: loaded.status, message: loaded.message });
+  }
+  const revisionConflict = enforceWritePrecondition({
+    type: "revision",
+    field: "baseRevision",
+    storedRevision: loaded.message.revision,
+    expectedRevision: change.baseRevision,
+    resource: "Chat message",
+  });
+  if (revisionConflict) {
+    return revisionConflict;
+  }
+  const target = (
+    await options.tx
+      .select({ content: chatMessageRevisions.content })
+      .from(chatMessageRevisions)
+      .where(
+        and(
+          eq(chatMessageRevisions.messageId, options.messageId),
+          eq(chatMessageRevisions.threadId, options.threadId),
+          eq(chatMessageRevisions.revision, change.toRevision),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  if (!target) {
+    return new HandlerError({
+      status: 404,
+      message: "Chat message revision not found",
+    });
+  }
+  // Restore the retained JSONB without decoding or re-encoding it.
+  return await persistRevisionOnTx({
+    ...options,
+    message: loaded.message,
+    content: target.content,
+    edit: { type: "revert", toRevision: change.toRevision },
+  });
+};
+
+export const writeChatMessageRevisionOnTx = async ({
+  change,
+  ...options
+}: WriteChatMessageRevisionOptions) => {
+  const loaded = await readRevisionMessageOnTx(options);
+  switch (change.type) {
+    case "accept":
+      return await writeAcceptedChatMessageRevisionOnTx({
+        ...options,
+        loaded,
+        change,
+      });
+    case "revert":
+      return await writeRevertedChatMessageRevisionOnTx({
+        ...options,
+        loaded,
+        change,
+      });
+    default:
+      return panic(change satisfies never);
+  }
 };

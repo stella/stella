@@ -14,16 +14,17 @@ import {
 import { tCurrencyCode, tMinorUnitAmount } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
+import { enforceWritePrecondition } from "@/api/lib/write-contract";
 
 const updateBillingArrangement = createSafeHandler(
   {
     contract: "replace",
     precondition: {
-      type: "deferred",
-      baselineId: "apps/api/src/handlers/rates/arrangement/update.ts",
+      type: "revision",
+      fields: ["revision"],
     },
     description:
-      "Set the matter's current billing arrangement in integer minor currency units. Hourly supports an optional positive cap and alert threshold in basis points; flat fee supplies one amount. Refused for mixed-currency existing charged work or a cap below reserved invoice time. Changes do not change invoice snapshots.",
+      "Set the matter's current billing arrangement in integer minor currency units. Hourly supports an optional positive cap and alert threshold in basis points; flat fee supplies one amount. Refused for mixed-currency existing charged work or a cap below reserved invoice time. Changes do not change invoice snapshots. Read rates.arrangement.get first and send its revision (0 when no arrangement exists).",
     permissions: { rate: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
@@ -38,7 +39,7 @@ const updateBillingArrangement = createSafeHandler(
         {
           mode: t.Literal("hourly"),
           currency: tCurrencyCode,
-          revision: t.Optional(t.Integer({ minimum: 1 })),
+          revision: t.Integer({ minimum: 0 }),
         },
         { additionalProperties: false },
       ),
@@ -46,7 +47,7 @@ const updateBillingArrangement = createSafeHandler(
         {
           mode: t.Literal("hourly"),
           currency: tCurrencyCode,
-          revision: t.Optional(t.Integer({ minimum: 1 })),
+          revision: t.Integer({ minimum: 0 }),
           capAmount: tMinorUnitAmount(1),
           alertThresholdBps: t.Integer({ minimum: 1, maximum: 10_000 }),
         },
@@ -56,7 +57,7 @@ const updateBillingArrangement = createSafeHandler(
         {
           mode: t.Literal("flat_fee"),
           currency: tCurrencyCode,
-          revision: t.Optional(t.Integer({ minimum: 1 })),
+          revision: t.Integer({ minimum: 0 }),
           flatFeeAmount: tMinorUnitAmount(0),
         },
         { additionalProperties: false },
@@ -79,18 +80,15 @@ const updateBillingArrangement = createSafeHandler(
             new HandlerError({ status: 404, message: "Workspace not found" }),
           );
         }
-        if (
-          body.revision !== undefined &&
-          body.revision !== previous?.revision
-        ) {
-          return Result.err(
-            new HandlerError({
-              status: 409,
-              code: "billing_arrangement_stale",
-              hint: "Call rates.arrangement.get, then retry rates.arrangement.update with the revision from the returned arrangement field.",
-              message: "Billing arrangement changed; reload and try again",
-            }),
-          );
+        const conflict = enforceWritePrecondition({
+          type: "revision",
+          field: "revision",
+          storedRevision: previous?.revision ?? 0,
+          expectedRevision: body.revision,
+          resource: "Billing arrangement",
+        });
+        if (conflict) {
+          return conflict;
         }
         const usage = await readBillingUsage(tx, {
           workspaceId,
@@ -193,6 +191,9 @@ const updateBillingArrangement = createSafeHandler(
         return Result.ok(billingArrangementResponse(arrangement));
       }),
     );
+    if (HandlerError.is(outcome)) {
+      return Result.err(outcome);
+    }
     return outcome;
   },
 );

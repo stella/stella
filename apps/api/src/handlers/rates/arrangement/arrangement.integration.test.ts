@@ -28,6 +28,7 @@ import {
 } from "@/api/lib/billing/arrangements";
 import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
+import { VERSION_CONFLICT_ERROR_CODE } from "@/api/lib/optimistic-concurrency";
 import { isPgError } from "@/api/lib/pg-error";
 import {
   NO_DB,
@@ -132,10 +133,28 @@ const audit = () =>
     request: new Request("https://example.test/rates/arrangement"),
     server: null,
   });
+type ArrangementBody = Parameters<typeof setArrangement.handler>[0]["body"];
+
 const set = async (
-  body: Parameters<typeof setArrangement.handler>[0]["body"],
-) =>
-  await setArrangement.handler(
+  body:
+    | ArrangementBody
+    | Omit<Extract<ArrangementBody, { mode: "hourly" }>, "revision">
+    | Omit<Extract<ArrangementBody, { mode: "flat_fee" }>, "revision">,
+) => {
+  const response = await getArrangement.handler(
+    createTestHandlerContext<Parameters<typeof getArrangement.handler>[0]>({
+      scopedDb: NO_DB,
+      workspaceId,
+      session: { activeOrganizationId: ids.orgA },
+      user: { id: ids.userAdmin },
+      safeDb: safeDb(),
+      audit: NO_AUDIT,
+    }),
+  );
+  if (!("revision" in response)) {
+    panic("Billing arrangement read was refused");
+  }
+  return await setArrangement.handler(
     createTestHandlerContext<Parameters<typeof setArrangement.handler>[0]>({
       scopedDb: NO_DB,
       workspaceId,
@@ -144,9 +163,13 @@ const set = async (
       safeDb: safeDb(),
       audit: audit(),
       createAuditRecorder: audit,
-      body,
+      body: {
+        ...body,
+        revision: "revision" in body ? body.revision : response.revision,
+      },
     }),
   );
+};
 const summary = async () => {
   const response = await getSummary.handler(
     createTestHandlerContext<Parameters<typeof getSummary.handler>[0]>({
@@ -586,7 +609,7 @@ test("GET configuration can be resent unchanged and stale revisions are refused"
   await set({ mode: "hourly", currency: "USD" });
   expect(await set(readback)).toMatchObject({
     code: 409,
-    response: { code: "billing_arrangement_stale" },
+    response: { code: VERSION_CONFLICT_ERROR_CODE },
   });
 });
 

@@ -37,6 +37,7 @@ import {
 } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { chatMessageCursorCodec } from "@/api/lib/chat/message-cursor";
+import { VERSION_CONFLICT_ERROR_CODE } from "@/api/lib/optimistic-concurrency";
 import { decodePaginationCursor } from "@/api/lib/pagination";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -388,15 +389,16 @@ if (!databaseUrl || !runPostgres) {
               ...acceptedChange,
               selectedTextHash: sha256Hex("Changed selection"),
             }),
-          ).toEqual({ type: "stale" });
+          ).toMatchObject({ status: 409, code: VERSION_CONFLICT_ERROR_CODE });
           expect(await fixture.observe()).toEqual(unedited);
           await fixture.write(db, acceptedChange);
           const before = await fixture.observe();
           const originalBytes = await db.execute<{ bytes: string }>(
             sql`SELECT content::text AS bytes FROM chat_message_revisions WHERE message_id = ${fixture.messageId} AND revision = 0`,
           );
-          expect(await fixture.write(db, acceptedChange)).toEqual({
-            type: "stale",
+          expect(await fixture.write(db, acceptedChange)).toMatchObject({
+            status: 409,
+            code: VERSION_CONFLICT_ERROR_CODE,
           });
           expect(await fixture.observe()).toEqual(before);
           expect(
@@ -500,10 +502,13 @@ if (!databaseUrl || !runPostgres) {
             fixture.write(first, acceptedChange),
             fixture.write(second, acceptedChange),
           ]);
-          expect(outcomes.map(({ type }) => type).toSorted()).toEqual([
-            "ok",
-            "stale",
-          ]);
+          expect(
+            outcomes
+              .map((outcome) =>
+                "type" in outcome ? outcome.type : outcome.code,
+              )
+              .toSorted(),
+          ).toEqual(["ok", "version_conflict"]);
           const observed = await fixture.observe();
           expect(observed.messages).toEqual([{ content: edited, revision: 1 }]);
           expect(observed.revisions).toHaveLength(1);
@@ -867,7 +872,13 @@ if (!databaseUrl || !runPostgres) {
                 content: candidate.content,
                 edit: candidate.edit,
               }),
-            ).toEqual({ type: candidate.expected });
+            ).toMatchObject({
+              status: 400,
+              message:
+                candidate.expected === "invalid-content"
+                  ? "Answer edits must preserve metadata and non-text parts"
+                  : "Edit range must refer to text in the current answer",
+            });
             expect(await fixture.observe()).toEqual(before);
           }
         } finally {
@@ -904,7 +915,10 @@ if (!databaseUrl || !runPostgres) {
                   },
                 }),
             );
-            expect(write).toEqual({ type: "not-found" });
+            expect(write).toMatchObject({
+              status: 404,
+              message: "Chat message not found",
+            });
             const page = await fixture.scoped(db)(
               async (tx) =>
                 await readChatMessageRevisionsOnTx({
@@ -984,8 +998,9 @@ if (!databaseUrl || !runPostgres) {
             .set({ role: "user" })
             .where(eq(chatMessages.id, fixture.messageId));
           const beforeUser = await fixture.observe();
-          expect(await fixture.write(db, acceptedChange)).toEqual({
-            type: "not-assistant",
+          expect(await fixture.write(db, acceptedChange)).toMatchObject({
+            status: 400,
+            message: "Only assistant answers can be edited",
           });
           expect(await fixture.observe()).toEqual(beforeUser);
           await db
@@ -1011,8 +1026,9 @@ if (!databaseUrl || !runPostgres) {
             })
             .where(eq(chatMessages.id, fixture.messageId));
           const beforePartial = await fixture.observe();
-          expect(await fixture.write(db, acceptedChange)).toEqual({
-            type: "unsettled",
+          expect(await fixture.write(db, acceptedChange)).toMatchObject({
+            status: 409,
+            message: "Wait for the assistant turn to settle before editing",
           });
           expect(await fixture.observe()).toEqual(beforePartial);
           await db
@@ -1037,8 +1053,9 @@ if (!databaseUrl || !runPostgres) {
             leaseExpiresAt: new Date(Date.now() + 60_000),
           });
           const beforeActive = await fixture.observe();
-          expect(await fixture.write(db, acceptedChange)).toEqual({
-            type: "unsettled",
+          expect(await fixture.write(db, acceptedChange)).toMatchObject({
+            status: 409,
+            message: "Wait for the assistant turn to settle before editing",
           });
           expect(await fixture.observe()).toEqual(beforeActive);
         } finally {
@@ -1096,7 +1113,10 @@ if (!databaseUrl || !runPostgres) {
               content: redistributed,
               edit,
             }),
-          ).toEqual({ type: "invalid-edit" });
+          ).toMatchObject({
+            status: 400,
+            message: "Edit range must refer to text in the current answer",
+          });
           expect(await fixture.observe()).toEqual(before);
 
           const candidate = {

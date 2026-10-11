@@ -6,12 +6,16 @@ import {
   revisionNumber,
   revisionResult,
 } from "@/api/handlers/chat/messages/revisions/accept";
-import { writeChatMessageRevisionOnTx } from "@/api/handlers/chat/messages/revisions/revision-on-tx";
+import {
+  readRevisionMessageOnTx,
+  writeRevertedChatMessageRevisionOnTx,
+} from "@/api/handlers/chat/messages/revisions/revision-on-tx";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 
 const config = {
@@ -42,20 +46,29 @@ const revertMessageRevision = createSafeRootHandler(
     recordAuditEvent,
   }) {
     const result = yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await writeChatMessageRevisionOnTx({
-            tx,
-            getWorkspaceAccess,
-            threadId,
-            messageId,
-            userId: user.id,
-            organizationId: session.activeOrganizationId,
-            change: { type: "revert", baseRevision, toRevision: revision },
-            recordAuditEvent,
-          }),
-      ),
+      safeDb(async (tx) => {
+        const loaded = await readRevisionMessageOnTx({
+          tx,
+          getWorkspaceAccess,
+          threadId,
+          messageId,
+          userId: user.id,
+          organizationId: session.activeOrganizationId,
+        });
+        return await writeRevertedChatMessageRevisionOnTx({
+          tx,
+          loaded,
+          threadId,
+          messageId,
+          userId: user.id,
+          change: { type: "revert", baseRevision, toRevision: revision },
+          recordAuditEvent,
+        });
+      }),
     );
+    if (HandlerError.is(result)) {
+      return Result.err(result);
+    }
     if (result.type === "ok") {
       upsertChatThreadSearchDocument(threadId).catch(captureError);
     }
