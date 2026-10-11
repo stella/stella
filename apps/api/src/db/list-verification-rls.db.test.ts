@@ -75,7 +75,7 @@ describe.skipIf(!enabled)("list verification row security", () => {
       try {
         await client.unsafe(`SET search_path TO ${schema}, public`);
         await client.unsafe(
-          `CREATE ROLE ${ownerRole} NOLOGIN NOSUPERUSER NOBYPASSRLS`,
+          `CREATE ROLE ${ownerRole} NOLOGIN NOSUPERUSER NOBYPASSRLS; GRANT ${ownerRole} TO CURRENT_USER WITH INHERIT TRUE, SET TRUE; GRANT CREATE ON SCHEMA ${schema} TO ${ownerRole}`,
         );
         await client.unsafe(
           `GRANT USAGE ON SCHEMA ${schema} TO stella, ${ownerRole}`,
@@ -242,16 +242,21 @@ describe.skipIf(!enabled)("list verification row security", () => {
           text: "A dated meeting.",
           anchor: { type: "docx-block", blockId: "p1", start: 0, end: 16 },
         } as const satisfies typeof legalListClaims.$inferInsert;
-        await db.insert(legalListClaims).values(claim);
-        await db.insert(legalListClaimReviewEvents).values({
-          id: createSafeId<"legalListClaimReviewEvent">(),
-          runId,
-          claimId,
-          workspaceId,
-          kind: "note",
-          payload: { kind: "note", note: "Reviewed." },
-          actorId: userId,
-        });
+        await actor.writeDb(
+          async (tx) => await tx.insert(legalListClaims).values(claim),
+        );
+        await actor.writeDb(
+          async (tx) =>
+            await tx.insert(legalListClaimReviewEvents).values({
+              id: createSafeId<"legalListClaimReviewEvent">(),
+              runId,
+              claimId,
+              workspaceId,
+              kind: "note",
+              payload: { kind: "note", note: "Reviewed." },
+              actorId: userId,
+            }),
+        );
 
         for (const table of [
           "legal_list_verification_runs",
@@ -472,7 +477,7 @@ describe.skipIf(!enabled)("list evidence row security", () => {
       try {
         await client.unsafe(`CREATE SCHEMA ${schema}`);
         await client.unsafe(
-          `CREATE ROLE ${ownerRole} NOLOGIN NOSUPERUSER NOBYPASSRLS`,
+          `CREATE ROLE ${ownerRole} NOLOGIN NOSUPERUSER NOBYPASSRLS; GRANT ${ownerRole} TO CURRENT_USER WITH INHERIT TRUE, SET TRUE; GRANT CREATE ON SCHEMA ${schema} TO ${ownerRole}`,
         );
         await client.unsafe(
           `GRANT USAGE ON SCHEMA ${schema} TO stella, ${ownerRole}`,

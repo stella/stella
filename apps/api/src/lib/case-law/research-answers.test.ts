@@ -103,6 +103,30 @@ describe("selecting passages within a budget", () => {
       recording.restore();
     }
   });
+
+  test("classifies every passage after a budget rejection by its own reason", () => {
+    const recording = installRecordingLogger();
+    try {
+      expect(
+        selectPassagesWithinBudget(
+          [
+            { anchorId: "p-1", excerpt: "kept" },
+            { anchorId: "p-2", excerpt: "x".repeat(20) },
+            { anchorId: "p-3", excerpt: "   " },
+            { anchorId: "p-1", excerpt: "duplicate" },
+          ],
+          { budgetChars: 10, passageChars: 15 },
+        ),
+      ).toEqual([{ anchorId: "p-1", excerpt: "kept" }]);
+      expect(recording.records.map(({ attributes }) => attributes)).toEqual([
+        { surface: "research", reason: "passage_invalid", count: 1 },
+        { surface: "research", reason: "passage_duplicate", count: 1 },
+        { surface: "research", reason: "passage_budget", count: 1 },
+      ]);
+    } finally {
+      recording.restore();
+    }
+  });
 });
 
 const yesNo = {

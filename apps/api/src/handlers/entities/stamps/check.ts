@@ -70,6 +70,7 @@ export const checkStampHandler = async function* ({
 };
 
 const config = {
+  contract: "patch",
   description:
     "Check whether an uploaded DOCX carries a stella document reference and, " +
     "if so, which document in this organization it belongs to. Only the " +
