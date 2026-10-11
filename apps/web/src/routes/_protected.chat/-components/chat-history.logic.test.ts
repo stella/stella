@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 import { Temporal } from "@stll/time";
 
 import { APIError } from "@/lib/errors/api";
@@ -262,6 +263,16 @@ describe("history search params", () => {
       q: undefined,
       matter: undefined,
     });
+  });
+
+  test("keeps a search the API accepts and drops a longer one", () => {
+    const atLimit = "x".repeat(SEARCH_QUERY_MAX_LENGTH);
+    expect(v.parse(chatHistorySearchSchema, { q: atLimit }).q).toBe(atLimit);
+    expect(
+      v.parse(chatHistorySearchSchema, {
+        q: "x".repeat(SEARCH_QUERY_MAX_LENGTH + 1),
+      }),
+    ).toEqual({ q: undefined, matter: undefined });
   });
 
   test("keeps only a matter id in the format the API accepts", () => {

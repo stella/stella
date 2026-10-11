@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 import { isUuid } from "@stll/api-contract/safe-id";
 import { Temporal, todayFor } from "@stll/time";
 
@@ -12,7 +13,11 @@ import { APIError } from "@/lib/errors/api";
  * the format the API accepts, so a mistyped URL never reaches it.
  */
 export const chatHistorySearchSchema = v.object({
-  q: v.fallback(v.optional(v.string()), undefined),
+  // Longer than the API accepts would only fail; dropped like a bad matter.
+  q: v.fallback(
+    v.optional(v.pipe(v.string(), v.maxLength(SEARCH_QUERY_MAX_LENGTH))),
+    undefined,
+  ),
   matter: v.fallback(
     v.optional(v.pipe(v.string(), v.check(isUuid))),
     undefined,

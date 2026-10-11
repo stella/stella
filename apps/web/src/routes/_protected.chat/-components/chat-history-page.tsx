@@ -11,6 +11,7 @@ import { getRouteApi, Link } from "@tanstack/react-router";
 import { useDebouncedCallback } from "use-debounce";
 import { useNow, useTimeZone, useTranslations } from "use-intl";
 
+import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 import { Temporal } from "@stll/time";
 import {
   AlertDialog,
@@ -216,6 +217,7 @@ export const ChatHistoryPage = ({
           <SearchField
             aria-label={t("common.search")}
             clearLabel={t("common.clearSearch")}
+            maxLength={SEARCH_QUERY_MAX_LENGTH}
             groupClassName="sm:flex-1"
             onValueChange={(value) => {
               setSearchField((field) => ({ ...field, value }));
