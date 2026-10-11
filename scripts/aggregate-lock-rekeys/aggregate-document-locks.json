@@ -1,0 +1,9 @@
+[
+  {
+    "file": "apps/api/src/lib/entity-versions/publish-folio-collab-checkpoint.ts",
+    "fromFile": "apps/api/src/handlers/entities/publish-folio-collab-version.ts",
+    "from": "b87643ed7b53cb1bf7c9ef00d4557560a9d60d8b6b3acede149feb369654c7fe",
+    "to": "b87643ed7b53cb1bf7c9ef00d4557560a9d60d8b6b3acede149feb369654c7fe",
+    "reason": "Relocate the existing room publication lock to its library owner without changing the acquisition or count."
+  }
+]

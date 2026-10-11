@@ -459,7 +459,7 @@ const searchBoeLegislationArgsSchema = nullAsAbsent(
 );
 
 const SEARCH_BOE_LEGISLATION_TOOL_DEFINITION = defineValibotMcpTool({
-  consumesServices: true,
+  consumesServices: false,
   annotations: {
     title: "Search BOE legislation",
     destructiveHint: false,

@@ -15,7 +15,7 @@ import { MCP_APP_CONSUMED_FIELDS } from "./app-consumed-fields";
 import { MCP_APP_OUTPUT_SCHEMAS } from "./app-contracts";
 import { inspectAppManifest, inspectAppSchemas } from "./app-guards";
 import { isMcpAppAvailable } from "./app-policy";
-import { inspectAppSources } from "./app-source-guard";
+import { inspectAppHtmlSources, inspectAppSources } from "./app-source-guard";
 import {
   filterDefaults,
   resolveView,
@@ -254,6 +254,48 @@ describe("MCP app registry and contracts", () => {
       [...UI_LOCALES].toSorted(),
     );
     expect(actual).toEqual(expected);
+    for (const locale of ["cs", "en", "sk"] as const) {
+      expect(Object.keys(expected[locale]).toSorted()).toEqual(
+        Object.keys(expected.en).toSorted(),
+      );
+      expect(
+        Object.values(expected[locale]).every((value) => value.trim() !== ""),
+      ).toBe(true);
+    }
+  });
+  test("static app copy comes from the shared catalog", async () => {
+    const files = [...new Bun.Glob("**/*.html").scanSync(appRoot)];
+    const sources = Object.fromEntries(
+      await Promise.all(
+        files.map(async (file) => [
+          file,
+          await Bun.file(path.join(appRoot, file)).text(),
+        ]),
+      ),
+    );
+    expect(inspectAppHtmlSources(sources)).toEqual([]);
+  });
+  test("static copy guard rejects text nodes and accessible labels", () => {
+    expect(
+      inspectAppHtmlSources({
+        "file-comparison/app.html":
+          '<title>Compare two files</title><h1>Compare two files</h1><input aria-label="Original" placeholder="Choose file"><img alt="Preview"><button title="Upload">Upload for redline</button>',
+      }),
+    ).toEqual([
+      "App HTML copy requires the shared catalog: file-comparison/app.html: Compare two files",
+      "App HTML copy requires the shared catalog: file-comparison/app.html: Compare two files",
+      "App HTML copy requires the shared catalog: file-comparison/app.html: Original",
+      "App HTML copy requires the shared catalog: file-comparison/app.html: Choose file",
+      "App HTML copy requires the shared catalog: file-comparison/app.html: Preview",
+      "App HTML copy requires the shared catalog: file-comparison/app.html: Upload for redline",
+      "App HTML copy requires the shared catalog: file-comparison/app.html: Upload",
+    ]);
+    expect(
+      inspectAppHtmlSources({
+        "shared/app.html":
+          '<title>stella</title><style>body { color: red; }</style><script>const title = "Compare two files";</script><!-- Original --><div>…</div><button aria-label=""></button>',
+      }),
+    ).toEqual([]);
   });
   test("app consumed-field snapshots match the fields the view actually reads", () => {
     const search = new Set([

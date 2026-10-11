@@ -21,6 +21,7 @@ const bodySchema = t.Object({
   required: t.Optional(t.Boolean()),
 });
 const config = {
+  contract: "patch",
   featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Add a column to a list by binding one of the matter's properties to it, " +

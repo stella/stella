@@ -1072,10 +1072,6 @@
     "reason": "Existing ALL_MATTERS_STACK_COLORS domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/components/pdf/page-organizer.tsx::LoadedPDFPageOrganizer::domain:[\"top\",\"right\",\"bottom\",\"left\"]::1",
-    "reason": "Existing LoadedPDFPageOrganizer domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/components/pdf/versions-sidebar.tsx::MENU_OWNED_KEYS::domain:[\"Escape\",\"ArrowDown\",\"ArrowUp\"]::1",
     "reason": "Existing MENU_OWNED_KEYS domain; contract ownership pending migration."
   },

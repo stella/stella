@@ -11,6 +11,11 @@ import {
 } from "@/api/lib/fields/write-field";
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/fields/upsert.ts",
+  },
   description:
     "Set a document's value for a property (a cell in the matter's table). " +
     "Pass the document entityId, the propertyId (from list_properties), and " +

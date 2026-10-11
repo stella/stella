@@ -23,9 +23,8 @@ import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
 const organizationId =
   parseAuthProviderId<"organization">("organization") ??
   panic("Fixture organization id is invalid");
-const admissionResult = await admitLawRead({
+const admissionResult = admitLawRead({
   organizationId,
-  mayReadPublicLaw: async () => Result.ok(true),
   publicLawEnabled: () => true,
 });
 const admission = Result.isOk(admissionResult)

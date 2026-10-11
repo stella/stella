@@ -72,6 +72,10 @@ pub fn not_connected() -> String {
   "Desktop account is not connected".into()
 }
 
+pub fn role_forbidden() -> String {
+  crate::account::role_forbidden_error()
+}
+
 pub fn rate_limited() -> String {
   "Registry requests are rate limited".into()
 }
@@ -116,6 +120,10 @@ async fn request_path(
   .await
   .map_err(|_| "Registry search is unavailable")?;
   let unauthorized = response.status() == reqwest::StatusCode::UNAUTHORIZED;
+  if response.status() == reqwest::StatusCode::FORBIDDEN {
+    tracing::warn!(target: crate::logging::TRAIL_TARGET, event = "registry.forbidden", status = 403_u16);
+    return Err(role_forbidden());
+  }
   if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
     return Err(rate_limited());
   }
@@ -197,11 +205,11 @@ pub async fn registry_get_state(
     Err(error) => return Err(error),
   };
   let config =
-    match request(saved.request_auth(), serde_json::json!({"type":"config"})).await {
+    match request_current(&app, &state, &saved, serde_json::json!({"type":"config"}))
+      .await
+    {
       Ok(config) => config,
       Err(error) if error == not_connected() => {
-        account::invalidate(&state, &saved).await?;
-        account::notify(&app);
         return Ok(serde_json::json!({"status":"disconnected"}));
       }
       Err(error) => return Err(error),
@@ -219,8 +227,8 @@ pub async fn registry_get_state(
   )
 }
 
-async fn request_current(
-  app: &tauri::AppHandle,
+/// Only a decoded credential refusal ends the link; proof and role refusals keep it.
+async fn request_linked(
   state: &AccountState,
   saved: &account::AccountRequest,
   body: serde_json::Value,
@@ -231,6 +239,20 @@ async fn request_current(
     .is_err_and(|error| *error == not_connected())
   {
     account::invalidate(state, saved).await?;
+  }
+  result
+}
+
+async fn request_current(
+  app: &tauri::AppHandle,
+  state: &AccountState,
+  saved: &account::AccountRequest,
+  body: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+  let result = request_linked(state, saved, body).await;
+  if result.as_ref().is_err_and(|error| {
+    *error == not_connected() || *error == account::keychain_clear_failed()
+  }) {
     account::notify(app);
   }
   result
@@ -402,6 +424,76 @@ mod tests {
       );
     }
     server.abort();
+  }
+
+  #[tokio::test]
+  async fn only_a_rejected_credential_ends_the_account_link() {
+    use axum::{Router, http::StatusCode, routing::post};
+
+    for (case, (status, body, expected, linked)) in [
+      (
+        StatusCode::UNAUTHORIZED,
+        serde_json::json!({"code":"desktop_proof_invalid"}),
+        "Desktop account proof was refused".into(),
+        true,
+      ),
+      (
+        StatusCode::UNAUTHORIZED,
+        serde_json::json!({"message":"Reconnect desktop to your account"}),
+        not_connected(),
+        false,
+      ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+      let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+      let address = listener.local_addr().unwrap();
+      let router = Router::new().route(
+        "/v1/desktop-registry/request",
+        post(move || {
+          let body = body.clone();
+          async move { (status, axum::Json(body)) }
+        }),
+      );
+      let server = tokio::spawn(async move {
+        axum::serve(listener, router).await.unwrap();
+      });
+      let saved = LinkedAccount {
+        device_key: crate::device_proof::DeviceKey::fixture(),
+        api_base_url: format!("http://{address}"),
+        web_origin: "http://localhost:3000".into(),
+        identity: crate::types::DesktopAccountIdentity {
+          user_id: "user_fixture".into(),
+          organization_id: "org_fixture".into(),
+        },
+        account: crate::types::LinkedAccountSnapshot {
+          email: "desktop@example.test".into(),
+          name: None,
+          verified_at: chrono::Utc::now().to_rfc3339(),
+        },
+        credential: crate::types::DesktopAccountCredential {
+          key: format!("stella_dr_registry_{case}"),
+          expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).to_rfc3339(),
+        },
+      };
+      let state: AccountState = std::sync::Arc::new(tokio::sync::Mutex::new(
+        account::AccountStore::Memory(Some(saved.clone())),
+      ));
+      let saved = account::AccountRequest::fixture(saved).await;
+      assert_eq!(
+        request_linked(
+          &state,
+          &saved,
+          serde_json::json!({"type":"search", "registry":"ares", "query":"fixture"}),
+        )
+        .await
+        .unwrap_err(),
+        expected
+      );
+      assert_eq!(account::current(&state).await.unwrap().is_some(), linked);
+      server.abort();
+    }
   }
 
   #[test]

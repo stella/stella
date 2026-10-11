@@ -206,3 +206,51 @@ describe("page organizer state transitions", () => {
     expect(isPageOrganizerDirty(state)).toBe(true);
   });
 });
+
+test("per-page crops commit atomically and undo to the original crop fixed point", () => {
+  const initialCrop = { x: 0.1, y: 0.2, width: 0.7, height: 0.6 };
+  const initial = createPageOrganizerState({
+    pages: pages(3).map((page) => ({ ...page, crop: initialCrop })),
+  });
+  const crops = new Map([
+    ["page-1", { x: 0.2, y: 0.1, width: 0.6, height: 0.7 }],
+    ["page-2", { x: 0.1, y: 0.05, width: 0.8, height: 0.9 }],
+  ]);
+  const changed = reducePageOrganizer(initial, { type: "setPageCrops", crops });
+  expect(changed.history.past).toHaveLength(1);
+  for (const page of changed.history.present.pages) {
+    expect(page.crop).toEqual(crops.get(page.id) ?? initialCrop);
+  }
+  const undone = reducePageOrganizer(changed, { type: "undo" });
+  expect(undone.history.present).toEqual(initial.history.present);
+  expect(reducePageOrganizer(undone, { type: "redo" }).history.present).toEqual(
+    changed.history.present,
+  );
+  const reset = reducePageOrganizer(changed, {
+    type: "setPageCrops",
+    crops: new Map([
+      ["page-1", null],
+      ["page-2", null],
+    ]),
+  });
+  expect(reset.history.present.pages.at(0)).not.toHaveProperty("crop");
+  expect(reset.history.present.pages.at(1)).not.toHaveProperty("crop");
+  expect(reset.history.present.pages.at(2)?.crop).toEqual(initialCrop);
+  expect(reducePageOrganizer(reset, { type: "undo" }).history.present).toEqual(
+    changed.history.present,
+  );
+});
+
+test("identical per-page crops do not create an undo entry", () => {
+  const initial = stateWith();
+  const crop = { x: 0.1, y: 0.1, width: 0.8, height: 0.8 };
+  const cropped = reducePageOrganizer(initial, {
+    type: "setPageCrops",
+    crops: new Map([["page-1", crop]]),
+  });
+  const repeated = reducePageOrganizer(cropped, {
+    type: "setPageCrops",
+    crops: new Map([["page-1", crop]]),
+  });
+  expect(repeated.history.past).toHaveLength(1);
+});

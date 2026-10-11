@@ -32,6 +32,7 @@ import { createStoredTemplate } from "@/api/lib/templates/create-template";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason: "Clones a report template without delivering stored-file bytes.",
