@@ -1389,7 +1389,10 @@ type AggregateQueryIdentity =
 type AggregateRowQueryOptions<Row> = AggregateQueryIdentity & {
   mode: RowLockMode;
   select: (tx: Transaction) => {
-    where: (predicate: SQL) => AggregateLockableQuery<Row>;
+    // Infer the projection before Drizzle's polymorphic where/for methods.
+    // Only the scoped locking query executes; this method supplies its row type.
+    execute: () => PromiseLike<Row[]>;
+    where: (predicate: SQL) => AggregateLockableQuery<NoInfer<Row>>;
     toSQL: () => { sql: string };
     as: (alias: string) => Subquery;
   };
@@ -1983,10 +1986,11 @@ type AggregateSetQueryOptions<Row> = AggregateSetScope & {
   tx: Transaction;
   mode: RowLockMode;
   select: (tx: Transaction) => {
+    execute: () => PromiseLike<Row[]>;
     toSQL: () => { sql: string };
     as: (alias: string) => Subquery;
     where: (predicate: SQL) => {
-      orderBy: (order: SQL) => AggregateSetQuery<Row>;
+      orderBy: (order: SQL) => AggregateSetQuery<NoInfer<Row>>;
     };
   };
   where?: SQL;
@@ -2149,7 +2153,9 @@ export const withAggregateSetQuery = async <Row>(
     assertBatchIdAlphabet(id);
     const previous = returnedIds.at(index - 1);
     if (
-      (previous !== undefined && compareCodeUnit(previous, id) >= 0) ||
+      (index > 0 &&
+        previous !== undefined &&
+        compareCodeUnit(previous, id) >= 0) ||
       (knownIdSet !== undefined && !knownIdSet.has(id))
     ) {
       panic(

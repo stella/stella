@@ -41,6 +41,7 @@ export const setQueryAdapter = <Row>({
   statements,
   ordering = "ordered",
 }: SetQueryAdapterOptions<Row>) => ({
+  execute: () => Promise.resolve(rows),
   toSQL: () => query.toSQL(),
   as: (alias: string) => query.as(alias),
   where: (predicate: SQL) => ({
@@ -59,7 +60,7 @@ export const setQueryAdapter = <Row>({
         as: (alias: string) => scoped.as(alias),
         for: async (mode: RowLockMode) => {
           statements.push(scoped.for(mode).toSQL());
-          return rows;
+          return await Promise.resolve(rows);
         },
       });
       return {
@@ -120,12 +121,12 @@ export const listSetFixture = () => {
   };
 };
 
-export const plantedUnorderedSetQuery = (
+export const plantedUnorderedSetQuery = async (
   tx: Transaction,
   statements: { sql: string; params: unknown[] }[],
 ) => {
   const fixture = listSetFixture();
-  return withAggregateSetQuery({
+  return await withAggregateSetQuery({
     tx,
     aggregate: "listGenerationSource",
     scope: fixture.sourceScope,

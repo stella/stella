@@ -4,7 +4,10 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { toSafeId } from "@/api/lib/branded-types";
+
 import {
+  AGGREGATE_LOCKS,
   AggregateLockBusy,
   ROW_LOCK_MODES,
   withAggregateLock,
@@ -20,6 +23,232 @@ import {
 } from "./aggregate-lock-order.fixture";
 
 describe("blocking aggregate order regressions", () => {
+  test("all list row registrations share physical coverage across UUID case aliases after a higher rank", async () => {
+    type Registry = typeof AGGREGATE_LOCKS;
+    type ListRowName = {
+      [Name in keyof Registry]: Registry[Name]["rank"] extends
+        | 530
+        | 540
+        | 550
+        | 560
+        | 570
+        | 580
+        | 590
+        ? Name
+        : never;
+    }[keyof Registry];
+    type LockOptions = Parameters<typeof withAggregateLock>[0];
+    type CaseFixtures = {
+      [Name in ListRowName]: {
+        upper: Omit<Extract<LockOptions, { aggregate: Name }>, "tx">;
+        lower: Omit<Extract<LockOptions, { aggregate: Name }>, "tx">;
+        table: string;
+      };
+    };
+    const upperWorkspaceId = toSafeId<"workspace">(
+      "ABCDABCD-ABCD-4ABC-8ABC-ABCDEFABCDEF",
+    );
+    const lowerWorkspaceId = toSafeId<"workspace">(
+      "abcdabcd-abcd-4abc-8abc-abcdefabcdef",
+    );
+    expect(upperWorkspaceId).not.toBe(lowerWorkspaceId);
+    const fixtures = {
+      legalList: {
+        upper: {
+          aggregate: "legalList",
+          id: {
+            id: toSafeId<"legalList">("ABCDEFAB-ABCD-4ABC-8ABC-ABCDEFABCDEF"),
+            workspaceId: upperWorkspaceId,
+          },
+          mode: "update",
+        },
+        lower: {
+          aggregate: "legalList",
+          id: {
+            id: toSafeId<"legalList">("abcdefab-abcd-4abc-8abc-abcdefabcdef"),
+            workspaceId: lowerWorkspaceId,
+          },
+          mode: "update",
+        },
+        table: "legal_lists",
+      },
+      listGenerationRun: {
+        upper: {
+          aggregate: "listGenerationRun",
+          id: {
+            id: toSafeId<"legalListGenerationRun">(
+              "ABCDEFAB-ABCD-4ABC-8ABC-ABCDEFABCDEF",
+            ),
+            workspaceId: upperWorkspaceId,
+          },
+          mode: "update",
+        },
+        lower: {
+          aggregate: "listGenerationRun",
+          id: {
+            id: toSafeId<"legalListGenerationRun">(
+              "abcdefab-abcd-4abc-8abc-abcdefabcdef",
+            ),
+            workspaceId: lowerWorkspaceId,
+          },
+          mode: "update",
+        },
+        table: "legal_list_generation_runs",
+      },
+      listGenerationCandidate: {
+        upper: {
+          aggregate: "listGenerationCandidate",
+          id: {
+            id: toSafeId<"legalListGenerationCandidate">(
+              "ABCDEFAB-ABCD-4ABC-8ABC-ABCDEFABCDEF",
+            ),
+            workspaceId: upperWorkspaceId,
+          },
+          mode: "update",
+        },
+        lower: {
+          aggregate: "listGenerationCandidate",
+          id: {
+            id: toSafeId<"legalListGenerationCandidate">(
+              "abcdefab-abcd-4abc-8abc-abcdefabcdef",
+            ),
+            workspaceId: lowerWorkspaceId,
+          },
+          mode: "update",
+        },
+        table: "legal_list_generation_candidates",
+      },
+      listGenerationSource: {
+        upper: {
+          aggregate: "listGenerationSource",
+          id: {
+            id: toSafeId<"legalListGenerationCandidateSource">(
+              "ABCDEFAB-ABCD-4ABC-8ABC-ABCDEFABCDEF",
+            ),
+            workspaceId: upperWorkspaceId,
+          },
+          mode: "update",
+        },
+        lower: {
+          aggregate: "listGenerationSource",
+          id: {
+            id: toSafeId<"legalListGenerationCandidateSource">(
+              "abcdefab-abcd-4abc-8abc-abcdefabcdef",
+            ),
+            workspaceId: lowerWorkspaceId,
+          },
+          mode: "update",
+        },
+        table: "legal_list_generation_candidate_sources",
+      },
+      listVerificationRun: {
+        upper: {
+          aggregate: "listVerificationRun",
+          id: {
+            id: toSafeId<"legalListVerificationRun">(
+              "ABCDEFAB-ABCD-4ABC-8ABC-ABCDEFABCDEF",
+            ),
+            workspaceId: upperWorkspaceId,
+          },
+          mode: "update",
+        },
+        lower: {
+          aggregate: "listVerificationRun",
+          id: {
+            id: toSafeId<"legalListVerificationRun">(
+              "abcdefab-abcd-4abc-8abc-abcdefabcdef",
+            ),
+            workspaceId: lowerWorkspaceId,
+          },
+          mode: "update",
+        },
+        table: "legal_list_verification_runs",
+      },
+      listVerificationClaim: {
+        upper: {
+          aggregate: "listVerificationClaim",
+          id: {
+            id: toSafeId<"legalListClaim">(
+              "ABCDEFAB-ABCD-4ABC-8ABC-ABCDEFABCDEF",
+            ),
+            workspaceId: upperWorkspaceId,
+          },
+          mode: "update",
+        },
+        lower: {
+          aggregate: "listVerificationClaim",
+          id: {
+            id: toSafeId<"legalListClaim">(
+              "abcdefab-abcd-4abc-8abc-abcdefabcdef",
+            ),
+            workspaceId: lowerWorkspaceId,
+          },
+          mode: "update",
+        },
+        table: "legal_list_claims",
+      },
+      listFactDetails: {
+        upper: {
+          aggregate: "listFactDetails",
+          id: {
+            itemEntityId: toSafeId<"entity">(
+              "ABCDEFAB-ABCD-4ABC-8ABC-ABCDEFABCDEF",
+            ),
+            workspaceId: upperWorkspaceId,
+          },
+          mode: "update",
+        },
+        lower: {
+          aggregate: "listFactDetails",
+          id: {
+            itemEntityId: toSafeId<"entity">(
+              "abcdefab-abcd-4abc-8abc-abcdefabcdef",
+            ),
+            workspaceId: lowerWorkspaceId,
+          },
+          mode: "update",
+        },
+        table: "legal_list_fact_details",
+      },
+    } as const satisfies CaseFixtures;
+    expect(Object.keys(fixtures).toSorted()).toEqual(
+      Object.entries(AGGREGATE_LOCKS)
+        .filter(([, entry]) => entry.rank >= 530 && entry.rank <= 590)
+        .map(([name]) => name)
+        .toSorted(),
+    );
+    for (const fixture of Object.values(fixtures)) {
+      const { tx, statements } = aggregateRecorder();
+      expect(await withAggregateLock({ ...fixture.upper, tx })).toEqual({
+        status: "locked",
+      });
+      await withAggregateLock({
+        aggregate: "signal",
+        id: {
+          id: toSafeId<"signal">("01234567-abcd-4abc-8abc-abcdefabcdef"),
+          organizationId: toSafeId<"organization">("CaseSensitiveOrganization"),
+        },
+        mode: "update",
+        tx,
+      });
+      expect(await withAggregateLock({ ...fixture.lower, tx })).toEqual({
+        status: "locked",
+      });
+      expect(statements).toHaveLength(3);
+      for (const statement of [statements.at(0), statements.at(2)]) {
+        expect(statement?.sql).toContain(`FROM "public"."${fixture.table}"`);
+        expect(statement?.params).toEqual([
+          "abcdefab-abcd-4abc-8abc-abcdefabcdef",
+          "abcdabcd-abcd-4abc-8abc-abcdefabcdef",
+        ]);
+      }
+      expect(statements.at(1)?.params).toEqual([
+        "01234567-abcd-4abc-8abc-abcdefabcdef",
+        "CaseSensitiveOrganization",
+      ]);
+    }
+  });
+
   test("chat revision locks scope the thread to its principal and the message to its thread", async () => {
     const fixture = aggregateFences();
     const { tx, statements } = aggregateRecorder();

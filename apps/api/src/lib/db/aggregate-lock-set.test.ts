@@ -90,8 +90,8 @@ test("known claim sets deduplicate requests, lock in physical order, bound the q
     panic("Missing claim fixture");
   }
   ids.push(first);
-  const acquire = (rows: typeof fixture.claimRows) =>
-    withAggregateSetQuery({
+  const acquire = async (rows: typeof fixture.claimRows) =>
+    await withAggregateSetQuery({
       tx,
       aggregate: "listVerificationClaim",
       scope: fixture.claimScope,
@@ -353,6 +353,7 @@ test("a UUID row-query case alias reuses canonical held coverage after advancing
   const select = () => {
     const query = fixture.claimQuery();
     return {
+      execute: () => Promise.resolve(rows),
       toSQL: () => query.toSQL(),
       as: (alias: string) => query.as(alias),
       where: (predicate: SQL) => {

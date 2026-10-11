@@ -40,6 +40,7 @@ test("joined source locks preserve every target and retain child rank history", 
     select: () => {
       const query = fixture.select();
       return {
+        execute: () => query.execute(),
         toSQL: () => query.toSQL(),
         as: (alias: string) => query.as(alias),
         where: (predicate: SQL) => {

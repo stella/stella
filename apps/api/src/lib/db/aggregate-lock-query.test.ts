@@ -43,6 +43,7 @@ const malformedWorkspaceQuery = (
     .select({ id: workspaces.id, organizationId: workspaces.organizationId })
     .from(workspaces);
   return {
+    execute: () => query.execute(),
     toSQL: () => query.toSQL(),
     as: (alias: string) => query.as(alias),
     where: (predicate: SQL) => {
@@ -584,6 +585,7 @@ describe("owner-scoped query predicates", () => {
                   }
                 })();
                 return {
+                  execute: () => query.execute(),
                   toSQL: () => query.toSQL(),
                   as: (alias: string) => query.as(alias),
                   where: (predicate: SQL) => {
@@ -1072,6 +1074,7 @@ describe("NOWAIT acquisition fencing", () => {
             })
             .from(workspaces);
           return {
+            execute: () => query.execute(),
             toSQL: () => query.toSQL(),
             as: (alias: string) => query.as(alias),
             where: (predicate: SQL) => {

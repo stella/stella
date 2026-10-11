@@ -493,9 +493,9 @@ if (!databaseUrl || !enabled) {
     test("fact update waits and observes the prior writer's committed detail", async () => {
       await withFixture(databaseUrl, async (fixture) => {
         const recorded: unknown[] = [];
-        const factAudit = auditRecorderDouble((events) =>
-          recorded.push(...events),
-        );
+        const factAudit = auditRecorderDouble((events) => {
+          recorded.push(...events);
+        });
         const body = {
           listId: fixture.listId,
           itemEntityId: fixture.entityId,
