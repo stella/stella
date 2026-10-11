@@ -15,6 +15,7 @@ import {
   findVersionDrift,
 } from "../packages/external-contracts/src/guard";
 import { EXTERNAL_CONTRACTS } from "../packages/external-contracts/src/registry";
+import type { ExternalContractEntry } from "../packages/external-contracts/src/types";
 import {
   checkExternalContracts,
   findShrinkOnlyGrowth,
@@ -225,12 +226,14 @@ test("literal classification sources bind shrink-only keys without executing mod
       owners: [{ path: "owner.ts", reason: "Replay pending." }],
       sdks: [{ package: "remote-sdk", reason: "Capture pending." }]
     } },
-    other: { status: "uncharacterised", reason: "Pending." }
+    other: { status: "uncharacterised", reason: "Pending.", owners: [{ path: "other.ts", role: "primary" }], sdks: ["other-sdk"] }
   } as const;`;
   expect(inProcessFromSource(ledger)).toEqual(["local-one"]);
   expect(uncharacterisedScopeFromSource(registry)).toEqual([
     "fixture#owners:owner.ts",
     "fixture#sdks:remote-sdk",
+    "other#owners:other.ts",
+    "other#sdks:other-sdk",
   ]);
   expect(
     findShrinkOnlyGrowth({
@@ -262,7 +265,82 @@ test("literal classification sources bind shrink-only keys without executing mod
   ).toEqual([]);
 });
 
-test("the partial-scope and in-process AST ledgers match their declared keys", () => {
+test("whole uncharacterised contracts can promote uncovered subsets without admitting new surfaces", () => {
+  const baselineSource = `export const EXTERNAL_CONTRACTS = {
+    fixture: { status: "uncharacterised", reason: "Captures pending.", owners: [
+      { path: "covered.ts", role: "primary" }, { path: "pending.ts", role: "shared" }
+    ], sdks: ["covered-sdk", "pending-sdk"] }
+  } as const;`;
+  const partialSource = `export const EXTERNAL_CONTRACTS = {
+    fixture: { status: "characterised", uncharacterisedScope: {
+      owners: [{ path: "pending.ts", reason: "Replay pending." }],
+      sdks: [{ package: "pending-sdk", reason: "Capture pending." }]
+    } }
+  } as const;`;
+  const baseline = uncharacterisedScopeFromSource(baselineSource);
+  const current = uncharacterisedScopeFromSource(partialSource);
+  expect(baseline).toEqual([
+    "fixture#owners:covered.ts",
+    "fixture#owners:pending.ts",
+    "fixture#sdks:covered-sdk",
+    "fixture#sdks:pending-sdk",
+  ]);
+  expect(current).toEqual([
+    "fixture#owners:pending.ts",
+    "fixture#sdks:pending-sdk",
+  ]);
+  expect(
+    findShrinkOnlyGrowth({ current, baseline, label: "Uncharacterised scope" }),
+  ).toEqual([]);
+  const expandedWhole = baselineSource
+    .replace('"pending.ts"', '"new-owner.ts"')
+    .replace('"pending-sdk"', '"new-sdk"');
+  expect(
+    findShrinkOnlyGrowth({
+      current: uncharacterisedScopeFromSource(expandedWhole),
+      baseline,
+      label: "Uncharacterised scope",
+    }),
+  ).toEqual([
+    "Uncharacterised scope fixture#owners:new-owner.ts: classification keys only shrink; add runtime characterisation instead of expanding the exemption.",
+    "Uncharacterised scope fixture#sdks:new-sdk: classification keys only shrink; add runtime characterisation instead of expanding the exemption.",
+  ]);
+  expect(
+    findShrinkOnlyGrowth({
+      current: uncharacterisedScopeFromSource(
+        partialSource.replace('"pending.ts"', '"new-owner.ts"'),
+      ),
+      baseline,
+      label: "Uncharacterised scope",
+    }),
+  ).toEqual([
+    "Uncharacterised scope fixture#owners:new-owner.ts: classification keys only shrink; add runtime characterisation instead of expanding the exemption.",
+  ]);
+});
+
+const expectedUncoveredScope = (
+  system: string,
+  entry: ExternalContractEntry,
+) => {
+  switch (entry.status) {
+    case "characterised":
+      return [
+        ...entry.uncharacterisedScope.owners.map(
+          ({ path: owner }) => `${system}#owners:${owner}`,
+        ),
+        ...entry.uncharacterisedScope.sdks.map(
+          ({ package: sdk }) => `${system}#sdks:${sdk}`,
+        ),
+      ];
+    case "uncharacterised":
+      return [
+        ...entry.owners.map(({ path: owner }) => `${system}#owners:${owner}`),
+        ...entry.sdks.map((sdk) => `${system}#sdks:${sdk}`),
+      ];
+  }
+};
+
+test("all uncovered surfaces and in-process AST ledgers match their declared keys", () => {
   expect(
     inProcessFromSource(
       readFileSync(
@@ -275,17 +353,7 @@ test("the partial-scope and in-process AST ledgers match their declared keys", (
     ).toSorted(),
   ).toEqual(Object.keys(IN_PROCESS_DEPENDENCIES).toSorted());
   const expected = Object.entries(EXTERNAL_CONTRACTS).flatMap(
-    ([system, entry]) =>
-      entry.status === "characterised"
-        ? [
-            ...entry.uncharacterisedScope.owners.map(
-              ({ path: owner }) => `${system}#owners:${owner}`,
-            ),
-            ...entry.uncharacterisedScope.sdks.map(
-              ({ package: sdk }) => `${system}#sdks:${sdk}`,
-            ),
-          ]
-        : [],
+    ([system, entry]) => expectedUncoveredScope(system, entry),
   );
   expect(
     uncharacterisedScopeFromSource(

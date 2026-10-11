@@ -118,10 +118,9 @@ const createEvidenceResolver = ({
                   specifier.length - suffix.length,
                 );
           for (const replacement of replacements) {
-            const pathsBasePath = config.options.pathsBasePath;
+            const pathsBasePath = config.options["pathsBasePath"];
             const base =
-              config.options.baseUrl ??
-              (typeof pathsBasePath === "string" ? pathsBasePath : current);
+              typeof pathsBasePath === "string" ? pathsBasePath : current;
             const candidate = path.resolve(
               base,
               replacement.replace("*", () => match),
@@ -203,7 +202,7 @@ const createEvidenceResolver = ({
 const typeOnlyImport = (clause: ts.ImportClause | undefined) => {
   const bindings = clause?.namedBindings;
   return (
-    clause?.isTypeOnly ||
+    clause?.phaseModifier === ts.SyntaxKind.TypeKeyword ||
     (clause?.name === undefined &&
       bindings !== undefined &&
       ts.isNamedImports(bindings) &&
@@ -465,7 +464,7 @@ export const readFixtureEvidence = ({
         }
         return;
       }
-      if (target && identity !== undefined) {
+      if (target) {
         sdks.add(identity);
       }
       // Non-target third-party libraries are terminal: missing indirect evidence stays uncharacterised.

@@ -537,6 +537,54 @@ export const inProcessFromSource = (text: string): string[] => {
   });
 };
 
+const uncoveredScope = (entry: ts.ObjectLiteralExpression, status: string) => {
+  if (status === "uncharacterised") {
+    return entry;
+  }
+  if (status !== "characterised") {
+    return panic(`External classification source: unknown status ${status}.`);
+  }
+  // Older characterised snapshots have no partial scope and therefore no uncovered keys.
+  const scopeProperty = entry.properties.find(
+    (member) =>
+      ts.isPropertyAssignment(member) &&
+      (ts.isIdentifier(member.name) || ts.isStringLiteral(member.name)) &&
+      member.name.text === "uncharacterisedScope",
+  );
+  if (scopeProperty === undefined) {
+    return undefined;
+  }
+  const scope = literalMember(entry, "uncharacterisedScope");
+  if (!ts.isObjectLiteralExpression(scope)) {
+    return panic("External uncharacterised scope must be literal.");
+  }
+  return scope;
+};
+
+type UncoveredKeyOptions = {
+  entry: ts.Expression;
+  kind: "owners" | "sdks";
+  field: "path" | "package";
+  status: string;
+};
+
+const uncoveredKey = ({ entry, kind, field, status }: UncoveredKeyOptions) => {
+  if (status === "uncharacterised" && kind === "sdks") {
+    if (!ts.isStringLiteral(entry)) {
+      return panic("Whole uncharacterised SDK keys must be literal strings.");
+    }
+    return entry.text;
+  }
+  if (!ts.isObjectLiteralExpression(entry)) {
+    return panic(`Uncharacterised ${kind} entries must be literal objects.`);
+  }
+  const key = literalMember(entry, field);
+  if (!ts.isStringLiteral(key)) {
+    return panic(`Uncharacterised ${kind} keys must be literal strings.`);
+  }
+  return key.text;
+};
+
 export const uncharacterisedScopeFromSource = (text: string): string[] => {
   const registry = declaredInitializer(
     REGISTRY_PATH,
@@ -559,24 +607,9 @@ export const uncharacterisedScopeFromSource = (text: string): string[] => {
     if (!ts.isStringLiteral(status)) {
       return panic(`${property.name.text}: missing literal contract status.`);
     }
-    if (status.text !== "characterised") {
+    const scope = uncoveredScope(property.initializer, status.text);
+    if (scope === undefined) {
       continue;
-    }
-    // Older registry snapshots predate partial scope; their missing set is empty.
-    const scopeProperty = property.initializer.properties.find(
-      (member) =>
-        ts.isPropertyAssignment(member) &&
-        (ts.isIdentifier(member.name) || ts.isStringLiteral(member.name)) &&
-        member.name.text === "uncharacterisedScope",
-    );
-    if (scopeProperty === undefined) {
-      continue;
-    }
-    const scope = literalMember(property.initializer, "uncharacterisedScope");
-    if (!ts.isObjectLiteralExpression(scope)) {
-      return panic(
-        `${property.name.text}: uncharacterised scope must be literal.`,
-      );
     }
     for (const [kind, field] of [
       ["owners", "path"],
@@ -589,18 +622,8 @@ export const uncharacterisedScopeFromSource = (text: string): string[] => {
         );
       }
       for (const entry of entries.elements) {
-        if (!ts.isObjectLiteralExpression(entry)) {
-          return panic(
-            `${property.name.text}: uncharacterised ${kind} entries must be literal.`,
-          );
-        }
-        const key = literalMember(entry, field);
-        if (!ts.isStringLiteral(key)) {
-          return panic(
-            `${property.name.text}: uncharacterised ${kind} keys must be literal strings.`,
-          );
-        }
-        keys.push(`${property.name.text}#${kind}:${key.text}`);
+        const key = uncoveredKey({ entry, kind, field, status: status.text });
+        keys.push(`${property.name.text}#${kind}:${key}`);
       }
     }
   }
