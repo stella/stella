@@ -4,6 +4,10 @@ import path from "node:path";
 import ts from "typescript";
 
 import { positiveSqlConjunctInterpolations } from "./case-law-publication-conjuncts";
+import {
+  CASE_LAW_DECISION_TABLE,
+  createDecisionTableResolver,
+} from "./case-law-publication-tables";
 
 const lastSqlToken = (text: string, pattern: RegExp): number =>
   Math.max(-1, ...[...text.matchAll(pattern)].map((match) => match.index));
@@ -220,6 +224,9 @@ type OwnerConjunctOptions = {
   sqlNames: ReadonlySet<string>;
   resolveName?: (node: ts.Identifier) => ts.Node | undefined;
   alias?: string;
+  table?: string;
+  tableOf?: (node: ts.Node) => string | undefined;
+  constantTables?: ReadonlyMap<string, string>;
 };
 
 const isOwnerConjunct = ({
@@ -229,8 +236,23 @@ const isOwnerConjunct = ({
   sqlNames,
   resolveName,
   alias,
+  table,
+  tableOf,
+  constantTables,
 }: OwnerConjunctOptions): boolean => {
   const visited = new Set<ts.Node>();
+  const matchesOwnerCall = (current: ts.CallExpression): boolean => {
+    if (table !== undefined) {
+      const target = current.arguments.at(0);
+      return target !== undefined && tableOf?.(target) === table;
+    }
+    return (
+      alias === undefined ||
+      current.arguments.some(
+        (argument) => ts.isStringLiteral(argument) && argument.text === alias,
+      )
+    );
+  };
   const visit = (current: ts.Node): boolean => {
     if (visited.has(current)) {
       return false;
@@ -241,7 +263,10 @@ const isOwnerConjunct = ({
     }
     if (ts.isIdentifier(current)) {
       if (names.has(current.text)) {
-        return alias === undefined;
+        return (
+          alias === undefined &&
+          (table === undefined || constantTables?.get(current.text) === table)
+        );
       }
       const initializer = resolveName?.(current);
       return initializer !== undefined && visit(initializer);
@@ -249,13 +274,7 @@ const isOwnerConjunct = ({
     if (ts.isCallExpression(current)) {
       if (ts.isIdentifier(current.expression)) {
         if (names.has(current.expression.text)) {
-          return (
-            alias === undefined ||
-            current.arguments.some(
-              (argument) =>
-                ts.isStringLiteral(argument) && argument.text === alias,
-            )
-          );
+          return matchesOwnerCall(current);
         }
         return (
           andNames.has(current.expression.text) && current.arguments.some(visit)
@@ -312,8 +331,14 @@ type ReadSite = {
   node: ts.Node;
   line: number;
   text: string;
-  kind: "builder" | "relational" | "raw";
-};
+} & (
+  | {
+      kind: "builder";
+      target: ts.Expression;
+      joinCondition: ts.Expression | undefined;
+    }
+  | { kind: "relational" | "raw" }
+);
 
 const importNames = (
   tree: ts.SourceFile,
@@ -338,21 +363,10 @@ const importNames = (
 };
 
 const readExpression = (node: ts.Node): ts.Node => {
-  let current = node;
-  while (!ts.isSourceFile(current)) {
-    if (
-      ts.isCallExpression(current) &&
-      ts.isPropertyAccessExpression(current.expression) &&
-      current.expression.name.text === "where"
-    ) {
-      return current;
-    }
-    current = current.parent;
-  }
   let root = node;
   while (
     !ts.isSourceFile(root) &&
-    (ts.isCallExpression(root.parent) ||
+    ((ts.isCallExpression(root.parent) && root.parent.expression === root) ||
       ts.isPropertyAccessExpression(root.parent) ||
       ts.isAwaitExpression(root.parent) ||
       ts.isParenthesizedExpression(root.parent))
@@ -362,19 +376,50 @@ const readExpression = (node: ts.Node): ts.Node => {
   return root;
 };
 
+const builderCalls = (node: ts.Node): ts.CallExpression[] => {
+  const calls: ts.CallExpression[] = [];
+  let current = node;
+  while (true) {
+    if (
+      ts.isAwaitExpression(current) ||
+      ts.isParenthesizedExpression(current)
+    ) {
+      current = current.expression;
+      continue;
+    }
+    if (
+      !ts.isCallExpression(current) ||
+      !ts.isPropertyAccessExpression(current.expression)
+    ) {
+      return calls;
+    }
+    calls.push(current);
+    current = current.expression.expression;
+  }
+};
+
 type OwnerResolver = {
   usesOwner: (node: ts.Node) => boolean;
   hasOwnerAlias: (node: ts.Node, alias: string) => boolean;
-  hasOwnerProjection: (node: ts.Node) => boolean;
+  hasOwnerTable: (node: ts.Node, table: string) => boolean;
+  hasOwnerProjection: (node: ts.Node, table?: string) => boolean;
   hasRelationalWhereOwner: (node: ts.Node) => boolean;
   rawFilterOwners: (node: ts.Node) => ts.Node[];
 };
 
-const createOwnerResolver = (
-  file: string,
-  tree: ts.SourceFile,
-  predicateLocals: ReadonlySet<string>,
-): OwnerResolver => {
+type OwnerResolverOptions = {
+  file: string;
+  tree: ts.SourceFile;
+  predicateLocals: ReadonlySet<string>;
+  tableOf: (node: ts.Node) => string | undefined;
+};
+
+const createOwnerResolver = ({
+  file,
+  tree,
+  predicateLocals,
+  tableOf,
+}: OwnerResolverOptions): OwnerResolver => {
   const initializers = new Map<ts.Node, Map<string, ts.Node>>();
   const scopeOf = (node: ts.Node): ts.Node => {
     let current = node;
@@ -477,6 +522,37 @@ const createOwnerResolver = (
       resolveName,
       alias,
     });
+  const constantTables = new Map<string, string>();
+  for (const statement of tree.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      !isOwnerModule(file, statement.moduleSpecifier.text)
+    ) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings && ts.isNamedImports(bindings)) {
+      for (const item of bindings.elements) {
+        if (
+          (item.propertyName ?? item.name).text === "publishedCaseLawDecision"
+        ) {
+          constantTables.set(item.name.text, CASE_LAW_DECISION_TABLE);
+        }
+      }
+    }
+  }
+  const hasOwnerTable = (node: ts.Node, table: string): boolean =>
+    isOwnerConjunct({
+      node,
+      names: predicateLocals,
+      andNames,
+      sqlNames,
+      resolveName,
+      table,
+      tableOf,
+      constantTables,
+    });
 
   const hasOwnerEvidence = (node: ts.Node): boolean =>
     resolves(
@@ -484,7 +560,7 @@ const createOwnerResolver = (
       (current) =>
         ts.isIdentifier(current) && predicateLocals.has(current.text),
     );
-  const hasFilteredQuery = (node: ts.Node): boolean => {
+  const hasFilteredQuery = (node: ts.Node, table?: string): boolean => {
     const visited = new Set<ts.Node>();
     const visit = (current: ts.Node): boolean => {
       if (visited.has(current)) {
@@ -508,7 +584,11 @@ const createOwnerResolver = (
         return false;
       }
       if (current.expression.name.text === "where") {
-        return current.arguments.some(usesOwner);
+        return current.arguments.some((argument) =>
+          table === undefined
+            ? usesOwner(argument)
+            : hasOwnerTable(argument, table),
+        );
       }
       return visit(current.expression.expression);
     };
@@ -518,12 +598,15 @@ const createOwnerResolver = (
   return {
     usesOwner,
     hasOwnerAlias,
+    hasOwnerTable,
     ...createOwnerQueryChecks({
       file,
       tree,
       usesOwner,
       hasOwnerEvidence,
       hasFilteredQuery,
+      hasOwnerTable,
+      tableOf,
     }),
   };
 };
@@ -533,7 +616,9 @@ type OwnerQueryChecksOptions = {
   tree: ts.SourceFile;
   usesOwner: (node: ts.Node) => boolean;
   hasOwnerEvidence: (node: ts.Node) => boolean;
-  hasFilteredQuery: (node: ts.Node) => boolean;
+  hasFilteredQuery: (node: ts.Node, table?: string) => boolean;
+  hasOwnerTable: (node: ts.Node, table: string) => boolean;
+  tableOf: (node: ts.Node) => string | undefined;
 };
 
 const createOwnerQueryChecks = ({
@@ -542,20 +627,25 @@ const createOwnerQueryChecks = ({
   usesOwner,
   hasOwnerEvidence,
   hasFilteredQuery,
+  hasOwnerTable,
+  tableOf,
 }: OwnerQueryChecksOptions) => {
-  const hasOwnerProjection = (node: ts.Node): boolean => {
+  const hasOwnerProjection = (node: ts.Node, table?: string): boolean => {
     const permitted = SELECT_VISIBILITY_PROJECTIONS.get(file)?.properties;
     if (!permitted) {
       return false;
     }
     if (permitted.has("row")) {
-      return hasEligibleRehydration(tree, node, hasFilteredQuery);
+      return hasEligibleRehydration({
+        tree,
+        node,
+        hasFilteredQuery,
+        hasOwnerTable,
+        tableOf,
+        table,
+      });
     }
-    let found = false;
-    const visit = (current: ts.Node): void => {
-      if (found) {
-        return;
-      }
+    return builderCalls(node).some((current) => {
       if (
         ts.isCallExpression(current) &&
         ts.isPropertyAccessExpression(current.expression) &&
@@ -563,20 +653,20 @@ const createOwnerQueryChecks = ({
       ) {
         const argument = current.arguments.at(0);
         if (argument && ts.isObjectLiteralExpression(argument)) {
-          found = argument.properties.some(
+          return argument.properties.some(
             (property) =>
               ts.isPropertyAssignment(property) &&
               permitted.has(
                 property.name.getText(tree).replaceAll(/["']/gu, ""),
               ) &&
-              hasOwnerEvidence(property.initializer),
+              (table === undefined
+                ? hasOwnerEvidence(property.initializer)
+                : hasOwnerTable(property.initializer, table)),
           );
         }
       }
-      ts.forEachChild(current, visit);
-    };
-    visit(node);
-    return found;
+      return false;
+    });
   };
   const hasRelationalWhereOwner = (node: ts.Node): boolean => {
     let found = false;
@@ -638,14 +728,22 @@ const createOwnerQueryChecks = ({
   return { hasOwnerProjection, hasRelationalWhereOwner, rawFilterOwners };
 };
 
-const hasEligibleRehydration = (
-  tree: ts.SourceFile,
-  node: ts.Node,
-  usesOwner: (node: ts.Node) => boolean,
-): boolean => {
+type EligibleRehydrationOptions = Pick<
+  OwnerQueryChecksOptions,
+  "tree" | "hasFilteredQuery" | "hasOwnerTable" | "tableOf"
+> & { node: ts.Node; table: string | undefined };
+
+const hasEligibleRehydration = ({
+  tree,
+  node,
+  hasFilteredQuery,
+  hasOwnerTable,
+  tableOf,
+  table,
+}: EligibleRehydrationOptions): boolean => {
   const selectCalls: ts.CallExpression[] = [];
-  const joins: string[] = [];
-  const visit = (current: ts.Node): void => {
+  const joins: { name: string; condition: ts.Expression }[] = [];
+  for (const current of builderCalls(node)) {
     if (
       ts.isCallExpression(current) &&
       ts.isPropertyAccessExpression(current.expression)
@@ -653,17 +751,18 @@ const hasEligibleRehydration = (
       if (current.expression.name.text === "select") {
         selectCalls.push(current);
       }
+      const target = current.arguments.at(0);
+      const condition = current.arguments.at(1);
       if (
         current.expression.name.text === "leftJoin" &&
-        current.arguments[0] &&
-        ts.isIdentifier(current.arguments[0])
+        target !== undefined &&
+        ts.isIdentifier(target) &&
+        condition !== undefined
       ) {
-        joins.push(current.arguments[0].text);
+        joins.push({ name: target.text, condition });
       }
     }
-    ts.forEachChild(current, visit);
-  };
-  visit(node);
+  }
   return selectCalls.some((call) => {
     const arg = call.arguments[0];
     if (!arg || !ts.isObjectLiteralExpression(arg)) {
@@ -685,6 +784,19 @@ const hasEligibleRehydration = (
       return false;
     }
     const initializer = row.initializer;
+    const id = properties.find(
+      (property) =>
+        property.name.getText(tree).replaceAll(/["']/gu, "") === "id",
+    )?.initializer;
+    if (
+      table === undefined ||
+      id === undefined ||
+      !ts.isPropertyAccessExpression(id) ||
+      id.name.text !== "id" ||
+      tableOf(id.expression) !== table
+    ) {
+      return false;
+    }
     return (
       ts.isCallExpression(initializer) &&
       ts.isIdentifier(initializer.expression) &&
@@ -692,8 +804,12 @@ const hasEligibleRehydration = (
       initializer.arguments.some(
         (argument) =>
           ts.isIdentifier(argument) &&
-          joins.includes(argument.text) &&
-          usesOwner(argument),
+          joins.some(
+            (join) =>
+              join.name === argument.text &&
+              hasOwnerTable(join.condition, table),
+          ) &&
+          hasFilteredQuery(argument, table),
       )
     );
   });
@@ -701,21 +817,32 @@ const hasEligibleRehydration = (
 
 const discoverDecisionReadSites = (
   tree: ts.SourceFile,
-  decisionTables: ReadonlySet<string>,
-  hasNamespacedDecision: (node: ts.Node) => boolean,
+  tableOf: (node: ts.Node) => string | undefined,
 ): ReadSite[] => {
   const sites: ReadSite[] = [];
-  const seen = new Set<number>();
-  const addSite = (node: ts.Node, kind: ReadSite["kind"]): void => {
-    const start = node.getStart(tree);
-    if (seen.has(start)) {
+  const seen = new Set<ts.Node>();
+  const addSite = (
+    node: ts.Node,
+    details:
+      | {
+          kind: "builder";
+          target: ts.Expression;
+          joinCondition: ts.Expression | undefined;
+        }
+      | { kind: "relational" | "raw" },
+  ): void => {
+    const start =
+      details.kind === "builder"
+        ? details.target.getStart(tree)
+        : node.getStart(tree);
+    if (seen.has(node)) {
       return;
     }
-    seen.add(start);
+    seen.add(node);
     const expression = readExpression(node);
     sites.push({
       node: expression,
-      kind,
+      ...details,
       line: tree.getLineAndCharacterOfPosition(start).line + 1,
       text: expression.getText(tree),
     });
@@ -726,21 +853,23 @@ const discoverDecisionReadSites = (
       if (ts.isPropertyAccessExpression(node.expression)) {
         method = node.expression.name.text;
       }
+      const target = node.arguments.at(0);
       if (
         (method === "from" || method.endsWith("Join")) &&
-        node.arguments.some(
-          (argument) =>
-            (ts.isIdentifier(argument) && decisionTables.has(argument.text)) ||
-            hasNamespacedDecision(argument),
-        )
+        target !== undefined &&
+        tableOf(target) !== undefined
       ) {
-        addSite(node, "builder");
+        addSite(node, {
+          kind: "builder",
+          target,
+          joinCondition: method === "from" ? undefined : node.arguments.at(1),
+        });
       }
       if (
         (method === "findFirst" || method === "findMany") &&
         node.expression.getText(tree).includes("caseLawDecisions")
       ) {
-        addSite(node, "relational");
+        addSite(node, { kind: "relational" });
       }
     }
     if (
@@ -749,7 +878,7 @@ const discoverDecisionReadSites = (
         node.template.getText(tree),
       )
     ) {
-      addSite(node, "raw");
+      addSite(node, { kind: "raw" });
     }
     ts.forEachChild(node, visit);
   };
@@ -762,8 +891,6 @@ type FileCensusContext = {
   tree: ts.SourceFile;
   predicateLocals: Set<string>;
   importedJoinAliases: Map<string, string>;
-  decisionTables: Set<string>;
-  hasNamespacedDecision: (node: ts.Node) => boolean;
 };
 
 const createFileCensusContext = (
@@ -774,41 +901,6 @@ const createFileCensusContext = (
 ): FileCensusContext | null => {
   const subjectImports = importNames(tree, SUBJECT);
   const dbImports = importNames(tree, PUBLIC_DB);
-  const schemaImports = importNames(tree, "@/api/db/schema");
-  const decisionTables = new Set(
-    [...schemaImports]
-      .filter(([, imported]) => imported === "caseLawDecisions")
-      .map(([local]) => local),
-  );
-  const schemaNamespaces = new Set(
-    tree.statements.flatMap((statement) =>
-      ts.isImportDeclaration(statement) &&
-      ts.isStringLiteral(statement.moduleSpecifier) &&
-      statement.moduleSpecifier.text === "@/api/db/schema" &&
-      statement.importClause?.namedBindings &&
-      ts.isNamespaceImport(statement.importClause.namedBindings)
-        ? [statement.importClause.namedBindings.name.text]
-        : [],
-    ),
-  );
-  const hasNamespacedDecision = (node: ts.Node): boolean => {
-    let found = false;
-    const visit = (current: ts.Node): void => {
-      if (
-        ts.isPropertyAccessExpression(current) &&
-        current.name.text === "caseLawDecisions" &&
-        ts.isIdentifier(current.expression) &&
-        schemaNamespaces.has(current.expression.text)
-      ) {
-        found = true;
-      }
-      if (!found) {
-        ts.forEachChild(current, visit);
-      }
-    };
-    visit(node);
-    return found;
-  };
   const predicateLocals = new Set<string>();
   const importedJoinAliases = new Map<string, string>();
   for (const statement of tree.statements) {
@@ -865,76 +957,37 @@ const createFileCensusContext = (
   if (!publicReadModule) {
     return null;
   }
-  const visitAliases = (node: ts.Node): void => {
-    const initializer = ts.isVariableDeclaration(node)
-      ? node.initializer
-      : undefined;
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      initializer !== undefined &&
-      ts.isCallExpression(initializer) &&
-      ts.isIdentifier(initializer.expression) &&
-      initializer.expression.text === "alias" &&
-      initializer.arguments.some(
-        (arg) =>
-          (ts.isIdentifier(arg) && decisionTables.has(arg.text)) ||
-          hasNamespacedDecision(arg),
-      )
-    ) {
-      decisionTables.add(node.name.text);
-    }
-    ts.forEachChild(node, visitAliases);
-  };
-  visitAliases(tree);
   return {
     file,
     tree,
     predicateLocals,
     importedJoinAliases,
-    decisionTables,
-    hasNamespacedDecision,
   };
 };
 
-const inspectFileReads = (context: FileCensusContext): PublicationCensus => {
-  const {
+const inspectFileReads = (
+  context: FileCensusContext,
+  tableOf: (node: ts.Node) => string | undefined,
+): PublicationCensus => {
+  const { file, tree, predicateLocals, importedJoinAliases } = context;
+  const resolver = createOwnerResolver({
     file,
     tree,
     predicateLocals,
-    importedJoinAliases,
-    decisionTables,
-    hasNamespacedDecision,
-  } = context;
-  const resolver = createOwnerResolver(file, tree, predicateLocals);
-  const sites = discoverDecisionReadSites(
-    tree,
-    decisionTables,
-    hasNamespacedDecision,
-  );
+    tableOf,
+  });
+  const sites = discoverDecisionReadSites(tree, tableOf);
   const reads: string[] = [];
   const errors: string[] = [];
   for (const site of sites) {
-    const whereNodes: ts.CallExpression[] = [];
-    const visitWhere = (node: ts.Node): void => {
-      if (ts.isAwaitExpression(node) || ts.isParenthesizedExpression(node)) {
-        visitWhere(node.expression);
-        return;
-      }
-      if (
-        !ts.isCallExpression(node) ||
-        !ts.isPropertyAccessExpression(node.expression)
-      ) {
-        return;
-      }
-      if (node.expression.name.text === "where") {
-        whereNodes.push(node);
-      }
-      visitWhere(node.expression.expression);
-    };
-    if (site.kind === "builder") {
-      visitWhere(site.node);
-    }
+    const whereNodes =
+      site.kind === "builder"
+        ? builderCalls(site.node).filter(
+            (call) =>
+              ts.isPropertyAccessExpression(call.expression) &&
+              call.expression.name.text === "where",
+          )
+        : [];
 
     const rawQuery = site.node.getText(tree);
     const rawFilters =
@@ -1002,7 +1055,21 @@ const inspectFileReads = (context: FileCensusContext): PublicationCensus => {
     );
     const label = `${file}:${site.line}`;
     reads.push(label);
-    if (!maintenanceWrite && (!hasOwner || !everyAliasOwned)) {
+    const target = site.kind === "builder" ? tableOf(site.target) : undefined;
+    const builderOwned =
+      site.kind !== "builder" ||
+      (target !== undefined &&
+        (whereNodes.some((where) =>
+          resolver.hasOwnerTable(where.arguments.at(0) ?? where, target),
+        ) ||
+          (site.joinCondition !== undefined &&
+            resolver.hasOwnerTable(site.joinCondition, target)) ||
+          resolver.hasOwnerProjection(site.node, target)));
+    if (
+      !maintenanceWrite &&
+      (!builderOwned ||
+        (site.kind !== "builder" && (!hasOwner || !everyAliasOwned)))
+    ) {
       errors.push(
         `${label}: decision read has no publication owner predicate in its query expression`,
       );
@@ -1022,6 +1089,7 @@ export const inspectCaseLawPublication = (
   );
   const ownerExports = exportedOwnerBindings(files, trees);
   const ownerJoinAliases = findOwnerJoinAliases({ files, ownerExports, trees });
+  const tableOf = createDecisionTableResolver(trees);
   const reads: string[] = [];
   const errors: string[] = [];
   for (const { file } of files) {
@@ -1041,7 +1109,7 @@ export const inspectCaseLawPublication = (
     if (!context) {
       continue;
     }
-    const report = inspectFileReads(context);
+    const report = inspectFileReads(context, tableOf);
     reads.push(...report.reads);
     errors.push(...report.errors);
   }

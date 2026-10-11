@@ -376,7 +376,13 @@ export const decisionCitationPageQuery = ({
       },
     })
     .from(candidates)
-    .leftJoin(relatedDecision, eq(relatedDecision.id, candidates.relatedId))
+    .leftJoin(
+      relatedDecision,
+      and(
+        eq(relatedDecision.id, candidates.relatedId),
+        publishedCaseLawDecisionFor(relatedDecision),
+      ),
+    )
     .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
     .orderBy(asc(candidates.id))
     .limit(limit + 1);
@@ -568,7 +574,10 @@ export const decisionCitationSummaryQuery = ({
     .from(incomingCandidates)
     .leftJoin(
       relatedDecision,
-      eq(relatedDecision.id, incomingCandidates.relatedId),
+      and(
+        eq(relatedDecision.id, incomingCandidates.relatedId),
+        publishedCaseLawDecisionFor(relatedDecision),
+      ),
     )
     .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
     // By ordinal: the year expression binds its bounds as parameters, and
@@ -598,7 +607,10 @@ export const decisionCitationSummaryQuery = ({
     .from(outgoingCandidates)
     .leftJoin(
       relatedDecision,
-      eq(relatedDecision.id, outgoingCandidates.relatedId),
+      and(
+        eq(relatedDecision.id, outgoingCandidates.relatedId),
+        publishedCaseLawDecisionFor(relatedDecision),
+      ),
     )
     .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
     .groupBy(outgoingCandidates.polarity);

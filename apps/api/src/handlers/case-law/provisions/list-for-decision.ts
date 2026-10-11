@@ -341,7 +341,9 @@ export const listDecisionProvisionsHandler = async ({
       ),
     )
     .leftJoin(caseLawProvisionCitations, and(...pageConditions))
-    .where(eq(decision.id, decisionId))
+    .where(
+      and(publishedCaseLawDecisionFor(decision), eq(decision.id, decisionId)),
+    )
     .orderBy(
       asc(caseLawProvisionCitations.spanStart),
       asc(caseLawProvisionCitations.anchor),

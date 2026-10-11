@@ -11,10 +11,14 @@ type DecisionPublicationColumns = {
   redactedAt: Column;
 };
 
+export const unredactedCaseLawDecisionFor = (
+  decision: Pick<DecisionPublicationColumns, "redactedAt">,
+): SQL => sql`${decision.redactedAt} IS NULL`;
+
 export const publishedCaseLawDecisionFor = (
   decision: DecisionPublicationColumns,
 ): SQL =>
-  sql`(${decision.redactedAt} IS NULL AND ${storedObservationHasDetail(decision.metadata)})`;
+  sql`(${unredactedCaseLawDecisionFor(decision)} AND ${storedObservationHasDetail(decision.metadata)})`;
 
 type PublishedCaseLawDecisionPredicateOptions = {
   redactedAtColumn: string;

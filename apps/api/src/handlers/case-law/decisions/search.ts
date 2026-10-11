@@ -1389,7 +1389,10 @@ export const candidateDecisionRowsStatement = (
   return tx
     .select({ id: caseLawDecisions.id, row: getColumns(eligibleRows) })
     .from(caseLawDecisions)
-    .leftJoin(eligibleRows, eq(caseLawDecisions.id, eligibleRows.id))
+    .leftJoin(
+      eligibleRows,
+      and(eq(caseLawDecisions.id, eligibleRows.id), publishedCaseLawDecision),
+    )
     .where(inArray(caseLawDecisions.id, ids))
     .limit(ids.length);
 };
@@ -1455,7 +1458,10 @@ export const pageDecisionRowsStatement = (
   return tx
     .select({ id: caseLawDecisions.id, row: getColumns(eligibleRows) })
     .from(caseLawDecisions)
-    .leftJoin(eligibleRows, eq(caseLawDecisions.id, eligibleRows.id))
+    .leftJoin(
+      eligibleRows,
+      and(eq(caseLawDecisions.id, eligibleRows.id), publishedCaseLawDecision),
+    )
     .where(inArray(caseLawDecisions.id, ids))
     .limit(ids.length);
 };

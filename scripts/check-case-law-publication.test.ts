@@ -120,6 +120,30 @@ test("joined and imported schema aliases are counted as decision reads", () => {
   expect(report.errors).toEqual([]);
 });
 
+test("each joined decision table needs its own publication condition", () => {
+  const inspect = (condition: string) =>
+    inspectCaseLawPublication([
+      {
+        file: "apps/api/src/lib/legal-search/joined-decisions.ts",
+        source: `${publicationImports}
+        import { and, eq } from "drizzle-orm";
+        import { alias } from "drizzle-orm/pg-core";
+        const joinedDecision = alias(caseLawDecisions, "joined_decision");
+        const query = db.select().from(caseLawDecisions)
+          .innerJoin(joinedDecision, eq(joinedDecision.id, caseLawDecisions.id))
+          .where(${condition});`,
+      },
+    ]);
+  const single = inspect("eligible(caseLawDecisions)");
+  expect(single.reads).toHaveLength(2);
+  expect(single.errors).toHaveLength(1);
+  const both = inspect(
+    "and(eligible(caseLawDecisions), eligible(joinedDecision))",
+  );
+  expect(both.reads).toHaveLength(2);
+  expect(both.errors).toEqual([]);
+});
+
 test("a publication projection in SELECT does not certify a decision read", () => {
   const report = inspectCaseLawPublication([
     {

@@ -136,7 +136,13 @@ const readOutgoingDecisionCitationRows = async ({
       )`,
     })
     .from(candidates)
-    .leftJoin(citedDecision, eq(citedDecision.id, candidates.citedDecisionId))
+    .leftJoin(
+      citedDecision,
+      and(
+        eq(citedDecision.id, candidates.citedDecisionId),
+        publishedCaseLawDecisionFor(citedDecision),
+      ),
+    )
     .leftJoin(citedSource, eq(citedSource.id, citedDecision.sourceId))
     .orderBy(asc(candidates.id))
     .limit(
@@ -234,7 +240,10 @@ export const listIncomingDecisionCitations = async ({
     .from(candidates)
     .leftJoin(
       citingDecision,
-      eq(citingDecision.id, candidates.citingDecisionId),
+      and(
+        eq(citingDecision.id, candidates.citingDecisionId),
+        publishedCaseLawDecisionFor(citingDecision),
+      ),
     )
     .leftJoin(citingSource, eq(citingSource.id, citingDecision.sourceId))
     .orderBy(asc(candidates.id))

@@ -583,6 +583,35 @@ test(
 );
 
 test(
+  "an erased absorbed supplement is not found",
+  async () => {
+    const db = drizzle({ client });
+    const absorbedId = await insertAbsorbedRow({
+      slug: "absorbed-erased-reasons",
+      sourceDocumentId: "syn-erased-reasons",
+      judgmentId: openId,
+    });
+    const resolve = async (id: SafeId<"caseLawDecision">) =>
+      await withRedistributableSubject(
+        caseLawDb,
+        { kind: "id", id },
+        async (subject) => subject.id,
+      );
+
+    expect(await resolve(absorbedId)).toBe(openId);
+
+    await db
+      .update(caseLawDecisions)
+      .set({ redactedAt: new Date("2026-10-11T12:00:00.000Z") })
+      .where(eq(caseLawDecisions.id, absorbedId));
+
+    expect(await resolve(absorbedId)).toBe(await resolve(missingId));
+    expect(await resolve(absorbedId)).toBeNull();
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
   "alias writes flatten chains, preserve retries, and refuse cycles, conflicts and stale targets",
   async () => {
     const db = drizzle({ client });

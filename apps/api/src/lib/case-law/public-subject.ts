@@ -48,6 +48,7 @@ import {
 } from "@/api/lib/case-law/decision-absorption";
 import { normalizePublicDecisionLanguage } from "@/api/lib/case-law/decision-language";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
+import { unredactedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
 import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
 
 /** Module-private, so the subject type is constructible only below. */
@@ -149,7 +150,7 @@ const selectLocatedRow = async (
         caseLawSources,
         eq(caseLawSources.id, caseLawDecisions.sourceId),
       )
-      .where(condition)
+      .where(and(unredactedCaseLawDecisionFor(caseLawDecisions), condition))
       .limit(1)
   ).at(0);
 
