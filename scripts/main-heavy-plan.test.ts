@@ -800,3 +800,93 @@ test("heavy queue evidence follows Git tree identity and remains conservative wh
     expect(warnings.length, evidence).toBe(evidence === "unavailable" ? 1 : 0);
   }
 });
+
+test("heavy classification uses passing evidence from any matching-tree run", async () => {
+  const { collectMainHeavyFailures } =
+    await import("./main-heavy-classification.mjs");
+  const job = {
+    name: "suites / code-check",
+    conclusion: "failure",
+    steps: [
+      { name: "Checkout", conclusion: "success" },
+      { name: "Check", conclusion: "failure" },
+    ],
+  };
+  const queueJob = {
+    name: "code-check",
+    conclusion: "success",
+    steps: job.steps.map(({ name }) => ({ name, conclusion: "success" })),
+  };
+  const evidence = {
+    passed: { tree: "same-tree", jobs: [queueJob] },
+    failed: {
+      tree: "same-tree",
+      jobs: [{ ...queueJob, conclusion: "failure" }],
+    },
+    empty: { tree: "same-tree", jobs: [] },
+    checkoutOnly: {
+      tree: "same-tree",
+      jobs: [{ ...queueJob, steps: queueJob.steps.slice(0, 1) }],
+    },
+    checkOnly: {
+      tree: "same-tree",
+      jobs: [{ ...queueJob, steps: queueJob.steps.slice(1) }],
+    },
+    differentTree: { tree: "other-tree", jobs: [queueJob] },
+  };
+  for (const [firstKind, first] of Object.entries(evidence)) {
+    for (const [secondKind, second] of Object.entries(evidence)) {
+      const warnings: string[] = [];
+      const github = {
+        paginate: async (_method: unknown, { run_id }: { run_id: number }) => {
+          if (run_id === 100) {
+            return [job];
+          }
+          return run_id === 200 ? first.jobs : second.jobs;
+        },
+        rest: {
+          actions: {
+            listJobsForWorkflowRun: "current-jobs",
+            listJobsForWorkflowRunAttempt: "queue-jobs",
+            listWorkflowRuns: async () => ({
+              data: {
+                workflow_runs: [
+                  { id: 200, head_sha: "first", run_attempt: 1 },
+                  { id: 201, head_sha: "second", run_attempt: 2 },
+                ],
+              },
+            }),
+          },
+          repos: {
+            getCommit: async ({ ref }: { ref: string }) => {
+              let tree = "same-tree";
+              if (ref === "first") {
+                tree = first.tree;
+              }
+              if (ref === "second") {
+                tree = second.tree;
+              }
+              return { data: { commit: { tree: { sha: tree } } } };
+            },
+          },
+        },
+      };
+      const failures = await collectMainHeavyFailures({
+        github,
+        context: { repo: { owner: "stella", repo: "stella" }, runId: 100 },
+        sha: "tested-commit",
+        results: { suites: { result: "failure" } },
+        warn: (message: string) => {
+          warnings.push(message);
+        },
+      });
+      const expected =
+        firstKind === "passed" || secondKind === "passed" ? "INFRA" : "CODE";
+      expect(
+        failures.map(({ type }) => type),
+        `${firstKind}/${secondKind}`,
+      ).toEqual([expected]);
+      expect(warnings).toEqual([]);
+    }
+  }
+});

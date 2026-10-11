@@ -92,7 +92,7 @@ export const collectMainHeavyFailures = async ({
       }));
   }
   /** @type {Job[]} */
-  let queueJobs = [];
+  const queueJobs = [];
   if (sha) {
     try {
       const { data: tested } = await github.rest.repos.getCommit({
@@ -115,7 +115,7 @@ export const collectMainHeavyFailures = async ({
         if (queued.commit.tree.sha !== tested.commit.tree.sha) {
           continue;
         }
-        queueJobs = await github.paginate(
+        const matchingJobs = await github.paginate(
           github.rest.actions.listJobsForWorkflowRunAttempt,
           {
             ...repository,
@@ -124,10 +124,12 @@ export const collectMainHeavyFailures = async ({
             per_page: 100,
           },
         );
-        break;
+        queueJobs.push(...matchingJobs);
       }
     } catch {
-      warn("Merge-group evidence is unavailable; failures remain CODE.");
+      warn(
+        "Merge-group evidence is incomplete; unproven failures remain CODE.",
+      );
     }
   }
   return classifyMainHeavyFailures({ jobs, queueJobs });
