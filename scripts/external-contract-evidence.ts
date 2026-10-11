@@ -196,7 +196,52 @@ const createEvidenceResolver = ({
     const identity = packageIdentity(specifier);
     return identity !== undefined && workspacePackages.has(identity);
   };
-  return { resolveImport, workspaceSpecifier };
+  const packageRoots = new Map<string, string | undefined>();
+  const installedPackageRoot = (directory: string, identity: string) => {
+    const key = `${directory}\0${identity}`;
+    if (packageRoots.has(key)) {
+      return packageRoots.get(key);
+    }
+    let current = directory;
+    while (true) {
+      const packageDirectory = path.join(current, "node_modules", identity);
+      const candidate = Result.try(() => realpathSync(packageDirectory));
+      if (candidate.isOk()) {
+        packageRoots.set(key, candidate.value);
+        return candidate.value;
+      }
+      const parent = path.dirname(current);
+      if (parent === current) {
+        break;
+      }
+      current = parent;
+    }
+    // Bun's real store paths can sit outside the checkout's module ancestry.
+    const candidate = Result.try(() =>
+      realpathSync(path.join(repositoryRoot, "node_modules", identity)),
+    );
+    const root = candidate.isOk() ? candidate.value : undefined;
+    packageRoots.set(key, root);
+    return root;
+  };
+  type ResolvedPackageOptions = {
+    identity: string;
+    importer: string;
+    resolved: string;
+  };
+  const resolvedPackage = ({
+    identity,
+    importer,
+    resolved,
+  }: ResolvedPackageOptions) => {
+    const workspace = workspacePackages.get(identity);
+    const packageRoot =
+      workspace === undefined
+        ? installedPackageRoot(path.dirname(importer), identity)
+        : Result.try(() => realpathSync(workspace)).unwrapOr(undefined);
+    return packageRoot !== undefined && inside(packageRoot, resolved);
+  };
+  return { resolveImport, workspaceSpecifier, resolvedPackage };
 };
 
 const typeOnlyImport = (clause: ts.ImportClause | undefined) => {
@@ -388,12 +433,13 @@ export const readFixtureEvidence = ({
   if (proved()) {
     return { owners, sdks, problems: rootProblems };
   }
-  const { resolveImport, workspaceSpecifier } = createEvidenceResolver({
-    repositoryRoot,
-    read,
-    label,
-    problems,
-  });
+  const { resolveImport, workspaceSpecifier, resolvedPackage } =
+    createEvidenceResolver({
+      repositoryRoot,
+      read,
+      label,
+      problems,
+    });
   let cursor = 0;
   // Breadth-first search finds short proof paths before unrelated application branches.
   while (cursor < pending.length) {
@@ -463,7 +509,7 @@ export const readFixtureEvidence = ({
         }
         return;
       }
-      if (target) {
+      if (target && resolvedPackage({ identity, importer: file, resolved })) {
         sdks.add(identity);
       }
       // Non-target third-party libraries are terminal: missing indirect evidence stays uncharacterised.

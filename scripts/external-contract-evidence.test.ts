@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  rmSync,
+  writeFileSync,
+  symlinkSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -31,6 +37,69 @@ const sdkFiles = {
   }),
   "node_modules/@example/sdk/runtime.js": "export const client = 1;",
 };
+
+test.each(["installed", "symlinked", "workspace"])(
+  "SDK claims require resolved membership in the %s package root",
+  (layout) => {
+    const packageRoot =
+      layout === "workspace" ? "packages/sdk" : "node_modules/@example/sdk";
+    withProject({
+      files: {
+        [`${packageRoot}/package.json`]: JSON.stringify({
+          name: "@example/sdk",
+          exports: "./runtime.js",
+        }),
+        [`${packageRoot}/runtime.js`]: "export const client = 1;",
+        "local/shim.ts": "export const client = 1;",
+        "aliased/tsconfig.json": JSON.stringify({
+          compilerOptions: {
+            baseUrl: ".",
+            paths: { "@example/sdk": ["../local/shim.ts"] },
+          },
+        }),
+        "aliased/replay.ts": 'import "@example/sdk";',
+        "real/replay.ts": 'import "@example/sdk";',
+      },
+      run: (root) => {
+        if (layout === "symlinked") {
+          const installed = path.join(root, packageRoot);
+          const store = path.join(root, "store/node_modules/@example/sdk");
+          mkdirSync(store, { recursive: true });
+          writeFileSync(
+            path.join(store, "package.json"),
+            JSON.stringify({ name: "@example/sdk", exports: "./runtime.js" }),
+          );
+          writeFileSync(
+            path.join(store, "runtime.js"),
+            "export const client = 1;",
+          );
+          rmSync(installed, { recursive: true });
+          symlinkSync(store, installed, "dir");
+        }
+        const claims = { owners: [], sdks: ["@example/sdk"] };
+        const aliased = readFixtureEvidence({
+          root,
+          replayFiles: ["aliased/replay.ts"],
+          sdkNames: claims.sdks,
+          claims,
+        });
+        expect(aliased.owners.has("local/shim.ts")).toBe(true);
+        expect([...aliased.sdks]).toEqual([]);
+        expect(aliased.problems).toEqual([
+          "Cannot prove runtime reachability for claimed SDK @example/sdk",
+        ]);
+        const real = readFixtureEvidence({
+          root,
+          replayFiles: ["real/replay.ts"],
+          sdkNames: claims.sdks,
+          claims,
+        });
+        expect(real.problems).toEqual([]);
+        expect([...real.sdks]).toEqual(["@example/sdk"]);
+      },
+    });
+  },
+);
 
 test("runtime reachability follows every literal edge through aliases, workspace exports and external adapters", () => {
   withProject({
