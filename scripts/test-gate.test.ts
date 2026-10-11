@@ -9,6 +9,7 @@ import {
   packageTestCollectionFailure,
   packageTestExecutionFailure,
   parseTestRegistrations,
+  rootCommandExecutionFailure,
 } from "./test-gate";
 
 context("test registration census", () => {
@@ -454,6 +455,74 @@ jobs:
       }),
     ).toBe("job condition: no gating job executes @stll/orphan test");
   });
+
+  check("an include entry adds back a leg that exclude removed", () => {
+    const workflow = Bun.YAML.parse(`
+jobs:
+  package-check:
+    strategy:
+      matrix:
+        event: [pull_request]
+        exclude:
+          - event: pull_request
+        include:
+          - event: pull_request
+    steps:
+      - if: github.event_name == matrix.event
+        run: bun --filter @stll/orphan test
+  ci-result:
+    needs: [package-check]
+`);
+    expect(
+      packageTestExecutionFailure({
+        gatingJobs: gatingWorkflowJobs(workflow),
+        packageDirectory: "packages/orphan",
+        packageName: "@stll/orphan",
+        shardedPackages: new Set<string>(),
+      }),
+    ).toBeUndefined();
+  });
+
+  check(
+    "a required root command whose failure is suppressed does not gate",
+    () => {
+      for (const run of [
+        "bun scripts/test-gate.ts || true",
+        "set +e; bun scripts/test-gate.ts",
+      ]) {
+        const workflow = Bun.YAML.parse(`
+jobs:
+  checks:
+    steps:
+      - run: ${JSON.stringify(run)}
+  ci-result:
+    needs: [checks]
+`);
+        expect(
+          rootCommandExecutionFailure({
+            command: "bun scripts/test-gate.ts",
+            gatingJobs: gatingWorkflowJobs(workflow),
+          }),
+        ).toBe(
+          "job condition: no gating job executes bun scripts/test-gate.ts",
+        );
+      }
+      const gating = Bun.YAML.parse(`
+jobs:
+  checks:
+    steps:
+      - run: bun scripts/test-gate.ts
+  ci-result:
+    needs: [checks]
+`);
+      expect(
+        rootCommandExecutionFailure({
+          command: "bun scripts/test-gate.ts",
+          gatingJobs: gatingWorkflowJobs(gating),
+        }),
+      ).toBeUndefined();
+    },
+  );
 
   check("counts matrix include legs that can run on a gating event", () => {
     const workflow = Bun.YAML.parse(`

@@ -796,6 +796,27 @@ export const managedServiceRunnerFailure = ({
   });
 };
 
+type RootCommandOptions = {
+  readonly command: string;
+  readonly gatingJobs: ReadonlyMap<string, readonly string[]>;
+};
+
+/** A required root collector counts only when a gating step runs it and its failure propagates. */
+export const rootCommandExecutionFailure = ({
+  command,
+  gatingJobs,
+}: RootCommandOptions): string | undefined => {
+  const runner = shellWords(command);
+  return gatingCommandExecutionFailure({
+    commandMatches: (candidate) =>
+      shellInvocationGates(candidate, (words, index) =>
+        runner.every((word, offset) => words[index + offset] === word),
+      ),
+    gatingJobs,
+    missingMessage: `job condition: no gating job executes ${command}`,
+  });
+};
+
 const packageScripts = (packageFile: string): PackageScripts | undefined => {
   const parsed: unknown = readJson(packageFile);
   if (!isRecord(parsed) || !("scripts" in parsed)) {
@@ -1004,9 +1025,8 @@ const matrixLegs = (job: Record<string, unknown>): readonly MatrixLeg[] => {
       ),
     );
     if (compatible.length === 0) {
-      if (!excludes.some((excluded) => matrixEntryMatches(entry, excluded))) {
-        legs.push(entry);
-      }
+      // GitHub applies exclude before include, so include can add back an excluded leg.
+      legs.push(entry);
       continue;
     }
     const compatibleSet = new Set(compatible);
@@ -2166,11 +2186,7 @@ const validateExecutionTopology = (errors: string[]): void => {
     "bun scripts/test-gate.ts",
   ];
   for (const command of requiredCommands) {
-    const runnerFailure = gatingCommandExecutionFailure({
-      commandMatches: (candidate) => candidate.includes(command),
-      gatingJobs,
-      missingMessage: `job condition: no gating job executes ${command}`,
-    });
+    const runnerFailure = rootCommandExecutionFailure({ command, gatingJobs });
     if (runnerFailure !== undefined) {
       errors.push(runnerFailure);
     }
