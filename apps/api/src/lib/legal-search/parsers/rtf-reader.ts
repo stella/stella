@@ -42,7 +42,9 @@ import type {
   TableRow,
   TextFormatting,
 } from "@stll/docx-core/model";
+import { escapeRegExp } from "@stll/text-normalize";
 
+import { RTF_CONTROLS } from "./rtf-control-vocabulary";
 import {
   RTF_EMBEDDED_CONTAINERS,
   RTF_VISIBLE_BLOCK_DESTINATIONS,
@@ -1364,85 +1366,25 @@ export const isRtf = (bytes: Uint8Array): boolean =>
 // Recognized control words distinguish RTF syntax from OCR fragments and
 // published Windows paths. This detection vocabulary is broader than the
 // reader's supported dialect; detecting a word does not imply parsing it.
-const RTF_CONTROL_WORDS = [
-  "rtf",
-  "ansi",
-  "mac",
-  "pc",
-  "pca",
-  "ansicpg",
-  "deff",
-  "deflang",
-  "fonttbl",
-  "f",
-  "fnil",
-  "froman",
-  "fswiss",
-  "fmodern",
-  "fcharset",
-  "colortbl",
-  "red",
-  "green",
-  "blue",
-  "stylesheet",
-  "s",
-  "cs",
-  "pard",
-  "plain",
-  "par",
-  "b",
-  "i",
-  "ul",
-  "ulnone",
-  "fs",
-  "cf",
-  "u",
-  "uc",
-  "tab",
-  "line",
-  "page",
-  "qc",
-  "ql",
-  "qr",
-  "qj",
-  "pict",
-  "pngblip",
-  "jpegblip",
-  "wmetafile",
-  "dibitmap",
-  "picprop",
-  "shppict",
-  "nonshppict",
-  "shplid",
-  "picw",
-  "pich",
-  "picwgoal",
-  "pichgoal",
-  "object",
-  "objemb",
-  "objdata",
-  "trowd",
-  "intbl",
-  "cell",
-  "row",
-  "cellx",
-  "li",
-  "ri",
-  "fi",
-  "sa",
-  "sb",
-  "sl",
-  "slmult",
-  "insrsid",
-  "lang",
-].join("|");
-const RTF_CONTROL_WORD = String.raw`\\(?:${RTF_CONTROL_WORDS})(?![a-zA-Z])-?\d{0,10}`;
+const RTF_CONTROL_WORDS = RTF_CONTROLS.filter((control) =>
+  /^[a-zA-Z]+$/u.test(control),
+)
+  .map(escapeRegExp)
+  .join("|");
+const RTF_CONTROL_SYMBOLS = RTF_CONTROLS.filter(
+  (control) => !/^[a-zA-Z]+$/u.test(control),
+)
+  .map((control) =>
+    control === "'" ? "'[a-fA-F0-9]{2}" : escapeRegExp(control),
+  )
+  .join("|");
+const RTF_CONTROL = String.raw`\\(?:${RTF_CONTROL_WORDS})(?![a-zA-Z])-?\d{0,10}|\\(?:${RTF_CONTROL_SYMBOLS})`;
 
-// parser-output-unchanged: [cz-us] Moving the CourtListener residue detector here does not change RTF decoding.
-// parser-output-unchanged: [hu-bhgy] Moving the CourtListener residue detector here does not change RTF decoding.
+// parser-output-unchanged: [cz-us] Expanding the residue vocabulary does not change RTF decoding.
+// parser-output-unchanged: [hu-bhgy] Expanding the residue vocabulary does not change RTF decoding.
 /** Recognize leaked RTF syntax without decoding or changing source text. */
 export const rtfControlResiduePattern = (): RegExp =>
   new RegExp(
-    String.raw`\{\\\*|\{\\rtf\d{1,10}(?!\d)|${RTF_CONTROL_WORD}[\s{}]{0,4}${RTF_CONTROL_WORD}`,
+    String.raw`\{\\\*|\{\\rtf\d{1,10}(?!\d)|(?:${RTF_CONTROL})[\s{}]{0,4}(?:${RTF_CONTROL})`,
     "gu",
   );
