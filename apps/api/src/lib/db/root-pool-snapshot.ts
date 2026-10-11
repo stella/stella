@@ -27,7 +27,7 @@ export const readRootPoolSnapshot = async (client: Pick<SQL, "reserve">) =>
       using session = await client.reserve({
         signal: AbortSignal.timeout(SNAPSHOT_RESERVATION_TIMEOUT_MS),
       });
-      const query = session.unsafe<
+      let query = session.unsafe<
         {
           size: number;
           inUse: number;
@@ -35,7 +35,7 @@ export const readRootPoolSnapshot = async (client: Pick<SQL, "reserve">) =>
         }[]
       >(ROOT_POOL_SNAPSHOT_SQL);
       const timer = setTimeout(() => {
-        query.cancel();
+        query = query.cancel();
       }, SNAPSHOT_QUERY_TIMEOUT_MS);
       try {
         const rows = await query;

@@ -13,7 +13,7 @@ type RootPoolWindowOptions = {
 // Millisecond upper bounds, with one overflow bucket. Storage is allocated
 // once; acquisition paths return only a primitive timer token.
 export const createRootPoolWindow = ({
-  now = performance.now,
+  now = () => performance.now(),
   random = Math.random,
 }: RootPoolWindowOptions = {}) => {
   const buckets = new Float64Array(MAX_BUCKET_MS + 1);
