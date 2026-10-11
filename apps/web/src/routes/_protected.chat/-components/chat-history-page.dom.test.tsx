@@ -3,6 +3,7 @@ import {
   afterAll,
   afterEach,
   beforeEach,
+  setDefaultTimeout,
   describe,
   expect,
   jest,
@@ -20,6 +21,10 @@ GlobalRegistrator.register({
   url: "http://localhost:3000/chat/history",
   width: 1280,
 });
+// A hung test fails instead of holding the run. Assertions compare strings
+// and booleans, never DOM nodes: a failing match on a node makes the runner
+// print the whole document graph.
+setDefaultTimeout(10_000);
 
 const previousFetch = globalThis.fetch;
 const testing = await import("@testing-library/react");
@@ -361,6 +366,10 @@ const openHistory = async (initial: ChatHistorySearch = {}) => {
   return { appRouter, navigateTo, searchChanges, ui };
 };
 
+/** A text field's value; an element that is not one reads as null. */
+const inputValue = (element: Element) =>
+  element instanceof HTMLInputElement ? element.value : null;
+
 /** Clicks inside `act`, so dialog open/close transitions settle in order. */
 const press = async (element: Element) => {
   await testing.act(async () => {
@@ -439,8 +448,8 @@ describe("chat history page", () => {
     expect(ui.queryByText(OLDER_IN_B.title)).toBeNull();
     // The field shows the matter the URL names.
     expect(
-      ui.getByRole("combobox", { name: messages.common.matter }),
-    ).toHaveProperty("value", MATTER_A.name);
+      inputValue(ui.getByRole("combobox", { name: messages.common.matter })),
+    ).toBe(MATTER_A.name);
   });
 
   test("the matter filter reaches the server, so a matter chat past the first unfiltered page shows at once", async () => {
@@ -536,7 +545,7 @@ describe("chat history page", () => {
       jest.useRealTimers();
     }
 
-    expect(field).toHaveProperty("value", "claim");
+    expect(inputValue(field)).toBe("claim");
     expect(searchChanges).toEqual([]);
     await testing.waitFor(() =>
       expect(threadLink(ui, THIS_WEEK_IN_A.title)).toBeDefined(),
@@ -551,17 +560,17 @@ describe("chat history page", () => {
     serve(fullServer());
     const { navigateTo, ui } = await openHistory({ q: "lease" });
     const field = ui.getByRole("searchbox", { name: messages.common.search });
-    expect(field).toHaveProperty("value", "lease");
+    expect(inputValue(field)).toBe("lease");
 
     await navigateTo({ q: "claim" });
 
-    expect(field).toHaveProperty("value", "claim");
+    expect(inputValue(field)).toBe("claim");
     await testing.waitFor(() =>
       expect(threadLink(ui, THIS_WEEK_IN_A.title)).toBeDefined(),
     );
 
     await navigateTo({});
-    expect(field).toHaveProperty("value", "");
+    expect(inputValue(field)).toBe("");
   });
 
   test("clearing the filters brings every chat back", async () => {
@@ -579,8 +588,8 @@ describe("chat history page", () => {
       expect(threadLink(ui, TODAY_GLOBAL.title)).toBeDefined(),
     );
     expect(
-      ui.getByRole("combobox", { name: messages.common.matter }),
-    ).toHaveProperty("value", "");
+      inputValue(ui.getByRole("combobox", { name: messages.common.matter })),
+    ).toBe("");
   });
 
   test("deleting asks first, then removes the chat in its own scope", async () => {
@@ -636,16 +645,17 @@ describe("chat history page", () => {
       ...row.querySelectorAll<HTMLElement>("a[href], button"),
     ].filter((element) => element.tabIndex >= 0);
 
-    expect(tabStops.at(0)).toBe(link);
-    expect(tabStops.at(-1)).toBe(
-      testing
-        .within(row)
-        .getByRole("button", { name: messages.chat.deleteThread }),
-    );
+    expect(tabStops.at(0) === link).toBe(true);
+    expect(
+      tabStops.at(-1) ===
+        testing
+          .within(row)
+          .getByRole("button", { name: messages.chat.deleteThread }),
+    ).toBe(true);
 
     // A focused link activates on Enter with a click, as anchors do.
     link.focus();
-    expect(document.activeElement).toBe(link);
+    expect(document.activeElement === link).toBe(true);
     await press(link);
     await testing.waitFor(() =>
       expect(appRouter.state.location.pathname).toBe(

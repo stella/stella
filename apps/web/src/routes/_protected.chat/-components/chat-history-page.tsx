@@ -69,7 +69,7 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
@@ -536,9 +536,7 @@ function DeleteChatDialog({ dialog, onOpenChange }: DeleteChatDialogProps) {
                 : {},
           },
         );
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
+      unwrapEden(response);
     },
     onError: (error) => {
       notifyUserError(error, t("errors.actionFailed"));

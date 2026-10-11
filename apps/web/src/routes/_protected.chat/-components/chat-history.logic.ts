@@ -118,7 +118,7 @@ export const groupChatHistoryByPeriod = <
 };
 
 /** The query the field last sent to the URL, until the URL shows it. */
-export type PendingSearchQuery =
+type PendingSearchQuery =
   | { status: "idle" }
   | { status: "sent"; query: string | undefined };
 

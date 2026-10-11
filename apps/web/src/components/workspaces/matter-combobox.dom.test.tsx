@@ -1,11 +1,22 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 
 import type { WebApiRoutes } from "@/lib/eden-client";
 import type { WorkspaceNavigationItem } from "@/lib/memory-api";
 import { toSafeId } from "@/lib/safe-id";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/", width: 1280 });
+// A hung test fails instead of holding the run. Assertions compare strings
+// and booleans, never DOM nodes: a failing match on a node makes the runner
+// print the whole document graph.
+setDefaultTimeout(10_000);
 
 const testing = await import("@testing-library/react");
 const query = await import("@tanstack/react-query");
@@ -214,8 +225,14 @@ const openList = async (input: HTMLInputElement) => {
   });
 };
 
-const groupedOptions = (ui: ReturnType<typeof testing.render>) =>
-  ui.queryAllByRole("group").map((group) => [
+// The popup's option groups. Not `role="group"`: the input's own wrapper
+// carries that role too.
+const optionGroups = () => [
+  ...document.querySelectorAll<HTMLElement>('[data-slot="combobox-group"]'),
+];
+
+const groupedOptions = () =>
+  optionGroups().map((group) => [
     document.querySelector(
       `[id="${group.getAttribute("aria-labelledby") ?? ""}"]`,
     )?.textContent ?? "",
@@ -256,7 +273,7 @@ describe("matter combobox rendering", () => {
 
 describe("matter combobox groups", () => {
   test("browsing leads with recent matters: pinned, then by activity, then all others", async () => {
-    const { input, ui } = openCombobox(null, {
+    const { input } = openCombobox(null, {
       // A recent chat lifts the least active matter into the group.
       chat: [{ workspaceId: many(6).id, updatedAt: NOW.toISOString() }],
       pinned: [many(5).id],
@@ -265,7 +282,7 @@ describe("matter combobox groups", () => {
     await openList(input);
 
     await testing.waitFor(() =>
-      expect(groupedOptions(ui)).toEqual([
+      expect(groupedOptions()).toEqual([
         [
           messages.navigation.recents,
           [
@@ -293,7 +310,7 @@ describe("matter combobox groups", () => {
         ui.getAllByRole("option").map((option) => option.textContent),
       ).toEqual([many(6).name]),
     );
-    expect(ui.queryAllByRole("group")).toEqual([]);
+    expect(optionGroups().length).toBe(0);
     expect(ui.queryByText(messages.navigation.recents)).toBeNull();
   });
 
@@ -369,7 +386,7 @@ describe("matter combobox", () => {
       [options.at(1), LEASE],
     ] as const) {
       const icon = option?.querySelector("svg.lucide-layers");
-      expect(icon).toBeInstanceOf(SVGElement);
+      expect(icon instanceof SVGElement).toBe(true);
       expect(paintedColor(icon)).toBe(
         expectedColor(resolveMatterColor(source.id, source.color)),
       );
@@ -396,7 +413,7 @@ describe("matter combobox", () => {
 
     expect(input.value).toBe(LEASE.name);
     const addonIcon = ui.container.querySelector("svg.lucide-layers");
-    expect(addonIcon).toBeInstanceOf(SVGElement);
+    expect(addonIcon instanceof SVGElement).toBe(true);
     expect(paintedColor(addonIcon)).toBe(
       expectedColor(resolveMatterColor(LEASE.id, LEASE.color)),
     );
