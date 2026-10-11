@@ -8703,7 +8703,8 @@ jobs:
           fi
           if [[ "${HEAVY_ONLY:-false}" == true ]]; then
             # No main run may turn a cancellation into successful supersession.
-            # Keep only the derived heavy set; thin jobs intentionally skipped.
+            # Keep only the derived heavy set; thin jobs intentionally skipped,
+            # and their folded suites are not expected either.
             NEEDS=$(jq -ce --argjson heavy "$HEAVY_JOBS" '
               with_entries(select(.key as $job | $job == "ci-plan" or ($heavy | index($job))))
               ' <<< "$NEEDS")
@@ -8827,7 +8828,7 @@ jobs:
               folded_violations=$(jq -r --arg queue "${QUEUE_DEPTH:-full}" --argjson thin "${THIN_JOBS:-[]}" --argjson plan "$PLAN" --argjson suites "$FOLDED_SUITES" '
                 . as $needs
                 | [$suites | to_entries[] | .key as $job | .value | to_entries[]
-                  | select(($queue != "thin" or ($thin | index($job))) and $plan[.value] == "true") | .key as $suite
+                  | select(($needs | has($job)) and ($queue != "thin" or ($thin | index($job))) and $plan[.value] == "true") | .key as $suite
                   | ($needs[$job].outputs[$suite] // "missing") as $result
                   | select($result != "success") | "\($suite) (planned, \($result))"]
                 | join(", ")' <<< "$NEEDS")
