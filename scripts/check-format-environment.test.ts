@@ -19,13 +19,27 @@ const referencedPackages = (value: unknown): string[] => {
   return Object.values(value).flatMap(referencedPackages);
 };
 
-test("formatter package resources belong to root dependencies for scoped installs", () => {
-  const packages = new Set(referencedPackages(formatterConfig));
+const assertFormatterDependencies = (config: unknown) => {
+  const packages = new Set(referencedPackages(config));
   const dependencies = new Set(Object.keys(rootPackage.devDependencies));
   expect(packages.size).toBeGreaterThan(0);
   for (const name of packages) {
     expect(dependencies.has(name), name).toBe(true);
   }
+};
+
+test("formatter package resources belong to root dependencies for scoped installs", () => {
+  assertFormatterDependencies(formatterConfig);
+});
+
+test("formatter dependency census rejects undeclared package resources", () => {
+  const name = "formatter-census-undeclared";
+  expect(Object.hasOwn(rootPackage.devDependencies, name)).toBe(false);
+  expect(() =>
+    assertFormatterDependencies({
+      nested: [{ stylesheet: `node_modules/${name}/theme.css` }],
+    }),
+  ).toThrow(name);
 });
 
 test("scan engine installs the formatter owner alongside its workspace", () => {
