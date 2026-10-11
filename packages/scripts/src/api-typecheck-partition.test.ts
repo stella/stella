@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { apiDeclarationCacheInputs } from "./api-typecheck-declarations";
 import {
   apiTestPartitionIssues,
   apiTestPartitionInputs,
@@ -40,11 +41,16 @@ test("API test ownership follows transitive imports and fails when its derived p
       "apps/api/tsconfig.tests.json",
       JSON.stringify({ files: ["src/alpha.test.ts"] }),
     );
+    write("apps/api/src/safe.ts", "export type Value = string;\n");
+    const declarationInputs = apiDeclarationCacheInputs(
+      path.join(root, "apps/api/tsconfig.declarations.json"),
+    );
     const inputs = apiTestPartitionInputs(["src/alpha.test.ts"]);
     write(
       "turbo.json",
       JSON.stringify({
         tasks: {
+          "@stll/api#typecheck:declarations": { inputs: declarationInputs },
           "@stll/api#typecheck:src": { inputs: inputs.source },
           "@stll/api#typecheck:tests": { inputs: inputs.tests },
         },
@@ -78,6 +84,7 @@ test("API test ownership follows transitive imports and fails when its derived p
       "turbo.json",
       JSON.stringify({
         tasks: {
+          "@stll/api#typecheck:declarations": { inputs: declarationInputs },
           "@stll/api#typecheck:src": {
             inputs: [...inputs.source, "!src/**/*.test.ts"],
           },
@@ -94,6 +101,7 @@ test("API test ownership follows transitive imports and fails when its derived p
       "turbo.json",
       JSON.stringify({
         tasks: {
+          "@stll/api#typecheck:declarations": { inputs: declarationInputs },
           "@stll/api#typecheck:src": { inputs: inputs.source },
           "@stll/api#typecheck:tests": { inputs: inputs.tests },
         },

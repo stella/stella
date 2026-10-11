@@ -113,7 +113,8 @@ test("declaration consumers run after emission and invalidate with API source ch
         ? dependency
         : `${owner}#${dependency}`;
       if (qualified !== EMITTER) {
-        fixtureTasks[qualified] ??= {};
+        // Keep prerequisite hashes stable so they cannot mask a missing producer input.
+        fixtureTasks[qualified] ??= { inputs: ["package.json"] };
       }
     }
   }
@@ -223,7 +224,7 @@ test("declaration consumers run after emission and invalidate with API source ch
     );
     write(".gitignore", "node_modules/\n.turbo/\n**/.cache/\nruns.log\n");
     write(
-      "apps/api/src/contract.ts",
+      "apps/api/src/mcp/apps/manifest.ts",
       "export type Contract = string;\nconst internal = 1;\n",
     );
     write("apps/api/src/contract.test.ts", "// consumer input\n");
@@ -233,10 +234,10 @@ test("declaration consumers run after emission and invalidate with API source ch
         "import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';",
         "import path from 'node:path';",
         "const root = import.meta.dir;",
-        "const output = path.join(root, 'apps/api/.cache/typecheck-declarations/apps/api/src/contract.d.ts');",
+        "const output = path.join(root, 'apps/api/.cache/typecheck-declarations/apps/api/src/mcp/apps/manifest.d.ts');",
         "if (process.argv[2] === '@stll/api#typecheck:declarations') {",
         "mkdirSync(path.dirname(output), { recursive: true });",
-        "writeFileSync(output, readFileSync(path.join(root, 'apps/api/src/contract.ts'), 'utf8').split('\\n')[0]);",
+        "writeFileSync(output, readFileSync(path.join(root, 'apps/api/src/mcp/apps/manifest.ts'), 'utf8').split('\\n')[0]);",
         "} else if (!existsSync(output)) process.exit(1);",
         "appendFileSync(path.join(root, 'runs.log'), JSON.stringify({ task: process.argv[2], hash: process.env.TURBO_HASH }) + '\\n');",
       ].join("\n"),
@@ -287,7 +288,7 @@ test("declaration consumers run after emission and invalidate with API source ch
     expect(cold).toHaveLength(consumers.size + 1);
     const output = path.join(
       directory,
-      "apps/api/.cache/typecheck-declarations/apps/api/src/contract.d.ts",
+      "apps/api/.cache/typecheck-declarations/apps/api/src/mcp/apps/manifest.d.ts",
     );
     rmSync(output);
     run(command);
@@ -296,7 +297,7 @@ test("declaration consumers run after emission and invalidate with API source ch
       "export type Contract = string;",
     );
     write(
-      "apps/api/src/contract.ts",
+      "apps/api/src/mcp/apps/manifest.ts",
       "export type Contract = number;\nconst internal = 1;\n",
     );
     run(command);
@@ -307,13 +308,55 @@ test("declaration consumers run after emission and invalidate with API source ch
     // Turbo keys consumers on the producer's input hash, not declaration bytes:
     // internal changes deliberately invalidate consumers even with identical emit.
     write(
-      "apps/api/src/contract.ts",
+      "apps/api/src/mcp/apps/manifest.ts",
       "export type Contract = number;\nconst internal = 2;\n",
     );
     run(command);
     expect(executions()).toHaveLength(3 * (consumers.size + 1));
     expect(readFileSync(output, "utf-8")).toBe(
       "export type Contract = number;",
+    );
+    const declarationTask = fixtureTasks[EMITTER];
+    if (
+      !isRecord(declarationTask) ||
+      !Array.isArray(declarationTask["inputs"])
+    ) {
+      panic("Missing declaration cache inputs");
+    }
+    const originalInputs = declarationTask["inputs"];
+    declarationTask["inputs"] = originalInputs.filter(
+      (input) => input !== "src/mcp/apps/manifest.ts",
+    );
+    writeTasks();
+    run(command);
+    const beforeExcludedRoot = executions();
+    write(
+      "apps/api/src/mcp/apps/manifest.ts",
+      "export type Contract = boolean;\nconst internal = 2;\n",
+    );
+    run(command);
+    const affectedTasks = (records: string[]) =>
+      records.filter((execution) => {
+        const entry: unknown = JSON.parse(execution);
+        return (
+          isRecord(entry) &&
+          (entry["task"] === EMITTER ||
+            entry["task"] === "@stll/api#typecheck:tests")
+        );
+      });
+    expect(affectedTasks(executions())).toEqual(
+      affectedTasks(beforeExcludedRoot),
+    );
+    const afterExcludedRoot = executions().length;
+    expect(readFileSync(output, "utf-8")).toBe(
+      "export type Contract = number;",
+    );
+    declarationTask["inputs"] = originalInputs;
+    writeTasks();
+    run(command);
+    expect(executions()).toHaveLength(afterExcludedRoot + consumers.size + 1);
+    expect(readFileSync(output, "utf-8")).toBe(
+      "export type Contract = boolean;",
     );
     const beforePatch = executions().length;
     write("patches/dependency.patch", "dependency types v2\n");

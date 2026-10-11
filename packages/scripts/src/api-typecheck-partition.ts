@@ -4,7 +4,10 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
-import { typescriptModuleReferences } from "./api-typecheck-declarations";
+import {
+  apiDeclarationCacheInputs,
+  typescriptModuleReferences,
+} from "./api-typecheck-declarations";
 import { childExitStatus } from "./child-exit-status";
 import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
 
@@ -247,6 +250,19 @@ export const apiTestPartitionIssues = (root: string) => {
   const turbo: { tasks: Record<string, { inputs?: string[] }> } =
     Bun.JSONC.parse(readFileSync(path.join(root, "turbo.json"), "utf-8"));
   const inputs = apiTestPartitionInputs(independent);
+  const declarations = apiDeclarationCacheInputs(
+    path.join(api, "tsconfig.declarations.json"),
+  );
+  if (
+    JSON.stringify(turbo.tasks["@stll/api#typecheck:declarations"]?.inputs) !==
+    JSON.stringify(declarations)
+  ) {
+    issues.push({
+      path: "turbo.json",
+      message:
+        "Declaration cache inputs must match the canonical resolved source graph; regenerate API test partition",
+    });
+  }
   for (const [task, expected] of [
     ["typecheck:src", inputs.source],
     ["typecheck:tests", inputs.tests],
@@ -393,13 +409,18 @@ if (import.meta.main) {
     const text = readFileSync(turboPath, "utf-8");
     const document = ts.parseJsonText(turboPath, text);
     const inputs = apiTestPartitionInputs(partition.independent);
+    const expectedInputs = new Map([
+      ["@stll/api#typecheck:src", inputs.source],
+      ["@stll/api#typecheck:tests", inputs.tests],
+      [
+        "@stll/api#typecheck:declarations",
+        apiDeclarationCacheInputs(path.join(api, "tsconfig.declarations.json")),
+      ],
+    ]);
     const edits: { start: number; end: number; text: string }[] = [];
     const visit = (node: ts.Node) => {
       if (ts.isPropertyAssignment(node) && ts.isStringLiteral(node.name)) {
-        const expected = new Map([
-          ["@stll/api#typecheck:src", inputs.source],
-          ["@stll/api#typecheck:tests", inputs.tests],
-        ]).get(node.name.text);
+        const expected = expectedInputs.get(node.name.text);
         if (expected && ts.isObjectLiteralExpression(node.initializer)) {
           for (const property of node.initializer.properties) {
             if (
@@ -419,7 +440,7 @@ if (import.meta.main) {
       ts.forEachChild(node, visit);
     };
     visit(document);
-    if (edits.length !== 2) {
+    if (edits.length !== expectedInputs.size) {
       panic("Missing split API Turbo task inputs");
     }
     let updated = text;

@@ -1,6 +1,12 @@
 #!/usr/bin/env bun
 import { panic } from "better-result";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
@@ -54,6 +60,119 @@ export const typescriptModuleReferences = (text: string, filename: string) => {
   };
   visit(source);
   return { imports, dynamic };
+};
+
+// Runtime imports also affect inferred exported types, so cache the resolved
+// source closure, a conservative superset of retained declaration imports.
+export const apiDeclarationCacheInputs = (project: string) => {
+  const configPath = path.resolve(project);
+  const api = path.dirname(configPath);
+  const root = path.resolve(api, "../..");
+  const config = ts.readConfigFile(configPath, (filename) =>
+    ts.sys.readFile(filename),
+  );
+  const parsed = ts.parseJsonConfigFileContent(
+    config.config,
+    ts.sys,
+    api,
+    undefined,
+    configPath,
+  );
+  const resolutionCache = ts.createModuleResolutionCache(
+    api,
+    (filename) => filename,
+    parsed.options,
+  );
+  const visited = new Set<string>();
+  const queue = [...parsed.fileNames];
+  for (const filename of queue) {
+    if (
+      visited.has(filename) ||
+      filename.includes(`${path.sep}node_modules${path.sep}`)
+    ) {
+      continue;
+    }
+    visited.add(filename);
+    const text = ts.sys.readFile(filename);
+    if (text === undefined) {
+      panic(`Missing declaration cache dependency: ${filename}`);
+    }
+    for (const specifier of typescriptModuleReferences(text, filename)
+      .imports) {
+      const dependency = ts.resolveModuleName(
+        specifier,
+        filename,
+        parsed.options,
+        ts.sys,
+        resolutionCache,
+      ).resolvedModule;
+      if (
+        dependency &&
+        dependency.resolvedFileName.startsWith(`${root}${path.sep}`)
+      ) {
+        queue.push(dependency.resolvedFileName);
+      }
+    }
+  }
+  return [
+    ...[...visited]
+      .filter((filename) => filename.startsWith(`${api}${path.sep}`))
+      .map((filename) => path.relative(api, filename))
+      .toSorted(),
+    "$TURBO_ROOT$/.npmrc",
+    "$TURBO_ROOT$/bunfig.toml",
+    "$TURBO_ROOT$/package.json",
+    "$TURBO_ROOT$/bun.lock",
+    "$TURBO_ROOT$/patches/**",
+    "$TURBO_ROOT$/packages/**",
+    "$TURBO_ROOT$/types/**",
+    "package.json",
+    "tsconfig*.json",
+  ];
+};
+
+export const missingDeclarationCacheInputs = (
+  files: readonly string[],
+  project: string,
+) => {
+  const api = path.dirname(path.resolve(project));
+  const root = path.resolve(api, "../..");
+  const turbo = path.join(root, "turbo.json");
+  if (!existsSync(turbo)) {
+    return [];
+  }
+  const config: { tasks: Record<string, { inputs: string[] }> } =
+    Bun.JSONC.parse(readFileSync(turbo, "utf-8"));
+  const inputs = config.tasks["@stll/api#typecheck:declarations"]?.inputs ?? [];
+  const exact = new Set(
+    inputs
+      .filter((input) => !/[!*?{]/u.test(input))
+      .map((input) =>
+        path.resolve(
+          input.startsWith("$TURBO_ROOT$/") ? root : api,
+          input.replace("$TURBO_ROOT$/", ""),
+        ),
+      ),
+  );
+  const patterns = inputs
+    .filter((input) => /[!*?{]/u.test(input))
+    .map((input) => {
+      const pattern = input.startsWith("!") ? input.slice(1) : input;
+      return {
+        excluded: input.startsWith("!"),
+        root: pattern.startsWith("$TURBO_ROOT$/") ? root : api,
+        glob: new Bun.Glob(pattern.replace("$TURBO_ROOT$/", "")),
+      };
+    });
+  return files.filter((filename) => {
+    const matches = patterns.filter((pattern) =>
+      pattern.glob.match(path.relative(pattern.root, filename)),
+    );
+    return (
+      matches.some((pattern) => pattern.excluded) ||
+      (!exact.has(filename) && !matches.some((pattern) => !pattern.excluded))
+    );
+  });
 };
 
 // Route and server contracts belong to the source checker, never to the
@@ -209,6 +328,12 @@ export const emitApiTypecheckDeclarations = (project: string) => {
   }
   if (diagnostics.length > 0) {
     return { diagnostics, files: [...emitted] };
+  }
+  const missing = missingDeclarationCacheInputs([...emitted], configPath);
+  if (missing.length > 0) {
+    panic(
+      `Emitted API sources missing from declaration cache inputs: ${missing.join(", ")}`,
+    );
   }
   // Replace the surface only after serialization succeeds, removing stale
   // declarations for modules that no longer belong to the public surface.

@@ -11,7 +11,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import ts from "typescript";
 
-import { emitApiTypecheckDeclarations } from "./api-typecheck-declarations";
+import {
+  apiDeclarationCacheInputs,
+  missingDeclarationCacheInputs,
+  emitApiTypecheckDeclarations,
+} from "./api-typecheck-declarations";
 
 test("declarations follow public type imports without serializing runtime-only route exports", () => {
   const directory = mkdtempSync(
@@ -146,3 +150,62 @@ test.each([
     }
   },
 );
+
+test("declaration cache inputs cover roots and transitive emitted dependencies without directory exclusions", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "api-declaration-inputs-"));
+  const api = path.join(root, "apps/api");
+  const project = path.join(api, "tsconfig.declarations.json");
+  const manifest = path.join(api, "src/mcp/apps/manifest.ts");
+  const leaf = path.join(api, "src/mcp/apps/leaf.ts");
+  mkdirSync(path.dirname(manifest), { recursive: true });
+  try {
+    writeFileSync(manifest, "export type { Contract } from './leaf';\n");
+    writeFileSync(leaf, "export type Contract = string;\n");
+    writeFileSync(
+      project,
+      JSON.stringify({
+        compilerOptions: {
+          noCheck: true,
+          declaration: true,
+          emitDeclarationOnly: true,
+          rootDir: ".",
+          outDir: "declarations",
+          types: [],
+        },
+        files: ["src/mcp/apps/manifest.ts"],
+      }),
+    );
+    const inputs = apiDeclarationCacheInputs(project);
+    expect(inputs).toContain("src/mcp/apps/manifest.ts");
+    expect(inputs).toContain("src/mcp/apps/leaf.ts");
+    const writeInputs = (values: string[]) =>
+      writeFileSync(
+        path.join(root, "turbo.json"),
+        JSON.stringify({
+          tasks: { "@stll/api#typecheck:declarations": { inputs: values } },
+        }),
+      );
+    writeInputs(inputs);
+    const result = emitApiTypecheckDeclarations(project);
+    expect(result.diagnostics).toEqual([]);
+    expect(result.files.toSorted()).toEqual([manifest, leaf].toSorted());
+    expect(missingDeclarationCacheInputs(result.files, project)).toEqual([]);
+    for (const removed of [manifest, leaf]) {
+      writeInputs(
+        inputs.filter((input) => input !== path.relative(api, removed)),
+      );
+      expect(missingDeclarationCacheInputs(result.files, project)).toEqual([
+        removed,
+      ]);
+      expect(() => emitApiTypecheckDeclarations(project)).toThrow(
+        "Emitted API sources missing from declaration cache inputs",
+      );
+    }
+    writeInputs([...inputs, "!src/mcp/apps/**"]);
+    expect(
+      missingDeclarationCacheInputs(result.files, project).toSorted(),
+    ).toEqual(result.files.toSorted());
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
