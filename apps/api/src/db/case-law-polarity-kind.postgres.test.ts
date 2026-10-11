@@ -46,11 +46,20 @@ describe.skipIf(!enabled)("persisted polarity rule kinds", () => {
           VALUES (${Bun.randomUUIDv7()}::uuid, 'invalid-form', 'xx', 'form', 'supportive')`),
         ).toHaveProperty("constraint", "polarity_rules_form_neutral");
         await tx`ROLLBACK TO SAVEPOINT deployed_form_check`;
-        // Temporary relations isolate the rollout from the CI corpus tables.
-        await tx`CREATE TEMP TABLE case_law_polarity_rules (
-          pattern text NOT NULL, language text NOT NULL, polarity text NOT NULL
-        ) ON COMMIT DROP`;
-        await tx`CREATE TEMP TABLE case_law_citations (id text) ON COMMIT DROP`;
+        // Derive the predecessor from the migrated schema, removing only this
+        // migration's additions; all other columns and checks remain canonical.
+        await tx`CREATE TEMP TABLE case_law_polarity_rules
+          (LIKE public.case_law_polarity_rules INCLUDING ALL) ON COMMIT DROP`;
+        await tx`ALTER TABLE case_law_polarity_rules DROP COLUMN kind CASCADE`;
+        await tx`CREATE TEMP TABLE case_law_citations
+          (LIKE public.case_law_citations INCLUDING ALL) ON COMMIT DROP`;
+        await tx`ALTER TABLE case_law_citations
+          DROP COLUMN polarity_source CASCADE,
+          DROP COLUMN polarity_classifier_version CASCADE,
+          DROP COLUMN polarity_window_start CASCADE,
+          DROP COLUMN polarity_window_end CASCADE,
+          DROP COLUMN polarity_confidence CASCADE,
+          DROP COLUMN cited_part CASCADE`;
         const fixtures = JSON.stringify(
           SEED_RULES.map((seed) => ({
             pattern: seed.pattern,
@@ -58,18 +67,18 @@ describe.skipIf(!enabled)("persisted polarity rule kinds", () => {
             polarity: "supportive",
           })),
         );
-        await tx`INSERT INTO case_law_polarity_rules (pattern, language, polarity)
-          SELECT pattern, language, polarity FROM jsonb_to_recordset(${fixtures}::text::jsonb)
+        await tx`INSERT INTO case_law_polarity_rules (id, pattern, language, polarity)
+          SELECT gen_random_uuid(), pattern, language, polarity FROM jsonb_to_recordset(${fixtures}::text::jsonb)
           AS seeds(pattern text, language text, polarity text)`;
-        await tx`INSERT INTO case_law_polarity_rules VALUES
-          ('unregistered-manual', 'xx', 'negative'), ('unregistered-model', 'xx', 'supportive')`;
+        await tx`INSERT INTO case_law_polarity_rules (id, pattern, language, polarity) VALUES
+          (gen_random_uuid(), 'unregistered-manual', 'xx', 'negative'), (gen_random_uuid(), 'unregistered-model', 'xx', 'supportive')`;
         for (const statement of migration.split("--> statement-breakpoint")) {
           await tx.unsafe(statement);
         }
         const constraints = await tx.unsafe<
           { conname: string; convalidated: boolean }[]
         >(
-          "SELECT conname, convalidated FROM pg_constraint WHERE contype = 'c' AND conrelid IN ('pg_temp.case_law_polarity_rules'::regclass, 'pg_temp.case_law_citations'::regclass)",
+          "SELECT conname, convalidated FROM pg_constraint WHERE contype = 'c' AND conrelid IN ('pg_temp.case_law_polarity_rules'::regclass, 'pg_temp.case_law_citations'::regclass) AND conname IN ('citations_cited_part_values', 'citations_polarity_confidence_bounds', 'citations_polarity_source_values', 'citations_polarity_window_bounds', 'polarity_rules_form_neutral', 'polarity_rules_kind_values')",
         );
         expect(constraints.length).toBe(6);
         expect(
@@ -96,7 +105,7 @@ describe.skipIf(!enabled)("persisted polarity rule kinds", () => {
         const validatedConstraints = await tx.unsafe<
           { convalidated: boolean }[]
         >(
-          "SELECT convalidated FROM pg_constraint WHERE contype = 'c' AND conrelid IN ('pg_temp.case_law_polarity_rules'::regclass, 'pg_temp.case_law_citations'::regclass)",
+          "SELECT convalidated FROM pg_constraint WHERE contype = 'c' AND conrelid IN ('pg_temp.case_law_polarity_rules'::regclass, 'pg_temp.case_law_citations'::regclass) AND conname IN ('citations_cited_part_values', 'citations_polarity_confidence_bounds', 'citations_polarity_source_values', 'citations_polarity_window_bounds', 'polarity_rules_form_neutral', 'polarity_rules_kind_values')",
         );
         expect(validatedConstraints.length).toBe(6);
         expect(
@@ -147,19 +156,19 @@ describe.skipIf(!enabled)("persisted polarity rule kinds", () => {
         ]) {
           await tx`SAVEPOINT rejected_form`;
           expect(
-            await rejectionOf(tx`INSERT INTO case_law_polarity_rules (pattern, language, kind, polarity)
-            VALUES ('invalid-form', 'xx', 'form', ${polarity})`),
+            await rejectionOf(tx`INSERT INTO case_law_polarity_rules (id, pattern, language, kind, polarity)
+            VALUES (gen_random_uuid(), 'invalid-form', 'xx', 'form', ${polarity})`),
           ).toHaveProperty("constraint", "polarity_rules_form_neutral");
           await tx`ROLLBACK TO SAVEPOINT rejected_form`;
         }
         await tx`SAVEPOINT rejected_kind`;
         expect(
-          await rejectionOf(tx`INSERT INTO case_law_polarity_rules (pattern, language, kind, polarity)
-          VALUES ('invalid-kind', 'xx', 'other', 'neutral')`),
+          await rejectionOf(tx`INSERT INTO case_law_polarity_rules (id, pattern, language, kind, polarity)
+          VALUES (gen_random_uuid(), 'invalid-kind', 'xx', 'other', 'neutral')`),
         ).toHaveProperty("constraint", "polarity_rules_kind_values");
         await tx`ROLLBACK TO SAVEPOINT rejected_kind`;
-        await tx`INSERT INTO case_law_polarity_rules (pattern, language, kind, polarity)
-          VALUES ('valid-form', 'xx', 'form', 'neutral'), ('valid-stance', 'xx', 'stance', 'supportive')`;
+        await tx`INSERT INTO case_law_polarity_rules (id, pattern, language, kind, polarity)
+          VALUES (gen_random_uuid(), 'valid-form', 'xx', 'form', 'neutral'), (gen_random_uuid(), 'valid-stance', 'xx', 'stance', 'supportive')`;
       });
     });
   });

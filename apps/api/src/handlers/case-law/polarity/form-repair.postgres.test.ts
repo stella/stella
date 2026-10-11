@@ -1,12 +1,17 @@
 import { describe, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { getTableName, sql } from "drizzle-orm";
 import { TransactionRollbackError } from "drizzle-orm/errors";
 import * as v from "valibot";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawCitations } from "@/api/db/schema";
+import {
+  caseLawCitationReviews,
+  caseLawCitations,
+  caseLawDecisions,
+  caseLawPolarityRules,
+} from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -30,21 +35,17 @@ describe.skipIf(!enabled)(
         const { db } = openClient();
         const outcome = await rejectionOf(
           db.transaction(async (tx) => {
-            await tx.execute(sql`CREATE TEMP TABLE case_law_decisions (
-          id uuid PRIMARY KEY, country text, language text, sections jsonb
-        ) ON COMMIT DROP`);
-            await tx.execute(sql`CREATE TEMP TABLE case_law_polarity_rules (
-          id uuid PRIMARY KEY, kind text, polarity text, source text, pattern text
-        ) ON COMMIT DROP`);
-            await tx.execute(sql`CREATE TEMP TABLE case_law_citations (
-          id uuid PRIMARY KEY, citing_decision_id uuid, citation_key text,
-          citation_text text, section_index ${sql.raw(caseLawCitations.sectionIndex.getSQLType())}, polarity text, polarity_rule_id uuid,
-          polarity_source text, polarity_classifier_version text, polarity_window_start ${sql.raw(caseLawCitations.polarityWindowStart.getSQLType())},
-          polarity_window_end ${sql.raw(caseLawCitations.polarityWindowEnd.getSQLType())}, polarity_confidence ${sql.raw(caseLawCitations.polarityConfidence.getSQLType())}, cited_part text
-        ) ON COMMIT DROP`);
-            await tx.execute(sql`CREATE TEMP TABLE case_law_citation_reviews (
-          citing_decision_id uuid, citation_key text
-        ) ON COMMIT DROP`);
+            // Clone the migrated schema so query columns, defaults and checks cannot drift.
+            for (const table of [
+              caseLawDecisions,
+              caseLawPolarityRules,
+              caseLawCitations,
+              caseLawCitationReviews,
+            ]) {
+              const name = sql.identifier(getTableName(table));
+              await tx.execute(sql`CREATE TEMP TABLE ${name}
+                (LIKE public.${name} INCLUDING ALL) ON COMMIT DROP`);
+            }
             const formId = createSafeId<"caseLawPolarityRule">();
             const stanceId = createSafeId<"caseLawPolarityRule">();
             const rules = compileRules([
@@ -63,8 +64,22 @@ describe.skipIf(!enabled)(
                 confidence: 1,
               },
             ]);
-            await tx.execute(sql`INSERT INTO case_law_polarity_rules VALUES
-          (${formId}, 'form', 'neutral', 'manual', 'compare'), (${stanceId}, 'stance', 'negative', 'manual', 'reject')`);
+            await tx.insert(caseLawPolarityRules).values([
+              {
+                id: formId,
+                kind: "form",
+                polarity: "neutral",
+                language: "en",
+                pattern: "compare",
+              },
+              {
+                id: stanceId,
+                kind: "stance",
+                polarity: "negative",
+                language: "en",
+                pattern: "reject",
+              },
+            ]);
             const fixtures = [
               "unchanged",
               "reviewed",
@@ -79,24 +94,38 @@ describe.skipIf(!enabled)(
               decisionId: createSafeId<"caseLawDecision">(),
             }));
             for (const fixture of fixtures) {
-              const sections = JSON.stringify([
+              const sections = [
                 {
+                  index: 0,
+                  type: "argumentation" as const,
+                  title: null,
                   text:
                     fixture.name === "rejection"
                       ? "reject, compare A 12/2020"
                       : "compare A 12/2020",
                 },
-              ]);
-              await tx.execute(
-                sql`INSERT INTO case_law_decisions VALUES (${fixture.decisionId}, 'XXX', 'en', ${sections}::text::jsonb)`,
-              );
+              ];
+              await tx.insert(caseLawDecisions).values({
+                id: fixture.decisionId,
+                sourceId: createSafeId<"caseLawSource">(),
+                caseNumber: fixture.name,
+                court: "Fixture court",
+                country: "CZE",
+                language: "en",
+                sections,
+                contentHash: "a".repeat(64),
+              });
               await tx.execute(sql`INSERT INTO case_law_citations
             (id, citing_decision_id, citation_key, citation_text, section_index, polarity, polarity_rule_id)
             VALUES (${fixture.id}, ${fixture.decisionId}, ${fixture.name}, 'A 12/2020', 0, 'supportive', ${fixture.name === "stance" ? stanceId : formId})`);
               if (fixture.name === "reviewed") {
-                await tx.execute(
-                  sql`INSERT INTO case_law_citation_reviews VALUES (${fixture.decisionId}, ${fixture.name})`,
-                );
+                await tx.insert(caseLawCitationReviews).values({
+                  citingDecisionId: fixture.decisionId,
+                  citationKey: fixture.name,
+                  polarity: "supportive",
+                  reviewRef: "fixture",
+                  origin: "human-review",
+                });
               }
             }
             const scopedDb: ScopedDb = async (run) => await run(tx);
@@ -126,9 +155,13 @@ describe.skipIf(!enabled)(
             ).toBe(true);
             for (const fixture of fixtures) {
               if (fixture.name === "late-review") {
-                await tx.execute(
-                  sql`INSERT INTO case_law_citation_reviews VALUES (${fixture.decisionId}, ${fixture.name})`,
-                );
+                await tx.insert(caseLawCitationReviews).values({
+                  citingDecisionId: fixture.decisionId,
+                  citationKey: fixture.name,
+                  polarity: "supportive",
+                  reviewRef: "fixture",
+                  origin: "human-review",
+                });
               }
               if (fixture.name === "label-changed") {
                 await tx.execute(
@@ -137,7 +170,7 @@ describe.skipIf(!enabled)(
               }
               if (fixture.name === "text-changed") {
                 await tx.execute(
-                  sql`UPDATE case_law_decisions SET sections = '[{"text":"compare A 12/2020 changed"}]'::jsonb WHERE id = ${fixture.decisionId}`,
+                  sql`UPDATE case_law_decisions SET sections = '[{"index":0,"type":"argumentation","title":null,"text":"compare A 12/2020 changed"}]'::jsonb, content_hash = ${"b".repeat(64)} WHERE id = ${fixture.decisionId}`,
                 );
               }
             }
@@ -150,20 +183,23 @@ describe.skipIf(!enabled)(
             const after = await tx.execute(
               sql`SELECT citation_key, polarity, polarity_source FROM case_law_citations ORDER BY citation_key`,
             );
+            const stored = v.parse(
+              v.array(
+                v.object({
+                  citation_key: v.string(),
+                  polarity: v.string(),
+                  polarity_source: v.nullable(v.string()),
+                }),
+              ),
+              executedRows(after),
+            );
             expect(
-              v
-                .parse(
-                  v.array(
-                    v.object({
-                      citation_key: v.string(),
-                      polarity: v.string(),
-                      polarity_source: v.nullable(v.string()),
-                    }),
-                  ),
-                  executedRows(after),
-                )
-                .filter((row) => row.polarity === "neutral"),
-            ).toEqual([
+              stored.find((row) => row.citation_key === "text-changed"),
+            ).toMatchObject({
+              polarity: "supportive",
+              polarity_source: null,
+            });
+            expect(stored.filter((row) => row.polarity === "neutral")).toEqual([
               {
                 citation_key: "unchanged",
                 polarity: "neutral",
