@@ -54,6 +54,7 @@ import {
   MERGE_GROUP_EXCEPTIONS,
   thinJobs,
 } from "./main-heavy-plan";
+import { unlistedTests } from "./run-unlisted-script-tests";
 import { TEST_JOB_SHARDS, type TestShardId } from "./test-shards";
 import { flattenWorkflowSteps } from "./workflow-steps";
 
@@ -2229,6 +2230,7 @@ const jobSteps = (job: unknown) =>
             run: v.optional(v.string()),
             if: v.optional(v.string()),
             env: v.optional(v.record(v.string(), v.string())),
+            "continue-on-error": v.optional(v.unknown()),
           }),
         ),
       ),
@@ -5395,6 +5397,117 @@ test("parity rejects new queue-only jobs, ungated PR paths and stale exemptions"
   ).toThrow("Unknown CI predicate context");
 });
 
+test("workflow and planner changes run every planner test as a merge-group gate", () => {
+  const root = nodePath.resolve(import.meta.dirname, "..");
+  const plannerTests = [
+    ...new Bun.Glob(
+      "scripts/{ci-*plan*,ci-checks-partition,ci-completed-depth,ci-pr-pilot,ci-pr-depth-workflow,main-heavy*,thin-queue,github-expression}.test.ts",
+    ).scanSync({ cwd: root }),
+  ];
+  expect(plannerTests).toContain("scripts/ci-checks-partition.test.ts");
+  expect(plannerTests).toContain("scripts/ci-plan.test.ts");
+  const unlisted = new Set(unlistedTests(plannerTests, workflow));
+  const owners = new Map<
+    string,
+    { job: string; step: ReturnType<typeof jobSteps>[number] }[]
+  >();
+  for (const [job, body] of Object.entries(ciJobs)) {
+    if (!v.is(v.object({ steps: v.array(v.unknown()) }), body)) {
+      continue;
+    }
+    for (const step of jobSteps(body)) {
+      for (const file of plannerTests) {
+        if (
+          step.run?.includes(file) ||
+          (unlisted.has(file) &&
+            step.run?.includes("bun scripts/run-unlisted-script-tests.ts"))
+        ) {
+          const existing = owners.get(file) ?? [];
+          existing.push({ job, step });
+          owners.set(file, existing);
+        }
+      }
+    }
+  }
+  const changes = [
+    ".github/workflows/ci.yml",
+    ...plannerTests.map((file) => file.replace(/\.test\.ts$/u, ".ts")),
+    ...new Bun.Glob(
+      "scripts/{ci-*plan*,ci-pr-*,main-heavy*,github-expression}.ts",
+    ).scanSync({ cwd: root }),
+  ];
+  const selections = planSelector(
+    [...new Set(changes)].map((file) => ({
+      files: [file],
+      outputs: ["package_checks_required"],
+      suiteDepth: SUITE_DEPTH.full,
+      e2eLandingRequired: "false",
+      event: EVENT.mergeGroup,
+    })),
+  );
+  for (const { item, plan } of selections) {
+    expect(plan, item.files.join(",")).toEqual(["true"]);
+  }
+  const admitted = queueAdmittedJobs({ jobs: ciJobs });
+  const gated = new Set<string>();
+  for (const file of plannerTests) {
+    const selected = owners.get(file) ?? [];
+    expect(selected.length, file).toBeGreaterThan(0);
+    for (const { job, step } of selected) {
+      expect(admitted, file).toContain(job);
+      expect(resultJob.needs, file).toContain(job);
+      expect(jobScopes[job], job).toBe("package_checks_required");
+      const body = v.parse(v.record(v.string(), v.unknown()), ciJobs[job]);
+      expect(body["continue-on-error"] ?? false, job).toBe(false);
+      expect(step["continue-on-error"] ?? false, file).toBe(false);
+      gated.add(job);
+      for (const queueDepth of ["thin", "full"] as const) {
+        expect(
+          runsAtDepth(jobIf(ciJobs[job]), {
+            event: EVENT.mergeGroup,
+            depth: SUITE_DEPTH.full,
+            queueDepth,
+          }),
+          job,
+        ).toBe(true);
+        expect(
+          evaluate(step.if ?? "true", {
+            values: {
+              "github.event_name": EVENT.mergeGroup,
+              "needs.ci-plan.outputs.package_checks_required": "true",
+              "needs.ci-plan.outputs.queue_depth": queueDepth,
+              "needs.ci-plan.outputs.suite_depth": SUITE_DEPTH.full,
+            },
+            status: {
+              always: true,
+              success: true,
+              failure: false,
+              cancelled: false,
+            },
+            fallback: (name) =>
+              /^steps\.[\w-]+\.outcome$/u.test(name) ? "success" : undefined,
+          }),
+          file,
+        ).toBe(true);
+      }
+    }
+  }
+  for (const job of gated) {
+    for (const queueDepth of ["thin", "full"]) {
+      for (const result of ["failure", "skipped"]) {
+        expect(
+          evaluateResult({
+            event: EVENT.mergeGroup,
+            plannedOutputs: { queue_depth: queueDepth },
+            results: { [job]: result },
+          }),
+          `${job}/${queueDepth}/${result}`,
+        ).toBe(1);
+      }
+    }
+  }
+});
+
 test("thin merge groups require every scoped code job while full parity stays enforced", () => {
   const admitted = new Set(queueAdmittedJobs({ jobs: ciJobs }));
   for (const { name, condition } of parityJobs) {
@@ -5410,18 +5523,16 @@ test("thin merge groups require every scoped code job while full parity stays en
       }),
       name,
     ).toBe(full);
-    expect(
-      runsAtDepth(condition, {
-        event: EVENT.mergeGroup,
-        depth: SUITE_DEPTH.full,
-        queueDepth: "thin",
-      }),
-      name,
-    ).toBe(
-      admitted.has(name) || Object.hasOwn(MERGE_GROUP_EXCEPTIONS, name)
-        ? full
-        : false,
-    );
+    const thin = runsAtDepth(condition, {
+      event: EVENT.mergeGroup,
+      depth: SUITE_DEPTH.full,
+      queueDepth: "thin",
+    });
+    if (admitted.has(name)) {
+      expect(thin, name).toBe(full);
+    } else if (!Object.hasOwn(MERGE_GROUP_EXCEPTIONS, name)) {
+      expect(thin, name).toBe(false);
+    }
     // Browser configuration cannot disable a planned queue gate.
     expect(
       runsAtDepth(condition, {
@@ -5431,11 +5542,7 @@ test("thin merge groups require every scoped code job while full parity stays en
         queueBrowserSuites: "off",
       }),
       `${name}/off`,
-    ).toBe(
-      admitted.has(name) || Object.hasOwn(MERGE_GROUP_EXCEPTIONS, name)
-        ? full
-        : false,
-    );
+    ).toBe(thin);
     for (const event of [EVENT.pullRequest, EVENT.workflowDispatch]) {
       expect(
         runsAtDepth(condition, {
