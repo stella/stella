@@ -5,6 +5,7 @@ import type { Fetcher } from "@stll/fetch";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { checkStructuredOutputBudget } from "@/api/lib/structured-output-budget";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { decide, decideMany } from "@/api/lib/workflow/decisions/decide";
 import type { DecisionGenerator } from "@/api/lib/workflow/decisions/decide";
@@ -565,6 +566,128 @@ test("the generation deadline bounds a stalled resolver without aborting the cal
     confidence: null,
   });
 });
+
+test.each(["success", "failed-middle", "stalled-middle"])(
+  "a no-backend batch respects the provider schema budget (%s)",
+  async (path) => {
+    logs = installRecordingLogger();
+    const organizationId = toSafeId<"organization">("org-decision-budget");
+    const questions = Object.fromEntries(
+      Array.from({ length: 20 }, (_, index) => [
+        `question-${index}`,
+        signedQuestion,
+      ]),
+    );
+    const requestedIds: string[][] = [];
+    const failedIds = new Set<string>();
+    const pending = Promise.withResolvers<{ data: object; rawText: string }>();
+    const adapter = {
+      ...createScriptedTextAdapter([]),
+      structuredOutput: async ({ outputSchema }) => {
+        expect(
+          checkStructuredOutputBudget({
+            provider: "anthropic",
+            modelId: "claude-sonnet-5",
+            schema: outputSchema,
+          }).isOk(),
+        ).toBe(true);
+        const ids = [
+          ...new Set(JSON.stringify(outputSchema).match(/question-\d+/gu)),
+        ];
+        expect(ids.length).toBeGreaterThan(0);
+        requestedIds.push(ids);
+        if (path !== "success" && requestedIds.length === 2) {
+          for (const id of ids) {
+            failedIds.add(id);
+          }
+          if (path === "stalled-middle") {
+            return await pending.promise;
+          }
+          throw new TypeError("The middle provider chunk is unavailable");
+        }
+        const output = {
+          answers: ids.map((id) => ({
+            id,
+            answer: { type: "noul", noul: 1 },
+            evidence: null,
+          })),
+        };
+        return { data: output, rawText: JSON.stringify(output) };
+      },
+    } satisfies AnyTextAdapter;
+    const model = {
+      adapter,
+      keySource: "byok",
+      modelId: "claude-sonnet-5",
+      provider: "anthropic",
+      modelOptions: {},
+    } as const satisfies ResolvedTanStackTextModel;
+    let resolutions = 0;
+    const result = await decideMany({
+      id: "test.provider-budget",
+      dataClass: "customer",
+      orgAIConfig: null,
+      state,
+      questions,
+      client: null,
+      generation: {
+        role: "fast",
+        dataClass: "customer",
+        orgAIConfig: null,
+        managedAIResidency: "eu",
+        organizationId,
+        admission: testModelAdmission(organizationId),
+        tenantWorkspaceIds: [],
+        serviceTier: "standard",
+        caching: { enabled: false, reason: "org-disabled" },
+        prompt: "Read the contract.",
+        deadlineMs: 80,
+        resolveTextModel: () => {
+          resolutions += 1;
+          return model;
+        },
+      },
+    });
+    expect(resolutions).toBe(1);
+    expect(requestedIds.length).toBeGreaterThan(1);
+    expect(requestedIds.flat().toSorted()).toEqual(
+      Object.keys(questions).toSorted(),
+    );
+    const callLogs = logs
+      .at("INFO")
+      .filter((record) => record.message === "ai.decision");
+    expect(callLogs).toHaveLength(requestedIds.length);
+    for (const [index, ids] of requestedIds.entries()) {
+      expect(callLogs[index]?.attributes).toMatchObject({
+        source: "generative",
+        questionCount: ids.length,
+      });
+      const readings: unknown = JSON.parse(
+        String(callLogs[index]?.attributes?.["readings"] ?? "[]"),
+      );
+      expect(readings).toEqual(
+        ids.slice(0, 20).map((id) => ({
+          q: id,
+          source: "generative",
+          state: failedIds.has(id) ? "undecided" : "decided",
+        })),
+      );
+    }
+    for (const [id, decision] of Object.entries(result.decisions)) {
+      expect(decision).toMatchObject({
+        state: failedIds.has(id) ? "undecided" : "decided",
+        source: "generative",
+        model: "claude-sonnet-5",
+      });
+      if (decision.state === "undecided") {
+        expect(decision.reason).toBe("failed");
+      }
+    }
+    if (path !== "success") {
+      expect(failedIds.size).toBeGreaterThan(0);
+    }
+  },
+);
 
 test.each(["extra", "duplicate", "missing"])(
   "rejects a generative batch with an %s question id",

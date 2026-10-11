@@ -276,7 +276,7 @@ const GENERATION_DEADLINE_LABEL = "model generation deadline";
  * also receives the deadline as an abort signal, so work that does listen
  * stops with it.
  */
-const withGenerationDeadline = async <T>(
+export const withGenerationDeadline = async <T>(
   {
     abortSignal,
     deadlineMs,

@@ -14,10 +14,15 @@ import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 import { admittedDispatchSignal } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { splitPropertiesForBudget } from "@/api/lib/structured-output-budget";
 import {
   generateTanStackObjectForRole,
   resolveTanStackTextModel,
+  structuredOutputWireJsonSchema,
+  withGenerationDeadline,
 } from "@/api/lib/tanstack-ai-generate";
+import { isMockTextAdapter } from "@/api/lib/tanstack-ai-models";
+import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { resolveDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import {
@@ -103,6 +108,7 @@ export type DecisionGenerationOptions = DecisionGenerationOptionsFor<
 >;
 
 export type DecisionGenerationRequest = {
+  decisionId: string;
   orgAIConfig: OrgAIConfig | null | undefined;
   state: SystemOneState;
   questions: SystemOneQuestions;
@@ -111,11 +117,21 @@ export type DecisionGenerationRequest = {
 };
 
 /** External generation seam; tests supply a fake without calling a provider. */
+export type DecisionGenerationCall = {
+  questionIds: readonly string[];
+  model: string | null;
+  latencyMs: number;
+  usage?: { inputTokens: number; outputTokens: number } | undefined;
+};
+
 export type DecisionGenerator = (
   request: DecisionGenerationRequest,
 ) => Promise<{
   model: string;
   output: unknown;
+  /** Failed chunks are terminal; successful chunks retain their answers. */
+  failedQuestionIds?: readonly string[] | undefined;
+  calls?: readonly DecisionGenerationCall[] | undefined;
   usage?: { inputTokens: number; outputTokens: number } | undefined;
 }>;
 
@@ -427,29 +443,31 @@ const parseGeneratedDecisions = (
   return entries;
 };
 
-const generateDecisions: DecisionGenerator = async ({
+type GenerateDecisionChunkOptions = {
+  generation: DecisionGenerationOptions;
+  orgAIConfig: OrgAIConfig | null | undefined;
+  model: ResolvedTanStackTextModel;
+  state: SystemOneState;
+  questions: SystemOneQuestions;
+  abortSignal: AbortSignal;
+  call: DecisionGenerationCall;
+};
+
+/** One admitted provider request, including the caller's context and usage. */
+const generateDecisionChunk = async ({
+  generation,
   orgAIConfig,
+  model,
   state,
   questions,
   abortSignal,
-  generation,
-}) => {
-  if (generation === undefined) {
-    return panic("Decision generation requires an admitted runtime");
-  }
+  call,
+}: GenerateDecisionChunkOptions) => {
   const { prompt, messages, evidenceInstruction, ...runtime } = generation;
   const options = { ...runtime, orgAIConfig };
-  let modelId: string | undefined;
-  let usage: { inputTokens: number; outputTokens: number } | undefined;
-  const output = await generateTanStackObjectForRole({
+  return await generateTanStackObjectForRole({
     ...options,
-    resolveTextModel: async (request) => {
-      const model = await (
-        runtime.resolveTextModel ?? resolveTanStackTextModel
-      )(request);
-      modelId = model.modelId;
-      return model;
-    },
+    resolveTextModel: () => model,
     analytics: {
       usageMetering: options.analytics?.usageMetering,
       captureError: options.analytics?.captureError ?? captureError,
@@ -458,10 +476,10 @@ const generateDecisions: DecisionGenerator = async ({
         name: options.analytics?.middleware.name ?? "typed-decision-usage",
         onUsage: async (context, reported) => {
           await options.analytics?.middleware.onUsage?.(context, reported);
-          usage = {
-            inputTokens: (usage?.inputTokens ?? 0) + reported.promptTokens,
+          call.usage = {
+            inputTokens: (call.usage?.inputTokens ?? 0) + reported.promptTokens,
             outputTokens:
-              (usage?.outputTokens ?? 0) + reported.completionTokens,
+              (call.usage?.outputTokens ?? 0) + reported.completionTokens,
           };
         },
       },
@@ -478,10 +496,101 @@ const generateDecisions: DecisionGenerator = async ({
     ],
     outputSchema: generativeDecisionsSchema(questions),
   });
+};
+
+const generateDecisions: DecisionGenerator = async ({
+  decisionId,
+  orgAIConfig,
+  state,
+  questions,
+  abortSignal,
+  generation,
+}) => {
+  if (generation === undefined) {
+    return panic("Decision generation requires an admitted runtime");
+  }
+  const model = await withGenerationDeadline(
+    { ...generation, abortSignal },
+    async (signal) =>
+      await (generation.resolveTextModel ?? resolveTanStackTextModel)({
+        ...generation,
+        orgAIConfig,
+        abortSignal: signal ?? abortSignal,
+      }),
+  );
+  abortSignal.throwIfAborted();
+  const planned = splitPropertiesForBudget({
+    provider: model.provider,
+    modelId: model.modelId,
+    properties: Object.entries(questions),
+    buildSchema: (entries) =>
+      structuredOutputWireJsonSchema({
+        mock: isMockTextAdapter(model.adapter),
+        provider: model.provider,
+        outputSchema: generativeDecisionsSchema(Object.fromEntries(entries)),
+      }),
+  });
+  if (Result.isError(planned)) {
+    throw planned.error;
+  }
+  const answers: v.InferOutput<
+    ReturnType<typeof generativeDecisionsSchema>
+  >["answers"] = [];
+  const failedQuestionIds: string[] = [];
+  const calls: DecisionGenerationCall[] = [];
+  let usage: { inputTokens: number; outputTokens: number } | undefined;
+  for (const chunk of planned.value) {
+    abortSignal.throwIfAborted();
+    const chunkQuestions = Object.fromEntries(chunk);
+    const started = performance.now();
+    const call: DecisionGenerationCall = {
+      questionIds: Object.keys(chunkQuestions),
+      model: model.modelId,
+      latencyMs: 0,
+    };
+    const generated = await Result.tryPromise({
+      try: async () =>
+        await generateDecisionChunk({
+          generation,
+          orgAIConfig,
+          model,
+          state,
+          questions: chunkQuestions,
+          abortSignal,
+          call,
+        }),
+      catch: (error: unknown) => error,
+    });
+    call.latencyMs = performance.now() - started;
+    calls.push(call);
+    if (call.usage !== undefined) {
+      usage = {
+        inputTokens: (usage?.inputTokens ?? 0) + call.usage.inputTokens,
+        outputTokens: (usage?.outputTokens ?? 0) + call.usage.outputTokens,
+      };
+    }
+    abortSignal.throwIfAborted();
+    const entries = Result.isOk(generated)
+      ? parseGeneratedDecisions(generated.value, chunkQuestions)
+      : null;
+    if (entries === null) {
+      failedQuestionIds.push(...Object.keys(chunkQuestions));
+      if (Result.isError(generated)) {
+        observeFailure(generated.error, {
+          sink: DECISION_FAILURE,
+          ctx: { source: "generative", decisionId },
+        });
+      }
+      continue;
+    }
+    answers.push(...entries.values());
+  }
   return {
-    model: modelId ?? panic("Successful generation did not resolve its model"),
-    output,
+    model: model.modelId,
+    output: { answers },
     usage,
+    failedQuestionIds,
+    calls,
   };
 };
 
@@ -543,7 +652,49 @@ const bindGeneratedDecision = ({
   };
 };
 
-/** One generative request settles all questions the decision model left open. */
+type LogGenerativeDecisionCallsOptions = {
+  decisionId: string;
+  calls: readonly DecisionGenerationCall[];
+  decisions: ReadonlyMap<string, Decision<SystemOneAnswer>>;
+};
+
+const logGenerativeDecisionCalls = ({
+  decisionId,
+  calls,
+  decisions,
+}: LogGenerativeDecisionCallsOptions) => {
+  for (const call of calls) {
+    const outcomes = call.questionIds.map((id) => ({
+      id,
+      decision:
+        decisions.get(id) ??
+        panic(`Generative call recorded unknown question "${id}"`),
+    }));
+    const decided = outcomes.filter(
+      ({ decision }) => decision.state === "decided",
+    ).length;
+    logger.info("ai.decision", {
+      decision: decisionId,
+      source: "generative",
+      model: call.model,
+      questionCount: outcomes.length,
+      decidedCount: decided,
+      undecidedCount: outcomes.length - decided,
+      latencyMs: call.latencyMs,
+      inputTokens: call.usage?.inputTokens ?? null,
+      outputTokens: call.usage?.outputTokens ?? null,
+      readings: JSON.stringify(
+        outcomes.slice(0, READINGS_MAX).map(({ id, decision }) => ({
+          q: id,
+          source: decision.source,
+          state: decision.state,
+        })),
+      ),
+    });
+  }
+};
+
+/** Shared generation settles open questions in provider-budgeted schema chunks. */
 export const decideMany = async <TQuestions extends SystemOneQuestions>(
   options: DecideManyOptions<TQuestions>,
 ): Promise<DecideManyResult<TQuestions>> => {
@@ -555,7 +706,23 @@ export const decideMany = async <TQuestions extends SystemOneQuestions>(
       ? AbortSignal.any([admittedSignal, options.abortSignal])
       : (admittedSignal ?? options.abortSignal);
   abortSignal?.throwIfAborted();
-  const primary = await askDecisionModel({ ...options, abortSignal });
+  const modelQuestions = Object.fromEntries(
+    Object.entries(options.questions).filter(
+      ([, question]) => question.requiredCapability !== "tools",
+    ),
+  );
+  const asked = await askDecisionModel({
+    ...options,
+    questions: modelQuestions,
+    abortSignal,
+  });
+  const primary = {
+    model: asked.model,
+    decisions: {
+      ...undecidedAll(options.questions, "no-backend"),
+      ...asked.decisions,
+    },
+  };
   const openMap = new Map<string, SystemOneQuestion>();
   for (const [key, question] of Object.entries(options.questions)) {
     const outcome = primary.decisions[key];
@@ -575,6 +742,7 @@ export const decideMany = async <TQuestions extends SystemOneQuestions>(
   const generated = await Result.tryPromise({
     try: async () =>
       await (options.generator ?? generateDecisions)({
+        decisionId: options.id,
         orgAIConfig: options.orgAIConfig,
         state: options.state,
         questions: open,
@@ -586,9 +754,16 @@ export const decideMany = async <TQuestions extends SystemOneQuestions>(
   if (Result.isError(generated) && abortSignal?.aborted) {
     abortSignal.throwIfAborted();
   }
-  const entries = Result.isOk(generated)
-    ? parseGeneratedDecisions(generated.value.output, open)
-    : null;
+  const failedQuestionIds = new Set(
+    Result.isOk(generated) ? generated.value.failedQuestionIds : undefined,
+  );
+  const successfulQuestions = Object.fromEntries(
+    Object.entries(open).filter(([id]) => !failedQuestionIds.has(id)),
+  );
+  const entries =
+    Result.isOk(generated) && Object.keys(successfulQuestions).length > 0
+      ? parseGeneratedDecisions(generated.value.output, successfulQuestions)
+      : null;
   if (Result.isError(generated)) {
     observeFailure(generated.error, {
       sink: DECISION_FAILURE,
@@ -599,8 +774,6 @@ export const decideMany = async <TQuestions extends SystemOneQuestions>(
     Object.entries(primary.decisions),
   );
   const model = Result.isOk(generated) ? generated.value.model : null;
-  const readings: Record<string, string | number>[] = [];
-  let decidedCount = 0;
   for (const [key, question] of Object.entries(open)) {
     const outcome = bindGeneratedDecision({
       decisionId: options.id,
@@ -609,28 +782,25 @@ export const decideMany = async <TQuestions extends SystemOneQuestions>(
       model,
       entry: entries?.get(key),
     });
-    decidedCount += outcome.state === "decided" ? 1 : 0;
     decisionMap.set(key, outcome);
-    if (readings.length < READINGS_MAX) {
-      readings.push({ q: key, source: outcome.source, state: outcome.state });
-    }
   }
-  logger.info("ai.decision", {
-    decision: options.id,
-    source: "generative",
-    model,
-    questionCount: Object.keys(open).length,
-    decidedCount,
-    undecidedCount: Object.keys(open).length - decidedCount,
-    latencyMs: performance.now() - started,
-    inputTokens: Result.isOk(generated)
-      ? (generated.value.usage?.inputTokens ?? null)
-      : null,
-    outputTokens: Result.isOk(generated)
-      ? (generated.value.usage?.outputTokens ?? null)
-      : null,
-    readings: JSON.stringify(readings),
+  const calls =
+    Result.isOk(generated) && generated.value.calls !== undefined
+      ? generated.value.calls
+      : [
+          {
+            questionIds: Object.keys(open),
+            model,
+            latencyMs: performance.now() - started,
+            usage: Result.isOk(generated) ? generated.value.usage : undefined,
+          },
+        ];
+  logGenerativeDecisionCalls({
+    decisionId: options.id,
+    calls,
+    decisions: decisionMap,
   });
+
   const decisions = Object.fromEntries(decisionMap);
   return {
     decisions: hasEveryDecision(options.questions, decisions)

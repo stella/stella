@@ -166,7 +166,9 @@ export const buildWorkflowAIAnalyticsProps = ({
 const SYSTEM_ONE_ERROR_SOURCE = "workflow.generate-batch.system-one";
 
 type SystemOnePhaseOptions = {
-  generation: Extract<DecisionGenerationOptions, { dataClass: "customer" }>;
+  generation: (
+    properties: AIBatchProperty[],
+  ) => Extract<DecisionGenerationOptions, { dataClass: "customer" }>;
   decisionModel: DecisionModel | null | undefined;
   usageMetering: AIUsageMetering | undefined;
   orgAIConfig: OrgAIConfig | null | undefined;
@@ -239,7 +241,9 @@ const askSystemOne = async ({
   }
 
   const { decisions } = await decideMany({
-    generation,
+    generation: generation(
+      systemOne.filter((property) => plan.plans.has(property.id)),
+    ),
     dataClass: "customer",
     id: "workflow.table-batch",
     orgAIConfig,
@@ -380,7 +384,7 @@ export const generateWorkflowData = async ({
 
   const { output: systemOneOutput, generative: generativeProperties } =
     await askSystemOne({
-      generation: {
+      generation: (plannedProperties) => ({
         dataClass: "customer",
         role: "pdf",
         orgAIConfig,
@@ -393,7 +397,7 @@ export const generateWorkflowData = async ({
             entityVersionId,
             organizationId,
             orgAIConfig: orgAIConfig ?? null,
-            propertyCount: properties.length,
+            propertyCount: plannedProperties.length,
             usageMetering,
             workspaceId,
           }),
@@ -405,14 +409,14 @@ export const generateWorkflowData = async ({
             role: "user",
             content: [
               ...messageContent,
-              { type: "text", content: buildPromptsMessage(properties) },
+              { type: "text", content: buildPromptsMessage(plannedProperties) },
             ],
           },
         ],
         system: WORKFLOW_SYSTEM_PROMPT,
         abortSignal,
         deadlineMs: getWorkflowBatchAITimeoutMs(serviceTier),
-      },
+      }),
       decisionModel,
       usageMetering,
       orgAIConfig,

@@ -63,18 +63,23 @@ export type SystemOneState =
   | SystemOneEntry[]
   | Record<string, SystemOneEntry>;
 
+type QuestionRequirements = {
+  /** Tools must run before this question can be answered. */
+  requiredCapability?: "tools" | undefined;
+};
+
 export type ChoiceQuestion<TOption extends string = string> = {
   type: "choice";
   instructions: SystemOneEntry;
   /** Option to rubric; null when the option name needs no gloss. */
   criteria: Record<TOption, SystemOneEntry>;
-};
+} & QuestionRequirements;
 
 export type NoulQuestion = {
   type: "noul";
   instructions: SystemOneEntry;
   criteria?: { true?: SystemOneEntry; false?: SystemOneEntry } | undefined;
-};
+} & QuestionRequirements;
 
 export type SystemOneQuestion = ChoiceQuestion | NoulQuestion;
 

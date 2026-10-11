@@ -386,7 +386,7 @@ const answerDecision = async (
   } as const satisfies Parameters<typeof createTanStackAIAnalyticsCallbacks>[0];
 
   const tier = await answerWithSystemOne({
-    generation: {
+    generation: (prompt, questionCount) => ({
       dataClass: "customer",
       role: "fast",
       serviceTier: "standard",
@@ -395,21 +395,22 @@ const answerDecision = async (
       organizationId: input.organizationId,
       admission: input.admission,
       tenantWorkspaceIds: [],
-      analytics: createTanStackAIAnalyticsCallbacks(analyticsOptions),
+      analytics: createTanStackAIAnalyticsCallbacks({
+        ...analyticsOptions,
+        properties: {
+          ...analyticsOptions.properties,
+          question_count: questionCount,
+        },
+      }),
       caching: resolveCaching({
         promptCachingEnabled: input.promptCachingEnabled,
         role: "fast",
         scopeKey: decisionId,
       }),
       system: RESEARCH_SYSTEM_PROMPT,
-      prompt: buildResearchUserMessage({
-        decision,
-        passages: text.passages,
-        questions,
-        retrieved: text.retrieved,
-      }),
+      prompt,
       deadlineMs: ANSWER_TIMEOUT_MS,
-    },
+    }),
     caseLawDb,
     decisionModel,
     orgAIConfig: input.orgAIConfig,
@@ -819,12 +820,18 @@ export const retrieveResearchPassages = async ({
 };
 
 type SystemOnePassOptions = {
-  generation: Extract<DecisionGenerationOptions, { dataClass: "customer" }>;
+  generation: (
+    prompt: string,
+    questionCount: number,
+  ) => Extract<DecisionGenerationOptions, { dataClass: "customer" }>;
   caseLawDb: CaseLawPublicReadDb;
   decisionModel: DecisionModel | null | undefined;
   usageMetering: AIUsageMetering;
   orgAIConfig: OrgAIConfig | null;
-  decision: ResearchDecisionRow;
+  decision: Pick<
+    ResearchDecisionRow,
+    "id" | "caseNumber" | "court" | "country" | "language" | "decisionType"
+  >;
   questions: readonly ResearchRunColumn[];
   text: {
     passages: readonly ResearchPassage[];
@@ -845,7 +852,7 @@ type SystemOnePass = {
  * came back settled. The decision runtime owns fallback; only unplanned
  * questions continue to the runner's normal generation call.
  */
-const answerWithSystemOne = async ({
+export const answerWithSystemOne = async ({
   generation,
   usageMetering,
   caseLawDb,
@@ -896,8 +903,17 @@ const answerWithSystemOne = async ({
   if (plan.plans.size === 0) {
     return untouched;
   }
+  const plannedQuestions = questions.filter((question) =>
+    plan.plans.has(question.columnId),
+  );
+  const prompt = buildResearchUserMessage({
+    decision,
+    passages: text.passages,
+    questions: plannedQuestions,
+    retrieved: text.retrieved,
+  });
   const { decisions } = await decideMany({
-    generation,
+    generation: generation(prompt, plannedQuestions.length),
     dataClass: "customer",
     id: "case-law.research-answers",
     orgAIConfig,

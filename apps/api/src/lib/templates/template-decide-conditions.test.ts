@@ -6,6 +6,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import type { FieldMeta } from "@/api/lib/docx/types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import {
   createSystemOneClient,
@@ -406,6 +407,72 @@ describe("decideTemplateConditions answers", () => {
   });
 });
 
+describe("condition preview enters model gates only for open questions", () => {
+  test.each(["empty", "supplied"] as const)(
+    "%s conditions require no AI gates",
+    async (mode) => {
+      const { scopedDb } = createScopedDbMock({
+        query: {
+          templates: {
+            findFirst: async () => ({
+              manifest: {
+                fields: mode === "empty" ? [] : fields,
+                clauseSlots: [],
+              },
+            }),
+          },
+        },
+      });
+      let gates = 0;
+      const result = await templateDecideConditionsLogic({
+        scopedDb,
+        organizationId: toSafeId<"organization">("org_preview"),
+        templateId: toSafeId<"template">("tmpl_preview_conditional"),
+        body: { values: { is_consumer: false, has_arbitration: true } },
+        abortSignal: new AbortController().signal,
+        runDecisions: async () => {
+          gates += 1;
+          return Result.err(
+            new HandlerError({ status: 429, message: "Model work refused" }),
+          );
+        },
+      });
+      expect(Result.isOk(result)).toBe(true);
+      expect(gates).toBe(0);
+    },
+  );
+
+  test.each([429, 503] as const)(
+    "an open condition preserves the gate refusal status %s",
+    async (status) => {
+      const { scopedDb } = createScopedDbMock({
+        query: {
+          templates: {
+            findFirst: async () => ({ manifest: { fields, clauseSlots: [] } }),
+          },
+        },
+      });
+      const result = await templateDecideConditionsLogic({
+        scopedDb,
+        organizationId: toSafeId<"organization">("org_preview"),
+        templateId: toSafeId<"template">("tmpl_preview_conditional"),
+        body: { values: {} },
+        abortSignal: new AbortController().signal,
+        runDecisions: async ({ fields: planned }) => {
+          expect(planned).toEqual(fields);
+          return Result.err(
+            new HandlerError({ status, message: "Model work refused" }),
+          );
+        },
+      });
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.status).toBe(status);
+      }
+    },
+  );
+});
+
 describe("templateDecideConditionsLogic access", () => {
   test("reads the template only within the caller's organization", async () => {
     const queried: unknown[] = [];
@@ -424,14 +491,13 @@ describe("templateDecideConditionsLogic access", () => {
     const templateId = toSafeId<"template">("tmpl_other_org");
 
     const result = await templateDecideConditionsLogic({
+      runDecisions: async () => {
+        throw new Error("Deterministic preview must not enter AI gates");
+      },
       scopedDb,
       organizationId,
       templateId,
       body: { values: {} },
-      orgAIConfig: null,
-      generator: async () => {
-        throw new Error("Generation unavailable in this test");
-      },
       abortSignal: new AbortController().signal,
     });
 
@@ -485,16 +551,28 @@ describe("templateDecideConditionsLogic access", () => {
     const controller = new AbortController();
 
     const result = templateDecideConditionsLogic({
+      runDecisions: async ({
+        fields: plannedFields,
+        values: plannedValues,
+        abortSignal,
+      }) =>
+        Result.ok(
+          await decideTemplateConditions({
+            fields: plannedFields,
+            values: plannedValues,
+            abortSignal,
+            orgAIConfig: null,
+            client,
+            generator: async () => {
+              throw new Error("Generation unavailable in this test");
+            },
+          }),
+        ),
       scopedDb,
       organizationId: toSafeId<"organization">("org_caller"),
       templateId: toSafeId<"template">("tmpl_conditioned"),
       body: { values },
-      orgAIConfig: null,
-      generator: async () => {
-        throw new Error("Generation unavailable in this test");
-      },
       abortSignal: controller.signal,
-      client,
     });
 
     await modelStarted.promise;
@@ -536,15 +614,13 @@ test("linked clauses without markers reuse the cached condition manifest", async
     },
   });
   const result = await templateDecideConditionsLogic({
+    runDecisions: async () => {
+      throw new Error("Deterministic preview must not enter AI gates");
+    },
     scopedDb,
     organizationId: toSafeId<"organization">("org_caller"),
     templateId: toSafeId<"template">("tmpl_cached"),
     body: { values: { is_consumer: true, has_arbitration: false } },
-    orgAIConfig: null,
-    generator: async () => {
-      throw new Error("Generation unavailable in this test");
-    },
-    client: null,
     abortSignal: new AbortController().signal,
   });
   expect(result.unwrap().conditions.map(({ decision }) => decision)).toEqual([
@@ -621,15 +697,13 @@ for (const resolution of [
       }),
     });
     const result = await templateDecideConditionsLogic({
+      runDecisions: async () => {
+        throw new Error("Deterministic preview must not enter AI gates");
+      },
       scopedDb,
       templateId: toSafeId<"template">("tmpl_preview"),
       organizationId: toSafeId<"organization">("org_preview"),
       body: { values: { applicable: true } },
-      orgAIConfig: null,
-      generator: async () => {
-        throw new Error("Generation unavailable in this test");
-      },
-      client: null,
       abortSignal: new AbortController().signal,
     });
     if (resolution === "text-limit") {
@@ -669,15 +743,13 @@ test("condition preview reports an incomplete state before reading an excessive 
     },
   });
   const result = await templateDecideConditionsLogic({
+    runDecisions: async () => {
+      throw new Error("Deterministic preview must not enter AI gates");
+    },
     scopedDb,
     templateId: toSafeId<"template">("tmpl_preview"),
     organizationId: toSafeId<"organization">("org_preview"),
     body: { values: {} },
-    orgAIConfig: null,
-    generator: async () => {
-      throw new Error("Generation unavailable in this test");
-    },
-    client: null,
     abortSignal: new AbortController().signal,
   });
   expect(result.unwrap()).toEqual({

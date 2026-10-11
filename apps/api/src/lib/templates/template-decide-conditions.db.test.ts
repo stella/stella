@@ -35,28 +35,24 @@ afterAll(async () => await releaseRlsFixture());
 
 test("condition preview addresses a template only in its organization", async () => {
   const own = await templateDecideConditionsLogic({
+    runDecisions: async () => {
+      throw new Error("Deterministic preview must not enter AI gates");
+    },
     scopedDb,
     organizationId: ids.orgB,
     templateId: ids.templateB,
     body: { values: {} },
-    orgAIConfig: null,
-    client: null,
-    generator: async () => {
-      throw new Error("Empty manifest must not ask a generator");
-    },
     abortSignal: new AbortController().signal,
   });
   expect(own.unwrap()).toEqual({ conditions: [], model: null });
   const other = await templateDecideConditionsLogic({
+    runDecisions: async () => {
+      throw new Error("Deterministic preview must not enter AI gates");
+    },
     scopedDb,
     organizationId: ids.orgA,
     templateId: ids.templateB,
     body: { values: {} },
-    orgAIConfig: null,
-    client: null,
-    generator: async () => {
-      throw new Error("Empty manifest must not ask a generator");
-    },
     abortSignal: new AbortController().signal,
   });
   expect(Result.isError(other)).toBe(true);

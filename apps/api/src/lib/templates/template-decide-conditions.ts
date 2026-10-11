@@ -150,6 +150,54 @@ export type DecideTemplateConditionsOptions = {
   usageMetering?: DecisionUsageMetering | undefined;
 } & TemplateDecisionRuntime;
 
+type TemplateConditionPlan =
+  | { type: "complete"; value: TemplateConditionDecisions }
+  | {
+      type: "model";
+      conditions: TemplateAiCondition[];
+      supplied: Map<string, boolean>;
+      questions: Record<string, NoulQuestion>;
+    };
+
+const planTemplateConditions = (
+  fields: readonly FieldMeta[],
+  values: Record<string, unknown>,
+): TemplateConditionPlan => {
+  const conditions = templateAiConditions(fields);
+  const supplied = new Map<string, boolean>();
+  const questions: Record<string, NoulQuestion> = {};
+  for (const { path, prompt } of conditions) {
+    const existing = resolvePath(path, values);
+    if (existing !== undefined && existing !== "") {
+      supplied.set(path, evaluateCondition(path, values));
+      continue;
+    }
+    questions[path] = conditionQuestion(prompt);
+  }
+
+  if (supplied.size === conditions.length) {
+    return {
+      type: "complete",
+      value: {
+        conditions: conditions.map(({ path, label }) => ({
+          path,
+          label,
+          decision: {
+            state: "decided",
+            decidedBy: "user",
+            value:
+              supplied.get(path) ??
+              panic(`Supplied decision missing for condition "${path}"`),
+          },
+        })),
+        model: null,
+      },
+    };
+  }
+
+  return { type: "model", conditions, supplied, questions };
+};
+
 /**
  * Every AI-decided condition of one manifest, in one call: they share a state
  * (the values), which is how the provider prices a batch and what keeps the
@@ -165,34 +213,11 @@ export const decideTemplateConditions = async ({
   generation,
   generator,
 }: DecideTemplateConditionsOptions): Promise<TemplateConditionDecisions> => {
-  const conditions = templateAiConditions(fields);
-  const supplied = new Map<string, boolean>();
-  const questions: Record<string, NoulQuestion> = {};
-  for (const { path, prompt } of conditions) {
-    const existing = resolvePath(path, values);
-    if (existing !== undefined && existing !== "") {
-      supplied.set(path, evaluateCondition(path, values));
-      continue;
-    }
-    questions[path] = conditionQuestion(prompt);
+  const plan = planTemplateConditions(fields, values);
+  if (plan.type === "complete") {
+    return plan.value;
   }
-
-  if (supplied.size === conditions.length) {
-    return {
-      conditions: conditions.map(({ path, label }) => ({
-        path,
-        label,
-        decision: {
-          state: "decided",
-          decidedBy: "user",
-          value:
-            supplied.get(path) ??
-            panic(`Supplied decision missing for condition "${path}"`),
-        },
-      })),
-      model: null,
-    };
-  }
+  const { conditions, supplied, questions } = plan;
 
   const runtime =
     generation === undefined
@@ -244,17 +269,22 @@ export const decideTemplateConditions = async ({
   };
 };
 
+type TemplatePreviewError = HandlerError<
+  402 | 403 | 404 | 422 | 429 | 500 | 503
+>;
+
 export type TemplateDecideConditionsProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   templateId: SafeId<"template">;
   body: { values: Record<string, unknown> };
-  orgAIConfig: OrgAIConfig | null;
   abortSignal: AbortSignal;
-  /** Injected by tests; the org's resolved decision model otherwise. */
-  client?: DecisionModel | null | undefined;
-  usageMetering?: DecisionUsageMetering | undefined;
-} & TemplateDecisionRuntime;
+  runDecisions: (input: {
+    fields: readonly FieldMeta[];
+    values: Record<string, unknown>;
+    abortSignal: AbortSignal;
+  }) => Promise<ResultType<TemplateConditionDecisions, TemplatePreviewError>>;
+};
 
 type DerivedManifestFieldsOptions = Pick<
   TemplateDecideConditionsProps,
@@ -314,14 +344,10 @@ export const templateDecideConditionsLogic = async ({
   organizationId,
   templateId,
   body: { values },
-  orgAIConfig,
   abortSignal,
-  client,
-  usageMetering,
-  generation,
-  generator,
+  runDecisions,
 }: TemplateDecideConditionsProps): Promise<
-  ResultType<TemplateConditionDecisions, HandlerError<404 | 422 | 500 | 503>>
+  ResultType<TemplateConditionDecisions, TemplatePreviewError>
 > => {
   // The organization predicate is redundant with RLS on `scopedDb` and stays
   // anyway, for the reason `loadStoredTemplateSource` states: a cross-tenant
@@ -409,21 +435,9 @@ export const templateDecideConditionsLogic = async ({
   }
   fields = [...clauseFields.values()];
 
-  // A template with no AI-decided condition asks nothing, so it neither reads
-  // the org's AI config nor reaches a model.
-  if (templateAiConditions(fields).length === 0) {
-    return Result.ok({ conditions: [], model: null });
+  const plan = planTemplateConditions(fields, values);
+  if (plan.type === "complete") {
+    return Result.ok(plan.value);
   }
-
-  return Result.ok(
-    await decideTemplateConditions({
-      fields,
-      values,
-      orgAIConfig,
-      abortSignal,
-      client,
-      usageMetering,
-      ...(generation === undefined ? { generator } : { generation, generator }),
-    }),
-  );
+  return await runDecisions({ fields, values, abortSignal });
 };

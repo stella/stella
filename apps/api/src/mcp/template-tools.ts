@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { and, desc, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { isActionAdmissionCode } from "@stll/api-contract/action-admission";
+
 import type { Transaction } from "@/api/db/root";
 import { entities, templates } from "@/api/db/schema";
 import type {
@@ -58,6 +60,7 @@ import { projectionPayload } from "@/api/lib/projection-totality";
 import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
 import {
   createModelActionAdmitter,
+  modelActionRefusal,
   type AdmittedModelAction,
 } from "@/api/lib/rate-limit/model-action-admission";
 import {
@@ -82,6 +85,7 @@ import { renameStoredTemplate } from "@/api/lib/templates/rename-template";
 import { containsNull } from "@/api/lib/templates/template-data";
 import {
   templateConditionPreviewSchema,
+  decideTemplateConditions,
   templateDecideConditionsLogic,
 } from "@/api/lib/templates/template-decide-conditions";
 import type {
@@ -116,6 +120,7 @@ import { MCP_MAX_REQUEST_BODY_BYTES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { OPENAI_FILE_REFERENCE_SCHEMA } from "@/api/mcp/document-file-upload";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import { projectMcpRefusal } from "@/api/mcp/error-codes";
 import { plainRecord } from "@/api/mcp/input-schemas";
 import {
   TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA,
@@ -3046,87 +3051,101 @@ const handlePreviewTemplateConditionsTool: TypedMcpToolHandler<
   const decideConditions =
     context.testDependencies?.templateDecideConditionsLogic ??
     templateDecideConditionsLogic;
-  const readOrgAIConfig = deferOrgAIConfig(context);
-  const config = await readOrgAIConfig();
-  if (Result.isError(config)) {
-    return internalFailureResult(config.error);
-  }
-  const orgAIConfig = config.value;
-  const usageError = await assertTemplateFillUsage({
-    context,
-    readOrgAIConfig,
-    workspaceId: null,
-  });
-  if (usageError !== null) {
-    return internalFailureResult(usageError);
-  }
-  const admitModelAction = createModelActionAdmitter({
+  const decided = await decideConditions({
+    scopedDb: context.scopedDb,
     organizationId: context.organizationId,
-    userId: context.userId,
-    organizationStateDb: context.scopedDb,
-    actionKind: "templates.fill",
-  });
-  const admitted = await admitModelAction(async ({ signal, admission }) => {
-    const usageMetering = {
-      actionType: "chat" as const,
-      organizationId: context.organizationId,
-      safeDb: context.safeDb,
-      serviceTier: "standard" as const,
-      userId: context.userId,
-      workspaceId: null,
-    };
-    return await decideConditions({
-      scopedDb: context.scopedDb,
-      organizationId: context.organizationId,
-      templateId: brandPersistedTemplateId(parsed.output.template_id),
-      body: { values: parsed.output.values },
-      orgAIConfig,
-      abortSignal: AbortSignal.any([
-        signal,
-        ...(context.request === undefined ? [] : [context.request.signal]),
-        AbortSignal.timeout(PREVIEW_TEMPLATE_CONDITIONS_TIMEOUT_MS),
-      ]),
-      usageMetering: { ...usageMetering, callId: Bun.randomUUIDv7() },
-      generation: {
-        dataClass: "customer",
-        managedAIResidency:
-          await (context.testDependencies?.loadManagedAIResidency?.(
-            context.organizationId,
-          ) ??
-            context.scopedDb(
-              async (tx) =>
-                await loadManagedAIResidency(tx, context.organizationId),
-            )),
-        orgAIConfig,
+    templateId: brandPersistedTemplateId(parsed.output.template_id),
+    body: { values: parsed.output.values },
+    abortSignal: context.request?.signal ?? new AbortController().signal,
+    runDecisions: async ({ fields, values, abortSignal }) => {
+      const readOrgAIConfig = deferOrgAIConfig(context);
+      const config = await readOrgAIConfig();
+      if (Result.isError(config)) {
+        return Result.err(config.error);
+      }
+      const orgAIConfig = config.value;
+      const usageError = await assertTemplateFillUsage({
+        context,
+        readOrgAIConfig,
+        workspaceId: null,
+      });
+      if (usageError !== null) {
+        return Result.err(usageError);
+      }
+      const admitModelAction = createModelActionAdmitter({
         organizationId: context.organizationId,
-        admission,
-        tenantWorkspaceIds: [],
-        role: "fast",
-        serviceTier: "standard",
-        caching: resolveCaching({
-          promptCachingEnabled: false,
-          role: "fast",
-          scopeKey: parsed.output.template_id,
-        }),
-        prompt: "Decide the template conditions from the supplied values.",
-        analytics: createTanStackAIAnalyticsCallbacks({
-          dataClass: "customer",
-          feature: "templates.preview-conditions",
-          modelRole: "fast",
-          orgAIConfig,
+        userId: context.userId,
+        organizationStateDb: context.scopedDb,
+        actionKind: "templates.fill",
+      });
+      const admitted = await admitModelAction(async ({ signal, admission }) => {
+        const usageMetering = {
+          actionType: "chat" as const,
           organizationId: context.organizationId,
-          traceId: Bun.randomUUIDv7(),
-          usageMetering,
-        }),
-      },
-    });
+          safeDb: context.safeDb,
+          serviceTier: "standard" as const,
+          userId: context.userId,
+          workspaceId: null,
+        };
+        return await (
+          context.testDependencies?.decideTemplateConditions ??
+          decideTemplateConditions
+        )({
+          fields,
+          values,
+          orgAIConfig,
+          abortSignal: AbortSignal.any([
+            signal,
+            abortSignal,
+            AbortSignal.timeout(PREVIEW_TEMPLATE_CONDITIONS_TIMEOUT_MS),
+          ]),
+          usageMetering: { ...usageMetering, callId: Bun.randomUUIDv7() },
+          generation: {
+            dataClass: "customer",
+            managedAIResidency:
+              await (context.testDependencies?.loadManagedAIResidency?.(
+                context.organizationId,
+              ) ??
+                context.scopedDb(
+                  async (tx) =>
+                    await loadManagedAIResidency(tx, context.organizationId),
+                )),
+            orgAIConfig,
+            organizationId: context.organizationId,
+            admission,
+            tenantWorkspaceIds: [],
+            role: "fast",
+            serviceTier: "standard",
+            caching: resolveCaching({
+              promptCachingEnabled: false,
+              role: "fast",
+              scopeKey: parsed.output.template_id,
+            }),
+            prompt: "Decide the template conditions from the supplied values.",
+            analytics: createTanStackAIAnalyticsCallbacks({
+              dataClass: "customer",
+              feature: "templates.preview-conditions",
+              modelRole: "fast",
+              orgAIConfig,
+              organizationId: context.organizationId,
+              traceId: Bun.randomUUIDv7(),
+              usageMetering,
+            }),
+          },
+        });
+      });
+      return Result.isError(admitted)
+        ? Result.err(modelActionRefusal(admitted.error))
+        : Result.ok(admitted.value);
+    },
   });
-  if (Result.isError(admitted)) {
-    return internalFailureResult(admitted.error);
-  }
-  const decided = admitted.value;
   if (Result.isError(decided)) {
-    return storedTemplateFailureResult(decided.error);
+    if (isActionAdmissionCode(decided.error.code)) {
+      return structuredErrorResult(projectMcpRefusal(decided.error));
+    }
+    return decided.error.status === 404 || decided.error.status === 422
+      ? storedTemplateFailureResult(decided.error)
+      : internalFailureResult(decided.error);
   }
 
   // Each condition's label is the org-authored field label; its path,

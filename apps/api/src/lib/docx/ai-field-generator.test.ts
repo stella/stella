@@ -7,6 +7,7 @@ import type { Fetcher } from "@stll/fetch";
 import { listSkillMetadata, readSkillRequiredTools } from "@stll/skills";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import type { agentSkills } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -21,6 +22,10 @@ import { resolveDecisionModel } from "@/api/lib/workflow/decisions/decision-mode
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import { createSystemOneClient } from "@/api/lib/workflow/decisions/system-one";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 // The real `chat()` engine runs here; only the provider boundary is faked, so
 // a fixture cannot invent chunk shapes the engine never emits. Each request the
@@ -601,9 +606,13 @@ describe("output budgets are sized from the work asked for", () => {
 
 describe("buildAiConditionDecider decision tier", () => {
   /** A decision model over a fake wire answering the condition with one noul. */
-  const decisionModel = (yes: number): DecisionModel => {
-    const fetcher: Fetcher = async () =>
-      await Promise.resolve(
+  const decisionModel = (
+    yes: number,
+    onRequest?: () => void,
+  ): DecisionModel => {
+    const fetcher: Fetcher = async () => {
+      onRequest?.();
+      return await Promise.resolve(
         new Response(
           JSON.stringify({
             model: "jev-1.13.0",
@@ -613,6 +622,7 @@ describe("buildAiConditionDecider decision tier", () => {
           { status: 200, headers: { "content-type": "application/json" } },
         ),
       );
+    };
     return {
       ...createSystemOneClient({ apiKey: "key-test", fetcher }),
       keySource: "byok",
@@ -661,6 +671,115 @@ describe("buildAiConditionDecider decision tier", () => {
     expect(
       decided?.decidedBy === "decision_model" ? decided.probability : null,
     ).toBeCloseTo(0.96, 6);
+  });
+
+  test("a skill-dependent condition loads the skill even when the decision model is confident", async () => {
+    const skill = {
+      id: toSafeId<"agentSkill">("skl_condition"),
+      scope: "team",
+      name: "Condition methodology",
+      slug: "condition-methodology",
+      description: "Decide the condition using the supplied company details.",
+      version: "1",
+      license: null,
+      compatibility: null,
+      metadata: {},
+      body: "Treat a named limited company as a company for this condition.",
+      origin: "authored",
+    } as const satisfies Pick<
+      typeof agentSkills.$inferSelect,
+      | "id"
+      | "scope"
+      | "name"
+      | "slug"
+      | "description"
+      | "version"
+      | "license"
+      | "compatibility"
+      | "metadata"
+      | "body"
+      | "origin"
+    >;
+    const { safeDb: skillDb } = createScopedDbMock({
+      select: (selection: Record<string, unknown>) =>
+        createSelectQueryMock(
+          Object.hasOwn(selection, "skillId") ? [] : [skill],
+        ),
+    });
+    let primaryCalls = 0;
+    let requestedSkill = false;
+    let loadedSkill = false;
+    const model = modelWith(COMPLETE_RUN);
+    const adapter: AnyTextAdapter = {
+      ...model.adapter,
+      async *chatStream(options) {
+        if (requestedSkill) {
+          loadedSkill =
+            options.messages?.some(
+              (message) =>
+                message.role === "tool" &&
+                typeof message.content === "string" &&
+                message.content.includes(skill.body),
+            ) ?? false;
+          yield* model.adapter.chatStream(options);
+          return;
+        }
+        requestedSkill = true;
+        captureRequest(options);
+        yield {
+          type: EventType.RUN_STARTED,
+          runId: "skill-run",
+          threadId: "skill-thread",
+        } satisfies StreamChunk;
+        yield {
+          type: EventType.TOOL_CALL_START,
+          toolCallId: "skill-call",
+          toolCallName: "load-skill",
+          timestamp: 1,
+        } satisfies StreamChunk;
+        yield {
+          type: EventType.TOOL_CALL_ARGS,
+          toolCallId: "skill-call",
+          delta: JSON.stringify({ skillName: skill.slug }),
+          timestamp: 1,
+        } satisfies StreamChunk;
+        yield {
+          type: EventType.TOOL_CALL_END,
+          toolCallId: "skill-call",
+          timestamp: 1,
+        } satisfies StreamChunk;
+        yield {
+          type: EventType.RUN_FINISHED,
+          runId: "skill-run",
+          threadId: "skill-thread",
+          finishReason: "tool_calls",
+        } satisfies StreamChunk;
+      },
+    };
+    const decideCondition = buildAiConditionDecider({
+      decisionModel: decisionModel(0.94, () => {
+        primaryCalls += 1;
+      }),
+      orgAIConfig,
+      managedAIResidency: "eu",
+      organizationId,
+      admission: testModelAdmission(organizationId),
+      resolveTextModel: () => ({ ...model, adapter }),
+      skillContext: { organizationId, userId, safeDb: skillDb },
+      tenantWorkspaceIds: [],
+    });
+    const decision = await decideCondition?.({
+      ...input,
+      prompt: `Decide whether the principal is a company [Methodology](#stella-skill-ref=${skill.slug}).`,
+    });
+    expect(primaryCalls).toBe(0);
+    expect(capturedRequests.at(0)?.toolNames).toEqual([
+      "load-skill",
+      "read-skill-resource",
+    ]);
+    expect(requestedSkill).toBe(true);
+    expect(loadedSkill).toBe(true);
+    expect(decision).toEqual({ decidedBy: "generative_model", value: true });
   });
 
   test("an answer under the floor hands the condition to the generative model", async () => {

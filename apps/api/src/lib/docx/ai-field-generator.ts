@@ -498,7 +498,9 @@ export const buildAiConditionDecider = ({
         id: CONDITION_DECISION_ID,
         orgAIConfig,
         state: conditionState({ prompt, values }),
-        question: CONDITION_QUESTION,
+        question: skillTools
+          ? { ...CONDITION_QUESTION, requiredCapability: "tools" }
+          : CONDITION_QUESTION,
         abortSignal: operationSignal,
         timeoutMs: AI_CONDITION_TIMEOUT_MS,
         client: decisionModel,
