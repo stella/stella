@@ -18,7 +18,7 @@ import {
 } from "@/api/lib/ai-config-response";
 import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
-import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";

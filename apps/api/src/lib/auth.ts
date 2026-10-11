@@ -31,7 +31,6 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import type { InferSelectModel } from "drizzle-orm";
 import type { Context } from "elysia";
 import Elysia, { t } from "elysia";
 
@@ -75,6 +74,7 @@ import {
   AUTH_VERIFICATION_STORAGE_OPTIONS,
 } from "@/api/lib/auth-adapter-options";
 import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth-user-additional-fields";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { createAgentUserPlugin } from "@/api/lib/auth/agent-auth-user";
 import { authCookiePolicy } from "@/api/lib/auth/auth-cookie-name";
 import {
@@ -2461,11 +2461,6 @@ export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
     },
   },
 });
-
-export type AccessibleWorkspace = {
-  id: SafeId<"workspace">;
-  status: InferSelectModel<typeof workspaces>["status"];
-};
 
 /**
  * Structural subset of `rootDb` the bounded membership query needs. Tests can

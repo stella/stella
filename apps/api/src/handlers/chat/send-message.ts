@@ -222,8 +222,8 @@ import {
 } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import type { AccessibleWorkspace } from "@/api/lib/auth";
 import { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";

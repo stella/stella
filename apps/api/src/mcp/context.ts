@@ -52,7 +52,7 @@ import type { loadAnonymizationGazetteerEntriesByWorkspace } from "@/api/lib/ano
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
-import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { checkReviewAccountOrganization } from "@/api/lib/auth/review-account";
