@@ -1,6 +1,6 @@
 import { entityResidueIn } from "@/api/lib/legal-search/parsers/entity-residue";
 import type { MarkupResidueRuleId } from "@/api/lib/legal-search/parsers/markup-residue";
-import { rtfControlResiduePattern } from "@/api/lib/legal-search/parsers/rtf-reader";
+import { rtfControlResidueMatchesIn } from "@/api/lib/legal-search/parsers/rtf-reader";
 
 const entityCharacterReferencePattern =
   /&(?:#[xX][\da-fA-F]+|#\d+|[a-zA-Z][\da-zA-Z]*);/gu;
@@ -41,13 +41,6 @@ const MARKUP_RESIDUE_EXCERPT_CHARS = 120;
  * digits reports as a number rather than as hex.
  */
 const MARKUP_RESIDUE_RULES: readonly MarkupResidueRule[] = [
-  {
-    id: "rtf-control",
-    reason: "RTF control words",
-    // Complete known control words, not arbitrary backslashed letters.
-    // The group/header forms also catch unknown ignorable destinations.
-    pattern: rtfControlResiduePattern(),
-  },
   {
     id: "html-tag",
     reason: "HTML tags",
@@ -148,6 +141,15 @@ type MarkupResidueMatch = MarkupResidue & { index: number; matched: string };
 export function* markupResidueMatchesIn(
   text: string,
 ): Generator<MarkupResidueMatch> {
+  for (const { index, matched } of rtfControlResidueMatchesIn(text)) {
+    yield {
+      index,
+      matched,
+      rule: "rtf-control",
+      reason: "RTF control words",
+      excerpt: text.slice(index, index + MARKUP_RESIDUE_EXCERPT_CHARS).trim(),
+    };
+  }
   for (const rule of MARKUP_RESIDUE_RULES) {
     const detectsPayload = rule.id === "digit-run" || rule.id === "hex-run";
     // Iterators may be interleaved; each owns its scan cursor.

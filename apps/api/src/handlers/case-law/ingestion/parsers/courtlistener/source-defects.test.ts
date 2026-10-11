@@ -8,6 +8,7 @@ import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import { composeCourtListenerText } from "./compose";
 import { COURTLISTENER_HTML_PARSERS } from "./html";
+import { markupResidueMatchesIn } from "./markup-residue";
 import { createTextBudget } from "./outcome";
 import { selectOpinionText } from "./select";
 import { publishedTextDefects } from "./source-defects";
@@ -81,6 +82,10 @@ test.each([
   String.raw`Text \loch\hich continues.`,
   String.raw`Judgment. \pard Continued text.`,
   String.raw`Judgment. \fs24 Continued text.`,
+  String.raw`Text\pard Continued text.`,
+  "Text\\pard\nContinued text.",
+  "Text\\pard\tX",
+  String.raw`\a\noise\pict\pngblip payload`,
 ])(
   "RTF controls in the sole candidate are refused as residue: %s",
   (wording) => {
@@ -101,8 +106,23 @@ test.each([
   },
 );
 
-test("ordinary backslash prose in the sole candidate remains usable", () => {
-  const wording = String.raw`The exhibit is at C:\file\temp; the literal "\n" is quoted.`;
+test("RTF residue detection finds a known token after an unknown control", () => {
+  const text = String.raw`\a\noise\pict\pngblip payload`;
+  const detected = Array.from(markupResidueMatchesIn(text)).some(
+    ({ rule, matched }) =>
+      rule === "rtf-control" && matched === String.raw`\pict`,
+  );
+  expect(detected).toBe(true);
+});
+
+test.each([
+  String.raw`C:\file\temp`,
+  String.raw`\\server\share\file`,
+  String.raw`(C:\file\temp)`,
+  String.raw`[\\server\share\file]`,
+  String.raw`The literal "\n" is quoted code.`,
+])("path and quoted-code escapes remain usable: %s", (literal) => {
+  const wording = `The exhibit records ${literal}.`;
   const result = selectOpinionText({
     row: opinionRow({
       xml_harvard: "",
