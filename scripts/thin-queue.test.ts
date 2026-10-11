@@ -297,6 +297,7 @@ type ExpectedPrSelectionOptions = {
 const DECLARED_PR_PLAN_CHANGES = new Set([
   "ci-browser",
   "e2e-production-shard",
+  "scan-engine-wasm-drift",
   "web-build",
 ]);
 const expectedPrSelection = ({
@@ -313,6 +314,13 @@ const expectedPrSelection = ({
     return (
       value.needs["ci-plan"]?.outputs["trusted"] === "true" &&
       value.needs["ci-plan"].outputs["desktop_browser_required"] === "true"
+    );
+  }
+  if (job === "scan-engine-wasm-drift") {
+    expect(DECLARED_PR_PLAN_CHANGES.has(job)).toBe(true);
+    return (
+      value.needs["ci-plan"]?.outputs["trusted"] === "true" &&
+      value.needs["ci-plan"].outputs["scan_engine_wasm_required"] === "true"
     );
   }
   if (job === "web-build") {
@@ -822,6 +830,7 @@ test("unset and full preserve historical predicates except declared PR, Postgres
   expect([...DECLARED_PR_PLAN_CHANGES].toSorted()).toEqual([
     "ci-browser",
     "e2e-production-shard",
+    "scan-engine-wasm-drift",
     "web-build",
   ]);
   for (const event of events) {
