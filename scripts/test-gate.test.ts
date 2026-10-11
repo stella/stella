@@ -42,6 +42,25 @@ context("test registration census", () => {
     },
   );
 
+  check.each(["&&", "||", "??"])(
+    "inventories short-circuit registrations: %s",
+    (operator) => {
+      expect(
+        parseTestRegistrations(
+          "fixture.test.ts",
+          `
+      process.env.RUN_TESTS ${operator} test("conditional", () => {});
+      enabled ${operator} describe("suite", () => { test("nested", () => {}); });
+      test("always", () => {}) ${operator} other();
+    `,
+        ),
+      ).toEqual([
+        { identity: "fixture.test.ts::conditional", type: "disabled" },
+        { identity: "fixture.test.ts::suite", type: "disabled" },
+      ]);
+    },
+  );
+
   check(
     "finds focused registrations and environment-keyed early returns",
     () => {
@@ -330,6 +349,37 @@ context("test registration census", () => {
         shardedPackages: new Set(),
       }),
     ).toBe("job condition: no gating job executes @stll/orphan test");
+  });
+
+  check.each([
+    "bun --filter @stll/orphan test -- one.test.ts",
+    "bun run --cwd packages/orphan test -- one.test.ts",
+    "cd packages/orphan && bun run test -- one.test.ts",
+  ])("combines package collection with forwarded filters: %s", (command) => {
+    const options = {
+      gatingJobs: new Map([["package-check", [command]]]),
+      packageDirectory: "packages/orphan",
+      packageName: "@stll/orphan",
+      shardedPackages: new Set<string>(),
+    };
+    expect(
+      packageTestExecutionFailure({
+        ...options,
+        collection: {
+          candidate: "packages/orphan/one.test.ts",
+          scripts: { test: "bun test" },
+        },
+      }),
+    ).toBeUndefined();
+    expect(
+      packageTestExecutionFailure({
+        ...options,
+        collection: {
+          candidate: "packages/orphan/two.test.ts",
+          scripts: { test: "bun test" },
+        },
+      }),
+    ).toContain("does not collect");
   });
 
   check("requires the gating job to invoke the exact test script", () => {

@@ -582,6 +582,10 @@ const nearestPackage = (file: string): string | undefined => {
 type PackageScripts = Readonly<Record<string, unknown>>;
 
 type PackageTestExecutionOptions = {
+  readonly collection?: {
+    readonly candidate: string;
+    readonly scripts: PackageScripts;
+  };
   readonly gatingJobs: ReadonlyMap<string, readonly string[]>;
   readonly packageDirectory: string;
   readonly packageName: string;
