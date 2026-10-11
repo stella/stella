@@ -3,7 +3,8 @@ import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
 
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 
-import type { rootDb, Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { documentProcessingRuns } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -33,7 +34,7 @@ type ClaimDocumentProcessingAttemptOptions = {
   now: Date;
 };
 
-const DOCUMENT_PROCESSING_RETRY_TRANSITIONS = defineTransitions(
+export const DOCUMENT_PROCESSING_RETRY_TRANSITIONS = defineTransitions(
   documentProcessingRuns,
   {
     queued: ["running", "cancelled"],
@@ -128,7 +129,7 @@ export const claimDocumentProcessingAttempt = async ({
 };
 
 type FailDocumentProcessingAttemptOptions = {
-  database: typeof rootDb;
+  database: { transaction: ScopedDb };
   runId: SafeId<"documentProcessingRun">;
   claimToken: string;
   errorCode: string;

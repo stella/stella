@@ -23,7 +23,6 @@ import {
   DOCUMENT_PROCESSING_MAX_ATTEMPTS,
   DOCUMENT_OCR_PROCESSOR_VERSION,
 } from "@/api/lib/document-processing-contract";
-import { restoreManualOcrRunAfterProjectionLoss } from "@/api/lib/document-processing-manual-ocr-restore";
 import {
   createDocumentProcessingReconciliationPhases,
   processDocumentProcessingRun,
@@ -31,6 +30,7 @@ import {
   persistOcrProjection,
 } from "@/api/lib/document-processing-queue";
 import { persistManualOcrRun } from "@/api/lib/document-processing-request";
+import { restoreManualOcrRunAfterProjectionLoss } from "@/api/lib/search/document-processing-manual-ocr-restore";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";

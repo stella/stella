@@ -8776,7 +8776,7 @@
         "job": "measure-2"
       }
     },
-    "src/lib/document-processing-manual-ocr-restore.db.test.ts": {
+    "src/lib/search/document-processing-manual-ocr-restore.db.test.ts": {
       "peakMb": 683,
       "baselineMb": 175,
       "source": {

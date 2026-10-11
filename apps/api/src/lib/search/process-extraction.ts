@@ -20,7 +20,6 @@ import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { requestAutomaticDocumentOcr } from "@/api/lib/document-processing-automatic-request";
 import { DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
-import { restoreManualOcrRunAfterProjectionLoss } from "@/api/lib/document-processing-manual-ocr-restore";
 import { readDocxDeclaredSourceLanguage } from "@/api/lib/document-translation/docx-language";
 import { recordEntityVersionDetectedLanguage } from "@/api/lib/document-translation/version-language";
 import { enqueueUploadedMailFiling } from "@/api/lib/email/inbound/upload-enqueue";
@@ -32,6 +31,7 @@ import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { restoreManualOcrRunAfterProjectionLoss } from "@/api/lib/search/document-processing-manual-ocr-restore";
 import {
   extractFileTextResult,
   resolveExtractionMimeType,

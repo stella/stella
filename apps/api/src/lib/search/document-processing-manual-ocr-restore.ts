@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { and, eq, inArray, lt, or } from "drizzle-orm";
 
-import type { rootDb } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   documentProcessingRuns,
   entities,
@@ -17,11 +17,13 @@ import {
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
+import { transition } from "@/api/lib/db/transitions";
 import { isExactOcrProjection } from "@/api/lib/document-processing-automatic-request-state";
 import {
   DOCUMENT_PROCESSING_MAX_ATTEMPTS,
   DOCUMENT_OCR_PROCESSOR_VERSION,
 } from "@/api/lib/document-processing-contract";
+import { DOCUMENT_PROCESSING_RETRY_TRANSITIONS } from "@/api/lib/document-processing-retry";
 
 const RETRYABLE_MANUAL_OCR_CANCELLATION_CODES = [
   "policy_disabled",
@@ -48,6 +50,17 @@ const restorableRunFilter = () =>
     ),
   );
 
+type RestoreManualOcrRunOptions = {
+  db: { transaction: ScopedDb };
+  entityId: SafeId<"entity">;
+  entityVersionId: SafeId<"entityVersion">;
+  fieldId: SafeId<"field">;
+  organizationId: SafeId<"organization">;
+  sourceFileId: string;
+  sourceSha256Hex: string;
+  workspaceId: SafeId<"workspace">;
+};
+
 export const restoreManualOcrRunAfterProjectionLoss = async ({
   entityId,
   entityVersionId,
@@ -57,16 +70,7 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
   sourceSha256Hex,
   workspaceId,
   db,
-}: {
-  db: Pick<typeof rootDb, "transaction">;
-  entityId: SafeId<"entity">;
-  entityVersionId: SafeId<"entityVersion">;
-  fieldId: SafeId<"field">;
-  organizationId: SafeId<"organization">;
-  sourceFileId: string;
-  sourceSha256Hex: string;
-  workspaceId: SafeId<"workspace">;
-}): Promise<void> => {
+}: RestoreManualOcrRunOptions): Promise<void> => {
   await withAggregateTransaction(db, async (tx) => {
     const parents = await lockForWrite(tx, {
       organizationIds: [organizationId],
@@ -169,7 +173,15 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
           aggregate: "processingClaim",
           id: { id: identity.id, workspaceId },
           mode: "update",
-          select: (queryTx) => queryTx.select().from(documentProcessingRuns),
+          select: (queryTx) =>
+            queryTx
+              .select({
+                id: documentProcessingRuns.id,
+                workspaceId: documentProcessingRuns.workspaceId,
+                status: documentProcessingRuns.status,
+                attemptCount: documentProcessingRuns.attemptCount,
+              })
+              .from(documentProcessingRuns),
           where: restorableRunFilter(),
         })
       : null;
@@ -213,30 +225,41 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
       return;
     }
 
-    await tx
-      .update(documentProcessingRuns)
-      .set({
-        attemptCount: existing.status === "failed" ? existing.attemptCount : 0,
-        claimedAt: null,
-        claimedBy: null,
-        errorAt: null,
-        errorCode: null,
-        errorMessage: null,
-        finishedAt: null,
-        nextAttemptAt: null,
-        nextDeliveryAt: null,
-        progressCompleted: 0,
-        progressTotal: null,
-        startedAt: null,
-        status: "queued",
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(documentProcessingRuns.id, existing.id),
-          eq(documentProcessingRuns.requestSource, "manual"),
-          restorableRunFilter(),
-        ),
-      );
+    const changed = await transition({
+      tx,
+      spec: DOCUMENT_PROCESSING_RETRY_TRANSITIONS,
+      id: existing.id,
+      options: {
+        from: ["failed", "succeeded", "cancelled"],
+        to: "queued",
+        set: {
+          attemptCount:
+            existing.status === "failed" ? existing.attemptCount : 0,
+          claimedAt: null,
+          claimedBy: null,
+          errorAt: null,
+          errorCode: null,
+          errorMessage: null,
+          finishedAt: null,
+          nextAttemptAt: null,
+          nextDeliveryAt: null,
+          progressCompleted: 0,
+          progressTotal: null,
+          startedAt: null,
+          updatedAt: new Date(),
+        },
+      },
+      // Projection repair changes worker bookkeeping; the manual request owns its audit event.
+      recordTransitionAuditEvent: async () => await Promise.resolve(),
+    });
+    switch (changed.type) {
+      case "stale":
+        return panic("Locked manual OCR run changed during projection repair");
+      case "transitioned":
+        return;
+      default:
+        changed satisfies never;
+        return panic("Unknown document processing transition outcome");
+    }
   });
 };

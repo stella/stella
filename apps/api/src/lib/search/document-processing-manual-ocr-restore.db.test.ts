@@ -16,7 +16,7 @@ import {
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
-import type { restoreManualOcrRunAfterProjectionLoss as RestoreManualOcrRunAfterProjectionLoss } from "@/api/lib/document-processing-manual-ocr-restore";
+import type { restoreManualOcrRunAfterProjectionLoss as RestoreManualOcrRunAfterProjectionLoss } from "@/api/lib/search/document-processing-manual-ocr-restore";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -41,7 +41,7 @@ beforeAll(async () => {
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
   ({ restoreManualOcrRunAfterProjectionLoss } =
-    await import("@/api/lib/document-processing-manual-ocr-restore"));
+    await import("@/api/lib/search/document-processing-manual-ocr-restore"));
 }, 120_000);
 
 beforeEach(async () => {

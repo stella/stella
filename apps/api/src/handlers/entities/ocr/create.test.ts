@@ -1,12 +1,11 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
-import { PgDialect } from "drizzle-orm/pg-core";
+import { PgDialect, QueryBuilder } from "drizzle-orm/pg-core";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import { workspaces } from "@/api/db/schema";
-import type { documentProcessingRuns } from "@/api/db/schema";
+import { documentProcessingRuns, workspaces } from "@/api/db/schema";
 import { requestManualOcrHandler } from "@/api/handlers/entities/ocr/create";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -57,6 +56,34 @@ const executeParentLock = async (query: SQL) => {
   expect(compiled.params).toContain(workspaceId);
   return [{ id: workspaceId }];
 };
+
+type LockedRun = Pick<
+  typeof documentProcessingRuns.$inferSelect,
+  | "attemptCount"
+  | "errorCode"
+  | "id"
+  | "requestSource"
+  | "status"
+  | "workspaceId"
+>;
+
+const lockedRunSelect = (run: LockedRun) => ({
+  from: () => {
+    const query = new QueryBuilder().select().from(documentProcessingRuns);
+    return {
+      toSQL: () => query.toSQL(),
+      as: (alias: string) => query.as(alias),
+      where: (predicate: SQL) => {
+        const scoped = query.where(predicate);
+        return {
+          toSQL: () => scoped.toSQL(),
+          as: (alias: string) => scoped.as(alias),
+          for: async () => [run],
+        };
+      },
+    };
+  },
+});
 
 const createSafeDb =
   (content: unknown): SafeDb =>
@@ -239,6 +266,16 @@ describe("requestManualOcrHandler", () => {
               }),
             };
           }
+          if (selectCount === 5) {
+            return lockedRunSelect({
+              attemptCount: 0,
+              errorCode,
+              id: runId,
+              requestSource: "upload",
+              status: "cancelled",
+              workspaceId,
+            });
+          }
           if (selectCount === 3) {
             return {
               from: () => ({
@@ -363,6 +400,16 @@ describe("requestManualOcrHandler", () => {
               }),
             };
           }
+          if (selectCount === 5) {
+            return lockedRunSelect({
+              attemptCount: 0,
+              errorCode: null,
+              id: runId,
+              requestSource,
+              status,
+              workspaceId,
+            });
+          }
           if (selectCount === 3) {
             return {
               from: () => ({
@@ -476,6 +523,16 @@ describe("requestManualOcrHandler", () => {
                 }),
               }),
             };
+          }
+          if (selectCount === 5) {
+            return lockedRunSelect({
+              attemptCount: 0,
+              errorCode: null,
+              id: runId,
+              requestSource: "upload",
+              status: "succeeded",
+              workspaceId,
+            });
           }
           if (selectCount === 3) {
             return {
