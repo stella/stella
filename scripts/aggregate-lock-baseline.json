@@ -1278,7 +1278,7 @@
     "reason": "builder-for in apps/api/src/handlers/entities/open-desktop-edit-session.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/handlers/entities/publish-folio-collab-version.ts",
+    "file": "apps/api/src/lib/entity-versions/publish-folio-collab-checkpoint.ts",
     "fingerprint": "b87643ed7b53cb1bf7c9ef00d4557560a9d60d8b6b3acede149feb369654c7fe",
     "count": 1,
     "reason": "Collaboration room uses UPDATE after aggregate parent acquisition; retained as room publication coordination."

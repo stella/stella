@@ -55,7 +55,7 @@ export const DOCUMENT_BYTE_WRITE_DISPOSITION = {
   "handlers/entities/versions/delete.ts": STORED_BYTE_DISPOSITION.NO_NEW_BYTES,
   "handlers/entities/finalize-desktop-edit-session.ts":
     STORED_BYTE_DISPOSITION.STRIPS_REFERENCE,
-  "handlers/entities/publish-folio-collab-version.ts":
+  "lib/entity-versions/publish-folio-collab-checkpoint.ts":
     STORED_BYTE_DISPOSITION.STRIPS_REFERENCE,
   "handlers/entities/versions/restore.ts": STORED_BYTE_DISPOSITION.NO_NEW_BYTES,
   "handlers/entities/upload.ts": STORED_BYTE_DISPOSITION.STRIPS_REFERENCE,

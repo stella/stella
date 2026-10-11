@@ -905,10 +905,27 @@ const membershipKey = (
     kind: entry.kind === "fixed-page-size" ? "constant-limit" : entry.kind,
   });
 
+// Keep relocated function budgets at their original identity until the move
+// is in the comparison base; removing a rekey then leaves membership unchanged.
+const TRANSFER_READ_PATH_REKEYS = [
+  {
+    file: "apps/api/src/lib/entity-versions/publish-folio-collab-checkpoint.ts",
+    function: "module/loadRoomContributors",
+    fromFile: "apps/api/src/handlers/entities/publish-folio-collab-version.ts",
+  },
+] as const;
+
 export const transferMembership = (text: string, label: string): string[] => {
   const counts = new Map<string, number>();
   for (const entry of parseTransferBaseline(text, label)) {
-    const key = membershipKey(entry);
+    const rekey = TRANSFER_READ_PATH_REKEYS.find(
+      (candidate) =>
+        candidate.file === entry.file && candidate.function === entry.function,
+    );
+    const key = membershipKey({
+      ...entry,
+      file: rekey?.fromFile ?? entry.file,
+    });
     counts.set(key, (counts.get(key) ?? 0) + entry.count);
   }
   return [...counts].flatMap(([key, count]) =>

@@ -18,13 +18,13 @@ import {
   timeEntries,
   workspaces,
 } from "@/api/db/schema";
-import { publishCheckpointInTransaction } from "@/api/handlers/entities/publish-folio-collab-version";
 import { finalizeEntityVersion } from "@/api/handlers/uploads/entity-version";
 import { archiveWorkspaceHandler } from "@/api/handlers/workspaces/archive";
 import { createSafeId } from "@/api/lib/branded-types";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { lockWorkspaceForEntityCreate } from "@/api/lib/entity-cap-lock";
+import { publishCheckpointInTransaction } from "@/api/lib/entity-versions/publish-folio-collab-checkpoint";
 import { officeFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
