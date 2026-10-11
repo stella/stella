@@ -57,6 +57,8 @@ const NETWORK_MODULES = new Set([
   "nodemailer",
   "posthog-node",
   "posthog-js",
+  "@hocuspocus/provider",
+  "@hocuspocus/extension-redis",
   "bullmq",
   "mailauth",
   "@smithy/fetch-http-handler",

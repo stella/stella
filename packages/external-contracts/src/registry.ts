@@ -1398,12 +1398,31 @@ export const EXTERNAL_CONTRACTS = {
         role: "primary",
       },
     ],
-    sdks: [],
-    pinSources: [],
+    sdks: ["@hocuspocus/provider", "@hocuspocus/extension-redis"],
+    pinSources: [
+      {
+        type: "manifest",
+        file: "apps/web/package.json",
+        section: "dependencies",
+        package: "@hocuspocus/provider",
+      },
+      {
+        type: "manifest",
+        file: "apps/collab/package.json",
+        section: "devDependencies",
+        package: "@hocuspocus/provider",
+      },
+      {
+        type: "manifest",
+        file: "apps/collab/package.json",
+        section: "dependencies",
+        package: "@hocuspocus/extension-redis",
+      },
+    ],
     driftTriggers: ["upstream-response-change"],
     status: "uncharacterised",
     reason:
-      "Configured API and collaboration clients have application tests, with no enrolled release-version response corpus.",
+      "Configured API, collaboration WebSocket and Redis pub/sub clients have application tests, with no enrolled release-version response corpus.",
   },
   "http-transport": {
     owners: [

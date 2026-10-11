@@ -831,7 +831,11 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "operator-configured-infrastructure",
     reason:
       "Posts collaboration requests to the configured API and uses WebSocket transport for collaboration sessions.",
-    transports: ["global:WebSocket", "global:fetch"],
+    transports: [
+      "global:WebSocket",
+      "global:fetch",
+      "module:@hocuspocus/extension-redis",
+    ],
   },
   {
     path: "apps/web/src/boot-prefetch.ts",
@@ -905,7 +909,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "operator-configured-infrastructure",
     reason:
       "Sends collaboration requests to the configured API and downloads seed documents.",
-    transports: ["module:@stll/fetch"],
+    transports: ["module:@hocuspocus/provider", "module:@stll/fetch"],
   },
   {
     path: "apps/web/src/components/inspector/external-reference-panel.tsx",
