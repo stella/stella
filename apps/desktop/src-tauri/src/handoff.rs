@@ -271,6 +271,8 @@ pub(crate) enum Stop {
   /// No usable account for the link's server. The handoff has not been
   /// redeemed, so it can wait for the account to be linked.
   AccountRequired,
+  /// A live account must be explicitly disconnected before linking this server.
+  AccountMismatch(AccountMismatch),
   /// Not yet shown to the user.
   Failed(Failure),
 }
@@ -285,11 +287,41 @@ impl From<String> for Stop {
   }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct AccountMismatch {
+  pub linked_server: String,
+  pub requested_server: String,
+}
+
+impl AccountMismatch {
+  pub(crate) fn message(&self) -> String {
+    crate::i18n::t_fmt(
+      "dialog.handoffServerMismatch",
+      &[
+        ("linkedServer", &self.linked_server),
+        ("requestedServer", &self.requested_server),
+      ],
+    )
+  }
+}
+
+pub(crate) async fn account_mismatch(
+  state: &crate::account::AccountState,
+  api_base_url: &str,
+) -> Result<Option<AccountMismatch>, String> {
+  Ok(crate::account::current(state).await?.and_then(|account| {
+    (account.api_base_url != api_base_url).then(|| AccountMismatch {
+      linked_server: account.api_base_url,
+      requested_server: api_base_url.into(),
+    })
+  }))
+}
+
 /// The account a redemption may present. An unlinked desktop, or one whose
 /// saved credential the API rejects, must not redeem: an unauthenticated
 /// redeem ends the handoff on the server, and the user is about to link.
-/// An account on another server also waits for its own connection; it must
-/// never send an unauthenticated redemption for the new handoff.
+/// An account on another server requires an explicit disconnect first; it
+/// must never send an unauthenticated redemption for the new handoff.
 async fn admitted_account(
   state: &crate::account::AccountState,
   api_base_url: &str,
@@ -305,7 +337,10 @@ async fn admitted_account(
     return Err(Stop::AccountRequired);
   };
   if account.api_base_url != api_base_url {
-    return Err(Stop::AccountRequired);
+    return Err(Stop::AccountMismatch(AccountMismatch {
+      linked_server: account.api_base_url.clone(),
+      requested_server: api_base_url.into(),
+    }));
   }
   match crate::registry::request(
     account.request_auth(),
@@ -481,6 +516,7 @@ pub(crate) enum OfferConnection {
   NotCurrent,
   Expired,
   Started(crate::account::ConnectionStart),
+  AccountMismatch(AccountMismatch),
 }
 
 /// Replacements queue behind the active offer instead of losing their dialog.
@@ -503,6 +539,7 @@ impl AccountOffer {
   pub(crate) async fn connect(
     &self,
     host: &impl ConnectionHost,
+    state: &crate::account::AccountState,
   ) -> Result<OfferConnection, Failure> {
     let original = match self.pending() {
       Resumable::Nothing => return Ok(OfferConnection::NotCurrent),
@@ -520,6 +557,10 @@ impl AccountOffer {
     // Preparation has no reservation or browser side effect. Revalidate only
     // after every await, then reserve and open under the same lease as parking.
     let _start = CONNECTION_START.lock().await;
+    let _account = crate::account::lock_requests().await;
+    let mismatch = account_mismatch(state, &original.api_base_url)
+      .await
+      .map_err(Failure::Terminal)?;
     let mut parked = PARKED
       .lock()
       .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -535,6 +576,9 @@ impl AccountOffer {
     if std::time::Instant::now() >= current.expires {
       parked.take();
       return Ok(OfferConnection::Expired);
+    }
+    if let Some(mismatch) = mismatch {
+      return Ok(OfferConnection::AccountMismatch(mismatch));
     }
     let outcome = host.open(prepared).map_err(Failure::Terminal)?;
     current.recovery = AccountRecovery::AwaitingAccount;
@@ -1265,8 +1309,15 @@ mod tests {
       .route(
         "/v1/desktop-registry/request",
         post(move |headers: axum::http::HeaderMap| async move {
-          if accepted(&headers) {
-            (StatusCode::OK, axum::Json(serde_json::json!({})))
+          if accepted(&headers) || headers.get("authorization").is_some_and(|value| value == "Bearer stella_dr_account_a") {
+            (StatusCode::OK, axum::Json(serde_json::json!({
+              "account": {
+                "email": "desktop@example.test",
+                "name": null,
+                "verifiedAt": "2026-10-01T00:00:00Z"
+              },
+              "identity": { "userId": "user_fixture", "organizationId": "org_fixture" }
+            })))
           } else {
             (
               StatusCode::UNAUTHORIZED,
@@ -1607,7 +1658,7 @@ mod tests {
           outcome: crate::account::ConnectionStart::Started,
         };
         {
-          let mut connection = std::pin::pin!(first_offer.connect(&host));
+          let mut connection = std::pin::pin!(first_offer.connect(&host, &state));
           assert!(
             std::future::poll_fn(|cx| std::task::Poll::Ready(
               connection.as_mut().poll(cx).is_pending()
@@ -1645,7 +1696,7 @@ mod tests {
         let second_host =
           immediate_connection(crate::account::ConnectionStart::Started);
         assert_eq!(
-          second_offer.connect(&second_host).await.unwrap(),
+          second_offer.connect(&second_host, &state).await.unwrap(),
           OfferConnection::Started(crate::account::ConnectionStart::Started)
         );
         assert_eq!(*second_host.opened.lock().unwrap(), [replacement_api]);
@@ -1675,6 +1726,115 @@ mod tests {
       }
     }
 
+    // Admission and the browser offer must agree with real persistence:
+    // a live account cannot be replaced until the user disconnects it.
+    let (server_a, server_a_task) = handoff_server(Arc::new(Default::default())).await;
+    for target in [Target::DesktopEdit, Target::PdfSigning] {
+      let live_a = linked_fixture(&server_a, "stella_dr_account_a");
+      let live_b = linked_fixture(&origin, "stella_dr_live");
+      {
+        let mut store = state.lock().await;
+        assert_eq!(
+          store.link_fixture(live_a.clone()).await.unwrap(),
+          crate::account::LinkOutcome::Linked
+        );
+        assert_eq!(
+          store.link_fixture(live_b.clone()).await.unwrap_err(),
+          "Disconnect the current desktop account before connecting another"
+        );
+      }
+      let mismatch = AccountMismatch {
+        linked_server: server_a.clone(),
+        requested_server: origin.clone(),
+      };
+      assert_eq!(
+        account_mismatch(&state, &origin).await.unwrap(),
+        Some(AccountMismatch {
+          linked_server: server_a.clone(),
+          requested_server: origin.clone()
+        })
+      );
+      assert_eq!(
+        admitted_account(&state, &origin).await.err().unwrap(),
+        Stop::AccountMismatch(mismatch)
+      );
+      assert!(crate::i18n::locales_missing("dialog.handoffServerMismatch").is_empty());
+      let notice = account_mismatch(&state, &origin)
+        .await
+        .unwrap()
+        .unwrap()
+        .message();
+      assert!(notice.contains(&server_a));
+      assert!(notice.contains(&origin));
+      let before = redeems.load(std::sync::atomic::Ordering::SeqCst);
+      let expires = std::time::Instant::now() + HANDOFF_LIFETIME;
+      assert_eq!(
+        park_if_unlinked(&state, target, &origin, "mismatch", expires)
+          .await
+          .unwrap(),
+        AccountWait::Parked
+      );
+      let offer = account_offer("mismatch", &origin).await;
+      let host = immediate_connection(crate::account::ConnectionStart::Started);
+      assert!(matches!(
+        offer.connect(&host, &state).await.unwrap(),
+        OfferConnection::AccountMismatch(_)
+      ));
+      assert!(host.opened.lock().unwrap().is_empty());
+      assert!(matches!(offer.pending(), Resumable::Ready(_)));
+      assert_eq!(
+        crate::account::current(&state)
+          .await
+          .unwrap()
+          .unwrap()
+          .api_base_url,
+        server_a
+      );
+      drop(offer);
+      {
+        let mut store = state.lock().await;
+        store.disconnect_fixture().await.unwrap();
+        assert_eq!(
+          store.link_fixture(live_b).await.unwrap(),
+          crate::account::LinkOutcome::Linked
+        );
+      }
+      let resumed = match take_parked_for_account(&origin).await {
+        ResumeAfterLink::Ready(parked) => parked,
+        outcome => {
+          panic!("explicit disconnect and connection must resume: {outcome:?}")
+        }
+      };
+      assert_eq!(resumed.target, target);
+      assert_eq!(resumed.token.as_str(), "mismatch");
+      assert_eq!(
+        take_parked_for_account(&origin).await,
+        ResumeAfterLink::Nothing
+      );
+      let (redeemed, account) = redeem_with::<serde_json::Value>(
+        RedeemCore {
+          state: &state,
+          client: &client,
+          target,
+          api_base_url: &origin,
+          token: &resumed.token,
+        },
+        &no_recovery(),
+      )
+      .await
+      .unwrap();
+      assert_eq!(redeemed, serde_json::json!({"id":"redeemed"}));
+      assert_eq!(account.api_base_url, origin);
+      assert_eq!(
+        redeems.load(std::sync::atomic::Ordering::SeqCst),
+        before + 1
+      );
+      state.lock().await.disconnect_fixture().await.unwrap();
+    }
+
+    server_a_task.abort();
+    redeems.store(0, std::sync::atomic::Ordering::SeqCst);
+
     // A different-origin pending connection has its own state and re-offer,
     // rather than pretending the replacement can use the pending account.
     let other_api = "https://other.example.test";
@@ -1683,7 +1843,7 @@ mod tests {
       crate::account::AccountStore::fixture(linked_fixture(&origin, "stella_dr_live"));
     assert!(matches!(
       admitted_account(&state, other_api).await,
-      Err(Stop::AccountRequired)
+      Err(Stop::AccountMismatch(_))
     ));
     assert_eq!(
       park_if_unlinked(&state, Target::PdfSigning, other_api, "other", expires)
@@ -1691,11 +1851,12 @@ mod tests {
         .unwrap(),
       AccountWait::Parked
     );
+    *state.lock().await = crate::account::AccountStore::Memory(None);
     let other_offer = account_offer("other", other_api).await;
     let other_host =
       immediate_connection(crate::account::ConnectionStart::DifferentOriginPending);
     assert_eq!(
-      other_offer.connect(&other_host).await.unwrap(),
+      other_offer.connect(&other_host, &state).await.unwrap(),
       OfferConnection::Started(crate::account::ConnectionStart::DifferentOriginPending)
     );
     drop(other_offer);

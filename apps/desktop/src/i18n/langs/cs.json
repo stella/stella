@@ -152,6 +152,7 @@
     "handoffConnectDetail": "Připojte svůj účet stella. Dokument se po připojení otevře automaticky.",
     "handoffUntrustedServer": "stella desktop nedůvěřuje serveru, ze kterého odkaz na dokument pochází.",
     "handoffAccountMismatch": "Tento dokument patří jinému účtu, než který je připojen ke stella desktop.",
+    "handoffServerMismatch": "Stella Desktop je připojen k serveru {linkedServer}, ale tento dokument vyžaduje server {requestedServer}. V nastavení odpojte aktuální účet a poté se připojte k serveru {requestedServer}, abyste mohli dokument otevřít.",
     "handoffAccountChanged": "Během otevírání dokumentu se změnil účet stella desktop. Začněte znovu ze stelly.",
     "handoffAlreadyOpen": "Jiné okno pro podpis je již otevřené. Dokončete ho nebo zavřete a zkuste to znovu.",
     "handoffExpired": "Platnost odkazu na dokument vypršela dříve, než byl stella desktop připojen. Začněte znovu ze stelly."

@@ -152,6 +152,7 @@
     "handoffConnectDetail": "Pievienojiet savu stella kontu. Dokuments tiks atvērts automātiski pēc pievienošanas.",
     "handoffUntrustedServer": "stella desktop neuzticas serverim, no kura nāk šī dokumenta saite.",
     "handoffAccountMismatch": "Šis dokuments pieder citam kontam, nevis tam, kas pievienots stella desktop.",
+    "handoffServerMismatch": "Stella Desktop ir savienots ar {linkedServer}, taču šim dokumentam nepieciešams {requestedServer}. Iestatījumos atvienojiet pašreizējo kontu un pēc tam savienojieties ar {requestedServer}, lai atvērtu dokumentu.",
     "handoffAccountChanged": "Dokumenta atvēršanas laikā mainījās stella desktop konts. Sāciet no jauna stella.",
     "handoffAlreadyOpen": "Jau ir atvērts cits parakstīšanas logs. Pabeidziet vai aizveriet to un mēģiniet vēlreiz.",
     "handoffExpired": "Dokumenta saites derīgums beidzās, pirms stella desktop tika pievienots. Sāciet no jauna stella."

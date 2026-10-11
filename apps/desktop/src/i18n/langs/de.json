@@ -152,6 +152,7 @@
     "handoffConnectDetail": "Verbinden Sie Ihr stella-Konto. Das Dokument öffnet sich automatisch, sobald die Verbindung steht.",
     "handoffUntrustedServer": "stella desktop vertraut dem Server nicht, von dem dieser Dokumentlink stammt.",
     "handoffAccountMismatch": "Dieses Dokument gehört zu einem anderen Konto als dem, das mit stella desktop verbunden ist.",
+    "handoffServerMismatch": "Stella Desktop ist mit {linkedServer} verbunden, aber dieses Dokument erfordert {requestedServer}. Trennen Sie das aktuelle Konto in den Einstellungen und verbinden Sie sich anschließend mit {requestedServer}, um das Dokument zu öffnen.",
     "handoffAccountChanged": "Das Konto von stella desktop hat sich beim Öffnen des Dokuments geändert. Starten Sie erneut über stella.",
     "handoffAlreadyOpen": "Ein anderer Signaturdialog ist bereits geöffnet. Schließen Sie ihn ab oder schließen Sie ihn, und versuchen Sie es erneut.",
     "handoffExpired": "Der Dokumentlink ist abgelaufen, bevor stella desktop verbunden war. Starten Sie erneut über stella."

@@ -372,7 +372,8 @@ fn start_handoff(run: HandoffRun, manager: Arc<Mutex<SessionManager>>, app: AppH
         tracing::warn!(error = %message, "document handoff ended");
         tracing::warn!(target: crate::logging::TRAIL_TARGET, event = "handoff.ended", target_kind = ?run.target);
       }
-      Err(crate::handoff::Stop::AccountRequired) => {
+      Err(crate::handoff::Stop::AccountRequired)
+      | Err(crate::handoff::Stop::AccountMismatch(_)) => {
         crate::account::notify(&app);
         offer_account_link(run, manager, app).await;
       }
@@ -497,6 +498,18 @@ async fn offer_parked_handoff(
     }
     crate::handoff::Resumable::Ready(_) => {}
   }
+  let state = app.state::<crate::account::AccountState>();
+  match crate::handoff::account_mismatch(&state, &run.api_base_url).await {
+    Ok(Some(mismatch)) => {
+      present_account_mismatch(&app, &mismatch).await;
+      return;
+    }
+    Ok(None) => {}
+    Err(error) => {
+      present_handoff_failure(&app, &crate::handoff::Failure::Terminal(error)).await;
+      return;
+    }
+  }
   let approved = match show_connection_confirmation(
     &app,
     ConnectionConfirmation::HandoffConnect(run.target),
@@ -528,12 +541,18 @@ async fn offer_parked_handoff(
     return;
   }
   match offer
-    .connect(&DesktopConnectionHost {
-      manager: &manager,
-      app: &app,
-    })
+    .connect(
+      &DesktopConnectionHost {
+        manager: &manager,
+        app: &app,
+      },
+      &state,
+    )
     .await
   {
+    Ok(crate::handoff::OfferConnection::AccountMismatch(mismatch)) => {
+      present_account_mismatch(&app, &mismatch).await;
+    }
     Ok(crate::handoff::OfferConnection::NotCurrent) => {}
     Ok(crate::handoff::OfferConnection::Expired) => {
       present_handoff_failure(&app, &crate::handoff::Failure::Expired).await;
@@ -552,6 +571,18 @@ async fn offer_parked_handoff(
       crate::handoff::unpark(&run.token, &run.api_base_url);
       present_handoff_failure(&app, &failure).await;
     }
+  }
+}
+
+async fn present_account_mismatch(
+  app: &AppHandle,
+  mismatch: &crate::handoff::AccountMismatch,
+) {
+  if let Err(error) =
+    show_connection_confirmation(app, ConnectionConfirmation::AccountMismatch(mismatch))
+      .await
+  {
+    tracing::warn!(error = %error, "account mismatch notice was not shown");
   }
 }
 
@@ -674,6 +705,7 @@ async fn confirm_and_trust_self_host(
 
 pub(crate) enum ConnectionConfirmation<'a> {
   HandoffError(&'a crate::handoff::Failure),
+  AccountMismatch(&'a crate::handoff::AccountMismatch),
   /// A document handoff waits for the account link.
   HandoffConnect(crate::handoff::Target),
   SelfHost {
@@ -731,6 +763,13 @@ pub(crate) async fn show_connection_confirmation(
         "dialog.handoffWindowTitle",
       )
     }
+    ConnectionConfirmation::AccountMismatch(mismatch) => (
+      format!(
+        "mode=handoff&message={}&action=&detail=",
+        percent_encode(&mismatch.message()),
+      ),
+      "dialog.handoffWindowTitle",
+    ),
     ConnectionConfirmation::HandoffConnect(target) => (
       format!(
         "mode=handoff&message={}&action={}&dismiss={}&detail={}",

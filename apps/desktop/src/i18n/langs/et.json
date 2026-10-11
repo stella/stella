@@ -152,6 +152,7 @@
     "handoffConnectDetail": "Ühendage oma stella konto. Dokument avaneb pärast ühendamist automaatselt.",
     "handoffUntrustedServer": "stella desktop ei usalda serverit, kust see dokumendilink pärineb.",
     "handoffAccountMismatch": "See dokument kuulub teisele kontole kui see, mis on stella desktopiga ühendatud.",
+    "handoffServerMismatch": "Stella Desktop on ühendatud serveriga {linkedServer}, kuid see dokument vajab serverit {requestedServer}. Ühendage praegune konto seadetes lahti ja seejärel looge ühendus serveriga {requestedServer}, et dokument avada.",
     "handoffAccountChanged": "stella desktopi konto muutus dokumendi avamise ajal. Alustage uuesti stellast.",
     "handoffAlreadyOpen": "Teine allkirjastamise aken on juba avatud. Lõpetage või sulgege see ja proovige uuesti.",
     "handoffExpired": "Dokumendilink aegus enne, kui stella desktop ühendati. Alustage uuesti stellast."

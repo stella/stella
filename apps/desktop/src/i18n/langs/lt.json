@@ -152,6 +152,7 @@
     "handoffConnectDetail": "Prijunkite savo stella paskyrą. Prisijungus dokumentas atsidarys automatiškai.",
     "handoffUntrustedServer": "stella desktop nepasitiki serveriu, iš kurio gauta ši dokumento nuoroda.",
     "handoffAccountMismatch": "Šis dokumentas priklauso kitai paskyrai nei ta, kuri prijungta prie stella desktop.",
+    "handoffServerMismatch": "Stella Desktop prijungta prie {linkedServer}, tačiau šiam dokumentui reikia {requestedServer}. Nustatymuose atjunkite dabartinę paskyrą, tada prisijunkite prie {requestedServer}, kad atvertumėte dokumentą.",
     "handoffAccountChanged": "Atidarant dokumentą pasikeitė stella desktop paskyra. Pradėkite iš naujo stella.",
     "handoffAlreadyOpen": "Jau atidarytas kitas pasirašymo langas. Užbaikite arba uždarykite jį ir bandykite dar kartą.",
     "handoffExpired": "Dokumento nuoroda nebegalioja, nes stella desktop nebuvo laiku prijungtas. Pradėkite iš naujo stella."

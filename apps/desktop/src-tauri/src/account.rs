@@ -255,6 +255,27 @@ impl AccountStore {
     })
   }
 
+  #[cfg(test)]
+  pub(crate) async fn link_fixture(
+    &mut self,
+    account: LinkedAccount,
+  ) -> Result<LinkOutcome, String> {
+    let mut pending = LinkedAccount::from_request(
+      LinkAccountRequest {
+        api_base_url: account.api_base_url,
+        credential: account.credential,
+      },
+      &account.web_origin,
+    )?;
+    pending.device_key = crate::device_proof::DeviceKey::fixture();
+    persist_link(self, pending, &account.identity).await
+  }
+
+  #[cfg(test)]
+  pub(crate) async fn disconnect_fixture(&mut self) -> Result<(), String> {
+    self.clear().await
+  }
+
   async fn load(&self) -> Result<Option<LinkedAccount>, String> {
     match self {
       Self::Keychain => {
@@ -816,7 +837,15 @@ pub async fn link(
   // Do not publish a profile for a credential the API has not accepted.
   let mut store = state.lock().await;
   pending.device_key = crate::device_proof::required().await?;
-  let outcome = prepare_replacement(&mut store, &pending).await?;
+  persist_link(&mut store, pending, expected_identity).await
+}
+
+async fn persist_link(
+  store: &mut AccountStore,
+  pending: PendingLinkedAccount,
+  expected_identity: &DesktopAccountIdentity,
+) -> Result<LinkOutcome, String> {
+  let outcome = prepare_replacement(store, &pending).await?;
   if outcome == LinkOutcome::Unchanged {
     return Ok(outcome);
   }

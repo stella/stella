@@ -152,6 +152,7 @@
     "handoffConnectDetail": "Csatlakoztassa stella-fiókját. A dokumentum a csatlakozás után automatikusan megnyílik.",
     "handoffUntrustedServer": "A stella desktop nem bízik abban a szerverben, ahonnan a dokumentumhivatkozás származik.",
     "handoffAccountMismatch": "Ez a dokumentum egy másik fiókhoz tartozik, mint amelyik a stella desktophoz csatlakozik.",
+    "handoffServerMismatch": "A Stella Desktop a(z) {linkedServer} szerverhez csatlakozik, de ehhez a dokumentumhoz a(z) {requestedServer} szerver szükséges. Válassza le a jelenlegi fiókot a beállításokban, majd csatlakozzon a(z) {requestedServer} szerverhez a dokumentum megnyitásához.",
     "handoffAccountChanged": "A stella desktop fiókja megváltozott a dokumentum megnyitása közben. Kezdje újra a stellában.",
     "handoffAlreadyOpen": "Már nyitva van egy másik aláírási ablak. Fejezze be vagy zárja be, majd próbálja újra.",
     "handoffExpired": "A dokumentumhivatkozás lejárt, mielőtt a stella desktop csatlakozott. Kezdje újra a stellában."
