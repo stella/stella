@@ -1,12 +1,12 @@
+import type { ChatClientState } from "@tanstack/ai-client";
 /**
  * Re-exports chat message types from the backend (single
  * source of truth) and provides frontend-only helpers.
  */
-
-import type { ChatClientState } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
+import { isServerChatToolCall } from "@stll/api-contract/chat";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 import type { FolioAgentToolName } from "@stll/folio-agents";
 
@@ -775,7 +775,17 @@ export const hasRunningToolCallInLatestAssistantMessage = ({
     return false;
   }
 
-  return message.parts.some(isRunningToolPart);
+  // Server execution belongs to an active response stream. A ready runtime
+  // with complete server input is waiting behind a gate, not still running.
+  return message.parts.some(
+    (part) =>
+      isRunningToolPart(part) &&
+      !(
+        part.type === "tool-call" &&
+        part.state === "input-complete" &&
+        isServerChatToolCall(part)
+      ),
+  );
 };
 
 type PersistedChatPart = PersistedChatMessage["parts"][number];
@@ -950,7 +960,14 @@ export const sanitizeRunningToolCalls = (
     if (message.role !== "assistant") {
       return message;
     }
-    const parts = message.parts.map(toTerminalIfRunningToolPart);
+    const parts = message.parts.map((part) =>
+      message.metadata?.turnOutcome?.type === "awaiting-user" &&
+      part.type === "tool-call" &&
+      part.state === "input-complete" &&
+      isServerChatToolCall(part)
+        ? part
+        : toTerminalIfRunningToolPart(part),
+    );
     const partsChanged = parts.some(
       (part, index) => part !== message.parts[index],
     );

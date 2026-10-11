@@ -3070,6 +3070,7 @@ export const createSendMessage = (
                 > => {
                   const validatedToolParts = validateToolCallParts({
                     allowPartialInput: CUT_SHORT_OUTCOME[outcome.type],
+                    allowDeferredServerInput: outcome.type === "awaiting-user",
                     message: responseMessage,
                     tools: streamingTools,
                   });

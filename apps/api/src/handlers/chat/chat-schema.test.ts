@@ -695,6 +695,52 @@ describe("parseMessage", () => {
 });
 
 describe("validateMessage", () => {
+  test("defers invalid server input only while a generated turn waits for approval", () => {
+    const message = {
+      id: chatMessageId("msg_deferred_server_input"),
+      role: "assistant",
+      parts: [
+        {
+          arguments: '{"unexpected":true}',
+          id: "tool-call-deferred",
+          name: "list_templates",
+          state: "input-complete",
+          type: "tool-call",
+        },
+      ],
+    } as const satisfies ChatMessage;
+    const clientTool = {
+      name: "list_templates",
+      description: "List templates",
+      inputSchema: toTanStackToolSchema(v.strictObject({})),
+    };
+    const serverTools = {
+      list_templates: { ...clientTool, execute: async () => [] },
+    } satisfies ChatToolMap;
+
+    const deferred = validateToolCallParts({
+      allowDeferredServerInput: true,
+      message,
+      tools: serverTools,
+    });
+    expect(Result.isOk(deferred)).toBe(true);
+    if (Result.isOk(deferred)) {
+      expect(deferred.value).toEqual(message.parts);
+    }
+    expect(
+      Result.isError(validateToolCallParts({ message, tools: serverTools })),
+    ).toBe(true);
+    expect(
+      Result.isError(
+        validateToolCallParts({
+          allowDeferredServerInput: true,
+          message,
+          tools: { list_templates: clientTool },
+        }),
+      ),
+    ).toBe(true);
+  });
+
   test("accepts malformed partial tool input only for interrupted persistence", () => {
     const message = {
       id: chatMessageId("msg_interrupted_partial_tool"),

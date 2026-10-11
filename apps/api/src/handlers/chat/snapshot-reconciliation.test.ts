@@ -452,9 +452,6 @@ const textualMetadataCases = [
       {
         type: "thinking",
         content: "AB",
-        signature: undefined,
-        stepId: undefined,
-        redacted: undefined,
       },
     ],
     replay: [{ type: "thinking", content: "AB" }],

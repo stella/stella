@@ -2860,14 +2860,11 @@ export const processServerChatStream = async function* ({
     announceBeforeFailure: () => announceBeforeFailure(),
     terminal,
   });
-  // Whether the client has been told which message this turn writes.
-  let announcedAssistantMessage = false;
-  // A run that fails before its first chunk still writes the turn's message
-  // (see `createTerminalResponseMessage`). Name it before the error, or the
-  // client opens a placeholder under an id of its own beside the message the
-  // turn stored or continued.
+  let clientAssistantState: "active" | "inactive" = "inactive";
+  // Snapshots clear the SDK's active-message state. Reassert the owner before
+  // a later failure so RUN_ERROR cannot create a second assistant placeholder.
   const announceBeforeFailure = (): StreamChunk[] =>
-    announcedAssistantMessage
+    clientAssistantState === "active"
       ? []
       : [
           assistantMessageStartChunk(
@@ -2889,9 +2886,6 @@ export const processServerChatStream = async function* ({
     });
 
     for await (const sourceChunk of normalizedSource) {
-      if (sourceChunk.type === EventType.TEXT_MESSAGE_START) {
-        announcedAssistantMessage = true;
-      }
       trackIncompleteToolCallInput(
         sourceChunk,
         rawArgumentsByIncompleteToolCallId,
@@ -2950,6 +2944,16 @@ export const processServerChatStream = async function* ({
         yield* announceBeforeFailure();
         yield failure.chunk;
         return;
+      }
+      if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
+        clientAssistantState = "inactive";
+      } else if (
+        chunk.type === EventType.TEXT_MESSAGE_START ||
+        chunk.type === EventType.TEXT_MESSAGE_CONTENT ||
+        chunk.type === EventType.REASONING_MESSAGE_CONTENT ||
+        chunk.type === EventType.TOOL_CALL_START
+      ) {
+        clientAssistantState = "active";
       }
       yield chunk;
     }

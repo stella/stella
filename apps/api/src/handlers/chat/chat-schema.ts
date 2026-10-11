@@ -1447,11 +1447,13 @@ const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
 
 export const validateToolCallParts = ({
   allowPartialInput = false,
+  allowDeferredServerInput = false,
   clientAuthoredCallIds,
   message,
   tools,
 }: {
   allowPartialInput?: boolean;
+  allowDeferredServerInput?: boolean;
   /** See `ValidatedIncomingChatParts`; `undefined` validates every call. */
   clientAuthoredCallIds?: ReadonlySet<string> | undefined;
   message: ChatMessage;
@@ -1483,6 +1485,7 @@ export const validateToolCallParts = ({
 
       const toolCallResult = validateToolCallPart({
         allowPartialInput,
+        allowDeferredServerInput,
         part,
         tools,
       });
@@ -1518,10 +1521,12 @@ export const validateToolCallParts = ({
 
 const validateToolCallPart = ({
   allowPartialInput,
+  allowDeferredServerInput,
   part,
   tools,
 }: {
   allowPartialInput: boolean;
+  allowDeferredServerInput: boolean;
   part: ChatToolCallPart;
   tools: ChatToolMap;
 }): Result<ValidatedToolCallPart, HandlerError<400>> => {
@@ -1538,9 +1543,13 @@ const validateToolCallPart = ({
     );
   }
 
+  // Calls queued behind approval reach SDK input validation only on resume.
   if (
-    allowPartialInput &&
-    (part.state === "awaiting-input" || part.state === "input-streaming")
+    (allowPartialInput &&
+      (part.state === "awaiting-input" || part.state === "input-streaming")) ||
+    (allowDeferredServerInput &&
+      part.state === "input-complete" &&
+      tool.execute !== undefined)
   ) {
     return Result.ok({
       type: "schema",

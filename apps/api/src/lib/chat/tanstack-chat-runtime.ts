@@ -10,7 +10,7 @@
 // through a reader here. A consumer that spells `chunk.finishReason` no longer
 // compiles.
 
-import { chat } from "@tanstack/ai";
+import { chat, EventType } from "@tanstack/ai";
 import type {
   ChatMiddleware,
   RunFinishedEvent,
@@ -19,6 +19,8 @@ import type {
   StructuredOutputStream,
 } from "@tanstack/ai";
 import { panic } from "better-result";
+
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -207,11 +209,122 @@ export type StreamChatChunksOptions = Omit<
   "outputSchema" | "stream" | "toolExecution"
 >;
 
-export const streamChatChunks = (
+const providerToolMetadata = (metadata: unknown) => {
+  if (!isRecord(metadata)) {
+    return metadata;
+  }
+  const { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: _executor, ...provider } =
+    metadata;
+  return Object.keys(provider).length === 0 ? undefined : provider;
+};
+
+export const streamChatChunks = async function* (
   options: StreamChatChunksOptions,
-): AsyncIterable<PublicStreamChunk> =>
-  // Same-document mutations and dependent reads must finish in call order.
-  chat({ ...options, toolExecution: "sequential" });
+): AsyncIterable<PublicStreamChunk> {
+  const executors = new Map(
+    options.tools?.map((tool) => [
+      tool.name,
+      tool.execute ? "server" : "client",
+    ]),
+  );
+  // Input-complete server calls can wait behind an approval. Their executor
+  // must survive snapshots so the browser does not offer a client resolution.
+  const messages = (options.messages ?? []).map((message) => {
+    if ("parts" in message) {
+      return {
+        ...message,
+        parts: message.parts.map((part) => {
+          if (part.type !== "tool-call") {
+            return part;
+          }
+          const { metadata, ...call } = part;
+          const provider = providerToolMetadata(metadata);
+          return {
+            ...call,
+            ...(provider === undefined ? {} : { metadata: provider }),
+          };
+        }),
+      };
+    }
+    if (message.toolCalls === undefined) {
+      return message;
+    }
+    return {
+      ...message,
+      toolCalls: message.toolCalls.map(({ metadata, ...call }) => {
+        const provider = providerToolMetadata(metadata);
+        return {
+          ...call,
+          ...(provider === undefined ? {} : { metadata: provider }),
+        };
+      }),
+    };
+  });
+  for await (const chunk of chat({
+    ...options,
+    messages,
+    toolExecution: "sequential",
+  })) {
+    if (chunk.type === "TOOL_CALL_START") {
+      const executor = executors.get(chunk.toolCallName);
+      yield executor === undefined
+        ? chunk
+        : {
+            ...chunk,
+            metadata: {
+              ...chunk.metadata,
+              [CHAT_TOOL_EXECUTOR_METADATA_KEY]: executor,
+            },
+          };
+      continue;
+    }
+    if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
+      yield {
+        ...chunk,
+        messages: chunk.messages.map((message) => {
+          if (message.role !== "assistant" || message.toolCalls === undefined) {
+            return message;
+          }
+          const tanstack = isRecord(message.metadata?.["tanstack"])
+            ? message.metadata["tanstack"]
+            : {};
+          const previousMetadata = isRecord(tanstack["toolCallMetadata"])
+            ? tanstack["toolCallMetadata"]
+            : {};
+          return {
+            ...message,
+            metadata: {
+              ...message.metadata,
+              tanstack: {
+                ...tanstack,
+                toolCallMetadata: Object.fromEntries(
+                  message.toolCalls.map((call) => {
+                    const executor = executors.get(call.function.name);
+                    const previous = previousMetadata[call.id];
+                    const metadata = isRecord(previous)
+                      ? previous
+                      : call.metadata;
+                    return [
+                      call.id,
+                      {
+                        ...metadata,
+                        ...(executor === undefined
+                          ? {}
+                          : { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: executor }),
+                      },
+                    ];
+                  }),
+                ),
+              },
+            },
+          };
+        }),
+      };
+      continue;
+    }
+    yield chunk;
+  }
+};
 
 export type ChatObjectOptions = StreamChatChunksOptions & {
   outputSchema: SchemaInput;

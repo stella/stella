@@ -138,13 +138,8 @@ import {
 } from "@/lib/user-files";
 import { downloadFile } from "@/lib/utils";
 
-export const ChatThreadMessages = (props: ChatThreadMessagesProps) => (
-  <ChatActivitySessionContext value={props.activitySession}>
-    <ChatThreadMessagesContent {...props} />
-  </ChatActivitySessionContext>
-);
-
-const ChatThreadMessagesContent = ({
+export const ChatThreadMessages = ({
+  activitySession,
   activeFileName,
   assistantTextDensity = "default",
   approvalPendingMessageId,
@@ -407,74 +402,78 @@ const ChatThreadMessagesContent = ({
   return (
     // Sent messages persist a same-matter mention without its matter; the
     // scope gives every reference chip below the thread's matter.
-    <ReferenceRenderScope workspaceId={workspaceId}>
-      {scrollRef !== null && <ChatTranscriptCopy rootRef={scrollRef} />}
-      {branchSource !== undefined && scrollRef !== null && (
-        <ChatSelectionToolbar
-          key={branchSource.threadRef.threadId}
-          rootRef={scrollRef}
-          source={branchSource}
-          messages={messages}
-          isGenerating={generationActive}
-          onAnswerEdited={onAnswerEdited}
-          answerRewriteAvailability={answerRewriteAvailability}
-        />
-      )}
-      {canLoadOlder && (
-        <LoadOlderSentinel
-          isLoadingOlder={isLoadingOlder}
-          onLoadOlder={triggerLoadOlder}
-          ref={sentinelRef}
-        />
-      )}
-      {stickyUserMessages
-        ? buildMessageTurns(messages).map((turn, turnIndex) => {
-            if (turn.type === "orphan") {
-              const orphanFirstMessageId = turn.body.at(0)?.message.id;
+    <ChatActivitySessionContext value={activitySession}>
+      <ReferenceRenderScope workspaceId={workspaceId}>
+        {scrollRef !== null && <ChatTranscriptCopy rootRef={scrollRef} />}
+        {branchSource !== undefined && scrollRef !== null && (
+          <ChatSelectionToolbar
+            key={branchSource.threadRef.threadId}
+            rootRef={scrollRef}
+            source={branchSource}
+            messages={messages}
+            isGenerating={generationActive}
+            onAnswerEdited={onAnswerEdited}
+            answerRewriteAvailability={answerRewriteAvailability}
+          />
+        )}
+        {canLoadOlder && (
+          <LoadOlderSentinel
+            isLoadingOlder={isLoadingOlder}
+            onLoadOlder={triggerLoadOlder}
+            ref={sentinelRef}
+          />
+        )}
+        {stickyUserMessages
+          ? buildMessageTurns(messages).map((turn, turnIndex) => {
+              if (turn.type === "orphan") {
+                const orphanFirstMessageId = turn.body.at(0)?.message.id;
+                return (
+                  <Fragment key={orphanFirstMessageId ?? `orphan-${turnIndex}`}>
+                    {turn.body.map((item) =>
+                      renderMessageNode(item.message, item.index),
+                    )}
+                  </Fragment>
+                );
+              }
               return (
-                <Fragment key={orphanFirstMessageId ?? `orphan-${turnIndex}`}>
+                <StickyUserTurn
+                  approvalPendingMessageId={approvalPendingMessageId}
+                  headerIndex={turn.index}
+                  headerMessage={turn.header}
+                  key={turn.header.id}
+                  messages={messages}
+                  scrollRef={scrollRef}
+                >
                   {turn.body.map((item) =>
                     renderMessageNode(item.message, item.index),
                   )}
-                </Fragment>
+                </StickyUserTurn>
               );
-            }
-            return (
-              <StickyUserTurn
-                approvalPendingMessageId={approvalPendingMessageId}
-                headerIndex={turn.index}
-                headerMessage={turn.header}
-                key={turn.header.id}
-                messages={messages}
-                scrollRef={scrollRef}
-              >
-                {turn.body.map((item) =>
-                  renderMessageNode(item.message, item.index),
-                )}
-              </StickyUserTurn>
-            );
-          })
-        : messages.map((message, index) => renderMessageNode(message, index))}
-      {error && (
-        <ChatErrorMessage
-          error={error}
-          isGenerating={generationActive}
-          onResend={onResend}
-          onSendWithoutAnonymization={onSendWithoutAnonymization}
-        />
-      )}
-      {showThinkingIndicator && generationActive && activityIndicatorState && (
-        <ThinkingIndicator state={activityIndicatorState} />
-      )}
-      {queuedMessageActions &&
-        queuedMessages !== undefined &&
-        queuedMessages.length > 0 && (
-          <QueuedUserMessages
-            actions={queuedMessageActions}
-            messages={queuedMessages}
+            })
+          : messages.map((message, index) => renderMessageNode(message, index))}
+        {error && (
+          <ChatErrorMessage
+            error={error}
+            isGenerating={generationActive}
+            onResend={onResend}
+            onSendWithoutAnonymization={onSendWithoutAnonymization}
           />
         )}
-    </ReferenceRenderScope>
+        {showThinkingIndicator &&
+          generationActive &&
+          activityIndicatorState && (
+            <ThinkingIndicator state={activityIndicatorState} />
+          )}
+        {queuedMessageActions &&
+          queuedMessages !== undefined &&
+          queuedMessages.length > 0 && (
+            <QueuedUserMessages
+              actions={queuedMessageActions}
+              messages={queuedMessages}
+            />
+          )}
+      </ReferenceRenderScope>
+    </ChatActivitySessionContext>
   );
 };
 

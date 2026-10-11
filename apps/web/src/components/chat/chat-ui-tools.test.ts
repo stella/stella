@@ -4,6 +4,7 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 
 import {
   consumeDocumentDeletionToolCalls,
@@ -1126,6 +1127,39 @@ describe("sanitizeRunningToolCalls", () => {
     state: "input-complete",
     type: "tool-call",
   } satisfies ChatPart;
+
+  test("server calls waiting behind approval remain resumable only on an awaiting-user turn", () => {
+    const part = {
+      ...runningToolPart,
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
+    };
+    const message = {
+      id: "deferred-message",
+      role: "assistant",
+      parts: [part],
+    } as const satisfies PersistedChatMessage;
+    const waiting = {
+      ...message,
+      metadata: {
+        turnOutcome: {
+          type: "awaiting-user",
+          interaction: { type: "approval", toolCallId: "approval-call" },
+        },
+      },
+    } as const satisfies PersistedChatMessage;
+    expect(sanitizeRunningToolCalls([waiting])).toEqual([waiting]);
+    expect(isChatTurnInFlight({ status: "ready", messages: [waiting] })).toBe(
+      false,
+    );
+    expect(
+      isChatTurnInFlight({ status: "streaming", messages: [waiting] }),
+    ).toBe(true);
+    expect(
+      sanitizeRunningToolCalls([message]).at(0)?.parts.at(0),
+    ).toMatchObject({
+      state: "error",
+    });
+  });
 
   test("rewrites a dead running tool call in the last assistant message to the terminal error state", () => {
     const messages: PersistedChatMessage[] = [

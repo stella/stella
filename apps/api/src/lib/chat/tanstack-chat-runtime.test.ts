@@ -8,6 +8,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { isServerChatToolCall } from "@stll/api-contract/chat";
 import { sleep } from "@stll/concurrency/sleep";
 import { assertProperty } from "@stll/property-testing";
 
@@ -192,6 +193,16 @@ test("sequential gated and ungated calls execute in document order after approva
           }
           expect(iteration).toBe(1);
           expect(executed).toEqual(prefix);
+          const deferredCalls = processor
+            .getMessages()
+            .flatMap(({ parts }) =>
+              parts.filter(
+                (part) =>
+                  part.type === "tool-call" && part.state === "input-complete",
+              ),
+            );
+          expect(deferredCalls.length).toBeGreaterThan(0);
+          expect(deferredCalls.every(isServerChatToolCall)).toBe(true);
           const pending = processor
             .getMessages()
             .flatMap(({ parts }) => parts)
@@ -235,17 +246,16 @@ test("sequential gated and ungated calls execute in document order after approva
             .getMessages()
             .flatMap(({ parts }) => parts)
             .filter((part) => part.type === "tool-result");
-          expect(settledResults).toHaveLength(names.length);
+          expect(settledResults).toHaveLength(executableNames.length);
           for (const part of settledCalls) {
             const result = settledResults.find(
               ({ toolCallId }) => toolCallId === part.id,
             );
             if (!approved && part.name === "approved_write") {
               expect(part.approval?.approved).toBe(false);
-              expect(result).toMatchObject({
-                state: "error",
-                outcome: "denied",
-              });
+              // The SDK inserts the denial into model history during UI
+              // conversion; it does not emit that result on the raw stream.
+              expect(result).toBeUndefined();
             } else {
               expect(part.state).toBe("complete");
               expect(result?.state).toBe("complete");

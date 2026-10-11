@@ -1687,10 +1687,14 @@ test("signed thinking snapshots enrich streamed content and survive later unsign
   for (const chunk of emitted) {
     live.processor.processChunk(chunk);
     if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
+      const expectedSnapshot = expectedSnapshots.at(index++);
+      if (expectedSnapshot === undefined) {
+        panic("Emitted snapshot has no expected projection");
+      }
       expect(
         live.processor.getMessages().flatMap(({ parts }) => parts),
         JSON.stringify({ oracle: CHAT_ORACLE.liveEqualsReload }),
-      ).toEqual(expectedSnapshots.at(index++));
+      ).toEqual(expectedSnapshot);
     }
   }
   expect(index).toBe(expectedSnapshots.length);

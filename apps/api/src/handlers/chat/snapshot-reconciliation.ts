@@ -343,8 +343,8 @@ type TextualSnapshotMetadataOptions = {
   canonical: Extract<MessagePart, { type: "text" | "thinking" }> | undefined;
   incoming: Extract<MessagePart, { type: "text" | "thinking" }>;
   content: string;
-  canonicalStart?: number;
-  contentStart?: number;
+  canonicalStart?: number | undefined;
+  contentStart?: number | undefined;
 };
 
 // Empty reasoning blocks carry opaque data: offsets alone cannot identify them.
@@ -747,7 +747,13 @@ export class SnapshotPartReconciler {
           : [],
       )
       .join("");
+    // Signed blocks retain their authenticated boundaries; unsigned snapshots
+    // own segmentation and may replace obsolete slots.
     const canReconcileRanges =
+      sameKind.some(
+        (candidate) =>
+          candidate.type === "thinking" && candidate.signature !== undefined,
+      ) &&
       content.length > 0 &&
       preservesPartLayout &&
       snapshotContent.length >= content.length &&

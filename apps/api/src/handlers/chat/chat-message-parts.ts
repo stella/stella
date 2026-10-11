@@ -10,6 +10,7 @@ import {
   isBoundedBase64Content,
   MCP_APP_RESOURCE_MIME_TYPE,
 } from "@stll/api-contract";
+import { isServerChatToolCall } from "@stll/api-contract/chat";
 import {
   GENERATED_VISUAL_MIME_TYPE,
   generatedVisualPartSchema,
@@ -621,11 +622,9 @@ export const isProviderVisibleChatPart = (part: ChatPart): boolean =>
   CHAT_PART_POLICY[part.type].providerVisibility === "model";
 
 /**
- * Whether a client-executed tool call (ask-user, or any tool without a server
- * `execute`) still awaits its client resolution. A server-executed call never
- * ends a run in `input-complete`: the agent loop executes every tool of a
- * model turn before it decides whether to call the model again, so at run end
- * an `input-complete` call is by construction one the client must resolve.
+ * Whether a client-executed tool call still awaits its client resolution.
+ * Input readiness alone cannot identify its executor: sequential server calls
+ * can remain input-complete behind an unanswered approval.
  */
 const CLIENT_TOOL_STATE_AWAITS_RESOLUTION = {
   "approval-requested": false,
@@ -766,7 +765,10 @@ export const getAwaitingUserInteractions = (
       interactions.push({ type: "approval", toolCallId: part.id });
       continue;
     }
-    if (CLIENT_TOOL_STATE_AWAITS_RESOLUTION[part.state]) {
+    if (
+      CLIENT_TOOL_STATE_AWAITS_RESOLUTION[part.state] &&
+      !isServerChatToolCall(part)
+    ) {
       interactions.push({
         type: clientToolInteractionType(part.name),
         toolCallId: part.id,

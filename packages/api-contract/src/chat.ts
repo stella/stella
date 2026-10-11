@@ -42,6 +42,28 @@ export const isChatPastedTextPart = (
   );
 };
 
+/** Executor recorded from the tool definition, independent of input readiness. */
+export const CHAT_TOOL_EXECUTOR_METADATA_KEY = "stellaToolExecutor";
+
+export const isServerChatToolCall = (part: unknown): boolean => {
+  if (
+    typeof part !== "object" ||
+    part === null ||
+    !("type" in part) ||
+    part.type !== "tool-call" ||
+    !("metadata" in part)
+  ) {
+    return false;
+  }
+  const { metadata } = part;
+  return (
+    typeof metadata === "object" &&
+    metadata !== null &&
+    CHAT_TOOL_EXECUTOR_METADATA_KEY in metadata &&
+    metadata[CHAT_TOOL_EXECUTOR_METADATA_KEY] === "server"
+  );
+};
+
 /**
  * Title a thread is persisted with until its first message generates a real
  * one. Deliberately untranslated: it is a sentinel both sides compare
