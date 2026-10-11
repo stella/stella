@@ -152,7 +152,7 @@ const CASE_LAW_DECISION_VIEW_COLUMN_GRANTS = {
   text_s3_key: "required",
   ast_s3_key: "required",
   content_hash: "required",
-  // Granted, and no longer read: the column is dropped a release from now.
+  // The reader retains this grant until the column is dropped in the next release.
   indexed_hash: "permitted",
   created_at: "required",
   updated_at: "required",
@@ -408,7 +408,7 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     text_s3_key: "required",
     ast_s3_key: "required",
     content_hash: "required",
-    // Granted, and no longer read: the column is dropped a release from now.
+    // The reader retains this grant until the column is dropped in the next release.
     indexed_hash: "permitted",
     created_at: "required",
     updated_at: "required",
@@ -474,7 +474,7 @@ export const publicLawColumnPairs = (
 /**
  * The v0.7.22 reader contract retained during the bounded rollout window.
  * Remove these constants with `stella_caselaw_reader` after that release can
- * no longer be deployed or used for rollback.
+ * be excluded from deployments and rollback.
  */
 export const ROLLOUT_CASE_LAW_WHOLE_RELATIONS = [
   "case_law_citations",

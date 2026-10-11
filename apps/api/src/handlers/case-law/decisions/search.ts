@@ -491,17 +491,21 @@ export const caseLawSearchPlan = ({
       )`
     : sql``;
 
-  const allFilters = sql`
-    ${datedFilter}
-    ${courtFilter}
-    ${courtListFilter}
-    ${countryFilter}
-    ${dateFromFilter}
-    ${dateToFilter}
-    ${typeFilter}
-    ${sourceFilter}
-    ${languageFilter}
-  `;
+  const matchedPredicate = sql.join(
+    [
+      ftsSearch.predicate,
+      datedFilter,
+      courtFilter,
+      courtListFilter,
+      countryFilter,
+      dateFromFilter,
+      dateToFilter,
+      typeFilter,
+      sourceFilter,
+      languageFilter,
+    ],
+    sql` `,
+  );
 
   // The citing court can belong to any jurisdiction — citation graphs cross
   // borders — so this side of the statement reads the flattened registry
@@ -553,9 +557,7 @@ export const caseLawSearchPlan = ({
         ON d.id = sd.decision_id
       ${publicCaseLawDecisionJoin}
       LEFT JOIN ${citationAuthorityLateral} ON true
-      WHERE TRUE
-        WHERE ${ftsSearch.predicate}
-        ${allFilters}
+      WHERE ${matchedPredicate}
     )
   `;
 

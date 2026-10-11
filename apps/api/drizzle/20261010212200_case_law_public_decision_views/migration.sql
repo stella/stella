@@ -60,7 +60,7 @@ REVOKE SELECT (
 
 -- stella-migration-safety: reviewed drop-object - reader access is granted through the views; table reads require restoring the policy and grants in a forward migration.
 DROP POLICY "public_law_reader_access" ON "case_law_decisions";--> statement-breakpoint
--- stella-migration-safety: reviewed drop-object - the legacy role no longer reads decisions; restoring table access requires a forward migration with explicit grants and policy.
+-- stella-migration-safety: reviewed drop-object - The legacy role has no decision-table access; restoring table access requires a forward migration with explicit grants and policy.
 DROP POLICY IF EXISTS "case_law_reader_access" ON "case_law_decisions";--> statement-breakpoint
 
 GRANT SELECT (
