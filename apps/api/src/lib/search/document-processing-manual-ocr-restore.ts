@@ -240,13 +240,15 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
       // Projection repair changes worker bookkeeping; the manual request owns its audit event.
       recordTransitionAuditEvent: async () => await Promise.resolve(),
     });
-    if (changed.type === "transitioned") {
-      return;
+    switch (changed.type) {
+      case "transitioned":
+        return;
+      case "stale":
+        break;
+      default:
+        changed satisfies never;
+        panic("Unknown document processing transition outcome");
     }
-    if (changed.type === "stale") {
-      panic("Locked manual OCR run changed during projection repair");
-    }
-    changed satisfies never;
-    panic("Unknown document processing transition outcome");
+    panic("Locked manual OCR run changed during projection repair");
   });
 };
