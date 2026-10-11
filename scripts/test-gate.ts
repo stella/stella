@@ -632,6 +632,11 @@ type ShellPropagation = {
   readonly errexit: boolean;
 };
 
+const PACKAGE_SCRIPT_PROPAGATION: ShellPropagation = {
+  pipefail: false,
+  errexit: false,
+};
+
 const shellInvocationGates = (
   command: string,
   matches: (words: readonly string[], index: number) => boolean,
@@ -774,11 +779,13 @@ type GatingArgumentsOptions = {
     words: readonly string[],
     index: number,
   ) => number | undefined;
+  readonly propagation?: ShellPropagation;
 };
 
 const gatingArguments = ({
   command,
   invocationEnd,
+  propagation,
 }: GatingArgumentsOptions): readonly string[][] => {
   const words = shellWords(command.replaceAll(/\\\r?\n/gu, " "), "include");
   const invocations: string[][] = [];
@@ -786,7 +793,11 @@ const gatingArguments = ({
     const end = invocationEnd(words, index);
     if (
       end === undefined ||
-      !shellInvocationGates(command, (_words, cursor) => cursor === index)
+      !shellInvocationGates(
+        command,
+        (_words, cursor) => cursor === index,
+        propagation,
+      )
     ) {
       continue;
     }
@@ -805,12 +816,19 @@ const repositoryRootScripts = (): PackageScripts => {
   return cachedRootScripts;
 };
 
+// A root script body runs as a package script, not under the workflow shell.
+type RootCommand = {
+  readonly command: string;
+  readonly packageScript: boolean;
+};
+
 const expandRootScripts = (
   command: string,
   scripts: PackageScripts,
   visited: ReadonlySet<string> = new Set(),
-): string[] => {
-  const expanded = [command];
+): RootCommand[] => {
+  const packageScript = visited.size > 0;
+  const expanded: RootCommand[] = [{ command, packageScript }];
   const words = shellWords(command, "include");
   const invokedNames = new Set(
     words.flatMap((word, index) => {
@@ -834,6 +852,7 @@ const expandRootScripts = (
         !tokens.slice(0, index).includes("cd")
           ? index + 3
           : undefined,
+      ...(packageScript ? { propagation: PACKAGE_SCRIPT_PROPAGATION } : {}),
     });
     for (const arguments_ of invocations) {
       const forwarded =
@@ -852,12 +871,12 @@ const expandRootScripts = (
 
 const expandedRootCommands = new WeakMap<
   PackageScripts,
-  Map<string, readonly string[]>
+  Map<string, readonly RootCommand[]>
 >();
 const rootScriptCommands = (
   command: string,
   scripts: PackageScripts,
-): readonly string[] => {
+): readonly RootCommand[] => {
   let commands = expandedRootCommands.get(scripts);
   if (commands === undefined) {
     commands = new Map();
@@ -883,8 +902,8 @@ export const packageTestExecutionFailure = ({
 }: PackageTestExecutionOptions): string | undefined => {
   let directExecutionFailure = `job condition: no gating job executes ${packageName} ${scriptName}`;
   for (const commands of gatingJobs.values()) {
-    for (const command of commands.flatMap((workflowCommand) =>
-      rootScriptCommands(workflowCommand, rootScripts),
+    for (const { command, packageScript } of commands.flatMap(
+      (workflowCommand) => rootScriptCommands(workflowCommand, rootScripts),
     )) {
       const invocations = gatingArguments({
         command,
@@ -896,6 +915,7 @@ export const packageTestExecutionFailure = ({
             packageName,
             scriptName,
           }),
+        ...(packageScript ? { propagation: PACKAGE_SCRIPT_PROPAGATION } : {}),
       });
       for (const arguments_ of invocations) {
         if (collection === undefined) {
@@ -1156,7 +1176,7 @@ export const packageTestCollectionFailure = ({
       !shellInvocationGates(
         normalizedCommand,
         (_words, cursor) => cursor === index,
-        { pipefail: false, errexit: false },
+        PACKAGE_SCRIPT_PROPAGATION,
       )
     ) {
       continue;
@@ -2265,7 +2285,7 @@ export const gatingPlaywrightCollection = ({
         command,
         (words, index) =>
           words[index] === "playwright" && words[index + 1] === "test",
-        { pipefail: false, errexit: false },
+        PACKAGE_SCRIPT_PROPAGATION,
       ) ||
       packageTestExecutionFailure({
         ...topology,

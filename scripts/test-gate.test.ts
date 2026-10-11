@@ -440,6 +440,26 @@ context("test registration census", () => {
     }
   });
 
+  check("root script bodies keep package-script failure propagation", () => {
+    const failure = (body: string) =>
+      packageTestExecutionFailure({
+        rootScripts: { check: body },
+        gatingJobs: new Map([["ci-checks-rest", ["bun run check"]]]),
+        packageDirectory: "packages/orphan",
+        packageName: "@stll/orphan",
+        shardedPackages: new Set<string>(),
+      });
+    expect(failure("bun --filter @stll/orphan test; echo done")).toBe(
+      "job condition: no gating job executes @stll/orphan test",
+    );
+    expect(failure("bun --filter @stll/orphan test | cat")).toBe(
+      "job condition: no gating job executes @stll/orphan test",
+    );
+    expect(
+      failure("bun --filter @stll/orphan test && echo done"),
+    ).toBeUndefined();
+  });
+
   check("rejects a collectable package absent from gating jobs", () => {
     const scripts = { test: "bun test" };
     expect(
