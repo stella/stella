@@ -302,12 +302,18 @@ describe("shared lazy decision analysis", () => {
     },
   );
 
-  test("a failed run settles as its named error; Retry asks for a new run and polls it to done", async () => {
+  test("a failed run retains provider guidance; Retry asks for a new run and polls it to done", async () => {
+    const diagnostic = {
+      provider: "google",
+      code: "ai_config_google_api_not_enabled",
+      message: "Enable the Generative Language API for this project",
+    } as const;
     const FAILED = {
       status: "error",
-      code: "answer_incomplete",
+      code: "provider_unavailable",
       error: "The AI model returned an incomplete answer",
       key: { source: "organization", provider: "google" },
+      providerDiagnostic: diagnostic,
     } as const;
     const retried = { value: false };
     const requests = respondToAnalysis(async () => {
@@ -333,8 +339,9 @@ describe("shared lazy decision analysis", () => {
       status: "error",
       error: {
         kind: "failed",
-        code: "answer_incomplete",
+        code: "provider_unavailable",
         key: { source: "organization", provider: "google" },
+        providerDiagnostic: diagnostic,
       },
     });
     // The failure is terminal: past a whole poll interval the query has not
