@@ -6,11 +6,14 @@ import type {
   ModelMessage,
   RunAgentResumeItem,
   StreamChunk,
+  StructuredOutputPart,
+  SubagentPart,
   TokenUsage,
   ToolCallPart,
   UIMessage,
 } from "@tanstack/ai";
 import { panic, Result } from "better-result";
+import { deepEquals } from "bun";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 
 import {
@@ -2334,6 +2337,19 @@ const TOOL_CALL_FINALITY = {
   error: 5,
 } as const satisfies Record<ToolCallPart["state"], number>;
 
+const STRUCTURED_OUTPUT_FINALITY = {
+  streaming: 0,
+  complete: 1,
+  error: 1,
+} as const satisfies Record<StructuredOutputPart["status"], number>;
+
+const SUBAGENT_FINALITY = {
+  running: 0,
+  suspended: 1,
+  finished: 2,
+  error: 2,
+} as const satisfies Record<SubagentPart["subagent"]["status"], number>;
+
 type ProcessPersistenceChunkOptions = {
   responseMessageId: SafeId<"chatMessage">;
   sourceChunk: PublicStreamChunk;
@@ -2457,43 +2473,156 @@ const processPersistenceChunk = ({
       if (previous !== undefined && snapshot !== undefined) {
         // Model history cannot reconstruct the streamed transcript's text,
         // reasoning placement or partial call arguments. Keep that transcript
-        // and reconcile the tool state/results available only in snapshots.
+        // and reconcile the presentation state available only in snapshots.
         let parts = [...previous.parts];
         for (const part of snapshot.parts) {
-          if (part.type === "tool-call") {
-            if (
-              !parts.some(
+          switch (part.type) {
+            case "text":
+            case "thinking":
+              // Model history flattens the streamed transcript; use snapshot
+              // content only when this kind has never streamed in the turn.
+              if (
+                !previous.parts.some((existing) => existing.type === part.type)
+              ) {
+                parts.push(part);
+              }
+              break;
+            case "tool-call":
+              if (
+                !parts.some(
+                  (existing) =>
+                    existing.type === "tool-call" && existing.id === part.id,
+                )
+              ) {
+                parts.push(part);
+              }
+              break;
+            case "tool-result": {
+              const existingIndex = parts.findIndex(
                 (existing) =>
-                  existing.type === "tool-call" && existing.id === part.id,
-              )
-            ) {
-              parts.push(part);
+                  existing.type === "tool-result" &&
+                  existing.toolCallId === part.toolCallId,
+              );
+              if (existingIndex === -1) {
+                parts.push(part);
+                break;
+              }
+              const existing = parts.at(existingIndex);
+              if (existing?.type !== "tool-result") {
+                panic("A matching snapshot result has no streamed tool result");
+              }
+              // Equal-finality results retain canonical content and denials.
+              if (
+                TANSTACK_TOOL_RESULT_STATE_LIFECYCLE[existing.state] ===
+                  "active" &&
+                TANSTACK_TOOL_RESULT_STATE_LIFECYCLE[part.state] === "settled"
+              ) {
+                parts[existingIndex] = part;
+              }
+              break;
             }
-            continue;
-          }
-          if (part.type !== "tool-result") {
-            continue;
-          }
-          const existingIndex = parts.findIndex(
-            (existing) =>
-              existing.type === "tool-result" &&
-              existing.toolCallId === part.toolCallId,
-          );
-          if (existingIndex === -1) {
-            parts.push(part);
-            continue;
-          }
-          const existing = parts.at(existingIndex);
-          if (existing?.type !== "tool-result") {
-            panic("A matching snapshot result has no streamed tool result");
-          }
-          // Advance partial results, but retain canonical content and denied
-          // outcomes when both versions have the same lifecycle finality.
-          if (
-            TANSTACK_TOOL_RESULT_STATE_LIFECYCLE[existing.state] === "active" &&
-            TANSTACK_TOOL_RESULT_STATE_LIFECYCLE[part.state] === "settled"
-          ) {
-            parts[existingIndex] = part;
+            case "activity": {
+              // Embedded SDK activities have no id: renderer type and child
+              // scope own their identity. The latest snapshot owns content.
+              const existingIndex = parts.findIndex(
+                (existing) =>
+                  existing.type === "activity" &&
+                  existing.activityType === part.activityType &&
+                  existing.subagentRunId === part.subagentRunId,
+              );
+              if (existingIndex === -1) {
+                parts.push(part);
+              } else {
+                parts[existingIndex] = part;
+              }
+              break;
+            }
+            case "structured-output": {
+              const existingIndex = parts.findIndex(
+                (existing) => existing.type === "structured-output",
+              );
+              const existing = parts.at(existingIndex);
+              if (existingIndex === -1) {
+                parts.push(part);
+              } else if (
+                existing?.type === "structured-output" &&
+                STRUCTURED_OUTPUT_FINALITY[part.status] >=
+                  STRUCTURED_OUTPUT_FINALITY[existing.status]
+              ) {
+                parts[existingIndex] = part;
+              }
+              break;
+            }
+            case "subagent": {
+              const existingIndex = parts.findIndex(
+                (existing) =>
+                  existing.type === "subagent" &&
+                  existing.subagent.id === part.subagent.id,
+              );
+              const existing = parts.at(existingIndex);
+              if (existingIndex === -1) {
+                parts.push(part);
+              } else if (
+                existing?.type === "subagent" &&
+                SUBAGENT_FINALITY[part.subagent.status] >=
+                  SUBAGENT_FINALITY[existing.subagent.status]
+              ) {
+                parts[existingIndex] = part;
+              }
+              break;
+            }
+            case "ui-resource": {
+              const existingIndex = parts.findIndex(
+                (existing) =>
+                  existing.type === "ui-resource" &&
+                  existing.toolCallId === part.toolCallId &&
+                  existing.resource.uri === part.resource.uri,
+              );
+              if (existingIndex === -1) {
+                parts.push(part);
+              } else {
+                parts[existingIndex] = part;
+              }
+              break;
+            }
+            case "image":
+            case "audio":
+            case "video":
+            case "document": {
+              const existingIndex = parts.findIndex((existing) => {
+                switch (existing.type) {
+                  case "image":
+                  case "audio":
+                  case "video":
+                  case "document":
+                    return (
+                      existing.type === part.type &&
+                      deepEquals(existing.source, part.source)
+                    );
+                  case "activity":
+                  case "structured-output":
+                  case "subagent":
+                  case "text":
+                  case "thinking":
+                  case "tool-call":
+                  case "tool-result":
+                  case "ui-resource":
+                    return false;
+                  default:
+                    existing satisfies never;
+                    return panic("Unhandled snapshot media candidate");
+                }
+              });
+              if (existingIndex === -1) {
+                parts.push(part);
+              } else {
+                parts[existingIndex] = part;
+              }
+              break;
+            }
+            default:
+              part satisfies never;
+              panic("Unhandled snapshot message part");
           }
         }
         parts = parts.map((part) => {

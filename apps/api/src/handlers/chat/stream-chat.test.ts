@@ -746,6 +746,179 @@ describe("snapshot tool-result reconciliation", () => {
     }
   }
 
+  test("snapshot activity updates persist beside the streamed transcript", async () => {
+    const activity = {
+      type: "activity",
+      activityType: "review",
+      content: { status: "running" },
+    } as const;
+    const updated = { ...activity, content: { status: "complete" } };
+    const scoped = { ...activity, subagentRunId: "child-1" };
+    const snapshots = [activity, updated].map((part) => {
+      const message = {
+        id: "snapshot-assistant",
+        role: "assistant",
+        parts: [{ type: "text", content: "Flattened history" }, part, scoped],
+      } satisfies UIMessage;
+      return unsafeFixture(
+        "The server snapshot extension carries embedded activity parts",
+        {
+          type: EventType.MESSAGES_SNAPSHOT,
+          messages: [message],
+        } satisfies StreamChunk,
+      );
+    });
+    const { emitted, finish } = await persistNativeInterruptTurn(
+      streamChunks([
+        {
+          type: EventType.RUN_STARTED,
+          runId: "snapshot-run",
+          threadId: "snapshot-thread",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: "snapshot-assistant",
+          role: "assistant",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: "snapshot-assistant",
+          delta: "Checking the request.",
+        },
+        ...snapshots,
+        {
+          type: EventType.RUN_FINISHED,
+          runId: "snapshot-run",
+          threadId: "snapshot-thread",
+          finishReason: "stop",
+        },
+      ]),
+    );
+    if (finish === null) {
+      panic("Snapshot activity did not persist its turn");
+    }
+    const client = new StreamProcessor();
+    let snapshotCount = 0;
+    for (const chunk of emitted) {
+      client.processChunk(chunk);
+      if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
+        continue;
+      }
+      snapshotCount += 1;
+      expect(
+        client
+          .getMessages()
+          .flatMap(({ parts }) => parts)
+          .filter((part) => part.type === "activity"),
+      ).toEqual([snapshotCount === 1 ? activity : updated, scoped]);
+    }
+    expect(snapshotCount).toBe(2);
+    expect(finish.responseMessage.parts).toEqual([
+      { type: "text", content: "Checking the request." },
+      updated,
+      scoped,
+    ]);
+    const reload = chatMessageFromPersisted({
+      id: finish.responseMessage.id,
+      role: finish.responseMessage.role,
+      content: structuredClone(
+        chatMessageContentFromMessage(finish.responseMessage),
+      ),
+    });
+    expect(reload.parts.filter((part) => part.type === "activity")).toEqual([
+      updated,
+      scoped,
+    ]);
+    expect(
+      diffLiveAgainstReload({ live: client.getMessages(), reload: [reload] }),
+    ).toEqual([]);
+  });
+
+  test("snapshot presentation parts retain terminal structured output and media", async () => {
+    const media = {
+      type: "audio",
+      source: {
+        type: "url",
+        value: "https://example.test/answer.mp3",
+        mimeType: "audio/mpeg",
+      },
+    } as const;
+    const complete = {
+      type: "structured-output",
+      status: "complete",
+      raw: '{"answer":"ready"}',
+      data: { answer: "ready" },
+    } as const;
+    const partial = {
+      type: "structured-output",
+      status: "streaming",
+      raw: '{"answer":',
+      partial: {},
+    } as const;
+    const snapshots = [partial, complete, partial].map((part) => {
+      const message = {
+        id: "snapshot-assistant",
+        role: "assistant",
+        parts: [part, media],
+      } satisfies UIMessage;
+      return unsafeFixture(
+        "The server snapshot extension carries presentation parts",
+        {
+          type: EventType.MESSAGES_SNAPSHOT,
+          messages: [message],
+        } satisfies StreamChunk,
+      );
+    });
+    const { emitted, finish } = await persistNativeInterruptTurn(
+      streamChunks([
+        {
+          type: EventType.RUN_STARTED,
+          runId: "snapshot-run",
+          threadId: "snapshot-thread",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: "snapshot-assistant",
+          role: "assistant",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: "snapshot-assistant",
+          delta: "Answer",
+        },
+        ...snapshots,
+        {
+          type: EventType.RUN_FINISHED,
+          runId: "snapshot-run",
+          threadId: "snapshot-thread",
+          finishReason: "stop",
+        },
+      ]),
+    );
+    if (finish === null) {
+      panic("Snapshot presentation did not persist its turn");
+    }
+    expect(finish.responseMessage.parts).toEqual([
+      { type: "text", content: "Answer" },
+      complete,
+      media,
+    ]);
+    const client = new StreamProcessor();
+    for (const chunk of emitted) {
+      client.processChunk(chunk);
+    }
+    const reload = chatMessageFromPersisted({
+      id: finish.responseMessage.id,
+      role: finish.responseMessage.role,
+      content: structuredClone(
+        chatMessageContentFromMessage(finish.responseMessage),
+      ),
+    });
+    expect(
+      diffLiveAgainstReload({ live: client.getMessages(), reload: [reload] }),
+    ).toEqual([]);
+  });
+
   const canonicalResults = {
     streaming: {
       type: "tool-result",
