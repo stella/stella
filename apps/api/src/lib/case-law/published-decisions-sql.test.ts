@@ -9,9 +9,10 @@ test("published decisions view uses the canonical partial-index predicate", asyn
       import.meta.url,
     ),
   ).text();
-  const publishedView = migration.match(
-    /CREATE VIEW "case_law_published_decisions"[\s\S]*?--> statement-breakpoint/u,
-  )?.[0];
+  const publishedView =
+    /CREATE VIEW "case_law_published_decisions"[\s\S]*?--> statement-breakpoint/u.exec(
+      migration,
+    )?.[0];
 
   expect(publishedView).toContain(
     `WHERE ${publishedCaseLawDecisionIndexPredicateSql()};`,
