@@ -496,9 +496,7 @@ export const checkExternalContracts = (
           system,
           fixture,
           current,
-          owners: entry.owners
-            .filter(({ role }) => role === "primary")
-            .map(({ path: ownerPath }) => ownerPath),
+          owners: entry.owners.map(({ path: ownerPath }) => ownerPath),
           sdks: entry.sdks,
         }),
       );

@@ -18,6 +18,7 @@ Current pins come from the actual manifests, resolved SDK versions in
 `bun.lock`, applicable patch bytes, CI service image digests and API-version
 constants. Fixture receipts record the pins, owners and SDKs exercised by a
 fixture set. A changed pin or coverage scope requires re-characterisation.
+Receipts include every declared owner path, including shared assignments.
 Publisher captures retain their existing hash sidecars and their honest legacy
 provenance; an unversioned publisher has no invented upstream release number.
 
