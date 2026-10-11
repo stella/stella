@@ -7928,7 +7928,7 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install scripts workspace dependencies
-        timeout-minutes: 3
+        timeout-minutes: 5
         run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/scripts.log" --frozen-lockfile --ignore-scripts --filter @stll/scripts
         env:
           # Restored Windows global-store links can omit transitive dependency
