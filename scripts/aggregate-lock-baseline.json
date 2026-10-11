@@ -1788,34 +1788,10 @@
     "reason": "builder-for in apps/api/src/handlers/skills/proposals/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/handlers/skills/resources/create.ts",
-    "fingerprint": "745425c50707e5147fec430ac68ad76671c50c5a80d1f3e1b46d3014781c876d",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/handlers/skills/resources/create.ts: Legacy savepoint on tx; migrate through the aggregate savepoint owner so the parent lock history is retained."
-  },
-  {
-    "file": "apps/api/src/handlers/skills/resources/delete.ts",
-    "fingerprint": "c21d439677c5264d3b73be835a27c56823ae7eddef3b1c039ecf9a8461d6fe96",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/handlers/skills/resources/delete.ts: Legacy savepoint on tx; migrate through the aggregate savepoint owner so the parent lock history is retained."
-  },
-  {
-    "file": "apps/api/src/handlers/skills/resources/rename.ts",
-    "fingerprint": "ca65d0c051d8def03b51c19e97dc52b7166c0ac0ffe70cc237d41c4132013b22",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/handlers/skills/resources/rename.ts: Legacy savepoint on tx; migrate through the aggregate savepoint owner so the parent lock history is retained."
-  },
-  {
     "file": "apps/api/src/handlers/skills/resources/update.ts",
     "fingerprint": "07a25acf766baa7c2d674cce6a23b8b4b2d512d6ad2f1c4050ac4a95746782b8",
     "count": 1,
     "reason": "transaction-boundary in apps/api/src/handlers/skills/resources/update.ts: Legacy savepoint on tx; migrate through the aggregate savepoint owner so the parent lock history is retained."
-  },
-  {
-    "file": "apps/api/src/handlers/skills/resources/upload.ts",
-    "fingerprint": "de59b8af4117843aaf48c8416c92381448b4f56f24debec1625e28529859db75",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/handlers/skills/resources/upload.ts: Legacy savepoint on tx; migrate through the aggregate savepoint owner so the parent lock history is retained."
   },
   {
     "file": "apps/api/src/handlers/skills/update.ts",
@@ -2218,24 +2194,6 @@
     "fingerprint": "b2d38628d5502c60dc8a4e8f1f907983354c073f775be9645d7c1c58914c476a",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/agent-skills/content-hash.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/agent-skills/skill-tools.ts",
-    "fingerprint": "0c8b0556b2e528b4a88da62a8943e9e46e6295af01398caba0c5481d5e4f31cc",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/agent-skills/skill-tools.ts: Legacy savepoint on tx; migrate through the aggregate savepoint owner so the parent lock history is retained."
-  },
-  {
-    "file": "apps/api/src/lib/agent-skills/skill-tools.ts",
-    "fingerprint": "54d47cedd9bc676f9f2a5696f516ee671fa6666aeb3b215586af810ad4f0f01c",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/agent-skills/skill-tools.ts: Legacy savepoint on tx; migrate through the aggregate savepoint owner so the parent lock history is retained."
-  },
-  {
-    "file": "apps/api/src/lib/agent-skills/skill-tools.ts",
-    "fingerprint": "63ab5170751fef6e8a44d974a544fd5167337c4554ab268e1abf62e7f3de013c",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/agent-skills/skill-tools.ts: Legacy savepoint on tx; migrate through the aggregate savepoint owner so the parent lock history is retained."
   },
   {
     "file": "apps/api/src/lib/anonymization-write-cap.ts",
@@ -4240,12 +4198,6 @@
     "fingerprint": "8f251f5c50d8856c2cda79c689c28c5fc197e9bbdb2b59690e8125eb57ac9f36",
     "count": 1,
     "reason": "transaction-boundary in apps/api/src/lib/sharepoint-disable-purge.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/skills/install.ts",
-    "fingerprint": "0480d02f02c59045cc41f1c93125b671ff9c7dd096f069fde8ae661f965f3708",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/skills/install.ts: Legacy savepoint on tx; migrate through the aggregate savepoint owner so the parent lock history is retained."
   },
   {
     "file": "apps/api/src/lib/skills/install.ts",
