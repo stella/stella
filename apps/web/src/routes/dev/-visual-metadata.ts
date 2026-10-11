@@ -23,6 +23,8 @@ export const playbookEditorStates = Object.keys(playbookEditorFixtures);
 
 // Browser tests share the fixture census without importing the app graph.
 export const visualRegistry = {
+  "page-crop": { label: "PDF page crop", layout: "plain" },
+  "chat-long-paste": { label: "Chat long paste", layout: "plain" },
   "answer-edit": { label: "Chat answer edits", layout: "plain" },
   autocomplete: { label: "Autocomplete", layout: "plain" },
   ui: { label: "UI components", layout: "plain" },
@@ -31,6 +33,7 @@ export const visualRegistry = {
   "playbook-editor": { label: "Playbook editor lifecycle", layout: "plain" },
   "shell-pending": { label: "Shell pending", layout: "plain" },
   "workspace-table": { label: "Workspace table", layout: "workspace-table" },
+  "chat-history-decision": { label: "Chat history decision", layout: "plain" },
 } as const satisfies Record<string, VisualEntry>;
 
 export type VisualName = keyof typeof visualRegistry;

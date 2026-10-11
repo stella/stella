@@ -15,6 +15,7 @@ import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
 const config = {
+  contract: "patch",
   permissions: { chat: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },

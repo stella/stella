@@ -27,7 +27,7 @@ import {
   isAstNode,
   isIdentifier,
   isIdentifierReference,
-  resolveImportedExpression,
+  resolveImportedExpressionForEnforcement,
   resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
@@ -101,7 +101,7 @@ export default eslintCompatPlugin({
               if (initializer?.type !== "CallExpression") {
                 return false;
               }
-              const factory = resolveImportedExpression(
+              const factory = resolveImportedExpressionForEnforcement(
                 context,
                 initializer.callee,
               );
@@ -128,7 +128,10 @@ export default eslintCompatPlugin({
               return;
             }
 
-            const hook = resolveImportedExpression(context, callee);
+            const hook = resolveImportedExpressionForEnforcement(
+              context,
+              callee,
+            );
             if (
               hook?.source !== ROUTER_MODULE ||
               !STRICT_ROUTE_READS.has(hook.imported)

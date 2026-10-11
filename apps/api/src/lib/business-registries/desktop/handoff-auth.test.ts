@@ -209,3 +209,22 @@ test("a failed status write surfaces a retryable service error", async () => {
     expect(result.error).toMatchObject({ status: 503, retryable: true });
   }
 });
+
+test("a role denial keeps the handoff open for a member who can act on it", async () => {
+  for (const kind of KINDS) {
+    const result = await authorizeDesktopHandoff(
+      {
+        kind,
+        handoffToken: HANDOFF_TOKEN,
+        request: requestWithProtocol(String(DESKTOP_HANDOFF_PROTOCOL_VERSION)),
+      },
+      {
+        authorizeAccount: async () =>
+          Result.err(new HandlerError({ status: 403, message: "Forbidden" })),
+        recordFailure: async () =>
+          panic("a role denial must not end the handoff"),
+      },
+    );
+    expect(result.isErr() && result.error.status).toBe(403);
+  }
+});

@@ -37,6 +37,7 @@ const querySchema = t.Object({
   cursor: t.Optional(tPaginationCursor()),
 });
 const config = {
+  contract: "patch",
   featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Read one list item's activity trail, newest first with cursor " +

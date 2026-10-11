@@ -45,6 +45,7 @@ const querySchema = t.Object({
 
 const businessRegistriesLookup = createSafeRootHandler(
   {
+    contract: "patch",
     description:
       "Look up a company in a public business register. Pass a canonical " +
       "identifier (company/registration number, VAT number) for an exact " +

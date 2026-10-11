@@ -30,6 +30,19 @@ const rejectionOf = (payload: JWTPayload): string => {
 };
 
 describe("extractMcpSession", () => {
+  test("requires a user principal on user-only MCP surfaces", () => {
+    const result = extractMcpSession({
+      sub: "synthetic-service-client",
+      client_id: "synthetic-service-client",
+      org_id: "synthetic-service-org",
+      scope: "stella:law_read",
+      stella_principal: "service",
+    });
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.message).toBe("A user token is required");
+    }
+  });
   test("uses explicit auth endpoints for MCP access token verification", () => {
     expect(getMcpAccessTokenVerificationOptions()).toEqual({
       jwksUrl: `${getAuthIssuerUrl()}/jwks`,

@@ -120,6 +120,37 @@ const openConsent = async ({
   ).toBeVisible({ timeout: 30_000 });
 };
 
+test("OAuth consent keeps its decision in view on a laptop and a phone", async ({
+  context,
+  page,
+}) => {
+  await setEnglishLocale(page);
+  for (const viewport of [
+    { width: 1280, height: 720 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const id = token();
+    const redirectUri = hostedRedirectUriFor(id);
+    const clientId = await registerClient({
+      request: context.request,
+      id,
+      redirectUri,
+    });
+    await openConsent({ page, clientId, id, redirectUri });
+    for (const name of ["Allow", "Decline"]) {
+      await expect(page.getByRole("button", { name })).toBeInViewport({
+        ratio: 1,
+      });
+    }
+    // A registered client is unverified: its own name, no product mark.
+    await expect(page.getByText("Unverified app")).toBeVisible();
+    await expect(
+      page.locator('[data-slot="verified-client-mark"]'),
+    ).toHaveCount(0);
+  }
+});
+
 test("OAuth consent allows and declines through the top-level callback", async ({
   context,
   page,

@@ -7,7 +7,6 @@ type GeneratedSkillEntry = {
   id: string;
   source: string;
   resources: readonly {
-    kind: "knowledge" | "prompt";
     path: string;
     source: string;
   }[];

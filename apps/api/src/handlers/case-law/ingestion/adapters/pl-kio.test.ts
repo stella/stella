@@ -29,6 +29,12 @@ import {
   readPlKioDetail,
   readPlKioListing,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
+import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
+import { UNPERSISTABLE_DECISION_FIELDS } from "@/api/lib/errors/tagged-errors";
+import {
+  fitsDecisionSearchCandidateRow,
+  sanitizeResult,
+} from "@/api/lib/legal-search/ingestion-normalization";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
@@ -357,6 +363,92 @@ describe("building a ruling from its three pages", () => {
       decision.metadata["challengedAuthority"] ===
         "Prezes Urzędu Zamówień Publicznych",
     ).toBe(true);
+  });
+
+  test("issuing bodies at the storage boundary retain exact text or the listing-only row", async () => {
+    const page = await fixtureText("pl-kio-detail-30308.html");
+    const width = CITATION_STORAGE_WIDTHS.court;
+    for (const token of ["x", "é", "😀"]) {
+      for (const length of [width - 1, width, width + 1]) {
+        const court = token.repeat(length);
+        for (const detailHtml of [
+          undefined,
+          page.replace(
+            /(<label aria-label="Organ wydający">[\s\S]*?<br[^>]*>)[\s\S]*?(<\/p>)/u,
+            (_match, start: string, end: string) => `${start}${court}${end}`,
+          ),
+        ]) {
+          const outcome = assemblePlKioDecision({
+            item: { id: "30308", signature: "KIO 2845/25", court },
+            detailHtml,
+            documentHtml: undefined,
+          });
+          const decision = built(outcome);
+          const refused =
+            length > width ||
+            !fitsDecisionSearchCandidateRow({ ...decision, court });
+          expect(decision.sourceDocumentId).toBe("30308");
+          expect(refused ? "" : court).toBe(decision.court);
+          expect(decision.isListingOnly === true).toBe(
+            detailHtml === undefined || refused,
+          );
+          expect(
+            decision.metadata["quarantineReason"] ===
+              (refused ? "court-too-long" : undefined),
+          ).toBe(true);
+          expect(
+            decision.metadata["courtAsStated"] ===
+              (refused ? court : undefined),
+          ).toBe(true);
+          expect(sanitizeResult(decision).court).toBe(decision.court);
+        }
+      }
+    }
+  });
+
+  test("court byte exhaustion keeps the listing-only identity and publisher court", () => {
+    const court = "😀".repeat(512);
+    const decision = built(
+      assemblePlKioDecision({
+        item: { id: "30308", signature: "KIO 2845/25", court },
+        detailHtml: undefined,
+        documentHtml: undefined,
+      }),
+    );
+    expect(Array.from(court).length).toBe(CITATION_STORAGE_WIDTHS.court);
+    expect(decision.court === "").toBe(true);
+    expect(decision.sourceDocumentId === "30308").toBe(true);
+    expect(decision.metadata["courtAsStated"] === court).toBe(true);
+    expect(decision.metadata["quarantineReason"] === "court-too-long").toBe(
+      true,
+    );
+    expect(decision.isListingOnly).toBe(true);
+    expect(sanitizeResult(decision).court === "").toBe(true);
+  });
+
+  test("an oversized docket does not quarantine the stated court", () => {
+    const court = "Krajowa Izba Odwoławcza";
+    const decision = built(
+      assemblePlKioDecision({
+        item: { id: "30308", signature: "😀".repeat(512), court },
+        detailHtml: undefined,
+        documentHtml: undefined,
+      }),
+    );
+    expect(decision.court === court).toBe(true);
+    expect(decision.metadata["quarantineReason"]).toBeUndefined();
+    expect(decision.metadata["courtAsStated"]).toBeUndefined();
+    const refused = Result.try({
+      try: () => sanitizeResult(decision),
+      catch: (error: unknown) => error,
+    });
+    expect(refused.isErr()).toBe(true);
+    if (refused.isOk()) {
+      throw new Error("Expected decision number storage refusal");
+    }
+    expect(refused.error).toMatchObject({
+      field: UNPERSISTABLE_DECISION_FIELDS.CASE_NUMBER_LENGTH,
+    });
   });
 
   test("a record the database no longer serves leaves a listing-only row", () => {

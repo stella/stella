@@ -39,6 +39,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import { printError } from "@stll/errors";
+
 import { parseCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-load";
 import { expandSchemaDefs } from "../../../packages/cli/src/expand-schema-defs";
 import { buildCliRouteTree } from "../../../packages/cli/src/generate-capability-tree";
@@ -236,6 +238,7 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // billing write bucket rather than the read scope its resolution tool used.
   rates: "stella:billing_write",
   "saved-time-narratives": "stella:billing_write",
+  "search-history": "stella:knowledge_write",
   // Report export creates workspace artifacts (entities / template records), so
   // it stays on the workspace write bucket. Unlike chat (which got its own
   // stella:chat scope because thread reads/renames should not demand a
@@ -1677,7 +1680,7 @@ const printErrors = (errors: readonly string[]): void => {
     "\nexport-capability-catalog: cannot generate the catalog until these are resolved:",
   );
   for (const error of errors) {
-    console.error(`  ${error}`);
+    printError(`  ${error}`);
   }
 };
 

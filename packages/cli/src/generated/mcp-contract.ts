@@ -4,9 +4,9 @@ export const MCP_CAPABILITY_EXECUTORS = {
   read: "read_capability",
   write: "write_capability",
 } as const;
-export const MCP_HTTP_PATH = "/mcp" as const;
+export const MCP_HTTP_PATH = "/mcp/advanced" as const;
 export const MCP_DISCOVERY_PATH =
-  "/.well-known/oauth-protected-resource/mcp" as const;
+  "/.well-known/oauth-protected-resource/mcp/advanced" as const;
 export const MCP_TOOL_NAME_MAX_LENGTH = 71;
 export const MCP_TOOL_NAME_PATTERN_SOURCE = "^[a-z][a-z0-9_-]{0,70}$" as const;
 export const MCP_TOOL_NAME_PATTERN_FLAGS = "u" as const;
@@ -29,8 +29,8 @@ export const CLI_KNOWN_SCOPES = [
   "stella:admin_write",
   "stella:onboarding",
   "stella:skills",
-  "stella:external_mcps",
   "stella:feedback",
+  "stella:external_mcps",
 ] as const;
 export const CLI_REQUIRED_RESOURCE_SCOPES = [
   "stella:search",
@@ -47,8 +47,8 @@ export const CLI_REQUIRED_RESOURCE_SCOPES = [
   "stella:admin_write",
   "stella:onboarding",
   "stella:skills",
-  "stella:external_mcps",
   "stella:feedback",
+  "stella:external_mcps",
 ] as const;
 export const MCP_ERROR_CODES = [
   "action_period_exhausted",

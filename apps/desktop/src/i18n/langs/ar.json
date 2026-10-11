@@ -146,7 +146,16 @@
     "handoffFailed": "تعذّر فتح المستند",
     "handoffUnavailable": "تعذّر فتح المستند. ابدأ من جديد من Stella.",
     "handoffRetry": "إعادة المحاولة",
-    "unsavedChangesEscape": "تغييرات غير محفوظة. اضغط على Esc مرة أخرى لتجاهلها"
+    "unsavedChangesEscape": "تغييرات غير محفوظة. اضغط على Esc مرة أخرى لتجاهلها",
+    "handoffConnectToSign": "اربط stella desktop لتوقيع هذا المستند",
+    "handoffConnectToOpen": "اربط stella desktop لفتح هذا المستند",
+    "handoffConnectDetail": "اربط حسابك في stella. سيُفتح المستند تلقائيًا بعد الربط.",
+    "handoffUntrustedServer": "لا يثق stella desktop بالخادم الذي جاء منه رابط هذا المستند.",
+    "handoffAccountMismatch": "ينتمي هذا المستند إلى حساب غير الحساب المرتبط بـ stella desktop.",
+    "handoffServerMismatch": "Stella Desktop متصل بالخادم {linkedServer}، لكن هذا المستند يتطلب الخادم {requestedServer}. افصل الحساب الحالي في الإعدادات، ثم اتصل بالخادم {requestedServer} لفتح المستند.",
+    "handoffAccountChanged": "تغيّر حساب stella desktop أثناء فتح المستند. ابدأ من جديد من stella.",
+    "handoffAlreadyOpen": "توجد نافذة توقيع أخرى مفتوحة بالفعل. أكملها أو أغلقها، ثم حاول مرة أخرى.",
+    "handoffExpired": "انتهت صلاحية رابط المستند قبل ربط stella desktop. ابدأ من جديد من stella."
   },
   "settings": {
     "about": "حول",
@@ -314,6 +323,8 @@
     "registryErrorConnect": "تعذر ربط الحساب.",
     "registryRetry": "إعادة المحاولة",
     "registryErrorSearch": "فشل البحث في السجل.",
+    "registryErrorKeychain": "تعذّر على stella desktop إزالة الحساب المفصول من سلسلة المفاتيح. حاول مرة أخرى.",
+    "registryErrorRole": "البحث في السجل غير متاح لدورك.",
     "registryErrorFormat": "تعذر تغيير تنسيق النتيجة.",
     "registryErrorSetDefaultFormat": "تعذر حفظ التنسيق الافتراضي.",
     "registryErrorCopy": "تعذر نسخ النتيجة.",

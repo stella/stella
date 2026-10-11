@@ -21,6 +21,7 @@ import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import { readWorkspaceListRows } from "@/api/lib/workspaces/list-query";
 
 const config = {
+  contract: "patch",
   description: "List the matters you can access.",
   permissions: {
     workspace: ["read"],

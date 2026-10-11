@@ -1,3 +1,5 @@
+import { printError } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 // parser-output-unchanged: fixture provenance hashes the same captured bytes through the Bun owner.
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
@@ -80,7 +82,7 @@ const writeFixture = async (
 
 const updateAdapter = async (
   adapterKey: string,
-): Promise<{ filename: string; count: number } | { error: string }> => {
+): Promise<{ filename: string; count: number } | { error: unknown }> => {
   try {
     const adapter = await loadAdapterByKey(adapterKey);
 
@@ -98,7 +100,7 @@ const updateAdapter = async (
 
     if (result.isErr()) {
       return {
-        error: `${adapterKey}: ${result.error.message}`,
+        error: result.error,
       };
     }
 
@@ -135,67 +137,74 @@ const updateAdapter = async (
     return { filename, count: page.decisions.length };
   } catch (error) {
     return {
-      error: `${adapterKey}: ${error instanceof Error ? error.message : String(error)}`,
+      error,
     };
   }
 };
 
 // CLI entry point
 if (import.meta.main) {
-  const args = process.argv.slice(2);
-  const adapterFlag = args.indexOf("--adapter");
-  const rawTarget = adapterFlag !== -1 ? args[adapterFlag + 1] : undefined;
+  await runScriptWithErrorOutput(async () => {
+    const args = process.argv.slice(2);
+    const adapterFlag = args.indexOf("--adapter");
+    const rawTarget = adapterFlag !== -1 ? args[adapterFlag + 1] : undefined;
 
-  const allKeys = listAdapterKeys();
+    const allKeys = listAdapterKeys();
 
-  if (adapterFlag !== -1 && !rawTarget) {
-    writeStderrLine("--adapter requires a value");
-    writeStderrLine(`Available: ${allKeys.join(", ")}`);
-    process.exit(1);
-  }
+    if (adapterFlag !== -1 && !rawTarget) {
+      writeStderrLine("--adapter requires a value");
+      writeStderrLine(`Available: ${allKeys.join(", ")}`);
+      process.exit(1);
+    }
 
-  const targetAdapter = rawTarget;
-  const keysToUpdate = targetAdapter
-    ? allKeys.filter((k) => k === targetAdapter)
-    : allKeys;
+    const targetAdapter = rawTarget;
+    const keysToUpdate = targetAdapter
+      ? allKeys.filter((k) => k === targetAdapter)
+      : allKeys;
 
-  if (keysToUpdate.length === 0) {
-    writeStderrLine(
-      targetAdapter
-        ? `Unknown adapter: ${targetAdapter}`
-        : "No adapters registered",
+    if (keysToUpdate.length === 0) {
+      writeStderrLine(
+        targetAdapter
+          ? `Unknown adapter: ${targetAdapter}`
+          : "No adapters registered",
+      );
+      writeStderrLine(`Available: ${allKeys.join(", ")}`);
+      process.exit(1);
+    }
+
+    writeStdoutLine(
+      `Updating fixtures for ${keysToUpdate.length} adapter(s)...`,
     );
-    writeStderrLine(`Available: ${allKeys.join(", ")}`);
-    process.exit(1);
-  }
+    writeStdoutLine();
 
-  writeStdoutLine(`Updating fixtures for ${keysToUpdate.length} adapter(s)...`);
-  writeStdoutLine();
+    let failures = 0;
+    for (const [i, key] of keysToUpdate.entries()) {
+      process.stdout.write(`  ${key}... `);
+      const result = await updateAdapter(key);
 
-  let failures = 0;
-  for (const [i, key] of keysToUpdate.entries()) {
-    process.stdout.write(`  ${key}... `);
-    const result = await updateAdapter(key);
+      if ("error" in result) {
+        printError("Fixture update failed", {
+          adapterKey: key,
+          error: result.error,
+        });
+        failures++;
+      } else {
+        writeStdoutLine(`OK (${result.count} decisions → ${result.filename})`);
+      }
 
-    if ("error" in result) {
-      writeStdoutLine(`FAILED: ${result.error}`);
-      failures++;
-    } else {
-      writeStdoutLine(`OK (${result.count} decisions → ${result.filename})`);
+      // Rate limit between adapters
+      if (i < keysToUpdate.length - 1) {
+        await Bun.sleep(2000);
+      }
     }
 
-    // Rate limit between adapters
-    if (i < keysToUpdate.length - 1) {
-      await Bun.sleep(2000);
+    writeStdoutLine(
+      `\n${keysToUpdate.length - failures}/${keysToUpdate.length} updated`,
+    );
+    if (failures > 0) {
+      process.exit(1);
     }
-  }
-
-  writeStdoutLine(
-    `\n${keysToUpdate.length - failures}/${keysToUpdate.length} updated`,
-  );
-  if (failures > 0) {
-    process.exit(1);
-  }
+  });
 }
 
 export { updateAdapter };

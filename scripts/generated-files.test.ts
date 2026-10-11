@@ -8,6 +8,7 @@ import { pathToFileURL } from "node:url";
 import * as v from "valibot";
 
 import { generateCapabilityRuntime } from "../apps/api/scripts/generate-capability-runtime";
+import { pinnedParserInputs } from "../packages/catalogue/scripts/pinned-content-facts";
 import {
   GENERATORS,
   CI_GENERATED_FILES,
@@ -35,6 +36,18 @@ const generator = (id: string) => {
 test("generation owners have unique identifiers", () => {
   const ids = GENERATORS.map(({ id }) => id);
   expect(new Set(ids).size).toBe(ids.length);
+});
+
+test("pinned facts generation inputs cover the derived parser graph", () => {
+  const inputs = generator("catalogue-pinned-facts").inputs;
+  const parserInputs = pinnedParserInputs();
+  expect(parserInputs).toContain("packages/skills/src/frontmatter.ts");
+  for (const file of parserInputs) {
+    expect(
+      inputs.some((glob) => matchesGeneratedGlob(glob, file)),
+      file,
+    ).toBe(true);
+  }
 });
 
 test("visual source changes select the frame bundle before API catalog generation", () => {

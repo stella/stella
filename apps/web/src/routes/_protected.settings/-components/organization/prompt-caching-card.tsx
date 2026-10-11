@@ -6,17 +6,19 @@ import { Field, FieldLabel } from "@stll/ui/field";
 import { Frame, FramePanel } from "@stll/ui/frame";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unwrapEden } from "@/lib/errors/api";
-import {
-  organizationSettingsKeys,
-  organizationSettingsOptions,
-} from "@/lib/organization/settings-queries";
+import { organizationSettingsOptions } from "@/lib/organization/settings-queries";
 import { useQueryView } from "@/lib/use-query-view";
-import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
 
-export const PromptCachingCard = () => {
+import { AISettingsSectionFeedback } from "./ai-settings-section";
+import type { ToggleSettingsSectionProps } from "./ai-settings-section";
+
+export const PromptCachingCard = ({
+  value,
+  onChange,
+  disabled,
+  feedback,
+}: ToggleSettingsSectionProps) => {
   const t = useTranslations();
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const settingsQuery = useQuery(
@@ -29,26 +31,11 @@ export const PromptCachingCard = () => {
   const settings =
     settingsView.type === "items" ? settingsView.items : undefined;
 
-  const mutation = useSettingsMutation({
-    // Send only the prompt-caching field so a stale matter-numbering
-    // value from `settings` cannot roll back a concurrent admin's
-    // matter-numbering change.
-    mutationFn: async (nextEnabled: boolean) =>
-      unwrapEden(
-        await api["organization-settings"].post({
-          promptCachingEnabled: nextEnabled,
-        }),
-      ),
-    invalidate: organizationSettingsKeys.all,
-    successToast: { title: t("success.promptCachingUpdated") },
-    errorToast: { title: t("errors.actionFailed") },
-  });
-
   if (!settings) {
     return <QueryViewFeedback view={settingsView} />;
   }
 
-  const enabled = settings.promptCachingEnabled;
+  const enabled = value ?? settings.promptCachingEnabled;
 
   return (
     <Frame>
@@ -64,15 +51,14 @@ export const PromptCachingCard = () => {
           <Field className="flex-row items-center gap-2">
             <Checkbox
               checked={enabled}
-              disabled={mutation.isPending}
-              onCheckedChange={(next) => {
-                mutation.mutate(next);
-              }}
+              disabled={disabled}
+              onCheckedChange={onChange}
             />
             <FieldLabel>
               {t("settings.organization.promptCaching.toggleLabel")}
             </FieldLabel>
           </Field>
+          <AISettingsSectionFeedback feedback={feedback} />
         </div>
       </FramePanel>
     </Frame>

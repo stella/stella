@@ -671,7 +671,7 @@ const PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION = defineValibotMcpTool({
     'condition with `path`, `label`, and either `state: "decided"`, its ' +
     "`value`, `decided_by` (`user` or `decision_model`), and `probability` " +
     'for model answers; or `state: "undecided"` and `reason` ' +
-    "(`no_decision_model`, `below_floor`, `failed`). Only the decision " +
+    "(`no_decision_model`, `below_floor`, `failed`, `refusal`). Only the decision " +
     "model runs; fill may later use the generative model. A boolean in " +
     "`values` wins. Nothing is written.",
   inputSchema: previewTemplateConditionsArgsSchema,
@@ -763,7 +763,7 @@ const LIST_TEMPLATES_TOOL_DEFINITION = defineValibotMcpTool({
     "List the document templates in this organization (NDAs, powers of " +
     "attorney, leases), or describe one template's fillable fields. Omit " +
     "template_id to list templates: each template's id, name, field count, " +
-    "tags, and usage guidance (whenToUse / whenNotToUse); prefer a template " +
+    "tags, and usage guidance (whenToUse / whenNotToUse); use a template " +
     "whose whenToUse matches the request and skip any whose whenNotToUse " +
     "applies. Pass template_id to return that template's full field " +
     "configuration, its named conditions and formula fields. The " +

@@ -11,6 +11,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 
 const config = {
+  contract: "patch",
   description:
     "Return an archived matter to active so it is writable again. The " +
     "counterpart of matters.archive: a matter that is not archived is " +

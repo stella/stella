@@ -588,7 +588,7 @@
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
-    "file": "apps/api/src/handlers/entities/publish-folio-collab-version.ts",
+    "file": "apps/api/src/lib/entity-versions/publish-folio-collab-checkpoint.ts",
     "function": "module/loadRoomContributors",
     "kind": "constant-limit",
     "count": 1,
@@ -1151,7 +1151,7 @@
     "file": "apps/api/src/lib/document-processing-queue.ts",
     "function": "module/persistMissingNativeExtractionRuns",
     "kind": "constant-limit",
-    "count": 3,
+    "count": 2,
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {

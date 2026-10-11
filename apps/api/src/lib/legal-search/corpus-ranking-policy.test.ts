@@ -22,6 +22,7 @@ import {
   courtTierSignal,
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
+import { testRevisionsFor } from "@/api/tests/helpers/corpus-projection-revisions";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -34,10 +35,11 @@ const rankingTestOptions = {
   indexId: "case_law_v7_cs_sk",
   query: "text:fiction",
   order: RELEVANCE_ORDER,
-  scanTransport: { type: "scored", fields: ["document_id"] },
+  scanTransport: { type: "scored" },
   limit: 40,
   parsedCursor: null,
   snippetFields: [],
+  projectionRevisionField: "projection_revision",
   extractId: (hit) =>
     typeof hit["document_id"] === "string" ? hit["document_id"] : null,
   extractSnippet: () => null,
@@ -49,6 +51,7 @@ const rankingTestOptions = {
       candidates,
       authorityById: new Map(),
     }),
+    revisionById: testRevisionsFor(candidates),
   }),
 } satisfies Parameters<typeof readCorpusIndexSearchPage>[0];
 
@@ -218,7 +221,9 @@ test("BM25 ranking drops rejected identities before passage metadata and hydrati
   });
   expect(page.pageRanked.map((hit) => hit.id)).toEqual(["doc-1"]);
   expect(page.nextCursor).toBeNull();
-  expect([...page.anchorIdById.keys()]).toEqual(["doc-1"]);
+  expect([...(page.lexicalScores?.passageClauseById.keys() ?? [])]).toEqual([
+    "doc-1",
+  ]);
   expect([...page.passageCountById]).toEqual([["doc-1", 1]]);
   expect(page.lexicalScores?.bestScoreById).toEqual(new Map([["doc-1", 80]]));
 });
@@ -308,10 +313,11 @@ test("BM25 ranking replays a bounded deduplicated universe with scale-invariant 
       query: "text:fiction",
       order: RELEVANCE_ORDER,
       rankingMode: "bm25-ratio",
-      scanTransport: { type: "scored", fields: ["document_id"] },
+      scanTransport: { type: "scored" },
       limit: 10,
       parsedCursor,
       snippetFields: [],
+      projectionRevisionField: "projection_revision",
       extractId: (hit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
@@ -336,6 +342,7 @@ test("BM25 ranking replays a bounded deduplicated universe with scale-invariant 
           groups: [...groupTokenById]
             .filter(([id]) => id === "doc-9" || id === "doc-10")
             .map(([, token]) => token),
+          revisionById: testRevisionsFor(candidates),
         };
       },
     });
@@ -349,7 +356,9 @@ test("BM25 ranking replays a bounded deduplicated universe with scale-invariant 
   expect(hydratedIds.length).toBe(6999);
   expect(new Set(hydratedIds).size).toBe(hydratedIds.length);
   expect(hydratedIds).not.toContain("doc-7000");
-  expect(first.anchorIdById.get("first")).toBe("anchor-0");
+  expect(first.lexicalScores?.passageClauseById.get("first")).toBe(
+    'chunk_id:"passage-0"',
+  );
   expect(first.nextCursor?.windowStart).toBe(0);
   expect(first.nextCursor?.id).toBe("doc-9");
   scale = 8;
@@ -411,6 +420,7 @@ test("BM25 pages honor and carry the groups their cursor excludes", async () => 
           groups: [...groupTokenById]
             .filter(([id]) => groupKeyOf(id) !== null)
             .map(([, token]) => token),
+          revisionById: testRevisionsFor(candidates),
         };
       },
     });
@@ -580,9 +590,8 @@ test("ties below the cutoff page deterministically despite engine tie order", as
               parsedCursor: cursor,
             });
           seen.push(...result.pageRanked.map(({ id }) => id));
-          for (const { id } of result.pageRanked) {
-            expect(result.anchorIdById.get(id)).toBe("p0");
-          }
+          // No passage round without snippet fields, so nothing to deep-link.
+          expect(result.anchorIdById.size).toBe(0);
           cursor = result.nextCursor;
           if (cursor !== null) {
             expect(cursor.rankingMode).toBe("bm25-ratio");

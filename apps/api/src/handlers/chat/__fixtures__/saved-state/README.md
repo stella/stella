@@ -42,3 +42,7 @@ states, turn rows, thread-name kinds) with every file here. When it fails:
 
 Once a release ships, you may rename a `main-*` file after it and set its
 `release`. Files contain only test data from the scripted conversation.
+
+`main-2026-10-07-reattach.json` also stores native interrupt resume state on
+awaiting-user assistant messages. That state restores approvals after reload
+and after the delivery log expires.

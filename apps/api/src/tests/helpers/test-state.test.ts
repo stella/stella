@@ -120,6 +120,55 @@ test("later tests retain defaults after multiple restores", () => {
   expect(child.output).toContain("3 pass");
 });
 
+test("restoring fixtures restore setter-backed values and accessor descriptors at every lifecycle boundary", () => {
+  const child = runLifecycleFixture(`
+let backing = "original-accessor";
+const config = {
+  get value() { return backing; },
+  set value(value: string) { backing = value; },
+  ordinary: "original-data",
+};
+const originalDescriptors = Object.getOwnPropertyDescriptors(config);
+const state = createTestState({ file: import.meta.path, config });
+state.setConfig("value", "file-accessor");
+state.setConfig("ordinary", "file-data");
+let restoredTests = 0;
+afterEach(() => {
+  expect(backing).toBe("file-accessor");
+  expect(config.value).toBe("file-accessor");
+  expect(config.ordinary).toBe("file-data");
+  expect(Object.getOwnPropertyDescriptor(config, "value")).toEqual(originalDescriptors.value);
+  restoredTests += 1;
+});
+afterAll(() => {
+  expect(restoredTests).toBe(2);
+  expect(backing).toBe("original-accessor");
+  expect(config.value).toBe("original-accessor");
+  expect(config.ordinary).toBe("original-data");
+  expect(Object.getOwnPropertyDescriptors(config)).toEqual(originalDescriptors);
+  console.log("ACCESSOR_CLEANUP_VERIFIED");
+});
+test("first writes retain the original backing value across repeated mutations", () => {
+  state.setConfig("value", "first");
+  state.patchConfig({ value: "second", ordinary: "changed-data" });
+  expect(backing).toBe("second");
+  expect(config.value).not.toBe("file-accessor");
+});
+test("descriptor replacement restores the original accessor and its backing value", () => {
+  expect(backing).toBe("file-accessor");
+  state.setConfig("value", "changed-backing");
+  state.deleteConfig("value");
+  state.setConfig("value", "temporary-data");
+  expect(Object.getOwnPropertyDescriptor(config, "value")?.get).toBeUndefined();
+  expect(config.value).toBe("temporary-data");
+  expect(backing).toBe("changed-backing");
+});
+`);
+  expect(child.exitCode, child.output).toBe(0);
+  expect(child.output).toContain("ACCESSOR_CLEANUP_VERIFIED");
+  expect(child.output).toContain("2 pass");
+});
+
 test("restoring fixtures clean test and file state after a thrown test failure", () => {
   const child = runLifecycleFixture(`
 const config = { value: "original-config" };

@@ -127,14 +127,17 @@ const seed = async (db: GatedTestDb) => {
         ],
       },
     });
-    await db.insert(legalListVerificationBlocks).values({
-      runId: id,
-      workspaceId,
-      ordinal: 0,
-      blockId: "p1",
-      kind: "docx-block",
-      text: CANARY,
-    });
+    await scoped()(
+      async (tx) =>
+        await tx.insert(legalListVerificationBlocks).values({
+          runId: id,
+          workspaceId,
+          ordinal: 0,
+          blockId: "p1",
+          kind: "docx-block",
+          text: CANARY,
+        }),
+    );
   }
   const recorder = (userId = actor): AuditRecorder =>
     createAuditRecorder({
@@ -259,6 +262,7 @@ const seed = async (db: GatedTestDb) => {
   };
   const capabilityRead = async () =>
     await handleMcpToolCall({
+      mode: "advanced",
       context: await capabilityContext(),
       toolName: "read_capability",
       args: {
@@ -312,6 +316,7 @@ const seed = async (db: GatedTestDb) => {
           jsonrpc: "2.0",
           id: envelope.id,
           result: await handleMcpToolCall({
+            mode: "advanced",
             context,
             toolName: params.name,
             args: params.arguments ?? {},

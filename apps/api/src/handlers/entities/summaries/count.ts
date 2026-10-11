@@ -7,6 +7,7 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
+  contract: "patch",
   description:
     "Count all documents, folders, and tasks in a matter. The companion " +
     "total for entities.summaries.list, whose pages carry no count of their " +

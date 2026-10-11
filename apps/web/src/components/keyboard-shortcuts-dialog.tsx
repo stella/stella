@@ -282,7 +282,7 @@ const RebindableBinding = ({
           size="sm"
           variant="ghost"
         >
-          {t("navigation.shortcutsDialog.resetToDefault")}
+          {t("common.resetToDefault")}
         </Button>
       ) : null}
       <kbd className="border-border bg-muted text-muted-foreground rounded border px-1.5 py-0.5 text-xs">

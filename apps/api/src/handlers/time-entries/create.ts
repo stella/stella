@@ -5,6 +5,7 @@ import { createTimeEntryHandler } from "@/api/lib/billing/time-entry-insert";
 
 const createTimeEntry = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Create a time entry in the current matter. dateWorked, timezoneId, " +
       "durationMinutes, and narrative are required; workItemId is optional. " +

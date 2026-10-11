@@ -9,6 +9,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contract: "patch",
   description:
     "Archive an issuer profile so it is unavailable for new invoices. " +
     "The retained record remains available for historical references.",

@@ -1101,6 +1101,16 @@ impl SessionManager {
       .any(|connection| connection.api_base_url == normalized_api_base_url)
   }
 
+  pub fn trusted_self_host_web_origin(&self, api_base_url: &str) -> Option<String> {
+    let normalized_api_base_url =
+      config::normalize_self_host_api_base_url(api_base_url).ok()?;
+    self
+      .trusted_self_host_connections
+      .iter()
+      .find(|connection| connection.api_base_url == normalized_api_base_url)
+      .map(|connection| connection.web_origin.clone())
+  }
+
   pub fn is_trusted_self_host_connection(
     &self,
     web_origin: &str,
