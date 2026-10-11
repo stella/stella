@@ -604,6 +604,43 @@ const gatingCommandExecutionFailure = ({
     ? undefined
     : missingMessage;
 
+const shellInvocationGates = (
+  command: string,
+  matches: (words: readonly string[], index: number) => boolean,
+): boolean => {
+  const words = shellWords(command.replaceAll(/\\\r?\n/gu, " "), "include");
+  let errexit = true;
+  for (let index = 0; index < words.length; index += 1) {
+    if (words[index] === "set" && words[index + 1] === "+e") {
+      errexit = false;
+    }
+    if (words[index] === "set" && words[index + 1] === "-e") {
+      errexit = true;
+    }
+    if (!errexit || !matches(words, index)) {
+      continue;
+    }
+    const suffix = words.slice(index + 1);
+    const succeeds = (offset: number): boolean => {
+      const next = suffix.at(offset);
+      return (
+        next === "true" ||
+        next === ":" ||
+        (next === "exit" && suffix.at(offset + 1) === "0")
+      );
+    };
+    const end = suffix.findIndex((word) => word === ";" || word === "\n");
+    const list = end === -1 ? suffix : suffix.slice(0, end);
+    const suppressed =
+      list.some((word, offset) => word === "||" && succeeds(offset + 1)) ||
+      (end !== -1 && succeeds(end + 1));
+    if (!suppressed) {
+      return true;
+    }
+  }
+  return false;
+};
+
 export const packageTestExecutionFailure = ({
   gatingJobs,
   packageDirectory,
@@ -611,9 +648,8 @@ export const packageTestExecutionFailure = ({
   scriptName = "test",
   shardedPackages,
 }: PackageTestExecutionOptions): string | undefined => {
-  const invokesPackageScript = (command: string): boolean => {
-    const words = shellWords(command);
-    for (let index = 0; index < words.length; index += 1) {
+  const invokesPackageScript = (command: string): boolean =>
+    shellInvocationGates(command, (words, index) => {
       if (
         words[index] === "bun" &&
         words[index + 1] === "--filter" &&
@@ -623,7 +659,7 @@ export const packageTestExecutionFailure = ({
         return true;
       }
       if (words[index] !== "bun") {
-        continue;
+        return false;
       }
       const cwdOffset = words[index + 1] === "run" ? 2 : 1;
       if (
@@ -633,21 +669,17 @@ export const packageTestExecutionFailure = ({
       ) {
         return true;
       }
-    }
-    const packageDirectoryChange = words.findIndex(
-      (word, index) => word === "cd" && words[index + 1] === packageDirectory,
-    );
-    return (
-      packageDirectoryChange !== -1 &&
-      words.some(
-        (word, index) =>
-          index > packageDirectoryChange &&
-          word === "bun" &&
-          words[index + 1] === "run" &&
-          words[index + 2] === scriptName,
-      )
-    );
-  };
+      return (
+        words[index + 1] === "run" &&
+        words[index + 2] === scriptName &&
+        words
+          .slice(0, index)
+          .some(
+            (word, cursor) =>
+              word === "cd" && words[cursor + 1] === packageDirectory,
+          )
+      );
+    });
   const directExecutionFailure = gatingCommandExecutionFailure({
     commandMatches: invokesPackageScript,
     gatingJobs,
@@ -661,7 +693,15 @@ export const packageTestExecutionFailure = ({
     scriptName === "test" &&
     shardedPackages.has(packageName) &&
     testJob?.some((command) =>
-      command.includes("bun run test -- --concurrency=2"),
+      shellInvocationGates(
+        command,
+        (words, index) =>
+          words[index] === "bun" &&
+          words[index + 1] === "run" &&
+          words[index + 2] === "test" &&
+          words[index + 3] === "--" &&
+          words[index + 4] === "--concurrency=2",
+      ),
     ) === true &&
     testJob.some((command) => command.includes("bun scripts/test-scope.ts")) &&
     testJob.some((command) =>
@@ -683,12 +723,17 @@ export const managedServiceRunnerFailure = ({
   command,
   gate,
   gatingJobs,
-}: ManagedServiceRunnerOptions): string | undefined =>
-  gatingCommandExecutionFailure({
-    commandMatches: (candidate) => candidate.includes(command),
+}: ManagedServiceRunnerOptions): string | undefined => {
+  const runner = shellWords(command);
+  return gatingCommandExecutionFailure({
+    commandMatches: (candidate) =>
+      shellInvocationGates(candidate, (words, index) =>
+        runner.every((word, offset) => words[index + offset] === word),
+      ),
     gatingJobs,
     missingMessage: `job condition: no gating job executes the ${gate} runner`,
   });
+};
 
 const packageScripts = (packageFile: string): PackageScripts | undefined => {
   const parsed: unknown = readJson(packageFile);
@@ -699,10 +744,19 @@ const packageScripts = (packageFile: string): PackageScripts | undefined => {
   return isRecord(scripts) ? scripts : undefined;
 };
 
-const shellWords = (command: string): string[] =>
+const shellWords = (
+  command: string,
+  operators: "include" | "omit" = "omit",
+): string[] =>
   [
-    ...command.matchAll(/"([^"\\]*(?:\\.[^"\\]*)*)"|'([^']*)'|([^\s;&|()]+)/gu),
-  ].map((match) => match[1] ?? match[2] ?? match[3] ?? "");
+    ...command.matchAll(
+      /"([^"\\]*(?:\\.[^"\\]*)*)"|'([^']*)'|(\|\||&&|[;&|()\n])|([^\s;&|()]+)/gu,
+    ),
+  ].flatMap((match) =>
+    match[3] !== undefined && operators === "omit"
+      ? []
+      : [match[1] ?? match[2] ?? match[3] ?? match[4] ?? ""],
+  );
 
 type PackageTestCollectionOptions = {
   readonly candidate: string;

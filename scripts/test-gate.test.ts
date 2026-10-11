@@ -344,6 +344,71 @@ context("test registration census", () => {
     ).toBe("job condition: no gating job executes @stll/orphan test");
   });
 
+  check.each([
+    "RUNNER || true",
+    "RUNNER||true",
+    "RUNNER || :",
+    "RUNNER || exit 0",
+    "RUNNER; true",
+    "RUNNER; exit 0",
+    "RUNNER\ntrue",
+    "RUNNER\nexit 0",
+    "set +e\nRUNNER",
+    "set +e; RUNNER; set -e",
+  ])("failure-suppressed runners do not gate: %s", (shape) => {
+    const packageCommand = shape.replace(
+      "RUNNER",
+      "bun --filter @stll/orphan test",
+    );
+    const serviceCommand = "bun run test:postgres";
+    expect([
+      packageTestExecutionFailure({
+        gatingJobs: new Map([["package-check", [packageCommand]]]),
+        packageDirectory: "packages/orphan",
+        packageName: "@stll/orphan",
+        shardedPackages: new Set(),
+      }),
+      managedServiceRunnerFailure({
+        command: serviceCommand,
+        gate: "STELLA_RUN_POSTGRES_TESTS",
+        gatingJobs: new Map([
+          ["service-suites", [shape.replace("RUNNER", () => serviceCommand)]],
+        ]),
+      }),
+    ]).toEqual([
+      "job condition: no gating job executes @stll/orphan test",
+      "job condition: no gating job executes the STELLA_RUN_POSTGRES_TESTS runner",
+    ]);
+  });
+
+  check.each([
+    "set +e; set -e; RUNNER",
+    "RUNNER || exit 1",
+    "RUNNER; cleanup || true",
+  ])("preserves failure-propagating runners: %s", (shape) => {
+    const serviceCommand = "bun run test:postgres";
+    expect([
+      packageTestExecutionFailure({
+        gatingJobs: new Map([
+          [
+            "package-check",
+            [shape.replace("RUNNER", "bun --filter @stll/orphan test")],
+          ],
+        ]),
+        packageDirectory: "packages/orphan",
+        packageName: "@stll/orphan",
+        shardedPackages: new Set(),
+      }),
+      managedServiceRunnerFailure({
+        command: serviceCommand,
+        gate: "STELLA_RUN_POSTGRES_TESTS",
+        gatingJobs: new Map([
+          ["service-suites", [shape.replace("RUNNER", () => serviceCommand)]],
+        ]),
+      }),
+    ]).toEqual([undefined, undefined]);
+  });
+
   check("ignores package commands in statically disabled steps", () => {
     const workflow = Bun.YAML.parse(`
 jobs:
