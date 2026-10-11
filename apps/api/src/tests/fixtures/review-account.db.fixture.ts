@@ -42,10 +42,12 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
       disabled: oauthResource.disabled,
     })
     .from(oauthResource);
-  const normalizedResources = storedResources.map((stored) => ({
-    ...stored,
-    allowedScopes: stored.allowedScopes.toSorted(),
-  }));
+  const normalizedResources = storedResources.map((stored) => {
+    if (stored.allowedScopes === null) {
+      return panic("Configured OAuth resource has no allowed scopes");
+    }
+    return { ...stored, allowedScopes: stored.allowedScopes.toSorted() };
+  });
   expect(storedResources).toHaveLength(configuredResources.length);
   for (const resource of configuredResources) {
     expect(normalizedResources).toContainEqual({
