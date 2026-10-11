@@ -370,28 +370,38 @@ const PageThumbnail = ({ page, pageInfo }: PageThumbnailProps) => {
 
   const crop = page.crop;
   const cropTop = crop ? (1 - crop.y - crop.height) * 100 : 0;
+  const display = pageInfo.proxy.getViewport({
+    scale: 1,
+    rotation: page.rotation,
+  });
 
   return (
     <div
-      className="bg-muted relative flex min-h-44 w-full items-center justify-center overflow-hidden rounded-sm"
+      className="bg-muted flex min-h-44 w-full items-center justify-center overflow-hidden rounded-sm"
       ref={setContainer}
     >
       {shouldRender && (
-        <canvas
-          className="bg-card block h-auto max-h-64 w-full"
-          ref={setCanvas}
-        />
-      )}
-      {crop && (
         <div
-          className="border-primary pointer-events-none absolute border-2 shadow-[0_0_0_999px_rgb(0_0_0/0.42)]"
+          className="relative"
+          dir="ltr"
           style={{
-            height: `${crop.height * 100}%`,
-            insetInlineStart: `${crop.x * 100}%`,
-            top: `${cropTop}%`,
-            width: `${crop.width * 100}%`,
+            aspectRatio: `${display.width} / ${display.height}`,
+            width: `min(100%, calc(16rem * ${display.width / display.height}))`,
           }}
-        />
+        >
+          <canvas className="bg-card block size-full" ref={setCanvas} />
+          {crop && (
+            <div
+              className="border-primary pointer-events-none absolute border-2 shadow-[0_0_0_999px_rgb(0_0_0/0.42)]"
+              style={{
+                height: `${crop.height * 100}%`,
+                left: `${crop.x * 100}%`,
+                top: `${cropTop}%`,
+                width: `${crop.width * 100}%`,
+              }}
+            />
+          )}
+        </div>
       )}
     </div>
   );
