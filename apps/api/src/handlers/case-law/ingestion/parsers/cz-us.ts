@@ -1,5 +1,11 @@
 import { panic } from "better-result";
 import * as cheerio from "cheerio";
+
+import type {
+  BlockContent as FolioBlockContent,
+  Paragraph as FolioParagraph,
+  ParagraphContent as FolioParagraphContent,
+} from "@stll/docx-core/model";
 /**
  * Czech Constitutional Court (Ustavni soud) HTML parser.
  *
@@ -44,13 +50,6 @@ import * as cheerio from "cheerio";
  *   V Brne dne ...
  *   Judge name + title
  */
-
-import type {
-  BlockContent as FolioBlockContent,
-  Paragraph as FolioParagraph,
-  ParagraphContent as FolioParagraphContent,
-  RunContent as FolioRunContent,
-} from "@stll/docx-core/model";
 import { caseLawSectionHeading } from "@stll/legal-ast/case-law-heading";
 import {
   CZ_CLOSING_RE as CLOSING_RE,
@@ -68,6 +67,7 @@ import {
   type DocumentLine,
 } from "@/api/lib/legal-search/parsers/document-footnotes";
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
+import { runContentVisibleText } from "@/api/lib/legal-search/parsers/run-content-text";
 import {
   buildValidationHtml,
   validateAndLog,
@@ -242,34 +242,6 @@ type ParsedLine = DocumentLine<ParsedLineData>;
 
 // ── RTF reading ───────────────────────────────────────────
 
-const rtfRunContentText = (item: FolioRunContent): string => {
-  switch (item.type) {
-    case "text":
-      return item.text;
-    case "tab":
-      return "\t";
-    case "break":
-      return "\n";
-    case "preservedXml":
-      return item.text;
-    case "symbol":
-    case "noteMarker":
-    case "footnoteRef":
-    case "endnoteRef":
-    case "fieldChar":
-    case "instrText":
-    case "softHyphen":
-    case "noBreakHyphen":
-    case "renderedPageBreak":
-    case "drawing":
-    case "shape":
-      return "";
-    default:
-      item satisfies never;
-      return panic("Unhandled RTF run content");
-  }
-};
-
 const rtfInlinesOf = (paragraph: FolioParagraph): Inline[] => {
   const inlines: Inline[] = [];
 
@@ -277,7 +249,7 @@ const rtfInlinesOf = (paragraph: FolioParagraph): Inline[] => {
     for (const item of items) {
       switch (item.type) {
         case "run": {
-          const text = item.content.map(rtfRunContentText).join("");
+          const text = item.content.map(runContentVisibleText).join("");
           if (text.length === 0) {
             break;
           }

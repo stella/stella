@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Hungarian courts (Bírósági Határozatok Gyűjteménye) decision parser.
  *
@@ -21,8 +22,6 @@
  * order, and only a line it does recognise gains a heading or a role.
  */
 
-import { panic } from "better-result";
-
 import type {
   BlockContent,
   Document as FolioDocument,
@@ -30,7 +29,6 @@ import type {
   Paragraph as FolioParagraph,
   ParagraphContent as FolioParagraphContent,
   Run as FolioRun,
-  RunContent as FolioRunContent,
   TrackedRunContent,
   Table as FolioTable,
   TextFormatting,
@@ -66,6 +64,7 @@ import {
   type BodyDocumentLine,
   type DocumentLine,
 } from "@/api/lib/legal-search/parsers/document-footnotes";
+import { runContentVisibleText } from "@/api/lib/legal-search/parsers/run-content-text";
 import {
   buildValidationHtml,
   validateAndLog,
@@ -101,41 +100,6 @@ type DocItem =
   | { readonly type: "line"; readonly line: DocLine }
   | { readonly type: "table"; readonly table: DocTable };
 
-/** The characters one run item contributes to the document's text. */
-const runContentText = (item: FolioRunContent): string => {
-  switch (item.type) {
-    case "text":
-      return item.text;
-    case "tab":
-      return "\t";
-    case "break":
-      return "\n";
-    // Verbatim-preserved markup folio does not model. Its `text` is what the
-    // markup puts on the line (a `w:ruby` base is a word of the decision), so
-    // the extraction takes it rather than dropping the characters.
-    case "preservedXml":
-      return item.text;
-    // Carry no characters of their own: a symbol, a note mark, a field's own
-    // instruction text, a hyphen the layout inserted, a drawing or a shape all
-    // reach the text through the runs around them.
-    case "symbol":
-    case "footnoteRef":
-    case "endnoteRef":
-    case "noteMarker":
-    case "fieldChar":
-    case "instrText":
-    case "softHyphen":
-    case "noBreakHyphen":
-    case "renderedPageBreak":
-    case "drawing":
-    case "shape":
-      return "";
-    default:
-      item satisfies never;
-      return panic(`Unhandled run content: ${JSON.stringify(item)}`);
-  }
-};
-
 type FolioInlineContent =
   | FolioParagraphContent
   | TrackedRunContent
@@ -148,7 +112,7 @@ const runsOf = (paragraph: FolioParagraph): DocRun[] => {
     fallbackFormatting?: TextFormatting,
   ): void => {
     const formatting = run.formatting ?? fallbackFormatting;
-    const text = run.content.map(runContentText).join("");
+    const text = run.content.map(runContentVisibleText).join("");
     if (text.length === 0) {
       return;
     }
@@ -774,7 +738,7 @@ const DATE_ENDS_LINE = /\d{1,2}\.(?:\s*napján\.?)?$/u;
  * The date of a closing line a soft break put inside a longer paragraph.
  *
  * A break renders as a newline inside one line rather than ending it
- * (`runContentText` maps `break` to "\n"), so a body paragraph built with
+ * (`runContentVisibleText` maps `break` to "\n"), so a body paragraph built with
  * `\line` carries the place-and-date line after its own text, where a match
  * anchored to the paragraph's start never sees it. Each visual line after the
  * first is read on its own, as `huDocketFrom` reads the header; the first is
@@ -898,7 +862,7 @@ const persistableDocket = (docket: string): string | undefined =>
 export const huDocketFrom = (lines: readonly string[]): string | undefined => {
   for (const block of lines) {
     // A soft break renders as a newline inside one line rather than ending
-    // it (`runContentText` maps `break` to "\n"), so a header paragraph built
+    // it (`runContentVisibleText` maps `break` to "\n"), so a header paragraph built
     // with `\line` instead of `\par` carries the rest of the document with
     // it. The docket is stated on its own visual line, so read those: an
     // unbounded slice of the block took the whole body into the docket.

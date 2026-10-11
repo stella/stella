@@ -14,6 +14,11 @@ import {
   embeddedTextRtf,
 } from "@/api/lib/legal-search/parsers/rtf-destinations.fixtures";
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
+import {
+  VISIBLE_RUN_CASES,
+  VISIBLE_FIELD_DOCUMENT,
+  visibleRunDocument,
+} from "@/api/lib/legal-search/parsers/run-content-text.fixtures";
 import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
 
 import { classifyUsDocumentLines, usDocumentLinesOf } from "./cz-us";
@@ -27,6 +32,31 @@ import {
 } from "./document-note-paths.fixtures";
 import { assertHtmlRtfLineParity } from "./rtf-line-parity.fixtures";
 import { inlinesToPlainText } from "./shared-inlines";
+
+test("CZ field results keep visible hyphens and omit instructions", () => {
+  const line = usDocumentLinesOf(VISIBLE_FIELD_DOCUMENT).at(0);
+  expect(line?.kind).toBe("body");
+  if (line?.kind !== "body") {
+    return;
+  }
+  expect(line.value.plainText).toBe("word\u2011word");
+  expect(inlinesToPlainText(line.value.inlines)).toBe("word\u2011word");
+});
+
+test.each(Object.values(VISIBLE_RUN_CASES))(
+  "CZ run kind $item.type preserves its visible characters",
+  ({ item, text }) => {
+    const lines = usDocumentLinesOf(visibleRunDocument(item));
+    expect(lines).toHaveLength(1);
+    const line = lines.at(0);
+    expect(line?.kind).toBe("body");
+    if (line?.kind !== "body") {
+      return;
+    }
+    expect(line.value.plainText).toBe(`word${text}word`);
+    expect(inlinesToPlainText(line.value.inlines)).toBe(`word${text}word`);
+  },
+);
 
 // ── Helpers ─────────────────────────────────────────────────
 

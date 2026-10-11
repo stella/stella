@@ -36,6 +36,11 @@ import {
   readRtfString,
   readRtf as readRtfDocument,
 } from "@/api/lib/legal-search/parsers/rtf-reader";
+import {
+  VISIBLE_RUN_CASES,
+  VISIBLE_FIELD_DOCUMENT,
+  visibleRunDocument,
+} from "@/api/lib/legal-search/parsers/run-content-text.fixtures";
 
 import {
   noteTableRtf,
@@ -113,6 +118,42 @@ const parseDocument = (document: FolioDocument) =>
 
 const parse = (lines: readonly LineSpec[], footnotes?: readonly Footnote[]) =>
   parseDocument(documentOf(lines, footnotes));
+
+const visibleDocumentParagraph = (document: FolioDocument) =>
+  parseDocument({
+    package: {
+      ...document.package,
+      document: {
+        content: [
+          paragraphOf({ text: "Indokolás" }),
+          ...document.package.document.content,
+        ],
+      },
+    },
+  }).documentAst.blocks.find((block) => block.type === "paragraph");
+
+test("HU field results keep visible hyphens and omit instructions", () => {
+  const block = visibleDocumentParagraph(VISIBLE_FIELD_DOCUMENT);
+  expect(block?.type).toBe("paragraph");
+  if (block?.type !== "paragraph") {
+    return;
+  }
+  expect(block.plainText).toBe("word\u2011word");
+  expect(inlinesToPlainText(block.inlines)).toBe("word\u2011word");
+});
+
+test.each(Object.values(VISIBLE_RUN_CASES))(
+  "HU run kind $item.type preserves its visible characters",
+  ({ item, text }) => {
+    const block = visibleDocumentParagraph(visibleRunDocument(item));
+    expect(block?.type).toBe("paragraph");
+    if (block?.type !== "paragraph") {
+      return;
+    }
+    expect(block.plainText).toBe(`word${text}word`);
+    expect(inlinesToPlainText(block.inlines)).toBe(`word${text}word`);
+  },
+);
 
 test.each(["  ", "\t", "\u00a0", " \t\u00a0"])(
   "HU numbered paragraphs use the same normalized text axis after leading %j",

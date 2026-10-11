@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * The RTF reader against the constructs the court dialect states.
  *
@@ -6,17 +7,10 @@
  * a real decision is `parsers/hu-bhgy.test.ts`, which drives the same reader
  * from a captured file.
  */
-
-import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import type {
-  BlockContent,
-  Paragraph,
-  Run,
-  RunContent,
-} from "@stll/docx-core/model";
+import type { BlockContent, Paragraph, Run } from "@stll/docx-core/model";
 import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
@@ -29,6 +23,8 @@ import {
   readRtf,
   readRtfString,
 } from "@/api/lib/legal-search/parsers/rtf-reader";
+
+import { runContentVisibleText } from "./run-content-text";
 
 /**
  * The bytes a document holds, one per character: RTF is a byte format and the
@@ -47,47 +43,13 @@ const bytesOf = (rtf: string): Uint8Array =>
 const runsOf = (paragraph: Paragraph): Run[] =>
   paragraph.content.filter((item): item is Run => item.type === "run");
 
-const runContentText = (item: RunContent): string => {
-  switch (item.type) {
-    case "text":
-      return item.text;
-    case "tab":
-      return "\t";
-    case "break":
-      return "\n";
-    // Verbatim-preserved markup folio does not model. Its `text` is what the
-    // markup puts on the line (a `w:ruby` base is visible text), so this
-    // reads it rather than dropping the characters.
-    case "preservedXml":
-      return item.text;
-    // Carry no characters of their own: a symbol, a note mark, a field's own
-    // instruction text, a hyphen the layout inserted, a drawing or a shape all
-    // reach the text through the runs around them.
-    case "symbol":
-    case "footnoteRef":
-    case "endnoteRef":
-    case "noteMarker":
-    case "fieldChar":
-    case "instrText":
-    case "softHyphen":
-    case "noBreakHyphen":
-    case "renderedPageBreak":
-    case "drawing":
-    case "shape":
-      return "";
-    default:
-      item satisfies never;
-      return panic(`Unhandled run content: ${JSON.stringify(item)}`);
-  }
-};
-
 const textOf = (block: BlockContent): string => {
   if (block.type !== "paragraph") {
     return "";
   }
   return runsOf(block)
     .flatMap((run) => run.content)
-    .map(runContentText)
+    .map(runContentVisibleText)
     .join("");
 };
 
