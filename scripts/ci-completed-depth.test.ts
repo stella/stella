@@ -1134,12 +1134,18 @@ test("thin groups require queued code checks regardless of normal PR completion"
           "needs.heavy-web-build.result": "skipped",
           "inputs.pr_depth_only": false,
           ...Object.fromEntries(
-            Object.entries(allScopes).map(([name, value]) => [
-              `needs.ci-plan.outputs.${name}`,
-              value,
-            ]),
+            Object.keys(planner.outputs)
+              .filter((name) => name.endsWith("_required"))
+              .map((name) => [`needs.ci-plan.outputs.${name}`, "true"]),
           ),
         },
+        // GitHub exposes an unset output of this completed producer as empty.
+        fallback: (name) =>
+          name.startsWith("steps.completed-depth.outputs.")
+            ? (evidence.outputs.get(
+                name.slice("steps.completed-depth.outputs.".length),
+              ) ?? "")
+            : undefined,
         status: {
           always: true,
           success: true,
