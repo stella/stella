@@ -1,5 +1,9 @@
 name: Railway Template Source
 
+defaults:
+  run:
+    shell: bash
+
 on:
   schedule:
     - cron: "17 6 * * *"
