@@ -5,7 +5,10 @@ import type { Fetcher } from "@stll/fetch";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import { checkStructuredOutputBudget } from "@/api/lib/structured-output-budget";
+import {
+  checkStructuredOutputBudget,
+  STRUCTURED_OUTPUT_BUDGETS,
+} from "@/api/lib/structured-output-budget";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { decide, decideMany } from "@/api/lib/workflow/decisions/decide";
 import type { DecisionGenerator } from "@/api/lib/workflow/decisions/decide";
@@ -1178,5 +1181,55 @@ describe("decide", () => {
       source: "generative",
       model: null,
     });
+  });
+});
+
+test("a question that cannot fit the provider budget fails without dispatching", async () => {
+  const organizationId = toSafeId<"organization">("org-decision-oversize");
+  let dispatched = 0;
+  const adapter = {
+    ...createScriptedTextAdapter([]),
+    structuredOutput: async () => {
+      dispatched += 1;
+      return await Promise.resolve({ data: { answers: [] }, rawText: "{}" });
+    },
+  } satisfies AnyTextAdapter;
+  const result = await decide({
+    id: "test.provider-budget-single-question",
+    dataClass: "customer",
+    orgAIConfig: null,
+    state: "The contract is signed.",
+    question: choice("Which clause applies?", {
+      ["clause".repeat(STRUCTURED_OUTPUT_BUDGETS.anthropic.maxSchemaBytes)]:
+        "The signed clause",
+    }),
+    client: null,
+    generation: {
+      role: "fast",
+      dataClass: "customer",
+      orgAIConfig: null,
+      managedAIResidency: "eu",
+      organizationId,
+      admission: testModelAdmission(organizationId),
+      tenantWorkspaceIds: [],
+      serviceTier: "standard",
+      caching: { enabled: false, reason: "org-disabled" },
+      prompt: "Read the contract.",
+      resolveTextModel: () => ({
+        adapter,
+        keySource: "byok",
+        modelId: "claude-sonnet-5",
+        provider: "anthropic",
+        modelOptions: {},
+      }),
+    },
+  });
+  expect(dispatched).toBe(0);
+  expect(result).toEqual({
+    state: "undecided",
+    source: "generative",
+    model: null,
+    reason: "failed",
+    confidence: null,
   });
 });

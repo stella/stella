@@ -271,7 +271,6 @@ export const outputFromSystemOneOutcomes = ({
       case "undecided":
         switch (outcome.reason) {
           case "refusal":
-            output[property.id] = { answer: null, justification: [] };
             break;
           case "failed":
           case "no-backend":
@@ -293,7 +292,6 @@ export const outputFromSystemOneOutcomes = ({
         }
         break;
       case "not_stated":
-        output[property.id] = { answer: null, justification: [] };
         break;
       case "answered":
         output[property.id] = {
@@ -305,11 +303,12 @@ export const outputFromSystemOneOutcomes = ({
               : locators.get(outcome.sourceId),
           ),
         };
-        break;
+        continue;
       default:
         outcome satisfies never;
         panic("Unhandled System One outcome state");
     }
+    output[property.id] = { answer: null, justification: [] };
   }
   return Result.ok({ output, fallbackPropertyIds });
 };

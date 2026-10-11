@@ -166,7 +166,7 @@ const choiceAnswerSchema = v.strictObject({
   confidence: unitInterval,
 });
 
-export const systemOneAnswerSchema = v.variant("type", [
+const systemOneAnswerSchema = v.variant("type", [
   noulAnswerSchema,
   choiceAnswerSchema,
 ]);

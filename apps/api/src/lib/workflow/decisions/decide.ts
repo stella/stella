@@ -498,14 +498,14 @@ const generateDecisionChunk = async ({
   });
 };
 
-const generateDecisions: DecisionGenerator = async ({
+const generateDecisions = async ({
   decisionId,
   orgAIConfig,
   state,
   questions,
   abortSignal,
   generation,
-}) => {
+}: DecisionGenerationRequest) => {
   if (generation === undefined) {
     return panic("Decision generation requires an admitted runtime");
   }
@@ -530,7 +530,7 @@ const generateDecisions: DecisionGenerator = async ({
       }),
   });
   if (Result.isError(planned)) {
-    throw planned.error;
+    return Result.err(planned.error);
   }
   const answers: v.InferOutput<
     ReturnType<typeof generativeDecisionsSchema>
@@ -584,13 +584,13 @@ const generateDecisions: DecisionGenerator = async ({
     }
     answers.push(...entries.values());
   }
-  return {
+  return Result.ok({
     model: model.modelId,
     output: { answers },
     usage,
     failedQuestionIds,
     calls,
-  };
+  });
 };
 
 type BindGeneratedDecisionOptions = {
@@ -738,18 +738,24 @@ export const decideMany = async <TQuestions extends SystemOneQuestions>(
   }
   const started = performance.now();
   const signal = abortSignal ?? AbortSignal.any([]);
-  const generated = await Result.tryPromise({
-    try: async () =>
-      await (options.generator ?? generateDecisions)({
-        decisionId: options.id,
-        orgAIConfig: options.orgAIConfig,
-        state: options.state,
-        questions: open,
-        abortSignal: signal,
-        generation: options.generation,
-      }),
-    catch: (error: unknown) => error,
-  });
+  const generated = (
+    await Result.tryPromise({
+      try: async () => {
+        const request = {
+          decisionId: options.id,
+          orgAIConfig: options.orgAIConfig,
+          state: options.state,
+          questions: open,
+          abortSignal: signal,
+          generation: options.generation,
+        };
+        return options.generator === undefined
+          ? await generateDecisions(request)
+          : Result.ok(await options.generator(request));
+      },
+      catch: (error: unknown) => error,
+    })
+  ).andThen((result) => result);
   if (Result.isError(generated) && abortSignal?.aborted) {
     abortSignal.throwIfAborted();
   }

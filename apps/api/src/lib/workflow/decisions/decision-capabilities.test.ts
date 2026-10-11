@@ -86,9 +86,7 @@ test("a mixed batch asks the decision model only about tool-free questions", asy
         apiKey: "test",
         fetcher: async (_url, init) => {
           modelCalls += 1;
-          expect(String(init?.body)).not.toContain(
-            "Does the skill permit this?",
-          );
+          expect(init?.body).not.toContain("Does the skill permit this?");
           return Response.json({
             model: "jev-test",
             answers: { ordinary: { type: "noul", noul: 1 } },

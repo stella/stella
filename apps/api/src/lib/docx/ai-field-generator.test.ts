@@ -715,13 +715,12 @@ describe("buildAiConditionDecider decision tier", () => {
       ...model.adapter,
       async *chatStream(options) {
         if (requestedSkill) {
-          loadedSkill =
-            options.messages?.some(
-              (message) =>
-                message.role === "tool" &&
-                typeof message.content === "string" &&
-                message.content.includes(skill.body),
-            ) ?? false;
+          loadedSkill = options.messages.some(
+            (message) =>
+              message.role === "tool" &&
+              typeof message.content === "string" &&
+              message.content.includes(skill.body),
+          );
           yield* model.adapter.chatStream(options);
           return;
         }
@@ -839,13 +838,12 @@ describe("buildAiConditionDecider decision tier", () => {
         },
         async *chatStream(options) {
           if (requestedSkill) {
-            loadedSkill =
-              options.messages?.some(
-                (message) =>
-                  message.role === "tool" &&
-                  typeof message.content === "string" &&
-                  message.content.includes(skill.body),
-              ) ?? false;
+            loadedSkill = options.messages.some(
+              (message) =>
+                message.role === "tool" &&
+                typeof message.content === "string" &&
+                message.content.includes(skill.body),
+            );
             expect(loadedSkill).toBe(true);
             yield* model.adapter.chatStream(options);
             return;

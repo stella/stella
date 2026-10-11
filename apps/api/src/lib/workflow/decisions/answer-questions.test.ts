@@ -557,7 +557,7 @@ describe("decodeSystemOneAnswers", () => {
       "col-parties:o3": { type: "noul", noul: 0.05 },
     });
     const optionDecision = primary["col-parties:o2"];
-    if (optionDecision === undefined || optionDecision.state !== "decided") {
+    if (optionDecision?.state !== "decided") {
       throw new Error("Expected the fixture to settle the second option");
     }
     const outcomes = decodeSystemOneAnswers({
