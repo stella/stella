@@ -322,6 +322,7 @@ describe("reading the organization time zone", () => {
   ) =>
     projectOrganizationSettingsRow(
       {
+        updatedAt: new Date("2026-01-01T00:00:00.000Z"),
         documentProcessingMode: "off",
         matterNumberPadding: 3,
         matterNumberPattern: "{SEQ}",
@@ -359,7 +360,7 @@ describe("reading the organization time zone", () => {
         ]),
       ).toMatchObject({ timeZone, timeZoneSource: "practice-jurisdiction" });
     }
-    expect(projectOrganizationSettingsRow(null, emptySnapshot)).toMatchObject({
+    expect(row(null, [])).toMatchObject({
       timeZone: "UTC",
       timeZoneSource: "practice-jurisdiction",
     });

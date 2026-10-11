@@ -51,6 +51,7 @@ const workspaceId = "019a0000-0000-7000-8000-000000000001";
 const listId = "019a0000-0000-7000-8000-000000000002";
 const itemEntityId = "019a0000-0000-7000-8000-000000000003";
 const settings = {
+  updatedAt: "2026-01-01T00:00:00.000Z",
   declaredFeatureIds: ["legal-lists", "list-verification"],
   deploymentFeatures: { legalLists: true },
   capabilities: {},

@@ -9,10 +9,12 @@ import {
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import { organizationSettings } from "@/api/db/schema";
 import {
   createMembershipSafeDb,
   createMembershipScopedDb,
 } from "@/api/db/scoped";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isRecord } from "@/api/lib/type-guards";
 import { MCP_ALL_RESOURCE_SCOPES } from "@/api/mcp/constants";
@@ -165,6 +167,7 @@ type RunToolName = {
 
 /** Ids earlier calls created, read by later ones. */
 type Seeded = {
+  settingsUpdatedAt: string;
   userId: SafeId<"user">;
   matterId?: string;
   contactId?: string;
@@ -315,7 +318,10 @@ const STEPS: readonly Step[] = [
   { tool: "list_templates", args: () => ({}) },
   {
     tool: "set_practice_jurisdictions",
-    args: () => ({ jurisdictions: [{ country_code: "CZ", is_primary: true }] }),
+    args: (s) => ({
+      expected_updated_at: s.settingsUpdatedAt,
+      jurisdictions: [{ country_code: "CZ", is_primary: true }],
+    }),
   },
   {
     tool: "manage_organization",
@@ -381,6 +387,7 @@ afterAll(async () => {
 });
 
 type Caller = {
+  settingsUpdatedAt: string;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
 };
@@ -404,7 +411,23 @@ const createOrganization = async (): Promise<Caller> => {
     role: "owner",
     createdAt: new Date(),
   });
-  return { organizationId, userId };
+  const settings = (
+    await testDb
+      .insert(organizationSettings)
+      .values({
+        id: createSafeId<"organizationSettings">(),
+        organizationId,
+      })
+      .returning({ updatedAt: organizationSettings.updatedAt })
+  ).at(0);
+  if (!settings) {
+    throw new Error("Expected seeded organization settings");
+  }
+  return {
+    organizationId,
+    userId,
+    settingsUpdatedAt: settings.updatedAt.toISOString(),
+  };
 };
 
 /** Resolved per call, as one MCP request does: matters change between steps. */
@@ -472,7 +495,10 @@ describe("every MCP tool's real output passes its output contract", () => {
 
   test("a seeded organization drives each runnable tool", async () => {
     const caller = await createOrganization();
-    const seeded: Seeded = { userId: caller.userId };
+    const seeded: Seeded = {
+      userId: caller.userId,
+      settingsUpdatedAt: caller.settingsUpdatedAt,
+    };
     for (const step of STEPS) {
       const result = await handleMcpToolCall({
         mode: "advanced",

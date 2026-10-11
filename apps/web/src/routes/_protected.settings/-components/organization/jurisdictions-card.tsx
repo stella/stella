@@ -1,6 +1,7 @@
 import { useOptimistic, useRef, useState, useTransition } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Frame, FramePanel } from "@stll/ui/frame";
@@ -21,12 +22,12 @@ import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-set
 export const OrganizationJurisdictionsCard = () => {
   const t = useTranslations();
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
-  const settingsQuery = useQuery(
-    organizationSettingsOptions({
-      organizationId: activeOrganizationId,
-      userId,
-    }),
-  );
+  const queryClient = useQueryClient();
+  const settingsOptions = organizationSettingsOptions({
+    organizationId: activeOrganizationId,
+    userId,
+  });
+  const settingsQuery = useQuery(settingsOptions);
   const settingsView = useQueryView(settingsQuery);
   const settings =
     settingsView.type === "items" ? settingsView.items : undefined;
@@ -49,12 +50,23 @@ export const OrganizationJurisdictionsCard = () => {
   const [, startSelectionTransition] = useTransition();
 
   const updateMutation = useSettingsMutation({
-    mutationFn: async (next: PracticeJurisdiction[]) =>
-      unwrapEden(
+    mutationFn: async (next: PracticeJurisdiction[]) => {
+      const current =
+        queryClient.getQueryData(settingsOptions.queryKey) ??
+        panic("Jurisdiction write requires loaded settings");
+      const result = unwrapEden(
         await api["organization-settings"]["practice-jurisdictions"].post({
+          expectedUpdatedAt: current.updatedAt,
           practiceJurisdictions: next,
         }),
-      ),
+      );
+      // A queued selection must observe the preceding successful write's
+      // version before its replacement reaches the server.
+      await queryClient.invalidateQueries({
+        queryKey: settingsOptions.queryKey,
+      });
+      return result;
+    },
     invalidate: organizationSettingsKeys.all,
     errorToast: { title: t("errors.actionFailed") },
   });

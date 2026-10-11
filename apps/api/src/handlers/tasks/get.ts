@@ -98,6 +98,7 @@ const readTaskById = createSafeHandler(
               where: { kind: { eq: "task" } },
               columns: {
                 id: true,
+                updatedAt: true,
                 name: true,
                 status: true,
                 priority: true,

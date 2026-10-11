@@ -17,7 +17,10 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { hasInstanceDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 
+import { readOrCreateOrganizationSettings } from "./read-or-create";
+
 type AIConfigResult = {
+  updatedAt: string;
   /**
    * Whether the backend has any platform-provisioned AI keys
    * (env-configured fallback). When false and `configured` is
@@ -65,19 +68,13 @@ const config = {
  */
 const readAIConfig = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session }) {
+  async function* ({ safeDb, session, recordAuditEvent }) {
     const row = yield* Result.await(
       safeDb((tx) =>
-        tx.query.organizationSettings.findFirst({
-          where: {
-            organizationId: {
-              eq: session.activeOrganizationId,
-            },
-          },
-          columns: {
-            aiConfigEncrypted: true,
-            aiConfigIv: true,
-          },
+        readOrCreateOrganizationSettings({
+          tx,
+          organizationId: session.activeOrganizationId,
+          recordAuditEvent,
         }),
       ),
     );
@@ -91,6 +88,7 @@ const readAIConfig = createSafeRootHandler(
       configured: false,
       instanceProvisioned,
       decisionInstanceProvisioned,
+      updatedAt: row.updatedAt.toISOString(),
     };
 
     if (ciphertext && iv) {
@@ -127,6 +125,7 @@ const readAIConfig = createSafeRootHandler(
               },
         instanceProvisioned,
         decisionInstanceProvisioned,
+        updatedAt: row.updatedAt.toISOString(),
       };
     }
 

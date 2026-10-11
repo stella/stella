@@ -567,6 +567,7 @@ describe("projectForChat", () => {
       payload: {
         task: {
           taskId: ENTITY_UUID,
+          updatedAt: "2026-01-01T00:00:00.000Z",
           name: "Call the counterparty",
           status: "todo",
           priority: null,

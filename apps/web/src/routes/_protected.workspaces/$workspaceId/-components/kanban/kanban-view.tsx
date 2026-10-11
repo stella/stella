@@ -99,6 +99,7 @@ import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-compone
 import { KanbanColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
 import type { KanbanCalculations } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
 import { KanbanSubgroupBoard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-subgroup-board";
+import type { KanbanSubgroupDropParams } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-subgroup-board";
 import { viewEntityKinds } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 
 type KanbanViewProps = {
@@ -413,14 +414,17 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     mutationFn: async ({
       taskId,
       status,
+      expectedUpdatedAt,
     }: {
       taskId: string;
       status: string;
+      expectedUpdatedAt: string;
     }) => {
       const response = await api
         .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .patch({
           taskId: toSafeId<"entity">(taskId),
+          expectedUpdatedAt,
           status,
         });
       unwrapEden(response);
@@ -451,9 +455,23 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
 
   const groups = getKanbanGroups(options, t("common.uncategorized"));
 
-  const handleDrop = (targetValue: string | null, entityId: string) => {
+  const handleDrop = ({
+    targetValue,
+    entityId,
+    expectedUpdatedAt,
+  }: {
+    targetValue: string | null;
+    entityId: string;
+    expectedUpdatedAt: string | null;
+  }) => {
     if (isStatusGrouping && targetValue !== null) {
-      updateTaskStatus.mutate({ taskId: entityId, status: targetValue });
+      updateTaskStatus.mutate({
+        taskId: entityId,
+        status: targetValue,
+        expectedUpdatedAt:
+          expectedUpdatedAt ??
+          panic("Dragged Kanban task has no observed version"),
+      });
       return;
     }
     if (isBuiltInGrouping || isReadOnlyVerdictGrouping) {
@@ -751,12 +769,13 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     });
   };
 
-  const handleDropCardInCell = async (
-    entityId: string,
-    columnValue: string,
-    laneValue: string | null,
-    sourceSubgroupValue: string | null | undefined,
-  ) => {
+  const handleDropCardInCell = async ({
+    entityId,
+    columnValue,
+    laneValue,
+    sourceSubgroupValue,
+    expectedUpdatedAt,
+  }: KanbanSubgroupDropParams) => {
     if (subgroup.type !== "property") {
       const sourceEntity = subgroupEntities.find(
         (entity) => entity.entityId === entityId,
@@ -790,6 +809,9 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       if (isStatusGrouping) {
         await updateTaskStatus.mutateAsync({
           taskId: entityId,
+          expectedUpdatedAt:
+            expectedUpdatedAt ??
+            panic("Dragged Kanban task has no observed version"),
           status: columnValue,
         });
         return;
@@ -820,7 +842,15 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     await updateKanbanPlacement.mutateAsync({
       workspaceId,
       entityId,
-      ...(isStatusGrouping && { status: columnValue }),
+      ...(isStatusGrouping
+        ? {
+            type: "task-status" as const,
+            status: columnValue,
+            expectedUpdatedAt:
+              expectedUpdatedAt ??
+              panic("Dragged Kanban task has no observed version"),
+          }
+        : { type: "fields" as const }),
       fields: [
         ...(!isStatusGrouping
           ? [
@@ -994,19 +1024,9 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
               "kanban-view.create-task-in-cell",
             );
           }}
-          onDropCard={(
-            entityId,
-            columnValue,
-            laneValue,
-            sourceSubgroupValue,
-          ) => {
+          onDropCard={(params) => {
             detached(
-              handleDropCardInCell(
-                entityId,
-                columnValue,
-                laneValue,
-                sourceSubgroupValue,
-              ),
+              handleDropCardInCell(params),
               "kanban-view.drop-card-in-cell",
             );
           }}
@@ -1067,7 +1087,9 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
                 "kanban-view.create",
               );
             }}
-            onDrop={(entityId) => handleDrop(value, entityId)}
+            onDrop={(entityId, expectedUpdatedAt) =>
+              handleDrop({ targetValue: value, entityId, expectedUpdatedAt })
+            }
             onFileUpload={(files) => {
               detached(
                 (async () => await handleFileUpload(value, files))(),

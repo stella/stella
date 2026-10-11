@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   and,
   asc,
@@ -80,6 +80,7 @@ type EntityRow = typeof entities.$inferSelect;
 // `itemType`, the name the list contract already uses.
 const TASK_LIST_ENTITY_SELECTION = {
   id: entities.id,
+  updatedAt: entities.updatedAt,
   name: entities.name,
   status: entities.status,
   priority: entities.priority,
@@ -103,11 +104,10 @@ const UNPROJECTED_TASK_LIST_COLUMNS = [
   "sortOrder",
   // `name` is the list label; the display name belongs to documents.
   "displayName",
-  // Authorship and timestamps are detail-view fields.
+  // Authorship and creation time are detail-view fields.
   "createdBy",
   "lastEditedBy",
   "createdAt",
-  "updatedAt",
   // Agenda scheduling and attendance: the detail read and calendar own them.
   "agendaKind",
   "startAt",
@@ -193,6 +193,7 @@ export const listTasksPage = async ({
     tx
       .select({
         id: TASK_LIST_ENTITY_SELECTION.id,
+        updatedAt: TASK_LIST_ENTITY_SELECTION.updatedAt,
         name: TASK_LIST_ENTITY_SELECTION.name,
         status: TASK_LIST_ENTITY_SELECTION.status,
         priority: TASK_LIST_ENTITY_SELECTION.priority,
@@ -245,8 +246,12 @@ export const listTasksPage = async ({
   });
   return Result.ok({
     ...page,
-    items: page.items.map((item) =>
-      Object.assign(item, { itemType: item.itemType ?? "task" }),
-    ),
+    items: page.items.map((item) => ({
+      ...item,
+      itemType: item.itemType ?? "task",
+      updatedAt: (
+        item.updatedAt ?? panic("Listed task has no update timestamp")
+      ).toISOString(),
+    })),
   });
 };

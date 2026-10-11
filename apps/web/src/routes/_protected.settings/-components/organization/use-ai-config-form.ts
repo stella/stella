@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
@@ -132,6 +132,9 @@ export const useAIConfigForm = ({
     nextProviders,
     nextRoles,
   }: PersistAIConfigOptions) => {
+    if (config === null) {
+      panic("AI configuration write requires loaded settings");
+    }
     const serialized = serializeRoleOverrides({
       providers: getProviderValues(nextProviders),
       overrides: nextRoles,
@@ -147,6 +150,7 @@ export const useAIConfigForm = ({
     }
     const decision = serializeDecisionModel(decisionState);
     const response = await api["organization-settings"]["ai-config"].post({
+      expectedUpdatedAt: config.updatedAt,
       providers: serializeProviderDrafts(nextProviders),
       overrideModels: serialized.overrides,
       ...(decision === undefined ? {} : { decision }),

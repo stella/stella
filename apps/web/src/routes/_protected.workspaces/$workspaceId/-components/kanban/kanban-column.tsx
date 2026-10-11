@@ -76,7 +76,7 @@ type KanbanColumnProps = {
   optionColor?: PropertyOptionColor | undefined;
   cardFields?: string[] | undefined;
   properties?: WorkspaceProperty[] | undefined;
-  onDrop: (entityId: string) => void;
+  onDrop: (entityId: string, expectedUpdatedAt: string | null) => void;
   onFileUpload?: ((files: File[]) => void) | undefined;
   onChangeColor?: ((color: PropertyOptionColor) => void) | undefined;
   onRenameColumn?: ((newName: string) => void) | undefined;
@@ -190,7 +190,8 @@ export const KanbanColumn = ({
   const isEntityDragOver = useKanbanEntityDropTarget({
     elementRef: scrollRef,
     name: title,
-    onDrop,
+    onDrop: (entityId, _sourceSubgroupValue, expectedUpdatedAt) =>
+      onDrop(entityId, expectedUpdatedAt),
   });
   const { closestEdge: closestColumnEdge, isDragging } = useKanbanColumnDrag({
     columnValue,

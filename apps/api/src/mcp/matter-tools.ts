@@ -719,6 +719,15 @@ const saveContactArgsSchema = nullAsAbsent(
       contact_id: v.optional(
         uuidInputSchema("Contact ID to update; omit to create"),
       ),
+      expected_updated_at: v.optional(
+        v.pipe(
+          v.string(),
+          v.isoTimestamp(),
+          v.description(
+            "Version returned by the contact read; required when updating",
+          ),
+        ),
+      ),
       type: v.optional(
         v.pipe(
           v.picklist(CONTACT_TYPES),
@@ -777,6 +786,15 @@ const saveContactArgsSchema = nullAsAbsent(
         ),
       ),
     }),
+    v.forward(
+      v.partialCheck(
+        [["contact_id"], ["expected_updated_at"]],
+        ({ contact_id, expected_updated_at }) =>
+          contact_id === undefined || expected_updated_at !== undefined,
+        "expected_updated_at is required to update a contact",
+      ),
+      ["expected_updated_at"],
+    ),
     // Creating (no contact_id) requires type and a name to display.
     v.forward(
       v.partialCheck(
@@ -913,6 +931,9 @@ const handleSaveContactTool: TypedMcpToolHandler<
       contactId,
       recordAuditEvent: context.recordAuditEvent,
       body: {
+        expectedUpdatedAt:
+          input.expected_updated_at ??
+          panic("validated contact update token missing"),
         ...(input.type === undefined ? {} : { type: input.type }),
         ...(input.display_name === undefined
           ? {}
@@ -1395,6 +1416,7 @@ const readTaskDetail = async ({
         where: { id: { eq: taskId }, workspaceId: { eq: workspaceId } },
         columns: {
           id: true,
+          updatedAt: true,
           name: true,
           status: true,
           priority: true,
@@ -1514,6 +1536,9 @@ const handleListTasksTool: TypedMcpToolHandler<
 
     const task = {
       taskId: taskRow.id,
+      updatedAt: (
+        taskRow.updatedAt ?? panic("Read task has no update timestamp")
+      ).toISOString(),
       name: taskRow.name,
       status: taskRow.status,
       priority: taskRow.priority,
@@ -1599,6 +1624,15 @@ const saveTaskArgsSchema = nullAsAbsent(
       task_id: v.optional(
         entityIdInputSchema("Task entity ID to update; omit to create"),
       ),
+      expected_updated_at: v.optional(
+        v.pipe(
+          v.string(),
+          v.isoTimestamp(),
+          v.description(
+            "Version returned by the task read; required when updating",
+          ),
+        ),
+      ),
       matter_id: v.optional(
         uuidInputSchema(
           "Matter ID to create the task in; required when creating.",
@@ -1676,6 +1710,15 @@ const saveTaskArgsSchema = nullAsAbsent(
       ),
       unlink_link_id: v.optional(uuidInputSchema("Entity-link ID to remove")),
     }),
+    v.forward(
+      v.partialCheck(
+        [["task_id"], ["expected_updated_at"]],
+        ({ task_id, expected_updated_at }) =>
+          task_id === undefined || expected_updated_at !== undefined,
+        "expected_updated_at is required to update a task",
+      ),
+      ["expected_updated_at"],
+    ),
     // Creating (no task_id) requires matter_id and name.
     v.forward(
       v.partialCheck(
@@ -2055,6 +2098,9 @@ const handleSaveTaskTool: TypedMcpToolHandler<
         userId: context.userId,
         recordAuditEvent,
         body: {
+          expectedUpdatedAt:
+            input.expected_updated_at ??
+            panic("validated task update token missing"),
           taskId,
           ...(input.name === undefined ? {} : { name: input.name }),
           ...(input.status === undefined ? {} : { status: input.status }),

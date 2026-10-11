@@ -391,6 +391,9 @@ export const AIKeyRequiredDialog = ({
       }
 
       const response = await api["organization-settings"]["ai-config"].post({
+        expectedUpdatedAt:
+          config?.updatedAt ??
+          panic("AI config write requires loaded settings"),
         providers: serializeProviderDrafts(providers),
         overrideModels,
       });

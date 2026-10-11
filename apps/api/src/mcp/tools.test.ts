@@ -846,7 +846,10 @@ type MockMcpTransaction = {
       >;
     };
     organizationSettings: {
-      findFirst: () => Promise<{ documentProcessingMode: string }>;
+      findFirst: () => Promise<{
+        documentProcessingMode: string;
+        updatedAt: Date;
+      }>;
     };
     searchDocuments: {
       findFirst: () => Promise<{ updatedAt: Date } | undefined>;
@@ -1046,6 +1049,7 @@ const createScopedDb = (
               findFirst: async () => ({
                 documentProcessingMode:
                   processingState.documentProcessingMode ?? "off",
+                updatedAt: new Date("2026-01-01T00:00:00.000Z"),
               }),
             },
             searchDocuments: {
@@ -9384,7 +9388,10 @@ describe("OpenAI-compatible MCP tools", () => {
               findMany: async () => [],
             },
             organizationSettings: {
-              findFirst: async () => ({ documentProcessingMode: "off" }),
+              findFirst: async () => ({
+                documentProcessingMode: "off",
+                updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+              }),
             },
             searchDocuments: {
               findFirst: async () => ({
@@ -9663,6 +9670,8 @@ describe("OpenAI-compatible MCP tools", () => {
   // list_tasks (detail) and save_task confine themselves to entities of kind
   // "task": a document/folder ID the caller can otherwise access is rejected as
   // wrong-kind, not acted on.
+  const TASK_UPDATED_AT = new Date("2026-01-01T00:00:00.000Z");
+
   const createTaskKindScopedDb = (kind: string) =>
     createScopedDbMock({
       select: () =>
@@ -9689,7 +9698,11 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("save_task rejects a task_id that is not a task", async () => {
     const result = await handleMcpToolCall({
-      args: { task_id: DOCUMENT_ENTITY_ID, name: "Renamed" },
+      args: {
+        task_id: DOCUMENT_ENTITY_ID,
+        expected_updated_at: TASK_UPDATED_AT.toISOString(),
+        name: "Renamed",
+      },
       context: createContext({ scopedDb: createTaskKindScopedDb("document") }),
       toolName: "save_task",
     });
@@ -9706,6 +9719,7 @@ describe("OpenAI-compatible MCP tools", () => {
     const result = await handleMcpToolCall({
       args: {
         task_id: "00000000-0000-4000-8000-00000007a001",
+        expected_updated_at: TASK_UPDATED_AT.toISOString(),
         matter_id: WORKSPACE_ID_2,
         name: "Renamed",
       },
@@ -9764,6 +9778,7 @@ describe("OpenAI-compatible MCP tools", () => {
     const result = await handleMcpToolCall({
       args: {
         task_id: "00000000-0000-4000-8000-00000007a001",
+        expected_updated_at: TASK_UPDATED_AT.toISOString(),
         unlink_link_id: ENTITY_LINK_ID,
       },
       context: createContext({ scopedDb: createUnlinkMismatchScopedDb() }),
@@ -9821,6 +9836,7 @@ describe("OpenAI-compatible MCP tools", () => {
     const result = await handleMcpToolCall({
       args: {
         task_id: "00000000-0000-4000-8000-00000007a001",
+        expected_updated_at: TASK_UPDATED_AT.toISOString(),
         name: "Renamed",
         link_entity_id: "00000000-0000-4000-8000-00000007a001",
       },
@@ -9845,6 +9861,7 @@ describe("OpenAI-compatible MCP tools", () => {
     const result = await handleMcpToolCall({
       args: {
         task_id: "00000000-0000-4000-8000-00000007a001",
+        expected_updated_at: TASK_UPDATED_AT.toISOString(),
         name: "Renamed",
         link_entity_id: "00000000-0000-4000-8000-00000007a002",
       },
@@ -9886,7 +9903,10 @@ describe("OpenAI-compatible MCP tools", () => {
         from: (table: unknown) => {
           if (table === entities) {
             return createSelectQueryMock([
-              { id: "00000000-0000-4000-8000-00000007a001" },
+              {
+                id: "00000000-0000-4000-8000-00000007a001",
+                updatedAt: TASK_UPDATED_AT,
+              },
             ]).from();
           }
           return createSelectQueryMock(
@@ -9935,7 +9955,11 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { task_id: "00000000-0000-4000-8000-00000007a001", status: "done" },
+      args: {
+        task_id: "00000000-0000-4000-8000-00000007a001",
+        expected_updated_at: TASK_UPDATED_AT.toISOString(),
+        status: "done",
+      },
       context: createContext({ scopedDb }),
       toolName: "save_task",
     }).finally(restoreRuntimeMode);
@@ -10035,6 +10059,7 @@ describe("OpenAI-compatible MCP tools", () => {
         scopedDb: createSelectListScopedDb([
           {
             id: "00000000-0000-4000-8000-00000007a001",
+            updatedAt: TASK_UPDATED_AT,
             name: "John Smith deposition",
             status: "open",
             priority: "high",
@@ -10060,6 +10085,7 @@ describe("OpenAI-compatible MCP tools", () => {
       tasks: [
         {
           id: "00000000-0000-4000-8000-00000007a001",
+          updatedAt: TASK_UPDATED_AT.toISOString(),
           itemType: "task",
           name: "[PERSON_1] deposition",
           status: "open",

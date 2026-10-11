@@ -3,6 +3,7 @@ import { t } from "elysia";
 
 import { MODEL_ROLES, TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 
+import type { Transaction } from "@/api/db/root";
 import { organizationSettings } from "@/api/db/schema";
 import {
   DECISION_MODEL_PROVIDERS,
@@ -28,14 +29,19 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { OPTIONAL_ANTHROPIC_WORKSPACE_ID_PATTERN } from "@/api/lib/chat/anthropic-config";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { expectedUpdatedAtSchema } from "@/api/lib/optimistic-concurrency";
 import { isAllowedBYOKModelForRole } from "@/api/lib/tanstack-ai-models";
 import type { BYOKProvider, ModelRole } from "@/api/lib/tanstack-ai-models";
 import { probeDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
+import { enforceWritePrecondition } from "@/api/lib/write-contract";
 
 import { resolveDecisionConfig } from "./ai-config-decision";
 
@@ -68,6 +74,7 @@ const decisionBody = t.Object({
 });
 
 const updateAIConfigBody = t.Object({
+  expectedUpdatedAt: expectedUpdatedAtSchema,
   providers: t.Array(providerBody, { minItems: 1 }),
   overrideModels: t.Optional(
     t.Nullable(
@@ -84,11 +91,7 @@ const updateAIConfigBody = t.Object({
 
 const config = {
   contract: "replace",
-  precondition: {
-    type: "deferred",
-    baselineId:
-      "apps/api/src/handlers/organization-settings/update-ai-config.ts",
-  },
+  precondition: { type: "updatedAt", field: "expectedUpdatedAt" },
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
@@ -124,13 +127,33 @@ const updateAIConfig = createSafeRootHandler(
           columns: {
             aiConfigEncrypted: true,
             aiConfigIv: true,
+            updatedAt: true,
           },
         }),
       ),
     );
 
-    const ciphertext = row?.aiConfigEncrypted;
-    const iv = row?.aiConfigIv;
+    if (!row) {
+      return Result.err(
+        new HandlerError({
+          status: 404,
+          message: "Organization settings not found",
+        }),
+      );
+    }
+    const preflightConflict = enforceWritePrecondition({
+      type: "updatedAt",
+      field: "expectedUpdatedAt",
+      storedUpdatedAt: row.updatedAt,
+      expectedUpdatedAt: body.expectedUpdatedAt,
+      resource: "Organization AI configuration",
+    });
+    if (preflightConflict !== null) {
+      return Result.err(preflightConflict);
+    }
+
+    const ciphertext = row.aiConfigEncrypted;
+    const iv = row.aiConfigIv;
     if (ciphertext && iv) {
       const decryptResult = await Result.tryPromise({
         try: async () =>
@@ -265,39 +288,23 @@ const updateAIConfig = createSafeRootHandler(
       orgConfig,
     );
 
-    yield* Result.await(
-      safeDb(async (tx) => {
-        await tx
-          .insert(organizationSettings)
-          .values({
-            id: createSafeId<"organizationSettings">(),
+    const writeConflict = yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await persistAIConfig({
+            tx,
             organizationId: session.activeOrganizationId,
-            aiConfigEncrypted: newCiphertext,
-            aiConfigIv: newIv,
-          })
-          .onConflictDoUpdate({
-            target: organizationSettings.organizationId,
-            set: {
-              aiConfigEncrypted: newCiphertext,
-              aiConfigIv: newIv,
-              updatedAt: new Date(),
-            },
-          });
-
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
-          resourceId: session.activeOrganizationId,
-          metadata: {
-            field: "aiConfig",
-            providers: orgConfig.providers.map(
-              (providerConfig) => providerConfig.provider,
-            ),
-            decision: orgConfig.decision?.provider ?? null,
-          },
-        });
-      }),
+            expectedUpdatedAt: body.expectedUpdatedAt,
+            orgConfig,
+            ciphertext: newCiphertext,
+            iv: newIv,
+            recordAuditEvent,
+          }),
+      ),
     );
+    if (writeConflict !== null) {
+      return Result.err(writeConflict);
+    }
 
     return Result.ok({
       providers: orgConfig.providers.map((providerConfig) => ({
@@ -318,6 +325,82 @@ const updateAIConfig = createSafeRootHandler(
     });
   },
 );
+
+type PersistAIConfigOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  expectedUpdatedAt: string;
+  orgConfig: OrgAIConfig;
+  ciphertext: Buffer;
+  iv: Buffer;
+  recordAuditEvent: AuditRecorder;
+};
+
+const persistAIConfig = async ({
+  tx,
+  organizationId,
+  expectedUpdatedAt,
+  orgConfig,
+  ciphertext,
+  iv,
+  recordAuditEvent,
+}: PersistAIConfigOptions) => {
+  await withAggregateLock({
+    tx,
+    aggregate: "organizationSettings",
+    id: organizationId,
+    mode: "update",
+  });
+  const current = await tx.query.organizationSettings.findFirst({
+    where: { organizationId: { eq: organizationId } },
+    columns: { updatedAt: true },
+  });
+  if (!current) {
+    return new HandlerError({
+      status: 404,
+      message: "Organization settings not found",
+    });
+  }
+  const conflict = enforceWritePrecondition({
+    type: "updatedAt",
+    field: "expectedUpdatedAt",
+    storedUpdatedAt: current.updatedAt,
+    expectedUpdatedAt,
+    resource: "Organization AI configuration",
+  });
+  if (conflict !== null) {
+    return conflict;
+  }
+  await tx
+    .insert(organizationSettings)
+    .values({
+      id: createSafeId<"organizationSettings">(),
+      organizationId,
+      aiConfigEncrypted: ciphertext,
+      aiConfigIv: iv,
+    })
+    .onConflictDoUpdate({
+      target: organizationSettings.organizationId,
+      set: {
+        aiConfigEncrypted: ciphertext,
+        aiConfigIv: iv,
+        updatedAt: new Date(),
+      },
+    });
+  await recordAuditEvent(tx, {
+    action: AUDIT_ACTION.UPDATE,
+    resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+    resourceId: organizationId,
+    metadata: {
+      field: "aiConfig",
+      providers: orgConfig.providers.map(
+        (providerConfig) => providerConfig.provider,
+      ),
+      decision: orgConfig.decision?.provider ?? null,
+    },
+  });
+  return null;
+};
 
 type ValidationResult = ProviderProbeResult;
 

@@ -18,9 +18,11 @@ import type {
 } from "@/api/lib/ai-config";
 import { decryptAIConfig } from "@/api/lib/ai-config-crypto";
 import { toSafeId } from "@/api/lib/branded-types";
+import { VERSION_CONFLICT_ERROR_CODE } from "@/api/lib/optimistic-concurrency";
 import * as outbound from "@/api/lib/safe-outbound-fetch";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import {
+  NO_AUDIT,
   NO_DB,
   createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
@@ -52,12 +54,15 @@ const createSettingsDb = (
     decision: null,
   };
   const row = {
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
     aiConfigEncrypted: Buffer.from(JSON.stringify(storedConfig)),
     aiConfigIv: Buffer.alloc(12),
   };
   let written: typeof row | undefined;
   let operations = 0;
   const tx = asTestRaw<Transaction>({
+    execute: async () => [{}],
+    query: { organizationSettings: { findFirst: async () => row } },
     insert: () => ({
       values: (value: typeof row) => ({
         onConflictDoUpdate: () => {
@@ -87,7 +92,11 @@ describe("organization AI settings validation", () => {
             scopedDb: NO_DB,
             audit: auditRecorderDouble(),
             safeDb: db.safeDb,
-            body: { providers: [{ provider, region }], overrideModels },
+            body: {
+              expectedUpdatedAt: "2026-01-01T00:00:00.000Z",
+              providers: [{ provider, region }],
+              overrideModels,
+            },
           }),
         );
         expect(result).toMatchObject({
@@ -111,7 +120,11 @@ describe("organization AI settings validation", () => {
           scopedDb: NO_DB,
           audit: auditRecorderDouble(),
           safeDb: db.safeDb,
-          body: { providers: [{ provider: "google", region }], overrideModels },
+          body: {
+            expectedUpdatedAt: "2026-01-01T00:00:00.000Z",
+            providers: [{ provider: "google", region }],
+            overrideModels,
+          },
         }),
       );
       expect(result).toMatchObject({
@@ -175,6 +188,7 @@ describe("Anthropic workspace settings", () => {
           audit: auditRecorderDouble(),
           safeDb: db.safeDb,
           body: {
+            expectedUpdatedAt: "2026-01-01T00:00:00.000Z",
             providers: [
               {
                 provider: "anthropic",
@@ -245,6 +259,7 @@ describe("Anthropic workspace settings", () => {
           audit: auditRecorderDouble(),
           safeDb: db.safeDb,
           body: {
+            expectedUpdatedAt: "2026-01-01T00:00:00.000Z",
             providers: [
               { provider: "anthropic", apiKey: "sk-ant-usr-fixture" },
             ],
@@ -307,7 +322,11 @@ describe("Anthropic workspace settings", () => {
             scopedDb: NO_DB,
             audit: auditRecorderDouble(),
             safeDb: db.safeDb,
-            body: { providers: [input], overrideModels: anthropicOverrides },
+            body: {
+              expectedUpdatedAt: "2026-01-01T00:00:00.000Z",
+              providers: [input],
+              overrideModels: anthropicOverrides,
+            },
           }),
         );
         const written = db.written();
@@ -347,6 +366,7 @@ describe("Anthropic workspace settings", () => {
         audit: auditRecorderDouble(),
         safeDb: db.safeDb,
         body: {
+          expectedUpdatedAt: "2026-01-01T00:00:00.000Z",
           providers: [
             { provider: "google", anthropicWorkspaceId: "wrk_fixture" },
           ],
@@ -391,6 +411,7 @@ describe("Anthropic workspace settings", () => {
           audit: auditRecorderDouble(),
           safeDb: db.safeDb,
           body: {
+            expectedUpdatedAt: "2026-01-01T00:00:00.000Z",
             providers: [
               { provider: "anthropic", apiKey: "sk-ant-usr-fixture" },
               { provider: "google", apiKey: "google-fixture" },
@@ -417,6 +438,7 @@ describe("Anthropic workspace settings", () => {
     for (const anthropicWorkspaceId of ["wrk_safe-ID_01", ""]) {
       expect(
         Value.Check(updateAIConfig.config.body, {
+          expectedUpdatedAt: "2026-01-01T00:00:00.000Z",
           providers: [{ provider: "anthropic", anthropicWorkspaceId }],
           overrideModels: anthropicOverrides,
         }),
@@ -431,6 +453,7 @@ describe("Anthropic workspace settings", () => {
     ]) {
       expect(
         Value.Check(updateAIConfig.config.body, {
+          expectedUpdatedAt: "2026-01-01T00:00:00.000Z",
           providers: [{ provider: "anthropic", anthropicWorkspaceId }],
           overrideModels: anthropicOverrides,
         }),
@@ -477,6 +500,7 @@ describe("sparse custom model settings", () => {
           audit: auditRecorderDouble(),
           safeDb: db.safeDb,
           body: {
+            expectedUpdatedAt: "2026-01-01T00:00:00.000Z",
             providers: [
               { provider: "google", apiKey: "fixture-google-replacement" },
               { provider: "anthropic" },
@@ -520,7 +544,10 @@ describe("sparse custom model settings", () => {
         scopedDb: NO_DB,
         audit: auditRecorderDouble(),
         safeDb: db.safeDb,
-        body: { providers: [{ provider: "google" }] },
+        body: {
+          expectedUpdatedAt: "2026-01-01T00:00:00.000Z",
+          providers: [{ provider: "google" }],
+        },
       }),
     );
     expect((await readSaved(db)).overrideModels).toBeNull();
@@ -533,7 +560,11 @@ describe("sparse custom model settings", () => {
         scopedDb: NO_DB,
         audit: auditRecorderDouble(),
         safeDb: db.safeDb,
-        body: { providers: [{ provider: "google" }], overrideModels: custom },
+        body: {
+          expectedUpdatedAt: "2026-01-01T00:00:00.000Z",
+          providers: [{ provider: "google" }],
+          overrideModels: custom,
+        },
       }),
     );
     const saved = await readSaved(db);
@@ -544,7 +575,11 @@ describe("sparse custom model settings", () => {
         scopedDb: NO_DB,
         audit: auditRecorderDouble(),
         safeDb: reset.safeDb,
-        body: { providers: [{ provider: "google" }], overrideModels: null },
+        body: {
+          expectedUpdatedAt: "2026-01-01T00:00:00.000Z",
+          providers: [{ provider: "google" }],
+          overrideModels: null,
+        },
       }),
     );
     expect((await readSaved(reset)).overrideModels).toBeNull();
@@ -569,11 +604,44 @@ describe("sparse custom model settings", () => {
         scopedDb: NO_DB,
         audit: auditRecorderDouble(),
         safeDb: db.safeDb,
-        body: { providers: [{ provider: "google" }] },
+        body: {
+          expectedUpdatedAt: "2026-01-01T00:00:00.000Z",
+          providers: [{ provider: "google" }],
+        },
       }),
     );
     expect((await readSaved(db)).overrideModels).toEqual({
       chat: overrideModels.chat,
     });
   });
+});
+
+test("rejects a stale AI configuration replacement token", async () => {
+  let operations = 0;
+  const safeDb: SafeDb = async () => {
+    operations += 1;
+    return Result.ok(
+      asTestRaw({
+        aiConfigEncrypted: null,
+        aiConfigIv: null,
+        updatedAt: new Date("2026-01-02T00:00:00.000Z"),
+      }),
+    );
+  };
+  const result = await updateAIConfig.handler(
+    createTestHandlerContext<UpdateContext>({
+      audit: NO_AUDIT,
+      safeDb,
+      scopedDb: NO_DB,
+      body: {
+        expectedUpdatedAt: "2026-01-01T00:00:00.000Z",
+        providers: [{ provider: "google", apiKey: "test-key" }],
+      },
+    }),
+  );
+  expect(result).toMatchObject({
+    code: 409,
+    response: { code: VERSION_CONFLICT_ERROR_CODE },
+  });
+  expect(operations).toBe(1);
 });

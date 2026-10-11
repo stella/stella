@@ -1,11 +1,17 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq, isNull } from "drizzle-orm";
 
-import { anonymizationBlacklistEntries } from "@/api/db/schema";
+import {
+  anonymizationBlacklistEntries,
+  organizationSettings,
+} from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { boundedAll } from "@/api/lib/db/bounded-all";
 import { LIMITS } from "@/api/lib/limits";
+
+import { readOrCreateOrganizationSettings } from "../read-or-create";
 
 const config = {
   contract: "patch",
@@ -30,41 +36,66 @@ const config = {
 // managed per-workspace and must not surface in firm-wide settings.
 const readAnonymizationBlacklist = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session }) {
-    const rows = yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await boundedAll({
-            invariant:
-              "LIMITS.anonymizationBlacklistEntriesPerOrganization, enforced by update-anonymization-blacklist.ts",
-            max: LIMITS.anonymizationBlacklistEntriesPerOrganization,
-            table: "anonymization_blacklist_entries",
-            query: (limit) =>
-              tx
-                .select({
-                  canonical: anonymizationBlacklistEntries.canonical,
-                  enabled: anonymizationBlacklistEntries.enabled,
-                  id: anonymizationBlacklistEntries.id,
-                  label: anonymizationBlacklistEntries.label,
-                  variants: anonymizationBlacklistEntries.variants,
-                })
-                .from(anonymizationBlacklistEntries)
-                .where(
-                  and(
-                    eq(
-                      anonymizationBlacklistEntries.organizationId,
-                      session.activeOrganizationId,
-                    ),
-                    isNull(anonymizationBlacklistEntries.workspaceId),
+  async function* ({ safeDb, session, recordAuditEvent }) {
+    const result = yield* Result.await(
+      safeDb(async (tx) => {
+        await readOrCreateOrganizationSettings({
+          tx,
+          organizationId: session.activeOrganizationId,
+          recordAuditEvent,
+        });
+        // Serialize the collection snapshot with replacements, which lock this
+        // owner row before changing entries and advancing its version.
+        const locked = await withAggregateRowQuery({
+          tx,
+          aggregate: "organizationSettings",
+          id: session.activeOrganizationId,
+          mode: "share",
+          select: (handle) =>
+            handle
+              .select({
+                organizationId: organizationSettings.organizationId,
+                updatedAt: organizationSettings.updatedAt,
+              })
+              .from(organizationSettings),
+        });
+        if (locked.status === "busy") {
+          return panic("Blocking organization settings lock returned busy");
+        }
+        const settings =
+          locked.rows.at(0) ?? panic("Organization settings not found");
+        const rows = await boundedAll({
+          invariant:
+            "LIMITS.anonymizationBlacklistEntriesPerOrganization, enforced by update-anonymization-blacklist.ts",
+          max: LIMITS.anonymizationBlacklistEntriesPerOrganization,
+          table: "anonymization_blacklist_entries",
+          query: (limit) =>
+            tx
+              .select({
+                canonical: anonymizationBlacklistEntries.canonical,
+                enabled: anonymizationBlacklistEntries.enabled,
+                id: anonymizationBlacklistEntries.id,
+                label: anonymizationBlacklistEntries.label,
+                variants: anonymizationBlacklistEntries.variants,
+              })
+              .from(anonymizationBlacklistEntries)
+              .where(
+                and(
+                  eq(
+                    anonymizationBlacklistEntries.organizationId,
+                    session.activeOrganizationId,
                   ),
-                )
-                .orderBy(asc(anonymizationBlacklistEntries.canonical))
-                .limit(limit),
-          }),
-      ),
+                  isNull(anonymizationBlacklistEntries.workspaceId),
+                ),
+              )
+              .orderBy(asc(anonymizationBlacklistEntries.canonical))
+              .limit(limit),
+        });
+        return { entries: rows, updatedAt: settings.updatedAt.toISOString() };
+      }),
     );
 
-    return Result.ok({ entries: rows });
+    return Result.ok(result);
   },
 );
 

@@ -236,7 +236,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella contact read`
   - `--contact-id` — Contact ID (string)
 - `stella contact save`
-  - optional: --contact-id, --type (person|organization), --display-name, --first-name, --last-name, --organization-name, --notes, --nationality-codes
+  - optional: --contact-id, --expected-updated-at, --type (person|organization), --display-name, --first-name, --last-name, --organization-name, --notes, --nationality-codes
   - via `--input` only: date_of_birth
   - date_of_birth: precision="year": year:integer; precision="month": year:integer, month:integer; precision="day": year:integer, month:integer, day:integer. Example: `--input '{"date_of_birth":{"precision":"year","year":1000}}'`
 - `stella document compare`
@@ -322,7 +322,9 @@ are omitted here. Input union keys are required unless marked `?`.
   - `--matter-id` — Matter ID for add_member and remove_member. (string)
   - `--user-id` — User id to add or remove for the member actions (string)
   - optional: --reassign-to
-- `stella organization set-jurisdictions` — no flags; pass `--input` with jurisdictions
+- `stella organization set-jurisdictions`
+  - `--expected-updated-at` — Version returned by organization settings (string)
+  - via `--input` only: jurisdictions
 - `stella organization update-settings`
   - optional: --matter-number-pattern, --matter-number-padding, --prompt-caching-enabled, --document-processing-mode (off|searchable-text), --time-minimum-unit-minutes, --time-edit-window-days, --time-locked-through-month, --time-narrative-required, --time-zone
 - `stella playbook list`
@@ -345,7 +347,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella task list`
   - optional: --matter-id, --task-id, --assignee (me|any|unassigned), --date-from, --date-to, --status
 - `stella task save`
-  - optional: --task-id, --matter-id, --name, --status (open|in_progress|in_review|done|cancelled), --priority (none|urgent|high|medium|low), --item-type (task|fact|issue|requirement|event), --list-id, --list-section-id, --list-description, --due-date, --workflow-reason, --add-assignee-user-id, --remove-assignee-user-id, --link-entity-id, --unlink-link-id
+  - optional: --task-id, --expected-updated-at, --matter-id, --name, --status (open|in_progress|in_review|done|cancelled), --priority (none|urgent|high|medium|low), --item-type (task|fact|issue|requirement|event), --list-id, --list-section-id, --list-description, --due-date, --workflow-reason, --add-assignee-user-id, --remove-assignee-user-id, --link-entity-id, --unlink-link-id
 - `stella template configure-fields`
   - `--template-id` — Template to configure, as returned by create_template or list_templates (string)
   - via `--input` only: fields

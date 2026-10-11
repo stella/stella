@@ -71,6 +71,7 @@ type CalendarViewProps = {
 };
 
 type HandleDropParams = {
+  expectedUpdatedAt: string | null;
   date: string;
   entityId: string;
   kind: string;
@@ -434,7 +435,12 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     pendingScrollMonthKey.current = null;
   }, [mode, monthWindowStart, viewDate]);
 
-  const handleDrop = ({ date, entityId, kind }: HandleDropParams) => {
+  const handleDrop = ({
+    date,
+    entityId,
+    kind,
+    expectedUpdatedAt,
+  }: HandleDropParams) => {
     if (!isEditable) {
       return;
     }
@@ -447,6 +453,9 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
                 .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
                 .patch({
                   taskId: toSafeId<"entity">(entityId),
+                  expectedUpdatedAt:
+                    expectedUpdatedAt ??
+                    panic("Dragged calendar task has no observed version"),
                   dueDate: date,
                 }),
             ),
@@ -471,6 +480,9 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
                 .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
                 .patch({
                   taskId: toSafeId<"entity">(entityId),
+                  expectedUpdatedAt:
+                    expectedUpdatedAt ??
+                    panic("Dragged calendar task has no observed version"),
                   allDay: true,
                   startAt: toDayStartDateTime(date),
                 }),
@@ -672,8 +684,13 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
                               "calendar-view.create-entry-month",
                             );
                           }}
-                          onDrop={(entityId, kind) =>
-                            handleDrop({ date: day.date, entityId, kind })
+                          onDrop={(entityId, kind, expectedUpdatedAt) =>
+                            handleDrop({
+                              date: day.date,
+                              entityId,
+                              kind,
+                              expectedUpdatedAt,
+                            })
                           }
                           workspaceId={workspaceId}
                         />
@@ -707,8 +724,13 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
                       "calendar-view.create-entry-week",
                     );
                   }}
-                  onDrop={(entityId, kind) =>
-                    handleDrop({ date: day.date, entityId, kind })
+                  onDrop={(entityId, kind, expectedUpdatedAt) =>
+                    handleDrop({
+                      date: day.date,
+                      entityId,
+                      kind,
+                      expectedUpdatedAt,
+                    })
                   }
                   workspaceId={workspaceId}
                 />

@@ -6,17 +6,9 @@ import type {
   DocumentProcessingMode,
   PracticeJurisdiction,
 } from "@/api/db/schema";
-import {
-  DEFAULT_DOCUMENT_PROCESSING_MODE,
-  DEFAULT_TIME_EDIT_WINDOW_DAYS,
-  DEFAULT_TIME_MINIMUM_UNIT_MINUTES,
-  DEFAULT_TIME_NARRATIVE_REQUIRED,
-} from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { arrayOrEmpty } from "@/api/lib/array";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
-import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
@@ -26,13 +18,11 @@ import {
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import {
-  DEFAULT_MATTER_NUMBER_PADDING,
-  DEFAULT_MATTER_NUMBER_PATTERN,
-} from "@/api/lib/matter-reference";
-import {
   effectiveOrganizationTimeZone,
   ORGANIZATION_TIME_ZONE_SOURCE,
 } from "@/api/lib/organization-time-zone";
+
+import { readOrCreateOrganizationSettings } from "./read-or-create";
 
 const config = {
   contract: "patch",
@@ -58,6 +48,7 @@ const config = {
 } satisfies HandlerConfig;
 
 type OrganizationSettingsRow = {
+  updatedAt: Date;
   documentProcessingMode: DocumentProcessingMode;
   matterNumberPadding: number;
   matterNumberPattern: string;
@@ -73,7 +64,7 @@ type OrganizationSettingsRow = {
 };
 
 export const projectOrganizationSettingsRow = (
-  row: OrganizationSettingsRow | null | undefined,
+  row: OrganizationSettingsRow,
   snapshot: FeatureAccessSnapshot,
 ) => {
   const visibleDecisions = Array.from(snapshot.decisions).filter(
@@ -82,6 +73,7 @@ export const projectOrganizationSettingsRow = (
       isFeatureEnabled(snapshot, featureId, snapshot),
   );
   return {
+    updatedAt: row.updatedAt.toISOString(),
     declaredFeatureIds: visibleDecisions.map(([featureId]) => featureId),
     deploymentFeatures: {
       legalLists: isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS"),
@@ -99,29 +91,23 @@ export const projectOrganizationSettingsRow = (
           ] as const,
       ),
     ),
-    documentProcessingMode:
-      row?.documentProcessingMode ?? DEFAULT_DOCUMENT_PROCESSING_MODE,
-    matterNumberPattern:
-      row?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN,
-    matterNumberPadding:
-      row?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING,
-    practiceJurisdictions: arrayOrEmpty(row?.practiceJurisdictions),
-    promptCachingEnabled: row?.promptCachingEnabled ?? true,
-    managedAIResidency: row?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY,
-    memoryExtractionEnabled: row?.memoryExtractionEnabled ?? false,
-    timeMinimumUnitMinutes:
-      row?.timeMinimumUnitMinutes ?? DEFAULT_TIME_MINIMUM_UNIT_MINUTES,
-    timeEditWindowDays:
-      row?.timeEditWindowDays ?? DEFAULT_TIME_EDIT_WINDOW_DAYS,
-    timeLockedThroughMonth: row?.timeLockedThroughMonth ?? null,
-    timeNarrativeRequired:
-      row?.timeNarrativeRequired ?? DEFAULT_TIME_NARRATIVE_REQUIRED,
+    documentProcessingMode: row.documentProcessingMode,
+    matterNumberPattern: row.matterNumberPattern,
+    matterNumberPadding: row.matterNumberPadding,
+    practiceJurisdictions: row.practiceJurisdictions,
+    promptCachingEnabled: row.promptCachingEnabled,
+    managedAIResidency: row.managedAIResidency,
+    memoryExtractionEnabled: row.memoryExtractionEnabled,
+    timeMinimumUnitMinutes: row.timeMinimumUnitMinutes,
+    timeEditWindowDays: row.timeEditWindowDays,
+    timeLockedThroughMonth: row.timeLockedThroughMonth,
+    timeNarrativeRequired: row.timeNarrativeRequired,
     timeZone: effectiveOrganizationTimeZone({
-      timeZone: row?.timeZone ?? null,
-      practiceJurisdictions: arrayOrEmpty(row?.practiceJurisdictions),
+      timeZone: row.timeZone,
+      practiceJurisdictions: row.practiceJurisdictions,
     }),
     timeZoneSource:
-      (row?.timeZone ?? null) === null
+      row.timeZone === null
         ? ORGANIZATION_TIME_ZONE_SOURCE.PRACTICE_JURISDICTION
         : ORGANIZATION_TIME_ZONE_SOURCE.ORGANIZATION,
   };
@@ -129,25 +115,19 @@ export const projectOrganizationSettingsRow = (
 
 const readOrganizationSettings = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, user, featureAccessSnapshot }) {
+  async function* ({
+    safeDb,
+    session,
+    user,
+    featureAccessSnapshot,
+    recordAuditEvent,
+  }) {
     const row = yield* Result.await(
       safeDb((tx) =>
-        tx.query.organizationSettings.findFirst({
-          where: { organizationId: { eq: session.activeOrganizationId } },
-          columns: {
-            documentProcessingMode: true,
-            matterNumberPattern: true,
-            matterNumberPadding: true,
-            practiceJurisdictions: true,
-            promptCachingEnabled: true,
-            managedAIResidency: true,
-            memoryExtractionEnabled: true,
-            timeMinimumUnitMinutes: true,
-            timeEditWindowDays: true,
-            timeLockedThroughMonth: true,
-            timeNarrativeRequired: true,
-            timeZone: true,
-          },
+        readOrCreateOrganizationSettings({
+          tx,
+          organizationId: session.activeOrganizationId,
+          recordAuditEvent,
         }),
       ),
     );

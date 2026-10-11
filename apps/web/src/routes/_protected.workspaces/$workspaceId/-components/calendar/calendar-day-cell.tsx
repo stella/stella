@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
@@ -38,7 +39,11 @@ type CalendarDayCellProps = {
   mode: "month" | "week";
   isEditable: boolean;
   workspaceId: string;
-  onDrop: (entityId: string, kind: string) => void;
+  onDrop: (
+    entityId: string,
+    kind: string,
+    expectedUpdatedAt: string | null,
+  ) => void;
   onCreate: (kind: EntityKind) => void;
 };
 
@@ -99,7 +104,13 @@ export const CalendarDayCell = ({
     }
     return dropTargetForElements({
       element: el,
-      canDrop: ({ source }) => source.data["type"] === ENTITY_DRAG_TYPE,
+      canDrop: ({ source }) => {
+        const expectedUpdatedAt = source.data["expectedUpdatedAt"];
+        return (
+          source.data["type"] === ENTITY_DRAG_TYPE &&
+          (typeof expectedUpdatedAt === "string" || expectedUpdatedAt === null)
+        );
+      },
       getData: () =>
         withDropAnnouncementData(
           {},
@@ -112,9 +123,17 @@ export const CalendarDayCell = ({
         const entityId = source.data["entityId"];
         const kind = source.data["kind"];
         if (typeof entityId === "string") {
+          const expectedUpdatedAt = source.data["expectedUpdatedAt"];
+          if (
+            typeof expectedUpdatedAt !== "string" &&
+            expectedUpdatedAt !== null
+          ) {
+            panic("Accepted calendar task has no observed version");
+          }
           handleEntityDrop(
             entityId,
             typeof kind === "string" ? kind : "document",
+            expectedUpdatedAt,
           );
         }
       },

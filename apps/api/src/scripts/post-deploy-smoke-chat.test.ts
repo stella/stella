@@ -199,7 +199,11 @@ describe("describeChatSendFailure", () => {
 
 describe("buildSmokeAIConfigBody", () => {
   test("puts the one smoke model on every role of the keyed provider", () => {
-    const body = buildSmokeAIConfigBody("key");
+    const body = buildSmokeAIConfigBody({
+      apiKey: "key",
+      expectedUpdatedAt: "2026-01-01T00:00:00.000Z",
+    });
+    expect(body.expectedUpdatedAt).toBe("2026-01-01T00:00:00.000Z");
     expect(body.providers).toEqual([{ provider: "openai", apiKey: "key" }]);
     expect(Object.keys(body.overrideModels).toSorted()).toEqual([
       "chat",
@@ -557,6 +561,14 @@ const createFakeDeployment = ({
       return await Promise.resolve(Response.json({}));
     }
     if (path === "/v1/organization-settings/ai-config") {
+      if (method === "GET") {
+        return await Promise.resolve(
+          Response.json({ updatedAt: "2026-01-01T00:00:00.000Z" }),
+        );
+      }
+      expect(body).toMatchObject({
+        expectedUpdatedAt: "2026-01-01T00:00:00.000Z",
+      });
       return await Promise.resolve(Response.json({}));
     }
     if (path.endsWith("/messages")) {
@@ -654,6 +666,7 @@ describe("runAIChatJourney", () => {
     expect(turn).toMatchObject({ ok: false });
     expect(turn?.detail).toContain("AI smoke organization");
     expect(deployment.calls).toEqual([
+      "GET /v1/organization-settings/ai-config",
       "POST /v1/organization-settings/ai-config",
       "POST /v1/chat/",
       "REFRESH session",
@@ -706,6 +719,36 @@ describe("runAIChatJourney", () => {
     ]);
   });
 
+  test("never writes AI settings or creates a thread without a current update token", async () => {
+    for (const currentResponse of [
+      () => Response.json({ message: "unavailable" }, { status: 503 }),
+      () => Response.json({}),
+      () => Response.json({ updatedAt: "invalid" }),
+    ]) {
+      const calls: string[] = [];
+      const checks = await runAIChatJourney({
+        apiKey: "key",
+        refreshSession: async () => {
+          await Promise.resolve();
+        },
+        request: async (path, { method }) => {
+          calls.push(`${method ?? "GET"} ${path}`);
+          return await Promise.resolve(
+            method === "DELETE" ? Response.json({}) : currentResponse(),
+          );
+        },
+      });
+      expect(checks.at(0)).toMatchObject({
+        name: "POST /v1/organization-settings/ai-config",
+        ok: false,
+      });
+      expect(calls).toEqual([
+        "GET /v1/organization-settings/ai-config",
+        "DELETE /v1/organization-settings/ai-config",
+      ]);
+    }
+  });
+
   test("never creates a thread when the AI config is refused", async () => {
     const calls: string[] = [];
     const checks = await runAIChatJourney({
@@ -716,6 +759,9 @@ describe("runAIChatJourney", () => {
       },
       request: async (path, { method }) => {
         calls.push(`${method ?? "GET"} ${path}`);
+        if (method === "GET") {
+          return Response.json({ updatedAt: "2026-01-01T00:00:00.000Z" });
+        }
         return await Promise.resolve(
           method === "DELETE"
             ? Response.json({})
@@ -725,6 +771,7 @@ describe("runAIChatJourney", () => {
     });
     expect(checks.map(({ ok }) => ok)).toEqual([false, true]);
     expect(calls).toEqual([
+      "GET /v1/organization-settings/ai-config",
       "POST /v1/organization-settings/ai-config",
       "REFRESH session",
       "DELETE /v1/organization-settings/ai-config",

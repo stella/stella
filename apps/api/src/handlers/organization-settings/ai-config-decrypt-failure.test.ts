@@ -22,6 +22,7 @@ import updateAIConfig from "./update-ai-config";
  * reach its decrypt-failure branch.
  */
 const undecryptableRow = {
+  updatedAt: new Date("2026-01-01T00:00:00.000Z"),
   aiConfigEncrypted: Buffer.from(
     "9f3c1a77e5b40d28cc6f01935ae2d4b8a71c5e6039f8d24b7ce013a5b6082f4d",
     "hex",
@@ -33,6 +34,7 @@ type UpdateContext = Parameters<typeof updateAIConfig.handler>[0];
 type ReadContext = Parameters<typeof readAIConfig.handler>[0];
 
 const updateBody = {
+  expectedUpdatedAt: "2026-01-01T00:00:00.000Z",
   providers: [{ provider: "google", apiKey: "test-google-key" }],
   overrideModels: {
     fast: { provider: "google", modelId: "gemini-3.5-flash" },
@@ -41,7 +43,7 @@ const updateBody = {
     pdf: { provider: "google", modelId: "gemini-3.5-flash" },
   },
   decision: null,
-};
+} satisfies UpdateContext["body"];
 
 const writeRejectingTx = asTestRaw<Transaction>({
   insert: () => {

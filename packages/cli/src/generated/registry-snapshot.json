@@ -601,9 +601,14 @@
     "description": "Set the practice jurisdictions for the user's stella organization. Call this when the org's practice jurisdictions are empty (e.g., the user signed up via an OAuth client and skipped onboarding). Pass an array of {country_code, is_primary}; exactly one entry should be primary.",
     "inputSchema": {
       "type": "object",
-      "required": ["jurisdictions"],
+      "required": ["expected_updated_at", "jurisdictions"],
       "additionalProperties": false,
       "properties": {
+        "expected_updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Version returned by organization settings"
+        },
         "jurisdictions": {
           "type": "array",
           "items": {
@@ -2922,6 +2927,11 @@
           "format": "uuid",
           "description": "Contact ID to update; omit to create"
         },
+        "expected_updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Version returned by the contact read; required when updating"
+        },
         "type": {
           "enum": ["person", "organization"],
           "type": "string",
@@ -3535,6 +3545,11 @@
           "type": "string",
           "format": "uuid",
           "description": "Task entity ID to update; omit to create"
+        },
+        "expected_updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Version returned by the task read; required when updating"
         },
         "matter_id": {
           "type": "string",

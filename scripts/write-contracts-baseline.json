@@ -24,12 +24,6 @@
     "baselineId": "apps/api/src/handlers/clauses/update.ts"
   },
   {
-    "key": "apps/api/src/handlers/contacts/routes.ts|POST|/contacts/:contactId/|apps/api/src/handlers/contacts/update.ts.handler",
-    "count": 1,
-    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
-    "baselineId": "apps/api/src/handlers/contacts/update.ts"
-  },
-  {
     "key": "apps/api/src/handlers/document-types/routes.ts|POST|/document-types/reorder|apps/api/src/handlers/document-types/reorder.ts.handler",
     "count": 1,
     "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
@@ -90,24 +84,6 @@
     "baselineId": "apps/api/src/handlers/lists/items/fact-details/update.ts"
   },
   {
-    "key": "apps/api/src/handlers/organization-settings/routes.ts|POST|/organization-settings/ai-config|apps/api/src/handlers/organization-settings/update-ai-config.ts.handler",
-    "count": 1,
-    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
-    "baselineId": "apps/api/src/handlers/organization-settings/update-ai-config.ts"
-  },
-  {
-    "key": "apps/api/src/handlers/organization-settings/routes.ts|POST|/organization-settings/practice-jurisdictions|apps/api/src/handlers/organization-settings/practice-jurisdictions/update.ts.handler",
-    "count": 1,
-    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
-    "baselineId": "apps/api/src/handlers/organization-settings/practice-jurisdictions/update.ts"
-  },
-  {
-    "key": "apps/api/src/handlers/organization-settings/routes.ts|PUT|/organization-settings/anonymization-blacklist|apps/api/src/handlers/organization-settings/anonymization-blacklist/update.ts.handler",
-    "count": 1,
-    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
-    "baselineId": "apps/api/src/handlers/organization-settings/anonymization-blacklist/update.ts"
-  },
-  {
     "key": "apps/api/src/handlers/playbooks/routes.ts|PUT|/playbooks/:playbookId|apps/api/src/handlers/playbooks/update.ts.handler",
     "count": 1,
     "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
@@ -160,12 +136,6 @@
     "count": 1,
     "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
     "baselineId": "apps/api/src/handlers/style-sets/replace.ts"
-  },
-  {
-    "key": "apps/api/src/handlers/tasks/routes.ts|PATCH|/tasks/:workspaceId/|apps/api/src/handlers/tasks/update.ts.handler",
-    "count": 1,
-    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
-    "baselineId": "apps/api/src/handlers/tasks/update.ts"
   },
   {
     "key": "apps/api/src/handlers/templates/routes.ts|POST|/templates/:templateId/document|apps/api/src/handlers/templates/document/update.ts.handler",

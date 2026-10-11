@@ -31,15 +31,19 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
 import { nationalityCodesSchema } from "@/api/lib/business-registries/nationality-codes";
 import { tMinorUnitAmount, tSafeId, tUserId } from "@/api/lib/custom-schema";
+import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
+import { expectedUpdatedAtSchema } from "@/api/lib/optimistic-concurrency";
 import { pickDefined } from "@/api/lib/pick-defined";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { lockOrgUserIdsForAssignment } from "@/api/lib/validated-org-user-id";
+import { enforceWritePrecondition } from "@/api/lib/write-contract";
 
 const updateContactBodySchema = t.Object({
+  expectedUpdatedAt: expectedUpdatedAtSchema,
   type: t.Optional(contactTypeSchema),
   prefix: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),
   firstName: t.Optional(t.Nullable(t.String({ maxLength: 256 }))),
@@ -152,6 +156,45 @@ const contactRateUpdates = async ({
   });
 };
 
+type LockContactForWriteOptions = {
+  tx: Transaction;
+  contactId: SafeId<"contact">;
+  organizationId: SafeId<"organization">;
+};
+
+const lockContactForWrite = async ({
+  tx,
+  contactId,
+  organizationId,
+}: LockContactForWriteOptions) => {
+  const locked = await withAggregateRowQuery({
+    tx,
+    aggregate: "contact",
+    id: { id: contactId, organizationId },
+    mode: "update",
+    select: (queryTx) =>
+      queryTx
+        .select({
+          id: contacts.id,
+          organizationId: contacts.organizationId,
+          type: contacts.type,
+          metadata: contacts.metadata,
+          currency: contacts.currency,
+          defaultHourlyRate: contacts.defaultHourlyRate,
+          dateOfBirthYear: contacts.dateOfBirthYear,
+          dateOfBirthMonth: contacts.dateOfBirthMonth,
+          dateOfBirthDay: contacts.dateOfBirthDay,
+          nationalityCodes: contacts.nationalityCodes,
+          updatedAt: contacts.updatedAt,
+        })
+        .from(contacts),
+  });
+  if (locked.status === "busy") {
+    return Result.err(locked.error);
+  }
+  return Result.ok(locked.rows.at(0));
+};
+
 // Shared contact-update logic reused by the HTTP handler and the
 // `save_contact` MCP tool, so both emit identical audit events and
 // search-index writes.
@@ -190,30 +233,27 @@ export const updateContactHandler = async function* ({
           }),
         };
       }
-      const existingRows = await tx
-        .select({
-          id: contacts.id,
-          type: contacts.type,
-          metadata: contacts.metadata,
-          currency: contacts.currency,
-          defaultHourlyRate: contacts.defaultHourlyRate,
-          dateOfBirthYear: contacts.dateOfBirthYear,
-          dateOfBirthMonth: contacts.dateOfBirthMonth,
-          dateOfBirthDay: contacts.dateOfBirthDay,
-          nationalityCodes: contacts.nationalityCodes,
-        })
-        .from(contacts)
-        .where(
-          and(
-            eq(contacts.id, contactId),
-            eq(contacts.organizationId, organizationId),
-          ),
-        )
-        .limit(1)
-        .for("update");
-      const existing = existingRows.at(0);
+      const contactLock = await lockContactForWrite({
+        tx,
+        contactId,
+        organizationId,
+      });
+      if (contactLock.isErr()) {
+        return { kind: "invalid" as const, error: contactLock.error };
+      }
+      const existing = contactLock.value;
       if (!existing) {
         return { kind: "not_found" as const };
+      }
+      const conflict = enforceWritePrecondition({
+        type: "updatedAt",
+        field: "expectedUpdatedAt",
+        storedUpdatedAt: existing.updatedAt,
+        expectedUpdatedAt: body.expectedUpdatedAt,
+        resource: "Contact",
+      });
+      if (conflict !== null) {
+        return { kind: "invalid" as const, error: conflict };
       }
 
       const error = validatePersonDetails({
@@ -366,10 +406,7 @@ export const updateContactHandler = async function* ({
 const updateContactById = createSafeRootHandler(
   {
     contract: "replace",
-    precondition: {
-      type: "deferred",
-      baselineId: "apps/api/src/handlers/contacts/update.ts",
-    },
+    precondition: { type: "updatedAt", field: "expectedUpdatedAt" },
     description:
       "Change a contact in the organization address book, writing only the " +
       "fields you pass and clearing a nullable one when you pass null. " +
@@ -383,6 +420,33 @@ const updateContactById = createSafeRootHandler(
     body: updateContactBodySchema,
   },
   async function* ({ safeDb, session, params, body, recordAuditEvent }) {
+    const current = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.contacts.findFirst({
+          where: {
+            id: { eq: params.contactId },
+            organizationId: { eq: session.activeOrganizationId },
+          },
+          columns: { updatedAt: true },
+        }),
+      ),
+    );
+    if (!current) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Contact not found" }),
+      );
+    }
+    const conflict = enforceWritePrecondition({
+      type: "updatedAt",
+      field: "expectedUpdatedAt",
+      storedUpdatedAt: current.updatedAt,
+      expectedUpdatedAt: body.expectedUpdatedAt,
+      resource: "Contact",
+    });
+    if (conflict !== null) {
+      return Result.err(conflict);
+    }
+
     return yield* updateContactHandler({
       safeDb,
       organizationId: session.activeOrganizationId,

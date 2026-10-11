@@ -200,6 +200,17 @@ const executeFlowStepWithTestModel = async (
   });
 
 /** The task a run's review gate raised, with the obligation that governs it. */
+const loadTaskUpdatedAt = async (taskId: SafeId<"entity">) => {
+  const task = await testDb.query.entities.findFirst({
+    where: { id: { eq: taskId } },
+    columns: { updatedAt: true },
+  });
+  if (!task) {
+    throw new Error("Expected a persisted task before updating it");
+  }
+  return task.updatedAt.toISOString();
+};
+
 const loadReviewTask = async (runId: SafeId<"flowRun">, stepIndex: number) => {
   const step = await testDb.query.flowRunSteps.findFirst({
     where: { runId: { eq: runId }, index: { eq: stepIndex } },
@@ -512,13 +523,18 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
           .where(eq(workObligations.entityId, taskEntityId));
       }
       if (closingPath === "task update") {
+        const expectedUpdatedAt = await loadTaskUpdatedAt(taskEntityId);
         const result = await Result.gen(() =>
           updateTaskHandler({
             safeDb,
             workspaceId,
             userId,
             recordAuditEvent: async () => undefined,
-            body: { taskId: taskEntityId, status: "cancelled" },
+            body: {
+              expectedUpdatedAt,
+              taskId: taskEntityId,
+              status: "cancelled",
+            },
             features: { governedWorkflow, legalLists: false },
             decideGate: async (options) =>
               await decideGateForTask(options, {
@@ -597,13 +613,18 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
         columns: { status: true },
       });
       expect(run?.status).toBe("awaiting_review");
+      const expectedUpdatedAt = await loadTaskUpdatedAt(taskEntityId);
       const cancelled = await Result.gen(() =>
         updateTaskHandler({
           safeDb,
           workspaceId,
           userId,
           recordAuditEvent: async () => undefined,
-          body: { taskId: taskEntityId, status: "cancelled" },
+          body: {
+            expectedUpdatedAt,
+            taskId: taskEntityId,
+            status: "cancelled",
+          },
           features: { governedWorkflow, legalLists: false },
           decideGate: async (options) =>
             await decideGateForTask(options, {
@@ -686,6 +707,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
                 ...context,
                 body: {
                   entityId: taskEntityId,
+                  expectedUpdatedAt: await loadTaskUpdatedAt(taskEntityId),
                   status,
                   fields: [
                     {
@@ -842,13 +864,18 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       throw rejected.error;
     }
     await expectRejectedGate(runId);
+    const expectedUpdatedAt = await loadTaskUpdatedAt(taskEntityId);
     const reopened = await Result.gen(() =>
       updateTaskHandler({
         safeDb,
         workspaceId,
         userId,
         recordAuditEvent: async () => undefined,
-        body: { taskId: taskEntityId, status: "open" },
+        body: {
+          expectedUpdatedAt,
+          taskId: taskEntityId,
+          status: "open",
+        },
         features: { governedWorkflow: false, legalLists: false },
         decideGate: async (options) =>
           await decideGateForTask(options, {
@@ -884,13 +911,18 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       columns: { status: true, output: true },
     });
     expect(before).toEqual({ status: "awaiting_review", output: null });
+    const expectedUpdatedAt = await loadTaskUpdatedAt(taskEntityId);
     const cancelled = await Result.gen(() =>
       updateTaskHandler({
         safeDb,
         workspaceId,
         userId,
         recordAuditEvent: async () => undefined,
-        body: { taskId: taskEntityId, status: "cancelled" },
+        body: {
+          expectedUpdatedAt,
+          taskId: taskEntityId,
+          status: "cancelled",
+        },
         features: { governedWorkflow: true, legalLists: false },
         decideGate: async (options) =>
           await decideGateForTask(options, {
@@ -968,13 +1000,18 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     expect(before.run?.status).toBe("awaiting_review");
     expect(before.run?.currentStepIndex).toBe(1);
     expect(before.steps.at(1)?.status).toBe("awaiting_review");
+    const expectedUpdatedAt = await loadTaskUpdatedAt(taskEntityId);
     const stale = await Result.gen(() =>
       updateTaskHandler({
         safeDb,
         workspaceId,
         userId,
         recordAuditEvent: async () => undefined,
-        body: { taskId: taskEntityId, status: "cancelled" },
+        body: {
+          expectedUpdatedAt,
+          taskId: taskEntityId,
+          status: "cancelled",
+        },
         features: { governedWorkflow: true, legalLists: false },
         decideGate: async (options) =>
           await decideGateForTask(options, {
@@ -1451,13 +1488,18 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
 
     // The task panel, the kanban board, and the save_task capability all
     // change a task's status this way; for a gate task that is the decision.
+    const expectedUpdatedAt = await loadTaskUpdatedAt(raised.taskEntityId);
     const updated = await Result.gen(() =>
       updateTaskHandler({
         safeDb,
         workspaceId,
         userId,
         recordAuditEvent: async () => undefined,
-        body: { taskId: raised.taskEntityId, status: "done" },
+        body: {
+          expectedUpdatedAt,
+          taskId: raised.taskEntityId,
+          status: "done",
+        },
         features: { governedWorkflow: true, legalLists: false },
         decideGate: async (options) =>
           await decideGateForTask(options, {
@@ -1657,13 +1699,18 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
         await testDb.$count(entities, eq(entities.id, raised.taskEntityId)),
       ).toBe(1);
       if (decision === "closed") {
+        const expectedUpdatedAt = await loadTaskUpdatedAt(raised.taskEntityId);
         const updated = await Result.gen(() =>
           updateTaskHandler({
             safeDb,
             workspaceId,
             userId,
             recordAuditEvent: async () => undefined,
-            body: { taskId: raised.taskEntityId, status: "done" },
+            body: {
+              expectedUpdatedAt,
+              taskId: raised.taskEntityId,
+              status: "done",
+            },
             features: { governedWorkflow: true, legalLists: false },
             decideGate: async (options) =>
               await decideGateForTask(options, {

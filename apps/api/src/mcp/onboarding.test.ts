@@ -21,12 +21,14 @@ const readDecisionHandlerMock = mock();
 const readWorkspaceHandlerMock = mock();
 const readOverviewHandlerMock = mock();
 const readWorkspaceContactsHandlerMock = mock();
+const SETTINGS_UPDATED_AT = new Date("2026-01-01T00:00:00.000Z");
 const APP_BASE_URL = env.FRONTEND_URL.replace(/\/$/u, "");
 
 const { getMcpToolDefinition, handleMcpToolCall, listMcpTools } =
   await import("@/api/mcp/tools");
 
 type PracticeJurisdictionRow = {
+  updatedAt: Date;
   practiceJurisdictions: { countryCode: string; isPrimary: boolean }[];
 };
 
@@ -45,7 +47,9 @@ type SelectChain = {
   innerJoin: () => SelectChain;
   where: () => SelectChain;
   orderBy: () => SelectChain;
-  limit: () => Promise<MattersRow[]>;
+  limit: () => Promise<MattersRow[]> & {
+    for: (lock: "update") => Promise<PracticeJurisdictionRow[]>;
+  };
 };
 
 type ScopedTx = SelectChain & {
@@ -92,7 +96,13 @@ const createScopedDb = ({
         innerJoin: () => builder,
         where: () => builder,
         orderBy: () => builder,
-        limit: async () => matters,
+        limit: () =>
+          Object.assign(Promise.resolve(matters), {
+            for: async () =>
+              practiceJurisdictions === null
+                ? []
+                : [{ practiceJurisdictions, updatedAt: SETTINGS_UPDATED_AT }],
+          }),
       };
       return await callback({
         ...builder,
@@ -100,7 +110,9 @@ const createScopedDb = ({
         query: {
           organizationSettings: {
             findFirst: async () =>
-              practiceJurisdictions === null ? null : { practiceJurisdictions },
+              practiceJurisdictions === null
+                ? null
+                : { practiceJurisdictions, updatedAt: SETTINGS_UPDATED_AT },
           },
           workspaces: {
             findMany: async () => matters,
@@ -209,6 +221,7 @@ describe("set_practice_jurisdictions MCP tool", () => {
 
     const result = await handleMcpToolCall({
       args: {
+        expected_updated_at: SETTINGS_UPDATED_AT.toISOString(),
         jurisdictions: [
           { country_code: "CZ", is_primary: true },
           { country_code: "SK", is_primary: false },
@@ -260,6 +273,7 @@ describe("set_practice_jurisdictions MCP tool", () => {
 
     const result = await handleMcpToolCall({
       args: {
+        expected_updated_at: SETTINGS_UPDATED_AT.toISOString(),
         jurisdictions: [{ country_code: "CZ", is_primary: true }],
       },
       context,
@@ -281,6 +295,7 @@ describe("set_practice_jurisdictions MCP tool", () => {
 
     const result = await handleMcpToolCall({
       args: {
+        expected_updated_at: SETTINGS_UPDATED_AT.toISOString(),
         jurisdictions: [
           { country_code: "CZ", is_primary: false },
           { country_code: "SK", is_primary: false },
@@ -303,6 +318,7 @@ describe("set_practice_jurisdictions MCP tool", () => {
 
     const result = await handleMcpToolCall({
       args: {
+        expected_updated_at: SETTINGS_UPDATED_AT.toISOString(),
         jurisdictions: [
           { country_code: "CZ", is_primary: true },
           { country_code: "SK", is_primary: true },
@@ -325,6 +341,7 @@ describe("set_practice_jurisdictions MCP tool", () => {
 
     const result = await handleMcpToolCall({
       args: {
+        expected_updated_at: SETTINGS_UPDATED_AT.toISOString(),
         jurisdictions: [{ country_code: "ZZZ", is_primary: true }],
       },
       context,
@@ -339,6 +356,7 @@ describe("set_practice_jurisdictions MCP tool", () => {
 
     const result = await handleMcpToolCall({
       args: {
+        expected_updated_at: SETTINGS_UPDATED_AT.toISOString(),
         jurisdictions: [{ countryCode: "CZ", isPrimary: true }],
       },
       context,
@@ -366,7 +384,10 @@ describe("set_practice_jurisdictions MCP tool", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { jurisdictions: [] },
+      args: {
+        expected_updated_at: SETTINGS_UPDATED_AT.toISOString(),
+        jurisdictions: [],
+      },
       context,
       toolName: "set_practice_jurisdictions",
     });
@@ -395,7 +416,10 @@ describe("set_practice_jurisdictions MCP tool", () => {
     const context = createContext();
 
     const result = await handleMcpToolCall({
-      args: { jurisdictions: "CZ" },
+      args: {
+        expected_updated_at: SETTINGS_UPDATED_AT.toISOString(),
+        jurisdictions: "CZ",
+      },
       context,
       toolName: "set_practice_jurisdictions",
     });

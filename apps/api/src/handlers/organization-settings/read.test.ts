@@ -2,12 +2,19 @@ import { describe, expect, test } from "bun:test";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
+import {
+  DEFAULT_DOCUMENT_PROCESSING_MODE,
+  DEFAULT_TIME_EDIT_WINDOW_DAYS,
+  DEFAULT_TIME_MINIMUM_UNIT_MINUTES,
+  DEFAULT_TIME_NARRATIVE_REQUIRED,
+} from "@/api/db/schema";
 import { env } from "@/api/env";
 import readOrganizationSettings, {
   projectOrganizationSettingsRow,
 } from "@/api/handlers/organization-settings/get";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { toSafeId } from "@/api/lib/branded-types";
+import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import {
   FEATURE_REGISTRY,
@@ -15,6 +22,10 @@ import {
   LEGAL_LISTS_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
+import {
+  DEFAULT_MATTER_NUMBER_PADDING,
+  DEFAULT_MATTER_NUMBER_PATTERN,
+} from "@/api/lib/matter-reference";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import {
@@ -22,6 +33,22 @@ import {
   createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+
+const defaultSettingsRow = {
+  updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  documentProcessingMode: DEFAULT_DOCUMENT_PROCESSING_MODE,
+  matterNumberPadding: DEFAULT_MATTER_NUMBER_PADDING,
+  matterNumberPattern: DEFAULT_MATTER_NUMBER_PATTERN,
+  practiceJurisdictions: [],
+  promptCachingEnabled: true,
+  managedAIResidency: DEFAULT_MANAGED_AI_RESIDENCY,
+  memoryExtractionEnabled: false,
+  timeMinimumUnitMinutes: DEFAULT_TIME_MINIMUM_UNIT_MINUTES,
+  timeEditWindowDays: DEFAULT_TIME_EDIT_WINDOW_DAYS,
+  timeLockedThroughMonth: null,
+  timeNarrativeRequired: DEFAULT_TIME_NARRATIVE_REQUIRED,
+  timeZone: null,
+} satisfies Parameters<typeof projectOrganizationSettingsRow>[0];
 
 const emptySnapshot = createFeatureAccessSnapshot({
   organizationId: "org_test",
@@ -32,7 +59,11 @@ const emptySnapshot = createFeatureAccessSnapshot({
 // Identity resolves through the member join; the enrolment read finds no rows.
 const unenrolledSettingsDatabase = (email: string) =>
   createScopedDbMock(
-    { query: { organizationSettings: { findFirst: async () => undefined } } },
+    {
+      query: {
+        organizationSettings: { findFirst: async () => defaultSettingsRow },
+      },
+    },
     { featureAccess: { identity: { email, emailVerified: true } } },
   );
 
@@ -40,6 +71,7 @@ describe("projectOrganizationSettingsRow", () => {
   test("returns the active org's practiceJurisdictions verbatim", () => {
     const result = projectOrganizationSettingsRow(
       {
+        updatedAt: defaultSettingsRow.updatedAt,
         documentProcessingMode: "searchable-text",
         matterNumberPadding: 3,
         matterNumberPattern: "{SEQ}",
@@ -67,25 +99,13 @@ describe("projectOrganizationSettingsRow", () => {
     expect(result.managedAIResidency).toBe("us");
   });
 
-  test("defaults practiceJurisdictions to an empty array when no row exists", () => {
+  test("projects the initialized settings defaults and their update token", () => {
     expect(
-      projectOrganizationSettingsRow(null, emptySnapshot).practiceJurisdictions,
-    ).toEqual([]);
-    expect(
-      projectOrganizationSettingsRow(undefined, emptySnapshot)
-        .practiceJurisdictions,
-    ).toEqual([]);
-  });
-
-  test("defaults document processing to off when settings do not exist", () => {
-    expect(
-      projectOrganizationSettingsRow(null, emptySnapshot)
-        .documentProcessingMode,
-    ).toBe("off");
-  });
-
-  test("defaults time policy when settings do not exist", () => {
-    expect(projectOrganizationSettingsRow(null, emptySnapshot)).toMatchObject({
+      projectOrganizationSettingsRow(defaultSettingsRow, emptySnapshot),
+    ).toMatchObject({
+      updatedAt: defaultSettingsRow.updatedAt.toISOString(),
+      practiceJurisdictions: [],
+      documentProcessingMode: "off",
       timeMinimumUnitMinutes: 6,
       timeEditWindowDays: 90,
       timeLockedThroughMonth: null,
@@ -139,7 +159,10 @@ test("organization settings expose registry-derived enabled or hidden statuses w
         "fixture-self-serve": { status: "hidden" },
       },
     });
-    const projected = projectOrganizationSettingsRow(null, snapshot);
+    const projected = projectOrganizationSettingsRow(
+      defaultSettingsRow,
+      snapshot,
+    );
     expect(projected.declaredFeatureIds).toEqual(Object.keys(registry));
     for (const featureId of Object.keys(registry)) {
       for (const kind of ["capabilities", "tools", "resources"] as const) {
@@ -204,7 +227,9 @@ test("organization settings recompute a supplied snapshot when the user or activ
         },
       }),
   );
-  expect(projectOrganizationSettingsRow(null, snapshot).capabilities).toEqual({
+  expect(
+    projectOrganizationSettingsRow(defaultSettingsRow, snapshot).capabilities,
+  ).toEqual({
     "fixture-invitation": { status: "enabled" },
   });
   for (const principal of [
@@ -242,7 +267,11 @@ test("organization settings project the production verification declaration for 
   const organizationId = toSafeId<"organization">("org_test");
   for (const granted of [false, true]) {
     const database = createScopedDbMock(
-      { query: { organizationSettings: { findFirst: async () => undefined } } },
+      {
+        query: {
+          organizationSettings: { findFirst: async () => defaultSettingsRow },
+        },
+      },
       {
         featureAccess: {
           identity: { email: "member@example.test", emailVerified: true },
@@ -290,7 +319,7 @@ test("organization settings project the production verification declaration for 
       );
     }
     const capabilities = projectOrganizationSettingsRow(
-      null,
+      defaultSettingsRow,
       snapshot,
     ).capabilities;
     expect(Object.keys(capabilities)).toEqual(
@@ -311,7 +340,10 @@ describe.serial("undeclared feature deployment discovery", () => {
     try {
       for (const enabled of [false, true]) {
         env.FEATURE_LEGAL_LISTS = enabled;
-        const result = projectOrganizationSettingsRow(null, emptySnapshot);
+        const result = projectOrganizationSettingsRow(
+          defaultSettingsRow,
+          emptySnapshot,
+        );
         expect(result.declaredFeatureIds).toEqual([]);
         expect(result.capabilities).toEqual({});
         expect(result.deploymentFeatures.legalLists).toBe(enabled);

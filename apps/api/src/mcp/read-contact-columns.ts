@@ -1,5 +1,6 @@
 export const READ_CONTACT_COLUMNS = {
   id: true,
+  updatedAt: true,
   type: true,
   displayName: true,
   firstName: true,

@@ -5,8 +5,7 @@ import type { ContactType } from "@stll/api-contract";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { contactsKeys } from "@/lib/contacts/queries";
-import type { contactOptions } from "@/lib/contacts/queries";
+import { contactOptions, contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -160,7 +159,13 @@ export const useUpdateContact = () => {
       organizationId: _organizationId,
       ...body
     }: UpdateContactVars) => {
-      const response = await api.contacts({ contactId }).post(body);
+      const contact = await queryClient.ensureQueryData(
+        contactOptions(_organizationId, contactId),
+      );
+      const response = await api.contacts({ contactId }).post({
+        expectedUpdatedAt: contact.updatedAt.toISOString(),
+        ...body,
+      });
 
       return unwrapEden(response);
     },

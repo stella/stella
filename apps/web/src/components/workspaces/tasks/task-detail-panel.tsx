@@ -144,10 +144,18 @@ const TaskDetailPanelContent = ({
 
   const updateMutation = useMutation({
     mutationFn: async (update: TaskUpdate) => {
+      const observedTask =
+        update.taskId === taskId
+          ? task
+          : task?.children.find((child) => child.id === update.taskId);
+      if (!observedTask?.updatedAt) {
+        panic("Updated task is not loaded");
+      }
       const response = await api
         .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .patch({
           ...taskUpdateBody(update),
+          expectedUpdatedAt: observedTask.updatedAt,
           taskId: toSafeId<"entity">(update.taskId),
         });
       return unwrapEden(response);

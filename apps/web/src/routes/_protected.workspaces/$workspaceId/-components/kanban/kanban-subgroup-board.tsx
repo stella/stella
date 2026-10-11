@@ -34,6 +34,14 @@ import {
   KanbanColumnTitle,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
 
+export type KanbanSubgroupDropParams = {
+  entityId: string;
+  columnValue: string;
+  laneValue: string | null;
+  sourceSubgroupValue: string | null | undefined;
+  expectedUpdatedAt: string | null;
+};
+
 type KanbanSubgroupBoardProps = {
   cardFields: string[];
   canMoveCards: boolean;
@@ -47,12 +55,7 @@ type KanbanSubgroupBoardProps = {
     | ((columnValue: string, color: OptionColor) => void)
     | undefined;
   onCreateTask: (columnValue: string, laneValue: string | null) => void;
-  onDropCard: (
-    entityId: string,
-    columnValue: string,
-    laneValue: string | null,
-    sourceSubgroupValue: string | null | undefined,
-  ) => void;
+  onDropCard: (params: KanbanSubgroupDropParams) => void;
   onHideColumn: (columnValue: string) => void;
   onLoadMore: () => void;
   onRenameColumn?:
@@ -162,12 +165,7 @@ type WorkspaceKanbanSubgroupCellProps = {
   laneValue: string | null;
   loadedEntityCount: number;
   onCreateTask: (columnValue: string, laneValue: string | null) => void;
-  onDropCard: (
-    entityId: string,
-    columnValue: string,
-    laneValue: string | null,
-    sourceSubgroupValue: string | null | undefined,
-  ) => void;
+  onDropCard: (params: KanbanSubgroupDropParams) => void;
   onLoadMore: () => void;
   onRenameEntity: (entityId: string, newName: string) => void;
   properties: WorkspaceProperty[];
@@ -200,9 +198,15 @@ const WorkspaceKanbanSubgroupCell = ({
     elementRef: cellRef,
     enabled: canMoveCards,
     name: `${cell.coordinate.column.type === "group" ? cell.coordinate.column.group.label : cell.coordinate.column.destination.label}, ${cell.coordinate.lane.type === "group" ? cell.coordinate.lane.group.label : ""}`,
-    onDrop: (entityId, sourceSubgroupValue) => {
+    onDrop: (entityId, sourceSubgroupValue, expectedUpdatedAt) => {
       if (columnValue !== null) {
-        onDropCard(entityId, columnValue, laneValue, sourceSubgroupValue);
+        onDropCard({
+          entityId,
+          columnValue,
+          laneValue,
+          sourceSubgroupValue,
+          expectedUpdatedAt,
+        });
       }
     },
   });

@@ -84,19 +84,31 @@ const seedTask = async (listItemType: "task" | "fact") => {
 const changeListItemType = async (
   taskId: SafeId<"entity">,
   listItemType: "task" | "fact",
-) =>
-  await Result.gen(() =>
+) => {
+  const task = await testDb.query.entities.findFirst({
+    where: { id: { eq: taskId } },
+    columns: { updatedAt: true },
+  });
+  if (!task) {
+    throw new Error("Expected a persisted task before changing its item type");
+  }
+  return await Result.gen(() =>
     updateTaskHandler(
       asTestRaw<Parameters<typeof updateTaskHandler>[0]>({
         safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
         workspaceId: ids.wsA1,
         userId: ids.userA1,
         recordAuditEvent: async () => undefined,
-        body: { taskId, listItemType },
+        body: {
+          expectedUpdatedAt: task.updatedAt.toISOString(),
+          taskId,
+          listItemType,
+        },
         features: FEATURES_ENABLED,
       }),
     ),
   );
+};
 
 const storedListItemType = async (entityId: SafeId<"entity">) => {
   const task = await testDb.query.entities.findFirst({

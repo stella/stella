@@ -70,6 +70,7 @@ export const CalendarEntityChip = ({
         withDragAnnouncementData(
           {
             type: ENTITY_DRAG_TYPE,
+            expectedUpdatedAt: entity.updatedAt,
             entityId: entity.taskId,
             name,
             kind: "task",
@@ -92,7 +93,7 @@ export const CalendarEntityChip = ({
         });
       },
     });
-  }, [entity.taskId, isEditable, name]);
+  }, [entity.taskId, entity.updatedAt, isEditable, name]);
 
   const handleClick = () => {
     openTask({ taskId: entity.taskId, workspaceId, label: name });

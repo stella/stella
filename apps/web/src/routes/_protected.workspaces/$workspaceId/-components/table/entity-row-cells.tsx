@@ -394,6 +394,7 @@ export const DraggableRow = ({
         withDragAnnouncementData(
           {
             type: ENTITY_DRAG_TYPE,
+            expectedUpdatedAt: entity.updatedAt,
             entityId: entity.entityId,
             entityIds: [entity.entityId],
             entities: [
@@ -420,7 +421,14 @@ export const DraggableRow = ({
         });
       },
     });
-  }, [entity.entityId, entity.kind, entity.parentId, name, file?.mimeType]);
+  }, [
+    entity.entityId,
+    entity.updatedAt,
+    entity.kind,
+    entity.parentId,
+    name,
+    file?.mimeType,
+  ]);
 
   if (isFolder && visibleCells.length > 2) {
     return (

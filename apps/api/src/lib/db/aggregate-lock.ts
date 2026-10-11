@@ -34,6 +34,7 @@ import { isRecord } from "@/api/lib/type-guards";
 /** Registered blocking chains share one physical transaction order. */
 export const AGGREGATE_LOCKS = {
   organization: { rank: 0, kind: "row" },
+  organizationSettings: { rank: 5, kind: "row" },
   orgFeatureAdmission: { rank: 10, kind: "advisory" },
   schedulerClaim: { rank: 20, kind: "row" },
   definitionCap: { rank: 30, kind: "advisory" },
@@ -52,6 +53,7 @@ export const AGGREGATE_LOCKS = {
   currentStep: { rank: 300, kind: "row" },
   obligation: { rank: 400, kind: "row" },
   entity: { rank: 500, kind: "row" },
+  contact: { rank: 500, kind: "row" },
   signal: { rank: 600, kind: "row" },
   automatedFlowRunCap: { rank: 700, kind: "advisory" },
   processingClaim: { rank: 600, kind: "row" },
@@ -65,6 +67,7 @@ export type AggregateName = keyof typeof AGGREGATE_LOCKS;
 
 /** Derive rank proofs from the same registry used for acquisitions. */
 export const AGGREGATE_CHAINS = {
+  organizationSettings: ["organization", "organizationSettings"],
   existing: [
     "organization",
     "workspace",
@@ -109,6 +112,7 @@ export const AGGREGATE_CHAINS = {
   signal: ["signal"],
   automatedFlowRunCap: ["automatedFlowRunCap"],
   contactCapacity: ["contactCapacity"],
+  contact: ["contact"],
   personalCatalog: ["personalCatalog"],
   searchHistory: ["desktopMembership", "searchHistory"],
   chatRevision: ["chatThread", "chatMessage"],
@@ -138,6 +142,7 @@ const modeCovers = (
 
 type AggregateIdentities = {
   organization: SafeId<"organization">;
+  organizationSettings: SafeId<"organization">;
   desktopMembership: {
     organizationId: SafeId<"organization">;
     userId: SafeId<"user">;
@@ -194,6 +199,7 @@ type AggregateIdentities = {
   currentStep: { id: SafeId<"flowRunStep">; workspaceId: SafeId<"workspace"> };
   obligation: { id: SafeId<"entity">; workspaceId: SafeId<"workspace"> };
   entity: { id: SafeId<"entity">; workspaceId: SafeId<"workspace"> };
+  contact: { id: SafeId<"contact">; organizationId: SafeId<"organization"> };
   signal: { id: SafeId<"signal">; organizationId: SafeId<"organization"> };
   automatedFlowRunCap: SafeId<"flowDefinition">;
   processingClaim: {
@@ -556,6 +562,14 @@ type RowResource = {
 };
 const rowResource = (options: RowIdentityOptions): RowResource => {
   switch (options.aggregate) {
+    case "organizationSettings":
+      return {
+        table: "organization_settings",
+        columns: ["organization_id"],
+        values: [options.id],
+        scopeColumns: [],
+        scopeValues: [],
+      };
     case "organization":
       return {
         table: "organization",
@@ -627,6 +641,14 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         values: [options.id.id],
         scopeColumns: ["workspace_id"],
         scopeValues: [options.id.workspaceId],
+      };
+    case "contact":
+      return {
+        table: "contacts",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["organization_id"],
+        scopeValues: [options.id.organizationId],
       };
     case "entity":
       return {

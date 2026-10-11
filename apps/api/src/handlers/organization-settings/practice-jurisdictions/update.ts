@@ -10,6 +10,8 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { expectedUpdatedAtSchema } from "@/api/lib/optimistic-concurrency";
+import { enforceWritePrecondition } from "@/api/lib/write-contract";
 
 const practiceJurisdictionSchema = t.Object({
   countryCode: t.String({
@@ -25,11 +27,7 @@ const practiceJurisdictionSchema = t.Object({
 
 const config = {
   contract: "replace",
-  precondition: {
-    type: "deferred",
-    baselineId:
-      "apps/api/src/handlers/organization-settings/practice-jurisdictions/update.ts",
-  },
+  precondition: { type: "updatedAt", field: "expectedUpdatedAt" },
   description:
     "Set the practice jurisdictions for the user's stella organization. " +
     "Call this when the org's practice jurisdictions are empty (e.g., the " +
@@ -39,6 +37,7 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "tool", name: "set_practice_jurisdictions" },
   body: t.Object({
+    expectedUpdatedAt: expectedUpdatedAtSchema,
     practiceJurisdictions: t.Array(practiceJurisdictionSchema, {
       maxItems: LIMITS.practiceJurisdictionsPerOrganization,
       description:
@@ -52,6 +51,33 @@ const config = {
 const updatePracticeJurisdictions = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, body, recordAuditEvent }) {
+    const current = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.organizationSettings.findFirst({
+          where: { organizationId: { eq: session.activeOrganizationId } },
+          columns: { updatedAt: true },
+        }),
+      ),
+    );
+    if (!current) {
+      return Result.err(
+        new HandlerError({
+          status: 404,
+          message: "Organization settings not found",
+        }),
+      );
+    }
+    const preflightConflict = enforceWritePrecondition({
+      type: "updatedAt",
+      field: "expectedUpdatedAt",
+      storedUpdatedAt: current.updatedAt,
+      expectedUpdatedAt: body.expectedUpdatedAt,
+      resource: "Organization practice jurisdictions",
+    });
+    if (preflightConflict !== null) {
+      return Result.err(preflightConflict);
+    }
+
     const primaryCount = body.practiceJurisdictions.filter(
       (jurisdiction) => jurisdiction.isPrimary,
     ).length;
@@ -69,16 +95,21 @@ const updatePracticeJurisdictions = createSafeRootHandler(
       body.practiceJurisdictions,
     );
 
-    yield* Result.await(
-      safeDb(async (tx) => {
-        await upsertPracticeJurisdictions({
-          organizationId: session.activeOrganizationId,
-          practiceJurisdictions,
-          recordAuditEvent,
-          tx,
-        });
-      }),
+    const conflict = yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await upsertPracticeJurisdictions({
+            expectedUpdatedAt: body.expectedUpdatedAt,
+            organizationId: session.activeOrganizationId,
+            practiceJurisdictions,
+            recordAuditEvent,
+            tx,
+          }),
+      ),
     );
+    if (conflict !== null) {
+      return Result.err(conflict);
+    }
 
     identifyOrganizationJurisdictions(
       session.activeOrganizationId,

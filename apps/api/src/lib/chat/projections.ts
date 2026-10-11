@@ -324,6 +324,7 @@ export const READ_CONTENT_ACROSS_MATTERS_PROJECTION = v.strictObject({
  */
 export const READ_CONTACT_PROJECTION = v.strictObject({
   contactId: chatRef("contact"),
+  updatedAt: v.string(),
   type: v.string(),
   displayName: v.string(),
   firstName: v.nullable(v.string()),
@@ -710,6 +711,7 @@ export const LIST_TASKS_LIST_PROJECTION = v.strictObject({
   tasks: v.array(
     v.strictObject({
       id: chatEntityRef({ from: "sibling", key: "matterId" }),
+      updatedAt: v.string(),
       name: v.string(),
       status: v.nullable(v.string()),
       priority: v.nullable(v.string()),
@@ -732,6 +734,7 @@ export const LIST_TASKS_LIST_PROJECTION = v.strictObject({
 export const LIST_TASKS_DETAIL_PROJECTION = v.strictObject({
   task: v.strictObject({
     taskId: chatEntityRef({ from: "inputEntity", param: "task_id" }),
+    updatedAt: v.string(),
     name: v.string(),
     status: v.nullable(v.string()),
     priority: v.nullable(v.string()),

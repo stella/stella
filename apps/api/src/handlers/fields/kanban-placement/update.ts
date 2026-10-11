@@ -17,6 +17,7 @@ import {
 import type { FlowRunCompletionNotice } from "@/api/lib/flows/flow-run-actor";
 import { notifyFlowRunActorOfCompletion } from "@/api/lib/flows/flow-run-completion-notice";
 import { decideGateForTask } from "@/api/lib/flows/review-gate-task";
+import { expectedUpdatedAtSchema } from "@/api/lib/optimistic-concurrency";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 
@@ -49,11 +50,20 @@ export const createUpdateKanbanPlacement = ({
         reason: "workspace_schema",
         consumesServices: false,
       },
-      body: t.Object({
-        entityId: tSafeId("entity"),
-        status: t.Optional(t.String({ minLength: 1, maxLength: 32 })),
-        fields: t.Array(fieldAssignmentSchema, { maxItems: 2 }),
-      }),
+      body: t.Union([
+        t.Object({
+          entityId: tSafeId("entity"),
+          status: t.String({ minLength: 1, maxLength: 32 }),
+          expectedUpdatedAt: expectedUpdatedAtSchema,
+          fields: t.Array(fieldAssignmentSchema, { maxItems: 2 }),
+        }),
+        t.Object({
+          entityId: tSafeId("entity"),
+          status: t.Optional(t.Never()),
+          expectedUpdatedAt: t.Optional(t.Never()),
+          fields: t.Array(fieldAssignmentSchema, { maxItems: 2 }),
+        }),
+      ]),
     },
     async function* ({
       safeDb,
@@ -80,21 +90,24 @@ export const createUpdateKanbanPlacement = ({
           }),
         );
       }
-      const status = body.status;
       const completionNotices: FlowRunCompletionNotice[] = [];
 
       yield* Result.await(
         abortableTx(safeDb, async (tx) => {
           const txSafeDb = transactionSafeDb(tx);
 
-          if (status !== undefined) {
+          if (body.status !== undefined) {
             const taskResult = await Result.gen(() =>
               updateTaskHandler({
                 safeDb: txSafeDb,
                 workspaceId,
                 userId: user.id,
                 recordAuditEvent,
-                body: { taskId: body.entityId, status },
+                body: {
+                  taskId: body.entityId,
+                  status: body.status,
+                  expectedUpdatedAt: body.expectedUpdatedAt,
+                },
                 decideGate: async (options) =>
                   await decideGateForTask(options, {
                     notifyRunCompleted: (notice) => {

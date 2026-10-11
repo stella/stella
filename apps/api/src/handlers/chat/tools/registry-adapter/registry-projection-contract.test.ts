@@ -691,6 +691,7 @@ const CONTRACT_CORPUS = {
             findFirst: async () =>
               ({
                 id: toSafeId<"contact">(uid(13)),
+                updatedAt: new Date("2026-01-01T00:00:00.000Z"),
                 type: "person",
                 displayName: "Jan Novák",
                 firstName: "Jan",
@@ -721,6 +722,7 @@ const CONTRACT_CORPUS = {
         },
       }),
       expectRefPaths: ["contactId"],
+      expectPayloadContains: ["2026-01-01T00:00:00.000Z"],
     },
   ],
   list_documents: [
@@ -914,6 +916,7 @@ const CONTRACT_CORPUS = {
           [
             {
               id: uid(25),
+              updatedAt: new Date("2026-01-01T00:00:00.000Z"),
               name: "File the brief",
               status: "open",
               priority: "high",
@@ -927,6 +930,7 @@ const CONTRACT_CORPUS = {
         ]),
       }),
       expectRefPaths: ["tasks[].id", "tasks[].matterId"],
+      expectPayloadContains: ["2026-01-01T00:00:00.000Z"],
     },
     {
       mode: "detail",
@@ -938,6 +942,7 @@ const CONTRACT_CORPUS = {
           entities: {
             findFirst: async () => ({
               id: uid(26),
+              updatedAt: new Date("2026-01-01T00:00:00.000Z"),
               workspaceId: WS,
               kind: "task",
               name: "File the brief",
@@ -983,6 +988,7 @@ const CONTRACT_CORPUS = {
         },
       }),
       expectRefPaths: ["task.taskId", "task.links[].entity.id"],
+      expectPayloadContains: ["2026-01-01T00:00:00.000Z"],
     },
   ],
   list_clauses: [

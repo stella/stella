@@ -1,8 +1,10 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { Transaction } from "@/api/db/root";
 import {
   entities,
+  flowRunSteps,
   WORK_OBLIGATION_EVENT_TYPE,
   WORK_OBLIGATION_STATUS,
   WORK_OBLIGATION_TYPE,
@@ -13,13 +15,17 @@ import type { WorkObligationStatus } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditAction, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { FlowRunActionResult } from "@/api/lib/flows/flow-executor";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 import { WORK_OBLIGATION_TRANSITIONS } from "@/api/lib/work-obligations/transitions";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createScopedDbMock,
   createSelectQueryMock,
 } from "@/api/tests/scoped-db-mock";
+
+const TASK_UPDATED_AT = new Date("2026-01-01T00:00:00.000Z");
 
 const TASK_FEATURES_ENABLED = {
   governedWorkflow: true,
@@ -47,7 +53,11 @@ describe("updateTaskHandler feature compatibility", () => {
         workspaceId,
         userId,
         recordAuditEvent: async () => {},
-        body: { taskId, listItemType: "fact" },
+        body: {
+          expectedUpdatedAt: TASK_UPDATED_AT.toISOString(),
+          taskId,
+          listItemType: "fact",
+        },
         features: TASK_FEATURES_DISABLED,
       }),
     );
@@ -71,7 +81,9 @@ describe("updateTaskHandler feature compatibility", () => {
           where: () => ({
             limit: () => ({
               for: async () =>
-                table === entities ? [{ listItemType: "task" }] : [],
+                table === entities
+                  ? [{ listItemType: "task", updatedAt: TASK_UPDATED_AT }]
+                  : [],
             }),
           }),
         }),
@@ -89,7 +101,11 @@ describe("updateTaskHandler feature compatibility", () => {
         workspaceId,
         userId,
         recordAuditEvent: async () => {},
-        body: { taskId, listItemType: "task" },
+        body: {
+          expectedUpdatedAt: TASK_UPDATED_AT.toISOString(),
+          taskId,
+          listItemType: "task",
+        },
         features: TASK_FEATURES_DISABLED,
       }),
     );
@@ -115,9 +131,13 @@ describe("updateTaskHandler feature compatibility", () => {
     const { safeDb } = createScopedDbMock({
       select: () => ({
         from: (table: unknown) =>
-          createSelectQueryMock(
-            table === workObligations ? [workflow] : [],
-          ).from(),
+          table === workObligations
+            ? createSelectQueryMock([workflow]).from()
+            : createSelectQueryMock(
+                table === entities
+                  ? [{ listItemType: "task", updatedAt: TASK_UPDATED_AT }]
+                  : [],
+              ).from(),
       }),
       update: (table: unknown) => ({
         set: (values: Record<string, unknown>) => {
@@ -141,7 +161,11 @@ describe("updateTaskHandler feature compatibility", () => {
         workspaceId,
         userId,
         recordAuditEvent: async () => {},
-        body: { taskId, status: "done" },
+        body: {
+          expectedUpdatedAt: TASK_UPDATED_AT.toISOString(),
+          taskId,
+          status: "done",
+        },
         features: TASK_FEATURES_DISABLED,
       }),
     );
@@ -169,9 +193,13 @@ describe("updateTaskHandler feature compatibility", () => {
     const { safeDb } = createScopedDbMock({
       select: () => ({
         from: (table: unknown) =>
-          createSelectQueryMock(
-            table === workObligations ? [workflow] : [],
-          ).from(),
+          table === workObligations
+            ? createSelectQueryMock([workflow]).from()
+            : createSelectQueryMock(
+                table === entities
+                  ? [{ listItemType: "task", updatedAt: TASK_UPDATED_AT }]
+                  : [],
+              ).from(),
       }),
       update: () => {
         throw new Error("database should not be updated");
@@ -184,7 +212,11 @@ describe("updateTaskHandler feature compatibility", () => {
         workspaceId,
         userId,
         recordAuditEvent: async () => {},
-        body: { taskId, dueDate: "2026-08-20" },
+        body: {
+          expectedUpdatedAt: TASK_UPDATED_AT.toISOString(),
+          taskId,
+          dueDate: "2026-08-20",
+        },
         features: TASK_FEATURES_DISABLED,
       }),
     );
@@ -219,9 +251,13 @@ describe("updateTaskHandler legacy deadline compatibility", () => {
     const { safeDb } = createScopedDbMock({
       select: () => ({
         from: (table: unknown) =>
-          createSelectQueryMock(
-            table === workObligations ? [workflow] : [],
-          ).from(),
+          table === workObligations
+            ? createSelectQueryMock([workflow]).from()
+            : createSelectQueryMock(
+                table === entities
+                  ? [{ listItemType: "task", updatedAt: TASK_UPDATED_AT }]
+                  : [],
+              ).from(),
       }),
       update: (table: unknown) => ({
         set: (values: Record<string, unknown>) => {
@@ -251,7 +287,11 @@ describe("updateTaskHandler legacy deadline compatibility", () => {
         workspaceId,
         userId,
         recordAuditEvent: async () => {},
-        body: { taskId, dueDate: "2026-08-20" },
+        body: {
+          expectedUpdatedAt: TASK_UPDATED_AT.toISOString(),
+          taskId,
+          dueDate: "2026-08-20",
+        },
         features: TASK_FEATURES_ENABLED,
       }),
     );
@@ -317,9 +357,13 @@ const runStatusWrite = async ({
   const { safeDb } = createScopedDbMock({
     select: () => ({
       from: (table: unknown) =>
-        createSelectQueryMock(
-          table === workObligations ? [workflow] : [],
-        ).from(),
+        table === workObligations
+          ? createSelectQueryMock([workflow]).from()
+          : createSelectQueryMock(
+              table === entities
+                ? [{ listItemType: "task", updatedAt: TASK_UPDATED_AT }]
+                : [],
+            ).from(),
     }),
     update: (table: unknown) => ({
       set: (values: Record<string, unknown>) => {
@@ -351,6 +395,7 @@ const runStatusWrite = async ({
       userId,
       recordAuditEvent,
       body: {
+        expectedUpdatedAt: TASK_UPDATED_AT.toISOString(),
         taskId,
         status: requestedStatus,
         ...(workflowReason === undefined ? {} : { workflowReason }),
@@ -489,4 +534,86 @@ describe("updateTaskHandler governed lifecycle", () => {
       expect.objectContaining({ status: WORK_OBLIGATION_STATUS.COMPLETED }),
     ]);
   });
+});
+
+describe("review task status decisions", () => {
+  for (const status of ["done", "cancelled"] as const) {
+    for (const workflowReason of [undefined, "Review settled"] as const) {
+      test(`settles ${status} once without a metadata write (${String(workflowReason)})`, async () => {
+        const taskId = createSafeId<"entity">();
+        const workspaceId = createSafeId<"workspace">();
+        const organizationId = createSafeId<"organization">();
+        const runId = createSafeId<"flowRun">();
+        const userId = mintAuthProviderId<"user">();
+        let updatedAt = TASK_UPDATED_AT;
+        const settledUpdatedAt = new Date("2026-01-02T00:00:00.000Z");
+        expect(settledUpdatedAt.toISOString()).not.toBe(
+          updatedAt.toISOString(),
+        );
+        const decisions: string[] = [];
+        const database = createScopedDbMock({
+          select: () => ({
+            from: (table: unknown) =>
+              table === flowRunSteps
+                ? createSelectQueryMock([
+                    { runId, organizationId, status: "awaiting_review" },
+                  ]).from()
+                : createSelectQueryMock([
+                    { id: taskId, listItemType: "task", updatedAt },
+                  ]).from(),
+          }),
+          update: () => {
+            throw new Error(
+              "The gate settlement must be the only task mutation",
+            );
+          },
+        });
+        const result = await Result.gen(() =>
+          updateTaskHandler({
+            safeDb: database.safeDb,
+            workspaceId,
+            userId,
+            recordAuditEvent: async () => undefined,
+            body: {
+              taskId,
+              expectedUpdatedAt: TASK_UPDATED_AT.toISOString(),
+              status,
+              ...(workflowReason === undefined ? {} : { workflowReason }),
+            },
+            features: TASK_FEATURES_DISABLED,
+            decideGate: async ({ decision, note, taskEntityId, taskWrite }) => {
+              expect(taskEntityId).toBe(taskId);
+              expect(note).toBe(workflowReason ?? null);
+              if (taskWrite?.type !== "replacement") {
+                throw new Error(
+                  "Expected a versioned task replacement decision",
+                );
+              }
+              expect(taskWrite.expectedUpdatedAt).toBe(
+                TASK_UPDATED_AT.toISOString(),
+              );
+              expect(taskWrite.workspaceLock).toBe("reference");
+              decisions.push(decision);
+              updatedAt = settledUpdatedAt;
+              const remaining = await taskWrite.applyRemainingChanges(
+                asTestRaw<Transaction>({}),
+              );
+              expect(remaining).toBeUndefined();
+              await Promise.resolve();
+              return Result.ok({
+                runId,
+                status: "completed",
+              } satisfies FlowRunActionResult);
+            },
+          }),
+        );
+        expect(result.unwrap()).toEqual({ success: true });
+        expect(decisions).toEqual([
+          status === "done" ? "approved" : "rejected",
+        ]);
+        expect(updatedAt).toBe(settledUpdatedAt);
+        expect(database.getCallCount()).toBe(1);
+      });
+    }
+  }
 });

@@ -327,34 +327,38 @@ type UpsertFieldVars = {
 type UpdateKanbanPlacementVars = {
   workspaceId: string;
   entityId: string;
-  status?: string | undefined;
   fields: {
     propertyId: string;
     content: UpsertFieldContent;
   }[];
-};
+} & (
+  | { type: "task-status"; status: string; expectedUpdatedAt: string }
+  | { type: "fields" }
+);
 
 export const useUpdateKanbanPlacement = () => {
   const analytics = useAnalytics();
   const t = useTranslations();
 
   return useMutation({
-    mutationFn: async ({
-      workspaceId,
-      entityId,
-      status,
-      fields,
-    }: UpdateKanbanPlacementVars) => {
+    mutationFn: async (variables: UpdateKanbanPlacementVars) => {
+      const entityId = toSafeId<"entity">(variables.entityId);
+      const fields = variables.fields.map(({ propertyId, content }) => ({
+        propertyId: toSafeId<"property">(propertyId),
+        content,
+      }));
+      const body =
+        variables.type === "task-status"
+          ? {
+              entityId,
+              fields,
+              status: variables.status,
+              expectedUpdatedAt: variables.expectedUpdatedAt,
+            }
+          : { entityId, fields };
       const response = await api
-        .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["kanban-placement"].patch({
-          entityId: toSafeId<"entity">(entityId),
-          ...(status !== undefined && { status }),
-          fields: fields.map(({ propertyId, content }) => ({
-            propertyId: toSafeId<"property">(propertyId),
-            content,
-          })),
-        });
+        .fields({ workspaceId: toSafeId<"workspace">(variables.workspaceId) })
+        ["kanban-placement"].patch(body);
 
       return unwrapEden(response);
     },

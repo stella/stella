@@ -21,20 +21,24 @@ const requests: { method: string; url: string; body: string }[] = [];
 let settingsFailure: { code: string; message: string } | undefined;
 let reflectProviderOrder = false;
 const ORGANIZATION = "byok-navigation-fixture";
+const UPDATED_AT = "2026-01-01T00:00:00.000Z";
 let sessionOrganization = ORGANIZATION;
 let auxiliaryFailure: { path: string; message: string } | undefined;
 let organizationSettings = {
+  updatedAt: UPDATED_AT,
   promptCachingEnabled: false,
   documentProcessingMode: "off",
   memoryExtractionEnabled: false,
 };
 const GOOGLE_KEY = `AIza${"a".repeat(31)}1234`;
 const config = {
+  updatedAt: UPDATED_AT,
   configured: false,
   instanceProvisioned: false,
   decisionInstanceProvisioned: false,
 } satisfies OrganizationAIConfig;
 const savedConfig = {
+  updatedAt: UPDATED_AT,
   configured: true,
   instanceProvisioned: false,
   decisionInstanceProvisioned: false,
@@ -184,6 +188,7 @@ afterEach(() => {
   auxiliaryFailure = undefined;
   sessionOrganization = ORGANIZATION;
   organizationSettings = {
+    updatedAt: UPDATED_AT,
     promptCachingEnabled: false,
     documentProcessingMode: "off",
     memoryExtractionEnabled: false,
@@ -376,6 +381,9 @@ test("saving the key clears the navigation prompt", async () => {
   );
   expect(savedWrites).toHaveLength(1);
   expect(savedWrites.at(0)?.method).toBe("POST");
+  expect(JSON.parse(savedWrites.at(0)?.body ?? "null")).toMatchObject({
+    expectedUpdatedAt: config.updatedAt,
+  });
   expect(savedWrites.at(0)?.body).toContain(
     `"providers":${JSON.stringify([{ provider: "google", apiKey: GOOGLE_KEY, region: "global" }])}`,
   );
@@ -511,6 +519,7 @@ test("Advanced shows catalog defaults, saves only explicit overrides and resets 
   await waitFor(() => expect(hasUnsavedWork()).toBe(false));
   const write = requests.find(({ method }) => method === "POST");
   expect(JSON.parse(write?.body ?? "null")).toMatchObject({
+    expectedUpdatedAt: UPDATED_AT,
     overrideModels: { chat: { provider: "google", modelId: overrideId } },
   });
   expect(JSON.parse(write?.body ?? "null").overrideModels).toEqual({
@@ -666,6 +675,7 @@ test("replacing the first saved key preserves provider order and every default r
   }
   const write = requests.find(({ method }) => method === "POST");
   expect(JSON.parse(write?.body ?? "null")).toMatchObject({
+    expectedUpdatedAt: UPDATED_AT,
     providers: [
       { provider: "google", apiKey: GOOGLE_KEY },
       { provider: "anthropic" },
@@ -876,6 +886,7 @@ test("decision changes and reset save the exact decision override", async () => 
       requests.find(({ method }) => method === "POST")?.body ?? "null",
     ),
   ).toEqual({
+    expectedUpdatedAt: UPDATED_AT,
     providers: [{ provider: "google", region: "global" }],
     overrideModels: null,
     decision: { provider, modelId, apiKey: "fixture-decision-key" },
@@ -899,6 +910,7 @@ test("decision changes and reset save the exact decision override", async () => 
       requests.filter(({ method }) => method === "POST").at(1)?.body ?? "null",
     ),
   ).toEqual({
+    expectedUpdatedAt: UPDATED_AT,
     providers: [{ provider: "google", region: "global" }],
     overrideModels: null,
     decision: null,
@@ -967,6 +979,7 @@ test("one page header save writes credential, model and decision changes togethe
   const postWrites = requests.filter(({ method }) => method === "POST");
   expect(postWrites).toHaveLength(1);
   expect(JSON.parse(postWrites.at(0)?.body ?? "null")).toEqual({
+    expectedUpdatedAt: UPDATED_AT,
     providers: [{ provider: "google", apiKey: GOOGLE_KEY, region: "global" }],
     overrideModels: { chat: { provider: "google", modelId } },
     decision: {
@@ -1063,6 +1076,7 @@ test("page header save reveals Anthropic workspace recovery and preserves the co
   const postWrites = requests.filter(({ method }) => method === "POST");
   expect(postWrites).toHaveLength(2);
   expect(JSON.parse(postWrites.at(1)?.body ?? "null")).toEqual({
+    expectedUpdatedAt: UPDATED_AT,
     providers: [
       { provider: "google", apiKey: GOOGLE_KEY, region: "global" },
       {
@@ -1174,6 +1188,7 @@ test("one page Save commits both provider drafts and all auxiliary sections", as
       writes().find(({ url }) => url.includes("ai-config"))?.body ?? "null",
     ),
   ).toEqual({
+    expectedUpdatedAt: UPDATED_AT,
     providers: [
       { provider: "google", apiKey: GOOGLE_KEY, region: "global" },
       { provider: "anthropic", apiKey: anthropicKey, region: "global" },
@@ -1368,6 +1383,7 @@ test("provider removal is staged until Save and preserves remaining credentials"
   await waitFor(() => expect(hasUnsavedWork()).toBe(false));
   expect(writes()).toHaveLength(1);
   expect(JSON.parse(writes().at(0)?.body ?? "null")).toEqual({
+    expectedUpdatedAt: UPDATED_AT,
     providers: [{ provider: "google", region: "global" }],
     overrideModels: null,
   });

@@ -430,13 +430,25 @@ if (!databaseUrl || !runPostgresTests) {
                   }),
                 );
               }
+              const contact = await checkDb.query.contacts.findFirst({
+                where: { id: { eq: contactId } },
+                columns: { updatedAt: true },
+              });
+              if (!contact) {
+                throw new Error(
+                  "Expected a persisted contact before updating it",
+                );
+              }
               return await Result.gen(() =>
                 updateContactHandler({
                   safeDb,
                   organizationId,
                   contactId,
                   recordAuditEvent,
-                  body: { originatingAttorneyId: leaverUserId },
+                  body: {
+                    expectedUpdatedAt: contact.updatedAt.toISOString(),
+                    originatingAttorneyId: leaverUserId,
+                  },
                 }),
               );
             };

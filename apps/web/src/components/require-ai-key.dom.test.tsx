@@ -1,10 +1,18 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cz/cases/1" });
 
 const originalFetch = globalThis.fetch;
 let configStatus = 200;
+const config = {
+  updatedAt: "2026-01-01T00:00:00.000Z",
+  configured: false,
+  instanceProvisioned: false,
+  decisionInstanceProvisioned: false,
+} satisfies OrganizationAIConfig;
 globalThis.fetch = Object.assign(
   async (input: RequestInfo | URL) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
@@ -16,7 +24,7 @@ globalThis.fetch = Object.assign(
     }
     if (url.pathname.endsWith("/organization-settings/ai-config")) {
       return configStatus === 200
-        ? Response.json({ providers: [], roleModels: {} })
+        ? Response.json(config)
         : Response.json({ error: "Forbidden" }, { status: configStatus });
     }
     return Response.json({});

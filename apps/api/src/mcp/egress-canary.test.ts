@@ -793,6 +793,7 @@ describe("MCP anonymization canary corpus", () => {
           contacts: {
             findFirst: async () => ({
               id: "00000000-0000-4000-8000-0000000c0001",
+              updatedAt: new Date("2026-01-01T00:00:00.000Z"),
               type: "person",
               displayName: displayNameSeed,
               dateOfBirthYear: 1984,
@@ -827,6 +828,7 @@ describe("MCP anonymization canary corpus", () => {
       expectNoSeedLeak(result, seeds);
       expectSeedsQueuedForAnonymization(seeds);
       expect(result.structuredContent).toMatchObject({
+        updatedAt: "2026-01-01T00:00:00.000Z",
         dateOfBirth: null,
         nationalityCodes: [],
       });
@@ -1098,6 +1100,7 @@ describe("MCP anonymization canary corpus", () => {
           chainableRows([
             {
               id: "00000000-0000-4000-8000-0000000b0001",
+              updatedAt: new Date("2026-01-01T00:00:00.000Z"),
               name: nameSeed,
               status: "open",
               priority: "high",
@@ -1120,6 +1123,9 @@ describe("MCP anonymization canary corpus", () => {
       const seeds = [nameSeed, matterNameSeed, matterReferenceSeed];
       expectNoSeedLeak(result, seeds);
       expectSeedsQueuedForAnonymization(seeds);
+      expect(result.structuredContent).toMatchObject({
+        tasks: [{ updatedAt: "2026-01-01T00:00:00.000Z" }],
+      });
     },
   );
 
@@ -1135,6 +1141,7 @@ describe("MCP anonymization canary corpus", () => {
           entities: {
             findFirst: async () => ({
               id: "00000000-0000-4000-8000-0000000b0001",
+              updatedAt: new Date("2026-01-01T00:00:00.000Z"),
               workspaceId: "00000000-0000-4000-8000-0000000a0001",
               kind: "task",
               name: nameSeed,
@@ -1198,6 +1205,9 @@ describe("MCP anonymization canary corpus", () => {
       ];
       expectNoSeedLeak(result, seeds);
       expectSeedsQueuedForAnonymization(seeds);
+      expect(result.structuredContent).toMatchObject({
+        task: { updatedAt: "2026-01-01T00:00:00.000Z" },
+      });
     },
   );
 

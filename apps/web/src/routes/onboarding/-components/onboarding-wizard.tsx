@@ -37,7 +37,7 @@ import { authClient } from "@/lib/auth-client";
 import { refreshAuthQueries, sessionOptions } from "@/lib/auth-queries";
 import { installCatalogueEntry } from "@/lib/catalogue-install";
 import { detached } from "@/lib/detached";
-import { toAPIError } from "@/lib/errors/api";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyAuthClientError } from "@/lib/errors/user-toast";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
@@ -324,9 +324,11 @@ export const OnboardingWizard = () => {
         await refreshAuthQueries(queryClient);
 
         if (finalData.practiceJurisdictions.length > 0) {
+          const settings = unwrapEden(await api["organization-settings"].get());
           const { error: jurisdictionError } = await api[
             "organization-settings"
           ]["practice-jurisdictions"].post({
+            expectedUpdatedAt: settings.updatedAt,
             practiceJurisdictions: finalData.practiceJurisdictions,
           });
 
@@ -401,9 +403,13 @@ export const OnboardingWizard = () => {
           hasUsableProviderDrafts(finalData.aiProviders) &&
           aiOverrideModels !== null
         ) {
+          const config = unwrapEden(
+            await api["organization-settings"]["ai-config"].get(),
+          );
           const { error: aiConfigError } = await api["organization-settings"][
             "ai-config"
           ].post({
+            expectedUpdatedAt: config.updatedAt,
             providers: serializeProviderDrafts(finalData.aiProviders),
             overrideModels: aiOverrideModels,
           });

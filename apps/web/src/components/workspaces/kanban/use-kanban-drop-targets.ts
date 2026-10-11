@@ -5,6 +5,7 @@ import { attachClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/clos
 import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/extract-closest-edge";
 import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/types";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
+import { panic } from "better-result";
 
 import {
   withDragAnnouncementData,
@@ -52,6 +53,7 @@ type UseKanbanEntityDropTargetParams<TElement extends HTMLElement> = {
   onDrop: (
     entityId: string,
     sourceSubgroupValue: string | null | undefined,
+    expectedUpdatedAt: string | null,
   ) => void;
 };
 
@@ -81,9 +83,12 @@ export const useKanbanEntityDropTarget = <TElement extends HTMLElement>({
       name,
       canDrop: ({ source }) => {
         const entityId = source.data["entityId"];
+        const expectedUpdatedAt = source.data["expectedUpdatedAt"];
         return (
           source.data["type"] === ENTITY_DRAG_TYPE &&
           typeof entityId === "string" &&
+          (typeof expectedUpdatedAt === "string" ||
+            expectedUpdatedAt === null) &&
           acceptsDrop(entityId, readSourceSubgroupValue(source.data))
         );
       },
@@ -94,7 +99,18 @@ export const useKanbanEntityDropTarget = <TElement extends HTMLElement>({
         setIsDragOver(false);
         const entityId = source.data["entityId"];
         if (typeof entityId === "string") {
-          handleDrop(entityId, readSourceSubgroupValue(source.data));
+          const expectedUpdatedAt = source.data["expectedUpdatedAt"];
+          if (
+            typeof expectedUpdatedAt !== "string" &&
+            expectedUpdatedAt !== null
+          ) {
+            panic("Accepted Kanban card has no observed version");
+          }
+          handleDrop(
+            entityId,
+            readSourceSubgroupValue(source.data),
+            expectedUpdatedAt,
+          );
         }
       },
     });

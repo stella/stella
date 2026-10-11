@@ -25,6 +25,11 @@ export const aggregateFences = () => {
       id: organizationId,
       mode: "update",
     },
+    organizationSettings: {
+      aggregate: "organizationSettings",
+      id: organizationId,
+      mode: "update",
+    },
     orgFeatureAdmission: {
       aggregate: "orgFeatureAdmission",
       id: { organizationId, featureId: "flows" },
@@ -98,6 +103,11 @@ export const aggregateFences = () => {
     entity: {
       aggregate: "entity",
       id: { id: createSafeId<"entity">(), workspaceId },
+      mode: "update",
+    },
+    contact: {
+      aggregate: "contact",
+      id: { id: createSafeId<"contact">(), organizationId },
       mode: "update",
     },
     signal: {

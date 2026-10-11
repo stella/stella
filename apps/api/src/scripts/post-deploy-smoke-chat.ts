@@ -39,6 +39,7 @@ import {
 import type { ToolCallState } from "@/api/handlers/chat/chat-turn-settlement";
 import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/subagent-tool-shared";
 import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
+import type updateAIConfig from "@/api/handlers/organization-settings/update-ai-config";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
@@ -294,14 +295,21 @@ export const isRunErrorFrame = ({ type }: StreamFrame): boolean =>
 // Request bodies
 // ---------------------------------------------------------------------------
 
-export const buildSmokeAIConfigBody = (apiKey: string) => {
+export const buildSmokeAIConfigBody = ({
+  apiKey,
+  expectedUpdatedAt,
+}: {
+  apiKey: string;
+  expectedUpdatedAt: string;
+}) => {
   const selection = { provider: SMOKE_AI_PROVIDER, modelId: SMOKE_AI_MODEL_ID };
   return {
+    expectedUpdatedAt,
     providers: [{ provider: SMOKE_AI_PROVIDER, apiKey }],
     overrideModels: Object.fromEntries(
       SMOKE_AI_ROLES.map((role) => [role, selection]),
     ),
-  };
+  } satisfies Static<typeof updateAIConfig.config.body>;
 };
 
 type ChatSmokeBody = Static<typeof agUiSendMessageBodySchema>;
@@ -791,9 +799,34 @@ const provisionAIConfig = async (
   apiKey: string,
 ): Promise<SmokeCheck> => {
   const name = "POST /v1/organization-settings/ai-config";
+  const currentResponse = await request("/v1/organization-settings/ai-config", {
+    method: "GET",
+    timeoutMs: AI_CONFIG_TIMEOUT_MS,
+  });
+  if (!isSuccess(currentResponse.status)) {
+    return {
+      name,
+      ok: false,
+      detail: `Could not read the current AI settings: ${String(currentResponse.status)} ${truncate(await currentResponse.text())}`,
+    };
+  }
+  const current = v.safeParse(
+    v.object({ updatedAt: v.pipe(v.string(), v.isoTimestamp()) }),
+    await currentResponse.json(),
+  );
+  if (!current.success) {
+    return {
+      name,
+      ok: false,
+      detail: "AI settings response omitted a valid update token",
+    };
+  }
   const response = await request("/v1/organization-settings/ai-config", {
     method: "POST",
-    body: buildSmokeAIConfigBody(apiKey),
+    body: buildSmokeAIConfigBody({
+      apiKey,
+      expectedUpdatedAt: current.output.updatedAt,
+    }),
     timeoutMs: AI_CONFIG_TIMEOUT_MS,
   });
   if (isSuccess(response.status)) {

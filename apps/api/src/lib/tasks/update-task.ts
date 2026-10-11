@@ -5,7 +5,7 @@ import type { Static } from "elysia";
 import { isDeepStrictEqual } from "node:util";
 
 import type { Transaction } from "@/api/db/root";
-import { abortableTx } from "@/api/db/safe-db";
+import { abortableTx, safeDbFromScoped } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   entities,
@@ -39,6 +39,7 @@ import {
   decideGateForTask,
   gateDecisionForTaskStatus,
 } from "@/api/lib/flows/review-gate-task";
+import { expectedUpdatedAtSchema } from "@/api/lib/optimistic-concurrency";
 import {
   agendaFieldsBodySchema,
   validateAgendaFields,
@@ -62,8 +63,10 @@ import {
   workObligationIntentForTaskStatus,
 } from "@/api/lib/work-obligations/transitions";
 import type { WorkObligationTransitionAction } from "@/api/lib/work-obligations/transitions";
+import { enforceWritePrecondition } from "@/api/lib/write-contract";
 
 export const updateTaskBodySchema = t.Object({
+  expectedUpdatedAt: expectedUpdatedAtSchema,
   taskId: tSafeId("entity"),
   name: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
   agendaKind: t.Optional(t.String({ minLength: 1, maxLength: 32 })),
@@ -501,6 +504,25 @@ export type UpdateTaskHandlerProps = {
   decideGate?: typeof decideGateForTask;
 };
 
+const assertTaskWritePrecondition = (
+  storedUpdatedAt: Date | null | undefined,
+  expectedUpdatedAt: string,
+): void => {
+  if (!storedUpdatedAt) {
+    throw new HandlerError({ status: 404, message: "Task not found" });
+  }
+  const conflict = enforceWritePrecondition({
+    type: "updatedAt",
+    field: "expectedUpdatedAt",
+    storedUpdatedAt,
+    expectedUpdatedAt,
+    resource: "Task",
+  });
+  if (conflict !== null) {
+    throw conflict;
+  }
+};
+
 type ApplyTaskUpdateOutcome =
   | { type: "updated" }
   | { type: "gate"; decision: FlowReviewDecision };
@@ -790,6 +812,7 @@ const applyTaskUpdate = async function* ({
           .limit(1)
           .for("update")
       ).at(0);
+      assertTaskWritePrecondition(before?.updatedAt, body.expectedUpdatedAt);
       const rows = await tx
         .update(entities)
         .set({ ...values, updatedAt: now })
@@ -909,6 +932,13 @@ export const updateTaskHandler = async function* ({
   // A closing status on the task a workflow review gate raised is the gate's
   // decision; the run settles the task, and the rest of the change applies
   // as usual.
+  const { status: _decided, ...rest } = props.body;
+  const hasRemainingChanges = Object.keys(rest).some(
+    (key) =>
+      key !== "taskId" &&
+      key !== "workflowReason" &&
+      key !== "expectedUpdatedAt",
+  );
   yield* Result.await(
     decideGate({
       safeDb: props.safeDb,
@@ -918,21 +948,50 @@ export const updateTaskHandler = async function* ({
       decision: first.value.decision,
       note: props.body.workflowReason?.trim() ?? null,
       recordAuditEvent: props.recordAuditEvent,
+      taskWrite: {
+        type: "replacement",
+        expectedUpdatedAt: props.body.expectedUpdatedAt,
+        workspaceLock:
+          props.body.listItemType === undefined ? "reference" : "cap",
+        applyRemainingChanges: async (tx) => {
+          if (!hasRemainingChanges) {
+            return;
+          }
+          const settled = await tx.query.entities.findFirst({
+            where: {
+              id: { eq: props.body.taskId },
+              workspaceId: { eq: props.workspaceId },
+            },
+            columns: { updatedAt: true },
+          });
+          if (!settled?.updatedAt) {
+            throw new HandlerError({ status: 404, message: "Task not found" });
+          }
+          // The gate owns this transaction and has just advanced the version.
+          // Remaining edits use that version and roll back with the decision.
+          const applied = await Result.gen(() =>
+            applyTaskUpdate({
+              ...props,
+              safeDb: safeDbFromScoped(async (run) => await run(tx)),
+              body: {
+                ...rest,
+                expectedUpdatedAt: settled.updatedAt.toISOString(),
+              },
+              features,
+            }),
+          );
+          if (applied.isErr()) {
+            throw applied.error;
+          }
+          if (applied.value.type !== "updated") {
+            panic(
+              "Status-free task replacement attempted another gate decision",
+            );
+          }
+          return;
+        },
+      },
     }),
   );
-  const { status: _decided, ...rest } = props.body;
-  // Settlement already updates the task and records its audit. A status-only
-  // decision has no remaining fields to write; a second update in an outer
-  // transaction would recheck its workspace FK while still holding the run.
-  const hasRemainingChanges = Object.keys(rest).some(
-    (key) => key !== "taskId" && key !== "workflowReason",
-  );
-  if (!hasRemainingChanges) {
-    return Result.ok({ success: true });
-  }
-  const second = yield* applyTaskUpdate({ ...props, body: rest, features });
-  if (Result.isError(second)) {
-    return second;
-  }
   return Result.ok({ success: true });
 };

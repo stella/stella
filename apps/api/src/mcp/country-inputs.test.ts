@@ -240,6 +240,7 @@ describe("a country input reads the spellings a model writes", () => {
   ])("set_practice_jurisdictions reads %j as %s", (spelling, canonical) => {
     expect(
       readCountry("set_practice_jurisdictions", {
+        expected_updated_at: "2026-01-01T00:00:00.000Z",
         jurisdictions: [{ country_code: spelling, is_primary: true }],
       }),
     ).toMatchObject({

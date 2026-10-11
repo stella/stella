@@ -1454,6 +1454,7 @@ export const FilesystemRow = ({
                 return withDragAnnouncementData(
                   {
                     type: ENTITY_DRAG_TYPE,
+                    expectedUpdatedAt: node.updatedAt,
                     entityId: node.entityId,
                     entityIds,
                     entities,
@@ -1541,6 +1542,7 @@ export const FilesystemRow = ({
     };
   }, [
     node.entityId,
+    node.updatedAt,
     node.parentId,
     node.kind,
     name,

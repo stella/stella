@@ -111,6 +111,7 @@ export const KanbanCard = ({
         withDragAnnouncementData(
           {
             type: ENTITY_DRAG_TYPE,
+            expectedUpdatedAt: entity.updatedAt,
             entityId: entity.entityId,
             entityIds: [entity.entityId],
             entities: [
@@ -133,6 +134,7 @@ export const KanbanCard = ({
   }, [
     draggable,
     entity.entityId,
+    entity.updatedAt,
     name,
     entity.kind,
     file?.mimeType,

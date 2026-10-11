@@ -8,6 +8,7 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { compareCodeUnit } from "@stll/collation";
@@ -105,6 +106,7 @@ const TEAM_HEATMAP_GRID_CLASS =
 
 type UpcomingTaskContext = {
   entityId: string;
+  updatedAt: string | null;
   name: string;
   status: string | null;
 };
@@ -243,14 +245,17 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     mutationFn: async ({
       taskId,
       status,
+      expectedUpdatedAt,
     }: {
       taskId: string;
       status: TaskStatus;
+      expectedUpdatedAt: string;
     }) => {
       const response = await api
         .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .patch({
           taskId: toSafeId<"entity">(taskId),
+          expectedUpdatedAt,
           status,
         });
       return unwrapEden(response);
@@ -611,6 +616,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                         }
                         onContextMenu={handleTaskContextMenu({
                           entityId: task.entityId,
+                          updatedAt: task.updatedAt,
                           name: task.name,
                           status: task.status,
                         })}
@@ -749,6 +755,11 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                                 }
                                 updateTaskStatus.mutate({
                                   taskId: task.entityId,
+                                  expectedUpdatedAt:
+                                    task.updatedAt ??
+                                    panic(
+                                      "Updated overview task has no observed version",
+                                    ),
                                   status,
                                 });
                               }}

@@ -20,6 +20,8 @@ import updateKanbanPlacement from "@/api/handlers/fields/kanban-placement/update
 import transitionWorkObligation from "@/api/handlers/work-obligations/transition";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { decideGateForTask } from "@/api/lib/flows/review-gate-task";
+import { VERSION_CONFLICT_ERROR_CODE } from "@/api/lib/optimistic-concurrency";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
@@ -48,6 +50,7 @@ type TaskEntry = (typeof TASK_ENTRIES)[number];
 type Fixture = Awaited<ReturnType<typeof flowReviewGateFixture>>;
 type TaskActionOptions = {
   fixture: Fixture;
+  expectedUpdatedAt: string;
   safeDb: SafeDb;
   entry: TaskEntry;
   taskStatus: "done" | "cancelled";
@@ -58,6 +61,7 @@ type TaskActionOptions = {
 
 const taskAction = async ({
   fixture: f,
+  expectedUpdatedAt,
   safeDb,
   entry,
   taskStatus,
@@ -72,6 +76,7 @@ const taskAction = async ({
         recordAuditEvent: f.recordAuditEvent,
         body: {
           taskId: f.taskEntityId,
+          expectedUpdatedAt,
           status: taskStatus,
           workflowReason: "Task decision",
         },
@@ -114,6 +119,7 @@ const taskAction = async ({
       toolName: "save_task",
       args: {
         task_id: f.taskEntityId,
+        expected_updated_at: expectedUpdatedAt,
         status: taskStatus,
         name: "Changed review task",
         due_date: "2026-10-10",
@@ -156,6 +162,7 @@ const taskAction = async ({
             ...context,
             body: {
               entityId: f.taskEntityId,
+              expectedUpdatedAt,
               status: taskStatus,
               fields: assignment,
             },
@@ -310,6 +317,13 @@ if (!databaseUrl || !enabled) {
             });
             assignment.push({ propertyId, content });
           }
+          const { task } = await f.read();
+          if (!task) {
+            throw new Error(
+              "Expected a persisted review task before updating it",
+            );
+          }
+          const expectedUpdatedAt = task.updatedAt.toISOString();
           const previousGovernedWorkflow = env.FEATURE_GOVERNED_WORKFLOW;
           env.FEATURE_GOVERNED_WORKFLOW = true;
           const pid = async (client: typeof first) => {
@@ -369,6 +383,7 @@ if (!databaseUrl || !enabled) {
                 taskFirst
                   ? taskAction({
                       fixture: f,
+                      expectedUpdatedAt,
                       safeDb: firstDb,
                       entry,
                       taskStatus,
@@ -387,6 +402,7 @@ if (!databaseUrl || !enabled) {
                   ? runAction({ fixture: f, safeDb: secondDb, action })
                   : taskAction({
                       fixture: f,
+                      expectedUpdatedAt,
                       safeDb: secondDb,
                       entry,
                       taskStatus,
@@ -511,6 +527,86 @@ if (!databaseUrl || !enabled) {
         });
       },
     );
+    test("a stale bundled review-task edit rolls back its gate decision and task changes", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const client = openClient();
+        const f = await flowReviewGateFixture(client.db, {
+          intermediate: false,
+          governed: true,
+        });
+        try {
+          const initial = await f.read();
+          if (!initial.task) {
+            throw new Error(
+              "Expected a persisted review task before updating it",
+            );
+          }
+          const expectedUpdatedAt = initial.task.updatedAt.toISOString();
+          const changedUpdatedAt = new Date(
+            initial.task.updatedAt.getTime() + 1,
+          );
+          expect(changedUpdatedAt.toISOString()).not.toBe(expectedUpdatedAt);
+          await client.db
+            .update(entities)
+            .set({ name: "A newer task edit", updatedAt: changedUpdatedAt })
+            .where(eq(entities.id, f.taskEntityId));
+          const before = await f.read();
+          const effects: string[] = [];
+          const result = await Result.gen(() =>
+            updateTaskHandler({
+              safeDb: f.safeDb(client.db),
+              workspaceId: f.workspaceId,
+              userId: f.userId,
+              recordAuditEvent: f.recordAuditEvent,
+              body: {
+                taskId: f.taskEntityId,
+                expectedUpdatedAt,
+                status: "done",
+                name: "Stale bundled task edit",
+              },
+              features: { governedWorkflow: true, legalLists: false },
+              decideGate: async (options) =>
+                await decideGateForTask(options, {
+                  broadcastUpdate: () => {
+                    effects.push("broadcast");
+                  },
+                  enqueueStep: async () => {
+                    effects.push("enqueue");
+                    await Promise.resolve();
+                  },
+                  notifyRunCompleted: () => {
+                    effects.push("notice");
+                  },
+                }),
+            }),
+          );
+          expect(result.isErr()).toBe(true);
+          if (result.isErr()) {
+            expect(result.error).toMatchObject({
+              status: 409,
+              code: VERSION_CONFLICT_ERROR_CODE,
+            });
+          }
+          expect(await f.read()).toEqual(before);
+          expect(effects).toEqual([]);
+          expect(f.enqueued).toEqual([]);
+          expect(
+            await client.db
+              .select({ id: notifications.id })
+              .from(notifications)
+              .where(
+                eq(
+                  notifications.idempotencyKey,
+                  `flow-run-completed:${f.runId}`,
+                ),
+              ),
+          ).toEqual([]);
+        } finally {
+          await f.cleanup();
+        }
+      });
+    });
+
     test("failed Kanban field write rolls back review completion without filing a notice", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const client = openClient();
@@ -519,12 +615,18 @@ if (!databaseUrl || !enabled) {
           governed: true,
         });
         const before = await f.read();
+        if (!before.task) {
+          throw new Error(
+            "Expected a persisted review task before updating it",
+          );
+        }
         const previousGovernedWorkflow = env.FEATURE_GOVERNED_WORKFLOW;
         env.FEATURE_GOVERNED_WORKFLOW = true;
         try {
           expect(
             await taskAction({
               fixture: f,
+              expectedUpdatedAt: before.task.updatedAt.toISOString(),
               safeDb: f.safeDb(client.db),
               entry: "Kanban text",
               taskStatus: "done",

@@ -11,24 +11,28 @@ GlobalRegistrator.register({
 });
 
 const ORGANIZATION = "jurisdictions-card-org";
+const INITIAL_UPDATED_AT = "2026-01-01T00:00:00.000Z";
 const ORGANIZATION_SETTINGS_CALLER = {
   organizationId: ORGANIZATION,
   userId: "user",
 };
 
 type PendingWrite = {
+  expectedUpdatedAt: string;
   body: unknown;
   response: ReturnType<typeof Promise.withResolvers<Response>>;
 };
 
 const originalFetch = globalThis.fetch;
 const writes: PendingWrite[] = [];
-const server: { practiceJurisdictions: unknown } = {
+const server: { practiceJurisdictions: unknown; updatedAt: string } = {
+  updatedAt: INITIAL_UPDATED_AT,
   practiceJurisdictions: [],
 };
 let settingsReads = 0;
 
 const settingsBody = () => ({
+  updatedAt: server.updatedAt,
   documentProcessingMode: "standard",
   matterNumberPattern: "{YYYY}-{NNN}",
   matterNumberPadding: 3,
@@ -62,10 +66,17 @@ globalThis.fetch = Object.assign(
     ) {
       const response = Promise.withResolvers<Response>();
       const body = v.parse(
-        v.object({ practiceJurisdictions: v.unknown() }),
+        v.object({
+          expectedUpdatedAt: v.string(),
+          practiceJurisdictions: v.unknown(),
+        }),
         await request.json(),
       );
-      writes.push({ body: body.practiceJurisdictions, response });
+      writes.push({
+        expectedUpdatedAt: body.expectedUpdatedAt,
+        body: body.practiceJurisdictions,
+        response,
+      });
       return await response.promise;
     }
     throw new Error(`Unexpected request: ${request.method} ${request.url}`);
@@ -88,6 +99,7 @@ afterEach(() => {
   testing.cleanup();
   writes.length = 0;
   server.practiceJurisdictions = [];
+  server.updatedAt = INITIAL_UPDATED_AT;
   settingsReads = 0;
 });
 
@@ -173,8 +185,12 @@ const nextWrite = async (index: number) => {
 
 const commit = async (write: PendingWrite) =>
   await testing.act(async () => {
+    expect(write.expectedUpdatedAt).toBe(server.updatedAt);
     server.practiceJurisdictions = write.body;
-    write.response.resolve(Response.json({ success: true }));
+    server.updatedAt = new Date(Date.parse(server.updatedAt) + 1).toISOString();
+    write.response.resolve(
+      Response.json({ practiceJurisdictions: server.practiceJurisdictions }),
+    );
   });
 
 const fail = async (write: PendingWrite) =>
@@ -225,6 +241,7 @@ test.each(SCHEDULES)(
     testing.fireEvent.click(countryButton(/^Czechia/u));
     const first = await nextWrite(0);
     expect(first.body).toEqual([CZ]);
+    expect(first.expectedUpdatedAt).toBe(INITIAL_UPDATED_AT);
 
     testing.fireEvent.click(countryButton(/^Slovakia/u));
     await drain();
@@ -262,6 +279,7 @@ test("the card keeps the newest selection while the older write's refetch lands"
   const readsBefore = settingsReads;
   await commit(first);
   const second = await nextWrite(1);
+  expect(second.expectedUpdatedAt).toBe(server.updatedAt);
   // The older write's refetch returns the older value ([CZ]) while the newer
   // write is still in flight.
   await testing.waitFor(() =>

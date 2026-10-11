@@ -9,7 +9,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { resolveFlowReviewGate } from "@/api/lib/flows/flow-executor";
-import type { FlowRunActionResult } from "@/api/lib/flows/flow-executor";
+import type {
+  ReviewTaskWrite,
+  FlowRunActionResult,
+} from "@/api/lib/flows/flow-executor";
 import type { FlowReviewDecision } from "@/api/lib/flows/flow-types";
 import { WORK_OBLIGATION_TRANSITION_ACTION } from "@/api/lib/work-obligations/transitions";
 import type { WorkObligationTransitionAction } from "@/api/lib/work-obligations/transitions";
@@ -120,6 +123,7 @@ type DecideGateForTaskOptions = {
   decision: FlowReviewDecision;
   note: string | null;
   recordAuditEvent: AuditRecorder;
+  taskWrite?: ReviewTaskWrite;
 };
 
 /**
@@ -138,6 +142,7 @@ export const decideGateForTask = async (
     decision,
     note,
     recordAuditEvent,
+    taskWrite = { type: "settlement" },
   }: DecideGateForTaskOptions,
   /** The resolver's side effects, including notices deferred until commit. */
   dependencies: Parameters<typeof resolveFlowReviewGate>[1] = {},
@@ -169,6 +174,7 @@ export const decideGateForTask = async (
           decision,
           note,
           recordAuditEvent,
+          taskWrite,
         },
         dependencies,
       ),

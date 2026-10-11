@@ -76,6 +76,7 @@ const files = [
   },
 ];
 const settings = {
+  updatedAt: "2026-01-01T00:00:00.000Z",
   declaredFeatureIds: ["legal-lists", "list-verification"],
   deploymentFeatures: { legalLists: true },
   capabilities: {},

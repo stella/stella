@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { isCountryCode } from "@stll/country-codes";
 
 import type { Transaction } from "@/api/db/root";
@@ -9,6 +11,9 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { enforceWritePrecondition } from "@/api/lib/write-contract";
 
 type RawJurisdictionInput = {
   countryCode: string;
@@ -73,6 +78,7 @@ export const identifyOrganizationJurisdictions = (
 };
 
 type UpsertPracticeJurisdictionsOptions = {
+  expectedUpdatedAt: string;
   organizationId: SafeId<"organization">;
   practiceJurisdictions: PracticeJurisdiction[];
   recordAuditEvent: AuditRecorder;
@@ -80,15 +86,46 @@ type UpsertPracticeJurisdictionsOptions = {
 };
 
 export const upsertPracticeJurisdictions = async ({
+  expectedUpdatedAt,
   organizationId,
   practiceJurisdictions,
   recordAuditEvent,
   tx,
 }: UpsertPracticeJurisdictionsOptions) => {
-  const previous = await tx.query.organizationSettings.findFirst({
-    where: { organizationId: { eq: organizationId } },
-    columns: { practiceJurisdictions: true },
+  const locked = await withAggregateRowQuery({
+    tx,
+    aggregate: "organizationSettings",
+    id: organizationId,
+    mode: "update",
+    select: (handle) =>
+      handle
+        .select({
+          organizationId: organizationSettings.organizationId,
+          practiceJurisdictions: organizationSettings.practiceJurisdictions,
+          updatedAt: organizationSettings.updatedAt,
+        })
+        .from(organizationSettings),
   });
+  if (locked.status === "busy") {
+    return panic("Blocking organization settings lock returned busy");
+  }
+  const previous = locked.rows.at(0);
+  if (!previous) {
+    return new HandlerError({
+      status: 404,
+      message: "Organization settings not found",
+    });
+  }
+  const conflict = enforceWritePrecondition({
+    type: "updatedAt",
+    field: "expectedUpdatedAt",
+    storedUpdatedAt: previous.updatedAt,
+    expectedUpdatedAt,
+    resource: "Organization practice jurisdictions",
+  });
+  if (conflict !== null) {
+    return conflict;
+  }
 
   await tx
     .insert(organizationSettings)
@@ -111,9 +148,10 @@ export const upsertPracticeJurisdictions = async ({
     resourceId: organizationId,
     changes: {
       practiceJurisdictions: {
-        old: arrayOrEmpty(previous?.practiceJurisdictions),
+        old: arrayOrEmpty(previous.practiceJurisdictions),
         new: practiceJurisdictions,
       },
     },
   });
+  return null;
 };

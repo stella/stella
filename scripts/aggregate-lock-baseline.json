@@ -1110,12 +1110,6 @@
     "reason": "builder-for in apps/api/src/handlers/contacts/delete.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/handlers/contacts/update.ts",
-    "fingerprint": "17c7bb8ec46797fd4ecfd614aa1e73cef6a521504e9f5175c57ffcb53d83652e",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/contacts/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
     "file": "apps/api/src/handlers/desktop-presence/service.ts",
     "fingerprint": "2a9c22582d78c71be05af2f9bd5683cdc7c93e5be5a4247298bd38d0d6a35681",
     "count": 1,

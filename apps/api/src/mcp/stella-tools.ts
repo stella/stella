@@ -64,6 +64,7 @@ import {
   normalizePracticeJurisdictions,
   upsertPracticeJurisdictions,
 } from "@/api/handlers/organization-settings/practice-jurisdictions";
+import { readOrCreateOrganizationSettings } from "@/api/handlers/organization-settings/read-or-create";
 import type { readWorkspaceHandler } from "@/api/handlers/workspaces/get";
 import type { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import type { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
@@ -997,6 +998,11 @@ const practiceJurisdictionInputSchema = v.strictObject({
 
 const setPracticeJurisdictionsArgsSchema = nullAsAbsent(
   v.strictObject({
+    expected_updated_at: v.pipe(
+      v.string(),
+      v.isoTimestamp(),
+      v.description("Version returned by organization settings"),
+    ),
     jurisdictions: v.pipe(
       v.array(practiceJurisdictionInputSchema),
       v.minLength(1),
@@ -1309,7 +1315,8 @@ export const STELLA_TOOL_DEFINITIONS = [
       "Call this when the org's practice jurisdictions are empty (e.g., the " +
       "user signed up via an OAuth client and skipped onboarding). Pass an " +
       "array of {country_code, is_primary}; exactly one entry should be " +
-      "primary.",
+      "primary. Copy expected_updated_at from the empty-result onboarding " +
+      "nextStep, or from organization-settings.get via read_capability.",
     inputSchema: setPracticeJurisdictionsArgsSchema,
     // Not idempotent: the handler records a fresh audit event and bumps
     // updatedAt on every call even when the jurisdictions are unchanged, so a
@@ -1340,9 +1347,9 @@ export const STELLA_TOOL_DEFINITIONS = [
   }),
 ] as const satisfies readonly McpToolDefinition[];
 
-const buildOnboardingNextStep = () =>
+const buildOnboardingNextStep = (expectedUpdatedAt: string) =>
   `This organization has no practice jurisdictions yet. Call ` +
-  `${SET_PRACTICE_JURISDICTIONS_TOOL} with \`jurisdictions: [{ country_code, ` +
+  `${SET_PRACTICE_JURISDICTIONS_TOOL} with \`expected_updated_at: "${expectedUpdatedAt}", jurisdictions: [{ country_code, ` +
   `is_primary }]\` to enable jurisdiction-aware tools, or have the user ` +
   `complete onboarding at ${getAppBaseUrl()}.`;
 
@@ -1356,9 +1363,20 @@ const onboardingNextStep = async (
   context: McpRequestContext,
 ): Promise<{ nextStep?: string }> => {
   const jurisdictions = await loadPracticeJurisdictions(context);
-  return jurisdictions.length > 0
-    ? {}
-    : { nextStep: buildOnboardingNextStep() };
+  if (jurisdictions.length > 0) {
+    return {};
+  }
+  const settings = await context.scopedDb(
+    async (tx) =>
+      await readOrCreateOrganizationSettings({
+        tx,
+        organizationId: context.organizationId,
+        recordAuditEvent: context.recordAuditEvent,
+      }),
+  );
+  return {
+    nextStep: buildOnboardingNextStep(settings.updatedAt.toISOString()),
+  };
 };
 
 // The list_matters cursor is the boundary matter id alone; the query
@@ -3685,6 +3703,7 @@ const handleReadContactTool: TypedMcpToolHandler<
   // with how chat anonymizes contact fields.
   const payload = projectionPayload(READ_CONTACT_PROJECTION, {
     contactId: contact.id,
+    updatedAt: contact.updatedAt.toISOString(),
     type: contact.type,
     displayName: contact.displayName,
     firstName: contact.firstName,
@@ -3740,12 +3759,16 @@ const handleSetPracticeJurisdictionsTool: TypedMcpToolHandler<
   );
 
   await context.scopedDb(async (tx) => {
-    await upsertPracticeJurisdictions({
+    const conflict = await upsertPracticeJurisdictions({
+      expectedUpdatedAt: parsed.output.expected_updated_at,
       organizationId: context.organizationId,
       practiceJurisdictions,
       recordAuditEvent: context.recordAuditEvent,
       tx,
     });
+    if (conflict !== null) {
+      throw conflict;
+    }
   });
 
   identifyOrganizationJurisdictions(

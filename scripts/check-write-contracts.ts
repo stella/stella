@@ -92,11 +92,22 @@ const propagatesConflict = (call: ts.CallExpression): boolean => {
         returnsConflict(only)
       );
     }
+    if (!ts.isReturnStatement(node) || node.expression === undefined) {
+      return false;
+    }
+    const returned = unwrap(node.expression);
+    if (ts.isIdentifier(returned) && returned.text === name) {
+      return true;
+    }
     return (
-      ts.isReturnStatement(node) &&
-      node.expression !== undefined &&
-      ts.isIdentifier(unwrap(node.expression)) &&
-      unwrap(node.expression).getText() === name
+      ts.isCallExpression(returned) &&
+      ts.isPropertyAccessExpression(returned.expression) &&
+      ts.isIdentifier(returned.expression.expression) &&
+      returned.expression.expression.text === "Result" &&
+      returned.expression.name.text === "err" &&
+      returned.arguments.length === 1 &&
+      ts.isIdentifier(unwrap(returned.arguments[0])) &&
+      unwrap(returned.arguments[0]).getText() === name
     );
   };
   if (next === undefined) {

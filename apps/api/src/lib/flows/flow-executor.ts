@@ -39,6 +39,7 @@ import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
@@ -96,6 +97,7 @@ import type { TaskDeploymentFeatures } from "@/api/lib/tasks/deployment-features
 import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
 import { settleWorkObligation } from "@/api/lib/work-obligations/settle-work-obligation";
 import { WORK_OBLIGATION_SOURCE_SETTLEMENT } from "@/api/lib/work-obligations/transitions";
+import { enforceWritePrecondition } from "@/api/lib/write-contract";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 /**
@@ -723,6 +725,15 @@ const flowRunAuditRecorder = ({
 
 type ReviewTaskSettlement = keyof typeof WORK_OBLIGATION_SOURCE_SETTLEMENT;
 
+export type ReviewTaskWrite =
+  | { type: "settlement" }
+  | {
+      type: "replacement";
+      expectedUpdatedAt: string;
+      workspaceLock: "cap" | "reference";
+      applyRemainingChanges: (tx: Transaction) => Promise<void>;
+    };
+
 /**
  * Settle the task a review gate raised once the gate is decided or the run
  * is cancelled. Under governed workflow the obligation carries the task and
@@ -737,6 +748,7 @@ const settleReviewTask = async ({
   action,
   reason,
   recordAuditEvent,
+  taskWrite = { type: "settlement" },
 }: {
   tx: Transaction;
   taskEntityId: SafeId<"entity">;
@@ -745,12 +757,42 @@ const settleReviewTask = async ({
   action: ReviewTaskSettlement;
   reason: string | null;
   recordAuditEvent: AuditRecorder;
+  taskWrite?: ReviewTaskWrite;
 }): Promise<void> => {
   const settlement = WORK_OBLIGATION_SOURCE_SETTLEMENT[action];
   const obligation = await lockWorkObligation(tx, {
     entityId: taskEntityId,
     workspaceId,
   });
+  if (taskWrite.type === "replacement") {
+    await withAggregateLock({
+      tx,
+      aggregate: "entity",
+      id: { id: taskEntityId, workspaceId },
+      mode: "update",
+    });
+    const task = await tx.query.entities.findFirst({
+      where: {
+        id: { eq: taskEntityId },
+        workspaceId: { eq: workspaceId },
+        kind: { eq: "task" },
+      },
+      columns: { updatedAt: true },
+    });
+    if (!task?.updatedAt) {
+      throw new HandlerError({ status: 404, message: "Task not found" });
+    }
+    const conflict = enforceWritePrecondition({
+      type: "updatedAt",
+      field: "expectedUpdatedAt",
+      storedUpdatedAt: task.updatedAt,
+      expectedUpdatedAt: taskWrite.expectedUpdatedAt,
+      resource: "Task",
+    });
+    if (conflict !== null) {
+      throw conflict;
+    }
+  }
   if (obligation === undefined) {
     await tx
       .update(entities)
@@ -1351,6 +1393,7 @@ export type ResolveFlowReviewGateOptions = {
   note: string | null;
   /** Records the review task's settlement as the reviewer's own act. */
   recordAuditEvent: AuditRecorder;
+  taskWrite?: ReviewTaskWrite;
 };
 
 type LockRunAndCurrentStepOptions = {
@@ -1416,6 +1459,7 @@ export const resolveFlowReviewGate = async (
     decision,
     note,
     recordAuditEvent,
+    taskWrite = { type: "settlement" },
   }: ResolveFlowReviewGateOptions,
   {
     broadcastUpdate = broadcastFlowRunUpdate,
@@ -1437,6 +1481,12 @@ export const resolveFlowReviewGate = async (
   await Result.gen(async function* () {
     const result = yield* Result.await(
       resultTx(safeDb, async (tx) => {
+        if (
+          taskWrite.type === "replacement" &&
+          taskWrite.workspaceLock === "cap"
+        ) {
+          await lockWorkspacesForEntityCap(tx, [workspaceId]);
+        }
         const current = await lockRunAndCurrentStep(tx, { workspaceId, runId });
         if (current === undefined) {
           return Result.err(
@@ -1503,7 +1553,11 @@ export const resolveFlowReviewGate = async (
             action: "complete",
             reason: note,
             recordAuditEvent,
+            taskWrite,
           });
+          if (taskWrite.type === "replacement") {
+            await taskWrite.applyRemainingChanges(tx);
+          }
         }
 
         const nextStatus = reviewGateNextStatus(resolution.kind);

@@ -3,6 +3,7 @@ import { useFormStatus } from "react-dom";
 
 import { useQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { DEFAULT_CHAT_ANON_ENTITY_LABELS } from "@stll/anonymize-chat";
@@ -298,6 +299,10 @@ export const AnonymizationDenyListCard = () => {
     mutationFn: async ({ entries }: UpdateBlacklistVars) =>
       unwrapEden(
         await api["organization-settings"]["anonymization-blacklist"].put({
+          expectedUpdatedAt:
+            blacklistView.type === "items"
+              ? blacklistView.items.updatedAt
+              : panic("Blacklist update requires loaded settings"),
           entries: entries.map((entry) => ({
             canonical: entry.canonical,
             label: entry.label,
