@@ -1,7 +1,9 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import type { WebApiRoutes } from "@/lib/eden-client";
 import type { WorkspaceNavigationItem } from "@/lib/memory-api";
+import { toSafeId } from "@/lib/safe-id";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/", width: 1280 });
 
@@ -20,6 +22,8 @@ const { RenderLoopGuard } = await import("@/testing/render-loop-guard");
 const { MatterCombobox } = await import("./matter-combobox");
 
 type MatterOption = Parameters<typeof MatterCombobox>[0]["value"];
+type ThreadSlice =
+  WebApiRoutes["chat"]["threads"]["get"]["response"][200]["global"][number];
 
 /**
  * How many commits the picker may take to settle after mounting, and again
@@ -40,14 +44,17 @@ const matter = (
   lastActivityAt = NOW,
 ) =>
   ({
-    client: client === null ? null : { displayName: client, id },
+    client:
+      client === null
+        ? null
+        : { displayName: client, id: toSafeId<"contact">(id) },
     clientId: null,
     color,
     defaultViewId: null,
-    id,
+    id: toSafeId<"workspace">(id),
     lastActivityAt,
     name,
-    reference: null,
+    reference: `M-${id.slice(-4)}`,
     status: "active",
   }) satisfies WorkspaceNavigationItem;
 
@@ -74,7 +81,8 @@ const MANY = Array.from({ length: 7 }, (_, index) =>
     new Date(NOW.getTime() - index * 86_400_000),
   ),
 );
-const many = (index: number) => MANY[index] ?? MANY[0];
+const many = (index: number) =>
+  MANY.at(index) ?? panic(`No fixture matter ${index}`);
 
 type ChatActivity = { workspaceId: string; updatedAt: string };
 
@@ -137,11 +145,11 @@ const openCombobox = (
               createdAt: updatedAt,
               decision: null,
               id: `thread-${workspaceId}`,
-              origin: "original",
+              origin: "original" as const,
               title: "Chat",
               updatedAt,
               usedAnonymization: false,
-            },
+            } satisfies ThreadSlice,
           ],
         })),
       },

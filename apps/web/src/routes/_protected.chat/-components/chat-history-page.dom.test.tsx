@@ -1,9 +1,19 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, describe, expect, jest, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  jest,
+  setSystemTime,
+  test,
+} from "bun:test";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import type { WebApiRoutes } from "@/lib/eden-client";
 import type { WorkspaceNavigationItem } from "@/lib/memory-api";
+import { toSafeId } from "@/lib/safe-id";
 
 // Wide enough that rows are not in their narrow layout.
 GlobalRegistrator.register({
@@ -51,7 +61,7 @@ const MATTER_A = {
   clientId: null,
   color: null,
   defaultViewId: null,
-  id: "00000000-0000-7000-8000-0000000000a1",
+  id: toSafeId<"workspace">("00000000-0000-7000-8000-0000000000a1"),
   lastActivityAt: NOW,
   name: "Novak v. Horak",
   reference: "M-2026-001",
@@ -59,7 +69,7 @@ const MATTER_A = {
 } satisfies WorkspaceNavigationItem;
 const MATTER_B = {
   ...MATTER_A,
-  id: "00000000-0000-7000-8000-0000000000b2",
+  id: toSafeId<"workspace">("00000000-0000-7000-8000-0000000000b2"),
   name: "Lease renewal Vinohrady",
   reference: "M-2026-002",
 } satisfies WorkspaceNavigationItem;
@@ -223,7 +233,13 @@ const serve = (
   );
 };
 
+// Pins "now" for the day grouping and relative times.
+beforeEach(() => {
+  setSystemTime(NOW);
+});
+
 afterEach(() => {
+  setSystemTime();
   testing.cleanup();
   for (const client of clients) {
     client.clear();
@@ -271,7 +287,9 @@ const openHistory = async (initial: ChatHistorySearch = {}) => {
   };
   const subscribe = (listener: () => void) => {
     listeners.add(listener);
-    return () => listeners.delete(listener);
+    return () => {
+      listeners.delete(listener);
+    };
   };
   const Host = () => {
     const search = useSyncExternalStore(subscribe, () => current);
@@ -324,12 +342,7 @@ const openHistory = async (initial: ChatHistorySearch = {}) => {
     <AnalyticsContext value={noopAnalytics}>
       <RenderLoopGuard>
         <query.QueryClientProvider client={createClient()}>
-          <IntlProvider
-            locale="en"
-            messages={messages}
-            now={NOW}
-            timeZone="UTC"
-          >
+          <IntlProvider locale="en" messages={messages} timeZone="UTC">
             <FormattingProvider locale="en" timeZone="UTC">
               <AuthenticatedUserProvider user={user}>
                 <router.RouterProvider router={appRouter} />
