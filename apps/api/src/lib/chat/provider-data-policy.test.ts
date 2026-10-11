@@ -175,11 +175,13 @@ describe("provider request policy", () => {
 
   test("every provider declares its request policy", () => {
     expect(Object.keys(PROVIDER_DATA_POLICY.customer).toSorted()).toEqual(
-      [
-        ...AI_PROVIDERS,
-        ...DECISION_MODEL_PROVIDERS,
-        "agent_sandbox",
-      ].toSorted(),
+      Array.from(
+        new Set([
+          ...AI_PROVIDERS,
+          ...DECISION_MODEL_PROVIDERS,
+          "agent_sandbox",
+        ]),
+      ).toSorted(),
     );
   });
 

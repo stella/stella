@@ -68,6 +68,7 @@ const documentReviewPartiesBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Read cached document parties, or explicitly detect them for the review launcher. Cached mode never runs detection.",
   permissions: { workspace: ["read"] },

@@ -12,7 +12,7 @@ import {
   isIdentifier,
   isIdentifierReference,
   isStringLiteral,
-  resolveImportedExpression,
+  resolveImportedExpressionForEnforcement,
   resolveVariable,
   stableInitializer,
   staticStringValue,
@@ -211,7 +211,10 @@ export default eslintCompatPlugin({
                   : getPropertyName(callee.property);
               const binding =
                 name === null && callee.computed === true
-                  ? resolveImportedExpression(context, callee.object)
+                  ? resolveImportedExpressionForEnforcement(
+                      context,
+                      callee.object,
+                    )
                   : null;
               if (
                 (name !== null && VALIDATOR_NAMES.has(name)) ||

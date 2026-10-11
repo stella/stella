@@ -85,6 +85,7 @@ export const readEditableMessageOnTx = async ({
       workspaceId: row.thread.workspaceId,
       userId: row.thread.userId,
       organizationId: row.thread.organizationId,
+      activeSkill: row.thread.activeSkill,
       title: row.thread.title,
       titleSource: row.thread.titleSource,
       rollbackToken: row.thread.rollbackToken,

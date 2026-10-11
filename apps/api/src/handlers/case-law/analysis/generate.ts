@@ -72,6 +72,7 @@ import {
 
 import { resolveAnalysisInput } from "./analysis-input";
 import { analysisOutputSchema, buildDecisionAnalysis } from "./analysis-output";
+import { persistGeneratedAnalysis } from "./analysis-persistence";
 import { allowsDerivedAiAnalysis } from "./analysis-update";
 import { refreshSignificance } from "./significance-run";
 
@@ -277,6 +278,7 @@ const runGeneration = async ({
     traceId: Bun.randomUUIDv7(),
   });
 
+  let analysis: DecisionAnalysis;
   try {
     const { modelId } = getTanStackTextModelInfoForTask(
       "short-text",
@@ -309,7 +311,7 @@ const runGeneration = async ({
       ...(resolveTextModel === undefined ? {} : { resolveTextModel }),
     });
 
-    const analysis = buildDecisionAnalysis({
+    analysis = buildDecisionAnalysis({
       anchorIds,
       output: result,
       language: input.language,
@@ -317,8 +319,6 @@ const runGeneration = async ({
       inputFingerprint: input.fingerprint,
       generatedAt: new Date(),
     });
-
-    await store.save({ analysis, contentHash, decisionId });
   } catch (error) {
     // A model answer that arrived incomplete, invalid or too late is an
     // incomplete case-law answer; storage and provider failures are not.
@@ -331,30 +331,74 @@ const runGeneration = async ({
         count: 1,
       });
     }
-    // Named outcomes (an incomplete answer, a deadline, a provider refusal)
-    // are recorded by the analytics callbacks and told to the reader; only
-    // an unanticipated shape is an exception worth capturing.
-    if (isUnanticipatedAIFailure(error)) {
-      captureError(error, {
-        source: "case-law-analysis",
-        decisionId,
-      });
-    }
-    aiAnalytics.captureError(error);
-    const failure = analysisFailureRecord({
-      code: ANALYSIS_FAILURE_CODE_BY_KIND[classifyAIError(error)],
-      fingerprint: sentinel.inputFingerprint,
-      now: new Date(),
-      reader,
-    });
-    await recordFailedRun({
+    await handleGenerationFailure({
+      aiAnalytics,
       decisionId,
-      failure,
-      keyTag: analysisFailureKeyTag(reader, decisionId),
+      error,
+      reader,
       sentinel,
       store,
     });
+    return;
   }
+
+  await persistGeneratedAnalysis({
+    analysis,
+    contentHash,
+    decisionId,
+    persistence: store,
+    onFailure: async (error) =>
+      await handleGenerationFailure({
+        aiAnalytics,
+        decisionId,
+        error,
+        reader,
+        sentinel,
+        store,
+      }),
+  });
+};
+
+type GenerationFailureOptions = {
+  aiAnalytics: ReturnType<typeof createTanStackAIAnalyticsCallbacks>;
+  decisionId: SafeId<"caseLawDecision">;
+  error: unknown;
+  reader: AnalysisReaderKey;
+  sentinel: AnalysisGenerating;
+  store: AnalysisStore;
+};
+
+const handleGenerationFailure = async ({
+  aiAnalytics,
+  decisionId,
+  error,
+  reader,
+  sentinel,
+  store,
+}: GenerationFailureOptions) => {
+  // Named outcomes (an incomplete answer, a deadline, a provider refusal)
+  // are recorded by the analytics callbacks and told to the reader; only
+  // an unanticipated shape is an exception worth capturing.
+  if (isUnanticipatedAIFailure(error)) {
+    captureError(error, {
+      source: "case-law-analysis",
+      decisionId,
+    });
+  }
+  aiAnalytics.captureError(error);
+  const failure = analysisFailureRecord({
+    code: ANALYSIS_FAILURE_CODE_BY_KIND[classifyAIError(error)],
+    fingerprint: sentinel.inputFingerprint,
+    now: new Date(),
+    reader,
+  });
+  await recordFailedRun({
+    decisionId,
+    failure,
+    keyTag: analysisFailureKeyTag(reader, decisionId),
+    sentinel,
+    store,
+  });
 };
 
 /**
@@ -659,6 +703,7 @@ export const generateAnalysis = async ({
 };
 
 const config = {
+  contract: "patch",
   description:
     "Read the structural analysis of one court decision, starting generation " +
     "when there is none yet. Returns status done with the stored analysis, " +
@@ -668,8 +713,9 @@ const config = {
     "made; answer_incomplete, timed_out, provider_refused, " +
     "provider_unavailable or failed when the last run failed, with key " +
     "naming whose AI key it used (the organization's own, or the platform's). " +
-    "A failed run answers until the call passes retry=true, which starts a " +
-    "new one. Generation runs in the background and a call made while one " +
+    "A failed run answers callers using the same key for 15 minutes; within " +
+    "that window a call passing retry=true starts a new run, and after it the " +
+    "next call starts one on its own. Generation runs in the background and a call made while one " +
     "is already running does not start a second.",
   permissions: { workspace: ["read"], chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,

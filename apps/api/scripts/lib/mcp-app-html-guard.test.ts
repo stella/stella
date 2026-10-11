@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import path from "node:path";
 
 import { inspectMcpAppHtml } from "./mcp-app-html-guard";
 
@@ -69,4 +70,42 @@ test.each([
   'body::before{content:"no references here"}',
 ])("inline stylesheets pass: %s", (css) => {
   expect(inspectMcpAppHtml(`<style>${css}</style>`)).toEqual([]);
+});
+
+test("style elements follow the CSS policy", () => {
+  expect(
+    inspectMcpAppHtml(
+      "<style>width: expression(document.body.clientWidth)</style>",
+    ),
+  ).toContain("Script-bearing CSS: style");
+});
+
+test("style attributes follow the CSS policy", () => {
+  expect(
+    inspectMcpAppHtml('<div style="width: expression(1)"></div>'),
+  ).toContain("Script-bearing CSS style: div");
+});
+
+test.each([
+  ".expressionless { color: red }",
+  'body::before { content: "expressionless" }',
+  "color: red",
+])("ordinary CSS passes the style checks: %s", (css) => {
+  expect(inspectMcpAppHtml(`<style>${css}</style>`)).toEqual([]);
+  expect(inspectMcpAppHtml(`<div style="${css}"></div>`)).toEqual([]);
+});
+
+test("committed MCP app bundles pass the HTML guard", async () => {
+  const appsDirectory = path.join(import.meta.dirname, "../../src/mcp/apps");
+  const bundlePaths = await Array.fromAsync(
+    new Bun.Glob("*/generated/app.html.txt").scan({
+      absolute: true,
+      cwd: appsDirectory,
+    }),
+  );
+
+  expect(bundlePaths.length).toBeGreaterThan(0);
+  for (const bundlePath of bundlePaths) {
+    expect(inspectMcpAppHtml(await Bun.file(bundlePath).text())).toEqual([]);
+  }
 });

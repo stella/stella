@@ -991,11 +991,9 @@ const decisionRow = () =>
     name: messages.organization.aiConfig.decision.label,
   });
 
-const selectDecisionProvider = async () => {
-  const provider = DECISION_MODEL_PROVIDERS.at(0);
-  if (provider === undefined) {
-    panic("Decision catalogue must offer a provider");
-  }
+const selectDecisionProvider = async (): Promise<"typesafe"> => {
+  const provider =
+    "typesafe" satisfies (typeof DECISION_MODEL_PROVIDERS)[number];
   fireEvent.click(
     within(decisionRow()).getByLabelText(
       messages.organization.aiConfig.providerForRole.replace(
@@ -1070,8 +1068,10 @@ test("Advanced has five mode rows with the default decision in the same table", 
   );
   const providerLabels = [
     messages.organization.aiConfig.usingDefaults,
-    ...DECISION_MODEL_PROVIDERS.map(
-      (provider) => DECISION_MODEL_CATALOG[provider].label,
+    ...DECISION_MODEL_PROVIDERS.map((provider) =>
+      provider === "openai"
+        ? `${DECISION_MODEL_CATALOG[provider].label} ${messages.auth.betaNoticeTitle}`
+        : DECISION_MODEL_CATALOG[provider].label,
     ),
   ];
   expect(screen.getAllByRole("option")).toHaveLength(providerLabels.length);
@@ -1750,10 +1750,8 @@ test.each([false, true])(
 );
 
 test("recovering readable AI settings cancels pending removal and preserves auxiliary edits", async () => {
-  const provider = DECISION_MODEL_PROVIDERS.at(0);
-  if (provider === undefined) {
-    panic("Decision provider must be present");
-  }
+  const provider =
+    "typesafe" satisfies (typeof DECISION_MODEL_PROVIDERS)[number];
   const recovered = {
     ...savedConfig,
     decision: {

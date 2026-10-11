@@ -1069,6 +1069,7 @@ const persistGeneratedSummaries = async ({
 };
 
 const config = {
+  contract: "patch",
   actionAdmission: {
     type: "handler",
     actionKind: "entities.suggest-placements",

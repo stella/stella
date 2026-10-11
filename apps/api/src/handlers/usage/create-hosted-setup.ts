@@ -49,6 +49,7 @@ const createHostedSetupBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "hosted_billing" },

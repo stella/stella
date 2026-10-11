@@ -85,6 +85,7 @@ describe.serial("registered handler admission", () => {
         );
         const checked = createSafeRootHandler(
           {
+            contract: "patch",
             permissions: { chat: ["create"] },
             accountAccess: ACCOUNT_ACCESS.sandbox,
             mcp: { type: "internal", reason: "assistant_chat" },

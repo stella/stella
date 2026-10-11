@@ -21,6 +21,7 @@ import { createRootSafeDb } from "@/api/lib/root-scoped-db";
 import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 
 const config = {
+  contract: "patch",
   access: "write",
   description:
     "Queue answers for the given decisions in the given question columns " +

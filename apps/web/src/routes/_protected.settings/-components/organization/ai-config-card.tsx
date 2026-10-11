@@ -14,7 +14,10 @@ import {
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
 
-import { getProviderValues } from "@/components/ai-config-role-models.logic";
+import {
+  getProviderValues,
+  hasUsableOpenAIKey,
+} from "@/components/ai-config-role-models.logic";
 import { CopyActionButton } from "@/components/copy-action-button";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { env } from "@/env";
@@ -272,6 +275,7 @@ export const AIConfigForm = ({
           <AIConfigAdvanced
             disabled={form.saving}
             providers={providerValues}
+            hasOpenAIKey={hasUsableOpenAIKey(form.providers)}
             roleModels={form.roleModels}
             defaultModels={form.defaultModels}
             providerDefaultModels={form.providerDefaultModels}

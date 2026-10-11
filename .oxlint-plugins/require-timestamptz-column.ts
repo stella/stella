@@ -29,7 +29,7 @@ import {
   isFileIn,
   isIdentifier,
   memberPropertyName,
-  resolveImportedExpression,
+  resolveImportedExpressionForEnforcement,
   staticStringValue,
   unwrapExpression,
 } from "./utils.ts";
@@ -140,11 +140,14 @@ export default eslintCompatPlugin({
             return !isFileIn(context, [ALLOWLISTED_FILE]);
           },
           CallExpression(node) {
-            let imported = resolveImportedExpression(context, node.callee);
+            let imported = resolveImportedExpressionForEnforcement(
+              context,
+              node.callee,
+            );
             if (imported === null) {
               const callee = unwrapExpression(node.callee);
               if (callee?.type === "MemberExpression") {
-                const namespace = resolveImportedExpression(
+                const namespace = resolveImportedExpressionForEnforcement(
                   context,
                   callee.object,
                 );

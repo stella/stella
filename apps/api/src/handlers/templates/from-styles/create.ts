@@ -107,6 +107,7 @@ const createTemplateFromStylesHandler = async function* ({
 };
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason:

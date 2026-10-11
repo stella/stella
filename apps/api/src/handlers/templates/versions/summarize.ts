@@ -19,6 +19,7 @@ const templateVersionSummarizeParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   actionAdmission: { type: "handler", actionKind: "versions.summarize" },
   contentDelivery: {
     type: "none",

@@ -1,5 +1,9 @@
 name: Contributor signatures
 
+defaults:
+  run:
+    shell: bash
+
 # SECURITY INVARIANT — DO NOT BREAK.
 # pull_request_target executes trusted base-repository workflow code with secrets.
 # Never check out PR head code, build or install it, or interpolate PR data into

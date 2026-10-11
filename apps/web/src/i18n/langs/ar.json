@@ -1993,6 +1993,7 @@
     "sort": "فرز",
     "source": "المصدر",
     "stale": "قديم",
+    "start": "ابدأ",
     "status": "الحالة",
     "stepCount": "{count, plural, zero {# خطوة} one {# خطوة} two {# خطوتان} few {# خطوات} many {# خطوة} other {# خطوة}}",
     "stepProgress": "{current} من {total}",
@@ -2807,7 +2808,6 @@
       },
       "selectFlow": "اختر مسار عمل",
       "sizeConfirmTitle": "تشغيل سير عمل كبير",
-      "start": "بدء",
       "startFailed": "تعذّر بدء مسار العمل.",
       "started": "تم بدء مسار العمل",
       "stepProgress": "الخطوة {current} من {total}",
@@ -3024,8 +3024,7 @@
   "guides": {
     "action": {
       "replay": "البدء من جديد",
-      "skip": "تخطي",
-      "start": "ابدأ"
+      "skip": "تخطي"
     },
     "checklist": {
       "progress": "اكتمل {completed} من {total}"
@@ -3705,6 +3704,10 @@
         "nameMissing": "لم يُحفظ: أضِف اسمًا",
         "positionsNeedAttention": "لم يُحفظ: {count, plural, zero {لا مواقف تحتاج} one {موقف واحد يحتاج} two {موقفان يحتاجان} few {# مواقف تحتاج} many {# موقفًا يحتاج} other {# موقف يحتاج}} إلى مراجعة"
       },
+      "buildWithAi": {
+        "description": "أجب عن بضعة أسئلة في دردشة، ويُحفظ دليل المراجعة أولًا بأول.",
+        "title": "الإنشاء بالذكاء الاصطناعي"
+      },
       "check": "استخدام قاعدة دقيقة بدلًا من الذكاء الاصطناعي",
       "checkHint": "للشروط القابلة للقياس، مثل: مهلة السداد ≤ 30 يومًا.",
       "checkKind": {
@@ -4171,11 +4174,16 @@
       "customModelDescription": "معرّف هذا النموذج غير موجود في كتالوج stella. سيُمرَّر إلى المزوّد المحدد كما هو مكتوب.",
       "customModelHint": "لا تطابق في الكتالوج. اكتب أي معرّف نموذج؛ تُحفظ المعرّفات المخصصة كما هي مكتوبة.",
       "decision": {
+        "dataRegion": "منطقة البيانات",
         "description": "أسئلة ذات إجابات محددة (فئات المستندات، قطبية الاستشهادات)",
         "generativeFallback": "يستخدم النموذج التوليدي للمهمة.",
         "incomplete": "أدخل مفتاح API ونموذجًا لنموذج القرار، أو أزِله.",
         "instanceProvided": "توفّر stella بالفعل نموذج قرار؛ أضف نموذجك الخاص فقط لاستخدام نموذج آخر.",
-        "label": "اتخاذ القرارات"
+        "label": "اتخاذ القرارات",
+        "regionEu": "الاتحاد الأوروبي",
+        "regionGlobal": "عالمي",
+        "reuseOpenAIKey": "استخدام مفتاح OpenAI الخاص بي",
+        "separateKey": "استخدام مفتاح منفصل"
       },
       "defaultModel": "الافتراضي: {model}",
       "defaultModelOption": "الافتراضي",
@@ -6094,12 +6102,30 @@
         "addPDF": "إضافة PDF",
         "applyCrop": "تطبيق الاقتصاص",
         "crop": "اقتصاص",
-        "cropBottom": "أسفل",
-        "cropDescription": "{count, plural, zero {حدد هوامش الاقتصاص.} one {حدد هوامش الاقتصاص للصفحة المحددة.} two {حدد هوامش الاقتصاص للصفحتين المحددتين.} few {حدد هوامش الاقتصاص لـ # صفحات محددة.} many {حدد هوامش الاقتصاص لـ # صفحة محددة.} other {حدد هوامش الاقتصاص لـ # صفحة محددة.}}",
-        "cropLeft": "يسار",
-        "cropRight": "يمين",
+        "cropAdvanced": "إعدادات متقدمة",
+        "cropBottom": "أسفل (mm)",
+        "cropDescription": "{count, plural, zero {حدد هوامش الاقتصاص بالملليمتر.} one {حدد هوامش الاقتصاص للصفحة المحددة بالملليمتر.} two {حدد هوامش الاقتصاص للصفحتين المحددتين بالملليمتر.} few {حدد هوامش الاقتصاص لـ # صفحات محددة بالملليمتر.} many {حدد هوامش الاقتصاص لـ # صفحة محددة بالملليمتر.} other {حدد هوامش الاقتصاص لـ # صفحة محددة بالملليمتر.}}",
+        "cropHandle": "تغيير حجم الاقتصاص: {position}",
+        "cropHandleBottom": "أسفل",
+        "cropHandleBottomLeft": "أسفل اليسار",
+        "cropHandleBottomRight": "أسفل اليمين",
+        "cropHandleLeft": "يسار",
+        "cropHandleRight": "يمين",
+        "cropHandleTop": "أعلى",
+        "cropHandleTopLeft": "أعلى اليسار",
+        "cropHandleTopRight": "أعلى اليمين",
+        "cropHint": "اسحب المنطقة أو مقابضها. تضبط مفاتيح الأسهم الاقتصاص بمقدار 1 مم، ومع Shift بمقدار 10 مم. تُطبَّق الهوامش نفسها على كل الصفحات المحددة.",
+        "cropLeft": "يسار (mm)",
+        "cropMove": "تحريك منطقة الاقتصاص",
+        "cropNextPage": "الصفحة المحددة التالية",
+        "cropPage": "الصفحة {page, number} من {count, number}",
+        "cropPreview": "معاينة الاقتصاص، الصفحة {page, number}",
+        "cropPreviewFailed": "تعذّر عرض معاينة الصفحة.",
+        "cropPreviousPage": "الصفحة المحددة السابقة",
+        "cropRight": "يمين (mm)",
         "cropTitle": "اقتصاص الصفحات",
-        "cropTop": "أعلى",
+        "cropTooSmall": "هذه الصفحة صغيرة جدًا لاقتصاصها إلى حجم لا يقل عن 10 مم.",
+        "cropTop": "أعلى (mm)",
         "delete": "حذف",
         "deselectAll": "إلغاء تحديد الكل",
         "discard": "تجاهل",

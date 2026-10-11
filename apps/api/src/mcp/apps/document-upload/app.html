@@ -3,17 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Upload document version</title>
+    <title data-message="uploadDocumentTitle"></title>
   </head>
   <body>
     <div id="app">
-      <h1 id="title">Upload a new version</h1>
-      <p id="target">Connecting to stella…</p>
+      <h1 data-message="uploadTitle" id="title"></h1>
+      <p data-message="connecting" id="target"></p>
       <label class="picker">
-        <span>File</span>
+        <span data-message="file"></span>
         <input id="file" type="file" />
       </label>
-      <button id="upload" type="button" disabled>Upload version</button>
+      <button
+        data-message="uploadVersion"
+        id="upload"
+        type="button"
+        disabled
+      ></button>
       <p id="status" role="status" aria-live="polite"></p>
     </div>
     <script type="module" src="./app.ts"></script>
