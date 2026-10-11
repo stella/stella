@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { typescriptModuleReferences } from "../packages/scripts/src/api-typecheck-declarations";
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
@@ -60,62 +61,38 @@ export const secondaryImportBoundaryViolations = ({
   );
   const violations: string[] = [];
   for (const filename of consumer.fileNames) {
-    const source = ts.createSourceFile(
-      filename,
+    const references = typescriptModuleReferences(
       readFileSync(filename, "utf-8"),
-      ts.ScriptTarget.Latest,
-      true,
+      filename,
     );
-    const visit = (node: ts.Node) => {
-      let specifier: ts.Node | undefined;
-      if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
-        specifier = node.moduleSpecifier;
-      } else if (
-        ts.isCallExpression(node) &&
-        node.expression.kind === ts.SyntaxKind.ImportKeyword
+    for (const specifier of references.imports) {
+      const resolved = ts.resolveModuleName(
+        specifier,
+        filename,
+        consumer.options,
+        ts.sys,
+        cache,
+      ).resolvedModule;
+      if (
+        resolved &&
+        /\.[cm]?tsx?$/u.test(resolved.resolvedFileName) &&
+        apiSourceBoundaryViolations([resolved.resolvedFileName], sourceRoot)
+          .length > 0
       ) {
-        specifier = node.arguments.at(0);
-      } else if (
-        ts.isImportTypeNode(node) &&
-        ts.isLiteralTypeNode(node.argument)
-      ) {
-        specifier = node.argument.literal;
-      }
-      if (specifier && ts.isStringLiteralLike(specifier)) {
-        const resolved = ts.resolveModuleName(
-          specifier.text,
-          filename,
-          consumer.options,
-          ts.sys,
-          cache,
-        ).resolvedModule;
-        if (
-          resolved &&
-          /\.[cm]?tsx?$/u.test(resolved.resolvedFileName) &&
-          apiSourceBoundaryViolations([resolved.resolvedFileName], sourceRoot)
-            .length > 0
+        const target = resolved.resolvedFileName;
+        if (!supportedFiles.has(target)) {
+          violations.push(`${filename}: unsupported API import ${specifier}`);
+        } else if (
+          !ts
+            .getOutputFileNames(producer, target, false)
+            .some(
+              (output) => /\.d\.[cm]?ts$/u.test(output) && existsSync(output),
+            )
         ) {
-          const target = resolved.resolvedFileName;
-          if (!supportedFiles.has(target)) {
-            violations.push(
-              `${filename}: unsupported API import ${specifier.text}`,
-            );
-          } else if (
-            !ts
-              .getOutputFileNames(producer, target, false)
-              .some(
-                (output) => /\.d\.[cm]?ts$/u.test(output) && existsSync(output),
-              )
-          ) {
-            violations.push(
-              `${filename}: missing API declaration ${specifier.text}`,
-            );
-          }
+          violations.push(`${filename}: missing API declaration ${specifier}`);
         }
       }
-      ts.forEachChild(node, visit);
-    };
-    visit(source);
+    }
   }
   return violations;
 };
