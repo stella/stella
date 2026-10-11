@@ -2000,6 +2000,7 @@
     "sort": "Řadit",
     "source": "Zdroj",
     "stale": "Zastaralé",
+    "start": "Začít",
     "status": "Stav",
     "stepCount": "{count, plural, one {# krok} few {# kroky} many {# kroku} other {# kroků}}",
     "stepProgress": "{current} z {total}",
@@ -2814,7 +2815,6 @@
       },
       "selectFlow": "Vyberte pracovní postup",
       "sizeConfirmTitle": "Rozsáhlý běh postupu",
-      "start": "Spustit",
       "startFailed": "Pracovní postup se nepodařilo spustit.",
       "started": "Pracovní postup spuštěn",
       "stepProgress": "Krok {current} z {total}",
@@ -3031,8 +3031,7 @@
   "guides": {
     "action": {
       "replay": "Spustit znovu",
-      "skip": "Přeskočit",
-      "start": "Začít"
+      "skip": "Přeskočit"
     },
     "checklist": {
       "progress": "{completed} z {total} dokončeno"
@@ -3711,6 +3710,10 @@
         "failed": "Nepodařilo se uložit",
         "nameMissing": "Neuloženo: zadejte název",
         "positionsNeedAttention": "Neuloženo: {count, plural, one {# pozice vyžaduje} few {# pozice vyžadují} other {# pozic vyžaduje}} pozornost"
+      },
+      "buildWithAi": {
+        "description": "Odpovězte v chatu na pár otázek a playbook se bude průběžně ukládat.",
+        "title": "Vytvořit pomocí AI"
       },
       "check": "Použít přesné pravidlo místo AI",
       "checkHint": "Pro měřitelné podmínky, například: splatnost ≤ 30 dnů.",
