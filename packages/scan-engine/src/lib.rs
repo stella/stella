@@ -20,9 +20,9 @@ const MAX_DIMENSION_AREA: u32 = 40_000_000;
 const MAX_DESKEW_TENTHS: i32 = 60;
 const DESKEW_TENTHS: f32 = 0.1;
 const MIN_FOREGROUND_CONTRAST: u8 = 15;
-const MIN_FLATTENING_PROTECTION_CONTRAST: u8 = 64;
 const ADAPTIVE_THRESHOLD_OFFSET: i32 = 5;
 const CROP_PADDING_MM: f32 = 3.0;
+const STRONG_EDGE_GRADIENT: u8 = 10;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CleanOutput {
@@ -401,6 +401,133 @@ fn threshold_document(flattened: &GrayImage) -> GrayImage {
     })
 }
 
+fn flattening_background(gray: &GrayImage) -> GrayImage {
+    let width = gray.width();
+    let height = gray.height();
+    let longest_side = width.max(height);
+    // Illumination is smooth while printed regions have sharp, enclosing boundaries. Measure
+    // gradients after smoothing at 1/500 of the longest side, close gaps by 1/250, then flood
+    // from the page boundary: anything the strong-edge barrier encloses is excluded from the
+    // background and filled from its nearest reachable page pixel. The final illumination field
+    // is averaged over 1/12 of the longest side. Thus every spatial parameter scales with the
+    // image rather than with a particular scan resolution; the 10-level gradient threshold
+    // describes sharpness at that scale, not a minimum foreground-to-page contrast.
+    let edge_scale = (longest_side / 500).max(1);
+    let edge_dilation = (longest_side / 250).max(1);
+    let illumination_radius = (longest_side / 12).max(1);
+    let smooth = box_filter(gray, edge_scale, edge_scale);
+    let mut strong_edge = vec![false; (width * height) as usize];
+    for y in 0..height {
+        for x in 0..width {
+            let left = smooth.get_pixel(x.saturating_sub(1), y)[0];
+            let right = smooth.get_pixel((x + 1).min(width - 1), y)[0];
+            let above = smooth.get_pixel(x, y.saturating_sub(1))[0];
+            let below = smooth.get_pixel(x, (y + 1).min(height - 1))[0];
+            strong_edge[(y * width + x) as usize] =
+                left.abs_diff(right).max(above.abs_diff(below)) >= STRONG_EDGE_GRADIENT;
+        }
+    }
+    let stride = width as usize + 1;
+    let mut edge_sum = vec![0_u32; stride * (height as usize + 1)];
+    for y in 0..height {
+        for x in 0..width {
+            let sum_index = (y as usize + 1) * stride + x as usize + 1;
+            edge_sum[sum_index] = u32::from(strong_edge[(y * width + x) as usize])
+                + edge_sum[sum_index - 1]
+                + edge_sum[sum_index - stride]
+                - edge_sum[sum_index - stride - 1];
+        }
+    }
+    let mut barrier = vec![false; strong_edge.len()];
+    for y in 0..height {
+        for x in 0..width {
+            let left = x.saturating_sub(edge_dilation);
+            let right = x.saturating_add(edge_dilation).min(width - 1);
+            let top = y.saturating_sub(edge_dilation);
+            let bottom = y.saturating_add(edge_dilation).min(height - 1);
+            let top_left = top as usize * stride + left as usize;
+            let top_right = top as usize * stride + right as usize + 1;
+            let bottom_left = (bottom as usize + 1) * stride + left as usize;
+            let bottom_right = (bottom as usize + 1) * stride + right as usize + 1;
+            barrier[(y * width + x) as usize] = edge_sum[bottom_right] + edge_sum[top_left]
+                - edge_sum[top_right]
+                - edge_sum[bottom_left]
+                > 0;
+        }
+    }
+
+    let mut reachable = vec![false; barrier.len()];
+    let mut queue = VecDeque::new();
+    for x in 0..width {
+        queue.push_back((x, 0));
+        queue.push_back((x, height - 1));
+    }
+    for y in 0..height {
+        queue.push_back((0, y));
+        queue.push_back((width - 1, y));
+    }
+    while let Some((x, y)) = queue.pop_front() {
+        let index = (y * width + x) as usize;
+        if reachable[index] || barrier[index] {
+            continue;
+        }
+        reachable[index] = true;
+        for (next_x, next_y) in [
+            (x.saturating_sub(1), y),
+            (x.saturating_add(1), y),
+            (x, y.saturating_sub(1)),
+            (x, y.saturating_add(1)),
+        ] {
+            if next_x < width && next_y < height {
+                queue.push_back((next_x, next_y));
+            }
+        }
+    }
+
+    let mut inpainted = gray.clone();
+    let mut source_queue = VecDeque::new();
+    for y in 0..height {
+        for x in 0..width {
+            if reachable[(y * width + x) as usize]
+                && [
+                    (x.saturating_sub(1), y),
+                    (x.saturating_add(1), y),
+                    (x, y.saturating_sub(1)),
+                    (x, y.saturating_add(1)),
+                ]
+                .into_iter()
+                .any(|(next_x, next_y)| {
+                    next_x < width
+                        && next_y < height
+                        && !reachable[(next_y * width + next_x) as usize]
+                })
+            {
+                source_queue.push_back((x, y));
+            }
+        }
+    }
+    while let Some((x, y)) = source_queue.pop_front() {
+        let value = inpainted.get_pixel(x, y)[0];
+        for (next_x, next_y) in [
+            (x.saturating_sub(1), y),
+            (x.saturating_add(1), y),
+            (x, y.saturating_sub(1)),
+            (x, y.saturating_add(1)),
+        ] {
+            if next_x >= width || next_y >= height {
+                continue;
+            }
+            let index = (next_y * width + next_x) as usize;
+            if !reachable[index] {
+                reachable[index] = true;
+                inpainted.put_pixel(next_x, next_y, Luma([value]));
+                source_queue.push_back((next_x, next_y));
+            }
+        }
+    }
+    box_filter(&inpainted, illumination_radius, illumination_radius)
+}
+
 fn content_bounds(binary: &GrayImage, dpi: f32) -> Option<ContentBox> {
     let width = binary.width();
     let height = binary.height();
@@ -495,17 +622,9 @@ pub fn clean_scan(
         RotatedImage { image: rectified }
     };
     let straight = rotated.image;
-    let page_white = page_background(&straight);
-    let protected_maximum = page_white.saturating_sub(MIN_FLATTENING_PROTECTION_CONTRAST);
-    // Radius 32 produces the requested 65 by 65 local background window.
-    let background = box_filter(&straight, 32, 32);
+    let background = flattening_background(&straight);
     let flattened = GrayImage::from_fn(straight.width(), straight.height(), |x, y| {
         let source_value = straight.get_pixel(x, y)[0];
-        // Pixels far below the global page-white mode are content, not illumination. Leaving
-        // them unchanged prevents a local background window inside a large mark from erasing it.
-        if source_value <= protected_maximum {
-            return Luma([source_value]);
-        }
         let value = f32::from(source_value);
         let base = f32::from(background.get_pixel(x, y)[0].max(1));
         Luma([(value * 245.0 / base).min(255.0).round() as u8])

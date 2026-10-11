@@ -338,10 +338,11 @@ fn flattening_removes_a_background_gradient_without_losing_text() {
 }
 
 #[test]
-fn flattening_preserves_large_nonblack_dark_regions_in_each_output_mode() {
-    let mut source = GrayImage::from_pixel(500, 500, Luma([245]));
-    for (left, value) in [(70, 25), (310, 80)] {
-        for y in 190..310 {
+fn flattening_preserves_sharp_solid_fills_in_each_output_mode() {
+    let mut source = GrayImage::from_pixel(700, 700, Luma([245]));
+    let fills: [(u32, u32, u8); 4] = [(70, 90, 190), (270, 90, 120), (70, 330, 80), (270, 330, 25)];
+    for (left, top, value) in fills {
+        for y in top..top + 120 {
             for x in left..left + 120 {
                 source.put_pixel(x, y, Luma([value]));
             }
@@ -350,21 +351,72 @@ fn flattening_preserves_large_nonblack_dark_regions_in_each_output_mode() {
 
     for output in [CleanOutput::Binary, CleanOutput::Grayscale] {
         let result = clean_scan(&source, options(output)).expect("dark regions should clean");
-        for (left, value) in [(70, 25), (310, 80)] {
+        for (left, top, value) in fills {
             let expected_maximum = match output {
                 CleanOutput::Binary => 0,
-                CleanOutput::Grayscale => value,
+                CleanOutput::Grayscale => value.saturating_add(10),
             };
-            assert!(result.image.get_pixel(left + 60, 250)[0] <= expected_maximum);
-            let dark_interior = (205..295)
-                .flat_map(|y| (left + 25..left + 95).map(move |x| (x, y)))
+            assert!(result.image.get_pixel(left + 60, top + 60)[0] <= expected_maximum);
+            let dark_interior = (top + 5..top + 115)
+                .flat_map(|y| (left + 5..left + 115).map(move |x| (x, y)))
                 .filter(|(x, y)| result.image.get_pixel(*x, *y)[0] <= expected_maximum)
                 .count();
             assert!(
-                dark_interior >= 70 * 90 * 95 / 100,
+                dark_interior >= 110 * 110 * 90 / 100,
                 "{output:?} output retained {dark_interior} dark pixels for value {value}"
             );
         }
+    }
+}
+
+#[test]
+fn flattening_removes_smooth_shadow_and_vignette_without_softening_text() {
+    let mut source = GrayImage::from_fn(700, 700, |x, y| {
+        let shadow = 55.0 * (x as f32 / 699.0).powi(2);
+        let dx = (x as f32 - 350.0) / 495.0;
+        let dy = (y as f32 - 350.0) / 495.0;
+        let vignette = 25.0 * (dx * dx + dy * dy).min(1.0);
+        Luma([(245.0_f32 - shadow - vignette).round() as u8])
+    });
+    for y in 330..334 {
+        for x in 100..600 {
+            source.put_pixel(x, y, Luma([25]));
+        }
+    }
+
+    for output in [CleanOutput::Binary, CleanOutput::Grayscale] {
+        let result = clean_scan(&source, options(output)).expect("shadowed page should clean");
+        let minimum_page = result
+            .image
+            .enumerate_pixels()
+            .filter(|(_, y, _)| !(320..345).contains(y))
+            .map(|(_, _, pixel)| pixel[0])
+            .min()
+            .expect("page pixels");
+        let expected_page_minimum = match output {
+            CleanOutput::Binary => 255,
+            CleanOutput::Grayscale => 235,
+        };
+        assert!(
+            minimum_page >= expected_page_minimum,
+            "{output:?} page minimum {minimum_page}"
+        );
+        let text_maximum = match output {
+            CleanOutput::Binary => 0,
+            CleanOutput::Grayscale => 30,
+        };
+        let darkest_text_row = (325..340)
+            .map(|y| {
+                (120..580)
+                    .filter(|x| result.image.get_pixel(*x, y)[0] <= text_maximum)
+                    .count()
+            })
+            .max()
+            .expect("text rows");
+        assert!(
+            darkest_text_row >= 450,
+            "{output:?} retained {darkest_text_row} crisp text pixels"
+        );
     }
 }
 
