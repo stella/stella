@@ -68,7 +68,10 @@ const publishedIndexNames = (): string[] => {
         candidate.config.where !== undefined &&
         dialect.sqlToQuery(candidate.config.where).sql.includes(queryPredicate),
     )
-    .map((candidate) => candidate.config.name)
+    .map(
+      (candidate) =>
+        candidate.config.name ?? panic("A publication index has no name"),
+    )
     .toSorted();
   const onlineNames = ONLINE_MIGRATION_INDEXES.filter(
     (candidate) =>
@@ -84,9 +87,12 @@ const publishedIndexNames = (): string[] => {
 
 test("the search candidate index carries the same columns in schema and online migration", () => {
   expect(
-    searchCandidateIndex()?.config.columns.map((column) =>
-      "name" in column ? column.name : undefined,
-    ),
+    searchCandidateIndex()?.config.columns.map((column) => {
+      if (!("name" in column) || typeof column.name !== "string") {
+        return panic("The search candidate index contains an unnamed column");
+      }
+      return column.name;
+    }),
   ).toEqual(KEY_COLUMNS);
 
   const columns = KEY_COLUMNS.map((column) => `"${column}"`).join(", ");

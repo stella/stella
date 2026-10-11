@@ -49,6 +49,10 @@ export const publishedCaseLawDecisionIndexPredicateSql = (): string =>
 export const publishedCaseLawDecisionIndexDefinitionPredicateSql = (): string =>
   `${publishedCaseLawDecisionIndexPredicateSql()
     .replaceAll(/'([^']*)'/gu, "'$1'::text")
+    .replace(
+      /jsonb_extract_path_text\(([^,]+), ([^)]+)\)/u,
+      "jsonb_extract_path_text($1, VARIADIC ARRAY[$2])",
+    )
     .replace("(", "((")
     .replace(" IS NULL AND ", " IS NULL) AND (")
     .replace(" is distinct from ", " IS DISTINCT FROM ")})`;

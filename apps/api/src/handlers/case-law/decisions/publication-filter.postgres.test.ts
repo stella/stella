@@ -330,7 +330,7 @@ if (!databaseUrl || !runPostgresTests) {
               decisionId,
             }),
         );
-        if ("code" in citations && citations.code === 400) {
+        if (!("items" in citations)) {
           return panic("Expected a citation page for a valid cursor");
         }
         expect(
