@@ -20,5 +20,11 @@ export const CI_GENERATION_COMMANDS = [
   ["bun", "--cwd=packages/cli", "run", "codegen:runtime"],
   ["bun", "--cwd=apps/web", "run", "typegen"],
   ["bun", "--cwd=apps/web", "run", "generate:route-tree"],
-  ["bun", "exec", "turbo", "run", "generate:api-types", "--filter=@stll/web"],
+  [
+    "bun",
+    "node_modules/turbo/bin/turbo",
+    "run",
+    "generate:api-types",
+    "--filter=@stll/web",
+  ],
 ] as const;
