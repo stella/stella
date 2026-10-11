@@ -130,12 +130,14 @@ describe("API test batch planning", () => {
         expect(
           groups.find(({ kind }) => kind === TEST_BATCH_KIND.heavyDb),
         ).toEqual({
+          dbTestPaths: new Set([...ordinaryPaths, ...heavyPaths]),
           isolate: false,
           kind: TEST_BATCH_KIND.heavyDb,
           maxPeakRssMb: 3072,
           testBatches: heavyPaths.map((testPath) => [testPath]),
         });
         expect(groups.find(({ kind }) => kind === TEST_BATCH_KIND.db)).toEqual({
+          dbTestPaths: new Set([...ordinaryPaths, ...heavyPaths]),
           isolate: false,
           kind: TEST_BATCH_KIND.db,
           maxPeakRssMb: 2560,
