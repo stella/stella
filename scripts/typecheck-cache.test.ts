@@ -95,14 +95,14 @@ test("CI writes remote task caches only from main", () => {
 for (const storage of ["local", "remote"] as const) {
   test(`diagnostic-only typechecks replay from ${storage} cache and invalidate on program inputs`, async () => {
     const directory = mkdtempSync(path.join(tmpdir(), "typecheck-cache-"));
-    const artifacts = new Map<string, Uint8Array>();
+    const artifacts = new Map<string, ArrayBuffer>();
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
       async fetch(request) {
         const key = new URL(request.url).pathname;
         if (request.method === "PUT") {
-          artifacts.set(key, new Uint8Array(await request.arrayBuffer()));
+          artifacts.set(key, await request.arrayBuffer());
           return new Response(null, { status: 200 });
         }
         const artifact = artifacts.get(key);
@@ -149,6 +149,7 @@ for (const storage of ["local", "remote"] as const) {
       return stdout;
     };
     try {
+      write(".gitignore", ".turbo/\ncache/\ncalls\n");
       write(
         "package.json",
         JSON.stringify({
