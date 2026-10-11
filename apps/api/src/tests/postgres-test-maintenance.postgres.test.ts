@@ -93,7 +93,7 @@ describe.skipIf(!enabled)(
         await withGatedTestClients(url.toString(), async ({ openClient }) => {
           const observer = openClient().sql;
           const monitor = startLockMonitor({
-            capture: () => observer.unsafe(POSTGRES_LOCK_SNAPSHOT_SQL),
+            capture: async () => observer.unsafe(POSTGRES_LOCK_SNAPSHOT_SQL),
             intervalMs: 10,
           });
           let ready = () => {};
@@ -123,7 +123,7 @@ describe.skipIf(!enabled)(
               await tx`SET LOCAL lock_timeout = '500ms'`;
               await tx`LOCK TABLE public.fixture IN ACCESS EXCLUSIVE MODE`;
             });
-            const result = await Result.tryPromise(() => wait);
+            const result = await Result.tryPromise(async () => wait);
             expect(result.isErr()).toBe(true);
             if (result.isErr()) {
               expect(getPgErrorCode(result.error)).toBe("55P03");

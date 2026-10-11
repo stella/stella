@@ -147,7 +147,7 @@ type ObservePostgresTestProcessOptions = {
   reportFailure: (report: string) => void;
 };
 
-export const observePostgresTestProcess = ({
+export const observePostgresTestProcess = async ({
   child,
   capture,
   intervalMs,
