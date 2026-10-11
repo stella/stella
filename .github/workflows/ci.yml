@@ -8044,16 +8044,11 @@ jobs:
       inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
-      && (
-      github.event_name != 'pull_request' && (
-      needs.ci-plan.outputs.queue_depth != 'thin'
-      && ((needs.ci-plan.outputs.trusted == 'true'
+      && needs.ci-plan.outputs.queue_depth != 'thin'
+      && (needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.scan_engine_wasm_required == 'true'
-      )
-      )
-      )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -8073,7 +8068,7 @@ jobs:
 
       - name: Install dependencies
         timeout-minutes: 3
-        run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/scan-engine-wasm.log" --frozen-lockfile --ignore-scripts --filter @stll/scan-engine
+        run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/scan-engine-wasm.log" --frozen-lockfile --ignore-scripts --filter @stll/scan-engine --filter stella
         env:
           NPM_TOKEN: ""
 
@@ -8105,13 +8100,31 @@ jobs:
       - name: Fetch Rust dependencies and wasm-bindgen
         run: bash packages/scan-engine/scripts/wasm-toolchain.sh
 
-      - name: Check generated WebAssembly
+      - name: Check generated WebAssembly from a fresh Cargo cache
+        id: wasm-check
         env:
-          CARGO_NET_OFFLINE: "true"
           SCAN_ENGINE_WASM_OUT_DIR: ${{ runner.temp }}/scan-engine-wasm
+        run: bash packages/scan-engine/scripts/test-wasm-offline.sh
+
+      - name: Record fresh WebAssembly checksums
+        if: failure() && steps.wasm-check.outcome == 'failure'
         run: |
-          bun --cwd=packages/scan-engine run build:wasm
-          bun --filter @stll/scan-engine check:wasm --check
+          if [[ -d "$RUNNER_TEMP/scan-engine-wasm" ]]; then
+            (cd "$RUNNER_TEMP/scan-engine-wasm" && sha256sum ./*) > "$RUNNER_TEMP/scan-engine-wasm.sha256"
+            rustc -vV > "$RUNNER_TEMP/scan-engine-wasm.toolchain"
+          fi
+
+      - name: Upload fresh WebAssembly on mismatch
+        if: failure() && steps.wasm-check.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: scan-engine-wasm
+          path: |
+            ${{ runner.temp }}/scan-engine-wasm/
+            ${{ runner.temp }}/scan-engine-wasm.sha256
+            ${{ runner.temp }}/scan-engine-wasm.toolchain
+          retention-days: 7
+          if-no-files-found: warn
 
       - name: Save Rust build cache
         if: success()
@@ -8761,7 +8774,7 @@ jobs:
           FAST_JOB_SCOPES: >-
             {"postgres-service-suites": "postgres_service_suites_required", "service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required", "web-build": "browser_spec_selection_required"}
           FAST_REQUIRED: >-
-            ["dated-waiver-expiry", "desktop-rust-lint", "ci-browser", "ci-generated-sources", "ci-checks-docs", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-malware", "parser-version-guard", "ci-tests", "e2e-production-shard", "web-build", "query-perf"]
+            ["dated-waiver-expiry", "desktop-rust-lint", "ci-browser", "ci-generated-sources", "ci-checks-docs", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-malware", "parser-version-guard", "ci-tests", "e2e-production-shard", "web-build", "scan-engine-wasm-drift", "query-perf"]
           # These scoped gates certify the exact queue head even at thin depth.
           QUEUE_GATES: '["query-perf"]'
         run: |

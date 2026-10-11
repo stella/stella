@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 
 export const PILOT_FAST_ROOTS = [
   "desktop-rust-lint",
+  "scan-engine-wasm-drift",
   "ci-checks-docs",
   "ci-checks-generated",
   "ci-checks-policy",
@@ -42,7 +43,6 @@ export const PILOT_DEFERRED = [
   "windows-scripts",
   "desktop-windows-dry-run",
   "desktop-rust-tests",
-  "scan-engine-wasm-drift",
   "dependency-malware",
   "api-test-durations",
 ] as const;
