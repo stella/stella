@@ -8,6 +8,8 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 // `import.meta.dirname` rather than Bun's `import.meta.dir`: ownership.ts
 // imports this module and is itself loaded by oxlint.config.ts under Node.
 const REPO_ROOT = path.join(import.meta.dirname, "..");
@@ -87,7 +89,7 @@ export const writeOrCheckArtifacts = async (
   for (const { contents, path: file } of artifacts) {
     const committed = await readFile(file, "utf-8").catch(() => null);
     if (committed !== contents) {
-      drifted.push(path.relative(REPO_ROOT, file));
+      drifted.push(repoRelativePath(REPO_ROOT, file));
     }
   }
   for (const file of drifted) {

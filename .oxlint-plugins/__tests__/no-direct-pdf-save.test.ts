@@ -2,6 +2,8 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { lintSingleRule } from "./lint-single-rule.ts";
 
 setDefaultTimeout(20_000);
@@ -133,7 +135,7 @@ describe.serial("no-direct-pdf-save", () => {
 
     const reports: Record<string, number[]> = {};
     for (const file of modules) {
-      const relative = path.relative(root, file);
+      const relative = repoRelativePath(root, file);
       const lines = await lintSingleRule(
         "no-direct-pdf-save",
         readFileSync(file, "utf-8"),

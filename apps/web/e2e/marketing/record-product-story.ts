@@ -11,6 +11,8 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import {
   CAPTURE_DPR,
   CAPTURE_THEMES,
@@ -1067,7 +1069,7 @@ const recordCapture = async ({
       reference: payoffReference,
     });
   }
-  process.stdout.write(`recorded ${path.relative(REPO_ROOT, outputPath)}\n`);
+  process.stdout.write(`recorded ${repoRelativePath(REPO_ROOT, outputPath)}\n`);
 };
 
 const READY_MARKER_ID = "__stella_capture_ready_marker";
