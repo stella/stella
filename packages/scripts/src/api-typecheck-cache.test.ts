@@ -29,6 +29,15 @@ test("declaration consumers run after emission and invalidate with API source ch
   if (!isRecord(tasks)) {
     panic("Missing Turbo tasks");
   }
+  for (const [id, task] of Object.entries(tasks)) {
+    if (!id.startsWith("@stll/api#typecheck:")) {
+      continue;
+    }
+    if (!isRecord(task) || !Array.isArray(task["inputs"])) {
+      panic(`Missing task inputs: ${id}`);
+    }
+    expect(task["inputs"], id).toContain("$TURBO_ROOT$/patches/**");
+  }
   const consumers = new Set(["@stll/api#typecheck:tests"]);
   const manifests = [
     "package.json",
@@ -217,6 +226,9 @@ test("declaration consumers run after emission and invalidate with API source ch
         "appendFileSync(path.join(root, 'runs.log'), JSON.stringify({ task: process.argv[2], hash: process.env.TURBO_HASH }) + '\\n');",
       ].join("\n"),
     );
+    write("patches/dependency.patch", "dependency types v1\n");
+    // Isolate per-task inputs: the repository also hashes patches globally,
+    // which would otherwise conceal a missing explicit producer input here.
     const writeTasks = () =>
       write("turbo.json", JSON.stringify({ tasks: fixtureTasks }));
     writeTasks();
@@ -288,6 +300,38 @@ test("declaration consumers run after emission and invalidate with API source ch
     expect(readFileSync(output, "utf-8")).toBe(
       "export type Contract = number;",
     );
+    const beforePatch = executions().length;
+    write("patches/dependency.patch", "dependency types v2\n");
+    run(command);
+    expect(executions()).toHaveLength(beforePatch + consumers.size + 1);
+
+    const producer = fixtureTasks[EMITTER];
+    if (!isRecord(producer) || !Array.isArray(producer["inputs"])) {
+      panic("Missing producer inputs");
+    }
+    const inputs = producer["inputs"];
+    producer["inputs"] = inputs.filter(
+      (input) => input !== "$TURBO_ROOT$/patches/**",
+    );
+    writeTasks();
+    run(command);
+    const beforeMutation = executions().length;
+    write("patches/dependency.patch", "dependency types v3\n");
+    run(command);
+    // With the producer input removed, consumers see the patch change while
+    // the producer replays its declaration result instead of emitting.
+    const mutationRuns = executions().slice(beforeMutation);
+    expect(mutationRuns).toHaveLength(consumers.size);
+    expect(mutationRuns.some((row) => JSON.parse(row).task === EMITTER)).toBe(
+      false,
+    );
+    producer["inputs"] = inputs;
+    writeTasks();
+    run(command);
+    const beforeRestoredPatch = executions().length;
+    write("patches/dependency.patch", "dependency types v4\n");
+    run(command);
+    expect(executions()).toHaveLength(beforeRestoredPatch + consumers.size + 1);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
