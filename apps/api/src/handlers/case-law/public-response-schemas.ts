@@ -241,30 +241,49 @@ const polarityEvidence = t.Object(
   { additionalProperties: false },
 );
 
-const citation = t.Object(
-  {
-    id: tSafeId("caseLawCitation"),
-    citationText: nullableBoundedString(16_384),
-    textWithheldReason: t.Union([
-      t.Literal(DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE),
-      t.Null(),
-    ]),
-    textIncompleteReason: t.Union([
-      t.UnionEnum(CITATION_TEXT_INCOMPLETE_REASONS),
-      t.Null(),
-    ]),
-    evidenceIncompleteReason: t.Union([
-      t.UnionEnum(CITATION_EVIDENCE_INCOMPLETE_REASONS),
-      t.Null(),
-    ]),
-    sectionIndex: numberOrNull,
-    treatment: t.UnionEnum(CITATION_TREATMENTS),
-    polarityEvidence: t.Union([polarityEvidence, t.Null()]),
-    citedPart: t.Union([t.UnionEnum(CITED_PARTS), t.Null()]),
-    decision: t.Union([relatedDecision, t.Null()]),
-  } satisfies Record<keyof Omit<CitationWithPassage, "passage">, TSchema>,
-  { additionalProperties: false },
-);
+const citationFields = {
+  id: tSafeId("caseLawCitation"),
+  citationText: nullableBoundedString(16_384),
+  textWithheldReason: t.Union([
+    t.Literal(DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE),
+    t.Null(),
+  ]),
+  textIncompleteReason: t.Union([
+    t.UnionEnum(CITATION_TEXT_INCOMPLETE_REASONS),
+    t.Null(),
+  ]),
+  sectionIndex: numberOrNull,
+  treatment: t.UnionEnum(CITATION_TREATMENTS),
+  decision: t.Union([relatedDecision, t.Null()]),
+} satisfies Record<
+  keyof Omit<
+    CitationWithPassage,
+    "passage" | "evidenceIncompleteReason" | "polarityEvidence" | "citedPart"
+  >,
+  TSchema
+>;
+const citation = t.Union([
+  t.Object(
+    {
+      ...citationFields,
+      evidenceIncompleteReason: t.Null(),
+      polarityEvidence,
+      citedPart: t.UnionEnum(CITED_PARTS),
+    },
+    { additionalProperties: false },
+  ),
+  t.Object(
+    {
+      ...citationFields,
+      evidenceIncompleteReason: t.UnionEnum(
+        CITATION_EVIDENCE_INCOMPLETE_REASONS,
+      ),
+      polarityEvidence: t.Null(),
+      citedPart: t.Null(),
+    },
+    { additionalProperties: false },
+  ),
+]);
 // A leading citation always names a held decision; only the general list
 // carries unresolved rows.
 const leadingCitation = t.Object(

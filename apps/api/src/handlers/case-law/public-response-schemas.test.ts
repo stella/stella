@@ -127,7 +127,7 @@ test("the REST citation response preserves the text withholding reason", () => {
         citationText: null,
         textWithheldReason: "source_licence",
         textIncompleteReason: null,
-        evidenceIncompleteReason: null,
+        evidenceIncompleteReason: "missing_privileges",
         sectionIndex: null,
         treatment: "neutral",
         polarityEvidence: null,
