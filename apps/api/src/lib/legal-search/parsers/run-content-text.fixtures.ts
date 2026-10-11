@@ -2,7 +2,7 @@ import type { Document, RunContent } from "@stll/docx-core/model";
 
 type VisibleRunCases = {
   [Kind in RunContent["type"]]: {
-    item: Extract<RunContent, { type: Kind }>;
+    item: RunContent & { type: Kind };
     text: string;
   };
 };
@@ -34,7 +34,11 @@ export const VISIBLE_RUN_CASES = {
   drawing: {
     item: {
       type: "drawing",
-      image: { type: "image", size: { width: 1, height: 1 } },
+      image: {
+        type: "image",
+        size: { width: 1, height: 1 },
+        wrap: { type: "inline" },
+      },
     },
     text: "",
   },
@@ -70,7 +74,7 @@ export const visibleRunDocument = (item: RunContent): Document => ({
         },
       ],
     },
-    footnotes: [{ id: 1, content: [] }],
+    footnotes: [{ type: "footnote", id: 1, content: [] }],
   },
 });
 
