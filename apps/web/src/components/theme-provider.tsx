@@ -10,6 +10,7 @@ import { PALETTE_STORAGE_KEY, THEME_STORAGE_KEY } from "@/consts";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { deviceStorage } from "@/lib/account/browser-storage";
+import { syncThemeColorMeta } from "@/lib/theme-color";
 import { forceReflow } from "@/lib/utils";
 
 const THEMES = ["light", "dark", "system"] as const;
@@ -149,6 +150,7 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
     // would leave native scrollbars and form controls painted dark.
     root.style.setProperty("color-scheme", resolvedTheme);
     root.style.removeProperty("background-color");
+    syncThemeColorMeta();
     restore();
   }, [hydrated, resolvedTheme]);
 
@@ -169,6 +171,7 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
       root.classList.add(`${PALETTE_PREFIX}${palette}`);
     }
 
+    syncThemeColorMeta();
     restore();
   }, [hydrated, palette]);
 

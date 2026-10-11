@@ -13,6 +13,10 @@ import {
   InspectorRailIconButton,
 } from "../inspector/chrome";
 import { SHELL_CHROME_LAYER_CLASS_NAME } from "../lib/overlay-layer";
+import {
+  SAFE_AREA_BOTTOM_EDGE_CLASS_NAME,
+  SAFE_AREA_TOP_EDGE_CLASS_NAME,
+} from "../lib/safe-area";
 import { cn } from "../lib/utils";
 import { Sheet, SheetPopup, SheetTitle, SheetTrigger } from "./sheet";
 
@@ -100,7 +104,13 @@ export const WorkspaceShell = ({
 
   const frame = (
     <div
-      className="flex h-dvh min-h-0 w-full overflow-hidden"
+      className={cn(
+        "flex h-dvh min-h-0 w-full overflow-hidden",
+        // The frame owns the viewport, so it keeps the top bar below the
+        // status bar and the last row above the home indicator.
+        SAFE_AREA_TOP_EDGE_CLASS_NAME,
+        SAFE_AREA_BOTTOM_EDGE_CLASS_NAME,
+      )}
       data-slot="workspace-shell"
     >
       {navigation.mode === "responsive"
@@ -109,6 +119,9 @@ export const WorkspaceShell = ({
       <main
         className={cn(
           "bg-background relative flex w-full min-w-0 flex-1 flex-col overflow-hidden",
+          // Below md the rails are hidden, so the content meets both edges of
+          // a landscape phone; at md and up the rails own those edges.
+          "max-md:ps-(--safe-area-inline-start) max-md:pe-(--safe-area-inline-end)",
           "md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ms-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ms-2",
         )}
         data-slot="workspace-shell-main"
@@ -154,7 +167,7 @@ export const WorkspaceShell = ({
         >
           <SheetTitle className="sr-only">{compactNavigation.label}</SheetTitle>
           <div
-            className="bg-background flex h-full min-h-0 flex-col overflow-y-auto [padding-inline:max(0.75rem,env(safe-area-inset-left))_max(0.75rem,env(safe-area-inset-right))] [padding-block:max(0.75rem,env(safe-area-inset-top))_max(0.75rem,env(safe-area-inset-bottom))]"
+            className="bg-background flex h-full min-h-0 flex-col overflow-y-auto overscroll-contain p-3"
             data-slot="workspace-compact-navigation"
           >
             {compactNavigation.content}

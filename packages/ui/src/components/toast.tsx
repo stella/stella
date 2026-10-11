@@ -184,12 +184,12 @@ const Toasts = ({ position }: { position: ToastPosition }) => {
           // menus (z-[100]). See @stll/ui/overlay-layer for the ladder.
           "fixed z-[90] mx-auto flex w-[calc(100%-var(--toast-inset)*2)] max-w-90 [--toast-inset:--spacing(4)] sm:[--toast-inset:--spacing(8)]",
           "md:data-[position*=right]:w-[calc(100%-var(--toast-inset)*2-min(var(--stella-toast-right-offset,0px),calc(100vw-var(--toast-inset)*2-10rem)))]",
-          // Vertical positioning
-          "data-[position*=top]:top-(--toast-inset)",
-          "data-[position*=bottom]:bottom-(--toast-inset)",
-          // Horizontal positioning
-          "data-[position*=left]:start-(--toast-inset)",
-          "data-[position*=right]:end-(--toast-inset)",
+          // Vertical positioning, clear of the status bar and home indicator
+          "data-[position*=top]:top-[calc(var(--toast-inset)+var(--safe-area-top))]",
+          "data-[position*=bottom]:bottom-[calc(var(--toast-inset)+var(--safe-area-bottom))]",
+          // Horizontal positioning, clear of a landscape notch
+          "data-[position*=left]:start-[calc(var(--toast-inset)+var(--safe-area-inline-start))]",
+          "data-[position*=right]:end-[calc(var(--toast-inset)+var(--safe-area-inline-end))]",
           "md:data-[position*=right]:end-[calc(var(--toast-inset)+min(var(--stella-toast-right-offset,0px),calc(100vw-var(--toast-inset)*2-10rem)))]",
           "data-[position*=center]:left-1/2 data-[position*=center]:-translate-x-1/2",
         )}
@@ -199,7 +199,7 @@ const Toasts = ({ position }: { position: ToastPosition }) => {
         {toasts.map((toastItem) => (
           <Toast.Root
             className={cn(
-              "bg-popover text-popover-foreground absolute z-[calc(9999-var(--toast-index))] h-(--toast-calc-height) w-full rounded-lg border shadow-lg/5 [transition:transform_.5s_var(--ease-smooth),opacity_.5s,height_.15s] not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] motion-reduce:transition-none dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
+              "bg-popover text-popover-foreground absolute z-[calc(9999-var(--toast-index))] h-(--toast-calc-height) w-full rounded-lg border shadow-lg/5 [transition:transform_300ms_var(--ease-out),opacity_300ms_var(--ease-out),height_150ms_var(--ease-out)] not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] data-ending-style:[transition-duration:200ms,200ms,150ms] motion-reduce:transition-none dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
               // Base positioning using data-position
               "data-[position*=right]:start-auto data-[position*=right]:end-0",
               "data-[position*=left]:start-0 data-[position*=left]:end-auto",

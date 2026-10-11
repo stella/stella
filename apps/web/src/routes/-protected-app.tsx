@@ -710,7 +710,7 @@ function WorkspaceInspectorSidePanel({
         open={showPaneContent}
       >
         <SheetPopup
-          className="h-dvh w-full max-w-none border-0 p-0 md:hidden"
+          className="h-dvh w-full max-w-none border-0 md:hidden"
           showCloseButton={false}
           side="inline-end"
           style={routeMatterChromeStyle}
