@@ -7,6 +7,7 @@ import type {
   RunAgentResumeItem,
   StreamChunk,
   TokenUsage,
+  ToolCallPart,
   UIMessage,
 } from "@tanstack/ai";
 import { panic, Result } from "better-result";
@@ -2322,6 +2323,17 @@ const createStreamSettlement = ({
   };
 };
 
+// Calls without a sibling result must also advance monotonically on replay.
+const TOOL_CALL_FINALITY = {
+  "awaiting-input": 0,
+  "input-streaming": 1,
+  "input-complete": 2,
+  "approval-requested": 3,
+  "approval-responded": 4,
+  complete: 5,
+  error: 5,
+} as const satisfies Record<ToolCallPart["state"], number>;
+
 type ProcessPersistenceChunkOptions = {
   responseMessageId: SafeId<"chatMessage">;
   sourceChunk: PublicStreamChunk;
@@ -2498,34 +2510,57 @@ const processPersistenceChunk = ({
               candidate.type === "tool-result" &&
               candidate.toolCallId === part.id,
           );
-          // A retained result owns the call's canonical state and output too.
-          if (result?.type === "tool-result" && result === canonicalResult) {
-            return part;
-          }
           const updated = snapshot.parts.find(
             (candidate) =>
               candidate.type === "tool-call" && candidate.id === part.id,
           );
+          const snapshotCall = updated?.type === "tool-call" ? updated : part;
+          // The selected result owns finality; without a result, only advance
+          // the call. Equal-finality conflicts retain the streamed version.
+          let selected = part;
           if (result?.type === "tool-result") {
-            return {
-              ...updated,
-              ...part,
-              state:
-                result.state === "streaming" ? "input-complete" : result.state,
-              output:
+            if (result !== canonicalResult) {
+              selected = snapshotCall;
+            }
+          } else if (
+            TOOL_CALL_FINALITY[snapshotCall.state] >
+            TOOL_CALL_FINALITY[part.state]
+          ) {
+            selected = snapshotCall;
+          }
+          const other = selected === part ? snapshotCall : part;
+          let approval = selected.approval ?? other.approval;
+          if (
+            selected.approval?.approved === undefined &&
+            other.approval?.approved !== undefined
+          ) {
+            approval = other.approval;
+          }
+          const input =
+            part.input === undefined ? snapshotCall.input : part.input;
+          const metadata =
+            part.metadata === undefined ? snapshotCall.metadata : part.metadata;
+          let state = selected.state;
+          let output: unknown = selected.output;
+          if (result?.type === "tool-result") {
+            state =
+              result.state === "streaming" ? "input-complete" : result.state;
+            if (result !== canonicalResult || output === undefined) {
+              output =
                 typeof result.content === "string"
                   ? parseToolResultContent(result.content).value
-                  : result.content,
-            };
+                  : result.content;
+            }
           }
-          if (updated?.type !== "tool-call") {
-            return part;
-          }
-          const output: unknown = updated.output;
           return {
-            ...updated,
-            ...part,
-            state: updated.state,
+            type: part.type,
+            id: part.id,
+            name: part.name,
+            arguments: part.arguments,
+            ...(input === undefined ? {} : { input }),
+            ...(metadata === undefined ? {} : { metadata }),
+            ...(approval === undefined ? {} : { approval }),
+            state,
             ...(output === undefined ? {} : { output }),
           };
         });

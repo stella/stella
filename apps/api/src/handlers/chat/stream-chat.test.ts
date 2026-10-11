@@ -601,6 +601,151 @@ describe("snapshot tool-result reconciliation", () => {
     });
   }
 
+  for (const approved of [false, true]) {
+    for (const withResult of [false, true]) {
+      test(`snapshot-only ${approved ? "approval" : "denial"} survives reconciliation ${withResult ? "with" : "without"} a result and stale replay`, async () => {
+        const requested = {
+          type: "tool-call",
+          id: "snapshot-call",
+          name: "lookup",
+          arguments: "{}",
+          input: {},
+          state: "approval-requested",
+          approval: { id: "approval_snapshot-call", needsApproval: true },
+        } as const satisfies ToolCallPart;
+        const result = {
+          type: "tool-result",
+          toolCallId: requested.id,
+          state: approved ? "complete" : "error",
+          content: JSON.stringify(approved ? { ok: true } : { denied: true }),
+          ...(approved ? {} : { outcome: "denied" }),
+        } as const satisfies ToolResultPart;
+        const decided = {
+          ...requested,
+          approval: { ...requested.approval, approved },
+          state: withResult ? result.state : "approval-responded",
+          ...(withResult ? { output: JSON.parse(result.content) } : {}),
+        } satisfies ToolCallPart;
+        const initial = {
+          id: "snapshot-assistant",
+          role: "assistant",
+          parts: [requested],
+        } satisfies UIMessage;
+        const updated = {
+          ...initial,
+          parts: [decided, ...(withResult ? [result] : [])],
+        } satisfies UIMessage;
+        const snapshot = (message: typeof initial | typeof updated) =>
+          unsafeFixture(
+            "Approval reconciliation exercises the server's UI-parts snapshot extension",
+            {
+              type: EventType.MESSAGES_SNAPSHOT,
+              messages: [message],
+            } satisfies StreamChunk,
+          );
+        const { emitted, finish } = await persistNativeInterruptTurn(
+          streamChunks([
+            {
+              type: EventType.RUN_STARTED,
+              runId: "snapshot-run",
+              threadId: "snapshot-thread",
+            },
+            {
+              type: EventType.TEXT_MESSAGE_START,
+              messageId: initial.id,
+              role: "assistant",
+            },
+            {
+              type: EventType.TEXT_MESSAGE_CONTENT,
+              messageId: initial.id,
+              delta: "Checking the request.",
+            },
+            {
+              type: EventType.TOOL_CALL_START,
+              parentMessageId: initial.id,
+              toolCallId: requested.id,
+              toolCallName: requested.name,
+            },
+            {
+              type: EventType.TOOL_CALL_ARGS,
+              toolCallId: requested.id,
+              delta: requested.arguments,
+            },
+            {
+              type: EventType.TOOL_CALL_END,
+              toolCallId: requested.id,
+              input: requested.input,
+            },
+            {
+              type: EventType.CUSTOM,
+              name: "approval-requested",
+              value: {
+                approval: requested.approval,
+                input: requested.input,
+                toolCallId: requested.id,
+                toolName: requested.name,
+              },
+            },
+            snapshot(initial),
+            snapshot(updated),
+            snapshot(initial),
+            {
+              type: EventType.RUN_FINISHED,
+              runId: "snapshot-run",
+              threadId: "snapshot-thread",
+              finishReason: "stop",
+            },
+          ]),
+        );
+        if (finish === null) {
+          panic("Snapshot decision did not persist its turn");
+        }
+        const client = new StreamProcessor();
+        let snapshots = 0;
+        for (const chunk of emitted) {
+          client.processChunk(chunk);
+          if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
+            continue;
+          }
+          snapshots += 1;
+          const call = client
+            .getMessages()
+            .flatMap(({ parts }) => parts)
+            .find(
+              (part) => part.type === "tool-call" && part.id === requested.id,
+            );
+          expect(call).toMatchObject(snapshots === 1 ? requested : decided);
+        }
+        expect(snapshots).toBe(3);
+        expect(
+          finish.responseMessage.parts.find(
+            (part) => part.type === "tool-call",
+          ),
+        ).toMatchObject(decided);
+        const content = structuredClone(
+          chatMessageContentFromMessage(finish.responseMessage),
+        );
+        const reload = chatMessageFromPersisted({
+          id: finish.responseMessage.id,
+          role: finish.responseMessage.role,
+          content,
+        });
+        expect(
+          reload.parts.find((part) => part.type === "tool-call"),
+        ).toMatchObject({
+          approval: { approved },
+          state: decided.state,
+        });
+        expect(
+          diffLiveAgainstReload({
+            live: client.getMessages(),
+            reload: [reload],
+          }),
+        ).toEqual([]);
+      });
+    }
+  }
+
   const canonicalResults = {
     streaming: {
       type: "tool-result",
@@ -736,6 +881,9 @@ describe("snapshot tool-result reconciliation", () => {
             );
           const selected = snapshots === 1 ? previous : expected;
           expect(visibleCalls).toHaveLength(1);
+          expect(visibleCalls.every((call) => !("approval" in call))).toBe(
+            true,
+          );
           expect(visibleCalls).toMatchObject([
             {
               id: toolCall.id,
