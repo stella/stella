@@ -2,6 +2,7 @@ import { EventType } from "@tanstack/ai";
 import type {
   MessagePart,
   StreamChunk,
+  SubagentPart,
   ToolCallPart,
   ToolResultPart,
   UIMessage,
@@ -17,6 +18,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import { unsafeFixture } from "@/api/tests/helpers/chat-fixtures";
 import { diffLiveAgainstReload } from "@/api/tests/helpers/chat-live-reload-invariants";
+import { CHAT_ORACLE } from "@/api/tests/helpers/chat-oracles";
 
 import {
   chatMessageContentFromMessage,
@@ -1033,6 +1035,103 @@ const orderedTurn = (snapshots: UIMessage["parts"][]): StreamChunk[] => [
     finishReason: "stop",
   },
 ];
+
+const subagentLifecycleArbitrary = fc.record({
+  cycles: fc.array(
+    fc.record({ suspended: fc.string(), resumed: fc.string() }),
+    { minLength: 1, maxLength: 5 },
+  ),
+  terminal: fc.constantFrom("finished", "error"),
+  stale: fc.array(
+    fc.record({
+      status: fc.constantFrom("running", "suspended"),
+      content: fc.string(),
+    }),
+    { minLength: 1, maxLength: 5 },
+  ),
+});
+
+const subagentLifecyclePart = (
+  status: SubagentPart["subagent"]["status"],
+  content: string,
+): SubagentPart => ({
+  type: "subagent",
+  subagent: {
+    id: "lifecycle-child",
+    name: "Review",
+    status,
+    messages: [
+      {
+        id: "child-answer",
+        role: "assistant",
+        parts: [{ type: "text", content }],
+      },
+    ],
+  },
+});
+
+test(
+  "subagent snapshots preserve suspend resume cycles and terminal finality",
+  async () => {
+    await assertProperty(
+      "subagent snapshots preserve suspend resume cycles and terminal finality",
+      fc.asyncProperty(subagentLifecycleArbitrary, async (scenario) => {
+        const active = [
+          subagentLifecyclePart("running", "Initial child transcript"),
+        ];
+        for (const [index, cycle] of scenario.cycles.entries()) {
+          active.push(
+            subagentLifecyclePart(
+              "suspended",
+              `Suspended ${index}: ${cycle.suspended}`,
+            ),
+            subagentLifecyclePart(
+              "running",
+              `Resumed ${index}: ${cycle.resumed}`,
+            ),
+          );
+        }
+        const terminal = subagentLifecyclePart(
+          scenario.terminal,
+          "Final child transcript",
+        );
+        const stale = scenario.stale.map(({ status, content }) =>
+          subagentLifecyclePart(status, `Stale: ${content}`),
+        );
+        const answer = { type: "text", content: "Answer" } as const;
+        const inputs = [...active, terminal, ...stale].map((part) => [
+          answer,
+          part,
+        ]);
+        const expected = [...active, terminal, ...stale.map(() => terminal)];
+        const { emitted } = await collectTurn(orderedTurn(inputs));
+        const live = createStreamMessageCapture({
+          initialMessages: [],
+          capture: (message) => message,
+        });
+        let step = 0;
+        for (const chunk of emitted) {
+          live.processor.processChunk(chunk);
+          if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
+            continue;
+          }
+          const child = expected.at(step);
+          if (child === undefined) {
+            panic("Subagent lifecycle emitted an unexpected snapshot");
+          }
+          expect(
+            live.processor.getMessages().flatMap(({ parts }) => parts),
+            JSON.stringify({ oracle: CHAT_ORACLE.liveSubagentLifecycle, step }),
+          ).toEqual([answer, child]);
+          step += 1;
+        }
+        expect(step).toBe(expected.length);
+      }),
+      { numRuns: 100 },
+    );
+  },
+  propertyTestTimeout(15_000),
+);
 
 for (const append of [false, true]) {
   test(`snapshot text stays after its intervening call when ${append ? "appended" : "unchanged"}`, async () => {

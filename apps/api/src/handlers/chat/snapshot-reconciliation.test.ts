@@ -1,6 +1,7 @@
 import type {
   ActivityPart,
   MessagePart,
+  SubagentPart,
   ToolCallPart,
   ToolResultPart,
   UIMessage,
@@ -13,6 +14,51 @@ import {
   reconcileSnapshotCall,
   reconcileSnapshotResult,
 } from "@/api/handlers/chat/snapshot-reconciliation";
+
+test("a suspended subagent resumes with updated messages and stays terminal once settled", () => {
+  const child = (
+    status: SubagentPart["subagent"]["status"],
+    content: string,
+  ): SubagentPart => ({
+    type: "subagent",
+    subagent: {
+      id: "child",
+      name: "Review",
+      status,
+      messages: [
+        {
+          id: "child-answer",
+          role: "assistant",
+          parts: [{ type: "text", content }],
+        },
+      ],
+    },
+  });
+  for (const terminal of ["finished", "error"] as const) {
+    const owner = new SnapshotPartReconciler([]);
+    let parts: UIMessage["parts"] = [];
+    const reconcile = (part: SubagentPart) => {
+      parts = owner.reconcile({
+        previous: { id: "parent", role: "assistant", parts },
+        snapshot: { id: "parent", role: "assistant", parts: [part] },
+        preservesPartLayout: true,
+        parseResultOutput: (content) => content,
+      });
+      return parts;
+    };
+    reconcile(child("running", "Before suspension"));
+    reconcile(child("suspended", "Awaiting approval"));
+    const resumed = child("running", "After approval");
+    expect(reconcile(resumed)).toEqual([resumed]);
+    const settled = child(terminal, "Final child transcript");
+    expect(reconcile(settled)).toEqual([settled]);
+    for (const status of ["running", "suspended"] as const) {
+      expect(reconcile(child(status, "Stale active transcript"))).toEqual([
+        settled,
+      ]);
+    }
+  }
+});
 
 test("duplicate activity keys match ordinal slots and preserve unmatched parts", () => {
   const activity = (content: string, subagentRunId?: string): ActivityPart => ({

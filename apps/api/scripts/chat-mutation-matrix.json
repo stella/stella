@@ -2,6 +2,20 @@
   "$comment": "Each entry is one behaviour of the chat pipeline, stated as the mutation that removes it from the current tree, the scenario that exercises it, and the oracle (apps/api/src/tests/helpers/chat-oracles.ts) that must fail when it is gone. Run: bun apps/api/scripts/chat-mutation-matrix.ts. An entry whose mutation no longer applies fails until it is replaced or retired with a reason.",
   "entries": [
     {
+      "id": "subagent-snapshot-resumes-after-suspension",
+      "fix": "#5256",
+      "behaviour": "Resuming a suspended subagent updates its running status and child transcript; terminal snapshots reject active replays.",
+      "status": "active",
+      "file": "src/handlers/chat/snapshot-reconciliation.ts",
+      "search": "  suspended: 0,",
+      "replace": "  suspended: 1,",
+      "scenario": {
+        "file": "src/handlers/chat/snapshot-reconciliation.property.test.ts",
+        "test": "subagent snapshots preserve suspend resume cycles and terminal finality"
+      },
+      "oracle": "chat.live.subagent-lifecycle"
+    },
+    {
       "id": "snapshot-one-message-per-id",
       "fix": "#3858",
       "behaviour": "The interrupt snapshot carries one assistant message per id, merging the copies the engine splits at each tool result.",

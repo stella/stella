@@ -217,7 +217,8 @@ const STRUCTURED_OUTPUT_FINALITY = {
 
 const SUBAGENT_FINALITY = {
   running: 0,
-  suspended: 1,
+  // Suspension is resumable; either active state can carry newer child messages.
+  suspended: 0,
   finished: 2,
   error: 2,
 } as const satisfies Record<SubagentPart["subagent"]["status"], number>;
