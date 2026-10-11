@@ -11,7 +11,7 @@ import {
   isIdentifier,
   isIdentifierReference,
   memberPropertyName,
-  resolveImportedExpression,
+  resolveImportedExpressionForEnforcement,
   resolveVariable,
   stableInitializer,
   staticStringValue,
@@ -210,7 +210,10 @@ class ParserHtmlProvenance {
   }
 
   importedLoad(node: unknown): boolean {
-    const imported = resolveImportedExpression(this.context, node);
+    const imported = resolveImportedExpressionForEnforcement(
+      this.context,
+      node,
+    );
     return imported?.source === "cheerio" && imported.imported === "load";
   }
 

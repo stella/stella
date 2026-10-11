@@ -1,3 +1,4 @@
+import { printError } from "@stll/errors";
 /**
  * Backfill the chat-thread search index for every existing thread.
  *
@@ -18,6 +19,6 @@ const main = async () => {
 };
 
 main().catch((error: unknown) => {
-  console.error("Chat search backfill failed:", error);
+  printError("Chat search backfill failed:", error);
   process.exit(1);
 });

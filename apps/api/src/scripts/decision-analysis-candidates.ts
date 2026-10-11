@@ -35,6 +35,7 @@
 
 import { Result } from "better-result";
 
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 import { parsePersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 
 import { prepareCorpusReads, readRowAst } from "./decision-analysis.ast";
@@ -102,94 +103,96 @@ if (Result.isError(url)) {
 const db = openAnalysisDatabase(url.value);
 const tombstones = analysisTombstoneReader(db);
 
-await prepareCorpusReads();
+await runScriptWithErrorOutput(async () => {
+  await prepareCorpusReads();
 
-const outcomes: string[] = [];
-let printed = 0;
-let cursor: CandidateCursor | undefined;
+  const outcomes: string[] = [];
+  let printed = 0;
+  let cursor: CandidateCursor | undefined;
 
-/**
- * One page of the ranking: a cursor walk, not a per-row lookup. Each call is
- * one statement returning `limit * SCAN_FACTOR` rows, and the loop advances
- * the cursor only when a page did not fill the list. A single bounded window
- * would report "no candidates" while eligible decisions sat one row past its
- * edge, because the exclusions are decided in this process rather than in
- * the query.
- */
-const readCandidatePage = async (after: CandidateCursor | undefined) =>
-  await listCandidateRows(db, {
-    after,
-    country,
-    courts: courts.value,
-    minCitations,
-    scan: limit * SCAN_FACTOR,
-  });
+  /**
+   * One page of the ranking: a cursor walk, not a per-row lookup. Each call is
+   * one statement returning `limit * SCAN_FACTOR` rows, and the loop advances
+   * the cursor only when a page did not fill the list. A single bounded window
+   * would report "no candidates" while eligible decisions sat one row past its
+   * edge, because the exclusions are decided in this process rather than in
+   * the query.
+   */
+  const readCandidatePage = async (after: CandidateCursor | undefined) =>
+    await listCandidateRows(db, {
+      after,
+      country,
+      courts: courts.value,
+      minCitations,
+      scan: limit * SCAN_FACTOR,
+    });
 
-while (printed < limit) {
-  // db-await-in-loop: keyset page per iteration; the page is the batch
-  const rows = await readCandidatePage(cursor);
-  if (rows.length === 0) {
-    break;
-  }
-  const last = rows.at(-1);
-  cursor =
-    last === undefined
-      ? undefined
-      : {
-          citationAuthority: last.citationAuthority,
-          citationCount: last.citationCount,
-          id: last.id,
-        };
-
-  for (const candidate of rows) {
-    if (printed === limit) {
+  while (printed < limit) {
+    // db-await-in-loop: keyset page per iteration; the page is the batch
+    const rows = await readCandidatePage(cursor);
+    if (rows.length === 0) {
       break;
     }
-    const row = candidateAsRow(candidate);
-    const resolved = await resolveRowAnalysisInput({
-      readAst: async () => await readRowAst(row, tombstones),
-      row,
-    });
-    if (resolved.status === "rejected") {
-      outcomes.push(`skipped:${resolved.reason}`);
-      continue;
-    }
-    const stored = parsePersistedDecisionAnalysis(candidate.analysis);
-    const isCurrent =
-      stored !== null &&
-      !("status" in stored) &&
-      stored.version === 3 &&
-      stored.inputFingerprint === resolved.input.fingerprint;
-    if (isCurrent) {
-      outcomes.push("skipped:already-current");
-      continue;
-    }
+    const last = rows.at(-1);
+    cursor =
+      last === undefined
+        ? undefined
+        : {
+            citationAuthority: last.citationAuthority,
+            citationCount: last.citationCount,
+            id: last.id,
+          };
 
-    outcomes.push("candidate");
-    printed += 1;
-    if (idsOnly) {
-      console.log(candidate.id);
-      continue;
+    for (const candidate of rows) {
+      if (printed === limit) {
+        break;
+      }
+      const row = candidateAsRow(candidate);
+      const resolved = await resolveRowAnalysisInput({
+        readAst: async () => await readRowAst(row, tombstones),
+        row,
+      });
+      if (resolved.status === "rejected") {
+        outcomes.push(`skipped:${resolved.reason}`);
+        continue;
+      }
+      const stored = parsePersistedDecisionAnalysis(candidate.analysis);
+      const isCurrent =
+        stored !== null &&
+        !("status" in stored) &&
+        stored.version === 3 &&
+        stored.inputFingerprint === resolved.input.fingerprint;
+      if (isCurrent) {
+        outcomes.push("skipped:already-current");
+        continue;
+      }
+
+      outcomes.push("candidate");
+      printed += 1;
+      if (idsOnly) {
+        console.log(candidate.id);
+        continue;
+      }
+      console.log(
+        [
+          candidate.id,
+          candidate.court,
+          candidate.country,
+          `citations=${String(candidate.citationCount)}`,
+          `authority=${candidate.citationAuthority.toFixed(3)}`,
+          `reported=${candidate.reportedInCollection ? "yes" : "no"}`,
+        ].join("\t"),
+      );
     }
-    console.log(
-      [
-        candidate.id,
-        candidate.court,
-        candidate.country,
-        `citations=${String(candidate.citationCount)}`,
-        `authority=${candidate.citationAuthority.toFixed(3)}`,
-        `reported=${candidate.reportedInCollection ? "yes" : "no"}`,
-      ].join("\t"),
-    );
   }
-}
 
-// The tally goes to stderr, so `--ids-only` output stays pipeable.
-for (const line of summariseOutcomes(outcomes)) {
-  console.error(line);
-}
+  // The tally goes to stderr, so `--ids-only` output stays pipeable.
+  for (const line of summariseOutcomes(outcomes)) {
+    console.error(line);
+  }
 
-if (printed === 0) {
-  console.error("No candidates matched.");
-}
-process.exit(printed === 0 ? 1 : 0);
+  if (printed === 0) {
+    console.error("No candidates matched.");
+  }
+  process.exit(printed === 0 ? 1 : 0);
+});

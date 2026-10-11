@@ -1,5 +1,9 @@
 name: Documentation source policy
 
+defaults:
+  run:
+    shell: bash
+
 # Quarantines for dependencies whose canonical docs have no llms.txt expire
 # within 31 days. Run the same Oxlint rule daily so an expiry is visible even
 # when no pull request happens to touch the dependency policy.

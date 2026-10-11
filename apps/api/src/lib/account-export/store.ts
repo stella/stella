@@ -338,6 +338,8 @@ export const claimAccountExport = async (
     }
     const token = Bun.randomUUIDv7();
     const objectKey = `account-exports/${userId}/${id}/${token}.zip`;
+    // Reclaiming an expired lease stays in processing: a same-state write the
+    // transition owner permits without a graph edge.
     const claimed = await transition({
       tx,
       spec: TRANSITIONS.accountExports,

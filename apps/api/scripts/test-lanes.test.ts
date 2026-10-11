@@ -67,7 +67,9 @@ const controlledRun = () => {
     running.set(name, kind);
     maxConcurrent = Math.max(maxConcurrent, running.size);
     const heavyRunning = [...running.values()].filter(
-      (runningKind) => runningKind === TEST_BATCH_KIND.heavyLogic,
+      (runningKind) =>
+        runningKind === TEST_BATCH_KIND.heavyLogic ||
+        runningKind === TEST_BATCH_KIND.heavyDb,
     ).length;
     maxConcurrentHeavy = Math.max(maxConcurrentHeavy, heavyRunning);
     const exitCode = await new Promise<number>((resolve) => {
@@ -305,19 +307,27 @@ describe("orderBatchesForLanes", () => {
             lanes,
             runBatch: async (current) => {
               const heavyRunning = [...active].some(
-                ({ kind }) => kind === TEST_BATCH_KIND.heavyLogic,
+                ({ kind }) =>
+                  kind === TEST_BATCH_KIND.heavyLogic ||
+                  kind === TEST_BATCH_KIND.heavyDb,
               );
               const activeCount = active.size;
               const startedOnce = waiting.delete(current);
               const startable = [...waiting].filter(
                 ({ kind }) =>
-                  !(heavyRunning && kind === TEST_BATCH_KIND.heavyLogic),
+                  !(
+                    heavyRunning &&
+                    (kind === TEST_BATCH_KIND.heavyLogic ||
+                      kind === TEST_BATCH_KIND.heavyDb)
+                  ),
               );
               // Assertions run outside runBatch, whose rejections are exit codes.
               checks.push(() => {
                 expect(activeCount).toBeLessThan(lanes);
                 expect(
-                  heavyRunning && current.kind === TEST_BATCH_KIND.heavyLogic,
+                  heavyRunning &&
+                    (current.kind === TEST_BATCH_KIND.heavyLogic ||
+                      current.kind === TEST_BATCH_KIND.heavyDb),
                 ).toBe(false);
                 expect(startedOnce).toBe(true);
                 for (const candidate of startable) {
@@ -396,7 +406,7 @@ describe("runInLanes", () => {
     const run = controlledRun();
     const batches = [
       batch(TEST_BATCH_KIND.heavyLogic, "heavy-1"),
-      batch(TEST_BATCH_KIND.heavyLogic, "heavy-2"),
+      batch(TEST_BATCH_KIND.heavyDb, "heavy-2"),
       batch(TEST_BATCH_KIND.regular, "regular-1"),
     ];
     const done = runInLanes({ batches, lanes: 3, runBatch: run.runBatch });
