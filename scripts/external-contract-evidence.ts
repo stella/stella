@@ -253,7 +253,6 @@ const runtimeSpecifiers = (file: string, text: string) => {
       if (
         !node.isTypeOnly &&
         ts.isExternalModuleReference(node.moduleReference) &&
-        node.moduleReference.expression !== undefined &&
         ts.isStringLiteral(node.moduleReference.expression)
       ) {
         specifiers.push(node.moduleReference.expression.text);
