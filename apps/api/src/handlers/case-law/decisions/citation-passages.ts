@@ -34,6 +34,7 @@ import {
 } from "@/api/db/schema";
 import type { DecisionCitationRow } from "@/api/handlers/case-law/decisions/citation-graph";
 import { listDecisionCitationsHandler } from "@/api/handlers/case-law/decisions/citation-graph";
+import { citationTextRevisionFingerprintSql } from "@/api/handlers/case-law/polarity/text-revision";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
@@ -134,6 +135,7 @@ type PassageSourcePointer = {
   id: SafeId<"caseLawDecision">;
   astS3Key: string | null;
   contentHash: string | null;
+  textRevisionFingerprint: string;
   textWithheldReason: DecisionTextWithheldReason | null;
 };
 
@@ -149,6 +151,10 @@ const readPassageSourcePointers = async (
       id: caseLawDecisions.id,
       astS3Key: caseLawDecisions.astS3Key,
       contentHash: caseLawDecisions.contentHash,
+      textRevisionFingerprint: citationTextRevisionFingerprintSql({
+        contentHash: caseLawDecisions.contentHash,
+        sections: caseLawDecisions.sections,
+      }),
       descriptor: caseLawSources.descriptor,
     })
     .from(caseLawDecisions)
@@ -175,6 +181,7 @@ const readPassageSourcePointers = async (
  */
 type DecisionTextColumns = {
   contentHash: string | null;
+  textRevisionFingerprint: string;
   documentAst: unknown;
   sections: DecisionSection[] | null;
 };
@@ -190,6 +197,10 @@ const readDecisionTextColumns = async (
           id: caseLawDecisions.id,
           documentAst: caseLawDecisions.documentAst,
           contentHash: caseLawDecisions.contentHash,
+          textRevisionFingerprint: citationTextRevisionFingerprintSql({
+            contentHash: caseLawDecisions.contentHash,
+            sections: caseLawDecisions.sections,
+          }),
           sections: caseLawDecisions.sections,
         })
         .from(caseLawDecisions)
@@ -291,7 +302,10 @@ export const readCitationDecisionText = async ({
   readAst = readDecisionAnalysisAst,
   readTombstones = readCorpusTombstones,
 }: ReadCitationDecisionTextOptions): Promise<CitationDecisionText> => {
-  if (columns === undefined || columns.contentHash !== pointer.contentHash) {
+  if (
+    columns === undefined ||
+    columns.textRevisionFingerprint !== pointer.textRevisionFingerprint
+  ) {
     return {
       type: "gate-failed",
       error: new CitationTextGateError({
