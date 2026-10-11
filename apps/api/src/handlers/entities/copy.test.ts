@@ -6,6 +6,7 @@ import {
   entities,
   entityVersions,
   fields,
+  flowRunSteps,
 } from "@/api/db/schema";
 import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
 import { envBase } from "@/api/env-base";
@@ -1373,11 +1374,14 @@ describe("copy-to-workspace", () => {
             },
           };
         }
-        selectCallCount += 1;
-
         return {
-          from: (table: unknown) =>
-            table === entityVersions
+          from: (table: unknown) => {
+            if (table === flowRunSteps) {
+              const where = () => ({ limit: async () => [] });
+              return { where, innerJoin: () => ({ where }) };
+            }
+            selectCallCount += 1;
+            return table === entityVersions
               ? {
                   // The code carry reads the source rows FOR UPDATE.
                   where: () => ({
@@ -1401,7 +1405,8 @@ describe("copy-to-workspace", () => {
                     }
                     throw new Error("unexpected lookup");
                   },
-                },
+                };
+          },
         };
       },
       insert: (table: unknown) => ({
