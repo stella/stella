@@ -427,6 +427,7 @@ const trimInlineWhitespace = (
   return edge === "start" ? kept : kept.toReversed();
 };
 
+// parser-output-unchanged: Only cz-us, cz-nss, and hu-bhgy consume the new normalization/prefix path (their versions are bumped); all other parsers use unchanged HTML/text utilities.
 const NORMALIZED_INLINE_LINE = Symbol("normalized-inline-line");
 
 /** Text offsets and rendering share the same trimmed, formatting-preserving tree. */
