@@ -11,6 +11,7 @@ const listVariantsParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "List one clause's variants in sort order, each with its label, body, " +
     "and position. A clause that does not belong to this organization is a " +

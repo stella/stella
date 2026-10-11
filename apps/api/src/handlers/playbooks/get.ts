@@ -13,6 +13,7 @@ import { getPlaybookDefinitionHandler } from "./read";
 import { playbookDefinitionParamsSchema } from "./schema";
 
 const config = {
+  contract: "patch",
   description:
     "Read one playbook definition in full: its name, description, " +
     "document-type scope, positions, status, approval metadata, and how the " +

@@ -105,6 +105,7 @@ export const discoverHandler = async ({
 };
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason:

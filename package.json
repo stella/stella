@@ -91,6 +91,7 @@
     "check:projection-totality": "bun scripts/check-projection-totality.ts",
     "check:aggregate-locks": "bun scripts/check-aggregate-locks.ts",
     "check:aggregate-mutations": "bun scripts/check-aggregate-mutations.ts",
+    "check:write-contracts": "bun scripts/check-write-contracts.ts",
     "check:split-buttons": "bun scripts/check-split-buttons.ts",
     "check:result-boundary-enrolment": "bun scripts/check-result-boundary-enrolment.ts",
     "check:test-input-coverage": "bun scripts/check-test-input-coverage.ts",

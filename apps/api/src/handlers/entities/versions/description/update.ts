@@ -17,6 +17,7 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Set or clear the free-text description on one version of a document, up " +
     "to 1024 characters. An annotation only: no file and no field value " +

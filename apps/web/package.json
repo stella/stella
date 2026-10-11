@@ -82,6 +82,7 @@
     "@stll/locales": "workspace:*",
     "@stll/money": "workspace:*",
     "@stll/permissions": "workspace:*",
+    "@stll/scan-engine": "workspace:*",
     "@stll/sha256": "workspace:*",
     "@stll/skills": "workspace:*",
     "@stll/ssr-kit": "workspace:^",

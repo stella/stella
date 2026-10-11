@@ -3,7 +3,9 @@
  *
  * `parseDocx` from `@stll/folio-core/server` returns a `Document` — a package
  * whose body is `BlockContent[]` of paragraphs and tables, whose runs carry
- * `TextFormatting`, and whose notes hang off `package.footnotes`. A court that
+ * `TextFormatting`, and whose notes hang off `package.footnotes`, anchored by
+ * paragraph-local `footnoteRef` run items. Source parsers resolve those anchors
+ * with `createParagraphFootnoteReader`, placing notes after their paragraph. A court that
  * publishes half its collection as RTF and half as DOCX otherwise needs two
  * parsers, one per encoding, and the second one is where the drift starts. So
  * this reads RTF into that same model and is named for the `parseRtf` it would
@@ -54,7 +56,7 @@ import {
  * letter rather than a failure, so the mapping is explicit and a code page
  * outside it is reported instead of guessed at.
  */
-const ANSI_CODE_PAGES = [
+const RTF_CODE_PAGES = [
   [1250, "windows-1250"],
   [1251, "windows-1251"],
   [1252, "windows-1252"],
@@ -65,9 +67,10 @@ const ANSI_CODE_PAGES = [
 ] as const;
 
 /** The labels above, as the decoder's own vocabulary. */
-type CodePageLabel = (typeof ANSI_CODE_PAGES)[number][1];
+type RtfCodePage = (typeof RTF_CODE_PAGES)[number][0];
+type CodePageLabel = (typeof RTF_CODE_PAGES)[number][1];
 
-const CODE_PAGE_LABELS = new Map<number, CodePageLabel>(ANSI_CODE_PAGES);
+const CODE_PAGE_LABELS = new Map<number, CodePageLabel>(RTF_CODE_PAGES);
 
 const DEFAULT_CODE_PAGE_LABEL: CodePageLabel = "windows-1252";
 
@@ -295,6 +298,18 @@ const SKIPPED_DESTINATIONS = new Set([
   "revtbl",
 ]);
 
+/** Skipped tables establish font decoding and colours, never document content. */
+const METADATA_CONTROL_WORDS = new Set([
+  "fonttbl",
+  "colortbl",
+  "f",
+  "fcharset",
+  "deff",
+  "red",
+  "green",
+  "blue",
+]);
+
 /** The literal characters a symbol control word stands for. */
 const SYMBOL_CONTROL_WORDS = new Map<string, string>([
   ["emdash", "\u2014"],
@@ -341,7 +356,7 @@ type Destination =
   | { type: "footnote"; note: OpenFootnote }
   | { type: "embedded-container"; content: Paragraph[] }
   | { type: "embedded-text"; content: Paragraph[] }
-  | { type: "skipped"; reason: "metadata" | "unknown" };
+  | { type: "skipped"; reason: "metadata" | "pending" | "unknown" };
 
 const initialCharacterState = (): CharacterState => ({
   bold: false,
@@ -417,7 +432,7 @@ export type ReadRtfOptions = {
    * Code page to read `\'xx` bytes against when the document states none.
    * Defaults to windows-1252, which is what `\ansi` alone means.
    */
-  defaultCodePage?: number | undefined;
+  defaultCodePage?: RtfCodePage | undefined;
 };
 
 const decodeBytes = (bytes: readonly number[], label: CodePageLabel): string =>
@@ -429,7 +444,8 @@ const decodeBytes = (bytes: readonly number[], label: CodePageLabel): string =>
  * A run of bytes read as the ASCII it is: control words and the RTF signature
  * are ASCII by definition, so each byte is its own code point.
  */
-const asciiOf = (bytes: Uint8Array): string => String.fromCodePoint(...bytes);
+const asciiOf = (bytes: Uint8Array | Uint16Array): string =>
+  String.fromCodePoint(...bytes);
 
 const HEX_DIGITS = "0123456789abcdefABCDEF";
 
@@ -473,12 +489,15 @@ type ControlToken = {
  * remainder is returned as text — which recovers the name rather than losing
  * it, and is reported by the caller either way.
  */
-const readControlWord = (source: Uint8Array, start: number): ControlToken => {
+const readControlWord = (
+  source: Uint8Array | Uint16Array,
+  start: number,
+): ControlToken => {
   let cursor = start;
   while (cursor < source.length && isAsciiLetter(source[cursor] ?? 0)) {
     cursor += 1;
   }
-  const letters = asciiOf(source.subarray(start, cursor));
+  const letters = asciiOf(source.subarray(start, cursor)).toLowerCase();
   if (letters.length === 0) {
     return { word: null, parameter: undefined, next: start };
   }
@@ -535,7 +554,7 @@ const readControlWord = (source: Uint8Array, start: number): ControlToken => {
  * a group) ends the replacement early and is left to the scanner.
  */
 const afterFallbackCharacters = (
-  source: Uint8Array,
+  source: Uint8Array | Uint16Array,
   start: number,
   count: number,
 ): number => {
@@ -857,6 +876,39 @@ const readRtfInto = (
     }
   };
 
+  /** Destination controls establish content boundaries before formatting is read. */
+  const applyDestinationWord = (word: string): boolean => {
+    // Only known drawing wrappers may expose nested text; a font table or
+    // an unknown ignorable destination cannot turn its children into body text.
+    const parent = stack.at(-1)?.state.destination;
+    const mayReadEmbedded =
+      state.destination.type !== "skipped" ||
+      (state.destination.reason === "pending" && parent?.type !== "skipped");
+    if (mayReadEmbedded && RTF_EMBEDDED_CONTAINERS.has(word)) {
+      enterDestination({ type: "embedded-container", content: [] });
+      return true;
+    }
+    if (mayReadEmbedded && RTF_VISIBLE_BLOCK_DESTINATIONS.has(word)) {
+      enterDestination({ type: "embedded-text", content: [] });
+      state.paragraph = initialParagraphState();
+      return true;
+    }
+    if (
+      state.destination.type === "skipped" &&
+      state.destination.reason === "pending"
+    ) {
+      state.destination = { type: "skipped", reason: "unknown" };
+    }
+    if (SKIPPED_DESTINATIONS.has(word)) {
+      enterDestination({ type: "skipped", reason: "metadata" });
+      // Font/colour tables still establish decoding and formatting below.
+      if (word !== "fonttbl" && word !== "colortbl") {
+        return true;
+      }
+    }
+    return false;
+  };
+
   /**
    * Apply one control word.
    *
@@ -868,27 +920,8 @@ const readRtfInto = (
     word: string,
     parameter: number | undefined,
   ): void => {
-    // Only known drawing wrappers may expose nested text; a font table or
-    // an unknown ignorable destination cannot turn its children into body text.
-    const parent = stack.at(-1)?.state.destination;
-    const mayReadEmbedded =
-      state.destination.type !== "skipped" ||
-      (state.destination.reason === "unknown" && parent?.type !== "skipped");
-    if (mayReadEmbedded && RTF_EMBEDDED_CONTAINERS.has(word)) {
-      enterDestination({ type: "embedded-container", content: [] });
+    if (applyDestinationWord(word)) {
       return;
-    }
-    if (mayReadEmbedded && RTF_VISIBLE_BLOCK_DESTINATIONS.has(word)) {
-      enterDestination({ type: "embedded-text", content: [] });
-      state.paragraph = initialParagraphState();
-      return;
-    }
-    if (SKIPPED_DESTINATIONS.has(word)) {
-      enterDestination({ type: "skipped", reason: "metadata" });
-      // Font/colour tables still establish decoding and formatting below.
-      if (word !== "fonttbl" && word !== "colortbl") {
-        return;
-      }
     }
     if (!HANDLED_CONTROL_WORDS.has(word)) {
       if (
@@ -897,6 +930,13 @@ const readRtfInto = (
       ) {
         unknownWords.add(word);
       }
+      return;
+    }
+
+    if (
+      state.destination.type === "skipped" &&
+      !METADATA_CONTROL_WORDS.has(word)
+    ) {
       return;
     }
 
@@ -936,6 +976,11 @@ const readRtfInto = (
       case "green":
       case "blue":
         break;
+      // Source parsers classify headings per paragraph; all RTF line boundaries
+      // must finish a paragraph while retaining formatting for the next line.
+      case "line":
+      case "page":
+      case "sect":
       case "par":
         endParagraph();
         break;
@@ -980,26 +1025,14 @@ const readRtfInto = (
       case "tab":
         pushRunContent({ type: "tab" });
         break;
-      case "line":
-        pushRunContent({ type: "break", breakType: "textWrapping" });
-        break;
-      case "page":
-        pushRunContent({ type: "break", breakType: "page" });
-        break;
       case "u": {
-        // RTF writes a code point above 0x7fff as a negative 16-bit value, so
-        // the escape's own range is one 16-bit word. Anything outside it is a
-        // number `String.fromCodePoint` throws on, and a throw here would lose
-        // the whole document to one malformed escape.
+        // Invalid code points must fail the structured parse: adapters retain
+        // their source-text fallback instead of publishing a partial document.
         if (parameter === undefined) {
           unknownWords.add("u");
           break;
         }
         const codePoint = parameter < 0 ? parameter + 0x1_00_00 : parameter;
-        if (codePoint < 0 || codePoint > 0x10_ff_ff) {
-          unknownWords.add(`u${parameter}`);
-          break;
-        }
         appendText(String.fromCodePoint(codePoint));
         // The escape is followed by `\ucN` replacement characters for
         // readers that cannot decode it.
@@ -1058,7 +1091,7 @@ const readRtfInto = (
     ) {
       return;
     }
-    enterDestination({ type: "skipped", reason: "unknown" });
+    enterDestination({ type: "skipped", reason: "pending" });
   };
 
   const closeGroup = (): void => {
@@ -1082,6 +1115,12 @@ const readRtfInto = (
       state = frame.state;
       pendingFormatting = formattingOf(state.character, colors);
       hasPendingRun = false;
+    }
+  };
+
+  const closeOpenGroups = (): void => {
+    while (stack.length > 0) {
+      closeGroup();
     }
   };
 
@@ -1182,7 +1221,10 @@ const readRtfInto = (
     applyControlWord(word, parameter);
   }
 
-  // Whatever the writer left unterminated is still the document's text.
+  // EOF closes every open group. In particular, this restores the body
+  // paragraph held before an unterminated destination without promoting that
+  // destination's metadata or binary payload into it.
+  closeOpenGroups();
   const following = paragraph.following;
   const trailing = takeParagraph();
   if (trailing.content.length > 0) {
@@ -1219,11 +1261,99 @@ export const readRtf = (
   return {
     package: {
       document: { content: blocks },
-      ...(footnotes.length === 0 ? {} : { footnotes }),
+      footnotes,
     },
     ...(warnings.length === 0 ? {} : { warnings }),
   };
 };
+
+/**
+ * Read RTF exposed through a Unicode transport such as an HTML form field.
+ * The transport has already decoded literal non-ASCII characters, so encode
+ * them as RTF Unicode controls while leaving the source's byte escapes intact.
+ */
+const rtfBytesFromUnicodeTransport = (source: string): Uint8Array => {
+  const ascii: number[] = [];
+  const appendUnicodeUnit = (unit: number): void => {
+    const signed = unit > 0x7f_ff ? unit - 0x1_00_00 : unit;
+    // Scope `\uc1` with the escape: the surrounding document may select a
+    // different fallback width, but this transport-generated escape has one.
+    for (const escaped of `{\\uc1\\u${String(signed)}?}`) {
+      ascii.push(escaped.codePointAt(0) ?? 0);
+    }
+  };
+  // Split by UTF-16 unit: Unicode escapes and opaque counts include separate
+  // surrogate halves, even when the decoded transport contains astral text.
+  const units = Uint16Array.from(
+    source.split(""),
+    (unit) => unit.codePointAt(0) ?? 0,
+  );
+  const fallbackStack: number[] = [];
+  let fallbackCount = 1;
+  const copyOpaque = (start: number, end: number): void => {
+    for (let index = start; index < end; index += 1) {
+      const unit = units[index] ?? 0;
+      // These units are skipped by the reader. A decoded non-byte unit occupies
+      // one opaque byte slot; emitting Unicode syntax here would change the count.
+      ascii.push(unit <= 0xff ? unit : 0);
+    }
+  };
+  let cursor = 0;
+  while (cursor < units.length) {
+    const unit = units[cursor] ?? 0;
+    if (unit === 0x5c) {
+      const token = readControlWord(units, cursor + 1);
+      if (token.word !== null) {
+        copyOpaque(cursor, token.next);
+        cursor = token.next;
+        if (
+          token.word === "bin" &&
+          token.parameter !== undefined &&
+          token.parameter >= 0
+        ) {
+          const end = Math.min(units.length, cursor + token.parameter);
+          copyOpaque(cursor, end);
+          cursor = end;
+        } else if (token.word === "uc") {
+          fallbackCount = Math.max(token.parameter ?? 1, 0);
+        } else if (
+          token.word === "u" &&
+          token.parameter !== undefined &&
+          token.parameter >= -0x1_00_00 &&
+          token.parameter <= 0x10_ff_ff
+        ) {
+          const end = afterFallbackCharacters(units, cursor, fallbackCount);
+          copyOpaque(cursor, end);
+          cursor = end;
+        }
+        continue;
+      }
+      // Escaped backslashes and braces are symbols, not token/group boundaries.
+      if ([0x5c, 0x7b, 0x7d].includes(units[cursor + 1] ?? 0)) {
+        copyOpaque(cursor, cursor + 2);
+        cursor += 2;
+        continue;
+      }
+    }
+    if (unit === 0x7b) {
+      fallbackStack.push(fallbackCount);
+    } else if (unit === 0x7d) {
+      fallbackCount = fallbackStack.pop() ?? fallbackCount;
+    }
+    if (unit <= 0x7f) {
+      ascii.push(unit);
+    } else {
+      appendUnicodeUnit(unit);
+    }
+    cursor += 1;
+  }
+  return Uint8Array.from(ascii);
+};
+
+export const readRtfString = (
+  source: string,
+  options: ReadRtfOptions = {},
+): Document => readRtf(rtfBytesFromUnicodeTransport(source), options);
 
 /** Every RTF file opens with this; nothing else the publisher serves does. */
 const RTF_SIGNATURE = "{\\rtf";
