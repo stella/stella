@@ -19,7 +19,6 @@ import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { executeFlowStep, FlowStepError } from "@/api/lib/flows/flow-executor";
-import { FLOW_STEP_LEASE_MS } from "@/api/lib/flows/flow-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
@@ -57,7 +56,6 @@ if (!databaseUrl || !enabled) {
           const attemptedIds: ReturnType<typeof createSafeId<"entity">>[] = [];
           const launched: Promise<unknown>[] = [];
           let creations = 0;
-          let now = Date.now();
           const cleanupFailure = new HandlerError({
             status: 500,
             message: "Document cleanup failed",
@@ -170,7 +168,6 @@ if (!databaseUrl || !enabled) {
                     claimed.resolve(token);
                   },
                   admission: testModelAdmission(f.organizationId),
-                  now: () => new Date(now),
                   database: connection.db,
                   makeScopedDb: () =>
                     createScopedDb(
@@ -194,7 +191,6 @@ if (!databaseUrl || !enabled) {
                   panic("Document worker missed its first creation barrier"),
                 ),
               ]);
-              now += FLOW_STEP_LEASE_MS;
               launched.push(start(duplicate));
             }
             await Promise.race([
