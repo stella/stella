@@ -117,7 +117,7 @@ test("Stop in another tab cancels a detached turn and settles both viewers", asy
     await expect(
       page.getByRole("log").getByText(ANSWER_START, { exact: false }),
     ).toBeVisible();
-    const joins = [page, observer].map((viewer) =>
+    const joins = [page, observer].map(async (viewer) =>
       viewer.waitForResponse(
         (response) =>
           /\/turns\/[^/]+\/join/u.test(response.url()) &&

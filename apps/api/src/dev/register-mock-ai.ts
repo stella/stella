@@ -21,6 +21,7 @@ import { isMockAI } from "@/api/consts";
 import {
   MOCK_AI_CANCELLATION_MARKER,
   mockAiCancellationChunks,
+  mockAiCancellationSignal,
 } from "@/api/dev/mock-ai-cancellation";
 import {
   mockAiStreamKindChunks,
@@ -440,7 +441,7 @@ async function* createDocumentCallChunks({
   };
 }
 
-const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
+export const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
   kind: "text",
   name: "mock",
   model: modelId,
@@ -452,7 +453,8 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
     toolCallMetadata: {},
     systemPromptMetadata: undefined,
   },
-  async *chatStream({ model, runId, threadId, messages, abortSignal }) {
+  async *chatStream(options) {
+    const { model, runId, threadId, messages } = options;
     logger.debug("mock_ai.turn_answered", { "ai.model": model });
     const resolvedRunId = runId ?? "mock-run";
     const resolvedThreadId = threadId ?? "mock-thread";
@@ -592,7 +594,9 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
     } satisfies AdapterYieldChunk;
 
     if (latestUserText.includes(MOCK_AI_CANCELLATION_MARKER)) {
-      for await (const delta of mockAiCancellationChunks(abortSignal)) {
+      for await (const delta of mockAiCancellationChunks(
+        mockAiCancellationSignal(options),
+      )) {
         yield {
           type: EventType.TEXT_MESSAGE_CONTENT,
           messageId,

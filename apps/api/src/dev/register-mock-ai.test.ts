@@ -1,8 +1,13 @@
-import { convertSchemaToJsonSchema } from "@tanstack/ai";
+import { chat, convertSchemaToJsonSchema, EventType } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { mockStructuredData } from "@/api/dev/register-mock-ai";
+import { rejectionOf } from "@stll/property-testing/rejection";
+
+import {
+  createMockTextAdapter,
+  mockStructuredData,
+} from "@/api/dev/register-mock-ai";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import { toTanStackValibotSchema } from "@/api/lib/tanstack-ai-schema";
 
@@ -223,4 +228,29 @@ describe("mockStructuredData", () => {
       }),
     ).toThrow("mock AI adapter cannot synthesise structured output");
   });
+});
+
+test("the real SDK stops the cancellation fixture through its adapter signal", async () => {
+  const run = new AbortController();
+  const firstDelta = Promise.withResolvers<undefined>();
+  const deltas: string[] = [];
+  const stream = chat({
+    adapter: createMockTextAdapter("mock-cancellation"),
+    messages: [{ role: "user", content: "Stream until stopped please" }],
+    abortController: run,
+  });
+  const consume = async () => {
+    for await (const chunk of stream) {
+      if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
+        deltas.push(chunk.delta);
+        firstDelta.resolve(undefined);
+      }
+    }
+  };
+  const failure = rejectionOf(consume());
+  await firstDelta.promise;
+  const reason = new DOMException("Stopped", "AbortError");
+  run.abort(reason);
+  expect(await failure).toBe(reason);
+  expect(deltas).toEqual(["This mock reply streams back"]);
 });
