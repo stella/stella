@@ -8,13 +8,18 @@ import { RUNTIME_MODE } from "@stll/runtime-mode";
 import { SETTING_ORGANIZATION_ID, SETTING_USER_ID } from "@/api/db/rls";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import {
+  createMembershipScopedDb,
+  createScopedDb,
+  markRlsDatabase,
+} from "@/api/db/scoped";
 import { env } from "@/api/env";
 import enrolFeature from "@/api/handlers/organization-settings/feature-enrolments/enrol";
 import getFeatureEnrolments from "@/api/handlers/organization-settings/feature-enrolments/get";
 import unenrolFeature from "@/api/handlers/organization-settings/feature-enrolments/unenrol";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
+import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
@@ -35,6 +40,65 @@ const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 describe.skipIf(!runPostgresTests)(
   "feature enrolment ownership (postgres)",
   () => {
+    test("snapshot-less scopes admit invitation grants but exclude self-serve enrolments", async () => {
+      if (!databaseUrl) {
+        panic("DATABASE_URL required");
+      }
+      testState.setConfig("FEATURE_TIME_BILLING", true);
+      testState.setConfig("FEATURE_LEGAL_LISTS", true);
+      const restoreRuntimeMode = setRuntimeModeForTesting({
+        mode: RUNTIME_MODE.strict,
+      });
+      const organizationId = mintAuthProviderId<"organization">();
+      const userId = mintAuthProviderId<"user">();
+      testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
+        [LEGAL_LISTS_FEATURE_ID]: [{ type: "organization", organizationId }],
+      });
+      try {
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const { sql: client, db } = openClient();
+          try {
+            await client`INSERT INTO organization (id, name, slug, created_at) VALUES (${organizationId}, 'Enrolment organization', ${organizationId}, now())`;
+            await client`INSERT INTO "user" (id, name, email, email_verified) VALUES (${userId}, 'Enrolment user', ${`${userId}@example.test`}, true)`;
+            await client`INSERT INTO member (id, organization_id, user_id, role, created_at) VALUES (${Bun.randomUUIDv7()}, ${organizationId}, ${userId}, 'member', now())`;
+            await client`INSERT INTO feature_enrolments (user_id, organization_id, feature_id) VALUES (${userId}, ${organizationId}, 'time-billing')`;
+            const snapshot = await db.transaction(
+              async (tx) =>
+                await resolveFeatureAccessSnapshot({
+                  tx,
+                  organizationId,
+                  userId,
+                }),
+            );
+            expect(snapshot.decisions.get("time-billing")?.status).toBe(
+              "enabled",
+            );
+            await createMembershipScopedDb(markRlsDatabase(db), {
+              organizationId,
+              userId,
+              serverValidatedWorkspaceIds: [],
+            })(async (tx) => {
+              const scoped = (
+                await tx
+                  .select({
+                    featureIds: sql<
+                      string[]
+                    >`current_setting('app.enabled_features')::jsonb`,
+                  })
+                  .from(sql`(SELECT 1) AS feature_scope`)
+              ).at(0);
+              expect(scoped?.featureIds).toEqual([LEGAL_LISTS_FEATURE_ID]);
+            });
+          } finally {
+            await client`DELETE FROM organization WHERE id = ${organizationId}`;
+            await client`DELETE FROM "user" WHERE id = ${userId}`;
+          }
+        });
+      } finally {
+        restoreRuntimeMode();
+      }
+    });
+
     test("enrolments converge and every read and mutation isolates both the user and organization", async () => {
       if (!databaseUrl) {
         panic("DATABASE_URL required");
@@ -105,18 +169,21 @@ describe.skipIf(!runPostgresTests)(
             userId,
             expectedStatus,
           }: AssertFeatureParityOptions) => {
-            const callerDb = createScopedDb(
-              scopedDatabase,
-              [],
+            const snapshot = await db.transaction(
+              async (tx) =>
+                await resolveFeatureAccessSnapshot({
+                  tx,
+                  organizationId,
+                  userId,
+                }),
+            );
+            const callerDb = createMembershipScopedDb(scopedDatabase, {
               organizationId,
               userId,
-            );
+              serverValidatedWorkspaceIds: [],
+              featureAccessSnapshot: snapshot,
+            });
             await callerDb(async (tx) => {
-              const snapshot = await resolveFeatureAccessSnapshot({
-                tx,
-                organizationId,
-                userId,
-              });
               const scoped = (
                 await tx
                   .select({
