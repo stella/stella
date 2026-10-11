@@ -1,5 +1,9 @@
 name: Dependency Review
 
+defaults:
+  run:
+    shell: bash
+
 # Blocks PRs that introduce dependencies with known vulnerabilities
 # or copyleft licenses incompatible with Apache-2.0 distribution.
 #

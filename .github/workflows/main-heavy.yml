@@ -1,4 +1,8 @@
 name: Main heavy suites
+defaults:
+  run:
+    shell: bash
+
 run-name: "Main heavy suites ${{ inputs.sha || github.sha }}"
 
 on:
