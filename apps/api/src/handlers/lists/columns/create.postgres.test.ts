@@ -120,8 +120,13 @@ if (!databaseUrl || !runPostgres) {
             position,
           })),
         );
+        const auditedOperations: unknown[] = [];
         const baseContext = {
-          audit: auditRecorderDouble(),
+          audit: auditRecorderDouble((events) => {
+            auditedOperations.push(
+              ...events.map((event) => event.metadata?.["operation"]),
+            );
+          }),
           workspaceId,
           session: { activeOrganizationId: organizationId },
           user: { id: userId },
@@ -217,6 +222,8 @@ if (!databaseUrl || !runPostgres) {
           (result) => result instanceof ElysiaCustomStatusResponse,
         );
         expect(refused).toHaveLength(workers.length - 1);
+        // Only the admitted column is audited; refusals record nothing.
+        expect(auditedOperations).toEqual(["column_added"]);
         for (const refusal of refused) {
           expect(refusal.code).toBe(400);
           expect(refusal.response).toHaveProperty(

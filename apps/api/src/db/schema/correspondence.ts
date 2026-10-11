@@ -19,6 +19,10 @@ import {
   entityFeatureGateColumns,
 } from "../entity-feature-gate-columns";
 import {
+  REVIEW_RESET_ORGANIZATION_SETTING,
+  reviewResetOwnerPolicies,
+} from "../review-reset-policies";
+import {
   jsonb,
   organization,
   orgPolicies,
@@ -58,7 +62,7 @@ export const CORRESPONDENCE_ERASURE_SETTING = {
 } as const;
 
 export const CORRESPONDENCE_REVIEW_RESET_SETTING = {
-  organizationId: "app.correspondence_review_reset_organization_id",
+  organizationId: REVIEW_RESET_ORGANIZATION_SETTING,
 } as const;
 
 // Resolve the owner through the catalog because deployment login names differ.
@@ -127,6 +131,7 @@ export const correspondence = p.pgTable.withRLS(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...reviewResetOwnerPolicies("correspondence"),
     ...entityFeatureGateChecks(table),
     p
       .foreignKey({
@@ -236,6 +241,7 @@ export const correspondenceFilers = p.pgTable.withRLS(
     filedAt: timestamptz("filed_at").notNull().defaultNow(),
   },
   (table) => [
+    ...reviewResetOwnerPolicies("correspondence_filers"),
     ...entityFeatureGateChecks(table),
     p
       .foreignKey({
@@ -330,6 +336,7 @@ export const correspondenceAttachments = p.pgTable.withRLS(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...reviewResetOwnerPolicies("correspondence_attachments"),
     ...entityFeatureGateChecks(table),
     p
       .foreignKey({

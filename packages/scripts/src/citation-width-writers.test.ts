@@ -113,11 +113,12 @@ const declarations: Record<string, Declaration> = {
       reason:
         "metadata or document payload update; no citation identity assignment",
     },
-  "src/scripts/corpus-column-trim.ts:trimRow:orm-set-caseLawDecisions:1": {
-    disposition: "copy",
-    reason:
-      "metadata or document payload update; no citation identity assignment",
-  },
+  "src/scripts/corpus-column-trim.ts:trimColumnRow:orm-set-caseLawDecisions:1":
+    {
+      disposition: "copy",
+      reason:
+        "metadata or document payload update; no citation identity assignment",
+    },
   "src/scripts/backfill-corpus-storage.ts:apply:orm-set-caseLawDecisions:1": {
     disposition: "copy",
     reason:

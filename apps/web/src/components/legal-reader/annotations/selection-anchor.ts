@@ -90,28 +90,28 @@ const isChrome = (node: Node): boolean => {
   return isReaderChromeParent(element);
 };
 
-const textNodesOf = (root: Node): Text[] => {
+/** Text and explicit line breaks share the renderer's UTF-16 offset axis. */
+const blockWords = (root: Node): string => {
   const walker = root.ownerDocument?.createTreeWalker(
     root,
-    NodeFilter.SHOW_TEXT,
+    NodeFilter.SHOW_ALL,
   );
   if (walker === undefined) {
-    return [];
+    return "";
   }
-  const nodes: Text[] = [];
+  const words: string[] = [];
   for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
-    if (node instanceof Text && !isChrome(node)) {
-      nodes.push(node);
+    if (isChrome(node)) {
+      continue;
+    }
+    if (node instanceof Text) {
+      words.push(node.data);
+    } else if (node instanceof Element && node.tagName === "BR") {
+      words.push("\n");
     }
   }
-  return nodes;
+  return words.join("");
 };
-
-/** The block's words, in the order and form the offsets index. */
-const blockWords = (block: HTMLElement): string =>
-  textNodesOf(block)
-    .map((node) => node.data)
-    .join("");
 
 /**
  * Text offset of a DOM point within the block's words. A point on an element
@@ -125,10 +125,7 @@ const offsetWithin = (
   const beforeBoundary = block.ownerDocument.createRange();
   beforeBoundary.setStart(block, 0);
   beforeBoundary.setEnd(container, offset);
-  return textNodesOf(beforeBoundary.cloneContents()).reduce(
-    (total, node) => total + node.data.length,
-    0,
-  );
+  return blockWords(beforeBoundary.cloneContents()).length;
 };
 
 /**

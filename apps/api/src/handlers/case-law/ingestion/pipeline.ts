@@ -1,5 +1,6 @@
 import { Result, panic } from "better-result";
 
+import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import type { DocumentStageObserver } from "@stll/legal-atlas/document-fetch-diagnostics";
 import {
   INGESTION_STOP_KIND,
@@ -400,15 +401,18 @@ export const runIngestionPipeline = async ({
         deadline?.signal.aborted || pageSignal.aborted
           ? INGESTION_STOP_KIND.DEADLINE
           : observedPageResult.value.error.stopKind;
-      logger.error("case_law.ingestion.adapter_halted", {
-        adapterKey: adapter.key,
-        cursor: cursor ?? "",
-        httpStatus: String(observedPageResult.value.error.httpStatus ?? ""),
-        reason,
-        stopKind: pageStopKind,
-        inserted,
-        skipped,
-      });
+      logger.error(
+        "case_law.ingestion.adapter_halted",
+        sanitizeErrorAttributesForOutput({
+          adapterKey: adapter.key,
+          cursor: cursor ?? "",
+          httpStatus: String(observedPageResult.value.error.httpStatus ?? ""),
+          reason,
+          stopKind: pageStopKind,
+          inserted,
+          skipped,
+        }),
+      );
       return { type: "halt", reason, stopKind: pageStopKind } as const;
     }
     return observedPageResult.value;
