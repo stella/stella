@@ -18,6 +18,7 @@ import {
   noul,
   createSystemOneClient,
 } from "@/api/lib/workflow/decisions/system-one";
+import { failingDecisionGenerator } from "@/api/tests/helpers/decision-generator";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -258,6 +259,7 @@ describe("OpenAI Decisions boundary", () => {
       answers: [{ type: "refusal", name: "damaged" }, fixture.answers.at(1)],
     });
     const result = await decideMany({
+      generator: failingDecisionGenerator,
       id: "test.refusal",
       orgAIConfig: null,
       dataClass: "customer",
@@ -267,12 +269,14 @@ describe("OpenAI Decisions boundary", () => {
     });
     expect(result.decisions.damaged).toEqual({
       state: "undecided",
-      reason: "refusal",
+      reason: "failed",
       confidence: null,
+      source: "generative",
+      model: null,
     });
     expect(result.decisions.category.state).toBe("decided");
-    expect(recording.analytics.exceptions()).toHaveLength(0);
-    expect(recording.logs.records.at(-1)?.attributes).toMatchObject({
+    expect(recording.analytics.exceptions()).toHaveLength(1);
+    expect(recording.logs.records.at(0)?.attributes).toMatchObject({
       provider: "openai",
       floor: 0.8,
       usd: (42 * 0.11) / 1_000_000,
@@ -290,6 +294,7 @@ describe("OpenAI Decisions boundary", () => {
         ],
       });
       const result = await decideMany({
+        generator: failingDecisionGenerator,
         id: "test.floor",
         confidencePurpose: purpose,
         orgAIConfig: null,
@@ -300,8 +305,10 @@ describe("OpenAI Decisions boundary", () => {
       });
       expect(result.decisions.category).toEqual({
         state: "undecided",
-        reason: "below-floor",
-        confidence: 0.75,
+        reason: "failed",
+        confidence: null,
+        source: "generative",
+        model: null,
       });
       expect(decisionConfidenceFloor("uncalibrated-model", purpose)).toBe(0.8);
       expect(decisionConfidenceFloor("jev-1.13", purpose)).toBe(
@@ -526,6 +533,7 @@ test.each(["typesafe", "openai"] as const)(
       expect(serializedNames(asked.value.answers)).toEqual(names.toSorted());
     }
     const result = await decideMany({
+      generator: failingDecisionGenerator,
       id: "test.question-names",
       orgAIConfig: null,
       dataClass: "customer",
@@ -541,6 +549,7 @@ test.each(["typesafe", "openai"] as const)(
       ),
     ).toBe(true);
     const skipped = await decideMany({
+      generator: failingDecisionGenerator,
       id: "test.question-names",
       orgAIConfig: null,
       dataClass: "customer",
