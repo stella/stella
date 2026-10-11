@@ -11,6 +11,8 @@ import * as v from "valibot";
 import { applyUpdate, encodeStateAsUpdate } from "yjs";
 
 import {
+  folioCollabSnapshotLoadResponseSchema,
+  FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME,
   FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE,
   FOLIO_COLLAB_FLUSH_REQUEST_TYPE,
   FOLIO_COLLAB_FLUSH_RESPONSE_TYPE,
@@ -103,12 +105,6 @@ const refreshTokenResponseSchema = v.strictObject({
   generation: v.pipe(v.number(), v.integer(), v.minValue(0)),
   token: v.string(),
   tokenExpiresAt: v.string(),
-});
-
-const loadSnapshotResponseSchema = v.strictObject({
-  generation: v.pipe(v.number(), v.integer(), v.minValue(0)),
-  snapshotBase64: v.nullable(v.string()),
-  snapshotRevision: v.pipe(v.number(), v.integer(), v.minValue(0)),
 });
 
 const storeSnapshotResponseSchema = v.strictObject({
@@ -292,6 +288,34 @@ export const createCollabServer = async (
   const managedConnections = new Set<ManagedConnection>();
   const managedConnectionsByRequest = new Map<Request, ManagedConnection>();
   const managedConnectionsBySocketId = new Map<string, ManagedConnection>();
+  const tokenStatesBySocketId = new Map<string, CollabRoomTokenState>();
+  const closeResetRoomConnections = ({
+    roomName,
+    resetGeneration,
+  }: {
+    roomName: string;
+    resetGeneration: number;
+  }) => {
+    const closedSockets = new Set<ManagedWebSocketLike>();
+    for (const [socketId, tokenState] of tokenStatesBySocketId) {
+      if (
+        tokenState.roomName !== roomName ||
+        tokenState.generation !== resetGeneration
+      ) {
+        continue;
+      }
+      const connection = managedConnectionsBySocketId.get(socketId);
+      if (connection === undefined || closedSockets.has(connection.socket)) {
+        continue;
+      }
+      closedSockets.add(connection.socket);
+      connection.socket.close(
+        FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE,
+        ROOM_GENERATION_CLOSE_REASON,
+      );
+    }
+    clearRoomTokens(roomName, resetGeneration);
+  };
   const closeManagedConnectionsForRetry = (reason: string) => {
     for (const { socket } of managedConnections) {
       socket.close(FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE, reason);
@@ -482,14 +506,20 @@ export const createCollabServer = async (
     roomHeartbeatStates.delete(tokenState);
   };
 
-  const clearRoomTokens = (roomName: string) => {
+  const clearRoomTokens = (roomName: string, generation?: number) => {
     for (const tokenState of roomHeartbeatStates.keys()) {
-      if (tokenState.roomName === roomName) {
+      if (
+        tokenState.roomName === roomName &&
+        (generation === undefined || tokenState.generation === generation)
+      ) {
         clearRoomHeartbeat(tokenState);
       }
     }
     for (const [token, state] of tokenStates) {
-      if (state.roomName !== roomName) {
+      if (
+        state.roomName !== roomName ||
+        (generation !== undefined && state.generation !== generation)
+      ) {
         continue;
       }
       clearRoomTokenRefresh(state);
@@ -750,8 +780,28 @@ export const createCollabServer = async (
           authorizationToken: serviceToken,
           body: { roomId: snapshot.roomId },
           path: "/folio-collab-rooms/snapshot/load",
-          schema: loadSnapshotResponseSchema,
+          schema: folioCollabSnapshotLoadResponseSchema,
         });
+        switch (current.loadOutcome) {
+          case FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME.rematerializeFromDocx:
+            closeResetRoomConnections({
+              roomName: document.name,
+              resetGeneration: current.resetGeneration,
+            });
+            logCollabEvent({
+              event: "snapshot_refused_rematerialization",
+              generation: current.resetGeneration,
+              level: "warn",
+              roomId: snapshot.roomId,
+            });
+            throw error;
+          case FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME.loaded:
+            break;
+          default: {
+            current satisfies never;
+            return panic("Unhandled snapshot load outcome");
+          }
+        }
         if (current.generation !== snapshot.generation) {
           closeManagedRoomConnections(
             document.name,
@@ -866,6 +916,7 @@ export const createCollabServer = async (
         );
         managedConnection.socketIds.add(socketId);
         managedConnectionsBySocketId.set(socketId, managedConnection);
+        tokenStatesBySocketId.set(socketId, tokenState);
 
         return {
           roomId: authorized.roomId,
@@ -887,6 +938,7 @@ export const createCollabServer = async (
       if (context.tokenState.activeConnections === 0) {
         clearRoomHeartbeat(context.tokenState);
       }
+      tokenStatesBySocketId.delete(socketId);
       const managedConnection = managedConnectionsBySocketId.get(socketId);
       const connectionCount =
         managedConnection?.roomConnectionCounts.get(documentName);
@@ -938,8 +990,28 @@ export const createCollabServer = async (
           roomId: context.roomId,
         },
         path: "/folio-collab-rooms/snapshot/load",
-        schema: loadSnapshotResponseSchema,
+        schema: folioCollabSnapshotLoadResponseSchema,
       });
+      switch (result.loadOutcome) {
+        case FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME.rematerializeFromDocx:
+          closeResetRoomConnections({
+            roomName: documentName,
+            resetGeneration: result.resetGeneration,
+          });
+          logCollabEvent({
+            event: "snapshot_refused_rematerialization",
+            generation: result.resetGeneration,
+            level: "warn",
+            roomId: context.roomId,
+          });
+          return;
+        case FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME.loaded:
+          break;
+        default: {
+          result satisfies never;
+          return panic("Unhandled snapshot load outcome");
+        }
+      }
       context.tokenState.generation = result.generation;
       documentSnapshots.set(document, {
         generation: result.generation,
@@ -1002,6 +1074,7 @@ export const createCollabServer = async (
         managedConnectionsByRequest.delete(peer.request);
         for (const socketId of client.managedConnection.socketIds) {
           managedConnectionsBySocketId.delete(socketId);
+          tokenStatesBySocketId.delete(socketId);
         }
         clientConnections.delete(peer);
       },

@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import {
+  folioCollabSnapshotLoadResponseSchema,
   parseFolioCollabRoomName,
   toFolioCollabRoomName,
 } from "./folio-collab";
@@ -28,4 +30,33 @@ describe("Folio collaboration room names", () => {
   ])("rejects non-canonical room name %s", (roomName) => {
     expect(parseFolioCollabRoomName(roomName)).toBeNull();
   });
+});
+
+test("snapshot reset responses require the generation actually reset and no update", () => {
+  const reset = {
+    loadOutcome: "rematerialize-from-docx",
+    generation: 4,
+    resetGeneration: 3,
+    snapshotBase64: null,
+    snapshotRevision: 5,
+  };
+  expect(v.parse(folioCollabSnapshotLoadResponseSchema, reset)).toEqual(reset);
+  const { resetGeneration, ...withoutResetGeneration } = reset;
+  expect(
+    v.safeParse(folioCollabSnapshotLoadResponseSchema, withoutResetGeneration)
+      .success,
+  ).toBeFalse();
+  expect(
+    v.safeParse(folioCollabSnapshotLoadResponseSchema, {
+      ...reset,
+      snapshotBase64: "AQ==",
+    }).success,
+  ).toBeFalse();
+  expect(
+    v.safeParse(folioCollabSnapshotLoadResponseSchema, {
+      ...reset,
+      loadOutcome: "loaded",
+    }).success,
+  ).toBeFalse();
+  expect(resetGeneration).toBe(3);
 });

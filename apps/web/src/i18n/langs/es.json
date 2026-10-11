@@ -2898,6 +2898,7 @@
     "checkingDocxEditDescription": "stella sigue comprobando si este DOCX se puede editar de forma segura. Vuelve a intentarlo cuando el documento termine de cargarse.",
     "checkingDocxEditTitle": "Comprobando el documento",
     "chooseEvidence": "Elija un archivo para insertar una referencia de prueba numerada.",
+    "collaborationSnapshotRecovered": "No se pudo volver a abrir la copia de colaboración almacenada. La sala se restauró a partir del último documento guardado; es posible que se hayan perdido los cambios no guardados.",
     "comment": "Comentario",
     "comments": {
       "addPlaceholder": "Añadir comentario...",

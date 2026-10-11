@@ -2898,6 +2898,7 @@
     "checkingDocxEditDescription": "stella vēl pārbauda, vai šo DOCX var droši rediģēt. Mēģiniet vēlreiz, kad dokuments būs pilnībā ielādēts.",
     "checkingDocxEditTitle": "Pārbauda dokumentu",
     "chooseEvidence": "Izvēlieties failu, lai ievietotu numurētu pierādījuma atsauci.",
+    "collaborationSnapshotRecovered": "Saglabāto sadarbības kopiju nevarēja atvērt atkārtoti. Telpa tika atjaunota no pēdējā saglabātā dokumenta; nesaglabātās izmaiņas varēja tikt zaudētas.",
     "comment": "Komentārs",
     "comments": {
       "addPlaceholder": "Pievienot komentāru…",

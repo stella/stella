@@ -1,5 +1,9 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { Doc, XmlElement, XmlText, encodeStateAsUpdate } from "yjs";
+
+import { FOLIO_YJS_ATTR_SCHEMA_VERSION } from "@stll/folio-core/server";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
@@ -27,7 +31,7 @@ type QueryBuilder = {
 
 type QueryApi = {
   delete: () => QueryBuilder;
-  execute: () => Promise<void>;
+  execute: () => Promise<Row[]>;
   insert: () => QueryBuilder;
   select: () => QueryBuilder;
   update: () => QueryBuilder;
@@ -109,7 +113,7 @@ const scopedTransaction: QueryApi = {
     scopedDeleteCalls += 1;
     return createScopedQueryBuilder();
   },
-  execute: async () => undefined,
+  execute: async () => [],
   insert: () =>
     createScopedQueryBuilder({ captureValues: true, readsRows: false }),
   select: () => createScopedQueryBuilder(),
@@ -185,6 +189,29 @@ const snapshotKey = (fileId: string) =>
     organizationId,
     workspaceId,
   });
+
+const currentFolioSnapshot = () => {
+  const doc = new Doc();
+  doc
+    .getMap("folio:document-metadata")
+    .set("attrSchemaVersion", FOLIO_YJS_ATTR_SCHEMA_VERSION);
+  const update = encodeStateAsUpdate(doc);
+  doc.destroy();
+  return update;
+};
+
+const refusedFolioSnapshot = () => {
+  const doc = new Doc();
+  doc.getMap("folio:document-metadata").set("attrSchemaVersion", 11);
+  const paragraph = new XmlElement("paragraph");
+  const text = new XmlText();
+  text.insert(0, "1", { footnoteRef: { id: 1 } });
+  paragraph.insert(0, [text]);
+  doc.getXmlFragment("prosemirror").insert(0, [paragraph]);
+  const update = encodeStateAsUpdate(doc);
+  doc.destroy();
+  return update;
+};
 
 const validRow = (overrides: Row = {}): Row => ({
   entityId,
@@ -333,16 +360,19 @@ describe("folio collaboration room snapshot generation", () => {
     ];
     // Only the replacement object exists: the concurrent store published a
     // new pointer and removed the object the first pointer named.
+    const snapshot = currentFolioSnapshot();
     fake.put(
       envBase.S3_BUCKET,
       snapshotKey(nextSnapshotFileId),
-      "next",
+      snapshot,
       FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
     );
 
-    expect(await loadFolioCollabSnapshot(authorized.value)).toEqual({
+    const loaded = await loadFolioCollabSnapshot(authorized.value);
+    expect(loaded).toEqual({
       generation: 3,
-      snapshotBase64: "bmV4dA==",
+      loadOutcome: "loaded",
+      snapshotBase64: Buffer.from(snapshot).toString("base64"),
       snapshotRevision: 5,
     });
     // The store confirming the first key is gone is what sends the read back
@@ -351,6 +381,147 @@ describe("folio collaboration room snapshot generation", () => {
       `GET ${snapshotKey(yjsSnapshotFileId)}`,
       `GET ${snapshotKey(nextSnapshotFileId)}`,
     ]);
+  });
+
+  test.each(["loaded", "rematerialize-from-docx", "conflict"] as const)(
+    "recovery handles a concurrent replacement: %s",
+    async (replacementOutcome) => {
+      const authorized = await authorize(validRow());
+      expect(authorized.status).toBe("authorized");
+      if (authorized.status !== "authorized") {
+        throw new Error("Expected an authorized snapshot target");
+      }
+      const nextFileId = toSafeId<"userFile">("file_yjs_replacement");
+      const pointer = {
+        baseVersionId: toSafeId<"entityVersion">("ev_saved"),
+        generation: 3,
+        yjsSnapshotFileId,
+        yjsSnapshotRevision: 4,
+        yjsSnapshotUpdatedAt: new Date(),
+      };
+      const replacement =
+        replacementOutcome === "loaded"
+          ? currentFolioSnapshot()
+          : refusedFolioSnapshot();
+      scopedRows = [
+        [pointer],
+        [], // The first recovery CAS loses to the replacement writer.
+        [{ ...pointer, yjsSnapshotFileId: nextFileId, yjsSnapshotRevision: 5 }],
+      ];
+      switch (replacementOutcome) {
+        case "rematerialize-from-docx":
+          scopedRows.push([{ generation: 4 }]);
+          break;
+        case "conflict":
+          scopedRows.push([]);
+          break;
+        case "loaded":
+          break;
+      }
+      fake.put(
+        envBase.S3_BUCKET,
+        snapshotKey(yjsSnapshotFileId),
+        refusedFolioSnapshot(),
+        FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+      );
+      fake.put(
+        envBase.S3_BUCKET,
+        snapshotKey(nextFileId),
+        replacement,
+        FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+      );
+
+      if (replacementOutcome === "conflict") {
+        expect(
+          await rejectionOf(loadFolioCollabSnapshot(authorized.value)),
+        ).toMatchObject({
+          status: 503,
+          code: "folio_collab_snapshot_recovery_conflict",
+        });
+      } else {
+        expect(await loadFolioCollabSnapshot(authorized.value)).toEqual(
+          replacementOutcome === "loaded"
+            ? {
+                generation: 3,
+                loadOutcome: "loaded",
+                snapshotBase64: Buffer.from(replacement).toString("base64"),
+                snapshotRevision: 5,
+              }
+            : {
+                generation: 4,
+                resetGeneration: 3,
+                loadOutcome: "rematerialize-from-docx",
+                snapshotBase64: null,
+                snapshotRevision: 5,
+              },
+        );
+      }
+      expect(scopedRows).toEqual([]);
+      expect(
+        scopedInsertedRows.filter((row) => row["resourceId"] === roomId),
+      ).toHaveLength(replacementOutcome === "rematerialize-from-docx" ? 1 : 0);
+      expect(
+        scopedInsertedRows.flatMap((row) =>
+          typeof row["objectKey"] === "string" ? [row["objectKey"]] : [],
+        ),
+      ).toEqual(
+        replacementOutcome === "rematerialize-from-docx"
+          ? [snapshotKey(nextFileId)]
+          : [],
+      );
+      expect(
+        fake.requests.map(({ method, key }) => `${method} ${key}`),
+      ).toEqual([
+        `GET ${snapshotKey(yjsSnapshotFileId)}`,
+        `GET ${snapshotKey(nextFileId)}`,
+      ]);
+    },
+  );
+
+  test("a refused snapshot resets its own generation and retires only its object", async () => {
+    const authorized = await authorize(validRow());
+    if (authorized.status !== "authorized") {
+      throw new Error("Expected an authorized snapshot target");
+    }
+    scopedRows = [
+      [
+        {
+          baseVersionId: toSafeId<"entityVersion">("ev_saved"),
+          generation: 3,
+          yjsSnapshotFileId,
+          yjsSnapshotRevision: 4,
+          yjsSnapshotUpdatedAt: new Date(),
+        },
+      ],
+      [{ generation: 4 }],
+    ];
+    fake.put(
+      envBase.S3_BUCKET,
+      snapshotKey(yjsSnapshotFileId),
+      refusedFolioSnapshot(),
+      FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+    );
+
+    expect(await loadFolioCollabSnapshot(authorized.value)).toEqual({
+      generation: 4,
+      resetGeneration: 3,
+      loadOutcome: "rematerialize-from-docx",
+      snapshotBase64: null,
+      snapshotRevision: 4,
+    });
+    expect(
+      scopedInsertedRows.find((row) => row["resourceId"] === roomId),
+    ).toMatchObject({
+      changes: { generation: { old: 3, new: 4 } },
+      performerType: "service",
+      triggerType: "system",
+    });
+    expect(scopedRows).toEqual([]);
+    expect(
+      scopedInsertedRows.flatMap((row) =>
+        typeof row["objectKey"] === "string" ? [row["objectKey"]] : [],
+      ),
+    ).toEqual([snapshotKey(yjsSnapshotFileId)]);
   });
 
   test("rejects a store from a stale generation", () => {

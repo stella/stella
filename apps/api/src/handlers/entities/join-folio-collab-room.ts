@@ -51,6 +51,7 @@ type JoinFolioCollabRoomResponse = {
   generation: number;
   roomId: SafeId<"folioCollabRoom">;
   roomName: string;
+  snapshotRecovery: "none" | "unsaved-changes-discarded";
   seedDownloadUrl: string;
   shouldSeed: boolean;
   token: string;
@@ -287,6 +288,7 @@ const joinFolioCollabRoomHandler = async function* ({
           id: folioCollabRooms.id,
           seedClaimedAt: folioCollabRooms.seedClaimedAt,
           seedState: folioCollabRooms.seedState,
+          yjsSnapshotRevision: folioCollabRooms.yjsSnapshotRevision,
         })
         .from(folioCollabRooms)
         .where(
@@ -337,6 +339,7 @@ const joinFolioCollabRoomHandler = async function* ({
             id: folioCollabRooms.id,
             seedClaimedAt: folioCollabRooms.seedClaimedAt,
             seedState: folioCollabRooms.seedState,
+            yjsSnapshotRevision: folioCollabRooms.yjsSnapshotRevision,
           });
 
         await recordAuditEvent(tx, {
@@ -463,6 +466,7 @@ const joinFolioCollabRoomHandler = async function* ({
         shouldSeed,
         token,
         tokenExpiresAt,
+        yjsSnapshotRevision: room.yjsSnapshotRevision,
       } as const;
     }),
   );
@@ -488,6 +492,10 @@ const joinFolioCollabRoomHandler = async function* ({
     generation: joined.generation,
     roomId: joined.roomId,
     roomName: toFolioCollabRoomName(joined.roomId),
+    snapshotRecovery:
+      joined.shouldSeed && joined.yjsSnapshotRevision > 0
+        ? "unsaved-changes-discarded"
+        : "none",
     seedDownloadUrl,
     shouldSeed: joined.shouldSeed,
     token: joined.token,
