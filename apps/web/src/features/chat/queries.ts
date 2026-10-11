@@ -1,5 +1,10 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
-import type { DataTag, QueryClient, QueryKey } from "@tanstack/react-query";
+import type {
+  DataTag,
+  InvalidateQueryFilters,
+  QueryClient,
+  QueryKey,
+} from "@tanstack/react-query";
 import { panic } from "better-result";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
@@ -11,6 +16,7 @@ import {
 import type { ChatContextUsage } from "@/components/chat/chat-context-meter";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { sanitizeRunningToolCalls } from "@/components/chat/chat-ui-tools";
+import type { ActiveSkillChatContext } from "@/components/inspector/inspector-active-skill";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
@@ -100,6 +106,7 @@ const EMPTY_ATTACHED_FILES: ChatThreadAttachedFiles = {
 };
 
 type ThreadFetch = {
+  activeSkill: ActiveSkillChatContext | null;
   /** The thread's turn not yet settled; null when every turn has settled. */
   activeTurnId: SafeId<"chatTurn"> | null;
   attachedFiles: ChatThreadAttachedFiles;
@@ -170,6 +177,7 @@ const fetchThreadMessages = async (
 
   if (response.error && allowMissingThread && response.error.status === 404) {
     return {
+      activeSkill: null,
       activeTurnId: null,
       attachedFiles: EMPTY_ATTACHED_FILES,
       forkProvenance: { type: "none" },
@@ -190,6 +198,7 @@ const fetchThreadMessages = async (
 
   const data = unwrapEden(response);
   return {
+    activeSkill: data.activeSkill,
     activeTurnId: data.activeTurnId,
     attachedFiles: data.attachedFiles,
     forkProvenance: data.forkProvenance,
@@ -447,6 +456,7 @@ export const listChatHistoryItems = (
 };
 
 export type ChatThreadFetched = {
+  activeSkill: ActiveSkillChatContext | null;
   /**
    * The thread's turn not yet settled when this page was read, which the
    * composer's Stop cancels. Null when every turn has settled.
@@ -600,6 +610,7 @@ const seedFileThreadMessageCache = ({
       attachedFiles: fetched.attachedFiles,
       messages: sanitizeRunningToolCalls(fetched.messages),
       olderCursor: fetched.olderCursor,
+      activeSkill: null,
       contextMatterIds: fetched.contextMatterIds,
       lastActivityAt: fetched.lastActivityAt,
       threadRevision: fetched.threadRevision,
@@ -1197,18 +1208,23 @@ export const matchesChatThreadAcrossScopes = (
  * different cache key (the scope is part of the key), so the old
  * scope's entry would otherwise serve stale data on the next
  * visit. Scoped by `threadId` only because that's the durable
- * identity; scope+workspace are surface-bound.
+ * identity; scope+workspace are surface-bound. `refetchType: "none"`
+ * marks the entries stale without refetching a still-observed one, so a
+ * cache seed survives until the destination surface reads it.
  */
 export const invalidateChatThreadAcrossScopes = async ({
   queryClient,
+  refetchType,
   threadId,
 }: {
   queryClient: QueryClient;
+  refetchType?: InvalidateQueryFilters["refetchType"];
   threadId: ChatThreadId;
 }) =>
   await queryClient.invalidateQueries({
     predicate: (query) =>
       matchesChatThreadAcrossScopes(query.queryKey, threadId),
+    ...(refetchType === undefined ? {} : { refetchType }),
   });
 
 /**

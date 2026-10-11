@@ -56,6 +56,7 @@ type SharedProjectionDocument = {
 };
 
 type CaseLawProjectionDocument = SharedProjectionDocument & {
+  chunk_id?: string;
   anchor_id?: string;
   case_number: string;
   court: string;
@@ -250,12 +251,21 @@ export const buildCaseLawProjectionDocuments = ({
       ? null
       : stemCorpusText(publisher.summary.value, stemmed.language);
   const chunks = chunkDocument({ ast, fallbackText: payload.text });
+  const passageIdentity =
+    manifest.engine.indexConfig.doc_mapping.field_mappings.some(
+      ({ name }) => name === "chunk_id",
+    );
   const documents: CaseLawProjectionDocument[] = [];
   for (const chunk of chunks) {
     const textStem =
       stemmed === null ? null : stemCorpusText(chunk.text, stemmed.language);
     documents.push({
       ...shared,
+      // The manifest owns whether passages can be addressed independently;
+      // the revision clause keeps this stable sequence inside its applied copy.
+      ...(passageIdentity
+        ? { chunk_id: `${input.documentId}:${chunk.seq}` }
+        : {}),
       text: chunk.text,
       is_opening: chunk.seq === 0,
       ...(chunk.seq === 0 ? { title } : {}),

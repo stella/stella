@@ -75,6 +75,13 @@ export const createTestState = <Config extends object>({
   };
   const captureConfig = (key: PropertyKey) => {
     const descriptor = Object.getOwnPropertyDescriptor(config, key);
+    const restoreAccessor = (() => {
+      if (descriptor?.get === undefined || descriptor.set === undefined) {
+        return undefined;
+      }
+      const value: unknown = descriptor.get.call(config);
+      return () => descriptor.set?.call(config, value);
+    })();
     capture(typeof key === "symbol" ? key : `config:${String(key)}`, () => {
       const restored =
         descriptor === undefined
@@ -83,6 +90,7 @@ export const createTestState = <Config extends object>({
       if (!restored) {
         panic(`Could not restore test configuration key ${String(key)}`);
       }
+      restoreAccessor?.();
     });
   };
   const setEnv = (key: string, value: string) => {

@@ -17,6 +17,11 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/style-sets/replace.ts",
+  },
   contentDelivery: {
     type: "none",
     reason:
