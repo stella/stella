@@ -49,11 +49,15 @@ if (!databaseUrl || !runPostgresTests) {
       const sellerB = createSafeId<"sellerProfile">();
       const sellerC = createSafeId<"sellerProfile">();
       const archivedSeller = createSafeId<"sellerProfile">();
+      const scopedDb = createScopedDb(rlsDb, [], orgId, userId);
       cleanUp(async () => {
         // The seller FK restricts deletion; remove series before profiles.
-        await db
-          .delete(numberSeries)
-          .where(eq(numberSeries.organizationId, orgId));
+        await scopedDb(
+          async (tx) =>
+            await tx
+              .delete(numberSeries)
+              .where(eq(numberSeries.organizationId, orgId)),
+        );
         await db.delete(organization).where(eq(organization.id, orgId));
         await db.delete(user).where(eq(user.id, userId));
       });
@@ -75,21 +79,23 @@ if (!databaseUrl || !runPostgresTests) {
         role: "owner",
         createdAt: new Date(),
       });
-      await db.insert(sellerProfiles).values([
-        ...[sellerA, sellerB, sellerC].map((id) => ({
-          id,
-          organizationId: orgId,
-          legalName: id,
-          defaultCurrency: "EUR",
-        })),
-        {
-          id: archivedSeller,
-          organizationId: orgId,
-          legalName: archivedSeller,
-          defaultCurrency: "EUR",
-          archivedAt: new Date(),
-        },
-      ]);
+      await scopedDb(async (tx) => {
+        await tx.insert(sellerProfiles).values([
+          ...[sellerA, sellerB, sellerC].map((id) => ({
+            id,
+            organizationId: orgId,
+            legalName: id,
+            defaultCurrency: "EUR",
+          })),
+          {
+            id: archivedSeller,
+            organizationId: orgId,
+            legalName: archivedSeller,
+            defaultCurrency: "EUR",
+            archivedAt: new Date(),
+          },
+        ]);
+      });
       const contextFor = (database: GatedTestDb) => ({
         safeDb: createSafeDb(markRlsDatabase(database), [], orgId, userId),
         session: { activeOrganizationId: orgId },
@@ -118,16 +124,18 @@ if (!databaseUrl || !runPostgresTests) {
         pattern?: string;
       } = {}) => {
         const id = createSafeId<"numberSeries">();
-        await db.insert(numberSeries).values({
-          id,
-          organizationId: orgId,
-          documentType: "invoice",
-          name: id,
-          padding: 3,
-          sellerProfileId,
-          isDefault,
-          archivedAt,
-          pattern,
+        await scopedDb(async (tx) => {
+          await tx.insert(numberSeries).values({
+            id,
+            organizationId: orgId,
+            documentType: "invoice",
+            name: id,
+            padding: 3,
+            sellerProfileId,
+            isDefault,
+            archivedAt,
+            pattern,
+          });
         });
         return id;
       };
@@ -166,24 +174,30 @@ if (!databaseUrl || !runPostgresTests) {
           }),
         );
       const defaults = async () =>
-        await db.query.numberSeries.findMany({
-          where: {
-            organizationId: { eq: orgId },
-            isDefault: { eq: true },
-            archivedAt: { isNull: true },
-          },
-          columns: { id: true, sellerProfileId: true },
-          limit: 20,
-        });
+        await scopedDb(
+          async (tx) =>
+            await tx.query.numberSeries.findMany({
+              where: {
+                organizationId: { eq: orgId },
+                isDefault: { eq: true },
+                archivedAt: { isNull: true },
+              },
+              columns: { id: true, sellerProfileId: true },
+              limit: 20,
+            }),
+        );
       const stored = async () =>
-        await db
-          .select({
-            id: numberSeries.id,
-            isDefault: numberSeries.isDefault,
-            sellerProfileId: numberSeries.sellerProfileId,
-          })
-          .from(numberSeries)
-          .where(eq(numberSeries.organizationId, orgId));
+        await scopedDb(
+          async (tx) =>
+            await tx
+              .select({
+                id: numberSeries.id,
+                isDefault: numberSeries.isDefault,
+                sellerProfileId: numberSeries.sellerProfileId,
+              })
+              .from(numberSeries)
+              .where(eq(numberSeries.organizationId, orgId)),
+        );
       return {
         orgId,
         sellerA,
@@ -196,7 +210,7 @@ if (!databaseUrl || !runPostgresTests) {
         update,
         defaults,
         stored,
-        scopedDb: createScopedDb(rlsDb, [], orgId, userId),
+        scopedDb,
       };
     };
 
@@ -254,10 +268,13 @@ if (!databaseUrl || !runPostgresTests) {
         sellerProfileId: f.sellerA,
         isDefault: true,
       });
-      await db
-        .update(numberSeries)
-        .set({ isDefault: false, archivedAt: new Date() })
-        .where(eq(numberSeries.id, archived));
+      await f.scopedDb(
+        async (tx) =>
+          await tx
+            .update(numberSeries)
+            .set({ isDefault: false, archivedAt: new Date() })
+            .where(eq(numberSeries.id, archived)),
+      );
       const result = await f.scopedDb(
         async (tx) => await findDefaultNumberSeries(tx, "invoice", f.sellerA),
       );
@@ -271,10 +288,13 @@ if (!databaseUrl || !runPostgresTests) {
         const alternate = await f.insert({ sellerProfileId });
         const duplicate = await Result.tryPromise({
           try: async () =>
-            await db
-              .update(numberSeries)
-              .set({ isDefault: true })
-              .where(eq(numberSeries.id, alternate)),
+            await f.scopedDb(
+              async (tx) =>
+                await tx
+                  .update(numberSeries)
+                  .set({ isDefault: true })
+                  .where(eq(numberSeries.id, alternate)),
+            ),
           catch: (cause) => cause,
         });
         if (!duplicate.isErr()) {
@@ -458,10 +478,13 @@ if (!databaseUrl || !runPostgresTests) {
           },
         });
         expect(await f.update(alternate, scope)).toEqual({ id: alternate });
-        const moved = await db.query.numberSeries.findFirst({
-          where: { id: { eq: alternate } },
-          columns: { sellerProfileId: true, isDefault: true },
-        });
+        const moved = await f.scopedDb(
+          async (tx) =>
+            await tx.query.numberSeries.findFirst({
+              where: { id: { eq: alternate } },
+              columns: { sellerProfileId: true, isDefault: true },
+            }),
+        );
         expect(moved).toEqual({ sellerProfileId: scope, isDefault: false });
       }
       expect(await f.update(a, f.sellerA)).toEqual({ id: a });

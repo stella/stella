@@ -22,7 +22,7 @@ export const withFreshIndicatorDatabase = async (
     const database = `load_indicator_${suffix}`;
     const unrelatedRole = `load_unrelated_${suffix}`;
     await admin.unsafe(
-      `CREATE ROLE ${unrelatedRole} NOLOGIN NOSUPERUSER NOINHERIT`,
+      `CREATE ROLE ${unrelatedRole} NOLOGIN NOSUPERUSER NOBYPASSRLS NOINHERIT; GRANT ${unrelatedRole} TO CURRENT_USER WITH INHERIT TRUE, SET TRUE`,
     );
     try {
       await admin.unsafe(`CREATE DATABASE ${database} TEMPLATE template0`);
@@ -32,6 +32,9 @@ export const withFreshIndicatorDatabase = async (
         await withGatedTestClients(url.toString(), async (scope) => {
           // The lane fixture holds one connection while corpus work uses the other.
           const { sql: client, db } = scope.openClient({ max: 2 });
+          await client.unsafe(
+            `GRANT CREATE ON SCHEMA public TO ${unrelatedRole}`,
+          );
           const absent = (
             await client.unsafe<{ absent: boolean }[]>(
               "SELECT to_regprocedure('public.stella_database_load_indicators(regclass)') IS NULL AS absent",
@@ -56,7 +59,7 @@ export const withFreshIndicatorDatabase = async (
           await work({ client, db, migration, unrelatedRole });
         });
       } finally {
-        await admin.unsafe(`DROP DATABASE IF EXISTS ${database} WITH (FORCE)`);
+        await admin.unsafe(`DROP DATABASE IF EXISTS ${database}`);
       }
     } finally {
       await admin.unsafe(`DROP ROLE ${unrelatedRole}`);

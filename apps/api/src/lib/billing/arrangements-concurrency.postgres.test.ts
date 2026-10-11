@@ -11,7 +11,7 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
+import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -39,6 +39,12 @@ if (!databaseUrl || !runPostgres) {
       const organizationId = mintAuthProviderId<"organization">();
       const userId = mintAuthProviderId<"user">();
       const workspaceId = createSafeId<"workspace">();
+      const fixtureScoped = createScopedDb(
+        markRlsDatabase(firstDb),
+        [workspaceId],
+        organizationId,
+        userId,
+      );
       const record = createBackgroundAuditRecorder({
         organizationId,
         workspaceId,
@@ -75,14 +81,17 @@ if (!databaseUrl || !runPostgres) {
           reference: workspaceId,
         });
         await firstDb.insert(workspaceMembers).values({ workspaceId, userId });
-        await firstDb.insert(billingArrangements).values({
-          workspaceId,
-          organizationId,
-          mode: "hourly",
-          currency: "USD",
-          capAmount: cents(10_000),
-          alertThresholdBps: 8000,
-        });
+        await fixtureScoped(
+          async (tx) =>
+            await tx.insert(billingArrangements).values({
+              workspaceId,
+              organizationId,
+              mode: "hourly",
+              currency: "USD",
+              capAmount: cents(10_000),
+              alertThresholdBps: 8000,
+            }),
+        );
         await firstDb.insert(timeEntries).values({
           organizationId,
           workspaceId,
@@ -137,20 +146,26 @@ if (!databaseUrl || !runPostgres) {
             await firstDb
               .delete(auditLogs)
               .where(eq(auditLogs.workspaceId, workspaceId));
-            await firstDb
-              .update(billingArrangements)
-              .set({
-                thresholdState: "below",
-                capState: "below",
-                crossingSequence: 0,
-              })
-              .where(eq(billingArrangements.workspaceId, workspaceId));
+            await fixtureScoped(
+              async (tx) =>
+                await tx
+                  .update(billingArrangements)
+                  .set({
+                    thresholdState: "below",
+                    capState: "below",
+                    crossingSequence: 0,
+                  })
+                  .where(eq(billingArrangements.workspaceId, workspaceId)),
+            );
           },
           readState: async () =>
-            await firstDb
-              .select()
-              .from(billingArrangements)
-              .where(eq(billingArrangements.workspaceId, workspaceId)),
+            await fixtureScoped(
+              async (tx) =>
+                await tx
+                  .select()
+                  .from(billingArrangements)
+                  .where(eq(billingArrangements.workspaceId, workspaceId)),
+            ),
           invariant: async ({ outcomes, state }) => {
             invariantCalls += 1;
             expect(outcomes).toEqual({

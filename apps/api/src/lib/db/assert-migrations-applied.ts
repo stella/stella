@@ -26,8 +26,10 @@ import {
 const MIGRATIONS_DIR = nodePath.resolve(process.cwd(), "drizzle");
 const ESCAPE_HATCH_ENV = "SKIP_MIGRATION_CHECK";
 
-export const assertApplicationRlsRolePosture = async (): Promise<void> => {
-  const result = await rootDb.execute<ApplicationRlsRolePosture>(sql`
+export const assertApplicationRlsRolePosture = async (
+  database: typeof rootDb,
+): Promise<void> => {
+  const result = await database.execute<ApplicationRlsRolePosture>(sql`
     SELECT
       app_role.rolbypassrls AS "bypassesRls",
       pg_has_role(CURRENT_USER, app_role.oid, 'SET') AS "canAssumeRole",
@@ -102,7 +104,7 @@ const queryAppliedRows = async (): Promise<readonly AppliedMigration[]> => {
 };
 
 export const assertMigrationsApplied = async (): Promise<void> => {
-  await assertApplicationRlsRolePosture();
+  await assertApplicationRlsRolePosture(rootDb);
   await assertIngestionRolePosture();
   await reportDatabaseLoginPosture();
   if (process.env[ESCAPE_HATCH_ENV] === "true") {

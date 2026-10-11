@@ -12,7 +12,7 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
+import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import createAllowedSender from "@/api/handlers/organization-settings/correspondence/allowed-senders/create";
 import {
   assertUserIsNotSoleOrgOwner,
@@ -261,10 +261,20 @@ if (!databaseUrl || !runPostgresTests) {
             ]);
             const snapshots =
               writerKind === "filing"
-                ? await writerDb
-                    .select({ display: correspondenceFilers.filedByDisplay })
-                    .from(correspondenceFilers)
-                    .where(eq(correspondenceFilers.filedByUserId, userId))
+                ? await createScopedDb(
+                    markRlsDatabase(writerDb),
+                    [workspaceId],
+                    organizationId,
+                    remainingOwnerId,
+                  )(
+                    async (tx) =>
+                      await tx
+                        .select({
+                          display: correspondenceFilers.filedByDisplay,
+                        })
+                        .from(correspondenceFilers)
+                        .where(eq(correspondenceFilers.filedByUserId, userId)),
+                  )
                 : await writerDb
                     .select({
                       display: correspondenceAllowedSenders.approvedByDisplay,

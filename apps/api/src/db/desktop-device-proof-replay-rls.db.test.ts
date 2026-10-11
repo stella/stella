@@ -32,6 +32,9 @@ describe.skipIf(!enabled)("desktop device proof replay row security", () => {
         await client.unsafe(
           `CREATE ROLE ${reader} NOLOGIN NOSUPERUSER NOBYPASSRLS`,
         );
+        await client.unsafe(
+          `GRANT ${owner}, ${reader} TO CURRENT_USER WITH INHERIT TRUE, SET TRUE`,
+        );
         await client.unsafe(`SET LOCAL search_path TO ${schema}, public`);
         const rewrittenMigration = migration.replaceAll(
           "public.desktop_device_proof_replays",
@@ -46,7 +49,7 @@ describe.skipIf(!enabled)("desktop device proof replay row security", () => {
         }
 
         await client.unsafe(
-          `GRANT USAGE ON SCHEMA ${schema} TO ${owner}, ${reader}`,
+          `GRANT USAGE ON SCHEMA ${schema} TO ${owner}, ${reader}; GRANT CREATE ON SCHEMA ${schema} TO ${owner}`,
         );
         await client.unsafe(
           `ALTER TABLE ${schema}.desktop_device_proof_replays OWNER TO ${owner}`,

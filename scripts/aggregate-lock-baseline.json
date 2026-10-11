@@ -480,12 +480,6 @@
     "reason": "transaction-boundary in apps/api/scripts/seed-matter-activity.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },
   {
-    "file": "apps/api/scripts/seed-route-smoke-correspondence.ts",
-    "fingerprint": "7200696b87255fd65b1d7fd03890142d513aeed2a250f88cdfd18dd1a6a7a326",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/seed-route-smoke-correspondence.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
     "file": "apps/api/scripts/seed-templates.ts",
     "fingerprint": "0086ce30ef0dd613e9d206797d94a1ba5f9c7b4018e529500aa3d80bcf60d946",
     "count": 1,

@@ -36,6 +36,9 @@ describe.skipIf(!enabled)("maintenance checkpoint row security", () => {
         await client.unsafe(
           `CREATE ROLE ${reader} NOLOGIN NOSUPERUSER NOBYPASSRLS`,
         );
+        await client.unsafe(
+          `GRANT ${owner}, ${reader} TO CURRENT_USER WITH INHERIT TRUE, SET TRUE`,
+        );
         await client.unsafe(`SET LOCAL search_path TO ${schema}, public`);
         for (const statement of migration
           .replaceAll(
@@ -52,10 +55,10 @@ describe.skipIf(!enabled)("maintenance checkpoint row security", () => {
         );
         expect(posture.at(0)).toEqual({ enabled: true, forced: true });
         await client.unsafe(
-          `ALTER TABLE database_backfill_states OWNER TO ${owner}`,
+          `GRANT USAGE ON SCHEMA ${schema} TO ${owner}, ${reader}; GRANT CREATE ON SCHEMA ${schema} TO ${owner}`,
         );
         await client.unsafe(
-          `GRANT USAGE ON SCHEMA ${schema} TO ${owner}, ${reader}`,
+          `ALTER TABLE database_backfill_states OWNER TO ${owner}`,
         );
         await client.unsafe(
           `GRANT SELECT, INSERT, UPDATE, DELETE ON database_backfill_states TO ${reader}`,
