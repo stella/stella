@@ -20,6 +20,7 @@ import {
   getOutputTokenLimit,
   TANSTACK_AI_PROVIDERS,
 } from "@stll/ai-catalog";
+import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
 import type { AnalysisGenerating } from "@stll/legal-ast/analysis";
 import type { DocumentAst, ParagraphBlock } from "@stll/legal-ast/document-ast";
 
@@ -41,11 +42,14 @@ import {
 } from "@/api/lib/case-law/analysis-failure";
 import { createDbAnalysisStore } from "@/api/lib/case-law/analysis-store-core";
 import { analysisSentinel } from "@/api/lib/case-law/stored-analysis";
+import { createProviderCallError } from "@/api/lib/errors/provider-call-failure";
+import { registerProviderDiagnosticCredentials } from "@/api/lib/errors/redacted-provider-diagnostic";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import type { DetachedModelActionStarter } from "@/api/lib/rate-limit/model-action-admission";
 import { admitFixtureModelDispatch } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { outputTokensWithinModelLimit } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
+import { PROVIDER_SETUP_ERROR_FIXTURES } from "@/api/tests/fixtures/provider-setup-errors";
 import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -117,12 +121,12 @@ const VALID_ANSWER = {
 };
 
 /** How the faked provider answers one run. */
-type ProviderAnswer = "cut-off" | "valid" | "never";
+type ProviderAnswer = "cut-off" | "valid" | "never" | "refused";
 
 const PROVIDER_RUN = { runId: "run-1", threadId: "thread-1" } as const;
 
 const answerChunks = async function* (
-  answer: ProviderAnswer,
+  answer: Exclude<ProviderAnswer, "refused">,
   signal: AbortSignal | undefined,
 ): AsyncIterable<StreamChunk> {
   yield { type: EventType.RUN_STARTED, ...PROVIDER_RUN };
@@ -205,6 +209,22 @@ const fakeGoogle = (answers: ProviderAnswer[]) => {
       if (answer === undefined) {
         return panic("An unexpected provider run");
       }
+      if (answer === "refused") {
+        throw createProviderCallError({
+          model,
+          status: 403,
+          evidence: {
+            status: 403,
+            error: {
+              ...PROVIDER_SETUP_ERROR_FIXTURES[
+                PROVIDER_SETUP_ERROR_CODE.googleApiNotEnabled
+              ].error,
+              message:
+                "API not enabled for opaque-fixture-credential and sk-fixture-key",
+            },
+          },
+        });
+      }
       return answerChunks(
         answer,
         options.chatOptions.request?.signal ?? undefined,
@@ -220,6 +240,7 @@ const fakeGoogle = (answers: ProviderAnswer[]) => {
     modelOptions: {},
     provider: "google",
   } as ResolvedTanStackTextModel;
+  registerProviderDiagnosticCredentials(model, ["opaque-fixture-credential"]);
   return { model, requests, remaining: () => answers.length };
 };
 
@@ -377,6 +398,58 @@ describe("a failed analysis run", () => {
       expect(poll.starts).toBe(0);
     });
   }
+
+  test("a provider refusal persists its redacted diagnostic until retry or a provider change", async () => {
+    const decisionId = await insertDecision();
+    const google = fakeGoogle(["refused", "valid"]);
+    await read({ decisionId, model: google.model });
+    const expectedDiagnostic = {
+      provider: "google",
+      code: PROVIDER_SETUP_ERROR_CODE.googleApiNotEnabled,
+      message: "API not enabled for [redacted-secret] and [redacted-secret]",
+    };
+    const persisted = await db
+      .select()
+      .from(caseLawAnalysisFailures)
+      .where(eq(caseLawAnalysisFailures.decisionId, decisionId));
+    expect(persisted.at(0)?.providerDiagnostic).toEqual(expectedDiagnostic);
+    expect(JSON.stringify(persisted)).not.toContain(
+      "opaque-fixture-credential",
+    );
+    expect(JSON.stringify(persisted)).not.toContain("sk-fixture-key");
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const held = await read({ decisionId, model: google.model });
+      expect(held.starts).toBe(0);
+      expect(held.response).toMatchObject({
+        status: "error",
+        code: "failed",
+        key: { source: "organization", provider: "google" },
+        providerDiagnostic: expectedDiagnostic,
+      });
+    }
+    const retried = await read({
+      decisionId,
+      model: google.model,
+      retry: true,
+    });
+    expect(retried.starts).toBe(1);
+    expect(
+      (await read({ decisionId, model: google.model })).response.status,
+    ).toBe("done");
+
+    const changedDecision = await insertDecision();
+    await read({
+      decisionId: changedDecision,
+      model: fakeGoogle(["refused"]).model,
+    });
+    const switched = await read({
+      decisionId: changedDecision,
+      model: fakeGoogle(["valid"]).model,
+      orgAIConfig: anthropicKey,
+    });
+    expect(switched.starts).toBe(1);
+  });
 
   test("an answer cut off on the organization's own key is recorded, told, and not run again by polling", async () => {
     const decisionId = await insertDecision();

@@ -110,6 +110,12 @@
       "path": "0:0:0:0:0:0",
       "note": "Regression coverage",
       "date": "2026-10-07"
+    },
+    {
+      "seed": 20260901,
+      "path": "1:0:1:0:0:0",
+      "note": "Typecheck parity guard models required producer output for both selection outcomes",
+      "date": "2026-10-11"
     }
   ]
 }

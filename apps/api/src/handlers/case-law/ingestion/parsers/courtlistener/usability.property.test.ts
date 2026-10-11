@@ -138,7 +138,7 @@ const classificationBlock = fc.oneof(
   ruling.map((text) => ({ type: "ruling" as const, text })),
 );
 
-test("ruling paragraphs cannot become part of an author name", () => {
+test("courtlistener-author-name-never-consumes-ruling-paragraph", () => {
   assertProperty(
     "courtlistener-author-name-never-consumes-ruling-paragraph",
     fc.property(

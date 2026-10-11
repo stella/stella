@@ -1927,6 +1927,7 @@ type Messages = {
     "noResults": "No results";
     "noVersions": "No version history";
     "none": "None";
+    "notStated": "Not stated";
     "notes": "Notes";
     "open": "Open";
     "openInNewTab": "Open in new tab";
@@ -1996,6 +1997,7 @@ type Messages = {
     "sort": "Sort";
     "source": "Source";
     "stale": "Stale";
+    "start": "Start";
     "status": "Status";
     "stepCount": "{count, plural, one {# step} other {# steps}}";
     "stepProgress": "{current} of {total}";
@@ -2810,7 +2812,6 @@ type Messages = {
       };
       "selectFlow": "Choose a workflow";
       "sizeConfirmTitle": "Large flow run";
-      "start": "Start";
       "startFailed": "Couldn't start the workflow.";
       "started": "Workflow started";
       "stepProgress": "Step {current} of {total}";
@@ -3028,7 +3029,6 @@ type Messages = {
     "action": {
       "replay": "Start again";
       "skip": "Skip";
-      "start": "Start";
     };
     "checklist": {
       "progress": "{completed} of {total} complete";
@@ -3708,6 +3708,10 @@ type Messages = {
         "nameMissing": "Not saved: add a name";
         "positionsNeedAttention": "Not saved: {count, plural, one {# position needs} other {# positions need}} attention";
       };
+      "buildWithAi": {
+        "description": "Answer a few questions in a chat and the playbook is saved as you go.";
+        "title": "Build with AI";
+      };
       "check": "Use an exact rule instead of AI";
       "checkHint": "For measurable conditions, such as payment term ≤ 30 days.";
       "checkKind": {
@@ -4158,6 +4162,10 @@ type Messages = {
     "aiConfig": {
       "addProvider": "Add provider";
       "addProviderFirst": "Add a provider first";
+      "anthropicKeyDisabled": "Create an active API key in Anthropic Console and replace this key.";
+      "anthropicNoCredits": "Add API credits in Anthropic Console billing, then retry.";
+      "anthropicOrganizationRestricted": "Ask your Anthropic organization administrator to grant access, or use a key from an allowed organization.";
+      "anthropicSubscriptionToken": "Use an API key created in Anthropic Console instead of a Claude subscription token.";
       "anthropicWorkspaceId": "Workspace ID";
       "anthropicWorkspaceRequired": "This Anthropic key needs a workspace. Enter its Workspace ID from Anthropic Console, then save again.";
       "anthropicWorkspaces": "Open Anthropic Workspaces";
@@ -4166,7 +4174,9 @@ type Messages = {
       "apiKeyPlaceholder": "Enter your API key";
       "apiKeySaved": "Saved key {key}";
       "apiKeyUpdatePlaceholder": "Enter new key to update";
+      "azureModelNotEnabled": "Check that the model deployment exists in the selected Azure resource and region, and that this key can access it.";
       "baseUrl": "Base URL";
+      "bedrockModelNotEnabled": "Check model availability in the selected AWS region, model access and your IAM permissions. Enable or choose an accessible model, then retry.";
       "chooseModelsSubtitle": "Pick a model for each role. Prices update on the right.";
       "chooseModelsTitle": "Choose models";
       "configure": "Configure";
@@ -4197,6 +4207,8 @@ type Messages = {
       "editProviders": "Edit providers";
       "endpoint": "Endpoint";
       "endpointDescription": "Use the Azure OpenAI or Azure Foundry /openai/v1 endpoint. stella stores the normalized endpoint.";
+      "googleApiNotEnabled": "Enable the Generative Language API in the Google Cloud project that owns this key, then retry.";
+      "googleKeyRestricted": "Check this key’s API, IP address and referrer restrictions in Google Cloud. Allow the required API and your server’s requests, then retry.";
       "keepSavedKey": "Keep saved key";
       "keyFormatHint": "This key has an unusual format for {provider}. Save to check it with the provider.";
       "modelForRole": "{role} model";
@@ -4206,6 +4218,9 @@ type Messages = {
       "newApiKey": "New API key";
       "newApiKeyDescription": "This will replace the saved key when you save changes.";
       "noModelResults": "No matching offered models";
+      "openaiInsufficientQuota": "Check your OpenAI project budget and API billing. Add credits or raise the applicable limit, then retry.";
+      "openaiProjectOrganizationMismatch": "Use an API key from the intended OpenAI project and organization. Check their access settings, then retry.";
+      "openrouterNoCredits": "Add credits in OpenRouter billing, then retry.";
       "overrideRoles": "Override roles";
       "overrideRolesDescription": "Choose which roles use this key, then choose a model for each role. Unselected roles use the platform default.";
       "prices": {
@@ -4225,6 +4240,7 @@ type Messages = {
       "providerForRole": "{role} provider";
       "providerKeyInvalid": "{provider} rejected the key. Double-check it before saving.";
       "providerKeyInvalidShort": "Invalid";
+      "providerSetupConsole": "Open provider settings";
       "providersDescription": "Add the provider credentials you want stella to use.";
       "providersPanel": "Providers";
       "removeLastProviderConfirm": "Remove {provider}? This also resets the custom AI model choices.";

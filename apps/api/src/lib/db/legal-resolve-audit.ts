@@ -23,7 +23,6 @@ export type LegalResolveAudit = {
     | LegalResolveResponse["status"]
     | "rate_limited"
     | "missing_scope"
-    | "not_entitled"
     | "invalid_request"
     | "error";
 };
