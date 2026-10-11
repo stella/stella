@@ -35,7 +35,10 @@ import type { UsageEventLane } from "@/api/db/schema";
 import type { AnonymizationRefusal } from "@/api/handlers/chat/anonymization-refusal";
 import { refuseAnonymizedCrossing } from "@/api/handlers/chat/anonymization-refusal";
 import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-modality";
-import { chunkCarriesAnswer } from "@/api/handlers/chat/attempt-answer";
+import {
+  chunkCarriesAnswer,
+  snapshotMessageAddsAnswer,
+} from "@/api/handlers/chat/attempt-answer";
 import {
   applyChatPartPersistenceBudget,
   attachTerminalTurnOutcome,
@@ -2643,16 +2646,17 @@ export const processServerChatStream = async function* ({
 }: ProcessServerChatStreamProps): AsyncIterable<PublicStreamChunk> {
   const deferredRunFinishedChunks: PublicStreamChunk[] = [];
   const runState = { cancelled: false };
-  const partProvenance = new SnapshotPartReconciler(
-    initialMessages.find(
-      ({ id }) => id === mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
-    )?.parts ?? [],
+  const responseMessageId = mapMessageId(
+    ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL,
   );
-  // Whether the run streamed an answer (`chunkCarriesAnswer`): the one
-  // measure of an empty run, read here from the chunks the persistence
-  // processor is fed and in the attempt middleware from the chunks the model
-  // sends. A continuation's message already holds the call the user
-  // answered; the chunks hold only what this run added.
+  const initialResponseMessage = initialMessages.find(
+    ({ id }) => id === responseMessageId,
+  );
+  const partProvenance = new SnapshotPartReconciler(
+    initialResponseMessage?.parts ?? [],
+  );
+  // Source deltas or new content in an explicit UI snapshot establish an
+  // answer. Continuation history alone cannot make an empty run successful.
   let producedAnswer = false;
   const rawArgumentsByIncompleteToolCallId = new Map<string, string>();
   const toolCallsWithCompleteInput = new Set<string>();
@@ -2745,7 +2749,7 @@ export const processServerChatStream = async function* ({
         return;
       }
       const processed = processPersistenceChunk({
-        responseMessageId: mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
+        responseMessageId,
         sourceChunk,
         deferredRunFinishedChunks,
         processor,
@@ -2761,6 +2765,22 @@ export const processServerChatStream = async function* ({
         continue;
       }
       const { chunk, lifecycle, resumeChunks } = processed;
+      if (
+        sourceChunk.type === EventType.MESSAGES_SNAPSHOT &&
+        sourceChunk.messages.some(
+          (message) => message.id === responseMessageId && "parts" in message,
+        )
+      ) {
+        const message = processor
+          .getMessages()
+          .find(({ id }) => id === responseMessageId);
+        if (message !== undefined) {
+          producedAnswer ||= snapshotMessageAddsAnswer({
+            message,
+            initial: initialResponseMessage,
+          });
+        }
+      }
       yield* resumeChunks;
       if (lifecycle === "failed") {
         const failure = failedRunDetails({ chunk, sourceChunk });
