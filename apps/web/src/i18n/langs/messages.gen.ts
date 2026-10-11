@@ -1927,6 +1927,7 @@ type Messages = {
     "noResults": "No results";
     "noVersions": "No version history";
     "none": "None";
+    "notStated": "Not stated";
     "notes": "Notes";
     "open": "Open";
     "openInNewTab": "Open in new tab";
