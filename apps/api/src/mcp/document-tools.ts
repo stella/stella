@@ -1528,7 +1528,7 @@ const handleReadDocumentTool: TypedMcpToolHandler<
     entityId: current.entityId,
     kind: current.kind,
     name: current.name,
-    updatedAt: current.updatedAt.toISOString(),
+    updatedAt: current.updatedAt?.toISOString() ?? null,
     fields: current.fields,
     contentState: processingStates.contentState,
     searchIndexState: processingStates.searchIndexState,
