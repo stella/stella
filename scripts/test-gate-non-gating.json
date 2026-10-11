@@ -180,6 +180,11 @@
     "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
   },
   {
+    "file": "apps/web/e2e/specs/lists-granted.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+  },
+  {
     "file": "apps/web/e2e/specs/matter-color-picker.spec.ts",
     "owningWorkflow": ".github/workflows/ci.yml",
     "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"

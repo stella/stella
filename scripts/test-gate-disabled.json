@@ -62,6 +62,7 @@
     "apps/api/src/handlers/legislation/applicability.db.test.ts::withdrawn: it is never a Work's default",
     "apps/api/src/handlers/legislation/work-name-backfill.postgres.test.ts::legislation work-name backfill locking (postgres)",
     "apps/api/src/handlers/lists/columns/create.postgres.test.ts::list column admission on PostgreSQL",
+    "apps/api/src/handlers/lists/items/fact-details/update.postgres.test.ts::fact detail nullable confidence on PostgreSQL",
     "apps/api/src/handlers/playbooks/document-type-reference.postgres.test.ts::playbook document type references on Postgres",
     "apps/api/src/handlers/rates/default-concurrency.postgres.test.ts::rate default serialization (postgres)",
     "apps/api/src/handlers/search-history/entries.postgres.test.ts::search history (postgres)",
