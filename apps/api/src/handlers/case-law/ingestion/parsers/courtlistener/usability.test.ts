@@ -28,12 +28,17 @@ describe("CourtListener short text usability", () => {
       "Case: 24-12345 Date Filed: 01/01/2024 Page: 1 of 2\n\nOffice of the Attorney General",
       "no-ruling-text",
     ],
-    [
-      "Mr. Justice Zqvrvv\n\ndelivered the opinion of the court.",
-      "no-ruling-text",
-    ],
+    ["Mr. Justice Zqvrvv\n\ndelivered the opinion of the court.", "usable"],
     [
       "Mr. Justice Zqvrvv\n\nUnable to extract document content\n\ndelivered the opinion of the court.",
+      "usable",
+    ],
+    [
+      "Office of the Attorney General\nThis opinion has been withdrawn.\n\nOpinion #C-729",
+      "source-placeholder",
+    ],
+    [
+      "This opinion has been withdrawn.\nOffice of the Attorney General\n\nOpinion #C-729",
       "source-placeholder",
     ],
   ] satisfies [string, CourtListenerTextUsability][])(
@@ -47,20 +52,35 @@ describe("CourtListener short text usability", () => {
   );
 
   test.each([
-    "Case: 24-12345 Date Filed: 01/01/2024 Page: 1 of 2\n\nCase: 24-12345 Date Filed: 01/01/2024 Page: 2 of 2",
-    "Case: 24-12345 Date Filed: 01/01/2024 Page: 1 of 2\nOffice of the Attorney General\nUnited States Court of Appeals for the Second Circuit",
-    "Case: 24-12345\nDate Filed: 01/01/2024 Page: 1 of 2\n\nCase: 24-12345\nDate Filed: 01/01/2024 Page: 2 of 2",
-    "Office of the attoheey general\n\n.\n\n. .",
-    "Opinion by\n\nJustice Zqlrv.\n\nNot to be published in full.",
-    "In the Zqykvv Zqbkvv Court of Appeals\n\nfor the Eleventh Circuit",
-    "9999 qx super 99u\n\n99s9s9999",
-    "J\nanu\n\nary99,999\n\n9",
-  ])("multiple metadata blocks contain no ruling: %s", (body) => {
-    expect(classifyCourtListenerText(body)).toBe("no-ruling-text");
-    expect(classifyCourtListenerText(`${body}\n\nThe order is vacated.`)).toBe(
+    [
+      "Case: 24-12345 Date Filed: 01/01/2024 Page: 1 of 2\n\nCase: 24-12345 Date Filed: 01/01/2024 Page: 2 of 2",
+      "no-ruling-text",
+    ],
+    [
+      "Case: 24-12345 Date Filed: 01/01/2024 Page: 1 of 2\nOffice of the Attorney General\nUnited States Court of Appeals for the Second Circuit",
+      "no-ruling-text",
+    ],
+    [
+      "Case: 24-12345\nDate Filed: 01/01/2024 Page: 1 of 2\n\nCase: 24-12345\nDate Filed: 01/01/2024 Page: 2 of 2",
+      "no-ruling-text",
+    ],
+    ["Office of the attoheey general\n\n.\n\n. .", "no-ruling-text"],
+    ["Opinion by\n\nJustice Zqlrv.\n\nNot to be published in full.", "usable"],
+    [
+      "In the Zqykvv Zqbkvv Court of Appeals\n\nfor the Eleventh Circuit",
       "usable",
-    );
-  });
+    ],
+    ["9999 qx super 99u\n\n99s9s9999", "no-ruling-text"],
+    ["J\nanu\n\nary99,999\n\n9", "usable"],
+  ] satisfies [string, CourtListenerTextUsability][])(
+    "classifies whole metadata blocks without crossing paragraphs: %s",
+    (body, expected) => {
+      expect(classifyCourtListenerText(body)).toBe(expected);
+      expect(
+        classifyCourtListenerText(`${body}\n\nThe order is vacated.`),
+      ).toBe("usable");
+    },
+  );
   test("recognizes filing metadata with whitespace-only separators", () => {
     expect(
       classifyCourtListenerText(
@@ -138,12 +158,56 @@ describe("CourtListener short text usability", () => {
     },
   );
 
-  test("does not treat delivery metadata as an explicit ruling", () => {
+  test("keeps an author introduction split across blocks as candidate text", () => {
     expect(
       classifyCourtListenerText(
         "Mr. Justice Zqlrv.\n\ndelivered the opinion of the court.\n\nThis opinion has been withdrawn.\n\nOpinion #C-729",
       ),
-    ).toBe("source-placeholder");
+    ).toBe("usable");
+  });
+
+  test("recognizes bounded author names without consuming nearby ruling prose", () => {
+    expect(
+      classifyCourtListenerText(
+        "Mr. Justice Zqlrv.\n\nThe judgment is affirmed.\n\ndelivered the opinion of the court.",
+      ),
+    ).toBe("usable");
+    expect(
+      classifyCourtListenerText(
+        "Mr. Justice Holmes delivered the opinion of the Court.",
+      ),
+    ).toBe("no-ruling-text");
+    expect(
+      classifyCourtListenerText(
+        "Mr. Justice John Q. Public Jr. delivered the opinion of the Court.",
+      ),
+    ).toBe("no-ruling-text");
+    expect(
+      classifyCourtListenerText(
+        "Mr. Justice John Q. Public Robert Smith Jones Brown delivered the opinion of the Court.",
+      ),
+    ).toBe("usable");
+  });
+
+  test.each([
+    "Mr. Justice McDonald delivered the opinion of the court.",
+    "JUSTICE MACARTHUR delivered the opinion of the COURT.",
+    "Mr. Justice Jan de la van von Berg delivered the opinion of the Court.",
+    "Opinion by Justice John Q. Public Jr. Not to be published in full.",
+    "Present — Zqmrvv, P. J., Zqyrvv, Zqbr, Zqwrvvv and Zqdrvv, JJ.",
+  ])(
+    "recognizes bounded names independently of fixed keyword case: %s",
+    (body) => {
+      expect(classifyCourtListenerText(body)).toBe("no-ruling-text");
+    },
+  );
+  test.each([
+    "Mr. Justice The Judgment Is Affirmed delivered the opinion of the Court.",
+    "Mr. Justice John lower Smith delivered the opinion of the Court.",
+    "Mr. Justice John. Smith delivered the opinion of the Court.",
+    "Mr. Justice John Q. Public Robert Smith Jones Brown delivered the opinion of the Court.",
+  ])("keeps ambiguous or invalid name slots usable: %s", (body) => {
+    expect(classifyCourtListenerText(body)).toBe("usable");
   });
 
   test("keeps ruling prose usable before unrelated numeric blocks", () => {
@@ -195,9 +259,9 @@ describe("CourtListener short text usability", () => {
       }
     }
     expect(Object.fromEntries(counts)).toEqual({
-      usable: 421,
+      usable: 427,
       "source-placeholder": 59,
-      "no-ruling-text": 37,
+      "no-ruling-text": 31,
       undecodable: 13,
     });
   });

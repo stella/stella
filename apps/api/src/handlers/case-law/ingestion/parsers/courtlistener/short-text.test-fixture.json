@@ -1228,7 +1228,7 @@
   {
     "group": "group-153",
     "normalisedText": "in the\nzqykvv zqbkvv court of appeals\n\nfor the eleventh circuit",
-    "expected": "no-ruling-text",
+    "expected": "usable",
     "texts": [
       "In the\nZqykvv Zqbkvv Court of Appeals\n\nFor the Eleventh Circuit"
     ]
@@ -1254,7 +1254,7 @@
   {
     "group": "group-157",
     "normalisedText": "j\nanu\n\nary99,999\n\n9",
-    "expected": "no-ruling-text",
+    "expected": "usable",
     "texts": ["J\nanu\n\nary17,208\n\n8"]
   },
   {
@@ -1406,13 +1406,13 @@
   {
     "group": "group-182",
     "normalisedText": "mr. justice zqvrvv\n\ndelivered the opinion of the court.",
-    "expected": "no-ruling-text",
+    "expected": "usable",
     "texts": ["Mr. Justice Zqvrvv\n\ndelivered the opinion of the court."]
   },
   {
     "group": "group-183",
     "normalisedText": "mr. justice zqrrvvv\n\ndelivered the opinion of the court.",
-    "expected": "no-ruling-text",
+    "expected": "usable",
     "texts": ["Mr. Justice Zqrrvvv\n\ndelivered the opinion of the court."]
   },
   {
@@ -1520,13 +1520,13 @@
   {
     "group": "group-201",
     "normalisedText": "opinion by\n\njustice zqlrv.\n\nnot to be published in full.",
-    "expected": "no-ruling-text",
+    "expected": "usable",
     "texts": ["Opinion by\n\nJUSTICE ZQLRV.\n\nNot to be published in full."]
   },
   {
     "group": "group-202",
     "normalisedText": "opinion by\n\njustice zqkrvv.\n\nnot to be published in full.",
-    "expected": "no-ruling-text",
+    "expected": "usable",
     "texts": ["Opinion by\n\nJUSTICE ZQKRVV.\n\nNot to be published in full."]
   },
   {

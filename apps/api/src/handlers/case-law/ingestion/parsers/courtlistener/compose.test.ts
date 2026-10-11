@@ -285,20 +285,6 @@ describe("which column becomes an opinion's text", () => {
   test.each([
     "This opinion has been withdrawn.\n\nOpinion #C-729",
     "This opinion has been\nwithdrawn.\n\nOpinion #C-729",
-    "Mr. Justice Zqlrv.\n\ndelivered the opinion of the court.\n\nThis opinion has been withdrawn.\n\nOpinion #C-729",
-    [
-      "Mr.",
-      "Justice",
-      "Zqlrv.",
-      "delivered",
-      "the",
-      "opinion",
-      "of",
-      "the",
-      "court.",
-      "This opinion has been withdrawn.",
-      "Opinion #C-729",
-    ].join("\n\n"),
   ])(
     "rejects a split publisher message after metadata and selects the fallback: %s",
     (message) => {
@@ -324,6 +310,25 @@ describe("which column becomes an opinion's text", () => {
       });
     },
   );
+
+  test("keeps ruling prose when an author introduction is split across blocks", () => {
+    const outcome = composeCourtListenerText([
+      {
+        row: opinionRow({
+          xml_harvard: "",
+          html_with_citations:
+            "<pre>Mr. Justice Zqlrv.\n\ndelivered the opinion of the court.\n\nThis opinion has been withdrawn.\n\nOpinion #C-729</pre>",
+          plain_text: "The court affirms the judgment.",
+        }),
+        type: "020lead",
+      },
+    ]);
+    expect(outcome.status).toBe("parsed");
+    expect(outcome.opinions.at(0)).toMatchObject({
+      selection: "parsed",
+      format: "html_with_citations",
+    });
+  });
 
   test("needs the page images where only scan layout is left", () => {
     const blank = Object.fromEntries(

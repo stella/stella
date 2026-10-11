@@ -138,6 +138,23 @@ const classificationBlock = fc.oneof(
   ruling.map((text) => ({ type: "ruling" as const, text })),
 );
 
+test("ruling paragraphs cannot become part of an author name", () => {
+  assertProperty(
+    "courtlistener-author-name-never-consumes-ruling-paragraph",
+    fc.property(
+      readableSentence,
+      fc.constantFrom("\n\n", "\r\n\r\n"),
+      (sentence, boundary) => {
+        expect(
+          classifyCourtListenerText(
+            `Mr. Justice Zqhr.${boundary}${sentence}${boundary}delivered the opinion of the court.`,
+          ),
+        ).toBe("usable");
+      },
+    ),
+  );
+});
+
 test(
   "CourtListener metadata and placeholder block mixes classify by their ruling content",
   () => {
