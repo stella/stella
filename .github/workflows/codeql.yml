@@ -1,5 +1,9 @@
 name: CodeQL
 
+defaults:
+  run:
+    shell: bash
+
 on:
   # Scans run nightly on main and on release pull requests. Other pull
   # requests and pushes to main are covered by those two scans.
