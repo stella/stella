@@ -497,6 +497,12 @@ export const chatTurns = p.pgTable(
         foreignColumns: [chatMessages.id, chatMessages.threadId],
       })
       .onDelete("cascade"),
+    p.check(
+      "chat_turns_active_timing_check",
+      sql`(${table.activeDurationMs} IS NULL AND ${table.activeStartedAt} IS NULL) OR
+        (${table.activeDurationMs} IS NOT NULL AND ${table.activeDurationMs} >= 0 AND
+          ((${table.status} IN (${sql.join(CHAT_TURN_TIMING_ACTIVE_SQL_VALUES, sql`, `)})) = (${table.activeStartedAt} IS NOT NULL)))`,
+    ),
     p
       .index("chat_turns_org_timing_message_idx")
       .on(table.organizationId, table.timingMessageId),

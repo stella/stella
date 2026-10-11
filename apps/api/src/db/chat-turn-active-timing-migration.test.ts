@@ -1,6 +1,9 @@
 import { PGlite } from "@electric-sql/pglite";
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
-import { getTableConfig } from "drizzle-orm/pg-core";
+import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
+
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { chatTurns } from "@/api/db/schema";
 import {
@@ -15,7 +18,7 @@ const migrationSql = async (name: string) =>
     new URL(`../../drizzle/${name}/migration.sql`, import.meta.url),
   ).text();
 
-test("timing expansion admits status-only terminal writes", async () => {
+test("timing expansion and contraction preserve the timing invariant", async () => {
   await using db = await PGlite.create();
   await db.exec(`
     CREATE TABLE chat_messages (
@@ -61,14 +64,54 @@ test("timing expansion admits status-only terminal writes", async () => {
     ).toEqual([{ status, timing_retained: true }]);
   }
 
-  expect(
-    getTableConfig(chatTurns).checks.map(({ name }) => name),
-  ).not.toContain(TIMING_CHECK);
-  expect(
+  // Repair inactive spans before adding and validating the invariant.
+  await db.exec("UPDATE chat_turns SET active_started_at = NULL");
+  await db.exec(
+    await migrationSql("20261011100000_chat_turn_active_timing_contract"),
+  );
+  await db.exec("COMMIT");
+  for (const status of CHAT_TURN_STATUSES) {
+    const isActive = CHAT_TURN_TIMING_DISPOSITION[status] !== "finished";
+    await db.query(
+      `INSERT INTO chat_turns (thread_id, status, active_duration_ms, active_started_at)
+       VALUES (gen_random_uuid(), $1, 0, $2)`,
+      [status, isActive ? "2026-10-11T00:00:00Z" : null],
+    );
+    expect(
+      await rejectionOf(
+        db.query(
+          `INSERT INTO chat_turns (thread_id, status, active_duration_ms, active_started_at)
+         VALUES (gen_random_uuid(), $1, 0, $2)`,
+          [status, isActive ? null : "2026-10-11T00:00:00Z"],
+        ),
+      ),
+    ).toMatchObject({ code: "23514", constraint: TIMING_CHECK });
+  }
+
+  const definition = async () =>
     (
-      await db.query("SELECT conname FROM pg_constraint WHERE conname = $1", [
-        TIMING_CHECK,
-      ])
-    ).rows,
-  ).toEqual([]);
+      await db.query<{ definition: string; validated: boolean }>(
+        `SELECT pg_get_constraintdef(oid) AS definition, convalidated AS validated
+         FROM pg_constraint WHERE conname = $1`,
+        [TIMING_CHECK],
+      )
+    ).rows;
+  const fromMigration = await definition();
+  expect(fromMigration).toHaveLength(1);
+  expect(fromMigration.at(0)?.validated).toBe(true);
+  const schemaCheck = getTableConfig(chatTurns).checks.find(
+    ({ name }) => name === TIMING_CHECK,
+  );
+  if (schemaCheck === undefined) {
+    panic("Schema is missing the active timing constraint");
+  }
+  const schemaSql = new PgDialect().sqlToQuery(
+    schemaCheck.value.inlineParams(),
+  );
+  expect(schemaSql.params).toEqual([]);
+  await db.exec(`ALTER TABLE chat_turns DROP CONSTRAINT "${TIMING_CHECK}"`);
+  await db.exec(
+    `ALTER TABLE chat_turns ADD CONSTRAINT "${TIMING_CHECK}" CHECK (${schemaSql.sql})`,
+  );
+  expect(await definition()).toEqual(fromMigration);
 });
