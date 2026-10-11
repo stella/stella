@@ -209,7 +209,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - `--decision-ids` — The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest. (string-array, repeatable)
   - optional: --max-chars, --page, --full, --text-version, --query, --include (details|metadata|textFields|source|citations|outline)
 - `stella case-law resolve`
-  - `--country` — Country of the cited law; alpha-2, alpha-3 or country name. Unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
+  - `--country` — Country of the deciding court; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
   - `--identifier` — One exact docket as the court wrote it, including its sheet, or ECLI. Use search_case_law for a description of a case. (string)
 - `stella case-law search`
   - `--queries` — Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. (string-array, repeatable)
@@ -304,8 +304,8 @@ are omitted here. Input union keys are required unless marked `?`.
   - `--eli` — European Legislation Identifier of the work, as search_legislation returns it (for example https://www.e-sbirka.cz/eli/cz/sb/2012/89). It addresses the act, not one consolidation of it. A short, prefix-less or reordered ELI is read as the canonical one. (string)
   - optional: --language, --as-of
 - `stella legislation resolve`
-  - `--country` — Country of the cited law; alpha-2, alpha-3 or country name. Unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
-  - `--section` — Section number without §, e.g. 1729 or 5a. (string)
+  - `--country` — Country of the cited law; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
+  - `--section` — Section number, with optional §, e.g. 1729 or § 5a. (string)
   - optional: --as-of
   - via `--input` only: source
   - source: type="citation": citation:string; type="structured": collection:string, year:string, number:string. Example: `--input '{"source":{"type":"citation","citation":"x"}}'`
