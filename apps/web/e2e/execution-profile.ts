@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-export const E2E_SHARD_COUNT = 2;
+export { E2E_SHARD_COUNT } from "./shard-count";
 
 export const E2E_EXECUTION_PROFILE = {
   standard: "standard",
