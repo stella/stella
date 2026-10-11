@@ -4,7 +4,6 @@ import type {
   ReaderAnswer,
   ReaderAnswerStreamEvent,
 } from "@stll/api-contract/reader-answers";
-import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { toSafeId } from "@/lib/safe-id";
 
@@ -78,7 +77,7 @@ describe("reader answer stream lifecycle", () => {
       citations,
       invalidCitationCount: 1,
     } as const satisfies ReaderAnswerStreamEvent;
-    await consumeReaderAnswerStream({
+    const result = await consumeReaderAnswerStream({
       body: streamOf([
         started,
         {
@@ -98,6 +97,7 @@ describe("reader answer stream lifecycle", () => {
         });
       },
     });
+    expect(result.isOk()).toBe(true);
     expect(answer.messages).toHaveLength(1);
     expect(answer.messages.at(0)).toMatchObject({
       id: "new",
@@ -110,7 +110,7 @@ describe("reader answer stream lifecycle", () => {
 
   test("follow-up appends an assistant and complete replaces deltas with the authoritative payload", async () => {
     let answer = answerFixture();
-    await consumeReaderAnswerStream({
+    const result = await consumeReaderAnswerStream({
       body: streamOf([
         started,
         { type: "delta", messageId: started.messageId, delta: "draft" },
@@ -134,6 +134,7 @@ describe("reader answer stream lifecycle", () => {
         });
       },
     });
+    expect(result.isOk()).toBe(true);
     expect(answer.messages.map((message) => message.content)).toEqual([
       "old answer",
       "validated",
@@ -141,45 +142,83 @@ describe("reader answer stream lifecycle", () => {
     expect(answer.messages.at(-1)?.status).toBe("complete");
   });
 
-  test("rejects a truncated stream and mismatched message ownership", async () => {
-    expect(
-      await rejectionOf(
-        consumeReaderAnswerStream({
-          body: streamOf([started]),
-          signal: new AbortController().signal,
-          onEvent: () => undefined,
+  test("returns typed failures for truncated streams and mismatched message ownership", async () => {
+    const truncated = await consumeReaderAnswerStream({
+      body: streamOf([started]),
+      signal: new AbortController().signal,
+      onEvent: () => undefined,
+    });
+    expect(truncated.isErr()).toBe(true);
+    if (truncated.isErr()) {
+      expect(truncated.error).toBeInstanceOf(ReaderAnswerFailure);
+      expect(truncated.error.message).toBe(
+        "Reader answer stream ended before completion",
+      );
+    }
+    const mismatched = await consumeReaderAnswerStream({
+      body: streamOf([
+        started,
+        {
+          type: "delta",
+          messageId: toSafeId<"legalReaderAnswerMessage">("other"),
+          delta: "wrong",
+        },
+      ]),
+      signal: new AbortController().signal,
+      onEvent: () => undefined,
+    });
+    expect(mismatched.isErr()).toBe(true);
+    if (mismatched.isErr()) {
+      expect(mismatched.error).toMatchObject({
+        message: "Reader answer stream message mismatch",
+      });
+    }
+  });
+
+  test("invalid protocol frames stop dispatch and cancel the stream", async () => {
+    for (const wire of [
+      "data: invalid-json\n\n",
+      'data: {"type":"unknown"}\n\n',
+      `event: delta\ndata: ${JSON.stringify(started)}\n\n`,
+      `data: ${JSON.stringify(started)}\n\ndata: ${JSON.stringify(started)}\n\n`,
+    ]) {
+      const events: ReaderAnswerStreamEvent[] = [];
+      const lifecycle = { cancelled: false };
+      const result = await consumeReaderAnswerStream({
+        body: new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode(wire));
+          },
+          cancel() {
+            lifecycle.cancelled = true;
+          },
         }),
-      ),
-    ).toBeInstanceOf(ReaderAnswerFailure);
-    expect(
-      await rejectionOf(
-        consumeReaderAnswerStream({
-          body: streamOf([
-            started,
-            {
-              type: "delta",
-              messageId: toSafeId<"legalReaderAnswerMessage">("other"),
-              delta: "wrong",
-            },
-          ]),
-          signal: new AbortController().signal,
-          onEvent: () => undefined,
-        }),
-      ),
-    ).toMatchObject({ message: "Reader answer stream message mismatch" });
+        signal: new AbortController().signal,
+        onEvent: (event) => {
+          events.push(event);
+        },
+      });
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBeInstanceOf(ReaderAnswerFailure);
+      }
+      expect(events.length).toBeLessThanOrEqual(1);
+      expect(lifecycle.cancelled).toBe(true);
+    }
   });
 
   test("cancelled streams do not dispatch frames or report truncation", async () => {
     const controller = new AbortController();
     controller.abort();
     const events: ReaderAnswerStreamEvent[] = [];
-    await consumeReaderAnswerStream({
+    const result = await consumeReaderAnswerStream({
       body: streamOf([started]),
       signal: controller.signal,
       onEvent: (event) => {
         events.push(event);
       },
     });
+    expect(result.isOk()).toBe(true);
     expect(events).toEqual([]);
   });
 });

@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { Result } from "better-result";
 
 import type {
   ReaderAnswer,
@@ -11,6 +12,7 @@ import { api } from "@/lib/api";
 import { getApiRequestHeaders } from "@/lib/api-request-context";
 import { apiUrl } from "@/lib/api-url";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { toSafeId } from "@/lib/safe-id";
 
 import {
@@ -50,10 +52,14 @@ export const readerAnswersOptions = ({
         cursor = page.nextCursor ?? undefined;
         if (cursor !== undefined) {
           if (cursors.has(cursor)) {
-            throw new ReaderAnswerFailure({
-              kind: "protocol",
-              message: "Reader answer pagination did not advance",
-            });
+            return readQueryResult(
+              Result.err(
+                new ReaderAnswerFailure({
+                  kind: "protocol",
+                  message: "Reader answer pagination did not advance",
+                }),
+              ),
+            );
           }
           cursors.add(cursor);
         }
@@ -75,28 +81,51 @@ export const streamReaderAnswer = async ({
   signal,
   onEvent,
 }: StreamReaderAnswerOptions) => {
-  const response = await fetchWithTimeout(apiUrl(`/reader/answers${path}`), {
-    method: "POST",
-    credentials: "include",
-    signal,
-    timeoutMs: READER_ANSWER_DEADLINE_MS,
-    headers: { ...getApiRequestHeaders(), "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const fetched = await Result.tryPromise(
+    async () =>
+      await fetchWithTimeout(apiUrl(`/reader/answers${path}`), {
+        method: "POST",
+        credentials: "include",
+        signal,
+        timeout: { type: "idle", ms: READER_ANSWER_DEADLINE_MS },
+        headers: {
+          ...getApiRequestHeaders(),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      }),
+  );
+  if (fetched.isErr()) {
+    return Result.err(fetched.error);
+  }
+  const response = fetched.value;
   if (!response.ok) {
-    const value: unknown = await response.json();
-    throw toAPIError({ status: response.status, value });
+    const decoded = await Result.tryPromise(
+      async (): Promise<unknown> => await response.json(),
+    );
+    if (decoded.isErr()) {
+      return Result.err(decoded.error);
+    }
+    return Result.err(
+      toAPIError({ status: response.status, value: decoded.value }),
+    );
   }
   if (
     !response.body ||
     !response.headers.get("content-type")?.includes("text/event-stream")
   ) {
-    throw new ReaderAnswerFailure({
-      kind: "protocol",
-      message: "Missing reader answer stream",
-    });
+    return Result.err(
+      new ReaderAnswerFailure({
+        kind: "protocol",
+        message: "Missing reader answer stream",
+      }),
+    );
   }
-  await consumeReaderAnswerStream({ body: response.body, signal, onEvent });
+  return await consumeReaderAnswerStream({
+    body: response.body,
+    signal,
+    onEvent,
+  });
 };
 
 export const deleteReaderAnswer = async (

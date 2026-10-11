@@ -70,25 +70,29 @@ const eventSchemas = {
 };
 const eventSchema = v.variant("type", Object.values(eventSchemas));
 
-const parseReaderAnswerEvent = (frame: SSEEvent): ReaderAnswerStreamEvent => {
+const parseReaderAnswerEvent = (frame: SSEEvent) => {
   const decoded = Result.try((): unknown => JSON.parse(frame.data));
   if (decoded.isErr()) {
-    throw new ReaderAnswerFailure({
-      kind: "protocol",
-      message: "Invalid reader answer stream",
-    });
+    return Result.err(
+      new ReaderAnswerFailure({
+        kind: "protocol",
+        message: "Invalid reader answer stream",
+      }),
+    );
   }
   const parsed = v.safeParse(eventSchema, decoded.value);
   if (
     !parsed.success ||
     (frame.event !== "message" && parsed.output.type !== frame.event)
   ) {
-    throw new ReaderAnswerFailure({
-      kind: "protocol",
-      message: "Invalid reader answer stream",
-    });
+    return Result.err(
+      new ReaderAnswerFailure({
+        kind: "protocol",
+        message: "Invalid reader answer stream",
+      }),
+    );
   }
-  return parsed.output;
+  return Result.ok(parsed.output);
 };
 
 type ConsumeReaderAnswerStreamOptions = {
@@ -102,36 +106,64 @@ export const consumeReaderAnswerStream = async ({
   onEvent,
 }: ConsumeReaderAnswerStreamOptions) => {
   let messageId: string | null = null;
-  const completion = { seen: false };
-  await readSSEEvents(body, (frame) => {
-    if (signal.aborted) {
-      return false;
-    }
-    const event = parseReaderAnswerEvent(frame);
-    if (event.type === "started") {
-      if (messageId !== null) {
-        throw new ReaderAnswerFailure({
-          kind: "protocol",
-          message: "Reader answer stream restarted",
-        });
-      }
-      messageId = event.messageId;
-    } else if (messageId === null || event.messageId !== messageId) {
-      throw new ReaderAnswerFailure({
-        kind: "protocol",
-        message: "Reader answer stream message mismatch",
-      });
-    }
-    onEvent(event);
-    completion.seen = event.type === "complete" || event.type === "failed";
-    return !completion.seen;
-  });
-  if (!signal.aborted && !completion.seen) {
-    throw new ReaderAnswerFailure({
-      kind: "protocol",
-      message: "Reader answer stream ended before completion",
-    });
+  const completion: { result: Result<void, ReaderAnswerFailure> | null } = {
+    result: null,
+  };
+  const read = await Result.tryPromise(
+    async () =>
+      await readSSEEvents(body, (frame) => {
+        if (signal.aborted) {
+          return false;
+        }
+        const parsed = parseReaderAnswerEvent(frame);
+        if (parsed.isErr()) {
+          completion.result = Result.err(parsed.error);
+          return false;
+        }
+        const event = parsed.value;
+        if (event.type === "started") {
+          if (messageId !== null) {
+            completion.result = Result.err(
+              new ReaderAnswerFailure({
+                kind: "protocol",
+                message: "Reader answer stream restarted",
+              }),
+            );
+            return false;
+          }
+          messageId = event.messageId;
+        } else if (messageId === null || event.messageId !== messageId) {
+          completion.result = Result.err(
+            new ReaderAnswerFailure({
+              kind: "protocol",
+              message: "Reader answer stream message mismatch",
+            }),
+          );
+          return false;
+        }
+        onEvent(event);
+        if (event.type === "complete" || event.type === "failed") {
+          completion.result = Result.ok(undefined);
+          return false;
+        }
+        return true;
+      }),
+  );
+  if (read.isErr()) {
+    return Result.err(read.error);
   }
+  if (completion.result !== null) {
+    return completion.result;
+  }
+  if (!signal.aborted) {
+    return Result.err(
+      new ReaderAnswerFailure({
+        kind: "protocol",
+        message: "Reader answer stream ended before completion",
+      }),
+    );
+  }
+  return Result.ok(undefined);
 };
 
 type ApplyReaderAnswerEventOptions = {

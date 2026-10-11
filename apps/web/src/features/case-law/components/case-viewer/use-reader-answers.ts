@@ -16,6 +16,7 @@ import { useLocale } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { APIError } from "@/lib/errors/api";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { toSafeId } from "@/lib/safe-id";
 
 import {
@@ -98,89 +99,83 @@ const runStreamAnswer = async (
 ) => {
   let currentAnswerId = answerId;
   const ownership: { messageId: string | null } = { messageId: null };
-  const streaming = await Result.tryPromise({
-    try: async () =>
-      await streamReaderAnswer({
-        path,
-        body,
-        signal,
-        onEvent: (event) => {
-          if (runtime.isCancelled() || signal.aborted) {
-            return;
+  const streaming = await streamReaderAnswer({
+    path,
+    body,
+    signal,
+    onEvent: (event) => {
+      if (runtime.isCancelled() || signal.aborted) {
+        return;
+      }
+      if (event.type === "started") {
+        currentAnswerId = event.answerId;
+        runtime.ownedMessageIds.add(event.messageId);
+        ownership.messageId = event.messageId;
+        activateAnswer(event.answerId);
+        setBusyAnswerIds((current) => new Set([...current, event.answerId]));
+      }
+      const id = currentAnswerId;
+      if (id === null) {
+        return;
+      }
+      // oxlint-disable-next-line no-restricted-properties -- A received SSE event timestamps an ephemeral client message; this callback never runs during SSR or hydration.
+      const now = Temporal.Now.instant().toString();
+      queryClient.setQueryData(
+        queryKey,
+        (current: ReaderAnswer[] | undefined) => {
+          const answers = current ?? [];
+          let answer = answers.find((item) => item.id === id);
+          if (!answer && event.type === "started" && anchor) {
+            answer = {
+              id: event.answerId,
+              decisionId: toSafeId<"caseLawDecision">(decisionId),
+              authorId: toSafeId<"user">(userId),
+              mine: true,
+              kind: "explain",
+              anchor,
+              visibility: "private",
+              messages: [],
+              createdAt: now,
+              updatedAt: now,
+            };
           }
-          if (event.type === "started") {
-            currentAnswerId = event.answerId;
-            runtime.ownedMessageIds.add(event.messageId);
-            ownership.messageId = event.messageId;
-            activateAnswer(event.answerId);
-            setBusyAnswerIds(
-              (current) => new Set([...current, event.answerId]),
-            );
+          if (!answer) {
+            return answers;
           }
-          const id = currentAnswerId;
-          if (id === null) {
-            return;
-          }
-          // oxlint-disable-next-line no-restricted-properties -- A received SSE event timestamps an ephemeral client message; this callback never runs during SSR or hydration.
-          const now = Temporal.Now.instant().toString();
-          queryClient.setQueryData(
-            queryKey,
-            (current: ReaderAnswer[] | undefined) => {
-              const answers = current ?? [];
-              let answer = answers.find((item) => item.id === id);
-              if (!answer && event.type === "started" && anchor) {
-                answer = {
-                  id: event.answerId,
-                  decisionId: toSafeId<"caseLawDecision">(decisionId),
-                  authorId: toSafeId<"user">(userId),
-                  mine: true,
-                  kind: "explain",
-                  anchor,
-                  visibility: "private",
-                  messages: [],
-                  createdAt: now,
-                  updatedAt: now,
-                };
-              }
-              if (!answer) {
-                return answers;
-              }
-              const updated = applyReaderAnswerEvent({
-                answer,
-                event,
-                regenerate,
-                now,
-              });
-              return answers.some((item) => item.id === id)
-                ? answers.map((item) => (item.id === id ? updated : item))
-                : [...answers, updated];
-            },
-          );
-          if (event.type !== "complete" && event.type !== "failed") {
-            return;
-          }
-          runtime.ownedMessageIds.delete(event.messageId);
-          if (event.type === "failed") {
-            setErrors((current) =>
-              new Map(current).set(
-                id,
-                new ReaderAnswerFailure({
-                  kind: "model",
-                  code: event.errorCode,
-                  message: event.message,
-                }),
-              ),
-            );
-          }
+          const updated = applyReaderAnswerEvent({
+            answer,
+            event,
+            regenerate,
+            now,
+          });
+          return answers.some((item) => item.id === id)
+            ? answers.map((item) => (item.id === id ? updated : item))
+            : [...answers, updated];
         },
-      }),
-    catch: (cause) => cause,
+      );
+      if (event.type !== "complete" && event.type !== "failed") {
+        return;
+      }
+      runtime.ownedMessageIds.delete(event.messageId);
+      if (event.type === "failed") {
+        setErrors((current) =>
+          new Map(current).set(
+            id,
+            new ReaderAnswerFailure({
+              kind: "model",
+              code: event.errorCode,
+              message: event.message,
+            }),
+          ),
+        );
+      }
+    },
   });
   if (ownership.messageId !== null) {
     runtime.ownedMessageIds.delete(ownership.messageId);
   }
   if (runtime.isCancelled() || signal.aborted) {
-    return;
+    return Result.ok(undefined);
   }
   if (streaming.isErr() && currentAnswerId !== null) {
     const failedId = currentAnswerId;
@@ -215,9 +210,7 @@ const runStreamAnswer = async (
     });
   }
   await queryClient.invalidateQueries({ queryKey });
-  if (streaming.isErr()) {
-    throw streaming.error;
-  }
+  return streaming;
 };
 
 type PerformReaderAnswerOperationOptions = Pick<
@@ -225,7 +218,7 @@ type PerformReaderAnswerOperationOptions = Pick<
   "runtime" | "queryClient" | "setBusyAnswerIds" | "setErrors"
 > & {
   id: string | null;
-  operation: (signal: AbortSignal) => Promise<void>;
+  operation: (signal: AbortSignal) => Promise<void | Result<void, Error>>;
   enabled: boolean;
   authenticated: boolean;
   setIsCreating: Dispatch<SetStateAction<boolean>>;
@@ -286,11 +279,12 @@ const performReaderAnswerOperation = async (
   if (runtime.isCancelled() || controller.signal.aborted) {
     return;
   }
-  if (outcome.isErr()) {
-    getAnalytics().captureError(outcome.error);
+  const result = outcome.andThen((value) => value ?? Result.ok(undefined));
+  if (result.isErr()) {
+    getAnalytics().captureError(result.error);
     const error =
-      APIError.is(outcome.error) || ReaderAnswerFailure.is(outcome.error)
-        ? outcome.error
+      APIError.is(result.error) || ReaderAnswerFailure.is(result.error)
+        ? result.error
         : new ReaderAnswerFailure({
             kind: "request",
             message: "Reader answer request failed",
@@ -350,7 +344,13 @@ const readerAnswersRecoveryOptions = ({
       }
       const fetched = await Result.tryPromise({
         try: async () => await read({ ...context, signal }),
-        catch: (cause) => cause,
+        catch: (cause) =>
+          cause instanceof Error
+            ? cause
+            : new ReaderAnswerFailure({
+                kind: "request",
+                message: "Reader answer request failed",
+              }),
       });
       const now = readerPollingNow();
       if (fetched.isOk()) {
@@ -361,7 +361,7 @@ const readerAnswersRecoveryOptions = ({
         });
       }
       if (context.signal.aborted || runtime.isCancelled()) {
-        throw fetched.error;
+        return readQueryResult(fetched);
       }
       getAnalytics().captureError(fetched.error);
       const projected = projectExpiredReaderAnswers({ ...polling, now });
@@ -369,7 +369,7 @@ const readerAnswersRecoveryOptions = ({
       if (allUnownedReaderClaimsExpired({ ...polling, now })) {
         return projectExpiredReaderAnswers({ ...polling, now });
       }
-      throw fetched.error;
+      return readQueryResult(fetched);
     },
   });
 };
@@ -431,7 +431,7 @@ export const useReaderAnswers = ({
 
   const perform = async (
     id: string | null,
-    operation: (signal: AbortSignal) => Promise<void>,
+    operation: (signal: AbortSignal) => Promise<void | Result<void, Error>>,
   ) =>
     await performReaderAnswerOperation(options.queryKey, {
       id,
