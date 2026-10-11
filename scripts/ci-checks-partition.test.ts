@@ -1753,6 +1753,25 @@ test("continued guard conditions preserve every previously runnable plan outcome
       ),
     ),
   ];
+  // Successful producer outcomes do not imply that their output gates selected
+  // every consumer. Derive those decisions from the workflow's conditions.
+  const stepOutputs = [
+    ...new Set(
+      partitions.flatMap(({ steps }) =>
+        steps.flatMap((step) => {
+          const condition =
+            v.parse(v.looseObject({ if: v.optional(v.string()) }), step).if ??
+            "";
+          return [
+            ...condition.matchAll(/steps\.([a-z_]+)\.outputs\.([a-z_]+)/gu),
+          ].map(
+            (match) =>
+              `${v.parse(v.string(), match.at(1))}:${v.parse(v.string(), match.at(2))}`,
+          );
+        }),
+      ),
+    ),
+  ];
   assertProperty(
     "continued guard conditions preserve every previously runnable plan outcome",
     fc.property(
@@ -1765,6 +1784,10 @@ test("continued guard conditions preserve every previously runnable plan outcome
         scopes: fc.array(fc.boolean(), {
           minLength: scopeNames.length,
           maxLength: scopeNames.length,
+        }),
+        outputs: fc.array(fc.boolean(), {
+          minLength: stepOutputs.length,
+          maxLength: stepOutputs.length,
         }),
       }),
       (input) => {
@@ -1786,17 +1809,40 @@ test("continued guard conditions preserve every previously runnable plan outcome
             headJobSchema,
             baseJobs["ci-checks"] ?? baseJobs[id],
           ).steps;
-          const outcomes = Object.fromEntries(
-            steps.flatMap((step) => {
-              const stepId = v.parse(
-                v.looseObject({ id: v.optional(v.string()) }),
-                step,
-              ).id;
-              return stepId === undefined
-                ? []
-                : [[stepId, { outcome: "success" }]];
-            }),
-          );
+          const outcomes: ConditionContextOptions["outcomes"] =
+            Object.fromEntries(
+              steps.flatMap((step) => {
+                const stepId = v.parse(
+                  v.looseObject({ id: v.optional(v.string()) }),
+                  step,
+                ).id;
+                return stepId === undefined
+                  ? []
+                  : [
+                      [
+                        stepId,
+                        {
+                          outcome: "success",
+                          outputs: Object.fromEntries(
+                            stepOutputs.flatMap((reference, outputIndex) => {
+                              const [producer, output] = reference.split(":");
+                              return producer === stepId && output !== undefined
+                                ? [
+                                    [
+                                      output,
+                                      input.outputs.at(outputIndex)
+                                        ? "true"
+                                        : "false",
+                                    ],
+                                  ]
+                                : [];
+                            }),
+                          ),
+                        },
+                      ],
+                    ];
+              }),
+            );
           outcomes["checkout"] = { outcome: "success" };
           outcomes["install"] = {
             outcome:
@@ -1890,7 +1936,17 @@ test("continued guard conditions preserve every previously runnable plan outcome
         }
       },
     ),
-    { numRuns: 32 },
+    {
+      numRuns: 32,
+      // Queue failure: package checks selected, every other plan scope off.
+      examples: [false, true].map((selected) => [
+        {
+          event: "pull_request",
+          scopes: [true, false, false, false, false, false, false],
+          outputs: stepOutputs.map(() => selected),
+        },
+      ]),
+    },
   );
 });
 
