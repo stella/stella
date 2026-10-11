@@ -21,6 +21,7 @@ import type {
 import { MCP_CHAT_TOOL_GRANT_POLICIES } from "@/lib/api-contract";
 import type { WebApiRoutes } from "@/lib/eden-client";
 import { toAPIError } from "@/lib/errors/api";
+import { withProviderDiagnostic } from "@/lib/errors/provider-diagnostic";
 
 export type {
   ChatAnonRestoration,
@@ -1094,7 +1095,10 @@ export const getChatAssistantTurnError = (
   switch (outcome.type) {
     case "failed":
       return outcome.refusal === undefined
-        ? new Error(outcome.error)
+        ? withProviderDiagnostic(
+            new Error(outcome.error),
+            outcome.providerDiagnostic,
+          )
         : toAPIError({
             status: ACTION_ADMISSION_REFUSALS[outcome.refusal.code].status,
             value: outcome.refusal,

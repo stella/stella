@@ -31,7 +31,7 @@ const qualityInputProblems = ({
   const problems: string[] = [];
   for (const [name, task] of Object.entries(tasks)) {
     const baseName = name.split("#").at(-1) ?? "";
-    if (!["lint", "typecheck", "typecheck:repo"].includes(baseName)) {
+    if (name.startsWith("//#") || !["lint", "typecheck"].includes(baseName)) {
       continue;
     }
     const inputs = task.inputs ??
@@ -70,7 +70,7 @@ test("quality input guard accepts inheritance and rejects restored whole-file in
   ).toEqual([]);
   for (const [name, task] of Object.entries(configuration.tasks)) {
     const baseName = name.split("#").at(-1) ?? "";
-    if (!["lint", "typecheck", "typecheck:repo"].includes(baseName)) {
+    if (name.startsWith("//#") || !["lint", "typecheck"].includes(baseName)) {
       continue;
     }
     const inputs = task.inputs ??
@@ -87,6 +87,26 @@ test("quality input guard accepts inheritance and rejects restored whole-file in
       };
       expect(qualityInputProblems(mutated)).toContain(`${name}: ${forbidden}`);
     }
+  }
+});
+
+// A root task hashes only root dependencies in Turbo, while these projects
+// import workspace source. Its full dependency inputs preserve that boundary.
+const rootDependencyProblems = (inputs: readonly string[]) =>
+  ["$TURBO_ROOT$/bun.lock", "$TURBO_ROOT$/package.json"].filter(
+    (required) => !inputs.includes(required),
+  );
+
+test("root typecheck retains complete dependency inputs for cross-workspace imports", () => {
+  const inputs = configuration.tasks["//#typecheck:repo"]?.inputs ?? [];
+  expect(rootDependencyProblems(inputs)).toEqual([]);
+  for (const required of [
+    "$TURBO_ROOT$/bun.lock",
+    "$TURBO_ROOT$/package.json",
+  ]) {
+    expect(
+      rootDependencyProblems(inputs.filter((input) => input !== required)),
+    ).toEqual([required]);
   }
 });
 

@@ -64,6 +64,12 @@ export const ALL_WORKSPACE_CACHE_INPUTS = [
   ),
   ...SHARED_COMPILER_CACHE_INPUTS,
 ] as const;
+// Turbo hashes each workspace's resolved dependencies. Root programs span
+// multiple workspaces and still need the complete lockfile in their inputs.
+export const WORKSPACE_TYPECHECK_CACHE_INPUTS =
+  ALL_WORKSPACE_CACHE_INPUTS.filter(
+    (input) => input !== "$TURBO_ROOT$/bun.lock",
+  );
 // Every module `oxlint.config.ts` imports is rule configuration: a row edited
 // in the ownership table, a glob in the result-boundary scope, or a file in the
 // design-system backlog changes what every workspace lint reports.

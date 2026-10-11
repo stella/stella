@@ -18,6 +18,7 @@ import {
 import {
   ALL_WORKSPACE_CACHE_INPUTS,
   CODE_CHECK_EXECUTION_BUDGET_MS,
+  WORKSPACE_TYPECHECK_CACHE_INPUTS,
   CommandFailedError,
   codeCheckConcurrency,
   prioritizeWebLint,
@@ -641,7 +642,7 @@ describe("Turbo cache input contract", () => {
     const tasks = turboTasks();
 
     expect(taskInputs(tasks, "typecheck").filter(isRootInput)).toEqual(
-      [...ALL_WORKSPACE_CACHE_INPUTS].toSorted(),
+      [...WORKSPACE_TYPECHECK_CACHE_INPUTS].toSorted(),
     );
     expect(taskInputs(tasks, "//#typecheck:repo").filter(isRootInput)).toEqual(
       [
@@ -650,6 +651,8 @@ describe("Turbo cache input contract", () => {
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/apps/**",
         "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/bun.lock",
+        "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/packages/**",
         "$TURBO_ROOT$/patches/**",
