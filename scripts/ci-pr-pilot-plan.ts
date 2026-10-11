@@ -17,6 +17,7 @@ export const PILOT_DEFERRED = [
   "ci-generated-sources",
   "ci-browser",
   "service-suites",
+  "postgres-service-suites",
   "migration-upgrade-rehearsal",
   "release-typecheck",
   "fix-tests-on-base",

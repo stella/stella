@@ -1,7 +1,11 @@
 import { readFileSync, readdirSync } from "node:fs";
 import * as v from "valibot";
 
-import { definitelyFalse, evaluate } from "./github-expression";
+import {
+  contextWithPlanOutputs,
+  definitelyFalse,
+  evaluate,
+} from "./github-expression";
 
 const policySchema = v.object({
   jobs: v.record(
@@ -40,6 +44,7 @@ export const workflowSchema = v.looseObject({
     v.string(),
     v.looseObject({
       permissions: v.optional(v.unknown()),
+      outputs: v.optional(v.record(v.string(), v.string())),
       if: v.optional(v.union([v.string(), v.boolean()])),
       needs: v.optional(v.union([v.string(), v.array(v.string())])),
       steps: v.optional(
@@ -213,7 +218,28 @@ type CheckJobEventPolicyOptions = {
   eventPolicy: v.InferOutput<typeof policySchema>["jobs"][string];
   triggers: v.InferOutput<typeof workflowSchema>["on"];
   periodic: boolean;
+  planOutputs: Record<string, string>;
 };
+
+type PostgresPrSwitchOptions = {
+  key: string;
+  condition: string;
+  planOutputs: Record<string, string>;
+};
+
+const requiresPostgresPrSwitch = ({
+  key,
+  condition,
+  planOutputs,
+}: PostgresPrSwitchOptions) =>
+  key === "ci.yml/postgres-service-suites"
+    ? condition.includes(
+        "needs.ci-plan.outputs.postgres_service_suites_required == 'true'",
+      ) &&
+      planOutputs["postgres_service_suites_required"]?.includes(
+        "vars.CI_POSTGRES_PR_SELECTION == 'on'",
+      )
+    : condition.includes("vars.CI_POSTGRES_PR_SELECTION == 'on'");
 
 const checkJobEventPolicy = ({
   key,
@@ -222,6 +248,7 @@ const checkJobEventPolicy = ({
   eventPolicy,
   triggers,
   periodic,
+  planOutputs,
 }: CheckJobEventPolicyOptions) => {
   const problems: string[] = [];
   if (file === "codeql.yml" && eventPolicy !== "release-pr") {
@@ -236,18 +263,27 @@ const checkJobEventPolicy = ({
   if (eventPolicy === "pr-opt-in") {
     const condition =
       typeof job.if === "boolean" ? String(job.if) : (job.if ?? "true");
-    if (key === "ci.yml/service-suites") {
+    if (
+      key === "ci.yml/service-suites" ||
+      key === "ci.yml/postgres-service-suites"
+    ) {
       if (
-        !condition.includes("vars.CI_POSTGRES_PR_SELECTION == 'on'") ||
+        !requiresPostgresPrSwitch({ key, condition, planOutputs }) ||
         ["", "off"].some(
           (value) =>
-            !definitelyFalse(condition, {
-              values: {
-                "github.event_name": "pull_request",
-                "vars.CI_POSTGRES_PR_SELECTION": value,
-                "needs.ci-plan.outputs.corpus_suites_required": "false",
-              },
-            }),
+            !definitelyFalse(
+              condition,
+              contextWithPlanOutputs({
+                outputs: planOutputs,
+                context: {
+                  values: {
+                    "github.event_name": "pull_request",
+                    "vars.CI_POSTGRES_PR_SELECTION": value,
+                    "needs.ci-plan.outputs.corpus_suites_required": "false",
+                  },
+                },
+              }),
+            ),
         )
       ) {
         problems.push(
@@ -408,6 +444,7 @@ export const checkCiEventPolicies = ({
           eventPolicy,
           triggers: workflow.on,
           periodic: declared.periodicJobs.includes(key),
+          planOutputs: workflow.jobs["ci-plan"]?.outputs ?? {},
         }),
       );
     }
