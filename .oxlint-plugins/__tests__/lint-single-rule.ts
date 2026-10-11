@@ -41,6 +41,8 @@ const reportedLine = (diagnostic: unknown, code: string): number | null => {
 };
 
 type LintSingleRuleOptions = {
+  /** Test-only wrapper for a plugin factory; production config is unchanged. */
+  pluginPath?: string;
   /** Use an oxlint built-in plugin instead of a local JavaScript plugin. */
   builtin?: boolean;
   /** The plugin that carries the rule, when it is not named after it. */
@@ -68,6 +70,7 @@ export const runSingleRule = async (
   {
     builtin = false,
     plugin = ruleName,
+    pluginPath,
     settings,
     fix = false,
     ruleOptions,
@@ -89,7 +92,8 @@ export const runSingleRule = async (
           ? { plugins: [plugin] }
           : {
               jsPlugins: [
-                path.join(REPOSITORY_ROOT, ".oxlint-plugins", `${plugin}.ts`),
+                pluginPath ??
+                  path.join(REPOSITORY_ROOT, ".oxlint-plugins", `${plugin}.ts`),
               ],
             }),
         rules: {

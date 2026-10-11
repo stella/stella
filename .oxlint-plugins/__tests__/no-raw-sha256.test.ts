@@ -374,3 +374,17 @@ test("preserves nested and default noncrypto export bindings", async () => {
     ),
   ).toEqual([]);
 });
+
+test("recognizes a primitive loaded by an imported module loader", async () => {
+  expect(
+    await lintSingleRule(
+      "no-raw-sha256",
+      [
+        'import { createRequire } from "node:module";',
+        "const require = createRequire(import.meta.url);",
+        'require("node:fs");',
+        'require("node:crypto").createHash("sha256");',
+      ].join("\n"),
+    ),
+  ).toEqual([4]);
+});

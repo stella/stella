@@ -27,6 +27,9 @@ type RunGatedTestsOptions = {
   script: GatedTestScript;
   selection?: string | undefined;
   exclusiveTestPaths?: ReadonlySet<string> | undefined;
+  shardTestFiles?:
+    | ((testFiles: readonly string[]) => readonly string[])
+    | undefined;
   validateTestPlan?:
     | ((apiRoot: string, testPaths: readonly string[]) => Promise<void>)
     | undefined;
@@ -167,6 +170,7 @@ export const runGatedTests = async ({
   selection,
   exclusiveTestPaths = new Set(),
   validateTestPlan,
+  shardTestFiles,
 }: RunGatedTestsOptions): Promise<number> => {
   const runner = packageJson.ciGateTestRunners[script];
   const missing = requiredEnv.filter((name) => !process.env[name]);
@@ -197,15 +201,23 @@ export const runGatedTests = async ({
     plannedFiles,
     normalizeAbsoluteTestPatterns(patterns, apiRoot),
   );
-  const testFiles = plannedFiles.filter(
+  const matchingFiles = plannedFiles.filter(
     (testFile) => selectedPaths === null || selectedPaths.has(testFile),
   );
 
-  if (testFiles.length === 0) {
+  if (matchingFiles.length === 0) {
     console.error(
       `No test files declaring ${runner.gate} matched the selection.`,
     );
     return 1;
+  }
+
+  const testFiles = shardTestFiles?.(matchingFiles) ?? matchingFiles;
+  if (testFiles.length === 0) {
+    console.log(
+      `Empty ${runner.gate} shard; other shards cover this selection.`,
+    );
+    return 0;
   }
 
   // The same derived sources the package `test` script generates first: the
