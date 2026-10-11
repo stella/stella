@@ -642,7 +642,7 @@
   {
     "group": "group-057",
     "normalisedText": ". . .._\n\n..\n\noffice of the a’itorney general of zqulv\n\nzqelvv",
-    "expected": "no-ruling-text",
+    "expected": "usable",
     "texts": [
       ". . .._\n\n..\n\nOFFICE OF THE A’ITORNEY GENERAL OF ZQULV\n\nZQELVV"
     ]
@@ -674,7 +674,7 @@
   {
     "group": "group-062",
     "normalisedText": "999\n\noffice of the attorney\n\nzqelvv",
-    "expected": "no-ruling-text",
+    "expected": "usable",
     "texts": ["330\n\nOFFICE OF THE ATTORNEY\n\nZQELVV"]
   },
   {
@@ -1484,13 +1484,13 @@
   {
     "group": "group-195",
     "normalisedText": "office of the altorney general of zqulv\n\nzqelvv",
-    "expected": "no-ruling-text",
+    "expected": "usable",
     "texts": ["OFFICE OF THE AlTORNEY GENERAL OF ZQULV\n\nZQELVV"]
   },
   {
     "group": "group-196",
     "normalisedText": "office of the asitorney general of zqulv\n\nzqalvv\n\n. s",
-    "expected": "no-ruling-text",
+    "expected": "usable",
     "texts": ["OFFICE OF THE AsITORNEY GENERAL OF ZQULV\n\nZQALVV\n\n. s"]
   },
   {

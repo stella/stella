@@ -131,10 +131,6 @@ const publisherPlaceholder = fc.constantFrom(
   ...shortTexts
     .filter(({ expected }) => expected === "source-placeholder")
     .flatMap(({ texts }) => texts),
-  "Unable to extract document content",
-  "Failed to extract text.",
-  "No opinion found. Click here to view source material.",
-  "USCA2 Opinion can't open 24-9876A.pdf",
 );
 const classificationBlock = fc.oneof(
   metadataHeader.map((text) => ({ type: "metadata" as const, text })),
@@ -275,4 +271,30 @@ test(
     );
   },
   propertyTestTimeout(10_000),
+);
+
+const withdrawalRelatedProse = [
+  "This opinion concerns a motion",
+  "The court's opinion discusses a motion",
+  "This opinion explains why the prior order",
+  "The opinion describes how the application",
+].flatMap((subject) =>
+  [
+    "that was withdrawn",
+    "that has been withdrawn",
+    "was withdrawn",
+    "was never issued",
+    "has not been issued",
+  ].flatMap((clause) =>
+    [".", " after review.", " by the lower court."].map(
+      (ending) => `${subject} ${clause}${ending}`,
+    ),
+  ),
+);
+
+test.each(withdrawalRelatedProse)(
+  "CourtListener preserves readable prose about withdrawn or unissued matters: %s",
+  (text) => {
+    expect(classifyCourtListenerText(text)).toBe("usable");
+  },
 );

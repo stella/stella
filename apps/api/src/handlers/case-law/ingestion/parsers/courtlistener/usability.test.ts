@@ -28,6 +28,14 @@ describe("CourtListener short text usability", () => {
       "Case: 24-12345 Date Filed: 01/01/2024 Page: 1 of 2\n\nOffice of the Attorney General",
       "no-ruling-text",
     ],
+    [
+      "Mr. Justice Zqvrvv\n\ndelivered the opinion of the court.",
+      "no-ruling-text",
+    ],
+    [
+      "Mr. Justice Zqvrvv\n\nUnable to extract document content\n\ndelivered the opinion of the court.",
+      "source-placeholder",
+    ],
   ] satisfies [string, CourtListenerTextUsability][])(
     "classifies metadata and publisher placeholder blocks: %s",
     (body, expected) => {
@@ -42,12 +50,62 @@ describe("CourtListener short text usability", () => {
     "Case: 24-12345 Date Filed: 01/01/2024 Page: 1 of 2\n\nCase: 24-12345 Date Filed: 01/01/2024 Page: 2 of 2",
     "Case: 24-12345 Date Filed: 01/01/2024 Page: 1 of 2\nOffice of the Attorney General\nUnited States Court of Appeals for the Second Circuit",
     "Case: 24-12345\nDate Filed: 01/01/2024 Page: 1 of 2\n\nCase: 24-12345\nDate Filed: 01/01/2024 Page: 2 of 2",
+    "Office of the attoheey general\n\n.\n\n. .",
+    "Opinion by\n\nJustice Zqlrv.\n\nNot to be published in full.",
+    "In the Zqykvv Zqbkvv Court of Appeals\n\nfor the Eleventh Circuit",
+    "9999 qx super 99u\n\n99s9s9999",
+    "J\nanu\n\nary99,999\n\n9",
   ])("multiple metadata blocks contain no ruling: %s", (body) => {
     expect(classifyCourtListenerText(body)).toBe("no-ruling-text");
     expect(classifyCourtListenerText(`${body}\n\nThe order is vacated.`)).toBe(
       "usable",
     );
   });
+  test.each([
+    "FILE\nUNAVAILABLE\nUnable to extract document content",
+    "FILE\nUNAVAILABLE\n\nUnable to extract document content",
+    "Office of the Attorney General\n\nFILE\nUNAVAILABLE\n\nUnable to extract document content",
+  ])("recognizes exact publisher messages across line breaks: %s", (body) => {
+    expect(classifyCourtListenerText(body)).toBe("source-placeholder");
+  });
+
+  test("does not treat replacement characters as punctuation metadata", () => {
+    expect(
+      classifyCourtListenerText(
+        "Office of the Attorney General\n\n\ufffd\ufffd\ufffd",
+      ),
+    ).toBe("undecodable");
+  });
+
+  test("keeps an unexplained trailing initial in candidate ruling text", () => {
+    expect(classifyCourtListenerText("Office of the Attorney General A.")).toBe(
+      "usable",
+    );
+  });
+
+  test.each(["Acquitted.", "Convicted.", "Sustained.", "Allowed."])(
+    "keeps short legal outcomes usable after metadata: %s",
+    (outcome) => {
+      for (const separator of [" ", "\n"]) {
+        expect(
+          classifyCourtListenerText(
+            `Office of the Attorney General${separator}${outcome}`,
+          ),
+        ).toBe("usable");
+      }
+      expect(
+        classifyCourtListenerText(
+          `Office of the Attorney General\n\n${outcome}`,
+        ),
+      ).toBe("usable");
+      expect(
+        classifyCourtListenerText(
+          `Office of the Attorney General\n\nUnable to extract document content\n\n${outcome}`,
+        ),
+      ).toBe("usable");
+    },
+  );
+
   test("covers every reviewed group and synthetic text", () => {
     expect(shortTexts).toHaveLength(281);
     expect(
@@ -64,6 +122,7 @@ describe("CourtListener short text usability", () => {
     }
   });
 
+  // Headers cannot absorb residual words: those remain candidate ruling text.
   test.each(shortTexts)("$expected: $normalisedText", ({ expected, texts }) => {
     for (const text of texts) {
       expect(expected).toBe(classifyCourtListenerText(text));
@@ -80,13 +139,17 @@ describe("CourtListener short text usability", () => {
           .replace(/\bz(?=\p{L})/giu, (letter) => (letter === "Z" ? "Q" : "q"))
           .replace(/\d/gu, (numeral) => String((Number(numeral) + 1) % 10));
         expect(expected).toBe(classifyCourtListenerText(text));
-        expect(expected).toBe(classifyCourtListenerText(swapped));
+        const swappedExpected =
+          expected === "source-placeholder" && swapped !== text
+            ? "usable"
+            : expected;
+        expect(swappedExpected).toBe(classifyCourtListenerText(swapped));
       }
     }
     expect(Object.fromEntries(counts)).toEqual({
-      usable: 416,
+      usable: 421,
       "source-placeholder": 59,
-      "no-ruling-text": 42,
+      "no-ruling-text": 37,
       undecodable: 13,
     });
   });
@@ -109,6 +172,20 @@ describe("CourtListener short text usability", () => {
 
   test.each([
     ["Unable\tto extract\n document content", "source-placeholder"],
+    ["Failed to extract text.", "source-placeholder"],
+    [
+      "OPINION # Ms 568 WAS NEVER ISSUED OR WAS WITHDRAWN.",
+      "source-placeholder",
+    ],
+    [
+      "OPINION los 7463 WAS NEVER ISSUED OH\n\nWAS WITHDRAWN.",
+      "source-placeholder",
+    ],
+    [
+      "This opinion has been withdrawn.\n\nOpinion #C-473",
+      "source-placeholder",
+    ],
+    ["This opinion was withdrawn.\n\nOpinion # WWs560", "source-placeholder"],
     ["Unable to extract document content\n\n\ufffd\ufffd\ufffd", "undecodable"],
     [
       "No opinion found.\nClick here to view source material.",

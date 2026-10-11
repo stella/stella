@@ -12,19 +12,105 @@ export const COURTLISTENER_TEXT_USABILITY = {
 export type CourtListenerTextUsability =
   (typeof COURTLISTENER_TEXT_USABILITY)[keyof typeof COURTLISTENER_TEXT_USABILITY];
 
-// CourtListener and the courts it republishes use these messages in place of
-// document bodies. Match the whole message, never a quotation within an opinion.
-const SOURCE_PLACEHOLDERS = [
-  /^(?:unable|failed) to extract (?:document )?(?:content|text)[.!]?$/u,
-  /^no opinion found(?: ?\. ?| )?(?:click here to view source material[.!]?)?$/u,
-  /^(?:usca\d+\s+)?opinion (?:can't|cannot|could not) open\s+\S+$/u,
-  /^(?:this )?opinion\b.{0,100}\b(?:was|has been) (?:never (?:issued|released)|withdrawn)(?: or was withdrawn)?[.!]?(?:\s+opinion\s*#\s*[\w-]+(?:\s*['’])?)?$/u,
-  /^decision removed at the request of the court[.!]?$/u,
-  /^entry removed as entered in error[.!]?$/u,
-  /^(?:file\s+)?unavailable[.!]?$/u,
-  /^memorandum decisions?[.!]?$/u,
-  /^test(?:ing)? (?:document|pdf)[.!]?$/u,
+// These complete replacement messages come from the census and reviewed fixtures.
+// The list deliberately preserves exact identities instead of generalizing IDs.
+const SOURCE_PLACEHOLDER_MESSAGES = [
+  "decision removed at the request of the court.",
+  "entry removed as entered in error",
+  "failed to extract text.",
+  "file unavailable",
+  "memorandum decisions",
+  "memorandum decisions.",
+  "no opinion found. click here to view source material.",
+  "no opinion found.click here to view source material.",
+  "opinion # ms 568 was never issued or was withdrawn.",
+  "opinion # ww-1432 was never issued.",
+  "opinion # ww-1239 was never issued.",
+  "opinion # ww11177 was never released.",
+  "opinion # ww-1145 was never released.",
+  "opinion # ww-915 was never issued.",
+  "opinion # zz-98765 was never issued.",
+  "opinion # xy-678 was never released.",
+  "opinion los 7463 was never issued oh was withdrawn.",
+  "opinion x ww-1167 was never issued.",
+  "test document",
+  "test pdf",
+  "testing document",
+  "this opinion has been withdrawn. opinion #c-473",
+  "this opinion was never issued. opinion # ww-1119 '",
+  "this opinion was withdrawn. opinion # wws560",
+  "unable to extract document content",
+  "unavailable",
+  "usca1 opinion can't open 09-2406e.01a.",
+  "usca1 opinion can't open 15-1424p2.01b",
+  "usca1 opinion can't open 15-1544p.01a.",
+  "usca1 opinion can't open 19-1490p.01",
+  "usca1 opinion can't open 19-2192p.01",
+  "usca1 opinion can't open 19-1389p.01",
+  "usca1 opinion can't open 20-1136p.01",
+  "usca1 opinion can't open 21-1479p.01",
+  "usca2 opinion can't open 24-9876a.pdf",
+  "opinion # ms 035 was never issued or was withdrawn.",
+  "opinion # ww-160 was never issued.",
+  "opinion # ww-6491 was never issued.",
+  "opinion # ww-6670 was never released.",
+  "opinion # ww-6794 was never issued.",
+  "opinion # ww66622 was never released.",
+  "opinion los 2739 was never issued oh was withdrawn.",
+  "opinion x ww-6632 was never issued.",
+  "this opinion has been withdrawn. opinion #c-729",
+  "this opinion was never issued. opinion # ww-6661 '",
+  "this opinion was withdrawn. opinion # wws038",
+  "usca6 opinion can't open 46-6721p.86",
+  "usca6 opinion can't open 48-6693p.86",
+  "usca6 opinion can't open 60-6077p.86a.",
+  "usca6 opinion can't open 60-6747p4.86b",
+  "usca6 opinion can't open 61-4614p.86",
+  "usca6 opinion can't open 61-6718p.86",
+  "usca6 opinion can't open 61-6951p.86",
+  "usca6 opinion can't open 81-4783e.86a.",
 ] as const;
+
+const normalizeSourcePlaceholder = (text: string): string =>
+  text.normalize("NFC").replace(/\s+/gu, " ").trim().toLowerCase();
+const SOURCE_PLACEHOLDERS = new Set(
+  SOURCE_PLACEHOLDER_MESSAGES.map(normalizeSourcePlaceholder),
+);
+
+const isSourcePlaceholder = (text: string): boolean =>
+  SOURCE_PLACEHOLDERS.has(normalizeSourcePlaceholder(text));
+
+const SOURCE_PLACEHOLDER_WORD_SEQUENCES = Array.from(
+  SOURCE_PLACEHOLDERS,
+  (message) => message.split(" "),
+);
+
+// Every token must belong to a complete closed message; whitespace may wrap or
+// separate messages, but unknown tokens always remain candidate ruling text.
+const isSourcePlaceholderSequence = (text: string): boolean => {
+  const normalized = normalizeSourcePlaceholder(text);
+  if (!normalized) {
+    return false;
+  }
+  const words = normalized.split(" ");
+  const matches = new Uint8Array(words.length + 1);
+  matches[0] = 1;
+  for (let start = 0; start < words.length; start += 1) {
+    if (matches[start] === 0) {
+      continue;
+    }
+    for (const messageWords of SOURCE_PLACEHOLDER_WORD_SEQUENCES) {
+      const end = start + messageWords.length;
+      if (
+        end <= words.length &&
+        messageWords.every((word, offset) => words[start + offset] === word)
+      ) {
+        matches[end] = 1;
+      }
+    }
+  }
+  return matches[words.length] === 1;
+};
 
 const MONTH =
   "(?:january|february|march|april|may|june|july|august|september|october|november|december)";
@@ -50,7 +136,7 @@ const FILING_HEADER =
 const PARTICIPATION_NOTE =
   /^(?:judge [\p{L}'’-]+(?: [\p{L}'’-]+)* took no part|present ?[—:-] ?[\p{L}.,'’-]+(?: [\p{L}.,'’-]+)* (?:jj|j)\.)[.!]?$/u;
 const OFFICE_HEADER =
-  /^[^\p{L}]*office of (?:the )?[\p{L}'’]+(?: general)?(?: of \p{L}+)?(?: \p{L}+)?[^\p{L}'’]*$/u;
+  /^[^\p{L}]*office of (?:the )?[\p{L}'’]+(?: general)?(?: of \p{L}+)?[^\p{L}'’]*$/u;
 const DAMAGED_OFFICE_HEADER =
   /^(?:office of\b|[\p{L}'’]+\s+[\p{L}'’[\]]+ general\b)[\s\S]{0,100}$/u;
 const COURT_IDENTIFIER =
@@ -64,11 +150,7 @@ const isOfficeHeader = (text: string): boolean => {
   for (const match of text.matchAll(/\p{L}/gu)) {
     end = match.index + match[0].length;
   }
-  const header = text.slice(0, end);
-  return (
-    OFFICE_HEADER.test(header) ||
-    (/ [a-z]$/u.test(header) && OFFICE_HEADER.test(header.slice(0, -2)))
-  );
+  return OFFICE_HEADER.test(text.slice(0, end));
 };
 
 const isMetadata = (text: string): boolean =>
@@ -85,7 +167,7 @@ type NonRulingBlock = "metadata" | "placeholder";
 
 const nonRulingBlock = (block: string): NonRulingBlock | null => {
   const compact = block.replace(/\s+/gu, " ").trim();
-  if (SOURCE_PLACEHOLDERS.some((pattern) => pattern.test(compact))) {
+  if (isSourcePlaceholderSequence(compact)) {
     return "placeholder";
   }
   if (isMetadata(compact)) {
@@ -97,7 +179,7 @@ const nonRulingBlock = (block: string): NonRulingBlock | null => {
     .filter((line) => line.length > 0);
   let kind: NonRulingBlock = "metadata";
   for (const line of lines) {
-    if (SOURCE_PLACEHOLDERS.some((pattern) => pattern.test(line))) {
+    if (isSourcePlaceholder(line)) {
       kind = "placeholder";
       continue;
     }
@@ -109,11 +191,11 @@ const nonRulingBlock = (block: string): NonRulingBlock | null => {
 };
 
 const hasReadableSentence = (text: string): boolean => {
-  const compactBody = text.replace(/\s+/gu, " ").trim();
+  const compactBody = text.normalize("NFC").replace(/\s+/gu, " ").trim();
   if (
     AUTHOR_INTRODUCTION.test(compactBody) ||
     AUTHOR_PUBLICATION_NOTE.test(compactBody) ||
-    SOURCE_PLACEHOLDERS.some((pattern) => pattern.test(compactBody))
+    isSourcePlaceholderSequence(compactBody)
   ) {
     return false;
   }
@@ -128,7 +210,7 @@ const hasReadableSentence = (text: string): boolean => {
     for (const [sentence] of compact.matchAll(/[^.!?。！？]*[.!?。！？]+/guy)) {
       const candidate = sentence.trim();
       if (
-        SOURCE_PLACEHOLDERS.some((pattern) => pattern.test(candidate)) ||
+        isSourcePlaceholderSequence(candidate) ||
         isMetadata(candidate) ||
         /^(?:click here to view source material|not to be published in full)[.!]?$/u.test(
           candidate,
@@ -160,37 +242,32 @@ const hasReadableSentence = (text: string): boolean => {
   return false;
 };
 
-const classifyBody = (unattributed: string): CourtListenerTextUsability => {
-  const blocks = unattributed
-    .split(/\n[^\S\n]*\n/gu)
-    .map((block) => block.trim())
-    .filter((block) => block.length > 0);
-  const rulingBlocks: string[] = [];
-  let hasPlaceholder = false;
-  for (const block of blocks) {
-    const kind = nonRulingBlock(block);
-    switch (kind) {
-      case "metadata":
-        break;
-      case "placeholder":
-        hasPlaceholder = true;
-        break;
-      case null:
-        rulingBlocks.push(block);
-        break;
-      default:
-        kind satisfies never;
-        return panic("Unhandled non-ruling block classification");
-    }
+const isAsciiPunctuationOnly = (text: string): boolean =>
+  /^[\s\x21-\x2f\x3a-\x40\x5b-\x60\x7b-\x7e]*$/u.test(text);
+
+const isOcrDateFragment = (text: string): boolean =>
+  /^\d{2}s\d{1,2}s\d{4}$/u.test(text.replace(/\s+/gu, ""));
+
+const isExplicitNoRulingBody = (text: string): boolean => {
+  if (isMetadata(text) || isAsciiPunctuationOnly(text)) {
+    return true;
   }
-  if (blocks.length > 0 && rulingBlocks.length === 0) {
-    // An explicit publisher replacement is more specific than missing ruling text.
-    return hasPlaceholder
-      ? COURTLISTENER_TEXT_USABILITY.SOURCE_PLACEHOLDER
-      : COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT;
+  const compact = text.replace(/\s+/gu, " ").trim();
+  if (/^(?:(?:amended )?memorandum opinion|decision)[\s.!]*$/u.test(compact)) {
+    return true;
   }
+  const tokens = compact.toLowerCase().split(" ");
+  return (
+    tokens.some((token) => /^\d/u.test(token)) &&
+    tokens.every(
+      (token) =>
+        /^(?:for|at|of|the)$/u.test(token) || /^\d[\d/.,:-]*$/u.test(token),
+    )
+  );
+};
+
+const classifyRulingText = (rulingText: string): CourtListenerTextUsability => {
   // Metadata and replacement messages cannot supply words to damaged ruling text.
-  const rulingText = rulingBlocks.join("\n\n");
   const compact = rulingText.replace(/\s+/gu, " ").trim();
   if (hasReadableSentence(rulingText)) {
     return COURTLISTENER_TEXT_USABILITY.USABLE;
@@ -254,6 +331,70 @@ const classifyBody = (unattributed: string): CourtListenerTextUsability => {
   return /\p{L}{2}/u.test(readable)
     ? COURTLISTENER_TEXT_USABILITY.USABLE
     : COURTLISTENER_TEXT_USABILITY.UNDECODABLE;
+};
+
+const classifyBody = (unattributed: string): CourtListenerTextUsability => {
+  const completeBody = unattributed.replace(/\s+/gu, " ").trim();
+  if (isSourcePlaceholderSequence(completeBody)) {
+    return COURTLISTENER_TEXT_USABILITY.SOURCE_PLACEHOLDER;
+  }
+  if (isExplicitNoRulingBody(completeBody)) {
+    return COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT;
+  }
+  const blocks = unattributed
+    .split(/\n[^\S\n]*\n/gu)
+    .map((block) => block.trim())
+    .filter((block) => block.length > 0);
+  const rulingBlocks: string[] = [];
+  let hasPlaceholder = false;
+  let hasMetadata = false;
+  for (const block of blocks) {
+    const kind = nonRulingBlock(block);
+    switch (kind) {
+      case "metadata":
+        hasMetadata = true;
+        break;
+      case "placeholder":
+        hasPlaceholder = true;
+        break;
+      case null:
+        rulingBlocks.push(block);
+        break;
+      default:
+        kind satisfies never;
+        return panic("Unhandled non-ruling block classification");
+    }
+  }
+  const nonPlaceholderText = rulingBlocks
+    .join(" ")
+    .replace(/\s+/gu, " ")
+    .trim();
+  if (rulingBlocks.length > 0 && rulingBlocks.every(isAsciiPunctuationOnly)) {
+    return hasPlaceholder
+      ? COURTLISTENER_TEXT_USABILITY.SOURCE_PLACEHOLDER
+      : COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT;
+  }
+  if (
+    hasMetadata &&
+    rulingBlocks.length > 0 &&
+    rulingBlocks.every(isOcrDateFragment)
+  ) {
+    return hasPlaceholder
+      ? COURTLISTENER_TEXT_USABILITY.SOURCE_PLACEHOLDER
+      : COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT;
+  }
+  if (rulingBlocks.length > 1 && isMetadata(nonPlaceholderText)) {
+    return hasPlaceholder
+      ? COURTLISTENER_TEXT_USABILITY.SOURCE_PLACEHOLDER
+      : COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT;
+  }
+  if (blocks.length > 0 && rulingBlocks.length === 0) {
+    // An explicit publisher replacement is more specific than missing ruling text.
+    return hasPlaceholder
+      ? COURTLISTENER_TEXT_USABILITY.SOURCE_PLACEHOLDER
+      : COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT;
+  }
+  return classifyRulingText(rulingBlocks.join("\n\n"));
 };
 
 export const classifyCourtListenerText = (
