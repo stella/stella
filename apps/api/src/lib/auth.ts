@@ -229,11 +229,11 @@ import {
   type AuthRequestBudgetFrameworkApi,
 } from "@/api/lib/rate-limit/auth-request-budget";
 import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
+import type { RateLimitContext } from "@/api/lib/rate-limit/contracts";
 import {
   createAccountAttemptBudget,
   createOtpAccountLimitPlugin,
 } from "@/api/lib/rate-limit/otp-account-budget";
-import type { RateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 import { TENANT_ACTION_DETAIL } from "@/api/lib/rate-limit/tenant-action-boundary";
 import { memoizePerRequest } from "@/api/lib/request-memo";

@@ -8,10 +8,8 @@ import {
 } from "@/api/handlers/legal-resolve/authorization";
 import { createLegalResolveRoute } from "@/api/handlers/legal-resolve/routes";
 import { hasLawReadScope } from "@/api/handlers/legal-resolve/scope";
-import {
-  InMemoryRateLimitContext,
-  type RateLimitOptions,
-} from "@/api/lib/rate-limit/rate-limit";
+import type { RateLimitOptions } from "@/api/lib/rate-limit/contracts";
+import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import {
   McpAuthenticationError,
