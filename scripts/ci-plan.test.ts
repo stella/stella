@@ -5395,7 +5395,11 @@ test("thin merge groups intentionally skip heavy jobs while full parity stays en
         queueDepth: "thin",
       }),
       name,
-    ).toBe(heavy.has(name) && !admitted.has(name) ? false : full);
+    ).toBe(
+      heavy.has(name) && !admitted.has(name) && name !== "desktop-rust-tests"
+        ? false
+        : full,
+    );
     // The off switch restores the thin skip for the admitted browser suites.
     expect(
       runsAtDepth(condition, {
@@ -5405,7 +5409,7 @@ test("thin merge groups intentionally skip heavy jobs while full parity stays en
         queueBrowserSuites: "off",
       }),
       `${name}/off`,
-    ).toBe(heavy.has(name) ? false : full);
+    ).toBe(heavy.has(name) && name !== "desktop-rust-tests" ? false : full);
     for (const event of [EVENT.pullRequest, EVENT.workflowDispatch]) {
       expect(
         runsAtDepth(condition, {
