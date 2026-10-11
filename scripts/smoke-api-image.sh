@@ -72,11 +72,16 @@ done
 # Optional local escape hatch for a Docker daemon with exhausted default pools.
 docker network create "${network_args[@]}" --label "$owner_label=$run_id" "$network" >/dev/null
 network_created=true
-docker run --detach --name "$postgres" --network "$network" --network-alias smoke-postgres \
+# The data directory is tmpfs, so a restart re-initializes the cluster: start
+# with the development image's settings rather than configuring by restart.
+docker create --name "$postgres" --network "$network" --network-alias smoke-postgres \
   --tmpfs /var/lib/postgresql:rw,size=1g \
   --label "$owner_label=$run_id" \
   --env POSTGRES_USER=postgres --env POSTGRES_PASSWORD=smoke-only --env POSTGRES_DB=stella \
-  "$postgres_image" >/dev/null
+  "$postgres_image" postgres -c config_file=/etc/postgresql/server.conf >/dev/null
+docker cp "$repo/docker/postgres/server.conf" "$postgres:/etc/postgresql/server.conf"
+docker cp "$repo/docker/postgres/prod-parity.conf" "$postgres:/etc/postgresql/prod-parity.conf"
+docker start "$postgres" >/dev/null
 docker run --detach --name "$redis" --network "container:$postgres" \
   --label "$owner_label=$run_id" \
   "$redis_image" >/dev/null
