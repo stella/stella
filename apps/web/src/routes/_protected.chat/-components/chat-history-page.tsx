@@ -70,6 +70,7 @@ import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
@@ -154,7 +155,7 @@ export const ChatHistoryPage = ({
   const mattersView = useQueryView(mattersQuery);
   useQueryViewError(mattersView);
   const matters = mattersView.type === "items" ? mattersView.items : undefined;
-  const selectedMatter = matterOption(matters?.workspaces ?? [], search.matter);
+  const selectedMatter = matterOption(matters?.workspaces, search.matter);
 
   const clearFilters = () => {
     commitQuery.cancel();
@@ -253,10 +254,10 @@ type NavigationMatter = Parameters<typeof toMatterOption>[0];
 
 /** The selected matter as the combobox expects it, from the URL's id. */
 function matterOption(
-  matters: readonly NavigationMatter[],
+  matters: readonly NavigationMatter[] | undefined,
   matterId: string | undefined,
 ): MatterOption | null {
-  if (matterId === undefined) {
+  if (matterId === undefined || matters === undefined) {
     return null;
   }
   const matter = matters.find(({ id }) => id === matterId);
@@ -361,10 +362,7 @@ function ChatHistoryRow({ onDelete, thread }: ChatHistoryRowProps) {
       <time
         className="shrink-0 tabular-nums"
         dateTime={updatedAt.toISOString()}
-        title={format.dateTime(updatedAt, {
-          dateStyle: "medium",
-          timeStyle: "short",
-        })}
+        title={format.dateTime(updatedAt, MEDIUM_DATE_SHORT_TIME_FORMAT)}
       >
         {relativeTime(updatedAt)}
       </time>

@@ -64,6 +64,8 @@ export const toMatterOption = (matter: {
   name: matter.name,
 });
 
+const NO_WORKSPACES: readonly never[] = [];
+
 const GROUP_LABEL = {
   [MATTER_OPTION_GROUP.recent]: "navigation.recents",
   [MATTER_OPTION_GROUP.all]: "inspector.matterPicker.allMatters",
@@ -123,7 +125,9 @@ export const MatterCombobox = ({
     groupedChatThreadsOptions({ activeOrganizationId, userId }),
   );
   const groupedThreadsView = useQueryView(groupedThreadsQuery);
-  const workspaces = navigation?.workspaces ?? [];
+  // Nothing to offer until the navigation list has loaded.
+  const workspaces =
+    navigation === undefined ? NO_WORKSPACES : navigation.workspaces;
   const matters = workspaces.map(toMatterOption);
   const recentIds = selectPinnedThenRecentWorkspaces({
     chatActivityByWorkspaceId: chatActivityByWorkspace(
