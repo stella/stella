@@ -39,6 +39,7 @@ export const VISUAL_BLOCKED_GLOBALS = [
   "WebTransportReceiveStream",
   "WebTransportSendGroup",
   "WebTransportSendStream",
+  "WebTransportWriter",
   "EventSource",
   "Worker",
   "SharedWorker",
