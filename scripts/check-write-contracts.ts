@@ -33,6 +33,30 @@ type LocatedExpression = {
   node: ts.Expression;
   scope?: LexicalScope | undefined;
 };
+
+const isResultCall = (
+  node: ts.Node,
+  method: "await" | "err",
+): node is ts.CallExpression =>
+  ts.isCallExpression(node) &&
+  ts.isPropertyAccessExpression(node.expression) &&
+  node.expression.expression.getText() === "Result" &&
+  node.expression.name.text === method;
+
+const isHandlerErrorCheck = (node: ts.Expression, name: string) =>
+  ts.isCallExpression(node) &&
+  ts.isPropertyAccessExpression(node.expression) &&
+  node.expression.expression.getText() === "HandlerError" &&
+  node.expression.name.text === "is" &&
+  node.arguments.at(0)?.getText() === name;
+
+const isTransparentConflictWrapper = (node: ts.Node, child: ts.Node) =>
+  ts.isAwaitExpression(node) ||
+  ts.isYieldExpression(node) ||
+  ts.isParenthesizedExpression(node) ||
+  ts.isAsExpression(node) ||
+  ts.isSatisfiesExpression(node) ||
+  (isResultCall(node, "await") && node.arguments.at(0) === child);
 export type WriteRegistration = MutationRegistration & {
   contract: string | undefined;
   precondition: string | undefined;
@@ -54,12 +78,7 @@ const unwrap = (node: ts.Expression): ts.Expression => {
 /** Recognize only a returned value or an immediate conflict early return. */
 const propagatesConflict = (call: ts.CallExpression): boolean => {
   let expression: ts.Node = call;
-  while (
-    ts.isAwaitExpression(expression.parent) ||
-    ts.isParenthesizedExpression(expression.parent) ||
-    ts.isAsExpression(expression.parent) ||
-    ts.isSatisfiesExpression(expression.parent)
-  ) {
+  while (isTransparentConflictWrapper(expression.parent, expression)) {
     expression = expression.parent;
   }
   const parent = expression.parent;
@@ -92,11 +111,16 @@ const propagatesConflict = (call: ts.CallExpression): boolean => {
         returnsConflict(only)
       );
     }
+    const returned =
+      ts.isReturnStatement(node) && node.expression !== undefined
+        ? unwrap(node.expression)
+        : undefined;
     return (
       ts.isReturnStatement(node) &&
-      node.expression !== undefined &&
-      ts.isIdentifier(unwrap(node.expression)) &&
-      unwrap(node.expression).getText() === name
+      returned !== undefined &&
+      ((ts.isIdentifier(returned) && returned.getText() === name) ||
+        (isResultCall(returned, "err") &&
+          returned.arguments.at(0)?.getText() === name))
     );
   };
   if (next === undefined) {
@@ -111,6 +135,7 @@ const propagatesConflict = (call: ts.CallExpression): boolean => {
   const condition = unwrap(next.expression);
   const nonNull =
     (ts.isIdentifier(condition) && condition.text === name) ||
+    isHandlerErrorCheck(condition, name) ||
     (ts.isBinaryExpression(condition) &&
       (condition.operatorToken.kind ===
         ts.SyntaxKind.ExclamationEqualsEqualsToken ||
@@ -883,11 +908,14 @@ class WriteSourceResolver {
       }
       return result;
     }
-    // Transaction callbacks run while their decisive lock is held. Other callback
-    // consumers require a called write helper rather than an assumed invocation.
+    // Transaction and safeDb callbacks run while their decisive lock is held.
+    // Other callback consumers require a called write helper rather than an
+    // assumed invocation.
     const callbacks =
-      ts.isPropertyAccessExpression(value.node.expression) &&
-      value.node.expression.name.text === "transaction"
+      (ts.isPropertyAccessExpression(value.node.expression) &&
+        value.node.expression.name.text === "transaction") ||
+      (ts.isIdentifier(value.node.expression) &&
+        value.node.expression.text === "safeDb")
         ? value.node.arguments
         : [];
     for (const expression of [value.node.expression, ...callbacks]) {

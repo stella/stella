@@ -282,6 +282,7 @@ export const PropertyPopover = ({
         await updateProperty.mutateAsync({
           workspaceId,
           propertyId: id,
+          expectedUpdatedAt: new Date(property.updatedAt).toISOString(),
           name,
           content: property.content,
           tool: { ...tool, dependencies: nextDependencies },

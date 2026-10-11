@@ -4,6 +4,7 @@ import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
 import { auditEventChanges } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { VERSION_CONFLICT_ERROR_CODE } from "@/api/lib/optimistic-concurrency";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/lib/properties/create-schema";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -12,20 +13,23 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 import updateProperty from "./update";
 
 type UpdatePropertyCtx = Parameters<typeof updateProperty.handler>[0];
+const STORED_UPDATED_AT = new Date("2026-10-11T00:00:00.000Z");
 
 const createContext = ({
   body,
   safeDb,
   scopedDb,
+  expectedUpdatedAt = STORED_UPDATED_AT.toISOString(),
   recordAuditEvent = async () => {},
 }: {
-  body: UpdatePropertyCtx["body"];
+  body: Omit<UpdatePropertyCtx["body"], "expectedUpdatedAt">;
   safeDb: UpdatePropertyCtx["safeDb"];
   scopedDb: UpdatePropertyCtx["scopedDb"];
+  expectedUpdatedAt?: string;
   recordAuditEvent?: UpdatePropertyCtx["recordAuditEvent"];
 }): UpdatePropertyCtx =>
   asTestRaw<UpdatePropertyCtx>({
-    body,
+    body: { ...body, expectedUpdatedAt },
     request: new Request(
       "https://example.test/v1/properties/workspace_test/property_test",
       { method: "POST" },
@@ -44,6 +48,57 @@ const createContext = ({
   });
 
 describe("updateProperty", () => {
+  test("rejects a stale property token before writing", async () => {
+    let updateCalled = false;
+    const { safeDb, scopedDb } = createScopedDbMock({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            for: async () => [
+              {
+                id: toSafeId<"property">("property_test"),
+                name: "Current name",
+                content: { version: 1, type: "text" },
+                tool: { version: 1, type: "manual-input" },
+                role: null,
+                status: "fresh",
+                updatedAt: STORED_UPDATED_AT,
+                playbookSourceId: null,
+              },
+            ],
+          }),
+        }),
+      }),
+      update: () => {
+        updateCalled = true;
+        return { set: () => ({ where: async () => undefined }) };
+      },
+    });
+
+    const result = await updateProperty.handler(
+      createContext({
+        safeDb,
+        scopedDb,
+        expectedUpdatedAt: new Date(0).toISOString(),
+        body: {
+          name: "Stale edit",
+          content: { version: 1, type: "text" },
+          tool: { version: 1, type: "manual-input" },
+        },
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 409,
+      response: {
+        code: VERSION_CONFLICT_ERROR_CODE,
+        message:
+          "Property changed while it was being edited; reload and try again",
+      },
+    });
+    expect(updateCalled).toBe(false);
+  });
+
   test("file policy reads the stored type under the write lock before refusing", async () => {
     const order: string[] = [];
     const storedContent = {
@@ -71,6 +126,7 @@ describe("updateProperty", () => {
                     content: storedContent,
                     tool: { version: 1, type: "manual-input" },
                     status: "fresh",
+                    updatedAt: STORED_UPDATED_AT,
                     playbookSourceId: null,
                   },
                 ];
@@ -164,6 +220,7 @@ describe("updateProperty", () => {
                 content: { version: 1, type: "text" },
                 tool: { version: 1, type: "manual-input" },
                 status: "fresh",
+                updatedAt: STORED_UPDATED_AT,
                 playbookSourceId: "pb_src_test",
               },
             ],
@@ -232,6 +289,7 @@ describe("updateProperty", () => {
                 tool: { version: 1, type: "manual-input" },
                 role: null,
                 status: "fresh",
+                updatedAt: STORED_UPDATED_AT,
                 playbookSourceId: null,
               },
             ],
@@ -325,6 +383,7 @@ describe("updateProperty", () => {
                 tool: { version: 1, type: "ai-model", prompt: "classify" },
                 role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
                 status: "fresh",
+                updatedAt: STORED_UPDATED_AT,
                 playbookSourceId: null,
               },
             ],
@@ -401,6 +460,7 @@ describe("updateProperty", () => {
                 tool,
                 role: null,
                 status: "fresh",
+                updatedAt: STORED_UPDATED_AT,
                 playbookSourceId: null,
               },
             ],
@@ -475,6 +535,7 @@ describe("updateProperty", () => {
                 tool,
                 role: null,
                 status: "fresh",
+                updatedAt: STORED_UPDATED_AT,
                 playbookSourceId: null,
               },
             ],
@@ -557,6 +618,7 @@ describe("updateProperty", () => {
                 tool,
                 role: null,
                 status: "fresh",
+                updatedAt: STORED_UPDATED_AT,
                 playbookSourceId: null,
               },
             ],
@@ -633,6 +695,7 @@ describe("updateProperty", () => {
                 tool: { version: 1, type: "ai-model", prompt: "classify" },
                 role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
                 status: "fresh",
+                updatedAt: STORED_UPDATED_AT,
                 playbookSourceId: null,
               },
             ],
@@ -737,6 +800,7 @@ describe("updateProperty", () => {
                   tool,
                   role: null,
                   status: "fresh",
+                  updatedAt: STORED_UPDATED_AT,
                   playbookSourceId: null,
                 },
               ],

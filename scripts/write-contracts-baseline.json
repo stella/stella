@@ -114,12 +114,6 @@
     "baselineId": "apps/api/src/handlers/playbooks/update.ts"
   },
   {
-    "key": "apps/api/src/handlers/properties/routes.ts|POST|/properties/:workspaceId/property/:propertyId/|apps/api/src/handlers/properties/update.ts.handler",
-    "count": 1,
-    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
-    "baselineId": "apps/api/src/handlers/properties/update.ts"
-  },
-  {
     "key": "apps/api/src/handlers/rates/routes.ts|PUT|/rates/:workspaceId/arrangement|apps/api/src/handlers/rates/arrangement/update.ts.handler",
     "count": 1,
     "reason": "Existing replacement awaits required schema precondition and caller enrollment.",

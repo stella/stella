@@ -31,6 +31,7 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { serializeAITool } from "@/api/lib/markdown/ai-tool";
+import { expectedUpdatedAtSchema } from "@/api/lib/optimistic-concurrency";
 import {
   DOCUMENT_TYPE_CLASSIFIER_ROLE,
   isDocumentTypeClassifierProperty,
@@ -44,6 +45,7 @@ import {
 } from "@/api/lib/properties/dependency-limits";
 import { propertyKindsForUpdate } from "@/api/lib/properties/property-kinds";
 import { lockWorkspacePropertyWrites } from "@/api/lib/properties/property-lock";
+import { enforceWritePrecondition } from "@/api/lib/write-contract";
 
 type PropertyWithDeps = {
   id: SafeId<"property">;
@@ -214,6 +216,7 @@ const hasCircularDependency = ({
 };
 
 const updatePropertyBodySchema = t.Object({
+  expectedUpdatedAt: expectedUpdatedAtSchema,
   name: tDefaultVarchar,
   content: propertyContentSchema,
   tool: t.Union([
@@ -238,10 +241,7 @@ const updatePropertyBodySchema = t.Object({
 
 const config = {
   contract: "replace",
-  precondition: {
-    type: "deferred",
-    baselineId: "apps/api/src/handlers/properties/update.ts",
-  },
+  precondition: { type: "updatedAt", field: "expectedUpdatedAt" },
   description:
     "Replace one property's name, value type, and tool (an AI prompt with " +
     "its dependencies, or manual input) in a matter. A change that affects " +
@@ -317,6 +317,7 @@ const updateProperty = createSafeHandler(
             kinds: properties.kinds,
             role: properties.role,
             status: properties.status,
+            updatedAt: properties.updatedAt,
             playbookSourceId: properties.playbookSourceId,
           })
           .from(properties)
@@ -335,6 +336,17 @@ const updateProperty = createSafeHandler(
             status: 404 as const,
             message: "Property not found",
           };
+        }
+
+        const conflict = enforceWritePrecondition({
+          type: "updatedAt",
+          field: "expectedUpdatedAt",
+          storedUpdatedAt: oldProperty.updatedAt,
+          expectedUpdatedAt: body.expectedUpdatedAt,
+          resource: "Property",
+        });
+        if (conflict) {
+          return conflict;
         }
 
         if (isFileProperty(oldProperty.content) !== isFileProperty(content)) {
@@ -572,6 +584,10 @@ const updateProperty = createSafeHandler(
         return { ok: true as const };
       }),
     );
+
+    if (HandlerError.is(txResult)) {
+      return Result.err(txResult);
+    }
 
     if (!txResult.ok) {
       return Result.err(

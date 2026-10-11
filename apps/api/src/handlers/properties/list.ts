@@ -44,6 +44,7 @@ const toPropertyListItem = (
     kinds: property.kinds,
     role: property.role,
     createdAt: property.createdAt,
+    updatedAt: property.updatedAt,
   };
 
   if (property.tool.type === "ai-model") {

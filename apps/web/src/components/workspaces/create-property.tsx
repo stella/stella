@@ -631,6 +631,7 @@ const PropertyComposerBody = ({
         {
           workspaceId,
           propertyId: editingProperty.id,
+          expectedUpdatedAt: new Date(editingProperty.updatedAt).toISOString(),
           name: trimmedName,
           content: nextContent,
           tool: nextTool,

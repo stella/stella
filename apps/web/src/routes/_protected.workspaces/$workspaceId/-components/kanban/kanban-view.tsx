@@ -581,6 +581,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         updateProperty.mutate({
           workspaceId,
           propertyId: groupByPropertyId,
+          expectedUpdatedAt: new Date(groupByProperty.updatedAt).toISOString(),
           name: groupByProperty.name,
           content: {
             ...groupByProperty.content,
@@ -617,6 +618,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         updateProperty.mutate({
           workspaceId,
           propertyId: groupByPropertyId,
+          expectedUpdatedAt: new Date(groupByProperty.updatedAt).toISOString(),
           name: groupByProperty.name,
           content: {
             ...groupByProperty.content,
@@ -888,6 +890,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       updateProperty.mutate({
         workspaceId,
         propertyId: groupByPropertyId,
+        expectedUpdatedAt: new Date(groupByProperty.updatedAt).toISOString(),
         name: groupByProperty.name,
         content: { ...groupByProperty.content, options: opts },
         tool: groupByProperty.tool,

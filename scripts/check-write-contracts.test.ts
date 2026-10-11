@@ -408,6 +408,33 @@ describe("write contracts cover the mutation route graph", () => {
     );
     expect(check(sources)).toEqual([]);
   });
+  test("safe database callbacks propagate typed conflicts through Result.await", () => {
+    const config = `{contract: 'replace', precondition: {type: 'updatedAt', field: 'expectedUpdatedAt'}}`;
+    const guarded = `import { Result } from 'better-result';
+      import { createSafeHandler } from '@/api/lib/api-handlers';
+      import { HandlerError } from '@/api/lib/errors/tagged-errors';
+      import { enforceWritePrecondition } from '@/api/lib/write-contract';
+      export default createSafeHandler(${config}, async function* ({body, safeDb}) {
+        const outcome = yield* Result.await(safeDb(async (tx) => {
+          const stored = await tx.readForUpdate();
+          const conflict = enforceWritePrecondition({type: 'updatedAt', field: 'expectedUpdatedAt', expectedUpdatedAt: body.expectedUpdatedAt, storedUpdatedAt: stored.updatedAt, resource: 'Example'});
+          if (conflict) return conflict;
+          return tx.replace(body);
+        }));
+        if (HandlerError.is(outcome)) return Result.err(outcome);
+        return Result.ok(outcome);
+      });`;
+    const sources = fixture(config);
+    sources.set(handler, guarded);
+    expect(check(sources)).toEqual([]);
+    sources.set(
+      handler,
+      guarded.replace("if (conflict) return conflict;", "void conflict;"),
+    );
+    expect(check(sources)).toContainEqual(
+      expect.stringContaining("Replacement must reach owner enforcement"),
+    );
+  });
   test("compound revision declarations require every owner comparison", () => {
     const config = `{contract: 'replace', precondition: {type: 'revision', fields: ['baseRevision', 'selectedTextHash']}}`;
     const sources = fixture(config);

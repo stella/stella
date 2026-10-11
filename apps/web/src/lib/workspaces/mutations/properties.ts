@@ -139,6 +139,7 @@ export const useCreatePropertiesBatch = ({
 type UpdatePropertyVars = {
   workspaceId: string;
   propertyId: string;
+  expectedUpdatedAt: string;
   name: string;
   content: WorkspaceProperty["content"];
   // Verdict columns are system-computed and read-only; the update endpoint only
@@ -155,6 +156,7 @@ export const useUpdateProperty = () => {
     mutationFn: async ({
       workspaceId,
       propertyId,
+      expectedUpdatedAt,
       name,
       content,
       tool,
@@ -163,6 +165,7 @@ export const useUpdateProperty = () => {
         .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .property({ propertyId: toSafeId<"property">(propertyId) })
         .post({
+          expectedUpdatedAt,
           name,
           content,
           tool:

@@ -64,6 +64,10 @@ export const properties = p.pgTable(
       "playbook_definition_id",
     ).references(() => playbookDefinitions.id, { onDelete: "set null" }),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
   },
   (table) => [
     p.index("properties_workspace_id_idx").on(table.workspaceId),

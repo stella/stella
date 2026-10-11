@@ -19,66 +19,67 @@ properties.role                    text             null              properties
 properties.playbook_source_id      uuid             null              properties.ts:54  Correlates a property materialized by a playbook back to the bundle column (its `sourceId`) that produced it, so re-applying matches by identity rather than na…
 properties.playbook_definition_id  safeUuid         fk,null           properties.ts:63  Which playbook currently owns this column.
 properties.created_at              timestamptz      default,not null  properties.ts:66
+properties.updated_at              timestamptz      default,not null  properties.ts:67
 ```
 
-## property_dependencies · `propertyDependencies` · properties.ts:84
+## property_dependencies · `propertyDependencies` · properties.ts:88
 
 ```text
-property_dependencies.id                      pUuid            pk,not null  properties.ts:87
-property_dependencies.workspace_id            safeWorkspaceId  not null     properties.ts:88
-property_dependencies.property_id             safeUuid         not null     properties.ts:89
-property_dependencies.depends_on_property_id  safeUuid         not null     properties.ts:90
-property_dependencies.condition               jsonb            null         properties.ts:93
+property_dependencies.id                      pUuid            pk,not null  properties.ts:91
+property_dependencies.workspace_id            safeWorkspaceId  not null     properties.ts:92
+property_dependencies.property_id             safeUuid         not null     properties.ts:93
+property_dependencies.depends_on_property_id  safeUuid         not null     properties.ts:94
+property_dependencies.condition               jsonb            null         properties.ts:97
 ```
 
-## playbook_definitions · `playbookDefinitions` · properties.ts:146 · rls
+## playbook_definitions · `playbookDefinitions` · properties.ts:150 · rls
 
 An org-scoped playbook definition: a saved, reusable set of graded Positions.
 
 ```text
-playbook_definitions.id                 pUuid               pk,not null       properties.ts:149
-playbook_definitions.organization_id    safeOrganizationId  fk,not null       properties.ts:150
-playbook_definitions.name               varchar             not null          properties.ts:153
-playbook_definitions.starter_id         varchar             null              properties.ts:157  Stable bundled-starter provenance.
-playbook_definitions.description        text                null              properties.ts:158
-playbook_definitions.scope              jsonb               null              properties.ts:159
-playbook_definitions.document_type_key  text                null              properties.ts:163  Derived from `scope.documentTypeKey` by the `playbook_definitions_derive_document_type_key` trigger on every insert and update; a value a writer supplies is re…
-playbook_definitions.positions          jsonb               not null          properties.ts:164
-playbook_definitions.status             text                default,not null  properties.ts:171  Advisory approval status (v1): "draft" | "approved".
-playbook_definitions.approved_at        timestamptz         null              properties.ts:176
-playbook_definitions.approved_by        text                fk,null           properties.ts:177
-playbook_definitions.created_at         timestamptz         default,not null  properties.ts:180
-playbook_definitions.updated_at         timestamptz         default,not null  properties.ts:181
+playbook_definitions.id                 pUuid               pk,not null       properties.ts:153
+playbook_definitions.organization_id    safeOrganizationId  fk,not null       properties.ts:154
+playbook_definitions.name               varchar             not null          properties.ts:157
+playbook_definitions.starter_id         varchar             null              properties.ts:161  Stable bundled-starter provenance.
+playbook_definitions.description        text                null              properties.ts:162
+playbook_definitions.scope              jsonb               null              properties.ts:163
+playbook_definitions.document_type_key  text                null              properties.ts:167  Derived from `scope.documentTypeKey` by the `playbook_definitions_derive_document_type_key` trigger on every insert and update; a value a writer supplies is re…
+playbook_definitions.positions          jsonb               not null          properties.ts:168
+playbook_definitions.status             text                default,not null  properties.ts:175  Advisory approval status (v1): "draft" | "approved".
+playbook_definitions.approved_at        timestamptz         null              properties.ts:180
+playbook_definitions.approved_by        text                fk,null           properties.ts:181
+playbook_definitions.created_at         timestamptz         default,not null  properties.ts:184
+playbook_definitions.updated_at         timestamptz         default,not null  properties.ts:185
 ```
 
-## playbook_definition_versions · `playbookDefinitionVersions` · properties.ts:223 · rls
+## playbook_definition_versions · `playbookDefinitionVersions` · properties.ts:227 · rls
 
 Immutable snapshot of a `playbookDefinitions` row taken on each approval (`approve.ts`).
 
 ```text
-playbook_definition_versions.id                      pUuid               pk,not null       properties.ts:226
-playbook_definition_versions.organization_id         safeOrganizationId  not null          properties.ts:227
-playbook_definition_versions.playbook_definition_id  safeUuid            not null          properties.ts:228
-playbook_definition_versions.version                 integer             not null          properties.ts:231
-playbook_definition_versions.source                  text                not null          properties.ts:232
-playbook_definition_versions.name                    varchar             not null          properties.ts:233
-playbook_definition_versions.description             text                null              properties.ts:234
-playbook_definition_versions.scope                   jsonb               null              properties.ts:235
-playbook_definition_versions.positions               jsonb               not null          properties.ts:236
-playbook_definition_versions.created_at              timestamptz         default,not null  properties.ts:237
-playbook_definition_versions.created_by              text                fk,not null       properties.ts:238
+playbook_definition_versions.id                      pUuid               pk,not null       properties.ts:230
+playbook_definition_versions.organization_id         safeOrganizationId  not null          properties.ts:231
+playbook_definition_versions.playbook_definition_id  safeUuid            not null          properties.ts:232
+playbook_definition_versions.version                 integer             not null          properties.ts:235
+playbook_definition_versions.source                  text                not null          properties.ts:236
+playbook_definition_versions.name                    varchar             not null          properties.ts:237
+playbook_definition_versions.description             text                null              properties.ts:238
+playbook_definition_versions.scope                   jsonb               null              properties.ts:239
+playbook_definition_versions.positions               jsonb               not null          properties.ts:240
+playbook_definition_versions.created_at              timestamptz         default,not null  properties.ts:241
+playbook_definition_versions.created_by              text                fk,not null       properties.ts:242
 ```
 
-## document_types · `documentTypes` · properties.ts:278 · rls
+## document_types · `documentTypes` · properties.ts:282 · rls
 
 An org-owned, editable taxonomy of document TYPES (e.g. "Share Purchase Agreement").
 
 ```text
-document_types.id               pUuid               pk,not null       properties.ts:281
-document_types.organization_id  safeOrganizationId  fk,not null       properties.ts:282
-document_types.key              varchar             not null          properties.ts:285
-document_types.label            varchar             not null          properties.ts:286
-document_types.sort_order       integer             default,not null  properties.ts:287
-document_types.created_at       timestamptz         default,not null  properties.ts:288
-document_types.updated_at       timestamptz         default,not null  properties.ts:289
+document_types.id               pUuid               pk,not null       properties.ts:285
+document_types.organization_id  safeOrganizationId  fk,not null       properties.ts:286
+document_types.key              varchar             not null          properties.ts:289
+document_types.label            varchar             not null          properties.ts:290
+document_types.sort_order       integer             default,not null  properties.ts:291
+document_types.created_at       timestamptz         default,not null  properties.ts:292
+document_types.updated_at       timestamptz         default,not null  properties.ts:293
 ```
