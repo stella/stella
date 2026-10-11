@@ -844,6 +844,12 @@ export const caseLawDecisions = p.pgTable(
       .index("case_law_decisions_source_arrivals_idx")
       .on(t.sourceId, t.createdAt)
       .where(storedObservationHasDetail(t.metadata)),
+    // Exact coverage bounds per source: two endpoint probes, independent of
+    // the display-sized year facet.
+    p
+      .index("case_law_decisions_source_decision_date_coverage_idx")
+      .on(t.sourceId, t.decisionDate, t.id)
+      .where(storedObservationHasDetail(t.metadata)),
     // The sitemap shard refresh: the public countries' published decisions,
     // counted per month and bucket with their newest `updated_at`.
     // Partial on the publication gate so the gate costs nothing per row, and

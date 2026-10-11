@@ -15,6 +15,7 @@ import {
   type CaseLawCourtStatusRow,
   caseLawCourtStatusRows,
   readCaseLawCourtActivityQuery,
+  readCaseLawCourtCountQuery,
 } from "@/api/handlers/case-law/decisions/status-courts";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
@@ -279,7 +280,7 @@ export const readCaseLawCorpusStatusHandler = async (
       // of index probes per court, and the provider decides how many buckets
       // it returns.
       const named = buckets.slice(0, LIMITS.caseLawFacetLimit);
-      const [courtWeights, activity] = await Promise.all([
+      const [courtWeights, activity, courtCount] = await Promise.all([
         loadPublicCourtWeights(),
         caseLawDb(
           async (tx) =>
@@ -289,12 +290,14 @@ export const readCaseLawCorpusStatusHandler = async (
               now: new Date(),
             }),
         ),
+        caseLawDb(async (tx) => await readCaseLawCourtCountQuery(tx, read)),
       ]);
       return caseLawCourtStatusRows({
         activity,
         buckets: named,
         country: read.country,
         courtWeights,
+        courtCount,
         total,
       });
     },

@@ -18,7 +18,7 @@ export type CourtBreakdownRow =
       tier: string;
     }
   | { type: "tier"; tier: string; courts: number }
-  | { type: "unlisted"; listed: number };
+  | { type: "other-courts"; courts: number };
 
 /**
  * A tier the UI has a label for. A label it does not know folds into the
@@ -58,10 +58,11 @@ export const CourtRowLabel = ({ row }: { row: CourtBreakdownRow }) => {
           </span>
         </span>
       );
-    case "unlisted":
+    case "other-courts":
       return (
         <span className="text-muted-foreground">
-          {t("caseLaw.corpusStatus.unlistedCourts", { count: row.listed })}
+          {t("caseLaw.corpusStatus.otherCourts")} ·{" "}
+          {t("caseLaw.corpusStatus.courtCount", { count: row.courts })}
         </span>
       );
     default: {

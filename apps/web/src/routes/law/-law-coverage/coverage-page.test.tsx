@@ -62,6 +62,10 @@ const NEARLY_COMPLETE: CaseLawCoverageSource = {
   publicHomeUrl: "https://rozhodnuti.nsoud.cz/",
   health: "current",
   lastSyncAt: OBSERVED_AT,
+  decisionYearFrom: 1993,
+  decisionYearTo: 2026,
+  pendingTextCount: 0,
+  knownGaps: { type: "unknown" },
   addedLastWeek: 12,
   completeness: {
     state: "measured",
@@ -79,6 +83,10 @@ const NEVER_MEASURED: CaseLawCoverageSource = {
   publicHomeUrl: "https://nalus.usoud.cz/",
   health: "delayed",
   lastSyncAt: OBSERVED_AT,
+  decisionYearFrom: 1993,
+  decisionYearTo: 2026,
+  pendingTextCount: 0,
+  knownGaps: { type: "unknown" },
   addedLastWeek: 0,
   completeness: { state: "not-measured-yet" },
 };
@@ -90,6 +98,10 @@ const NEVER_COUNTED: CaseLawCoverageSource = {
   publicHomeUrl: "https://vyhledavac.nssoud.cz/",
   health: "current",
   lastSyncAt: OBSERVED_AT,
+  decisionYearFrom: 1993,
+  decisionYearTo: 2026,
+  pendingTextCount: 0,
+  knownGaps: { type: "unknown" },
   addedLastWeek: 0,
   completeness: { state: "not-counted-yet" },
 };
@@ -259,7 +271,12 @@ describe("the coverage page states what it counts", () => {
               ...CZECHIA,
               courts: [
                 ...(CZECHIA.courts ?? []),
-                { type: "unlisted", tier: "other", listed: 2, decisions: 480 },
+                {
+                  type: "other-courts",
+                  tier: "other",
+                  courts: 5,
+                  decisions: 480,
+                },
               ],
             },
           ],
@@ -267,9 +284,10 @@ describe("the coverage page states what it counts", () => {
       />,
     );
 
-    // The row names how many courts were listed, carries the rest of the
-    // count, and states no activity, because none was read for it.
-    expect(markup).toContain("Courts beyond the 2 largest");
+    // The row names and counts the other courts, carries their decisions,
+    // and states no activity, because none was read for them.
+    expect(markup).toContain("Other courts");
+    expect(markup).toContain("5 courts");
     expect(markup).toContain("480");
   });
 

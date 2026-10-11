@@ -21,7 +21,7 @@ const coverageAnswerSchema = t.Union([
 ]);
 
 const config = {
-  cache: { kind: "public", maxAge: 900, swr: 3600 },
+  cache: { kind: "public", maxAge: 300, swr: 3600 },
   response:
     safePublicHandlerResponseSchemasWithStatusText(coverageAnswerSchema),
   // Not a capability: it takes no input, opts into shared response caching,

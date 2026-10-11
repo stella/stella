@@ -39,6 +39,11 @@ const skSourceId = createSafeId<"caseLawSource">();
 const disabledSourceId = createSafeId<"caseLawSource">();
 const withheldSourceId = createSafeId<"caseLawSource">();
 
+const COVERAGE_YEARS = [
+  1981, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012,
+  2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2026,
+] as const;
+
 const LISTING_ONLY = {
   _stellaPartialObservation: { isListingOnly: true },
 } as const;
@@ -56,6 +61,8 @@ const decisionRow = (overrides: {
   sourceId: SafeId<"caseLawSource">;
   createdAt: Date;
   metadata?: Record<string, unknown>;
+  decisionDate?: string;
+  fulltext?: string;
 }) => ({
   caseNumber: overrides.caseNumber,
   country: overrides.country,
@@ -65,6 +72,8 @@ const decisionRow = (overrides: {
   createdAt: overrides.createdAt,
   updatedAt: overrides.createdAt,
   metadata: overrides.metadata ?? {},
+  decisionDate: overrides.decisionDate,
+  fulltext: overrides.fulltext,
 });
 
 beforeAll(
@@ -177,6 +186,22 @@ beforeAll(
       }),
     ]);
 
+    // More than a facet page of distinct years, with sparse endpoints, proves
+    // coverage reads exact source bounds rather than capped year buckets.
+    await db.insert(caseLawDecisions).values(
+      COVERAGE_YEARS.map((year) =>
+        decisionRow({
+          caseNumber: `cz coverage year ${year}`,
+          country: "CZE",
+          court: "Nejvyšší soud",
+          sourceId: czSourceId,
+          createdAt: new Date("2000-01-01T00:00:00.000Z"),
+          fulltext: "Published decision text",
+          decisionDate: `${year}-06-15`,
+        }),
+      ),
+    );
+
     // SAFETY: the PGlite handle implements the root select and transaction
     // surface the scheduled refresh uses.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- embedded test database stands in for the root pool
@@ -226,6 +251,13 @@ test(
       ADAPTER_KEYS.CZ_NSS,
       ADAPTER_KEYS.SK_COURTS,
     ]);
+    const czech = sources.find(
+      ({ adapterKey }) => adapterKey === ADAPTER_KEYS.CZ_NS,
+    );
+    expect(czech?.decisionYearFrom).toBe(1981);
+    expect(czech?.decisionYearTo).toBe(2026);
+    expect(czech?.pendingTextCount).toBe(1);
+
     // The stored figure is read as a column, never counted here.
     expect(
       sources.find(({ adapterKey }) => adapterKey === ADAPTER_KEYS.CZ_NS)
@@ -340,7 +372,7 @@ test(
     expect(cze?.stored.asOf).toBe(
       new Date(NOW.getTime() - 2 * HOUR_IN_MS).toISOString(),
     );
-    expect(cze).toMatchObject({ decisionYearFrom: 2019, decisionYearTo: 2026 });
+    expect(cze).toMatchObject({ decisionYearFrom: 1981, decisionYearTo: 2026 });
 
     const svk = byCountry.get("SVK");
     expect(svk?.availability).toBe(

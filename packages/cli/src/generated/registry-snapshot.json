@@ -321,7 +321,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "case_law_coverage",
-    "description": "Report case-law availability, decision counts, year ranges and court breakdowns per jurisdiction. Use before concluding that a decision is missing from the corpus; in-preparation counts describe held decisions that public search cannot yet find.",
+    "description": "Report case-law availability per jurisdiction and source: searchable year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
     "inputSchema": {
       "type": "object",
       "required": [],

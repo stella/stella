@@ -111,6 +111,20 @@ export const REVIEWED_SQL_PRODUCERS: readonly {
     reason: "A predicate over the aliased decision's metadata column.",
   },
   {
+    modules: ["apps/api/src/lib/legal-search/partial-observation-sql"],
+    name: "storedObservationHasDetailSqlFor",
+    sqlArguments: [0],
+    reason:
+      "The canonical published-detail predicate over a literal metadata column.",
+  },
+  {
+    modules: ["apps/api/src/lib/legal-search/partial-observation-sql"],
+    name: "storedObservationIsListingOnlySqlFor",
+    sqlArguments: [0],
+    reason:
+      "The canonical listing-only predicate over a literal metadata column.",
+  },
+  {
     modules: [
       "apps/api/src/lib/case-law/redistribution",
       "apps/api/src/lib/case-law/redistribution-sql",

@@ -1,4 +1,5 @@
 import { Result, TaggedError } from "better-result";
+import { sql } from "drizzle-orm";
 
 import {
   type CaseLawJurisdiction,
@@ -28,6 +29,7 @@ import {
   type CaseLawCourtStatusRow,
   caseLawCourtStatusRows,
   readCaseLawCourtActivityQuery,
+  readCaseLawCourtCountQuery,
 } from "@/api/handlers/case-law/decisions/status-courts";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
@@ -40,6 +42,10 @@ import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution"
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  storedObservationHasDetailSqlFor,
+  storedObservationIsListingOnlySqlFor,
+} from "@/api/lib/legal-search/partial-observation-sql";
 import { createUnrecognizedSourceReporter } from "@/api/lib/legal-search/source-registry-membership";
 import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
 import { LIMITS } from "@/api/lib/limits";
@@ -92,6 +98,24 @@ type CaseLawCoverageSource = {
   health: CaseLawCoverageHealth;
   /** ISO 8601; null before the first run. */
   lastSyncAt: string | null;
+  /** Exact searchable decision-year bounds for this source. */
+  decisionYearFrom: number | null;
+  decisionYearTo: number | null;
+  /** Publisher-listed decisions whose text has not arrived. */
+  pendingTextCount: number;
+  /** Registry-reviewed gaps; unknown is never presented as no gaps. */
+  knownGaps:
+    | { type: "unknown" }
+    | { type: "none-recorded" }
+    | {
+        type: "known";
+        gaps: readonly {
+          from: string;
+          to: string;
+          reason: string;
+          evidenceRef: string;
+        }[];
+      };
   completeness: CaseLawSourceCompleteness;
   /**
    * Decisions published for this source in the last seven days; null when
@@ -199,6 +223,9 @@ type CaseLawCoverageSourceRow = {
   reportedTotalOrigin: string | null;
   storedTotal: number | null;
   storedTotalAsOf: Date | null;
+  decisionYearFrom: number | null;
+  decisionYearTo: number | null;
+  pendingTextCount: number;
 };
 
 /**
@@ -210,6 +237,13 @@ type CaseLawCoverageSourceRow = {
  * nothing a reader of the corpus needs. The redistribution gate is applied
  * here rather than per number, so a withheld source contributes to nothing.
  */
+const PUBLISHED_COVERAGE_DECISION_SQL = sql.raw(
+  storedObservationHasDetailSqlFor("coverage_decisions.metadata"),
+);
+const LISTING_ONLY_COVERAGE_DECISION_SQL = sql.raw(
+  storedObservationIsListingOnlySqlFor("coverage_decisions.metadata"),
+);
+
 export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawCoverageSources,
   async (
@@ -226,29 +260,32 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
         reportedTotalOrigin: caseLawSources.reportedTotalOrigin,
         storedTotal: caseLawSources.storedTotal,
         storedTotalAsOf: caseLawSources.storedTotalAsOf,
+        decisionYearFrom: sql<number | null>`(
+          SELECT min(extract(year FROM coverage_decisions.decision_date))::integer
+          FROM case_law_decisions AS coverage_decisions
+          WHERE coverage_decisions.source_id = case_law_sources.id
+            AND ${PUBLISHED_COVERAGE_DECISION_SQL}
+        )`,
+        decisionYearTo: sql<number | null>`(
+          SELECT max(extract(year FROM coverage_decisions.decision_date))::integer
+          FROM case_law_decisions AS coverage_decisions
+          WHERE coverage_decisions.source_id = case_law_sources.id
+            AND ${PUBLISHED_COVERAGE_DECISION_SQL}
+        )`,
+        pendingTextCount: sql<number>`(
+          SELECT count(*)::integer
+          FROM case_law_decisions AS coverage_decisions
+          WHERE coverage_decisions.source_id = case_law_sources.id
+            AND coverage_decisions.fulltext IS NULL
+            AND coverage_decisions.redacted_at IS NULL
+            AND ${LISTING_ONLY_COVERAGE_DECISION_SQL}
+        )`,
       })
       .from(caseLawSources)
       .where(redistributableCaseLawSource)
       .orderBy(caseLawSources.adapterKey)
       .limit(CASE_LAW_SOURCE_ROWS_BOUND),
 );
-
-/** The earliest and latest year the index reports for a jurisdiction. */
-const decisionYearBounds = (
-  facets: LegalBrowseFacets,
-): { from: number | null; to: number | null } => {
-  let from: number | null = null;
-  let to: number | null = null;
-  for (const { value } of facets.year) {
-    const year = Number(value);
-    if (!Number.isInteger(year)) {
-      continue;
-    }
-    from = from === null || year < from ? year : from;
-    to = to === null || year > to ? year : to;
-  }
-  return { from, to };
-};
 
 /** A source the week's read did not answer for: unknown, never zero. */
 const UNKNOWN_ARRIVALS = {
@@ -365,6 +402,10 @@ export const loadCaseLawCoverage = async ({
         now,
       }),
       lastSyncAt: source.lastSyncAt?.toISOString() ?? null,
+      decisionYearFrom: source.decisionYearFrom,
+      decisionYearTo: source.decisionYearTo,
+      pendingTextCount: source.pendingTextCount,
+      knownGaps: manifest.knownGaps,
       completeness: caseLawSourceCompleteness({
         reportedTotal: source.reportedTotal,
         reportedTotalAsOf: source.reportedTotalAsOf,
@@ -447,7 +488,26 @@ export const loadCaseLawCoverage = async ({
     const bucket = facets.value.country.find(({ value }) => value === country);
     const searchable = bucket?.count ?? 0;
     searchableTotal += searchable;
-    const { from, to } = decisionYearBounds(facets.value);
+    const searchableSources = entry.sources.filter(
+      ({ decisionYearFrom, decisionYearTo }) =>
+        decisionYearFrom !== null && decisionYearTo !== null,
+    );
+    const from =
+      searchableSources.length === 0
+        ? null
+        : Math.min(
+            ...searchableSources.map(
+              ({ decisionYearFrom }) => decisionYearFrom ?? Infinity,
+            ),
+          );
+    const to =
+      searchableSources.length === 0
+        ? null
+        : Math.max(
+            ...searchableSources.map(
+              ({ decisionYearTo }) => decisionYearTo ?? -Infinity,
+            ),
+          );
     const courts = await Result.tryPromise({
       try: async () =>
         await readCourts({
@@ -533,7 +593,7 @@ export const readCaseLawCoverageHandler = async (
         excludedSourceIds: excludedSourceIds.value,
       }),
     readCourts: async ({ buckets, country, total }) => {
-      const [courtWeights, activity] = await Promise.all([
+      const [courtWeights, activity, courtCount] = await Promise.all([
         loadPublicCourtWeights(),
         caseLawDb(
           async (tx) =>
@@ -544,12 +604,20 @@ export const readCaseLawCoverageHandler = async (
               now,
             }),
         ),
+        caseLawDb(
+          async (tx) =>
+            await readCaseLawCourtCountQuery(tx, {
+              country,
+              excludedSourceIds: excludedSourceIds.value,
+            }),
+        ),
       ]);
       return caseLawCourtStatusRows({
         activity,
         buckets,
         country,
         courtWeights,
+        courtCount,
         total,
       });
     },

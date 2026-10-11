@@ -134,14 +134,49 @@ export type CaseLawCourtStatusRow =
        * less the courts listed. The buckets are the largest courts up to a
        * limit, and a breakdown that stopped at the limit would sum to less
        * than the total beside it with nothing to say where the rest went.
-       * How many courts these are is not known, so the row names how many
-       * are listed instead; it carries no activity, because none was read.
+       * The exact court count comes from the cached public-corpus aggregate;
+       * the row carries no activity, because none was read for those courts.
        */
-      type: "unlisted";
+      type: "other-courts";
       tier: "other";
-      listed: number;
+      courts: number;
       decisions: number;
     };
+
+/** Exact number of searchable courts, read from the public corpus. */
+export const readCaseLawCourtCountQuery = definePublicLawSharedQuery(
+  PUBLIC_LAW_SHARED_QUERY.caseLawCourtCount,
+  async (
+    tx: CaseLawPublicReadTransaction,
+    {
+      country,
+      excludedSourceIds,
+    }: Pick<CourtActivityRead, "country" | "excludedSourceIds">,
+  ): Promise<number> => {
+    const admitted =
+      excludedSourceIds.length === 0
+        ? sql``
+        : sql`AND d.source_id <> ALL(
+          SELECT value::uuid
+          FROM jsonb_array_elements_text(${JSON.stringify([...excludedSourceIds])}::text::jsonb) AS value
+        )`;
+    const published = sql.raw(publishedCaseLawDecisionSqlFor("d"));
+    const result: unknown = await withSharedStatementTimeout(
+      tx,
+      ACTIVITY_STATEMENT_TIMEOUT_MS,
+      async () =>
+        await tx.execute(sql`
+        SELECT count(DISTINCT d.court)::integer AS courts
+        FROM case_law_decisions d
+        WHERE d.country = ${country}
+          AND ${published}
+          ${admitted}
+      `),
+    );
+    const row = executedRows(result).find(isRecord);
+    return toCount(row?.["courts"]);
+  },
+);
 
 /** What one court's rows say about recent ingestion and the last change. */
 export type CourtActivity = {
@@ -289,6 +324,8 @@ type CourtStatusRowsOptions = {
   activity: ReadonlyMap<string, CourtActivity>;
   /** The jurisdiction's whole searchable count, which the rows must sum to. */
   total: number;
+  /** Exact searchable court count for the jurisdiction. */
+  courtCount: number;
 };
 
 const NO_ACTIVITY: CourtActivity = {
@@ -308,6 +345,7 @@ export const caseLawCourtStatusRows = ({
   activity,
   buckets,
   country,
+  courtCount,
   courtWeights,
   total,
 }: CourtStatusRowsOptions): CaseLawCourtStatusRow[] => {
@@ -317,15 +355,15 @@ export const caseLawCourtStatusRows = ({
   // and a bucket sum above it would be the projection contradicting itself.
   // Clamped rather than asserted, because the two are read separately and a
   // reindex may land between the reads.
-  const unlisted = Math.max(0, total - listed);
-  if (unlisted === 0) {
+  const otherDecisions = Math.max(0, total - listed);
+  if (otherDecisions === 0) {
     return rows;
   }
   rows.push({
-    type: "unlisted",
+    type: "other-courts",
     tier: "other",
-    listed: buckets.length,
-    decisions: unlisted,
+    courts: Math.max(0, courtCount - buckets.length),
+    decisions: otherDecisions,
   });
   return rows;
 };
@@ -335,7 +373,10 @@ const courtRowsByTier = ({
   buckets,
   country,
   courtWeights,
-}: Omit<CourtStatusRowsOptions, "total">): CaseLawCourtStatusRow[] => {
+}: Omit<
+  CourtStatusRowsOptions,
+  "total" | "courtCount"
+>): CaseLawCourtStatusRow[] => {
   // A list per tier up front, so every tier has one to collect into and there
   // is no absent case to stand in for. A tier added to the union has to be
   // given one here before this compiles. Annotated, not inferred: empty
