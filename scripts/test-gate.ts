@@ -752,17 +752,27 @@ const expandRootScripts = (
   visited: ReadonlySet<string> = new Set(),
 ): string[] => {
   const expanded = [command];
-  for (const [name, body] of Object.entries(scripts)) {
+  const words = shellWords(command, "include");
+  const invokedNames = new Set(
+    words.flatMap((word, index) => {
+      const name = words[index + 2];
+      return word === "bun" && words[index + 1] === "run" && name !== undefined
+        ? [name]
+        : [];
+    }),
+  );
+  for (const name of invokedNames) {
+    const body = scripts[name];
     if (typeof body !== "string" || visited.has(name)) {
       continue;
     }
     const invocations = gatingArguments({
       command,
-      invocationEnd: (words, index) =>
-        words[index] === "bun" &&
-        words[index + 1] === "run" &&
-        words[index + 2] === name &&
-        !words.slice(0, index).includes("cd")
+      invocationEnd: (tokens, index) =>
+        tokens[index] === "bun" &&
+        tokens[index + 1] === "run" &&
+        tokens[index + 2] === name &&
+        !tokens.slice(0, index).includes("cd")
           ? index + 3
           : undefined,
     });
