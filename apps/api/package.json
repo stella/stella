@@ -13,7 +13,7 @@
     "build:mcp-apps": "bun scripts/build-mcp-apps.ts",
     "gen:chat-saved-state": "bun scripts/gen-chat-saved-state.ts",
     "gen:chat-transcripts": "bun scripts/gen-chat-transcripts.ts",
-    "gen:web-api-types": "bun scripts/generate-web-api-types.ts",
+    "gen:web-api-types": "bun --cwd=../.. node_modules/turbo/bin/turbo run generate:api-types --filter=@stll/web --",
     "build:analyze": "bun run generate:capability-runtime && bun build --target bun --define 'process.env.NODE_ENV=\"production\"' --outdir .cache/server-build --entry-naming=server.js --metafile-md=.cache/server-metafile.md src/server.ts",
     "test": "bun --cwd=../../packages/cli run codegen:runtime && bun run generate:capability-runtime && bun scripts/run-tests.ts",
     "action-cost:report": "bun src/scripts/action-cost-report.ts",
@@ -79,7 +79,8 @@
     "typecheck:scripts": "bun check --no-pretty --all --project=tsconfig.scripts.json",
     "typecheck:contracts": "bun check --no-pretty --all --project=tsconfig.contracts.json",
     "typecheck:mcp-apps": "bun check --no-pretty --all --project=tsconfig.mcp-apps.json",
-    "typecheck:visual-sandbox": "bun check --no-pretty --all --project=tsconfig.visual-sandbox.json"
+    "typecheck:visual-sandbox": "bun check --no-pretty --all --project=tsconfig.visual-sandbox.json",
+    "test:perf": "bun scripts/run-perf-tests.ts"
   },
   "dependencies": {
     "@aws-sdk/client-cloudwatch": "^3.1145.0",
@@ -254,6 +255,12 @@
       "gateValue": "true",
       "runner": "scripts/run-valkey-tests.ts",
       "testFileGlob": "src/**/*.test.{ts,tsx}"
+    },
+    "test:perf": {
+      "gate": "STELLA_RUN_QUERY_PERF_TESTS",
+      "gateValue": "true",
+      "runner": "scripts/run-perf-tests.ts",
+      "testFileGlob": "src/tests/query-perf/**/*.test.ts"
     }
   },
   "crawlPosture": "unserved"
