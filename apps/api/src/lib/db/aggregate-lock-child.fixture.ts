@@ -33,7 +33,7 @@ export const documentSourceFixture = () => {
 };
 
 /** A declared child order must be checked before issuing the joined lock. */
-export const plantedDescendingDocumentChildren = (tx: Transaction) => {
+export const plantedDescendingDocumentChildren = async (tx: Transaction) => {
   const fixture = documentSourceFixture();
   return withAggregateRowQuery({
     tx,
