@@ -229,7 +229,7 @@ const requiresField = (schema: unknown, field: string): boolean => {
       ) {
         return false;
       }
-      const value = Object.entries(schema.properties)
+      const value: unknown = Object.entries(schema.properties)
         .find(([key]) => key === field)
         ?.at(1);
       if (typeof value !== "object" || value === null || !(Kind in value)) {
