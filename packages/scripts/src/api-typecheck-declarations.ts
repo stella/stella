@@ -4,7 +4,10 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
-import { apiResolvedTypecheckInputs } from "./api-typecheck-inputs";
+import {
+  apiResolvedTypecheckInputs,
+  nativeTypecheckProgramFiles,
+} from "./api-typecheck-inputs";
 import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
 import { readTurboTypecheckInputs } from "./turbo-typecheck-inputs";
 
@@ -325,12 +328,83 @@ export const emitApiTypecheckDeclarations = (project: string) => {
   return { diagnostics, files: [...emitted] };
 };
 
+// References can require implementation modules that declaration serialization
+// erased. Discover those roots from the native consumer programs, rather than
+// maintaining a second surface allowlist.
+const nativeRequiredDeclarationRoots = (project: string) => {
+  const resolved = path.resolve(project);
+  const config = ts.sys.realpath?.(resolved) ?? resolved;
+  const api = path.dirname(config);
+  const root = path.resolve(api, "../..");
+  const required = new Set<string>();
+  for (const pattern of [
+    "tsconfig*.json",
+    "apps/*/tsconfig*.json",
+    "packages/*/tsconfig*.json",
+  ]) {
+    for (const filename of new Bun.Glob(pattern).scanSync({ cwd: root })) {
+      const consumer = path.join(root, filename);
+      const read = ts.readConfigFile(consumer, (file) => ts.sys.readFile(file));
+      const parsed = ts.parseJsonConfigFileContent(
+        read.config,
+        ts.sys,
+        path.dirname(consumer),
+        undefined,
+        consumer,
+      );
+      if (
+        !parsed.projectReferences?.some(
+          (reference) => ts.resolveProjectReferencePath(reference) === config,
+        )
+      ) {
+        continue;
+      }
+      const owned = new Set(
+        parsed.fileNames.map((file) => ts.sys.realpath?.(file) ?? file),
+      );
+      for (const source of nativeTypecheckProgramFiles(consumer)) {
+        if (
+          source.startsWith(`${path.join(api, "src")}${path.sep}`) &&
+          /\.[cm]?tsx?$/u.test(source) &&
+          !/\.d\.[cm]?ts$/u.test(source) &&
+          !owned.has(source)
+        ) {
+          required.add(source);
+        }
+      }
+    }
+  }
+  return [...required];
+};
+
+export const regenerateApiDeclarationSurface = (project: string) => {
+  let result = emitApiTypecheckDeclarations(project);
+  while (result.diagnostics.length === 0) {
+    const roots = writeApiDeclarationSurface(project, result.files);
+    const required = nativeRequiredDeclarationRoots(project);
+    const directory = path.dirname(path.resolve(project));
+    const api = ts.sys.realpath?.(directory) ?? directory;
+    const missing = required.filter(
+      (file) => !roots.includes(path.relative(api, file)),
+    );
+    if (missing.length === 0) {
+      return result;
+    }
+    writeApiDeclarationSurface(project, [...result.files, ...missing]);
+    result = emitApiTypecheckDeclarations(project);
+  }
+  return result;
+};
+
 if (import.meta.main) {
   const project = process.argv[2];
   if (!project) {
     panic("Expected API declaration project path");
   }
-  const { diagnostics, files } = emitApiTypecheckDeclarations(project);
+  const writeSurface = process.argv.includes("--write-surface");
+  const { diagnostics, files } = writeSurface
+    ? regenerateApiDeclarationSurface(project)
+    : emitApiTypecheckDeclarations(project);
   if (diagnostics.length > 0) {
     process.stderr.write(
       ts.formatDiagnosticsWithColorAndContext(diagnostics, {
@@ -341,9 +415,7 @@ if (import.meta.main) {
     );
     process.exit(1);
   }
-  if (process.argv.includes("--write-surface")) {
-    writeApiDeclarationSurface(project, files);
-  } else {
+  if (!writeSurface) {
     const config = ts.readConfigFile(project, (file) => ts.sys.readFile(file));
     const roots = apiDeclarationSurfaceFiles(project, files);
     if (JSON.stringify(config.config.files) !== JSON.stringify(roots)) {

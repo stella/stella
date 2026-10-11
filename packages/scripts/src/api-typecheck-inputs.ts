@@ -6,11 +6,8 @@ import { childExitStatus } from "./child-exit-status";
 
 // Root exclusions do not exclude imported modules. Cache the compiler program,
 // including workspace dependencies and ambient declarations, instead.
-export const apiResolvedTypecheckInputs = (project: string) => {
+export const nativeTypecheckProgramFiles = (project: string) => {
   const config = path.resolve(project);
-  const projectDirectory = path.dirname(config);
-  const api = ts.sys.realpath?.(projectDirectory) ?? projectDirectory;
-  const root = path.resolve(api, "../..");
   const child = Bun.spawnSync(
     [
       process.execPath,
@@ -20,11 +17,23 @@ export const apiResolvedTypecheckInputs = (project: string) => {
       "--listFilesOnly",
       `--project=${config}`,
     ],
-    { cwd: root, stdout: "pipe", stderr: "pipe" },
+    { cwd: path.dirname(config), stdout: "pipe", stderr: "pipe" },
   );
   if (childExitStatus(child) !== 0) {
     panic(child.stdout.toString() + child.stderr.toString());
   }
+  return child.stdout
+    .toString()
+    .split(/\r?\n/u)
+    .filter((file) => path.isAbsolute(file))
+    .map((file) => ts.sys.realpath?.(file) ?? file);
+};
+
+export const apiResolvedTypecheckInputs = (project: string) => {
+  const config = path.resolve(project);
+  const projectDirectory = path.dirname(config);
+  const api = ts.sys.realpath?.(projectDirectory) ?? projectDirectory;
+  const root = path.resolve(api, "../..");
   const read = ts.readConfigFile(config, (file) => ts.sys.readFile(file));
   const parsed = ts.parseJsonConfigFileContent(
     read.config,
@@ -38,11 +47,7 @@ export const apiResolvedTypecheckInputs = (project: string) => {
     parsed.options.declarationDir,
   ].flatMap((directory) => (directory ? [path.resolve(directory)] : []));
   const files = new Set(
-    child.stdout
-      .toString()
-      .split(/\r?\n/u)
-      .filter((file) => path.isAbsolute(file))
-      .map((file) => ts.sys.realpath?.(file) ?? file)
+    nativeTypecheckProgramFiles(config)
       .filter(
         (file) =>
           path.isAbsolute(file) &&

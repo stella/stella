@@ -16,6 +16,7 @@ import {
   apiDeclarationCacheInputs,
   missingDeclarationCacheInputs,
   emitApiTypecheckDeclarations,
+  regenerateApiDeclarationSurface,
   writeApiDeclarationSurface,
 } from "./api-typecheck-declarations";
 
@@ -463,6 +464,40 @@ test("declaration aliases resolve transitive API contracts without checking thei
     expect(files.some((file) => file.endsWith("/src/leaf.ts"))).toBe(false);
     expect(files.some((file) => file.endsWith("/src/runtime.ts"))).toBe(false);
     expect(files.some((file) => file.endsWith("/src/surface.ts"))).toBe(false);
+    writeFileSync(path.join(api, "src/extra.ts"), "export const extra = 1;\n");
+    writeFileSync(
+      path.join(api, "consumer.test.ts"),
+      'import { extra } from "./src/extra"; export const count: number = extra;\n',
+    );
+    const regenerated = regenerateApiDeclarationSurface(project);
+    expect(regenerated.diagnostics).toEqual([]);
+    expect(JSON.parse(readFileSync(project, "utf-8")).files).toContain(
+      "src/extra.ts",
+    );
+    expect(
+      readFileSync(
+        path.join(api, ".cache/declarations/src/extra.d.ts"),
+        "utf-8",
+      ),
+    ).toContain("export declare const extra = 1;");
+    const closed = Bun.spawnSync(
+      [process.execPath, "check", "--listFilesOnly", `--project=${consumer}`],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    expect(closed.exitCode).toBe(0);
+    expect(closed.stdout.toString()).not.toContain(
+      path.join(api, "src/extra.ts"),
+    );
+    const surfaceConfig = JSON.parse(readFileSync(project, "utf-8"));
+    surfaceConfig.files = ["src/surface.ts"];
+    writeFileSync(project, JSON.stringify(surfaceConfig));
+    writeFileSync(
+      path.join(api, "src/extra.ts"),
+      'import Elysia from "elysia"; export const extra = new Elysia();\n',
+    );
+    expect(() => regenerateApiDeclarationSurface(project)).toThrow(
+      "Forbidden API runtime declaration dependency",
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

@@ -116,8 +116,9 @@ test("the API declaration command emits its public surface", () => {
     path.join(tmpdir(), "api-native-declarations-"),
   );
   try {
+    mkdirSync(path.join(directory, "src"));
     writeFileSync(
-      path.join(directory, "value.ts"),
+      path.join(directory, "src/value.ts"),
       "export type Value = string;\n",
     );
     writeFileSync(
@@ -128,9 +129,10 @@ test("the API declaration command emits its public surface", () => {
           declaration: true,
           emitDeclarationOnly: true,
           outDir: "declarations",
+          rootDir: ".",
           types: [],
         },
-        files: ["value.ts"],
+        files: ["src/value.ts"],
       }),
     );
     const result = spawnSync(
@@ -141,7 +143,10 @@ test("the API declaration command emits its public surface", () => {
     expect(result.error).toBeUndefined();
     expect(result.status, result.stdout + result.stderr).toBe(0);
     expect(
-      readFileSync(path.join(directory, "declarations/value.d.ts"), "utf-8"),
+      readFileSync(
+        path.join(directory, "declarations/src/value.d.ts"),
+        "utf-8",
+      ),
     ).toContain("export type Value = string;");
   } finally {
     rmSync(directory, { recursive: true, force: true });
