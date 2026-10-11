@@ -102,6 +102,13 @@ const outcome = step({
   job: "ci-result",
   name: "Evaluate CI outcome",
 });
+const folded = v.parse(
+  v.record(v.string(), v.record(v.string(), v.string())),
+  JSON.parse(outcome.env?.["FOLDED_SUITES"] ?? ""),
+);
+const skippedOnThin = new Set(
+  heavy.filter((job) => !Object.hasOwn(folded, job)),
+);
 const scopes = v.parse(
   v.record(v.string(), v.nullable(v.string())),
   JSON.parse(outcome.env?.["JOB_SCOPES"] ?? ""),
@@ -109,9 +116,10 @@ const scopes = v.parse(
 const needs = v.parse(v.array(v.string()), ci.jobs["ci-result"]?.needs);
 const plan = {
   ...Object.fromEntries(
-    Object.values(scopes).flatMap((scope) =>
-      scope === null ? [] : [[scope, "true"]],
-    ),
+    [
+      ...Object.values(scopes),
+      ...Object.values(folded).flatMap(Object.values),
+    ].flatMap((scope) => (scope === null ? [] : [[scope, "true"]])),
   ),
   ...Object.fromEntries(
     Object.values(
@@ -122,8 +130,6 @@ const plan = {
     ).map((scope) => [scope, "true"]),
   ),
   desktop_browser_required: "true",
-  agent_sandbox_docker_required: "true",
-  api_image_deps_required: "true",
   run_required: "true",
   trusted: "true",
   coverage_profile: "normal-v1",
@@ -861,7 +867,7 @@ test("unset and full preserve historical predicates except declared PR, Postgres
   }
 }, 30_000);
 
-test("one variable moves only derived heavy jobs from merge groups to ordinary main pushes", () => {
+test("one variable moves only derived heavy-only jobs from merge groups to ordinary main pushes", () => {
   const baseline = original("ci.yml");
   for (const event of events) {
     for (const variable of ["", "full", "thin", "typo"]) {
@@ -914,7 +920,7 @@ test("one variable moves only derived heavy jobs from merge groups to ordinary m
         }
         if (
           resolved.exitCode !== 0 ||
-          (thinQueue && heavy.includes(job) && !admitted.includes(job))
+          (thinQueue && skippedOnThin.has(job) && !admitted.includes(job))
         ) {
           expect(runs, `${event.event}/${variable}/${job}`).toBe(false);
           continue;
@@ -1041,13 +1047,9 @@ const evaluate = ({
   result,
   script = outcome.run,
 }: EvaluateOptions) => {
-  const folded = v.parse(
-    v.record(v.string(), v.record(v.string(), v.string())),
-    JSON.parse(outcome.env?.["FOLDED_SUITES"] ?? "{}"),
-  );
   const dependencies = Object.fromEntries(
     needs.map((name) => {
-      let jobResult = heavy.includes(name) ? "skipped" : "success";
+      let jobResult = skippedOnThin.has(name) ? "skipped" : "success";
       if (name === job) {
         jobResult = result ?? "missing";
       }
@@ -1107,7 +1109,7 @@ test("thin aggregation accepts only intended heavy skips and still requires ever
       ).toBe(1);
     }
   }
-  for (const job of THIN_JOBS) {
+  for (const job of [...THIN_JOBS, ...Object.keys(folded)]) {
     expect(evaluate({ queueDepth: "thin", job, result: "skipped" }), job).toBe(
       1,
     );
