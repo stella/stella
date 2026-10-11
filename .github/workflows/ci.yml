@@ -1101,7 +1101,7 @@ jobs:
                 ;;
             esac
             case "$file" in
-              packages/scan-engine/*)
+              packages/scan-engine/*|bun.lock|.github/workflows/ci.yml)
                 scan_engine_wasm_required=true
                 ;;
             esac
