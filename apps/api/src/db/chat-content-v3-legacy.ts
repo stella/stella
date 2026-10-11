@@ -149,7 +149,7 @@ const normalizeLegacyMessagePartsToTanStack = (
     if (isLegacyToolPart(part)) {
       const converted = legacyToolPartToTanStack(part);
       if (converted === null) {
-        invalidLegacyPart();
+        return invalidLegacyPart();
       }
       normalized.push(converted);
       continue;

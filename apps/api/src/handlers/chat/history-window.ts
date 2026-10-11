@@ -6,17 +6,12 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError, SafeDbOrTx } from "@/api/db/safe-db";
 import { withScopedTx } from "@/api/db/safe-db";
 import { chatMessages } from "@/api/db/schema";
-import {
-  chatMessageFromPersisted,
-  toChatMessageContent,
-} from "@/api/handlers/chat/chat-message-parts";
 import type { ChatThreadCompactionCheckpoint } from "@/api/handlers/chat/persistent-compaction";
 import {
   decodeChatCompactionDeltaCursor,
   readLatestChatCompactionOnTx,
 } from "@/api/handlers/chat/persistent-compaction";
 import type {
-  ChatMessageContent,
   ChatMessageRole,
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
@@ -25,31 +20,10 @@ import { chatMessageCursorCodec } from "@/api/lib/chat/message-cursor";
 import type { TimestampIdCursor } from "@/api/lib/db-pagination";
 import { LIMITS } from "@/api/lib/limits";
 
-export type WindowedThreadMessage = {
-  id: SafeId<"chatMessage">;
-  role: ChatMessageRole;
-  content: ChatMessageContent;
-};
-
-/**
- * Decode stored v3 content into the version-2 wire envelope used by the chat pipeline.
- */
-const toWindowedMessage = (row: {
-  id: SafeId<"chatMessage">;
-  role: ChatMessageRole;
-  content: PersistedChatMessageContent;
-}): WindowedThreadMessage => {
-  const message = chatMessageFromPersisted(row);
-  return {
-    id: row.id,
-    role: row.role,
-    content: toChatMessageContent({
-      data: message.parts,
-      ...(message.metadata === undefined ? {} : { metadata: message.metadata }),
-      version: 2,
-    }),
-  };
-};
+export type WindowedThreadMessage = Pick<
+  typeof chatMessages.$inferSelect,
+  "id" | "role" | "content"
+>;
 
 /**
  * PostgreSQL's version of the row: every insert and every update writes a new
@@ -159,7 +133,7 @@ const loadWindowedThreadHistoryOnTx = async ({
 
   const ascending = rows.toReversed();
   return {
-    messages: ascending.map(toWindowedMessage),
+    messages: ascending,
     snapshot: {
       rows: ascending.map(({ id, version }) => ({ id, version })),
       scope: windowScope({ ascending, cursor, limit }),
@@ -444,7 +418,7 @@ export const resolveTruncationTarget = async ({
       .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id));
 
     return {
-      messagesForPersistence: retainedPrefix.map(toWindowedMessage),
+      messagesForPersistence: retainedPrefix,
       deleteMessageIdsBeforeLatest: idsAfterTarget.map((row) => row.id),
       hasLaterUserMessage: idsAfterTarget.some((row) => row.role === "user"),
       // Exactly the rows every decision above came from, so whenever the

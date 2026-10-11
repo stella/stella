@@ -196,7 +196,7 @@ const isPersistedTextChatPart = (
   "content" in part &&
   typeof part.content === "string";
 
-export const proveTextOnlyPersistedChatMessageContent = <TMetadata>(
+export const proveTextOnlyPersistedChatMessageContent = <TMetadata = undefined>(
   content: PersistedChatMessageContentV3Candidate<
     PersistedTextChatPart,
     TMetadata

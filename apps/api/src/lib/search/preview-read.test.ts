@@ -367,11 +367,14 @@ describe("search preview rendering contract", () => {
               metadata: {
                 sourceDocuments: [
                   {
+                    entityId: "entity_1",
                     title: "Closing memorandum",
                     mention: "@closing-memo",
                     entityRef: "entity_1",
                     matterRef: "matter_1",
                     kind: "document",
+                    mimeType: "application/pdf",
+                    workspaceId: ids.wsA1,
                   },
                 ],
               },

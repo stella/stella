@@ -63,6 +63,7 @@ export const TABLE_POLICY_SETTINGS_BASELINE: readonly string[] = [
   "case_law_statute_citation_counts",
   "case_law_statute_citation_memberships",
   "cell_metadata",
+  "chat_content_v3_backfill_receipts",
   "chat_message_search_documents",
   "chat_messages",
   "chat_thread_compactions",

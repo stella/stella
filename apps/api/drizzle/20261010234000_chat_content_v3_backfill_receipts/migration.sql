@@ -13,7 +13,7 @@ CREATE TABLE "chat_content_v3_backfill_receipts" (
   CONSTRAINT "chat_content_v3_backfill_receipts_pkey" PRIMARY KEY ("source", "row_id"),
   CONSTRAINT "chat_content_v3_backfill_receipts_source_check" CHECK ("source" IN ('message', 'revision')),
   CONSTRAINT "chat_content_v3_backfill_receipts_outcome_check" CHECK ("outcome" IN ('converted', 'skipped', 'failed')),
-  CONSTRAINT "chat_content_v3_backfill_receipts_message_id_chat_messages_id_fk"
+  CONSTRAINT "chat_content_v3_receipts_message_fk"
     FOREIGN KEY ("message_id") REFERENCES "chat_messages" ("id") ON DELETE CASCADE
 );--> statement-breakpoint
 

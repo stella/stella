@@ -1111,7 +1111,7 @@ describe("durable chat turn persistence", () => {
       userMessageId,
       workspaceId: ids.wsA1,
     });
-    const pendingApprovals = toChatMessageContent({
+    const pendingApprovals = toPersistedChatMessageContentV3({
       data: [
         {
           arguments: '{"name":"First","source":"@title First"}',
@@ -1147,7 +1147,6 @@ describe("durable chat turn persistence", () => {
           type: "tool-call",
         },
       ] satisfies ChatPart[],
-      version: 2,
     });
 
     unwrap(

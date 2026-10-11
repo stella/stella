@@ -105,11 +105,14 @@ const seedThread = async (
 
   return {
     threadId,
-    messages: rows.map((row) => ({
-      id: row.id,
-      createdAt: row.createdAt,
-      text: row.content.data[0]?.text ?? "",
-    })),
+    messages: rows.map((row) => {
+      const firstPart = row.content.data.at(0);
+      return {
+        id: row.id,
+        createdAt: row.createdAt,
+        text: firstPart?.type === "text" ? firstPart.content : "",
+      };
+    }),
   };
 };
 

@@ -1,4 +1,5 @@
 import { panic, Result } from "better-result";
+import { deepEquals } from "bun";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -25,7 +26,7 @@ describe("frozen legacy conversion preserves pre-cutover persisted output", () =
   });
   for (const { name, input, expected } of goldenFixtures) {
     test(name, () => {
-      expect(convertLegacyChatContent(input)).toEqual(expected);
+      expect(deepEquals(convertLegacyChatContent(input), expected)).toBe(true);
     });
   }
 });
@@ -63,6 +64,10 @@ const canonicalToolStates = {
   Extract<ChatPart, { type: "tool-call" }>["state"],
   true
 >;
+const canonicalToolStateValues = Object.keys(canonicalToolStates).filter(
+  (state): state is Extract<ChatPart, { type: "tool-call" }>["state"] =>
+    Object.hasOwn(canonicalToolStates, state),
+);
 const canonicalArguments = fc.oneof(
   fc.string(),
   fc.string().map((query) => ` \n {"query": ${JSON.stringify(query)} }\t`),
@@ -73,7 +78,7 @@ const canonicalToolPart = fc.record({
   type: fc.constant("tool-call"),
   id: fc.string({ minLength: 1 }),
   name: fc.string({ minLength: 1 }),
-  state: fc.constantFrom(...Object.keys(canonicalToolStates)),
+  state: fc.constantFrom(...canonicalToolStateValues),
   arguments: canonicalArguments,
 });
 
@@ -91,46 +96,57 @@ test("v1 canonical tool-call golden retains its name and exact raw arguments", (
       },
     ],
   });
-  expect(converted).toEqual({
-    version: 3,
-    data: [
+  expect(
+    deepEquals(converted, {
+      version: 3,
+      data: [
+        {
+          type: "tool-call",
+          id: "call_1",
+          name: "search",
+          state: "input-complete",
+          input: { status: "raw", rawArguments: argumentsText },
+        },
+      ],
+    }),
+  ).toBe(true);
+  expect(
+    deepEquals(normalizePersistedChatMessageContent(converted).parts, [
       {
         type: "tool-call",
         id: "call_1",
         name: "search",
         state: "input-complete",
-        input: { status: "raw", rawArguments: argumentsText },
+        arguments: argumentsText,
       },
-    ],
-  });
-  expect(normalizePersistedChatMessageContent(converted).parts).toEqual([
-    {
-      type: "tool-call",
-      id: "call_1",
-      name: "search",
-      state: "input-complete",
-      arguments: argumentsText,
-    },
-  ]);
+    ]),
+  ).toBe(true);
 });
 
 test("v1 canonical tool calls preserve name state and raw argument bytes across reload", () => {
   assertProperty(
     "v1 canonical tool calls preserve name state and raw argument bytes across reload",
     fc.property(canonicalToolPart, (part) => {
+      if (!isChatPart(part)) {
+        panic("Generated canonical tool call is not a chat part");
+      }
       const converted = convertLegacyChatContent({ version: 1, data: [part] });
-      expect(converted.data).toEqual([
-        {
-          type: "tool-call",
-          id: part.id,
-          name: part.name,
-          state: part.state,
-          input: { status: "raw", rawArguments: part.arguments },
-        },
-      ]);
-      expect(normalizePersistedChatMessageContent(converted).parts).toEqual([
-        part,
-      ]);
+      expect(
+        deepEquals(converted.data, [
+          {
+            type: "tool-call",
+            id: part.id,
+            name: part.name,
+            state: part.state,
+            input: { status: "raw", rawArguments: part.arguments },
+          },
+        ]),
+      ).toBe(true);
+      expect(
+        deepEquals(normalizePersistedChatMessageContent(converted).parts, [
+          part,
+        ]),
+      ).toBe(true);
     }),
   );
 });
@@ -249,13 +265,15 @@ test("every legacy input part is preserved in order or causes a typed whole-mess
           expectPartFailure({ version, parts });
           return;
         }
-        expect(convertLegacyChatContent({ version, data: parts })).toEqual({
-          version: 3,
-          data: [...prefix, ...suffix].map((content) => ({
-            type: "text",
-            content,
-          })),
-        });
+        expect(
+          deepEquals(convertLegacyChatContent({ version, data: parts }), {
+            version: 3,
+            data: [...prefix, ...suffix].map((content) => ({
+              type: "text",
+              content,
+            })),
+          }),
+        ).toBe(true);
       },
     ),
   );
@@ -276,7 +294,13 @@ test("supported content and promoted metadata are accounted for or reject the wh
   }));
   const sourceDocument = fc.string().map((title) => ({
     type: "data-stella-source-document",
-    data: { kind: "document", title },
+    data: {
+      entityId: "entity_1",
+      kind: "document",
+      mimeType: "application/pdf",
+      title,
+      workspaceId: "workspace_1",
+    },
   }));
   assertProperty(
     "supported content and promoted metadata are accounted for or reject the whole legacy message",
@@ -337,7 +361,12 @@ test("supported content and promoted metadata are accounted for or reject the wh
               sourceDocuments.push(part["data"]);
               break;
             default:
-              if (part["type"] === "tool-call") {
+              if (part["type"] === "text") {
+                expect(reloaded.at(contentParts)).toMatchObject({
+                  type: "text",
+                  content: part["text"] ?? part["content"],
+                });
+              } else if (part["type"] === "tool-call") {
                 expect(reloaded.at(contentParts)).toMatchObject({
                   type: "tool-call",
                   id: part["id"],
@@ -387,20 +416,17 @@ test("supported content and promoted metadata are accounted for or reject the wh
                   }
                 }
               }
-              if (part["type"] === "text") {
-                expect(reloaded.at(contentParts)).toMatchObject({
-                  type: "text",
-                  content: part["text"] ?? part["content"],
-                });
-              }
               contentParts += 1;
           }
         }
         expect(converted.value.data).toHaveLength(contentParts);
         if (sourceDocuments.length > 0) {
-          expect(converted.value.metadata?.sourceDocuments).toEqual(
-            sourceDocuments,
-          );
+          expect(
+            deepEquals(
+              converted.value.metadata?.sourceDocuments,
+              sourceDocuments,
+            ),
+          ).toBe(true);
         }
       },
     ),

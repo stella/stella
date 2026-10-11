@@ -392,9 +392,7 @@ export const chatContentV3BackfillReceipts = p.pgTable.withRLS(
   {
     source: p.text({ enum: CHAT_CONTENT_V3_BACKFILL_SOURCES }).notNull(),
     rowId: p.uuid("row_id").notNull(),
-    messageId: safeUuid<"chatMessage">("message_id")
-      .notNull()
-      .references(() => chatMessages.id, { onDelete: "cascade" }),
+    messageId: safeUuid<"chatMessage">("message_id").notNull(),
     /** Null means the stored value has no recognizable integer version. */
     fromVersion: p.integer("from_version"),
     outcome: p.text({ enum: CHAT_CONTENT_V3_BACKFILL_OUTCOMES }).notNull(),
@@ -403,6 +401,13 @@ export const chatContentV3BackfillReceipts = p.pgTable.withRLS(
   },
   (table) => [
     p.primaryKey({ columns: [table.source, table.rowId] }),
+    p
+      .foreignKey({
+        name: "chat_content_v3_receipts_message_fk",
+        columns: [table.messageId],
+        foreignColumns: [chatMessages.id],
+      })
+      .onDelete("cascade"),
     p
       .index("chat_content_v3_backfill_receipts_message_idx")
       .on(table.messageId),
