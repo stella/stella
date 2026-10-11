@@ -4477,6 +4477,8 @@ jobs:
             apps/desktop \
             apps/web \
             packages \
+            scripts/ci-service-images.ts \
+            scripts/ci-service-images.json \
             scripts/ci-browser-scope.ts \
             scripts/ci-package-scope.ts \
             scripts/install-free-ci.ts \

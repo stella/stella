@@ -70,8 +70,8 @@ test("image selection includes every consumed source and workspace manifest and 
   expect(tracked.exitCode).toBe(0);
   const trackedFiles = tracked.stdout.toString().split("\0").filter(Boolean);
   const tree = new Map(trackedFiles.map((file) => [`/app/${file}`, file]));
-  // This oracle follows the real build script independently of the selector's
-  // selected set, so removing a selected dependency cannot change the oracle.
+  // This integration guard follows the real build script and Docker inputs.
+  // Resolver completeness is independently pinned by the alias fixture below.
   const entries = commandEntries(
     ROOT,
     tree,
@@ -190,14 +190,42 @@ test("additional Docker build commands and newly configured aliases join the sou
         "apps/legal-atlas-runner/tsconfig.json": JSON.stringify({
           compilerOptions: { paths: { "@new/*": ["../api/src/new/*"] } },
         }),
-        "apps/api/src/new/dependency.ts": "export const dependency = 1;",
-        "apps/api/src/direct-entry.ts": "export const direct = 1;",
+        "apps/api/src/new/dependency.ts":
+          'export { dependency } from "./transitive";',
+        "apps/api/src/new/transitive.ts":
+          'export { dependency } from "../shared/leaf";',
+        "apps/api/src/shared/leaf.ts": "export const dependency = 1;",
+        "apps/api/src/direct-entry.ts": 'import "./direct-dependency";',
+        "apps/api/src/direct-dependency.ts": "export const direct = 1;",
       },
     },
     (root, trackedFiles) => {
+      // This list comes from the fixture's authored imports, never from the
+      // resolver. Losing an alias or transitive edge must fail this oracle.
+      const expected = [
+        "apps/legal-atlas-runner/src/index.ts",
+        "apps/api/src/new/dependency.ts",
+        "apps/api/src/new/transitive.ts",
+        "apps/api/src/shared/leaf.ts",
+        "apps/api/src/direct-entry.ts",
+        "apps/api/src/direct-dependency.ts",
+      ];
+      const closure = legalAtlasApiSourceClosure({ root, trackedFiles });
+      expect(closure.status).toBe("resolved");
+      if (closure.status !== "resolved") {
+        panic("Alias fixture must have a resolved image source closure");
+      }
+      expect(closure.files).toEqual(new Set(expected));
       const required = legalAtlasApiSourcePredicate({ root, trackedFiles });
-      expect(required(["apps/api/src/new/dependency.ts"])).toBe(true);
-      expect(required(["apps/api/src/direct-entry.ts"])).toBe(true);
+      for (const file of expected) {
+        expect(required([file]), file).toBe(true);
+        const omitted = new Set(closure.files);
+        omitted.delete(file);
+        expect(
+          expected.filter((dependency) => !omitted.has(dependency)),
+        ).toEqual([file]);
+      }
+      expect(required([API_SOURCE])).toBe(false);
       expect(required([UNRELATED])).toBe(false);
     },
   );

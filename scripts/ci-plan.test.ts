@@ -6511,6 +6511,47 @@ const browserPlanOutput = ({
   );
 };
 
+test("Playwright image-only changes admit browser suites in merge groups", () => {
+  for (const file of [
+    "scripts/ci-service-images.ts",
+    "scripts/ci-service-images.json",
+  ]) {
+    const [browserScopeRequired, desktopRequired, packageChecksRequired] =
+      runSelector(
+        [file],
+        [
+          "ci_browser_scope_required",
+          "desktop_browser_required",
+          "package_checks_required",
+        ],
+        SUITE_DEPTH.full,
+        "false",
+        EVENT.mergeGroup,
+      );
+    expect(browserScopeRequired, file).toBe("true");
+    const planned = browserPlanOutput({
+      event: EVENT.mergeGroup,
+      depth: SUITE_DEPTH.full,
+      desktopRequired: desktopRequired ?? panic("Missing desktop scope"),
+      packageChecksRequired:
+        packageChecksRequired ?? panic("Missing package scope"),
+      browserScopeRequired:
+        browserScopeRequired ?? panic("Missing browser scope"),
+    });
+    expect(planned, file).toBe("true");
+    expect(
+      evaluate(jobIf(ciJobs["ci-browser"]), {
+        values: {
+          "inputs.pr_depth_only": false,
+          "needs.ci-plan.outputs.ci_browser_required": planned,
+          "needs.ci-plan.outputs.coverage_profile": "normal-v1",
+        },
+      }),
+      file,
+    ).toBe(true);
+  }
+});
+
 test("browser scope vetoes otherwise eligible execution", () => {
   for (const event of [
     EVENT.pullRequest,

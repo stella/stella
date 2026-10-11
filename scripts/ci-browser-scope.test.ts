@@ -1,5 +1,12 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import {
+  readFileSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -171,4 +178,55 @@ test("the shared import reader identifies dependencies that need conservative di
   expect(
     unresolvedRuntimeImports("input.ts", "import(variable);"),
   ).toHaveLength(1);
+});
+
+test("browser source consumption preserves an independently pinned alias chain", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "browser-alias-scope-"));
+  const entry = "apps/web/src/alias-entry.ts";
+  const dependency = "packages/browser-scope-fixture/src/dependency.ts";
+  const transitive = "packages/browser-scope-fixture/src/transitive.ts";
+  const expected = [entry, dependency, transitive];
+  const files = {
+    ".github/workflows/ci.yml": source,
+    "bun.lock": readFileSync(path.join(ROOT, "bun.lock"), "utf-8"),
+    "turbo.json": readFileSync(path.join(ROOT, "turbo.json"), "utf-8"),
+    "apps/web/tsconfig.json": JSON.stringify({
+      compilerOptions: {
+        paths: { "@fixture/*": ["../../packages/browser-scope-fixture/src/*"] },
+      },
+    }),
+    [entry]: 'import "@fixture/dependency";',
+    [dependency]: 'import "./transitive";',
+    [transitive]: "export const value = 1;",
+  };
+  try {
+    for (const [file, content] of Object.entries(files)) {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      writeFileSync(path.join(root, file), content);
+    }
+    const tree = new Map(
+      Object.keys(files).map((file) => [`/app/${file}`, file]),
+    );
+    const seen = new Set<string>();
+    expect(sourceClosureProblems(root, tree, [`/app/${entry}`], seen)).toEqual(
+      [],
+    );
+    expect(seen).toEqual(new Set(expected.map((file) => `/app/${file}`)));
+    const required = ciBrowserScopePredicate({ root });
+    for (const file of expected) {
+      expect(required([file]), file).toBe(true);
+    }
+    expect(required(["apps/api/src/handlers/health.ts"])).toBe(false);
+    const missingPackageScope = source.replace("            packages \\", "");
+    expect(missingPackageScope).not.toBe(source);
+    writeFileSync(
+      path.join(root, ".github/workflows/ci.yml"),
+      missingPackageScope,
+    );
+    const narrowed = ciBrowserScopePredicate({ root });
+    expect(narrowed([dependency])).toBe(false);
+    expect(narrowed([transitive])).toBe(false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
