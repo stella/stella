@@ -10,6 +10,7 @@ import {
   buildFeatureAccessSnapshot,
   featureAccessReadPlan,
 } from "@/api/lib/feature-access/snapshot";
+import { typedPgArray } from "@/api/lib/search/sql";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 type ScopedFeatureAccessOptions = {
@@ -35,9 +36,9 @@ export const resolveScopedFeatureIds = async ({
   const enrolments =
     enrolmentFeatureIds.length === 0
       ? sql`'{}'::text[]`
-      : sql`coalesce((SELECT array_agg(e.feature_id) FROM ${featureEnrolments} e
-        WHERE e.organization_id = ${member.organizationId} AND e.user_id = ${member.userId}
-          AND e.feature_id = ANY(${sql.param(enrolmentFeatureIds)}::text[])), '{}')`;
+      : sql`coalesce((SELECT array_agg(${featureEnrolments.featureId}) FROM ${featureEnrolments}
+        WHERE ${featureEnrolments.organizationId} = ${member.organizationId} AND ${featureEnrolments.userId} = ${member.userId}
+          AND ${featureEnrolments.featureId} = ANY(${typedPgArray(enrolmentFeatureIds, "text")})), '{}')`;
   const identity = executedRows(
     await tx.execute(sql`
     SELECT ${authUser.email} AS email, ${authUser.emailVerified} AS "emailVerified",

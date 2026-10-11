@@ -240,6 +240,7 @@ import {
   brandPersistedUserId,
   parseAuthProviderId,
 } from "@/api/lib/safe-id-boundaries";
+import { typedPgArray } from "@/api/lib/search/sql";
 import {
   assertSelfhostEmailOtpAllowed,
   assertSelfhostBootstrapSignUp,
@@ -2512,7 +2513,7 @@ const featureAccessColumns = (organizationId: SafeId<"organization">) => {
         ? sql<string[]>`'{}'::text[]`
         : sql<
             string[]
-          >`coalesce((select array_agg(${featureEnrolments.featureId}) from ${featureEnrolments} where ${featureEnrolments.organizationId} = ${member.organizationId} and ${featureEnrolments.userId} = ${member.userId} and ${featureEnrolments.featureId} = ANY(${sql.param(enrolmentFeatureIds)}::text[])), '{}')`,
+          >`coalesce((select array_agg(${featureEnrolments.featureId}) from ${featureEnrolments} where ${featureEnrolments.organizationId} = ${member.organizationId} and ${featureEnrolments.userId} = ${member.userId} and ${featureEnrolments.featureId} = ANY(${typedPgArray(enrolmentFeatureIds, "text")})), '{}')`,
   };
 };
 

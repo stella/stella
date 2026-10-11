@@ -19,6 +19,7 @@ import {
   buildFeatureAccessSnapshot,
   featureAccessReadPlan,
 } from "@/api/lib/feature-access/snapshot";
+import { typedPgArray } from "@/api/lib/search/sql";
 
 type ResolveFeatureAccessSnapshotOptions = {
   tx: Pick<Transaction, "select">;
@@ -45,9 +46,9 @@ export const resolveFeatureAccessSnapshot = async ({
       ? sql<string[]>`'{}'::text[]`
       : sql<
           string[]
-        >`coalesce((select array_agg(e.feature_id) from ${featureEnrolments} e
-        where e.organization_id = ${member.organizationId} and e.user_id = ${member.userId}
-          and e.feature_id = ANY(${sql.param(enrolmentFeatureIds)}::text[])), '{}')`;
+        >`coalesce((select array_agg(${featureEnrolments.featureId}) from ${featureEnrolments}
+        where ${featureEnrolments.organizationId} = ${member.organizationId} and ${featureEnrolments.userId} = ${member.userId}
+          and ${featureEnrolments.featureId} = ANY(${typedPgArray(enrolmentFeatureIds, "text")})), '{}')`;
   const identity =
     userId === null || candidates.length === 0
       ? undefined
