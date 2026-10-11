@@ -1,13 +1,18 @@
-import Elysia from "elysia";
+import Elysia, { type Context } from "elysia";
 
 import {
+  readAdvancedMetadata,
   readAnonymizedMetadata,
   readDefaultMetadata,
   readDocumentsMetadata,
   readLawMetadata,
 } from "@/api/handlers/mcp/read-discovery-metadata";
+import type { createMcpAuthenticationFailureLimiter } from "@/api/handlers/mcp/transport-rate-limit";
 import { resolveRateLimitClientAddress } from "@/api/lib/client-ip";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import {
+  MCP_ADVANCED_DISCOVERY_PATH,
+  MCP_ADVANCED_HTTP_PATH,
   MCP_ANONYMIZED_DISCOVERY_PATH,
   MCP_ANONYMIZED_HTTP_PATH,
   MCP_DISCOVERY_PATH,
@@ -27,7 +32,7 @@ import {
 
 type HandleMcpHttpRequest = (
   request: Request,
-  options?: { clientIp?: string | null; mode?: McpMode },
+  options?: { clientIp?: string | null | undefined; mode?: McpMode },
 ) => Promise<Response>;
 
 type RouteSet = {
@@ -76,11 +81,13 @@ const applyHeaders = ({
  * the MCP route serves, and the route's own preflight branch is unreachable.
  */
 const MCP_PREFLIGHT_HEADERS_BY_PATH = new Map<string, () => Headers>([
+  [MCP_ADVANCED_HTTP_PATH, createMcpPreflightHeaders],
   [MCP_HTTP_PATH, createMcpPreflightHeaders],
   [MCP_ANONYMIZED_HTTP_PATH, createMcpPreflightHeaders],
   [MCP_DOCUMENTS_HTTP_PATH, createMcpPreflightHeaders],
   [MCP_LAW_HTTP_PATH, createMcpPreflightHeaders],
   [ROOT_MCP_DISCOVERY_PATH, createMcpDiscoveryPreflightHeaders],
+  [MCP_ADVANCED_DISCOVERY_PATH, createMcpDiscoveryPreflightHeaders],
   [MCP_DISCOVERY_PATH, createMcpDiscoveryPreflightHeaders],
   [MCP_ANONYMIZED_DISCOVERY_PATH, createMcpDiscoveryPreflightHeaders],
   [MCP_DOCUMENTS_DISCOVERY_PATH, createMcpDiscoveryPreflightHeaders],
@@ -116,15 +123,19 @@ const discoveryOptionsHandler = ({ set }: { set: RouteSet }) => {
 
 export const createMcpRoute = ({
   handleMcpHttpRequest,
+  limitAuthenticationFailure,
 }: {
   handleMcpHttpRequest: HandleMcpHttpRequest;
+  limitAuthenticationFailure?: ReturnType<
+    typeof createMcpAuthenticationFailureLimiter
+  >;
 }) => {
   const handleMcpTransportRoute = async ({
     options,
     request,
     set,
   }: {
-    options?: { clientIp?: string | null; mode?: McpMode };
+    options?: { clientIp?: string | null | undefined; mode?: McpMode };
     request: Request;
     set: RouteSet;
   }) => {
@@ -137,20 +148,80 @@ export const createMcpRoute = ({
       });
     }
 
-    return await handleMcpHttpRequest(request, options);
+    if (!limitAuthenticationFailure) {
+      return await handleMcpHttpRequest(request, options);
+    }
+    return await limitAuthenticationFailure({
+      request,
+      clientIp: options?.clientIp,
+      run: async () => await handleMcpHttpRequest(request, options),
+    });
   };
 
   return new Elysia()
+    .options(MCP_ADVANCED_DISCOVERY_PATH, discoveryOptionsHandler)
+    .get(
+      MCP_ADVANCED_DISCOVERY_PATH,
+      readAdvancedMetadata.handler,
+      readAdvancedMetadata.config,
+    )
     .options(ROOT_MCP_DISCOVERY_PATH, discoveryOptionsHandler)
-    .get(ROOT_MCP_DISCOVERY_PATH, readDefaultMetadata.handler)
+    .get(
+      ROOT_MCP_DISCOVERY_PATH,
+      readDefaultMetadata.handler,
+      readDefaultMetadata.config,
+    )
     .options(MCP_ANONYMIZED_DISCOVERY_PATH, discoveryOptionsHandler)
-    .get(MCP_ANONYMIZED_DISCOVERY_PATH, readAnonymizedMetadata.handler)
+    .get(
+      MCP_ANONYMIZED_DISCOVERY_PATH,
+      readAnonymizedMetadata.handler,
+      readAnonymizedMetadata.config,
+    )
     .options(MCP_DISCOVERY_PATH, discoveryOptionsHandler)
-    .get(MCP_DISCOVERY_PATH, readDefaultMetadata.handler)
+    .get(
+      MCP_DISCOVERY_PATH,
+      readDefaultMetadata.handler,
+      readDefaultMetadata.config,
+    )
     .options(MCP_DOCUMENTS_DISCOVERY_PATH, discoveryOptionsHandler)
-    .get(MCP_DOCUMENTS_DISCOVERY_PATH, readDocumentsMetadata.handler)
+    .get(
+      MCP_DOCUMENTS_DISCOVERY_PATH,
+      readDocumentsMetadata.handler,
+      readDocumentsMetadata.config,
+    )
     .options(MCP_LAW_DISCOVERY_PATH, discoveryOptionsHandler)
-    .get(MCP_LAW_DISCOVERY_PATH, readLawMetadata.handler)
+    .get(
+      MCP_LAW_DISCOVERY_PATH,
+      readLawMetadata.handler,
+      readLawMetadata.config,
+    )
+    .all(
+      MCP_ADVANCED_HTTP_PATH,
+      declareAggregateMutation(
+        async ({
+          request,
+          server,
+          set,
+        }: Pick<Context, "request" | "server" | "set">) =>
+          await handleMcpTransportRoute({
+            options: {
+              clientIp: resolveRateLimitClientAddress({
+                request,
+                server: server ?? null,
+              }),
+              mode: "advanced",
+            },
+            request,
+            set,
+          }),
+        {
+          type: "independent",
+          reason:
+            "MCP transport dispatches to capability handlers that own their aggregate mutations; the transport itself owns no aggregate state.",
+        },
+      ),
+      { parse: "none" },
+    )
     .all(
       MCP_HTTP_PATH,
       async ({ request, server, set }) =>

@@ -285,6 +285,7 @@ describe("feature reset cleanup audit transactions", () => {
           tx: asTestRaw<Transaction>(tx),
           organizationId,
           subject,
+          userId: mintAuthProviderId<"user">(),
         }),
     );
     expect(new Set(removed.keys())).toEqual(

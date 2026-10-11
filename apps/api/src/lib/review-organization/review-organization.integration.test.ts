@@ -556,6 +556,7 @@ describe("review organization sender reset", () => {
                 tx: asTestRaw<Transaction>(tx),
                 organizationId: fixture.reviewOrgId,
                 subject: createSafeId<"schedulerJobRun">(),
+                userId: fixture.reviewUserId,
               });
               expect(removed.get("correspondence_allowed_senders")).toBe(1);
             }

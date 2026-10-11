@@ -288,7 +288,12 @@ const createContext = ({
 };
 
 const call = async (toolName: string, args: Record<string, unknown>) =>
-  await handleMcpToolCall({ args, context: createContext(), toolName });
+  await handleMcpToolCall({
+    mode: "advanced",
+    args,
+    context: createContext(),
+    toolName,
+  });
 
 const capabilityExecutorFor = (args: Record<string, unknown>) => {
   const entry = capabilityCatalog.find(
@@ -303,6 +308,7 @@ const handleCapabilityCall = async (
   options: Omit<Parameters<typeof handleMcpToolCall>[0], "toolName">,
 ) =>
   await handleMcpToolCall({
+    mode: "advanced",
     ...options,
     toolName: capabilityExecutorFor(options.args),
   });
@@ -571,6 +577,7 @@ describe("list verification access grants across MCP tools", () => {
     const listed: string[] = [];
     for (const domain of ["lists"]) {
       const result = await handleMcpToolCall({
+        mode: "advanced",
         toolName: "list_capabilities",
         context,
         args: { domain, limit: MAX_LIST_LIMIT },
@@ -584,6 +591,7 @@ describe("list verification access grants across MCP tools", () => {
     for (const capability of Object.keys(inputs)) {
       expect(listed).not.toContain(capability);
       const described = await handleMcpToolCall({
+        mode: "advanced",
         toolName: "describe_capability",
         context,
         args: { capability },
@@ -645,11 +653,13 @@ describe("list verification access grants across MCP tools", () => {
         entry.featureAccess === "conditional",
     )) {
       const enabled = await handleMcpToolCall({
+        mode: "advanced",
         toolName: "describe_capability",
         context: granted,
         args: { capability: id },
       });
       const hidden = await handleMcpToolCall({
+        mode: "advanced",
         toolName: "describe_capability",
         context: denied,
         args: { capability: id },
@@ -774,6 +784,7 @@ describe("list verification access grants across MCP tools", () => {
     const listed: string[] = [];
     for (const domain of ["lists"]) {
       const result = await handleMcpToolCall({
+        mode: "advanced",
         toolName: "list_capabilities",
         context: fixture.context,
         args: { domain, limit: MAX_LIST_LIMIT },
@@ -787,6 +798,7 @@ describe("list verification access grants across MCP tools", () => {
     for (const [capability, input] of Object.entries(inputs)) {
       expect(listed).toContain(capability);
       const described = await handleMcpToolCall({
+        mode: "advanced",
         toolName: "describe_capability",
         context: fixture.context,
         args: { capability },
@@ -816,6 +828,7 @@ describe("list verification access grants across MCP tools", () => {
     ] as const satisfies readonly VerificationContextOptions[]) {
       const fixture = verificationContext(options);
       const listed = await handleMcpToolCall({
+        mode: "advanced",
         toolName: "list_capabilities",
         context: fixture.context,
         args: { domain: "lists", limit: MAX_LIST_LIMIT },
@@ -826,6 +839,7 @@ describe("list verification access grants across MCP tools", () => {
       for (const [capability, input] of Object.entries(inputs)) {
         expect(ids).not.toContain(capability);
         const described = await handleMcpToolCall({
+          mode: "advanced",
           toolName: "describe_capability",
           context: fixture.context,
           args: { capability },
@@ -1561,6 +1575,7 @@ describe("capability executor gates", () => {
       do {
         const page: CapabilityPage = parseToolPayload<CapabilityPage>(
           await handleMcpToolCall({
+            mode: "advanced",
             args: {
               limit: MAX_LIST_LIMIT,
               ...(cursor === null ? {} : { cursor }),
@@ -2025,6 +2040,7 @@ describe("capability executor execution", () => {
       input: { params: { categoryId } },
     };
     const unconfirmed = await handleMcpToolCall({
+      mode: "advanced",
       toolName: MCP_CAPABILITY_EXECUTORS.write,
       args,
       context,
@@ -2035,6 +2051,7 @@ describe("capability executor execution", () => {
     expect(auditRows).not.toHaveBeenCalled();
 
     const confirmed = await handleMcpToolCall({
+      mode: "advanced",
       toolName: MCP_CAPABILITY_EXECUTORS.write,
       args: { ...args, confirm: true },
       context,
@@ -3367,6 +3384,7 @@ describe("feature access discovery guard: real capability catalog", () => {
     async (userId, organizationId) => {
       const context = fixtureContext(userId, organizationId);
       const list = await handleMcpToolCall({
+        mode: "advanced",
         toolName: "list_capabilities",
         args: { limit: 50 },
         context,
@@ -3380,6 +3398,7 @@ describe("feature access discovery guard: real capability catalog", () => {
         }
         expect(listedIds).not.toContain(id);
         const described = await handleMcpToolCall({
+          mode: "advanced",
           toolName: "describe_capability",
           args: { capability: id },
           context,
@@ -3393,6 +3412,7 @@ describe("feature access discovery guard: real capability catalog", () => {
       }
       expect(loadOrgSettingsMock).not.toHaveBeenCalled();
       const typo = await handleMcpToolCall({
+        mode: "advanced",
         toolName: "describe_capability",
         args: { capability: "time-entries.creat" },
         context,
@@ -3403,6 +3423,7 @@ describe("feature access discovery guard: real capability catalog", () => {
   test("caller grant permits real catalog and live schema discovery", async () => {
     const context = fixtureContext("user_1", "org_1");
     const list = await handleMcpToolCall({
+      mode: "advanced",
       toolName: "list_capabilities",
       args: { limit: 50 },
       context,
@@ -3411,6 +3432,7 @@ describe("feature access discovery guard: real capability catalog", () => {
       parseToolPayload<{ items: unknown[] }>(list).items.length,
     ).toBeGreaterThan(0);
     const described = await handleMcpToolCall({
+      mode: "advanced",
       toolName: "describe_capability",
       args: { capability: "time-entries.create" },
       context,
@@ -3613,6 +3635,7 @@ for (const grants of [
     );
     expect(entries.length).toBeGreaterThan(0);
     const list = await handleMcpToolCall({
+      mode: "advanced",
       toolName: "list_capabilities",
       args: { domain: "lists", limit: MAX_LIST_LIMIT },
       context,
@@ -3629,6 +3652,7 @@ for (const grants of [
           : grants.length === 2;
       expect(listed.includes(entry.id)).toBe(enabled);
       const schema = await handleMcpToolCall({
+        mode: "advanced",
         toolName: "describe_capability",
         args: { capability: entry.id },
         context,
@@ -3657,6 +3681,7 @@ for (const grants of [
         for (const validate_only of [false, true]) {
           expectUnknownId(
             await handleMcpToolCall({
+              mode: "advanced",
               toolName,
               args: { capability: entry.id, validate_only },
               context,
@@ -3733,6 +3758,7 @@ describe("capability executor access isolation", () => {
           ? MCP_CAPABILITY_EXECUTORS.write
           : MCP_CAPABILITY_EXECUTORS.read;
       const result = await handleMcpToolCall({
+        mode: "advanced",
         args: { capability: entry.id, validate_only: true, input: {} },
         context,
         toolName,
@@ -3749,7 +3775,13 @@ describe("capability executor access isolation", () => {
   });
 
   test("the retired mixed executor is absent from every exposed audience", async () => {
-    for (const mode of ["default", "documents", "anonymized", "law"] as const) {
+    for (const mode of [
+      "advanced",
+      "default",
+      "documents",
+      "anonymized",
+      "law",
+    ] as const) {
       const definitions = listStaticMcpToolDefinitions(mode);
       expect(definitions.some(({ name }) => name === "invoke_capability")).toBe(
         false,

@@ -3925,12 +3925,6 @@
   },
   {
     "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
-    "fingerprint": "9eb2ed37cbe3d993329e1a2459bf69437abd262692d46925e853be84e16b9db2",
-    "count": 1,
-    "reason": "existing acquisition moved by #5308; the locked batch limit is capped at the remaining cleanup budget; mode/table/key/predicate unchanged; no new acquisition; migrates with owner extension follow-up"
-  },
-  {
-    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
     "fingerprint": "dc1895cb4fefa177f64451a22aa2f388230255c400865e71eabfcc3a84abaf16",
     "count": 1,
     "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"

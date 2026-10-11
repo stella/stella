@@ -599,6 +599,7 @@ const sweepRemainingRows = async (
           tx,
           organizationId,
           subject: scope.subject,
+          userId: scope.target.userId,
         });
         return { removed, requestIds: teardown.requestIds };
       }),
