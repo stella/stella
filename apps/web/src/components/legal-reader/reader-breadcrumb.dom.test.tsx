@@ -5,7 +5,7 @@ import { sleep } from "@stll/concurrency/sleep";
 import type { HeadingBlock, HeadingLevel } from "@stll/legal-ast/document-ast";
 
 GlobalRegistrator.register();
-const { act, cleanup, fireEvent, render, screen } =
+const { act, cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { TooltipProvider } = await import("@stll/ui/tooltip");
@@ -39,6 +39,100 @@ const mount = (onJump: (id: string) => void) =>
       </TooltipProvider>
     </IntlProvider>,
   );
+
+test("Contents stays attached to its trigger as the visible heading path changes", async () => {
+  const reader = (visiblePath: typeof path) => (
+    <IntlProvider locale="en" messages={messages}>
+      <TooltipProvider>
+        <ReaderBreadcrumb
+          headings={path}
+          onJump={() => {}}
+          path={visiblePath}
+        />
+      </TooltipProvider>
+    </IntlProvider>
+  );
+  const { rerender } = render(reader([]));
+  const trigger = screen.getByRole("button", { name: "Contents", exact: true });
+  await act(async () => fireEvent.click(trigger));
+  expect(trigger.getAttribute("aria-expanded")).toBe("true");
+  for (const visiblePath of [path.slice(0, 1), path, []]) {
+    rerender(reader(visiblePath));
+    const current = screen.getByRole("button", { name: /^Contents/u });
+    expect(current.getAttribute("aria-expanded")).toBe("true");
+    expect(current === trigger).toBe(true);
+    expect(screen.getByRole("dialog")).toBeTruthy();
+  }
+});
+
+test("scrolling keeps the breadcrumb and zoom controls in one pinned row outside the viewport", async () => {
+  const { LegalReaderControls } = await import("./legal-reader-controls");
+  const { useReaderTextScale } =
+    await import("@stll/decision-reader/use-reader-text-scale");
+  const viewport = document.createElement("div");
+  const content = document.createElement("article");
+  const heading = document.createElement("h2");
+  heading.dataset["anchor"] = "first";
+  heading.getBoundingClientRect = () =>
+    new DOMRect(0, 200 - viewport.scrollTop, 200, 24);
+  viewport.getBoundingClientRect = () => new DOMRect(0, 0, 400, 300);
+  Object.defineProperties(viewport, {
+    clientHeight: { value: 300 },
+    scrollHeight: { value: 1000 },
+  });
+  content.append(heading);
+  viewport.append(content);
+  document.body.append(viewport);
+  const Controls = () => (
+    <LegalReaderControls
+      blocks={[
+        {
+          type: "heading",
+          id: "first",
+          anchorId: "first",
+          level: 1,
+          plainText: "First",
+          inlines: [],
+        },
+      ]}
+      content={content}
+      viewport={viewport}
+      textScale={useReaderTextScale()}
+    />
+  );
+  try {
+    render(
+      <IntlProvider locale="en" messages={messages}>
+        <TooltipProvider>
+          <Controls />
+        </TooltipProvider>
+      </IntlProvider>,
+    );
+    const navigation = screen.getByRole("navigation");
+    const row = navigation.parentElement;
+    expect(row?.classList.contains("absolute")).toBe(true);
+    expect(viewport.contains(row)).toBe(false);
+    for (const name of ["Zoom in", "Zoom out", "Reset zoom"]) {
+      expect(screen.getByRole("button", { name }).parentElement === row).toBe(
+        true,
+      );
+    }
+    await act(async () => {
+      viewport.scrollTop = 200;
+      viewport.dispatchEvent(new Event("scroll"));
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Contents: First" }),
+      ).toBeTruthy(),
+    );
+    expect(navigation.parentElement === row).toBe(true);
+    expect(row?.querySelectorAll("button").length).toBe(4);
+  } finally {
+    cleanup();
+    viewport.remove();
+  }
+});
 
 test("reader breadcrumb shows three heading levels and exposes hidden jump destinations on click", async () => {
   const jumps: string[] = [];

@@ -188,44 +188,62 @@ for (const view of views) {
       const root = surface === "inspector" ? inspector : page.locator("body");
       const breadcrumb = root.locator('[data-slot="reader-breadcrumb"]');
       await expect(breadcrumb).toHaveCount(1);
-      const initialClearance = await root
-        .locator('[data-anchor="introduction"]')
-        .evaluate((introduction) => {
-          const content =
-            introduction.closest('[data-slot="reader-document-column"]') ??
-            introduction.closest("main.reader-paper");
-          const first = Array.from(
-            content?.querySelectorAll("h1, h2, h3, p") ?? [],
-          ).find((element) => {
-            const bounds = element.getBoundingClientRect();
-            return bounds.width > 1 && bounds.height > 1;
-          });
-          // Both surfaces render a breadcrumb: measure the one in this reader.
-          let reader: Element | null = introduction;
-          while (
-            reader?.querySelector('[data-slot="reader-breadcrumb"]') === null
-          ) {
-            reader = reader.parentElement;
-          }
-          const controls = reader?.querySelector(
-            '[data-slot="reader-breadcrumb"]',
-          )?.parentElement;
-          if (
-            first === undefined ||
-            controls === null ||
-            controls === undefined
-          ) {
-            throw new Error("Reader content or controls are missing");
-          }
-          return (
-            first.getBoundingClientRect().top -
-            controls.getBoundingClientRect().bottom
-          );
-        });
-      expect
-        .soft(
-          initialClearance,
-          `initial ${view.kind}/${surface} content clears the controls`,
+      // Attachment precedes layout during inspector restoration and route
+      // changes. Read geometry only once the actual scroll viewport has size.
+      await expect
+        .poll(
+          () =>
+            root
+              .locator('[data-anchor="introduction"]')
+              .evaluate((introduction) => {
+                const content =
+                  introduction.closest(
+                    '[data-slot="reader-document-column"]',
+                  ) ?? introduction.closest("main.reader-paper");
+                const first = Array.from(
+                  content?.querySelectorAll("h1, h2, h3, p") ?? [],
+                ).find((element) => {
+                  const bounds = element.getBoundingClientRect();
+                  return bounds.width > 1 && bounds.height > 1;
+                });
+                // Both surfaces render a breadcrumb: measure the one in this reader.
+                let reader: Element | null = introduction;
+                while (
+                  reader?.querySelector('[data-slot="reader-breadcrumb"]') ===
+                  null
+                ) {
+                  reader = reader.parentElement;
+                }
+                const controls = reader?.querySelector(
+                  '[data-slot="reader-breadcrumb"]',
+                )?.parentElement;
+                let viewport = introduction.parentElement;
+                while (
+                  viewport !== null &&
+                  !["auto", "scroll"].includes(
+                    getComputedStyle(viewport).overflowY,
+                  )
+                ) {
+                  viewport = viewport.parentElement;
+                }
+                if (
+                  viewport === null ||
+                  viewport.clientWidth <= 1 ||
+                  viewport.clientHeight <= 1 ||
+                  first === undefined ||
+                  controls === null ||
+                  controls === undefined
+                ) {
+                  return null;
+                }
+                return (
+                  first.getBoundingClientRect().top -
+                  controls.getBoundingClientRect().bottom
+                );
+              }),
+          {
+            message: `initial ${view.kind}/${surface} content clears the laid-out controls`,
+          },
         )
         .toBeGreaterThanOrEqual(0);
       const initialContents = breadcrumb.getByRole("button", {

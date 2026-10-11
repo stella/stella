@@ -34,6 +34,9 @@ export const ReaderBreadcrumb = ({
   const [contentsOpen, setContentsOpen] = useState(false);
   const [middleOpen, setMiddleOpen] = useState(false);
   const current = path.at(-1);
+  const currentNumber = readerProvisionNumber(current?.title ?? "");
+  const currentWidth =
+    current === undefined ? undefined : layout?.widths.at(-1);
   const measure = (node: HTMLElement | null) => {
     if (node === null) {
       return undefined;
@@ -186,28 +189,10 @@ export const ReaderBreadcrumb = ({
         </span>
       </div>
       <ol className="flex h-11 min-w-0 items-center">
-        {path.length === 0 && headings.length > 0 && (
-          <li>{contentsControl({ label: t("statutes.outline") })}</li>
-        )}
-        {visible.map((segment, index) => {
+        {visible.slice(0, -1).map((segment, index) => {
           if (layout?.widths[index] === 0) {
             return null;
           }
-          const width = layout?.widths[index];
-          const last = index === visible.length - 1;
-          const number = last ? readerProvisionNumber(segment.title) : null;
-          const label = (
-            <span className="flex min-w-0 items-center">
-              <bdi className={cn(number === null ? "truncate" : "shrink-0")}>
-                {number ?? segment.title}
-              </bdi>
-              {number !== null && (
-                <bdi className="ms-1 truncate">
-                  {segment.title.replace(number, "").trim()}
-                </bdi>
-              )}
-            </span>
-          );
           return (
             <li
               className="flex min-w-0 shrink-0 items-center"
@@ -225,25 +210,17 @@ export const ReaderBreadcrumb = ({
                     icon={ChevronRightIcon}
                   />
                 )}
-              {last ? (
-                contentsControl({
-                  label,
-                  title: segment.title,
-                  ...(width === undefined ? {} : { width }),
-                })
-              ) : (
-                <Button
-                  aria-label={segment.title}
-                  className="h-11 min-w-0 sm:h-11"
-                  size="xs"
-                  onClick={() => onJump(segment.anchorId)}
-                  style={{ width: layout?.widths[index] }}
-                  title={segment.title}
-                  variant="ghost"
-                >
-                  {label}
-                </Button>
-              )}
+              <Button
+                aria-label={segment.title}
+                className="h-11 min-w-0 sm:h-11"
+                size="xs"
+                onClick={() => onJump(segment.anchorId)}
+                style={{ width: layout?.widths[index] }}
+                title={segment.title}
+                variant="ghost"
+              >
+                <bdi className="truncate">{segment.title}</bdi>
+              </Button>
               {index === 0 &&
                 hidden.length > 0 &&
                 (layout?.showMiddle ?? true) && (
@@ -286,6 +263,44 @@ export const ReaderBreadcrumb = ({
             </li>
           );
         })}
+        {(current !== undefined || headings.length > 0) && (
+          // Keep the Contents root and trigger mounted as scrolling changes
+          // the path; Base UI associates an open popup with its trigger id.
+          <li className="flex min-w-0 shrink-0 items-center">
+            {visible
+              .slice(0, -1)
+              .some((_, index) => layout?.widths[index] !== 0) && (
+              <DirectionalIcon
+                aria-hidden="true"
+                className="size-4 shrink-0"
+                icon={ChevronRightIcon}
+              />
+            )}
+            {contentsControl({
+              label:
+                current === undefined ? (
+                  t("statutes.outline")
+                ) : (
+                  <span className="flex min-w-0 items-center">
+                    <bdi
+                      className={cn(
+                        currentNumber === null ? "truncate" : "shrink-0",
+                      )}
+                    >
+                      {currentNumber ?? current.title}
+                    </bdi>
+                    {currentNumber !== null && (
+                      <bdi className="ms-1 truncate">
+                        {current.title.replace(currentNumber, "").trim()}
+                      </bdi>
+                    )}
+                  </span>
+                ),
+              ...(current === undefined ? {} : { title: current.title }),
+              ...(currentWidth === undefined ? {} : { width: currentWidth }),
+            })}
+          </li>
+        )}
       </ol>
     </nav>
   );
