@@ -1328,11 +1328,19 @@ const repositoryTestExecutionTopology = (): RepositoryTestExecutionTopology => {
   return cachedRepositoryTestExecutionTopology;
 };
 
-const isCollectedByGatingPlaywright = (
-  file: string,
-  packageFile: string,
-  scripts: PackageScripts,
-): boolean => {
+type GatingPlaywrightOptions = {
+  readonly file: string;
+  readonly packageFile: string;
+  readonly scripts: PackageScripts;
+  readonly topology: RepositoryTestExecutionTopology;
+};
+
+export const isCollectedByGatingPlaywright = ({
+  file,
+  packageFile,
+  scripts,
+  topology,
+}: GatingPlaywrightOptions): boolean => {
   const parsed = readJson(packageFile);
   if (typeof parsed !== "object" || parsed === null || !("name" in parsed)) {
     return false;
@@ -1341,20 +1349,21 @@ const isCollectedByGatingPlaywright = (
   if (typeof packageName !== "string") {
     return false;
   }
-  const gatingWorkflow = [
-    ...repositoryTestExecutionTopology().gatingJobs.values(),
-  ]
-    .flat()
-    .join("\n");
   const packageDirectory = path.posix.dirname(packageFile);
   for (const [scriptName, command] of Object.entries(scripts)) {
     if (
       typeof command !== "string" ||
-      !command.includes("playwright test") ||
-      (!gatingWorkflow.includes(`--filter ${packageName} ${scriptName}`) &&
-        !gatingWorkflow.includes(
-          `cd ${packageDirectory}\nbun run ${scriptName}`,
-        ))
+      !shellInvocationGates(
+        command,
+        (words, index) =>
+          words[index] === "playwright" && words[index + 1] === "test",
+      ) ||
+      packageTestExecutionFailure({
+        ...topology,
+        packageDirectory,
+        packageName,
+        scriptName,
+      }) !== undefined
     ) {
       continue;
     }
@@ -1534,7 +1543,7 @@ export const firstCollectionFailure = ({
       packageName,
     });
   }
-  if (isCollectedByGatingPlaywright(file, packageFile, scripts)) {
+  if (isCollectedByGatingPlaywright({ file, packageFile, scripts, topology })) {
     return undefined;
   }
   for (const scriptName of Object.keys(scripts).toSorted(compareCodeUnit)) {

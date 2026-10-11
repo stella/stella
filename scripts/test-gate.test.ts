@@ -3,6 +3,7 @@ import { describe as context, expect, test as check } from "bun:test";
 import {
   analyzeGatingWorkflow,
   firstCollectionFailure,
+  isCollectedByGatingPlaywright,
   gatingWorkflowJobs,
   managedServiceRunnerFailure,
   packageTestCollectionFailure,
@@ -931,4 +932,32 @@ context("suppressed collection", () => {
       }
     });
   }
+});
+
+context("Playwright failure propagation", () => {
+  check.each([
+    {
+      layer: "workflow",
+      invocation: "bun --filter @stll/desktop test:browser || true",
+      body: "playwright test --config playwright.config.ts",
+    },
+    {
+      layer: "package script",
+      invocation: "bun --filter @stll/desktop test:browser",
+      body: "playwright test --config playwright.config.ts || true",
+    },
+  ])("rejects suppression in the $layer", ({ invocation, body }) => {
+    expect(
+      isCollectedByGatingPlaywright({
+        file: "apps/desktop/tests/browser/theme-prepaint.playwright.spec.ts",
+        packageFile: "apps/desktop/package.json",
+        scripts: { "test:browser": body },
+        topology: {
+          gatingJobs: new Map([["browser-tests", [invocation]]]),
+          shardedPackages: new Set(),
+          workflow: invocation,
+        },
+      }),
+    ).toBe(false);
+  });
 });
