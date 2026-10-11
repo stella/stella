@@ -44,6 +44,8 @@ import {
   getAwaitingUserInteractions,
   getResumedUserInteraction,
 } from "@/api/handlers/chat/chat-message-parts";
+import { assembleMessageMarkdown } from "@/api/handlers/chat/export/export-shared";
+import { clientMessageFromPageRow } from "@/api/handlers/chat/message-page";
 import type {
   ChatPart,
   ChatTurnOutcome,
@@ -721,6 +723,58 @@ describe("persisted chat message parts", () => {
     expect(normalizePersistedChatMessageContent(current, {}).parts).toEqual([
       tagged,
     ]);
+  });
+
+  test("completed legacy tool calls render and export without a tool catalog", () => {
+    const call = {
+      type: "tool-call",
+      id: "completed-server",
+      name: "list_templates",
+      arguments: "{}",
+      input: {},
+      state: "complete",
+      output: { templates: [{ name: "Template" }] },
+      metadata: { provider: "legacy" },
+    } as const;
+    const result = {
+      type: "tool-result",
+      toolCallId: call.id,
+      state: "complete",
+      content: JSON.stringify(call.output),
+    } as const;
+    const markdown = "# Templates\n\nOne template is available.";
+    const text = createChatTextPart(markdown);
+    const content = toChatMessageContent({
+      version: 2,
+      data: [call, result, text],
+    });
+    expect(chatToolExecutor(call)).toBeNull();
+    const page = clientMessageFromPageRow(
+      {
+        content,
+        createdAt: new Date("2026-01-01T00:00:00Z"),
+        id: toSafeId<"chatMessage">("msg_legacy_completed"),
+        role: "assistant",
+        revision: 0,
+      },
+      new Map(),
+    );
+    const expected = [
+      {
+        ...call,
+        metadata: {
+          ...call.metadata,
+          [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client",
+        },
+      },
+      result,
+      text,
+    ];
+    expect(page.parts).toEqual(expected);
+    expect(getAwaitingUserInteractions(page)).toEqual([]);
+    const exported = normalizePersistedChatMessageContent(content).parts;
+    expect(exported).toEqual(page.parts);
+    expect(assembleMessageMarkdown(exported)).toBe(markdown);
   });
 
   test("prefers an explicit approval response over an unchanged ask-user call", () => {

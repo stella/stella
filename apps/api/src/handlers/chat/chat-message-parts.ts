@@ -336,8 +336,9 @@ export const normalizePersistedChatMessageContent = (
       if (provider[CHAT_TOOL_EXECUTOR_METADATA_KEY] !== undefined) {
         panic("Stored tool call has invalid executor ownership");
       }
-      // Older rows predate recorded ownership. Resolve it only at this read
-      // boundary; downstream selection, validation and refs use the tag.
+      // Untagged legacy rows predate deferred server calls. Completed calls
+      // have no awaiting owner, so catalog-free reads can classify them as
+      // client. Resolve once here; downstream code uses the recorded tag.
       const tool = registeredChatTool(tools, part.name);
       return {
         ...part,
