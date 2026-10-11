@@ -55,6 +55,20 @@ test("Lists renders and saves an item for a granted caller", async ({
       },
     );
     expect(active.ok(), await active.text()).toBe(true);
+    const members = await api.get(
+      `${E2E_API_ORIGIN}/api/auth/organization/list-members`,
+      { params: { organizationId: fixture.organizationId } },
+    );
+    expect(members.ok(), await members.text()).toBe(true);
+    expect(
+      v.parse(
+        v.object({
+          total: v.number(),
+          members: v.array(v.object({ user: v.object({ email: v.string() }) })),
+        }),
+        await members.json(),
+      ),
+    ).toEqual({ total: 1, members: [{ user: { email: fixture.email } }] });
     const workspace = await createTestWorkspace(api, "lists-journey");
     try {
       const state = await api.storageState();
