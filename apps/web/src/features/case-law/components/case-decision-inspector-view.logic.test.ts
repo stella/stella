@@ -5,10 +5,8 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import { createCaseDecisionViewTab } from "@/components/inspector/case-decision-view";
 import { readerTargetCitation } from "@/components/legal-reader/annotations/reader-annotation-target";
-import {
-  analysisReaderBreadcrumbPaths,
-  decisionInspectorAnnotationTarget,
-} from "@/features/case-law/components/case-decision-inspector-view.logic";
+import { decisionInspectorAnnotationTarget } from "@/features/case-law/components/case-decision-inspector-view.logic";
+import { analysisReaderBreadcrumbPaths } from "@/features/case-law/components/case-viewer/analysis/reader-breadcrumb";
 
 describe("the inspector decision citation", () => {
   test("uses one loaded decision for its court, style, date, and type", () => {

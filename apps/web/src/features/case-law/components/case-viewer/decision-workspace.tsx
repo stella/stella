@@ -47,6 +47,7 @@ import {
 } from "@/features/case-law/components/case-viewer/analysis/example-notes.logic";
 import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import type { AnalysisMarginItem } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
+import { useAnalysisReaderBreadcrumb } from "@/features/case-law/components/case-viewer/analysis/reader-breadcrumb";
 import {
   buildSectionMap,
   flattenAnalysisHeadings,
@@ -257,6 +258,10 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   const completeAnalysis =
     analysisState.status === "done" ? analysisState.analysis : null;
 
+  const fallbackBreadcrumb = useAnalysisReaderBreadcrumb(
+    completeAnalysis?.tree ?? null,
+  );
+
   // The passage the reader was sent to, marked for as long as they are on it.
   // A jump anywhere else in the document is them leaving it, so the marker
   // goes. A new decision starts the question over, and so does a new fragment
@@ -448,6 +453,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
         <LegalReaderControls
           blocks={ast === null ? [] : ast.blocks}
           content={contentElement}
+          fallbackBreadcrumb={fallbackBreadcrumb}
           viewport={viewportElement}
           textScale={textScale}
           key={decisionId}

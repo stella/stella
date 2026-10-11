@@ -11,8 +11,8 @@ const { IntlProvider } = await import("use-intl");
 const { TooltipProvider } = await import("@stll/ui/tooltip");
 const { ReaderBreadcrumb } = await import("./reader-breadcrumb");
 const { default: messages } = await import("@/i18n/langs/en.json");
-const { analysisReaderBreadcrumbPaths } =
-  await import("@/features/case-law/components/case-decision-inspector-view.logic");
+const { useAnalysisReaderBreadcrumb } =
+  await import("@/features/case-law/components/case-viewer/analysis/reader-breadcrumb");
 
 afterEach(() => {
   cleanup();
@@ -195,7 +195,7 @@ test("reader breadcrumb jumps ancestors and opens Contents at the current provis
   expect(jumps).toEqual(["heading-0", "heading-4"]);
 });
 
-test("paragraph-only decisions keep completed analysis headings in Contents and navigate to them", async () => {
+test("paragraph-only decisions retain completed analysis Contents across inspector-to-main remounts", async () => {
   const { LegalReaderBreadcrumb } = await import("./legal-reader-breadcrumb");
   const viewport = document.createElement("div");
   const content = document.createElement("article");
@@ -244,46 +244,66 @@ test("paragraph-only decisions keep completed analysis headings in Contents and 
       ],
     },
   ];
+  const ReaderSurface = () => {
+    const fallback = useAnalysisReaderBreadcrumb(completedAnalysisTree);
+    return (
+      <LegalReaderBreadcrumb
+        blocks={[
+          {
+            type: "paragraph",
+            id: "paragraph-1",
+            anchorId: "paragraph-1",
+            plainText: "The court gives its reasons.",
+            inlines: [{ type: "text", text: "The court gives its reasons." }],
+          },
+          {
+            type: "paragraph",
+            id: "paragraph-2",
+            anchorId: "paragraph-2",
+            plainText: "The appeal is dismissed.",
+            inlines: [{ type: "text", text: "The appeal is dismissed." }],
+          },
+        ]}
+        fallback={fallback}
+        viewport={viewport}
+        content={content}
+      />
+    );
+  };
+  const reader = (surface: "inspector" | "main") => (
+    <IntlProvider locale="en" messages={messages}>
+      <TooltipProvider>
+        <ReaderSurface key={surface} />
+      </TooltipProvider>
+    </IntlProvider>
+  );
   try {
-    render(
-      <IntlProvider locale="en" messages={messages}>
-        <TooltipProvider>
-          <LegalReaderBreadcrumb
-            blocks={[
-              {
-                type: "paragraph",
-                id: "paragraph-1",
-                anchorId: "paragraph-1",
-                plainText: "The court gives its reasons.",
-                inlines: [
-                  { type: "text", text: "The court gives its reasons." },
-                ],
-              },
-              {
-                type: "paragraph",
-                id: "paragraph-2",
-                anchorId: "paragraph-2",
-                plainText: "The appeal is dismissed.",
-                inlines: [{ type: "text", text: "The appeal is dismissed." }],
-              },
-            ]}
-            fallback={analysisReaderBreadcrumbPaths(completedAnalysisTree)}
-            viewport={viewport}
-            content={content}
-          />
-        </TooltipProvider>
-      </IntlProvider>,
-    );
-    await act(async () => {
-      await sleep(0);
-    });
-    expect(
-      screen.getByRole("button", { name: "Contents: Outcome" }),
-    ).toBeTruthy();
-    await act(async () =>
-      fireEvent.click(screen.getByRole("button", { name: "Court reasoning" })),
-    );
-    expect(viewport.scrollTop).toBe(36);
+    const assertContentsAndJump = async () => {
+      await act(async () => {
+        await sleep(0);
+      });
+      const contents = screen.getByRole("button", {
+        name: "Contents: Outcome",
+      });
+      await act(async () => fireEvent.click(contents));
+      expect(
+        document
+          .querySelector('[data-contents-anchor="paragraph-2"]')
+          ?.getAttribute("aria-current"),
+      ).toBe("location");
+      await act(async () => fireEvent.click(contents));
+      await act(async () =>
+        fireEvent.click(
+          screen.getByRole("button", { name: "Court reasoning" }),
+        ),
+      );
+      expect(viewport.scrollTop).toBe(36);
+    };
+    const { rerender } = render(reader("inspector"));
+    await assertContentsAndJump();
+    viewport.scrollTop = 200;
+    rerender(reader("main"));
+    await assertContentsAndJump();
   } finally {
     viewport.remove();
   }

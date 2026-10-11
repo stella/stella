@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useRef } from "react";
 import type { ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
@@ -35,12 +35,10 @@ import { OpenOriginalButton } from "@/components/legal-reader/open-original-butt
 import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
-import {
-  analysisReaderBreadcrumbPaths,
-  decisionInspectorAnnotationTarget,
-} from "@/features/case-law/components/case-decision-inspector-view.logic";
+import { decisionInspectorAnnotationTarget } from "@/features/case-law/components/case-decision-inspector-view.logic";
 import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import type { MarginItem } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
+import { useAnalysisReaderBreadcrumb } from "@/features/case-law/components/case-viewer/analysis/reader-breadcrumb";
 import { useLazyDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis";
 import { DecisionCitationBox } from "@/features/case-law/components/case-viewer/decision-citation-box";
 import { DecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts";
@@ -102,15 +100,7 @@ export const CaseDecisionInspectorView = ({
   });
   const analysisTree =
     analysis.state.status === "done" ? analysis.state.analysis.tree : null;
-  // The observer binds to model identity; unrelated inspector renders must not
-  // reset its active path while the completed analysis is unchanged.
-  const fallbackBreadcrumb = useMemo(
-    () =>
-      analysisTree === null
-        ? undefined
-        : analysisReaderBreadcrumbPaths(analysisTree),
-    [analysisTree],
-  );
+  const fallbackBreadcrumb = useAnalysisReaderBreadcrumb(analysisTree);
   // No text is shown before the decision loads, so the default is moot then.
   const caseNumberType =
     decision?.caseNumberType ?? DECISION_IDENTIFIER_TYPES.CASE_NUMBER;

@@ -2,6 +2,7 @@ import * as v from "valibot";
 
 import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
 import { decisionTitle } from "@stll/decision-reader/decision-title";
+import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import {
@@ -10,6 +11,7 @@ import {
 } from "../../src/components/inspector/inspector-storage-keys";
 import { READER_BREADCRUMB_CLEARANCE } from "../../src/components/legal-reader/reader-breadcrumb-scroll";
 import { createStatuteViewTab } from "../../src/features/statutes/statute-inspector.logic";
+import type { WebRoutes } from "../../src/generated/api-routes.gen";
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 import { E2E_API_ORIGIN } from "../helpers/api";
 import {
@@ -82,32 +84,101 @@ const ast = {
 } satisfies DocumentAst;
 const decision = { ...dockedChatLegalPayloads.decision, documentAst: ast };
 const statute = { ...dockedChatLegalPayloads.statute, documentAst: ast };
+const paragraphOnlyAst = {
+  ...ast,
+  blocks: [
+    {
+      id: "introduction",
+      anchorId: "introduction",
+      type: "paragraph" as const,
+      inlines: [
+        { type: "text" as const, text: "Úvodní ustanovení. ".repeat(40) },
+      ],
+      plainText: "Úvodní ustanovení. ".repeat(40),
+    },
+    ...headings.map(({ title }, index) => ({
+      id: `paragraph-${index}`,
+      anchorId: `paragraph-${index}`,
+      type: "paragraph" as const,
+      inlines: [
+        {
+          type: "text" as const,
+          text: `${title}. Soud posoudil podmínky žádosti a předložené listiny. `.repeat(
+            30,
+          ),
+        },
+      ],
+      plainText:
+        `${title}. Soud posoudil podmínky žádosti a předložené listiny. `.repeat(
+          30,
+        ),
+    })),
+  ],
+} satisfies DocumentAst;
+const paragraphOnlyDecision = {
+  ...dockedChatLegalPayloads.decision,
+  documentAst: paragraphOnlyAst,
+};
+const paragraphAnalysisHeadingAt = (
+  index: number,
+): DecisionAnalysis["tree"][number] => {
+  const heading = headings.at(index);
+  if (heading === undefined) {
+    throw new Error(`Missing analysis heading at index ${index}`);
+  }
+  return {
+    id: `analysis-${index}`,
+    label: heading.title,
+    category: index === headings.length - 1 ? "holding" : "reasoning",
+    startAnchorId: `paragraph-${index}`,
+    endAnchorId: "paragraph-4",
+    annotations: [],
+    children:
+      index + 1 < headings.length
+        ? [paragraphAnalysisHeadingAt(index + 1)]
+        : [],
+  };
+};
+const paragraphOnlyAnalysis = {
+  version: 2,
+  generatedAt: "2026-10-06T08:00:00.000Z",
+  model: "synthetic",
+  inputFingerprint: "f".repeat(64),
+  tree: [paragraphAnalysisHeadingAt(0)],
+} satisfies DecisionAnalysis;
+const decisionTab = {
+  type: "case-law-decision",
+  id: `case-law-decision:${decision.id}`,
+  label: decisionTitle(decision),
+  payload: {
+    caseNumber: decision.caseNumber,
+    country: decision.country,
+    court: decision.court,
+    decisionId: decision.id,
+    route: createCaseLawDecisionRouteParams({
+      ...decision,
+      decisionId: decision.id,
+    }),
+  },
+};
 const views = [
   {
     kind: "decision",
     value: decision,
     // The inspector's tab factory module reaches the router types, which the
     // e2e program cannot load; the restore assertions below catch a drift.
-    tab: {
-      type: "case-law-decision",
-      id: `case-law-decision:${decision.id}`,
-      label: decisionTitle(decision),
-      payload: {
-        caseNumber: decision.caseNumber,
-        country: decision.country,
-        court: decision.court,
-        decisionId: decision.id,
-        route: createCaseLawDecisionRouteParams({
-          ...decision,
-          decisionId: decision.id,
-        }),
-      },
-    },
+    tab: decisionTab,
     mainPath: DOCKED_CHAT_LEGAL_ROUTES.decision.path,
     paths: [
       `/v1/case/decisions/${decision.id}`,
       `/v1/case/decisions/by-slug/${decision.slug}`,
     ],
+    anchors: {
+      introduction: "introduction",
+      first: "heading-0",
+      active: "heading-4",
+    },
+    analysis: null,
   },
   {
     kind: "statute",
@@ -122,24 +193,80 @@ const views = [
       `/v1/law/statutes/${statute.id}`,
       `/v1/law/statutes/by-slug/${statute.slug}`,
     ],
+    anchors: {
+      introduction: "introduction",
+      first: "heading-0",
+      active: "heading-4",
+    },
+    analysis: null,
+  },
+  {
+    kind: "paragraph-only decision",
+    value: paragraphOnlyDecision,
+    tab: decisionTab,
+    mainPath: DOCKED_CHAT_LEGAL_ROUTES.decision.path,
+    paths: [
+      `/v1/case/decisions/${paragraphOnlyDecision.id}`,
+      `/v1/case/decisions/by-slug/${paragraphOnlyDecision.slug}`,
+    ],
+    anchors: {
+      introduction: "introduction",
+      first: "paragraph-0",
+      active: "paragraph-4",
+    },
+    analysis: paragraphOnlyAnalysis,
   },
 ];
 const sessionSchema = v.object({
   user: v.object({ id: v.string() }),
   session: v.object({ activeOrganizationId: v.string() }),
 });
+type OrganizationAIAvailability = NonNullable<
+  WebRoutes["v1"]["organization-settings"]["ai-availability"]["get"]["response"][200]
+>;
 
 for (const view of views) {
   test(`the ${view.kind} breadcrumb shares one pinned controls row in inspector and main reader`, async ({
     page,
     request,
   }) => {
+    if (view.analysis !== null) {
+      expect(new Set(paragraphOnlyAst.blocks.map(({ type }) => type))).toEqual(
+        new Set(["paragraph"]),
+      );
+    }
     await page.setViewportSize({ width: 1440, height: 900 });
     await installDockedLegalFixtures(page);
     await page.route(
       (url) =>
-        url.origin === E2E_API_ORIGIN && view.paths.includes(url.pathname),
+        url.origin === E2E_API_ORIGIN &&
+        (view.paths.includes(url.pathname) ||
+          (view.analysis !== null &&
+            (url.pathname ===
+              `/v1/case/decisions/${paragraphOnlyDecision.id}/analysis` ||
+              url.pathname === "/v1/organization-settings/ai-availability"))),
       async (route) => {
+        const { pathname } = new URL(route.request().url());
+        if (pathname.endsWith("/analysis") && view.analysis !== null) {
+          await route.fulfill({
+            json: {
+              status: "done",
+              analysis: view.analysis,
+            } satisfies { status: "done"; analysis: DecisionAnalysis },
+          });
+          return;
+        }
+        if (pathname === "/v1/organization-settings/ai-availability") {
+          const availability = {
+            available: true,
+            instanceProvisioned: true,
+            orgConfigured: false,
+            deferredServiceTierAvailable: false,
+            mockAnswers: false,
+          } satisfies OrganizationAIAvailability;
+          await route.fulfill({ json: availability });
+          return;
+        }
         await route.fulfill({ json: view.value });
       },
     );
@@ -181,9 +308,9 @@ for (const view of views) {
     );
     await page.goto("/chat", { waitUntil: "domcontentloaded" });
     const inspector = page.locator('[data-slot="inspector-dock-pane"]');
-    await expect(inspector.locator('[data-anchor="heading-4"]')).toBeAttached({
-      timeout: 30_000,
-    });
+    await expect(
+      inspector.locator(`[data-anchor="${view.anchors.active}"]`),
+    ).toBeAttached({ timeout: 30_000 });
     for (const surface of ["inspector", "main"] as const) {
       const root = surface === "inspector" ? inspector : page.locator("body");
       const breadcrumb = root.locator('[data-slot="reader-breadcrumb"]');
@@ -194,7 +321,7 @@ for (const view of views) {
         .poll(
           async () =>
             await root
-              .locator('[data-anchor="introduction"]')
+              .locator(`[data-anchor="${view.anchors.introduction}"]`)
               .evaluate((introduction) => {
                 const content =
                   introduction.closest(
@@ -254,9 +381,11 @@ for (const view of views) {
       await initialContents.click();
       await expect(initialContents).toHaveAttribute("aria-expanded", "true");
       await expect(
-        page.locator('[data-contents-anchor="heading-0"]'),
+        page.locator(`[data-contents-anchor="${view.anchors.first}"]`),
       ).toBeVisible();
-      await page.locator('[data-contents-anchor="heading-0"]').focus();
+      await page
+        .locator(`[data-contents-anchor="${view.anchors.first}"]`)
+        .focus();
       await page.keyboard.press("Escape");
       await expect(initialContents).toHaveAttribute("aria-expanded", "false");
       await expect(initialContents).toBeFocused();
@@ -268,7 +397,7 @@ for (const view of views) {
       const before = await breadcrumb.boundingBox();
       expect(before).not.toBeNull();
       await root
-        .locator('[data-anchor="heading-4"]')
+        .locator(`[data-anchor="${view.anchors.active}"]`)
         .evaluate((heading, clearance) => {
           let viewport = heading.parentElement;
           while (
@@ -318,7 +447,7 @@ for (const view of views) {
       await current.click();
       await expect(
         page.locator(
-          '[data-contents-anchor="heading-4"][aria-current="location"]',
+          `[data-contents-anchor="${view.anchors.active}"][aria-current="location"]`,
         ),
       ).toBeVisible();
       await page.keyboard.press("Escape");
