@@ -1164,8 +1164,7 @@ export const putTemporaryS3ObjectWithSignal = async (
         new PutObjectCommand({
           // Reopen a spooled file on each credential attempt; buffering the
           // archive here would defeat the publisher's bounded-memory contract.
-          Body:
-            bytes instanceof Blob ? Readable.fromWeb(bytes.stream()) : bytes,
+          Body: bytes instanceof Blob ? Readable.from(bytes.stream()) : bytes,
           ContentLength: bytes instanceof Blob ? bytes.size : bytes.byteLength,
           Bucket: envBase.S3_BUCKET,
           ContentType: mimeType,
@@ -1187,13 +1186,11 @@ export const openS3ObjectStreamWithSignal = async (
       new GetObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
       { abortSignal: signal },
     );
-    if (!response.Body) {
-      throw new S3ObjectReadError({
-        message: "S3 returned an object without a response body",
-      });
-    }
+    // A successful GetObject always carries a body; the SDK types it optional.
+    const body =
+      response.Body ?? panic("S3 returned an object without a response body");
     return {
-      body: response.Body.transformToWebStream(),
+      body: body.transformToWebStream(),
       contentLength: response.ContentLength,
     };
   });

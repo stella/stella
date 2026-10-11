@@ -1,67 +1,20 @@
 import { panic } from "better-result";
 
-import {
-  toPersonalChatThreadResponse,
-  toPersonalChatMessageResponse,
-  toPersonalChatMessageRevisionResponse,
-} from "@/api/handlers/chat/personal-data-response";
-import { projectPrivateAnnotationForAccountExport } from "@/api/handlers/legal-reader/annotations/personal-data-response";
-import { toMemoryResponse } from "@/api/handlers/memories/response";
-import { toSavedSearchResponse } from "@/api/handlers/saved-searches/response";
-import { toSavedTimeNarrativeItem } from "@/api/handlers/saved-time-narratives/schema";
-import { toSearchHistoryEntryResponse } from "@/api/handlers/search-history/entries";
-import {
-  toAgentSkillResponse,
-  toAgentSkillRevisionResponse,
-} from "@/api/handlers/skills/response";
-import { toUserDefaultAccountExport } from "@/api/handlers/templates/lookup-formats/projection";
-import { toPersonalUserFileResponse } from "@/api/handlers/user-files/personal-data-response";
-import { toPersonalViewTemplateResponse } from "@/api/handlers/view-templates/personal-data-response";
-import {
-  projectAccountProfile,
-  projectAccountMembership,
-} from "@/api/lib/db/account-profile-projection";
-import { projectFeedbackReportForAccountExport } from "@/api/lib/db/feedback-report-projection";
-
 import { USER_OWNED_TABLE_NAMES } from "./user-owned-tables.gen";
 import type { UserOwnedTableName } from "./user-owned-tables.gen";
 
-type OwnerProjection = (...args: never[]) => unknown;
-export const ACCOUNT_EXPORT_EXEMPT_REASON = {
+const ACCOUNT_EXPORT_EXEMPT_REASON = {
   noUserContent: "no user content",
   derived: "derived/cache",
   security: "security artifact",
   organization: "org-owned",
 } as const;
-export type AccountExportDisposition =
-  | { type: "exported"; project: OwnerProjection }
+type AccountExportDisposition =
+  | { type: "exported" }
   | {
       type: "exempt";
       reason: (typeof ACCOUNT_EXPORT_EXEMPT_REASON)[keyof typeof ACCOUNT_EXPORT_EXEMPT_REASON];
     };
-
-// These references establish the owning projection contract; the registry
-// cannot substitute a raw row serializer or another table's projection.
-export const ACCOUNT_EXPORT_OWNER_PROJECTIONS = {
-  user: projectAccountProfile,
-  member: projectAccountMembership,
-  feedback_reports: projectFeedbackReportForAccountExport,
-  legal_reader_annotations: projectPrivateAnnotationForAccountExport,
-  saved_time_narratives: toSavedTimeNarrativeItem,
-  template_lookup_format_user_defaults: toUserDefaultAccountExport,
-  chat_threads: toPersonalChatThreadResponse,
-  chat_messages: toPersonalChatMessageResponse,
-  chat_message_revisions: toPersonalChatMessageRevisionResponse,
-  ai_memories: toMemoryResponse,
-  agent_skills: toAgentSkillResponse,
-  agent_skill_revisions: toAgentSkillRevisionResponse,
-  saved_searches: toSavedSearchResponse,
-  search_history_entries: toSearchHistoryEntryResponse,
-  user_files: toPersonalUserFileResponse,
-  workspace_view_templates: toPersonalViewTemplateResponse,
-} as const;
-export type ExportedAccountTableName =
-  keyof typeof ACCOUNT_EXPORT_OWNER_PROJECTIONS;
 
 // Actor-attribution FKs on shared legal records do not confer personal ownership.
 // Mixed tables export only their private subset, enforced by the page owner.
@@ -99,18 +52,9 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
   },
-  agent_skill_revisions: {
-    type: "exported",
-    project: ACCOUNT_EXPORT_OWNER_PROJECTIONS.agent_skill_revisions,
-  },
-  agent_skills: {
-    type: "exported",
-    project: ACCOUNT_EXPORT_OWNER_PROJECTIONS.agent_skills,
-  },
-  ai_memories: {
-    type: "exported",
-    project: ACCOUNT_EXPORT_OWNER_PROJECTIONS.ai_memories,
-  },
+  agent_skill_revisions: { type: "exported" },
+  agent_skills: { type: "exported" },
+  ai_memories: { type: "exported" },
   anonymization_allowlist_entries: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
@@ -136,22 +80,13 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
   },
-  chat_message_revisions: {
-    type: "exported",
-    project: ACCOUNT_EXPORT_OWNER_PROJECTIONS.chat_message_revisions,
-  },
-  chat_messages: {
-    type: "exported",
-    project: ACCOUNT_EXPORT_OWNER_PROJECTIONS.chat_messages,
-  },
+  chat_message_revisions: { type: "exported" },
+  chat_messages: { type: "exported" },
   chat_secrets: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
   },
-  chat_threads: {
-    type: "exported",
-    project: ACCOUNT_EXPORT_OWNER_PROJECTIONS.chat_threads,
-  },
+  chat_threads: { type: "exported" },
   chat_turns: { type: "exempt", reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived },
   clauses: {
     type: "exempt",
@@ -233,10 +168,7 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.noUserContent,
   },
-  feedback_reports: {
-    type: "exported",
-    project: ACCOUNT_EXPORT_OWNER_PROJECTIONS.feedback_reports,
-  },
+  feedback_reports: { type: "exported" },
   file_chat_threads: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
@@ -309,10 +241,7 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
   },
-  legal_reader_annotations: {
-    type: "exported",
-    project: ACCOUNT_EXPORT_OWNER_PROJECTIONS.legal_reader_annotations,
-  },
+  legal_reader_annotations: { type: "exported" },
   matter_inbound_addresses: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
@@ -325,10 +254,7 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
   },
-  member: {
-    type: "exported",
-    project: ACCOUNT_EXPORT_OWNER_PROJECTIONS.member,
-  },
+  member: { type: "exported" },
   notifications: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived,
@@ -377,18 +303,9 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
   },
-  saved_searches: {
-    type: "exported",
-    project: ACCOUNT_EXPORT_OWNER_PROJECTIONS.saved_searches,
-  },
-  saved_time_narratives: {
-    type: "exported",
-    project: ACCOUNT_EXPORT_OWNER_PROJECTIONS.saved_time_narratives,
-  },
-  search_history_entries: {
-    type: "exported",
-    project: ACCOUNT_EXPORT_OWNER_PROJECTIONS.search_history_entries,
-  },
+  saved_searches: { type: "exported" },
+  saved_time_narratives: { type: "exported" },
+  search_history_entries: { type: "exported" },
   search_history_owners: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived,
@@ -430,11 +347,7 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
   },
-  template_lookup_format_user_defaults: {
-    type: "exported",
-    project:
-      ACCOUNT_EXPORT_OWNER_PROJECTIONS.template_lookup_format_user_defaults,
-  },
+  template_lookup_format_user_defaults: { type: "exported" },
   template_persistence_requests: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
@@ -488,11 +401,8 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
   },
-  user: { type: "exported", project: ACCOUNT_EXPORT_OWNER_PROJECTIONS.user },
-  user_files: {
-    type: "exported",
-    project: ACCOUNT_EXPORT_OWNER_PROJECTIONS.user_files,
-  },
+  user: { type: "exported" },
+  user_files: { type: "exported" },
   work_obligation_events: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
@@ -505,15 +415,19 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
   },
-  workspace_view_templates: {
-    type: "exported",
-    project: ACCOUNT_EXPORT_OWNER_PROJECTIONS.workspace_view_templates,
-  },
+  workspace_view_templates: { type: "exported" },
   workspaces: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
   },
 } as const satisfies Record<UserOwnedTableName, AccountExportDisposition>;
+
+type AccountExportRegistry = typeof ACCOUNT_EXPORT_REGISTRY;
+export type ExportedAccountTableName = {
+  [
+    Table in UserOwnedTableName
+  ]: AccountExportRegistry[Table]["type"] extends "exported" ? Table : never;
+}[UserOwnedTableName];
 
 const isExported = (
   table: UserOwnedTableName,
@@ -525,15 +439,14 @@ export const EXPORTED_ACCOUNT_TABLE_NAMES =
 type AssertAccountExportRegistryOptions = {
   tableNames: readonly string[];
   registry: Readonly<Record<string, AccountExportDisposition>>;
+  projections: Readonly<Record<string, unknown>>;
 };
 export const assertAccountExportRegistry = ({
   tableNames,
   registry,
+  projections,
 }: AssertAccountExportRegistryOptions): void => {
   const schemaNames = new Set(tableNames);
-  const ownerProjections = new Map(
-    Object.entries(ACCOUNT_EXPORT_OWNER_PROJECTIONS),
-  );
   for (const table of schemaNames) {
     if (!Object.hasOwn(registry, table)) {
       panic(`Account export disposition missing: ${table}`);
@@ -544,10 +457,17 @@ export const assertAccountExportRegistry = ({
       panic(`Account export disposition has no user table: ${table}`);
     }
     if (
-      disposition.type === "exported" &&
-      ownerProjections.get(table) !== disposition.project
+      (disposition.type === "exported") !==
+      Object.hasOwn(projections, table)
     ) {
-      panic(`Account export projection belongs to another owner: ${table}`);
+      panic(
+        `Account export projection does not match its disposition: ${table}`,
+      );
+    }
+  }
+  for (const table of Object.keys(projections)) {
+    if (!Object.hasOwn(registry, table)) {
+      panic(`Account export projection has no disposition: ${table}`);
     }
   }
 };

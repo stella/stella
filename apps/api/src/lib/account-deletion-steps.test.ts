@@ -216,7 +216,7 @@ describe("desktop edit session deletion", () => {
   });
 });
 
-test("storage cleanup keeps its publication deadline in parent and chunks", async () => {
+test("storage cleanup keeps its publication deadline on the parent request", async () => {
   const stored: unknown[] = [];
   const tx = asTestRaw<Transaction>({
     insert: () => ({
@@ -247,9 +247,13 @@ test("storage cleanup keeps its publication deadline in parent and chunks", asyn
     }),
     [
       expect.objectContaining({
-        nextAttemptAt: notBefore,
         s3Keys: ["account-exports/user-1/export/attempt.zip"],
       }),
     ],
+  ]);
+  // First attempts read the deadline from the parent; chunks keep the shared
+  // retry-state invariant, where only failed chunks carry a retry time.
+  expect(stored.at(1)).toEqual([
+    expect.not.objectContaining({ nextAttemptAt: expect.anything() }),
   ]);
 });

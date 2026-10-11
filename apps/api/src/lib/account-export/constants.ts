@@ -12,7 +12,6 @@ export const ACCOUNT_EXPORT_LIMITS = {
   publicationCancellationMarginMs: 30 * 1000,
   attempts: 5,
   recoveryPageSize: 100,
-  deletionPageSize: 100,
   requestsPerWindow: 3,
   requestWindowMs: 60 * 60 * 1000,
 } as const;

@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { ACCOUNT_EXPORT_PROJECTIONS } from "@/api/account-export-projections";
+
 import {
   ACCOUNT_EXPORT_REGISTRY,
   assertAccountExportRegistry,
@@ -15,6 +17,7 @@ describe("personal data export coverage", () => {
     assertAccountExportRegistry({
       tableNames,
       registry: ACCOUNT_EXPORT_REGISTRY,
+      projections: ACCOUNT_EXPORT_PROJECTIONS,
     });
   });
 
@@ -27,12 +30,16 @@ describe("personal data export coverage", () => {
         ),
       );
       expect(() =>
-        assertAccountExportRegistry({ tableNames, registry }),
+        assertAccountExportRegistry({
+          tableNames,
+          registry,
+          projections: ACCOUNT_EXPORT_PROJECTIONS,
+        }),
       ).toThrow("disposition missing");
     }
   });
 
-  test("unowned tables and another owner's projection fail the guard", () => {
+  test("unowned tables and unbound or misplaced projections fail the guard", () => {
     const tableNames = userOwnedTableNames();
     expect(() =>
       assertAccountExportRegistry({
@@ -41,16 +48,37 @@ describe("personal data export coverage", () => {
           ...ACCOUNT_EXPORT_REGISTRY,
           unowned_table: { type: "exempt", reason: "org-owned" },
         },
+        projections: ACCOUNT_EXPORT_PROJECTIONS,
       }),
     ).toThrow("no user table");
+    const { saved_searches: _unbound, ...withoutSavedSearches } =
+      ACCOUNT_EXPORT_PROJECTIONS;
     expect(() =>
       assertAccountExportRegistry({
         tableNames,
-        registry: {
-          ...ACCOUNT_EXPORT_REGISTRY,
-          user: ACCOUNT_EXPORT_REGISTRY.saved_searches,
+        registry: ACCOUNT_EXPORT_REGISTRY,
+        projections: withoutSavedSearches,
+      }),
+    ).toThrow("does not match its disposition: saved_searches");
+    expect(() =>
+      assertAccountExportRegistry({
+        tableNames,
+        registry: ACCOUNT_EXPORT_REGISTRY,
+        projections: {
+          ...ACCOUNT_EXPORT_PROJECTIONS,
+          account: ACCOUNT_EXPORT_PROJECTIONS.user,
         },
       }),
-    ).toThrow("another owner");
+    ).toThrow("does not match its disposition: account");
+    expect(() =>
+      assertAccountExportRegistry({
+        tableNames,
+        registry: ACCOUNT_EXPORT_REGISTRY,
+        projections: {
+          ...ACCOUNT_EXPORT_PROJECTIONS,
+          unowned_table: ACCOUNT_EXPORT_PROJECTIONS.user,
+        },
+      }),
+    ).toThrow("has no disposition: unowned_table");
   });
 });

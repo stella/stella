@@ -15,6 +15,7 @@ import {
   exportAccountRows,
 } from "@/api/lib/account-export/pages";
 import type { AccountExportDataDb } from "@/api/lib/account-export/pages";
+import type { AccountExportProjections } from "@/api/lib/account-export/projections";
 import { EXPORTED_ACCOUNT_TABLE_NAMES } from "@/api/lib/account-export/registry";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -36,6 +37,7 @@ export class AccountExportArchiveError extends TaggedError(
 }> {}
 
 type BuildAccountExportArchiveOptions = {
+  projections: AccountExportProjections;
   db: AccountExportDataDb;
   userId: SafeId<"user">;
   objectKey: string;
@@ -57,8 +59,13 @@ const archiveDeps = {
   publish: putTemporaryS3ObjectWithSignal,
 } satisfies AccountExportArchiveDeps;
 
+// A projection may yield a value JSON cannot represent, such as undefined.
+const serializeRecord = (row: unknown): string | undefined =>
+  JSON.stringify(row);
+
 /** Stream table arrays and object bodies into one bounded, private spool. */
 export const buildAccountExportArchive = async ({
+  projections,
   db,
   userId,
   objectKey,
@@ -75,9 +82,15 @@ export const buildAccountExportArchive = async ({
       tables.push(summary);
       const tableJson = async function* () {
         yield encoder.encode("[");
-        for await (const row of deps.rows({ db, userId, table, signal })) {
+        for await (const row of deps.rows({
+          projections,
+          db,
+          userId,
+          table,
+          signal,
+        })) {
           signal.throwIfAborted();
-          const serialized = JSON.stringify(row);
+          const serialized = serializeRecord(row);
           if (serialized === undefined) {
             panic("Account export projection must produce JSON");
           }
@@ -101,7 +114,7 @@ export const buildAccountExportArchive = async ({
       yield { name: `${table}.json`, input: tableJson() };
     }
     let fileCount = 0;
-    for await (const file of deps.files({ db, userId, signal })) {
+    for await (const file of deps.files({ projections, db, userId, signal })) {
       signal.throwIfAborted();
       fileCount += 1;
       // client-zip retains one central-directory record per entry.
@@ -167,7 +180,7 @@ export const buildAccountExportArchive = async ({
       },
     });
     await pipeline(
-      Readable.fromWeb(makeZip(entries())),
+      Readable.from(makeZip(entries())),
       ceiling,
       createWriteStream(archivePath, { flags: "wx", mode: 0o600 }),
       { signal },

@@ -1,4 +1,5 @@
 import {
+  accountExports,
   desktopEditSessions,
   EU_COMPLETION_STATUSES,
   euCompletionApprovals,
@@ -70,6 +71,19 @@ const UNMANAGED_REASONS = {
   coordinatedTimers:
     "Timer state and its entry projection are coordinated by the timer transaction owner pending migration.",
 } as const;
+
+// A failed attempt retries until its budget is spent; a ready archive expires.
+const ACCOUNT_EXPORT_TRANSITIONS = defineTransitions(
+  accountExports,
+  {
+    requested: ["processing", "failed"],
+    processing: ["ready", "requested", "failed"],
+    ready: ["expired"],
+    failed: [],
+    expired: [],
+  },
+  { terminal: ["failed", "expired"] },
+);
 
 const DESKTOP_EDIT_SESSION_TRANSITIONS = defineTransitions(
   desktopEditSessions,
@@ -231,6 +245,7 @@ export const TRANSITIONS = {
   agentRegistration: { unmanaged: UNMANAGED_REASONS.authCeremony },
   accountDeletionEffectChunks: { unmanaged: UNMANAGED_REASONS.cleanup },
   accountDeletionRequests: { unmanaged: UNMANAGED_REASONS.cleanup },
+  accountExports: ACCOUNT_EXPORT_TRANSITIONS,
   agentSkillProposals: { unmanaged: UNMANAGED_REASONS.userDecision },
   aiMemories: { unmanaged: UNMANAGED_REASONS.userDecision },
   auditLogs: { unmanaged: UNMANAGED_REASONS.userDecision },

@@ -34,9 +34,7 @@ const requestPersonalDataExport = createSafeSessionHandler(
       "Request an asynchronous export of your own personal data across current organization memberships. Organization and matter content are excluded. One active export is reused. Poll account-exports.status.get with the returned id as exportId, then call account-exports.download.get when ready. Pass nextCall to read_capability. Downloads require your authenticated account and expire after one hour.",
   },
   async function* ({ user, request }) {
-    const row = yield* Result.await(
-      Result.tryPromise(async () => await requestAccountExport(user.id)),
-    );
+    const row = yield* Result.await(requestAccountExport(user.id));
     // Queue transport is reconstructible from the committed ledger. A failed
     // enqueue must not turn an accepted request into an ambiguous refusal.
     const queued = await Result.tryPromise(

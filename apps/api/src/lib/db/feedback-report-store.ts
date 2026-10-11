@@ -33,8 +33,6 @@ import {
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 
-export { projectFeedbackReportForAccountExport } from "@/api/lib/db/feedback-report-projection";
-
 export type FeedbackReportRow = {
   kind: FeedbackKind;
   area: FeedbackArea;
@@ -56,22 +54,19 @@ export type FeedbackReportRow = {
 
 const FEEDBACK_REPORT_ACCOUNT_PAGE_SIZE = 100;
 
+type FeedbackReportId = (typeof feedbackReports.$inferSelect)["id"];
 type ReadOwnFeedbackReportPageOptions = {
   database: Pick<typeof rootDb, "select">;
   userId: SafeId<"user">;
-  afterId?: string;
+  after?: FeedbackReportId;
 };
 
 /** Reads only the caller's reports and omits maintainer-only fields. */
 export const readOwnFeedbackReportPage = async ({
   database,
   userId,
-  afterId,
+  after,
 }: ReadOwnFeedbackReportPageOptions) => {
-  const conditions = [eq(feedbackReports.userId, userId)];
-  if (afterId !== undefined) {
-    conditions.push(lt(feedbackReports.id, afterId));
-  }
   const rows = await database
     .select({
       id: feedbackReports.id,
@@ -87,17 +82,15 @@ export const readOwnFeedbackReportPage = async ({
       createdAt: feedbackReports.createdAt,
     })
     .from(feedbackReports)
-    .where(and(...conditions))
+    .where(
+      and(
+        eq(feedbackReports.userId, userId),
+        after === undefined ? undefined : lt(feedbackReports.id, after),
+      ),
+    )
     .orderBy(desc(feedbackReports.id))
-    .limit(FEEDBACK_REPORT_ACCOUNT_PAGE_SIZE + 1);
-  const items = rows.slice(0, FEEDBACK_REPORT_ACCOUNT_PAGE_SIZE);
-  return {
-    items,
-    nextAfterId:
-      rows.length > FEEDBACK_REPORT_ACCOUNT_PAGE_SIZE
-        ? (items.at(-1)?.id ?? null)
-        : null,
-  };
+    .limit(FEEDBACK_REPORT_ACCOUNT_PAGE_SIZE);
+  return rows;
 };
 
 type StoredFeedbackReport = { id: SafeId<"feedbackReport"> };

@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, desc, eq, gt, inArray, lte, or, sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
@@ -10,13 +10,16 @@ import {
   ACCOUNT_EXPORT_LIMITS,
 } from "@/api/lib/account-export/constants";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
+import type { AccountAuditEventType } from "@/api/lib/audit-log.constants";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockActiveAccountRow } from "@/api/lib/db/account-row";
 import {
   withAggregateRowQuery,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transition } from "@/api/lib/db/transitions";
+import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   createCursorPage,
   decodePaginationCursor,
@@ -87,15 +90,94 @@ const claimable = () =>
       lte(accountExports.leaseExpiresAt, sql`clock_timestamp()`),
     ),
   );
-const claimPredicate = (claim: AccountExportClaim) =>
-  and(
-    eq(accountExports.id, claim.id),
-    eq(accountExports.userId, claim.userId),
-    eq(accountExports.status, "processing"),
-    eq(accountExports.claimToken, claim.token),
-    eq(accountExports.objectKey, claim.objectKey),
-    gt(accountExports.leaseExpiresAt, sql`clock_timestamp()`),
-  );
+
+/** A row-locked ledger entry and its deadlines on the database clock. */
+type LockedAccountExport = {
+  row: AccountExportRow;
+  leaseElapsed: boolean;
+  readyElapsed: boolean;
+};
+
+const lockAccountExport = async (
+  tx: Transaction,
+  { id, userId }: { id: string; userId: SafeId<"user"> },
+): Promise<LockedAccountExport | null> => {
+  const locked = await withAggregateRowQuery({
+    tx,
+    aggregate: "accountExport",
+    id: { id, userId },
+    mode: "no key update",
+    select: (lockedTx) => lockedTx.select().from(accountExports),
+  });
+  if (locked.status === "busy") {
+    panic("Blocking account export lock was busy");
+  }
+  const row = locked.rows.at(0);
+  if (row === undefined) {
+    return null;
+  }
+  const deadlines = await tx
+    .select({
+      leaseElapsed: sql<boolean>`coalesce(${accountExports.leaseExpiresAt} <= clock_timestamp(), false)`,
+      readyElapsed: sql<boolean>`coalesce(${accountExports.expiresAt} <= clock_timestamp(), false)`,
+    })
+    .from(accountExports)
+    .where(eq(accountExports.id, id))
+    .limit(1);
+  const deadline =
+    deadlines.at(0) ?? panic("Locked account export has no deadline row");
+  return { row, ...deadline };
+};
+
+const holdsClaim = (
+  locked: LockedAccountExport | null,
+  claim: AccountExportClaim,
+): locked is LockedAccountExport =>
+  locked?.row.status === "processing" &&
+  locked.row.claimToken === claim.token &&
+  locked.row.objectKey === claim.objectKey &&
+  !locked.leaseElapsed;
+
+const RELEASED_ATTEMPT = {
+  claimToken: null,
+  leaseExpiresAt: null,
+  objectKey: null,
+  expiresAt: null,
+  updatedAt: sql`clock_timestamp()`,
+};
+
+const recordAccountExportTransition =
+  (userId: SafeId<"user">, type: AccountAuditEventType) =>
+  async (tx: Transaction, { id }: { id: string }) => {
+    await createBackgroundAuditRecorder({ account: { userId } })(tx, {
+      type,
+      resourceId: id,
+    });
+  };
+
+// Lease claims, retries and retry exhaustion change only the request's derived
+// execution state. The account trail records the request, its readiness,
+// every download and expiry.
+const executionStateOnly = async (): Promise<void> => {
+  // No account event: the transition itself is the durable record.
+};
+
+const expireReadyAccountExport = async (
+  tx: Transaction,
+  row: AccountExportRow,
+): Promise<boolean> => {
+  const moved = await transition({
+    tx,
+    spec: TRANSITIONS.accountExports,
+    id: row.id,
+    options: { from: ["ready"], to: "expired", set: RELEASED_ATTEMPT },
+    recordTransitionAuditEvent: recordAccountExportTransition(
+      row.userId,
+      "account.data_export.expired",
+    ),
+  });
+  return moved.type === "transitioned";
+};
 
 type RequestAccountExportOptions = {
   db?: AccountExportDb;
@@ -104,46 +186,22 @@ type RequestAccountExportOptions = {
 export const requestAccountExport = async (
   userId: SafeId<"user">,
   { db, rateLimitContext }: RequestAccountExportOptions = {},
-): Promise<AccountExportRow> => {
-  await admitAccountExportRequest({
+): Promise<Result<AccountExportRow, HandlerError>> => {
+  const admitted = await admitAccountExportRequest({
     userId,
     max: ACCOUNT_EXPORT_LIMITS.requestsPerWindow,
     durationMs: ACCOUNT_EXPORT_LIMITS.requestWindowMs,
     ...(rateLimitContext === undefined ? {} : { context: rateLimitContext }),
   });
+  if (Result.isError(admitted)) {
+    return admitted;
+  }
   const database = await resolveDatabase(db);
-  return await withAggregateTransaction(database, async (tx) => {
+  const row = await withAggregateTransaction(database, async (tx) => {
     await lockActiveAccountRow(tx, userId);
     await scopeAccount(tx, userId);
-    // Expiration participates in the same lock and transaction as creation.
-    const expired = await tx
-      .update(accountExports)
-      .set({
-        status: "expired",
-        claimToken: null,
-        leaseExpiresAt: null,
-        objectKey: null,
-        expiresAt: null,
-        updatedAt: sql`clock_timestamp()`,
-      })
-      .where(
-        and(
-          eq(accountExports.userId, userId),
-          eq(accountExports.status, "ready"),
-          lte(accountExports.expiresAt, sql`clock_timestamp()`),
-        ),
-      )
-      .returning();
-    const record = createBackgroundAuditRecorder({ account: { userId } });
-    await record(
-      tx,
-      expired.map(({ id }) => ({
-        type: "account.data_export.expired",
-        resourceId: id,
-      })),
-    );
     const existing = await tx
-      .select()
+      .select({ id: accountExports.id })
       .from(accountExports)
       .where(
         and(
@@ -152,9 +210,18 @@ export const requestAccountExport = async (
         ),
       )
       .limit(1);
-    const active = existing.at(0);
-    if (active !== undefined) {
-      return active;
+    const activeId = existing.at(0)?.id;
+    if (activeId !== undefined) {
+      // Expiration participates in the same lock and transaction as creation.
+      const active =
+        (await lockAccountExport(tx, { id: activeId, userId })) ??
+        panic("Active account export left under the account lock");
+      if (active.row.status !== "ready" || !active.readyElapsed) {
+        return active.row;
+      }
+      if (!(await expireReadyAccountExport(tx, active.row))) {
+        panic("Locked account export changed under its lock");
+      }
     }
     const rows = await tx
       .insert(accountExports)
@@ -164,12 +231,13 @@ export const requestAccountExport = async (
     if (created === undefined) {
       panic("Account export insertion returned no row");
     }
-    await record(tx, {
+    await createBackgroundAuditRecorder({ account: { userId } })(tx, {
       type: "account.data_export.requested",
       resourceId: created.id,
     });
     return created;
   });
+  return Result.ok(row);
 };
 
 type ReadScopedAccountExportOptions = {
@@ -227,75 +295,79 @@ export const readLatestAccountExport = async (
   });
 };
 
+const claimSource = ({ row, leaseElapsed }: LockedAccountExport) => {
+  if (row.status === "requested") {
+    return row.status;
+  }
+  return row.status === "processing" && leaseElapsed ? row.status : null;
+};
+
 export const claimAccountExport = async (
   id: string,
   db: AccountExportDb,
 ): Promise<AccountExportClaim | null> =>
   await withAggregateTransaction(db, async (tx) => {
-    // audit: skip - Lease claims and retry exhaustion maintain the existing request's derived execution state.
-    const rows = await tx
-      .select()
+    const owners = await tx
+      .select({ userId: accountExports.userId })
       .from(accountExports)
       .where(eq(accountExports.id, id))
       .limit(1);
-    const row = rows.at(0);
-    if (row === undefined) {
+    const userId = owners.at(0)?.userId;
+    if (userId === undefined) {
       return null;
     }
-    await lockActiveAccountRow(tx, row.userId);
+    await lockActiveAccountRow(tx, userId);
+    const locked = await lockAccountExport(tx, { id, userId });
+    const source = locked === null ? null : claimSource(locked);
+    if (locked === null || source === null) {
+      return null;
+    }
     // A crashed final attempt becomes terminal before another worker can claim.
-    await tx
-      .update(accountExports)
-      .set({
-        status: "failed",
-        claimToken: null,
-        leaseExpiresAt: null,
-        objectKey: null,
-        expiresAt: null,
-        updatedAt: sql`clock_timestamp()`,
-      })
-      .where(
-        and(
-          eq(accountExports.id, id),
-          claimable(),
-          sql`${accountExports.attemptCount} >= ${ACCOUNT_EXPORT_LIMITS.attempts}`,
-        ),
-      );
-    const token = Bun.randomUUIDv7();
-    const objectKey = `account-exports/${row.userId}/${id}/${token}.zip`;
-    const claimed = await tx
-      .update(accountExports)
-      .set({
-        status: "processing",
-        claimToken: token,
-        leaseExpiresAt: sql`clock_timestamp() + (${ACCOUNT_EXPORT_LIMITS.leaseMs} * INTERVAL '1 millisecond')`,
-        objectKey,
-        attemptCount: sql`${accountExports.attemptCount} + 1`,
-        attemptObjectKeys: sql`${accountExports.attemptObjectKeys} || jsonb_build_array(${objectKey}::text)`,
-        updatedAt: sql`clock_timestamp()`,
-      })
-      .where(
-        and(
-          eq(accountExports.id, id),
-          claimable(),
-          sql`${accountExports.attemptCount} < ${ACCOUNT_EXPORT_LIMITS.attempts}`,
-        ),
-      )
-      .returning({ leaseExpiresAt: accountExports.leaseExpiresAt });
-    const claimedRow = claimed.at(0);
-    if (claimedRow === undefined) {
+    if (locked.row.attemptCount >= ACCOUNT_EXPORT_LIMITS.attempts) {
+      const exhausted = await transition({
+        tx,
+        spec: TRANSITIONS.accountExports,
+        id,
+        options: { from: [source], to: "failed", set: RELEASED_ATTEMPT },
+        recordTransitionAuditEvent: executionStateOnly,
+      });
+      if (exhausted.type === "stale") {
+        panic("Locked account export changed under its lock");
+      }
       return null;
     }
-    if (claimedRow.leaseExpiresAt === null) {
-      panic("Claimed export requires a lease deadline");
-    }
-    return {
+    const token = Bun.randomUUIDv7();
+    const objectKey = `account-exports/${userId}/${id}/${token}.zip`;
+    const claimed = await transition({
+      tx,
+      spec: TRANSITIONS.accountExports,
       id,
-      userId: row.userId,
-      token,
-      objectKey,
-      leaseExpiresAt: claimedRow.leaseExpiresAt,
-    };
+      options: {
+        from: [source],
+        to: "processing",
+        set: {
+          claimToken: token,
+          leaseExpiresAt: sql`clock_timestamp() + (${ACCOUNT_EXPORT_LIMITS.leaseMs} * INTERVAL '1 millisecond')`,
+          objectKey,
+          attemptCount: sql`${accountExports.attemptCount} + 1`,
+          attemptObjectKeys: sql`${accountExports.attemptObjectKeys} || jsonb_build_array(${objectKey}::text)`,
+          updatedAt: sql`clock_timestamp()`,
+        },
+      },
+      recordTransitionAuditEvent: executionStateOnly,
+    });
+    if (claimed.type === "stale") {
+      panic("Locked account export changed under its lock");
+    }
+    const leases = await tx
+      .select({ leaseExpiresAt: accountExports.leaseExpiresAt })
+      .from(accountExports)
+      .where(eq(accountExports.id, id))
+      .limit(1);
+    const leaseExpiresAt =
+      leases.at(0)?.leaseExpiresAt ??
+      panic("Claimed export requires a lease deadline");
+    return { id, userId, token, objectKey, leaseExpiresAt };
   });
 
 type CompleteAccountExportOptions = {
@@ -313,25 +385,30 @@ export const completeAccountExport = async ({
   }
   return await withAggregateTransaction(db, async (tx) => {
     await lockActiveAccountRow(tx, claim.userId);
-    const rows = await tx
-      .update(accountExports)
-      .set({
-        status: "ready",
-        claimToken: null,
-        leaseExpiresAt: null,
-        expiresAt: sql`clock_timestamp() + (${ACCOUNT_EXPORT_LIMITS.ttlMs} * INTERVAL '1 millisecond')`,
-        updatedAt: sql`clock_timestamp()`,
-      })
-      .where(claimPredicate(claim))
-      .returning({ id: accountExports.id });
-    if (rows.length === 0) {
+    const locked = await lockAccountExport(tx, claim);
+    if (!holdsClaim(locked, claim)) {
       return false;
     }
-    await createBackgroundAuditRecorder({ account: { userId: claim.userId } })(
+    const moved = await transition({
       tx,
-      { type: "account.data_export.ready", resourceId: claim.id },
-    );
-    return true;
+      spec: TRANSITIONS.accountExports,
+      id: claim.id,
+      options: {
+        from: ["processing"],
+        to: "ready",
+        set: {
+          claimToken: null,
+          leaseExpiresAt: null,
+          expiresAt: sql`clock_timestamp() + (${ACCOUNT_EXPORT_LIMITS.ttlMs} * INTERVAL '1 millisecond')`,
+          updatedAt: sql`clock_timestamp()`,
+        },
+      },
+      recordTransitionAuditEvent: recordAccountExportTransition(
+        claim.userId,
+        "account.data_export.ready",
+      ),
+    });
+    return moved.type === "transitioned";
   });
 };
 
@@ -340,20 +417,21 @@ export const failAccountExport = async (
   db: AccountExportDb,
 ): Promise<boolean> =>
   await withAggregateTransaction(db, async (tx) => {
-    // audit: skip - Retry transitions maintain the existing request's derived execution state.
-    const rows = await tx
-      .update(accountExports)
-      .set({
-        status: sql`CASE WHEN ${accountExports.attemptCount} >= ${ACCOUNT_EXPORT_LIMITS.attempts} THEN 'failed' ELSE 'requested' END`,
-        claimToken: null,
-        leaseExpiresAt: null,
-        objectKey: null,
-        expiresAt: null,
-        updatedAt: sql`clock_timestamp()`,
-      })
-      .where(claimPredicate(claim))
-      .returning({ id: accountExports.id });
-    return rows.length > 0;
+    const locked = await lockAccountExport(tx, claim);
+    if (!holdsClaim(locked, claim)) {
+      return false;
+    }
+    const exhausted = locked.row.attemptCount >= ACCOUNT_EXPORT_LIMITS.attempts;
+    const moved = await transition({
+      tx,
+      spec: TRANSITIONS.accountExports,
+      id: claim.id,
+      options: exhausted
+        ? { from: ["processing"], to: "failed", set: RELEASED_ATTEMPT }
+        : { from: ["processing"], to: "requested", set: RELEASED_ATTEMPT },
+      recordTransitionAuditEvent: executionStateOnly,
+    });
+    return moved.type === "transitioned";
   });
 
 export const expireAccountExport = async (
@@ -361,33 +439,24 @@ export const expireAccountExport = async (
   db: AccountExportDb,
 ): Promise<AccountExportRow | null> =>
   await withAggregateTransaction(db, async (tx) => {
-    const rows = await tx
-      .update(accountExports)
-      .set({
-        status: "expired",
-        claimToken: null,
-        leaseExpiresAt: null,
-        objectKey: null,
-        expiresAt: null,
-        updatedAt: sql`clock_timestamp()`,
-      })
-      .where(
-        and(
-          eq(accountExports.id, id),
-          eq(accountExports.status, "ready"),
-          lte(accountExports.expiresAt, sql`clock_timestamp()`),
-        ),
-      )
-      .returning();
-    const row = rows.at(0);
-    if (row === undefined) {
+    const owners = await tx
+      .select({ userId: accountExports.userId })
+      .from(accountExports)
+      .where(eq(accountExports.id, id))
+      .limit(1);
+    const userId = owners.at(0)?.userId;
+    if (userId === undefined) {
       return null;
     }
-    await createBackgroundAuditRecorder({ account: { userId: row.userId } })(
-      tx,
-      { type: "account.data_export.expired", resourceId: id },
-    );
-    return row;
+    const locked = await lockAccountExport(tx, { id, userId });
+    if (
+      locked?.row.status !== "ready" ||
+      !locked.readyElapsed ||
+      !(await expireReadyAccountExport(tx, locked.row))
+    ) {
+      return null;
+    }
+    return await readScopedAccountExport({ tx, id, userId });
   });
 
 const artifactCleanupEligible = () =>
@@ -465,10 +534,7 @@ export const recordAccountExportDownload = async ({
       id: { id, userId },
       mode: "share",
       select: (lockedTx) => lockedTx.select().from(accountExports),
-      where: and(
-        eq(accountExports.status, "ready"),
-        gt(accountExports.expiresAt, sql`clock_timestamp()`),
-      ),
+      where: sql`${eq(accountExports.status, "ready")} AND ${gt(accountExports.expiresAt, sql`clock_timestamp()`)}`,
     });
     if (result.status === "busy") {
       panic("Blocking account export lock was busy");
@@ -491,12 +557,9 @@ export const listRecoverableAccountExports = async (
 ): Promise<Page<AccountExportRow>> => {
   const parts = cursor ? decodePaginationCursor(cursor) : null;
   const afterId = parts?.at(0);
+  // Only the reconciler mints this cursor, from a page it has just read.
   if (cursor && (parts?.length !== 1 || !isUuidPaginationCursorPart(afterId))) {
-    throw new HandlerError({
-      status: 400,
-      code: "account_export_cursor_invalid",
-      message: "Invalid cursor.",
-    });
+    panic("Account export recovery cursor is malformed");
   }
   return await withAggregateTransaction(db, async (tx) => {
     const rows = await tx
@@ -522,10 +585,11 @@ export const listRecoverableAccountExports = async (
       )
       .orderBy(asc(accountExports.id))
       .limit(ACCOUNT_EXPORT_LIMITS.recoveryPageSize + 1);
-    return createCursorPage({
+    const page = createCursorPage({
       rows,
       limit: ACCOUNT_EXPORT_LIMITS.recoveryPageSize,
       cursorForItem: ({ id }) => encodePaginationCursor([id]),
     });
+    return page;
   });
 };

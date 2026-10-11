@@ -6,6 +6,7 @@ import path from "node:path";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { ACCOUNT_EXPORT_PROJECTIONS } from "@/api/account-export-projections";
 import {
   ACCOUNT_EXPORT_ARCHIVE_LIMITS,
   AccountExportArchiveError,
@@ -67,6 +68,7 @@ describe("account export archive", () => {
   test("writes empty table arrays and the consumed-row manifest", async () => {
     const { deps, published } = fixture();
     await buildAccountExportArchive({
+      projections: ACCOUNT_EXPORT_PROJECTIONS,
       db,
       userId,
       objectKey: "archive-key",
@@ -138,6 +140,7 @@ describe("account export archive", () => {
       },
     } satisfies AccountExportArchiveDeps;
     await buildAccountExportArchive({
+      projections: ACCOUNT_EXPORT_PROJECTIONS,
       db,
       userId,
       objectKey: "archive-key",
@@ -187,6 +190,7 @@ describe("account export archive", () => {
     expect(
       await rejectionOf(
         buildAccountExportArchive({
+          projections: ACCOUNT_EXPORT_PROJECTIONS,
           db,
           userId,
           objectKey: "archive-key",
@@ -211,6 +215,7 @@ describe("account export archive", () => {
     expect(
       await rejectionOf(
         buildAccountExportArchive({
+          projections: ACCOUNT_EXPORT_PROJECTIONS,
           db,
           userId,
           objectKey: "archive-key",
@@ -237,6 +242,7 @@ describe("account export archive", () => {
     expect(
       await rejectionOf(
         buildAccountExportArchive({
+          projections: ACCOUNT_EXPORT_PROJECTIONS,
           db,
           userId,
           objectKey: "archive-key",
@@ -261,6 +267,7 @@ describe("account export archive", () => {
     expect(
       await rejectionOf(
         buildAccountExportArchive({
+          projections: ACCOUNT_EXPORT_PROJECTIONS,
           db,
           userId,
           objectKey: "archive-key",

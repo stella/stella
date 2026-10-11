@@ -9,7 +9,8 @@ export default {
   summary:
     "The page reader resolves the dedicated RLS transaction pool and binds " +
     "the requesting account independently of an active organization. " +
-    "It calls each table owner's projection; export lifecycle writes remain " +
+    "It applies the projection each table owner supplies through the " +
+    "composition root; export lifecycle writes remain " +
     "confined to the durable ledger owner.",
   enforcement: { kind: "none" },
 } as const satisfies OwnershipEntry;

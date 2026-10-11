@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
 import JSZip from "jszip";
 
+import { ACCOUNT_EXPORT_PROJECTIONS } from "@/api/account-export-projections";
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   aiMemories,
@@ -148,6 +149,7 @@ describe.skipIf(!enabled)("account export personal data", () => {
             },
           } satisfies AccountExportArchiveDeps;
           await buildAccountExportArchive({
+            projections: ACCOUNT_EXPORT_PROJECTIONS,
             db,
             userId: exportUserId,
             objectKey: "export-fixture.zip",

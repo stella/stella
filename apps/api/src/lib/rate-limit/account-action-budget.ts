@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { RateLimitContext } from "@/api/lib/rate-limit/rate-limit";
@@ -31,7 +33,7 @@ export const admitAccountExportRequest = async ({
   max,
   durationMs,
   context = getAccountActionContext(),
-}: AdmitAccountExportRequestOptions): Promise<void> => {
+}: AdmitAccountExportRequestOptions): Promise<Result<void, HandlerError>> => {
   const key = createRedisRateLimitRequestKey({
     counterKey: `${ACCOUNT_ACTION_KIND.dataExportRequest}:${userId}`,
     requestId: Bun.randomUUIDv7(),
@@ -39,10 +41,13 @@ export const admitAccountExportRequest = async ({
   const counter = await context.increment(key, durationMs);
   await context.complete(key);
   if (counter.count > max) {
-    throw new HandlerError({
-      status: 429,
-      code: "account_export_request_limited",
-      message: "Try again later.",
-    });
+    return Result.err(
+      new HandlerError({
+        status: 429,
+        code: "account_export_request_limited",
+        message: "Try again later.",
+      }),
+    );
   }
+  return Result.ok();
 };

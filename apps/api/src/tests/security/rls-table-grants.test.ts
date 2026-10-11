@@ -145,9 +145,10 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   "sanctions_edition_entries",
 ]);
 
-// Request transactions append names alongside chat messages and read them on
-// later requests. The role needs SELECT and INSERT, never UPDATE or DELETE.
+// Request transactions append history and read it on later requests.
+// The role needs SELECT and INSERT, never UPDATE or DELETE.
 const POST_BOOTSTRAP_APPEND_ONLY_TABLES = new Set([
+  "account_audit_logs",
   "chat_thread_names",
   "chat_message_revisions",
 ]);
@@ -161,6 +162,9 @@ const POST_BOOTSTRAP_INSERT_ONLY_TABLES = new Set(["system_audit_runs"]);
 const POST_BOOTSTRAP_MUTABLE_PROJECTION_TABLES = new Set([
   "time_entry_timer_states",
   "time_daily_targets",
+  // Account export ledger: request transactions create and transition rows;
+  // only the table owner deletes them, during account erasure.
+  "account_exports",
 ]);
 const MUTABLE_PROJECTION_PRIVILEGES = new Set(["select", "insert", "update"]);
 

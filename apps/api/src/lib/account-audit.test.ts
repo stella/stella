@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { eq, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { accountAuditLogs } from "@/api/db/schema";
@@ -8,6 +9,10 @@ import {
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  getRlsFixture,
+  releaseRlsFixture,
+} from "@/api/tests/security/rls-fixture";
 
 const userId = asTestRaw<SafeId<"user">>("account-user");
 
@@ -27,6 +32,127 @@ const captureWrites = () => {
 };
 
 describe("account audit scope", () => {
+  test("an authenticated application transaction records its own account event", async () => {
+    const { ids, scopedQuery } = await getRlsFixture();
+    try {
+      const resourceId = Bun.randomUUIDv7();
+      const recorder = createAuditRecorder({
+        account: { userId: ids.userA1 },
+        request: new Request("https://example.test/account"),
+        server: null,
+      });
+      await scopedQuery(
+        [ids.wsA1],
+        ids.orgA,
+        async (tx) => {
+          expect(
+            (await tx.execute(sql`SELECT current_user AS role`)).rows,
+          ).toEqual([{ role: "stella" }]);
+          await recorder(tx, {
+            type: "account.data_export.requested",
+            resourceId,
+          });
+        },
+        ids.userA1,
+      );
+      const rows = await scopedQuery(
+        [ids.wsA1],
+        ids.orgA,
+        async (tx) =>
+          await tx
+            .select({
+              userId: accountAuditLogs.userId,
+              eventType: accountAuditLogs.eventType,
+              resourceId: accountAuditLogs.resourceId,
+            })
+            .from(accountAuditLogs)
+            .where(eq(accountAuditLogs.resourceId, resourceId))
+            .limit(1),
+        ids.userA1,
+      );
+      expect(rows).toEqual([
+        {
+          userId: ids.userA1,
+          eventType: "account.data_export.requested",
+          resourceId,
+        },
+      ]);
+    } finally {
+      await releaseRlsFixture();
+    }
+  });
+
+  test("an owning background transaction records an account event without request scope", async () => {
+    const { testDb, ids, scopedQuery } = await getRlsFixture();
+    try {
+      const resourceId = Bun.randomUUIDv7();
+      const backgroundRole = `account_audit_worker_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+      await testDb.transaction(async (tx) => {
+        // A non-bypassing owner exercises FORCE RLS even though the fixture connection is privileged.
+        await tx.execute(
+          sql`CREATE ROLE ${sql.identifier(backgroundRole)} NOLOGIN NOSUPERUSER NOBYPASSRLS`,
+        );
+        await tx.execute(
+          sql`GRANT USAGE ON SCHEMA public TO ${sql.identifier(backgroundRole)}`,
+        );
+        await tx.execute(
+          sql`ALTER TABLE account_audit_logs OWNER TO ${sql.identifier(backgroundRole)}`,
+        );
+        await tx.execute(sql`SET LOCAL ROLE ${sql.identifier(backgroundRole)}`);
+        expect(
+          (
+            await tx.execute(sql`
+              SELECT current_user = pg_get_userbyid(relowner) AS owner,
+                relforcerowsecurity AS forced,
+                (SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user) AS bypass,
+                nullif(current_setting('app.user_id', true), '') IS NULL AS unscoped
+              FROM pg_class WHERE oid = 'public.account_audit_logs'::regclass
+            `)
+          ).rows,
+        ).toEqual([
+          { owner: true, forced: true, bypass: false, unscoped: true },
+        ]);
+        await createBackgroundAuditRecorder({
+          account: { userId: ids.userA1 },
+        })(tx, { type: "account.data_export.ready", resourceId });
+        await tx.execute(sql`RESET ROLE`);
+        await tx.execute(
+          sql`ALTER TABLE account_audit_logs OWNER TO CURRENT_USER`,
+        );
+        await tx.execute(
+          sql`REVOKE USAGE ON SCHEMA public FROM ${sql.identifier(backgroundRole)}`,
+        );
+        await tx.execute(sql`DROP ROLE ${sql.identifier(backgroundRole)}`);
+      });
+      const rows = await scopedQuery(
+        [ids.wsA1],
+        ids.orgA,
+        async (tx) =>
+          await tx
+            .select({
+              userId: accountAuditLogs.userId,
+              eventType: accountAuditLogs.eventType,
+              resourceId: accountAuditLogs.resourceId,
+              requestMetadata: accountAuditLogs.requestMetadata,
+            })
+            .from(accountAuditLogs)
+            .where(eq(accountAuditLogs.resourceId, resourceId))
+            .limit(1),
+        ids.userA1,
+      );
+      expect(rows).toEqual([
+        {
+          userId: ids.userA1,
+          eventType: "account.data_export.ready",
+          resourceId,
+          requestMetadata: null,
+        },
+      ]);
+    } finally {
+      await releaseRlsFixture();
+    }
+  });
+
   test("records account ownership and request provenance without event content", async () => {
     const { tx, writes } = captureWrites();
     const recorder = createAuditRecorder({

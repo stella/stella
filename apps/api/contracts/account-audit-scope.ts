@@ -1,3 +1,5 @@
+import { expectTypeOf } from "bun:test";
+
 import type { Transaction } from "@/api/db/root";
 import {
   AUDIT_ACTION,
@@ -18,16 +20,22 @@ const organization = { organizationId, workspaceId: null, userId };
 const transport = { request, server: null };
 
 const accountRecorder = createAuditRecorder({ account, ...transport });
-accountRecorder satisfies AccountAuditRecorder;
-createBackgroundAuditRecorder({ account }) satisfies AccountAuditRecorder;
-createAuditRecorder({ ...organization, ...transport }) satisfies AuditRecorder;
-createBackgroundAuditRecorder({
-  ...organization,
-  execution: {
-    performer: { type: "user", id: userId },
-    trigger: { type: "direct" },
-  },
-}) satisfies AuditRecorder;
+expectTypeOf(accountRecorder).toEqualTypeOf<AccountAuditRecorder>();
+expectTypeOf(
+  createBackgroundAuditRecorder({ account }),
+).toEqualTypeOf<AccountAuditRecorder>();
+expectTypeOf(
+  createAuditRecorder({ ...organization, ...transport }),
+).toEqualTypeOf<AuditRecorder>();
+expectTypeOf(
+  createBackgroundAuditRecorder({
+    ...organization,
+    execution: {
+      performer: { type: "user", id: userId },
+      trigger: { type: "direct" },
+    },
+  }),
+).toEqualTypeOf<AuditRecorder>();
 
 // @ts-expect-error An audit recorder requires a scope.
 createAuditRecorder(transport);
@@ -41,28 +49,29 @@ createBackgroundAuditRecorder({ account, ...organization });
 createBackgroundAuditRecorder({ account, workspaceId: null });
 // @ts-expect-error Account scope has one authoritative user binding.
 createBackgroundAuditRecorder({ account, userId });
-// @ts-expect-error Account scope cannot carry organization execution provenance.
-createBackgroundAuditRecorder({
+const accountWithExecution = {
   account,
   execution: {
     performer: { type: "user", id: userId },
     trigger: { type: "direct" },
   },
-});
+} as const;
+// @ts-expect-error Account scope cannot carry organization execution provenance.
+createBackgroundAuditRecorder(accountWithExecution);
 
-accountRecorder(tx, {
+void accountRecorder(tx, {
   type: "account.data_export.requested",
   resourceId: "export",
 });
 // @ts-expect-error Account event types are enumerated.
-accountRecorder(tx, { type: "account.custom", resourceId: "export" });
-accountRecorder(tx, {
+void accountRecorder(tx, { type: "account.custom", resourceId: "export" });
+void accountRecorder(tx, {
   type: "account.data_export.ready",
   resourceId: "export",
   // @ts-expect-error Account events cannot carry arbitrary metadata.
   metadata: { content: "unbounded" },
 });
-accountRecorder(tx, {
+void accountRecorder(tx, {
   // @ts-expect-error Account events cannot carry organization resource payloads.
   action: AUDIT_ACTION.UPDATE,
   resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,

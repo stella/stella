@@ -13,6 +13,7 @@ import {
 } from "@/api/lib/account-export/enqueue";
 import type { AccountExportJob } from "@/api/lib/account-export/enqueue";
 import type { AccountExportDataDb } from "@/api/lib/account-export/pages";
+import type { AccountExportProjections } from "@/api/lib/account-export/projections";
 import {
   claimAccountExport,
   canReclaimAccountExportAttempt,
@@ -28,10 +29,12 @@ import type {
   AccountExportDb,
   AccountExportRow,
 } from "@/api/lib/account-export/store";
-import { captureError, detached } from "@/api/lib/analytics/capture";
+import { detached } from "@/api/lib/analytics/capture";
 import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { deleteS3Keys } from "@/api/lib/files/utils";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
@@ -41,27 +44,56 @@ const RECONCILE_INTERVAL_MS = 60_000;
 const RECOVERY_PAGES_PER_TICK = 10;
 const STORAGE_CLEANUP_TIMEOUT_MS = 30_000;
 
+const BUILD_FAILED_SINK = failureSink({
+  event: "account_export.build_failed",
+  expected: [],
+});
+const JOB_FAILED_SINK = failureSink({
+  event: "account_export.job_failed",
+  expected: [],
+});
+const RECOVERY_FAILED_SINK = failureSink({
+  event: "account_export.recovery_failed",
+  expected: [],
+});
+
+type AccountExportFailureContext = { jobId?: string };
+const observeBuildFailure = (
+  error: unknown,
+  ctx: AccountExportFailureContext,
+): void => {
+  observeFailure(error, { sink: BUILD_FAILED_SINK, ctx });
+};
+
 type AccountExportWorkerDb = AccountExportDataDb & AccountExportDb;
 
 export type AccountExportProcessDeps = {
   claim: typeof claimAccountExport;
-  build: typeof buildAccountExportArchive;
+  build: (
+    options: Omit<
+      Parameters<typeof buildAccountExportArchive>[0],
+      "projections" | "deps"
+    >,
+  ) => Promise<void>;
   complete: typeof completeAccountExport;
   fail: typeof failAccountExport;
   canReclaim: typeof canReclaimAccountExportAttempt;
   deleteObjects: typeof deleteS3Keys;
-  capture: typeof captureError;
+  capture: (error: unknown, ctx: AccountExportFailureContext) => void;
 };
 
-const processDeps = {
+const createProcessDeps = (
+  projections: AccountExportProjections,
+): AccountExportProcessDeps => ({
   claim: claimAccountExport,
-  build: buildAccountExportArchive,
+  build: async (options) =>
+    await buildAccountExportArchive({ ...options, projections }),
   complete: completeAccountExport,
   fail: failAccountExport,
   canReclaim: canReclaimAccountExportAttempt,
   deleteObjects: deleteS3Keys,
-  capture: captureError,
-} satisfies AccountExportProcessDeps;
+  capture: observeBuildFailure,
+});
 
 type ReclaimAccountExportAttemptOptions = {
   claim: AccountExportClaim;
@@ -90,14 +122,14 @@ type ProcessAccountExportOptions = {
   id: string;
   db: AccountExportWorkerDb;
   signal?: AbortSignal;
-  deps?: AccountExportProcessDeps;
+  deps: AccountExportProcessDeps;
 };
 
 export const processAccountExport = async ({
   id,
   db,
   signal: parentSignal,
-  deps = processDeps,
+  deps,
 }: ProcessAccountExportOptions): Promise<void> => {
   const claim = await deps.claim(id, db);
   // A ready replay, live lease, or terminal row has no new work to claim.
@@ -144,20 +176,20 @@ export const processAccountExport = async ({
   if (Result.isOk(outcome)) {
     return;
   }
-  deps.capture(outcome.error, { exportId: claim.id });
+  deps.capture(outcome.error, { jobId: claim.id });
   const failed = await Result.tryPromise({
     try: async () => await deps.fail(claim, db),
     catch: (cause) => cause,
   });
   if (Result.isError(failed)) {
-    deps.capture(failed.error, { exportId: claim.id });
+    deps.capture(failed.error, { jobId: claim.id });
   }
   const reclaimed = await Result.tryPromise({
     try: async () => await reclaimAccountExportAttempt({ claim, db, deps }),
     catch: (cause) => cause,
   });
   if (Result.isError(reclaimed)) {
-    deps.capture(reclaimed.error, { exportId: claim.id });
+    deps.capture(reclaimed.error, { jobId: claim.id });
   }
   // An ambiguous completion may have committed ready. Reclamation consults
   // the owning ledger and never removes its current processing/ready key.
@@ -216,92 +248,115 @@ const cleanupAccountExport = async ({
   await clearAccountExportObjects(row.id, db);
 };
 
-export const initAccountExportWorker = ({ db }: BullMqWorkerContext) => {
-  const shutdown = new AbortController();
-  const connection = createBullMqConnection({
-    storeClass: "durable-coordination",
-  });
-  const worker = new BullMqWorker<AccountExportJob>(
-    ACCOUNT_EXPORT_QUEUE_NAME,
-    async ({ data }) =>
-      await processAccountExport({ id: data.id, db, signal: shutdown.signal }),
-    { connection, concurrency: WORKER_CONCURRENCY },
-  );
-  worker.on("failed", (job, error) =>
-    captureError(error, { exportId: job?.data.id ?? "" }),
-  );
-  worker.on(
-    "error",
-    createQueueWorkerErrorLogger("account_export.worker_error"),
-  );
+/** The composition root supplies the owning projections for every table. */
+export const createAccountExportWorker =
+  (projections: AccountExportProjections) =>
+  ({ db }: BullMqWorkerContext) => {
+    const deps = createProcessDeps(projections);
+    const shutdown = new AbortController();
+    const connection = createBullMqConnection({
+      storeClass: "durable-coordination",
+    });
+    const worker = new BullMqWorker<AccountExportJob>(
+      ACCOUNT_EXPORT_QUEUE_NAME,
+      async ({ data }) =>
+        await processAccountExport({
+          id: data.id,
+          db,
+          signal: shutdown.signal,
+          deps,
+        }),
+      { connection, concurrency: WORKER_CONCURRENCY },
+    );
+    worker.on("failed", (job, error) => {
+      observeFailure(error, {
+        sink: JOB_FAILED_SINK,
+        ctx: {
+          queue: ACCOUNT_EXPORT_QUEUE_NAME,
+          ...(job === undefined ? {} : { jobId: job.data.id }),
+        },
+      });
+    });
+    worker.on(
+      "error",
+      createQueueWorkerErrorLogger("account_export.worker_error"),
+    );
 
-  let reconciling = false;
-  let cursor: string | null = null;
-  const reconcile = () => {
-    if (reconciling || shutdown.signal.aborted) {
-      return;
-    }
-    reconciling = true;
-    const signal = AbortSignal.any([
-      shutdown.signal,
-      AbortSignal.timeout(RECONCILE_INTERVAL_MS),
-    ]);
-    detached(
-      (async () => {
-        try {
-          const sweep = await Result.tryPromise({
-            try: async () => {
-              for (
-                let pageNumber = 0;
-                pageNumber < RECOVERY_PAGES_PER_TICK;
-                pageNumber += 1
-              ) {
-                if (signal.aborted) {
-                  return;
-                }
-                const page = await listRecoverableAccountExports(db, cursor);
-                for (const row of page.items) {
-                  if (signal.aborted) {
+    let reconciling = false;
+    let cursor: string | null = null;
+    const reconcile = () => {
+      if (reconciling || shutdown.signal.aborted) {
+        return;
+      }
+      reconciling = true;
+      const signal = AbortSignal.any([
+        shutdown.signal,
+        AbortSignal.timeout(RECONCILE_INTERVAL_MS),
+      ]);
+      // Re-read on every check: a tick ends at its deadline or on shutdown.
+      const stopped = () => signal.aborted;
+      detached(
+        (async () => {
+          try {
+            const sweep = await Result.tryPromise({
+              try: async () => {
+                for (
+                  let pageNumber = 0;
+                  pageNumber < RECOVERY_PAGES_PER_TICK;
+                  pageNumber += 1
+                ) {
+                  if (stopped()) {
                     return;
                   }
-                  const recovered = await Result.tryPromise({
-                    try: async () =>
-                      await recoverAccountExport({ row, db, signal }),
-                    catch: (cause) => cause,
-                  });
-                  if (Result.isError(recovered)) {
-                    captureError(recovered.error, { exportId: row.id });
+                  const page = await listRecoverableAccountExports(db, cursor);
+                  for (const row of page.items) {
+                    if (stopped()) {
+                      return;
+                    }
+                    const recovered = await Result.tryPromise({
+                      try: async () =>
+                        await recoverAccountExport({ row, db, signal }),
+                      catch: (cause) => cause,
+                    });
+                    if (Result.isError(recovered)) {
+                      observeFailure(recovered.error, {
+                        sink: RECOVERY_FAILED_SINK,
+                        ctx: { jobId: row.id },
+                      });
+                    }
+                    // Retain progress within a page when this tick's deadline
+                    // ends; one slow row cannot pin recovery to the first page.
+                    cursor = encodePaginationCursor([row.id]);
                   }
-                  // Retain progress within a page when this tick's deadline
-                  // ends; one slow row cannot pin recovery to the first page.
-                  cursor = encodePaginationCursor([row.id]);
+                  cursor = page.nextCursor;
+                  if (cursor === null) {
+                    return;
+                  }
                 }
-                cursor = page.nextCursor;
-                if (cursor === null) {
-                  return;
-                }
-              }
-            },
-            catch: (cause) => cause,
-          });
-          if (Result.isError(sweep)) {
-            captureError(sweep.error);
+              },
+              catch: (cause) => cause,
+            });
+            if (Result.isError(sweep)) {
+              observeFailure(sweep.error, {
+                sink: RECOVERY_FAILED_SINK,
+                ctx: { queue: ACCOUNT_EXPORT_QUEUE_NAME },
+              });
+            }
+          } finally {
+            reconciling = false;
           }
-        } finally {
-          reconciling = false;
-        }
-      })(),
-      "account-export.reconcile",
-    );
+        })(),
+        "account-export.reconcile",
+      );
+    };
+    reconcile();
+    const interval = setInterval(reconcile, RECONCILE_INTERVAL_MS);
+    return {
+      queues: [ACCOUNT_EXPORT_QUEUE_NAME] as const,
+      close: async () => {
+        clearInterval(interval);
+        shutdown.abort();
+        await worker.close();
+      },
+    };
   };
-  reconcile();
-  const interval = setInterval(reconcile, RECONCILE_INTERVAL_MS);
-  return {
-    queues: [ACCOUNT_EXPORT_QUEUE_NAME] as const,
-    close: async () => {
-      clearInterval(interval);
-      shutdown.abort();
-      await worker.close();
-    },
-  };
-};
