@@ -21,16 +21,7 @@ import {
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
-import {
-  Dialog,
-  DialogFormState,
-  DialogClose,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogPopup,
-  DialogTitle,
-} from "@stll/ui/dialog";
+import { Dialog, DialogPopup } from "@stll/ui/dialog";
 import { openFilePicker } from "@stll/ui/file-picker";
 import {
   CopyIcon,
@@ -46,8 +37,6 @@ import {
   TriangleAlertIcon,
   Undo2Icon,
 } from "@stll/ui/icons";
-import { Input } from "@stll/ui/input";
-import { Label } from "@stll/ui/label";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Separator } from "@stll/ui/separator";
 import { stellaToast } from "@stll/ui/toast";
@@ -100,12 +89,12 @@ import { downloadFile } from "@/lib/utils";
 import { workspaceOptions } from "@/lib/workspaces/queries";
 import { entityVersionsKeys } from "@/lib/workspaces/queries/entity-versions";
 
+import { PageOrganizerCrop } from "./page-organizer-crop";
 import {
   createPageOrganizerState,
   getPageMoveDestination,
   isPageOrganizerDirty,
   reducePageOrganizer,
-  type NormalizedCrop,
   type OrganizerPage,
   type PageDropEdge,
   type PageOrganizerState,
@@ -164,27 +153,6 @@ const resolveOrganizerSourceDocument = ({
   throw sourceDocumentResult.error;
 };
 
-type CropMargins = {
-  top: string;
-  right: string;
-  bottom: string;
-  left: string;
-};
-
-const EMPTY_CROP_MARGINS: CropMargins = {
-  top: "0",
-  right: "0",
-  bottom: "0",
-  left: "0",
-};
-
-const CROP_LABEL_KEYS = {
-  top: "cropTop",
-  right: "cropRight",
-  bottom: "cropBottom",
-  left: "cropLeft",
-} as const satisfies Record<keyof CropMargins, string>;
-
 const normalizePDFRotation = (degrees: number): PageRotation => {
   const normalized = ((degrees % 360) + 360) % 360;
   switch (normalized) {
@@ -212,31 +180,6 @@ const safePDFBaseName = (fileName: string): string => {
   }
   safe = safe.trim();
   return safe.length > 0 ? safe : "document";
-};
-
-const cropFromMargins = ({
-  top,
-  right,
-  bottom,
-  left,
-}: CropMargins): NormalizedCrop | null => {
-  const topValue = Number(top);
-  const rightValue = Number(right);
-  const bottomValue = Number(bottom);
-  const leftValue = Number(left);
-  const values = [topValue, rightValue, bottomValue, leftValue];
-  if (values.some((value) => !Number.isFinite(value) || value < 0)) {
-    return null;
-  }
-  if (topValue + bottomValue >= 100 || leftValue + rightValue >= 100) {
-    return null;
-  }
-  return {
-    x: leftValue / 100,
-    y: bottomValue / 100,
-    width: 1 - (leftValue + rightValue) / 100,
-    height: 1 - (topValue + bottomValue) / 100,
-  };
 };
 
 const makeFile = (bytes: ArrayBuffer, name: string) =>
@@ -749,7 +692,6 @@ const LoadedPDFPageOrganizer = ({
   const [operation, setOperation] = useState<EditorOperation>({ type: "idle" });
   const [isAddingPDF, setIsAddingPDF] = useState(false);
   const [isCropOpen, setIsCropOpen] = useState(false);
-  const [cropMargins, setCropMargins] = useState(EMPTY_CROP_MARGINS);
   const plan = state.history.present;
   const selectedIds = new Set(state.ui.selectedPageIds);
   const isDirty = isPageOrganizerDirty(state);
@@ -999,7 +941,6 @@ const LoadedPDFPageOrganizer = ({
     });
   };
 
-  const crop = cropFromMargins(cropMargins);
   const downloadLabel = tPageEditor(
     selectedIds.size > 0 ? "downloadSelectedPages" : "downloadCopy",
   );
@@ -1252,74 +1193,34 @@ const LoadedPDFPageOrganizer = ({
       </footer>
 
       <Dialog onOpenChange={setIsCropOpen} open={isCropOpen}>
-        <DialogPopup>
-          <DialogFormState
-            dirty={
-              JSON.stringify(cropMargins) !== JSON.stringify(EMPTY_CROP_MARGINS)
-            }
-            onDiscard={() => {
-              setCropMargins(EMPTY_CROP_MARGINS);
-            }}
-          />
-          <DialogHeader>
-            <DialogTitle>{tPageEditor("cropTitle")}</DialogTitle>
-            <DialogDescription>
-              {tPageEditor("cropDescription", {
-                count: selectedIds.size,
-              })}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 px-6 pb-6">
-            {(["top", "right", "bottom", "left"] as const).map((side) => (
-              <div className="space-y-1.5" key={side}>
-                <Label htmlFor={`pdf-crop-${side}`}>
-                  {tPageEditor(CROP_LABEL_KEYS[side])}
-                </Label>
-                <Input
-                  id={`pdf-crop-${side}`}
-                  inputMode="decimal"
-                  min="0"
-                  onChange={(event) =>
-                    setCropMargins((current) => ({
-                      ...current,
-                      [side]: event.target.value,
-                    }))
-                  }
-                  step="0.5"
-                  type="number"
-                  value={cropMargins[side]}
-                />
-              </div>
-            ))}
-          </div>
-          <DialogFooter>
-            <Button
+        <DialogPopup className="max-w-3xl">
+          {isCropOpen && (
+            <PageOrganizerCrop
               disabled={isBusy}
-              onClick={() => {
-                dispatch({ type: "setCrop", crop: null });
-                setCropMargins(EMPTY_CROP_MARGINS);
+              pages={plan.pages
+                .filter((page) => selectedIds.has(page.id))
+                .map((page) => {
+                  const pageInfo = pageInfoFor(page);
+                  if (!pageInfo) {
+                    return panic("Selected crop page has no source");
+                  }
+                  return { page, pageInfo };
+                })}
+              onApply={(crops) => {
+                dispatch({ type: "setPageCrops", crops });
                 setIsCropOpen(false);
               }}
-              variant="ghost"
-            >
-              {tPageEditor("resetCrop")}
-            </Button>
-            <DialogClose render={<Button variant="outline" />}>
-              {tCommon("cancel")}
-            </DialogClose>
-            <Button
-              disabled={crop === null || isBusy}
-              onClick={() => {
-                if (!crop) {
-                  return;
-                }
-                dispatch({ type: "setCrop", crop });
+              onReset={() => {
+                dispatch({
+                  type: "setPageCrops",
+                  crops: new Map(
+                    state.ui.selectedPageIds.map((id) => [id, null]),
+                  ),
+                });
                 setIsCropOpen(false);
               }}
-            >
-              {tPageEditor("applyCrop")}
-            </Button>
-          </DialogFooter>
+            />
+          )}
         </DialogPopup>
       </Dialog>
 
