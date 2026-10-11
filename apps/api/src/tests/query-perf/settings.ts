@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { sql } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import type { TransactionOf } from "@/api/db/scoped";
@@ -21,10 +21,18 @@ export const QUERY_PERF_JIT = () => {
 };
 
 export const applyPlannerSettings = async (tx: TransactionOf<GatedTestDb>) => {
-  for (const [name, value] of Object.entries(plannerSettings)) {
-    // db-await-in-loop: bounded planner GUC file; set each parameter in this measurement session.
-    await tx.execute(sql`SELECT set_config(${name}, ${value}, true)`);
-  }
+  // Literal names keep timeout mutations auditable; the total map prevents unapplied settings.
+  const settings = {
+    jit: sql`set_config('jit', ${plannerSettings.jit}, true)`,
+    work_mem: sql`set_config('work_mem', ${plannerSettings.work_mem}, true)`,
+    random_page_cost: sql`set_config('random_page_cost', ${plannerSettings.random_page_cost}, true)`,
+    seq_page_cost: sql`set_config('seq_page_cost', ${plannerSettings.seq_page_cost}, true)`,
+    effective_cache_size: sql`set_config('effective_cache_size', ${plannerSettings.effective_cache_size}, true)`,
+    effective_io_concurrency: sql`set_config('effective_io_concurrency', ${plannerSettings.effective_io_concurrency}, true)`,
+    default_statistics_target: sql`set_config('default_statistics_target', ${plannerSettings.default_statistics_target}, true)`,
+    max_parallel_workers_per_gather: sql`set_config('max_parallel_workers_per_gather', ${plannerSettings.max_parallel_workers_per_gather}, true)`,
+  } satisfies Record<keyof typeof plannerSettings, SQL>;
+  await tx.execute(sql`SELECT ${sql.join(Object.values(settings), sql`, `)}`);
 };
 
 export const assertPlannerSettings = async (tx: TransactionOf<GatedTestDb>) => {
