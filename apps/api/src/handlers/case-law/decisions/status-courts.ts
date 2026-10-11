@@ -193,13 +193,10 @@ export const readCaseLawCourtActivityQuery = definePublicLawSharedQuery(
     const sinceDay = new Date(now.getTime() - DAY_IN_MS);
     const sinceWeek = new Date(now.getTime() - WEEK_IN_MS);
     const scanFrom = new Date(sinceWeek.getTime() - CLOCK_SKEW_MARGIN_MS);
-    // Emitted only when a source is actually withheld, so the ordinary read
-    // stays on the index alone.
-    const published = sql`AND ${sql.raw(publishedCaseLawDecisionSqlFor("d"))}`;
     const admitted =
       excludedSourceIds.length === 0
-        ? sql``
-        : sql`AND d.source_id <> ALL(
+        ? sql`TRUE`
+        : sql`d.source_id <> ALL(
               SELECT value::uuid
               FROM jsonb_array_elements_text(${JSON.stringify([...excludedSourceIds])}::text::jsonb) AS value
             )`;
@@ -221,8 +218,8 @@ export const readCaseLawCourtActivityQuery = definePublicLawSharedQuery(
         FROM case_law_decisions d
         WHERE d.country = ${country}
           AND d.court = named.court
-          ${published}
-          ${admitted}
+          AND ${sql.raw(publishedCaseLawDecisionSqlFor("d"))}
+          AND ${admitted}
         ORDER BY d.updated_at DESC
         LIMIT 1
       ) latest ON true
@@ -234,8 +231,8 @@ export const readCaseLawCourtActivityQuery = definePublicLawSharedQuery(
         WHERE d.country = ${country}
           AND d.court = named.court
           AND d.updated_at >= ${scanFrom}::timestamptz
-          ${published}
-          ${admitted}
+          AND ${sql.raw(publishedCaseLawDecisionSqlFor("d"))}
+          AND ${admitted}
       ) recent ON true
       ORDER BY named.ordinality
     `),

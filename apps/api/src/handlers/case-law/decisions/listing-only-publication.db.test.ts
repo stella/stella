@@ -464,7 +464,7 @@ test(
       });
     });
     expect(plan.join("\n")).toMatch(
-      /Index Only Scan using case_law_decisions_search_candidate_idx on case_law_decisions/u,
+      /Index Only Scan using case_law_decisions_search_candidate_published_idx on case_law_decisions/u,
     );
 
     await db

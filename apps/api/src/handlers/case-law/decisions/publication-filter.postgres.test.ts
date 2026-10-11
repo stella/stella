@@ -35,6 +35,7 @@ import { executedRows } from "@/api/lib/db/executed-rows";
 import { DEFAULT_SEARCH_SORT } from "@/api/lib/legal-search/corpus-search-order";
 import { pgFtsBrowseFacetPublishedQuery } from "@/api/lib/legal-search/pg-fts-browse-facet-refresh";
 import { readPgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facets";
+import { isRecord } from "@/api/lib/type-guards";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -46,8 +47,6 @@ const PROPERTY_SOURCE_ID = createSafeId<"caseLawSource">();
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
-const PROPERTY_TITLE = "public reads use the publication filter";
-
 if (!databaseUrl || !runPostgresTests) {
   describe.skip("public reads use the publication filter (postgres)", () => {
     test("requires STELLA_RUN_POSTGRES_TESTS=true and DATABASE_URL", () => {
@@ -227,7 +226,14 @@ if (!databaseUrl || !runPostgresTests) {
             queryUsed: "publicationword",
             sort: DEFAULT_SEARCH_SORT,
           });
-          const searchHits = executedRows(await tx.execute(search.hits));
+          const searchHits = executedRows(await tx.execute(search.hits)).map(
+            (hit) => {
+              if (!isRecord(hit)) {
+                return panic("Expected a search hit row");
+              }
+              return hit;
+            },
+          );
           expect(
             searchHits
               .map((hit) => hit["decision_id"])
@@ -299,7 +305,14 @@ if (!databaseUrl || !runPostgresTests) {
 
           const arrivals = executedRows(
             await tx.execute(sourceArrivalsRefreshQuery(NOW)),
-          ).at(0);
+          )
+            .map((arrival) => {
+              if (!isRecord(arrival)) {
+                return panic("Expected a source arrivals row");
+              }
+              return arrival;
+            })
+            .at(0);
           expect(arrivals?.["added_last_week"]).toBe(2);
           const coverageArrivals = await caseLawDb(
             async (readerTx) =>
@@ -318,6 +331,9 @@ if (!databaseUrl || !runPostgresTests) {
                 decisionId,
               }),
           );
+          if ("code" in citations && citations.code === 400) {
+            return panic("Expected a citation page for a valid cursor");
+          }
           expect(
             citations.items.map(({ citingDecisionId }) => citingDecisionId),
           ).toEqual([citingId]);
@@ -373,7 +389,7 @@ if (!databaseUrl || !runPostgresTests) {
   );
 
   test(
-    PROPERTY_TITLE,
+    "publication state combinations preserve public read membership",
     async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
@@ -423,7 +439,7 @@ if (!databaseUrl || !runPostgresTests) {
           expect(await countPublished()).toBe(1);
 
           await assertProperty(
-            PROPERTY_TITLE,
+            "publication state combinations preserve public read membership",
             fc.asyncProperty(
               fc.array(
                 fc.record({

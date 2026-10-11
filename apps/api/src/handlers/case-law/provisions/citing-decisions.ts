@@ -190,7 +190,9 @@ const readCitingDecisionRows = async ({
       languageGroupKey: caseLawDecisions.languageGroupKey,
       decisionDate: caseLawDecisions.decisionDate,
       citationAuthority: caseLawDecisions.citationAuthority,
-      sentenceText: caseLawProvisionCitations.sentenceText,
+      sentenceText: sql<
+        string | null
+      >`${caseLawProvisionCitations.sentenceText}`.as("sentence_text"),
       printText: caseLawProvisionCitations.printText,
       spanStart: caseLawProvisionCitations.spanStart,
       spanEnd: caseLawProvisionCitations.spanEnd,

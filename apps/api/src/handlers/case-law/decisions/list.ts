@@ -195,7 +195,6 @@ export const listDecisionsPageQuery = ({
 }: ListDecisionsPageQueryOptions) => {
   const conditions: SQL[] = [
     redistributableCaseLawSource,
-    publishedCaseLawDecision,
     ...decisionFilterConditions(query, caseLawDecisions),
   ];
   if (cursor !== undefined) {
@@ -208,6 +207,7 @@ export const listDecisionsPageQuery = ({
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
     .where(
       and(
+        publishedCaseLawDecision,
         ...conditions,
         // A multilingual decision is listed once, by its oldest listable
         // version. Rows only ever arrive with newer timestamps, so no later

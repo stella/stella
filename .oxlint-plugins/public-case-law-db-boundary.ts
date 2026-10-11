@@ -1484,7 +1484,7 @@ export default eslintCompatPlugin({
                     (isQueryFilter(root) &&
                       RAW_PUBLICATION_TEST.test(publicationText)))
                 ) {
-                  report(reportNode(root), "publicationPredicate");
+                  report(root, "publicationPredicate");
                 }
                 const { references, ctes } = statementReferences(
                   tokenize(variant),

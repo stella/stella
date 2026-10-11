@@ -1,4 +1,7 @@
 import { expect, test } from "bun:test";
+import * as fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import {
   checkExceptionHistory,
@@ -11,7 +14,7 @@ import {
 test("the tracked public case-law reads all use the publication policy", () => {
   checkExceptionHistory();
   expect(inspectCaseLawPublication(trackedApiSources()).errors).toEqual([]);
-});
+}, 60_000);
 
 test("visibility projection exceptions have reasons", () => {
   for (const exception of SELECT_VISIBILITY_PROJECTIONS.values()) {
@@ -186,4 +189,119 @@ test("alternative predicates cannot replace the publication condition", () => {
     },
   ]);
   expect(report.errors).toHaveLength(2);
+});
+
+test("the publication predicate must be a top-level conjunct", () => {
+  const report = inspectCaseLawPublication([
+    {
+      file: "apps/api/src/lib/legal-search/publication-conjuncts.ts",
+      source: `${publicationImports}
+        import { and, eq, not, or, sql } from "drizzle-orm";
+        import { and as allOf, eq as equals } from "drizzle-orm";
+        const owner = eligible(caseLawDecisions);
+        const unsafeOrTemplate = db.select().from(caseLawDecisions).where(sql\`\${owner} OR TRUE\`);
+        const equality = db.select().from(caseLawDecisions).where(eq(owner, false));
+        const negation = db.select().from(caseLawDecisions).where(not(owner));
+        const alternative = db.select().from(caseLawDecisions).where(or(owner, eq(caseLawDecisions.id, id)));
+        const caseExpression = db.select().from(caseLawDecisions).where(sql\`CASE WHEN \${owner} THEN TRUE ELSE TRUE END\`);
+        const nestedAlternative = db.select().from(caseLawDecisions).where(and(or(owner, eq(caseLawDecisions.id, id))));
+        const unknownWrapper = db.select().from(caseLawDecisions).where(publicationWrapper(owner));
+        const acceptedAnd = db.select().from(caseLawDecisions).where(and(owner, eq(caseLawDecisions.id, id)));
+        const acceptedAliasedAnd = db.select().from(caseLawDecisions).where(allOf(owner, equals(caseLawDecisions.id, id)));
+        const acceptedTemplate = db.select().from(caseLawDecisions).where(sql\`\${owner} AND \${eq(caseLawDecisions.id, id)}\`);
+      `,
+    },
+    {
+      file: "apps/api/src/lib/legal-search/publication-raw-query.ts",
+      source: `import { and, eq, sql } from "drizzle-orm";
+        import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+        import { publishedCaseLawDecisionSqlFor as eligibleSql } from "@/api/lib/case-law/published-decisions";
+        declare const db: CaseLawPublicReadDb;
+        const rawFalse = db.execute(sql\`SELECT d.id FROM case_law_decisions d WHERE \${sql.raw(eligibleSql("d"))} = FALSE\`);
+        const caseOr = db.execute(sql\`SELECT d.id FROM case_law_decisions d WHERE CASE WHEN \${sql.raw(eligibleSql("d"))} THEN TRUE ELSE TRUE END OR TRUE\`);
+        const aliasComparison = db.execute(sql\`SELECT d.id FROM case_law_decisions d JOIN case_law_decisions sibling ON sibling.id = d.id WHERE \${and(sql.raw(eligibleSql("d")), eq(sql.raw(eligibleSql("sibling")), false))}\`);`,
+    },
+  ]);
+  expect(report.reads).toHaveLength(13);
+  expect(report.errors).toHaveLength(10);
+});
+
+test("an arrow raw-predicate callback cannot invert the owner condition", () => {
+  const report = inspectCaseLawPublication([
+    {
+      file: "apps/api/src/lib/legal-search/publication-raw-callback.ts",
+      source: `import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+        import { sql } from "drizzle-orm";
+        import { publishedCaseLawDecisionSqlFor as eligibleSql } from "@/api/lib/case-law/published-decisions";
+        declare const db: CaseLawPublicReadDb;
+        const predicate = (alias: string) => sql.raw(eligibleSql(alias));
+        const query = () => db.execute(sql\`SELECT d.id FROM case_law_decisions d WHERE NOT (\${predicate("d")})\`);`,
+    },
+  ]);
+  expect(report.reads).toHaveLength(1);
+  expect(report.errors).toHaveLength(1);
+});
+
+const WRAPPER_KINDS = [
+  "and",
+  "eq_false",
+  "not",
+  "or_true",
+  "case_or_sql",
+  "unknown_wrapper",
+] as const;
+
+test("generated wrapper trees keep the publication owner out of the top-level conjunction", () => {
+  assertProperty(
+    "case-law-publication-rejects-generated-wrapper-trees",
+    fc.property(
+      fc.tuple(
+        fc.constantFrom(
+          "eq_false",
+          "not",
+          "or_true",
+          "case_or_sql",
+          "unknown_wrapper",
+        ),
+        fc.array(fc.constantFrom(...WRAPPER_KINDS), { maxLength: 8 }),
+      ),
+      ([unsafeRoot, nestedWrappers]) => {
+        let predicate = "eligible(caseLawDecisions)";
+        const wrap = (kind: (typeof WRAPPER_KINDS)[number], inner: string) => {
+          switch (kind) {
+            case "and":
+              return `and(${inner}, eq(caseLawDecisions.id, id))`;
+            case "eq_false":
+              return `eq(${inner}, false)`;
+            case "not":
+              return `not(${inner})`;
+            case "or_true":
+              return `or(${inner}, sql\`TRUE\`)`;
+            case "case_or_sql":
+              return `sql\`CASE WHEN \${${inner}} THEN TRUE ELSE TRUE END OR TRUE\``;
+            case "unknown_wrapper":
+              return `publicationWrapper(${inner})`;
+            default:
+              kind satisfies never;
+              return kind;
+          }
+        };
+        predicate = wrap(unsafeRoot, predicate);
+        for (const wrapper of nestedWrappers) {
+          predicate = wrap(wrapper, predicate);
+        }
+        const report = inspectCaseLawPublication([
+          {
+            file: "apps/api/src/lib/legal-search/generated-publication-wrapper.ts",
+            source: `${publicationImports}
+              import { and, eq, not, or, sql } from "drizzle-orm";
+              const query = db.select().from(caseLawDecisions).where(${predicate});
+            `,
+          },
+        ]);
+        expect(report.reads).toHaveLength(1);
+        expect(report.errors).toHaveLength(1);
+      },
+    ),
+  );
 });

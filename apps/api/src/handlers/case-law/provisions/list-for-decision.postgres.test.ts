@@ -122,7 +122,7 @@ if (!databaseUrl || !runPostgresTests) {
               'Court', ${listingOnlyId}, ${"b".repeat(64)},
               '{"_stellaPartialObservation":{"isListingOnly":true}}'::jsonb, NULL),
             (${redactedId}::uuid, ${sourceId}::uuid, 'CZE', ${language},
-              'Court', ${redactedId}, ${"c".repeat(64)}, '{}'::jsonb, now())`;
+              'Court', ${redactedId}, NULL, '{}'::jsonb, now())`;
         for (const id of [listingOnlyId, redactedId]) {
           expect(
             await withRedistributableSubject(

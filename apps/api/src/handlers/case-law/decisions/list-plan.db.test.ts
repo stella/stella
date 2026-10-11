@@ -79,7 +79,7 @@ test(
     });
 
     const indexedDecisionScan =
-      /Index Scan Backward using case_law_decisions_country_date_idx on case_law_decisions\n\s+Index Cond: \(\(country\)::text = 'CZE'::text\)/u;
+      /Index Scan Backward using case_law_decisions_country_date_published_idx on case_law_decisions\n\s+Index Cond: \(\(country\)::text = 'CZE'::text\)/u;
     expect(plans.natural).toMatch(indexedDecisionScan);
     expect(plans.forced).toMatch(indexedDecisionScan);
     expect(plans.natural).toContain("Nested Loop Anti Join");

@@ -628,8 +628,8 @@ export const caseLawSearchPlan = ({
     JOIN case_law_sources src ON src.id = d.source_id
     ${bodyPreviewJoin}
     WHERE ${representativeFilter}
-      AND ${sql.raw(publishedCaseLawDecisionSqlFor("d"))}
       ${cursorFilter}
+      AND ${sql.raw(publishedCaseLawDecisionSqlFor("d"))}
     ORDER BY m.sort_key DESC, m.decision_id DESC
     LIMIT ${limit + 1}
     OFFSET ${offset}
@@ -1379,6 +1379,7 @@ export const candidateDecisionRowsStatement = (
     .where(
       and(
         inArray(caseLawDecisions.id, ids),
+        publishedCaseLawDecision,
         ...caseLawSearchRowFilters(body, generation),
       ),
     )
@@ -1444,6 +1445,7 @@ export const pageDecisionRowsStatement = (
     .where(
       and(
         inArray(caseLawDecisions.id, ids),
+        publishedCaseLawDecision,
         ...caseLawSearchRowFilters(body, generation),
       ),
     )

@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { PgDialect } from "drizzle-orm/pg-core";
 import nodePath from "node:path";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import { caseLawDecisions } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { publicCaseLawRoute } from "@/api/handlers/case-law/public-routes";
 import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
@@ -12,7 +14,15 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import {
+  publishedCaseLawDecisionFor,
+  publishedCaseLawDecisionSqlFor,
+} from "@/api/lib/case-law/published-decisions";
 import { corpusIndexReadContract } from "@/api/lib/legal-search/corpus-index-read-contract";
+import {
+  PARTIAL_OBSERVATION_FIELD,
+  PARTIAL_OBSERVATION_KEY,
+} from "@/api/lib/legal-search/partial-observation-sql";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import {
   apiSourceRoot,
@@ -890,31 +900,30 @@ describe("public case-law route boundary", () => {
     expect(coverageSource).toContain("redistributableCaseLawSource");
   });
 
-  test("the listing-only predicate has one owner", async () => {
-    const [ownerSource, markerSource] = await Promise.all([
-      readSource("apps/api/src/lib/case-law/published-decisions.ts"),
-      readSource("apps/api/src/lib/legal-search/ingestion-normalization.ts"),
-    ]);
+  test("the publication predicate has one owner", () => {
+    const rendered = [
+      new PgDialect().sqlToQuery(publishedCaseLawDecisionFor(caseLawDecisions))
+        .sql,
+      publishedCaseLawDecisionSqlFor("decision"),
+    ];
 
-    // The owner states the predicate once per spelling, and each spelling is
-    // built from the marker module rather than from a literal path of its own.
-    expect(ownerSource).toContain(
-      "publishedCaseLawDecisionFor = storedObservationHasDetail",
-    );
-    expect(ownerSource).toContain("storedObservationHasDetailSqlFor(");
-    expect(ownerSource).not.toContain("_stellaPartialObservation");
-    expect(markerSource).toContain("PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY");
+    for (const predicate of rendered) {
+      expect(predicate).toContain("IS NULL AND");
+      expect(predicate).toContain("jsonb_extract_path_text");
+      expect(predicate).toContain(PARTIAL_OBSERVATION_KEY);
+      expect(predicate).toContain(PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY);
+      expect(predicate).toContain("is distinct from 'true'");
+    }
   });
 
   test("every related-decision read in the citation graph goes through its one gate", async () => {
     const source = await readSource(CITATION_GRAPH_FILE);
     const count = (token: string) => source.split(token).length - 1;
 
-    // Each component of the gate is stated once, inside `visibleFor`, so no
-    // read can hand-roll a subset of it.
+    // Source and country admission remain shared by the visibility gate;
+    // the publication census separately enforces positive filter conjuncts.
     for (const component of [
       "redistributableCaseLawSourceFor(",
-      "publishedCaseLawDecisionFor(",
       "[...PUBLIC_CASE_LAW_COUNTRIES]",
     ]) {
       expect({ component, count: count(component) }).toEqual({

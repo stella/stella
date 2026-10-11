@@ -40,7 +40,7 @@ export const SITEMAP_SHARD_SPLIT_THRESHOLD = Math.floor(
 
 /**
  * Index entries one count statement reads. The count walks
- * `case_law_decisions_sitemap_shard_idx` in its own order, a page at a time,
+ * `case_law_decisions_sitemap_shard_published_idx` in its own order, a page at a time,
  * so each statement's work is bounded by this and not by the corpus.
  */
 export const SITEMAP_REFRESH_PAGE_SIZE = 20_000;
@@ -150,7 +150,7 @@ const afterCursorSql = (
  * in index order, counted per month and bucket among the redistributable
  * sources, with the page's last entry as the cursor for the next one.
  *
- * Every column the page reads is on `case_law_decisions_sitemap_shard_idx` and
+ * Every column the page reads is on `case_law_decisions_sitemap_shard_published_idx` and
  * the publication gate is its partial predicate, so the page is an index-only
  * range read that stops at the limit. A page with no rows ends the phase; a
  * page whose rows are all withheld still returns its cursor, with no counts.

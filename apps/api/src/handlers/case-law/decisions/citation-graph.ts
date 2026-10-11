@@ -636,6 +636,7 @@ export const decisionCitationSummaryQuery = ({
         .innerJoin(relatedSource, publishedBy)
         .where(
           and(
+            publishedCaseLawDecisionFor(relatedDecision),
             lte(candidates.ordinal, CITATION_SUMMARY_SCAN_LIMIT),
             eq(candidates.kind, CITATION_KIND.PRECEDENT),
             visibleFor({
@@ -766,6 +767,7 @@ export const listLeadingCitationsHandler = async ({
     .innerJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
     .where(
       and(
+        publishedCaseLawDecisionFor(relatedDecision),
         eq(spec.anchor, decisionId),
         precedentOnly,
         // Before ranking, so a hidden decision cannot take a leader's place.
@@ -819,7 +821,12 @@ export const listLeadingCitationsHandler = async ({
       relatedDecision,
       sql`${relatedDecision.id} = ${ranked.relatedId}::uuid`,
     )
-    .where(sql`${ranked.rank} <= ${LEADING_CITATIONS_PER_TREATMENT}`)
+    .where(
+      and(
+        publishedCaseLawDecisionFor(relatedDecision),
+        sql`${ranked.rank} <= ${LEADING_CITATIONS_PER_TREATMENT}`,
+      ),
+    )
     .orderBy(asc(ranked.rank), asc(ranked.id))
     .limit(CITATION_TREATMENTS.length * LEADING_CITATIONS_PER_TREATMENT);
   const toRelatedDecision = await withLanguageAlternates(

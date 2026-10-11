@@ -112,7 +112,7 @@ test("keeps repeated relation scans distinct by structural position", () => {
 const coveringScan = (extra: Record<string, unknown> = {}) => ({
   "Node Type": "Index Only Scan",
   "Relation Name": "case_law_decisions",
-  "Index Name": "case_law_decisions_sitemap_shard_idx",
+  "Index Name": "case_law_decisions_sitemap_shard_published_idx",
   ...extra,
 });
 
@@ -284,14 +284,16 @@ test("a pinned heap-fetch exception covers only its scan until it expires", () =
       position: "root/0/0/0",
       relation: "case_law_decisions",
       nodeType: "Index Only Scan",
-      index: "case_law_decisions_sitemap_shard_idx",
+      index: "case_law_decisions_sitemap_shard_published_idx",
     },
     reason: "per-row lookup under an aggregate",
     rework: "bound the query",
     expiresOn: "2026-10-13",
   };
   const onDay = (day: string) => new Date(`${day}T12:00:00Z`);
-  const onlyPinned = aggregatePlan("case_law_decisions_sitemap_shard_idx");
+  const onlyPinned = aggregatePlan(
+    "case_law_decisions_sitemap_shard_published_idx",
+  );
   const pinnedScan = onlyPinned.filter(
     ({ position }) => position === "root/0/0/0",
   );
@@ -332,7 +334,7 @@ test("a pinned heap-fetch exception covers only its scan until it expires", () =
   ]);
   // Stale: the plan changed, so the exception must be removed.
   const stale =
-    "heap-fetch exception for root/0/0/0 on case_law_decisions is stale: the plan has no such risky Index Only Scan/case_law_decisions_sitemap_shard_idx; remove it";
+    "heap-fetch exception for root/0/0/0 on case_law_decisions is stale: the plan has no such risky Index Only Scan/case_law_decisions_sitemap_shard_published_idx; remove it";
   expect(
     heapFetchRiskViolations(
       aggregatePlan("case_law_decisions_changed_idx").filter(
@@ -382,7 +384,7 @@ test("flags an unbounded covering scan but leaves an Index Scan alone", () => {
       {
         "Node Type": "Index Only Scan",
         "Relation Name": "case_law_decisions",
-        "Index Name": "case_law_decisions_sitemap_shard_idx",
+        "Index Name": "case_law_decisions_sitemap_shard_published_idx",
       },
       {
         "Node Type": "Index Scan",
@@ -501,7 +503,7 @@ test("does not merge separate OR and subplan predicates", () => {
     "Node Type": "Index Scan",
     "Relation Name": "case_law_decisions",
     Alias: "case_law_decisions",
-    "Index Name": "case_law_decisions_country_date_idx",
+    "Index Name": "case_law_decisions_country_date_published_idx",
     "Index Cond": "(country = 'CZE')",
     Filter: "(((language = 'cs') OR (language = 'en')) AND (hashed SubPlan 1))",
   });
@@ -513,7 +515,7 @@ test("does not merge separate OR and subplan predicates", () => {
           alias: "case_law_decisions",
           relation: "case_law_decisions",
           nodeType: "Index Scan",
-          index: "case_law_decisions_country_date_idx",
+          index: "case_law_decisions_country_date_published_idx",
         },
       ],
       "page",

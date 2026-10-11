@@ -17,7 +17,7 @@ type RefreshDb = {
 /**
  * One source's published arrivals in `[since, until)`.
  *
- * `case_law_decisions_source_arrivals_idx` is `(source_id, created_at)`,
+ * `case_law_decisions_source_arrivals_published_idx` is `(source_id, created_at)`,
  * partial on the publication gate, so the window is an index range and is
  * counted off the index. It still visits the heap for every page not yet
  * marked all-visible, and a week of bulk ingest is exactly the freshly

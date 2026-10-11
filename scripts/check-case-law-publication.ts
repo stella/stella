@@ -3,24 +3,10 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
-const lastSqlToken = (text: string, pattern: RegExp): number =>
-  Math.max(
-    -1,
-    ...[...text.matchAll(pattern)].map((match) => match.index ?? -1),
-  );
+import { positiveSqlConjunctInterpolations } from "./case-law-publication-conjuncts";
 
-const hasIdentifier = (node: ts.Node, name: string): boolean => {
-  if (ts.isIdentifier(node) && node.text === name) {
-    return true;
-  }
-  let found = false;
-  ts.forEachChild(node, (child) => {
-    if (!found) {
-      found = hasIdentifier(child, name);
-    }
-  });
-  return found;
-};
+const lastSqlToken = (text: string, pattern: RegExp): number =>
+  Math.max(-1, ...[...text.matchAll(pattern)].map((match) => match.index));
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const OWNER_MODULES = new Set([
@@ -159,8 +145,8 @@ const exportedOwnerBindings = (
     }
     const exposed = new Set<string>();
     const exported = (node: ts.Node): boolean => {
-      let current: ts.Node | undefined = node;
-      while (current && !ts.isSourceFile(current)) {
+      let current = node;
+      while (!ts.isSourceFile(current)) {
         if (
           ts.canHaveModifiers(current) &&
           ts
@@ -179,7 +165,25 @@ const exportedOwnerBindings = (
         ts.isIdentifier(node.name) &&
         node.initializer &&
         exported(node.parent.parent) &&
-        isGuaranteedOwnerExpression(node.initializer, localOwners)
+        (isOwnerConjunct({
+          node: node.initializer,
+          names: localOwners,
+          andNames: drizzleOperatorNames(tree, "and"),
+          sqlNames: drizzleOperatorNames(tree, "sql"),
+        }) ||
+          (ts.isTaggedTemplateExpression(node.initializer) &&
+            ts.isIdentifier(node.initializer.tag) &&
+            drizzleOperatorNames(tree, "sql").has(node.initializer.tag.text) &&
+            ts.isTemplateExpression(node.initializer.template) &&
+            positiveSqlConjunctInterpolations(node.initializer.template).some(
+              (expression) =>
+                isOwnerConjunct({
+                  node: expression,
+                  names: localOwners,
+                  andNames: drizzleOperatorNames(tree, "and"),
+                  sqlNames: drizzleOperatorNames(tree, "sql"),
+                }),
+            )))
       ) {
         exposed.add(node.name.text);
       }
@@ -209,67 +213,107 @@ const exportedOwnerBindings = (
   return exportsByModule;
 };
 
-const isGuaranteedOwnerExpression = (
-  node: ts.Node,
-  names: ReadonlySet<string>,
-): boolean => {
-  if (ts.isIdentifier(node)) {
-    return names.has(node.text);
-  }
-  if (ts.isCallExpression(node)) {
-    const callee = node.expression;
-    let name = "";
-    if (ts.isIdentifier(callee)) {
-      name = callee.text;
-    } else if (ts.isPropertyAccessExpression(callee)) {
-      name = callee.name.text;
-    }
-    if (names.has(name)) {
-      return true;
-    }
-    if (name === "or" || name === "raw") {
-      return (
-        node.arguments.length > 0 &&
-        node.arguments.every((argument) =>
-          isGuaranteedOwnerExpression(argument, names),
-        )
-      );
-    }
-    return (
-      (name === "sql" || name === "and") &&
-      node.arguments.some((argument) =>
-        isGuaranteedOwnerExpression(argument, names),
-      )
-    );
-  }
-  if (ts.isTaggedTemplateExpression(node)) {
-    if (node.template.kind !== ts.SyntaxKind.TemplateExpression) {
+type OwnerConjunctOptions = {
+  node: ts.Node;
+  names: ReadonlySet<string>;
+  andNames: ReadonlySet<string>;
+  sqlNames: ReadonlySet<string>;
+  resolveName?: (node: ts.Identifier) => ts.Node | undefined;
+  alias?: string;
+};
+
+const isOwnerConjunct = ({
+  node,
+  names,
+  andNames,
+  sqlNames,
+  resolveName,
+  alias,
+}: OwnerConjunctOptions): boolean => {
+  const visited = new Set<ts.Node>();
+  const visit = (current: ts.Node): boolean => {
+    if (visited.has(current)) {
       return false;
     }
-    let prefix = node.template.head.text;
-    let guaranteed = false;
-    for (const span of node.template.templateSpans) {
-      if (isGuaranteedOwnerExpression(span.expression, names)) {
-        const filter = lastSqlToken(prefix, /\b(?:where|on|and)\b/giu);
-        const clause = lastSqlToken(prefix, /\b(?:select|from)\b/giu);
-        guaranteed =
-          filter > clause &&
-          !/\bor\b/iu.test(
-            span.literal.text
-              .split(/\b(?:select|from|where|group|order|returning)\b/iu)
-              .at(0) ?? "",
-          );
-      }
-      prefix += span.literal.text;
+    visited.add(current);
+    if (ts.isParenthesizedExpression(current)) {
+      return visit(current.expression);
     }
-    return guaranteed;
-  }
-  return false;
+    if (ts.isIdentifier(current)) {
+      if (names.has(current.text)) {
+        return alias === undefined;
+      }
+      const initializer = resolveName?.(current);
+      return initializer !== undefined && visit(initializer);
+    }
+    if (ts.isCallExpression(current)) {
+      if (ts.isIdentifier(current.expression)) {
+        if (names.has(current.expression.text)) {
+          return (
+            alias === undefined ||
+            current.arguments.some(
+              (argument) =>
+                ts.isStringLiteral(argument) && argument.text === alias,
+            )
+          );
+        }
+        return (
+          andNames.has(current.expression.text) && current.arguments.some(visit)
+        );
+      }
+      return (
+        ts.isPropertyAccessExpression(current.expression) &&
+        ts.isIdentifier(current.expression.expression) &&
+        sqlNames.has(current.expression.expression.text) &&
+        current.expression.name.text === "raw" &&
+        current.arguments.length === 1 &&
+        current.arguments.some(visit)
+      );
+    }
+    if (
+      !ts.isTaggedTemplateExpression(current) ||
+      !ts.isIdentifier(current.tag) ||
+      !sqlNames.has(current.tag.text) ||
+      !ts.isTemplateExpression(current.template)
+    ) {
+      return false;
+    }
+    const spans = current.template.templateSpans;
+    if (!/^\s*$/u.test(current.template.head.text)) {
+      return false;
+    }
+    for (const [index, span] of spans.entries()) {
+      if (
+        index === spans.length - 1
+          ? !/^\s*$/u.test(span.literal.text)
+          : !/^\s*AND\s*$/iu.test(span.literal.text)
+      ) {
+        return false;
+      }
+    }
+    return spans.some((span) => visit(span.expression));
+  };
+  return visit(node);
 };
+
+const drizzleOperatorNames = (
+  tree: ts.SourceFile,
+  imported: string,
+): ReadonlySet<string> =>
+  new Set(
+    [...importNames(tree, "drizzle-orm")]
+      .filter(([, name]) => name === imported)
+      .map(([local]) => local),
+  );
 
 type SourceInput = { file: string; source: string };
 type PublicationCensus = { reads: string[]; errors: string[] };
-type ReadSite = { node: ts.Node; line: number; text: string };
+type ReadSite = {
+  node: ts.Node;
+  line: number;
+  text: string;
+  kind: "builder" | "relational" | "raw";
+};
 
 const importNames = (
   tree: ts.SourceFile,
@@ -294,8 +338,8 @@ const importNames = (
 };
 
 const readExpression = (node: ts.Node): ts.Node => {
-  let current: ts.Node | undefined = node;
-  while (current !== undefined) {
+  let current = node;
+  while (!ts.isSourceFile(current)) {
     if (
       ts.isCallExpression(current) &&
       ts.isPropertyAccessExpression(current.expression) &&
@@ -307,7 +351,7 @@ const readExpression = (node: ts.Node): ts.Node => {
   }
   let root = node;
   while (
-    root.parent !== undefined &&
+    !ts.isSourceFile(root) &&
     (ts.isCallExpression(root.parent) ||
       ts.isPropertyAccessExpression(root.parent) ||
       ts.isAwaitExpression(root.parent) ||
@@ -333,7 +377,7 @@ const createOwnerResolver = (
 ): OwnerResolver => {
   const initializers = new Map<ts.Node, Map<string, ts.Node>>();
   const scopeOf = (node: ts.Node): ts.Node => {
-    let current: ts.Node = node;
+    let current = node;
     while (!ts.isSourceFile(current) && !ts.isFunctionLike(current)) {
       current = current.parent;
     }
@@ -364,20 +408,14 @@ const createOwnerResolver = (
   collectInitializers(tree);
   const scopesOf = (node: ts.Node): ts.Node[] => {
     const scopes: ts.Node[] = [];
-    let scope: ts.Node | undefined = scopeOf(node);
-    while (scope !== undefined) {
+    let scope = scopeOf(node);
+    while (true) {
       scopes.push(scope);
-      let parent: ts.Node | undefined = scope.parent;
-      while (
-        parent !== undefined &&
-        !ts.isSourceFile(parent) &&
-        !ts.isFunctionLike(parent)
-      ) {
-        parent = parent.parent;
+      if (ts.isSourceFile(scope)) {
+        return scopes;
       }
-      scope = parent;
+      scope = scopeOf(scope.parent);
     }
-    return scopes;
   };
   const resolves = (
     node: ts.Node,
@@ -411,81 +449,99 @@ const createOwnerResolver = (
     };
     return visit(node);
   };
-  const usesOwner = (node: ts.Node): boolean => {
-    const visited = new Set<string>();
-    const visit = (current: ts.Node): boolean => {
-      if (ts.isConditionalExpression(current)) {
-        return visit(current.whenTrue) && visit(current.whenFalse);
+  const resolveName = (identifier: ts.Identifier): ts.Node | undefined => {
+    for (const scope of scopesOf(identifier)) {
+      const initializer = initializers.get(scope)?.get(identifier.text);
+      if (initializer) {
+        return initializer;
       }
-      if (
-        ts.isPrefixUnaryExpression(current) &&
-        current.operator === ts.SyntaxKind.ExclamationToken
-      ) {
-        return false;
-      }
-      if (
-        ts.isCallExpression(current) &&
-        ts.isIdentifier(current.expression) &&
-        current.expression.text === "or"
-      ) {
-        return current.arguments.length > 0 && current.arguments.every(visit);
-      }
-      if (ts.isIdentifier(current) && predicateLocals.has(current.text)) {
-        return true;
-      }
-      if (ts.isIdentifier(current)) {
-        for (const scope of scopesOf(current)) {
-          const key = `${scope.pos}:${current.text}`;
-          if (visited.has(key)) {
-            continue;
-          }
-          visited.add(key);
-          const initializer = initializers.get(scope)?.get(current.text);
-          if (initializer && visit(initializer)) {
-            return true;
-          }
-        }
-      }
-      let found = false;
-      ts.forEachChild(current, (child) => {
-        if (!found) {
-          found = visit(child);
-        }
-      });
-      return found;
-    };
-    return visit(node);
+    }
+    return undefined;
   };
+  const andNames = drizzleOperatorNames(tree, "and");
+  const sqlNames = drizzleOperatorNames(tree, "sql");
+  const usesOwner = (node: ts.Node): boolean =>
+    isOwnerConjunct({
+      node,
+      names: predicateLocals,
+      andNames,
+      sqlNames,
+      resolveName,
+    });
   const hasOwnerAlias = (node: ts.Node, alias: string): boolean =>
+    isOwnerConjunct({
+      node,
+      names: predicateLocals,
+      andNames,
+      sqlNames,
+      resolveName,
+      alias,
+    });
+
+  const hasOwnerEvidence = (node: ts.Node): boolean =>
     resolves(
       node,
       (current) =>
-        ts.isCallExpression(current) &&
-        ts.isIdentifier(current.expression) &&
-        predicateLocals.has(current.expression.text) &&
-        current.arguments.some(
-          (argument) => ts.isStringLiteral(argument) && argument.text === alias,
-        ),
+        ts.isIdentifier(current) && predicateLocals.has(current.text),
     );
+  const hasFilteredQuery = (node: ts.Node): boolean => {
+    const visited = new Set<ts.Node>();
+    const visit = (current: ts.Node): boolean => {
+      if (visited.has(current)) {
+        return false;
+      }
+      visited.add(current);
+      if (ts.isIdentifier(current)) {
+        const initializer = resolveName(current);
+        return initializer !== undefined && visit(initializer);
+      }
+      if (
+        ts.isParenthesizedExpression(current) ||
+        ts.isAwaitExpression(current)
+      ) {
+        return visit(current.expression);
+      }
+      if (
+        !ts.isCallExpression(current) ||
+        !ts.isPropertyAccessExpression(current.expression)
+      ) {
+        return false;
+      }
+      if (current.expression.name.text === "where") {
+        return current.arguments.some(usesOwner);
+      }
+      return visit(current.expression.expression);
+    };
+    return visit(node);
+  };
+
   return {
     usesOwner,
     hasOwnerAlias,
-    ...createOwnerQueryChecks({ file, tree, predicateLocals, usesOwner }),
+    ...createOwnerQueryChecks({
+      file,
+      tree,
+      usesOwner,
+      hasOwnerEvidence,
+      hasFilteredQuery,
+    }),
   };
 };
 
 type OwnerQueryChecksOptions = {
   file: string;
   tree: ts.SourceFile;
-  predicateLocals: ReadonlySet<string>;
   usesOwner: (node: ts.Node) => boolean;
+  hasOwnerEvidence: (node: ts.Node) => boolean;
+  hasFilteredQuery: (node: ts.Node) => boolean;
 };
 
 const createOwnerQueryChecks = ({
   file,
   tree,
-  predicateLocals,
   usesOwner,
+  hasOwnerEvidence,
+  hasFilteredQuery,
 }: OwnerQueryChecksOptions) => {
   const hasOwnerProjection = (node: ts.Node): boolean => {
     const permitted = SELECT_VISIBILITY_PROJECTIONS.get(file)?.properties;
@@ -493,7 +549,7 @@ const createOwnerQueryChecks = ({
       return false;
     }
     if (permitted.has("row")) {
-      return hasEligibleRehydration(tree, node, usesOwner);
+      return hasEligibleRehydration(tree, node, hasFilteredQuery);
     }
     let found = false;
     const visit = (current: ts.Node): void => {
@@ -505,16 +561,15 @@ const createOwnerQueryChecks = ({
         ts.isPropertyAccessExpression(current.expression) &&
         current.expression.name.text === "select"
       ) {
-        const argument = current.arguments[0];
+        const argument = current.arguments.at(0);
         if (argument && ts.isObjectLiteralExpression(argument)) {
           found = argument.properties.some(
             (property) =>
               ts.isPropertyAssignment(property) &&
-              property.name &&
               permitted.has(
                 property.name.getText(tree).replaceAll(/["']/gu, ""),
               ) &&
-              usesOwner(property.initializer),
+              hasOwnerEvidence(property.initializer),
           );
         }
       }
@@ -533,7 +588,24 @@ const createOwnerQueryChecks = ({
         ts.isPropertyAssignment(current) &&
         current.name.getText(tree).replaceAll(/["']/gu, "") === "where"
       ) {
-        found = usesOwner(current.initializer);
+        const filter = current.initializer;
+        found = usesOwner(filter);
+        if (ts.isObjectLiteralExpression(filter)) {
+          found = filter.properties.some((property) => {
+            if (
+              !ts.isPropertyAssignment(property) ||
+              property.name.getText(tree) !== "RAW"
+            ) {
+              return false;
+            }
+            const callback = property.initializer;
+            return (
+              ts.isArrowFunction(callback) &&
+              !ts.isBlock(callback.body) &&
+              usesOwner(callback.body)
+            );
+          });
+        }
       }
       if (!found) {
         ts.forEachChild(current, visit);
@@ -547,37 +619,22 @@ const createOwnerQueryChecks = ({
     const visit = (current: ts.Node): void => {
       if (
         ts.isTaggedTemplateExpression(current) &&
+        ts.isIdentifier(current.tag) &&
+        drizzleOperatorNames(tree, "sql").has(current.tag.text) &&
         ts.isTemplateExpression(current.template)
       ) {
-        let prefix = current.template.head.text;
-        for (const span of current.template.templateSpans) {
-          const filterAt = lastSqlToken(prefix, /\b(?:where|on|and)\b/giu);
-          const clauseAt = lastSqlToken(prefix, /\b(?:select|from)\b/giu);
-          const ownerContext =
-            filterAt > clauseAt &&
-            lastSqlToken(prefix.slice(clauseAt + 1), /\bor\b/giu) < 0 &&
-            !/\bnot\s*$/iu.test(prefix) &&
-            !/\bnot\s*\(\s*$/iu.test(prefix) &&
-            !/\bor\b/iu.test(
-              span.literal.text
-                .split(/\b(?:select|from|where|group|order|returning)\b/iu)
-                .at(0) ?? "",
-            );
-          const joined =
-            ts.isIdentifier(span.expression) &&
-            predicateLocals.has(span.expression.text) &&
-            span.expression.text.toLowerCase().includes("join");
-          if (usesOwner(span.expression) && (ownerContext || joined)) {
-            owners.push(span.expression);
-          }
-          prefix += span.literal.text;
-        }
+        owners.push(
+          ...positiveSqlConjunctInterpolations(current.template).filter(
+            usesOwner,
+          ),
+        );
       }
       ts.forEachChild(current, visit);
     };
     visit(node);
     return owners;
   };
+
   return { hasOwnerProjection, hasRelationalWhereOwner, rawFilterOwners };
 };
 
@@ -649,7 +706,7 @@ const discoverDecisionReadSites = (
 ): ReadSite[] => {
   const sites: ReadSite[] = [];
   const seen = new Set<number>();
-  const addSite = (node: ts.Node): void => {
+  const addSite = (node: ts.Node, kind: ReadSite["kind"]): void => {
     const start = node.getStart(tree);
     if (seen.has(start)) {
       return;
@@ -658,6 +715,7 @@ const discoverDecisionReadSites = (
     const expression = readExpression(node);
     sites.push({
       node: expression,
+      kind,
       line: tree.getLineAndCharacterOfPosition(start).line + 1,
       text: expression.getText(tree),
     });
@@ -676,13 +734,13 @@ const discoverDecisionReadSites = (
             hasNamespacedDecision(argument),
         )
       ) {
-        addSite(node);
+        addSite(node, "builder");
       }
       if (
         (method === "findFirst" || method === "findMany") &&
         node.expression.getText(tree).includes("caseLawDecisions")
       ) {
-        addSite(node);
+        addSite(node, "relational");
       }
     }
     if (
@@ -691,7 +749,7 @@ const discoverDecisionReadSites = (
         node.template.getText(tree),
       )
     ) {
-      addSite(node);
+      addSite(node, "raw");
     }
     ts.forEachChild(node, visit);
   };
@@ -773,7 +831,11 @@ const createFileCensusContext = (
     }
     for (const item of bindings.elements) {
       const imported = (item.propertyName ?? item.name).text;
-      if (ownerNames.has(imported)) {
+      const joinAlias =
+        resolved === null
+          ? undefined
+          : ownerJoinAliases.get(`${modulePath(resolved)}:${imported}`);
+      if (ownerNames.has(imported) && joinAlias === undefined) {
         predicateLocals.add(item.name.text);
       }
       if (resolved !== null) {
@@ -798,19 +860,23 @@ const createFileCensusContext = (
         READ_CONNECTION_TYPES.has(name) || name === "caseLawPublicReadDb",
     ) ||
     hasSubjectScope ||
-    predicateLocals.size > 0;
+    predicateLocals.size > 0 ||
+    importedJoinAliases.size > 0;
   if (!publicReadModule) {
     return null;
   }
   const visitAliases = (node: ts.Node): void => {
+    const initializer = ts.isVariableDeclaration(node)
+      ? node.initializer
+      : undefined;
     if (
       ts.isVariableDeclaration(node) &&
       ts.isIdentifier(node.name) &&
-      node.initializer &&
-      ts.isCallExpression(node.initializer) &&
-      ts.isIdentifier(node.initializer.expression) &&
-      node.initializer.expression.text === "alias" &&
-      node.initializer.arguments.some(
+      initializer !== undefined &&
+      ts.isCallExpression(initializer) &&
+      ts.isIdentifier(initializer.expression) &&
+      initializer.expression.text === "alias" &&
+      initializer.arguments.some(
         (arg) =>
           (ts.isIdentifier(arg) && decisionTables.has(arg.text)) ||
           hasNamespacedDecision(arg),
@@ -849,25 +915,63 @@ const inspectFileReads = (context: FileCensusContext): PublicationCensus => {
   const reads: string[] = [];
   const errors: string[] = [];
   for (const site of sites) {
-    const whereNodes: ts.Node[] = [];
+    const whereNodes: ts.CallExpression[] = [];
     const visitWhere = (node: ts.Node): void => {
+      if (ts.isAwaitExpression(node) || ts.isParenthesizedExpression(node)) {
+        visitWhere(node.expression);
+        return;
+      }
       if (
-        ts.isCallExpression(node) &&
-        ts.isPropertyAccessExpression(node.expression) &&
-        node.expression.name.text === "where"
+        !ts.isCallExpression(node) ||
+        !ts.isPropertyAccessExpression(node.expression)
       ) {
+        return;
+      }
+      if (node.expression.name.text === "where") {
         whereNodes.push(node);
       }
-      ts.forEachChild(node, visitWhere);
+      visitWhere(node.expression.expression);
     };
-    visitWhere(site.node);
+    if (site.kind === "builder") {
+      visitWhere(site.node);
+    }
+
     const rawQuery = site.node.getText(tree);
-    const rawFilters = resolver.rawFilterOwners(site.node);
-    const joinedAliases = [...importedJoinAliases]
-      .filter(([name]) =>
-        rawFilters.some((filter) => hasIdentifier(filter, name)),
-      )
-      .map(([, alias]) => alias);
+    const rawFilters =
+      site.kind === "raw" ? resolver.rawFilterOwners(site.node) : [];
+    const joinedAliases: string[] = [];
+    const visitJoins = (node: ts.Node): void => {
+      if (
+        ts.isTaggedTemplateExpression(node) &&
+        ts.isTemplateExpression(node.template)
+      ) {
+        let prefix = node.template.head.text;
+        for (const span of node.template.templateSpans) {
+          if (ts.isIdentifier(span.expression)) {
+            const alias = importedJoinAliases.get(span.expression.text);
+            const suffix = span.literal.text.trimStart();
+            if (
+              alias !== undefined &&
+              /\bFROM\b/iu.test(prefix) &&
+              !/\b(?:WHERE|CASE|OR|NOT)\b/iu.test(
+                prefix.slice(lastSqlToken(prefix, /\bFROM\b/giu)),
+              ) &&
+              (suffix.length === 0 ||
+                /^(?:WHERE|JOIN|LEFT|RIGHT|INNER|CROSS|GROUP|ORDER|LIMIT)\b/iu.test(
+                  suffix,
+                ))
+            ) {
+              joinedAliases.push(alias);
+            }
+          }
+          prefix += span.literal.text;
+        }
+      }
+      ts.forEachChild(node, visitJoins);
+    };
+    if (site.kind === "raw") {
+      visitJoins(site.node);
+    }
     const aliases = [
       ...rawQuery.matchAll(
         /\b(?:from|join)\s+case_law_decisions\s+(?:as\s+)?([a-z_][\w$]*)/giu,
@@ -882,9 +986,10 @@ const inspectFileReads = (context: FileCensusContext): PublicationCensus => {
       );
     const hasOwner =
       whereNodes.some((where) =>
-        resolver.usesOwner(where.arguments[0] ?? where),
+        resolver.usesOwner(where.arguments.at(0) ?? where),
       ) ||
-      resolver.hasRelationalWhereOwner(site.node) ||
+      (site.kind === "relational" &&
+        resolver.hasRelationalWhereOwner(site.node)) ||
       rawFilters.length > 0 ||
       joinedAliases.length > 0 ||
       resolver.hasOwnerProjection(site.node);

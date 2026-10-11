@@ -70,7 +70,7 @@ export const PARTIAL_OBSERVATION_FIELD = {
  * A row with no marker is a row that carries detail.
  *
  * The path is inlined rather than bound: this predicate is the definition of
- * `case_law_decisions_search_candidate_idx`, and PostgreSQL can only match a
+ * `case_law_decisions_search_candidate_published_idx`, and PostgreSQL can only match a
  * query against a partial index's predicate once both are constants. A bound
  * path folds to a constant under a custom plan and stays a parameter under a
  * generic one, which would silently drop the search's candidate read back to

@@ -456,6 +456,8 @@ describe("public decision reader database boundary", () => {
   });
 
   test("text kept from AI skips citation reads for the model while the app reader locates real anchors", async () => {
+    // Compare the reader work after the shared lazy court registry is warm.
+    await read(withheldId, "citations");
     const metadataOnly = await measuredRead(withheldId, "citations");
     const visible = await runWithQueryCounter(async (counter) => {
       const result = await readDecisionReaderSource({

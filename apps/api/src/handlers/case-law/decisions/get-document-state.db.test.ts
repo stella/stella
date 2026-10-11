@@ -146,13 +146,7 @@ if (!databaseUrl || !runPostgresTests) {
       ).toEqual({ hasDocument: true, pending: false, unavailable: false });
     });
     test("public and full document predicates agree across stored payload states", async () => {
-      const id = await insertDecision(null);
       const contentHash = "a".repeat(64);
-      const keys = corpusKeys({
-        documentId: id,
-        jurisdiction: "CZE",
-        contentHash,
-      });
       const emptyHash =
         EMPTY_CORPUS_CONTENT_HASHES.at(0) ??
         panic("Expected an empty corpus hash");
@@ -163,51 +157,83 @@ if (!databaseUrl || !runPostgresTests) {
         normalizedS3Key: null,
         astS3Key: null,
       };
-      const complete = {
-        ...empty,
-        contentHash,
-        textS3Key: keys.textKey,
-        normalizedS3Key: keys.sectionsKey,
-        astS3Key: keys.astKey,
-      };
-      const fixtures = [
-        { name: "textless", values: empty, expected: false },
-        {
-          name: "empty text",
-          values: { ...empty, fulltext: "" },
+      const fixtureSpecs = {
+        "unconfirmed corpus": {
           expected: false,
+          values: (keys: ReturnType<typeof corpusKeys>) => ({
+            ...empty,
+            textS3Key: keys.textKey,
+            normalizedS3Key: keys.sectionsKey,
+            astS3Key: keys.astKey,
+          }),
         },
-        {
-          name: "inline text",
-          values: { ...empty, fulltext: "Document" },
+        textless: {
+          expected: false,
+          values: (_keys: ReturnType<typeof corpusKeys>) => empty,
+        },
+        "empty text": {
+          expected: false,
+          values: (_keys: ReturnType<typeof corpusKeys>) => ({
+            ...empty,
+            fulltext: "",
+          }),
+        },
+        "inline text": {
           expected: true,
+          values: (_keys: ReturnType<typeof corpusKeys>) => ({
+            ...empty,
+            fulltext: "Document",
+          }),
         },
-        { name: "trimmed complete corpus", values: complete, expected: true },
-        {
-          name: "canonical empty",
-          values: { ...complete, contentHash: emptyHash },
+        "trimmed complete corpus": {
+          expected: true,
+          values: (keys: ReturnType<typeof corpusKeys>) => ({
+            ...empty,
+            contentHash,
+            textS3Key: keys.textKey,
+            normalizedS3Key: keys.sectionsKey,
+            astS3Key: keys.astKey,
+          }),
+        },
+        "canonical empty": {
           expected: false,
+          values: (keys: ReturnType<typeof corpusKeys>) => ({
+            ...empty,
+            contentHash: emptyHash,
+            textS3Key: keys.textKey,
+            normalizedS3Key: keys.sectionsKey,
+            astS3Key: keys.astKey,
+          }),
         },
-        {
-          name: "normalized key alone",
-          values: { ...empty, contentHash, normalizedS3Key: keys.sectionsKey },
+        "normalized key alone": {
           expected: false,
+          values: (keys: ReturnType<typeof corpusKeys>) => ({
+            ...empty,
+            contentHash,
+            normalizedS3Key: keys.sectionsKey,
+          }),
         },
-        {
-          name: "text key alone",
-          values: { ...empty, contentHash, textS3Key: keys.textKey },
+        "text key alone": {
           expected: false,
+          values: (keys: ReturnType<typeof corpusKeys>) => ({
+            ...empty,
+            contentHash,
+            textS3Key: keys.textKey,
+          }),
         },
-        {
-          name: "unconfirmed corpus",
-          values: { ...complete, contentHash: null },
-          expected: false,
-        },
-      ];
-      for (const { name, values, expected } of fixtures) {
+      };
+      for (const [name, { expected, values: valuesFor }] of Object.entries(
+        fixtureSpecs,
+      )) {
+        const id = await insertDecision(null);
+        const keys = corpusKeys({
+          documentId: id,
+          jurisdiction: "CZE",
+          contentHash,
+        });
         await db
           .update(caseLawDecisions)
-          .set(values)
+          .set(valuesFor(keys))
           .where(eq(caseLawDecisions.id, id));
         const [full] = await db
           .select({ hasDocument: rowHoldsDocument })

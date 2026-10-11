@@ -35,7 +35,7 @@ const readLivePgFtsBrowseFacets = async (
   tx: CaseLawPublicReadTransaction,
   query: LegalBrowseFacetsQuery,
 ): Promise<LegalBrowseFacets> => {
-  const scope: SQL[] = [redistributableCaseLawSource, publishedCaseLawDecision];
+  const scope: SQL[] = [redistributableCaseLawSource];
   if (query.jurisdiction) {
     scope.push(eq(caseLawDecisions.country, query.jurisdiction));
   }
@@ -47,7 +47,7 @@ const readLivePgFtsBrowseFacets = async (
     })
     .from(caseLawDecisions)
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
-    .where(and(...scope))
+    .where(and(publishedCaseLawDecision, ...scope))
     .groupBy(caseLawDecisions.country)
     .orderBy(desc(sql`count(*)`), desc(caseLawDecisions.country))
     .limit(query.limit);
@@ -59,7 +59,7 @@ const readLivePgFtsBrowseFacets = async (
     })
     .from(caseLawDecisions)
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
-    .where(and(...scope))
+    .where(and(publishedCaseLawDecision, ...scope))
     .groupBy(caseLawDecisions.court)
     .orderBy(desc(sql`count(*)`), desc(caseLawDecisions.court))
     .limit(query.limit);
@@ -72,7 +72,13 @@ const readLivePgFtsBrowseFacets = async (
     })
     .from(caseLawDecisions)
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
-    .where(and(isNotNull(caseLawDecisions.decisionDate), ...scope))
+    .where(
+      and(
+        publishedCaseLawDecision,
+        isNotNull(caseLawDecisions.decisionDate),
+        ...scope,
+      ),
+    )
     .groupBy(decisionYear)
     .orderBy(desc(decisionYear))
     .limit(query.limit);
