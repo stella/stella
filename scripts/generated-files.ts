@@ -13,14 +13,14 @@ type GeneratorCheck =
 
 export type Generator = {
   id: string;
-  outputKind: "committed" | "derived";
   outputs: readonly string[];
   blocks?: readonly { path: string; begin: string; end: string }[];
   inputs: readonly string[];
   write: readonly string[];
   autofix: boolean;
   after: readonly string[];
-} & GeneratorCheck;
+} & GeneratorCheck &
+  ({ outputKind: "committed" } | { outputKind: "derived" });
 
 const MODEL_CATALOG_INPUTS = [
   ".github/workflows/ci.yml",
