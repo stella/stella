@@ -915,7 +915,7 @@ export const inspectCaseLawPublication = (
     ]),
   );
   const ownerExports = exportedOwnerBindings(files, trees);
-  const ownerJoinAliases = findOwnerJoinAliases(files, ownerExports);
+  const ownerJoinAliases = findOwnerJoinAliases({ files, ownerExports, trees });
   const reads: string[] = [];
   const errors: string[] = [];
   for (const { file } of files) {
@@ -951,22 +951,72 @@ const isCensusSource = (file: string): boolean =>
   !file.endsWith(".test.ts") &&
   !file.endsWith(".db.test.ts");
 
-const findOwnerJoinAliases = (
-  files: readonly SourceInput[],
-  ownerExports: ReadonlyMap<string, ReadonlySet<string>>,
-): Map<string, string> => {
+type FindOwnerJoinAliasesOptions = {
+  files: readonly SourceInput[];
+  ownerExports: ReadonlyMap<string, ReadonlySet<string>>;
+  trees: ReadonlyMap<string, ts.SourceFile>;
+};
+
+const findOwnerJoinAliases = ({
+  files,
+  ownerExports,
+  trees,
+}: FindOwnerJoinAliasesOptions): Map<string, string> => {
   const aliases = new Map<string, string>();
-  for (const { file, source } of files) {
-    for (const name of ownerExports.get(modulePath(file)) ?? []) {
-      const escaped = name.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-      const match = new RegExp(
-        `export\\s+const\\s+${escaped}\\b[\\s\\S]{0,1600}?publishedCaseLawDecisionSqlFor\\s*\\(\\s*["']([^"']+)["']`,
-        "u",
-      ).exec(source);
-      if (match?.[1]) {
-        aliases.set(`${modulePath(file)}:${name}`, match[1]);
+  for (const { file } of files) {
+    const tree = trees.get(file);
+    if (!tree) {
+      continue;
+    }
+    const localOwners = new Set<string>();
+    for (const statement of tree.statements) {
+      if (
+        !ts.isImportDeclaration(statement) ||
+        !ts.isStringLiteral(statement.moduleSpecifier) ||
+        !isOwnerModule(file, statement.moduleSpecifier.text)
+      ) {
+        continue;
+      }
+      const bindings = statement.importClause?.namedBindings;
+      if (!bindings || !ts.isNamedImports(bindings)) {
+        continue;
+      }
+      for (const item of bindings.elements) {
+        if (
+          (item.propertyName ?? item.name).text ===
+          "publishedCaseLawDecisionSqlFor"
+        ) {
+          localOwners.add(item.name.text);
+        }
       }
     }
+    const exportedNames = ownerExports.get(modulePath(file));
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isVariableDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        exportedNames?.has(node.name.text) &&
+        node.initializer
+      ) {
+        const binding = node.name.text;
+        const inspect = (child: ts.Node): void => {
+          if (
+            ts.isCallExpression(child) &&
+            ts.isIdentifier(child.expression) &&
+            localOwners.has(child.expression.text)
+          ) {
+            const alias = child.arguments.at(0);
+            if (alias && ts.isStringLiteral(alias)) {
+              aliases.set(`${modulePath(file)}:${binding}`, alias.text);
+            }
+          }
+          ts.forEachChild(child, inspect);
+        };
+        inspect(node.initializer);
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(tree);
   }
   return aliases;
 };

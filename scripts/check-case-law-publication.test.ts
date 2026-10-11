@@ -63,8 +63,8 @@ test("publication fragments resolve through their loaded source module", () => {
     {
       file: "apps/api/src/lib/case-law/search-sql.ts",
       source: `import { sql } from "drizzle-orm";
-        import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
-        export const publicCaseLawDecisionJoin = sql\`JOIN case_law_sources ON \${sql.raw(publishedCaseLawDecisionSqlFor("d"))}\`;`,
+        import { publishedCaseLawDecisionSqlFor as eligibleSql } from "@/api/lib/case-law/published-decisions";
+        export const publicCaseLawDecisionJoin = sql\`JOIN case_law_sources ON \${sql.raw(eligibleSql("d"))}\`;`,
     },
     {
       file: "apps/api/src/lib/legal-search/provider.ts",
