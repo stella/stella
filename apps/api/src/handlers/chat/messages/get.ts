@@ -11,6 +11,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contract: "patch",
   description:
     "Read the current chat answer and revision after an edit or selection conflict.",
   permissions: CHAT_TURN_PERMISSIONS,

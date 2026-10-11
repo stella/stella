@@ -14,6 +14,7 @@ import { PG_ERROR } from "@/api/lib/pg-error";
 import { deletePlaybookPositionColumns } from "@/api/lib/properties/delete-playbook-columns";
 
 const config = {
+  contract: "patch",
   description:
     "Permanently delete one custom property (column) from a matter, with every " +
     "value stored under it on every document version, plus its cell metadata " +

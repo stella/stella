@@ -77,6 +77,7 @@ import {
   hasRunningToolCallInLatestAssistantMessage,
   isApprovalPart,
   isOpaquePersistedChatToolCallPart,
+  isPendingApprovalPart,
   savedPlaybookId,
 } from "@/components/chat/chat-ui-tools";
 import {
@@ -91,7 +92,10 @@ import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
 import { RequestSecretCard } from "@/components/chat/request-secret-card";
 import { SpawnSubagentsCard } from "@/components/chat/spawn-subagents-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
-import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
+import {
+  PendingToolApprovalCard,
+  ToolApprovalCard,
+} from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { uiResourceRenderer } from "@/components/chat/ui-resource-renderer";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
@@ -1513,7 +1517,8 @@ const toAssistantPartRenderEntries = (
 // transport companions, so they stay inside a process run without becoming
 // visible steps or splitting the run. Interactive tool cards (ask-user,
 // create-document, approvals, subagent runs) read as answer content, so
-// they stay outside the folded process disclosure.
+// they stay outside the folded process disclosure; an approval-gated call
+// is one of them from its first input byte, before the request arrives.
 const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
   if (entry.type === "rich") {
     return false;
@@ -1530,7 +1535,8 @@ const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
     part.name !== "ask-user" &&
     part.name !== "create-document" &&
     part.name !== "spawn_subagents" &&
-    !isApprovalPart(part)
+    !isApprovalPart(part) &&
+    !isPendingApprovalPart(part)
   );
 };
 
@@ -1668,6 +1674,12 @@ const AssistantMessageParts = ({
   const renderEntries = toAssistantPartRenderEntries(message.parts);
   const isTurnActive = isGenerating && isLatestAssistantMessage;
   const renderGroups = toAssistantPartRenderGroups(renderEntries);
+  // Start open while this message is actively streaming its reasoning (no
+  // answer text yet), but always render the same disclosure so the user can
+  // collapse it immediately. Once the stream settles it folds unless the user
+  // already did so.
+  const thinkingDisplayState =
+    !hasAnswerContent && isTurnActive ? "expanded" : "folded";
   const renderEntry = (entry: AssistantPartRenderEntry, index: number) => {
     if (entry.type === "rich") {
       return (
@@ -1685,15 +1697,7 @@ const AssistantMessageParts = ({
       return (
         <AssistantThinkingPart
           components={streamdownComponents}
-          displayState={
-            // Start open while this message is actively streaming its
-            // reasoning (no answer text yet), but always render the same
-            // disclosure so the user can collapse it immediately. Once
-            // the stream settles it folds unless the user already did so.
-            !hasAnswerContent && isGenerating && isLatestAssistantMessage
-              ? "expanded"
-              : "folded"
-          }
+          displayState={thinkingDisplayState}
           key={`${message.id}-thinking-${index}`}
           reasoningTokenCount={
             index === firstThinkingPartIndex ? reasoningTokenCount : null
@@ -1832,6 +1836,10 @@ const AssistantMessageParts = ({
             part={part}
           />
         );
+      }
+
+      if (isPendingApprovalPart(part)) {
+        return <PendingToolApprovalCard key={part.id} part={part} />;
       }
 
       return (

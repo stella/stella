@@ -25,6 +25,7 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   permissions: { contact: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "upload_mechanics" },

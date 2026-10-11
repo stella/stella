@@ -386,6 +386,8 @@ describe("policy coverage", () => {
     // not tenant-scoped — it has a deny-all RLS policy plus REVOKE ALL from
     // stella, so the org-policy coverage requirement does not apply.
     "agent_delegation",
+    // Operator-managed OAuth bindings use the auth deny policy asserted below.
+    "service_oauth_clients",
     // Filed feedback reports: organization_id/user_id record who filed a
     // report for the maintainers' private view and are never a tenant scope.
     // The table has no read surface at all: RLS is enabled with no policy and
@@ -1319,6 +1321,7 @@ describe("policy coverage", () => {
       "jwks",
       "oauth_access_token",
       "oauth_client",
+      "service_oauth_clients",
       "oauth_consent",
       "oauth_refresh_token",
       "session",
@@ -1356,6 +1359,29 @@ describe("policy coverage", () => {
       expect(globalPolicy?.check_expr).toBeNull();
       expect(privilegesForTable(tablePrivileges, table)).toEqual(["SELECT"]);
     }
+  });
+
+  test("service client bindings retain owner-only RLS", async () => {
+    const result = await testDb.execute<{
+      rls_enabled: boolean;
+      owner_using: string | null;
+      owner_check: string | null;
+    }>(sql`
+      SELECT rel.relrowsecurity AS rls_enabled,
+        pg_catalog.pg_get_expr(policy.polqual, policy.polrelid) AS owner_using,
+        pg_catalog.pg_get_expr(policy.polwithcheck, policy.polrelid) AS owner_check
+      FROM pg_catalog.pg_class rel
+      JOIN pg_catalog.pg_policy policy ON policy.polrelid = rel.oid
+      WHERE rel.oid = 'public.service_oauth_clients'::regclass
+        AND policy.polname = 'service_oauth_clients_owner_access'
+    `);
+    const policy = result.rows.at(0);
+    expect(policy?.rls_enabled).toBe(true);
+    expect(policy?.owner_using).toContain("CURRENT_USER");
+    expect(policy?.owner_using).toContain("pg_get_userbyid");
+    expect(policy?.owner_check).toBe(policy?.owner_using);
+    const privileges = await fetchStellaTablePrivileges(testDb);
+    expect(privilegesForTable(privileges, "service_oauth_clients")).toEqual([]);
   });
 
   test("case-law ingestion role has explicit narrow write boundaries", async () => {
