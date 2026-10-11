@@ -16,6 +16,7 @@ const listTimeSuggestionsQuerySchema = t.Object({
 
 const listTimeSuggestions = createSafeHandler(
   {
+    contract: "patch",
     description:
       "List suggested time entries for one day in the current matter, drawn " +
       "from the signed-in user's own activity here: chat messages they sent " +

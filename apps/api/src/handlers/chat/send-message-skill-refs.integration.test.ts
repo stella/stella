@@ -144,10 +144,15 @@ afterAll(async () => {
   await releaseRlsFixture();
 });
 
-const seedThread = async (): Promise<SafeId<"chatThread">> => {
+// An existing thread runs the skill it stored when it was created; a
+// request's `activeSkill` names the skill only for a new thread.
+const seedThread = async (
+  activeSkill?: ChatSendRequest["activeSkill"],
+): Promise<SafeId<"chatThread">> => {
   const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
   seededThreadIds.push(threadId);
   await testDb.insert(chatThreads).values({
+    activeSkill: activeSkill ?? null,
     id: threadId,
     organizationId: ids.orgA,
     title: "Skill reference test",
@@ -310,12 +315,16 @@ describe("explicit skill references in a user message", () => {
   });
 
   test("an active skill this chat cannot run keeps its context but is not runnable", async () => {
-    const threadId = await seedThread();
+    const activeSkill = {
+      skillId: needsToolSkillId,
+      skillName: NEEDS_TOOL_SLUG,
+    };
+    const threadId = await seedThread(activeSkill);
     streamChatMock.mockClear();
 
     const result = await sendMessage.handler(
       createContext({
-        activeSkill: { skillId: needsToolSkillId, skillName: NEEDS_TOOL_SLUG },
+        activeSkill,
         auditEvents: [],
         message: {
           id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),

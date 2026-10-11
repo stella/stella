@@ -15,6 +15,7 @@ import {
 import { authorizeFolioCollabService } from "./service-credentials";
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   contentDelivery: {
     type: "none",

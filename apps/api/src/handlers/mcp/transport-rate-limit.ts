@@ -147,7 +147,10 @@ type McpAuthenticationRunOptions = {
 };
 
 export const createMcpAuthenticationFailureLimiter = (
-  options: RateLimitOptions = createMcpTransportAddressRateLimitOptions(),
+  // A fixed ceiling: the address reservation runs before any request is read.
+  options: RateLimitOptions & {
+    max: number;
+  } = createMcpTransportAddressRateLimitOptions(),
   recordRejection: typeof recordBudgetRejection = recordBudgetRejection,
 ) => {
   options.context.init({ duration: options.duration });

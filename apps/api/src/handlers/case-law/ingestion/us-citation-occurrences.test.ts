@@ -11,7 +11,11 @@ import type {
   ParagraphBlock,
 } from "@stll/legal-ast/document-ast";
 import type { InlineCitationPinPart } from "@stll/legal-ast/inline";
-import { propertyConfig, propertySeed } from "@stll/property-testing";
+import {
+  assertProperty,
+  propertyConfig,
+  propertySeed,
+} from "@stll/property-testing";
 
 import {
   extractCitations,
@@ -819,6 +823,39 @@ describe("case captions", () => {
         ),
       ]).occurrences.at(-1)?.[2],
     ).toBe("missing-antecedent");
+  });
+
+  test("prose particles before government parties preserve repeated captions", () => {
+    assertProperty(
+      "prose particles before government parties preserve repeated captions",
+      fc.property(
+        fc.constantFrom("de", "la", "du", "von", "van"),
+        fc.constantFrom("People", "State", "United States"),
+        (particle, party) => {
+          expect(
+            readingOf([
+              paragraph(
+                "p",
+                `En el caso ${particle} ${party} v. Qorvix, 9137 N.Y. 9246. ${party} v. Qorvix, 9137 N.Y.,9246.`,
+              ),
+            ]).occurrences.map((reading) => reading.at(2)),
+          ).toEqual([["9137 N.Y. 9246"], ["9137 N.Y. 9246"]]);
+        },
+      ),
+      config(30),
+    );
+  });
+
+  test("surname particles remain part of distinct party names", () => {
+    // Re exercises the grammatical-word boundary; Zulnax is a fictional party.
+    expect(
+      readingOf([
+        paragraph(
+          "p",
+          "de Re v. Zulnax, 9137 N.Y. 9246. Re v. Zulnax, 9137 N.Y. 9246.",
+        ),
+      ]).occurrences.map((reading) => reading.at(2)),
+    ).toEqual(["conflicting-parallels", "conflicting-parallels"]);
   });
 
   test("the same caption repeated is one decision", () => {

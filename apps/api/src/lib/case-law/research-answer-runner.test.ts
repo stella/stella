@@ -53,8 +53,11 @@ const servingTarget = {
     cluster: manifest.cluster,
   },
 } satisfies ServingCorpusIndexTarget;
+const APPLIED_REVISION = toSafeId<"corpusIndexProjectionIntent">(
+  "6f1c2a3e-8b4d-4c1e-9a2b-3c4d5e6f7a8b",
+);
 const readyDb = asTestRaw<CaseLawPublicReadDb>(async () =>
-  Result.ok(servingTarget),
+  Result.ok({ ...servingTarget, appliedRevision: APPLIED_REVISION }),
 );
 const emptySearch: CorpusIndexClient["search"] = async () =>
   Result.ok({ numHits: 0, hits: [], snippets: [] });
@@ -233,7 +236,11 @@ describe("research passage retrieval", () => {
       caseLawDb: readyDb,
       clientForCluster: clientForSearch(async (input) => {
         expect(input.indexId).toBe(servingTarget.route.indexId);
-        expect(input.query).toContain('document_id:"synthetic-decision"');
+        // Only the applied revision's copy may answer: a superseded copy of
+        // the same decision stays in the index until its delete applies.
+        expect(input.query).toStartWith(
+          `(document_id:"synthetic-decision" AND projection_revision:"${APPLIED_REVISION}") AND `,
+        );
         expect(input.sortBy).toBe("_score");
         return Result.ok({
           numHits: 2,
@@ -250,6 +257,22 @@ describe("research passage retrieval", () => {
       { anchorId: "second", excerpt: "Most relevant" },
       { anchorId: "first", excerpt: "Next relevant" },
     ]);
+    expect(logs.records).toEqual([]);
+    expect(analytics.exceptions()).toEqual([]);
+  });
+
+  test("a decision without a current revision reads no passages", async () => {
+    const result = await retrieveResearchPassages({
+      decision,
+      questions: [{ question: "synthetic question" }],
+      caseLawDb: asTestRaw<CaseLawPublicReadDb>(async () =>
+        Result.ok({ ...servingTarget, appliedRevision: null }),
+      ),
+      clientForCluster: () =>
+        panic("A decision with no current revision must not be searched"),
+    });
+    expect(result.isOk()).toBe(true);
+    expect(result.unwrapOr([])).toEqual([]);
     expect(logs.records).toEqual([]);
     expect(analytics.exceptions()).toEqual([]);
   });

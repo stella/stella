@@ -12,6 +12,7 @@ import {
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import {
   DatabaseError,
   HandlerError,
@@ -226,7 +227,8 @@ export const installSkill = async (props: InstallSkillProps) => {
 
   const insertResult = await safeDb(
     async (tx) =>
-      await tx.transaction(
+      await withAggregateSavepoint(
+        tx,
         async (innerTx): Promise<InstallSkillTransactionResult> => {
           const existingSkill = async () => {
             if (urlReplayIdentity === undefined) {
@@ -366,7 +368,6 @@ export const installSkill = async (props: InstallSkillProps) => {
                 organizationId: session.activeOrganizationId,
                 skillId: row.id,
                 path: resource.path,
-                kind: resource.kind,
                 content: resource.content,
                 sizeBytes: resource.sizeBytes,
               })),

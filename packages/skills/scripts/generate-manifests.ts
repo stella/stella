@@ -5,17 +5,16 @@ import path from "node:path";
 import {
   SKILL_FILE_NAME,
   SKILL_RESOURCE_EXTENSIONS,
-  SKILL_RESOURCE_FOLDER_KINDS,
+  isSkillResourceFolder,
   isAllowedFirstPartySkillPackageSkip,
   validateSkillPackage,
 } from "../src/format";
-import type { SkillPackageFile, SkillResourceKind } from "../src/format";
+import type { SkillPackageFile } from "../src/format";
 
 const packageRoot = path.join(import.meta.dirname, "..");
 
 type ResourceEntry = {
   importName: string;
-  kind: SkillResourceKind;
   path: string;
   sourcePath: string;
 };
@@ -79,17 +78,12 @@ function generateManifest(manifest: Manifest) {
   id: string;
   source: string;
   resources: readonly {
-    kind: SkillResourceKind;
     path: string;
     source: string;
   }[];
 };
 
 `
-      : "";
-  const typeImport =
-    manifest.exportName === "GENERATED_SKILLS"
-      ? 'import type { SkillResourceKind } from "./format";\n\n'
       : "";
   const annotation =
     manifest.exportName === "GENERATED_SKILLS"
@@ -99,7 +93,7 @@ function generateManifest(manifest: Manifest) {
   const output = `// oxlint-disable-next-line typescript/triple-slash-reference -- loads the ambient "*.md" module declaration; no ES import equivalent
 /// <reference path="./markdown.d.ts" />
 
-${typeImport}${importBlock}${typeDeclaration}export const ${manifest.exportName}${annotation} = [${body}]${suffix};
+${importBlock}${typeDeclaration}export const ${manifest.exportName}${annotation} = [${body}]${suffix};
 `;
 
   if (process.argv.includes("--check")) {
@@ -146,7 +140,6 @@ function readPackageEntry(
       }
       return {
         importName: `${manifest.entryPrefix}${index}Resource${resourceIndex}`,
-        kind: resource.kind,
         path: resource.path,
         sourcePath: toImportPath(
           path.join(packageDir, ...resource.path.split("/")),
@@ -192,7 +185,7 @@ function collectPackageFiles(
 function isSupportedResourcePath(resourcePath: string): boolean {
   const folder = resourcePath.split("/").at(0) ?? "";
   return (
-    Object.hasOwn(SKILL_RESOURCE_FOLDER_KINDS, folder) &&
+    isSkillResourceFolder(folder) &&
     SKILL_RESOURCE_EXTENSIONS.some((extension) =>
       resourcePath.endsWith(extension),
     )
@@ -203,7 +196,7 @@ function formatEntry(entry: PackageEntry): string {
   const resources = entry.resources
     .map(
       (resource) =>
-        `      { kind: ${JSON.stringify(resource.kind)}, path: ${JSON.stringify(resource.path)}, source: ${resource.importName} }`,
+        `      { path: ${JSON.stringify(resource.path)}, source: ${resource.importName} }`,
     )
     .join(",\n");
   const resourcesArray = resources.length > 0 ? `[\n${resources}\n    ]` : "[]";
