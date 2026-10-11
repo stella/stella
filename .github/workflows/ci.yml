@@ -176,6 +176,7 @@ jobs:
       docs_checks_required: ${{ steps.changed-files.outputs.docs_checks_required }}
       docs_changed_files: ${{ steps.changed-files.outputs.docs_changed_files }}
       postgres_suites_required: ${{ steps.changed-files.outputs.postgres_suites_required }}
+      query_perf_required: ${{ steps.query-perf-scope.outputs.query_perf_required }}
       corpus_suites_required: ${{ steps.changed-files.outputs.corpus_suites_required }}
       valkey_suites_required: ${{ steps.changed-files.outputs.valkey_suites_required }}
       collaboration_suite_required: ${{ steps.changed-files.outputs.collaboration_suite_required }}
@@ -1199,6 +1200,21 @@ jobs:
           if [[ "$package_checks_required" != "true" ]]; then
             echo "::notice::Only documentation changed; skipping package CI checks."
           fi
+
+      - name: Plan query performance scope
+        id: query-perf-scope
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.changed-files.outcome == 'success'
+        env:
+          CHANGED_PATHS: ${{ runner.temp }}/api-test-changed-paths
+          SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
+          HEAVY_ONLY: ${{ inputs.heavy_only }}
+        run: |
+          if [[ "$HEAVY_ONLY" == true ]]; then
+            echo "query_perf_required=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          QUERY_PERF_CHANGED_PATHS="$CHANGED_PATHS" QUERY_PERF_SCOPE_UNKNOWN="$SCOPE_UNKNOWN" \
+            bun scripts/query-perf-scope.ts >> "$GITHUB_OUTPUT"
 
       - name: Install API test planner dependencies
         id: api-test-deps
@@ -4984,6 +5000,21 @@ jobs:
               run_id: context.runId,
             });
 
+  query-perf:
+    needs: ci-plan
+    if: >-
+      inputs.pr_depth_only != true
+      && needs.ci-plan.outputs.run_required != 'false'
+      && (inputs.heavy_only == true
+      || ((github.event_name == 'pull_request' || github.event_name == 'merge_group')
+      && needs.ci-plan.outputs.query_perf_required == 'true'))
+    permissions:
+      contents: read
+    uses: ./.github/workflows/query-perf.yml
+    with:
+      sha: ${{ inputs.sha || '' }}
+      heavy_only: ${{ inputs.heavy_only == true }}
+
   postgres-service-suites:
     needs: ci-plan
     if: >-
@@ -8607,6 +8638,7 @@ jobs:
         code-quality-web-rest,
         service-suites,
         postgres-service-suites,
+        query-perf,
         release-typecheck,
         fix-tests-on-base,
         web-build,
@@ -8725,6 +8757,7 @@ jobs:
             "release-typecheck": "release_typecheck_required",
             "service-suites": "service_suites_required",
             "postgres-service-suites": "postgres_service_suites_required",
+            "query-perf": "query_perf_required",
             "stack-redaction-browsers": "stack_redaction_browsers_required",
             "web-build": "web_build_required",
             "heavy-web-build": "heavy_web_build_required",
@@ -8739,10 +8772,12 @@ jobs:
           FAST_JOB_SCOPES: >-
             {"postgres-service-suites": "postgres_service_suites_required", "service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required", "web-build": "browser_spec_selection_required"}
           FAST_REQUIRED: >-
-            ["dated-waiver-expiry", "desktop-rust-lint", "ci-browser", "ci-generated-sources", "ci-checks-docs", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-malware", "parser-version-guard", "ci-tests", "e2e-production-shard", "web-build", "scan-engine-wasm-drift"]
+            ["dated-waiver-expiry", "desktop-rust-lint", "ci-browser", "ci-generated-sources", "ci-checks-docs", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-malware", "parser-version-guard", "ci-tests", "e2e-production-shard", "web-build", "scan-engine-wasm-drift", "query-perf"]
+          # These scoped gates certify the exact queue head even at thin depth.
+          QUEUE_GATES: '["query-perf"]'
         run: |
           if [[ "$QUEUE_DEPTH" == thin ]]; then
-            THIN_JOBS=$(jq -cn --argjson thin "$THIN_JOBS" --argjson required "$QUEUE_REQUIRED_JOBS" '$thin + $required | unique') || exit 1
+            THIN_JOBS=$(jq -cn --argjson thin "$THIN_JOBS" --argjson required "$QUEUE_REQUIRED_JOBS" --argjson gates "$QUEUE_GATES" '$thin + $required + $gates | unique') || exit 1
           fi
           if [[ "$COVERAGE_PROFILE" == pilot-fast-v1 ]]; then
             FAST_REQUIRED="$PILOT_FAST_JOBS"
