@@ -13,6 +13,7 @@ const config = {
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.accountControl,
   access: "read",
+  contract: "patch",
   mcp: { type: "internal", reason: "provider_secret" },
   body: t.Object({
     providers: t.Array(t.UnionEnum(TANSTACK_AI_PROVIDERS), {
