@@ -8,7 +8,10 @@ import * as v from "valibot";
 import { typescriptModuleReferences } from "./api-typecheck-declarations";
 import { apiResolvedTypecheckInputs } from "./api-typecheck-inputs";
 import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
-import { readTurboTypecheckInputs } from "./turbo-typecheck-inputs";
+import {
+  readTurboTypecheckInputs,
+  writeTurboTypecheckInputs,
+} from "./turbo-typecheck-inputs";
 
 const isTest = (filename: string) => /\.test\.tsx?$/u.test(filename);
 
@@ -374,41 +377,7 @@ if (import.meta.main) {
       `${JSON.stringify(tests, null, 2)}\n`,
     );
     const turboPath = path.join(root, "turbo.json");
-    const text = readFileSync(turboPath, "utf-8");
-    const document = ts.parseJsonText(turboPath, text);
-    const expectedInputs = apiProjectInputs(api);
-    const edits: { start: number; end: number; text: string }[] = [];
-    const visit = (node: ts.Node) => {
-      if (ts.isPropertyAssignment(node) && ts.isStringLiteral(node.name)) {
-        const expected = expectedInputs.get(node.name.text);
-        if (expected && ts.isObjectLiteralExpression(node.initializer)) {
-          for (const property of node.initializer.properties) {
-            if (
-              ts.isPropertyAssignment(property) &&
-              ts.isStringLiteral(property.name) &&
-              property.name.text === "inputs"
-            ) {
-              edits.push({
-                start: property.initializer.getStart(document),
-                end: property.initializer.end,
-                text: JSON.stringify(expected, null, 2),
-              });
-            }
-          }
-        }
-      }
-      ts.forEachChild(node, visit);
-    };
-    visit(document);
-    if (edits.length !== expectedInputs.size) {
-      panic("Missing split API Turbo task inputs");
-    }
-    let updated = text;
-    for (const edit of edits.toSorted((a, b) => b.start - a.start)) {
-      updated =
-        updated.slice(0, edit.start) + edit.text + updated.slice(edit.end);
-    }
-    writeFileSync(turboPath, updated);
+    writeTurboTypecheckInputs(turboPath, apiProjectInputs(api));
   }
   process.stdout.write(
     `API test partition: ${partition.independent.length} declaration-safe, ${partition.coupled.length} coupled\n`,

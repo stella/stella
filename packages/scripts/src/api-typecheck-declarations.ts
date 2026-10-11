@@ -9,7 +9,10 @@ import {
   nativeTypecheckProgramFiles,
 } from "./api-typecheck-inputs";
 import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
-import { readTurboTypecheckInputs } from "./turbo-typecheck-inputs";
+import {
+  readTurboTypecheckInputs,
+  writeTurboTypecheckInputs,
+} from "./turbo-typecheck-inputs";
 
 export const typescriptModuleReferences = (text: string, filename: string) => {
   const imports = new Set<string>();
@@ -378,9 +381,25 @@ const nativeRequiredDeclarationRoots = (project: string) => {
 };
 
 export const regenerateApiDeclarationSurface = (project: string) => {
+  const refreshInputs = () => {
+    const turbo = path.resolve(path.dirname(project), "../../turbo.json");
+    if (existsSync(turbo)) {
+      writeTurboTypecheckInputs(
+        turbo,
+        new Map([
+          [
+            "@stll/api#typecheck:declarations",
+            apiResolvedTypecheckInputs(project),
+          ],
+        ]),
+      );
+    }
+  };
+  refreshInputs();
   let result = emitApiTypecheckDeclarations(project);
   while (result.diagnostics.length === 0) {
     const roots = writeApiDeclarationSurface(project, result.files);
+    refreshInputs();
     const required = nativeRequiredDeclarationRoots(project);
     const directory = path.dirname(path.resolve(project));
     const api = ts.sys.realpath?.(directory) ?? directory;
@@ -391,6 +410,7 @@ export const regenerateApiDeclarationSurface = (project: string) => {
       return result;
     }
     writeApiDeclarationSurface(project, [...result.files, ...missing]);
+    refreshInputs();
     result = emitApiTypecheckDeclarations(project);
   }
   return result;

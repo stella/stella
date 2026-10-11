@@ -19,6 +19,7 @@ import {
   regenerateApiDeclarationSurface,
   writeApiDeclarationSurface,
 } from "./api-typecheck-declarations";
+import { readTurboTypecheckInputs } from "./turbo-typecheck-inputs";
 
 test("declarations follow public type imports without serializing runtime-only route exports", () => {
   const directory = mkdtempSync(
@@ -464,6 +465,17 @@ test("declaration aliases resolve transitive API contracts without checking thei
     expect(files.some((file) => file.endsWith("/src/leaf.ts"))).toBe(false);
     expect(files.some((file) => file.endsWith("/src/runtime.ts"))).toBe(false);
     expect(files.some((file) => file.endsWith("/src/surface.ts"))).toBe(false);
+    const turbo = path.join(root, "turbo.json");
+    writeFileSync(
+      turbo,
+      `// retain configuration comments\n${JSON.stringify({
+        tasks: {
+          "@stll/api#typecheck:declarations": {
+            inputs: apiDeclarationCacheInputs(project),
+          },
+        },
+      })}\n`,
+    );
     writeFileSync(path.join(api, "src/extra.ts"), "export const extra = 1;\n");
     writeFileSync(
       path.join(api, "consumer.test.ts"),
@@ -471,6 +483,20 @@ test("declaration aliases resolve transitive API contracts without checking thei
     );
     const regenerated = regenerateApiDeclarationSurface(project);
     expect(regenerated.diagnostics).toEqual([]);
+    expect(readFileSync(turbo, "utf-8")).toContain(
+      "// retain configuration comments",
+    );
+    const producer = "@stll/api#typecheck:declarations";
+    const generated = readTurboTypecheckInputs(turbo);
+    expect(generated.tasks[producer]?.inputs).toContain("src/extra.ts");
+    writeFileSync(
+      turbo,
+      JSON.stringify({ tasks: { [producer]: { inputs: [] } } }),
+    );
+    expect(() => emitApiTypecheckDeclarations(project)).toThrow(
+      "Emitted API sources missing from declaration cache inputs",
+    );
+    expect(regenerateApiDeclarationSurface(project).diagnostics).toEqual([]);
     expect(JSON.parse(readFileSync(project, "utf-8")).files).toContain(
       "src/extra.ts",
     );
