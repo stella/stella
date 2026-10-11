@@ -17,6 +17,7 @@ const readTaskByIdParamsSchema = workspaceParams({ taskId: tSafeId("entity") });
 
 const readTaskById = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Read one task in full: its own fields, its assignees with their " +
       "users, its governed-work ownership with the most recent lifecycle " +

@@ -16,6 +16,7 @@ import type { PendingUploadPurposeData } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { createFileKey } from "@/api/lib/file-key";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import { LIMITS } from "@/api/lib/limits";
@@ -142,21 +143,46 @@ export const lockOrganizationObjectIntentsForLifecycle = async (
   );
 };
 
+type ActiveWorkspaceBufferIntentOptions = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+} & (
+  | { mode: "share" }
+  | { mode: "update"; organizationId: SafeId<"organization"> }
+);
+
 /**
- * Share-lock the workspace while reserving an intent. Workspace deletion
- * takes an update lock before sealing, so either the reservation commits in
- * time for its cleanup snapshot or it observes the seal and cannot publish.
+ * Readers reserve intents under SHARE; publication takes UPDATE before child
+ * locks so it never upgrades a SHARE fence later in the transaction.
  */
 export const lockActiveWorkspaceForBufferIntent = async (
-  tx: Transaction,
-  workspaceId: SafeId<"workspace">,
+  options: ActiveWorkspaceBufferIntentOptions,
 ): Promise<void> => {
-  const rows = await tx
-    .select({ status: workspaces.status })
-    .from(workspaces)
-    .where(eq(workspaces.id, workspaceId))
-    .limit(1)
-    .for("share");
+  const { tx, workspaceId } = options;
+  const rows =
+    options.mode === "share"
+      ? await tx
+          .select({ status: workspaces.status })
+          .from(workspaces)
+          .where(eq(workspaces.id, workspaceId))
+          .limit(1)
+          .for("share")
+      : (
+          await withAggregateRowQuery({
+            tx,
+            aggregate: "workspace",
+            id: { id: workspaceId, organizationId: options.organizationId },
+            mode: options.mode,
+            select: (lockTx) =>
+              lockTx
+                .select({
+                  id: workspaces.id,
+                  organizationId: workspaces.organizationId,
+                  status: workspaces.status,
+                })
+                .from(workspaces),
+          })
+        ).rows;
   if (rows.at(0)?.status !== "active") {
     throw new BufferIntentWorkspaceUnavailableError({
       message: "Workspace is not active",
@@ -572,7 +598,11 @@ export const reserveBufferIntent = async ({
   const claimRequestId = Bun.randomUUIDv7().slice(0, 64);
   const now = new Date();
   const reserved = await safeDb(async (tx) => {
-    await lockActiveWorkspaceForBufferIntent(tx, workspaceId);
+    await lockActiveWorkspaceForBufferIntent({
+      tx,
+      workspaceId,
+      mode: "share",
+    });
     // audit: skip — crash-recovery intent; the durable entity mutation is
     // audited in the transaction that finalizes this row.
     const rows = await tx

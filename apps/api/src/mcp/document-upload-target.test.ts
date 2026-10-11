@@ -5,11 +5,11 @@ import { createUploadTargetController } from "@/api/mcp/apps/document-upload/upl
 describe("document upload target lifecycle", () => {
   test("a new tool input invalidates the prior target until its result arrives", () => {
     let hasSelectedFile = true;
-    const setLabel = mock((_label: string) => undefined);
+    const setDocumentId = mock((_label: string) => undefined);
     const setUploadEnabled = mock((_enabled: boolean) => undefined);
     const controller = createUploadTargetController({
       hasSelectedFile: () => hasSelectedFile,
-      setLabel,
+      setDocumentId,
       setUploadEnabled,
     });
 
@@ -26,7 +26,7 @@ describe("document upload target lifecycle", () => {
 
     controller.handleToolInput("new-document");
     expect(controller.snapshot()).toBeUndefined();
-    expect(setLabel).toHaveBeenLastCalledWith("Document new-document");
+    expect(setDocumentId).toHaveBeenLastCalledWith("new-document");
     expect(setUploadEnabled).toHaveBeenLastCalledWith(false);
 
     hasSelectedFile = false;
@@ -40,7 +40,7 @@ describe("document upload target lifecycle", () => {
   test("an upload snapshot cannot be retargeted by a later tool result", () => {
     const controller = createUploadTargetController({
       hasSelectedFile: () => true,
-      setLabel: () => undefined,
+      setDocumentId: () => undefined,
       setUploadEnabled: () => undefined,
     });
     controller.handleToolInput("first-document");
@@ -70,7 +70,7 @@ describe("document upload target lifecycle", () => {
     const setUploadEnabled = mock((_enabled: boolean) => undefined);
     const controller = createUploadTargetController({
       hasSelectedFile: () => true,
-      setLabel: () => undefined,
+      setDocumentId: () => undefined,
       setUploadEnabled,
     });
 

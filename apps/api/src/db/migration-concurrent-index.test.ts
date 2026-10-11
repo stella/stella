@@ -52,6 +52,14 @@ const ENTITY_FEATURE_GATE_MIGRATION =
 // Fingerprinting the complete statement makes comments, quoting tricks, and
 // dynamically assembled commands unable to bypass migration safety checks.
 const APPROVED_PROCEDURAL_STATEMENTS = new Set([
+  // Renames legacy resource paths in stable order with collision checks and
+  // transaction-local snapshots. Static writes retain the 1s lock and 30s
+  // statement budgets; a timeout rolls back the entire cutover.
+  "20261010005100_standard_skill_resource_folders/migration.sql:408aba11e8c73f9f2237ad26f1637f0647f15cfbed9667ec4dc4595055082838",
+  // Rewrites only captured skills and recomputes their package hashes under
+  // the same bounded budgets. Temporarily selects isolated revision mode
+  // and restores it; changes no timeout and executes no dynamic SQL.
+  "20261010005100_standard_skill_resource_folders/migration.sql:da34387e90b88d13e4520045cbb8b3829eb9e7795670b1e63b4e0343e5bc8b92",
   "20261003122400_public_sanctions_reader/migration.sql:6cc0fbb1310629fc3b2e4e6ac47e0cdb64c91fed912aada50d7c9e4631dd3c05",
   // Validates matter memberships with a bounded existence read and a typed
   // constraint error. The static block changes no rows or timeout settings.

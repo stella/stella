@@ -27,7 +27,10 @@ import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-in
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 const processExtractionMock = mock(async () => {});
 const enqueueImageThumbnailOrMarkFailedMock = mock(async () => {});
@@ -95,14 +98,9 @@ describe("createCreateWorkspaceDocumentTools", () => {
           findFirst: async () => ({ reference: null }),
         },
       },
+      execute: async () => [{ id: workspaceId }],
       $count: async () => 0,
-      select: () => ({
-        from: () => ({
-          where: () => ({
-            limit: () => ({ for: async () => [{ status: "active" }] }),
-          }),
-        }),
-      }),
+      select: () => createSelectQueryMock([{ status: "active" }]),
       insert: (table: unknown) => ({
         values: (values: { id?: string; name?: string }) => {
           if (table === documentCounters) {

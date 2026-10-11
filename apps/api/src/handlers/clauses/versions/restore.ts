@@ -26,6 +26,7 @@ const restoreClauseVersionParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Restore a stored clause version by copying its body onto the clause as " +
     "a new version. History is append-only: the older versions stay and the " +

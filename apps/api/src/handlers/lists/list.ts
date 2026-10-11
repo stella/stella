@@ -24,6 +24,7 @@ const querySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "List a matter's lists, newest first, with cursor pagination, filtered " +

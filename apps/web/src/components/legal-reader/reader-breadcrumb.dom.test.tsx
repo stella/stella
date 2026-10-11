@@ -53,7 +53,7 @@ test("Contents stays attached to its trigger as the visible heading path changes
     </IntlProvider>
   );
   const { rerender } = render(reader([]));
-  const trigger = screen.getByRole("button", { name: "Contents", exact: true });
+  const trigger = screen.getByRole("button", { name: /^Contents$/u });
   await act(async () => fireEvent.click(trigger));
   expect(trigger.getAttribute("aria-expanded")).toBe("true");
   for (const visiblePath of [path.slice(0, 1), path, []]) {

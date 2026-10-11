@@ -24,6 +24,7 @@ const listTemplateVersionsQuerySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "List one template's versions, newest first, with cursor pagination. " +
     "Each entry carries its version number, field count, creation time, and " +

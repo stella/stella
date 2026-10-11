@@ -192,8 +192,8 @@ for (const view of views) {
       // changes. Read geometry only once the actual scroll viewport has size.
       await expect
         .poll(
-          () =>
-            root
+          async () =>
+            await root
               .locator('[data-anchor="introduction"]')
               .evaluate((introduction) => {
                 const content =

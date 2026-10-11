@@ -14,7 +14,7 @@ import {
   workspaces,
   featureEnrolments,
 } from "@/api/db/schema";
-import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
+import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import transitionInvoice from "@/api/handlers/invoices/transition";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -96,69 +96,76 @@ if (!databaseUrl || !runPostgres) {
         workspaceId: wsId,
         userId,
       });
-      await db.insert(sellerProfiles).values(
-        [sellerA, sellerB, sellerC].map((id) => ({
-          id,
-          organizationId: orgId,
-          legalName: id,
-          defaultCurrency: "EUR",
-        })),
-      );
-      await db.insert(numberSeries).values(
-        [
-          {
-            id: aSeries,
-            sellerProfileId: sellerA,
-            documentType: "invoice" as const,
-            pattern: "A-{SEQ}",
-            isDefault: true,
-            archivedAt: null,
-          },
-          {
-            id: bSeries,
-            sellerProfileId: sellerB,
-            documentType: "invoice" as const,
-            pattern: "B-{SEQ}",
-            isDefault: true,
-            archivedAt: null,
-          },
-          {
-            id: allSeries,
-            sellerProfileId: null,
-            documentType: "advance" as const,
-            pattern: "ALL-{SEQ}",
-            isDefault: true,
-            archivedAt: null,
-          },
-          {
-            id: archivedSeries,
-            sellerProfileId: sellerA,
-            documentType: "advance" as const,
-            pattern: "OLD-{SEQ}",
-            isDefault: false,
-            archivedAt: new Date(),
-          },
-        ].map(
-          ({
+      await createScopedDb(
+        markRlsDatabase(db),
+        [wsId],
+        orgId,
+        userId,
+      )(async (tx) => {
+        await tx.insert(sellerProfiles).values(
+          [sellerA, sellerB, sellerC].map((id) => ({
             id,
-            sellerProfileId,
-            documentType,
-            pattern,
-            isDefault,
-            archivedAt,
-          }) => ({
-            id,
-            sellerProfileId,
-            documentType,
-            pattern,
-            isDefault,
-            archivedAt,
             organizationId: orgId,
-            name: id,
-            padding: 3,
-          }),
-        ),
-      );
+            legalName: id,
+            defaultCurrency: "EUR",
+          })),
+        );
+        await tx.insert(numberSeries).values(
+          [
+            {
+              id: aSeries,
+              sellerProfileId: sellerA,
+              documentType: "invoice" as const,
+              pattern: "A-{SEQ}",
+              isDefault: true,
+              archivedAt: null,
+            },
+            {
+              id: bSeries,
+              sellerProfileId: sellerB,
+              documentType: "invoice" as const,
+              pattern: "B-{SEQ}",
+              isDefault: true,
+              archivedAt: null,
+            },
+            {
+              id: allSeries,
+              sellerProfileId: null,
+              documentType: "advance" as const,
+              pattern: "ALL-{SEQ}",
+              isDefault: true,
+              archivedAt: null,
+            },
+            {
+              id: archivedSeries,
+              sellerProfileId: sellerA,
+              documentType: "advance" as const,
+              pattern: "OLD-{SEQ}",
+              isDefault: false,
+              archivedAt: new Date(),
+            },
+          ].map(
+            ({
+              id,
+              sellerProfileId,
+              documentType,
+              pattern,
+              isDefault,
+              archivedAt,
+            }) => ({
+              id,
+              sellerProfileId,
+              documentType,
+              pattern,
+              isDefault,
+              archivedAt,
+              organizationId: orgId,
+              name: id,
+              padding: 3,
+            }),
+          ),
+        );
+      });
       return {
         orgId,
         userId,
@@ -305,13 +312,21 @@ if (!databaseUrl || !runPostgres) {
       expect(rows.every((row) => row.status === INVOICE_STATUS.FINALIZED)).toBe(
         true,
       );
-      const counters = await db
-        .select({
-          seriesId: numberSeriesCounters.seriesId,
-          lastValue: numberSeriesCounters.lastValue,
-        })
-        .from(numberSeriesCounters)
-        .where(inArray(numberSeriesCounters.seriesId, [aSeries, bSeries]));
+      const counters = await createScopedDb(
+        markRlsDatabase(db),
+        [scenario.wsId],
+        scenario.orgId,
+        scenario.userId,
+      )(
+        async (tx) =>
+          await tx
+            .select({
+              seriesId: numberSeriesCounters.seriesId,
+              lastValue: numberSeriesCounters.lastValue,
+            })
+            .from(numberSeriesCounters)
+            .where(inArray(numberSeriesCounters.seriesId, [aSeries, bSeries])),
+      );
       expect(counters).toHaveLength(2);
       expect(counters).toEqual(
         expect.arrayContaining([
@@ -319,10 +334,18 @@ if (!databaseUrl || !runPostgres) {
           { seriesId: bSeries, lastValue: 3 },
         ]),
       );
-      const receipts = await db
-        .select({ number: numberSeriesAllocations.number })
-        .from(numberSeriesAllocations)
-        .where(eq(numberSeriesAllocations.organizationId, orgId));
+      const receipts = await createScopedDb(
+        markRlsDatabase(db),
+        [scenario.wsId],
+        scenario.orgId,
+        scenario.userId,
+      )(
+        async (tx) =>
+          await tx
+            .select({ number: numberSeriesAllocations.number })
+            .from(numberSeriesAllocations)
+            .where(eq(numberSeriesAllocations.organizationId, orgId)),
+      );
       expect(receipts.map((row) => row.number).toSorted()).toEqual(
         numbers.toSorted(),
       );
@@ -391,10 +414,18 @@ if (!databaseUrl || !runPostgres) {
         status: INVOICE_STATUS.FINALIZED,
       });
       expect(
-        await db.query.numberSeriesCounters.findFirst({
-          where: { seriesId: { eq: allSeries } },
-          columns: { lastValue: true },
-        }),
+        await createScopedDb(
+          markRlsDatabase(db),
+          [scenario.wsId],
+          scenario.orgId,
+          scenario.userId,
+        )(
+          async (tx) =>
+            await tx.query.numberSeriesCounters.findFirst({
+              where: { seriesId: { eq: allSeries } },
+              columns: { lastValue: true },
+            }),
+        ),
       ).toEqual({ lastValue: 1 });
     });
 
@@ -414,9 +445,17 @@ if (!databaseUrl || !runPostgres) {
       });
       expect(row).toEqual({ invoiceNumber: "ALL-001" });
       expect(
-        await db.query.numberSeriesCounters.findFirst({
-          where: { seriesId: { eq: archivedSeries } },
-        }),
+        await createScopedDb(
+          markRlsDatabase(db),
+          [scenario.wsId],
+          scenario.orgId,
+          scenario.userId,
+        )(
+          async (tx) =>
+            await tx.query.numberSeriesCounters.findFirst({
+              where: { seriesId: { eq: archivedSeries } },
+            }),
+        ),
       ).toBeUndefined();
     });
 
