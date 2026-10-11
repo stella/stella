@@ -38,6 +38,7 @@ import {
 
 // oxlint-disable-next-line no-restricted-properties -- Claim clock is used by query fetch/interval callbacks for client recovery; it does not determine rendered SSR or hydration snapshots.
 const readerPollingNow = () => Temporal.Now.instant().epochMilliseconds;
+const MIN_RECOVERY_REQUEST_TIMEOUT_MS = 5000;
 
 const createReaderAnswerRuntime = (scope: string) => {
   let phase: "active" | "cancelled" = "active";
@@ -337,7 +338,13 @@ const readerAnswersRecoveryOptions = ({
       const signal =
         remaining === null
           ? context.signal
-          : AbortSignal.any([context.signal, AbortSignal.timeout(remaining)]);
+          : AbortSignal.any([
+              context.signal,
+              // A cached deadline cannot establish whether the server finished while unmounted.
+              AbortSignal.timeout(
+                Math.max(MIN_RECOVERY_REQUEST_TIMEOUT_MS, remaining),
+              ),
+            ]);
       const read = options.queryFn;
       if (typeof read !== "function") {
         return panic("Reader answers query must own a fetch function");
@@ -364,10 +371,16 @@ const readerAnswersRecoveryOptions = ({
         return readQueryResult(fetched);
       }
       getAnalytics().captureError(fetched.error);
-      const projected = projectExpiredReaderAnswers({ ...polling, now });
+      // A failed recovery may time out expired claims, but must preserve newer terminal cache data.
+      const current = {
+        ...polling,
+        answers: queryClient.getQueryData(options.queryKey) ?? cached,
+        now,
+      };
+      const projected = projectExpiredReaderAnswers(current);
       queryClient.setQueryData(options.queryKey, projected);
-      if (allUnownedReaderClaimsExpired({ ...polling, now })) {
-        return projectExpiredReaderAnswers({ ...polling, now });
+      if (allUnownedReaderClaimsExpired(current)) {
+        return projected;
       }
       return readQueryResult(fetched);
     },

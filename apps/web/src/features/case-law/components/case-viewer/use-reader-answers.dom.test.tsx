@@ -29,6 +29,7 @@ const {
   readerAnswerFailureKind,
   readerAnswerErrorCodeKind,
 } = await import("./reader-answers.logic");
+const { readerAnswersOptions } = await import("./reader-answers-query");
 
 const { document: testDocument, window: testWindow } = globalThis;
 const originalFetch = globalThis.fetch;
@@ -884,11 +885,15 @@ test.each(["never", "hanging"] as const)(
       ),
     );
     server.releaseRecovery();
-    await waitFor(() =>
-      expect(hook.result.current.answers.at(0)?.messages.at(-1)).toMatchObject({
-        status: "failed",
-        errorCode: "timeout",
-      }),
+    await waitFor(
+      () =>
+        expect(
+          hook.result.current.answers.at(0)?.messages.at(-1),
+        ).toMatchObject({
+          status: "failed",
+          errorCode: "timeout",
+        }),
+      { timeout: 7000 },
     );
     const settledReads = server.reads();
     await act(async () => {
@@ -904,5 +909,124 @@ test.each(["never", "hanging"] as const)(
       await hook.result.current.remove("answer-1");
     });
     expect(server.deletions()).toBe(1);
+  },
+  10_000,
+);
+
+// oxlint-disable-next-line require-contract-domains/require-contract-domains -- These are fake recovery HTTP outcomes, not API domain values.
+test.each([
+  "complete",
+  "streaming",
+  "unavailable",
+  "concurrent-completion",
+] as const)(
+  "reopening an expired cached claim reconciles the server outcome %s before timing out",
+  async (outcome) => {
+    // oxlint-disable-next-line no-restricted-properties -- The fixture owns the claim clock at the HTTP recovery boundary.
+    const expiredAt = Temporal.Now.instant()
+      .subtract({ milliseconds: READER_ANSWER_DEADLINE_MS + 1000 })
+      .toString();
+    const cached = {
+      id: toSafeId<"legalReaderAnswer">("answer-1"),
+      decisionId: toSafeId<"caseLawDecision">("decision-1"),
+      authorId: toSafeId<"user">(user.id),
+      mine: true,
+      kind: "explain",
+      anchor,
+      visibility: "private",
+      createdAt: expiredAt,
+      updatedAt: expiredAt,
+      messages: [
+        {
+          id: toSafeId<"legalReaderAnswerMessage">("expired-assistant"),
+          role: "assistant",
+          content: "Cached partial",
+          citations: [],
+          status: "streaming",
+          errorCode: null,
+          invalidCitationCount: 0,
+          model: null,
+          usage: null,
+          createdAt: expiredAt,
+          updatedAt: expiredAt,
+        },
+      ],
+    } satisfies ReaderAnswer;
+    const { client, wrapper } = setup();
+    const { queryKey } = readerAnswersOptions({
+      decisionId: "decision-1",
+      organizationId: user.activeOrganizationId,
+      userId: user.id,
+    });
+    client.setQueryData(queryKey, [cached]);
+    let reads = 0;
+    let authoritativeReads = 0;
+    globalThis.fetch = Object.assign(
+      async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+        const request = new Request(input, init);
+        expect(request.method).toBe("GET");
+        reads += 1;
+        // Cross the zero-timeout boundary, just as an actual HTTP request must.
+        await sleep(20, { signal: request.signal });
+        authoritativeReads += 1;
+        if (outcome === "concurrent-completion") {
+          client.setQueryData(queryKey, [
+            {
+              ...cached,
+              messages: cached.messages.map((message) => ({
+                ...message,
+                status: "complete",
+                content: "Saved completion",
+              })),
+            } satisfies ReaderAnswer,
+          ]);
+        }
+        if (outcome === "unavailable" || outcome === "concurrent-completion") {
+          return Response.json(
+            { message: "Recovery unavailable" },
+            { status: 503 },
+          );
+        }
+        const answer = {
+          ...cached,
+          messages: cached.messages.map((message) => ({
+            ...message,
+            status: outcome,
+            content:
+              outcome === "complete" ? "Saved completion" : message.content,
+          })),
+        } satisfies ReaderAnswer;
+        return Response.json({ items: [answer], nextCursor: null, limit: 50 });
+      },
+      { preconnect: originalFetch.preconnect },
+    );
+    const hook = renderHook(
+      () =>
+        useReaderAnswers({
+          decisionId: "decision-1",
+          generationMode: "enabled",
+        }),
+      { wrapper },
+    );
+    await waitFor(() =>
+      expect(hook.result.current.answers.at(0)?.messages.at(-1)).toMatchObject(
+        outcome === "complete" || outcome === "concurrent-completion"
+          ? { status: "complete", content: "Saved completion", errorCode: null }
+          : {
+              status: "failed",
+              content: "Cached partial",
+              errorCode: "timeout",
+            },
+      ),
+    );
+    expect(authoritativeReads).toBeGreaterThan(0);
+    await waitFor(() =>
+      expect(client.getQueryState(queryKey)?.fetchStatus).toBe("idle"),
+    );
+    const settledReads = reads;
+    await act(async () => {
+      await sleep(50);
+    });
+    expect(reads).toBe(settledReads);
   },
 );
