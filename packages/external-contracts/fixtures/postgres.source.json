@@ -1,0 +1,27 @@
+{
+  "characterisedAt": {
+    "scripts/ci-service-images.json#postgres": "docker.io/library/postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280"
+  },
+  "fixtureSet": "apps/api/src/lib/db/lock-for-write.postgres.test.ts",
+  "provenance": {
+    "type": "authored",
+    "kind": "synthetic-from-spec"
+  },
+  "coveredOwners": [
+    "apps/api/src/lib/public-law-read-db.ts",
+    "apps/api/src/db/long-running-connection.ts",
+    "apps/api/src/db/migrate.ts",
+    "apps/api/src/db/root.ts",
+    "apps/api/src/db/online-index-observer.ts",
+    "apps/api/scripts/seed-reset.ts",
+    "apps/api/src/scripts/decision-analysis.db.ts",
+    "apps/api/src/scripts/better-auth-migration-audit.ts",
+    "apps/api/src/scripts/seed-migration-rehearsal.ts",
+    "apps/api/src/scripts/better-auth-17-backfill.ts",
+    "apps/api/src/scripts/database-census.ts",
+    "apps/api/src/scripts/better-auth-microsoft-identity-map.ts",
+    "apps/api/src/lib/health/database-login-probe.ts",
+    "apps/api/src/lib/case-law/maintenance-lane.ts"
+  ],
+  "coveredSdks": []
+}

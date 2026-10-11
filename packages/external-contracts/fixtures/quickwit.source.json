@@ -1,0 +1,12 @@
+{
+  "characterisedAt": {
+    "scripts/ci-service-images.json#quickwit": "docker.io/quickwit/quickwit:0.9.0@sha256:1e6169bf4e98a489fca397105f1698c1d80a0f9779f3cf652973bac8a0c3b2bd"
+  },
+  "fixtureSet": "apps/api/src/lib/legal-search/corpus-index-query-features.contract.test.ts",
+  "provenance": {
+    "type": "authored",
+    "kind": "synthetic-from-spec"
+  },
+  "coveredOwners": ["apps/api/src/lib/legal-search/corpus-index-client.ts"],
+  "coveredSdks": []
+}

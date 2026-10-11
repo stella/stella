@@ -1,0 +1,19 @@
+{
+  "fixtureSet": "apps/api/src/handlers/case-law/ingestion/parsers/__fixtures__",
+  "provenance": {
+    "type": "sidecars",
+    "format": "fixture-provenance"
+  },
+  "characterisedAt": {},
+  "coveredOwners": [
+    "apps/api/scripts/capture-parser-fixture.ts",
+    "apps/api/scripts/record-eu-ecj-fixtures.ts",
+    "apps/api/src/handlers/case-law/decisions/dev-reparse.ts",
+    "apps/api/src/handlers/case-law/ingestion/adapters/cz-us-throttle.ts",
+    "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts",
+    "apps/api/src/handlers/case-law/judges/import-cz-us-roster.ts",
+    "apps/api/src/handlers/soft-law/publisher-access.ts",
+    "apps/api/src/scripts/citation-probe.ts"
+  ],
+  "coveredSdks": []
+}

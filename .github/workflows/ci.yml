@@ -3285,6 +3285,15 @@ jobs:
         # names has moved. Regenerate: `bun scripts/ownership.ts --write`.
         run: bun scripts/ownership.ts --check
 
+      - name: External service contracts
+        env:
+          STELLA_VERIFY: check
+          CHECK_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || 'origin/main' }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun scripts/check-external-contracts.ts --check
+          bun test scripts/check-external-contracts.test.ts
+
       - name: Outbound transport ownership
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: |
