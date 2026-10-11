@@ -46,32 +46,34 @@ test("Lists renders and saves an item for a granted caller", async ({
       await page.context().addCookies(state.cookies);
       const route = `/workspaces/${workspace.id}/lists`;
       await page.goto(route, { waitUntil: "commit" });
+      const listsPage = page.getByRole("main");
       await expect(
-        page.getByRole("heading", { name: "Lists", exact: true }),
+        listsPage.getByRole("heading", { name: "Lists", exact: true }),
       ).toBeVisible();
       await expect(page).toHaveURL(new RegExp(`${route}$`, "u"));
-      await page
-        .getByRole("textbox", { name: "Name", exact: true })
-        .fill("Review checklist");
-      await page
-        .getByRole("textbox", { name: "Name", exact: true })
-        .press("Enter");
+      const listName = listsPage
+        .getByRole("complementary")
+        .getByRole("textbox", { name: "Name", exact: true });
+      await listName.fill("Review checklist");
+      await listName.press("Enter");
       await expect(
-        page.getByRole("heading", { name: "Review checklist", exact: true }),
+        listsPage.getByRole("heading", {
+          name: "Review checklist",
+          exact: true,
+        }),
       ).toBeVisible();
-      await page
-        .getByRole("textbox", { name: "Add item", exact: true })
-        .fill("Confirm signing date");
-      await page
-        .getByRole("textbox", { name: "Add item", exact: true })
-        .press("Enter");
-      await expect(
-        page.getByText("Confirm signing date", { exact: true }),
-      ).toBeVisible();
-      await page.reload();
-      await expect(
-        page.getByText("Confirm signing date", { exact: true }),
-      ).toBeVisible();
+      const newItem = listsPage.getByRole("textbox", {
+        name: "Add item",
+        exact: true,
+      });
+      await newItem.fill("Confirm signing date");
+      await newItem.press("Enter");
+      const savedItem = listsPage
+        .getByRole("table")
+        .getByRole("button", { name: "Confirm signing date", exact: true });
+      await expect(savedItem).toBeVisible();
+      await page.reload({ waitUntil: "commit" });
+      await expect(savedItem).toBeVisible();
       await expect(page).toHaveURL(new RegExp(`${route}\\?list=`, "u"));
       const lists = await apiGet<{ items: { id: string; name: string }[] }>(
         api,
