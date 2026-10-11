@@ -103,7 +103,9 @@ const readWorkspaces = createSafeRootHandler(
               openTaskCount: sql<number>`count(*) filter (where ${openTaskCondition})::int`,
               nextDeadline: sql<
                 string | null
-              >`min(${entities.dueDate}) filter (where ${openTaskCondition})`,
+              >`min(${entities.dueDate}) filter (where ${openTaskCondition})`.mapWith(
+                entities.dueDate,
+              ),
             })
             .from(entities)
             .where(and(inArray(entities.workspaceId, wsIds), entityVisibility))
