@@ -2700,12 +2700,6 @@
     "reason": "builder-for in apps/api/src/lib/document-processing-automatic-request.ts: Existing document processing coordination; retain until its acquisition order is migrated."
   },
   {
-    "file": "apps/api/src/lib/document-processing-automatic-request.ts",
-    "fingerprint": "cf958c7e24ca2bdc59917288b9f99d8eb10d3da25712c76662c3de9d1dcc3ef3",
-    "count": 1,
-    "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
-  },
-  {
     "file": "apps/api/src/lib/document-processing-queue.ts",
     "fingerprint": "4095af46fc431287eb82618839a58fcf8c1ee2eb7e8ddb0d703a30f0884f3dd0",
     "count": 1,

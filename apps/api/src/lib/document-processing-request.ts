@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, eq, inArray, lt, ne, or } from "drizzle-orm";
+import { and, eq, inArray, ne, or } from "drizzle-orm";
 
 import type { rootDb } from "@/api/db/root";
 import {
@@ -55,6 +55,9 @@ export const classifyManualOcrCollision = ({
   status: (typeof documentProcessingRuns.$inferSelect)["status"];
 }): (typeof MANUAL_OCR_COLLISION_ACTION)[keyof typeof MANUAL_OCR_COLLISION_ACTION] => {
   if (status === "queued") {
+    if (attemptCount >= DOCUMENT_PROCESSING_MAX_ATTEMPTS) {
+      return MANUAL_OCR_COLLISION_ACTION.RETRY;
+    }
     return requestSource === "manual"
       ? MANUAL_OCR_COLLISION_ACTION.REUSE
       : MANUAL_OCR_COLLISION_ACTION.PROMOTE;
@@ -68,9 +71,7 @@ export const classifyManualOcrCollision = ({
       : MANUAL_OCR_COLLISION_ACTION.PROMOTE;
   }
   if (status === "failed") {
-    return attemptCount >= DOCUMENT_PROCESSING_MAX_ATTEMPTS
-      ? MANUAL_OCR_COLLISION_ACTION.REUSE
-      : MANUAL_OCR_COLLISION_ACTION.RETRY;
+    return MANUAL_OCR_COLLISION_ACTION.RETRY;
   }
   if (status === "succeeded") {
     return projectionState === "matching"
@@ -330,10 +331,7 @@ export const persistManualOcrRun = async ({
         const retried = await tx
           .update(documentProcessingRuns)
           .set({
-            attemptCount:
-              existing.status === "succeeded" || existing.status === "cancelled"
-                ? 0
-                : existing.attemptCount,
+            attemptCount: 0,
             requestSource: "manual",
             requestedBy: userId,
             updatedAt: new Date(),
@@ -354,13 +352,8 @@ export const persistManualOcrRun = async ({
             and(
               eq(documentProcessingRuns.id, existing.id),
               or(
-                and(
-                  eq(documentProcessingRuns.status, "failed"),
-                  lt(
-                    documentProcessingRuns.attemptCount,
-                    DOCUMENT_PROCESSING_MAX_ATTEMPTS,
-                  ),
-                ),
+                eq(documentProcessingRuns.status, "failed"),
+                eq(documentProcessingRuns.status, "queued"),
                 eq(documentProcessingRuns.status, "succeeded"),
                 and(
                   eq(documentProcessingRuns.status, "running"),

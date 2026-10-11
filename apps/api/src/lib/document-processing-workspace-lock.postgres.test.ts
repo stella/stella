@@ -409,7 +409,7 @@ if (!databaseUrl || !runPostgresTests) {
       })),
     ),
   )(
-    "$path preserves concurrent search replay attempts starting at $attemptCount",
+    "$path observes the locked replay budget starting at $attemptCount",
     async ({ path, attemptCount }) => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const manual = openClient({ connection: { statement_timeout: 5000 } });
@@ -493,9 +493,12 @@ if (!databaseUrl || !runPostgresTests) {
               .from(documentProcessingRuns)
               .where(eq(documentProcessingRuns.id, id))
           ).at(0);
-          expect(after?.attemptCount).toBe(attemptCount + 1);
+          expect(after?.attemptCount).toBe(
+            path === "request" ? 0 : attemptCount + 1,
+          );
           expect(after?.status).toBe(
-            attemptCount + 1 === DOCUMENT_PROCESSING_MAX_ATTEMPTS
+            path === "restore" &&
+              attemptCount + 1 === DOCUMENT_PROCESSING_MAX_ATTEMPTS
               ? "failed"
               : "queued",
           );

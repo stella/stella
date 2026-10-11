@@ -188,7 +188,7 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
         })
       : null;
     if (locked?.status === "busy") {
-      return panic("Blocking manual OCR processing claim lock was busy");
+      panic("Blocking manual OCR processing claim lock was busy");
     }
     const existing = locked?.rows.at(0);
     if (!existing) {
@@ -256,12 +256,13 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
     });
     switch (changed.type) {
       case "stale":
-        return panic("Locked manual OCR run changed during projection repair");
+        panic("Locked manual OCR run changed during projection repair");
+        return;
       case "transitioned":
         return;
       default:
         changed satisfies never;
-        return panic("Unknown document processing transition outcome");
+        panic("Unknown document processing transition outcome");
     }
   });
 };

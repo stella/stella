@@ -137,7 +137,7 @@ test("manual OCR collisions preserve owners and restart post-projection promotio
   }
 });
 
-test("manual OCR preserves exhausted failures across request sources", () => {
+test("manual OCR starts a fresh retry across failed request sources", () => {
   for (const requestSource of ["manual", "upload", "repair"] as const) {
     for (const attemptCount of [4, 5, 6]) {
       expect(
@@ -148,7 +148,7 @@ test("manual OCR preserves exhausted failures across request sources", () => {
           requestSource,
           status: "failed",
         }),
-      ).toBe(attemptCount < 5 ? "retry" : "reuse");
+      ).toBe("retry");
     }
   }
 });
