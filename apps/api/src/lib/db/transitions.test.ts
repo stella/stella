@@ -13,6 +13,7 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import { timestamptz } from "@/api/db/columns";
+import { READER_ANSWER_TRANSITION_IDENTITIES } from "@/api/lib/db/reader-answer-transition-identities";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import {
   defineFixedLifecycle,
@@ -31,8 +32,6 @@ import {
 } from "@/api/lib/db/transitions";
 import type { ScopedTransitionDeclaration } from "@/api/lib/db/transitions";
 import { SANCTIONS_MONITORING_TRANSITION_IDENTITIES } from "@/api/lib/lists/sanctions/monitoring-transition-identities";
-
-import { STATUS_TRANSITION_OWNERSHIP } from "../../../../../scripts/ownership";
 
 const states = ["queued", "running", "completed", "failed"] as const;
 
@@ -58,29 +57,26 @@ test("state-column ownership covers every scoped runtime transition", () => {
       return [];
     },
   );
-  const owned: Readonly<Record<string, readonly string[]>> =
-    STATUS_TRANSITION_OWNERSHIP.enforcement.columns;
-  const unowned = registered
-    .filter(
-      ({ tableName, stateColumn }) =>
-        !(owned[tableName] ?? []).includes(stateColumn),
-    )
-    .map(({ tableName, stateColumn }) => `${tableName}.${stateColumn}`);
-  expect(unowned).toEqual([]);
-
-  const stale = Object.values(SANCTIONS_MONITORING_TRANSITION_IDENTITIES)
-    .filter(
-      (identity) =>
-        !registered.some(
-          (declaration) =>
-            declaration.tableName === identity.tableName &&
-            declaration.key === identity.key &&
-            declaration.stateColumn === identity.stateColumn &&
-            declaration.scope.join(",") === identity.scope.join(","),
-        ),
-    )
-    .map(({ tableName, stateColumn }) => `${tableName}.${stateColumn}`);
-  expect(stale).toEqual([]);
+  const order = (
+    left: { stateColumn: string; tableName: string },
+    right: { stateColumn: string; tableName: string },
+  ) => {
+    const leftKey = `${left.tableName}.${left.stateColumn}`;
+    const rightKey = `${right.tableName}.${right.stateColumn}`;
+    if (leftKey < rightKey) {
+      return -1;
+    }
+    if (leftKey > rightKey) {
+      return 1;
+    }
+    return 0;
+  };
+  expect(registered.toSorted(order)).toEqual(
+    [
+      ...Object.values(SANCTIONS_MONITORING_TRANSITION_IDENTITIES),
+      ...Object.values(READER_ANSWER_TRANSITION_IDENTITIES),
+    ].toSorted(order),
+  );
 });
 const jobs = pgTable("transition_test_jobs", {
   id: text().primaryKey(),
