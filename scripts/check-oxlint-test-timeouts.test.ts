@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { repositoryCustomLintRunnerViolations } from "./check-custom-lint-test-runners";
 import { customLintTestTimeoutViolations } from "./check-oxlint-test-timeouts.ts";
 
 const IMPORTS =
@@ -279,4 +280,5 @@ test("shared test helpers cannot change the central budget", () => {
 
 test("custom lint test timeout overrides require a measured allow-list reason", () => {
   expect(customLintTestTimeoutViolations()).toEqual([]);
+  expect(repositoryCustomLintRunnerViolations()).toEqual([]);
 });
