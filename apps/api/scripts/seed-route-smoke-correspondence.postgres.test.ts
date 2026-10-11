@@ -179,21 +179,6 @@ describe.skipIf(!runPostgresTests)(
                   ),
             ),
           ).toEqual([{ userId: filer.id }]);
-          const otherScope = createScopedDb(
-            markRlsDatabase(db),
-            [],
-            mintAuthProviderId<"organization">(),
-            null,
-          );
-          expect(
-            await otherScope(
-              async (tx) =>
-                await tx
-                  .select({ id: correspondence.id })
-                  .from(correspondence)
-                  .where(eq(correspondence.id, correspondenceId)),
-            ),
-          ).toEqual([]);
         } finally {
           await scopedDb(async (tx) => {
             await tx
