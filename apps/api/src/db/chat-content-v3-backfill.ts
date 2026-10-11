@@ -3,6 +3,7 @@ import { panic, Result, TaggedError } from "better-result";
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
 import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
 
+import { queryOrganizationFencedRepairBatch } from "../lib/db/aggregate-lock";
 import { isRecord } from "../lib/type-guards";
 import { createBackfillRuntime } from "./backfill-runtime";
 import {
@@ -43,6 +44,7 @@ class ChatContentV3UpgradeError extends TaggedError(
 type ChatContentV3Receipt = {
   row_id: string;
   message_id: string;
+  organization_id: string;
   from_version: number | null;
   outcome: typeof chatContentV3BackfillReceipts.$inferInsert.outcome;
   reason: string;
@@ -61,13 +63,21 @@ export const backfillChatContentV3Batch = async ({
   size,
 }: BatchOptions) => {
   const { table, messageId } = CHAT_CONTENT_V3_SOURCES[source];
-  const rows = await tx.query(
-    `SELECT id, ${messageId} AS message_id, content FROM ${table}
-     ${cursor === null ? "ORDER BY id LIMIT $1" : "WHERE id > $1::uuid ORDER BY id LIMIT $2"}`,
-    cursor === null
-      ? [Math.min(size, CHAT_CONTENT_V3_BATCH_SIZE)]
-      : [cursor, Math.min(size, CHAT_CONTENT_V3_BATCH_SIZE)],
-  );
+  const rows = await queryOrganizationFencedRepairBatch({
+    connection: tx,
+    // Fence organization deletion until its receipts commit; message deletion
+    // remains free to proceed and is recorded by the receipt join.
+    query: `SELECT target.id, target.${messageId} AS message_id, target.content, thread.organization_id
+     FROM ${table} AS target
+     ${source === "revision" ? "JOIN chat_messages AS message ON message.id = target.message_id" : ""}
+     JOIN chat_threads AS thread ON thread.id = ${source === "revision" ? "message" : "target"}.thread_id
+     JOIN organization AS tenant ON tenant.id = thread.organization_id
+     ${cursor === null ? "ORDER BY target.id LIMIT $1" : "WHERE target.id > $1::uuid ORDER BY target.id LIMIT $2"}`,
+    params:
+      cursor === null
+        ? [Math.min(size, CHAT_CONTENT_V3_BATCH_SIZE)]
+        : [cursor, Math.min(size, CHAT_CONTENT_V3_BATCH_SIZE)],
+  });
   const receipts: ChatContentV3Receipt[] = [];
   const updates = [];
   let last = cursor;
@@ -75,7 +85,8 @@ export const backfillChatContentV3Batch = async ({
     if (
       !isRecord(row) ||
       typeof row["id"] !== "string" ||
-      typeof row["message_id"] !== "string"
+      typeof row["message_id"] !== "string" ||
+      typeof row["organization_id"] !== "string"
     ) {
       return panic("Invalid chat backfill row identity");
     }
@@ -93,6 +104,7 @@ export const backfillChatContentV3Batch = async ({
       receipts.push({
         row_id: last,
         message_id: row["message_id"],
+        organization_id: row["organization_id"],
         from_version: version,
         outcome: "skipped",
         reason: "already-v3",
@@ -110,6 +122,7 @@ export const backfillChatContentV3Batch = async ({
       receipts.push({
         row_id: last,
         message_id: row["message_id"],
+        organization_id: row["organization_id"],
         from_version: version,
         outcome: "failed",
         reason: converted.error,
@@ -124,6 +137,7 @@ export const backfillChatContentV3Batch = async ({
     receipts.push({
       row_id: last,
       message_id: row["message_id"],
+      organization_id: row["organization_id"],
       from_version: version,
       outcome: "converted",
       reason: "normalized-and-proved-v3",
@@ -159,12 +173,12 @@ export const backfillChatContentV3Batch = async ({
     // a replay still retains the original conversion provenance.
     const recorded = await tx.query(
       `INSERT INTO chat_content_v3_backfill_receipts
-       (source, row_id, message_id, from_version, outcome, reason)
-       SELECT $1, receipt.row_id, receipt.message_id, receipt.from_version,
+       (source, row_id, message_id, organization_id, from_version, outcome, reason)
+       SELECT $1, receipt.row_id, receipt.message_id, receipt.organization_id, receipt.from_version,
          CASE WHEN parent.id IS NULL THEN 'deleted-concurrently' ELSE receipt.outcome END,
          CASE WHEN parent.id IS NULL THEN 'parent-deleted' ELSE receipt.reason END
        FROM jsonb_to_recordset($2::text::jsonb)
-       AS receipt(row_id uuid, message_id uuid, from_version integer, outcome text, reason text)
+       AS receipt(row_id uuid, message_id uuid, organization_id text, from_version integer, outcome text, reason text)
        LEFT JOIN chat_messages AS parent ON parent.id = receipt.message_id
        WHERE true
        ON CONFLICT (source, row_id) DO UPDATE SET

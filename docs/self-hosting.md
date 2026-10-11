@@ -345,7 +345,8 @@ version 3 repair converts stored version 1 and 2 messages and revision snapshots
 in adaptive keyset batches of 1 to 50 rows, with durable progress. Every processed row
 has an owner-only receipt in `chat_content_v3_backfill_receipts`: source, row and
 message identifiers, prior version, outcome, fixed reason, and timestamp. Receipts
-contain no message content and retain repair history after message deletion. If a
+contain no message content and retain repair history after message deletion; an
+organization foreign key removes its receipts when the organization is deleted. If a
 parent message is deleted during a batch, its row receives a `deleted-concurrently`
 outcome with the fixed reason `parent-deleted`; message and revision repair both
 continue without referencing a deleted parent through a foreign key. Existing

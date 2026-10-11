@@ -42,6 +42,8 @@ const runDeletionRace = async ({ content, source }: DeletionCase) => {
     const connectionB = openClient({ max: 1 });
     const schema = `chat_content_v3_delete_${Bun.randomUUIDv7().replaceAll("-", "")}`;
     const messageId = Bun.randomUUIDv7();
+    const organizationId = `org_${Bun.randomUUIDv7()}`;
+    const threadId = Bun.randomUUIDv7();
     const rowId = source === "message" ? messageId : Bun.randomUUIDv7();
 
     await connectionA.sql.unsafe(`CREATE SCHEMA ${schema}`);
@@ -53,9 +55,17 @@ const runDeletionRace = async ({ content, source }: DeletionCase) => {
     );
 
     try {
+      await connectionA.sql.unsafe(
+        "CREATE TABLE organization (id text PRIMARY KEY)",
+      );
+      await connectionA.sql.unsafe(`CREATE TABLE chat_threads (
+        id uuid PRIMARY KEY,
+        organization_id text NOT NULL REFERENCES organization (id) ON DELETE CASCADE
+      )`);
       await connectionA.sql.unsafe(`
         CREATE TABLE chat_messages (
           id uuid PRIMARY KEY,
+          thread_id uuid NOT NULL REFERENCES chat_threads (id) ON DELETE CASCADE,
           content jsonb NOT NULL
         )
       `);
@@ -84,8 +94,17 @@ const runDeletionRace = async ({ content, source }: DeletionCase) => {
       await connectionA.sql.unsafe(createReceipts);
 
       await connectionA.sql.unsafe(
-        "INSERT INTO chat_messages (id, content) VALUES ($1, $2::text::jsonb)",
-        [messageId, JSON.stringify(currentContent)],
+        "INSERT INTO organization (id) VALUES ($1)",
+        [organizationId],
+      );
+      await connectionA.sql.unsafe(
+        "INSERT INTO chat_threads (id, organization_id) VALUES ($1, $2)",
+        [threadId, organizationId],
+      );
+
+      await connectionA.sql.unsafe(
+        "INSERT INTO chat_messages (id, thread_id, content) VALUES ($1, $2, $3::text::jsonb)",
+        [messageId, threadId, JSON.stringify(currentContent)],
       );
       if (source === "message") {
         await connectionA.sql.unsafe(
@@ -114,7 +133,10 @@ const runDeletionRace = async ({ content, source }: DeletionCase) => {
         },
         query: async (query, params = []) => {
           const rows = await connectionA.sql.unsafe(query, [...params]);
-          if (!intercepted && query.trimStart().startsWith("SELECT id,")) {
+          if (
+            !intercepted &&
+            query.trimStart().startsWith("SELECT target.id,")
+          ) {
             intercepted = true;
             selected.resolve(undefined);
             await resumeBatch.promise;
@@ -149,6 +171,7 @@ const runDeletionRace = async ({ content, source }: DeletionCase) => {
           {
             row_id: rowId,
             message_id: messageId,
+            organization_id: organizationId,
             from_version: content.version,
             outcome: "deleted-concurrently",
             reason: "parent-deleted",
@@ -156,13 +179,14 @@ const runDeletionRace = async ({ content, source }: DeletionCase) => {
         ]);
 
         const receipts = await connectionA.sql.unsafe(
-          "SELECT source, row_id, message_id, from_version, outcome, reason FROM chat_content_v3_backfill_receipts",
+          "SELECT source, row_id, message_id, organization_id, from_version, outcome, reason FROM chat_content_v3_backfill_receipts",
         );
         expect(receipts).toEqual([
           {
             source,
             row_id: rowId,
             message_id: messageId,
+            organization_id: organizationId,
             from_version: content.version,
             outcome: "deleted-concurrently",
             reason: "parent-deleted",
@@ -185,6 +209,14 @@ const runDeletionRace = async ({ content, source }: DeletionCase) => {
         ).toEqual([]);
         expect(
           await connectionA.sql.unsafe("SELECT id FROM chat_message_revisions"),
+        ).toEqual([]);
+        await connectionB.sql.unsafe("DELETE FROM organization WHERE id = $1", [
+          organizationId,
+        ]);
+        expect(
+          await connectionA.sql.unsafe(
+            "SELECT row_id FROM chat_content_v3_backfill_receipts",
+          ),
         ).toEqual([]);
       } finally {
         resumeBatch.resolve(undefined);
