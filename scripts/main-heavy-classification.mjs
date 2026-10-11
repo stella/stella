@@ -22,6 +22,7 @@
 const jobName = (name) => name.replace(/^suites \/ /u, "");
 /** @param {Job} job */
 const failed = ({ conclusion }) =>
+  conclusion !== null &&
   [
     "failure",
     "cancelled",
