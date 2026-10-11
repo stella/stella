@@ -335,7 +335,8 @@ export const legalListFactDetails = p.pgTable(
       length: FACT_DETAIL_LIMITS.EVIDENCE_KIND_MAX,
     }),
     medium: p.varchar({ length: FACT_DETAIL_LIMITS.MEDIUM_MAX }),
-    confidence: p.text("confidence", { enum: FACT_CONFIDENCES }).notNull(),
+    // Null means the interpretive confidence has not been stated.
+    confidence: p.text("confidence", { enum: FACT_CONFIDENCES }),
     // Set only where the meaning is genuinely contested; its presence is what
     // makes a claim citing this fact need a human.
     interpretationNote: p.varchar("interpretation_note", {

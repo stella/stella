@@ -88,7 +88,6 @@ const getSkill = createSafeRootHandler(
           .select({
             id: agentSkillResources.id,
             path: agentSkillResources.path,
-            kind: agentSkillResources.kind,
             sizeBytes: agentSkillResources.sizeBytes,
             content: agentSkillResources.content,
           })

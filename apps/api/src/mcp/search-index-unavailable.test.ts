@@ -85,6 +85,7 @@ const scanUnreachableIndex = async (): Promise<never> => {
     order: RELEVANCE_ORDER,
     parsedCursor: null,
     snippetFields: ["text"],
+    projectionRevisionField: "projection_revision",
     extractId: (hit) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: () => null,
@@ -96,6 +97,7 @@ const scanUnreachableIndex = async (): Promise<never> => {
           corpusSearchGroupToken(candidate.id),
         ),
         ranked: [],
+        revisionById: new Map(),
       }),
   });
   throw new Error("the scan succeeded against an unreachable index");

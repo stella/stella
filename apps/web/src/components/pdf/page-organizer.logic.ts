@@ -55,7 +55,7 @@ export type PageOrganizerAction =
   | { type: "duplicateSelected"; newPageIds: readonly string[] }
   | { type: "deleteSelected" }
   | { type: "appendSourcePages"; pages: readonly OrganizerPage[] }
-  | { type: "setCrop"; crop: NormalizedCrop | null }
+  | { type: "setPageCrops"; crops: ReadonlyMap<string, NormalizedCrop | null> }
   | { type: "undo" }
   | { type: "redo" };
 
@@ -398,14 +398,14 @@ export const reducePageOrganizer = (
         pages: [...plan.pages, ...action.pages],
       });
     }
-    case "setCrop": {
-      const selected = new Set(state.ui.selectedPageIds);
+    case "setPageCrops": {
       const pages = plan.pages.map((page) => {
-        if (!selected.has(page.id)) {
+        const crop = action.crops.get(page.id);
+        if (crop === undefined) {
           return page;
         }
-        if (action.crop !== null) {
-          return { ...page, crop: action.crop };
+        if (crop !== null) {
+          return { ...page, crop };
         }
         const { crop: _crop, ...withoutCrop } = page;
         return withoutCrop;

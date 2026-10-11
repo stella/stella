@@ -1,3 +1,4 @@
+import { installTimeoutMs } from "./ci-install";
 import { lexShell } from "./install-free-ci";
 import { flattenWorkflowSteps } from "./workflow-steps";
 
@@ -79,11 +80,14 @@ export const boundedInstallProblems = (
         if (!owner) {
           continue;
         }
+        const minimum =
+          Math.ceil(installTimeoutMs(windows ? "win32" : "linux") / 60_000) + 1;
+        const maximum = windows ? minimum : 10;
         const limit = step["timeout-minutes"];
         if (
           typeof limit !== "number" ||
-          limit <= 0 ||
-          limit > (windows ? 3 : 10) ||
+          limit < minimum ||
+          limit > maximum ||
           (typeof job["timeout-minutes"] === "number" &&
             limit >= job["timeout-minutes"])
         ) {

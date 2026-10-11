@@ -1396,6 +1396,9 @@ const config = defineConfig({
     "apps/web/public/**",
     // Declaration files carry no runtime code; skip product-code rules.
     "**/*.d.ts",
+    // wasm-bindgen glue is committed verbatim and checked by rebuilding it;
+    // product-code rewrites would be replaced by the next generation.
+    "packages/scan-engine/generated/scan_engine.js",
     // Snowball stemmers: generated output plus the upstream JS runtime,
     // transcribed verbatim. Product-code rules would rewrite the algorithm
     // (prefer-code-point changes UTF-16 semantics; no-bitwise has no
@@ -3440,6 +3443,16 @@ const config = defineConfig({
         "require-matter-affordance/require-matter-affordance": "error",
         "security-guards/no-unsanitized-href": "error",
         "stella-toast/stella-toast": "error",
+      },
+    },
+    {
+      files: ["apps/api/src/mcp/apps/**/*.tsx"],
+      excludeFiles: ["**/*.test.tsx"],
+      rules: {
+        "no-untranslated-jsx-literal/no-untranslated-jsx-literal": [
+          "error",
+          { allowedText: ["stella"] },
+        ],
       },
     },
     {

@@ -7,7 +7,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -315,6 +315,44 @@ afterAll(async () => {
       await releaseTestDb();
     }
   }
+});
+
+test("scoped upload versions succeed with SELECT-only organization privileges", async () => {
+  testReferences.push("SCOPED-UPLOAD/26");
+  const workspaceId = await createMatter("SCOPED-UPLOAD/26");
+  const propertyId = await createFileProperty(workspaceId);
+  const role = expectOk(
+    await createSafeDb(
+      testDb,
+      [workspaceId],
+      ids.orgA,
+      ids.userA1,
+    )(async (tx) => {
+      const result = await tx.execute(sql`
+          SELECT current_user AS role,
+            has_table_privilege(current_user, 'public.organization', 'SELECT') AS "canSelect",
+            has_table_privilege(current_user, 'public.organization', 'UPDATE') AS "canUpdate"
+        `);
+      return result.rows;
+    }),
+  );
+  expect(role).toEqual([{ role: "stella", canSelect: true, canUpdate: false }]);
+  const uploaded = await runNumberingUpload({
+    testDb,
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+    workspaceId,
+    propertyId,
+  });
+  const versioned = await runNumberingUpload({
+    testDb,
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+    workspaceId,
+    propertyId,
+    entityId: uploaded.finalizedResult.entityId,
+  });
+  expect(versioned.finalizedResult.type).toBe("entity_version");
 });
 
 describe("numbering paths preserve issued stamps across counter state", () => {

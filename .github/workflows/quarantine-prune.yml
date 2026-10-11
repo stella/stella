@@ -82,6 +82,28 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
 
+      - name: Disarm existing removal proposal
+        if: steps.prune.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+
+          armed_pr="$(gh pr list --repo "$GITHUB_REPOSITORY" \
+            --state open --base main --head "$PRUNE_BRANCH" \
+            --json number,isCrossRepository,autoMergeRequest \
+            --jq 'map(select(.isCrossRepository == false and .autoMergeRequest != null))[0].number // empty')"
+          if [[ -z "$armed_pr" ]]; then
+            echo "Existing quarantine removal proposal is not armed."
+            exit 0
+          fi
+
+          # A proposal already in the merge queue leaves it when the refresh
+          # pushes a new head, and under a merge hold the queue's required
+          # result refuses it, so disarming is what remains to do here.
+
+          gh pr merge "$armed_pr" --repo "$GITHUB_REPOSITORY" --disable-auto
+
       # The commit is created through the API so GitHub signs it. The branch
       # name is reserved for this job alone: re-running replaces its own
       # proposal with one computed from current main.
