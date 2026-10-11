@@ -4,7 +4,7 @@ import * as v from "valibot";
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
 import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
 
-import type { admitLawRead } from "@/api/handlers/legal-resolve/admission";
+import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
 import type { resolveDecision } from "@/api/handlers/legal-resolve/decision";
 import type { resolveLawCitation } from "@/api/handlers/legal-resolve/law";
 import { LAW_READ_SCOPE } from "@/api/handlers/legal-resolve/scope";
@@ -19,7 +19,6 @@ import {
   nullAsAbsent,
   structuredErrorResult,
   featureDisabledHint,
-  MCP_UPSTREAM_UNAVAILABLE_HINT,
   toolDataResult,
   validationErrorResult,
 } from "./tool-utils";
@@ -28,13 +27,8 @@ import {
   defineValibotMcpTool,
 } from "./valibot-tool-definition";
 
-const defaultAdmitLawRead: typeof admitLawRead = async (input) =>
-  await (
-    await import("@/api/handlers/legal-resolve/admission")
-  ).admitLawRead(input);
-
 type AdmissionFailure = Extract<
-  Awaited<ReturnType<typeof admitLawRead>>,
+  ReturnType<typeof admitLawRead>,
   { error: unknown }
 >["error"];
 
@@ -44,18 +38,6 @@ const ADMISSION_ERRORS = {
     message: "Public law is not enabled on this deployment.",
     hint: featureDisabledHint("FEATURE_PUBLIC_LAW"),
     retryable: false,
-  },
-  not_entitled: {
-    code: "permission_denied",
-    message: "This organization does not have public-law access.",
-    hint: "Ask an organization administrator to enable public-law access, then retry.",
-    retryable: false,
-  },
-  access_unavailable: {
-    code: "upstream_unavailable",
-    message: "Public-law access could not be checked.",
-    hint: MCP_UPSTREAM_UNAVAILABLE_HINT,
-    retryable: true,
   },
 } as const satisfies Record<
   AdmissionFailure["type"],
@@ -209,9 +191,9 @@ const handleResolveDecision: TypedMcpToolHandler<ResolveData> = async ({
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }
-  const admission = await (
-    context.testDependencies?.admitLawRead ?? defaultAdmitLawRead
-  )({ organizationId: context.organizationId });
+  const admission = (context.testDependencies?.admitLawRead ?? admitLawRead)({
+    organizationId: context.organizationId,
+  });
   if (Result.isError(admission)) {
     return structuredErrorResult(ADMISSION_ERRORS[admission.error.type]);
   }
@@ -230,9 +212,9 @@ const handleResolveLaw: TypedMcpToolHandler<ResolveData> = async ({
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }
-  const admission = await (
-    context.testDependencies?.admitLawRead ?? defaultAdmitLawRead
-  )({ organizationId: context.organizationId });
+  const admission = (context.testDependencies?.admitLawRead ?? admitLawRead)({
+    organizationId: context.organizationId,
+  });
   if (Result.isError(admission)) {
     return structuredErrorResult(ADMISSION_ERRORS[admission.error.type]);
   }

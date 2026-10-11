@@ -25,7 +25,7 @@ import { serializeToolResult } from "./tool-utils";
 const organizationId = toSafeId<"organization">(
   "00000000-0000-4000-8000-0000000d0091",
 );
-const admitted = await admitLawRead({
+const admitted = admitLawRead({
   organizationId,
   publicLawEnabled: () => true,
   mayReadPublicLaw: async () => Result.ok(true),
@@ -39,7 +39,7 @@ const contextWith = (
   asTestRaw<McpRequestContext>({
     organizationId,
     testDependencies: {
-      admitLawRead: async () => admitted,
+      admitLawRead: () => admitted,
       ...testDependencies,
     },
   });
@@ -251,7 +251,7 @@ describe("legal resolve MCP and HTTP envelopes stay identical", () => {
         await LEGAL_RESOLVE_TOOL_HANDLERS[definition.name]({
           args: normalized.value,
           context: contextWith({
-            admitLawRead: async () => admitted,
+            admitLawRead: () => admitted,
             resolveDecision,
             resolveLawCitation,
           }),
@@ -312,8 +312,7 @@ describe("legal resolve MCP and HTTP envelopes stay identical", () => {
   test("contradictory statute sources and batch decision identities are rejected before reading", async () => {
     const calls: unknown[] = [];
     const context = contextWith({
-      admitLawRead: async () =>
-        panic("invalid inputs must not request admission"),
+      admitLawRead: () => panic("invalid inputs must not request admission"),
       resolveDecision: async (...input) => {
         calls.push(input);
         return { status: "country_unavailable" };
@@ -368,12 +367,6 @@ describe("legal resolve MCP and HTTP envelopes stay identical", () => {
 describe("legal resolve organization admission", () => {
   for (const definition of LEGAL_RESOLVE_TOOL_SET.definitions) {
     test.each([
-      { type: "not_entitled", code: "permission_denied", retryable: false },
-      {
-        type: "access_unavailable",
-        code: "upstream_unavailable",
-        retryable: true,
-      },
       { type: "missing_scope", code: "feature_disabled", retryable: false },
     ] as const)(
       `${definition.name} maps $type without calling the resolver`,
@@ -390,7 +383,7 @@ describe("legal resolve organization admission", () => {
                     section: "1729",
                   },
             context: contextWith({
-              admitLawRead: async (options) => {
+              admitLawRead: (options) => {
                 calls.push(options);
                 return Result.err({ type });
               },
