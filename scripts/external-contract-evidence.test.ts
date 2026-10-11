@@ -1,0 +1,178 @@
+import { expect, test } from "bun:test";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
+import { readFixtureEvidence } from "./external-contract-evidence";
+
+type ProjectOptions = {
+  files: Record<string, string>;
+  run: (root: string) => void;
+};
+
+const withProject = ({ files, run }: ProjectOptions) => {
+  const root = mkdtempSync(path.join(tmpdir(), "stella-import-evidence-"));
+  try {
+    for (const [file, text] of Object.entries(files)) {
+      const target = path.join(root, file);
+      mkdirSync(path.dirname(target), { recursive: true });
+      writeFileSync(target, text);
+    }
+    run(root);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+};
+
+const sdkFiles = {
+  "node_modules/@example/sdk/package.json": JSON.stringify({
+    name: "@example/sdk",
+    exports: "./runtime.js",
+  }),
+  "node_modules/@example/sdk/runtime.js": "export const client = 1;",
+};
+
+test("runtime reachability follows every literal edge through aliases, workspace exports and external adapters", () => {
+  withProject({
+    files: {
+      ...sdkFiles,
+      "tsconfig.json": JSON.stringify({
+        compilerOptions: { baseUrl: ".", paths: { "@/*": ["src/*"] } },
+      }),
+      "replay.ts":
+        'import "@/direct"; export * from "./reexport"; import("./dynamic"); require("./required"); import legacy = require("./legacy");',
+      "src/direct.ts": 'import "@stll/fixture";',
+      "reexport.ts": 'export { client } from "@example/adapter";',
+      "dynamic.ts": 'import "./transitive";',
+      "required.ts": "export const required = 1;",
+      "legacy.ts": "export const legacy = 1;",
+      "transitive.ts": "export const transitive = 1;",
+      "packages/fixture/package.json": JSON.stringify({
+        name: "@stll/fixture",
+        exports: "./src/runtime.ts",
+      }),
+      "packages/fixture/src/runtime.ts": "export const workspace = 1;",
+      "node_modules/@example/adapter/package.json": JSON.stringify({
+        name: "@example/adapter",
+        exports: "./runtime.js",
+      }),
+      "node_modules/@example/adapter/runtime.js":
+        'export { client } from "@example/sdk";',
+      "unreachable.ts": 'import "@example/unreachable";',
+    },
+    run: (root) => {
+      const evidence = readFixtureEvidence({
+        root,
+        replayFiles: ["replay.ts"],
+        sdkNames: ["@example/adapter", "@example/sdk", "@example/unreachable"],
+      });
+      expect(evidence.problems).toEqual([]);
+      expect([...evidence.owners].toSorted()).toEqual([
+        "dynamic.ts",
+        "legacy.ts",
+        "packages/fixture/src/runtime.ts",
+        "reexport.ts",
+        "replay.ts",
+        "required.ts",
+        "src/direct.ts",
+        "transitive.ts",
+      ]);
+      expect([...evidence.sdks].toSorted()).toEqual([
+        "@example/adapter",
+        "@example/sdk",
+      ]);
+      expect(evidence.owners.has("unreachable.ts")).toBe(false);
+      expect(evidence.owners.has("nonexistent.ts")).toBe(false);
+    },
+  });
+});
+
+test("type-only imports, exports, declarations and manifest dependencies cannot prove runtime claims", () => {
+  withProject({
+    files: {
+      ...sdkFiles,
+      "package.json": JSON.stringify({
+        dependencies: { "@example/sdk": "1.0.0" },
+      }),
+      "replay.ts":
+        'import type { Client } from "@example/sdk"; import { type Client as Other } from "@example/sdk"; export type { Client } from "@example/sdk"; export { type Client as Third } from "@example/sdk"; type Lazy = typeof import("@example/sdk"); import type Legacy = require("@example/sdk");',
+      "types.d.ts": 'import "@example/sdk";',
+    },
+    run: (root) => {
+      const evidence = readFixtureEvidence({
+        root,
+        replayFiles: ["replay.ts", "types.d.ts"],
+        sdkNames: ["@example/sdk"],
+      });
+      expect(evidence.problems).toEqual([]);
+      expect([...evidence.owners]).toEqual(["replay.ts"]);
+      expect([...evidence.sdks]).toEqual([]);
+    },
+  });
+});
+
+test("cycles terminate and mixed imports retain their runtime edges", () => {
+  withProject({
+    files: {
+      ...sdkFiles,
+      "replay.ts": 'import "./owner";',
+      "owner.ts":
+        'import "./replay"; import { type Client, client } from "@example/sdk";',
+    },
+    run: (root) => {
+      const evidence = readFixtureEvidence({
+        root,
+        replayFiles: ["replay.ts"],
+        sdkNames: ["@example/sdk"],
+      });
+      expect(evidence.problems).toEqual([]);
+      expect([...evidence.owners].toSorted()).toEqual([
+        "owner.ts",
+        "replay.ts",
+      ]);
+      expect([...evidence.sdks]).toEqual(["@example/sdk"]);
+    },
+  });
+});
+
+test("unresolved runtime imports and replay files produce explicit problems without SDK evidence", () => {
+  withProject({
+    files: { "replay.ts": 'import "./missing"; import "@example/missing";' },
+    run: (root) => {
+      const evidence = readFixtureEvidence({
+        root,
+        replayFiles: ["replay.ts", "nonexistent.ts"],
+        sdkNames: ["@example/missing"],
+      });
+      expect(evidence.problems).toHaveLength(3);
+      expect(evidence.problems.join("\n")).toContain(
+        "Cannot read replay/runtime source nonexistent.ts",
+      );
+      expect(evidence.problems.join("\n")).toContain(
+        'Cannot resolve runtime import "./missing" from replay.ts',
+      );
+      expect([...evidence.sdks]).toEqual([]);
+    },
+  });
+});
+
+test("deep runtime graphs fail explicitly at their traversal bound", () => {
+  const files: Record<string, string> = {};
+  for (let index = 0; index < 70; index += 1) {
+    files[`${index}.ts`] =
+      index === 69 ? "export const end = 1;" : `import "./${index + 1}";`;
+  }
+  withProject({
+    files,
+    run: (root) => {
+      const evidence = readFixtureEvidence({
+        root,
+        replayFiles: ["0.ts"],
+        sdkNames: [],
+      });
+      expect(evidence.problems).toHaveLength(1);
+      expect(evidence.problems.at(0)).toContain("exceeds depth bound 64");
+      expect(evidence.owners.has("69.ts")).toBe(false);
+    },
+  });
+});

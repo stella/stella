@@ -190,9 +190,11 @@ export const EXTERNAL_CONTRACTS = {
       "model-catalog-check",
     ],
     status: "characterised",
+    uncharacterisedScope: { owners: [], sdks: [] },
     fixtures: [
       {
         path: "apps/api/src/tests/fixtures/provider-wire",
+        replayFiles: ["apps/api/src/lib/tanstack-ai-provider-wire.test.ts"],
         metadata: "apps/api/src/tests/fixtures/provider-wire.source.json",
         provenance: {
           type: "sidecars",
@@ -202,6 +204,7 @@ export const EXTERNAL_CONTRACTS = {
       },
       {
         path: "apps/api/src/tests/fixtures/provider-request-schemas",
+        replayFiles: ["apps/api/src/lib/tanstack-ai-provider-wire.test.ts"],
         provenance: {
           type: "sidecars",
           format: "provider-request-schemas",
@@ -250,9 +253,14 @@ export const EXTERNAL_CONTRACTS = {
     pinSources: [],
     driftTriggers: ["upstream-response-change"],
     status: "characterised",
+    uncharacterisedScope: { owners: [], sdks: [] },
     fixtures: [
       {
         path: "apps/api/src/handlers/case-law/ingestion/adapters/__fixtures__",
+        replayFiles: [
+          "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.test.ts",
+          "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.test.ts",
+        ],
         provenance: {
           type: "sidecars",
           format: "fixture-provenance",
@@ -263,6 +271,10 @@ export const EXTERNAL_CONTRACTS = {
       },
       {
         path: "apps/api/src/handlers/case-law/ingestion/parsers/__fixtures__",
+        replayFiles: [
+          "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj.test.ts",
+          "apps/api/src/handlers/case-law/ingestion/parsers/at-ris.test.ts",
+        ],
         provenance: {
           type: "sidecars",
           format: "fixture-provenance",
@@ -273,6 +285,9 @@ export const EXTERNAL_CONTRACTS = {
       },
       {
         path: "apps/api/src/handlers/case-law/judges/__fixtures__",
+        replayFiles: [
+          "apps/api/src/handlers/case-law/judges/import-cz-us-roster.test.ts",
+        ],
         provenance: {
           type: "sidecars",
           format: "fixture-provenance",
@@ -425,9 +440,11 @@ export const EXTERNAL_CONTRACTS = {
     ],
     driftTriggers: ["pin-bump"],
     status: "characterised",
+    uncharacterisedScope: { owners: [], sdks: [] },
     fixtures: [
       {
         path: "apps/api/src/tests/helpers/fake-s3.test.ts",
+        replayFiles: ["apps/api/src/tests/helpers/fake-s3.test.ts"],
         metadata:
           "packages/external-contracts/fixtures/s3-compatible.source.json",
         provenance: {
@@ -438,6 +455,7 @@ export const EXTERNAL_CONTRACTS = {
       },
       {
         path: "apps/api/src/lib/s3-presign.test.ts",
+        replayFiles: ["apps/api/src/lib/s3-presign.test.ts"],
         metadata: "packages/external-contracts/fixtures/s3-rustfs.source.json",
         provenance: {
           type: "authored",
@@ -627,8 +645,15 @@ export const EXTERNAL_CONTRACTS = {
         role: "primary",
       },
     ],
-    sdks: [],
-    pinSources: [],
+    sdks: ["@changesets/changelog-github"],
+    pinSources: [
+      {
+        type: "manifest",
+        file: "package.json",
+        section: "devDependencies",
+        package: "@changesets/changelog-github",
+      },
+    ],
     driftTriggers: ["upstream-response-change"],
     status: "uncharacterised",
     reason:
@@ -671,9 +696,13 @@ export const EXTERNAL_CONTRACTS = {
     ],
     driftTriggers: ["pin-bump"],
     status: "characterised",
+    uncharacterisedScope: { owners: [], sdks: [] },
     fixtures: [
       {
         path: "apps/api/src/lib/legal-search/corpus-index-query-features.contract.test.ts",
+        replayFiles: [
+          "apps/api/src/lib/legal-search/corpus-index-query-features.contract.test.ts",
+        ],
         metadata: "packages/external-contracts/fixtures/quickwit.source.json",
         provenance: {
           type: "authored",
@@ -991,9 +1020,11 @@ export const EXTERNAL_CONTRACTS = {
     ],
     driftTriggers: ["pin-bump"],
     status: "characterised",
+    uncharacterisedScope: { owners: [], sdks: [] },
     fixtures: [
       {
         path: "apps/api/src/lib/db/lock-for-write.postgres.test.ts",
+        replayFiles: ["apps/api/src/lib/db/lock-for-write.postgres.test.ts"],
         metadata: "packages/external-contracts/fixtures/postgres.source.json",
         provenance: {
           type: "authored",
@@ -1043,9 +1074,11 @@ export const EXTERNAL_CONTRACTS = {
     ],
     driftTriggers: ["pin-bump"],
     status: "characterised",
+    uncharacterisedScope: { owners: [], sdks: [] },
     fixtures: [
       {
         path: "apps/api/src/lib/redis-client-policy.valkey.test.ts",
+        replayFiles: ["apps/api/src/lib/redis-client-policy.valkey.test.ts"],
         metadata: "packages/external-contracts/fixtures/valkey.source.json",
         provenance: {
           type: "authored",

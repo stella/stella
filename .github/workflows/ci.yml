@@ -3292,7 +3292,7 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: |
           bun scripts/check-external-contracts.ts --check
-          bun test scripts/check-external-contracts.test.ts
+          bun test scripts/check-external-contracts.test.ts scripts/external-contract-evidence.test.ts
 
       - name: Outbound transport ownership
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}

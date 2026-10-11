@@ -10,14 +10,20 @@ custom model endpoints and real AWS S3). A shared declaration does not satisfy
 a missing primary assignment. Local loading and first-party clients are enrolled
 explicitly because the transport census also contains those surfaces.
 
-The catalog is partitioned between registry SDKs and reasoned in-process
-packages. New catalog names fail regardless of their naming convention. The
-same transport classifier discovers SDKs in workspace dependency declarations.
+Every direct dependency name in the root catalog and workspace manifests is
+partitioned between registry SDKs and reasoned in-process packages, including
+workspace packages and optional or peer dependencies. The in-process ledger is
+shrink-only after initial enrollment; a new name must receive an explicit
+contract or a package-specific reason. The transport census independently
+classifies owner paths and SDKs, so SDK naming conventions cannot hide a client.
 
 Current pins come from the actual manifests, resolved SDK versions in
 `bun.lock`, applicable patch bytes, CI service image digests and API-version
 constants. Fixture receipts record the pins, owners and SDKs exercised by a
-fixture set. A changed pin or coverage scope requires re-characterisation.
+fixture set. A bounded static runtime-import graph starts at each replay entry
+point and proves which repository owner paths and registry SDKs are reachable;
+it parses source without executing modules. A changed pin or coverage scope
+requires re-characterisation.
 Receipts include every declared owner path, including shared assignments.
 Publisher captures retain their existing hash sidecars and their honest legacy
 provenance; an unversioned publisher has no invented upstream release number.
@@ -29,12 +35,16 @@ receipts: downloading a schema does not re-characterise an adapter. Recorded,
 synthetic-from-spec and redacted-prod-shape are the supported provenance kinds;
 the existing cassette `synthetic` spelling denotes synthetic-from-spec.
 
-The `uncharacterised` entries state the remaining coverage boundary. The check
-compares their IDs with the merge-base registry, so the set may only shrink
-once the initial enrollment lands. A recorded fixture receipt describes
-existing coverage, not exhaustive behavior of every endpoint.
+The `uncharacterised` entries state the remaining coverage boundary. Their
+owner and SDK scopes each require a reason, must partition the entry's declared
+scope, and are compared with the merge-base registry so they may only shrink
+once initial enrollment lands. A recorded fixture receipt describes existing
+coverage, not exhaustive behavior of every endpoint. Updating receipt metadata
+cannot invent reachability: covered owners and SDKs must be discovered from the
+static replay graph.
 
-Run the offline guard with `bun run check:external-contracts`. Existing replay
+Run the offline guard and its focused tests with
+`bun run check:external-contracts`. Existing replay
 owners remain responsible for executing fixtures: provider wire uses
 `apps/api/src/lib/tanstack-ai-provider-wire.test.ts`, publisher fixtures use the
 parser and provenance tests, and the API's `test:corpus`, `test:postgres` and

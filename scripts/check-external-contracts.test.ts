@@ -9,6 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { IN_PROCESS_DEPENDENCIES } from "../packages/external-contracts/src/dependency-dispositions";
 import {
   findTotalityProblems,
   findVersionDrift,
@@ -16,7 +17,10 @@ import {
 import { EXTERNAL_CONTRACTS } from "../packages/external-contracts/src/registry";
 import {
   checkExternalContracts,
-  isExternalSdk,
+  findShrinkOnlyGrowth,
+  inProcessFromSource,
+  uncharacterisedScopeFromSource,
+  readDirectDependencies,
   readCurrentPins,
   readExternalSdks,
   readPin,
@@ -64,25 +68,15 @@ test("the real outbound census and SDK manifests have total offline coverage", (
   ).toContain("SDK @example/sdk maps to 0");
 });
 
-test("SDK discovery uses the transport definition and catches SDK-shaped additions", () => {
+test("the closed dependency census includes clients without SDK-shaped names", () => {
   expect(readExternalSdks(ROOT)).toContain("posthog-js");
   expect(readExternalSdks(ROOT)).toContain("@hocuspocus/provider");
   expect(readExternalSdks(ROOT)).toContain("@hocuspocus/extension-redis");
-  for (const sdk of [
-    "@aws-sdk/client-new",
-    "@tanstack/ai-openai",
-    "better-auth",
-    "posthog-js",
-    "@hocuspocus/provider",
-    "@hocuspocus/extension-redis",
-    "@better-auth/core",
-    "@example/sdk",
-  ]) {
-    expect(isExternalSdk(sdk)).toBe(true);
-  }
-  for (const library of ["typescript", "valibot", "react"]) {
-    expect(isExternalSdk(library)).toBe(false);
-  }
+  expect(
+    checkExternalContracts(ROOT, {
+      dependencies: [...readDirectDependencies(ROOT), "new-vendor-client"],
+    }).join("\n"),
+  ).toContain("Dependency new-vendor-client: classify it");
 });
 
 test("publisher captures require a characterised contract", () => {
@@ -103,7 +97,7 @@ test("publisher captures require a characterised contract", () => {
   ]);
 });
 
-test("a characterised contract cannot gain shared scope until its receipt is refreshed", () => {
+test("shared scope needs a refreshed receipt and a runtime-reachable replay import", () => {
   const root = mkdtempSync(path.join(tmpdir(), "external-contract-shared-"));
   try {
     const contract = EXTERNAL_CONTRACTS.quickwit;
@@ -123,8 +117,9 @@ test("a characterised contract cannot gain shared scope until its receipt is ref
     } as const;
     writeFileSync(receiptPath, JSON.stringify(originalReceipt));
     const problems = checkExternalContracts(ROOT, { registry });
-    expect(problems).toHaveLength(1);
-    expect(problems.join("\n")).toContain("re-characterise quickwit");
+    expect(problems.join("\n")).toContain(
+      `owner ${sharedOwner} has no reachable fixture receipt`,
+    );
     writeFileSync(
       receiptPath,
       JSON.stringify({
@@ -135,7 +130,32 @@ test("a characterised contract cannot gain shared scope until its receipt is ref
         coveredSdks: contract.sdks,
       }),
     );
-    expect(checkExternalContracts(ROOT, { registry })).toEqual([]);
+    expect(checkExternalContracts(ROOT, { registry }).join("\n")).toContain(
+      `owner claim ${sharedOwner} is not runtime-reachable`,
+    );
+    const replayPath = path.join(root, "shared-replay.test.ts");
+    writeFileSync(
+      replayPath,
+      `import ${JSON.stringify(path.join(ROOT, sharedOwner))};`,
+    );
+    const refreshedRegistry = {
+      ...registry,
+      quickwit: {
+        ...registry.quickwit,
+        fixtures: [
+          {
+            ...registry.quickwit.fixtures[0],
+            replayFiles: [
+              ...fixture.replayFiles,
+              path.relative(ROOT, replayPath),
+            ],
+          },
+        ],
+      },
+    } as const;
+    expect(
+      checkExternalContracts(ROOT, { registry: refreshedRegistry }),
+    ).toEqual([]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -152,6 +172,129 @@ test("literal source inspection binds the shrink-only set to entry statuses", ()
       .map(([id]) => id)
       .toSorted(),
   );
+});
+
+test("a planted receipt cannot claim an owner outside its replay graph", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "external-contract-forged-"));
+  try {
+    const contract = EXTERNAL_CONTRACTS.quickwit;
+    const fixture = contract.fixtures[0];
+    const receiptPath = path.join(root, "forged.source.json");
+    const replayPath = path.join(root, "unrelated-replay.test.ts");
+    writeFileSync(replayPath, "export const unrelated = true;");
+    writeFileSync(
+      receiptPath,
+      JSON.stringify({
+        characterisedAt: readCurrentPins(ROOT, contract),
+        fixtureSet: fixture.path,
+        provenance: fixture.provenance,
+        coveredOwners: contract.owners.map(({ path: owner }) => owner),
+        coveredSdks: contract.sdks,
+      }),
+    );
+    const registry = {
+      ...EXTERNAL_CONTRACTS,
+      quickwit: {
+        ...contract,
+        fixtures: [
+          {
+            ...fixture,
+            metadata: path.relative(ROOT, receiptPath),
+            replayFiles: [path.relative(ROOT, replayPath)],
+          },
+        ],
+      },
+    } as const;
+    const problems = checkExternalContracts(ROOT, { registry });
+    for (const { path: owner } of contract.owners) {
+      expect(problems.join("\n")).toContain(
+        `owner claim ${owner} is not runtime-reachable`,
+      );
+    }
+    expect(problems.join("\n")).toContain("has no reachable fixture receipt");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("literal classification sources bind shrink-only keys without executing modules", () => {
+  const ledger =
+    'export const IN_PROCESS_DEPENDENCIES = { "local-one": "Local parsing." } as const;';
+  const registry = `export const EXTERNAL_CONTRACTS = {
+    fixture: { status: "characterised", uncharacterisedScope: {
+      owners: [{ path: "owner.ts", reason: "Replay pending." }],
+      sdks: [{ package: "remote-sdk", reason: "Capture pending." }]
+    } },
+    other: { status: "uncharacterised", reason: "Pending." }
+  } as const;`;
+  expect(inProcessFromSource(ledger)).toEqual(["local-one"]);
+  expect(uncharacterisedScopeFromSource(registry)).toEqual([
+    "fixture#owners:owner.ts",
+    "fixture#sdks:remote-sdk",
+  ]);
+  expect(
+    findShrinkOnlyGrowth({
+      current: ["local-one", "new-client"],
+      baseline: inProcessFromSource(ledger),
+      label: "In-process dependency",
+    }),
+  ).toEqual([
+    "In-process dependency new-client: classification keys only shrink; add runtime characterisation instead of expanding the exemption.",
+  ]);
+  expect(
+    findShrinkOnlyGrowth({
+      current: ["fixture#owners:new.ts"],
+      baseline: uncharacterisedScopeFromSource(registry),
+      label: "Uncharacterised scope",
+    }).join("\n"),
+  ).toContain("Uncharacterised scope fixture#owners:new.ts");
+  expect(
+    findShrinkOnlyGrowth({
+      current: [],
+      baseline: inProcessFromSource(ledger),
+      label: "In-process dependency",
+    }),
+  ).toEqual([]);
+  expect(
+    uncharacterisedScopeFromSource(
+      'export const EXTERNAL_CONTRACTS = { fixture: { status: "characterised" } } as const;',
+    ),
+  ).toEqual([]);
+});
+
+test("the partial-scope and in-process AST ledgers match their declared keys", () => {
+  expect(
+    inProcessFromSource(
+      readFileSync(
+        path.join(
+          ROOT,
+          "packages/external-contracts/src/dependency-dispositions.ts",
+        ),
+        "utf-8",
+      ),
+    ).toSorted(),
+  ).toEqual(Object.keys(IN_PROCESS_DEPENDENCIES).toSorted());
+  const expected = Object.entries(EXTERNAL_CONTRACTS).flatMap(
+    ([system, entry]) =>
+      entry.status === "characterised"
+        ? [
+            ...entry.uncharacterisedScope.owners.map(
+              ({ path: owner }) => `${system}#owners:${owner}`,
+            ),
+            ...entry.uncharacterisedScope.sdks.map(
+              ({ package: sdk }) => `${system}#sdks:${sdk}`,
+            ),
+          ]
+        : [],
+  );
+  expect(
+    uncharacterisedScopeFromSource(
+      readFileSync(
+        path.join(ROOT, "packages/external-contracts/src/registry.ts"),
+        "utf-8",
+      ),
+    ).toSorted(),
+  ).toEqual(expected.toSorted());
 });
 
 test("pin readers observe edits to manifests, images, API constants, locks and patches", () => {

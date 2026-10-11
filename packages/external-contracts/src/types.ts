@@ -19,6 +19,7 @@ export type FixtureProvenanceKind =
 
 export type FixtureSet = {
   readonly path: string;
+  readonly replayFiles: readonly [string, ...string[]];
   readonly replay:
     | "fetch-replay"
     | "schema-validation"
@@ -60,6 +61,16 @@ export type ExternalContractEntry = ExternalContractBase &
     | {
         readonly status: "characterised";
         readonly fixtures: readonly [FixtureSet, ...FixtureSet[]];
+        readonly uncharacterisedScope: {
+          readonly owners: readonly {
+            readonly path: string;
+            readonly reason: string;
+          }[];
+          readonly sdks: readonly {
+            readonly package: string;
+            readonly reason: string;
+          }[];
+        };
       }
     | { readonly status: "uncharacterised"; readonly reason: string }
   );

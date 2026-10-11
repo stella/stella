@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 
 import {
-  findCatalogProblems,
+  findDependencyProblems,
   findCoverageDrift,
   findTotalityProblems,
   findUncharacterisedGrowth,
@@ -109,26 +109,45 @@ test("unused pins fail and uncovered contracts only shrink", () => {
 
 test("a new catalog dependency must be classified even when its name does not identify an SDK", () => {
   expect(
-    findCatalogProblems({
+    findDependencyProblems({
       registry,
       packages: ["@example/sdk", "parser", "new-vendor-client"],
       inProcess: { parser: "Parses local text." },
     }).join("\n"),
-  ).toContain("Catalog package new-vendor-client: classify it");
+  ).toContain("Dependency new-vendor-client: classify it");
   expect(
-    findCatalogProblems({
+    findDependencyProblems({
       registry,
       packages: ["@example/sdk", "parser"],
       inProcess: { parser: "Parses local text." },
     }),
   ).toEqual([]);
   expect(
-    findCatalogProblems({
+    findDependencyProblems({
       registry,
       packages: ["@example/sdk"],
       inProcess: { "@example/sdk": "Incorrect duplicate." },
     }).join("\n"),
   ).toContain("exactly one place");
+});
+
+test("in-process dependency classifications require a non-empty reason and a unique assignment", () => {
+  expect(
+    findDependencyProblems({
+      registry,
+      packages: ["@example/sdk", "parser"],
+      inProcess: { parser: "  " },
+    }).join("\n"),
+  ).toContain(
+    "parser: non-external dependency classification requires a reason.",
+  );
+  expect(
+    findDependencyProblems({
+      registry,
+      packages: ["@example/sdk", "parser"],
+      inProcess: { "@example/sdk": "Parser implementation." },
+    }).join("\n"),
+  ).toContain("Dependency @example/sdk: classify it");
 });
 
 test("new owner and SDK scope cannot inherit an existing fixture receipt", () => {

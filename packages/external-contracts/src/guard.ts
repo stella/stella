@@ -115,17 +115,17 @@ export const findUncharacterisedGrowth = (
         `${id}: uncharacterised contracts only shrink; add characterisation before enrolling a new system.`,
     );
 
-type CatalogOptions = {
+type DependencyOptions = {
   readonly registry: Readonly<Record<string, ExternalContractEntry>>;
   readonly packages: readonly string[];
   readonly inProcess: Readonly<Record<string, string>>;
 };
 
-export const findCatalogProblems = ({
+export const findDependencyProblems = ({
   registry,
   packages,
   inProcess,
-}: CatalogOptions): string[] => {
+}: DependencyOptions): string[] => {
   const problems: string[] = [];
   for (const name of packages) {
     const matches = Object.values(registry).filter((entry) =>
@@ -135,16 +135,18 @@ export const findCatalogProblems = ({
       continue;
     }
     problems.push(
-      `Catalog package ${name}: classify it as an external contract SDK or an in-process package in exactly one place.`,
+      `Dependency ${name}: classify it as an external contract SDK or an in-process package in exactly one place.`,
     );
   }
   for (const [name, reason] of Object.entries(inProcess)) {
     if (!packages.includes(name)) {
-      problems.push(`${name}: remove stale in-process catalog classification.`);
+      problems.push(
+        `${name}: remove stale non-external dependency classification.`,
+      );
     }
     if (reason.trim() === "") {
       problems.push(
-        `${name}: in-process catalog classification requires a reason.`,
+        `${name}: non-external dependency classification requires a reason.`,
       );
     }
   }

@@ -12,10 +12,9 @@ import {
   LEGACY_CAPTURES,
   PROVENANCE_SUFFIX,
 } from "../apps/api/src/tests/fixture-provenance";
-import { IN_PROCESS_CATALOG_PACKAGES } from "../packages/external-contracts/src/catalog-libraries";
+import { IN_PROCESS_DEPENDENCIES } from "../packages/external-contracts/src/dependency-dispositions";
 import {
-  findCatalogProblems,
-  findCoverageDrift,
+  findDependencyProblems,
   findTotalityProblems,
   findUncharacterisedGrowth,
   findVersionDrift,
@@ -29,6 +28,7 @@ import type {
   PinSource,
 } from "../packages/external-contracts/src/types";
 import { parseBunLockText } from "./bun-lock-text";
+import { readFixtureEvidence } from "./external-contract-evidence";
 import {
   OUTBOUND_TRANSPORT_CENSUS,
   type OutboundTransportCensusEntry,
@@ -38,6 +38,8 @@ import { parseSource } from "./parse-memo";
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const REGISTRY_PATH = "packages/external-contracts/src/registry.ts";
+const DEPENDENCY_DISPOSITIONS_PATH =
+  "packages/external-contracts/src/dependency-dispositions.ts";
 const stringMapSchema = v.record(v.string(), v.string());
 const objectSchema = v.record(v.string(), v.unknown());
 const manifestSchema = v.object({
@@ -188,13 +190,8 @@ export const readCurrentPins = (
   return current;
 };
 
-export const isExternalSdk = (name: string): boolean =>
-  isOutboundTransportModule(name) ||
-  name.startsWith("@better-auth/") ||
-  /(?:^|[/-])sdk(?:$|[/-])/u.test(name);
-
-export const readExternalSdks = (root: string): string[] => {
-  const sdks = new Set<string>();
+export const readDirectDependencies = (root: string): string[] => {
+  const dependencies = new Set<string>();
   const manifests = ["package.json"];
   for (const parent of ["apps", "packages"]) {
     for (const child of readdirSync(path.join(root, parent), {
@@ -218,18 +215,16 @@ export const readExternalSdks = (root: string): string[] => {
       ...Object.keys(manifest.optionalDependencies),
       ...Object.keys(manifest.peerDependencies),
     ]) {
-      if (
-        name.startsWith("@stll/") ||
-        name.startsWith("@types/") ||
-        !isExternalSdk(name)
-      ) {
-        continue;
-      }
-      sdks.add(name);
+      dependencies.add(name);
     }
   }
-  return [...sdks];
+  return [...dependencies];
 };
+
+export const readExternalSdks = (root: string): string[] =>
+  readDirectDependencies(root).filter(
+    (name) => !Object.hasOwn(IN_PROCESS_DEPENDENCIES, name),
+  );
 
 const filesBelow = (root: string, relative: string): string[] => {
   const files: string[] = [];
@@ -290,23 +285,65 @@ const checkFixture = ({
   current,
   owners,
   sdks,
-}: FixtureCheckOptions): string[] => {
+}: FixtureCheckOptions) => {
   const problems: string[] = [];
+  const coveredOwners = new Set<string>();
+  const coveredSdks = new Set<string>();
+  const result = { problems, coveredOwners, coveredSdks };
   if (!existsSync(path.join(root, fixture.path))) {
-    return [`${system}: missing fixture set ${fixture.path}.`];
+    problems.push(`${system}: missing fixture set ${fixture.path}.`);
+    return result;
   }
+  const evidence = readFixtureEvidence({
+    root,
+    replayFiles: fixture.replayFiles,
+    sdkNames: sdks,
+  });
+  problems.push(
+    ...evidence.problems.map(
+      (problem) => `${system}: ${fixture.path}: ${problem}`,
+    ),
+  );
+  const recordReceipt = ({
+    file,
+    receipt,
+  }: {
+    file: string;
+    receipt: {
+      coveredOwners: readonly string[];
+      coveredSdks: readonly string[];
+    };
+  }) => {
+    for (const [kind, claims, declared, reachable, covered] of [
+      ["owner", receipt.coveredOwners, owners, evidence.owners, coveredOwners],
+      ["SDK", receipt.coveredSdks, sdks, evidence.sdks, coveredSdks],
+    ] as const) {
+      const seen = new Set<string>();
+      for (const claim of claims) {
+        if (seen.has(claim)) {
+          problems.push(`${file}: duplicate ${kind} claim ${claim}.`);
+          continue;
+        }
+        seen.add(claim);
+        if (!declared.includes(claim)) {
+          problems.push(
+            `${file}: ${kind} claim ${claim} does not belong to ${system}.`,
+          );
+          continue;
+        }
+        if (!reachable.has(claim)) {
+          problems.push(
+            `${file}: ${kind} claim ${claim} is not runtime-reachable from its replay files; re-characterise ${system}.`,
+          );
+          continue;
+        }
+        covered.add(claim);
+      }
+    }
+  };
   if ("metadata" in fixture) {
     const metadata = v.parse(pinMetadataSchema, json(root, fixture.metadata));
-    problems.push(
-      ...findCoverageDrift({
-        system,
-        fixture: fixture.metadata,
-        owners,
-        sdks,
-        coveredOwners: metadata.coveredOwners,
-        coveredSdks: metadata.coveredSdks,
-      }),
-    );
+    recordReceipt({ file: fixture.metadata, receipt: metadata });
     if (
       metadata.fixtureSet !== fixture.path ||
       JSON.stringify(metadata.provenance) !== JSON.stringify(fixture.provenance)
@@ -325,7 +362,7 @@ const checkFixture = ({
     );
   }
   if (fixture.provenance.type === "authored") {
-    return problems;
+    return result;
   }
   const files = filesBelow(root, fixture.path);
   switch (fixture.provenance.format) {
@@ -343,7 +380,7 @@ const checkFixture = ({
           problems.push(`${file}: synthetic-from-spec provenance needs basis.`);
         }
       }
-      return problems;
+      return result;
     }
     case "provider-request-schemas": {
       const sidecars = files.filter((file) => file.endsWith(".source.json"));
@@ -355,16 +392,7 @@ const checkFixture = ({
           providerSchemaSourceSchema,
           json(root, file),
         );
-        problems.push(
-          ...findCoverageDrift({
-            system,
-            fixture: file,
-            owners,
-            sdks,
-            coveredOwners: provenance.coveredOwners,
-            coveredSdks: provenance.coveredSdks,
-          }),
-        );
+        recordReceipt({ file, receipt: provenance });
         problems.push(
           ...findVersionDrift({
             system,
@@ -381,7 +409,7 @@ const checkFixture = ({
           problems.push(`${file}: missing request schema.`);
         }
       }
-      return problems;
+      return result;
     }
     case "fixture-provenance": {
       const sidecars = files.filter((file) => file.endsWith(PROVENANCE_SUFFIX));
@@ -405,7 +433,7 @@ const checkFixture = ({
           problems.push(`${file}: new legacy provenance is not admitted.`);
         }
       }
-      return problems;
+      return result;
     }
     default:
       fixture.provenance satisfies never;
@@ -449,8 +477,180 @@ export const uncharacterisedFromSource = (text: string): string[] => {
   });
 };
 
+const literalMember = (object: ts.ObjectLiteralExpression, name: string) => {
+  for (const member of object.properties) {
+    if (
+      ts.isPropertyAssignment(member) &&
+      (ts.isIdentifier(member.name) || ts.isStringLiteral(member.name)) &&
+      member.name.text === name
+    ) {
+      return unwrap(member.initializer);
+    }
+  }
+  return panic(`External classification source: missing literal ${name}.`);
+};
+
+export const inProcessFromSource = (text: string): string[] => {
+  const ledger = declaredInitializer(
+    DEPENDENCY_DISPOSITIONS_PATH,
+    text,
+    "IN_PROCESS_DEPENDENCIES",
+  );
+  if (!ts.isObjectLiteralExpression(ledger)) {
+    return panic("In-process dependencies must be a closed object literal.");
+  }
+  return ledger.properties.map((property) => {
+    if (
+      !ts.isPropertyAssignment(property) ||
+      !(ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))
+    ) {
+      return panic("In-process dependency keys must be literal properties.");
+    }
+    return property.name.text;
+  });
+};
+
+export const uncharacterisedScopeFromSource = (text: string): string[] => {
+  const registry = declaredInitializer(
+    REGISTRY_PATH,
+    text,
+    "EXTERNAL_CONTRACTS",
+  );
+  if (!ts.isObjectLiteralExpression(registry)) {
+    return panic("External registry must be a closed object literal.");
+  }
+  const keys: string[] = [];
+  for (const property of registry.properties) {
+    if (
+      !ts.isPropertyAssignment(property) ||
+      !(ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) ||
+      !ts.isObjectLiteralExpression(property.initializer)
+    ) {
+      return panic("External registry entries must be literal properties.");
+    }
+    const status = literalMember(property.initializer, "status");
+    if (!ts.isStringLiteral(status)) {
+      return panic(`${property.name.text}: missing literal contract status.`);
+    }
+    if (status.text !== "characterised") {
+      continue;
+    }
+    // Older registry snapshots predate partial scope; their missing set is empty.
+    const scopeProperty = property.initializer.properties.find(
+      (member) =>
+        ts.isPropertyAssignment(member) &&
+        (ts.isIdentifier(member.name) || ts.isStringLiteral(member.name)) &&
+        member.name.text === "uncharacterisedScope",
+    );
+    if (scopeProperty === undefined) {
+      continue;
+    }
+    const scope = literalMember(property.initializer, "uncharacterisedScope");
+    if (!ts.isObjectLiteralExpression(scope)) {
+      return panic(
+        `${property.name.text}: uncharacterised scope must be literal.`,
+      );
+    }
+    for (const [kind, field] of [
+      ["owners", "path"],
+      ["sdks", "package"],
+    ] as const) {
+      const entries = literalMember(scope, kind);
+      if (!ts.isArrayLiteralExpression(entries)) {
+        return panic(
+          `${property.name.text}: uncharacterised ${kind} must be a literal array.`,
+        );
+      }
+      for (const entry of entries.elements) {
+        if (!ts.isObjectLiteralExpression(entry)) {
+          return panic(
+            `${property.name.text}: uncharacterised ${kind} entries must be literal.`,
+          );
+        }
+        const key = literalMember(entry, field);
+        if (!ts.isStringLiteral(key)) {
+          return panic(
+            `${property.name.text}: uncharacterised ${kind} keys must be literal strings.`,
+          );
+        }
+        keys.push(`${property.name.text}#${kind}:${key.text}`);
+      }
+    }
+  }
+  return keys;
+};
+
+type ShrinkOnlyGrowthOptions = {
+  current: readonly string[];
+  baseline: readonly string[];
+  label: string;
+};
+
+export const findShrinkOnlyGrowth = ({
+  current,
+  baseline,
+  label,
+}: ShrinkOnlyGrowthOptions): string[] => {
+  const admitted = new Set(baseline);
+  return current
+    .filter((key) => !admitted.has(key))
+    .map(
+      (key) =>
+        `${label} ${key}: classification keys only shrink; add runtime characterisation instead of expanding the exemption.`,
+    );
+};
+
+type ScopePartitionOptions = {
+  system: string;
+  kind: "owner" | "SDK";
+  declared: readonly string[];
+  covered: ReadonlySet<string>;
+  uncharacterised: readonly { key: string; reason: string }[];
+};
+
+const checkScopePartition = ({
+  system,
+  kind,
+  declared,
+  covered,
+  uncharacterised,
+}: ScopePartitionOptions) => {
+  const problems: string[] = [];
+  const uncovered = new Set<string>();
+  for (const { key, reason } of uncharacterised) {
+    if (uncovered.has(key)) {
+      problems.push(`${system}: duplicate uncharacterised ${kind} ${key}.`);
+    }
+    uncovered.add(key);
+    if (!declared.includes(key)) {
+      problems.push(
+        `${system}: uncharacterised ${kind} ${key} does not belong to its entry.`,
+      );
+    }
+    if (reason.trim() === "") {
+      problems.push(
+        `${system}: uncharacterised ${kind} ${key} requires a reason.`,
+      );
+    }
+    if (covered.has(key)) {
+      problems.push(
+        `${system}: ${kind} ${key} is both characterised and uncharacterised.`,
+      );
+    }
+  }
+  for (const key of declared) {
+    if (!covered.has(key) && !uncovered.has(key)) {
+      problems.push(
+        `${system}: re-characterise ${system}; ${kind} ${key} has no reachable fixture receipt or uncharacterised scope disposition.`,
+      );
+    }
+  }
+  return problems;
+};
+
 type ExternalContractCheckOptions = {
   registry?: Readonly<Record<ExternalSystemId, ExternalContractEntry>>;
+  dependencies?: readonly string[];
   census?: readonly OutboundTransportCensusEntry[];
   sdks?: readonly string[];
 };
@@ -459,20 +659,22 @@ export const checkExternalContracts = (
   root: string,
   {
     registry = EXTERNAL_CONTRACTS,
+    dependencies = readDirectDependencies(root),
     census = OUTBOUND_TRANSPORT_CENSUS,
-    sdks = readExternalSdks(root),
+    sdks = dependencies.filter(
+      (name) => !Object.hasOwn(IN_PROCESS_DEPENDENCIES, name),
+    ),
   }: ExternalContractCheckOptions = {},
 ): string[] => {
-  const manifest = v.parse(manifestSchema, json(root, "package.json"));
-  const catalogProblems = findCatalogProblems({
+  const catalogProblems = findDependencyProblems({
     registry,
-    packages: Object.keys(manifest.catalog),
-    inProcess: IN_PROCESS_CATALOG_PACKAGES,
+    packages: dependencies,
+    inProcess: IN_PROCESS_DEPENDENCIES,
   });
-  for (const name of Object.keys(IN_PROCESS_CATALOG_PACKAGES)) {
-    if (isExternalSdk(name)) {
+  for (const name of Object.keys(IN_PROCESS_DEPENDENCIES)) {
+    if (!name.startsWith("@stll/") && isOutboundTransportModule(name)) {
       catalogProblems.push(
-        `Catalog package ${name}: a transport SDK cannot be classified as in-process.`,
+        `Dependency ${name}: a transport SDK cannot be classified as in-process.`,
       );
     }
   }
@@ -492,18 +694,47 @@ export const checkExternalContracts = (
     if (entry.status === "uncharacterised") {
       continue;
     }
+    const coveredOwners = new Set<string>();
+    const coveredSdks = new Set<string>();
     for (const fixture of entry.fixtures) {
-      problems.push(
-        ...checkFixture({
-          root,
-          system,
-          fixture,
-          current,
-          owners: entry.owners.map(({ path: ownerPath }) => ownerPath),
-          sdks: entry.sdks,
-        }),
-      );
+      const checked = checkFixture({
+        root,
+        system,
+        fixture,
+        current,
+        owners: entry.owners.map(({ path: ownerPath }) => ownerPath),
+        sdks: entry.sdks,
+      });
+      problems.push(...checked.problems);
+      for (const owner of checked.coveredOwners) {
+        coveredOwners.add(owner);
+      }
+      for (const sdk of checked.coveredSdks) {
+        coveredSdks.add(sdk);
+      }
     }
+    problems.push(
+      ...checkScopePartition({
+        system,
+        kind: "owner",
+        declared: entry.owners.map(({ path: ownerPath }) => ownerPath),
+        covered: coveredOwners,
+        uncharacterised: entry.uncharacterisedScope.owners.map(
+          ({ path: ownerPath, reason }) => ({ key: ownerPath, reason }),
+        ),
+      }),
+    );
+    problems.push(
+      ...checkScopePartition({
+        system,
+        kind: "SDK",
+        declared: entry.sdks,
+        covered: coveredSdks,
+        uncharacterised: entry.uncharacterisedScope.sdks.map(
+          ({ package: name, reason }) => ({ key: name, reason }),
+        ),
+      }),
+    );
   }
   const publisher = registry["legal-publishers"];
   if (publisher.status === "uncharacterised") {
@@ -535,32 +766,51 @@ if (import.meta.main) {
       `Cannot resolve external contract baseline ${base}: ${mergeBase.stderr}`,
     );
   }
-  const tree = spawnSync(
-    "git",
-    ["ls-tree", "--name-only", mergeBase.stdout.trim(), "--", REGISTRY_PATH],
-    { cwd: ROOT, encoding: "utf-8" },
-  );
-  if (tree.status !== 0) {
-    panic(`Cannot inspect external contract baseline: ${tree.stderr}`);
-  }
   const problems = checkExternalContracts(ROOT);
-  // The first registry enrollment establishes the set; subsequent changes may only remove uncovered entries.
-  if (tree.stdout.trim() !== "") {
+  for (const file of [REGISTRY_PATH, DEPENDENCY_DISPOSITIONS_PATH]) {
+    const tree = spawnSync(
+      "git",
+      ["ls-tree", "--name-only", mergeBase.stdout.trim(), "--", file],
+      { cwd: ROOT, encoding: "utf-8" },
+    );
+    if (tree.status !== 0) {
+      panic(`Cannot inspect external classification baseline: ${tree.stderr}`);
+    }
+    // The initial enrollment establishes the set; later changes may only shrink it.
+    if (tree.stdout.trim() === "") {
+      continue;
+    }
     const baseline = spawnSync(
       "git",
-      ["show", `${mergeBase.stdout.trim()}:${REGISTRY_PATH}`],
+      ["show", `${mergeBase.stdout.trim()}:${file}`],
       { cwd: ROOT, encoding: "utf-8" },
     );
     if (baseline.status !== 0) {
-      panic(`Cannot read external contract baseline: ${baseline.stderr}`);
+      panic(`Cannot read external classification baseline: ${baseline.stderr}`);
+    }
+    const currentSource = readFileSync(path.join(ROOT, file), "utf-8");
+    if (file === DEPENDENCY_DISPOSITIONS_PATH) {
+      problems.push(
+        ...findShrinkOnlyGrowth({
+          current: inProcessFromSource(currentSource),
+          baseline: inProcessFromSource(baseline.stdout),
+          label: "In-process dependency",
+        }),
+      );
+      continue;
     }
     problems.push(
       ...findUncharacterisedGrowth(
-        uncharacterisedFromSource(
-          readFileSync(path.join(ROOT, REGISTRY_PATH), "utf-8"),
-        ),
+        uncharacterisedFromSource(currentSource),
         uncharacterisedFromSource(baseline.stdout),
       ),
+    );
+    problems.push(
+      ...findShrinkOnlyGrowth({
+        current: uncharacterisedScopeFromSource(currentSource),
+        baseline: uncharacterisedScopeFromSource(baseline.stdout),
+        label: "Uncharacterised scope",
+      }),
     );
   }
   if (problems.length !== 0) {
