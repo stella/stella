@@ -139,28 +139,28 @@ second tool; it is shaped to be picked up by that generator:
 Processed level, derived from the AST, the decision row and their readers.
 Shape: S = per-decision scalar/list, B = block structure, I = inline.
 
-| id | what / where | shape | main consumer |
-|---|---|---|---|
-| `court-paragraph-numbers` | `ParagraphBlock.number` | B | reader gutter, `paragraph-range.ts`, citations |
-| `case-number` | `caseNumber`, AST `metadata.caseNumber`, role `case-number` | S | `decision-caption.ts` |
-| `ecli` | `ecli` | S | `decision-row-columns.ts` |
-| `court` | `court` / `courtId` | S | caption, `analysis-prompt.ts` |
-| `decision-date` | `decisionDate` | S | facets, caption |
-| `decision-type` | `decisionType` | S | `analysis-prompt.ts`, type filter |
-| `judges` | `result.judges[]` with roles (rapporteur, presiding, panel, dissenting) | S | `judges/decision-judges.ts` |
-| `publisher-summary` | `textFields` headnote / legal sentence / abstract, or summary roles | S/B | `publisher-summary.ts`, reader |
-| `keywords` | `metadata.keywords` (+ fallbacks) | S | `decision-row-columns.ts`, MCP results |
-| `cited-provisions` | `metadata.statutes` / AST `metadata.statutes` | S | none typed yet (see gaps) |
-| `outcome` | `metadata.outcome` | S | none yet (see gaps) |
-| `publisher-cited-cases` | `publisherCitedCases` | S | `pipeline/decision-plan.ts` |
-| `decision-title` | heading role `decision-title` | B | `decision-text.logic.ts` |
-| `section-headings` | heading role `section-heading` | B | outline rail, `sections-from-ast.ts` |
-| `operative-part` | paragraph role `holding` | B | reader, `sections-from-ast.ts` |
-| `dissent` | paragraph role `dissent` | B | reader, citation extractor |
-| `bench-blocks` | roles `panel`, `counsel`, `parties`, `signature`, `closing` | B | reader |
-| `footnotes` | blocks with `note.noteId` | B | reader |
-| `page-anchors` | inline `page-anchor` | I | reader, citation pinpoints |
-| `inline-citations` | inline `citation` | I | citation extractor |
+| id                        | what / where                                                            | shape | main consumer                                  |
+| ------------------------- | ----------------------------------------------------------------------- | ----- | ---------------------------------------------- |
+| `court-paragraph-numbers` | `ParagraphBlock.number`                                                 | B     | reader gutter, `paragraph-range.ts`, citations |
+| `case-number`             | `caseNumber`, AST `metadata.caseNumber`, role `case-number`             | S     | `decision-caption.ts`                          |
+| `ecli`                    | `ecli`                                                                  | S     | `decision-row-columns.ts`                      |
+| `court`                   | `court` / `courtId`                                                     | S     | caption, `analysis-prompt.ts`                  |
+| `decision-date`           | `decisionDate`                                                          | S     | facets, caption                                |
+| `decision-type`           | `decisionType`                                                          | S     | `analysis-prompt.ts`, type filter              |
+| `judges`                  | `result.judges[]` with roles (rapporteur, presiding, panel, dissenting) | S     | `judges/decision-judges.ts`                    |
+| `publisher-summary`       | `textFields` headnote / legal sentence / abstract, or summary roles     | S/B   | `publisher-summary.ts`, reader                 |
+| `keywords`                | `metadata.keywords` (+ fallbacks)                                       | S     | `decision-row-columns.ts`, MCP results         |
+| `cited-provisions`        | `metadata.statutes` / AST `metadata.statutes`                           | S     | none typed yet (see gaps)                      |
+| `outcome`                 | `metadata.outcome`                                                      | S     | none yet (see gaps)                            |
+| `publisher-cited-cases`   | `publisherCitedCases`                                                   | S     | `pipeline/decision-plan.ts`                    |
+| `decision-title`          | heading role `decision-title`                                           | B     | `decision-text.logic.ts`                       |
+| `section-headings`        | heading role `section-heading`                                          | B     | outline rail, `sections-from-ast.ts`           |
+| `operative-part`          | paragraph role `holding`                                                | B     | reader, `sections-from-ast.ts`                 |
+| `dissent`                 | paragraph role `dissent`                                                | B     | reader, citation extractor                     |
+| `bench-blocks`            | roles `panel`, `counsel`, `parties`, `signature`, `closing`             | B     | reader                                         |
+| `footnotes`               | blocks with `note.noteId`                                               | B     | reader                                         |
+| `page-anchors`            | inline `page-anchor`                                                    | I     | reader, citation pinpoints                     |
+| `inline-citations`        | inline `citation`                                                       | I     | citation extractor                             |
 
 Dropped from the family: `sections` (derived for every source by
 `segmentDecision` fallback) and `document-role` (two sources; belongs with
@@ -170,50 +170,50 @@ identity). Reasoning text itself is the document, not a field.
 
 Paragraph numbers (implemented; evidence = recordings the suite parses):
 
-| source | disposition | evidence |
-|---|---|---|
-| cz-ns | provided (shared extractor) | `cz-ns-page.json.gz` (40 decisions: `[N]`, `N.`, `N)` styles; skip in 5 Tdo 28/2024 kept) |
-| cz-nss | provided (was: stripped and dropped) | `cz-nss-10-as-124-2025.html.gz`, `cz-nss-22-as-35-2026.html.gz` (new recordings) |
-| cz-us | provided (was: stripped and dropped) | `cz-us-iv-us-422-26.html.gz`, `cz-us-iii-us-2429-24.html.gz` (new), `cz-us-page.json.gz` (1993, unnumbered) |
-| cz-regional | provided (was: stripped and dropped) | `cz-regional-finaldoc-{district,appellate}.json.gz` |
-| sk-us | provided (was: left in text) | `sk-us-iii-us-265-2026.content.json.gz` (new) |
-| sk-courts | provided (was: left in text) | unrecorded: no general-court PDF recorded (portal 500 on 2026-10-12) |
-| eu-ecj | provided (point ids) | `eu-ecj/62022CJ0128.en.html.gz` |
-| hu-bhgy | provided (`[N]`) | `hu-bhgy-decision.docx` |
-| pl-tk | provided (`wyrok_akapitNr`) | `pl-tk-case-sk-14-11.html.gz` |
-| pl-nsa | skipped: not-extracted | `pl-nsa-rows.json` ("1. Wyrokiem …" left in text) |
-| pl-courts | skipped: not-extracted | unrecorded |
-| at-findok | skipped: source-lacks | `at-findok-152649.zip` |
-| at-courts … at-bks (11) | skipped: unassessed | unrecorded (no recent Supreme Court full text recorded) |
-| pl-sn, pl-kio, pl-ncourt, pl-kis, pl-uodo, pl-uokik | skipped: unassessed | unrecorded |
-| us-courtlistener | skipped: unassessed | unrecorded |
+| source                                              | disposition                          | evidence                                                                                                    |
+| --------------------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| cz-ns                                               | provided (shared extractor)          | `cz-ns-page.json.gz` (40 decisions: `[N]`, `N.`, `N)` styles; skip in 5 Tdo 28/2024 kept)                   |
+| cz-nss                                              | provided (was: stripped and dropped) | `cz-nss-10-as-124-2025.html.gz`, `cz-nss-22-as-35-2026.html.gz` (new recordings)                            |
+| cz-us                                               | provided (was: stripped and dropped) | `cz-us-iv-us-422-26.html.gz`, `cz-us-iii-us-2429-24.html.gz` (new), `cz-us-page.json.gz` (1993, unnumbered) |
+| cz-regional                                         | provided (was: stripped and dropped) | `cz-regional-finaldoc-{district,appellate}.json.gz`                                                         |
+| sk-us                                               | provided (was: left in text)         | `sk-us-iii-us-265-2026.content.json.gz` (new)                                                               |
+| sk-courts                                           | provided (was: left in text)         | unrecorded: no general-court PDF recorded (portal 500 on 2026-10-12)                                        |
+| eu-ecj                                              | provided (point ids)                 | `eu-ecj/62022CJ0128.en.html.gz`                                                                             |
+| hu-bhgy                                             | provided (`[N]`)                     | `hu-bhgy-decision.docx`                                                                                     |
+| pl-tk                                               | provided (`wyrok_akapitNr`)          | `pl-tk-case-sk-14-11.html.gz`                                                                               |
+| pl-nsa                                              | skipped: not-extracted               | `pl-nsa-rows.json` ("1. Wyrokiem …" left in text)                                                           |
+| pl-courts                                           | skipped: not-extracted               | unrecorded                                                                                                  |
+| at-findok                                           | skipped: source-lacks                | `at-findok-152649.zip`                                                                                      |
+| at-courts … at-bks (11)                             | skipped: unassessed                  | unrecorded (no recent Supreme Court full text recorded)                                                     |
+| pl-sn, pl-kio, pl-ncourt, pl-kis, pl-uodo, pl-uokik | skipped: unassessed                  | unrecorded                                                                                                  |
+| us-courtlistener                                    | skipped: unassessed                  | unrecorded                                                                                                  |
 
 Rest of the family, current state from code reading (P provided, – absent;
 to be turned into dispositions with evidence in later slices). Always P and
 omitted: case-number, court, decision-date, decision-type, section-headings.
 
-| source | ECLI | judges | summary | keywords | provisions | outcome | cited cases | title | operative | dissent | bench | footnotes | page anchors | citations |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| cz-regional | P | P | – | P | – | – | P | P | P | – | – | – | – | – |
-| cz-ns | P | – | P | P | P | – | – | P | P | – | – | – | – | – |
-| cz-nss | P | – | P | P | – | P | – | P | P | – | – | P | – | – |
-| cz-us | P | P | – | – | – | P* | – | P | P | P | – | P | – | – |
-| sk-courts | P | – | – | – | – | – | – | P | P | – | – | – | – | – |
-| sk-us | P | P | P | – | ? | – | – | P | P | – | – | – | – | – |
-| pl-courts | – | P | P | P | P | – | P | P | P | – | – | – | – | – |
-| pl-sn | – | – | – | – | – | – | – | P | P | – | – | – | – | – |
-| pl-kio | – | P | – | P | P | P | – | P | P | – | – | – | – | – |
-| pl-tk | – | P | – | – | – | – | – | P | P | P | P | P | – | – |
-| pl-nsa | – | P | P | P | P | P | – | P | P | P | – | – | – | – |
-| pl-ncourt | – | P | P | P | P | – | – | P | P | – | – | – | – | – |
-| at-ris (11) | P | – | P | P | P | – | – | – | P | – | – | – | – | – |
-| at-findok | P | – | P | P | P | – | – | P | – | – | – | – | – | – |
-| eu-ecj | P | P (partial) | – | P | – | – | P | P | P | – | – | – | – | – |
-| hu-bhgy | – | P | P | P | P | – | P | P | P | – | P | P | – | – |
-| pl-kis | – | – | P | P | P | – | – | P | P | – | – | – | – | – |
-| pl-uodo | – | P | P | P | – | – | P | P | P | – | – | P | – | P |
-| pl-uokik | – | – | – | P | – | – | – | P | P | – | – | – | – | – |
-| us-courtlistener | – | P | P | – | – | – | – | – | – | P | P | P | P | – |
+| source           | ECLI | judges      | summary | keywords | provisions | outcome | cited cases | title | operative | dissent | bench | footnotes | page anchors | citations |
+| ---------------- | ---- | ----------- | ------- | -------- | ---------- | ------- | ----------- | ----- | --------- | ------- | ----- | --------- | ------------ | --------- |
+| cz-regional      | P    | P           | –       | P        | –          | –       | P           | P     | P         | –       | –     | –         | –            | –         |
+| cz-ns            | P    | –           | P       | P        | P          | –       | –           | P     | P         | –       | –     | –         | –            | –         |
+| cz-nss           | P    | –           | P       | P        | –          | P       | –           | P     | P         | –       | –     | P         | –            | –         |
+| cz-us            | P    | P           | –       | –        | –          | P*      | –           | P     | P         | P       | –     | P         | –            | –         |
+| sk-courts        | P    | –           | –       | –        | –          | –       | –           | P     | P         | –       | –     | –         | –            | –         |
+| sk-us            | P    | P           | P       | –        | ?          | –       | –           | P     | P         | –       | –     | –         | –            | –         |
+| pl-courts        | –    | P           | P       | P        | P          | –       | P           | P     | P         | –       | –     | –         | –            | –         |
+| pl-sn            | –    | –           | –       | –        | –          | –       | –           | P     | P         | –       | –     | –         | –            | –         |
+| pl-kio           | –    | P           | –       | P        | P          | P       | –           | P     | P         | –       | –     | –         | –            | –         |
+| pl-tk            | –    | P           | –       | –        | –          | –       | –           | P     | P         | P       | P     | P         | –            | –         |
+| pl-nsa           | –    | P           | P       | P        | P          | P       | –           | P     | P         | P       | –     | –         | –            | –         |
+| pl-ncourt        | –    | P           | P       | P        | P          | –       | –           | P     | P         | –       | –     | –         | –            | –         |
+| at-ris (11)      | P    | –           | P       | P        | P          | –       | –           | –     | P         | –       | –     | –         | –            | –         |
+| at-findok        | P    | –           | P       | P        | P          | –       | –           | P     | –         | –       | –     | –         | –            | –         |
+| eu-ecj           | P    | P (partial) | –       | P        | –          | –       | P           | P     | P         | –       | –     | –         | –            | –         |
+| hu-bhgy          | –    | P           | P       | P        | P          | –       | P           | P     | P         | –       | P     | P         | –            | –         |
+| pl-kis           | –    | –           | P       | P        | P          | –       | –           | P     | P         | –       | –     | –         | –            | –         |
+| pl-uodo          | –    | P           | P       | P        | –          | –       | P           | P     | P         | –       | –     | P         | –            | P         |
+| pl-uokik         | –    | –           | –       | P        | –          | –       | –           | P     | P         | –       | –     | –         | –            | –         |
+| us-courtlistener | –    | P           | P       | –        | –          | –       | –           | –     | –         | P       | P     | P         | P            | –         |
 
 \* stored as `metadata.rulingType`, not `outcome`.
 

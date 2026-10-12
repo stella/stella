@@ -274,7 +274,7 @@ const readPlNsa: EvidenceReader = async (fixture) => {
         return [];
       }
       const built = assemblePlNsaDecision({
-        source: values as never,
+        source: values,
         position: { shard, row },
         snapshot: PL_NSA_SNAPSHOT,
       });
