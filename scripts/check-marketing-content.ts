@@ -23,8 +23,30 @@ const CLI_REGISTRY_SNAPSHOT_PATH =
 
 const ROOT_README_PATH = "README.md";
 
+// Computed filesystem reads retain these repository Markdown inputs.
+export const CI_MARKDOWN_READER_INPUTS = [ROOT_README_PATH];
+export const CI_MARKDOWN_READER_COMMAND =
+  "bun scripts/check-marketing-content.ts";
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
+
+const isRemoteReference = (reference: string) =>
+  reference.startsWith("//") || /^[a-z][a-z\d+.-]*:/iu.test(reference);
+
+// Every image a README line can name: `src`, each `srcset` candidate (without
+// its width or density descriptor) and Markdown `![alt](path "title")`.
+const readmeImageReferences = (readme: string): string[] => [
+  ...[...readme.matchAll(/\bsrc="([^"]+)"/gu)].map((match) => match[1] ?? ""),
+  ...[...readme.matchAll(/\bsrcset="([^"]+)"/gu)].flatMap((match) =>
+    (match[1] ?? "")
+      .split(",")
+      .map((candidate) => candidate.trim().split(/\s+/u)[0] ?? ""),
+  ),
+  ...[...readme.matchAll(/!\[[^\]]*\]\(\s*<?([^\s)>]+)/gu)].map(
+    (match) => match[1] ?? "",
+  ),
+];
 
 // The root README's tour embeds the captured product screenshots by
 // repository-relative path; a renamed capture must fail here, not render as
@@ -34,9 +56,8 @@ export const findMissingReadmeImages = (
   exists: (relativePath: string) => boolean,
 ): string[] => {
   const missing: string[] = [];
-  for (const match of readme.matchAll(/\b(?:src|srcset)="([^"]+)"/gu)) {
-    const reference = match[1];
-    if (reference === undefined || /^[a-z][a-z\d+.-]*:/iu.test(reference)) {
+  for (const reference of readmeImageReferences(readme)) {
+    if (reference === "" || isRemoteReference(reference)) {
       continue;
     }
     if (!exists(reference) && !missing.includes(reference)) {

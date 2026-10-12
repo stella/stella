@@ -40,11 +40,36 @@ test("reports a renamed capture once, whether light or dark", () => {
   ]);
 });
 
-test("ignores remote badges and links", () => {
+test("ignores remote badges and links, including protocol-relative ones", () => {
   expect(
     findMissingReadmeImages(
-      '<img src="https://img.shields.io/github/issues/stella/stella" alt="Issues" />',
+      [
+        '<img src="https://img.shields.io/github/issues/stella/stella" alt="Issues" />',
+        '<img src="//cdn.example.com/logo.png" />',
+        "![Deploy](https://railway.com/button.svg)",
+      ].join("\n"),
       exists,
     ),
   ).toEqual([]);
+});
+
+test("checks every srcset candidate without its descriptor", () => {
+  expect(
+    findMissingReadmeImages(
+      '<source srcset="apps/landing/public/media/products/agent.png 1x, apps/landing/public/media/products/agent@2x.png 2x" />',
+      exists,
+    ),
+  ).toEqual(["apps/landing/public/media/products/agent@2x.png"]);
+});
+
+test("checks Markdown images", () => {
+  expect(
+    findMissingReadmeImages(
+      [
+        '![agent](apps/landing/public/media/products/agent.png "The agent")',
+        "![gone](docs/missing.png)",
+      ].join("\n"),
+      exists,
+    ),
+  ).toEqual(["docs/missing.png"]);
 });
