@@ -71,6 +71,11 @@ jobs:
             const [pull] = candidates;
             // The branch must still be where the resolve run started.
             if (pull.head.sha !== run.head_sha) return;
+            // A plan left to people uploads nothing; there is nothing to publish.
+            const { data: { artifacts } } = await github.rest.actions.listWorkflowRunArtifacts({
+              owner, repo, run_id: run.id, name: 'generated-conflicts',
+            });
+            if (artifacts.length !== 1 || artifacts[0].expired) return;
             core.setOutput('branch', run.head_branch);
             core.setOutput('head', run.head_sha);
             core.setOutput('run', String(run.id));

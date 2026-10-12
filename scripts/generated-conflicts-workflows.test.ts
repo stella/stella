@@ -188,6 +188,7 @@ describe("publish", () => {
   type Scenario = {
     run: Record<string, unknown>;
     pulls: Record<string, unknown>[];
+    artifacts: { name: string; expired: boolean }[];
   };
   const scenario = (): Scenario => ({
     run: {
@@ -209,6 +210,7 @@ describe("publish", () => {
         base: { ref: "main" },
       },
     ],
+    artifacts: [{ name: "generated-conflicts", expired: false }],
   });
   const selectFor = async (input: Scenario) => {
     const outputs: Record<string, string> = {};
@@ -223,7 +225,18 @@ describe("publish", () => {
         },
       },
       github: {
-        rest: { pulls: { list: "pulls.list" } },
+        rest: {
+          pulls: { list: "pulls.list" },
+          actions: {
+            listWorkflowRunArtifacts: async (
+              params: Record<string, unknown>,
+            ) => {
+              expect(params["run_id"]).toBe(input.run["id"]);
+              expect(params["name"]).toBe("generated-conflicts");
+              return { data: { artifacts: input.artifacts } };
+            },
+          },
+        },
         paginate: async (route: unknown, params: Record<string, unknown>) => {
           expect(route).toBe("pulls.list");
           expect(params["head"]).toBe(
@@ -280,6 +293,16 @@ describe("publish", () => {
           };
         }
       },
+    },
+    {
+      // A plan left to people uploads nothing.
+      name: "a run that uploaded no resolution",
+      change: (input) => (input.artifacts = []),
+    },
+    {
+      name: "an expired resolution",
+      change: (input) =>
+        (input.artifacts = [{ name: "generated-conflicts", expired: true }]),
     },
     {
       name: "two pull requests from one branch",
