@@ -8,6 +8,7 @@ import {
   BACKGROUND_ACTION_KIND,
   QUEUED_ACTION_KIND,
 } from "@/api/lib/rate-limit/action-kinds";
+import { testOrganizationStateDb } from "@/api/tests/helpers/model-dispatch-admission";
 
 import { ActionAdmissionError, withActionAdmission } from "./action-admission";
 import {
@@ -41,6 +42,7 @@ describe("queued action admission", () => {
         const controller = new AbortController();
 
         const operation = runBackgroundJob({
+          organizationStateDb: testOrganizationStateDb,
           actionKind: BACKGROUND_ACTION_KIND.flow,
           organizationId,
           userId,
@@ -77,6 +79,7 @@ describe("queued action admission", () => {
       let ran = false;
       const delays: number[] = [];
       const operation = runBackgroundJob({
+        organizationStateDb: testOrganizationStateDb,
         actionKind: BACKGROUND_ACTION_KIND.extraction,
         organizationId,
         userId,
@@ -140,6 +143,7 @@ describe("queued action admission", () => {
         },
       });
     const operation = runBackgroundJob({
+      organizationStateDb: testOrganizationStateDb,
       actionKind: BACKGROUND_ACTION_KIND.flow,
       organizationId,
       userId,
@@ -190,6 +194,7 @@ describe("queued action admission", () => {
       };
 
       const result = await runBackgroundJob({
+        organizationStateDb: testOrganizationStateDb,
         actionKind: BACKGROUND_ACTION_KIND.flow,
         organizationId,
         userId,
@@ -228,6 +233,7 @@ describe("queued action admission", () => {
       actionKind: "document-reviews.background",
       organizationId,
       userId,
+      organizationStateDb: testOrganizationStateDb,
       job: { moveToDelayed: async () => undefined },
       signal: new AbortController().signal,
       admission,
@@ -418,6 +424,7 @@ describe("queued action admission", () => {
         },
       });
     const owner = runBackgroundJob({
+      organizationStateDb: testOrganizationStateDb,
       actionKind: BACKGROUND_ACTION_KIND.flow,
       organizationId,
       userId,
@@ -433,6 +440,7 @@ describe("queued action admission", () => {
     const deferred: { index: number; at: number }[] = [];
     const contender = async (index: number) =>
       await runBackgroundJob({
+        organizationStateDb: testOrganizationStateDb,
         actionKind: BACKGROUND_ACTION_KIND.flow,
         organizationId,
         userId,

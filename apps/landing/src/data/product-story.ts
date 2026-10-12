@@ -133,7 +133,7 @@ export const productStoryThumbnails = {
   agent: {
     src: "/media/products/agent.png",
     darkSrc: "/media/products/agent-dark.png",
-    alt: "AI agent in stella",
+    alt: "AI agent in stella: a cited change-of-control review with a generated exposure view",
   },
   cli: {
     src: "/media/products/story-cli-poster.jpg",
@@ -194,7 +194,7 @@ export const productStoryMedia = {
     darkVideoSrc: "/media/products/story-agent-dark.mp4",
     posterSrc: "/media/products/story-agent-poster.jpg",
     darkPosterSrc: "/media/products/story-agent-dark-poster.jpg",
-    alt: "A grounded answer with cited matter sources in stella",
+    alt: "A cited change-of-control review in stella, opening each source from the answer",
   },
   cli: {
     videoSrc: "/media/products/story-cli.mp4",
@@ -262,7 +262,7 @@ export const productStoryHeroMedia = {
     darkVideoSrc: "/media/products/story-agent-hero-dark.mp4",
     posterSrc: "/media/products/story-agent-hero-poster.jpg",
     darkPosterSrc: "/media/products/story-agent-hero-dark-poster.jpg",
-    alt: "A grounded answer with cited matter sources in stella",
+    alt: "A cited change-of-control review in stella, opening each source from the answer",
   },
   cli: {
     videoSrc: "/media/products/story-cli-hero.mp4",

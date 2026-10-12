@@ -819,6 +819,53 @@ describe("table export", () => {
     });
   });
 
+  test("a cited decision passage notes the court's paragraph number in the export's locale", () => {
+    const columns = buildExportColumns(tableLayout(), [
+      { id: "p1", name: "Holding", tool: aiTool },
+    ]);
+    const justifications = new Map<string, JustificationContent>([
+      [
+        "holding-field",
+        {
+          version: 1,
+          blocks: [
+            {
+              kind: "decision-passage",
+              anchorId: "p-8",
+              courtParagraphNumber: 1234,
+              excerpt: "The appeal is dismissed.",
+            },
+            {
+              kind: "decision-passage",
+              anchorId: "p-3",
+              courtParagraphNumber: null,
+              excerpt: "Facts.",
+            },
+          ],
+        },
+      ],
+    ]);
+    const table = buildExportTable(
+      columns,
+      [
+        entity([
+          {
+            id: "holding-field",
+            entityId: "entity-1",
+            propertyId: "p1",
+            content: { version: 1, type: "text", value: "Dismissed" },
+          },
+        ]),
+      ],
+      "de",
+      exportOptions(justifications),
+    );
+
+    expect(table.rows[0]?.[0]).toMatchObject({
+      comment: "The appeal is dismissed. (\u00b6\u00a01.234)\nFacts.",
+    });
+  });
+
   test("links a document cell to its folio deep link and notes the extraction rationale", async () => {
     const columns = buildExportColumns(tableLayout(), [
       { id: "p1", name: "Contract", tool: aiTool },
