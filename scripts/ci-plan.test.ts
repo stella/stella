@@ -50,6 +50,7 @@ import {
 import {
   mainHeavyJobs,
   prDepthJobs,
+  queueGateJobs,
   queueAdmittedJobs,
   thinJobs,
 } from "./main-heavy-plan";
@@ -713,6 +714,7 @@ const resultJob = v.parse(
 const CANCEL_REUSABLE_JOB = "marketing-screenshots-cancel";
 const MAIN_ONLY_JOBS = new Set(["api-test-durations"]);
 const CANCELLATION_EXCEPTIONS = new Set([
+  "query-perf",
   "fix-tests-on-base",
   "heavy-web-build",
   "marketing-screenshots",
@@ -1173,6 +1175,7 @@ const resultGateCase = ({
       NEEDS: JSON.stringify(needs),
       FAST_REQUIRED: resultStep.env["FAST_REQUIRED"] ?? "",
       FAST_JOB_SCOPES: resultStep.env["FAST_JOB_SCOPES"] ?? "",
+      QUEUE_GATES: resultStep.env["QUEUE_GATES"] ?? "",
       PATH: `${fakeGhDirectory}:${process.env["PATH"] ?? ""}`,
       PR_NUMBER: event === EVENT.pullRequest ? PULL_REQUEST.number : "",
       REPO: PULL_REQUEST.repo,
@@ -3290,7 +3293,7 @@ const runPlaywrightSelection = ({
 };
 
 test.each([1, 2])(
-  "full Playwright depth shards tests without a spec list: %s",
+  "full Playwright depth shards general and geometry projects independently: %s",
   (shard) => {
     const result = runPlaywrightSelection({ mode: "full", specs: "[]", shard });
     expect(result.exitCode, result.stderr.toString()).toBe(0);
@@ -3302,6 +3305,16 @@ test.each([1, 2])(
       "test:e2e",
       "--",
       "--grep-invert=route-smoke",
+      "--project=chromium",
+      "--project=heap-growth-canary",
+      `--shard=${shard}/2`,
+      `${nodePath.resolve(import.meta.dir, "..")}/.github/actions/setup-playwright/run-in-image.sh`,
+      "bun",
+      "--filter",
+      "@stll/web",
+      "test:e2e",
+      "--",
+      "--project=docked-chat-geometry",
       `--shard=${shard}/2`,
     ]);
   },
@@ -5407,6 +5420,7 @@ test("parity rejects new queue-only jobs, ungated PR paths and stale exemptions"
 test("thin merge groups intentionally skip heavy jobs while full parity stays enforced", () => {
   const heavy = new Set(mainHeavyJobs({ jobs: ciJobs }));
   const admitted = new Set(queueAdmittedJobs({ jobs: ciJobs }));
+  const gates = new Set(queueGateJobs({ jobs: ciJobs }));
   for (const { name, condition } of parityJobs) {
     const full = runsAtDepth(condition, {
       event: EVENT.mergeGroup,
@@ -5441,7 +5455,11 @@ test("thin merge groups intentionally skip heavy jobs while full parity stays en
         queueBrowserSuites: "off",
       }),
       `${name}/off`,
-    ).toBe(heavy.has(name) && name !== "desktop-rust-tests" ? false : full);
+    ).toBe(
+      heavy.has(name) && !gates.has(name) && name !== "desktop-rust-tests"
+        ? false
+        : full,
+    );
     for (const event of [EVENT.pullRequest, EVENT.workflowDispatch]) {
       expect(
         runsAtDepth(condition, {

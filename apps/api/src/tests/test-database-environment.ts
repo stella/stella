@@ -91,7 +91,11 @@ export const configureTestDatabaseEnvironment = (
   environment: NodeJS.ProcessEnv = process.env,
   sentinelUrl: () => string = rootPoolSentinelUrl,
 ) => {
-  if (environment[POSTGRES_TEST_MARKER] === POSTGRES_TEST_RUNNER.gateValue) {
+  if (
+    environment[POSTGRES_TEST_MARKER] === POSTGRES_TEST_RUNNER.gateValue ||
+    environment[packageJson.ciGateTestRunners["test:perf"].gate] ===
+      packageJson.ciGateTestRunners["test:perf"].gateValue
+  ) {
     return;
   }
   environment["DATABASE_URL"] = sentinelUrl();

@@ -1,0 +1,2016 @@
+[
+  {
+    "group": "group-001",
+    "normalisedText": "c. a. 9th cir. certiorari denied.",
+    "expected": "usable",
+    "texts": [
+      "C. A. 0th Cir. Certiorari denied.",
+      "C. A. 0th Cir. Certiorari denied.",
+      "C. A. 0th Cir. Certiorari denied.",
+      "C. A. 5th Cir. Certiorari denied.",
+      "C. A. 1th Cir. Certiorari denied.",
+      "C. A. 3th Cir. Certiorari denied.",
+      "C. A. 3th Cir. Certiorari denied.",
+      "C. A. 1th Cir. Certiorari denied.",
+      "C. A. 0th Cir. Certiorari denied.",
+      "C. A. 3th Cir. Certiorari denied.",
+      "C. A. 5th Cir. Certiorari denied.",
+      "C. A. 3th Cir. Certiorari denied.",
+      "C. A. 1th Cir. Certiorari denied.",
+      "C. A. 2th Cir. Certiorari denied.",
+      "C. A. 3th Cir. Certiorari denied.",
+      "C. A. 0th Cir. Certiorari denied.",
+      "C. A. 1th Cir. Certiorari denied.",
+      "C. A. 2th Cir. Certiorari denied.",
+      "C. A. 0th Cir. Certiorari denied.",
+      "C. A. 1th Cir. Certiorari denied.",
+      "C. A. 0th Cir. Certiorari denied.",
+      "C. A. 3th Cir. Certiorari denied.",
+      "C. A. 1th Cir. Certiorari denied.",
+      "C. A. 0th Cir. Certiorari denied.",
+      "C. A. 3th Cir. Certiorari denied.",
+      "C. A. 3th Cir. Certiorari denied.",
+      "C. A. 1th Cir. Certiorari denied.",
+      "C. A. 3th Cir. Certiorari denied.",
+      "C. A. 7th Cir. Certiorari denied.",
+      "C. A. 0th Cir. Certiorari denied.",
+      "C. A. 0th Cir. Certiorari denied.",
+      "C. A. 5th Cir. Certiorari denied.",
+      "C. A. 1th Cir. Certiorari denied.",
+      "C. A. 1th Cir. Certiorari denied.",
+      "C. A. 0th Cir. Certiorari denied.",
+      "C. A. 3th Cir. Certiorari denied.",
+      "C. A. 1th Cir. Certiorari denied.",
+      "C. A. 7th Cir. Certiorari denied.",
+      "C. A. 0th Cir. Certiorari denied.",
+      "C. A. 2th Cir. Certiorari denied.",
+      "C. A. 1th Cir. Certiorari denied.",
+      "C. A. 1th Cir. Certiorari denied.",
+      "C. A. 1th Cir. Certiorari denied.",
+      "C. A. 2th Cir. Certiorari denied.",
+      "C. A. 3th Cir. Certiorari denied.",
+      "C. A. 0th Cir. Certiorari denied.",
+      "C. A. 1th Cir. Certiorari denied.",
+      "C. A. 2th Cir. Certiorari denied.",
+      "C. A. 7th Cir. Certiorari denied.",
+      "C. A. 1th Cir. Certiorari denied.",
+      "C. A. 7th Cir. Certiorari denied.",
+      "C. A. 0th Cir. Certiorari denied.",
+      "C. A. 7th Cir. Certiorari denied.",
+      "C. A. 7th Cir. Certiorari denied.",
+      "C. A. 2th Cir. Certiorari denied.",
+      "C. A. 5th Cir. Certiorari denied.",
+      "C. A. 2th Cir. Certiorari denied.",
+      "C. A. 0th Cir. Certiorari denied.",
+      "C. A. 5th Cir. Certiorari denied.",
+      "C. A. 7th Cir. Certiorari denied.",
+      "C. A. 3th Cir. Certiorari denied."
+    ]
+  },
+  {
+    "group": "group-002",
+    "normalisedText": "affirmed.",
+    "expected": "usable",
+    "texts": [
+      "Affirmed.",
+      "Affirmed.",
+      "Affirmed.",
+      "Affirmed.",
+      "Affirmed.",
+      "Affirmed.",
+      "Affirmed.",
+      "Affirmed.",
+      "Affirmed.",
+      "Affirmed.",
+      "Affirmed.",
+      "Affirmed.",
+      "Affirmed.",
+      "Affirmed.",
+      "AFFIRMED.",
+      "Affirmed.",
+      "Affirmed.",
+      "Affirmed."
+    ]
+  },
+  {
+    "group": "group-003",
+    "normalisedText": "per curiam.",
+    "expected": "usable",
+    "texts": [
+      "Per Curiam.",
+      "Per Curiam.",
+      "Per Curiam.",
+      "Per Curiam.",
+      "Per Curiam.",
+      "Per Curiam.",
+      "Per Curiam.",
+      "Per Curiam.",
+      "Per Curiam.",
+      "Per Curiam.",
+      "Per Curiam.",
+      "Per Curiam.",
+      "Per Curiam.",
+      "Per Curiam.",
+      "Per Curiam.",
+      "Per Curiam.",
+      "Per Curiam."
+    ]
+  },
+  {
+    "group": "group-004",
+    "normalisedText": "unable to extract document content",
+    "expected": "source-placeholder",
+    "texts": [
+      "Unable to extract document content",
+      "Unable to extract document content",
+      "Unable to extract document content",
+      "Unable to extract document content",
+      "Unable to extract document content",
+      "Unable to extract document content",
+      "Unable to extract document content",
+      "Unable to extract document content",
+      "Unable to extract document content",
+      "Unable to extract document content",
+      "Unable to extract document content",
+      "Unable to extract document content",
+      "Unable to extract document content",
+      "Unable to extract document content",
+      "Unable to extract document content",
+      "Unable to extract document content"
+    ]
+  },
+  {
+    "group": "group-005",
+    "normalisedText": "c. a. 9d cir. certiorari denied.",
+    "expected": "usable",
+    "texts": [
+      "C. A. 9d Cir. Certiorari denied.",
+      "C. A. 4d Cir. Certiorari denied.",
+      "C. A. 9d Cir. Certiorari denied.",
+      "C. A. 9d Cir. Certiorari denied.",
+      "C. A. 4d Cir. Certiorari denied.",
+      "C. A. 4d Cir. Certiorari denied.",
+      "C. A. 4d Cir. Certiorari denied.",
+      "C. A. 9d Cir. Certiorari denied.",
+      "C. A. 4d Cir. Certiorari denied.",
+      "C. A. 4d Cir. Certiorari denied.",
+      "C. A. 4d Cir. Certiorari denied.",
+      "C. A. 9d Cir. Certiorari denied.",
+      "C. A. 4d Cir. Certiorari denied."
+    ]
+  },
+  {
+    "group": "group-006",
+    "normalisedText": "c. a. 99th cir. certiorari denied.",
+    "expected": "usable",
+    "texts": [
+      "C. A. 66th Cir. Certiorari denied.",
+      "C. A. 68th Cir. Certiorari denied.",
+      "C. A. 66th Cir. Certiorari denied.",
+      "C. A. 66th Cir. Certiorari denied.",
+      "C. A. 66th Cir. Certiorari denied.",
+      "C. A. 66th Cir. Certiorari denied.",
+      "C. A. 66th Cir. Certiorari denied.",
+      "C. A. 66th Cir. Certiorari denied.",
+      "C. A. 68th Cir. Certiorari denied.",
+      "C. A. 68th Cir. Certiorari denied.",
+      "C. A. 66th Cir. Certiorari denied.",
+      "C. A. 68th Cir. Certiorari denied."
+    ]
+  },
+  {
+    "group": "group-007",
+    "normalisedText": "per curiam.\n\naffirmed.",
+    "expected": "usable",
+    "texts": [
+      "PER CURIAM.\n\nAffirmed.",
+      "PER CURIAM.\n\nAffirmed.",
+      "PER CURIAM.\n\nAffirmed.",
+      "PER CURIAM.\n\nAffirmed.",
+      "PER CURIAM.\n\nAffirmed.",
+      "PER CURIAM.\n\nAffirmed.",
+      "PER CURIAM.\n\nAffirmed.",
+      "PER CURIAM.\n\nAffirmed.",
+      "PER CURIAM.\n\nAffirmed.",
+      "PER CURIAM.\n\nAffirmed.",
+      "PER CURIAM.\n\nAffirmed."
+    ]
+  },
+  {
+    "group": "group-008",
+    "normalisedText": "appeal dismissed.",
+    "expected": "usable",
+    "texts": [
+      "Appeal dismissed.",
+      "Appeal dismissed.",
+      "Appeal dismissed.",
+      "Appeal Dismissed.",
+      "Appeal dismissed.",
+      "Appeal dismissed.",
+      "Appeal dismissed.",
+      "Appeal dismissed."
+    ]
+  },
+  {
+    "group": "group-009",
+    "normalisedText": "denied.",
+    "expected": "usable",
+    "texts": [
+      "Denied.",
+      "Denied.",
+      "Denied.",
+      "Denied.",
+      "Denied.",
+      "Denied.",
+      "Denied.",
+      "Denied."
+    ]
+  },
+  {
+    "group": "group-010",
+    "normalisedText": "no opinion found.click here to view source material.",
+    "expected": "source-placeholder",
+    "texts": [
+      "No opinion found.Click here to view source material.",
+      "No opinion found.Click here to view source material.",
+      "No opinion found.Click here to view source material.",
+      "No opinion found.Click here to view source material.",
+      "No opinion found.Click here to view source material.",
+      "No opinion found.Click here to view source material.",
+      "No opinion found.Click here to view source material.",
+      "No opinion found.Click here to view source material."
+    ]
+  },
+  {
+    "group": "group-011",
+    "normalisedText": "petition for certification denied.",
+    "expected": "usable",
+    "texts": [
+      "Petition for certification denied.",
+      "Petition for certification denied.",
+      "Petition for certification denied.",
+      "Petition for certification denied.",
+      "Petition for certification denied.",
+      "Petition for certification denied.",
+      "Petition for certification denied."
+    ]
+  },
+  {
+    "group": "group-012",
+    "normalisedText": "certiorari denied without opinion.",
+    "expected": "usable",
+    "texts": [
+      "Certiorari denied without opinion.",
+      "Certiorari denied without opinion.",
+      "Certiorari denied without opinion.",
+      "Certiorari denied without opinion.",
+      "Certiorari denied without opinion.",
+      "Certiorari denied without opinion."
+    ]
+  },
+  {
+    "group": "group-013",
+    "normalisedText": "dismissed without opinion.",
+    "expected": "usable",
+    "texts": [
+      "Dismissed without opinion.",
+      "Dismissed without opinion.",
+      "Dismissed without opinion.",
+      "Dismissed without opinion.",
+      "Dismissed without opinion.",
+      "Dismissed without opinion."
+    ]
+  },
+  {
+    "group": "group-014",
+    "normalisedText": "zqvvvv, c.j.",
+    "expected": "no-ruling-text",
+    "texts": [
+      "Zqvvvv, C.J.",
+      "Zqvvvv, C.J.",
+      "Zqvvvv, C.J.",
+      "Zqvvvv, C.J.",
+      "Zqvvvv, C.J.",
+      "Zqvvvv, C.J."
+    ]
+  },
+  {
+    "group": "group-015",
+    "normalisedText": "c. a. 9th cir. cer-tiorari denied.",
+    "expected": "usable",
+    "texts": [
+      "C. A. 1th Cir. Cer-tiorari denied.",
+      "C. A. 5th Cir. Cer-tiorari denied.",
+      "C. A. 2th Cir. Cer-tiorari denied.",
+      "C. A. 2th Cir. Cer-tiorari denied.",
+      "C. A. 0th Cir. Cer-tiorari denied."
+    ]
+  },
+  {
+    "group": "group-016",
+    "normalisedText": "it is so ordered.",
+    "expected": "usable",
+    "texts": [
+      "IT IS SO ORDERED.",
+      "IT IS SO ORDERED.",
+      "IT IS SO ORDERED.",
+      "IT IS SO ORDERED.",
+      "IT IS SO ORDERED."
+    ]
+  },
+  {
+    "group": "group-017",
+    "normalisedText": "usca9 opinion can't open 99-9999p.99",
+    "expected": "source-placeholder",
+    "texts": [
+      "USCA6 Opinion Can't open 61-6718P.86",
+      "USCA6 Opinion Can't open 61-4614P.86",
+      "USCA6 Opinion Can't open 61-6951P.86",
+      "USCA6 Opinion Can't open 48-6693P.86",
+      "USCA6 Opinion Can't open 46-6721P.86"
+    ]
+  },
+  {
+    "group": "group-018",
+    "normalisedText": "99 99 9999",
+    "expected": "no-ruling-text",
+    "texts": ["86 64 4843", "89 63 4849", "89 49 4844", "81 44 4846"]
+  },
+  {
+    "group": "group-019",
+    "normalisedText": "[there is no error.]\n\nthere is no error.",
+    "expected": "usable",
+    "texts": [
+      "[There is no error.]\n\nThere is no error.",
+      "[There is no error.]\n\nThere is no error.",
+      "[There is no error.]\n\nThere is no error.",
+      "[There is no error.]\n\nThere is no error."
+    ]
+  },
+  {
+    "group": "group-020",
+    "normalisedText": "affirmed",
+    "expected": "usable",
+    "texts": ["Affirmed", "Affirmed", "Affirmed", "Affirmed"]
+  },
+  {
+    "group": "group-021",
+    "normalisedText": "certiorari denied.",
+    "expected": "usable",
+    "texts": [
+      "Certiorari denied.",
+      "Certiorari denied.",
+      "Certiorari denied.",
+      "Certiorari denied."
+    ]
+  },
+  {
+    "group": "group-022",
+    "normalisedText": "dismissed.",
+    "expected": "usable",
+    "texts": ["Dismissed.", "Dismissed.", "DISMISSED.", "Dismissed."]
+  },
+  {
+    "group": "group-023",
+    "normalisedText": "memorandum decisions",
+    "expected": "source-placeholder",
+    "texts": [
+      "MEMORANDUM DECISIONS",
+      "MEMORANDUM DECISIONS",
+      "MEMORANDUM DECISIONS",
+      "MEMORANDUM DECISIONS"
+    ]
+  },
+  {
+    "group": "group-024",
+    "normalisedText": "certiorari denied without opinion. 999 so.9d 999.",
+    "expected": "usable",
+    "texts": [
+      "Certiorari denied without opinion. 620 So.4d 029.",
+      "Certiorari denied without opinion. 656 So.4d 929.",
+      "Certiorari denied without opinion. 651 So.4d 951."
+    ]
+  },
+  {
+    "group": "group-025",
+    "normalisedText": "judgment affirmed by default.",
+    "expected": "usable",
+    "texts": [
+      "Judgment affirmed by default.",
+      "Judgment affirmed by default.",
+      "Judgment affirmed by default."
+    ]
+  },
+  {
+    "group": "group-026",
+    "normalisedText": "judgment of sentence affirmed.",
+    "expected": "usable",
+    "texts": [
+      "Judgment of sentence affirmed.",
+      "Judgment of sentence affirmed.",
+      "Judgment of sentence affirmed."
+    ]
+  },
+  {
+    "group": "group-027",
+    "normalisedText": "motion for leave to appeal denied.",
+    "expected": "usable",
+    "texts": [
+      "Motion for leave to appeal denied.",
+      "Motion for leave to appeal denied.",
+      "Motion for leave to appeal denied."
+    ]
+  },
+  {
+    "group": "group-028",
+    "normalisedText": "no opinion found. click here to view source material.",
+    "expected": "source-placeholder",
+    "texts": [
+      "No opinion found. Click here to view source material.",
+      "No opinion found. Click here to view source material.",
+      "No opinion found. Click here to view source material."
+    ]
+  },
+  {
+    "group": "group-029",
+    "normalisedText": "see s. c., 9 q.z. 999.",
+    "expected": "usable",
+    "texts": [
+      "See S. c., 3 Q.Z. 478.",
+      "See S. c., 3 Q.Z. 451.",
+      "See S. c., 3 Q.Z. 410."
+    ]
+  },
+  {
+    "group": "group-030",
+    "normalisedText": "so ordered.",
+    "expected": "usable",
+    "texts": ["SO ORDERED.", "SO ORDERED.", "SO ORDERED."]
+  },
+  {
+    "group": "group-031",
+    "normalisedText": "(b) (9)",
+    "expected": "no-ruling-text",
+    "texts": ["(b) (6)", "(b) (6)"]
+  },
+  {
+    "group": "group-032",
+    "normalisedText": "9st dept: 999 ad9d 999\n\ndenied",
+    "expected": "usable",
+    "texts": [
+      "6st Dept: 691 AD9d 012\n\ndenied",
+      "6st Dept: 692 AD9d 381\n\ndenied"
+    ]
+  },
+  {
+    "group": "group-033",
+    "normalisedText": "agree to affirm. no opinion.\n\nall concur.\n\njudgment affirmed.",
+    "expected": "usable",
+    "texts": [
+      "Agree to affirm. No opinion.\n\nAll concur.\n\nJudgment affirmed.",
+      "Agree to affirm. No opinion.\n\nAll concur.\n\nJudgment affirmed."
+    ]
+  },
+  {
+    "group": "group-034",
+    "normalisedText": "appeal dismissed on motion of counsel for appellee.",
+    "expected": "usable",
+    "texts": [
+      "Appeal dismissed on motion of counsel for Appellee.",
+      "Appeal dismissed on motion of counsel for appellee."
+    ]
+  },
+  {
+    "group": "group-035",
+    "normalisedText": "zqrvv, j.\n\nthe judgment of the court below is affirmed.",
+    "expected": "usable",
+    "texts": [
+      "Zqrvv, J.\n\nThe judgment of the court below is affirmed.",
+      "Zqrvv, J.\n\nThe judgment of the court below is affirmed."
+    ]
+  },
+  {
+    "group": "group-036",
+    "normalisedText": "c. a. 9st cir. certiorari denied.",
+    "expected": "usable",
+    "texts": [
+      "C. A. 6st Cir. Certiorari denied.",
+      "C. A. 6st Cir. Certiorari denied."
+    ]
+  },
+  {
+    "group": "group-037",
+    "normalisedText": "c. a. d. c. cir. certiorari denied.",
+    "expected": "usable",
+    "texts": [
+      "C. A. D. C. Cir. Certiorari denied.",
+      "C. A. D. C. Cir. Certiorari denied."
+    ]
+  },
+  {
+    "group": "group-038",
+    "normalisedText": "decision of dismissal",
+    "expected": "usable",
+    "texts": ["DECISION OF DISMISSAL", "DECISION OF DISMISSAL"]
+  },
+  {
+    "group": "group-039",
+    "normalisedText": "for cotton.",
+    "expected": "usable",
+    "texts": ["For cotton.", "For cotton."]
+  },
+  {
+    "group": "group-040",
+    "normalisedText": "zqlvvv, j.\n\ndenied.",
+    "expected": "usable",
+    "texts": ["Zqlvvv, J.\n\nDenied.", "Zqlvvv, J.\n\nDenied."]
+  },
+  {
+    "group": "group-041",
+    "normalisedText": "granted.",
+    "expected": "usable",
+    "texts": ["Granted.", "Granted."]
+  },
+  {
+    "group": "group-042",
+    "normalisedText": "habeas corpus denied.",
+    "expected": "usable",
+    "texts": ["Habeas corpus denied.", "Habeas Corpus denied."]
+  },
+  {
+    "group": "group-043",
+    "normalisedText": "note. — see s. c., reported in 9 q.z. 999.",
+    "expected": "usable",
+    "texts": [
+      "NOTE. — See S. c., reported in 0 Q.Z. 695.",
+      "NOTE. — See S. c., reported in 6 Q.Z. 630."
+    ]
+  },
+  {
+    "group": "group-044",
+    "normalisedText": "note. — see same case reported post, 999.",
+    "expected": "usable",
+    "texts": [
+      "NOTE. — See same case reported post, 477.",
+      "NOTE. — See same case reported post, 043."
+    ]
+  },
+  {
+    "group": "group-045",
+    "normalisedText": "opinion # ww-9999 was never issued.",
+    "expected": "source-placeholder",
+    "texts": [
+      "Opinion # WW-6794 was never issued.",
+      "Opinion # WW-6491 was never issued."
+    ]
+  },
+  {
+    "group": "group-046",
+    "normalisedText": "zqkvvv, j.\n\ndenied.",
+    "expected": "usable",
+    "texts": ["Zqkvvv, J.\n\nDenied.", "Zqkvvv, J.\n\nDenied."]
+  },
+  {
+    "group": "group-047",
+    "normalisedText": "sup. ct. zqs. certiorari denied.",
+    "expected": "usable",
+    "texts": [
+      "Sup. Ct. Zqs. Certiorari denied.",
+      "Sup. Ct. Zqs. Certiorari denied."
+    ]
+  },
+  {
+    "group": "group-048",
+    "normalisedText": "sup. ct. zqf. certiorari denied.",
+    "expected": "usable",
+    "texts": [
+      "Sup. Ct. Zqf. Certiorari denied.",
+      "Sup. Ct. Zqf. Certiorari denied."
+    ]
+  },
+  {
+    "group": "group-049",
+    "normalisedText": "test\n\ndocument",
+    "expected": "source-placeholder",
+    "texts": ["TEST\n\nDOCUMENT", "TEST\n\nDOCUMENT"]
+  },
+  {
+    "group": "group-050",
+    "normalisedText": "twenty per cent. case.",
+    "expected": "usable",
+    "texts": ["Twenty per cent. case.", "Twenty per cent. case."]
+  },
+  {
+    "group": "group-051",
+    "normalisedText": "zqnvvv, judge:\n\nfor opinion see c.d. 9999.",
+    "expected": "usable",
+    "texts": [
+      "Zqnvvv, Judge:\n\nFor opinion see C.D. 7797.",
+      "Zqnvvv, Judge:\n\nFor opinion see C.D. 7797."
+    ]
+  },
+  {
+    "group": "group-052",
+    "normalisedText": "ÿþc",
+    "expected": "undecodable",
+    "texts": ["ÿþC", "ÿþC"]
+  },
+  {
+    "group": "group-053",
+    "normalisedText": "(b) (9)\n\n(b) (9)\n\n(b) (9)",
+    "expected": "no-ruling-text",
+    "texts": ["(b) (6)\n\n(b) (6)\n\n(b) (6)"]
+  },
+  {
+    "group": "group-054",
+    "normalisedText": "(b) (9)(b) (9)",
+    "expected": "no-ruling-text",
+    "texts": ["(b) (6)(b) (6)"]
+  },
+  {
+    "group": "group-055",
+    "normalisedText": "(papers recalled by the zqdkvv.)",
+    "expected": "usable",
+    "texts": ["(Papers recalled by the Zqdkvv.)"]
+  },
+  {
+    "group": "group-056",
+    "normalisedText": ".\n\ni\n\n. .\n\n. . ..\n\n_.\n9",
+    "expected": "undecodable",
+    "texts": [".\n\ni\n\n. .\n\n. . ..\n\n_.\n6"]
+  },
+  {
+    "group": "group-057",
+    "normalisedText": ". . .._\n\n..\n\noffice of the a’itorney general of zqulv\n\nzqelvv",
+    "expected": "usable",
+    "texts": [
+      ". . .._\n\n..\n\nOFFICE OF THE A’ITORNEY GENERAL OF ZQULV\n\nZQELVV"
+    ]
+  },
+  {
+    "group": "group-058",
+    "normalisedText": "/s/ zquvvv zqevvvvv\n\nseptember 99, 9999",
+    "expected": "no-ruling-text",
+    "texts": ["/s/ Zquvvv Zqevvvvv\n\nSeptember 17, 2088"]
+  },
+  {
+    "group": "group-059",
+    "normalisedText": "9",
+    "expected": "no-ruling-text",
+    "texts": ["4"]
+  },
+  {
+    "group": "group-060",
+    "normalisedText": "9/9/99",
+    "expected": "no-ruling-text",
+    "texts": ["6/7/88"]
+  },
+  {
+    "group": "group-061",
+    "normalisedText": "99/99/9999\nfor",
+    "expected": "no-ruling-text",
+    "texts": ["06/14/2088\nfor"]
+  },
+  {
+    "group": "group-062",
+    "normalisedText": "999\n\noffice of the attorney\n\nzqelvv",
+    "expected": "usable",
+    "texts": ["330\n\nOFFICE OF THE ATTORNEY\n\nZQELVV"]
+  },
+  {
+    "group": "group-063",
+    "normalisedText": "9999 qx super 99u\n\n99s9s9999",
+    "expected": "no-ruling-text",
+    "texts": ["4849 QX SUPER 38U\n\n68s2s4849"]
+  },
+  {
+    "group": "group-064",
+    "normalisedText": ":i\n\n,\n\n,.~... . .,. _, . . ., .: .,. ..,: ..,, ,,,.: i:..,ii ji. ..i:,:::> ... . .: ;. ::::: :/: ::.:i.,..:.. 9’:\n\nj j:\n\n.\n ? r",
+    "expected": "undecodable",
+    "texts": [
+      ":i\n\n,\n\n,.~... . .,. _, . . ., .: .,. ..,: ..,, ,,,.: i:..,ii ji. ..i:,:::> ... . .: ;. ::::: :/: ::.:i.,..:.. 6’:\n\nj j:\n\n.\n ? r"
+    ]
+  },
+  {
+    "group": "group-065",
+    "normalisedText": "?obrttwy99, loa9",
+    "expected": "undecodable",
+    "texts": ["?obrttwy45, loa1"]
+  },
+  {
+    "group": "group-066",
+    "normalisedText": "_.\n\ns",
+    "expected": "undecodable",
+    "texts": ["_.\n\ns"]
+  },
+  {
+    "group": "group-067",
+    "normalisedText": "a separate order shall issue.",
+    "expected": "usable",
+    "texts": ["A separate order shall issue."]
+  },
+  {
+    "group": "group-068",
+    "normalisedText": "aff.\n\ncir. ct. (zqy-lvvv)",
+    "expected": "usable",
+    "texts": ["Aff.\n\nCir. Ct. (Zqy-lvvv)"]
+  },
+  {
+    "group": "group-069",
+    "normalisedText": "affirmed\n\n999-9999 (zqbl)",
+    "expected": "usable",
+    "texts": ["Affirmed\n\n635-4863 (Zqbl)"]
+  },
+  {
+    "group": "group-070",
+    "normalisedText": "affirmed by default.\n\nzqav, ch. c., not sitting.",
+    "expected": "usable",
+    "texts": ["Affirmed by default.\n\nZqav, Ch. C., not sitting."]
+  },
+  {
+    "group": "group-071",
+    "normalisedText": "agree to affirm; no opinion.\n\nall concur.\n\njudgment affirmed.",
+    "expected": "usable",
+    "texts": [
+      "Agree to affirm; no opinion.\n\nAll concur.\n\nJudgment affirmed."
+    ]
+  },
+  {
+    "group": "group-072",
+    "normalisedText": "amended memorandum opinion may 99, 9999.",
+    "expected": "no-ruling-text",
+    "texts": ["Amended Memorandum Opinion May 17, 2088."]
+  },
+  {
+    "group": "group-073",
+    "normalisedText": "app. ct. zqg., 9d dist. certiorari denied.",
+    "expected": "usable",
+    "texts": ["App. Ct. Zqg., 4d Dist. Certiorari denied."]
+  },
+  {
+    "group": "group-074",
+    "normalisedText": "appeal\n\ndismissed, without costs, upon stipulation.",
+    "expected": "usable",
+    "texts": ["Appeal\n\ndismissed, without costs, upon stipulation."]
+  },
+  {
+    "group": "group-075",
+    "normalisedText": "appeal denied. judgment affirmed.",
+    "expected": "usable",
+    "texts": ["Appeal denied. Judgment affirmed."]
+  },
+  {
+    "group": "group-076",
+    "normalisedText": "appeal dismissed",
+    "expected": "usable",
+    "texts": ["Appeal dismissed"]
+  },
+  {
+    "group": "group-077",
+    "normalisedText": "appeal dismissed for want of prosecution.",
+    "expected": "usable",
+    "texts": ["Appeal dismissed for want of prosecution."]
+  },
+  {
+    "group": "group-078",
+    "normalisedText": "appeal dismissed on motion of counsel for appellant.",
+    "expected": "usable",
+    "texts": ["Appeal dismissed on motion of counsel for Appellant."]
+  },
+  {
+    "group": "group-079",
+    "normalisedText": "appeal dismissed, by agreement.",
+    "expected": "usable",
+    "texts": ["Appeal dismissed, by agreement."]
+  },
+  {
+    "group": "group-080",
+    "normalisedText": "appeal dismissed, motion of appellant.",
+    "expected": "usable",
+    "texts": ["Appeal dismissed, motion of appellant."]
+  },
+  {
+    "group": "group-081",
+    "normalisedText": "appeal dismissed, without costs, upon stipulation.",
+    "expected": "usable",
+    "texts": ["Appeal dismissed, without costs, upon stipulation."]
+  },
+  {
+    "group": "group-082",
+    "normalisedText": "appeal from ct. app. q. v. dismissed for want of jurisdiction.",
+    "expected": "usable",
+    "texts": ["Appeal from Ct. App. Q. V. dismissed for want of jurisdiction."]
+  },
+  {
+    "group": "group-083",
+    "normalisedText": "appendix 9\n\n99999\n\n99999\n\n99999\n\nappendix 9\n\n99999\n\nappendix 9",
+    "expected": "no-ruling-text",
+    "texts": [
+      "Appendix 6\n\n62355\n\n62351\n\n62318\n\nAppendix 4\n\n62316\n\nAppendix 9"
+    ]
+  },
+  {
+    "group": "group-084",
+    "normalisedText": "august term, 9999 no. 9999..\n\n(zqwlvvvvvvvv)\n\naffirmed",
+    "expected": "usable",
+    "texts": ["August Term, 4867 No. 6380..\n\n(Zqwlvvvvvvvv)\n\nAffirmed"]
+  },
+  {
+    "group": "group-085",
+    "normalisedText": "au~~is. tbcs+e\n\njamly lib, 9999",
+    "expected": "undecodable",
+    "texts": ["Au~~Is. Tbcs+e\n\nJamly lib, 6191"]
+  },
+  {
+    "group": "group-086",
+    "normalisedText": "zqxvvv, c.j.",
+    "expected": "no-ruling-text",
+    "texts": ["Zqxvvv, C.J."]
+  },
+  {
+    "group": "group-087",
+    "normalisedText": "zqovvvvvvv, j.",
+    "expected": "no-ruling-text",
+    "texts": ["Zqovvvvvvv, J."]
+  },
+  {
+    "group": "group-088",
+    "normalisedText": "by the court.\n\njudgment affirmed.",
+    "expected": "usable",
+    "texts": ["By the Court.\n\nJudgment affirmed."]
+  },
+  {
+    "group": "group-089",
+    "normalisedText": "c. a.\n\n99th cir. certiorari denied.",
+    "expected": "usable",
+    "texts": ["C. A.\n\n68th Cir. Certiorari denied."]
+  },
+  {
+    "group": "group-090",
+    "normalisedText": "c. a. 99th cir. cer-tiorari denied.",
+    "expected": "usable",
+    "texts": ["C. A. 66th Cir. Cer-tiorari denied."]
+  },
+  {
+    "group": "group-091",
+    "normalisedText": "c. a. 9d cir. certiorari denied.\n\n.",
+    "expected": "usable",
+    "texts": ["C. A. 4d Cir. Certiorari denied.\n\n."]
+  },
+  {
+    "group": "group-092",
+    "normalisedText": "c. a. 9d cir. certiorari granted.",
+    "expected": "usable",
+    "texts": ["C. A. 9d Cir. Certiorari granted."]
+  },
+  {
+    "group": "group-093",
+    "normalisedText": "c. a. 9rd cir. certiorari denied.",
+    "expected": "usable",
+    "texts": ["C. A. 9rd Cir. Certiorari denied."]
+  },
+  {
+    "group": "group-094",
+    "normalisedText": "c. a. 9th cir. certiorari granted.",
+    "expected": "usable",
+    "texts": ["C. A. 3th Cir. Certiorari granted."]
+  },
+  {
+    "group": "group-095",
+    "normalisedText": "c. d. 999 affirmed. c. a. d. 999.",
+    "expected": "usable",
+    "texts": ["C. D. 649 affirmed. C. A. D. 694."]
+  },
+  {
+    "group": "group-096",
+    "normalisedText": "c. d. 9999. plaintiff’s application for rehearing denied.",
+    "expected": "usable",
+    "texts": ["C. D. 6370. Plaintiff’s application for rehearing denied."]
+  },
+  {
+    "group": "group-097",
+    "normalisedText": "c. d. zqd zqsl, disto. 9°. adulteración de leche.",
+    "expected": "usable",
+    "texts": ["C. D. Zqd Zqsl, Disto. 6°. Adulteración de leche."]
+  },
+  {
+    "group": "group-098",
+    "normalisedText": "c. d. zqd zqsl. daños y perjuicios-",
+    "expected": "usable",
+    "texts": ["C. D. Zqd Zqsl. Daños y perjuicios-"]
+  },
+  {
+    "group": "group-099",
+    "normalisedText": "case 9:99-cv-99999-qvx document 9999 filed 99/99/99 page 9 of 9",
+    "expected": "no-ruling-text",
+    "texts": ["Case 6:81-cv-88270-QVX Document 6335 Filed 06/14/88 Page 6 of 6"]
+  },
+  {
+    "group": "group-100",
+    "normalisedText": "case reported without published opinion. affirmed.",
+    "expected": "usable",
+    "texts": ["Case Reported Without Published Opinion. Affirmed."]
+  },
+  {
+    "group": "group-101",
+    "normalisedText": "case reported without published opinion. no error.",
+    "expected": "usable",
+    "texts": ["Case reported without published opinion. No error."]
+  },
+  {
+    "group": "group-102",
+    "normalisedText": "case without published opinion. no error.",
+    "expected": "usable",
+    "texts": ["Case without published opinion. No error."]
+  },
+  {
+    "group": "group-103",
+    "normalisedText": "case: 99-99999 date filed: 99/99/9999 page: 9 of 9",
+    "expected": "no-ruling-text",
+    "texts": ["Case: 62-66890 Date Filed: 06/14/2088 Page: 6 of 6"]
+  },
+  {
+    "group": "group-104",
+    "normalisedText": "cases reported without published opinion. no error.",
+    "expected": "usable",
+    "texts": ["Cases reported without published opinion. No error."]
+  },
+  {
+    "group": "group-105",
+    "normalisedText": "certiorari dismissed without opinion.",
+    "expected": "usable",
+    "texts": ["Certiorari dismissed without opinion."]
+  },
+  {
+    "group": "group-106",
+    "normalisedText": "claims for property destroyed by the zqflv zqgl.\n\ndismissed.",
+    "expected": "usable",
+    "texts": ["Claims for property destroyed by the Zqflv Zqgl.\n\nDismissed."]
+  },
+  {
+    "group": "group-107",
+    "normalisedText": "concur — zqmvvv, p; j., zqyvvv, zqbvvv, zqwvv and zqdvvv, jj.",
+    "expected": "usable",
+    "texts": ["Concur — Zqmvvv, P; J., Zqyvvv, Zqbvvv, Zqwvv and Zqdvvv, JJ."]
+  },
+  {
+    "group": "group-108",
+    "normalisedText": "contract with district of zqilvvvv. $9,999.99.",
+    "expected": "usable",
+    "texts": ["Contract with District of Zqilvvvv. $6,316.26."]
+  },
+  {
+    "group": "group-109",
+    "normalisedText": "convenio de deslinde. (reconsideración.) zqtlv.\n\nsin lugar.",
+    "expected": "usable",
+    "texts": ["Convenio de deslinde. (Reconsideración.) Zqtlv.\n\nSin lugar."]
+  },
+  {
+    "group": "group-110",
+    "normalisedText": "cp-99-cr-9999999-9999\n\n(zqwlvvvvvvvv)\n\naffirmed",
+    "expected": "usable",
+    "texts": ["CP-06-CR-8883060-4868\n\n(Zqwlvvvvvvvv)\n\nAffirmed"]
+  },
+  {
+    "group": "group-111",
+    "normalisedText": "ct. app. zqik. certio-­rari denied.",
+    "expected": "usable",
+    "texts": ["Ct. App. Zqik. Certio-­rari denied."]
+  },
+  {
+    "group": "group-112",
+    "normalisedText": "ct. app. zqs., 9d app. dist. certiorari denied.",
+    "expected": "usable",
+    "texts": ["Ct. App. Zqs., 4d App. Dist. Certiorari denied."]
+  },
+  {
+    "group": "group-113",
+    "normalisedText": "ct. app. zqs., 9th app. dist. cer-tiorari denied.",
+    "expected": "usable",
+    "texts": ["Ct. App. Zqs., 7th App. Dist. Cer-tiorari denied."]
+  },
+  {
+    "group": "group-114",
+    "normalisedText": "ct. app. d. c. certiorari denied.",
+    "expected": "usable",
+    "texts": ["Ct. App. D. C. Certiorari denied."]
+  },
+  {
+    "group": "group-115",
+    "normalisedText": "ct. app. zqt. certiorari denied.",
+    "expected": "usable",
+    "texts": ["Ct. App. Zqt. Certiorari denied."]
+  },
+  {
+    "group": "group-116",
+    "normalisedText": "ct. app. zc. certiorari denied.",
+    "expected": "usable",
+    "texts": ["Ct. App. Zc. Certiorari denied."]
+  },
+  {
+    "group": "group-117",
+    "normalisedText": "ct. civ. app. zqp., 9th sup. jud. dist. certiorari denied.",
+    "expected": "usable",
+    "texts": ["Ct. Civ. App. Zqp., 0th Sup. Jud. Dist. Certiorari denied."]
+  },
+  {
+    "group": "group-118",
+    "normalisedText": "ct. crim. app. zqjk. certiorari denied.",
+    "expected": "usable",
+    "texts": ["Ct. Crim. App. Zqjk. Certiorari denied."]
+  },
+  {
+    "group": "group-119",
+    "normalisedText": "ct. crim. app. zqp. certiorari denied.",
+    "expected": "usable",
+    "texts": ["Ct. Crim. App. Zqp. Certiorari denied."]
+  },
+  {
+    "group": "group-120",
+    "normalisedText": "damage to real property. $9,999.",
+    "expected": "usable",
+    "texts": ["Damage to real property. $6,288."]
+  },
+  {
+    "group": "group-121",
+    "normalisedText": "december 99, 9999",
+    "expected": "no-ruling-text",
+    "texts": ["December 17, 2088"]
+  },
+  {
+    "group": "group-122",
+    "normalisedText": "decision",
+    "expected": "no-ruling-text",
+    "texts": ["DECISION"]
+  },
+  {
+    "group": "group-123",
+    "normalisedText": "decision\n\nremoved\n at\n the\n request\n of\n the\n court.",
+    "expected": "source-placeholder",
+    "texts": ["Decision\n\nremoved\n at\n the\n request\n of\n the\n court."]
+  },
+  {
+    "group": "group-124",
+    "normalisedText": "decree affirmed.",
+    "expected": "usable",
+    "texts": ["Decree affirmed."]
+  },
+  {
+    "group": "group-125",
+    "normalisedText": "denied\n\n999 zqclv'v 9, 999 p.9d 999",
+    "expected": "usable",
+    "texts": ["Denied\n\n648 Zqclv'v 6, 488 P.9d 928"]
+  },
+  {
+    "group": "group-126",
+    "normalisedText": "zqllv. zqklvv tr., inc. v. zqnlvvvv, 9999 qvqx 99.",
+    "expected": "usable",
+    "texts": ["Zqllv. Zqklvv Tr., Inc. v. Zqnlvvvv, 4844 QVQX 96."]
+  },
+  {
+    "group": "group-127",
+    "normalisedText": "dismissed by agreement of parties.",
+    "expected": "usable",
+    "texts": ["Dismissed by agreement of parties."]
+  },
+  {
+    "group": "group-128",
+    "normalisedText": "dismissed for want of prosecution.",
+    "expected": "usable",
+    "texts": ["Dismissed for want of prosecution."]
+  },
+  {
+    "group": "group-129",
+    "normalisedText": "dismissed per stipulation of counsel.",
+    "expected": "usable",
+    "texts": ["Dismissed per stipulation of counsel."]
+  },
+  {
+    "group": "group-130",
+    "normalisedText": "dist. ct. app. zqs., 9st app. dist. certiorari denied.",
+    "expected": "usable",
+    "texts": ["Dist. Ct. App. Zqs., 6st App. Dist. Certiorari denied."]
+  },
+  {
+    "group": "group-131",
+    "normalisedText": "zqjr, j.",
+    "expected": "no-ruling-text",
+    "texts": ["Zqjr, J."]
+  },
+  {
+    "group": "group-132",
+    "normalisedText": "entry removed as\nentered in error",
+    "expected": "source-placeholder",
+    "texts": ["ENTRY REMOVED AS\nENTERED IN ERROR"]
+  },
+  {
+    "group": "group-133",
+    "normalisedText": "f",
+    "expected": "undecodable",
+    "texts": ["f"]
+  },
+  {
+    "group": "group-134",
+    "normalisedText": "fees of q. x. attorney. $99.",
+    "expected": "usable",
+    "texts": ["Fees of Q. X. attorney. $18."]
+  },
+  {
+    "group": "group-135",
+    "normalisedText": "fees of q. x. commissioner. $9,999.99.",
+    "expected": "usable",
+    "texts": ["Fees of Q. X. commissioner. $6,688.90."]
+  },
+  {
+    "group": "group-136",
+    "normalisedText": "file\nunavailable",
+    "expected": "source-placeholder",
+    "texts": ["FILE\nUNAVAILABLE"]
+  },
+  {
+    "group": "group-137",
+    "normalisedText": "for\n\n9 99 9999",
+    "expected": "no-ruling-text",
+    "texts": ["for\n\n5 46 4847"]
+  },
+  {
+    "group": "group-138",
+    "normalisedText": "for balance due on former judgment withheld by zqwkvvvv.",
+    "expected": "usable",
+    "texts": ["For balance due on former judgment withheld by Zqwkvvvv."]
+  },
+  {
+    "group": "group-139",
+    "normalisedText": "for bounty for military services.",
+    "expected": "usable",
+    "texts": ["For bounty for military services."]
+  },
+  {
+    "group": "group-140",
+    "normalisedText": "for leave to appeal. overruled.",
+    "expected": "usable",
+    "texts": ["For leave to appeal. Overruled."]
+  },
+  {
+    "group": "group-141",
+    "normalisedText": "for mileage.\n\njudgment for claimant, $999.99 ; appealed.",
+    "expected": "usable",
+    "texts": ["For mileage.\n\nJudgment for claimant, $746.41 ; appealed."]
+  },
+  {
+    "group": "group-142",
+    "normalisedText": "for use of property by the zqykvv zqbkvv.",
+    "expected": "usable",
+    "texts": ["For use of property by the Zqykvv Zqbkvv."]
+  },
+  {
+    "group": "group-143",
+    "normalisedText": "zqplvvvv app. no. 99ap-999, 9999-zqjl-999.",
+    "expected": "usable",
+    "texts": ["Zqplvvvv App. No. 83AP-644, 4882-Zqjl-179."]
+  },
+  {
+    "group": "group-144",
+    "normalisedText": "from zqhlvvv. let a nonsuit be entered.",
+    "expected": "usable",
+    "texts": ["From Zqhlvvv. Let a nonsuit be entered."]
+  },
+  {
+    "group": "group-145",
+    "normalisedText": "from zqhlvvv. let the rule for a new trial be discharged.",
+    "expected": "usable",
+    "texts": ["From Zqhlvvv. Let the rule for a new trial be discharged."]
+  },
+  {
+    "group": "group-146",
+    "normalisedText": "government’s application for rehearing granted.",
+    "expected": "usable",
+    "texts": ["Government’s application for rehearing granted."]
+  },
+  {
+    "group": "group-147",
+    "normalisedText": "zqsvvv, j., reads for affirmance.\n\nall concur.\n\norder affirmed.",
+    "expected": "usable",
+    "texts": [
+      "ZQSVVV, J., reads for affirmance.\n\nAll concur.\n\nOrder affirmed."
+    ]
+  },
+  {
+    "group": "group-148",
+    "normalisedText": "habeas corpus denied without opinion.",
+    "expected": "usable",
+    "texts": ["Habeas Corpus denied without opinion."]
+  },
+  {
+    "group": "group-149",
+    "normalisedText": "hoa. l.l.l?okrw,nar, 99, xia9.w 9",
+    "expected": "undecodable",
+    "texts": ["Hoa. L.L.l?okrw,nar, 67, xia1.w 4"]
+  },
+  {
+    "group": "group-150",
+    "normalisedText": "zqfvvvvvvv, zqgvvvv and zqbvvv, jj., concur.",
+    "expected": "usable",
+    "texts": ["Zqfvvvvvvv, Zqgvvvv and Zqbvvv, JJ., concur."]
+  },
+  {
+    "group": "group-151",
+    "normalisedText": "zqivvv, j., would grant",
+    "expected": "usable",
+    "texts": ["ZQIVVV, J., would grant"]
+  },
+  {
+    "group": "group-152",
+    "normalisedText": "i\n\ni\ni\n\ni\ni",
+    "expected": "undecodable",
+    "texts": ["I\n\nI\nI\n\nI\nI"]
+  },
+  {
+    "group": "group-153",
+    "normalisedText": "in the\nzqykvv zqbkvv court of appeals\n\nfor the eleventh circuit",
+    "expected": "usable",
+    "texts": [
+      "In the\nZqykvv Zqbkvv Court of Appeals\n\nFor the Eleventh Circuit"
+    ]
+  },
+  {
+    "group": "group-154",
+    "normalisedText": "indemnización. zqvkvvv.\n\nde-sestimada.",
+    "expected": "usable",
+    "texts": ["Indemnización. Zqvkvvv.\n\nDe-sestimada."]
+  },
+  {
+    "group": "group-155",
+    "normalisedText": "injunction.\n\ndeses-timada zl apelación.",
+    "expected": "usable",
+    "texts": ["Injunction.\n\nDeses-timada zl apelación."]
+  },
+  {
+    "group": "group-156",
+    "normalisedText": "it is so ordered .",
+    "expected": "usable",
+    "texts": ["IT IS SO ORDERED ."]
+  },
+  {
+    "group": "group-157",
+    "normalisedText": "j\nanu\n\nary99,999\n\n9",
+    "expected": "usable",
+    "texts": ["J\nanu\n\nary17,208\n\n8"]
+  },
+  {
+    "group": "group-158",
+    "normalisedText": "jmumy99th, loso",
+    "expected": "usable",
+    "texts": ["Jmumy43th, losO"]
+  },
+  {
+    "group": "group-159",
+    "normalisedText": "judge zqkvvv took no part.",
+    "expected": "no-ruling-text",
+    "texts": ["Judge Zqkvvv took no part."]
+  },
+  {
+    "group": "group-160",
+    "normalisedText": "judgment affirmed by default, with costs.",
+    "expected": "usable",
+    "texts": ["Judgment affirmed by default, with costs."]
+  },
+  {
+    "group": "group-161",
+    "normalisedText": "judgment affirmed on opinion of court below, witli costs.",
+    "expected": "usable",
+    "texts": ["Judgment affirmed on opinion of court below, witli costs."]
+  },
+  {
+    "group": "group-162",
+    "normalisedText": "judgment affirmed, with costs.\n\nopinion hy\n\nzqtvv, j.",
+    "expected": "usable",
+    "texts": ["Judgment affirmed, with costs.\n\nOpinion hy\n\nZqtvv, J."]
+  },
+  {
+    "group": "group-163",
+    "normalisedText": "judgment affirmed,with costs. opinion by\n\nzqc zqpvv, p. j.",
+    "expected": "usable",
+    "texts": ["Judgment affirmed,with costs. Opinion by\n\nZqc Zqpvv, P. J."]
+  },
+  {
+    "group": "group-164",
+    "normalisedText": "judgment and order affirmed.",
+    "expected": "usable",
+    "texts": ["Judgment and order affirmed."]
+  },
+  {
+    "group": "group-165",
+    "normalisedText": "judgment and order affirmed. opinion by\n\nzqjvv, p. j.",
+    "expected": "usable",
+    "texts": ["Judgment and order affirmed. Opinion by\n\nZqjvv, P. J."]
+  },
+  {
+    "group": "group-166",
+    "normalisedText": "judgment, affirmed, with costs. opinion by\n\nzqhvvvv, j.",
+    "expected": "usable",
+    "texts": ["Judgment, affirmed, with costs. Opinion by\n\nZqhvvvv, J."]
+  },
+  {
+    "group": "group-167",
+    "normalisedText": "l.t. no.: 9999-cf-9999\n\ndismissed.",
+    "expected": "usable",
+    "texts": ["L.T. No.: 4867-CF-7622\n\nDismissed."]
+  },
+  {
+    "group": "group-168",
+    "normalisedText": "let the rule be made absolute.",
+    "expected": "usable",
+    "texts": ["Let the rule be made absolute."]
+  },
+  {
+    "group": "group-169",
+    "normalisedText": "memorandum decisions.",
+    "expected": "source-placeholder",
+    "texts": ["MEMORANDUM DECISIONS."]
+  },
+  {
+    "group": "group-170",
+    "normalisedText": "mo opinion. motion denied.",
+    "expected": "usable",
+    "texts": ["Mo opinion. Motion denied."]
+  },
+  {
+    "group": "group-171",
+    "normalisedText": "motion by appellee.",
+    "expected": "usable",
+    "texts": ["Motion by appellee."]
+  },
+  {
+    "group": "group-172",
+    "normalisedText": "motion by respondent for temporary stay allowed 99 june 9999.",
+    "expected": "usable",
+    "texts": ["Motion by respondent for temporary stay allowed 66 June 4884."]
+  },
+  {
+    "group": "group-173",
+    "normalisedText": "motion denied, with ten dollars costs.",
+    "expected": "usable",
+    "texts": ["Motion denied, with ten dollars costs."]
+  },
+  {
+    "group": "group-174",
+    "normalisedText": "motion for leave to appeal to the court of appeals denied.",
+    "expected": "usable",
+    "texts": ["Motion for leave to appeal to the Court of Appeals denied."]
+  },
+  {
+    "group": "group-175",
+    "normalisedText": "motion for zqrkv appeals to certify. overruled.",
+    "expected": "usable",
+    "texts": ["Motion for Zqrkv Appeals to certify. Overruled."]
+  },
+  {
+    "group": "group-176",
+    "normalisedText": "motion for zqlkvv appeals to certify.",
+    "expected": "usable",
+    "texts": ["motion for Zqlkvv Appeals to certify."]
+  },
+  {
+    "group": "group-177",
+    "normalisedText": "motion for temporary injunction denied.",
+    "expected": "usable",
+    "texts": ["Motion for temporary injunction denied."]
+  },
+  {
+    "group": "group-178",
+    "normalisedText": "motion granted.",
+    "expected": "usable",
+    "texts": ["Motion granted."]
+  },
+  {
+    "group": "group-179",
+    "normalisedText": "motion to amend remittitur denied. (see 999 q.v. 999.)",
+    "expected": "usable",
+    "texts": ["Motion to amend remittitur denied. (See 447 Q.V. 352.)"]
+  },
+  {
+    "group": "group-180",
+    "normalisedText": "motion to dismiss the appeals herein denied.",
+    "expected": "usable",
+    "texts": ["Motion to dismiss the appeals herein denied."]
+  },
+  {
+    "group": "group-181",
+    "normalisedText": "motín.\n\nhurto menor.\n\nzqkkvvv.\n\nconfirmadas las sen-tencias.",
+    "expected": "usable",
+    "texts": [
+      "Motín.\n\nHurto menor.\n\nZqkkvvv.\n\nConfirmadas las sen-tencias."
+    ]
+  },
+  {
+    "group": "group-182",
+    "normalisedText": "mr. justice zqvrvv\n\ndelivered the opinion of the court.",
+    "expected": "usable",
+    "texts": ["Mr. Justice Zqvrvv\n\ndelivered the opinion of the court."]
+  },
+  {
+    "group": "group-183",
+    "normalisedText": "mr. justice zqrrvvv\n\ndelivered the opinion of the court.",
+    "expected": "usable",
+    "texts": ["Mr. Justice Zqrrvvv\n\ndelivered the opinion of the court."]
+  },
+  {
+    "group": "group-184",
+    "normalisedText": "no opinion. judgment affirmed, with costs.",
+    "expected": "usable",
+    "texts": ["No opinion. Judgment affirmed, with costs."]
+  },
+  {
+    "group": "group-185",
+    "normalisedText": "no opinion. judgment and order affirmed, with costs.",
+    "expected": "usable",
+    "texts": ["No opinion. Judgment and order affirmed, with costs."]
+  },
+  {
+    "group": "group-186",
+    "normalisedText": "no opinion. judgment appealed from affirmed.",
+    "expected": "usable",
+    "texts": ["No opinion. Judgment appealed from affirmed."]
+  },
+  {
+    "group": "group-187",
+    "normalisedText": "no opinion. on payment of $99 costs, motion denied.",
+    "expected": "usable",
+    "texts": ["No opinion. On payment of $68 costs, motion denied."]
+  },
+  {
+    "group": "group-188",
+    "normalisedText": "note. — see s. c., 9 q.z. 99, and 9 q.z. 999.\n\n(999)",
+    "expected": "usable",
+    "texts": ["NOTE. — See S. c., 0 Q.Z. 67, and 6 Q.Z. 390.\n\n(992)"]
+  },
+  {
+    "group": "group-189",
+    "normalisedText": "note. — see s. c., post, 999.\n\n(999)",
+    "expected": "usable",
+    "texts": ["NOTE. — See S. c., post, 454.\n\n(442)"]
+  },
+  {
+    "group": "group-190",
+    "normalisedText": "note. — see s. c., reported in 9 q.z. 999.\n\n(999)",
+    "expected": "usable",
+    "texts": ["NOTE. — See S. c., reported in 6 Q.Z. 994.\n\n(674)"]
+  },
+  {
+    "group": "group-191",
+    "normalisedText": "note. — see same case reported, 9 q.z. 99.",
+    "expected": "usable",
+    "texts": ["NOTE. — See same case reported, 0 Q.Z. 66."]
+  },
+  {
+    "group": "group-192",
+    "normalisedText": "note. — see this case reported in 9 q.z. 999.\n\n(99)",
+    "expected": "usable",
+    "texts": ["NOTE. — See this case reported in 6 Q.Z. 672.\n\n(65)"]
+  },
+  {
+    "group": "group-193",
+    "normalisedText": "office of\n?t’he &i!torney general\n\nzqxlv. zqulv",
+    "expected": "undecodable",
+    "texts": ["OFFICE OF\n?t’HE &I!TORNEY GENERAL\n\nZqxlv. ZQULV"]
+  },
+  {
+    "group": "group-194",
+    "normalisedText": "office of\nthe attoheey general\n\n.\n\n. .",
+    "expected": "no-ruling-text",
+    "texts": ["OFFICE OF\nTHE ATTOHEEY GENERAL\n\n.\n\n. ."]
+  },
+  {
+    "group": "group-195",
+    "normalisedText": "office of the altorney general of zqulv\n\nzqelvv",
+    "expected": "usable",
+    "texts": ["OFFICE OF THE AlTORNEY GENERAL OF ZQULV\n\nZQELVV"]
+  },
+  {
+    "group": "group-196",
+    "normalisedText": "office of the asitorney general of zqulv\n\nzqalvv\n\n. s",
+    "expected": "usable",
+    "texts": ["OFFICE OF THE AsITORNEY GENERAL OF ZQULV\n\nZQALVV\n\n. s"]
+  },
+  {
+    "group": "group-197",
+    "normalisedText": "opinion # ms 999 was never issued or was withdrawn.",
+    "expected": "source-placeholder",
+    "texts": ["OPINION # Ms 035 WAS NEVER ISSUED OR WAS WITHDRAWN."]
+  },
+  {
+    "group": "group-198",
+    "normalisedText": "opinion # ww-999 was never issued.",
+    "expected": "source-placeholder",
+    "texts": ["Opinion # WW-160 was never issued."]
+  },
+  {
+    "group": "group-199",
+    "normalisedText": "opinion # ww-9999 was never released.",
+    "expected": "source-placeholder",
+    "texts": ["Opinion # WW-6670 was never released."]
+  },
+  {
+    "group": "group-200",
+    "normalisedText": "opinion # ww99999 was never released.",
+    "expected": "source-placeholder",
+    "texts": ["Opinion # WW66622 was never released."]
+  },
+  {
+    "group": "group-201",
+    "normalisedText": "opinion by\n\njustice zqlrv.\n\nnot to be published in full.",
+    "expected": "usable",
+    "texts": ["Opinion by\n\nJUSTICE ZQLRV.\n\nNot to be published in full."]
+  },
+  {
+    "group": "group-202",
+    "normalisedText": "opinion by\n\njustice zqkrvv.\n\nnot to be published in full.",
+    "expected": "usable",
+    "texts": ["Opinion by\n\nJUSTICE ZQKRVV.\n\nNot to be published in full."]
+  },
+  {
+    "group": "group-203",
+    "normalisedText": "opinion by\n\nzqnrvvvv, j.\n\nthe protests were dismissed.",
+    "expected": "usable",
+    "texts": ["Opinion by\n\nZqnrvvvv, J.\n\nThe protests were dismissed."]
+  },
+  {
+    "group": "group-204",
+    "normalisedText": "opinion by\n\nzqurvvvv, j.\n\nthe protests were dismissed.",
+    "expected": "usable",
+    "texts": ["Opinion by\n\nZqurvvvv, J.\n\nThe protests were dismissed."]
+  },
+  {
+    "group": "group-205",
+    "normalisedText": "opinion by\n\nzqervv, p. j.\n\nthe petition was dismissed.",
+    "expected": "usable",
+    "texts": ["Opinion by\n\nZqervv, P. J.\n\nThe petition was dismissed."]
+  },
+  {
+    "group": "group-206",
+    "normalisedText": "opinion by\n\nzqa, i.\n\nthe protests were dismissed.",
+    "expected": "usable",
+    "texts": ["Opinion by\n\nZqa, I.\n\nThe protests were dismissed."]
+  },
+  {
+    "group": "group-207",
+    "normalisedText": "opinion los 9999 was never issued oh\n\nwas withdrawn.",
+    "expected": "source-placeholder",
+    "texts": ["OPINION los 2739 WAS NEVER ISSUED OH\n\nWAS WITHDRAWN."]
+  },
+  {
+    "group": "group-208",
+    "normalisedText": "opinion x ww-9999 was never issued.",
+    "expected": "source-placeholder",
+    "texts": ["Opinion X WW-6632 was never issued."]
+  },
+  {
+    "group": "group-209",
+    "normalisedText": "order\n\nper curiam.\n\norders and judgment of sentence affirmed.",
+    "expected": "usable",
+    "texts": [
+      "ORDER\n\nPER CURIAM.\n\nOrders and judgment of sentence affirmed."
+    ]
+  },
+  {
+    "group": "group-210",
+    "normalisedText": "order\n\nper curiam:\n\nthe judgment is affirmed. rule 99.99(b).",
+    "expected": "usable",
+    "texts": [
+      "ORDER\n\nPER CURIAM:\n\nThe judgment is affirmed. Rule 98.40(b)."
+    ]
+  },
+  {
+    "group": "group-211",
+    "normalisedText": "order affirmed, on opinion below, with costs.\n\nall concur.",
+    "expected": "usable",
+    "texts": ["Order affirmed, on opinion below, with costs.\n\nAll concur."]
+  },
+  {
+    "group": "group-212",
+    "normalisedText": "order affirmed, with ten dollars costs and disbursements.",
+    "expected": "usable",
+    "texts": ["Order affirmed, with ten dollars costs and disbursements."]
+  },
+  {
+    "group": "group-213",
+    "normalisedText": "order affirmed.",
+    "expected": "usable",
+    "texts": ["Order affirmed."]
+  },
+  {
+    "group": "group-214",
+    "normalisedText": "order affirmed.\n\nzqxrv, j., absent.",
+    "expected": "usable",
+    "texts": ["Order affirmed.\n\nZqxrv, J., absent."]
+  },
+  {
+    "group": "group-215",
+    "normalisedText": "order affirmed.\n\nzqorvvv, p. j., absent.",
+    "expected": "usable",
+    "texts": ["Order affirmed.\n\nZQORVVV, P. J., absent."]
+  },
+  {
+    "group": "group-216",
+    "normalisedText": "order appeal-9 ed from affirmed, with costs.",
+    "expected": "usable",
+    "texts": ["Order appeal-6 ed from affirmed, with costs."]
+  },
+  {
+    "group": "group-217",
+    "normalisedText": "order dismissing appeal.",
+    "expected": "usable",
+    "texts": ["Order dismissing appeal."]
+  },
+  {
+    "group": "group-218",
+    "normalisedText": "order of the vice-chancellor affirmed, with costs.",
+    "expected": "usable",
+    "texts": ["Order of the vice-chancellor affirmed, with costs."]
+  },
+  {
+    "group": "group-219",
+    "normalisedText": "order signed.",
+    "expected": "usable",
+    "texts": ["Order signed."]
+  },
+  {
+    "group": "group-220",
+    "normalisedText": "zm. commw. ct. certiorari denied.",
+    "expected": "usable",
+    "texts": ["Zm. Commw. Ct. Certiorari denied."]
+  },
+  {
+    "group": "group-221",
+    "normalisedText": "per curiam.\n\nappeal dismissed by agreement.",
+    "expected": "usable",
+    "texts": ["PER CURIAM.\n\nAppeal dismissed by agreement."]
+  },
+  {
+    "group": "group-222",
+    "normalisedText": "per curiam.\n\nappeal dismissed by appellant.",
+    "expected": "usable",
+    "texts": ["PER CURIAM.\n\nAppeal dismissed by appellant."]
+  },
+  {
+    "group": "group-223",
+    "normalisedText": "per curiam.\n\nappeal dismissed on motion of appellant.",
+    "expected": "usable",
+    "texts": ["PER CURIAM.\n\nAppeal dismissed on motion of appellant."]
+  },
+  {
+    "group": "group-224",
+    "normalisedText": "per curiam.\n\ncertiorari dismissed.",
+    "expected": "usable",
+    "texts": ["PER CURIAM.\n\nCertiorari dismissed."]
+  },
+  {
+    "group": "group-225",
+    "normalisedText": "per curiam.\n\ndocketed and dismissed, pursuant to stipulation.",
+    "expected": "usable",
+    "texts": ["PER CURIAM.\n\nDocketed and dismissed, pursuant to stipulation."]
+  },
+  {
+    "group": "group-226",
+    "normalisedText": "per curiam.\n\nprohibition dismissed.",
+    "expected": "usable",
+    "texts": ["PER CURIAM.\n\nProhibition dismissed."]
+  },
+  {
+    "group": "group-227",
+    "normalisedText": "per curiam.\n\nthe judgment is affirmed.",
+    "expected": "usable",
+    "texts": ["Per Curiam.\n\nThe judgment is affirmed."]
+  },
+  {
+    "group": "group-228",
+    "normalisedText": "petition for leave to appeal denied.",
+    "expected": "usable",
+    "texts": ["Petition for Leave to Appeal Denied."]
+  },
+  {
+    "group": "group-229",
+    "normalisedText": "petition for reconsideration denied:",
+    "expected": "usable",
+    "texts": ["Petition for Reconsideration Denied:"]
+  },
+  {
+    "group": "group-230",
+    "normalisedText": "petition for rehearing denied.",
+    "expected": "usable",
+    "texts": ["Petition for rehearing denied."]
+  },
+  {
+    "group": "group-231",
+    "normalisedText": "petition for writ of habeas corpus denied.",
+    "expected": "usable",
+    "texts": ["Petition for writ of habeas corpus denied."]
+  },
+  {
+    "group": "group-232",
+    "normalisedText": "petition for writ of mandamus denied.",
+    "expected": "usable",
+    "texts": ["Petition for writ of mandamus denied."]
+  },
+  {
+    "group": "group-233",
+    "normalisedText": "present — zqmrvv, p. j., zqyrvv, zqbr, zqwrvvv and zqdrvv, jj.",
+    "expected": "no-ruling-text",
+    "texts": ["Present — Zqmrvv, P. J., Zqyrvv, Zqbr, Zqwrvvv and Zqdrvv, JJ."]
+  },
+  {
+    "group": "group-234",
+    "normalisedText": "reargument ordered.",
+    "expected": "usable",
+    "texts": ["Reargument ordered."]
+  },
+  {
+    "group": "group-235",
+    "normalisedText": "rehearing denied.",
+    "expected": "usable",
+    "texts": ["Rehearing denied."]
+  },
+  {
+    "group": "group-236",
+    "normalisedText": "rei-vindicación de inmueble.\n\ndesestimada zl apelación.",
+    "expected": "usable",
+    "texts": ["Rei-vindicación de inmueble.\n\nDesestimada zl apelación."]
+  },
+  {
+    "group": "group-237",
+    "normalisedText": "reinstated.",
+    "expected": "usable",
+    "texts": ["Reinstated."]
+  },
+  {
+    "group": "group-238",
+    "normalisedText": "request for appointment of counsel denied.",
+    "expected": "usable",
+    "texts": ["Request for appointment of counsel denied."]
+  },
+  {
+    "group": "group-239",
+    "normalisedText": "s..\n\n..,.\n\ni.:\n\n. . . ‘.~. _. : .\n\n:\n\n. ..\n\n_” :\n\n_s\n\n..\n\n.:\n ‘.\n . .\n\n. ., ..\n\n..,\n\n. .\n\n,$c\n\n:.\n\n. ..\n\n.\n\n.\n\n9\n\n:,,\n\n:\n\n::\n\ni~’\n .., .~ i\n\n‘:,",
+    "expected": "undecodable",
+    "texts": [
+      "s..\n\n..,.\n\nI.:\n\n. . . ‘.~. _. : .\n\n:\n\n. ..\n\n_” :\n\n_s\n\n..\n\n.:\n ‘.\n . .\n\n. ., ..\n\n..,\n\n. .\n\n,$C\n\n:.\n\n. ..\n\n.\n\n.\n\n5\n\n:,,\n\n:\n\n::\n\nI~’\n .., .~ i\n\n‘:,"
+    ]
+  },
+  {
+    "group": "group-240",
+    "normalisedText": "see s. c., 9 q.z. 999.\n\njanuary term, 9999.",
+    "expected": "usable",
+    "texts": ["See S. c., 0 Q.Z. 979.\n\nJANUARY TERM, 6564."]
+  },
+  {
+    "group": "group-241",
+    "normalisedText": "sentence vacated. remanded with directions.",
+    "expected": "usable",
+    "texts": ["Sentence vacated. Remanded with directions."]
+  },
+  {
+    "group": "group-242",
+    "normalisedText": "zqsrvv q. zqfrvv, bankruptcy judge.\n\nreversed and remanded.",
+    "expected": "usable",
+    "texts": ["ZQSRVV Q. ZQFRVV, Bankruptcy Judge.\n\nREVERSED AND REMANDED."]
+  },
+  {
+    "group": "group-243",
+    "normalisedText": "so ordered .",
+    "expected": "usable",
+    "texts": ["SO ORDERED ."]
+  },
+  {
+    "group": "group-244",
+    "normalisedText": "so ordered on november 99, 9999.",
+    "expected": "usable",
+    "texts": ["SO ORDERED on November 17, 2088."]
+  },
+  {
+    "group": "group-245",
+    "normalisedText": "zqgrv, j.\n\ndenied.",
+    "expected": "usable",
+    "texts": ["Zqgrv, J.\n\nDenied."]
+  },
+  {
+    "group": "group-246",
+    "normalisedText": "sup. ct. zqh. certiorari denied.",
+    "expected": "usable",
+    "texts": ["Sup. Ct. Zqh. Certiorari denied."]
+  },
+  {
+    "group": "group-247",
+    "normalisedText": "sup. ct. zqik. certiorari denied.",
+    "expected": "usable",
+    "texts": ["Sup. Ct. Zqik. Certiorari denied."]
+  },
+  {
+    "group": "group-248",
+    "normalisedText": "sup. ct. zqvn. certiorari denied.",
+    "expected": "usable",
+    "texts": ["Sup. Ct. Zqvn. Certiorari denied."]
+  },
+  {
+    "group": "group-249",
+    "normalisedText": "sup. ct. zqr. certiorari denied.",
+    "expected": "usable",
+    "texts": ["Sup. Ct. Zqr. Certiorari denied."]
+  },
+  {
+    "group": "group-250",
+    "normalisedText": "sup. ct. zl.\n\ncertiorari dismissed under this court’s rule 99.",
+    "expected": "usable",
+    "texts": [
+      "Sup. Ct. Zl.\n\nCertiorari dismissed under this Court’s Rule 38."
+    ]
+  },
+  {
+    "group": "group-251",
+    "normalisedText": "sup. ct. zqkn. certiorari denied.",
+    "expected": "usable",
+    "texts": ["Sup. Ct. Zqkn. Certiorari denied."]
+  },
+  {
+    "group": "group-252",
+    "normalisedText": "sup. ct. zqnn. cer-tiorari denied.",
+    "expected": "usable",
+    "texts": ["Sup. Ct. Zqnn. Cer-tiorari denied."]
+  },
+  {
+    "group": "group-253",
+    "normalisedText": "sup. ct. zqun. certiorari denied.",
+    "expected": "usable",
+    "texts": ["Sup. Ct. Zqun. Certiorari denied."]
+  },
+  {
+    "group": "group-254",
+    "normalisedText": "sup. ct. zqen. certiorari denied.",
+    "expected": "usable",
+    "texts": ["Sup. Ct. Zqen. Certiorari denied."]
+  },
+  {
+    "group": "group-255",
+    "normalisedText": "sup. ct. za. certiorari denied.",
+    "expected": "usable",
+    "texts": ["Sup. Ct. Za. Certiorari denied."]
+  },
+  {
+    "group": "group-256",
+    "normalisedText": "sup. jud. ct. zqxn. certiorari denied.",
+    "expected": "usable",
+    "texts": ["Sup. Jud. Ct. Zqxn. Certiorari denied."]
+  },
+  {
+    "group": "group-257",
+    "normalisedText": "super. ct. zqukvv county, zo. certiorari denied.",
+    "expected": "usable",
+    "texts": ["Super. Ct. Zqukvv County, Zo. Certiorari denied."]
+  },
+  {
+    "group": "group-258",
+    "normalisedText": "super. ct. zm. certiorari denied.",
+    "expected": "usable",
+    "texts": ["Super. Ct. Zm. Certiorari denied."]
+  },
+  {
+    "group": "group-259",
+    "normalisedText": "supreme court of appeals of zqekvvvv. certiorari denied.",
+    "expected": "usable",
+    "texts": ["Supreme Court of Appeals of Zqekvvvv. Certiorari denied."]
+  },
+  {
+    "group": "group-260",
+    "normalisedText": "supreme court of zqakvvvv. certiorari denied.",
+    "expected": "usable",
+    "texts": ["Supreme Court of Zqakvvvv. Certiorari denied."]
+  },
+  {
+    "group": "group-261",
+    "normalisedText": "supreme court of zqxkvvvv. certiorari denied.",
+    "expected": "usable",
+    "texts": ["Supreme Court of Zqxkvvvv. Certiorari denied."]
+  },
+  {
+    "group": "group-262",
+    "normalisedText": "supreme court of zqokvvvvv. certiorari denied.",
+    "expected": "usable",
+    "texts": ["Supreme Court of Zqokvvvvv. Certiorari denied."]
+  },
+  {
+    "group": "group-263",
+    "normalisedText": "supreme court of zqmkvvvvvv. certiorari denied.",
+    "expected": "usable",
+    "texts": ["Supreme Court of Zqmkvvvvvv. Certiorari denied."]
+  },
+  {
+    "group": "group-264",
+    "normalisedText": "teie a’i[toewey general\n\noif zqulv\n zqolv; zqml\n\nmmh 999, x999",
+    "expected": "undecodable",
+    "texts": [
+      "TEIE A’I[TOEWEY GENERAL\n\nOIF ZQULV\n Zqolv; ZQML\n\nmmh 433, x191"
+    ]
+  },
+  {
+    "group": "group-265",
+    "normalisedText": "test pdf",
+    "expected": "source-placeholder",
+    "texts": ["TEST PDF"]
+  },
+  {
+    "group": "group-266",
+    "normalisedText": "testing\ndocument",
+    "expected": "source-placeholder",
+    "texts": ["TESTING\nDOCUMENT"]
+  },
+  {
+    "group": "group-267",
+    "normalisedText": "the court will enter a separate order.",
+    "expected": "usable",
+    "texts": ["The court will enter a separate order."]
+  },
+  {
+    "group": "group-268",
+    "normalisedText": "the judgment of sentence is affirmed.",
+    "expected": "usable",
+    "texts": ["The judgment of sentence is affirmed."]
+  },
+  {
+    "group": "group-269",
+    "normalisedText": "the petition is de-\n\nnied.",
+    "expected": "usable",
+    "texts": ["The petition is de-\n\nnied."]
+  },
+  {
+    "group": "group-270",
+    "normalisedText": "this opinion has been withdrawn.\n\nopinion #c-999",
+    "expected": "source-placeholder",
+    "texts": ["This opinion has been withdrawn.\n\nOpinion #C-729"]
+  },
+  {
+    "group": "group-271",
+    "normalisedText": "this opinion was never issued.\n\nopinion # ww-9999 '",
+    "expected": "source-placeholder",
+    "texts": ["This opinion was never issued.\n\nOpinion # WW-6661 '"]
+  },
+  {
+    "group": "group-272",
+    "normalisedText": "this opinion was withdrawn.\n\nopinion # wws999",
+    "expected": "source-placeholder",
+    "texts": ["This opinion was withdrawn.\n\nOpinion # WWs038"]
+  },
+  {
+    "group": "group-273",
+    "normalisedText": "trademarks for vitamin capsule for use in vitamin deficiencies.",
+    "expected": "usable",
+    "texts": ["Trademarks for vitamin capsule for use in vitamin deficiencies."]
+  },
+  {
+    "group": "group-274",
+    "normalisedText": "transfer denied. all justices concur.",
+    "expected": "usable",
+    "texts": ["Transfer denied. All Justices concur."]
+  },
+  {
+    "group": "group-275",
+    "normalisedText": "unavailable",
+    "expected": "source-placeholder",
+    "texts": ["Unavailable"]
+  },
+  {
+    "group": "group-276",
+    "normalisedText": "usca9 opinion can't open 99-9999e.99a.",
+    "expected": "source-placeholder",
+    "texts": ["USCA6 Opinion Can't open 81-4783E.86a."]
+  },
+  {
+    "group": "group-277",
+    "normalisedText": "usca9 opinion can't open 99-9999p.99a.",
+    "expected": "source-placeholder",
+    "texts": ["USCA6 Opinion Can't open 60-6077P.86a."]
+  },
+  {
+    "group": "group-278",
+    "normalisedText": "usca9 opinion can't open 99-9999p9.99b",
+    "expected": "source-placeholder",
+    "texts": ["USCA6 Opinion Can't open 60-6747P4.86b"]
+  },
+  {
+    "group": "group-279",
+    "normalisedText": "vacated & remanded",
+    "expected": "usable",
+    "texts": ["Vacated & remanded"]
+  },
+  {
+    "group": "group-280",
+    "normalisedText": "violation of zqwkvvvv regulations. zqnkvvv.\n\naffirmed.",
+    "expected": "usable",
+    "texts": ["Violation of Zqwkvvvv Regulations. Zqnkvvv.\n\nAffirmed."]
+  },
+  {
+    "group": "group-281",
+    "normalisedText": "writ denied.\n\nzqirvv, zqtrv, zqcrvv and zqprvv, jj., concur.",
+    "expected": "usable",
+    "texts": ["WRIT DENIED.\n\nZQIRVV, ZQTRV, ZQCRVV and ZQPRVV, JJ., concur."]
+  }
+]
