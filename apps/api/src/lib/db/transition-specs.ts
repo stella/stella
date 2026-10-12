@@ -1,8 +1,4 @@
-import {
-  desktopEditSessions,
-  legalReaderAnswerMessages,
-  workObligations,
-} from "@/api/db/schema";
+import { desktopEditSessions, workObligations } from "@/api/db/schema";
 import {
   EU_COMPLETION_APPROVAL_PROOF,
   EU_COMPLETION_CONTROL_LIFECYCLE,
@@ -12,13 +8,12 @@ import {
   FLOW_RUN_SCOPED_TRANSITIONS,
   FLOW_RUN_STEP_TRANSITIONS_V1,
 } from "@/api/lib/db/flow-run-transition-spec";
-import { READER_ANSWER_TRANSITION_IDENTITIES } from "@/api/lib/db/reader-answer-transition-identities";
+import { READER_ANSWER_MESSAGE_TRANSITIONS } from "@/api/lib/db/reader-answer-transitions";
 import type {
   STATUS_COLUMNS,
   StatusTable,
 } from "@/api/lib/db/status-tables.gen";
 import {
-  defineScopedTransitions,
   defineKeyedTransitions,
   defineTransitions,
 } from "@/api/lib/db/transitions";
@@ -74,13 +69,6 @@ const UNMANAGED_REASONS = {
   coordinatedTimers:
     "Timer state and its entry projection are coordinated by the timer transaction owner pending migration.",
 } as const;
-
-const READER_ANSWER_MESSAGE_TRANSITIONS = defineScopedTransitions({
-  ...READER_ANSWER_TRANSITION_IDENTITIES.READER_ANSWER_MESSAGE_TRANSITIONS,
-  table: legalReaderAnswerMessages,
-  edges: { streaming: ["complete", "failed"], complete: [], failed: [] },
-  initial: ["streaming", "complete"],
-});
 
 const DESKTOP_EDIT_SESSION_TRANSITIONS = defineTransitions(
   desktopEditSessions,

@@ -1439,6 +1439,39 @@ const aggregateTableNames = (ast: ts.SourceFile | undefined) => {
       scope = scope.parent;
     }
   };
+  const tableParameterIndexes = (body: ts.Node) => {
+    const helper = body.parent;
+    if (helper === undefined || !ts.isFunctionLike(helper)) {
+      return [];
+    }
+    const tableNames = new Set<string>();
+    const visit = (node: ts.Node) => {
+      if (ts.isFunctionLike(node) && node !== helper) {
+        return;
+      }
+      if (
+        ts.isShorthandPropertyAssignment(node) &&
+        node.name.text === "table"
+      ) {
+        tableNames.add("table");
+      }
+      if (
+        ts.isPropertyAssignment(node) &&
+        ts.isIdentifier(node.name) &&
+        node.name.text === "table" &&
+        ts.isIdentifier(node.initializer)
+      ) {
+        tableNames.add(node.initializer.text);
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(body);
+    return helper.parameters.flatMap((parameter, index) =>
+      ts.isIdentifier(parameter.name) && tableNames.has(parameter.name.text)
+        ? [index]
+        : [],
+    );
+  };
   const collectTables = (
     root: ts.Node,
     names: Set<string>,
@@ -1460,6 +1493,17 @@ const aggregateTableNames = (ast: ts.SourceFile | undefined) => {
       }
       if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
         const body = helperBody(node, node.expression.text);
+        if (body !== undefined) {
+          // A helper that builds the row from a `table` parameter selects
+          // the literal its caller passes in that position.
+          for (const index of tableParameterIndexes(body)) {
+            const argument = node.arguments.at(index);
+            if (argument !== undefined && ts.isStringLiteral(argument)) {
+              names.add(argument.text);
+              selectedNodes.add(argument);
+            }
+          }
+        }
         if (body !== undefined && !visitedHelpers.has(body)) {
           visitedHelpers.add(body);
           visit(body, true);

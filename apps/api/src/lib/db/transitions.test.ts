@@ -914,10 +914,12 @@ describe("nullable scoped lifecycles", () => {
       let audited = 0;
       const count = await transitionNullableScopedCount({
         tx: {
-          execute: async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
-            queries.push(dialect.sqlToQuery(query));
-            return [{ count: 1 }];
-          },
+          execute: createTestRawExecute(
+            async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
+              queries.push(dialect.sqlToQuery(query));
+              return [{ count: 1 }];
+            },
+          ),
           rollback,
         },
         spec: nullableSpec,
@@ -945,7 +947,10 @@ describe("nullable scoped lifecycles", () => {
     let audited = false;
     expect(
       await transitionNullableScopedCount({
-        tx: { execute: async () => [{ count: 0 }], rollback },
+        tx: {
+          execute: createTestRawExecute(async () => [{ count: 0 }]),
+          rollback,
+        },
         spec: nullableSpec,
         where: sql`false`,
         to: null,

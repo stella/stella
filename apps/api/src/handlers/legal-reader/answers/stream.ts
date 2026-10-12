@@ -29,8 +29,8 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { READER_ANSWER_MESSAGE_TRANSITIONS } from "@/api/lib/db/reader-answer-transitions";
 import { timestampMatchesCasToken } from "@/api/lib/db/timestamp-cas";
-import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionScopedCount } from "@/api/lib/db/transitions";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -157,7 +157,7 @@ const persistReaderAnswerSettlement = async ({
     const { status, ...metadata } = settlement;
     const count = await transitionScopedCount({
       tx,
-      spec: TRANSITIONS.legalReaderAnswerMessages,
+      spec: READER_ANSWER_MESSAGE_TRANSITIONS,
       where:
         and(ownerPredicate, deadlinePredicate) ??
         panic("Reader settlement requires its deadline fence"),

@@ -640,6 +640,43 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
       ]),
     ).toHaveLength(1);
   });
+  test("a resource helper taking the table as a parameter selects its caller's literal", () => {
+    const engine = "apps/api/src/lib/db/aggregate-lock.ts";
+    const source = `
+      const byIdWithin = (table, id, scopeColumn, scopeValue) => ({
+        table,
+        columns: ["id"],
+        values: [id],
+        scopeColumns: [scopeColumn],
+        scopeValues: [scopeValue],
+      });
+      const rowResource = (options) => {
+        switch (options.aggregate) {
+          case "ordinary":
+            return byIdWithin("ordinary_rows", options.id, "org", options.org);
+          case "feature":
+            return byIdWithin("fixture_rows", options.id, "org", options.org);
+        }
+      };
+      export const lock = (options) => rowResource(options);
+      export const transaction = (work) => work();
+    `;
+    const imports =
+      'import { lock, transaction } from "@/api/lib/db/aggregate-lock";';
+    // Every caller reaches the engine; only the feature selection owns a table.
+    expect(
+      check(
+        `${imports} transaction(() => lock({ aggregate: "ordinary" }));`,
+        {},
+        [[engine, source]],
+      ),
+    ).toEqual([]);
+    expect(
+      check(`${imports} lock({ aggregate: "feature" });`, {}, [
+        [engine, source],
+      ]),
+    ).toHaveLength(1);
+  });
   test("dynamic core imports and owned handler directories require a declaration", () => {
     expect(check('const run = await import("../feature/core");')).toHaveLength(
       1,
