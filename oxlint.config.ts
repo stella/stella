@@ -2448,6 +2448,11 @@ const config = defineConfig({
       rules: { "no-raw-path-relative/no-raw-path-relative": "error" },
     },
     {
+      // published package cannot depend on the private portable-path owner until it is publishable; tracked follow-up
+      files: ["packages/start-runtime/src/local-module-loader.ts"],
+      rules: { "no-raw-path-relative/no-raw-path-relative": "off" },
+    },
+    {
       // String normalization belongs to @stll/text-normalize. The owner is
       // excluded because its implementation must call the native primitive.
       files: [

@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 
+import config from "../../oxlint.config.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
 
 const lint = async (source: string, sourcePath = "scripts/path-consumer.ts") =>
@@ -41,4 +42,25 @@ test("accepts portable helpers and the owner module", async () => {
       "packages/portable-path/src/index.ts",
     ),
   ).toEqual([]);
+});
+
+test("only the published loader is exempt in the repository configuration", async () => {
+  const rule = "no-raw-path-relative/no-raw-path-relative";
+  const overrides = config.overrides.filter(
+    (override) => override.rules !== undefined && rule in override.rules,
+  );
+  const source = 'import path from "node:path";\npath.relative(root, file);';
+  for (const [sourcePath, expectedLine] of [
+    ["packages/start-runtime/src/local-module-loader.ts", null],
+    ["packages/start-runtime/src/another-loader.ts", 2],
+    ["packages/start-runtime/src/nested/local-module-loader.ts", 2],
+  ] as const) {
+    expect(
+      await lintSingleRule("no-raw-path-relative", source, {
+        sourcePath,
+        overrides,
+        cwd: "scratch",
+      }),
+    ).toEqual(expectedLine === null ? [] : [expectedLine]);
+  }
 });
