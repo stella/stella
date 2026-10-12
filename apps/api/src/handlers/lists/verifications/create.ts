@@ -103,12 +103,6 @@ const markVerificationEnqueueFailed = async (
   options: MarkVerificationEnqueueFailedOptions,
 ) =>
   await options.safeDb(async (tx) => {
-    await options.recordAuditEvent(tx, {
-      action: AUDIT_ACTION.UPDATE,
-      resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
-      resourceId: options.runId,
-      metadata: { status: "failed", errorCode: "enqueue_failed" },
-    });
     await tx
       .update(legalListVerificationRuns)
       .set({
@@ -122,6 +116,12 @@ const markVerificationEnqueueFailed = async (
           eq(legalListVerificationRuns.workspaceId, options.workspaceId),
         ),
       );
+    await options.recordAuditEvent(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
+      resourceId: options.runId,
+      metadata: { status: "failed", errorCode: "enqueue_failed" },
+    });
   });
 
 const createVerification = createSafeHandler(
