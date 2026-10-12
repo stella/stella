@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import {
@@ -39,7 +40,9 @@ for (const fixture of ["memory-allocation.ts", "memory-allocation-parent.ts"]) {
       readBytes,
       termination: process.platform === "win32" ? "process" : "group",
       file: () => filename,
-      onFailure: (message) => failures.push(message),
+      onFailure: (message) => {
+        failures.push(message);
+      },
       onWarning: (message) => {
         throw new TypeError(message);
       },
@@ -89,23 +92,27 @@ for (const boundary of ["census", "reading"] as const) {
       limitBytes: 1024,
       children: (pid) => {
         if (pid !== 42) {
-          return [];
+          return Result.ok([]);
         }
         if (boundary === "census") {
           failUntilRecovered();
         }
-        return [43, 44];
+        return Result.ok([43, 44]);
       },
       signalPid: () => {},
       readBytes: () => {
         if (boundary === "reading") {
           failUntilRecovered();
         }
-        return 400;
+        return Result.ok(400);
       },
       file: () => "fixture.test.ts",
-      onFailure: (message) => failures.push(message),
-      onWarning: (message) => warnings.push(message),
+      onFailure: (message) => {
+        failures.push(message);
+      },
+      onWarning: (message) => {
+        warnings.push(message);
+      },
       intervalMs: 10,
     });
     expect(signals).toEqual([]);
@@ -140,12 +147,16 @@ test("the cap sums measured workers instead of allowing each worker a full budge
       },
     },
     limitBytes: 1024,
-    children: (pid) => (pid === process.pid ? [42, 43] : []),
+    children: (pid) => Result.ok(pid === process.pid ? [42, 43] : []),
     signalPid: () => {},
-    readBytes: () => 400,
+    readBytes: () => Result.ok(400),
     file: () => "workers.test.ts",
-    onFailure: (message) => failures.push(message),
-    onWarning: (message) => warnings.push(message),
+    onFailure: (message) => {
+      failures.push(message);
+    },
+    onWarning: (message) => {
+      warnings.push(message);
+    },
   });
   watchdog.stop();
   expect(watchdog.peakBytes()).toBe(1200);
@@ -176,26 +187,30 @@ for (const boundary of ["census", "reading"] as const) {
         children: (pid) => {
           if (pid === 42) {
             samples += 1;
-            return [43, 44];
+            return Result.ok([43, 44]);
           }
           if (boundary === "census" && pid === 43) {
             throw new TypeError("fixture descendant census unavailable");
           }
-          return [];
+          return Result.ok([]);
         },
         readBytes: (pid) => {
           if (pid === 44) {
             if (boundary === "reading") {
               throw new TypeError("fixture descendant reading unavailable");
             }
-            return 0;
+            return Result.ok(0);
           }
-          return total === "above" ? 600 : 300;
+          return Result.ok(total === "above" ? 600 : 300);
         },
         signalPid: () => {},
         file: () => "partial-tree.test.ts",
-        onFailure: (message) => failures.push(message),
-        onWarning: (message) => warnings.push(message),
+        onFailure: (message) => {
+          failures.push(message);
+        },
+        onWarning: (message) => {
+          warnings.push(message);
+        },
         intervalMs: 10,
       });
       try {
@@ -242,11 +257,15 @@ test("an unavailable root census still enforces the measured root memory", () =>
     children: () => {
       throw new TypeError("fixture root census timed out");
     },
-    readBytes: () => 1200,
+    readBytes: () => Result.ok(1200),
     signalPid: () => {},
     file: () => "root-tree.test.ts",
-    onFailure: (message) => failures.push(message),
-    onWarning: (message) => warnings.push(message),
+    onFailure: (message) => {
+      failures.push(message);
+    },
+    onWarning: (message) => {
+      warnings.push(message);
+    },
   });
   watchdog.stop();
   expect(watchdog.peakBytes()).toBe(1200);

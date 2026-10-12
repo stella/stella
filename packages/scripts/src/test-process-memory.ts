@@ -37,30 +37,44 @@ const loadProcessMemoryReader = async () => {
     const view = new DataView(buffer.buffer);
     return (pid: number) => {
       if (library.symbols.proc_pid_rusage(pid, 2, ptr(buffer)) !== 0) {
-        throw new ProcessMemoryReadError({
-          message: `Cannot read memory for PID ${pid}`,
-        });
+        return Result.err(
+          new ProcessMemoryReadError({
+            message: `Cannot read memory for PID ${pid}`,
+          }),
+        );
       }
-      return Math.max(
-        Number(view.getBigUint64(64, true)),
-        Number(view.getBigUint64(72, true)),
+      return Result.ok(
+        Math.max(
+          Number(view.getBigUint64(64, true)),
+          Number(view.getBigUint64(72, true)),
+        ),
       );
     };
   }
   if (process.platform === "linux") {
     return (pid: number) => {
-      const status = readFileSync(`/proc/${pid}/status`, "utf-8");
+      const loaded = Result.try({
+        try: () => readFileSync(`/proc/${pid}/status`, "utf-8"),
+        catch: (cause) =>
+          new ProcessMemoryReadError({ message: String(cause), cause }),
+      });
+      if (loaded.isErr()) {
+        return Result.err(loaded.error);
+      }
+      const status = loaded.value;
       const rss = /^VmRSS:\s+(\d+)\s+kB$/mu.exec(status)?.at(1);
       const swap = /^VmSwap:\s+(\d+)\s+kB$/mu.exec(status)?.at(1);
       if (rss === undefined || swap === undefined) {
         if (/^State:\s+Z\b/mu.test(status)) {
-          return 0;
+          return Result.ok(0);
         }
-        throw new ProcessMemoryReadError({
-          message: `Cannot read memory for PID ${pid}`,
-        });
+        return Result.err(
+          new ProcessMemoryReadError({
+            message: `Cannot read memory for PID ${pid}`,
+          }),
+        );
       }
-      return (Number(rss) + Number(swap)) * 1024;
+      return Result.ok((Number(rss) + Number(swap)) * 1024);
     };
   }
   if (process.platform === "win32") {
@@ -77,21 +91,23 @@ const loadProcessMemoryReader = async () => {
       );
       const bytes = Number(result.stdout.toString().trim());
       if (!result.success || !Number.isFinite(bytes) || bytes <= 0) {
-        throw new ProcessMemoryReadError({
-          message: `Cannot read memory for PID ${pid}`,
-        });
+        return Result.err(
+          new ProcessMemoryReadError({
+            message: `Cannot read memory for PID ${pid}`,
+          }),
+        );
       }
-      return bytes;
+      return Result.ok(bytes);
     };
   }
-  panic(`No test process memory reader for ${process.platform}`);
+  return panic(`No test process memory reader for ${process.platform}`);
 };
 
 let memoryReader: ReturnType<typeof loadProcessMemoryReader> | undefined;
 export const createProcessMemoryReader = async () =>
   (memoryReader ??= loadProcessMemoryReader());
 
-const processChildren = (pid: number): number[] => {
+const processChildren = (pid: number) => {
   const result =
     process.platform === "win32"
       ? Bun.spawnSync(
@@ -110,35 +126,41 @@ const processChildren = (pid: number): number[] => {
     !result.success &&
     !(process.platform !== "win32" && result.exitCode === 1)
   ) {
-    throw new ProcessMemoryReadError({
-      message: `Cannot enumerate children of PID ${pid}`,
-    });
+    return Result.err(
+      new ProcessMemoryReadError({
+        message: `Cannot enumerate children of PID ${pid}`,
+      }),
+    );
   }
   const text = result.stdout.toString().trim();
   if (text === "") {
-    return [];
+    return Result.ok([]);
   }
-  return text.split(/\s+/u).map((value) => {
+  const pids: number[] = [];
+  for (const value of text.split(/\s+/u)) {
     const childPid = Number(value);
     if (!Number.isSafeInteger(childPid) || childPid <= 0) {
-      throw new ProcessMemoryReadError({
-        message: `Invalid child PID of ${pid}`,
-      });
+      return Result.err(
+        new ProcessMemoryReadError({
+          message: `Invalid child PID of ${pid}`,
+        }),
+      );
     }
-    return childPid;
-  });
+    pids.push(childPid);
+  }
+  return Result.ok(pids);
 };
 
 type WatchTestProcessMemoryOptions = {
   child: Pick<Bun.Subprocess, "pid" | "exitCode" | "signalCode" | "kill">;
   limitBytes: number;
-  readBytes: (pid: number) => number;
+  readBytes: (pid: number) => Result<number, ProcessMemoryReadError>;
   file: () => string;
   onFailure: (message: string) => void;
   onWarning: (message: string) => void;
   termination?: "process" | "group";
   intervalMs?: number;
-  children?: (pid: number) => readonly number[];
+  children?: (pid: number) => Result<readonly number[], ProcessMemoryReadError>;
   signalPid?: (pid: number, signal: NodeJS.Signals | 0) => void;
 };
 
@@ -152,7 +174,9 @@ export const watchTestProcessMemory = ({
   termination = "process",
   intervalMs = SAMPLE_INTERVAL_MS,
   children = processChildren,
-  signalPid = process.kill,
+  signalPid = (pid, signal) => {
+    process.kill(pid, signal);
+  },
 }: WatchTestProcessMemoryOptions) => {
   let peakBytes = 0;
   let failure: string | undefined;
@@ -222,7 +246,7 @@ export const watchTestProcessMemory = ({
         try: () => children(pid),
         catch: (cause) =>
           new ProcessMemoryReadError({ message: String(cause), cause }),
-      });
+      }).andThen((result) => result);
       if (descendants.isErr()) {
         unavailable ??= descendants.error;
         continue;
@@ -239,7 +263,7 @@ export const watchTestProcessMemory = ({
         try: () => readBytes(pid),
         catch: (cause) =>
           new ProcessMemoryReadError({ message: String(cause), cause }),
-      });
+      }).andThen((result) => result);
       if (read.isErr()) {
         const alive = Result.try({
           try: () => signalPid(pid, 0),
@@ -269,12 +293,7 @@ export const watchTestProcessMemory = ({
     }
     // Missing readings contribute no invented bytes. The readable sum is still
     // a lower bound that can prove a breach; retry unknowns on the next sample.
-    if (
-      unavailable !== undefined &&
-      !warned &&
-      child.exitCode === null &&
-      child.signalCode === null
-    ) {
+    if (unavailable !== undefined && !warned) {
       warned = true;
       onWarning(
         `Test memory sample partially unavailable for ${file()}; enforcing readable lower bound and retrying: ${unavailable.message}`,

@@ -66,7 +66,9 @@ for (const run of runs) {
   const shutdown = attachTestProcessShutdown({
     child,
     termination: process.platform === "win32" ? "process" : "group",
-    onWarning: (message) => process.stderr.write(`${message}\n`),
+    onWarning: (message) => {
+      process.stderr.write(`${message}\n`);
+    },
   });
   const watchdog = watchTestProcessMemory({
     child,
@@ -74,8 +76,12 @@ for (const run of runs) {
     readBytes,
     termination: process.platform === "win32" ? "process" : "group",
     file: () => currentFile,
-    onFailure: (message) => process.stderr.write(`${message}\n`),
-    onWarning: (message) => process.stderr.write(`${message}\n`),
+    onFailure: (message) => {
+      process.stderr.write(`${message}\n`);
+    },
+    onWarning: (message) => {
+      process.stderr.write(`${message}\n`);
+    },
   });
   try {
     const decoder = new TextDecoder();

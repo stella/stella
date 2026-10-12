@@ -4,6 +4,8 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { attachTestProcessShutdown } from "./test-process-shutdown";
+
 const posixTest = process.platform === "win32" ? test.skip : test;
 const SIGNAL_EXIT_CODES = { SIGINT: 130, SIGTERM: 143, SIGHUP: 129 } as const;
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP", "exit"] as const) {
@@ -19,11 +21,11 @@ for (const signal of ["SIGINT", "SIGTERM", "SIGHUP", "exit"] as const) {
           process.execPath,
           `${import.meta.dir}/test-fixtures/signal-cleanup-parent.ts`,
           marker,
+          signal,
         ],
         {
           stdout: "pipe",
           stderr: "inherit",
-          env: { ...process.env, SHUTDOWN_FIXTURE_MODE: signal },
         },
       );
       let childPid: number | undefined;
@@ -83,3 +85,28 @@ for (const signal of ["SIGINT", "SIGTERM", "SIGHUP", "exit"] as const) {
     },
   );
 }
+
+test("disposing shutdown ownership removes its listeners and signals cleanup only once", () => {
+  const events = ["SIGINT", "SIGTERM", "SIGHUP", "exit"] as const;
+  const previous = events.map((event) => process.listenerCount(event));
+  const signals: (number | NodeJS.Signals | undefined)[] = [];
+  const shutdown = attachTestProcessShutdown({
+    child: {
+      pid: 42,
+      kill: (signal) => {
+        signals.push(signal);
+      },
+    },
+    termination: "process",
+    onWarning: (message) => {
+      throw new TypeError(message);
+    },
+  });
+  expect(events.map((event) => process.listenerCount(event))).toEqual(
+    previous.map((count) => count + 1),
+  );
+  shutdown.dispose();
+  shutdown.dispose();
+  expect(events.map((event) => process.listenerCount(event))).toEqual(previous);
+  expect(signals).toEqual(["SIGKILL"]);
+});

@@ -15,12 +15,14 @@ const child = Bun.spawn(
 const shutdown = attachTestProcessShutdown({
   child,
   termination: "group",
-  onWarning: (message) => process.stderr.write(`${message}\n`),
+  onWarning: (message) => {
+    process.stderr.write(`${message}\n`);
+  },
 });
 const reader = child.stdout.getReader();
 const ready = await reader.read();
 console.log(`${child.pid} ${new TextDecoder().decode(ready.value).trim()}`);
-if (process.env["SHUTDOWN_FIXTURE_MODE"] === "exit") {
+if (process.argv.at(3) === "exit") {
   process.exit(23);
 }
 await child.exited;
