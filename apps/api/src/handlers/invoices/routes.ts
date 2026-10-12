@@ -10,6 +10,7 @@ import deleteInvoiceLine from "@/api/handlers/invoices/lines/delete";
 import updateInvoiceLine from "@/api/handlers/invoices/lines/update";
 import readInvoices from "@/api/handlers/invoices/list";
 import exportInvoicePdf from "@/api/handlers/invoices/pdf/export";
+import prefillInvoice from "@/api/handlers/invoices/prefill";
 import transitionInvoice from "@/api/handlers/invoices/transition";
 import updateInvoice from "@/api/handlers/invoices/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
@@ -34,6 +35,10 @@ export const invoicesRoute = new Elysia({
   .get("/", readInvoices.handler, {
     permissions: readInvoices.config.permissions,
     query: readInvoices.config.query,
+  })
+  .get("/prefill", prefillInvoice.handler, {
+    permissions: prefillInvoice.config.permissions,
+    query: prefillInvoice.config.query,
   })
   .get("/:invoiceId", readInvoiceById.handler, {
     params: readInvoiceById.config.params,
