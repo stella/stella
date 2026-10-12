@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   CITED_PART_RULES,
@@ -154,12 +155,12 @@ describe("the cited opinion belongs to the target reference", () => {
   test("normalizes decomposed diacritics before binding an opinion", () => {
     for (const [language, fixture] of languages) {
       for (const { cue, part } of fixture.opinions) {
-        if (cue.normalize("NFD") === cue) {
+        if (normalizeUnicode(cue, "NFD") === cue) {
           continue;
         }
         const context = `${TARGET} (${cue})`;
-        expect(context.normalize("NFD")).not.toBe(context);
-        expect(classify(context.normalize("NFD"), language)).toBe(part);
+        expect(normalizeUnicode(context, "NFD")).not.toBe(context);
+        expect(classify(normalizeUnicode(context, "NFD"), language)).toBe(part);
       }
     }
   });
