@@ -6,62 +6,32 @@ and available product states stay tied to production code.
 
 ## Refreshing the PNG screenshots
 
-The `.png` baselines come from CI, never from a developer machine. CI runs
+The `.png` baselines come from CI, never from a developer machine. PR CI runs
 the `marketing-screenshots` check whenever a change can reach a captured
-surface, so a UI change fails the pull request that makes it instead of the
-next nightly run.
-
-### Automatic regeneration
-
-When that check fails on a pixel diff (Playwright left a `*-diff.png`), it
-uploads a `marketing-screenshots-pixel-diff` marker, and
-**Regenerate marketing screenshots**
-(`.github/workflows/marketing-screenshots-autofix.yml`) takes over:
-
-1. It runs from `main` once CI completes, and only reads the GitHub API: it
-   resolves the pull request (directly, or from the merge-group ref), and
-   proceeds only for an open pull request whose branch lives in this
-   repository and whose head has not moved since the failing run.
-2. A capture job checks out exactly that head, regenerates every baseline on
-   the CI runner, and uploads the PNGs. It holds no push credential.
-3. A publish job, which executes nothing from the branch, accepts only flat,
-   regular `*.png` files with a PNG signature, mints the release App token,
-   and pushes them as one signed `chore(landing): regenerate marketing
-   screenshots` commit. The commit is built on the captured head, so a push
-   that landed on the branch in the meantime makes it fail instead of being
-   overwritten.
-
-The push re-runs the pull request's checks. If the branch head already is a
-regeneration commit and the check still finds a diff, nothing is pushed
-again: capture is not converging and a person has to look. A failure without
-the marker (the stack did not come up, an assertion failed) is never
-regenerated.
-
-### Manual regeneration
-
-For anything the automatic path skips, dispatch **Update marketing
-screenshots** (`.github/workflows/marketing-screenshots-update.yml`) from the
-default branch, naming the branch:
+surface, so a UI change fails the PR that makes it instead of the next nightly
+run. When the diff is intended, dispatch **Update marketing screenshots**
+(`.github/workflows/marketing-screenshots-update.yml`) from the default
+branch, naming the PR's branch:
 
 ```sh
 gh workflow run marketing-screenshots-update.yml -f branch=<pr-branch>
 ```
 
-It runs the same capture and publish jobs. Running from `main` is what keeps
-the release App key on workflow code from `main`: only the app and spec code
-checked out from `branch` is branch-controlled, and it runs in the job that
-never sees the token.
+Dispatching on `main` is what keeps the release App key on workflow code from
+`main`: only the app and spec code checked out from `branch` is
+branch-controlled, and the token never leaves the push step.
 
 The capture body is the composite action `.github/actions/marketing-capture`
 resolved from the branch, so a branch created before that action existed
-must be rebased onto `main` first. Because baselines and comparison render
-on the same runner image, the pixel tolerance only has to cover run-to-run
-noise.
+must be rebased onto `main` first.
 
-### Pull requests from forks
+It regenerates every baseline on the CI runner and pushes them to the branch,
+which re-runs the PR's checks against the new head. Because baselines and
+comparison render on the same runner image, the pixel tolerance only has to
+cover run-to-run noise.
 
-Only branches of this repository can be regenerated in place. Every update
-run also uploads the PNGs as a `marketing-screenshots-<run id>` artifact; for
+Every update run also uploads the PNGs as a `marketing-screenshots-<run id>`
+artifact. Only branches of this repository can be regenerated in place, so for
 a fork PR run the update against a same-repository branch carrying the change
 and commit the artifact's PNGs to the PR.
 

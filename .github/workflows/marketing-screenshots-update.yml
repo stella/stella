@@ -4,21 +4,20 @@ defaults:
   run:
     shell: bash
 
-# A same-repository pull request whose `marketing-screenshots` check finds a
-# pixel diff is regenerated automatically (marketing-screenshots-autofix.yml).
-# Dispatch this workflow by hand for anything else, on the default branch,
-# naming the branch:
+# When a PR fails the `marketing-screenshots` check because its UI change is
+# intended, dispatch this workflow on the default branch and name the PR's
+# branch:
 #
 #   gh workflow run marketing-screenshots-update.yml -f branch=<pr-branch>
 #
-# Running from main is what keeps the release App key on trusted workflow
+# Dispatching on main is what keeps the release App key on trusted workflow
 # code: this job body and the reusable workflow it calls are resolved from
-# main. The branch's app and spec code run in a capture job that holds no
-# push credential; a separate publish job validates the uploaded PNGs as data
-# and is the only job that mints the token. The push re-runs the PR's checks
-# against the new head. Baselines are never regenerated on a developer
-# machine, so the comparison tolerance only has to cover run-to-run noise on
-# one runner image.
+# main, only the app and spec code checked out from `branch` is
+# branch-controlled, and the token stays confined to the push step's
+# environment. Regeneration rewrites every baseline on the CI runner and
+# pushes the PNGs to the branch, which re-runs the PR's checks against the new
+# head. Baselines are never regenerated on a developer machine, so the
+# comparison tolerance only has to cover run-to-run noise on one runner image.
 
 on:
   workflow_dispatch:
