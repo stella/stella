@@ -115,6 +115,8 @@ type ResolveSystemOneOutcomesOptions = {
   outcomes: ReadonlyMap<string, AnswerOutcome>;
   /** The text behind each source id, for the justification blocks. */
   excerptByAnchor: ReadonlyMap<string, string>;
+  /** The court's number for each numbered block, by anchor. */
+  courtParagraphNumbers: ReadonlyMap<string, number>;
   run: SystemOneRunFacts;
 };
 
@@ -124,6 +126,7 @@ type ResolveSystemOneOutcomesOptions = {
  * parser uses, and an empty one is `not_stated` whatever the column's kind.
  */
 export const resolveSystemOneOutcomes = ({
+  courtParagraphNumbers,
   excerptByAnchor,
   outcomes,
   questions,
@@ -171,6 +174,7 @@ export const resolveSystemOneOutcomes = ({
       justification: buildAnswerJustification(
         sourceId === null ? [] : [sourceId],
         excerptByAnchor,
+        courtParagraphNumbers,
       ),
     };
     const answer = statedAnswerContent(validated.value);

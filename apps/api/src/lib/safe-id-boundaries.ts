@@ -1,4 +1,4 @@
-// parser-output-unchanged: shared SHA-256 ownership preserves derived ID bytes and UUID layout (sha256-storage-parity.test.ts compares each migrated boundary with the Node digest); search-history ID branding serves cursor pagination only.
+// parser-output-unchanged: shared SHA-256 ownership preserves derived ID bytes and UUID layout (sha256-storage-parity.test.ts compares each migrated boundary with the Node digest); search-history ID branding serves cursor pagination only; reader answer ID branding serves stored answers only.
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { isUuid } from "@stll/uuid-codec";
 
@@ -37,6 +37,10 @@ export const brandPersistedWorkspaceId = (
 export const brandPersistedSavedTimeNarrativeId = (
   id: string,
 ): SafeId<"savedTimeNarrative"> => toSafeId<"savedTimeNarrative">(id);
+
+export const brandPersistedLegalReaderAnswerId = (
+  id: string,
+): SafeId<"legalReaderAnswer"> => toSafeId<"legalReaderAnswer">(id);
 
 export const brandPersistedTemplateId = (
   templateId: string,

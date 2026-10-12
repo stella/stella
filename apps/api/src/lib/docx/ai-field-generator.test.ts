@@ -22,7 +22,10 @@ import { decideTemplateConditions } from "@/api/lib/templates/template-decide-co
 import { resolveDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import { createSystemOneClient } from "@/api/lib/workflow/decisions/system-one";
-import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import {
+  testModelAdmission,
+  testOrganizationStateDb,
+} from "@/api/tests/helpers/model-dispatch-admission";
 import {
   createScopedDbMock,
   createSelectQueryMock,
@@ -279,6 +282,7 @@ describe("buildAiFieldGenerator admitted action", () => {
     const generation = admitModelDispatch({
       organizationId,
       actionKind: "report-export.background",
+      organizationStateDb: testOrganizationStateDb,
       signal: lease.signal,
       run: async (admission) =>
         await buildAiFieldGenerator({

@@ -1,0 +1,6 @@
+{
+  "metric": "direct-root-connection-imports",
+  "file": "apps/api/src/lib/auth/professional-use.ts",
+  "delta": 1,
+  "reason": "The existing account acceptance operation moves from the broad auth module to its canonical professional-use owner, which acquires its aggregate lock directly and returns a typed result; the authenticated handler and database regression are the only allowed importers of this root connection door."
+}

@@ -1,8 +1,6 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
-
-setDefaultTimeout(20_000);
 
 const imported = 'import { stellaToast as notices } from "@stll/ui/toast";';
 const lint = async (source: string, sourcePath = "apps/web/src/example.ts") =>
