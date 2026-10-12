@@ -344,7 +344,13 @@ test("origin verify values are single values of at least 32 characters", () => {
     expect(v.safeParse(schema, undefined).success).toBe(true);
     expect(v.safeParse(schema, current).success).toBe(true);
     expect(v.safeParse(schema, previous).success).toBe(true);
-    for (const invalid of ["a".repeat(31), `${current},${previous}`]) {
+    expect(v.parse(schema, `${current}\n`)).toBe(current);
+    expect(v.parse(schema, ` ${previous} `)).toBe(previous);
+    for (const invalid of [
+      "a".repeat(31),
+      `${"a".repeat(31)}\n`,
+      `${current},${previous}`,
+    ]) {
       expect(v.safeParse(schema, invalid).success).toBe(false);
     }
   }

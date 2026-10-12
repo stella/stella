@@ -85,6 +85,7 @@ const edgeAddressHeaderName = v.pipe(
 
 const originVerifyValue = v.pipe(
   v.string(),
+  v.trim(),
   v.minLength(32, "must be at least 32 characters"),
   v.check((value) => !value.includes(","), "must be a single value"),
 );
