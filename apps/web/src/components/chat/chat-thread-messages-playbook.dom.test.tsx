@@ -60,6 +60,9 @@ test("opens the playbook an approved save wrote", async () => {
             <ChatApprovalContext value={testChatApprovalContextValue}>
               <ChatEditorProvider>
                 <ChatThreadMessages
+                  activitySession={{
+                    reportedUnknownActivityTypes: new Set<string>(),
+                  }}
                   approvalPendingMessageId={null}
                   messages={[
                     {
@@ -105,5 +108,67 @@ test("opens the playbook an approved save wrote", async () => {
   });
   fireEvent.click(openButton);
   expect(opened).toEqual(["playbook-1"]);
+  queryClient.clear();
+});
+
+test("tells the user when an approved save failed", async () => {
+  const input = { name: "Mutual NDA", positions: [] };
+  const queryClient = new QueryClient();
+  const view = render(
+    <ChatThreadTestRouter>
+      <QueryClientProvider client={queryClient}>
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <ChatMattersContext
+            value={{ createDocumentMattersView: { type: "empty" } }}
+          >
+            <ChatApprovalContext value={testChatApprovalContextValue}>
+              <ChatEditorProvider>
+                <ChatThreadMessages
+                  activitySession={{
+                    reportedUnknownActivityTypes: new Set<string>(),
+                  }}
+                  approvalPendingMessageId={null}
+                  messages={[
+                    {
+                      id: "message-save",
+                      parts: [
+                        {
+                          approval: {
+                            approved: true,
+                            id: "approval-1",
+                            needsApproval: true,
+                          },
+                          arguments: JSON.stringify(input),
+                          id: "tool-call-save",
+                          input,
+                          name: "save_playbook",
+                          output: {
+                            error: '{"error":{"code":"validation_error"}}',
+                          },
+                          state: "error",
+                          type: "tool-call",
+                        },
+                      ],
+                      role: "assistant",
+                    },
+                  ]}
+                  onAskUserSubmit={() => {}}
+                  onCreateDocumentResolve={() => {}}
+                  onOpenCreatedDocument={() => {}}
+                  streamdownComponents={{
+                    a: ({ children, ...props }) => <a {...props}>{children}</a>,
+                  }}
+                />
+              </ChatEditorProvider>
+            </ChatApprovalContext>
+          </ChatMattersContext>
+        </IntlProvider>
+      </QueryClientProvider>
+    </ChatThreadTestRouter>,
+  );
+  await view.findByText(messages.chat.toolCall.failed);
+  expect(view.getByText(messages.common.showDetails)).toBeDefined();
+  expect(view.queryByLabelText(messages.chat.approval.allowed)).toBeNull();
+  expect(view.queryByLabelText(messages.chat.approval.denied)).toBeNull();
   queryClient.clear();
 });

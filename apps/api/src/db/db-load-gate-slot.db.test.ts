@@ -5,7 +5,10 @@ import {
   createHeavyWorkSlot,
   tryAcquireBackfillTransactionSlot,
 } from "../../../../packages/db-load-gate/src/heavy-work-slot";
-import { withGatedTestClients } from "../tests/gated-test-database";
+import {
+  GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS,
+  withGatedTestClients,
+} from "../tests/gated-test-database";
 
 const OLD_BACKFILL_INTENT_KEY = 3;
 const databaseUrl = process.env["DATABASE_URL"];
@@ -345,7 +348,7 @@ describe.skipIf(!enabled)("database-wide heavy-work priorities", () => {
           survivor.release();
         }
       },
-      { closeTimeout: 0 },
+      { closeTimeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS },
     );
   });
 });

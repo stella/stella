@@ -10,6 +10,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { savedTimeNarrativeParamsSchema } from "./schema";
 
 const config = {
+  contract: "patch",
   description:
     "Delete a personal saved time narrative in the active organization.",
   permissions: { timeEntry: ["update"] },

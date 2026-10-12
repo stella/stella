@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-import { ARABIC_DIGIT_FOLDS } from "@stll/text-normalize";
+import { normalizeUnicode, ARABIC_DIGIT_FOLDS } from "@stll/text-normalize";
 import { parsePlainDate, Temporal } from "@stll/time";
 
 export const MAX_VAT_RATE_BPS = 2_147_483_647;
@@ -9,7 +9,7 @@ export const MAX_VAT_RATE_BPS = 2_147_483_647;
 // ASCII. The Arabic decimal separator (U+066B) joins "." and ",".
 const foldPercentText = (raw: string): string =>
   Array.from(
-    raw.normalize("NFKC"),
+    normalizeUnicode(raw, "NFKC"),
     (char) => ARABIC_DIGIT_FOLDS[char] ?? char,
   ).join("");
 

@@ -11,12 +11,12 @@ import {
 import {
   RESOURCE_PATH_PATTERN,
   RESOURCE_PATH_MAX_CHARS,
-  inferResourceKind,
 } from "@/api/lib/agent-skills/resource-path";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import { LIMITS } from "@/api/lib/limits";
@@ -58,6 +58,7 @@ const uploadSkillResourceBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Add one file to an agent skill by uploading it. A DOCX or PDF is stored " +
     "as its extracted text and anything else is decoded as UTF-8; content " +
@@ -158,13 +159,12 @@ const uploadSkillResource = createSafeRootHandler(
         .slice(0, LIMITS.agentSkillResourceMaxChars);
     }
 
-    const kind = inferResourceKind(path);
     const sizeBytes = new TextEncoder().encode(content).byteLength;
 
     const inserted = yield* Result.await(
       safeDb(
         async (tx) =>
-          await tx.transaction(async (innerTx) => {
+          await withAggregateSavepoint(tx, async (innerTx) => {
             const lockedSkill = await lockSkillForResourceWrite(
               innerTx,
               params.skillId,
@@ -175,14 +175,12 @@ const uploadSkillResource = createSafeRootHandler(
                 organizationId: session.activeOrganizationId,
                 skillId: params.skillId,
                 path,
-                kind,
                 content,
                 sizeBytes,
               })
               .returning({
                 id: agentSkillResources.id,
                 path: agentSkillResources.path,
-                kind: agentSkillResources.kind,
                 content: agentSkillResources.content,
                 sizeBytes: agentSkillResources.sizeBytes,
               });
@@ -195,7 +193,7 @@ const uploadSkillResource = createSafeRootHandler(
               changes: {
                 resource: {
                   old: null,
-                  new: { path, kind, sizeBytes },
+                  new: { path, sizeBytes },
                 },
               },
               metadata: { slug: skill.slug, path, origin: "upload" },
@@ -217,7 +215,6 @@ const uploadSkillResource = createSafeRootHandler(
       id: row.id,
       skillId: params.skillId,
       path: row.path,
-      kind: row.kind,
       content: row.content,
       sizeBytes: row.sizeBytes,
     });

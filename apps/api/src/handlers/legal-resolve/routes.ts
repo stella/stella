@@ -33,6 +33,7 @@ import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { resolveResponseStatus } from "@/api/lib/observability/response-status";
 import {
   rateLimit,
+  scopedRateLimitKey,
   type RateLimitContext,
   type RateLimitOptions,
 } from "@/api/lib/rate-limit/rate-limit";
@@ -44,6 +45,7 @@ import {
   CACHE_CONTROL_HEADER,
   PRIVATE_CACHE_CONTROL,
 } from "@/api/lib/security-headers";
+import { getMcpWwwAuthenticateHeader } from "@/api/mcp/metadata";
 import { LEGAL_RESOLVE_RESOURCE_ROUTES } from "@/api/mcp/resource-policy-contract";
 
 import type { authenticateLegalResolveToken } from "./authentication";
@@ -78,10 +80,14 @@ export const createLegalResolveRateLimitOptions = (
   ...createRedisRateLimit({
     failurePolicy: "fail_closed",
     scope: `legal-resolve-${route}`,
-    counterKeyGenerator: async (request) => {
+    counterKeyGenerator: async (request, server) => {
       const authorization = await getAuthorization(request);
       if (authorization.session === undefined) {
-        return `unauthorized:${route}`;
+        return scopedRateLimitKey({
+          scope: `unauthorized:${route}`,
+          request,
+          server,
+        });
       }
       return `${authorization.session.organizationId}:${credentialKey(authorization.session)}:${route}`;
     },
@@ -122,7 +128,6 @@ type LegalResolveRouteDependencies = {
   rateLimitContext?: RateLimitContext;
   publicLawEnabled?: () => boolean;
   resolveSessionContext?: LegalResolveAuthorizationDependencies["resolveSessionContext"];
-  mayReadPublicLaw?: LegalResolveAuthorizationDependencies["mayReadPublicLaw"];
   resolveDecision?: typeof resolveDecision;
   resolveLaw?: typeof resolveLawCitation;
 };
@@ -133,7 +138,6 @@ export const createLegalResolveRoute = ({
   decisionRateLimit,
   lawRateLimit,
   rateLimitContext,
-  mayReadPublicLaw,
   publicLawEnabled,
   resolveSessionContext,
   resolveDecision: resolveDecisionRequest = resolveDecision,
@@ -145,7 +149,6 @@ export const createLegalResolveRoute = ({
   const auditedRequests = new WeakSet<Request>();
   const usesDefaultAuthorization =
     authenticate === undefined &&
-    mayReadPublicLaw === undefined &&
     publicLawEnabled === undefined &&
     resolveSessionContext === undefined;
   const getAuthorization = usesDefaultAuthorization
@@ -155,7 +158,6 @@ export const createLegalResolveRoute = ({
           await authorizeLegalResolveRequest(request, {
             ...(authenticate === undefined ? {} : { authenticate }),
             publicLawEnabled: isPublicLawEnabled,
-            ...(mayReadPublicLaw === undefined ? {} : { mayReadPublicLaw }),
             ...(resolveSessionContext === undefined
               ? {}
               : { resolveSessionContext }),
@@ -175,6 +177,14 @@ export const createLegalResolveRoute = ({
 
   return new Elysia()
     .mapResponse(async ({ set, request, responseValue, params }) => {
+      if (set.status === 401) {
+        set.headers["WWW-Authenticate"] = getMcpWwwAuthenticateHeader({
+          error: request.headers.has("authorization")
+            ? "invalid_token"
+            : "none",
+          mode: "law",
+        });
+      }
       set.headers[CACHE_CONTROL_HEADER] = PRIVATE_CACHE_CONTROL;
       if (auditedRequests.has(request)) {
         return;

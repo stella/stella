@@ -15,6 +15,7 @@ const clauseVersionDiffParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Return a plain-text, line-level diff between one stored clause version " +
     "and the clause's current body. An empty segment list means the two are " +

@@ -218,7 +218,7 @@ const selected = (condition: string | undefined, value: object) => {
   }
   return Boolean(result);
 };
-test("computed browser planning retains trust, reuse and thin-depth boundaries", () => {
+test("computed browser planning retains trust and suite scopes across queue depths", () => {
   for (const event of events.filter(({ event: eventName }) =>
     ["pull_request", "merge_group", "push", "workflow_dispatch"].includes(
       eventName,
@@ -251,7 +251,7 @@ test("computed browser planning retains trust, reuse and thin-depth boundaries",
                 (trusted === "true" || event.event === "workflow_dispatch") &&
                 (event.event === "pull_request"
                   ? desktopRequired === "true"
-                  : suiteDepth === "full" && queueDepth !== "thin");
+                  : suiteDepth === "full");
               expect(
                 selected(ci.jobs["ci-browser"]?.if, value),
                 JSON.stringify({
@@ -279,9 +279,6 @@ const expectedRouteSelection = (value: ReturnType<typeof context>) => {
   return (
     value.github.event_name !== "pull_request" &&
     (value.github.event_name !== "merge_group" || !value.cancelled()) &&
-    (planner.outputs["queue_depth"] !== "thin" ||
-      (value.github.event_name === "merge_group" &&
-        value.vars.QUEUE_BROWSER_SUITES !== "off")) &&
     planner.outputs["trusted"] === "true" &&
     planner.outputs["route_smoke_required"] === "true" &&
     (value.needs["web-build"]?.result === "success" ||
@@ -297,6 +294,7 @@ type ExpectedPrSelectionOptions = {
 const DECLARED_PR_PLAN_CHANGES = new Set([
   "ci-browser",
   "e2e-production-shard",
+  "scan-engine-wasm-drift",
   "web-build",
 ]);
 const expectedPrSelection = ({
@@ -313,6 +311,13 @@ const expectedPrSelection = ({
     return (
       value.needs["ci-plan"]?.outputs["trusted"] === "true" &&
       value.needs["ci-plan"].outputs["desktop_browser_required"] === "true"
+    );
+  }
+  if (job === "scan-engine-wasm-drift") {
+    expect(DECLARED_PR_PLAN_CHANGES.has(job)).toBe(true);
+    return (
+      value.needs["ci-plan"]?.outputs["trusted"] === "true" &&
+      value.needs["ci-plan"].outputs["scan_engine_wasm_required"] === "true"
     );
   }
   if (job === "web-build") {
@@ -366,7 +371,6 @@ const expectedServiceSelection = (value: ReturnType<typeof context>) => {
     (outputs["corpus_suites_required"] === "true" ||
       ((event !== "pull_request" ||
         value.vars.CI_POSTGRES_PR_SELECTION === "on") &&
-        outputs["queue_depth"] !== "thin" &&
         (outputs["suite_depth"] === "full" ||
           (outputs["suite_depth"] === "fast" &&
             outputs["service_suites_pr_required"] === "true"))))
@@ -383,7 +387,6 @@ const expectedPostgresSelection = (value: ReturnType<typeof context>) => {
     (outputs["trusted"] === "true" ||
       value.github.event_name === "workflow_dispatch") &&
     outputs["postgres_suites_required"] === "true" &&
-    outputs["queue_depth"] !== "thin" &&
     (value.github.event_name !== "pull_request" ||
       value.vars.CI_POSTGRES_PR_SELECTION === "on") &&
     (outputs["suite_depth"] === "full" ||
@@ -812,14 +815,18 @@ test("unset and full preserve historical predicates except declared PR, Postgres
         "ci-generated-sources",
         "ci-checks-docs",
         "code-quality-web-rest",
+        "dated-waiver-expiry",
         "desktop-rust-tests",
         "desktop-rust-lint",
+        "query-perf",
+        "scan-engine-wasm-drift",
       ]),
     ].toSorted(),
   );
   expect([...DECLARED_PR_PLAN_CHANGES].toSorted()).toEqual([
     "ci-browser",
     "e2e-production-shard",
+    "scan-engine-wasm-drift",
     "web-build",
   ]);
   for (const event of events) {
@@ -861,99 +868,25 @@ test("unset and full preserve historical predicates except declared PR, Postgres
   }
 }, 30_000);
 
-test("one variable moves only derived heavy jobs from merge groups to ordinary main pushes", () => {
-  const baseline = original("ci.yml");
-  for (const event of events) {
-    for (const variable of ["", "full", "thin", "typo"]) {
-      const heavyOnly = mainTriggered(event.event);
-      const resolved = runDepth({ event: event.event, variable, heavyOnly });
-      const thinQueue =
-        !heavyOnly && event.event === "merge_group" && variable === "thin";
-      const outputs = Object.fromEntries(
-        resolved.output
-          .trim()
-          .split("\n")
-          .map((line) => line.split("=")),
+test("merge groups certify the same scoped code jobs at both queue depths", () => {
+  for (const job of admitted) {
+    for (const queueBrowserSuites of ["", "on", "off"]) {
+      const values = ["full", "thin"].map((queueDepth) =>
+        context({
+          event: { event: "merge_group", message: "ordinary" },
+          variable: queueDepth,
+          queueDepth,
+          queueBrowserSuites,
+        }),
       );
-      const value = context({
-        event,
-        variable,
-        queueDepth: outputs["queue_depth"] ?? "full",
-      });
-      value.inputs.heavy_only = heavyOnly;
-      const planner = value.needs["ci-plan"];
-      if (!planner) {
-        panic("Missing ci-plan context");
-      }
-      planner.result = resolved.exitCode === 0 ? "success" : "failure";
-      planner.outputs["suite_depth"] = outputs["suite_depth"] ?? "";
-      if (heavyOnly) {
-        planner.outputs["landing_build_required"] = "false";
-        planner.outputs["fix_tests_on_base_required"] = "false";
-        planner.outputs["heavy_web_build_required"] = "true";
-      }
-      const invoked =
-        !heavyOnly || mainSelection({ workflow: main, event, variable }).suites;
-      for (const job of needs.filter((name) => name !== "ci-plan")) {
-        const runs =
-          invoked &&
-          resolved.exitCode === 0 &&
-          selected(ci.jobs[job]?.if, value);
-        if (heavyOnly) {
-          const scope = scopes[job];
-          const planned =
-            scope === null ||
-            (scope !== undefined && planner.outputs[scope] === "true");
-          expect(runs, `${event.event}/${variable}/${job}`).toBe(
-            invoked &&
-              resolved.exitCode === 0 &&
-              heavy.includes(job) &&
-              planned,
-          );
-          continue;
-        }
-        if (
-          resolved.exitCode !== 0 ||
-          (thinQueue && heavy.includes(job) && !admitted.includes(job))
-        ) {
-          expect(runs, `${event.event}/${variable}/${job}`).toBe(false);
-          continue;
-        }
-        // An admitted browser suite keeps its full-depth queue selection in a
-        // thin group while the switch is unset.
-        const certified =
-          thinQueue && admitted.includes(job)
-            ? {
-                ...value,
-                needs: {
-                  ...value.needs,
-                  "ci-plan": {
-                    ...planner,
-                    outputs: { ...planner.outputs, queue_depth: "full" },
-                  },
-                },
-              }
-            : value;
-        let expected = selected(baseline.jobs[job]?.if, certified);
-        if (job === "docker-checks" && event.event === "merge_group") {
-          expected =
-            value.needs["ci-plan"]?.outputs["docker_checks_required"] ===
-            "true";
-        } else if (job === "service-suites") {
-          expected = expectedServiceSelection(value);
-        } else if (job === "postgres-service-suites") {
-          expected = expectedPostgresSelection(value);
-        } else if (job === "route-smoke") {
-          expected = expectedRouteSelection(value);
-        } else if (event.event === "pull_request") {
-          expected = expectedPrSelection({ job, baseline: expected, value });
-        }
-        expect(runs, `${event.event}/${variable}/${job}`).toBe(expected);
-      }
+      const selections = values.map((value) =>
+        selected(ci.jobs[job]?.if, value),
+      );
+      expect(selections, `${job}/${queueBrowserSuites}`).toEqual([true, true]);
     }
   }
   assertMainSelection(main);
-}, 30_000);
+});
 
 type RunDepthOptions = { event: string; variable: string; heavyOnly?: boolean };
 const runDepth = ({ event, variable, heavyOnly = false }: RunDepthOptions) => {
@@ -1047,7 +980,10 @@ const evaluate = ({
   );
   const dependencies = Object.fromEntries(
     needs.map((name) => {
-      let jobResult = heavy.includes(name) ? "skipped" : "success";
+      let jobResult =
+        heavy.includes(name) && !admitted.includes(name)
+          ? "skipped"
+          : "success";
       if (name === job) {
         jobResult = result ?? "missing";
       }
@@ -1074,7 +1010,7 @@ const evaluate = ({
       HEAVY_ONLY: "false",
       COVERAGE_PROFILE: "normal-v1",
       QUEUE_VALIDATION: "false",
-      QUEUE_REQUIRED_JOBS: "[]",
+      QUEUE_REQUIRED_JOBS: JSON.stringify(admitted),
       QUEUE_DEPTH: queueDepth,
       THIN_JOBS: JSON.stringify(THIN_JOBS),
       HEAVY_JOBS: JSON.stringify(heavy),
@@ -1084,44 +1020,35 @@ const evaluate = ({
       PR_DEPTH_REUSED: "false",
       PR_DEPTH_ONLY: "false",
       PR_DEPTH_SOURCE_RUN_ID: "",
-      PLAN: JSON.stringify({ ...plan, queue_depth: queueDepth }),
+      PLAN: JSON.stringify({
+        ...plan,
+        queue_depth: queueDepth,
+        heavy_web_build_required: "false",
+        release_typecheck_required: "false",
+      }),
       NEEDS: JSON.stringify(dependencies),
     },
   }).exitCode;
 };
 
-test("thin aggregation accepts only intended heavy skips and still requires every planned thin check", () => {
+test("both queue depths require every planned admitted check to succeed", () => {
   expect(outcome.env?.["QUEUE_DEPTH"]).toBe(
     `\${{ needs.ci-plan.outputs.queue_depth || 'full' }}`,
   );
   expect(outcome.env?.["THIN_JOBS"]).toBe(
     `\${{ needs.ci-plan.outputs.thin_jobs || '[]' }}`,
   );
-  expect(evaluate({ queueDepth: "thin" })).toBe(0);
-  expect(evaluate({ queueDepth: "full" })).toBe(1);
-  for (const job of [...THIN_JOBS, ...heavy]) {
-    for (const result of ["failure", "cancelled", "timed_out"]) {
-      expect(
-        evaluate({ queueDepth: "thin", job, result }),
-        `${job}/${result}`,
-      ).toBe(1);
+  for (const queueDepth of ["thin", "full"]) {
+    expect(evaluate({ queueDepth }), queueDepth).toBe(0);
+    for (const job of admitted) {
+      for (const result of ["failure", "cancelled", "timed_out", "skipped"]) {
+        expect(
+          evaluate({ queueDepth, job, result }),
+          `${queueDepth}/${job}/${result}`,
+        ).toBe(1);
+      }
     }
   }
-  for (const job of THIN_JOBS) {
-    expect(evaluate({ queueDepth: "thin", job, result: "skipped" }), job).toBe(
-      1,
-    );
-  }
-}, 30_000);
-
-test("ignoring queue depth in the result gate breaks intended thin skips", () => {
-  expect(evaluate({ queueDepth: "thin" })).toBe(0);
-  expect(
-    evaluate({
-      queueDepth: "thin",
-      script: `QUEUE_DEPTH=full\n${outcome.run}`,
-    }),
-  ).toBe(1);
 }, 30_000);
 
 test("heavy schedules and ordinary pushes supersede while release runs coalesce by SHA", () => {
@@ -1303,85 +1230,51 @@ test("main release and scheduled runs execute the planned version compiler in ei
   }
 }, 30_000);
 
-test("thin merge groups admit exactly the planned browser suites until the switch turns them off", () => {
+test("queue admission covers every gated job except documented event and producer exceptions", () => {
+  const exceptions = new Set([
+    "ci-checks-docs",
+    "fix-tests-on-base",
+    "heavy-web-build",
+    "release-typecheck",
+  ]);
   expect([...admitted].toSorted()).toEqual(
-    ["e2e-production-shard", "route-smoke"].toSorted(),
+    needs.filter((job) => job !== "ci-plan" && !exceptions.has(job)).toSorted(),
   );
+});
+
+test("scoped queue eligibility is invariant under depth and the retired browser switch", () => {
   for (const job of admitted) {
-    // Main-heavy keeps certifying them after merge as well.
-    expect(heavy, job).toContain(job);
     const scope = scopes[job];
-    if (!scope) {
-      panic(`Missing planner scope for ${job}`);
-    }
-    for (const planned of [false, true]) {
+    for (const required of ["true", "false"]) {
       for (const queueBrowserSuites of ["", "on", "off"]) {
-        const value = context({
-          event: { event: "merge_group", message: "ordinary" },
-          variable: "thin",
-          queueDepth: "thin",
-          queueBrowserSuites,
+        const selections = ["full", "thin"].map((queueDepth) => {
+          const value = context({
+            event: { event: "merge_group", message: "ordinary" },
+            variable: queueDepth,
+            queueDepth,
+            queueBrowserSuites,
+          });
+          const planner = value.needs["ci-plan"];
+          if (!planner) {
+            panic(`Missing ${job} planner context`);
+          }
+          if (scope) {
+            planner.outputs[scope] = required;
+          }
+          if (job === "postgres-service-suites") {
+            planner.outputs["postgres_suites_required"] = required;
+          }
+          if (job === "service-suites" || job === "ci-browser") {
+            planner.outputs["package_checks_required"] = required;
+            planner.outputs["collab_redis_required"] = "false";
+          }
+          return selected(ci.jobs[job]?.if, value);
         });
-        const planner = value.needs["ci-plan"];
-        const heavyWeb = value.needs["heavy-web-build"];
-        if (!planner || !heavyWeb) {
-          panic(`Missing ${job} build context`);
-        }
-        planner.outputs[scope] = String(planned);
-        heavyWeb.result = "skipped";
-        expect(
-          selected(ci.jobs[job]?.if, value),
-          `${job}/${planned}/${queueBrowserSuites}`,
-        ).toBe(planned && queueBrowserSuites !== "off");
+        expect(selections, `${job}/${required}/${queueBrowserSuites}`).toEqual([
+          scope === null || required === "true",
+          scope === null || required === "true",
+        ]);
       }
-    }
-  }
-});
-
-test("a browser suite without the queue switch drops out of thin merge groups", () => {
-  const mutated = structuredClone(ci);
-  const smoke = mutated.jobs["route-smoke"];
-  if (!smoke?.if) {
-    panic("Missing route smoke condition");
-  }
-  smoke.if = smoke.if.replace(
-    "(needs.ci-plan.outputs.queue_depth != 'thin' || (github.event_name == 'merge_group' && vars.QUEUE_BROWSER_SUITES != 'off'))",
-    "needs.ci-plan.outputs.queue_depth != 'thin'",
-  );
-  expect(queueAdmittedJobs(mutated)).not.toContain("route-smoke");
-  const value = context({
-    event: { event: "merge_group", message: "ordinary" },
-    variable: "thin",
-    queueDepth: "thin",
-  });
-  expect(selected(smoke.if, value)).toBe(false);
-});
-
-test("the queue switch admits browser suites only in merge groups", () => {
-  for (const job of admitted) {
-    const scope = scopes[job];
-    if (!scope) {
-      panic(`Missing planner scope for ${job}`);
-    }
-    for (const event of events.filter(
-      (candidate) => candidate.event !== "merge_group",
-    )) {
-      // A thin depth outside a merge group is not emitted today; the condition
-      // must still refuse it rather than rely on the resolver.
-      const value = context({ event, variable: "thin", queueDepth: "thin" });
-      const planner = value.needs["ci-plan"];
-      if (!planner) {
-        panic(`Missing ${job} planner context`);
-      }
-      planner.outputs[scope] = "true";
-      expect(
-        selected(ci.jobs[job]?.if, value),
-        `${job}/${event.event}/${event.message}`,
-      ).toBe(
-        DECLARED_PR_PLAN_CHANGES.has(job) &&
-          job === "e2e-production-shard" &&
-          event.event === "pull_request",
-      );
     }
   }
 });

@@ -333,7 +333,7 @@ const readProvisionHistoryArgsSchema = nullAsAbsent(
 
 const LEGISLATION_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Search legislation",
       destructiveHint: false,
@@ -371,7 +371,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     scope: "stella:search",
   }),
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Read statute",
       destructiveHint: false,
@@ -399,7 +399,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Read statute provisions",
       destructiveHint: false,
@@ -436,7 +436,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Read provision history",
       destructiveHint: false,

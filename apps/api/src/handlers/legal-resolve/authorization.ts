@@ -1,11 +1,9 @@
 import { Result } from "better-result";
 import { decodeJwt } from "jose";
 
-import { mayReadPublicLawForOrganization } from "@/api/db/root";
 import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
 import { hasLawReadScope } from "@/api/handlers/legal-resolve/scope";
 import { captureRequestError } from "@/api/lib/analytics/capture";
-import type { SafeId } from "@/api/lib/branded-types";
 import { isServiceResolveSession } from "@/api/lib/db/service-client-contract";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
@@ -21,9 +19,6 @@ import { authenticateLegalResolveToken } from "./authentication";
 export type LegalResolveAuthorizationDependencies = {
   authenticate?: typeof authenticateLegalResolveToken;
   captureError?: typeof captureRequestError;
-  mayReadPublicLaw?: (
-    organizationId: SafeId<"organization">,
-  ) => ReturnType<typeof mayReadPublicLawForOrganization>;
   publicLawEnabled?: () => boolean;
   resolveSessionContext?: (
     ...args: Parameters<typeof resolveMcpSessionContext>
@@ -48,14 +43,13 @@ export const authorizeLegalResolveRequest = async (
   {
     authenticate = authenticateLegalResolveToken,
     captureError = captureRequestError,
-    mayReadPublicLaw: readPublicLaw = mayReadPublicLawForOrganization,
     publicLawEnabled = () => isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW"),
     resolveSessionContext = resolveMcpSessionContext,
   }: LegalResolveAuthorizationDependencies = {},
 ) => {
   const authorization = request.headers.get("authorization");
   if (authorization === null || !authorization.startsWith("Bearer ")) {
-    return { status: 403 as const, body: { error: "missing_scope" as const } };
+    return { status: 401 as const, body: { error: "unauthorized" as const } };
   }
   const token = authorization.slice(7);
   const session = await authenticate(token, {
@@ -72,7 +66,7 @@ export const authorizeLegalResolveRequest = async (
         body: { error: "access_unavailable" as const },
       };
     }
-    return { status: 403 as const, body: { error: "missing_scope" as const } };
+    return { status: 401 as const, body: { error: "unauthorized" as const } };
   }
   if (!hasLawReadScope(session.value.scopes)) {
     return {
@@ -115,19 +109,11 @@ export const authorizeLegalResolveRequest = async (
       body: { error: "access_unavailable" as const },
     };
   }
-  const admission = await admitLawRead({
+  const admission = admitLawRead({
     organizationId,
-    mayReadPublicLaw: readPublicLaw,
     publicLawEnabled,
   });
   if (Result.isError(admission)) {
-    if (admission.error.type === "access_unavailable") {
-      return {
-        session: session.value,
-        status: 503 as const,
-        body: { error: "access_unavailable" as const },
-      };
-    }
     return {
       session: session.value,
       status: 403 as const,
