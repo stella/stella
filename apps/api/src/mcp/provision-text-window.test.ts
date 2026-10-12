@@ -1,4 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
+import { sha256Base64Url } from "@stll/sha256/bun";
 
 import { windowProvisionText } from "@/api/mcp/provision-text-window";
 
@@ -45,6 +49,63 @@ describe("provision text windows", () => {
         text: "a📚",
       }),
     ).toMatchObject({ text: "📚", truncated: false });
+  });
+
+  test("rechecksummed cursors accept exactly Unicode character boundaries", () => {
+    const bmpText = fc
+      .array(fc.integer({ min: 0, max: 0xd7_ff }), { maxLength: 8 })
+      .map((points) => String.fromCodePoint(...points));
+    assertProperty(
+      "provision-text-cursors-unicode-boundaries",
+      fc.property(
+        bmpText,
+        fc.integer({ min: 0x1_00_00, max: 0x10_ff_ff }),
+        bmpText,
+        (before, point, after) => {
+          const subject = "unicode|provision";
+          const text = `${before}${String.fromCodePoint(point)}${after}end`;
+          const first = windowProvisionText({ limit: 2, subject, text });
+          expect(first.type).toBe("window");
+          if (first.type !== "window") {
+            return;
+          }
+          expect(first.nextTextCursor).not.toBeNull();
+          if (first.nextTextCursor === null) {
+            return;
+          }
+          const [prefix, , binding] = first.nextTextCursor.split(".");
+          expect(prefix).toBe("ptw1");
+          expect(binding).toBeString();
+          if (prefix === undefined || binding === undefined) {
+            return;
+          }
+          const boundaries = new Set([0]);
+          let position = 0;
+          for (const character of text) {
+            position += character.length;
+            boundaries.add(position);
+          }
+          for (let offset = 0; offset <= text.length; offset += 1) {
+            const payload = `${offset}.${binding}`;
+            const cursor = `${prefix}.${payload}.${sha256Base64Url(payload)}`;
+            const result = windowProvisionText({
+              cursor,
+              limit: 2,
+              subject,
+              text,
+            });
+            if (!boundaries.has(offset)) {
+              expect(result).toEqual({ type: "invalid-cursor" });
+              continue;
+            }
+            expect(result.type).toBe("window");
+            if (result.type === "window") {
+              expect(result.text.isWellFormed()).toBe(true);
+            }
+          }
+        },
+      ),
+    );
   });
 
   test("refuses tampered and foreign cursors", () => {

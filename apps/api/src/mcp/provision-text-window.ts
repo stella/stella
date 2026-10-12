@@ -76,7 +76,10 @@ export const windowProvisionText = ({
     cursor !== undefined &&
     (decoded === null ||
       decoded.binding !== textBinding(subject, text) ||
-      decoded.offset > text.length)
+      decoded.offset > text.length ||
+      (decoded.offset > 0 &&
+        /[\uD800-\uDBFF]/u.test(text.charAt(decoded.offset - 1)) &&
+        /[\uDC00-\uDFFF]/u.test(text.charAt(decoded.offset))))
   ) {
     return { type: "invalid-cursor" };
   }
