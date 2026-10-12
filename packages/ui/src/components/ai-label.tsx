@@ -44,8 +44,11 @@ export const AiLabel = ({ label, disclosure, className }: AiLabelProps) => (
   <Popover>
     <PopoverTrigger
       className={cn(
-        // Inherits the line it sits in; the hit area grows on touch only.
-        "focus-visible:ring-ring relative inline-flex cursor-pointer items-center gap-1 rounded-sm align-middle tracking-[inherit] text-inherit [text-transform:inherit] decoration-dotted underline-offset-2 outline-none [font:inherit] hover:underline focus-visible:ring-2 data-popup-open:underline pointer-coarse:after:absolute pointer-coarse:after:-inset-3",
+        // Inherits the line it sits in. On touch the hit area grows to at
+        // least 44×44 around the mark, whatever the line height: the
+        // absolute pseudo-element is centred by the flex container's own
+        // alignment, as the shared button does.
+        "focus-visible:ring-ring relative inline-flex cursor-pointer items-center justify-center gap-1 rounded-sm align-middle tracking-[inherit] text-inherit [text-transform:inherit] decoration-dotted underline-offset-2 outline-none [font:inherit] hover:underline focus-visible:ring-2 data-popup-open:underline pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11",
         className,
       )}
       data-slot="ai-label"

@@ -36,6 +36,22 @@ describe("AiLabel", () => {
     expect(trigger).not.toMatch(/\b(bg-|border|shadow)/u);
   });
 
+  test("a touch target is at least 44×44, centred on the mark", () => {
+    const trigger = /<button[^>]*class="([^"]*)"/u.exec(markup)?.[1] ?? "";
+
+    // A fixed outset cannot reach 44px from a 14px line; a minimum size can.
+    for (const hitArea of [
+      "pointer-coarse:after:absolute",
+      "pointer-coarse:after:min-h-11",
+      "pointer-coarse:after:min-w-11",
+      "items-center",
+      "justify-center",
+    ]) {
+      expect(trigger).toContain(hitArea);
+    }
+    expect(trigger).not.toMatch(/after:-?inset/u);
+  });
+
   test("the sparkle is decoration", () => {
     expect(markup).toMatch(/<svg[^>]*aria-hidden="true"/u);
   });
