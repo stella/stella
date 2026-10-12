@@ -213,6 +213,24 @@ describe("numbered reasoning set without blank lines", () => {
     ]);
   });
 
+  test("a number the court skipped still starts its paragraph", () => {
+    const blocks = reasoning([
+      "1. Sťažovateľ podal ústavnú sťažnosť.",
+      "3. Sudca spravodajca oznámil námietku.",
+      "4. Námietka nie je dôvodná.",
+    ]);
+    expect(
+      blocks.map((block) => [
+        block.type === "paragraph" ? block.number : null,
+        block.plainText,
+      ]),
+    ).toEqual([
+      [1, "Sťažovateľ podal ústavnú sťažnosť."],
+      [3, "Sudca spravodajca oznámil námietku."],
+      [4, "Námietka nie je dôvodná."],
+    ]);
+  });
+
   test("a quoted petit's own points do not split the paragraph quoting it", () => {
     const blocks = reasoning([
       "1. Sťažovateľ navrhuje, aby ústavný súd rozhodol takto:",

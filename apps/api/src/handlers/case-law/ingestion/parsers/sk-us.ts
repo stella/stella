@@ -46,7 +46,10 @@ import {
 } from "@stll/legal-ast/slovak-document-roles";
 import type { SkDocumentSection } from "@stll/legal-ast/slovak-document-roles";
 
-import { courtParagraphNumbers } from "@/api/handlers/case-law/ingestion/parsers/court-paragraph-numbers";
+import {
+  COURT_PARAGRAPH_NUMBERING_LIMITS,
+  courtParagraphNumbers,
+} from "@/api/handlers/case-law/ingestion/parsers/court-paragraph-numbers";
 import {
   ANONYMIZED_CLASS,
   inlinesToPlainText,
@@ -388,14 +391,22 @@ const classifyLines = (lines: readonly MarkupLine[]): Block[] => {
     // The court's next paragraph number opening a line ends the paragraph
     // before it, because some decisions set no blank line between numbered
     // paragraphs. Only when it is unambiguous: the number is the one that
-    // comes next and stands before a capital (a wrapped "1. februára" is not
-    // one), the open paragraph has finished a sentence and is not inside a
-    // quotation („…“: a quoted petit numbers its own points), and no later
-    // line opens with the same number (then this one is a list item and the
-    // later one the court's paragraph).
+    // comes next, or a forward skip the numbering itself allows, and stands
+    // before a capital (a wrapped "1. februára" is not one); the open
+    // paragraph has finished a sentence and is not inside a quotation („…“:
+    // a quoted petit numbers its own points); and no later line opens with
+    // the same number (then this one is a list item and the later one the
+    // court's paragraph).
     const opening =
       state.section === "reasoning" ? openings[lineIndex] : undefined;
-    if (opening !== undefined && opening === nextCourtNumber) {
+    const step =
+      opening === undefined ? undefined : opening - (nextCourtNumber - 1);
+    if (
+      opening !== undefined &&
+      step !== undefined &&
+      step >= 1 &&
+      step <= COURT_PARAGRAPH_NUMBERING_LIMITS.maxJump
+    ) {
       const open = openParagraphText();
       if (
         open !== null &&
@@ -406,7 +417,7 @@ const classifyLines = (lines: readonly MarkupLine[]): Block[] => {
         flushParagraph();
       }
       if (openParagraphText() === null) {
-        nextCourtNumber += 1;
+        nextCourtNumber = opening + 1;
       }
     }
     openParagraph(line);
