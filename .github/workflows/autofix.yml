@@ -431,7 +431,9 @@ jobs:
           # No changed-path or generator grant can authorize decision records.
           # The only exception is a shrink-only baseline whose rewrite deletes
           # entries, checked against the head commit by the base revision's
-          # verifier, run from an empty directory without dependencies.
+          # verifier, run from an empty directory without dependencies. That
+          # is a policy guard against mistaken rewrites, not a security
+          # boundary: the pull request's own code already ran in this job.
           bun scripts/autofix-protected-paths.ts > "$RUNNER_TEMP/autofix-protected-paths"
           protected=()
           while IFS= read -r pattern; do

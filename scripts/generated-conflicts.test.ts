@@ -462,7 +462,64 @@ describe("resolution across runs", () => {
     expect(publish(origin, head, out).stderr).toContain("non-regular entry");
   });
 
-  test("a source conflict is left to people", () => {
+  test("a deletion of a file nobody conflicted on is refused", () => {
+    const { origin, head, main } = fixture();
+    const { out } = resolve(origin, head, main);
+    for (const target of [
+      // An ordinary file the merge resolved cleanly.
+      NOTES,
+      // Another generator's output: only owners of a conflict may write.
+      "apps/landing/src/i18n/messages/messages.gen.ts",
+    ]) {
+      editManifest(out, (manifest) => {
+        manifest.files.push({ path: target, deleted: true, mode: "100644" });
+      });
+      const published = publish(origin, head, out);
+      expect(published.exitCode, target).not.toBe(0);
+      expect(published.stderr, target).toContain(
+        `${target} is outside the owning generators' outputs`,
+      );
+      editManifest(out, (manifest) => {
+        manifest.files.pop();
+      });
+    }
+    expect(publish(origin, head, out).exitCode).toBe(0);
+  });
+
+  test("a branch that moved between the jobs gets no merge from the old resolution", () => {
+    const { origin, head, main } = fixture();
+    const { out } = resolve(origin, head, main);
+    git(origin, "switch", "-q", "feature");
+    write(origin, "apps/api/later.txt", "pushed after the resolve run\n");
+    git(origin, "add", "-A");
+    git(origin, "commit", "-qm", "later");
+    const moved = git(origin, "rev-parse", "HEAD");
+    git(origin, "switch", "-q", "main");
+    const published = publish(origin, moved, out);
+    expect(published.exitCode).not.toBe(0);
+    expect(published.stderr).toContain(
+      "The collected resolution is for a different head",
+    );
+  });
+
+  test("main that moved between the jobs still merges the commit that was resolved", () => {
+    const { origin, head, main } = fixture();
+    const { out } = resolve(origin, head, main);
+    write(origin, "apps/api/later.txt", "landed after the resolve run\n");
+    git(origin, "add", "-A");
+    git(origin, "commit", "-qm", "later");
+    expect(git(origin, "rev-parse", "HEAD")).not.toBe(main);
+    const published = publish(origin, head, out);
+    expect(published.exitCode, published.stderr).toBe(0);
+    const commit = JSON.parse(
+      readFileSync(path.join(published.requests, "commit.json"), "utf-8"),
+    );
+    expect(commit.parents).toEqual([head, main]);
+  });
+
+  test("a mixed conflict is left to people, even in the trusted run", () => {
+    // The fixture already conflicts in the generated message types; this
+    // adds a conflict in source next to it.
     const { origin, head, main } = fixture({
       branchEdits: (repo) => write(repo, "apps/api/src/index.ts", "branch\n"),
       mainEdits: (repo) => write(repo, "apps/api/src/index.ts", "main\n"),
@@ -483,6 +540,26 @@ describe("resolution across runs", () => {
     const result = JSON.parse(planned.stdout);
     expect(result.eligible).toBe(false);
     expect(result.reasons).toContain(
+      "apps/api/src/index.ts: not a generated output",
+    );
+    // A resolve run that claims otherwise is refused when the merge is
+    // rebuilt, whatever it collected.
+    const out = path.join(root, "forged");
+    mkdirSync(path.join(out, "files"), { recursive: true });
+    writeFileSync(
+      path.join(out, "manifest.json"),
+      JSON.stringify({
+        head,
+        main,
+        baseline: "0".repeat(40),
+        tree: "0".repeat(40),
+        files: [],
+      }),
+    );
+    const published = publish(origin, head, out);
+    expect(published.exitCode).not.toBe(0);
+    expect(published.stderr).toContain("The merge is not generated-only");
+    expect(published.stderr).toContain(
       "apps/api/src/index.ts: not a generated output",
     );
   });

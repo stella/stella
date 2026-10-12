@@ -5,15 +5,18 @@
 // pull request removes code a baseline still lists, the baseline's own writer
 // runs, and its result is kept only if it deletes entries or lowers counts.
 // Anything that would add or loosen an entry is reverted here and refused
-// again by `verify` in the workflow, which compares against the pull
-// request's head commit rather than trusting this runner.
+// again by `verify` in the workflow, which compares the rewrite with the pull
+// request's head commit.
 //
 //   bun scripts/autofix-baseline-prune.ts prune
 //   bun autofix-baseline-prune.ts verify --repo <dir> --ref <sha> <path>...
 //
 // The workflow runs `verify` from the base revision's copy of this file and
 // its two imports, in an empty directory with `--no-install --no-env-file`,
-// so a pull request cannot change the rules that judge its own baselines.
+// so an edit to these rules in the same pull request does not apply to its
+// own baselines. This is a policy guard, not a security boundary: the pull
+// request's code has already run in the same job before `verify`, so review
+// of the pushed commit remains the control against a hostile branch.
 //
 // Only writers whose output is a static scan of committed source are listed:
 // nothing that measures builds, timing, registries or a database.
