@@ -283,7 +283,18 @@
       "outputs": []
     },
     "@stll/portable-path#typecheck": {
-      "dependsOn": ["transit", "^generate:capability-runtime"]
+      "cache": true,
+      "dependsOn": ["transit", "^generate:capability-runtime"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.npmrc",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/packages/typescript-config/**",
+        "$TURBO_ROOT$/patches/**",
+        "$TURBO_ROOT$/types/**"
+      ],
+      "outputs": []
     },
     "//#typecheck:repo": {
       "cache": true,
