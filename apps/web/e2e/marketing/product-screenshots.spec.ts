@@ -44,9 +44,11 @@ const READER_STORY_ANSWER_TEXT = /No demand is needed/u;
 // Where the framed paragraph lands below the reader's top edge: room for its
 // section heading, and for the comment cards beside it to fit the clip.
 const READER_SCROLL_OFFSET_PX = 48;
-// Where a block cut by the reader's top edge is lowered to, so the frame opens
-// on its first line with a little air above it.
-const READER_TOP_INSET_PX = 16;
+// The most air left above the block the frame opens on; less when the gap to
+// the block above is smaller, so that block stays wholly out of view.
+const READER_TOP_INSET_PX = 12;
+// How many blocks, from the target's own upward, the frame may open on.
+const READER_FRAME_CANDIDATES = 6;
 // Duplicated from packages/api-contract/src/browser-storage.ts
 // (`ownerStorageKey`) and apps/web/src/components/inspector/
 // inspector-storage-keys.ts, for the same reason as the theme key below.
@@ -390,9 +392,16 @@ test("capture landing product screenshots", async ({
           "an AI margin note",
         );
         // Where a block or a stacked note meets the frame's edges depends on
-        // the fonts the runner renders with: settle on clean edges, then
-        // hold the line.
-        await settleReaderFrame(page, captureClip);
+        // the fonts the runner renders with, so the frame is chosen from
+        // the measured layout, then every promise is checked again.
+        await frameReader(page, {
+          clip: captureClip,
+          target:
+            "readerStory" in capture
+              ? readerMark
+              : page.locator(AI_MARGIN_NOTE_SELECTOR).first(),
+          needsComment: "readerStory" in capture,
+        });
         await expectCleanTopEdge(page);
         // Whole notes, inside the shot's own clip: a card cut at the frame's
         // edge reads as a glitch.
@@ -562,53 +571,130 @@ const expectWithinClip = async (
     .toBe(true);
 };
 
-// Settles the reader's frame on clean edges, scrolling up (content down) a
-// few steps at most. At the top, a text block the frame's edge cuts through
-// is lowered until it starts just below the edge, so the frame opens on the
-// start of a paragraph, never on the tail of one. At the bottom, a margin
-// note crossing the edge is pushed wholly below it. Each step only moves the
-// content down, so the two never undo each other and the loop ends.
-const settleReaderFrame = async (page: Page, clip: CaptureClip) => {
-  await page.evaluate(
-    ({ bottomEdge, inset, steps }) => {
-      const scroller = document
-        .querySelector('[data-slot="reader-document-column"]')
-        ?.closest(".reader-scroll");
-      if (!(scroller instanceof HTMLElement)) {
+// Chooses the reader's frame in one step, from measured positions. Every
+// candidate opens on the start of a block at or above the target's block,
+// with the block above it wholly out of view; the gap between two blocks is
+// only a few pixels, so the frame's top edge sits inside that gap rather
+// than at a fixed offset (a fixed offset larger than the gap would cut the
+// block above, and lowering that one would cut the next). The first
+// candidate that also holds an AI note clear of the margin's sticky header,
+// the target, a whole comment card when the shot has one, and no note cut
+// by either edge wins; the scroller moves once, by that candidate's offset.
+// Notes are laid out against the scrolling content, so shifting a measured
+// box by the offset is where it lands. Throws, naming each candidate's
+// failure, when none fits.
+const frameReader = async (
+  page: Page,
+  {
+    clip,
+    target,
+    needsComment,
+  }: { clip: CaptureClip; target: Locator; needsComment: boolean },
+) => {
+  await expect(target).toBeAttached({ timeout: COLD_COMPILE_TIMEOUT });
+  await target.evaluate(
+    (targetElement, { bandBottom, commentRequired, maxInset, candidates }) => {
+      const column = document.querySelector(
+        '[data-slot="reader-document-column"]',
+      );
+      const scroller = column?.closest(".reader-scroll");
+      if (!column || !(scroller instanceof HTMLElement)) {
         throw new Error("The reader's scroller is missing");
       }
-      for (let step = 0; step < steps; step += 1) {
-        const frame = scroller.getBoundingClientRect();
-        const cutAtTop = [
-          ...document.querySelectorAll(
-            '[data-slot="reader-document-column"] [data-anchor]',
-          ),
-        ].find((block) => {
-          const box = block.getBoundingClientRect();
-          return box.top < frame.top && box.bottom > frame.top;
-        });
-        if (cutAtTop !== undefined) {
-          scroller.scrollTop -=
-            frame.top + inset - cutAtTop.getBoundingClientRect().top;
+      const frame = scroller.getBoundingClientRect();
+      const top = frame.top;
+      const bottom = Math.min(frame.bottom, bandBottom);
+      // Outermost blocks only: a table cell carries its own anchor inside
+      // its table's.
+      const blocks = [...column.querySelectorAll<HTMLElement>("[data-anchor]")]
+        .filter(
+          (block) => block.parentElement?.closest("[data-anchor]") === null,
+        )
+        .map((block) => block.getBoundingClientRect())
+        .filter((box) => box.height > 0);
+      const notes = [
+        ...document.querySelectorAll<HTMLElement>("[data-margin-note] > *"),
+      ].map((note) => ({
+        box: note.getBoundingClientRect(),
+        kind: note.parentElement?.dataset.marginNote ?? "",
+      }));
+      // The margin's current-section header sticks to the top of the
+      // scroller; a note under it reads as cut.
+      const aside = column.parentElement?.querySelector("aside");
+      const stuck = aside
+        ? [...aside.querySelectorAll<HTMLElement>("*")]
+            .filter(
+              (element) => getComputedStyle(element).position === "sticky",
+            )
+            .map((element) => element.getBoundingClientRect())
+            .filter((box) => box.height > 0 && box.top <= top + 1)
+        : [];
+      const notesTop = Math.max(top, ...stuck.map((box) => box.bottom));
+      const targetBox = targetElement.getBoundingClientRect();
+      const targetBlock = blocks.findLastIndex(
+        (box) => box.top <= targetBox.top + 1,
+      );
+      if (targetBlock < 1) {
+        throw new Error("The target has no block above it to frame from");
+      }
+      const within = (box: DOMRect, delta: number, upper: number) =>
+        box.top - delta >= upper && box.bottom - delta <= bottom;
+      const crosses = (box: DOMRect, delta: number, edge: number) =>
+        box.top - delta < edge && box.bottom - delta > edge;
+      const failures: string[] = [];
+      for (
+        let index = targetBlock;
+        index > Math.max(0, targetBlock - candidates);
+        index -= 1
+      ) {
+        const block = blocks[index];
+        const above = blocks[index - 1];
+        if (!block || !above) {
           continue;
         }
-        const bottom = Math.min(frame.bottom, bottomEdge);
-        const crossing = [
-          ...document.querySelectorAll("[data-margin-note] > *"),
-        ].find((note) => {
-          const box = note.getBoundingClientRect();
-          return box.top < bottom && box.bottom > bottom;
-        });
-        if (crossing === undefined) {
+        const gap = block.top - above.bottom;
+        const inset = Math.max(0, Math.min(maxInset, gap - 1));
+        const delta = block.top - (top + inset);
+        const problems = [
+          blocks.some((box) => crosses(box, delta, top))
+            ? "a block crosses the top edge"
+            : null,
+          within(targetBox, delta, top) ? null : "the target is out of view",
+          notes.some(
+            ({ box, kind }) =>
+              kind !== "comment" &&
+              kind !== "composer" &&
+              within(box, delta, notesTop),
+          )
+            ? null
+            : "no AI note clear of the header",
+          !commentRequired ||
+          notes.some(
+            ({ box, kind }) =>
+              kind === "comment" && within(box, delta, notesTop),
+          )
+            ? null
+            : "no whole comment card",
+          notes.some(
+            ({ box }) =>
+              crosses(box, delta, notesTop) || crosses(box, delta, bottom),
+          )
+            ? "a note is cut by an edge"
+            : null,
+        ].filter((problem) => problem !== null);
+        if (problems.length === 0) {
+          scroller.scrollTop += delta;
           return;
         }
-        scroller.scrollTop -= bottom - crossing.getBoundingClientRect().top + 8;
+        failures.push(`block ${String(index)}: ${problems.join(", ")}`);
       }
+      throw new Error(`No frame fits the reader shot: ${failures.join("; ")}`);
     },
     {
-      bottomEdge: clip.y + clip.height,
-      inset: READER_TOP_INSET_PX,
-      steps: 6,
+      bandBottom: clip.y + clip.height,
+      commentRequired: needsComment,
+      maxInset: READER_TOP_INSET_PX,
+      candidates: READER_FRAME_CANDIDATES,
     },
   );
 };
