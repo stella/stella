@@ -1448,10 +1448,7 @@ describe("detect-e2e-changes", () => {
     // concurrency, and permissions there. A local reusable declares it on its own job (walked
     // below); a remote one must be handed the environment name. Pinned so
     // each caller stays a listed decision.
-    const forwardingCallers = new Set([
-      "marketing-screenshots-update.yml#update",
-      "publish-npm.yml#release",
-    ]);
+    const forwardingCallers = new Set(["publish-npm.yml#release"]);
     const seenCallers = new Set<string>();
 
     const workflowsDir = path.join(import.meta.dirname, "../.github/workflows");

@@ -43,6 +43,36 @@ const stepsOf = (workflow: unknown, job: string) =>
   workflowJobSteps(workflow, job).map((step) => v.parse(stepSchema, step));
 
 describe("screenshot update trust boundary", () => {
+  test("the push key is never handed to the reusable workflow", () => {
+    for (const name of [
+      "marketing-screenshots.yml",
+      "marketing-screenshots-update.yml",
+    ]) {
+      const workflow = Bun.YAML.parse(
+        readFileSync(
+          new URL(`../.github/workflows/${name}`, import.meta.url),
+          "utf-8",
+        ),
+      );
+      const call: unknown =
+        typeof workflow === "object" && workflow !== null
+          ? Reflect.get(Reflect.get(workflow, "on") ?? {}, "workflow_call")
+          : undefined;
+      expect(JSON.stringify(call ?? {}), name).not.toContain(
+        "STELLA_RELEASE_APP_PRIVATE_KEY",
+      );
+    }
+    expect(
+      readFileSync(
+        new URL(
+          "../.github/workflows/marketing-screenshots-update.yml",
+          import.meta.url,
+        ),
+        "utf-8",
+      ),
+    ).not.toContain("STELLA_RELEASE_APP_PRIVATE_KEY");
+  });
+
   test("only the publish job can reach the push key, and it runs no branch code", () => {
     const withKey = Object.entries(reusableJobs)
       .filter(([, job]) =>

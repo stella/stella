@@ -50,9 +50,6 @@ on:
       DOCKERHUB_TOKEN:
         description: Docker Hub token for authenticated infrastructure image pulls
         required: false
-      STELLA_RELEASE_APP_PRIVATE_KEY:
-        description: Private key of the release App; publish pushes the regenerated PNGs with its token
-        required: false
 
 permissions: {}
 
@@ -235,7 +232,8 @@ jobs:
       # GITHUB_TOKEN does not re-trigger the PR's checks, so the branch would
       # sit on a failed marketing check with the fix already committed.
       contents: read
-    # Release App key lives in this environment (main and v* tags only).
+    # The release App key is a secret of this environment alone (main and
+    # v* tags only); no caller passes it in, so only this job can read it.
     environment: release-app
 
     # Nothing from the branch executes in this job: it checks the branch out
