@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -148,11 +148,15 @@ export const legalAtlasApiSourcePredicate = (
       return true;
     }
     closure ??= legalAtlasApiSourceClosure(options);
-    switch (closure.status) {
+    const currentClosure = closure;
+    switch (currentClosure.status) {
       case "unresolved":
         return true;
       case "resolved":
-        return changed.some((file) => closure.files.has(file));
+        return changed.some((file) => currentClosure.files.has(file));
+      default:
+        currentClosure satisfies never;
+        return panic("Unknown legal-atlas source closure status");
     }
   };
 };

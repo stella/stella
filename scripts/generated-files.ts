@@ -37,7 +37,7 @@ const MODEL_CATALOG_INPUTS = [
   "packages/scripts/src/model-catalog-rates-gen.ts",
 ] as const;
 
-export const GENERATORS = [
+const GENERATOR_DECLARATIONS = [
   {
     id: "status-tables",
     outputKind: "committed",
@@ -831,6 +831,10 @@ export const GENERATORS = [
     after: [],
   },
 ] as const satisfies readonly Generator[];
+
+export const GENERATORS: readonly (Generator & {
+  id: (typeof GENERATOR_DECLARATIONS)[number]["id"];
+})[] = GENERATOR_DECLARATIONS;
 
 export const GUARD_A_EXCLUSIONS = [
   {

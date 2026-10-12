@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import {
   mkdtempSync,
@@ -81,13 +82,13 @@ test("image selection includes every consumed source and workspace manifest and 
   const seen = new Set<string>();
   expect(sourceClosureProblems(ROOT, tree, entries, seen)).toEqual([]);
   const dockerfile = readFileSync(path.join(ROOT, DOCKERFILE), "utf-8");
-  const installInputs = dockerfile
-    .match(/for input in ([^;]+);/u)
+  const installInputs = /for input in ([^;]+);/u
+    .exec(dockerfile)
     ?.at(1)
     ?.split(/\s+/u);
   expect(installInputs).toBeDefined();
-  const copiedRootInputs = dockerfile
-    .match(/cp ([^;&]+) \/json\//u)
+  const copiedRootInputs = /cp ([^;&]+) \/json\//u
+    .exec(dockerfile)
     ?.at(1)
     ?.split(/\s+/u);
   expect(copiedRootInputs).toBeDefined();
