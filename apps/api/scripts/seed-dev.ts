@@ -93,7 +93,10 @@ import type {
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import { seedCaseLaw } from "./seed-case-law";
-import { seedCaseLawReaderStory } from "./seed-case-law-reader-story";
+import {
+  CASE_LAW_READER_STORY,
+  seedCaseLawReaderStory,
+} from "./seed-case-law-reader-story";
 import { writeSeedRecentFiles } from "./seed-recents";
 import { seedTemplates } from "./seed-templates";
 import {
@@ -6430,7 +6433,8 @@ export async function seed(organizationId?: string, userId?: string) {
   // whole seed or dump a giant error toast — warn and continue.
   let caseLawSeeded = false;
   try {
-    await seedCaseLaw();
+    // The reader story is built on its decision's current fixture.
+    await seedCaseLaw({ refresh: [CASE_LAW_READER_STORY.decision] });
     caseLawSeeded = true;
   } catch (error) {
     logErrorOutput({

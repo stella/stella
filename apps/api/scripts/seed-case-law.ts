@@ -34,6 +34,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import type { CaseLawWriteHandles } from "@/api/lib/case-law/maintenance-lane";
 import { canonicalDecisionDate } from "@/api/lib/dates";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { indexDecision } from "@/api/lib/legal-search/case-law-search-index";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
@@ -219,11 +220,69 @@ export const fixtureDecisionRow = ({
   sourceHash: d.source_hash,
 });
 
+/** A recorded decision, named by the key the seed stores it under. */
+export type FixtureDecisionKey = {
+  adapterKey: string;
+  caseNumber: string;
+  language: string;
+};
+
+type SeedFixturesOptions = {
+  /**
+   * Decisions whose stored row is brought back to its fixture on every run.
+   * The seed otherwise keeps a row a database already holds, so a fixture
+   * edit (a new analysis, a re-recorded AST) would never reach a database
+   * seeded before it, and whatever is built on that decision would be built
+   * on its old text.
+   */
+  refresh?: readonly FixtureDecisionKey[] | undefined;
+};
+
+type RefreshFixtureDecisionOptions = FixtureDecisionRowOptions & {
+  /** The stored row's id, which need not be the fixture's seed id. */
+  decisionId: SafeId<"caseLawDecision">;
+};
+
+/**
+ * Brings a stored decision back to its fixture: the row is stored again,
+ * under the id it already had, exactly as a fresh seed writes it, whatever an
+ * earlier seed or a local run left there. Replaced rather than updated, so no
+ * column the fixture records (the analysis included) is written behind its
+ * lifecycle; rows that hang off the decision in a dev database go with it.
+ */
+export const refreshFixtureDecision = async (
+  db: Pick<CaseLawWriteHandles["rootDb"], "transaction">,
+  { decisionId, ...row }: RefreshFixtureDecisionOptions,
+) => {
+  const fixtureRow = { ...fixtureDecisionRow(row), id: decisionId };
+  await withAggregateTransaction(db, async (tx) => {
+    await tx
+      .delete(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, decisionId));
+    await tx.insert(caseLawDecisions).values(fixtureRow);
+  });
+};
+
+const isRefreshed = (
+  refresh: readonly FixtureDecisionKey[],
+  adapterKey: string,
+  decision: FixtureDecision,
+) =>
+  refresh.some(
+    (key) =>
+      key.adapterKey === adapterKey &&
+      key.caseNumber === decision.case_number &&
+      key.language === decision.language,
+  );
+
 // Index + slug writes target the global `case_law_*` tables, which only
 // the `stella_ingestion` role may write under RLS. The decision rows below
 // go in via the lane's `rootDb` (table owner), but `indexDecision` and the
 // slug backfill run their writes through its ingestion-scoped handle.
-const seedFixtures = async ({ rootDb, ingestionDb }: CaseLawWriteHandles) => {
+const seedFixtures = async (
+  { rootDb, ingestionDb }: CaseLawWriteHandles,
+  { refresh = [] }: SeedFixturesOptions,
+) => {
   await ensureSearchPreviewConfig(rootDb);
 
   const fixtures = [
@@ -308,6 +367,17 @@ const seedFixtures = async ({ rootDb, ingestionDb }: CaseLawWriteHandles) => {
         );
       }
 
+      // A row this database already held keeps its old columns unless the
+      // caller asked for this decision to match its fixture again.
+      if (result.length === 0 && isRefreshed(refresh, adapterKey, d)) {
+        await refreshFixtureDecision(rootDb, {
+          adapterKey,
+          decision: d,
+          decisionId,
+          sourceId,
+        });
+      }
+
       // Search-index projection is non-essential for the public read path
       // (decisions are read from `case_law_decisions`, not the search table).
       // A failure here (e.g. local schema drift in `case_law_search_documents`)
@@ -357,14 +427,14 @@ const seedFixtures = async ({ rootDb, ingestionDb }: CaseLawWriteHandles) => {
   console.log("Done. Case law data seeded successfully.");
 };
 
-export async function seedCaseLaw() {
+export async function seedCaseLaw(options: SeedFixturesOptions = {}) {
   requireLocalDevOpen("Seeding");
 
   // The dev seed route runs this inside the API process, so the lane is
   // released here rather than left to the process exit.
   const lane = await enterCaseLawMaintenanceLane();
   try {
-    await seedFixtures(lane);
+    await seedFixtures(lane, options);
   } finally {
     await lane.release();
   }
