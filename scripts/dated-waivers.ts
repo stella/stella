@@ -254,6 +254,22 @@ export const waiverWarnings = (
       `::warning file=${escapeCommand(entry.source).replaceAll(",", "%2C").replaceAll(":", "%3A")},line=${entry.line}::${escapeCommand(`${entry.id} (${entry.kind}) expires at ${entry.expiresAt}; ${RECHECK_INSTRUCTIONS[entry.kind]}`)}`,
   );
 
+// An elapsed waiver is the owner's cleanup (dated-waiver-healing opens it),
+// not a defect of whichever change is under review, so the per-change gate
+// annotates it instead of failing every pull request and merge group.
+export const expiredWaiverAnnotations = (
+  entries: readonly DatedWaiver[],
+  now: Date,
+): string[] =>
+  entries
+    .filter(
+      (entry) => Date.parse(expiryInstant(entry.expiresAt)) <= now.getTime(),
+    )
+    .map(
+      (entry) =>
+        `::warning file=${escapeCommand(entry.source).replaceAll(",", "%2C").replaceAll(":", "%3A")},line=${entry.line}::${escapeCommand(`${entry.id} (${entry.kind}) expired at ${entry.expiresAt}; ${RECHECK_INSTRUCTIONS[entry.kind]}`)}`,
+    );
+
 // A dated test quarantine is an adjacent comment on a literal test.skip/it.skip
 // call. The inventory guard blocks at expiry even while the source still skips.
 export const readTestQuarantines = (
@@ -488,19 +504,8 @@ if (import.meta.main) {
   }
   const entries = loadWaivers(readTrackedPolicyFiles(trackedFilesPath));
   if (check) {
-    const expired = entries.filter(
-      (entry) => Date.parse(expiryInstant(entry.expiresAt)) <= Date.now(),
-    );
-    if (expired.length > 0) {
-      console.error(
-        expired
-          .map(
-            (entry) =>
-              `${entry.source}:${entry.line} dated waiver expired: ${entry.id}`,
-          )
-          .join("\n"),
-      );
-      process.exitCode = 1;
+    for (const annotation of expiredWaiverAnnotations(entries, new Date())) {
+      console.log(annotation);
     }
   } else if (process.argv.includes("--due")) {
     console.log(dueWaivers(entries, new Date()).length > 0);

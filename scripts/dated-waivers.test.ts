@@ -12,6 +12,7 @@ import {
   DAY_MS,
   DOC_SOURCE_FILE,
   dueWaivers,
+  expiredWaiverAnnotations,
   expiryInstant,
   readTestQuarantines,
   RECHECK_INSTRUCTIONS,
@@ -111,6 +112,29 @@ test("complete owner UTC day and exact five-day grace boundary are preserved", (
   const boundary = Date.parse(expiryInstant("2026-10-03")) - 5 * DAY_MS;
   expect(dueWaivers(entries, new Date(boundary))).toEqual(entries);
   expect(dueWaivers(entries, new Date(boundary - 1))).toEqual([]);
+});
+test("an elapsed waiver annotates the change instead of failing it", () => {
+  const entries = inventory();
+  const exclusion = entries.find(
+    ({ kind }) => kind === "release-age-exclusion",
+  );
+  expect(
+    expiredWaiverAnnotations(entries, new Date("2026-10-02T01:02:02.999Z")),
+  ).toEqual([]);
+  const annotations = expiredWaiverAnnotations(
+    entries,
+    new Date("2026-10-02T01:02:03.000Z"),
+  );
+  expect(annotations).toHaveLength(1);
+  expect(annotations[0]).toStartWith(
+    `::warning file=bunfig.toml,line=${exclusion?.line}::`,
+  );
+  expect(annotations[0]).toContain(
+    "new-package (release-age-exclusion) expired at 2026-10-02T01:02:03.000Z",
+  );
+  expect(
+    expiredWaiverAnnotations(entries, new Date("2026-10-07T00:00:00.000Z")),
+  ).toHaveLength(entries.length);
 });
 test("impossible dates, missing anchors and new expiry-bearing owners fail closed", () => {
   for (const value of ["2026-02-30", "2026-02-30T00:00:00.000Z", "tomorrow"]) {
