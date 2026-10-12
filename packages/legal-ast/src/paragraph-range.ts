@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { courtParagraphNumber } from "./court-paragraph-number.js";
 import type { DocumentAst } from "./document-ast.js";
 
 /** Structural counterpart of the API contract range, kept dependency-free. */
@@ -35,17 +36,16 @@ export const resolveDecisionParagraphRange = (
 
   const firstAnchorByNumber = new Map<number, string>();
   for (const block of ast.blocks) {
+    const number = courtParagraphNumber(block);
     if (
-      block.type !== "paragraph" ||
-      block.number === undefined ||
-      !Number.isSafeInteger(block.number) ||
-      block.number < from ||
-      block.number > to ||
-      firstAnchorByNumber.has(block.number)
+      number === null ||
+      number < from ||
+      number > to ||
+      firstAnchorByNumber.has(number)
     ) {
       continue;
     }
-    firstAnchorByNumber.set(block.number, block.anchorId);
+    firstAnchorByNumber.set(number, block.anchorId);
   }
 
   const anchorIds: string[] = [];

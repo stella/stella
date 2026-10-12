@@ -20,6 +20,7 @@ const historical = {
   windowDisposition: "effective",
   windowDispositionBasis: null,
   status: "found",
+  nextTextCursor: null,
   text: "Historical wording",
   truncated: false,
 } as const satisfies ProvisionVersion;

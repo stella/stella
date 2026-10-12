@@ -586,8 +586,12 @@ export const createInspectorTabsSlice = (
           contextMatterIds: normalizeOptionalArray(args.contextMatterIds),
           activeLegalKey: args.activeLegalKey,
           activeSkill: args.activeSkill,
+          started: args.started,
         });
       } else if (existing.type === "chat") {
+        if (args.started !== undefined) {
+          existing.started = args.started;
+        }
         if (args.label !== undefined) {
           existing.label = args.label;
         }
@@ -612,6 +616,14 @@ export const createInspectorTabsSlice = (
     });
   },
 
+  markChatStarted: (tabId) =>
+    set((state) => {
+      const tab = state.tabs.find((candidate) => candidate.id === tabId);
+      if (tab?.type === "chat" && tab.started !== true) {
+        tab.started = true;
+      }
+    }),
+
   setChatContext: (tabId, matterIds) =>
     set((state) => {
       const tab = state.tabs.find((candidate) => candidate.id === tabId);
@@ -627,6 +639,8 @@ export const createInspectorTabsSlice = (
       if (tab?.type === "chat") {
         rotatedLegalKey = tab.activeLegalKey;
         tab.id = newId;
+        // Another conversation: whether it has begun is for it to say.
+        tab.started = undefined;
         if (Object.hasOwn(state.groupAssignments, oldId)) {
           state.groupAssignments[newId] = state.groupAssignments[oldId] ?? null;
           removeGroupAssignment(state, oldId);

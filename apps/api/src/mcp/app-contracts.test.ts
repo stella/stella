@@ -65,6 +65,7 @@ const PROVISION_HISTORY_FIXTURE = v.parse(READ_PROVISION_HISTORY_PROJECTION, {
       windowDisposition: "effective",
       windowDispositionBasis: null,
       status: "found",
+      nextTextCursor: null,
       text: "The provision wording.",
       truncated: false,
     },
@@ -97,6 +98,7 @@ const STATUTE_PROVISIONS_FIXTURE = v.parse(READ_STATUTE_PROVISIONS_PROJECTION, {
       resourceName:
         "stella://resource/legislation_document/id=provision-version-found",
       status: "found",
+      nextTextCursor: null,
       text: "The full provision wording.",
       truncated: false,
       versionValidFrom: "2020-01-01",

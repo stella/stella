@@ -93,6 +93,12 @@
             "text": {
               "type": "string"
             },
+            "nextTextCursor": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "truncated": {
               "type": "boolean"
             },
@@ -127,96 +133,6 @@
       "eli",
       "items",
       "nextCursor"
-    ],
-    "additionalProperties": false
-  },
-  "read_statute_provisions": {
-    "type": "object",
-    "properties": {
-      "items": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "properties": {
-            "anchor": {
-              "type": "string"
-            },
-            "eli": {
-              "type": "string"
-            },
-            "appUrl": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "url": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "source_url": {
-              "type": "string"
-            },
-            "documentId": {
-              "type": "string"
-            },
-            "resourceName": {
-              "type": "string"
-            },
-            "status": {
-              "enum": [
-                "found",
-                "not_found",
-                "uncovered_date",
-                "provision_not_found",
-                "text_withheld",
-                "invalid"
-              ],
-              "type": "string"
-            },
-            "text": {
-              "type": "string"
-            },
-            "truncated": {
-              "type": "boolean"
-            },
-            "versionValidFrom": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "versionValidTo": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "message": {
-              "type": "string"
-            },
-            "index": {
-              "type": "number"
-            },
-            "issues": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "additionalProperties": true
-              }
-            }
-          },
-          "required": [
-            "status"
-          ],
-          "additionalProperties": false
-        }
-      }
-    },
-    "required": [
-      "items"
     ],
     "additionalProperties": false
   },

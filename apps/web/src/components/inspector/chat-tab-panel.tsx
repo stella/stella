@@ -193,15 +193,21 @@ export const ChatTabPanel = ({
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const contextLabel = useChatContextLabel(tab, activeOrganizationId);
 
-  const { openChat, resetChatTabId, setChatContext, updateLabel } =
-    useInspectorTabsStore(
-      useShallow((s) => ({
-        openChat: s.openChat,
-        resetChatTabId: s.resetChatTabId,
-        setChatContext: s.setChatContext,
-        updateLabel: s.updateLabel,
-      })),
-    );
+  const {
+    markChatStarted,
+    openChat,
+    resetChatTabId,
+    setChatContext,
+    updateLabel,
+  } = useInspectorTabsStore(
+    useShallow((s) => ({
+      markChatStarted: s.markChatStarted,
+      openChat: s.openChat,
+      resetChatTabId: s.resetChatTabId,
+      setChatContext: s.setChatContext,
+      updateLabel: s.updateLabel,
+    })),
+  );
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -368,6 +374,13 @@ export const ChatTabPanel = ({
   // surface. Pre-first-message renames stay label-only, as before.
   const renameThread = useRenameChatThread(threadRef);
   const hasThreadMessages = messages.length > 0;
+  // The tab store keeps a document's chat across reloads only once its
+  // conversation exists on the server.
+  useExternalSyncEffect(() => {
+    if (hasThreadMessages && tab.started !== true) {
+      markChatStarted(tab.id);
+    }
+  }, [hasThreadMessages, markChatStarted, tab.id, tab.started]);
   // The optimistic label write needs its own rollback: the mutation's
   // onError restores the query caches but cannot reach this local tabs
   // store, and a failed PATCH must not leave the tab showing a title the
@@ -840,6 +853,9 @@ const ChatTabPanelChrome = ({
   return (
     <div
       className="relative flex min-w-0 flex-1 flex-col"
+      // Which conversation the pane shows, for tests that need to tell a
+      // restored thread from a freshly minted one.
+      data-chat-thread-id={tab.id}
       data-slot="inspector-chat-panel"
     >
       <InspectorTabHeader

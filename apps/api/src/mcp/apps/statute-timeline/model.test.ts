@@ -23,6 +23,7 @@ const version = (overrides: Partial<FoundVersion> = {}): FoundVersion => ({
   windowDisposition: "effective",
   windowDispositionBasis: null,
   status: "found",
+  nextTextCursor: null,
   text: "Current wording",
   truncated: false,
   ...overrides,
@@ -117,7 +118,10 @@ describe("statute timeline model", () => {
     const payload = {
       eli: "eli:example",
       anchor: "article-1",
-      items: [version({ truncated: true }), withheldVersion],
+      items: [
+        version({ truncated: true, nextTextCursor: "wording-next-page" }),
+        withheldVersion,
+      ],
       nextCursor: "cursor-next",
     } as const satisfies ProvisionHistory;
 
