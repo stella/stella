@@ -6585,9 +6585,15 @@ test("browser scope vetoes otherwise eligible execution", () => {
 });
 
 test("Legal Atlas scope deadlines conservatively select the image after timeout or kill", () => {
-  const step = ciJobs["ci-plan"]?.steps?.find(
-    ({ id }) => id === "legal-atlas-scope",
+  const { steps } = v.parse(
+    v.object({
+      steps: v.array(
+        v.object({ id: v.optional(v.string()), run: v.optional(v.string()) }),
+      ),
+    }),
+    ciJobs["ci-plan"],
   );
+  const step = steps.find(({ id }) => id === "legal-atlas-scope");
   const script = v.parse(v.string(), step?.run);
   const fixture = mkdtempSync(nodePath.join(tmpdir(), "atlas-scope-deadline-"));
   try {
@@ -6652,13 +6658,16 @@ test("Legal Atlas API source scope vetoes otherwise eligible execution", () => {
     ciJobs["ci-plan"],
   );
   for (const apiSourceRequired of ["true", "false", ""]) {
-    const planned = evaluate(outputs["legal_atlas_image_required"] ?? "", {
-      values: {
-        "steps.changed-files.outputs.legal_atlas_image_required": "true",
-        "steps.legal-atlas-scope.outputs.api_source_required":
-          apiSourceRequired,
-      },
-    });
+    const planned = v.parse(
+      v.boolean(),
+      evaluate(outputs["legal_atlas_image_required"] ?? "", {
+        values: {
+          "steps.changed-files.outputs.legal_atlas_image_required": "true",
+          "steps.legal-atlas-scope.outputs.api_source_required":
+            apiSourceRequired,
+        },
+      }),
+    );
     const expected = apiSourceRequired !== "false";
     expect(planned, apiSourceRequired).toBe(expected);
     expect(
