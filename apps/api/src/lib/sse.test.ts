@@ -1124,7 +1124,7 @@ describe("startSse: subscriber attach retry", () => {
   });
 });
 
-test("workspace broadcast rejects wire events and spread producer projections", () => {
+test("workspace broadcast rejects wire events and public producer projections", () => {
   type ForgedDeletion = Extract<
     WorkspaceRealtimeEvent,
     {
@@ -1135,8 +1135,8 @@ test("workspace broadcast rejects wire events and spread producer projections", 
     ForgedDeletion extends Parameters<typeof broadcast>[1] ? true : false
   >().toEqualTypeOf<false>();
   const event = testEvent("built-proof");
-  const spread = { ...event };
+  type PublicProjection = Pick<typeof event, keyof typeof event>;
   expectTypeOf<
-    typeof spread extends Parameters<typeof broadcast>[1] ? true : false
+    PublicProjection extends Parameters<typeof broadcast>[1] ? true : false
   >().toEqualTypeOf<false>();
 });
