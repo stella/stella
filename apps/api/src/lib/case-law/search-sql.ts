@@ -1,6 +1,9 @@
-import { sql } from "drizzle-orm";
+import { panic } from "better-result";
+import { sql, type SQL } from "drizzle-orm";
 
+import { caseLawSearchDocuments } from "@/api/db/schema";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import type { LegalSearchEngine } from "@/api/lib/legal-search/types";
 
 /**
  * The source gate for raw pg-fts queries. The base decision comes from the
@@ -35,3 +38,22 @@ export const bodyPreviewJoin = sql`
       AND nullif(section_item.value ->> 'text', '') IS NOT NULL
   ) body_preview ON true
 `;
+
+/** SQL serving membership for a decision already admitted by the published view. */
+export const servedCaseLawSearchDocumentFor = (
+  decisionAlias: string,
+  engine: LegalSearchEngine,
+): SQL | null => {
+  switch (engine) {
+    case "pg-fts":
+      return sql`EXISTS (
+        SELECT 1 FROM ${caseLawSearchDocuments}
+        WHERE ${caseLawSearchDocuments.decisionId} = ${sql.identifier(decisionAlias)}.id
+      )`;
+    case "corpus-index":
+      return null;
+    default:
+      engine satisfies never;
+      return panic("Unhandled serving provider");
+  }
+};

@@ -5,6 +5,7 @@ import { modelMessageToUIMessage, uiMessagesToWire } from "@tanstack/ai/client";
 import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import {
   DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
   DOCX_SUGGESTION_SURFACE,
@@ -179,6 +180,7 @@ const persistedAssistantContent = (call: ProviderToolCall) =>
           name: SUGGEST_CHANGES_TOOL_NAME,
           arguments: call.arguments,
           input: call.input,
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           state: "input-complete",
         },
       ],

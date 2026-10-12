@@ -1,5 +1,6 @@
 import {
   desktopEditSessions,
+  legalReaderAnswerMessages,
   EU_COMPLETION_STATUSES,
   euCompletionApprovals,
   euCompletionControls,
@@ -13,12 +14,14 @@ import {
   FLOW_RUN_TRANSITIONS_V1,
   FLOW_RUN_STEP_TRANSITIONS_V1,
 } from "@/api/lib/db/flow-run-transition-spec";
+import { READER_ANSWER_TRANSITION_IDENTITIES } from "@/api/lib/db/reader-answer-transition-identities";
 import type {
   WRITABLE_STATUS_COLUMNS,
   StatusTable,
 } from "@/api/lib/db/status-tables.gen";
 import {
   defineFixedLifecycle,
+  defineScopedTransitions,
   defineKeyedTransitions,
   defineLifecycle,
   defineTransitions,
@@ -70,6 +73,13 @@ const UNMANAGED_REASONS = {
   coordinatedTimers:
     "Timer state and its entry projection are coordinated by the timer transaction owner pending migration.",
 } as const;
+
+const READER_ANSWER_MESSAGE_TRANSITIONS = defineScopedTransitions({
+  ...READER_ANSWER_TRANSITION_IDENTITIES.READER_ANSWER_MESSAGE_TRANSITIONS,
+  table: legalReaderAnswerMessages,
+  edges: { streaming: ["complete", "failed"], complete: [], failed: [] },
+  initial: ["streaming", "complete"],
+});
 
 const DESKTOP_EDIT_SESSION_TRANSITIONS = defineTransitions(
   desktopEditSessions,
@@ -294,6 +304,7 @@ export const TRANSITIONS = {
   legalListItemSources: { unmanaged: UNMANAGED_REASONS.projection },
   legalLists: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   legalListVerificationRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
+  legalReaderAnswerMessages: READER_ANSWER_MESSAGE_TRANSITIONS,
   legislationDocuments: { unmanaged: UNMANAGED_REASONS.projection },
   legislationIndexJobs: { unmanaged: UNMANAGED_REASONS.workerRun },
   mcpConnectorAuthorizationReviews: {

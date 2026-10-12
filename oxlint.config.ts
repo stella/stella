@@ -58,6 +58,7 @@ const fixtureRuleOverride = (file: string, rules: readonly string[]) => ({
 const enforcedOwnershipEntries = OWNERSHIP.filter(
   (entry) =>
     entry.enforcement.kind !== "none" &&
+    entry.enforcement.kind !== "custom-rule" &&
     entry.enforcement.kind !== "status-set",
 );
 
@@ -1619,6 +1620,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-stream-reader-disposal.ts",
     "./.oxlint-plugins/no-auth-token-in-web-storage.ts",
     "./.oxlint-plugins/no-path-prefix-containment.ts",
+    "./.oxlint-plugins/no-direct-unicode-normalize.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
     "./.oxlint-plugins/no-network-await-in-loop.ts",
     "./.oxlint-plugins/require-cached-collator.ts",
@@ -2432,6 +2434,20 @@ const config = defineConfig({
       rules: {
         "no-object-url-leak/no-object-url-leak": "error",
         "no-auth-token-in-web-storage/no-auth-token-in-web-storage": "error",
+      },
+    },
+    {
+      // String normalization belongs to @stll/text-normalize. The owner is
+      // excluded because its implementation must call the native primitive.
+      files: [
+        "apps/**/*.{ts,tsx}",
+        "packages/**/*.{ts,tsx}",
+        "scripts/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-direct-unicode-normalize.fixture.ts",
+      ],
+      excludeFiles: ["packages/text-normalize/**/*.{ts,tsx}"],
+      rules: {
+        "no-direct-unicode-normalize/no-direct-unicode-normalize": "error",
       },
     },
     {

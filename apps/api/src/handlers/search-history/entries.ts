@@ -9,6 +9,7 @@ import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { parseCaseLawDecisionPath } from "@stll/api-contract/case-law-decision-route";
 import { searchHistoryEntryMatch } from "@stll/api-contract/search-history-identity";
 import { parseStatutePath } from "@stll/api-contract/statute-route";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -170,7 +171,7 @@ const statutePayloadSchema = v.object({
 });
 
 const collapseWhitespace = (value: string) =>
-  value.normalize("NFC").trim().replaceAll(/\s+/gu, " ");
+  normalizeUnicode(value, "NFC").trim().replaceAll(/\s+/gu, " ");
 
 /**
  * The entry as stored and the text its repeats are matched on. A query is

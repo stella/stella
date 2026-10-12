@@ -1,10 +1,17 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import {
+  caseLawDecisions,
+  publishedCaseLawDecisions,
+  caseLawSearchDocuments,
+  caseLawSources,
+} from "@/api/db/schema";
+import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import {
   CASE_LAW_COVERAGE_AVAILABILITY,
   loadCaseLawCoverage,
@@ -12,8 +19,16 @@ import {
 } from "@/api/handlers/case-law/decisions/coverage";
 import { readCaseLawArrivalsQuery } from "@/api/handlers/case-law/decisions/coverage-arrivals";
 import { CASE_LAW_COVERAGE_HEALTH } from "@/api/handlers/case-law/decisions/coverage-health";
+import {
+  caseLawCourtStatusRows,
+  readCaseLawCourtCountQuery,
+} from "@/api/handlers/case-law/decisions/status-courts";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import {
+  publishedCaseLawDecisionFor,
+  publishedCaseLawDecisionSqlFor,
+} from "@/api/lib/case-law/published-decisions-sql";
 import { refreshCaseLawSourceArrivals } from "@/api/lib/case-law/source-arrivals-refresh";
 import { SOURCE_ARRIVALS_FRESHNESS_MS } from "@/api/lib/case-law/source-arrivals-window";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
@@ -39,6 +54,11 @@ const skSourceId = createSafeId<"caseLawSource">();
 const disabledSourceId = createSafeId<"caseLawSource">();
 const withheldSourceId = createSafeId<"caseLawSource">();
 
+const COVERAGE_YEARS = [
+  1981, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012,
+  2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2026,
+] as const;
+
 const LISTING_ONLY = {
   _stellaPartialObservation: { isListingOnly: true },
 } as const;
@@ -56,6 +76,9 @@ const decisionRow = (overrides: {
   sourceId: SafeId<"caseLawSource">;
   createdAt: Date;
   metadata?: Record<string, unknown>;
+  decisionDate?: string;
+  fulltext?: string;
+  redactedAt?: Date;
 }) => ({
   caseNumber: overrides.caseNumber,
   country: overrides.country,
@@ -65,6 +88,9 @@ const decisionRow = (overrides: {
   createdAt: overrides.createdAt,
   updatedAt: overrides.createdAt,
   metadata: overrides.metadata ?? {},
+  decisionDate: overrides.decisionDate,
+  fulltext: overrides.fulltext,
+  redactedAt: overrides.redactedAt,
 });
 
 beforeAll(
@@ -177,6 +203,36 @@ beforeAll(
       }),
     ]);
 
+    // More than a facet page of distinct years, with sparse endpoints, proves
+    // coverage reads exact source bounds rather than capped year buckets.
+    await db.insert(caseLawDecisions).values(
+      COVERAGE_YEARS.map((year) =>
+        decisionRow({
+          caseNumber: `cz coverage year ${year}`,
+          country: "CZE",
+          court: "Nejvyšší soud",
+          sourceId: czSourceId,
+          createdAt: new Date("2000-01-01T00:00:00.000Z"),
+          fulltext: "Published decision text",
+          decisionDate: `${year}-06-15`,
+        }),
+      ),
+    );
+
+    const dated = await db
+      .select({ id: caseLawDecisions.id })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.sourceId, czSourceId));
+    await db.insert(caseLawSearchDocuments).values(
+      dated.map(({ id }) => ({
+        decisionId: id,
+        language: "cs",
+        regconfig: "simple",
+        searchableText: "Published decision text",
+        tsv: sql`to_tsvector('simple', 'Published decision text')`,
+      })),
+    );
+
     // SAFETY: the PGlite handle implements the root select and transaction
     // surface the scheduled refresh uses.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- embedded test database stands in for the root pool
@@ -189,6 +245,94 @@ beforeAll(
 afterAll(async () => {
   await client.close();
 });
+
+test(
+  "court counts exclude withdrawn, listing-only and unserved courts",
+  async () => {
+    const db = drizzle({ client });
+    const sourceId = createSafeId<"caseLawSource">();
+    await db.insert(caseLawSources).values(
+      caseLawSourceRow({
+        id: sourceId,
+        adapterKey: `court-count-${sourceId}`,
+        name: "Court count fixture",
+      }),
+    );
+    try {
+      const rows = [
+        { court: "Published court A", metadata: {}, redactedAt: undefined },
+        { court: "Published court B", metadata: {}, redactedAt: undefined },
+        { court: "Withdrawn court", metadata: {}, redactedAt: NOW },
+        {
+          court: "Listing-only court",
+          metadata: LISTING_ONLY,
+          redactedAt: undefined,
+        },
+        { court: "Unserved court", metadata: {}, redactedAt: undefined },
+      ].map(({ court, metadata, redactedAt }) => ({
+        ...decisionRow({
+          caseNumber: court,
+          country: "POL",
+          court,
+          sourceId,
+          createdAt: NOW,
+          metadata,
+          ...(redactedAt === undefined ? {} : { redactedAt }),
+        }),
+        id: createSafeId<"caseLawDecision">(),
+      }));
+      await db.insert(caseLawDecisions).values(rows);
+      await db.insert(caseLawSearchDocuments).values(
+        rows.slice(0, 4).map(({ id }) => ({
+          decisionId: id,
+          language: "cs",
+          regconfig: "simple",
+          searchableText: "Published decision text",
+          tsv: sql`to_tsvector('simple', 'Published decision text')`,
+        })),
+      );
+      const courtCount = await readAsReader(
+        async (tx) =>
+          await readCaseLawCourtCountQuery(tx, {
+            country: "POL",
+            excludedSourceIds: [],
+            engine: "pg-fts",
+          }),
+      );
+      expect(courtCount).toBe(2);
+      const breakdown = caseLawCourtStatusRows({
+        country: "POL",
+        buckets: [{ value: "Published court A", count: 1 }],
+        activity: new Map(),
+        courtWeights: courtWeightMapFromSeed(),
+        total: 2,
+        courtCount,
+      });
+      expect(breakdown.find(({ type }) => type === "other-courts")).toEqual({
+        type: "other-courts",
+        tier: "other",
+        courts: 1,
+        decisions: 1,
+      });
+      expect(
+        await readAsReader(
+          async (tx) =>
+            await readCaseLawCourtCountQuery(tx, {
+              country: "POL",
+              excludedSourceIds: [],
+              engine: "corpus-index",
+            }),
+        ),
+      ).toBeNull();
+    } finally {
+      await db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, sourceId));
+      await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+    }
+  },
+  { timeout: DB_TEST_TIMEOUT_MS },
+);
 
 const loadCoverage = async (
   overrides: Partial<Parameters<typeof loadCaseLawCoverage>[0]> = {},
@@ -217,6 +361,170 @@ const loadCoverage = async (
   });
 
 test(
+  "unindexed, withdrawn and listing-only decisions cannot widen either served year bound",
+  async () => {
+    const db = drizzle({ client });
+    const sourceId = createSafeId<"caseLawSource">();
+    await db.insert(caseLawSources).values(
+      caseLawSourceRow({
+        id: sourceId,
+        adapterKey: `coverage-regression-${sourceId}`,
+        name: "Coverage regression fixture",
+      }),
+    );
+    try {
+      const inserted = await db
+        .insert(caseLawDecisions)
+        .values([
+          ...[2000, 2010].map((year) =>
+            decisionRow({
+              caseNumber: `published ${year}`,
+              country: "CZE",
+              court: "Nejvyšší soud",
+              sourceId,
+              createdAt: new Date("2000-01-01T00:00:00.000Z"),
+              decisionDate: `${year}-06-15`,
+              fulltext: "Published decision text",
+            }),
+          ),
+          ...["withdrawn", "listing-only"].flatMap((status) =>
+            [1900, 2020].map((year) =>
+              decisionRow({
+                caseNumber: `excluded ${status} ${year}`,
+                country: "CZE",
+                court: "Nejvyšší soud",
+                sourceId,
+                createdAt: new Date("2000-01-01T00:00:00.000Z"),
+                decisionDate: `${year}-06-15`,
+                ...(status === "listing-only"
+                  ? {
+                      fulltext: "Excluded decision text",
+                      metadata: LISTING_ONLY,
+                    }
+                  : { redactedAt: NOW }),
+              }),
+            ),
+          ),
+        ])
+        .returning({
+          id: caseLawDecisions.id,
+          caseNumber: caseLawDecisions.caseNumber,
+        });
+      const expectedIds = inserted
+        .filter(({ caseNumber }) => caseNumber.startsWith("published "))
+        .map(({ id }) => id)
+        .toSorted();
+      expect(expectedIds).toHaveLength(2);
+      await db.insert(caseLawSearchDocuments).values(
+        expectedIds.map((id) => ({
+          decisionId: id,
+          language: "cs",
+          regconfig: "simple",
+          searchableText: "Published decision text",
+          tsv: sql`to_tsvector('simple', 'Published decision text')`,
+        })),
+      );
+      const decision = alias(caseLawDecisions, "publication_parity_decisions");
+      {
+        const published = await db
+          .select({ id: caseLawDecisions.id })
+          .from(caseLawDecisions)
+          .where(
+            and(
+              eq(caseLawDecisions.sourceId, sourceId),
+              publishedCaseLawDecisionFor(caseLawDecisions),
+            ),
+          );
+        const aliased = await db
+          .select({ id: decision.id })
+          .from(decision)
+          .where(
+            and(
+              eq(decision.sourceId, sourceId),
+              publishedCaseLawDecisionFor(decision),
+            ),
+          );
+        const raw = await db
+          .select({ id: decision.id })
+          .from(decision)
+          .where(
+            and(
+              eq(decision.sourceId, sourceId),
+              sql.raw(
+                publishedCaseLawDecisionSqlFor("publication_parity_decisions"),
+              ),
+            ),
+          );
+        for (const rows of [published, aliased, raw]) {
+          expect(rows.map(({ id }) => id).toSorted()).toEqual(expectedIds);
+        }
+      }
+      await readAsReader(async (tx) => {
+        const published = await tx
+          .select({ id: publishedCaseLawDecisions.id })
+          .from(publishedCaseLawDecisions)
+          .where(eq(publishedCaseLawDecisions.sourceId, sourceId));
+        expect(published.map(({ id }) => id).toSorted()).toEqual(expectedIds);
+      });
+      const fixture = await client.query(
+        `
+        SELECT extract(year FROM decision_date)::integer AS year, count(*)::integer AS count
+        FROM case_law_decisions WHERE source_id = $1 AND case_number LIKE 'excluded %'
+        GROUP BY decision_date ORDER BY decision_date
+      `,
+        [sourceId],
+      );
+      expect(fixture.rows).toEqual([
+        { year: 1900, count: 2 },
+        { year: 2020, count: 2 },
+      ]);
+      await db.insert(caseLawDecisions).values(
+        [1800, 2020].map((year) =>
+          decisionRow({
+            caseNumber: `unindexed ${year}`,
+            country: "CZE",
+            court: "Nejvyšší soud",
+            sourceId,
+            createdAt: NOW,
+            decisionDate: `${year}-06-15`,
+            fulltext: "Published but unindexed text",
+          }),
+        ),
+      );
+      const sources = await readAsReader(async (tx) =>
+        readCaseLawCoverageSourcesQuery(tx, "pg-fts"),
+      );
+      const unknown = await readAsReader(async (tx) =>
+        readCaseLawCoverageSourcesQuery(tx, "corpus-index"),
+      );
+      expect(unknown.find(({ id }) => id === sourceId)).toMatchObject({
+        decisionYearFrom: null,
+        decisionYearTo: null,
+      });
+      expect(sources.find(({ id }) => id === sourceId)).toMatchObject({
+        decisionYearFrom: 2000,
+        decisionYearTo: 2010,
+        pendingTextCount: 0,
+      });
+      expect(sources.find(({ id }) => id === skSourceId)).toMatchObject({
+        decisionYearFrom: null,
+        decisionYearTo: null,
+      });
+      expect(sources.find(({ id }) => id === disabledSourceId)).toMatchObject({
+        decisionYearFrom: null,
+        decisionYearTo: null,
+      });
+    } finally {
+      await db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, sourceId));
+      await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+    }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
   "the reader role can run every statement the coverage page needs",
   async () => {
     const sources = await readAsReader(readCaseLawCoverageSourcesQuery);
@@ -226,6 +534,13 @@ test(
       ADAPTER_KEYS.CZ_NSS,
       ADAPTER_KEYS.SK_COURTS,
     ]);
+    const czech = sources.find(
+      ({ adapterKey }) => adapterKey === ADAPTER_KEYS.CZ_NS,
+    );
+    expect(czech?.decisionYearFrom).toBe(1981);
+    expect(czech?.decisionYearTo).toBe(2026);
+    expect(czech?.pendingTextCount).toBe(1);
+
     // The stored figure is read as a column, never counted here.
     expect(
       sources.find(({ adapterKey }) => adapterKey === ADAPTER_KEYS.CZ_NS)
@@ -340,7 +655,7 @@ test(
     expect(cze?.stored.asOf).toBe(
       new Date(NOW.getTime() - 2 * HOUR_IN_MS).toISOString(),
     );
-    expect(cze).toMatchObject({ decisionYearFrom: 2019, decisionYearTo: 2026 });
+    expect(cze).toMatchObject({ decisionYearFrom: 1981, decisionYearTo: 2026 });
 
     const svk = byCountry.get("SVK");
     expect(svk?.availability).toBe(

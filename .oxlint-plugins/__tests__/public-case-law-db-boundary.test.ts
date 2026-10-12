@@ -338,7 +338,7 @@ describe.serial("public-law relation scan", () => {
     ).toHaveLength(1);
   });
 
-  test("the unredacted decision view is reserved for subject lookup", async () => {
+  test("the unredacted decision view is restricted to its read owners", async () => {
     const source = [
       'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
       'import { unredactedCaseLawDecisions as subjectRows } from "@/api/db/schema";',
@@ -361,9 +361,24 @@ describe.serial("public-law relation scan", () => {
     ).toEqual([]);
   });
 
-  test("the unredacted view allowance stays scoped to the subject module", () => {
+  test("coverage may count pending text through the unredacted view", async () => {
+    const source = [
+      'import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";',
+      'import { unredactedCaseLawDecisions } from "@/api/db/schema";',
+      "void unredactedCaseLawDecisions;",
+    ].join("\n");
+    expect(
+      await lint(
+        source,
+        "apps/api/src/handlers/case-law/decisions/coverage.ts",
+      ),
+    ).toEqual([]);
+  });
+
+  test("the unredacted view allowance stays scoped to subject and coverage owners", () => {
     expect(UNREDACTED_VIEW_ALLOWED_MODULES).toEqual([
       "apps/api/src/lib/case-law/public-subject.ts",
+      "apps/api/src/handlers/case-law/decisions/coverage.ts",
     ]);
   });
 
@@ -587,5 +602,19 @@ describe.serial("public-law relation scan", () => {
     ].join("\n");
 
     expect(await lint(source)).toEqual([]);
+  });
+
+  test("publication SQL accepts a literal alias and rejects a dynamic alias", async () => {
+    const source = [
+      'import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
+      'import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions-sql";',
+      "export type Handle = CaseLawPublicReadDb;",
+      "declare const sql: { raw: (text: string) => unknown };",
+      "declare const dynamicAlias: string;",
+      'export const literal = sql.raw(publishedCaseLawDecisionSqlFor("coverage_decisions"));',
+      "export const dynamic = sql.raw(publishedCaseLawDecisionSqlFor(dynamicAlias));",
+    ].join("\n");
+
+    expect(await lint(source)).toEqual([7]);
   });
 });

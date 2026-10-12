@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import { CZ_PROFILE } from "./cz-provision-citation-profile";
 import type {
   ActAliasSpec,
@@ -31,8 +33,7 @@ const SPACE_AFTER_PERIOD = /(?<=\.) (?=\S)/gu;
  * run, with or without a space between abbreviated components.
  */
 const spellingKey = (spelling: string): string =>
-  spelling
-    .normalize("NFC")
+  normalizeUnicode(spelling, "NFC")
     .replaceAll(SPACE_RUN, " ")
     .replaceAll(SPACE_AFTER_PERIOD, "");
 

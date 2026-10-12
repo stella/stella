@@ -20,6 +20,11 @@ export default {
     within: ["apps/api/src/"],
     allowed: [
       {
+        path: "apps/api/src/handlers/chat/stream-chat.ts",
+        reason:
+          "Reads TanStack StreamProcessor state to restore snapshot-cleared delta accumulators; it does not access BullMQ jobs.",
+      },
+      {
         path: "apps/api/src/lib/report-export-recovery.ts",
         reason:
           "Reads a job's state to decide whether an export outlived its job; it never enqueues.",

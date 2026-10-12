@@ -1,0 +1,32 @@
+Response terminal events retain provider stop evidence, and incomplete
+responses retain reported usage. Missing-terminal handling is upstream.
+Regression: apps/api/src/lib/tanstack-ai-provider-wire.test.ts.
+
+diff --git a/dist/esm/adapters/responses-text.js b/dist/esm/adapters/responses-text.js
+index 9c7f662e39cc04380f31d51526ba3893e9b068e0..2fb9c6a887117a7176f7a1933fee56130b981cb1 100644
+--- a/dist/esm/adapters/responses-text.js
++++ b/dist/esm/adapters/responses-text.js
+@@ -887,10 +887,12 @@ var OpenAIBaseResponsesTextAdapter = class extends BaseTextAdapter {
+ 						timestamp: Date.now(),
+ 						message: errorMessage,
+ 						...errorCode !== void 0 && { code: errorCode },
++						...chunk.response.usage && { usage: buildResponsesUsage(chunk.response.usage) },
+ 						error: {
+ 							message: errorMessage,
+ 							...errorCode !== void 0 && { code: errorCode }
+-						}
++						},
++						metadata: { providerStopReason: chunk.response.incomplete_details?.reason ?? chunk.response.status ?? null }
+ 					};
+ 					runFinishedEmitted = true;
+ 					return;
+@@ -1271,7 +1273,8 @@ var OpenAIBaseResponsesTextAdapter = class extends BaseTextAdapter {
+ 						model: model || options.model,
+ 						timestamp: Date.now(),
+ 						...chunk.response.usage && { usage: buildResponsesUsage(chunk.response.usage) },
+-						finishReason
++						finishReason,
++						metadata: { providerStopReason: chunk.response.incomplete_details?.reason ?? chunk.response.status ?? null }
+ 					};
+ 					runFinishedEmitted = true;
+ 					return;

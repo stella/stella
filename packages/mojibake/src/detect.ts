@@ -1,3 +1,4 @@
+import { normalizeUnicode } from "@stll/text-normalize";
 /**
  * Text decoded with the wrong character set, found without reading what the
  * text says.
@@ -280,7 +281,7 @@ const writtenInOneScript = (word: string): boolean => {
 };
 
 const classifyWord = (word: string, alphabet: Alphabet): WordClass => {
-  const chars = Array.from(word.normalize("NFC"));
+  const chars = Array.from(normalizeUnicode(word, "NFC"));
   let nativeLetter = false;
   let foreignLetter = false;
   let notation = false;

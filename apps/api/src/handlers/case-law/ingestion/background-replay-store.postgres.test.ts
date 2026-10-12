@@ -64,6 +64,7 @@ import {
 } from "@/api/lib/legal-search/ingestion-constants";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
+  GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS,
   withGatedTestClients,
   openGatedTestDatabase,
 } from "@/api/tests/gated-test-database";
@@ -497,7 +498,7 @@ if (!databaseUrl || !enabled) {
             expect(reachedCheckpoint).toBe(true);
             expect(Result.isError(result)).toBe(true);
           },
-          { closeTimeout: 0 },
+          { closeTimeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS },
         );
         await firstLease.release();
         expect(await store.pendingBatch(source, "2026-10-01")).toEqual(
@@ -782,7 +783,7 @@ if (!databaseUrl || !enabled) {
                 rival.release();
               }
             },
-            { closeTimeout: 0 },
+            { closeTimeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS },
           );
         } finally {
           await lease.release();
@@ -956,7 +957,7 @@ if (!databaseUrl || !enabled) {
           expect(reachedCheckpoint).toBe(true);
           expect(Result.isError(result)).toBe(true);
         },
-        { closeTimeout: 0 },
+        { closeTimeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS },
       );
       const receipt = (
         await db

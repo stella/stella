@@ -238,6 +238,7 @@ export const ChatTabPanel = ({
   });
 
   const {
+    activitySession,
     error,
     messages,
     refreshAnswers,
@@ -611,6 +612,7 @@ export const ChatTabPanel = ({
                 />
               ) : (
                 <ChatThreadMessages
+                  activitySession={activitySession}
                   onAnswerEdited={refreshAnswers}
                   answerRewriteAvailability={
                     data.usedAnonymization ? "anonymized" : "available"

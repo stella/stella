@@ -1,6 +1,8 @@
+// parser-output-unchanged: native NFC normalization retains the same code points and operation order.
 import { panic } from "better-result";
 
 import { DANGEROUS_CHARS } from "@stll/legal-ast/text-sanitize";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 export const COURTLISTENER_TEXT_USABILITY = {
   USABLE: "usable",
@@ -46,7 +48,7 @@ const SOURCE_PLACEHOLDER_MESSAGES = [
 ] as const satisfies readonly (readonly (string | PublisherSlot)[])[];
 
 const normalizeSourcePlaceholder = (text: string): string =>
-  text.normalize("NFC").replace(/\s+/gu, " ").trim().toLowerCase();
+  normalizeUnicode(text, "NFC").replace(/\s+/gu, " ").trim().toLowerCase();
 const SOURCE_PLACEHOLDER_WORD_SEQUENCES = SOURCE_PLACEHOLDER_MESSAGES.map(
   (message) => {
     const tokens: (string | PublisherSlot)[] = [];
@@ -364,7 +366,9 @@ const nonRulingBlock = (block: string): NonRulingBlock | null => {
 };
 
 const hasReadableSentence = (text: string): boolean => {
-  const compactBody = text.normalize("NFC").replace(/\s+/gu, " ").trim();
+  const compactBody = normalizeUnicode(text, "NFC")
+    .replace(/\s+/gu, " ")
+    .trim();
   if (isSourcePlaceholderSequence(compactBody)) {
     return false;
   }
@@ -564,7 +568,7 @@ const classifyBody = (unattributed: string): CourtListenerTextUsability => {
 export const classifyCourtListenerText = (
   text: string,
 ): CourtListenerTextUsability => {
-  const normalized = text.normalize("NFC").trim();
+  const normalized = normalizeUnicode(text, "NFC").trim();
   // Normalize spacing before matching whole lines so names and whitespace
   // never compete for the same characters during backtracking.
   const unattributed = normalized

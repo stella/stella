@@ -218,3 +218,44 @@ describe("replacement precondition schemas", () => {
     ).toThrow("A Replace description requires contract: replace");
   });
 });
+
+test("invalid contract registration names the handler, source and violated rule", () => {
+  const invalidReplacement = () => undefined;
+  expect(() =>
+    recordWriteContract(invalidReplacement, {
+      ...timestampContract,
+      body: t.Object({ values: t.Array(t.String()) }),
+    }),
+  ).toThrow(
+    /Invalid write contract for invalidReplacement: A replacement body must require expectedUpdatedAt in every branch[\s\S]*Handler registration:[\s\S]*write-contract\.test\.ts/u,
+  );
+  expect(getWriteContract(invalidReplacement)).toBeUndefined();
+});
+
+test("malformed runtime contract declarations report readable registration failures", () => {
+  const invalidRegistration = () => undefined;
+  const declarations = [
+    { config: {}, rule: "Declare contract: patch or contract: replace" },
+    {
+      config: { contract: "unknown" },
+      rule: "Declare contract: patch or contract: replace",
+    },
+    {
+      config: { contract: "replace" },
+      rule: "A replacement requires a declared precondition",
+    },
+    {
+      config: { contract: "replace", precondition: { type: "unknown" } },
+      rule: "A replacement precondition must be updatedAt, revision, or deferred",
+    },
+  ];
+  for (const { config, rule } of declarations) {
+    expect(() =>
+      Reflect.apply(recordWriteContract, undefined, [
+        invalidRegistration,
+        config,
+      ]),
+    ).toThrow(`Invalid write contract for invalidRegistration: ${rule}`);
+  }
+  expect(getWriteContract(invalidRegistration)).toBeUndefined();
+});
