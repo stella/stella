@@ -96,6 +96,7 @@ export const renderJustificationContent = ({
         const citation: Citation = {
           kind: "decision-passage",
           anchorId: block.anchorId,
+          courtParagraphNumber: block.courtParagraphNumber,
           excerpt: block.excerpt,
         };
         consider(citation);

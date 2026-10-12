@@ -51,7 +51,6 @@ export const CHAT_READ_SCRIPT_POLICY = {
   list_templates: "script",
   get_usage: "script",
   search_case_law: "script",
-  lookup_case_law: "script",
   case_law_coverage: "script",
   read_case_law_decision: "script",
   read_case_law_citations: "script",

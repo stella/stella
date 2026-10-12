@@ -623,7 +623,7 @@
       "fix": "#4273",
       "behaviour": "The request options a chat attempt hands the engine put nothing on the provider wire that the provider refuses, such as a request metadata value that is not a string.",
       "status": "active",
-      "file": "src/handlers/chat/chat-request.ts",
+      "file": "src/lib/chat/chat-request.ts",
       "search": "  adapter: withRunToolCallIds(model.adapter, toolCallIds),\n",
       "replace": "  adapter: withRunToolCallIds(model.adapter, toolCallIds),\n  metadata: { stellaToolCallIdLedger: toolCallIds },\n",
       "scenario": {
@@ -1015,7 +1015,7 @@
       "fix": "#4007",
       "behaviour": "A request of a thread sends the system prompt the request before it sent, so an approval's continuation extends the cached prompt instead of rewriting it.",
       "status": "active",
-      "file": "src/handlers/chat/chat-request.ts",
+      "file": "src/lib/chat/chat-request.ts",
       "search": "  ...systemPromptsFor({ caching, model, system, systemLayers }),",
       "replace": "  ...systemPromptsFor({ caching, model, system: `${String(system)}\\nRequest time: ${String(performance.now())}`, systemLayers }),",
       "scenario": {
@@ -1029,7 +1029,7 @@
       "fix": "#4007",
       "behaviour": "A provider's SDK writes a thread's tools in the same order on every request of the thread.",
       "status": "active",
-      "file": "src/handlers/chat/chat-request.ts",
+      "file": "src/lib/chat/chat-request.ts",
       "search": "  tools: projectChatToolSchemasForProvider({\n    modelTools,\n    provider: model.provider,\n  }),",
       "replace": "  tools: projectChatToolSchemasForProvider({\n    modelTools,\n    provider: model.provider,\n  }).toSorted(() => Math.random() - 0.5),",
       "scenario": {

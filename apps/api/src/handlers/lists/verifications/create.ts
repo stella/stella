@@ -14,6 +14,7 @@ import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
 import {
   ACCOUNT_ACCESS,
   authorizeHandlerRunSize,
+  configuredModelAdmission,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -128,6 +129,7 @@ const createVerification = createSafeHandler(
   config,
   async function* ({
     body,
+    modelAdmission,
     orgAIConfig,
     orgAIConfigStatus,
     recordAuditEvent,
@@ -201,7 +203,11 @@ const createVerification = createSafeHandler(
     const model = getTanStackTextModelInfoForRole(
       VERIFICATION_MODEL_ROLE,
       orgAIConfig,
-      { dataClass: "customer", organizationId },
+      {
+        dataClass: "customer",
+        organizationId,
+        modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
+      },
     );
     const authorization = yield* Result.await(
       authorizeHandlerRunSize({

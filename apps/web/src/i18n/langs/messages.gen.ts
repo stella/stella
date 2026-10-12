@@ -779,6 +779,9 @@ type Messages = {
       "none": "No citations recorded yet.";
       "openAtCitation": "Open at the citation";
       "openDecision": "Open decision";
+      "paragraphLabel": "Paragraph {paragraph}";
+      "paragraphMark": "¶ {paragraph}";
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, paragraph {paragraph}";
       "partialSummary": "Citation totals and timeline are partial.";
       "passageNotFound": "The citing passage was not located in the text";
       "positiveCount": "{count, plural, one {# positive} other {# positive}}";
@@ -807,7 +810,7 @@ type Messages = {
       "courtCount": "{count, plural, one {# court} other {# courts}}";
       "newLast24Hours": "{count} in the last 24 h";
       "newLast7Days": "New in the last 7 days";
-      "unlistedCourts": "{count, plural, one {Courts beyond the largest one} other {Courts beyond the # largest}}";
+      "otherCourts": "Other courts";
     };
     "courtTiers": {
       "constitutional": "Constitutional courts";
@@ -823,6 +826,7 @@ type Messages = {
       "decisionYears": "Decision years";
       "description": "How much case law the corpus holds, per country and per court, and how fresh each source is.";
       "exceedsReportedTotal": "Holds more than the publisher's last stated total of {date}";
+      "gapStatusUnknown": "Gap status unknown";
       "generatedAt": "Figures from {date}";
       "globeLabel": "Countries whose case law the corpus holds, on a globe";
       "healthCurrent": "Up to date";
@@ -831,9 +835,12 @@ type Messages = {
       "healthStalled": "Stalled";
       "healthUnknown": "Never run";
       "inPreparation": "In preparation";
+      "knownGaps": "Known gaps";
       "lastSync": "Last sync";
+      "noGapsRecorded": "No gaps recorded";
       "notCountedYet": "Not counted yet";
       "notMeasuredYet": "Not measured yet";
+      "pendingTexts": "Pending texts";
       "reportedByListing": "Counted from the publisher's listing";
       "reportedByOperator": "Recorded by hand";
       "reportedByPublisher": "Publisher's own count";
