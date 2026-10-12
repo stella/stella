@@ -11,7 +11,6 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
-import { lexShell } from "./install-free-ci";
 import { workflowJobSteps } from "./workflow-steps";
 
 const root = path.resolve(import.meta.dirname, "..");
@@ -26,39 +25,43 @@ const targets = {
   "e2e-landing": ["@stll/landing...", "@stll/cli...", "stella"],
 } as const;
 
-const installFilters = (command: string) => {
-  const invocations = [...lexShell(command)]
-    .filter((event) => event.type === "command")
-    .map(({ words }) => words.slice(words.indexOf("bun")))
-    .filter(
-      (words) =>
-        words.at(0) === "bun" &&
-        (words.at(1) === "ci" || words.at(1) === "scripts/ci-install.ts"),
-    );
-  expect(invocations).toHaveLength(1);
-  const words = invocations.at(0) ?? [];
-  expect(words).toContain("--frozen-lockfile");
-  expect(words).toContain("--ignore-scripts");
-  return words.flatMap((word, index) =>
-    word === "--filter" ? [words.at(index + 1)] : [],
+const filtersFromFlags = (flags: readonly string[]) => {
+  expect(flags).toContain("--frozen-lockfile");
+  expect(flags).toContain("--ignore-scripts");
+  return flags.flatMap((flag, index) =>
+    flag === "--filter" ? [flags.at(index + 1)] : [],
   );
 };
+
+const actionFlags = (step: Record<string, unknown>) => {
+  const selector = v.parse(v.string(), step["uses"]);
+  expect([
+    "$/.github/actions/ci-install",
+    "./.github/actions/ci-install",
+  ]).toContain(selector);
+  const inputs = v.parse(v.object({ flags: v.string() }), step["with"]);
+  return v.parse(v.array(v.string()), JSON.parse(inputs.flags));
+};
+
+const installFiltersFromAction = (step: Record<string, unknown>) =>
+  filtersFromFlags(actionFlags(step));
 
 for (const [job, filters] of Object.entries(targets)) {
   test(`${job} installs only its frozen task closure`, () => {
     const install = workflowJobSteps(workflow, job).find(
       (step) => step["name"] === "Install dependencies",
     );
-    const command = v.parse(v.string(), install?.["run"]);
-    expect(installFilters(command)).toEqual([...filters]);
+    if (install === undefined) {
+      expect.unreachable(`Missing ${job} install`);
+    }
+    expect(installFiltersFromAction(install)).toEqual([...filters]);
   });
 }
 
 test("a full workspace install cannot satisfy a scoped job", () => {
-  const full =
-    "bash scripts/retry.sh bun ci --frozen-lockfile --ignore-scripts";
+  const full = ["--frozen-lockfile", "--ignore-scripts"];
   for (const filters of Object.values(targets)) {
-    expect(installFilters(full)).not.toEqual([...filters]);
+    expect(filtersFromFlags(full)).not.toEqual([...filters]);
   }
 });
 

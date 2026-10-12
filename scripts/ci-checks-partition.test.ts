@@ -375,23 +375,95 @@ const withIsolatedCachePort = (step: Step): Step => {
   ).with;
   return { ...step, with: { ...inputs, "server-port": "0" } };
 };
-// Only ordinary install jobs may migrate to the shared dependency cache owner.
-const withInstallCache = (step: Step, job: Record<string, unknown>): Step => {
+const ownedInstallFlags = '["--frozen-lockfile","--ignore-scripts"]';
+const scopedInstallActions = new Set([
+  "./.github/actions/ci-install",
+  "$/.github/actions/ci-install",
+]);
+const derivedInstallTimeout = (job: Record<string, unknown>) => {
+  const runners = Array.isArray(job["runs-on"])
+    ? job["runs-on"].join(" ")
+    : job["runs-on"];
+  if (typeof runners !== "string") {
+    return undefined;
+  }
+  if (/windows/iu.test(runners)) {
+    return 7;
+  }
+  return /ubuntu|macos/iu.test(runners) ? 3 : undefined;
+};
+const hasOwnedInstallTransition = (job: Record<string, unknown>) => {
+  if (jobCachePolicy({ workflow: baseWorkflow, job }) !== "install-cache") {
+    return false;
+  }
+  const inputs =
+    v.parse(
+      v.looseObject({
+        steps: v.optional(
+          v.array(
+            v.looseObject({
+              name: v.string(),
+              uses: v.optional(v.string()),
+              with: v.optional(v.record(v.string(), v.unknown())),
+            }),
+          ),
+        ),
+      }),
+      job,
+    ).steps ?? [];
+  const setup = inputs.find(({ name }) => name === "Setup Bun");
+  const install = inputs.find(({ name }) => name === "Install dependencies");
   if (
-    jobCachePolicy({ workflow: baseWorkflow, job }) !== "install-cache" ||
-    usesOf(step) !== "oven-sh/setup-bun@<pinned>"
+    setup === undefined ||
+    usesOf(withoutActionRef(setup)) !== "oven-sh/setup-bun@<pinned>" ||
+    install === undefined ||
+    !scopedInstallActions.has(usesOf(install) ?? "")
   ) {
+    return false;
+  }
+  const setupInputs = setup.with ?? {};
+  const installInputs = install.with ?? {};
+  return (
+    Object.keys(setupInputs).length === 1 &&
+    setupInputs["bun-version-file"] === "package.json" &&
+    Object.keys(installInputs).length === 1 &&
+    installInputs["flags"] === ownedInstallFlags
+  );
+};
+// Normalize only the exact ordinary install-owner transition back to its
+// merge-base setup and install steps. All step metadata remains significant.
+const withInstallCache = (step: Step, job: Record<string, unknown>): Step => {
+  if (!hasOwnedInstallTransition(job)) {
     return step;
   }
-  const inputs = v.parse(
-    v.looseObject({ with: v.optional(v.record(v.string(), v.unknown())) }),
-    step,
-  ).with;
-  return {
-    ...step,
-    uses: "stella/.github/actions/setup-bun-cached@<pinned>",
-    with: { ...inputs, save: `\${{ github.ref == 'refs/heads/main' }}` },
-  };
+  if (
+    step.name === "Setup Bun" &&
+    usesOf(step) === "oven-sh/setup-bun@<pinned>"
+  ) {
+    const inputs = v.parse(
+      v.looseObject({ with: v.optional(v.record(v.string(), v.unknown())) }),
+      step,
+    ).with;
+    return {
+      ...step,
+      uses: "stella/.github/actions/setup-bun-cached@<pinned>",
+      with: { ...inputs, save: `\${{ github.ref == 'refs/heads/main' }}` },
+    };
+  }
+  if (
+    step.name === "Install dependencies" &&
+    scopedInstallActions.has(usesOf(step) ?? "")
+  ) {
+    const original = { ...step };
+    delete original["uses"];
+    delete original["with"];
+    if (original["timeout-minutes"] === derivedInstallTimeout(job)) {
+      delete original["timeout-minutes"];
+    }
+    original["run"] = "bash scripts/retry.sh bun ci --ignore-scripts";
+    return original;
+  }
+  return step;
 };
 const withoutPreparedGeneration = (step: Step): Step => {
   if (
@@ -815,16 +887,21 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
         ? Math.max(baselineBudget, 40)
         : baselineBudget;
     expect(timeout).toBe(expectedBudget);
-    expect(setupSteps(steps)).toEqual(originalSetup);
+    expect(
+      setupSteps(steps).map((step) => withInstallCache(step, partition)),
+    ).toEqual(originalSetup);
     const installIndex = steps.findIndex(
       ({ name }) => name === "Install dependencies",
     );
     expect(steps.findIndex(({ name }) => name === "Setup Bun")).toBeLessThan(
       installIndex,
     );
-    expect(steps.at(installIndex)?.["run"]).toBe(
-      "bash scripts/retry.sh bun ci --ignore-scripts",
-    );
+    const installStep = steps.at(installIndex);
+    expect(
+      installStep === undefined
+        ? undefined
+        : withInstallCache(installStep, partition)["run"],
+    ).toBe("bash scripts/retry.sh bun ci --ignore-scripts");
   }
 });
 
@@ -2013,21 +2090,88 @@ test("setup migration preserves runtime inputs and protected install policy", ()
     uses: "oven-sh/setup-bun@<pinned>",
     with: { "bun-version-file": "package.json" },
   };
-  const migrated = withInstallCache(setup, { steps: [setup] });
+  const install = {
+    name: "Install dependencies",
+    uses: "$/.github/actions/ci-install",
+    with: { flags: ownedInstallFlags },
+  };
+  const job = { steps: [setup, install] };
+  const migrated = withInstallCache(setup, job);
   expect(migrated).toEqual({
     ...setup,
     uses: "stella/.github/actions/setup-bun-cached@<pinned>",
     with: { ...setup.with, save: `\${{ github.ref == 'refs/heads/main' }}` },
   });
+  expect(withInstallCache(install, job)).toEqual({
+    name: "Install dependencies",
+    run: "bash scripts/retry.sh bun ci --ignore-scripts",
+  });
+  const guardedInstall = {
+    ...install,
+    id: "install",
+    if: "needs.ci-plan.outputs.package_checks_required == 'true'",
+    env: { NPM_TOKEN: "" },
+  };
+  expect(withInstallCache(guardedInstall, job)).toEqual({
+    name: "Install dependencies",
+    id: "install",
+    if: "needs.ci-plan.outputs.package_checks_required == 'true'",
+    env: { NPM_TOKEN: "" },
+    run: "bash scripts/retry.sh bun ci --ignore-scripts",
+  });
+  const derivedTimeoutJob = { ...job, "runs-on": "ubuntu-latest" };
+  const derivedTimeoutInstall = {
+    ...guardedInstall,
+    "timeout-minutes": 3,
+  };
+  expect(withInstallCache(derivedTimeoutInstall, derivedTimeoutJob)).toEqual({
+    name: "Install dependencies",
+    id: "install",
+    if: "needs.ci-plan.outputs.package_checks_required == 'true'",
+    env: { NPM_TOKEN: "" },
+    run: "bash scripts/retry.sh bun ci --ignore-scripts",
+  });
+  const unapprovedTimeout = { ...derivedTimeoutInstall, "timeout-minutes": 4 };
+  expect(withInstallCache(unapprovedTimeout, derivedTimeoutJob)).toEqual({
+    name: "Install dependencies",
+    id: "install",
+    if: "needs.ci-plan.outputs.package_checks_required == 'true'",
+    env: { NPM_TOKEN: "" },
+    "timeout-minutes": 4,
+    run: "bash scripts/retry.sh bun ci --ignore-scripts",
+  });
+  for (const flags of [
+    '["--ignore-scripts"]',
+    '["--frozen-lockfile","--ignore-scripts","--filter","other"]',
+  ]) {
+    const changedInstall = { ...install, with: { flags } };
+    const changed = { ...job, steps: [setup, changedInstall] };
+    expect(withInstallCache(setup, changed)).toEqual(setup);
+    expect(withInstallCache(changedInstall, changed)).toEqual(changedInstall);
+  }
+  const nonScoped = {
+    ...job,
+    steps: [
+      setup,
+      { name: "Install dependencies", run: "bun ci --ignore-scripts" },
+    ],
+  };
+  expect(withInstallCache(setup, nonScoped)).toEqual(setup);
   const noCache = { ...setup, with: { ...setup.with, "no-cache": true } };
   for (const steps of [
-    [noCache],
-    [{ uses: "./.github/actions/safe-chain" }, setup],
+    [noCache, install],
+    [
+      { name: "Install Safe Chain", uses: "./.github/actions/safe-chain" },
+      setup,
+      install,
+    ],
   ]) {
     expect(withInstallCache(setup, { steps })).toEqual(setup);
   }
   const mutable = { ...setup, uses: "oven-sh/setup-bun@main" };
-  expect(withInstallCache(mutable, { steps: [mutable] })).toEqual(mutable);
+  expect(withInstallCache(mutable, { steps: [mutable, install] })).toEqual(
+    mutable,
+  );
 });
 
 test("documentation policy widens only its package gate and retains successful installation", () => {

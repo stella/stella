@@ -1,0 +1,499 @@
+import { expect, test } from "bun:test";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import * as v from "valibot";
+
+import {
+  completeInstallStoreKey,
+  parseInstallFlags,
+  parseGlobalStoreMode,
+  sealInstallStore,
+  verifyInstallStore,
+} from "./ci-install-store";
+import { flattenWorkflowSteps } from "./workflow-steps";
+
+const flags = [
+  "--frozen-lockfile",
+  "--ignore-scripts",
+  "--filter",
+  "@stll/api",
+  "--filter",
+  "@stll/cli",
+];
+
+const identity = {
+  platform: "linux",
+  arch: "x64",
+  revision: "bun-revision-123",
+  globalStoreMode: "enabled" as const,
+};
+
+const makeRoot = () => {
+  const root = mkdtempSync(path.join(tmpdir(), "bun-install-key-"));
+  writeFileSync(path.join(root, "bun.lock"), "lock bytes\n");
+  writeFileSync(
+    path.join(root, "bunfig.toml"),
+    '[install]\nlinker = "hoisted"\n',
+  );
+  return root;
+};
+
+type InstallStoreOverrides = Partial<
+  Pick<
+    Parameters<typeof completeInstallStoreKey>[0],
+    "platform" | "arch" | "revision" | "globalStoreMode"
+  >
+>;
+
+const keyFor = (root: string, options: InstallStoreOverrides = {}) =>
+  completeInstallStoreKey({ root, flags, ...identity, ...options });
+
+test("v3 keys bind ordered flags, required config and the full runtime identity", () => {
+  const root = makeRoot();
+  try {
+    const key = keyFor(root);
+    expect(key).toStartWith(
+      "bun-complete-store-v3-linux-x64-bun-revision-123-enabled-",
+    );
+    expect(keyFor(root)).toBe(key);
+    expect(
+      completeInstallStoreKey({
+        root,
+        flags: [
+          "--frozen-lockfile",
+          "--ignore-scripts",
+          "--filter",
+          "@stll/cli",
+          "--filter",
+          "@stll/api",
+        ],
+        ...identity,
+      }),
+    ).not.toBe(key);
+    expect(
+      completeInstallStoreKey({
+        root,
+        flags: [...flags, "--production"],
+        ...identity,
+      }),
+    ).not.toBe(key);
+    for (const override of [
+      { platform: "darwin" },
+      { arch: "arm64" },
+      { revision: "bun-revision-456" },
+      { globalStoreMode: "disabled" as const },
+    ]) {
+      expect(keyFor(root, override)).not.toBe(key);
+    }
+
+    writeFileSync(path.join(root, "bun.lock"), "changed lock bytes\n");
+    expect(keyFor(root)).not.toBe(key);
+    writeFileSync(path.join(root, "bun.lock"), "lock bytes\n");
+    writeFileSync(
+      path.join(root, "bunfig.toml"),
+      '[install]\nlinker = "isolated"\n',
+    );
+    expect(keyFor(root)).not.toBe(key);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("key generation rejects missing inputs, empty identities and incomplete flags", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "bun-install-missing-"));
+  try {
+    expect(() => keyFor(root)).toThrow("Missing bun.lock");
+    writeFileSync(path.join(root, "bun.lock"), "lock\n");
+    expect(() => keyFor(root)).toThrow("Missing required bunfig.toml");
+    writeFileSync(path.join(root, "bunfig.toml"), "[install]\n");
+
+    for (const options of [{ platform: "" }, { arch: " " }, { revision: "" }]) {
+      expect(() => keyFor(root, options)).toThrow("Missing install-store");
+    }
+    for (const invalidFlags of [
+      [],
+      ["", "--frozen-lockfile", "--ignore-scripts"],
+      ["--frozen-lockfile"],
+      ["--ignore-scripts"],
+    ]) {
+      expect(() =>
+        completeInstallStoreKey({
+          root,
+          flags: invalidFlags,
+          ...identity,
+        }),
+      ).toThrow(/Install-store cache requires/u);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("global-store mode parsing defaults on and rejects ambiguous values", () => {
+  expect(parseGlobalStoreMode(undefined)).toBe("enabled");
+  expect(parseGlobalStoreMode("1")).toBe("enabled");
+  expect(parseGlobalStoreMode("0")).toBe("disabled");
+  expect(parseGlobalStoreMode("false")).toBe("disabled");
+  expect(() => parseGlobalStoreMode("off")).toThrow(
+    "must be 0, 1, false or true",
+  );
+});
+
+test("install flags must be a JSON array of strings", () => {
+  expect(() => parseInstallFlags(undefined)).toThrow(
+    "STELLA_CI_INSTALL_FLAGS must be a JSON array",
+  );
+  expect(() => parseInstallFlags('{"--frozen-lockfile":true}')).toThrow(
+    "STELLA_CI_INSTALL_FLAGS must be a JSON array of strings",
+  );
+  expect(() => parseInstallFlags('["--frozen-lockfile",null]')).toThrow(
+    "STELLA_CI_INSTALL_FLAGS must be a JSON array of strings",
+  );
+  expect(parseInstallFlags('["--frozen-lockfile","--ignore-scripts"]')).toEqual(
+    ["--frozen-lockfile", "--ignore-scripts"],
+  );
+});
+
+test("sealing accepts a populated package cache without links when the global store is off", () => {
+  const store = mkdtempSync(path.join(tmpdir(), "bun-package-cache-"));
+  const options = {
+    store,
+    key: "package-cache-key",
+    globalStoreMode: "disabled" as const,
+  };
+  try {
+    mkdirSync(path.join(store, "@stll"));
+    writeFileSync(path.join(store, "@stll/api.tgz"), "package archive");
+    expect(() => verifyInstallStore(options)).toThrow(
+      "Incomplete or mismatched",
+    );
+    sealInstallStore(options);
+    verifyInstallStore(options);
+
+    const marker = path.join(store, ".stella-install-complete");
+    expect(JSON.parse(readFileSync(marker, "utf-8"))).toMatchObject({
+      format: "v3",
+      key: "package-cache-key",
+      globalStoreMode: "disabled",
+    });
+    expect(() =>
+      verifyInstallStore({ ...options, globalStoreMode: "enabled" }),
+    ).toThrow("Global Bun install store is missing its links directory");
+  } finally {
+    rmSync(store, { recursive: true, force: true });
+  }
+});
+
+test("legitimate package directories ending in .tmp can be sealed", () => {
+  const store = mkdtempSync(path.join(tmpdir(), "bun-package-dot-tmp-"));
+  const packageDirectory = path.join(store, "@stll", "example.tmp");
+  const options = {
+    store,
+    key: "package-dot-tmp-key",
+    globalStoreMode: "disabled" as const,
+  };
+  try {
+    mkdirSync(packageDirectory, { recursive: true });
+    writeFileSync(
+      path.join(packageDirectory, "package.json"),
+      '{"name":"@stll/example.tmp"}\n',
+    );
+    sealInstallStore(options);
+    verifyInstallStore(options);
+  } finally {
+    rmSync(store, { recursive: true, force: true });
+  }
+});
+
+test("sealing requires populated links for global stores and rejects partial stores", () => {
+  const store = mkdtempSync(path.join(tmpdir(), "bun-global-store-"));
+  const options = {
+    store,
+    key: "global-store-key",
+    globalStoreMode: "enabled" as const,
+  };
+  try {
+    expect(() => sealInstallStore(options)).toThrow("Empty Bun install store");
+    mkdirSync(path.join(store, "package"));
+    writeFileSync(
+      path.join(store, "package/value.js"),
+      "export const value = 1;\n",
+    );
+    expect(() => sealInstallStore(options)).toThrow(
+      "missing its links directory",
+    );
+    mkdirSync(path.join(store, "links"));
+    expect(() => sealInstallStore(options)).toThrow(
+      "Empty Bun install-store links directory",
+    );
+    symlinkSync("../package", path.join(store, "links/package"));
+    sealInstallStore(options);
+    verifyInstallStore(options);
+
+    mkdirSync(path.join(store, "partial.tmp"));
+    expect(() => verifyInstallStore(options)).toThrow(
+      "Incomplete Bun install store",
+    );
+    expect(() => sealInstallStore(options)).toThrow(
+      "Incomplete Bun install store",
+    );
+  } finally {
+    rmSync(store, { recursive: true, force: true });
+  }
+});
+
+test("the ci-install composite restores and saves only the exact sealed cache", () => {
+  const action = v.parse(
+    v.object({
+      outputs: v.object({
+        "cache-hit": v.object({ value: v.string() }),
+        key: v.object({ value: v.string() }),
+        "restore-ms": v.object({ value: v.string() }),
+        "install-ms": v.object({ value: v.string() }),
+      }),
+      runs: v.object({
+        using: v.literal("composite"),
+        steps: v.array(v.record(v.string(), v.unknown())),
+      }),
+    }),
+    Bun.YAML.parse(
+      readFileSync(
+        path.resolve(
+          import.meta.dirname,
+          "../.github/actions/ci-install/action.yml",
+        ),
+        "utf-8",
+      ),
+    ),
+  );
+  const steps = flattenWorkflowSteps(action.runs.steps);
+  const step = (id: string) => {
+    const found = steps.find((entry) => entry["id"] === id);
+    if (found === undefined) {
+      expect.unreachable(`Missing ci-install action step ${id}`);
+    }
+    return found;
+  };
+  const identityStep = step("identity");
+  const restore = step("cache");
+  const verify = step("restore-time");
+  const install = step("install");
+  const seal = step("install-time");
+  const save = steps.find(
+    (entry) => entry["name"] === "Save complete store from main",
+  );
+  if (save === undefined) {
+    expect.unreachable("Missing main-only ci-install cache save");
+  }
+  const cacheInputs = (candidate: Record<string, unknown>) =>
+    v.parse(v.object({ path: v.string(), key: v.string() }), candidate["with"]);
+  const restoreInputs = cacheInputs(restore);
+  const saveInputs = cacheInputs(save);
+  const stepsByOrder = [identityStep, restore, verify, install, seal, save].map(
+    (entry) => steps.indexOf(entry),
+  );
+
+  expect(identityStep["run"]).toContain(
+    'bun scripts/ci-install-store.ts key >> "$GITHUB_OUTPUT"',
+  );
+  expect(action.outputs["cache-hit"].value).toBe(
+    `\${{ steps.cache.outputs.cache-hit }}`,
+  );
+  expect(action.outputs.key.value).toBe(`\${{ steps.identity.outputs.key }}`);
+  expect(action.outputs["restore-ms"].value).toBe(
+    `\${{ steps.restore-time.outputs.milliseconds }}`,
+  );
+  expect(action.outputs["install-ms"].value).toBe(
+    `\${{ steps.install-time.outputs.milliseconds }}`,
+  );
+  expect(restore["uses"]).toMatch(/^actions\/cache\/restore@[0-9a-f]{40}/u);
+  expect(save["uses"]).toMatch(/^actions\/cache\/save@[0-9a-f]{40}/u);
+  expect(restoreInputs).toEqual({
+    path: `\${{ steps.identity.outputs.store }}`,
+    key: `\${{ steps.identity.outputs.key }}`,
+  });
+  expect(saveInputs).toEqual(restoreInputs);
+  expect(restore["with"]).not.toHaveProperty("restore-keys");
+  const verifyEnv = v.parse(
+    v.object({
+      CACHE_HIT: v.string(),
+      STORE_KEY: v.string(),
+      START_MS: v.string(),
+    }),
+    verify["env"],
+  );
+  expect(verifyEnv["CACHE_HIT"]).toBe(`\${{ steps.cache.outputs.cache-hit }}`);
+  const verifyRun = v.parse(v.string(), verify["run"]);
+  expect(verifyRun).toContain('if [[ "$CACHE_HIT" == true ]]; then');
+  expect(verifyRun).toContain(
+    'bun scripts/ci-install-store.ts verify "$STORE_KEY"',
+  );
+  expect(verifyRun).toContain(
+    'echo "milliseconds=$((end - START_MS))" >> "$GITHUB_OUTPUT"',
+  );
+  expect(verifyRun.indexOf("end=$(bun -e")).toBeGreaterThan(
+    verifyRun.indexOf("fi"),
+  );
+  expect(seal["if"]).toBe(
+    `\${{ always() && steps.install.outcome != 'skipped' }}`,
+  );
+  const sealEnv = v.parse(
+    v.object({
+      INSTALL_OUTCOME: v.string(),
+      STORE_KEY: v.string(),
+      START_MS: v.string(),
+    }),
+    seal["env"],
+  );
+  expect(sealEnv["INSTALL_OUTCOME"]).toBe(`\${{ steps.install.outcome }}`);
+  const sealRun = v.parse(v.string(), seal["run"]);
+  expect(sealRun).toContain('if [[ "$INSTALL_OUTCOME" == success ]]; then');
+  expect(sealRun).toContain(
+    'bun scripts/ci-install-store.ts seal "$STORE_KEY"',
+  );
+  expect(sealRun).toContain(
+    'echo "milliseconds=$((end - START_MS))" >> "$GITHUB_OUTPUT"',
+  );
+  expect(sealRun.indexOf("end=$(bun -e")).toBeGreaterThan(
+    sealRun.indexOf("fi"),
+  );
+  expect(save["if"]).toBe(`\${{ github.ref == 'refs/heads/main' }}`);
+  expect(stepsByOrder).toEqual(stepsByOrder.toSorted((a, b) => a - b));
+  expect(restore["timeout-minutes"]).toBe(2);
+
+  const upload = steps.find(
+    (entry) =>
+      typeof entry["uses"] === "string" &&
+      entry["uses"].startsWith("actions/upload-artifact@"),
+  );
+  expect(upload?.["uses"]).toMatch(/^actions\/upload-artifact@[0-9a-f]{40}/u);
+  expect(upload?.["if"]).toBe("failure()");
+  const uploadInputs = v.parse(
+    v.object({ path: v.string(), "retention-days": v.number() }),
+    upload?.["with"],
+  );
+  expect(uploadInputs.path).toBe(`\${{ runner.temp }}/bun-install/*.log`);
+  expect(uploadInputs["retention-days"]).toBe(7);
+  expect(install["timeout-minutes"]).toBe(5);
+});
+
+test("the manual install-cache benchmark is dispatch-only and reports measured phases", () => {
+  const manual = v.parse(
+    v.object({
+      on: v.object({
+        workflow_dispatch: v.object({
+          inputs: v.object({
+            check: v.object({ options: v.array(v.string()) }),
+          }),
+        }),
+      }),
+      jobs: v.record(v.string(), v.unknown()),
+    }),
+    Bun.YAML.parse(
+      readFileSync(
+        path.resolve(
+          import.meta.dirname,
+          "../.github/workflows/manual-checks.yml",
+        ),
+        "utf-8",
+      ),
+    ),
+  );
+  expect(Object.keys(manual.on)).toEqual(["workflow_dispatch"]);
+  expect(manual.on.workflow_dispatch.inputs.check.options).toContain(
+    "install-cache-benchmark",
+  );
+
+  const benchmark = (job: string) =>
+    v.parse(
+      v.object({
+        if: v.string(),
+        env: v.record(v.string(), v.string()),
+        strategy: v.optional(
+          v.object({
+            matrix: v.object({ "global-store": v.array(v.string()) }),
+          }),
+        ),
+        steps: v.array(v.record(v.string(), v.unknown())),
+      }),
+      manual.jobs[job],
+    );
+  const windows = benchmark("install-cache-windows");
+  const linux = benchmark("install-cache-linux");
+  const benchmarkCondition = "inputs.check == 'install-cache-benchmark'";
+  expect(windows.if).toBe(benchmarkCondition);
+  expect(linux.if).toBe(benchmarkCondition);
+  expect(windows.strategy?.matrix["global-store"]).toEqual(["0", "1"]);
+  expect(windows.env["BUN_INSTALL_GLOBAL_STORE"]).toBe(
+    `\${{ matrix.global-store }}`,
+  );
+  expect(linux.env["BUN_INSTALL_GLOBAL_STORE"]).toBe("1");
+
+  const measure = (
+    job: typeof windows,
+    expectedFlags: string[],
+    timeout: number,
+  ) => {
+    const install = job.steps.find(
+      (step) => step["name"] === "Measure scoped install",
+    );
+    if (install === undefined) {
+      expect.unreachable("Missing benchmark install step");
+    }
+    expect(v.parse(v.string(), install["uses"])).toBe(
+      "$/.github/actions/ci-install",
+    );
+    expect(install["timeout-minutes"]).toBe(timeout);
+    const withInputs = v.parse(
+      v.object({ flags: v.string() }),
+      install["with"],
+    );
+    expect(JSON.parse(withInputs.flags)).toEqual(expectedFlags);
+
+    const report = job.steps.find(
+      (step) => step["name"] === "Report measured phases",
+    );
+    if (report === undefined) {
+      expect.unreachable("Missing benchmark report step");
+    }
+    const reportEnv = v.parse(
+      v.object({
+        CACHE_HIT: v.string(),
+        STORE_KEY: v.string(),
+        RESTORE_MS: v.string(),
+        INSTALL_MS: v.string(),
+        INSTALL_OUTCOME: v.string(),
+      }),
+      report["env"],
+    );
+    expect(reportEnv.RESTORE_MS).toContain("outputs.restore-ms");
+    expect(reportEnv.INSTALL_MS).toContain("outputs.install-ms");
+    const run = v.parse(v.string(), report["run"]);
+    expect(run).toContain("restoreMs: ms(process.env.RESTORE_MS)");
+    expect(run).toContain("installMs: ms(process.env.INSTALL_MS)");
+    expect(run).toContain("Number(value)");
+    expect(run).not.toMatch(/(?:restoreMs|installMs):\s*\d+/u);
+  };
+
+  measure(
+    windows,
+    [
+      "--frozen-lockfile",
+      "--ignore-scripts",
+      "--filter",
+      "@stll/desktop...",
+      "--filter",
+      "!stella",
+    ],
+    7,
+  );
+  measure(linux, ["--frozen-lockfile", "--ignore-scripts"], 3);
+});

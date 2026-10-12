@@ -1348,6 +1348,17 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // Ordered frozen install flags shared by the scoped CI cache and installer.
+  "STELLA_CI_INSTALL_FLAGS",
+  // Scoped install-store ownership and phase measurement.
+  "BUN_INSTALL_GLOBAL_STORE",
+  "CACHE_HIT",
+  "STORE_KEY",
+  "START_MS",
+  "INSTALL_LOG",
+  "RESTORE_MS",
+  "INSTALL_MS",
+  "INSTALL_OUTCOME",
   // Workflow lint resolves the checksum-verified actionlint executable.
   "ACTIONLINT_BIN",
   "QUERY_PERF_BASELINE_MODE",

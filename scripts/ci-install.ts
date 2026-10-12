@@ -14,6 +14,7 @@ import {
 import path from "node:path";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
+import { parseInstallFlags } from "./ci-install-store";
 
 const INSTALL_TIMEOUT_MS = 120_000;
 // Windows Bun 1.4.3 completed 1,680 extractions from a 2,502-package resolved
@@ -95,8 +96,12 @@ if (import.meta.main) {
     );
     process.exit(1);
   }
+  const flags =
+    args.length > 0
+      ? args
+      : parseInstallFlags(process.env["STELLA_CI_INSTALL_FLAGS"]);
   process.exitCode = await runLoggedInstall({
-    command: [process.execPath, "install", "--verbose", ...args],
+    command: [process.execPath, "install", "--verbose", ...flags],
     logFile,
     timeoutMs: installTimeoutMs(process.platform),
   });

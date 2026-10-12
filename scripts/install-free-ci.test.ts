@@ -24,7 +24,7 @@ import {
   type Classification,
   type InstallFreeInvocation,
 } from "./install-free-ci";
-import { workflowJobSteps } from "./workflow-steps";
+import { flattenWorkflowSteps, workflowJobSteps } from "./workflow-steps";
 
 // CI runs this file in "Test install-free CI commands" without the dependency
 // install, which the check below enforces for this file too.
@@ -65,14 +65,12 @@ test("the real Windows dry-run deadline retains platform headroom regardless of 
   );
   const steps = workflowJobSteps(workflow, "desktop-windows-dry-run");
   const install = steps.find(
-    (step) =>
-      typeof step["run"] === "string" &&
-      step["run"].includes("scripts/ci-install.ts"),
+    (step) => step["uses"] === "$/.github/actions/ci-install",
   );
   if (install === undefined) {
-    expect.unreachable("Missing bounded Windows install");
+    expect.unreachable("Missing fixed-owner Windows install action");
   }
-  const minimum = Math.ceil(installTimeoutMs("win32") / 60_000) + 1;
+  const minimum = 7;
   expect(install["timeout-minutes"]).toBe(minimum);
   const check = (candidateSteps: unknown[]) =>
     boundedInstallProblems(
@@ -118,6 +116,9 @@ test("the install guard rejects bypasses, unbounded steps and lost logs", () => 
     run: 'bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/scripts.log" --ignore-scripts',
     "timeout-minutes": 5,
   };
+  expect(install["timeout-minutes"]).toBe(
+    Math.ceil(installTimeoutMs("win32") / 60_000) + 1,
+  );
   const workflow = (steps: unknown[]) => ({
     jobs: {
       smoke: { "runs-on": "windows-latest", "timeout-minutes": 10, steps },
@@ -155,6 +156,112 @@ test("the install guard rejects bypasses, unbounded steps and lost logs", () => 
   expect(
     boundedInstallProblems(workflow([{ run: "bun install" }]), policy.scope),
   ).toContain("smoke: install bypasses scripts/ci-install.ts");
+});
+
+test("the fixed local composite owns its bounded install and failure log", () => {
+  const action = {
+    uses: "$/.github/actions/ci-install",
+    with: {
+      flags:
+        '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts"]',
+    },
+    "timeout-minutes": 7,
+  };
+  const check = (steps: unknown[], runner = "windows-latest") =>
+    boundedInstallProblems(
+      {
+        jobs: {
+          smoke: { "runs-on": runner, "timeout-minutes": 12, steps },
+        },
+      },
+      "all",
+    );
+  expect(check([action])).toEqual([]);
+  expect(check([{ ...action, uses: "./.github/actions/ci-install" }])).toEqual(
+    [],
+  );
+  expect(check([{ ...action, "timeout-minutes": 6 }])).toContain(
+    "smoke: install needs a bounded step timeout",
+  );
+  expect(
+    check([{ ...action, "timeout-minutes": 2 }], "ubuntu-latest"),
+  ).toContain("smoke: install needs a bounded step timeout");
+  expect(check([{ ...action, "timeout-minutes": 3 }], "ubuntu-latest")).toEqual(
+    [],
+  );
+  expect(
+    check([
+      {
+        ...action,
+        uses: "stella/.github/actions/ci-install@abcdef1234567890",
+      },
+    ]),
+  ).toContain("smoke: install bypasses scripts/ci-install.ts");
+  expect(
+    check([
+      {
+        ...action,
+        with: { flags: '["--ignore-scripts"]' },
+      },
+    ]),
+  ).toContain("smoke: ci-install action needs ordered frozen install flags");
+  expect(
+    check([
+      {
+        ...action,
+        with: { ...action.with, "log-file": "/tmp/install.log" },
+      },
+    ]),
+  ).toContain("smoke: ci-install action needs a retained failure log");
+  expect(
+    check([{ name: "Install dependencies", run: "bun install" }]),
+  ).toContain("smoke: install bypasses scripts/ci-install.ts");
+});
+
+test("the fixed ci-install composite owns the bounded wrapper and failure artifact", () => {
+  const action: unknown = Bun.YAML.parse(
+    readFileSync(
+      path.join(REPO_ROOT, ".github/actions/ci-install/action.yml"),
+      "utf-8",
+    ),
+  );
+  if (
+    typeof action !== "object" ||
+    action === null ||
+    !("runs" in action) ||
+    typeof action.runs !== "object" ||
+    action.runs === null ||
+    !("steps" in action.runs)
+  ) {
+    expect.unreachable("The fixed ci-install action must be composite");
+  }
+  const steps = flattenWorkflowSteps(action.runs.steps);
+  const install = steps.find(
+    (step) => step["name"] === "Run bounded frozen install",
+  );
+  expect(install?.["run"]).toBe(
+    [
+      'bun scripts/ci-install.ts "$',
+      '{INSTALL_LOG:-$RUNNER_TEMP/bun-install/$GITHUB_JOB.log}"',
+    ].join(""),
+  );
+  const upload = steps.find(
+    (step) =>
+      typeof step["uses"] === "string" &&
+      step["uses"].startsWith("actions/upload-artifact@"),
+  );
+  expect(upload?.["uses"]).toMatch(/^actions\/upload-artifact@[0-9a-f]{40}/u);
+  expect(upload?.["if"]).toBe("failure()");
+  const uploadInputs = upload?.["with"];
+  if (
+    typeof uploadInputs !== "object" ||
+    uploadInputs === null ||
+    Array.isArray(uploadInputs) ||
+    !("path" in uploadInputs)
+  ) {
+    expect.unreachable("The failure artifact step must declare upload inputs");
+  }
+  expect(uploadInputs["path"]).toBe(`\${{ runner.temp }}/bun-install/*.log`);
 });
 
 /** Install-free commands allowed to fetch a package to run it, with why. */
