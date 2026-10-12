@@ -6,6 +6,7 @@ import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import type { TanStackAIProvider } from "@stll/ai-catalog";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import { propertyTestTimeout } from "@stll/property-testing";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -206,6 +207,7 @@ const STORED_PART_WIRE = {
   "tool-call": {
     part: {
       type: "tool-call",
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
       id: "call_stored_1",
       name: "mcp__test__search_documents",
       arguments: JSON.stringify({ query: PLANTED["tool-call"] }),

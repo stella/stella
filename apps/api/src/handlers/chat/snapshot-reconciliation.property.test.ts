@@ -12,6 +12,10 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { MCP_APP_RESOURCE_MIME_TYPE } from "@stll/api-contract";
+import {
+  CHAT_TOOL_EXECUTOR_METADATA_KEY,
+  chatToolExecutor,
+} from "@stll/api-contract/chat";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import { toSafeId } from "@/api/lib/branded-types";
@@ -71,6 +75,11 @@ const callEvents = (call: ToolCallPart): StreamChunk[] => [
     parentMessageId: MESSAGE_ID,
     toolCallId: call.id,
     toolCallName: call.name,
+    metadata: {
+      [CHAT_TOOL_EXECUTOR_METADATA_KEY]:
+        chatToolExecutor(call) ??
+        panic("Generated tool call must declare executor ownership"),
+    },
   },
   {
     type: EventType.TOOL_CALL_ARGS,
@@ -279,6 +288,7 @@ test(
         const input = { query: scenario.token };
         const call = {
           type: "tool-call",
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           id: "input-call",
           name: "lookup",
           arguments: JSON.stringify(input),
@@ -752,6 +762,7 @@ const resegmentationAncillary = (token: string) => {
   const input = { query: token };
   const call = {
     type: "tool-call",
+    metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
     id: "reshape-result-call",
     name: "lookup",
     arguments: JSON.stringify(input),
@@ -1146,6 +1157,7 @@ for (const append of [false, true]) {
   test(`snapshot text stays after its intervening call when ${append ? "appended" : "unchanged"}`, async () => {
     const call = {
       type: "tool-call",
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
       id: "ordered-call",
       name: "lookup",
       arguments: "{}",
@@ -1244,6 +1256,7 @@ test(
       fc.asyncProperty(orderedMixedArbitrary, async (scenario) => {
         const call = {
           type: "tool-call",
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           id: "mixed-call",
           name: "lookup",
           arguments: "{}",
@@ -1396,6 +1409,7 @@ const terminalCallScenario = (
 ) => {
   const call = {
     type: "tool-call",
+    metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
     id: "terminal-call",
     name: "lookup",
     arguments: "{}",
@@ -1416,6 +1430,7 @@ const terminalCallScenario = (
   const after = { type: "text", content: "B" } as const;
   const stale = {
     type: "tool-call",
+    metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
     id: call.id,
     name: call.name,
     arguments: call.arguments,
@@ -1577,6 +1592,7 @@ const anchoredText = (
 test("streamed text completion stays after its newly introduced call", async () => {
   const call = {
     type: "tool-call",
+    metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
     id: "introduced-call",
     name: "lookup",
     arguments: "{}",
@@ -2101,6 +2117,7 @@ const occurrenceFixtures = (token: string) =>
     thinking: { type: "thinking", content: token, stepId: MESSAGE_ID },
     "tool-call": {
       type: "tool-call",
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
       id: "occurrence-call",
       name: "lookup",
       arguments: "{}",
@@ -2212,6 +2229,7 @@ test(
           const examples = Object.values(occurrenceFixtures(scenario.token));
           const approval = {
             type: "tool-call",
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             id: "occurrence-approval",
             name: "lookup",
             arguments: "{}",
