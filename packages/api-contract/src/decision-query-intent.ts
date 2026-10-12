@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import {
   canonicalDecisionIdentifierKey,
   DECISION_DOCKET_GRAMMARS,
@@ -400,8 +402,7 @@ const decisionIdentifierComparisonKey = (
  * typography. The same folding the identifier column is written with.
  */
 const structuredCitationKey = (value: string): string =>
-  value
-    .normalize("NFKC")
+  normalizeUnicode(value, "NFKC")
     .toLocaleLowerCase("und")
     .replace(/[\p{P}\p{Z}\s]+/gu, "");
 

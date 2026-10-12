@@ -452,7 +452,7 @@ describe("detect-e2e-changes", () => {
     );
     expect(requiredExpression(collabRedis["if"])).toBe(
       githubExpression(
-        "!cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && needs.ci-plan.outputs.queue_depth != 'thin' && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))",
+        "!cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))",
       ),
     );
     expect(requiredExpression(collabRedis["run"])).toBe(
@@ -857,18 +857,20 @@ describe("detect-e2e-changes", () => {
                     always: () => true,
                     cancelled: () => cancelled,
                   };
-                  expect(Boolean(evaluateExpression(predicate, context))).toBe(
+                  const certified =
                     event !== "pull_request" &&
-                      planned &&
-                      (trusted || event === "workflow_dispatch") &&
-                      (!buildRequired ||
-                        webResult === "success" ||
-                        heavyResult === "success") &&
-                      (event !== "merge_group" || !cancelled),
+                    planned &&
+                    (trusted || event === "workflow_dispatch") &&
+                    (!buildRequired ||
+                      webResult === "success" ||
+                      heavyResult === "success") &&
+                    (event !== "merge_group" || !cancelled);
+                  expect(Boolean(evaluateExpression(predicate, context))).toBe(
+                    certified,
                   );
                   context.needs["ci-plan"].outputs.queue_depth = "thin";
                   expect(Boolean(evaluateExpression(predicate, context))).toBe(
-                    false,
+                    certified,
                   );
                 }
               }
@@ -1201,21 +1203,18 @@ describe("detect-e2e-changes", () => {
                       Boolean(evaluateExpression(predicate, context)),
                       label,
                     ).toBe(certified);
-                    // A thin merge group keeps planned browser suites unless
-                    // the queue switch is off; no other event runs them thin.
+                    // Queue depth and browser configuration cannot bypass
+                    // a planned consumer's certification requirement.
                     context.needs["ci-plan"].outputs.queue_depth = "thin";
                     expect(
                       Boolean(evaluateExpression(predicate, context)),
                       `${label}/thin`,
-                    ).toBe(
-                      (event === "pull_request" || event === "merge_group") &&
-                        certified,
-                    );
+                    ).toBe(certified);
                     context.vars.QUEUE_BROWSER_SUITES = "off";
                     expect(
                       Boolean(evaluateExpression(predicate, context)),
                       `${label}/thin/off`,
-                    ).toBe(event === "pull_request" && certified);
+                    ).toBe(certified);
                   }
                 }
               }

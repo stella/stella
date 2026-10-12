@@ -23,9 +23,11 @@ import { meRoute } from "@/api/handlers/me/routes";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log.constants";
 import { getAuth } from "@/api/lib/auth";
 import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
+import { SERVICE_CLIENT_TYPE } from "@/api/lib/db/service-client-contract";
 import { completeOrganizationDeletion } from "@/api/lib/organization-storage-teardown";
 import { extractMcpSession } from "@/api/mcp/auth";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
+import { McpAuthenticationError } from "@/api/mcp/errors";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import {
   initAgentAuthTestDb,
@@ -246,6 +248,58 @@ describe("confidential service OAuth lifecycle", () => {
     );
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ error: "invalid_target" });
+  });
+
+  test("a service client without its binding refuses issuance and outstanding tokens", async () => {
+    const client = await fixture();
+    const issued = await issue(client);
+    expect(issued.status).toBe(200);
+    const token = v.parse(tokenSchema, await issued.json());
+    expect(Result.isOk(await authenticateIssuedToken(token.access_token))).toBe(
+      true,
+    );
+    const stored =
+      (
+        await rootDb
+          .select()
+          .from(oauthClient)
+          .where(eq(oauthClient.clientId, client.clientId))
+          .limit(1)
+      ).at(0) ?? panic("The operator fixture must persist its OAuth client");
+    expect(stored.type).toBe(SERVICE_CLIENT_TYPE);
+    // Reinsert the operator-created credential without its cascading binding.
+    await rootDb.transaction(async (tx) => {
+      await tx
+        .delete(oauthClient)
+        .where(eq(oauthClient.clientId, client.clientId));
+      await tx.insert(oauthClient).values(stored);
+      await tx.insert(oauthClientResource).values({
+        id: Bun.randomUUIDv7(),
+        clientId: client.clientId,
+        resourceId: getMcpResourceUrl("law"),
+      });
+    });
+    expect(
+      await rootDb
+        .select({ clientId: oauthClient.clientId })
+        .from(oauthClient)
+        .where(eq(oauthClient.clientId, client.clientId)),
+    ).toEqual([{ clientId: client.clientId }]);
+    expect(
+      await rootDb
+        .select({ clientId: serviceOAuthClients.clientId })
+        .from(serviceOAuthClients)
+        .where(eq(serviceOAuthClients.clientId, client.clientId)),
+    ).toEqual([]);
+    const denied = await issue(client);
+    expect(denied.status).toBe(403);
+    expect(await denied.json()).toMatchObject({ error: "unauthorized_client" });
+    const authenticated = await authenticateIssuedToken(token.access_token);
+    expect(Result.isError(authenticated)).toBe(true);
+    if (Result.isError(authenticated)) {
+      expect(authenticated.error).toBeInstanceOf(McpAuthenticationError);
+      expect(authenticated.error.message).toBe("Service client is unavailable");
+    }
   });
 
   test("removing a service binding removes its credential and outstanding tokens", async () => {

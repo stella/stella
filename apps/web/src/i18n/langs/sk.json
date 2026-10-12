@@ -1089,6 +1089,9 @@
       "toastDescription": "Zobrazenie chatu na celú stránku s uloženými vláknami už čoskoro.",
       "toastTitle": "Plné zobrazenie zatiaľ nie je dostupné"
     },
+    "activity": {
+      "review": "Informácie o revízii"
+    },
     "aiPrompt": "Pole správy pre AI",
     "aiThread": "Konverzácia s AI",
     "analyzingSources": "Analyzujem zdroje",
