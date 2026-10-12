@@ -85,9 +85,35 @@ test("unmeasured existing classes retain their platform limits", () => {
   expect(
     measuredInstallBudget({
       platform: "win32",
-      flags: ["--frozen-lockfile", "--ignore-scripts"],
+      flags: [
+        "--frozen-lockfile",
+        "--ignore-scripts",
+        "--filter",
+        "@stll/scripts",
+      ],
     }).timeoutMs,
   ).toBe(240_000);
+});
+
+test("measured Windows installs exclude restored stores and censored timeouts from cold p95", () => {
+  const options = {
+    platform: "win32",
+    flags: ["--frozen-lockfile", "--ignore-scripts"],
+  } as const;
+  const budget = measuredInstallBudget(options);
+  expect(budget.status).toBe("measured");
+  expect(budget.p95Ms).toBe(162_106);
+  expect(budget.timeoutMs).toBe(223_000);
+  const withoutWarmOrCensored = {
+    ...measurements,
+    classes: measurements.classes.map((entry) => ({
+      ...entry,
+      samples: entry.samples.filter(
+        (sample) => sample.cache === "cold" && sample.outcome === "completed",
+      ),
+    })),
+  };
+  expect(measuredInstallBudget(options, withoutWarmOrCensored)).toEqual(budget);
 });
 
 test("class discovery normalizes equivalent filters but distinguishes new scopes and flags", () => {

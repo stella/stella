@@ -198,10 +198,59 @@
     },
     {
       "key": "win32|development|frozen|ignored|all",
-      "status": "unmeasured",
+      "status": "measured",
       "currentBudgetMs": 240000,
-      "reason": "No completed cold install-store sample in the inspected CI logs. Current platform limit retained.",
-      "samples": []
+      "reason": "One completed cold install-store sample; its observed duration is the sparse-sample p95, not a population estimate. Completed warm restores and the censored warm timeout are recorded but excluded from cold p95.",
+      "samples": [
+        {
+          "runId": 38122797289,
+          "jobId": 114421484928,
+          "bunVersion": "1.4.3",
+          "cache": "cold",
+          "outcome": "completed",
+          "durationMs": 162106
+        },
+        {
+          "runId": 38200633026,
+          "jobId": 114654379462,
+          "bunVersion": "1.4.3",
+          "cache": "warm",
+          "outcome": "completed",
+          "durationMs": 134429
+        },
+        {
+          "runId": 38198352434,
+          "jobId": 114646813980,
+          "bunVersion": "1.4.3",
+          "cache": "warm",
+          "outcome": "completed",
+          "durationMs": 118689
+        },
+        {
+          "runId": 38191517084,
+          "jobId": 114625571541,
+          "bunVersion": "1.4.3",
+          "cache": "warm",
+          "outcome": "completed",
+          "durationMs": 123201
+        },
+        {
+          "runId": 38190173461,
+          "jobId": 114621488685,
+          "bunVersion": "1.4.3",
+          "cache": "warm",
+          "outcome": "completed",
+          "durationMs": 138270
+        },
+        {
+          "runId": 38208131915,
+          "jobId": 114677673805,
+          "bunVersion": "1.4.3",
+          "cache": "warm",
+          "outcome": "timeout",
+          "durationMs": 240108
+        }
+      ]
     },
     {
       "key": "win32|development|frozen|ignored|@stll/scripts",
