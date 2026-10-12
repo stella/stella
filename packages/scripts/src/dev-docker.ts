@@ -153,5 +153,8 @@ export const resolveDevDockerKeeper = ({
         target.env,
       )
     : Result.ok("");
-  return checked.map((label) => label.trim() || configuredLabel);
+  if (checked.isErr()) {
+    return Result.err(checked.error);
+  }
+  return Result.ok(checked.value.trim() || configuredLabel);
 };

@@ -42,8 +42,10 @@ test.each([
   "npipe:////./pipe/docker_engine",
 ])("accepts supported Docker endpoint transport %s", (host) => {
   expect(
-    resolveDockerTarget({ env: {}, inspect: () => Result.ok(host) }).unwrap()
-      .host,
+    String(
+      resolveDockerTarget({ env: {}, inspect: () => Result.ok(host) }).unwrap()
+        .host,
+    ),
   ).toBe(host);
 });
 

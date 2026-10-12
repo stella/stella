@@ -1122,7 +1122,10 @@ const ensureHostDockerKeeper = async ({
     now: () => Temporal.Now.instant().epochMilliseconds,
     sleep: (milliseconds) => Bun.sleep(milliseconds),
   });
-  return recovered.map(() => dockerTarget);
+  if (recovered.isErr()) {
+    return Result.err(recovered.error);
+  }
+  return Result.ok(dockerTarget);
 };
 
 const ensureDockerServices = async ({
@@ -2545,11 +2548,6 @@ const main = async () => {
     resolvedOffset === initialOffset.offset
       ? initialOffset.source
       : `${initialOffset.source}; adjusted for free ports`;
-  await ensureHostDockerKeeper({
-    dryRun: parsedArgs.dryRun,
-    mode,
-    dockerTarget,
-  });
   const resolvedInfraOffset = await resolveInfraOffset({
     dockerTarget,
     gitContext,
