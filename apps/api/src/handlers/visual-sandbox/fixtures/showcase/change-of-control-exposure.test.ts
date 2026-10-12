@@ -5,6 +5,7 @@ import { runInNewContext } from "node:vm";
 import * as v from "valibot";
 
 import { generatedVisualInputSchema } from "@stll/api-contract/generated-visual";
+import { compareCodeUnit } from "@stll/collation";
 
 import { prepareGeneratedVisual } from "../../prepare";
 import { sanitizeVisualHtml } from "../../sanitize";
@@ -213,8 +214,10 @@ describe("change-of-control exposure page", () => {
       "Critical",
       "Consent or termination review",
     ]);
-    expect(rows.map((cells) => cells.at(0)).toSorted()).toEqual(
-      pageData.counterparties.map(({ name }) => name).toSorted(),
+    expect(
+      rows.map((cells) => cells.at(0) ?? "").toSorted(compareCodeUnit),
+    ).toEqual(
+      pageData.counterparties.map(({ name }) => name).toSorted(compareCodeUnit),
     );
   });
 

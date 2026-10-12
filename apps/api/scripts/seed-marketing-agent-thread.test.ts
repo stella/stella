@@ -15,6 +15,7 @@ import {
   VISUAL_PREVIEW_TOOL_NAME,
   visualPreviewToolOutputSchema,
 } from "@stll/api-contract/visual-preview";
+import { compareCodeUnit } from "@stll/collation";
 
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import { RECAP_PROMPT_VERSION } from "@/api/handlers/chat/thread-recap";
@@ -269,8 +270,12 @@ describe("marketing agent thread", () => {
     const rows = EXPORT_REVIEW_DOC_NAMES.map((_name, index) =>
       buildExportReviewMetadata(index),
     );
-    expect(counterparties.map(({ name }) => name).toSorted()).toEqual(
-      [...new Set(rows.map(({ counterparty }) => counterparty))].toSorted(),
+    expect(
+      counterparties.map(({ name }) => name).toSorted(compareCodeUnit),
+    ).toEqual(
+      [...new Set(rows.map(({ counterparty }) => counterparty))].toSorted(
+        compareCodeUnit,
+      ),
     );
     expect(
       counterparties.reduce((sum, { documents }) => sum + documents, 0),
