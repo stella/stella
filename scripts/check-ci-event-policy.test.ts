@@ -56,6 +56,36 @@ test("Postgres-only PR suites cannot lose their disabled-by-default switch", () 
   }
 });
 
+test("Postgres shard eligibility cannot bypass the disabled-by-default PR switch", () => {
+  for (const replacement of [
+    "true",
+    "vars.CI_POSTGRES_PR_SELECTION != 'off'",
+  ]) {
+    const workflow = v.parse(
+      workflowSchema,
+      structuredClone(workflows["ci.yml"]),
+    );
+    const outputs = workflow.jobs["ci-plan"]?.outputs;
+    const original = outputs?.["postgres_service_suites_required"];
+    if (!outputs || !original) {
+      panic("Missing Postgres eligibility fixture");
+    }
+    outputs["postgres_service_suites_required"] = original.replace(
+      "vars.CI_POSTGRES_PR_SELECTION == 'on'",
+      () => replacement,
+    );
+    expect(outputs["postgres_service_suites_required"]).not.toBe(original);
+    expect(
+      checkCiEventPolicies({
+        workflows: { ...workflows, "ci.yml": workflow },
+        policy,
+      }),
+    ).toContain(
+      "ci.yml/postgres-service-suites: Postgres PR suites must require the disabled-by-default switch",
+    );
+  }
+});
+
 test("repeating a fast check cannot replace another declared check", () => {
   const workflow = structuredClone(workflows["ci.yml"]);
   const parsed = v.parse(workflowSchema, workflow);

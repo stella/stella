@@ -87,13 +87,13 @@
     "file": "apps/api/scripts/seed-case-law.ts",
     "fingerprint": "4144ff311f6619bb3cb10410aa2dacffc7e9f3fba082c2bcd590ab4965a9f65b",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/seed-case-law.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
+    "reason": "Existing seed insert transaction; extracting the row builder changes its fingerprint without changing the transaction boundary."
   },
   {
     "file": "apps/api/scripts/seed-case-law.ts",
     "fingerprint": "8755477f4c724d507cca15dfb1ad2d285ca9378b148757897e378a6afc8ae420",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/seed-case-law.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
+    "reason": "Existing seed insert transaction; extracting the row builder changes its fingerprint without changing the transaction boundary."
   },
   {
     "file": "apps/api/scripts/seed-case-law.ts",
@@ -474,12 +474,6 @@
     "reason": "transaction-boundary in apps/api/scripts/seed-matter-activity.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },
   {
-    "file": "apps/api/scripts/seed-route-smoke-correspondence.ts",
-    "fingerprint": "7200696b87255fd65b1d7fd03890142d513aeed2a250f88cdfd18dd1a6a7a326",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/seed-route-smoke-correspondence.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
     "file": "apps/api/scripts/seed-templates.ts",
     "fingerprint": "0086ce30ef0dd613e9d206797d94a1ba5f9c7b4018e529500aa3d80bcf60d946",
     "count": 1,
@@ -560,12 +554,6 @@
   {
     "file": "apps/api/scripts/seed-test-user.ts",
     "fingerprint": "827f04315ff26440b6f89ab305dea6773ad398c3ac50d2b1c9c500690156cea7",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/seed-test-user.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/scripts/seed-test-user.ts",
-    "fingerprint": "aaa48ca801ddcc093d6f0bb26c3f31b7881479615f380019022ed2d430adaccd",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-test-user.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },
@@ -1272,12 +1260,6 @@
     "reason": "builder-for in apps/api/src/handlers/entities/open-desktop-edit-session.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/handlers/entities/publish-folio-collab-version.ts",
-    "fingerprint": "b87643ed7b53cb1bf7c9ef00d4557560a9d60d8b6b3acede149feb369654c7fe",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/entities/publish-folio-collab-version.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
     "file": "apps/api/src/handlers/entities/release-desktop-edit-lock.ts",
     "fingerprint": "bc87c514d22e05bc815af453c81039d20880e4541066bb700bab7158bb5e73cc",
     "count": 1,
@@ -1788,34 +1770,10 @@
     "reason": "builder-for in apps/api/src/handlers/skills/proposals/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/handlers/skills/resources/create.ts",
-    "fingerprint": "745425c50707e5147fec430ac68ad76671c50c5a80d1f3e1b46d3014781c876d",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/handlers/skills/resources/create.ts: Legacy savepoint on tx; migrate through the aggregate savepoint owner so the parent lock history is retained."
-  },
-  {
-    "file": "apps/api/src/handlers/skills/resources/delete.ts",
-    "fingerprint": "c21d439677c5264d3b73be835a27c56823ae7eddef3b1c039ecf9a8461d6fe96",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/handlers/skills/resources/delete.ts: Legacy savepoint on tx; migrate through the aggregate savepoint owner so the parent lock history is retained."
-  },
-  {
-    "file": "apps/api/src/handlers/skills/resources/rename.ts",
-    "fingerprint": "ca65d0c051d8def03b51c19e97dc52b7166c0ac0ffe70cc237d41c4132013b22",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/handlers/skills/resources/rename.ts: Legacy savepoint on tx; migrate through the aggregate savepoint owner so the parent lock history is retained."
-  },
-  {
     "file": "apps/api/src/handlers/skills/resources/update.ts",
     "fingerprint": "07a25acf766baa7c2d674cce6a23b8b4b2d512d6ad2f1c4050ac4a95746782b8",
     "count": 1,
     "reason": "transaction-boundary in apps/api/src/handlers/skills/resources/update.ts: Legacy savepoint on tx; migrate through the aggregate savepoint owner so the parent lock history is retained."
-  },
-  {
-    "file": "apps/api/src/handlers/skills/resources/upload.ts",
-    "fingerprint": "de59b8af4117843aaf48c8416c92381448b4f56f24debec1625e28529859db75",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/handlers/skills/resources/upload.ts: Legacy savepoint on tx; migrate through the aggregate savepoint owner so the parent lock history is retained."
   },
   {
     "file": "apps/api/src/handlers/skills/update.ts",
@@ -1953,7 +1911,7 @@
     "file": "apps/api/src/handlers/uploads/entity-version.ts",
     "fingerprint": "eacadf1d650ed2d21c2cc9fb73d537b37502bfbafc9aa4fb6791a61aa6b3c525",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/uploads/entity-version.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "Pending upload claim uses UPDATE after aggregate parent acquisition; retained as upload coordination."
   },
   {
     "file": "apps/api/src/handlers/views/create.ts",
@@ -1977,13 +1935,7 @@
     "file": "apps/api/src/handlers/workspaces/archive.ts",
     "fingerprint": "417504192e24109eab7c3ed529a2ccf11edb14f06da52ce9965b479f4e974cda",
     "count": 1,
-    "reason": "pg_advisory_xact_lock( in apps/api/src/handlers/workspaces/archive.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/workspaces/archive.ts",
-    "fingerprint": "a23f6ef85bd6c603cb2cfa3b47d4a6c15979decefec0671259f7f5b8f02f132e",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/workspaces/archive.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "Timer starts and archive share the existing matter advisory key before workspace acquisition; retained with timer coordination."
   },
   {
     "file": "apps/api/src/handlers/workspaces/correspondence/address/create.ts",
@@ -2218,24 +2170,6 @@
     "fingerprint": "b2d38628d5502c60dc8a4e8f1f907983354c073f775be9645d7c1c58914c476a",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/agent-skills/content-hash.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/agent-skills/skill-tools.ts",
-    "fingerprint": "0c8b0556b2e528b4a88da62a8943e9e46e6295af01398caba0c5481d5e4f31cc",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/agent-skills/skill-tools.ts: Legacy savepoint on tx; migrate through the aggregate savepoint owner so the parent lock history is retained."
-  },
-  {
-    "file": "apps/api/src/lib/agent-skills/skill-tools.ts",
-    "fingerprint": "54d47cedd9bc676f9f2a5696f516ee671fa6666aeb3b215586af810ad4f0f01c",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/agent-skills/skill-tools.ts: Legacy savepoint on tx; migrate through the aggregate savepoint owner so the parent lock history is retained."
-  },
-  {
-    "file": "apps/api/src/lib/agent-skills/skill-tools.ts",
-    "fingerprint": "63ab5170751fef6e8a44d974a544fd5167337c4554ab268e1abf62e7f3de013c",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/agent-skills/skill-tools.ts: Legacy savepoint on tx; migrate through the aggregate savepoint owner so the parent lock history is retained."
   },
   {
     "file": "apps/api/src/lib/anonymization-write-cap.ts",
@@ -2683,135 +2617,15 @@
   },
   {
     "file": "apps/api/src/lib/document-processing-automatic-request.ts",
-    "fingerprint": "7299f13f8795d22f2acb6579e73ddc6027ecc0a31d65f9b439ccc3ba15972afc",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/document-processing-automatic-request.ts: Existing document processing coordination; retain until its acquisition order is migrated."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-automatic-request.ts",
     "fingerprint": "c0f1c6737009c300122788f7f1f569b64cb620944818bf043f3fa58c2df31673",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/document-processing-automatic-request.ts: Existing document processing coordination; retain until its acquisition order is migrated."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-automatic-request.ts",
-    "fingerprint": "cf958c7e24ca2bdc59917288b9f99d8eb10d3da25712c76662c3de9d1dcc3ef3",
-    "count": 1,
-    "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-manual-ocr-restore.ts",
-    "fingerprint": "09503cfd77cde605bd6f70a0427d40cc0a517d681d9cbc5ba2093d666ed1e0d3",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/document-processing-manual-ocr-restore.ts: Existing document processing coordination; retain until its acquisition order is migrated."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-manual-ocr-restore.ts",
-    "fingerprint": "38c49c7e29f4cccc995bd9605bda3c717c10de0f4c6353728e1ec3d95b63b5db",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/document-processing-manual-ocr-restore.ts: Existing document processing coordination; retain until its acquisition order is migrated."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-manual-ocr-restore.ts",
-    "fingerprint": "5faf26f4e8096b3db362ae8ff47b4668f2643ccef29205fa4b44f75b3eeddf8c",
-    "count": 1,
-    "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-manual-ocr-restore.ts",
-    "fingerprint": "63e3748f1ba5823de50a49662469e44a0671ed0c171e4ca0b4b732521456dfcc",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/document-processing-manual-ocr-restore.ts: Existing document processing coordination; retain until its acquisition order is migrated."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-queue.ts",
-    "fingerprint": "1898ebfde9ff2b5dd242b1d87a9a0d2582e099f5e7c182d73e491583da3a4c9b",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/document-processing-queue.ts: Existing document processing coordination; retain until its acquisition order is migrated."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-queue.ts",
-    "fingerprint": "3791f1529268b0a386f1464af6145b76b67d2ef1f99d9a38030759979a24376a",
-    "count": 1,
-    "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-queue.ts",
-    "fingerprint": "4095af46fc431287eb82618839a58fcf8c1ee2eb7e8ddb0d703a30f0884f3dd0",
-    "count": 1,
-    "reason": "Existing row lock in native extraction repair; the edited batch query around it changed the site's fingerprint."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-queue.ts",
-    "fingerprint": "90f1c7d2fc9546145c456c1c8810293a2ae476b65d4f33f7d26fa5399163c68b",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/document-processing-queue.ts: Existing document processing coordination; retain until its acquisition order is migrated."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-queue.ts",
-    "fingerprint": "bd3d6ac95d69c67d25971827b428c9b031d7c0040a85616fd701de9c9aed5f92",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/document-processing-queue.ts: Existing document processing coordination; retain until its acquisition order is migrated."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-queue.ts",
-    "fingerprint": "cbc674f845ecb6ec9e49507cd2a227e63359c012ed5d9bf43d33744d6d29a46d",
-    "count": 1,
-    "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
+    "reason": "Existing processing-run identity is discovered under source locks and uses UPDATE; retained as automatic request coordination."
   },
   {
     "file": "apps/api/src/lib/document-processing-queue.ts",
     "fingerprint": "ce70ea606611387780f4bd6f8fe2a17e84c8c36106321e3fcaf7def64fe822ec",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/document-processing-queue.ts: Existing document processing coordination; retain until its acquisition order is migrated."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-queue.ts",
-    "fingerprint": "d2b568cfd36e82df1ba515c21f3c45d166517eb610a5a9b8abe66447e4d5fd6c",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/document-processing-queue.ts: Existing document processing coordination; retain until its acquisition order is migrated."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-queue.ts",
-    "fingerprint": "dfe1c32873e804f5c5fe793a0bbce4bfd3c410536242f020b1f0b3fd0f403829",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/document-processing-queue.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-queue.ts",
-    "fingerprint": "ec268b47b791a0749ef19cd6f7a119bbdec04ac7a5733476cd5c05cd01f03e72",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/document-processing-queue.ts: Existing document processing coordination; retain until its acquisition order is migrated."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-queue.ts",
-    "fingerprint": "fd6ca2f1397f3abcc259279092d267e04c0ed5e6b98bef8567452efc8a588e91",
-    "count": 1,
-    "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-request.ts",
-    "fingerprint": "38c49c7e29f4cccc995bd9605bda3c717c10de0f4c6353728e1ec3d95b63b5db",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/document-processing-request.ts: Existing document processing coordination; retain until its acquisition order is migrated."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-request.ts",
-    "fingerprint": "6574904ed3880e17af23e7095c9faacf42c28b50245e1665847f017f1c71d36e",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/document-processing-request.ts: Existing document processing coordination; retain until its acquisition order is migrated."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-request.ts",
-    "fingerprint": "ad54071d8f8927c6434b3ba0467f5f9aab582b933a6000886b2b70da448e28fd",
-    "count": 1,
-    "reason": "Existing transaction boundary; the writer now takes its parent locks first, which changed the site's fingerprint."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-request.ts",
-    "fingerprint": "cbac216226418cc8cb5ce188cec6a2bdaa22a662d50ca138afd89ccf03710cd3",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/document-processing-request.ts: Existing document processing coordination; retain until its acquisition order is migrated."
+    "reason": "Organization settings use UPDATE after workspace and entity acquisition; retained as OCR policy coordination."
   },
   {
     "file": "apps/api/src/lib/document-review/suggestion-finding-sync.ts",
@@ -2934,24 +2748,6 @@
     "reason": "builder-for in apps/api/src/lib/entities/validate-parent-id.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/lib/entity-cap-lock.ts",
-    "fingerprint": "460a48355d616360021e4ce5644ee73026097fd9311d62a2847ee6e2ca223750",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/entity-cap-lock.ts: Existing acquisition sequence; migrate together with its aggregate order."
-  },
-  {
-    "file": "apps/api/src/lib/entity-cap-lock.ts",
-    "fingerprint": "560539cca7994ea459f2e346215ea27a6a7ffc8321692fb0e80813526323664f",
-    "count": 1,
-    "reason": "for update in apps/api/src/lib/entity-cap-lock.ts: Existing acquisition sequence; migrate together with its aggregate order."
-  },
-  {
-    "file": "apps/api/src/lib/entity-cap-lock.ts",
-    "fingerprint": "c49c9aebf2851f5c721c0b1423490256bc967c001313e3a3c23b3eb919e23a35",
-    "count": 1,
-    "reason": "for no key update in apps/api/src/lib/entity-cap-lock.ts: Existing acquisition sequence; migrate together with its aggregate order."
-  },
-  {
     "file": "apps/api/src/lib/entity-deletion-effect-store.ts",
     "fingerprint": "1692394d65a171b92cd996e3154f18735d425c39a68ea2a28f987aed0b8ed597",
     "count": 1,
@@ -3006,22 +2802,16 @@
     "reason": "builder-for in apps/api/src/lib/entity-versions/insert-entity-version.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
+    "file": "apps/api/src/lib/entity-versions/publish-folio-collab-checkpoint.ts",
+    "fingerprint": "b87643ed7b53cb1bf7c9ef00d4557560a9d60d8b6b3acede149feb369654c7fe",
+    "count": 1,
+    "reason": "Relocate the existing room publication lock to its library owner without changing the acquisition or count."
+  },
+  {
     "file": "apps/api/src/lib/entity-versions/write-file-version.ts",
     "fingerprint": "483facc9c019184b4653ee9db13bd414c2c8925c569fbd27b30b0a45f5e9be73",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/entity-versions/write-file-version.ts: Existing acquisition sequence; migrate together with its aggregate order."
-  },
-  {
-    "file": "apps/api/src/lib/entity-versions/write-file-version.ts",
-    "fingerprint": "6007cf7e6c6b9a53bb0a237779e56ccc9355769b6df3ddcd7dae3108b6534f61",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/entity-versions/write-file-version.ts: Existing acquisition sequence; migrate together with its aggregate order."
-  },
-  {
-    "file": "apps/api/src/lib/entity-versions/write-file-version.ts",
-    "fingerprint": "a524ff37109d74aa0f932e37c95b2ee1ecb4e7dcb7e9e700d9de72bc97fad1fb",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/entity-versions/write-file-version.ts: Existing acquisition sequence; migrate together with its aggregate order."
+    "reason": "Cell metadata uses UPDATE after aggregate workspace and entity acquisition; retained as version snapshot coordination."
   },
   {
     "file": "apps/api/src/lib/fields/write-field.ts",
@@ -3919,12 +3709,6 @@
   },
   {
     "file": "apps/api/src/lib/member-assignment-offboarding.ts",
-    "fingerprint": "9da13dce619de2de5432c01617347fa12ad129b0f7063a540d793569707dc335",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/member-assignment-offboarding.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/member-assignment-offboarding.ts",
     "fingerprint": "bb3dc694454717656339d319a8cd4642c0cb13cecd9fe0c32e2577a77173b19c",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/member-assignment-offboarding.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
@@ -4004,12 +3788,6 @@
   {
     "file": "apps/api/src/lib/review-organization/reset.ts",
     "fingerprint": "9f4c541e936fd204d19f5ac82fefa52c54850c5677c4a69bd2c464208a9bff18",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/review-organization/reset.ts: Existing root transaction runner on scope.db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/review-organization/reset.ts",
-    "fingerprint": "e5c584364ea0f13cbf50c2f1a82d38dedc69735c628dbc182bd70166f319f0bf",
     "count": 1,
     "reason": "transaction-boundary in apps/api/src/lib/review-organization/reset.ts: Existing root transaction runner on scope.db; opens the owning database transaction for this module."
   },
@@ -4252,12 +4030,6 @@
     "fingerprint": "8f251f5c50d8856c2cda79c689c28c5fc197e9bbdb2b59690e8125eb57ac9f36",
     "count": 1,
     "reason": "transaction-boundary in apps/api/src/lib/sharepoint-disable-purge.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/skills/install.ts",
-    "fingerprint": "0480d02f02c59045cc41f1c93125b671ff9c7dd096f069fde8ae661f965f3708",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/skills/install.ts: Legacy savepoint on tx; migrate through the aggregate savepoint owner so the parent lock history is retained."
   },
   {
     "file": "apps/api/src/lib/skills/install.ts",

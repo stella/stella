@@ -96,7 +96,13 @@ describe("custom oxlint guardrails", () => {
       "apps/web/src/lib/workspaces/queries.ts",
     );
 
-    expect(protectedGuardSource).not.toContain("ensureRouteQueryData");
+    const shellPrefetchStart = protectedGuardSource.indexOf(
+      "// Start optional shell data immediately.",
+    );
+    expect(shellPrefetchStart).toBeGreaterThan(-1);
+    expect(protectedGuardSource.slice(shellPrefetchStart)).not.toContain(
+      "ensureRouteQueryData",
+    );
     expect(protectedGuardSource).toContain("prefetchRouteQuery");
     expect(protectedGuardSource).toContain("aiAvailabilityOptions");
     expect(protectedGuardSource).toContain("roleOptions");

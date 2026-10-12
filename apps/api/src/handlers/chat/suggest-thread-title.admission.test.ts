@@ -4,7 +4,7 @@ import { describe, expect, mock, test } from "bun:test";
 import { env } from "@/api/env";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
-import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";

@@ -12,6 +12,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { readDesktopPresence } from "./service";
 
 const config = {
+  contract: "patch",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "native_tool_ui" },

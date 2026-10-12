@@ -1,3 +1,4 @@
+import { reviewResetOwnerPolicies } from "../review-reset-policies";
 import {
   p,
   sql,
@@ -25,6 +26,7 @@ export const desktopPresence = p.pgTable(
     lastSeenAt: timestamptz("last_seen_at").notNull().defaultNow(),
   },
   (table) => [
+    ...reviewResetOwnerPolicies("desktop_presence"),
     p.primaryKey({
       name: "desktop_presence_pkey",
       columns: [table.userId, table.organizationId, table.desktopId],

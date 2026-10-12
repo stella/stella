@@ -84,6 +84,7 @@ describe("feature access safe-handler admission", () => {
       });
       const endpoint = createSafeRootHandler(
         {
+          contract: "patch",
           accountAccess: ACCOUNT_ACCESS.sandbox,
           permissions: { workspace: ["read"] },
           mcp: { type: "internal", reason: "health_infra" },
@@ -119,6 +120,7 @@ describe("feature access safe-handler admission", () => {
   test("ordinary conditional requests need no feature identity read", async () => {
     const endpoint = createSafeRootHandler(
       {
+        contract: "patch",
         accountAccess: ACCOUNT_ACCESS.sandbox,
         permissions: { workspace: ["read"] },
         mcp: { type: "internal", reason: "health_infra" },
@@ -149,6 +151,7 @@ describe("feature access safe-handler admission", () => {
     let executions = 0;
     const endpoint = createSafeRootHandler(
       {
+        contract: "patch",
         accountAccess: ACCOUNT_ACCESS.sandbox,
         permissions: { workspace: ["read"] },
         mcp: { type: "internal", reason: "health_infra" },
@@ -187,6 +190,7 @@ describe("feature access safe-handler admission", () => {
       let executions = 0;
       const endpoint = createSafeRootHandler(
         {
+          contract: "patch",
           accountAccess: ACCOUNT_ACCESS.sandbox,
           permissions: { workspace: ["read"] },
           mcp: { type: "internal", reason: "health_infra" },
@@ -235,6 +239,7 @@ describe("feature access safe-handler admission", () => {
     let executions = 0;
     const endpoint = createSafeRootHandler(
       {
+        contract: "patch",
         accountAccess: ACCOUNT_ACCESS.sandbox,
         permissions: { workspace: ["read"] },
         mcp: { type: "internal", reason: "health_infra" },
@@ -274,6 +279,7 @@ describe("feature access safe-handler admission", () => {
     let observedUserId: unknown;
     const endpoint = createSafeRootHandler(
       {
+        contract: "patch",
         accountAccess: ACCOUNT_ACCESS.sandbox,
         permissions: { workspace: ["read"] },
         mcp: { type: "internal", reason: "health_infra" },
@@ -321,6 +327,7 @@ describe("feature access safe-handler admission", () => {
     const database = createScopedDbMock({});
     const endpoint = createSafeRootHandler(
       {
+        contract: "patch",
         accountAccess: ACCOUNT_ACCESS.sandbox,
         permissions: { workspace: ["read"] },
         mcp: { type: "internal", reason: "health_infra" },
@@ -377,6 +384,7 @@ test.each([
     const database = createScopedDbMock({});
     const endpoint = createSafeRootHandler(
       {
+        contract: "patch",
         query: conditionalQuerySchema,
         accountAccess: ACCOUNT_ACCESS.sandbox,
         permissions: { workspace: ["read"] },

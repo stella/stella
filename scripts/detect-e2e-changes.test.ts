@@ -315,7 +315,7 @@ describe("detect-e2e-changes", () => {
   test("keeps a landing-only change out of app E2E", () => {
     for (const file of [
       "apps/landing/src/pages/index.astro",
-      "apps/web/e2e/marketing/landing-navigation.spec.ts",
+      "apps/landing/e2e/landing-navigation.spec.ts",
     ]) {
       expect(detects("core", [file])).toBe("false");
       expect(detects("landing", [file])).toBe("true");
@@ -323,15 +323,15 @@ describe("detect-e2e-changes", () => {
   });
 
   test("the shared marketing config exercises the landing project", () => {
-    const files = ["apps/web/e2e/playwright.marketing.config.ts"];
+    const files = ["packages/playwright-tools/src/marketing-config.ts"];
     expect(detects("core", files)).toBe("false");
     expect(detects("landing", files)).toBe("true");
   });
 
-  test("the web package manifest exercises its core and landing commands", () => {
+  test("the web package manifest exercises its core commands", () => {
     const files = ["apps/web/package.json"];
     expect(detects("core", files)).toBe("true");
-    expect(detects("landing", files)).toBe("true");
+    expect(detects("landing", files)).toBe("false");
   });
 
   test("routes every input of a product screenshot through the marketing scope", () => {
@@ -452,7 +452,7 @@ describe("detect-e2e-changes", () => {
     );
     expect(requiredExpression(collabRedis["if"])).toBe(
       githubExpression(
-        "!cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && needs.ci-plan.outputs.queue_depth != 'thin' && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))",
+        "!cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))",
       ),
     );
     expect(requiredExpression(collabRedis["run"])).toBe(
@@ -509,9 +509,6 @@ describe("detect-e2e-changes", () => {
     expect(workflowJob("ci-plan")).toContain(
       "matrix=$(bun scripts/e2e-spec-shards-core.ts all)",
     );
-    expect(workflowJob("ci-plan")).toContain(
-      'echo "selection_required=true" >> "$GITHUB_OUTPUT"',
-    );
     expect(
       requiredExpression(
         workflowStepValue(production, "Check route network baseline")["if"],
@@ -528,16 +525,76 @@ describe("detect-e2e-changes", () => {
     }
   });
 
-  test("skips an eligible pull request when no e2e specs are selected", () => {
-    const plan = workflowJob("ci-plan");
-    expect(plan).toContain(`if [[ "$matrix" == '{"shard":[]}' ]]`);
-    expect(plan).toContain(
-      'echo "selection_required=false" >> "$GITHUB_OUTPUT"',
+  test("plans e2e outputs from selection and fallback semantics", () => {
+    const plan = workflowStepRun(
+      workflowJob("ci-plan"),
+      "Plan changed PR e2e shards",
     );
+    const fullMatrix = '{"shard":["full"]}';
+    const selectedMatrix = '{"shard":["selected"]}';
+    const selectedSpecs = '["e2e/specs/selected.spec.ts"]';
+    const root = mkdtempSync(path.join(tmpdir(), "e2e-plan-outputs-"));
+    const output = path.join(root, "outputs");
+    try {
+      for (const event of [
+        "pull_request",
+        "merge_group",
+        "workflow_dispatch",
+      ]) {
+        for (const outcome of ["success", "failure", "skipped"]) {
+          for (const matrix of ["", '{"shard":[]}', selectedMatrix]) {
+            for (const required of ["true", "false"]) {
+              writeFileSync(output, "fixture=preserved\n");
+              const result = Bun.spawnSync(
+                [
+                  "/bin/bash",
+                  "-c",
+                  [
+                    'bun() { [[ "$*" == "scripts/e2e-spec-shards-core.ts all" ]] || return 91; printf "%s\\n" "$FULL_MATRIX"; }',
+                    plan,
+                  ].join("\n"),
+                ],
+                {
+                  cwd: root,
+                  env: {
+                    PATH: "/usr/bin:/bin",
+                    GITHUB_OUTPUT: output,
+                    EVENT_NAME: event,
+                    SELECTOR_OUTCOME: outcome,
+                    SELECTED_MATRIX: matrix,
+                    SELECTED_MODE: "selected",
+                    SELECTED_SPECS: selectedSpecs,
+                    E2E_PRODUCTION_REQUIRED: required,
+                    FULL_MATRIX: fullMatrix,
+                  },
+                  stdout: "pipe",
+                  stderr: "pipe",
+                },
+              );
+              expect(result.exitCode, result.stderr.toString()).toBe(0);
+              const usesSelection =
+                event === "pull_request" &&
+                outcome === "success" &&
+                matrix !== "";
+              const emptySelection = usesSelection && matrix === '{"shard":[]}';
+              expect(readFileSync(output, "utf-8").trim().split("\n")).toEqual([
+                "fixture=preserved",
+                `matrix=${usesSelection ? matrix : fullMatrix}`,
+                `mode=${usesSelection ? "selected" : "full"}`,
+                `specs=${usesSelection ? selectedSpecs : "[]"}`,
+                `selection_required=${String(!emptySelection)}`,
+                `required=${emptySelection ? "false" : required}`,
+              ]);
+            }
+          }
+        }
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
     expect(
       ciContract.jobs["ci-plan"]?.outputs?.["e2e_production_required"],
     ).toBe(githubExpression("steps.e2e-pr-plan.outputs.required"));
-    expect(plan).toContain('echo "required=false" >> "$GITHUB_OUTPUT"');
   });
 
   test("starts only infrastructure exercised by pull request E2E", () => {
@@ -857,18 +914,20 @@ describe("detect-e2e-changes", () => {
                     always: () => true,
                     cancelled: () => cancelled,
                   };
-                  expect(Boolean(evaluateExpression(predicate, context))).toBe(
+                  const certified =
                     event !== "pull_request" &&
-                      planned &&
-                      (trusted || event === "workflow_dispatch") &&
-                      (!buildRequired ||
-                        webResult === "success" ||
-                        heavyResult === "success") &&
-                      (event !== "merge_group" || !cancelled),
+                    planned &&
+                    (trusted || event === "workflow_dispatch") &&
+                    (!buildRequired ||
+                      webResult === "success" ||
+                      heavyResult === "success") &&
+                    (event !== "merge_group" || !cancelled);
+                  expect(Boolean(evaluateExpression(predicate, context))).toBe(
+                    certified,
                   );
                   context.needs["ci-plan"].outputs.queue_depth = "thin";
                   expect(Boolean(evaluateExpression(predicate, context))).toBe(
-                    false,
+                    certified,
                   );
                 }
               }
@@ -911,22 +970,30 @@ describe("detect-e2e-changes", () => {
     );
     expect(marketingUpdateWorkflow).not.toContain("--ref");
 
-    const update = jobOf(marketingWorkflow, "update");
+    const update = jobOf(marketingUpdateWorkflow, "update");
     const validate = workflowStepRun(update, "Validate inputs");
     expect(validate).toContain('if [[ "$WORKFLOW_REF" != "main" ]]');
     expect(validate).toContain('if [[ "$BRANCH" == "main" ]]');
     expect(validate).toContain('"$BRANCH" =~ ^[A-Za-z0-9._/-]+$');
     expect(validate).toContain('"$BRANCH" == *".."*');
     expect(validate).toContain('"$BRANCH" == -*');
-    // Nothing is minted for a branch that does not exist here.
-    expect(update.indexOf("- name: Verify the branch exists")).toBeLessThan(
-      update.indexOf("- name: Mint App token"),
+    // The branch's code runs in the capture job, which never mints a token;
+    // the publish job mints it only after the capture verified the branch.
+    const publish = jobOf(marketingUpdateWorkflow, "publish");
+    expect(update).toContain("- name: Verify the branch exists");
+    expect(update).not.toContain("- name: Mint App token");
+    expect(publish).toContain("needs: update");
+    expect(workflowStepRun(publish, "Validate inputs")).toContain(
+      'if [[ "$WORKFLOW_REF" != "main" ]]',
+    );
+    expect(publish.indexOf("- name: Validate inputs")).toBeLessThan(
+      publish.indexOf("- name: Mint App token"),
     );
 
     // Updates capture the named branch; ordinary checks keep the event's
     // ref. Only the validated main-heavy caller selects an explicit SHA.
     expect(workflowStepValue(update, "Checkout")["with"]).toMatchObject({
-      ref: githubExpression("inputs.ref"),
+      ref: githubExpression("inputs.branch"),
     });
     expect(checkoutRefs.length).toBeGreaterThan(0);
     for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
@@ -1037,11 +1104,6 @@ describe("detect-e2e-changes", () => {
         }
       }
     }
-    expect(
-      evaluateExpression(marketingCheckout("update"), {
-        inputs: { ref: "named-branch" },
-      }),
-    ).toBe("named-branch");
     const validateSteps = mainHeavyContract.jobs["validate"]?.steps ?? [];
     expect(
       validateSteps.find(({ name }) => name === "Validate SHA format")?.run,
@@ -1052,13 +1114,13 @@ describe("detect-e2e-changes", () => {
     // The push is an API commit appended to the named branch: GitHub signs
     // it, so it cannot leave a person's pull request behind the
     // signed-commits rule.
-    const push = workflowStepValue(update, "Push regenerated baselines");
+    const push = workflowStepValue(publish, "Push regenerated baselines");
     expect(push["uses"]).toContain(
       "stella/.github/.github/actions/signed-commit@",
     );
     expect(push["with"]).toMatchObject({
       mode: "append",
-      branch: githubExpression("inputs.ref"),
+      branch: githubExpression("inputs.branch"),
     });
 
     // Nightly checks continue to use their triggering ref.
@@ -1067,7 +1129,7 @@ describe("detect-e2e-changes", () => {
 
   test("publishes regenerated baselines a fork pull request can commit itself", () => {
     const upload = workflowStepValue(
-      jobOf(marketingWorkflow, "update"),
+      jobOf(marketingUpdateWorkflow, "update"),
       "Upload regenerated baselines",
     );
     expect(upload["uses"]).toBe(
@@ -1081,9 +1143,9 @@ describe("detect-e2e-changes", () => {
     // Published before the push, so a run that cannot push still hands over
     // the PNGs.
     expect(
-      marketingWorkflow.indexOf("- name: Upload regenerated baselines"),
+      marketingUpdateWorkflow.indexOf("- name: Upload regenerated baselines"),
     ).toBeLessThan(
-      marketingWorkflow.indexOf("- name: Push regenerated baselines"),
+      marketingUpdateWorkflow.indexOf("- name: Push regenerated baselines"),
     );
   });
 
@@ -1109,11 +1171,11 @@ describe("detect-e2e-changes", () => {
   test("keeps one capture body behind both screenshot directions", () => {
     // The shared body is a composite action so check and update cannot drift;
     // only the checkout differs, because update captures a named branch.
-    expect(
-      marketingWorkflow.match(
-        /uses: \.\/\.github\/actions\/marketing-capture/gu,
-      ),
-    ).toHaveLength(2);
+    for (const source of [marketingWorkflow, marketingUpdateWorkflow]) {
+      expect(
+        source.match(/uses: \.\/\.github\/actions\/marketing-capture/gu),
+      ).toHaveLength(1);
+    }
     expect(marketingWorkflow).not.toContain("test:e2e:marketing");
     expect(marketingCapture).toContain("test:e2e:marketing:update");
     // Cleanup stays inside the action so a failed capture still releases the
@@ -1121,12 +1183,12 @@ describe("detect-e2e-changes", () => {
     expect(
       actionStep(marketingCapture, "Stop production web server"),
     ).toContain("if: always()");
-    // An unrecognised mode must fail loudly: the check job runs on anything
-    // that is not update, so it reaches this validation instead of leaving
-    // both jobs skipped and green.
-    expect(jobOf(marketingWorkflow, "check")).toContain(
-      "if: inputs.mode != 'update'",
-    );
+    // An unrecognised mode must fail loudly: the check job always runs and
+    // requires check mode, instead of being skipped green.
+    expect(jobOf(marketingWorkflow, "check")).not.toContain("if: inputs.mode");
+    expect(
+      workflowStepRun(jobOf(marketingWorkflow, "check"), "Require check mode"),
+    ).toContain('if [[ "$MODE" != check ]]');
     expect(actionStep(marketingCapture, "Validate mode")).toContain(
       "Unknown marketing screenshot mode",
     );
@@ -1201,21 +1263,18 @@ describe("detect-e2e-changes", () => {
                       Boolean(evaluateExpression(predicate, context)),
                       label,
                     ).toBe(certified);
-                    // A thin merge group keeps planned browser suites unless
-                    // the queue switch is off; no other event runs them thin.
+                    // Queue depth and browser configuration cannot bypass
+                    // a planned consumer's certification requirement.
                     context.needs["ci-plan"].outputs.queue_depth = "thin";
                     expect(
                       Boolean(evaluateExpression(predicate, context)),
                       `${label}/thin`,
-                    ).toBe(
-                      (event === "pull_request" || event === "merge_group") &&
-                        certified,
-                    );
+                    ).toBe(certified);
                     context.vars.QUEUE_BROWSER_SUITES = "off";
                     expect(
                       Boolean(evaluateExpression(predicate, context)),
                       `${label}/thin/off`,
-                    ).toBe(event === "pull_request" && certified);
+                    ).toBe(certified);
                   }
                 }
               }
@@ -1430,20 +1489,20 @@ describe("detect-e2e-changes", () => {
     // policy is main and release tags. A job that reads it without declaring
     // the environment would be a job the policy never sees, so the census
     // below covers every workflow rather than the two edited here.
-    expect(jobOf(marketingWorkflow, "update")).toContain(
+    expect(jobOf(marketingUpdateWorkflow, "publish")).toContain(
       "environment: release-app",
+    );
+    expect(jobOf(marketingUpdateWorkflow, "update")).not.toContain(
+      "environment:",
     );
     expect(jobOf(marketingWorkflow, "check")).not.toContain("environment:");
 
     // A job that calls a reusable workflow cannot declare an environment:
-    // GitHub allows only name, uses, with, secrets, needs, if, and
-    // permissions there. A local reusable declares it on its own job (walked
+    // GitHub allows only name, uses, with, secrets, strategy, needs, if,
+    // concurrency, and permissions there. A local reusable declares it on its own job (walked
     // below); a remote one must be handed the environment name. Pinned so
     // each caller stays a listed decision.
-    const forwardingCallers = new Set([
-      "marketing-screenshots-update.yml#update",
-      "publish-npm.yml#release",
-    ]);
+    const forwardingCallers = new Set(["publish-npm.yml#release"]);
     const seenCallers = new Set<string>();
 
     const workflowsDir = path.join(import.meta.dirname, "../.github/workflows");
@@ -1721,9 +1780,7 @@ test("browser image runner preserves argv, cwd, verdict and only browser inputs,
     path.join(root, imageFile),
     readFileSync(path.resolve(import.meta.dirname, "..", imageFile), "utf-8"),
   );
-  mkdirSync(path.join(root, "apps/web/node_modules/@playwright/test"), {
-    recursive: true,
-  });
+  mkdirSync(path.join(root, "apps/web"), { recursive: true });
   const cache = path.join(directory, ".bun/install/cache");
   mkdirSync(cache, { recursive: true });
   writeFileSync(
@@ -1780,12 +1837,27 @@ esac
     DOCKER_CREDENTIAL_FILE: credentialFile,
   };
   try {
-    for (const { offline, cached } of [
+    for (const { offline, cached, packageDirectory } of [
       { offline: false, cached: true },
       { offline: false, cached: false },
       { offline: true, cached: true },
       { offline: true, cached: false },
-    ]) {
+    ].flatMap((scenario) =>
+      ["apps/web", "apps/landing"].map((selectedDirectory) => ({
+        ...scenario,
+        packageDirectory: selectedDirectory,
+      })),
+    )) {
+      for (const workspace of ["apps/web", "apps/landing"]) {
+        rmSync(path.join(root, workspace, "node_modules"), {
+          recursive: true,
+          force: true,
+        });
+      }
+      mkdirSync(
+        path.join(root, packageDirectory, "node_modules/@playwright/test"),
+        { recursive: true },
+      );
       writeFileSync(credentialFile, "fixture");
       writeFileSync(dockerCalls, "");
       const result = Bun.spawnSync(
@@ -1802,7 +1874,13 @@ esac
         ],
         {
           cwd: path.join(root, "apps/web"),
-          env: { ...runnerEnv, DOCKER_IMAGE_CACHED: String(cached) },
+          env: {
+            ...runnerEnv,
+            DOCKER_IMAGE_CACHED: String(cached),
+            ...(packageDirectory === "apps/landing"
+              ? { PLAYWRIGHT_PACKAGE_DIR: packageDirectory }
+              : {}),
+          },
           stdout: "pipe",
           stderr: "pipe",
         },
@@ -1832,6 +1910,11 @@ esac
       expect(args).toContain("/native/bun:/usr/local/bin/bunx:ro");
       expect(args).toContain("PLAYWRIGHT_BROWSERS_PATH=/ms-playwright");
       expect(args).toContain("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1");
+      if (packageDirectory === "apps/landing") {
+        expect(args).toContain("PLAYWRIGHT_PACKAGE_DIR");
+      } else {
+        expect(args).not.toContain("PLAYWRIGHT_PACKAGE_DIR");
+      }
       expect(args).toContain("E2E_EXECUTION_PROFILE");
       expect(args).toContain("E2E_EDGE_HEADER_VALUE");
       expect(args).not.toContain("GH_TOKEN");

@@ -34,6 +34,8 @@ import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
+import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
+import { readManagedModelTierOnTx } from "@/api/lib/usage/organization-access-state";
 import { resolveWebSearchProvidersFromOrgSettingsRow } from "@/api/lib/web-search/load-org-keys";
 
 /**
@@ -99,6 +101,7 @@ const resolveForkProvenance = ({
 };
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason:
@@ -159,7 +162,9 @@ const getMessages = createSafeRootHandler(
       summary,
       threadChatModel,
       webResearch,
+      modelTier,
     }: {
+      modelTier: ManagedModelTier;
       messages: readonly ChatMessage[];
       revisionNoteTokens?: number;
       summary: {
@@ -187,6 +192,7 @@ const getMessages = createSafeRootHandler(
         chatModelOverride,
         orgAIConfig,
         organizationId: session.activeOrganizationId,
+        modelTier,
       });
       return computeThreadContextUsage({
         messages,
@@ -214,6 +220,7 @@ const getMessages = createSafeRootHandler(
             userId: { eq: user.id },
           },
           columns: {
+            activeSkill: true,
             workspaceId: true,
             contextMatterIds: true,
             webSearchEnabled: true,
@@ -257,8 +264,17 @@ const getMessages = createSafeRootHandler(
           disabledNativeToolSlugs,
         });
 
+        const modelTier = await readManagedModelTierOnTx(
+          tx,
+          session.activeOrganizationId,
+        );
+
         if (!thread) {
-          return { kind: "not-found" as const, webSearchAvailable };
+          return {
+            kind: "not-found" as const,
+            webSearchAvailable,
+            modelTier,
+          };
         }
 
         // Reject requests whose scope contradicts the persisted thread.
@@ -333,6 +349,7 @@ const getMessages = createSafeRootHandler(
           kind: "ok" as const,
           attachedFiles,
           webSearchAvailable,
+          modelTier,
           thread,
           page,
           parent,
@@ -346,6 +363,7 @@ const getMessages = createSafeRootHandler(
     if (reads.kind === "not-found") {
       if (allowMissingThread) {
         return Result.ok({
+          activeSkill: null,
           activeTurnId: null,
           attachedFiles: EMPTY_CHAT_THREAD_ATTACHED_FILES,
           forkProvenance: { type: "none" } as const,
@@ -369,6 +387,7 @@ const getMessages = createSafeRootHandler(
             summary: null,
             threadChatModel: null,
             webResearch: false,
+            modelTier: reads.modelTier,
           }),
         });
       }
@@ -398,6 +417,7 @@ const getMessages = createSafeRootHandler(
       parent,
       checkpoint,
       windowedMessages,
+      modelTier,
       revisionNoteTokens,
     } = reads;
 
@@ -423,9 +443,11 @@ const getMessages = createSafeRootHandler(
         : null,
       threadChatModel: thread.chatModel,
       webResearch: webSearchAvailable && thread.webSearchEnabled,
+      modelTier,
     });
 
     return Result.ok({
+      activeSkill: thread.activeSkill,
       activeTurnId: page.activeTurnId,
       attachedFiles,
       forkProvenance: resolveForkProvenance({

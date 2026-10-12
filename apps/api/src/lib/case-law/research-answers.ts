@@ -91,6 +91,7 @@ export const selectPassagesWithinBudget = (
   let invalid = 0;
   let truncated = 0;
   let budget = 0;
+  let budgetSpent = false;
   for (const passage of passages) {
     const trimmed = passage.excerpt.trim();
     if (trimmed.length === 0 || passage.anchorId.length === 0) {
@@ -102,9 +103,14 @@ export const selectPassagesWithinBudget = (
       continue;
     }
     const excerpt = trimmed.slice(0, passageChars);
-    if (used + excerpt.length > budgetChars) {
-      budget = passages.length - selected.length - duplicate - invalid;
-      break;
+    if (budgetSpent || used + excerpt.length > budgetChars) {
+      // The order is the ranking: once a passage does not fit, nothing ranked
+      // below it takes its place. Later passages still count under their own
+      // reason, so a repeat of a dropped anchor is a duplicate.
+      budgetSpent = true;
+      seen.add(passage.anchorId);
+      budget += 1;
+      continue;
     }
     truncated += Number(excerpt.length < trimmed.length);
     seen.add(passage.anchorId);
@@ -353,16 +359,19 @@ const CITED_EXCERPT_CHARS = 300;
 /**
  * The cited passages as justification blocks. One block per anchor, in the
  * order the anchors were sent, so the card renders them the way the reader
- * scrolls them.
+ * scrolls them. Each names the court's number for its block from the
+ * decision's AST (`courtParagraphNumbersByAnchor`), never from the anchor.
  */
 export const buildAnswerJustification = (
   anchorIds: readonly string[],
   excerptByAnchor: ReadonlyMap<string, string>,
+  courtParagraphNumbers: ReadonlyMap<string, number>,
 ): JustificationContent => ({
   version: 1,
   blocks: anchorIds.map((anchorId) => ({
     kind: "decision-passage",
     anchorId,
+    courtParagraphNumber: courtParagraphNumbers.get(anchorId) ?? null,
     excerpt: (excerptByAnchor.get(anchorId) ?? "").slice(
       0,
       CITED_EXCERPT_CHARS,

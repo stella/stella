@@ -213,7 +213,8 @@ type OutputTokenBudgetOption =
 
 type GenerateTanStackObjectForRoleOptions<TSchema extends v.GenericSchema> =
   TanStackTextForRoleOptions &
-    OutputTokenBudgetOption & {
+    OutputTokenBudgetOption &
+    Pick<StreamChatChunksOptions, "tools" | "agentLoopStrategy"> & {
       /** Explicit exception for a generative fallback or provider-path probe. */
       outputMode?: "generative" | undefined;
       outputSchema: TSchema;
@@ -275,7 +276,7 @@ const GENERATION_DEADLINE_LABEL = "model generation deadline";
  * also receives the deadline as an abort signal, so work that does listen
  * stops with it.
  */
-const withGenerationDeadline = async <T>(
+export const withGenerationDeadline = async <T>(
   {
     abortSignal,
     deadlineMs,
@@ -1157,6 +1158,8 @@ const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>({
             adapter: model.adapter,
             messages: requestMessages,
             outputSchema: tanStackOutputSchema,
+            tools: options.tools,
+            agentLoopStrategy: options.agentLoopStrategy,
             ...systemPromptsPatch({
               caching: options.caching,
               model,
@@ -1414,14 +1417,16 @@ const isStructuredOutputPartial = <TOutput>(
 
 export const resolveTanStackTextModel = async (
   options: ResolveTextModelOptions,
-  credentials = getManagedOpenRouterCredentialProvider(),
+  credentials: ReturnType<
+    typeof getManagedOpenRouterCredentialProvider
+  > = getManagedOpenRouterCredentialProvider(),
 ): Promise<ResolvedTanStackTextModel> => {
   // Every inference path resolves its model here with the proof that its
   // action was admitted; the type requires the proof, this binds it to the
   // organization the model serves.
   assertModelDispatchScope(options);
   const {
-    admission: _admission,
+    admission: { modelTier },
     modelId,
     organizationId,
     orgAIConfig,
@@ -1439,14 +1444,13 @@ export const resolveTanStackTextModel = async (
   let managedOpenRouterCredential: ManagedOpenRouterCredential | undefined;
   if (!orgAIConfig && !mockAnswersForOrganization(orgAIConfig)) {
     const info = modelId
-      ? getTanStackTextModelInfoById(
-          modelId,
-          orgAIConfig,
-          role,
-          policy.dataClass,
-        )
+      ? getTanStackTextModelInfoById(modelId, orgAIConfig, role, {
+          dataClass: policy.dataClass,
+          modelTier,
+        })
       : getTanStackTextModelInfoForRole(role, orgAIConfig, {
           organizationId,
+          modelTier,
           ...policy,
         });
     if (info.provider === "openrouter") {
@@ -1480,12 +1484,14 @@ export const resolveTanStackTextModel = async (
     ? getTanStackTextModelById(modelId, orgAIConfig, {
         role,
         organizationId,
+        modelTier,
         reasoningEffort,
         managedOpenRouterCredential,
         ...policy,
       })
     : getTanStackTextModelForRole(role, orgAIConfig, {
         organizationId,
+        modelTier,
         managedOpenRouterCredential,
         ...policy,
       });

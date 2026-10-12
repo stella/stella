@@ -174,7 +174,10 @@
             }
           },
           "state": "complete",
-          "type": "tool-call"
+          "type": "tool-call",
+          "metadata": {
+            "stellaToolExecutor": "server"
+          }
         },
         {
           "content": {
@@ -291,7 +294,10 @@
           },
           "name": "mcp__external__delete",
           "state": "approval-responded",
-          "type": "tool-call"
+          "type": "tool-call",
+          "metadata": {
+            "stellaToolExecutor": "server"
+          }
         }
       ],
       "metadata": {
@@ -462,7 +468,10 @@
           },
           "name": "mcp__external__delete",
           "state": "approval-responded",
-          "type": "tool-call"
+          "type": "tool-call",
+          "metadata": {
+            "stellaToolExecutor": "server"
+          }
         }
       ],
       "metadata": {
@@ -607,7 +616,10 @@
           },
           "name": "mcp__external__delete",
           "state": "approval-responded",
-          "type": "tool-call"
+          "type": "tool-call",
+          "metadata": {
+            "stellaToolExecutor": "server"
+          }
         }
       ],
       "metadata": {
@@ -729,7 +741,10 @@
           },
           "name": "mcp__external__delete",
           "state": "approval-responded",
-          "type": "tool-call"
+          "type": "tool-call",
+          "metadata": {
+            "stellaToolExecutor": "server"
+          }
         },
         {
           "approval": {
@@ -745,7 +760,10 @@
           },
           "name": "mcp__external__delete",
           "state": "approval-requested",
-          "type": "tool-call"
+          "type": "tool-call",
+          "metadata": {
+            "stellaToolExecutor": "server"
+          }
         }
       ],
       "metadata": {
@@ -888,7 +906,10 @@
             }
           },
           "state": "complete",
-          "type": "tool-call"
+          "type": "tool-call",
+          "metadata": {
+            "stellaToolExecutor": "server"
+          }
         }
       ],
       "version": 3
@@ -924,7 +945,10 @@
           },
           "name": "create-document",
           "state": "input-complete",
-          "type": "tool-call"
+          "type": "tool-call",
+          "metadata": {
+            "stellaToolExecutor": "client"
+          }
         }
       ],
       "version": 3
@@ -960,7 +984,10 @@
           },
           "name": "create-document",
           "state": "input-complete",
-          "type": "tool-call"
+          "type": "tool-call",
+          "metadata": {
+            "stellaToolExecutor": "client"
+          }
         }
       ],
       "version": 3
@@ -1016,7 +1043,10 @@
             }
           },
           "state": "complete",
-          "type": "tool-call"
+          "type": "tool-call",
+          "metadata": {
+            "stellaToolExecutor": "client"
+          }
         }
       ],
       "version": 3
@@ -1048,7 +1078,10 @@
           },
           "name": "mcp__external__search",
           "state": "input-complete",
-          "type": "tool-call"
+          "type": "tool-call",
+          "metadata": {
+            "stellaToolExecutor": "server"
+          }
         }
       ],
       "version": 3
@@ -1086,7 +1119,10 @@
             }
           },
           "state": "error",
-          "type": "tool-call"
+          "type": "tool-call",
+          "metadata": {
+            "stellaToolExecutor": "server"
+          }
         }
       ],
       "version": 3
@@ -1116,7 +1152,10 @@
           },
           "name": "mcp__external__search",
           "state": "input-streaming",
-          "type": "tool-call"
+          "type": "tool-call",
+          "metadata": {
+            "stellaToolExecutor": "server"
+          }
         }
       ],
       "version": 3
@@ -1146,7 +1185,10 @@
           },
           "name": "mcp__external__search",
           "state": "awaiting-input",
-          "type": "tool-call"
+          "type": "tool-call",
+          "metadata": {
+            "stellaToolExecutor": "server"
+          }
         }
       ],
       "version": 3

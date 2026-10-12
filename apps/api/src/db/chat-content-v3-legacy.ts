@@ -9,6 +9,7 @@ import {
   mergeAnonRestorations,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
+import { normalizeStoredChatToolExecutor } from "@/api/handlers/chat/legacy-tool-compat";
 import type {
   ChatAttachmentPart,
   ChatMessageMetadata,
@@ -278,6 +279,7 @@ const legacyToolPartToTanStack = (
     state: legacyToolStateToTanStack(part["state"]),
     ...("input" in part ? { input } : {}),
     ...("output" in part ? { output: Reflect.get(part, "output") } : {}),
+    ...("metadata" in part ? { metadata: part["metadata"] } : {}),
     ...legacyToolApprovalToTanStack(part["approval"]),
   };
 
@@ -536,10 +538,10 @@ export const convertLegacyChatContent = (
   const proved = Result.try({
     try: () =>
       toPersistedChatMessageContentV3({
-        data:
-          version === 1
-            ? normalized.parts
-            : normalizeLegacyPersistedToolInputs(normalized.parts),
+        data: (version === 1
+          ? normalized.parts
+          : normalizeLegacyPersistedToolInputs(normalized.parts)
+        ).map(normalizeStoredChatToolExecutor),
         ...(Object.keys(normalized.metadata).length > 0 ||
         (version === 2 && content["metadata"] !== undefined)
           ? { metadata: normalized.metadata }

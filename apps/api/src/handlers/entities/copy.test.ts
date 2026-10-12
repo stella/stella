@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import {
   documentCounters,
@@ -10,7 +12,7 @@ import {
 import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
 import { envBase } from "@/api/env-base";
 import { createAuditRecorder } from "@/api/lib/audit-log";
-import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createFileKey } from "@/api/lib/file-key";
@@ -333,6 +335,8 @@ describe("copy-to-workspace", () => {
     ];
 
     const tx = {
+      execute: async (query: SQL) =>
+        new PgDialect().sqlToQuery(query).params.map((id) => ({ id })),
       query: {
         entities: {
           findFirst: async (opts: {
@@ -532,6 +536,8 @@ describe("copy-to-workspace", () => {
       },
     ];
     const tx = {
+      execute: async (query: SQL) =>
+        new PgDialect().sqlToQuery(query).params.map((id) => ({ id })),
       query: {
         entities: {
           findFirst: async () => sourceEntity,
@@ -666,6 +672,8 @@ describe("copy-to-workspace", () => {
       },
     ];
     const tx = {
+      execute: async (query: SQL) =>
+        new PgDialect().sqlToQuery(query).params.map((id) => ({ id })),
       query: {
         entities: {
           findFirst: async () => sourceEntity,
@@ -799,6 +807,8 @@ describe("copy-to-workspace", () => {
       },
     ];
     const tx = {
+      execute: async (query: SQL) =>
+        new PgDialect().sqlToQuery(query).params.map((id) => ({ id })),
       query: {
         entities: {
           findFirst: async () => sourceEntity,
@@ -938,6 +948,8 @@ describe("copy-to-workspace", () => {
       },
     ];
     const tx = {
+      execute: async (query: SQL) =>
+        new PgDialect().sqlToQuery(query).params.map((id) => ({ id })),
       query: {
         entities: {
           findFirst: async () => sourceEntity,
@@ -1069,6 +1081,8 @@ describe("copy-to-workspace", () => {
       },
     ];
     const tx = {
+      execute: async (query: SQL) =>
+        new PgDialect().sqlToQuery(query).params.map((id) => ({ id })),
       query: {
         entities: {
           findFirst: async () => sourceEntity,
@@ -1164,6 +1178,8 @@ describe("copy-to-workspace", () => {
     };
 
     const tx = {
+      execute: async (query: SQL) =>
+        new PgDialect().sqlToQuery(query).params.map((id) => ({ id })),
       query: {
         entities: {
           findFirst: async () => sourceEntity,
@@ -1295,6 +1311,8 @@ describe("copy-to-workspace", () => {
     };
 
     const tx = {
+      execute: async (query: SQL) =>
+        new PgDialect().sqlToQuery(query).params.map((id) => ({ id })),
       query: {
         entities: {
           findFirst: async () => sourceEntity,
@@ -1524,6 +1542,8 @@ describe("copy-to-workspace", () => {
     const allEntities = [folderEntity, childEntity];
 
     const tx = {
+      execute: async (query: SQL) =>
+        new PgDialect().sqlToQuery(query).params.map((id) => ({ id })),
       query: {
         entities: {
           findFirst: async () => folderEntity,
@@ -1646,6 +1666,8 @@ describe("copy-to-workspace", () => {
     };
 
     const tx = {
+      execute: async (query: SQL) =>
+        new PgDialect().sqlToQuery(query).params.map((id) => ({ id })),
       query: {
         entities: {
           findFirst: async () => sourceEntity,
@@ -1765,6 +1787,8 @@ describe("copy-to-workspace", () => {
     // parent, which turns out to be a document rather than a folder.
     let entityReadCount = 0;
     const tx = {
+      execute: async (query: SQL) =>
+        new PgDialect().sqlToQuery(query).params.map((id) => ({ id })),
       query: {
         entities: {
           findFirst: async () => {
@@ -1848,6 +1872,8 @@ describe("copy-to-workspace", () => {
 
   test("rejects copy to same workspace", async () => {
     const tx = {
+      execute: async (query: SQL) =>
+        new PgDialect().sqlToQuery(query).params.map((id) => ({ id })),
       query: {
         entities: { findFirst: async () => undefined },
       },

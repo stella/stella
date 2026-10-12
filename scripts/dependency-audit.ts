@@ -115,7 +115,7 @@ const toBaselineEntry = (value: unknown): BaselineEntry | null => {
   };
 };
 
-const readBaseline = async (): Promise<Baseline> => {
+export const readBaseline = async (): Promise<Baseline> => {
   const file = Bun.file(BASELINE_PATH);
   if (!(await file.exists())) {
     return { note: "", auditLevel: "high", accepted: [] };

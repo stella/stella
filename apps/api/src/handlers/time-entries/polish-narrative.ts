@@ -48,6 +48,7 @@ export const buildPolishNarrativeMessage = ({
   });
 
 const config = {
+  contract: "patch",
   actionAdmission: {
     type: "handler",
     actionKind: "time-entries.polish-narrative",
@@ -112,6 +113,7 @@ const polishTimeEntryNarrative = createSafeHandler(
       feature: "time_entries.polish_narrative",
       modelRole: "fast",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: organizationId },
       traceId: Bun.randomUUIDv7(),
     });

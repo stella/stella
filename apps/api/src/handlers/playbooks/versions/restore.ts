@@ -17,6 +17,7 @@ const restorePlaybookVersionParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Restore a stored playbook version by copying its name, description, " +
     "scope, and positions back onto the definition. A restore counts as an " +

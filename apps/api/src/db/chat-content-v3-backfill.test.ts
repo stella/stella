@@ -3,12 +3,14 @@ import { deepEquals } from "bun";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import { assertProperty } from "@stll/property-testing";
 
 import {
   isChatPart,
   normalizePersistedChatMessageContent,
 } from "@/api/handlers/chat/chat-message-parts";
+import { normalizeStoredChatToolExecutor } from "@/api/handlers/chat/legacy-tool-compat";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
@@ -105,6 +107,7 @@ test("v1 canonical tool-call golden retains its name and exact raw arguments", (
           id: "call_1",
           name: "search",
           state: "input-complete",
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
           input: { status: "raw", rawArguments: argumentsText },
         },
       ],
@@ -118,6 +121,7 @@ test("v1 canonical tool-call golden retains its name and exact raw arguments", (
         name: "search",
         state: "input-complete",
         arguments: argumentsText,
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
       },
     ]),
   ).toBe(true);
@@ -131,6 +135,10 @@ test("v1 canonical tool calls preserve name state and raw argument bytes across 
         panic("Generated canonical tool call is not a chat part");
       }
       const converted = convertLegacyChatContent({ version: 1, data: [part] });
+      const expectedPart = normalizeStoredChatToolExecutor(part);
+      if (expectedPart.type !== "tool-call") {
+        panic("Normalized expected value is not a tool call");
+      }
       expect(
         deepEquals(converted.data, [
           {
@@ -138,13 +146,14 @@ test("v1 canonical tool calls preserve name state and raw argument bytes across 
             id: part.id,
             name: part.name,
             state: part.state,
+            metadata: expectedPart.metadata,
             input: { status: "raw", rawArguments: part.arguments },
           },
         ]),
       ).toBe(true);
       expect(
         deepEquals(normalizePersistedChatMessageContent(converted).parts, [
-          part,
+          expectedPart,
         ]),
       ).toBe(true);
     }),
@@ -152,6 +161,7 @@ test("v1 canonical tool calls preserve name state and raw argument bytes across 
 });
 
 const malformedCanonicalParts = {
+  activity: { type: "activity" },
   audio: { type: "audio" },
   document: { type: "document" },
   image: { type: "image" },
@@ -159,7 +169,14 @@ const malformedCanonicalParts = {
   subagent: { type: "subagent" },
   text: { type: "text", text: 42, content: 42 },
   thinking: { type: "thinking" },
-  "tool-call": { type: "tool-call" },
+  "tool-call": {
+    type: "tool-call",
+    id: "call",
+    name: "search",
+    arguments: "{}",
+    state: "input-complete",
+    metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "unknown" },
+  },
   "tool-result": { type: "tool-result" },
   "ui-resource": { type: "ui-resource" },
   video: { type: "video" },
@@ -199,6 +216,9 @@ const malformedLegacyParts = [
     state: "input-available",
     input: {},
     approval: { id: 42 },
+  },
+  {
+    type: "tool-call",
   },
   {
     type: "tool-call",

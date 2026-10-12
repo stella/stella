@@ -93,7 +93,7 @@ or change deployed feature flags.
 1. Ensure CI is green on `main`.
 2. Generate and review any required migration files.
 3. Run `bun run marketing:stale`; if anything is stale, `bun run
-marketing:reshoot` re-records only the stale captures (see
+   marketing:reshoot` re-records only the stale captures (see
    `apps/landing/public/media/products/README.md`, "Reshooting on release").
 4. In one commit, bump `VERSION` and add the matching changelog note. A
    release other than a maintenance release (`bun run release:maintenance`)

@@ -191,6 +191,10 @@ const ConditionChip = ({
           : t("templates.conditionDecidedNo", {
               probability: percent(answer.probability),
             });
+      case "generative":
+        return answer.value
+          ? t("caseLaw.research.answers.yes")
+          : t("caseLaw.research.answers.no");
       case "forced":
         return answer.value
           ? t("templates.conditionForcedYes")

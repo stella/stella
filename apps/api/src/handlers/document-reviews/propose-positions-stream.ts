@@ -26,6 +26,7 @@ import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admissio
 import { sseResponse } from "@/api/lib/sse";
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason: "Processes document inputs and streams proposed review positions.",
@@ -86,6 +87,7 @@ const proposePositionsStream = createSafeHandler(
       startExecutionAdmission({
         organizationId,
         userId: user.id,
+        organizationStateDb: scopedDb,
         mode: "concurrency-only",
         actionKind: PROPOSE_POSITIONS_ACTION_KIND,
       }),

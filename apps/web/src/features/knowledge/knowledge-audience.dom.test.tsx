@@ -173,6 +173,17 @@ globalThis.fetch = Object.assign(
       }
       return Response.json(sessionBody());
     }
+    if (
+      path === "/v1/me/professional-use" &&
+      (askedAs === "org-a" || askedAs === "org-b")
+    ) {
+      return Response.json({
+        status: "accepted",
+        statementVersion: "2026-10",
+        termsVersion: "2026-10",
+        acceptedAt: "2026-10-01T00:00:00.000Z",
+      });
+    }
     if (path === "/v1/public/knowledge/template-packs") {
       return Response.json({
         items: templateCatalogue === "missing" ? [] : [CATALOGUE_PACK],
@@ -246,7 +257,6 @@ const { HotkeysProvider } = await import("@tanstack/react-hotkeys");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const messages = (await import("@/i18n/langs/en.json")).default;
 const { refreshAuthQueries } = await import("@/lib/auth-queries");
-const { discardBootPrefetch } = await import("@/boot-prefetch");
 const { AppFrameHost } = await import("@/routes/-app-frame-host");
 const { Route: KnowledgeLayoutRoute } =
   await import("@/routes/knowledge/route");
@@ -398,8 +408,6 @@ const settle = async () => {
 };
 
 beforeAll(() => {
-  // The page did not boot here, so there is no early session read to reuse.
-  discardBootPrefetch();
   requests.length = 0;
 });
 

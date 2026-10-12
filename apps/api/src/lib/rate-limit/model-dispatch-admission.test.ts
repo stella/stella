@@ -1,7 +1,16 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import ts from "typescript";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
+import type { ScopedDb } from "@/api/db/safe-db";
+import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
+import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import { createTestState } from "@/api/tests/helpers/test-state";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
   ACTION_KIND_COUNTED_BY,
@@ -9,10 +18,12 @@ import {
   type ActionKind,
 } from "./action-kinds";
 import {
-  admitFixtureModelDispatch,
+  admitModelDispatch,
   assertModelDispatchScope,
   NO_ORGANIZATION_MODEL_DISPATCH,
 } from "./model-dispatch-admission";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const apiRoot = new URL("../../../", import.meta.url);
 
@@ -376,7 +387,7 @@ describe("model dispatch admission guard", () => {
       "lib/workflow/ai-generate-batch.ts",
       "lib/flows/flow-executor.ts",
       "lib/scheduler/tasks/memory-extractor.ts",
-      "handlers/case-law/polarity/llm-classifier.ts",
+      "lib/workflow/decisions/decide.ts",
       "scripts/ai-provider-canary.ts",
     ]) {
       expect(files.has(owner)).toBe(true);
@@ -441,18 +452,22 @@ describe("action kind registry", () => {
 describe("model dispatch scope", () => {
   test("a proof admits a dispatch for its own organization", () => {
     const organizationId = toSafeId<"organization">("org_fixture");
-    const admission = admitFixtureModelDispatch({
-      organizationId,
-      actionKind: "chat.send",
-    });
-    expect(admission).toMatchObject({
-      type: "organization",
-      organizationId,
-      actionKind: "chat.send",
-    });
-    expect(() =>
-      assertModelDispatchScope({ organizationId, admission }),
-    ).not.toThrow();
+    for (const modelTier of Object.values(MANAGED_MODEL_TIER)) {
+      const admission = testModelAdmission(
+        organizationId,
+        "chat.send",
+        modelTier,
+      );
+      expect(admission).toMatchObject({
+        type: "organization",
+        organizationId,
+        actionKind: "chat.send",
+        modelTier,
+      });
+      expect(() =>
+        assertModelDispatchScope({ organizationId, admission }),
+      ).not.toThrow();
+    }
   });
 
   test("work with no organization dispatches only without one", () => {
@@ -462,5 +477,44 @@ describe("model dispatch scope", () => {
         admission: NO_ORGANIZATION_MODEL_DISPATCH,
       }),
     ).not.toThrow();
+    expect(NO_ORGANIZATION_MODEL_DISPATCH.modelTier).toBe(
+      MANAGED_MODEL_TIER.standard,
+    );
+  });
+});
+
+describe("minted model tier", () => {
+  test("a proof minted without the free tier is standard and reads nothing", async () => {
+    testState.setConfig("FEATURE_FREE_TIER", false);
+    const scopedDb = mock(async () => await Promise.reject(new Error("read")));
+    const modelTier = await admitModelDispatch({
+      organizationId: mintAuthProviderId<"organization">(),
+      actionKind: "chat.send",
+      organizationStateDb: asTestRaw<ScopedDb>(scopedDb),
+      signal: new AbortController().signal,
+      run: async (admission) => await Promise.resolve(admission.modelTier),
+    });
+    expect(modelTier).toBe(MANAGED_MODEL_TIER.standard);
+    expect(scopedDb).not.toHaveBeenCalled();
+  });
+
+  test("a proof minted under the free tier reads its organization's standing", async () => {
+    testState.setConfig("FEATURE_FREE_TIER", true);
+    const failure = new Error("access state unavailable");
+    const scopedDb = mock(async () => await Promise.reject(failure));
+    // The tier comes only from the organization's scope: a failed read
+    // refuses the mint instead of defaulting a tier.
+    expect(
+      await rejectionOf(
+        admitModelDispatch({
+          organizationId: mintAuthProviderId<"organization">(),
+          actionKind: "chat.send",
+          organizationStateDb: asTestRaw<ScopedDb>(scopedDb),
+          signal: new AbortController().signal,
+          run: async (admission) => await Promise.resolve(admission),
+        }),
+      ),
+    ).toBe(failure);
+    expect(scopedDb).toHaveBeenCalledTimes(1);
   });
 });

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { STATUTE_ALIASES } from "./statute-aliases";
 import type { StatuteQueryCountry } from "./statute-query-capability";
@@ -431,7 +432,7 @@ describe("reading act references inside a full-text query", () => {
         readStatuteQueryReferences("cze", `výklad ${typed} pro smlouvu`),
       ).toEqual([{ country: "cze", ...target }]);
     }
-    const decomposed = "OSŘ".normalize("NFD");
+    const decomposed = normalizeUnicode("OSŘ", "NFD");
     expect(decomposed).not.toBe("OSŘ");
     expect(
       readStatuteQueryReferences("cze", `výklad ${decomposed} pro řízení`),

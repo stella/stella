@@ -19,7 +19,11 @@ gh workflow run marketing-screenshots-update.yml -f branch=<pr-branch>
 
 Dispatching on `main` is what keeps the release App key on workflow code from
 `main`: only the app and spec code checked out from `branch` is
-branch-controlled, and the token never leaves the push step.
+branch-controlled, and it runs in a capture job that holds no release secret.
+A separate publish job runs nothing from the branch: it accepts only flat,
+regular `*.png` files with a PNG signature, mints the token, and appends one
+signed commit on the captured head, so a push that landed on the branch in
+the meantime makes it fail.
 
 The capture body is the composite action `.github/actions/marketing-capture`
 resolved from the branch, so a branch created before that action existed

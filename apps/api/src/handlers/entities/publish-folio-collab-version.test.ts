@@ -73,8 +73,14 @@ describe("folio collaboration publication cut", () => {
   });
 
   test("serializes publish through the room lock and canonical writer", async () => {
-    const source = await Bun.file(
+    const endpoint = await Bun.file(
       import.meta.path.replace(".test.ts", ".ts"),
+    ).text();
+    const source = await Bun.file(
+      new URL(
+        "../../lib/entity-versions/publish-folio-collab-checkpoint.ts",
+        import.meta.url,
+      ),
     ).text();
     const lockStart = source.indexOf("const lockPublicationRoom =");
     const lockEnd = source.indexOf("type LockedPublicationRoom", lockStart);
@@ -95,7 +101,7 @@ describe("folio collaboration publication cut", () => {
     expect(transactionStart).toBeGreaterThan(-1);
     expect(roomLock).toBeGreaterThan(transactionStart);
     expect(canonicalWrite).toBeGreaterThan(roomLock);
-    expect(source).toMatch(
+    expect(endpoint).toMatch(
       /safeDb\(\s*async \(tx\) =>\s*await publishCheckpointInTransaction\(/u,
     );
     expect(source).toContain(

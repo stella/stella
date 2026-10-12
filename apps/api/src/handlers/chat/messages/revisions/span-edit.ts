@@ -41,6 +41,7 @@ const SPAN_EDIT_TIMEOUT_MS = 45_000;
 const outputSchema = v.strictObject({ replacement: v.string() });
 
 const config = {
+  contract: "patch",
   actionAdmission: { type: "handler", actionKind: "chat.span-edit" },
   permissions: CHAT_TURN_PERMISSIONS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -123,17 +124,19 @@ export const createProposeMessageSpanEdit = ({
         threadReasoningEffort: loaded.thread.chatReasoningEffort,
         orgAIConfig,
       });
+      const admission = configuredModelAdmission({ modelAdmission });
       const modelInfo =
         selection.modelId === undefined
           ? getTanStackTextModelInfoForRole("chat", orgAIConfig, {
               dataClass: "customer",
               organizationId,
+              modelTier: admission.modelTier,
             })
           : getTanStackTextModelInfoById(
               selection.modelId,
               orgAIConfig,
               "chat",
-              "customer",
+              { dataClass: "customer", modelTier: admission.modelTier },
             );
       const analytics = createTanStackAIAnalyticsCallbacks({
         dataClass: "customer",
@@ -149,6 +152,7 @@ export const createProposeMessageSpanEdit = ({
         modelRole: "chat",
         selectedModelId: selection.modelId,
         orgAIConfig,
+        modelTier: admission.modelTier,
         properties: {},
         traceId: Bun.randomUUIDv7(),
       });
@@ -157,7 +161,7 @@ export const createProposeMessageSpanEdit = ({
           try: async () =>
             await generateObject({
               dataClass: "customer",
-              admission: configuredModelAdmission({ modelAdmission }),
+              admission,
               role: "chat",
               orgAIConfig,
               managedAIResidency,

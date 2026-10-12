@@ -20,6 +20,7 @@ import { deleteQueuedStyleSetPackages } from "@/api/lib/style-set-package-cleanu
 
 const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
 const config = {
+  contract: "patch",
   description:
     "Permanently delete an organization style set and the stored package file " +
     "behind it. Documents and templates already created from the style set are " +

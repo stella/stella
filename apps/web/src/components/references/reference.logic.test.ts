@@ -368,12 +368,23 @@ describe("labels and decisions", () => {
     expect(referenceOf(referenceFromHref(href, ""))).toEqual({
       type: "decision",
       locator: { type: "ref", ref: "33333333-3333-4333-8333-333333333333" },
-      anchorId: "p-12",
+      paragraph: { anchorId: "p-12", courtParagraphNumber: null },
       label: "p-12",
     });
     expect(
       referenceOf(referenceFromHref(href, "the appeal fails")),
-    ).toMatchObject({ label: "the appeal fails", anchorId: "p-12" });
+    ).toMatchObject({
+      label: "the appeal fails",
+      paragraph: { anchorId: "p-12", courtParagraphNumber: null },
+    });
+  });
+
+  test("a passage the server stamped carries the court's paragraph number", () => {
+    const href =
+      "#stella-decision-passage=33333333-3333-4333-8333-333333333333:p-12:8";
+    expect(referenceOf(referenceFromHref(href, "as held"))).toMatchObject({
+      paragraph: { anchorId: "p-12", courtParagraphNumber: 8 },
+    });
   });
 
   test("an app decision page link is a decision reference", () => {
@@ -381,7 +392,7 @@ describe("labels and decisions", () => {
     expect(referenceFromDecisionRoute(params, "Ns 1/2")).toEqual({
       type: "decision",
       locator: { type: "route", params },
-      anchorId: null,
+      paragraph: null,
       label: "Ns 1/2",
     });
   });

@@ -2,6 +2,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { validateApiTypecheckProjects } from "./api-typecheck-projects";
 import { validateWorkspaceAppBoundaries } from "./workspace-app-boundaries";
 import type { AppBoundaryOptions } from "./workspace-app-boundaries";
 
@@ -51,8 +52,8 @@ const BABEL_TOOLCHAINS = [
 ] as const;
 const TYPESCRIPT_TOOLCHAIN = {
   native: "npm:typescript@7.0.2",
-  oxlint: "1.86.0",
-  oxlintConfig: "0.7.0",
+  oxlint: "1.87.0",
+  oxlintConfig: "0.12.0",
   tsgolint: "7.0.2003",
   typescript6Compatibility: "6.0.3",
 } as const;
@@ -408,10 +409,29 @@ const validateTypeScriptToolchain = (rootDir: string): WorkspaceIssue[] => {
       if (
         typecheck !== null &&
         relativePackagePath !== TYPESCRIPT6_COMPATIBILITY.astro.packagePath &&
-        !typecheck.includes("tsc-native.ts")
+        !(
+          relativePackagePath === "apps/api/package.json" &&
+          typecheck === "bun ../../packages/scripts/src/api-typecheck.ts"
+        ) &&
+        !typecheck
+          .split("&&")
+          .some((command) =>
+            command.trim().startsWith("bun check --no-pretty --all --project="),
+          )
       ) {
         issues.push({
-          message: `scripts.typecheck must use the TypeScript 7 native wrapper; found ${typecheck}`,
+          message: `scripts.typecheck must use bun check --no-pretty --all --project=<tsconfig>; found ${typecheck}`,
+          path: relativePackagePath,
+        });
+      }
+
+      if (
+        typecheck !== null &&
+        readStringProperty(packageJson, "scripts", "check") !== null
+      ) {
+        issues.push({
+          message:
+            "scripts.check shadows Bun's native checker; rename the script",
           path: relativePackagePath,
         });
       }
@@ -719,6 +739,7 @@ export const validateWorkspaceRoot = (
   appBoundaryOptions: AppBoundaryOptions = {},
 ): WorkspaceIssue[] => {
   const issues: WorkspaceIssue[] = [
+    ...validateApiTypecheckProjects(rootDir),
     ...validateWorkspaceAppBoundaries(rootDir, appBoundaryOptions),
     ...validateTurboInstallPins(rootDir),
     ...validateBunCwdRunForm(rootDir),
