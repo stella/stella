@@ -105,8 +105,7 @@ export const CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION = {
     polarity_rule_id: "permitted",
     polarity_source: "permitted",
     polarity_classifier_version: "permitted",
-    polarity_window_start: "permitted",
-    polarity_window_end: "permitted",
+    polarity_evidence_windows: "permitted",
     cited_part: "permitted",
   },
 } as const satisfies PublicLawColumnGrantsByRelation;

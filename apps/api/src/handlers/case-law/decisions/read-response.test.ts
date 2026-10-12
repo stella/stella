@@ -4,7 +4,10 @@ import fc from "fast-check";
 
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
-import { TEXT_FIELD_TYPE } from "@stll/api-contract/case-law-text-field";
+import {
+  CITATION_TEXT_INCOMPLETE_REASONS,
+  TEXT_FIELD_TYPE,
+} from "@stll/api-contract/case-law-text-field";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { assertProperty } from "@stll/property-testing";
 
@@ -207,3 +210,15 @@ test("decision readers keep every section whole so citation section indices reso
     ...Value.Errors(readDecisionSuccessResponseSchema, response),
   ]).toEqual([]);
 });
+
+test.each(CITATION_TEXT_INCOMPLETE_REASONS)(
+  "decision reader completion accepts %s according to its contract",
+  (reason) => {
+    expect(
+      Value.Check(
+        readDecisionSuccessResponseSchema.properties.textIncompleteReason,
+        reason,
+      ),
+    ).toBe(reason !== "absent_ast");
+  },
+);

@@ -27,6 +27,7 @@ import {
 } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { CompiledRule } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { CitationEvidenceWindows } from "@/api/lib/case-law/citation-evidence";
 import type { CitedPart } from "@/api/lib/case-law/citation-vocabulary";
 import { citationTextRevisionFence } from "@/api/lib/case-law/text-revision";
 import type { CitationTextRevision } from "@/api/lib/case-law/text-revision";
@@ -44,8 +45,7 @@ type Tightened = {
   polarity: Polarity;
   ruleId: SafeId<"caseLawPolarityRule">;
   previousPolarity: Polarity;
-  windowStart: number;
-  windowEnd: number;
+  evidenceWindows: CitationEvidenceWindows;
   confidence: number;
   citedPart: CitedPart;
 };
@@ -71,17 +71,16 @@ export const persistTightened = async (
              polarity_rule_id = v.rule_id,
              polarity_source = 'rule',
              polarity_classifier_version = ${POLARITY_CLASSIFIER_VERSION},
-             polarity_window_start = v.window_start,
-             polarity_window_end = v.window_end,
+             polarity_evidence_windows = v.evidence_windows,
              polarity_confidence = v.confidence,
              cited_part = v.cited_part
         FROM (VALUES ${sql.join(
           rows.map(
             (row) =>
-              sql`(${row.id}::uuid, ${row.polarity}::text, ${row.ruleId}::uuid, ${row.previousPolarity}::text, ${numericColumnParam(caseLawCitations.polarityWindowStart, row.windowStart)}, ${numericColumnParam(caseLawCitations.polarityWindowEnd, row.windowEnd)}, ${numericColumnParam(caseLawCitations.polarityConfidence, row.confidence)}, ${row.citedPart}::text, ${row.citingDecisionId}::uuid, ${row.textRevision.contentHash}::text, ${row.textRevision.sections === null ? null : JSON.stringify(row.textRevision.sections)}::text::jsonb)`,
+              sql`(${row.id}::uuid, ${row.polarity}::text, ${row.ruleId}::uuid, ${row.previousPolarity}::text, ${JSON.stringify(row.evidenceWindows)}::text::jsonb, ${numericColumnParam(caseLawCitations.polarityConfidence, row.confidence)}, ${row.citedPart}::text, ${row.citingDecisionId}::uuid, ${row.textRevision.contentHash}::text, ${row.textRevision.sections === null ? null : JSON.stringify(row.textRevision.sections)}::text::jsonb)`,
           ),
           sql.raw(","),
-        )}) AS v(id, polarity, rule_id, previous_polarity, window_start, window_end, confidence, cited_part, citing_decision_id, content_hash, sections)
+        )}) AS v(id, polarity, rule_id, previous_polarity, evidence_windows, confidence, cited_part, citing_decision_id, content_hash, sections)
        WHERE c.id = v.id
          AND c.citing_decision_id = v.citing_decision_id
          AND ${citationTextRevisionFence({
@@ -228,8 +227,7 @@ const recheckPage = async (args: RecheckPageArgs): Promise<RecheckResult> => {
       polarity: match.polarity,
       ruleId: match.ruleId,
       previousPolarity: current,
-      windowStart: windows.evidenceSpan.start,
-      windowEnd: windows.evidenceSpan.end,
+      evidenceWindows: windows.evidenceWindows,
       confidence: match.confidence,
       citedPart: classifyCitedPart({
         contexts: windows.contexts,

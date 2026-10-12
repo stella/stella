@@ -403,7 +403,7 @@ export const applyFormRepairs = async ({
             sql`(${id}::uuid, ${revision.sections === null ? null : JSON.stringify(revision.sections)}::text::jsonb, ${revision.contentHash}::text)`,
         ),
         sql.raw(","),
-      )}), repairs(id, citing_decision_id, citation_text, section_index, previous_polarity, previous_rule_id, rule_id, rule_pattern, rule_fingerprint, window_start, window_end, confidence, cited_part) AS (VALUES ${sql.join(
+      )}), repairs(id, citing_decision_id, citation_text, section_index, previous_polarity, previous_rule_id, rule_id, rule_pattern, rule_fingerprint, evidence_windows, confidence, cited_part) AS (VALUES ${sql.join(
         repairs.map(
           ({ candidate, current, ruleFingerprint }) => sql`(
           ${candidate.id}::uuid, ${candidate.citingDecisionId}::uuid,
@@ -411,7 +411,7 @@ export const applyFormRepairs = async ({
           ${current.row.oldPolarity}::text, ${current.row.oldRuleId}::uuid,
           ${current.row.newRuleId}::uuid, ${current.rulePattern}::text,
           ${ruleFingerprint}::text,
-          ${numericColumnParam(caseLawCitations.polarityWindowStart, current.windows.evidenceSpan.start)}, ${numericColumnParam(caseLawCitations.polarityWindowEnd, current.windows.evidenceSpan.end)},
+          ${JSON.stringify(current.windows.evidenceWindows)}::text::jsonb,
           ${numericColumnParam(caseLawCitations.polarityConfidence, current.confidence)}, ${classifyCitedPart({ contexts: current.windows.contexts, citationText: candidate.citationText, language: plan.language })}::text
         )`,
         ),
@@ -420,7 +420,7 @@ export const applyFormRepairs = async ({
       UPDATE ${caseLawCitations} AS c
          SET polarity = ${POLARITY.NEUTRAL}, polarity_rule_id = v.rule_id,
              polarity_source = 'rule', polarity_classifier_version = ${POLARITY_CLASSIFIER_VERSION},
-             polarity_window_start = v.window_start, polarity_window_end = v.window_end,
+             polarity_evidence_windows = v.evidence_windows,
              polarity_confidence = v.confidence, cited_part = v.cited_part
         FROM repairs v
         JOIN expected_documents document ON document.id = v.citing_decision_id

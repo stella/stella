@@ -35,8 +35,7 @@ export const resetRetiredRuleVerdicts = async (
         polarityRuleId: null,
         polaritySource: null,
         polarityClassifierVersion: null,
-        polarityWindowStart: null,
-        polarityWindowEnd: null,
+        polarityEvidenceWindows: null,
         polarityConfidence: null,
       })
       .where(

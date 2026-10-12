@@ -1,7 +1,7 @@
 import { eq, inArray, sql } from "drizzle-orm";
 
 import type {
-  CitationTextIncompleteReason,
+  DecisionTextIncompleteReason,
   DecisionTextWithheldReason,
 } from "@stll/api-contract/case-law-text-field";
 
@@ -68,7 +68,7 @@ type DecisionTextCompletionCheck =
   | { type: "withheld"; reason: DecisionTextWithheldReason }
   | {
       type: "incomplete";
-      reason: Exclude<CitationTextIncompleteReason, "absent_ast">;
+      reason: DecisionTextIncompleteReason;
     };
 
 /** A current source denial takes precedence over a revision mismatch. */

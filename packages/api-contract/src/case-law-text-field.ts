@@ -32,6 +32,12 @@ export const CITATION_TEXT_INCOMPLETE_REASONS = [
 export type CitationTextIncompleteReason =
   (typeof CITATION_TEXT_INCOMPLETE_REASONS)[number];
 
+// parser-output-unchanged: Decision completion reasons describe read-time availability; parsers do not emit them.
+export const DECISION_TEXT_INCOMPLETE_REASONS =
+  CITATION_TEXT_INCOMPLETE_REASONS.filter((reason) => reason !== "absent_ast");
+export type DecisionTextIncompleteReason =
+  (typeof DECISION_TEXT_INCOMPLETE_REASONS)[number];
+
 // parser-output-unchanged: citation evidence availability is read-time metadata.
 export const CITATION_EVIDENCE_INCOMPLETE_REASONS = [
   "missing_privileges",

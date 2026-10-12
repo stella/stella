@@ -12,10 +12,18 @@ describe("the windows around a citation", () => {
     expect(extractContexts(sections, "sp. zn. 3 Tdo 759/2020", 1)).toEqual({
       mentions: [sections[1]?.text ?? ""],
       contexts: [sections[1]?.text ?? ""],
-      evidenceSpan: {
-        start: (sections[0]?.text.length ?? 0) + 1,
-        end: sections.map((s) => s.text).join("\n").length,
-      },
+      evidenceWindows: [
+        {
+          start: (sections[0]?.text.length ?? 0) + 1,
+          end: sections.map((s) => s.text).join("\n").length,
+        },
+      ],
+      contextEvidenceWindows: [
+        {
+          start: (sections[0]?.text.length ?? 0) + 1,
+          end: sections.map((s) => s.text).join("\n").length,
+        },
+      ],
     });
   });
 
@@ -65,6 +73,7 @@ describe("the windows around a citation", () => {
     );
 
     expect(windows?.contexts).toHaveLength(1);
+    expect(windows?.contextEvidenceWindows).toHaveLength(1);
     expect(windows?.mentions).toHaveLength(2);
     expect(windows?.mentions[0]).toContain("srov.");
     expect(windows?.mentions[0]).not.toContain("odchyluje");
@@ -103,10 +112,11 @@ describe("the windows around a citation", () => {
     expect(windows).toEqual({
       mentions: [sentence],
       contexts: [sentence],
-      evidenceSpan: { start: 0, end: decomposed.length },
+      evidenceWindows: [{ start: 0, end: decomposed.length }],
+      contextEvidenceWindows: [{ start: 0, end: decomposed.length }],
     });
   });
-  test("evidence offsets recover original text across sections and disjoint windows", () => {
+  test("evidence windows recover each original mention across sections", () => {
     const sections = [
       { text: "Úvod".normalize("NFD") },
       {
@@ -118,24 +128,23 @@ describe("the windows around a citation", () => {
     const joined = sections.map((s) => s.text).join("\n");
     const windows = extractContexts(sections, "CIT", 1);
     expect(windows?.contexts).toHaveLength(2);
-    const start = windows?.evidenceSpan.start ?? 0;
-    const end = windows?.evidenceSpan.end ?? 0;
-    const excerpt = joined.slice(start, end);
     const sectionOffset = (sections.at(0)?.text.length ?? 0) + 1;
-    expect(start).toBeGreaterThan(sectionOffset);
-    expect(excerpt.slice(0, 10)).toBe(
-      sections
-        .at(1)
-        ?.text.slice(start - sectionOffset, start - sectionOffset + 10) ??
-        "missing",
-    );
-    expect(excerpt.match(/CIT/gu)).toHaveLength(2);
-    expect(excerpt.endsWith("CIT konec.")).toBe(true);
-    // Normalize after slicing: the next combining mark outside the first
-    // window can compose its final character in the larger evidence span.
-    const firstWindowEnd = excerpt.indexOf("CIT") + "CIT".length + 200;
-    expect(excerpt.slice(0, firstWindowEnd).normalize("NFC")).toBe(
-      windows?.contexts[0] ?? "missing",
+    const evidenceWindows = windows?.evidenceWindows ?? [];
+    expect(evidenceWindows).toHaveLength(2);
+    expect(windows?.contextEvidenceWindows).toHaveLength(2);
+    for (const [index, evidenceWindow] of evidenceWindows.entries()) {
+      expect(evidenceWindow.start).toBeGreaterThan(sectionOffset);
+      const originalWindow = joined.slice(
+        evidenceWindow.start,
+        evidenceWindow.end,
+      );
+      expect(originalWindow.normalize("NFC")).toBe(
+        windows?.mentions[index] ?? "missing",
+      );
+      expect(originalWindow.match(/CIT/gu)).toHaveLength(1);
+    }
+    expect(evidenceWindows[1]?.start).toBeGreaterThan(
+      evidenceWindows[0]?.end ?? 0,
     );
   });
 });

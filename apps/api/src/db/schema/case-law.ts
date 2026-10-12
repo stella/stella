@@ -62,6 +62,8 @@ import type {
   ReviewablePolarity,
   RuleSource,
 } from "@/api/handlers/case-law/polarity/consts";
+import { citationEvidenceWindowsValidSql } from "@/api/lib/case-law/citation-evidence";
+import type { CitationEvidenceWindows } from "@/api/lib/case-law/citation-evidence";
 import {
   CITATION_POLARITY_SOURCES,
   CITED_PARTS,
@@ -1852,10 +1854,10 @@ export const caseLawCitations = p.pgTable(
     }),
     /** Version of the classifier that produced the evidence. */
     polarityClassifierVersion: p.text("polarity_classifier_version"),
-    /** Start offset of evidence in joined decision sections. */
-    polarityWindowStart: p.integer("polarity_window_start"),
-    /** Exclusive end offset of evidence in joined decision sections. */
-    polarityWindowEnd: p.integer("polarity_window_end"),
+    /** Exact original-coordinate windows used to classify the citation. */
+    polarityEvidenceWindows: jsonb(
+      "polarity_evidence_windows",
+    ).$type<CitationEvidenceWindows>(),
     polarityConfidence: p.doublePrecision("polarity_confidence"),
     /** Explicit opinion part referred to by the citation. */
     citedPart: p
@@ -1886,7 +1888,7 @@ export const caseLawCitations = p.pgTable(
     ),
     p.check(
       "citations_polarity_window_bounds",
-      sql`(${t.polarityWindowStart} IS NULL AND ${t.polarityWindowEnd} IS NULL) OR (${t.polarityWindowStart} IS NOT NULL AND ${t.polarityWindowEnd} IS NOT NULL AND ${t.polarityWindowStart} >= 0 AND ${t.polarityWindowEnd} > ${t.polarityWindowStart})`,
+      citationEvidenceWindowsValidSql(t.polarityEvidenceWindows),
     ),
     p.check(
       "citations_polarity_confidence_bounds",

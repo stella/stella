@@ -6,7 +6,7 @@ import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
 import {
-  CITATION_TEXT_INCOMPLETE_REASONS,
+  DECISION_TEXT_INCOMPLETE_REASONS,
   DECISION_TEXT_WITHHELD_REASON,
   TEXT_ABSENCE_REASONS,
   TEXT_FIELD_TYPE,
@@ -147,7 +147,7 @@ const languageAlternateSchema = t.Object({
 
 export const readDecisionSuccessResponseSchema = t.Object({
   textIncompleteReason: t.Nullable(
-    t.UnionEnum([...CITATION_TEXT_INCOMPLETE_REASONS]),
+    t.UnionEnum([...DECISION_TEXT_INCOMPLETE_REASONS]),
   ),
   textWithheldReason: t.Nullable(t.Enum(DECISION_TEXT_WITHHELD_REASON)),
   documentPending: t.Boolean(),

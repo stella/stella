@@ -865,8 +865,7 @@ const relabelCitationsStatement = (
          polarity_rule_id = NULL,
          polarity_source = 'review',
          polarity_classifier_version = NULL,
-         polarity_window_start = NULL,
-         polarity_window_end = NULL,
+         polarity_evidence_windows = NULL,
          polarity_confidence = NULL
     FROM ${labelValues(labels)}
     JOIN case_law_citation_reviews r

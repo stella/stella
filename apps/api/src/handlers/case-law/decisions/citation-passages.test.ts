@@ -135,7 +135,7 @@ describe("stored polarity evidence windows", () => {
           fc
             .array(
               fc.constantFrom("ě", "😀", "e\u0301", " ", "\n", "\t", "X"),
-              { maxLength: 40 },
+              { minLength: 1, maxLength: 40 },
             )
             .map((characters) => characters.join("")),
           { minLength: 1, maxLength: 8 },
@@ -144,8 +144,8 @@ describe("stored polarity evidence windows", () => {
         fc.nat(),
         (texts, first, second) => {
           const text = texts.join("\n");
-          const start = first % (text.length + 1);
-          const end = start + (second % (text.length - start + 1));
+          const start = first % text.length;
+          const end = start + 1 + (second % (text.length - start));
           const sections = texts.map((sectionText, index) => ({
             index,
             text: sectionText,
@@ -153,7 +153,7 @@ describe("stored polarity evidence windows", () => {
             title: null,
           }));
           expect(
-            polarityExcerptIn({ sections, windowStart: start, windowEnd: end }),
+            polarityExcerptIn({ sections, evidenceWindows: [{ start, end }] }),
           ).toBe(text.slice(start, end));
         },
       ),
@@ -169,17 +169,18 @@ describe("stored polarity evidence windows", () => {
         title: null,
       },
     ];
+    expect(polarityExcerptIn({ sections, evidenceWindows: null })).toBeNull();
     expect(
-      polarityExcerptIn({ sections, windowStart: null, windowEnd: null }),
+      polarityExcerptIn({
+        sections: null,
+        evidenceWindows: [{ start: 0, end: 2 }],
+      }),
     ).toBeNull();
     expect(
-      polarityExcerptIn({ sections: null, windowStart: 0, windowEnd: 2 }),
+      polarityExcerptIn({ sections, evidenceWindows: [{ start: -1, end: 2 }] }),
     ).toBeNull();
     expect(
-      polarityExcerptIn({ sections, windowStart: 0, windowEnd: null }),
-    ).toBeNull();
-    expect(
-      polarityExcerptIn({ sections, windowStart: null, windowEnd: 2 }),
+      polarityExcerptIn({ sections, evidenceWindows: [{ start: 2, end: 1 }] }),
     ).toBeNull();
   });
 });
@@ -193,8 +194,7 @@ test("widely separated polarity mentions return bounded evidence with an explici
     sections: [
       { index: 0, text: original, type: "argumentation", title: null },
     ],
-    windowStart: 0,
-    windowEnd: original.length,
+    evidenceWindows: [{ start: 0, end: original.length }],
   });
   expect(excerpt?.length).toBe(LIMITS.caseLawCitationPassageChars);
   expect(excerpt).toStartWith(prefix);
@@ -217,8 +217,7 @@ test("every long evidence window stays bounded and preserves both recorded ends"
         const text = prefix + character.repeat(length) + suffix;
         const excerpt = polarityExcerptIn({
           sections: [{ index: 0, text, type: "argumentation", title: null }],
-          windowStart: 0,
-          windowEnd: text.length,
+          evidenceWindows: [{ start: 0, end: text.length }],
         });
         expect(excerpt?.length).toBeLessThanOrEqual(
           LIMITS.caseLawCitationPassageChars,
@@ -262,8 +261,7 @@ test("a text-eligibility failure returns no citation text and an incomplete reas
       textWithheldReason: null,
       citationText,
       sectionIndex: 0,
-      windowStart: 0,
-      windowEnd: paragraph.length,
+      evidenceWindows: [{ start: 0, end: paragraph.length }],
     }),
   ).toEqual({
     citationText: null,
@@ -324,8 +322,7 @@ const citationFieldsAfterCompletionChangesDuringAstRead = async (
     textWithheldReason: text?.type === "withheld" ? text.reason : null,
     citationText,
     sectionIndex: 0,
-    windowStart: 0,
-    windowEnd: paragraph.length,
+    evidenceWindows: [{ start: 0, end: paragraph.length }],
   });
   return fields;
 };
@@ -462,8 +459,7 @@ test("a later AST batch changes the first decision before the page completion", 
       textWithheldReason: text?.type === "withheld" ? text.reason : null,
       citationText,
       sectionIndex: 0,
-      windowStart: 0,
-      windowEnd: paragraph.length,
+      evidenceWindows: [{ start: 0, end: paragraph.length }],
     }),
   ).toEqual({
     citationText: null,
@@ -486,8 +482,7 @@ test("an absent analysis retains eligible citation text without excerpts", () =>
       textWithheldReason: null,
       citationText: "21 Cdo 500/2019",
       sectionIndex: 0,
-      windowStart: 0,
-      windowEnd: 10,
+      evidenceWindows: [{ start: 0, end: 10 }],
     }),
   ).toEqual({
     citationText: "21 Cdo 500/2019",

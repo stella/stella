@@ -56,8 +56,7 @@ describe.skipIf(!enabled)("persisted polarity rule kinds", () => {
         await tx`ALTER TABLE case_law_citations
           DROP COLUMN polarity_source CASCADE,
           DROP COLUMN polarity_classifier_version CASCADE,
-          DROP COLUMN polarity_window_start CASCADE,
-          DROP COLUMN polarity_window_end CASCADE,
+          DROP COLUMN polarity_evidence_windows CASCADE,
           DROP COLUMN polarity_confidence CASCADE,
           DROP COLUMN cited_part CASCADE`;
         const fixtures = JSON.stringify(
