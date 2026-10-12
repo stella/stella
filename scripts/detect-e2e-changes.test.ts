@@ -920,9 +920,17 @@ describe("detect-e2e-changes", () => {
     expect(validate).toContain('"$BRANCH" =~ ^[A-Za-z0-9._/-]+$');
     expect(validate).toContain('"$BRANCH" == *".."*');
     expect(validate).toContain('"$BRANCH" == -*');
-    // Nothing is minted for a branch that does not exist here.
-    expect(update.indexOf("- name: Verify the branch exists")).toBeLessThan(
-      update.indexOf("- name: Mint App token"),
+    // The branch's code runs in the capture job, which never mints a token;
+    // the publish job mints it only after the capture verified the branch.
+    const publish = jobOf(marketingWorkflow, "publish");
+    expect(update).toContain("- name: Verify the branch exists");
+    expect(update).not.toContain("- name: Mint App token");
+    expect(publish).toContain("needs: update");
+    expect(workflowStepRun(publish, "Validate inputs")).toContain(
+      'if [[ "$WORKFLOW_REF" != "main" ]]',
+    );
+    expect(publish.indexOf("- name: Validate inputs")).toBeLessThan(
+      publish.indexOf("- name: Mint App token"),
     );
 
     // Updates capture the named branch; ordinary checks keep the event's
@@ -1054,7 +1062,7 @@ describe("detect-e2e-changes", () => {
     // The push is an API commit appended to the named branch: GitHub signs
     // it, so it cannot leave a person's pull request behind the
     // signed-commits rule.
-    const push = workflowStepValue(update, "Push regenerated baselines");
+    const push = workflowStepValue(publish, "Push regenerated baselines");
     expect(push["uses"]).toContain(
       "stella/.github/.github/actions/signed-commit@",
     );
@@ -1429,14 +1437,15 @@ describe("detect-e2e-changes", () => {
     // policy is main and release tags. A job that reads it without declaring
     // the environment would be a job the policy never sees, so the census
     // below covers every workflow rather than the two edited here.
-    expect(jobOf(marketingWorkflow, "update")).toContain(
+    expect(jobOf(marketingWorkflow, "publish")).toContain(
       "environment: release-app",
     );
+    expect(jobOf(marketingWorkflow, "update")).not.toContain("environment:");
     expect(jobOf(marketingWorkflow, "check")).not.toContain("environment:");
 
     // A job that calls a reusable workflow cannot declare an environment:
-    // GitHub allows only name, uses, with, secrets, needs, if, and
-    // permissions there. A local reusable declares it on its own job (walked
+    // GitHub allows only name, uses, with, secrets, strategy, needs, if,
+    // concurrency, and permissions there. A local reusable declares it on its own job (walked
     // below); a remote one must be handed the environment name. Pinned so
     // each caller stays a listed decision.
     const forwardingCallers = new Set([
