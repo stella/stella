@@ -609,7 +609,7 @@ jobs:
 
       - name: Setup Bun for dependency scope
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch' || inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin'))
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
@@ -1544,7 +1544,7 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -1820,7 +1820,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
@@ -1914,7 +1914,7 @@ jobs:
           persist-credentials: false
           submodules: true
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
       - name: Install dependencies
@@ -2018,7 +2018,7 @@ jobs:
           persist-credentials: false
           submodules: true
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           bun-version-file: "package.json"
           save: ${{ github.ref == 'refs/heads/main' }}
@@ -2115,7 +2115,7 @@ jobs:
 
       - name: Setup Bun
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -2425,7 +2425,7 @@ jobs:
 
       - name: Setup Bun
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -2751,7 +2751,7 @@ jobs:
 
       - name: Setup Bun
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -2797,7 +2797,7 @@ jobs:
       - name: Changeset present for published package changes
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name == 'pull_request') && steps.policy.outcome == 'success' }}
         # The repository owner publishes this versioned shared contract.
-        uses: stella/.github/.github/actions/changeset-policy@167fb396c6c0f4e07296ad2cd72e6ef15367c776 # v1.8.0
+        uses: stella/.github/.github/actions/changeset-policy@5764ab66e4df84cfd2e642c7d7e4678261e668f8 # v1.8.0
         with:
           release-paths: ${{ steps.policy.outputs.release_paths }}
           generated-paths: ${{ steps.policy.outputs.generated_paths }}
@@ -4131,7 +4131,7 @@ jobs:
           fi
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -4353,7 +4353,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -4549,7 +4549,7 @@ jobs:
       # setup-bun reuses the matching ~/.bun/bin/bun above, avoiding unzip.
       - name: Restore Bun install cache
         if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           bun-version-file: package.json
           save: ${{ github.ref == 'refs/heads/main' }}
@@ -4709,7 +4709,7 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -4845,7 +4845,7 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -5300,7 +5300,7 @@ jobs:
           bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -5491,7 +5491,7 @@ jobs:
           bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -5623,7 +5623,7 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -5737,7 +5737,7 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -5802,7 +5802,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -5981,7 +5981,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           bun-version-file: package.json
           save: ${{ github.ref == 'refs/heads/main' }}
@@ -6121,7 +6121,7 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -6216,7 +6216,7 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -6308,7 +6308,7 @@ jobs:
           persist-credentials: false
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
       - name: Install dependencies
@@ -6362,7 +6362,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -6539,7 +6539,7 @@ jobs:
 
       - name: Setup Bun
         timeout-minutes: 1
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -6808,7 +6808,7 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -6924,7 +6924,7 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -7182,7 +7182,7 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -7441,7 +7441,7 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -7561,7 +7561,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           bun-version-file: package.json
           save: ${{ github.ref == 'refs/heads/main' }}
@@ -7755,7 +7755,7 @@ jobs:
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           bun-version-file: package.json
           save: ${{ github.ref == 'refs/heads/main' }}
@@ -7873,7 +7873,7 @@ jobs:
           ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
       - name: Setup Bun with install cache
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
@@ -7991,7 +7991,7 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -8086,7 +8086,7 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -8338,7 +8338,7 @@ jobs:
 
       - name: Setup Bun for the desktop transport smoke
         if: matrix.os == 'macos'
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -8566,7 +8566,7 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun for dated waiver guard
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
