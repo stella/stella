@@ -5,18 +5,13 @@ import type * as v from "valibot";
 
 import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "@stll/api-contract/mcp-app-sandbox-policy";
 
-import type {
-  READ_PROVISION_HISTORY_PROJECTION,
-  READ_STATUTE_PROVISIONS_PROJECTION,
-} from "../src/lib/chat/legislation-result-projections";
+import type { READ_PROVISION_HISTORY_PROJECTION } from "../src/lib/chat/legislation-result-projections";
 
 type ProvisionHistory = v.InferInput<typeof READ_PROVISION_HISTORY_PROJECTION>;
-type StatuteProvisions = v.InferInput<
-  typeof READ_STATUTE_PROVISIONS_PROJECTION
->;
 type FixtureHost = {
   calls: { name: string; arguments: Record<string, unknown> }[];
   failures: string[];
+  openedUrls: string[];
   setTheme: (theme: "light" | "dark") => void;
 };
 declare global {
@@ -25,7 +20,7 @@ declare global {
 
 const INPUT = { eli: "cz:act:2012:89", anchor: "par_1", language: "cs" };
 const VERSION_2020 = {
-  appUrl: null,
+  appUrl: "https://stella.example/legislation/2020",
   url: null,
   documentId: "00000000-0000-4000-8000-000000000001",
   resourceName:
@@ -56,7 +51,7 @@ const VERSION_2021 = {
 } satisfies ProvisionHistory["items"][number];
 const VERSION_WITHHELD = {
   appUrl: null,
-  url: null,
+  url: "https://publisher.example/legislation/2019",
   documentId: "00000000-0000-4000-8000-000000000003",
   resourceName:
     "stella://resource/legislation_document/id=00000000-0000-4000-8000-000000000003",
@@ -68,23 +63,33 @@ const VERSION_WITHHELD = {
   status: "text_withheld",
   message: "The source does not permit displaying this wording.",
 } satisfies ProvisionHistory["items"][number];
-const FULL_VERSION_READ = {
-  items: [
-    {
-      eli: INPUT.eli,
-      anchor: INPUT.anchor,
-      appUrl: null,
-      url: null,
-      documentId: VERSION_2020.documentId,
-      resourceName: VERSION_2020.resourceName,
-      status: "found",
-      text: VERSION_2020.text,
-      truncated: true,
-      versionValidFrom: VERSION_2020.versionValidFrom,
-      versionValidTo: VERSION_2020.versionValidTo,
-    },
-  ],
-} satisfies StatuteProvisions;
+const VERSION_WITHDRAWN = {
+  ...VERSION_2020,
+  appUrl: null,
+  documentId: "00000000-0000-4000-8000-000000000004",
+  resourceName:
+    "stella://resource/legislation_document/id=00000000-0000-4000-8000-000000000004",
+  versionValidFrom: "2018-01-01",
+  versionValidTo: "2019-01-01",
+  expressionKind: "promulgated",
+  windowDisposition: "withdrawn",
+  windowDispositionBasis: "publisher-unlisted",
+  text: "The publisher withdrew this published wording.",
+  truncated: false,
+} satisfies ProvisionHistory["items"][number];
+const VERSION_NEVER_IN_FORCE = {
+  ...VERSION_2020,
+  appUrl: null,
+  documentId: "00000000-0000-4000-8000-000000000005",
+  resourceName:
+    "stella://resource/legislation_document/id=00000000-0000-4000-8000-000000000005",
+  versionValidFrom: "2019-01-01",
+  versionValidTo: "2020-01-01",
+  windowDisposition: "never-in-force",
+  windowDispositionBasis: "publisher-flag",
+  text: "The publisher marks this wording as never having entered into force.",
+  truncated: false,
+} satisfies ProvisionHistory["items"][number];
 const FIRST_PAGE = {
   eli: INPUT.eli,
   anchor: INPUT.anchor,
@@ -103,12 +108,14 @@ const mountTimeline = async ({
   theme = "light",
   width = 1024,
   locale = "en-GB",
+  initialHistory = FIRST_PAGE,
   browserErrors,
 }: {
   page: Page;
   theme?: "light" | "dark";
   width?: number;
   locale?: string;
+  initialHistory?: ProvisionHistory;
   browserErrors: string[];
 }): Promise<FrameLocator> => {
   page.on("pageerror", (error) => browserErrors.push(error.message));
@@ -145,7 +152,6 @@ const mountTimeline = async ({
       input,
       firstPage,
       secondPage,
-      versionRead,
     }) => {
       const iframe = document.querySelector<HTMLIFrameElement>("iframe");
       if (iframe === null) {
@@ -153,6 +159,7 @@ const mountTimeline = async ({
       }
       const calls: FixtureHost["calls"] = [];
       const failures: string[] = [];
+      const openedUrls: string[] = [];
       const reply = (message: unknown) =>
         iframe.contentWindow?.postMessage(message, "*");
       const toolResult = (data: unknown) => ({
@@ -211,6 +218,15 @@ const mountTimeline = async ({
           });
           return;
         }
+        if (method === "ui/open-link") {
+          if (!record(params) || typeof params["url"] !== "string") {
+            reject(id, "Invalid timeline fixture link");
+            return;
+          }
+          openedUrls.push(params["url"]);
+          reply({ jsonrpc: "2.0", id, result: {} });
+          return;
+        }
         if (method === "tools/call") {
           if (
             !record(params) ||
@@ -227,10 +243,6 @@ const mountTimeline = async ({
             args["cursor"] === "timeline-page-2"
           ) {
             reply({ jsonrpc: "2.0", id, result: toolResult(secondPage) });
-            return;
-          }
-          if (name === "read_statute_provisions") {
-            reply({ jsonrpc: "2.0", id, result: toolResult(versionRead) });
             return;
           }
           reply({
@@ -250,6 +262,7 @@ const mountTimeline = async ({
       globalThis.statuteTimelineFixtureHost = {
         calls,
         failures,
+        openedUrls,
         setTheme: (nextTheme) =>
           reply({
             jsonrpc: "2.0",
@@ -266,9 +279,8 @@ const mountTimeline = async ({
       initialTheme: theme,
       hostLocale: locale,
       input: INPUT,
-      firstPage: FIRST_PAGE,
+      firstPage: initialHistory,
       secondPage: SECOND_PAGE,
-      versionRead: FULL_VERSION_READ,
     },
   );
   expect(mounted).toBe(true);
@@ -279,6 +291,7 @@ const calls = async (page: Page) =>
   page.evaluate(() => ({
     calls: globalThis.statuteTimelineFixtureHost.calls,
     failures: globalThis.statuteTimelineFixtureHost.failures,
+    openedUrls: globalThis.statuteTimelineFixtureHost.openedUrls,
   }));
 
 test("timeline selection, adjacent comparison and paging work in the fixture host", async ({
@@ -300,14 +313,30 @@ test("timeline selection, adjacent comparison and paging work in the fixture hos
   await expect(app.getByTestId("version-wording")).toContainText(
     VERSION_2020.text,
   );
-  await app.getByRole("button", { name: "Read this version" }).click();
+  await app.getByRole("button", { name: "Open version" }).click();
   await expect(app.getByText("This wording is truncated.")).toBeVisible();
   await versions.nth(0).click();
   await app.getByRole("button", { name: "Compare adjacent versions" }).click();
   await expect(app.locator('[data-slot="review-diff-text"]')).toBeVisible();
-  await expect(app.locator('[data-slot="review-diff-text"]')).toContainText(
-    "updated right",
-  );
+  const wordings = await app
+    .locator('[data-slot="review-diff-text"]')
+    .evaluate((diff) => {
+      const segments = [...diff.children];
+      return {
+        older: segments
+          .filter((segment) => segment.tagName !== "INS")
+          .map((segment) => segment.textContent)
+          .join(""),
+        newer: segments
+          .filter((segment) => segment.tagName !== "DEL")
+          .map((segment) => segment.textContent)
+          .join(""),
+      };
+    });
+  expect(wordings).toEqual({
+    older: VERSION_2020.text,
+    newer: VERSION_2021.text,
+  });
 
   await app.getByRole("button", { name: "Load more" }).click();
   await expect(versions).toHaveCount(3);
@@ -315,25 +344,82 @@ test("timeline selection, adjacent comparison and paging work in the fixture hos
     "data-version-id",
     VERSION_WITHHELD.documentId,
   );
+  await versions.nth(2).click();
+  await expect(app.getByText(VERSION_WITHHELD.message)).toBeVisible();
+  await app.getByRole("button", { name: "Open version" }).click();
+  await page.waitForFunction(
+    () => globalThis.statuteTimelineFixtureHost.openedUrls.length === 2,
+  );
   const recorded = await calls(page);
   expect(recorded.failures).toEqual([]);
   expect(recorded.calls).toContainEqual({
     name: "read_provision_history",
     arguments: { ...INPUT, cursor: "timeline-page-2" },
   });
-  expect(recorded.calls).toContainEqual({
-    name: "read_statute_provisions",
-    arguments: {
-      items: [
-        {
-          eli: INPUT.eli,
-          anchor: INPUT.anchor,
-          as_of: VERSION_2020.versionValidFrom,
-          language: INPUT.language,
-        },
-      ],
+  expect(recorded.openedUrls).toEqual([
+    VERSION_2020.appUrl,
+    VERSION_WITHHELD.url,
+  ]);
+  expect(
+    recorded.calls.filter(({ name }) => name === "read_statute_provisions"),
+  ).toHaveLength(0);
+  expect(browserErrors).toEqual([]);
+});
+
+test("effective history and non-effective versions have distinct localized labels and marks", async ({
+  page,
+}) => {
+  const browserErrors: string[] = [];
+  const app = await mountTimeline({
+    page,
+    locale: "cs",
+    browserErrors,
+    initialHistory: {
+      eli: INPUT.eli,
+      anchor: INPUT.anchor,
+      items: [VERSION_2020, VERSION_WITHDRAWN, VERSION_NEVER_IN_FORCE],
+      nextCursor: null,
     },
   });
+  const versions = app.locator("button[data-version-id]");
+  await expect(versions).toHaveCount(3);
+  const effective = versions
+    .nth(0)
+    .locator('[data-window-disposition="effective"]');
+  await expect(effective).toHaveText("Konsolidované znění · Období účinnosti");
+  await expect(effective).not.toHaveClass(/border-dashed/u);
+  const withdrawn = versions
+    .nth(1)
+    .locator('[data-window-disposition="withdrawn"]');
+  await expect(withdrawn).toHaveText("Vyhlášené znění · Stažené znění");
+  await expect(withdrawn).toHaveClass(/border-dashed/u);
+  const neverInForce = versions
+    .nth(2)
+    .locator('[data-window-disposition="never-in-force"]');
+  await expect(neverInForce).toHaveText(
+    "Konsolidované znění · Nikdy nenabylo účinnosti",
+  );
+  await expect(neverInForce).toHaveClass(/border-dashed/u);
+  const chart = app.getByTestId("statute-timeline-chart");
+  await expect(chart).toBeVisible();
+  await expect(
+    chart.locator('rect[fill="none"][stroke="var(--foreground)"]'),
+  ).toHaveCount(2);
+  await expect(chart.locator('rect[fill="var(--foreground)"]')).toHaveCount(1);
+  await versions.nth(1).click();
+  await expect(app.getByTestId("version-wording")).toHaveText(
+    VERSION_WITHDRAWN.text,
+  );
+  await expect(
+    app.locator('section [data-window-disposition="withdrawn"]'),
+  ).toHaveText("Vyhlášené znění · Stažené znění");
+  await versions.nth(2).click();
+  await expect(app.getByTestId("version-wording")).toHaveText(
+    VERSION_NEVER_IN_FORCE.text,
+  );
+  await expect(
+    app.locator('section [data-window-disposition="never-in-force"]'),
+  ).toHaveText("Konsolidované znění · Nikdy nenabylo účinnosti");
   expect(browserErrors).toEqual([]);
 });
 
@@ -373,9 +459,7 @@ test("timeline controls remain visible and keyboard reachable across themes and 
   await app
     .locator(`button[data-version-id="${VERSION_2020.documentId}"]`)
     .click();
-  await expect(
-    app.getByRole("button", { name: "Read this version" }),
-  ).toBeVisible();
+  await expect(app.getByRole("button", { name: "Open version" })).toBeVisible();
   await expect(
     app.getByRole("heading", { name: "Provision history" }),
   ).toBeVisible();
@@ -401,9 +485,7 @@ test("timeline controls remain visible and keyboard reachable across themes and 
   await app
     .locator(`button[data-version-id="${VERSION_2020.documentId}"]`)
     .click();
-  await expect(
-    app.getByRole("button", { name: "Read this version" }),
-  ).toBeVisible();
+  await expect(app.getByRole("button", { name: "Open version" })).toBeVisible();
   expect(browserErrors).toEqual([]);
 });
 
@@ -419,7 +501,9 @@ for (const theme of ["light", "dark"] as const) {
       app.getByRole("heading", { name: "Provision history" }),
     ).toBeVisible();
     const classes = await app.locator("html").getAttribute("class");
-    expect(classes?.split(/\s+/u).includes("dark")).toBe(theme === "dark");
+    expect(classes?.split(/\s+/u).includes("dark") ?? false).toBe(
+      theme === "dark",
+    );
     const dimensions = await app.locator("body").evaluate((body) => ({
       scrollWidth: body.scrollWidth,
       clientWidth: body.clientWidth,

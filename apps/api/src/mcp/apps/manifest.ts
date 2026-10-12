@@ -58,7 +58,7 @@ export const MCP_APPS = [
     uri: STATUTE_TIMELINE_RESOURCE_URI,
     linkedTools: ["read_provision_history"],
     type: "presentation",
-    callableTools: ["read_provision_history", "read_statute_provisions"],
+    callableTools: ["read_provision_history"],
   },
 ] as const;
 

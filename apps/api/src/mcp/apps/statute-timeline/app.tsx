@@ -2,13 +2,10 @@ import { useMemo, useState, useSyncExternalStore } from "react";
 import { createRoot } from "react-dom/client";
 
 import { DirectionProvider } from "@base-ui/react/direction-provider";
-import { defineChart, rect } from "@tanstack/charts";
-import { Chart } from "@tanstack/charts/react";
-import { scaleBand } from "@tanstack/charts/scales/band";
 import { panic } from "better-result";
-import { scaleUtc } from "d3-scale";
 import { IntlProvider, useFormatter, useTranslations } from "use-intl";
 
+import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { ReviewDiffText } from "@stll/ui/review-diff-text";
@@ -17,15 +14,14 @@ import { STATUTE_TIMELINE_APP } from "../manifest";
 import { createPresentationBridge } from "../shared/bridge";
 import { appLocale } from "../shared/locale";
 import {
-  provisionReadInput,
   compareAdjacentVersions,
   isCurrentVersion,
   mergeHistory,
-  timelineWindows,
   versionWording,
 } from "./model";
-import { parseHistory, parseProvisionRead } from "./parse";
+import { parseHistory } from "./parse";
 import type { ProvisionHistory, ProvisionVersion } from "./parse";
+import { TimelineChart, VersionLabel } from "./presentation";
 import "../shared/generated/style.css";
 
 const bridge = createPresentationBridge({
@@ -116,69 +112,12 @@ const Timeline = ({
     setHistory((current) => mergeHistory(current, page));
     setRead({ status: "idle" });
   };
-  const readVersion = async (version: ProvisionVersion) => {
-    const argumentsForVersion = provisionReadInput({
-      history,
-      version,
-      ...(typeof input["language"] === "string"
-        ? { language: input["language"] }
-        : {}),
-    });
-    if (argumentsForVersion === undefined) {
-      return;
-    }
-    setRead({ status: "loading" });
-    const result = await bridge.requestTool({
-      name: "read_statute_provisions",
-      arguments: argumentsForVersion,
-    });
-    const response =
-      result?.isError === true
-        ? undefined
-        : parseProvisionRead(result?.structuredContent);
-    const wording = response?.items.at(0);
-    if (
-      wording?.status !== "found" ||
-      wording.documentId !== version.documentId ||
-      wording.eli !== history.eli ||
-      wording.anchor !== history.anchor
-    ) {
-      setRead({
-        status: "error",
-        message:
-          wording !== undefined && "message" in wording
-            ? wording.message
-            : null,
-      });
-      return;
-    }
-    setHistory((current) => ({
-      ...current,
-      items: current.items.map((entry) =>
-        entry.documentId === version.documentId
-          ? {
-              appUrl: entry.appUrl,
-              url: entry.url,
-              ...(entry.source_url === undefined
-                ? {}
-                : { source_url: entry.source_url }),
-              documentId: entry.documentId,
-              resourceName: entry.resourceName,
-              versionValidFrom: entry.versionValidFrom,
-              versionValidTo: entry.versionValidTo,
-              expressionKind: entry.expressionKind,
-              windowDisposition: entry.windowDisposition,
-              windowDispositionBasis: entry.windowDispositionBasis,
-              status: "found",
-              text: wording.text,
-              truncated: wording.truncated,
-            }
-          : entry,
-      ),
-    }));
-    setRead({ status: "idle" });
-  };
   const content = selected === undefined ? null : versionWording(selected);
+  const selectedUrl =
+    selected === undefined
+      ? null
+      : (parseLegalCitationHttpUrl(selected.appUrl) ??
+        parseLegalCitationHttpUrl(selected.url));
   return (
     <main className="min-w-0 space-y-4 p-4">
       <h1 className="text-lg font-semibold">{t("timelineTitle")}</h1>
@@ -203,6 +142,7 @@ const Timeline = ({
                   onClick={() => select(version.documentId)}
                 >
                   <span>{windowLabel(version)}</span>
+                  <VersionLabel version={version} />
                   {isCurrentVersion(version, today) && (
                     <span className="text-muted-foreground text-xs">
                       {t("timelineCurrent")}
@@ -215,6 +155,7 @@ const Timeline = ({
           {selected !== undefined && content !== null && (
             <section aria-live="polite" className="space-y-3">
               <h2 className="font-medium">{windowLabel(selected)}</h2>
+              <VersionLabel version={selected} />
               <div className="flex flex-wrap gap-2">
                 <Button
                   className="h-auto max-w-full whitespace-normal"
@@ -227,30 +168,23 @@ const Timeline = ({
                 >
                   {t("timelineCompare")}
                 </Button>
-                {(content.type === "withheld" || content.truncated) && (
-                  <Button
-                    className="h-auto max-w-full whitespace-normal"
-                    variant="outline"
-                    disabled={
-                      !bridge.supportsTools() ||
-                      read.status === "loading" ||
-                      selected.versionValidFrom === null
-                    }
-                    onClick={() =>
-                      bridge.detached(
-                        readVersion(selected),
-                        "read provision wording",
-                      )
-                    }
-                  >
-                    {t("timelineReadVersion")}
-                  </Button>
-                )}
+                {(content.type === "withheld" || content.truncated) &&
+                  selectedUrl !== null && (
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        bridge.detached(
+                          bridge.openLink(selectedUrl.href, (message) =>
+                            setRead({ status: "error", message }),
+                          ),
+                          "open provision version",
+                        )
+                      }
+                    >
+                      {t("timelineOpenVersion")}
+                    </Button>
+                  )}
               </div>
-              {(content.type === "withheld" || content.truncated) &&
-                selected.versionValidFrom === null && (
-                  <p>{t("timelineNoDate")}</p>
-                )}
               <VersionContent version={selected} comparison={comparison} />
             </section>
           )}
@@ -271,98 +205,6 @@ const Timeline = ({
         </Button>
       )}
     </main>
-  );
-};
-
-const TimelineChart = ({
-  history,
-  today,
-  onSelect,
-}: {
-  history: ProvisionHistory;
-  today: string;
-  onSelect: (documentId: string) => void;
-}) => {
-  const t = useTranslations();
-  const format = useFormatter();
-  const definition = useMemo(() => {
-    const windows = timelineWindows(history.items, today);
-    return defineChart({
-      marks: [
-        rect(
-          windows.rows.filter((row) => !row.current),
-          {
-            x1: "start",
-            x2: "end",
-            y: "id",
-            key: "id",
-            fill: "var(--foreground)",
-            fillOpacity: 0.3,
-            stroke: "var(--foreground)",
-            inset: 6,
-          },
-        ),
-        rect(
-          windows.rows.filter((row) => row.current),
-          {
-            x1: "start",
-            x2: "end",
-            y: "id",
-            key: "id",
-            fill: "var(--foreground)",
-            fillOpacity: 0.6,
-            stroke: "var(--foreground)",
-            strokeWidth: 2,
-            inset: 6,
-          },
-        ),
-      ],
-      scales: {
-        x: {
-          scale: scaleUtc().domain([...windows.domain]),
-          axis: {
-            ticks: {
-              count: 4,
-              format: (value) =>
-                format.dateTime(value, {
-                  year: "numeric",
-                  month: "short",
-                  timeZone: "UTC",
-                }),
-            },
-          },
-        },
-        y: {
-          scale: scaleBand().domain(windows.rows.map((row) => row.id)),
-          axis: false,
-        },
-      },
-      theme: {
-        foreground: "var(--foreground)",
-        muted: "var(--muted-foreground)",
-        background: "var(--background)",
-        grid: "var(--border)",
-      },
-      keyboard: true,
-    });
-  }, [history.items, today, format]);
-  return (
-    <div
-      data-testid="statute-timeline-chart"
-      className="min-w-0 max-[480px]:hidden"
-    >
-      <Chart
-        definition={definition}
-        height={Math.max(140, history.items.length * 36 + 48)}
-        initialWidth={640}
-        ariaLabel={t("timelineTitle")}
-        onSelect={(point) => {
-          if (point !== null) {
-            onSelect(point.datum.id);
-          }
-        }}
-      />
-    </div>
   );
 };
 

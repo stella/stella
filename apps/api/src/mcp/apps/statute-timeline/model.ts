@@ -1,36 +1,11 @@
 import { panic } from "better-result";
 
+import { isEligibleLegislationExpression } from "@stll/api-contract/legislation-expression";
 import { versionCoversDate } from "@stll/api-contract/statute-version";
 import { DAY_IN_MS } from "@stll/time";
 import { diffWords } from "@stll/ui/review-word-diff";
 
 import type { ProvisionHistory, ProvisionVersion } from "./parse";
-
-type ProvisionReadInputOptions = {
-  history: Pick<ProvisionHistory, "eli" | "anchor">;
-  version: ProvisionVersion;
-  language?: string;
-};
-
-export const provisionReadInput = ({
-  history,
-  version,
-  language,
-}: ProvisionReadInputOptions) => {
-  if (version.versionValidFrom === null) {
-    return undefined;
-  }
-  return {
-    items: [
-      {
-        eli: history.eli,
-        anchor: history.anchor,
-        as_of: version.versionValidFrom,
-        ...(language === undefined ? {} : { language }),
-      },
-    ],
-  };
-};
 
 export const mergeHistory = (
   history: ProvisionHistory,
@@ -107,6 +82,7 @@ export const timelineWindows = (items: ProvisionVersion[], today: string) => {
     rows: items.map((item) => ({
       id: item.documentId,
       current: isCurrentVersion(item, today),
+      eligible: isEligibleLegislationExpression(item),
       start: new Date(item.versionValidFrom ?? minimum - padding),
       end: new Date(item.versionValidTo ?? maximum + padding),
       openStart: item.versionValidFrom === null,

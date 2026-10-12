@@ -4,7 +4,6 @@ import {
   compareAdjacentVersions,
   isCurrentVersion,
   mergeHistory,
-  provisionReadInput,
   timelineWindows,
   versionWording,
 } from "./model";
@@ -101,50 +100,6 @@ describe("statute timeline model", () => {
     expect(gap).toEqual([]);
   });
 
-  test("builds a dated provision read only when the version has a start date", () => {
-    const subject = history([]);
-    expect(
-      provisionReadInput({
-        history: subject,
-        version: version({ versionValidFrom: null }),
-        language: "cs",
-      }),
-    ).toBeUndefined();
-    expect(
-      provisionReadInput({
-        history: subject,
-        version: version({
-          documentId: "version-2",
-          versionValidFrom: "2020-01-01",
-        }),
-        language: "cs",
-      }),
-    ).toEqual({
-      items: [
-        {
-          eli: "eli:example",
-          anchor: "article-1",
-          as_of: "2020-01-01",
-          language: "cs",
-        },
-      ],
-    });
-    expect(
-      provisionReadInput({
-        history: subject,
-        version: version({ versionValidFrom: "2020-01-01" }),
-      }),
-    ).toEqual({
-      items: [
-        {
-          eli: "eli:example",
-          anchor: "article-1",
-          as_of: "2020-01-01",
-        },
-      ],
-    });
-  });
-
   test("parses found, withheld and truncated wording using the exact projection", () => {
     const withheldVersion = {
       appUrl: null,
@@ -221,6 +176,30 @@ describe("statute timeline model", () => {
     );
     expect(mergeHistory(original, changedSubject)).toBe(changedSubject);
   });
+
+  test.each([260, 3000])(
+    "compares %i repeated words as a bounded replacement without losing either wording",
+    (count) => {
+      const older = version({ documentId: "old", text: "a ".repeat(count) });
+      const newer = version({ documentId: "new", text: "b ".repeat(count) });
+      const comparison = compareAdjacentVersions([newer, older], "new");
+      expect(comparison?.segments.every(({ type }) => type !== "equal")).toBe(
+        true,
+      );
+      expect(
+        comparison?.segments
+          .filter(({ type }) => type === "delete")
+          .map(({ text }) => text)
+          .join(""),
+      ).toBe(older.text);
+      expect(
+        comparison?.segments
+          .filter(({ type }) => type === "insert")
+          .map(({ text }) => text)
+          .join(""),
+      ).toBe(newer.text);
+    },
+  );
 
   test("compares adjacent wording only when both versions are found and reports truncation", () => {
     const newer = version({
