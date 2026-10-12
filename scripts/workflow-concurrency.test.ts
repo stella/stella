@@ -253,6 +253,16 @@ const concurrencyModes: Record<
 };
 
 describe("pull request workflow concurrency", () => {
+  const supersedingEventsFor = (file: string) => {
+    if (file === "ci.yml") {
+      return ["workflow_dispatch", "push"];
+    }
+    if (file === "autofix.yml") {
+      return ["workflow_dispatch"];
+    }
+    return [];
+  };
+
   test("every pull request workflow cancels its superseded runs", async () => {
     const workflows = await repositoryWorkflows();
     const pullRequestWorkflows = workflows.filter(({ workflow }) =>
@@ -265,8 +275,7 @@ describe("pull request workflow concurrency", () => {
     expect(
       pullRequestWorkflows.flatMap(({ file, workflow }) =>
         concurrencyProblems(workflow, {
-          supersedingEvents:
-            file === "ci.yml" ? ["workflow_dispatch", "push"] : [],
+          supersedingEvents: supersedingEventsFor(file),
           mode: concurrencyModes[file] ?? "supersede",
         }).map((problem) => `${file}: ${problem}`),
       ),
