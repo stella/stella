@@ -14,6 +14,7 @@ import type { AnyNode } from "domhandler";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import type { UnitPosition } from "./opinion-class";
+import type { CourtListenerTextUsability } from "./usability";
 
 /**
  * Named bounds on one cluster's text. Past any, the cluster is held whole;
@@ -53,7 +54,8 @@ export const TEXT_CANDIDATE_UNUSABLE = {
 } as const;
 
 export type TextCandidateUnusable =
-  (typeof TEXT_CANDIDATE_UNUSABLE)[keyof typeof TEXT_CANDIDATE_UNUSABLE];
+  | (typeof TEXT_CANDIDATE_UNUSABLE)[keyof typeof TEXT_CANDIDATE_UNUSABLE]
+  | Exclude<CourtListenerTextUsability, "usable">;
 
 /**
  * A contiguous run of blocks under one structural opinion element, or

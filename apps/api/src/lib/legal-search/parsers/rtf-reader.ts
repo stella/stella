@@ -542,7 +542,10 @@ const readRtfToken = (
     parameter,
     next: delimiter + (code === 0x20 ? 1 : 0),
     syntax:
-      lettersEnd - first <= 32 && !isAsciiLetter(code) && !isAsciiDigit(code)
+      lettersEnd - first <= 32 &&
+      !isAsciiLetter(code) &&
+      !isAsciiDigit(code) &&
+      !(negative && digitsEnd === parameterStart)
         ? "valid"
         : "malformed",
   };
@@ -1443,6 +1446,55 @@ const LITERAL_QUOTE_CLOSERS = new Map([
   ["`", "`"],
 ]);
 
+type LiteralPathEndOptions = { text: string; start: number; tokenEnd: number };
+
+const literalPathEnd = ({
+  text,
+  start,
+  tokenEnd,
+}: LiteralPathEndOptions): number => {
+  let end = start;
+  if (/^[a-zA-Z]:\\$/u.test(text.slice(start, start + 3))) {
+    end += 3;
+  } else if (text.slice(start, start + 2) === "\\\\") {
+    end += 2;
+  }
+  while (end < tokenEnd) {
+    const char = text.charAt(end);
+    if ("\"“”‘’'`<>|".includes(char)) {
+      break;
+    }
+    if (".,;:!?)]}".includes(char)) {
+      let punctuationEnd = end + 1;
+      while (
+        punctuationEnd < tokenEnd &&
+        ".,;:!?)]}".includes(text.charAt(punctuationEnd))
+      ) {
+        punctuationEnd += 1;
+      }
+      const nextToken =
+        text.charAt(punctuationEnd) === "\\"
+          ? readRtfToken(text, punctuationEnd)
+          : null;
+      const followedByControl =
+        nextToken?.type === "word" &&
+        nextToken.syntax === "valid" &&
+        KNOWN_RTF_CONTROLS.has(nextToken.word);
+      if (
+        punctuationEnd === tokenEnd ||
+        "\"“”‘’'`".includes(text.charAt(punctuationEnd)) ||
+        followedByControl
+      ) {
+        break;
+      }
+      end = punctuationEnd;
+      continue;
+    }
+    end += 1;
+  }
+  return end;
+};
+
 // Only complete path tokens and paired quotation/code spans are literal escapes.
 // All other backslashes reach the lexer, including those immediately after text.
 const rtfLiteralSpans = (text: string): LiteralSpan[] => {
@@ -1509,9 +1561,12 @@ const rtfLiteralSpans = (text: string): LiteralSpan[] => {
     const token = match[0];
     const path = /(?:[a-zA-Z]:\\|\\\\[^\\\s]+\\[^\\\s]+)/u.exec(token);
     if (path) {
+      const start = match.index + path.index;
+      const tokenEnd = match.index + token.length;
+      const end = literalPathEnd({ text, start, tokenEnd });
       paths.push({
-        start: match.index + path.index,
-        end: match.index + token.length,
+        start,
+        end,
       });
     }
   }

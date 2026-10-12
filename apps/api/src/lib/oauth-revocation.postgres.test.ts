@@ -15,7 +15,6 @@ import {
   oauthClient,
   oauthConsent,
   oauthRefreshToken,
-  oauthResource,
   organization,
   user,
 } from "@/api/db/auth-schema";
@@ -24,7 +23,6 @@ import { meRoute } from "@/api/handlers/me/routes";
 import { getAuth } from "@/api/lib/auth";
 import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
-import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import {
   authorizeOAuthClient,
@@ -57,17 +55,8 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
       await remove();
     }
   });
-  beforeAll(async () => {
+  beforeAll(() => {
     expect(provider.version).toBe("1.7.6");
-    await rootDb
-      .insert(oauthResource)
-      .values(
-        getBetterAuthOAuthResources().map((resource) => ({
-          id: Bun.randomUUIDv7(),
-          ...resource,
-        })),
-      )
-      .onConflictDoNothing();
   });
   const fixture = async () => {
     const browser = await signInHuman(

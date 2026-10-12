@@ -35,6 +35,10 @@ import {
   publishedTextDefects,
   type PublishedTextDefect,
 } from "./source-defects";
+import {
+  classifyCourtListenerText,
+  COURTLISTENER_TEXT_USABILITY,
+} from "./usability";
 import { courtListenerValidationPolicy } from "./validation-policy";
 
 /** Text columns in precedence order. `xml_scan` is never text: see below. */
@@ -206,6 +210,15 @@ export const selectOpinionText = ({
     );
     switch (parsed.status) {
       case "parsed": {
+        const usability = classifyCourtListenerText(
+          parsed.text.units
+            .flatMap(({ blocks }) => blocks.map(({ plainText }) => plainText))
+            .join("\n\n"),
+        );
+        if (usability !== COURTLISTENER_TEXT_USABILITY.USABLE) {
+          attempts.push({ format, structure, reason: usability });
+          break;
+        }
         const validation = validateCandidate(row, parsed.text);
         switch (validation.status) {
           case "accepted":

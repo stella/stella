@@ -4,6 +4,7 @@ import {
   composeCourtListenerText,
   type CourtListenerTextOutcome,
 } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/compose";
+import { COURTLISTENER_TEXT_USABILITY } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/usability";
 import {
   absentTextField,
   checkedDecisionMetadata,
@@ -81,6 +82,32 @@ export const mapCourtListenerRecord = (
                 ? `scope defect: ${composed.defect}`
                 : composed.status,
           },
+          ...composed.opinions.flatMap(({ opinionId, attempts }) =>
+            attempts.flatMap(({ format, reason }) => {
+              switch (reason) {
+                case COURTLISTENER_TEXT_USABILITY.SOURCE_PLACEHOLDER:
+                case COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT:
+                case COURTLISTENER_TEXT_USABILITY.UNDECODABLE:
+                  return [
+                    { path: `opinions.${opinionId}.${format}`, detail: reason },
+                  ];
+                case "blank":
+                case "declared-dtd":
+                case "malformed-xml":
+                case "missing-opinion":
+                case "no-visible-text":
+                case "content-loss":
+                case "markup-residue":
+                case "text-not-conserved":
+                  return [];
+                default:
+                  reason satisfies never;
+                  return panic(
+                    "Unhandled CourtListener text candidate rejection",
+                  );
+              }
+            }),
+          ),
         ],
       }),
     );

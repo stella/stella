@@ -69,6 +69,8 @@ test("unknown and malformed control words are not recognized", () => {
   ]) {
     expect(matches(text)).toHaveLength(0);
   }
+  expect(matches(String.raw`\u-`)).toEqual([]);
+  expect(matches(String.raw`\u-1`)).toHaveLength(1);
 });
 
 test("control symbols are recognized next to following text", () => {
@@ -96,4 +98,15 @@ test("literal exclusions do not consume adjacent controls", () => {
   expect(matches(text)).toEqual([
     { index: text.lastIndexOf("\\pard"), matched: "\\pard" },
   ]);
+  for (const adjacent of [
+    String.raw`C:\file"\pard`,
+    String.raw`"C:\file"\pard`,
+    String.raw`C:\file)\pard`,
+    String.raw`\\server\share"\pard`,
+  ]) {
+    expect(matches(adjacent)).toEqual([
+      { index: adjacent.lastIndexOf("\\pard"), matched: "\\pard" },
+    ]);
+  }
+  expect(matches(String.raw`C:\b\i\f\u\v\s`)).toEqual([]);
 });

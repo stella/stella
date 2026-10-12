@@ -8,15 +8,23 @@ import {
 } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import type { rootDb, Transaction } from "@/api/db/root";
 import {
   documentProcessingRuns,
   extractedContent,
   fields,
+  organizationSettings,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
-import type { restoreManualOcrRunAfterProjectionLoss as RestoreManualOcrRunAfterProjectionLoss } from "@/api/lib/document-processing-manual-ocr-restore";
+import { requestAutomaticDocumentOcr } from "@/api/lib/document-processing-automatic-request";
+import {
+  DOCUMENT_PROCESSING_MAX_ATTEMPTS,
+  DOCUMENT_OCR_PROCESSOR_VERSION,
+} from "@/api/lib/document-processing-contract";
+import { persistManualOcrRun } from "@/api/lib/document-processing-request";
+import { claimDocumentProcessingAttempt } from "@/api/lib/document-processing-retry";
+import type { restoreManualOcrRunAfterProjectionLoss as RestoreManualOcrRunAfterProjectionLoss } from "@/api/lib/search/document-processing-manual-ocr-restore";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -41,10 +49,14 @@ beforeAll(async () => {
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
   ({ restoreManualOcrRunAfterProjectionLoss } =
-    await import("@/api/lib/document-processing-manual-ocr-restore"));
+    await import("@/api/lib/search/document-processing-manual-ocr-restore"));
 }, 120_000);
 
 beforeEach(async () => {
+  await testDb
+    .update(organizationSettings)
+    .set({ documentProcessingMode: "searchable-text" })
+    .where(eq(organizationSettings.organizationId, ids.orgA));
   await testDb
     .delete(extractedContent)
     .where(eq(extractedContent.organizationId, ids.orgA));
@@ -74,6 +86,8 @@ afterAll(async () => {
 });
 
 const insertRun = async ({
+  attemptCount = 2,
+  requestSource = "manual",
   entityId = ids.entityA1,
   entityVersionId = ids.entityVersionA1,
   errorCode = "prior_error",
@@ -84,6 +98,8 @@ const insertRun = async ({
   status = "succeeded",
   workspaceId = ids.wsA1,
 }: {
+  attemptCount?: number;
+  requestSource?: (typeof documentProcessingRuns.$inferSelect)["requestSource"];
   entityId?: SafeId<"entity">;
   entityVersionId?: SafeId<"entityVersion">;
   errorCode?: string | null;
@@ -91,12 +107,12 @@ const insertRun = async ({
   runId?: SafeId<"documentProcessingRun">;
   sourceFileId?: string;
   sourceSha256Hex?: string;
-  status?: "cancelled" | "failed" | "succeeded";
+  status?: (typeof documentProcessingRuns.$inferSelect)["status"];
   workspaceId?: SafeId<"workspace">;
 } = {}) => {
   const lifecycleAt = new Date("2026-08-08T12:00:00.000Z");
   await testDb.insert(documentProcessingRuns).values({
-    attemptCount: 2,
+    attemptCount,
     claimedAt: lifecycleAt,
     claimedBy: "worker_1",
     entityId,
@@ -112,7 +128,7 @@ const insertRun = async ({
     processorVersion: DOCUMENT_OCR_PROCESSOR_VERSION,
     progressCompleted: 3,
     progressTotal: 3,
-    requestSource: "manual",
+    requestSource,
     requestedBy: ids.userA1,
     sourceFileId,
     sourceSha256Hex,
@@ -272,3 +288,156 @@ describe("restoreManualOcrRunAfterProjectionLoss", () => {
     expect((await readRun(runId))?.status).toBe("succeeded");
   });
 });
+
+// Exercise the persisted queue state through the worker's actual claim fence.
+const expectClaimable = async (runId: SafeId<"documentProcessingRun">) => {
+  const queued = (
+    await testDb
+      .select()
+      .from(documentProcessingRuns)
+      .where(eq(documentProcessingRuns.id, runId))
+  ).at(0);
+  expect(queued?.status).toBe("queued");
+  expect(queued?.attemptCount).toBeLessThan(DOCUMENT_PROCESSING_MAX_ATTEMPTS);
+  expect(queued?.nextAttemptAt).toBeNull();
+  const claimed = await testDb.transaction(
+    async (tx) =>
+      await claimDocumentProcessingAttempt({
+        database: asTestRaw<Transaction>(tx),
+        runId,
+        claimToken: "fresh-budget-worker",
+        now: new Date(),
+      }),
+  );
+  expect(claimed?.status).toBe("running");
+  expect(queued).toBeDefined();
+  if (queued) {
+    expect(claimed?.attemptCount).toBe(queued.attemptCount + 1);
+  }
+};
+
+test.each(
+  (["upload", "repair", "manual"] as const).flatMap((requestSource) =>
+    (
+      [
+        "queued",
+        "failed",
+        "succeeded",
+        "cancelled",
+        ...(requestSource === "manual" ? [] : (["running"] as const)),
+      ] as const
+    ).map((status) => ({ requestSource, status })),
+  ),
+)(
+  "manual retry of capped $requestSource $status work starts a claimable fresh budget",
+  async ({ requestSource, status }) => {
+    const runId = await insertRun({
+      attemptCount: DOCUMENT_PROCESSING_MAX_ATTEMPTS,
+      requestSource,
+      status,
+      errorCode: "source_superseded",
+    });
+    // A running automatic run must replace a different source's projection.
+    await testDb.insert(extractedContent).values({
+      charCount: 0,
+      ciphertext: Buffer.from("ciphertext"),
+      iv: Buffer.from("iv"),
+      extractedAt: new Date(),
+      entityId: ids.entityA1,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      sourceFileId: UNRELATED_FILE_ID,
+      sourceSha256Hex: UNRELATED_SHA256_HEX,
+    });
+    const request = async () =>
+      await persistManualOcrRun({
+        db: asTestRaw<Pick<typeof rootDb, "transaction">>(testDb),
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        userId: ids.userA1,
+        source: {
+          entityId: ids.entityA1,
+          entityVersionId: ids.entityVersionA1,
+          fieldId: ids.fieldA1,
+          sourceFileId: SOURCE_FILE_ID,
+          sourceSha256Hex: SOURCE_SHA256_HEX,
+        },
+        recordAuditEvent: async () => undefined,
+      });
+    const result = await request();
+    expect(result?.id).toBe(runId);
+    const queued = (
+      await testDb
+        .select()
+        .from(documentProcessingRuns)
+        .where(eq(documentProcessingRuns.id, runId))
+    ).at(0);
+    expect(queued?.attemptCount).toBe(0);
+    expect(queued?.requestSource).toBe("manual");
+    await expectClaimable(runId);
+    // Repeated requests reuse the manual worker and cannot renew its budget.
+    expect((await request())?.status).toBe("running");
+    const reused = (
+      await testDb
+        .select()
+        .from(documentProcessingRuns)
+        .where(eq(documentProcessingRuns.id, runId))
+    ).at(0);
+    expect(reused?.attemptCount).toBe(1);
+    expect(reused?.claimedBy).toBe("fresh-budget-worker");
+  },
+);
+
+test.each(["succeeded", "cancelled"] as const)(
+  "projection restore of capped %s manual work remains claimable",
+  async (status) => {
+    const runId = await insertRun({
+      attemptCount: DOCUMENT_PROCESSING_MAX_ATTEMPTS,
+      status,
+      errorCode: "source_superseded",
+    });
+    await restore();
+    await expectClaimable(runId);
+  },
+);
+
+test.each(
+  (["upload", "repair"] as const).flatMap((requestSource) =>
+    (["succeeded", "failed"] as const).map((status) => ({
+      requestSource,
+      status,
+    })),
+  ),
+)(
+  "automatic $requestSource request at the cap handles $status work without retrying exhausted failures",
+  async ({ requestSource, status }) => {
+    const runId = await insertRun({
+      attemptCount: DOCUMENT_PROCESSING_MAX_ATTEMPTS,
+      requestSource,
+      status,
+    });
+    await requestAutomaticDocumentOcr({
+      db: asTestRaw<Pick<typeof rootDb, "transaction">>(testDb),
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      entityId: ids.entityA1,
+      entityVersionId: ids.entityVersionA1,
+      fieldId: ids.fieldA1,
+      sourceFileId: SOURCE_FILE_ID,
+      sourceSha256Hex: SOURCE_SHA256_HEX,
+      requestSource,
+    });
+    if (status === "succeeded") {
+      await expectClaimable(runId);
+      return;
+    }
+    const failed = (
+      await testDb
+        .select()
+        .from(documentProcessingRuns)
+        .where(eq(documentProcessingRuns.id, runId))
+    ).at(0);
+    expect(failed?.status).toBe("failed");
+    expect(failed?.attemptCount).toBe(DOCUMENT_PROCESSING_MAX_ATTEMPTS);
+  },
+);
