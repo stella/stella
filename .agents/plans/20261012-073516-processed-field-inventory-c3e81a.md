@@ -24,9 +24,7 @@ scalars slice.
   (`ParagraphBlock.number`, `role`, `note`, `listDepth`, page anchors, inline
   citations in `packages/legal-ast/src/document-ast.ts`) and row facts are
   untyped metadata keys. Nothing obliges a parser to fill them or say why
-  not. Paragraph numbers showed the cost: three sources filled `number`; the
-  four Czech parsers either left the marker in the text (NS) or removed it and
-  dropped the value (NSS, ÚS, regional), so `#par=` links never resolved.
+  not; paragraph numbers were filled by some sources and not others.
 
 ## Decisions
 
@@ -64,8 +62,12 @@ scalars slice.
   NSS, ÚS, regional, SK ÚS and SK courts parsers. It accepts `[N]`, `N.`,
   `N)` only when the decision's body paragraphs read as one numbering
   (counting from 1, nested lists restarting beside it, density and lead-in
-  bounds, small skips/repeats kept as printed); implausible numbering is
-  rejected with a typed defect (`irregular-sequence`, logged as
+  bounds, small forward skips kept as printed). Two invariants hold with no
+  allowance: the stored numbers strictly rise (a separate opinion may start
+  again at 1), and every marker of the numbering's style is either assigned
+  or provably a nested-list item. Anything else — a repeated number, a
+  marker both a list and the court could own — rejects the whole decision
+  with a typed defect (`irregular-sequence`, logged as
   `case_law.ingestion.paragraph_numbering_rejected`) and the markers stay in
   the text.
 
@@ -128,11 +130,16 @@ second tool; it is shaped to be picked up by that generator:
 - Moving a marker changes the analysis input: rows whose text changes need
   their analyses regenerated or re-stamped by a person, as the generator
   intends.
-- A raw-less snapshot whose old parser removed the marker and dropped the
-  number cannot be recovered from itself. The cz-nss, cz-us and cz-regional
-  seeds on this branch were refreshed once (outside the repo) from recordings
-  of the publishers' documents, numbers matched to stored blocks by text;
-  cz-ns, sk-us and sk-courts seeds by the extractor over stored blocks.
+- A raw-less snapshot whose old parser removed the marker cannot be
+  recovered from itself. The cz-nss, cz-us and cz-regional seeds were given
+  their numbers from recordings of the publishers' documents, committed
+  under `parsers/__fixtures__` with provenance (source URL, capture time):
+  each recording was parsed with the current parser and each number attached
+  to the stored block whose text matches (letters and digits, first 60),
+  leaving the seed's text and anchors as they were. The cz-ns, sk-us and
+  sk-courts seeds were refreshed by the extractor over their stored blocks,
+  which also normalises the numbered blocks' inlines (leading/trailing
+  whitespace and line-break nodes trimmed).
 
 ## Field family
 
@@ -173,11 +180,11 @@ Paragraph numbers (implemented; evidence = recordings the suite parses):
 | source                                              | disposition                          | evidence                                                                                                    |
 | --------------------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
 | cz-ns                                               | provided (shared extractor)          | `cz-ns-page.json.gz` (40 decisions: `[N]`, `N.`, `N)` styles; skip in 5 Tdo 28/2024 kept)                   |
-| cz-nss                                              | provided (was: stripped and dropped) | `cz-nss-10-as-124-2025.html.gz`, `cz-nss-22-as-35-2026.html.gz` (new recordings)                            |
-| cz-us                                               | provided (was: stripped and dropped) | `cz-us-iv-us-422-26.html.gz`, `cz-us-iii-us-2429-24.html.gz` (new), `cz-us-page.json.gz` (1993, unnumbered) |
-| cz-regional                                         | provided (was: stripped and dropped) | `cz-regional-finaldoc-{district,appellate}.json.gz`                                                         |
-| sk-us                                               | provided (was: left in text)         | `sk-us-iii-us-265-2026.content.json.gz` (new)                                                               |
-| sk-courts                                           | provided (was: left in text)         | unrecorded: no general-court PDF recorded (portal 500 on 2026-10-12)                                        |
+| cz-nss                                              | provided (shared extractor)          | three `cz-nss-*.html.gz` recordings                                                                         |
+| cz-us                                               | provided (shared extractor)          | three `cz-us-*.html.gz` recordings, `cz-us-page.json.gz` (1993, unnumbered)                                 |
+| cz-regional                                         | provided (shared extractor)          | `cz-regional-finaldoc-{district,appellate}.json.gz`, two `cz-regional-*.finaldoc.json.gz` recordings        |
+| sk-us                                               | provided (shared extractor)          | `sk-us-iii-us-265-2026.content.json.gz`                                                                     |
+| sk-courts                                           | skipped: unassessed                  | unrecorded: no recorded general-court PDF with numbered reasoning yet                                       |
 | eu-ecj                                              | provided (point ids)                 | `eu-ecj/62022CJ0128.en.html.gz`                                                                             |
 | hu-bhgy                                             | provided (`[N]`)                     | `hu-bhgy-decision.docx`                                                                                     |
 | pl-tk                                               | provided (`wyrok_akapitNr`)          | `pl-tk-case-sk-14-11.html.gz`                                                                               |
@@ -217,18 +224,9 @@ omitted: case-number, court, decision-date, decision-type, section-headings.
 
 \* stored as `metadata.rulingType`, not `outcome`.
 
-Gaps found (source has it, processed output lacks it), first to fix:
-
-1. pl-sn bench (full panel with roles and dissenters) only in metadata; no `judges`.
-2. cz-nss rapporteur and sk-courts judge only as untyped `metadata.judge`.
-3. cz-nss applied-legislation grid excluded; sk-courts `odkazovanePredpisy`
-   and areas under source-specific keys; cz-us subject index and provision
-   lists under source-specific keys (no keywords/provisions for cz-us).
-4. pl-courts dissent texts only in metadata; sk-us has no `dissent` role.
-5. eu-ecj footnotes emitted as plain paragraphs; judges limited to
-   rapporteur and Advocate General; provisions always empty.
-6. `outcome` (4 sources, inconsistent keys) and `cited-provisions` have no
-   typed consumer: either define the contract or drop them from the family.
+Each slice turns its columns into dispositions with evidence; a field a
+source carries but its output lacks becomes a `not-extracted` baseline line
+or is fixed in that slice.
 
 ## Vertical Slices
 
@@ -243,23 +241,26 @@ Gaps found (source has it, processed output lacks it), first to fix:
 3. **Scalars, one PR:** `ecli`, `judges`, `keywords`, `cited-provisions`,
    `outcome`, `publisher-cited-cases`, `publisher-summary` — checks read the
    ingestion result built from the recording (adapter-level readers rather
-   than parser-level). Fixes gaps 1–3 where one-line, the rest as
-   `not-extracted` baseline lines.
+   than parser-level). `outcome` and `cited-provisions` get a typed
+   contract here.
 4. **Block roles, one PR:** `decision-title`, `section-headings`,
-   `operative-part`, `dissent`, `bench-blocks` — checks over AST roles; fixes
-   gap 4.
+   `operative-part`, `dissent`, `bench-blocks` — checks over AST roles.
 5. **Notes and inlines, one PR:** `footnotes`, `page-anchors`,
-   `inline-citations`; fixes gap 5.
+   `inline-citations`.
 6. **Evidence debt, ongoing:** record a sk-courts PDF, a recent OGH RIS text,
    Polish SN/KIO/UOKiK documents; each recording deletes baseline lines.
 
 ## Contracts and Invariants
 
 - Inventory keys = registered source keys; fields = `PROCESSED_FIELDS`.
-- Baseline lists = backlog/unrecorded declarations, both directions.
+- Baseline lists = backlog/unrecorded declarations, both directions, and the
+  baseline only shrinks against the base revision
+  (`apps/api/scripts/processed-field-backlog-guard.ts`).
 - Paragraph numbers: stored value is the court's printed number; text loses
-  only the marker; extraction is idempotent and never touches holdings,
-  headings, notes, closings or signatures (property test).
+  only the marker; stored numbers strictly rise and no marker of the
+  numbering's style is left unassigned outside a nested list; extraction is
+  idempotent and never touches holdings, headings, notes, closings or
+  signatures (property tests).
 
 ## Verification
 
@@ -273,10 +274,13 @@ Re-parse is the existing stored-raw replay (`replay-tick`, enrolment in
 `replay-enrolment.ts`, all sources `off` today; `dry-run` then `enrolled`
 with a daily budget ≤ 10 000, load-gated by `REPLAY_HEALTH_CONFIG`). The
 parser-version bump makes every row of the six sources eligible; no publisher
-contact and no sitemap/shard scans. Text changes for cz-ns, sk-us and
-sk-courts rows (marker leaves the text), so their stored AI analyses go stale
-and regenerate on next open; cz-nss, cz-us and cz-regional text is unchanged
-(their markers were already stripped) and their analyses stay valid.
+contact and no sitemap/shard scans. Text may change for any of the six:
+where a decision's markers are now moved into `number` they leave the text,
+and where the numbering is rejected or reads as unnumbered the markers now
+stay in it (the older cz-nss, cz-us and cz-regional parsers removed them
+unconditionally). Every row whose text changes has its stored analysis go
+stale and regenerate on next open, so the replay is not ordered on an
+assumption of unchanged text; its order follows budget and load only.
 
 ## Open Questions
 

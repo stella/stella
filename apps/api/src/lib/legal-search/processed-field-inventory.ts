@@ -183,6 +183,8 @@ export const PROCESSED_FIELD_INVENTORY = {
       recordedEvidence(
         "src/handlers/case-law/ingestion/adapters/__fixtures__/cz-regional-finaldoc-district.json.gz",
         "src/handlers/case-law/ingestion/adapters/__fixtures__/cz-regional-finaldoc-appellate.json.gz",
+        "src/handlers/case-law/ingestion/parsers/__fixtures__/cz-regional-17-c-33-2019.finaldoc.json.gz",
+        "src/handlers/case-law/ingestion/parsers/__fixtures__/cz-regional-26-c-151-2021.finaldoc.json.gz",
       ),
     ),
   },
@@ -200,6 +202,7 @@ export const PROCESSED_FIELD_INVENTORY = {
       recordedEvidence(
         "src/handlers/case-law/ingestion/parsers/__fixtures__/cz-nss-10-as-124-2025.html.gz",
         "src/handlers/case-law/ingestion/parsers/__fixtures__/cz-nss-22-as-35-2026.html.gz",
+        "src/handlers/case-law/ingestion/parsers/__fixtures__/cz-nss-10-azs-28-2026.html.gz",
       ),
     ),
   },
@@ -209,15 +212,17 @@ export const PROCESSED_FIELD_INVENTORY = {
       recordedEvidence(
         "src/handlers/case-law/ingestion/parsers/__fixtures__/cz-us-iv-us-422-26.html.gz",
         "src/handlers/case-law/ingestion/parsers/__fixtures__/cz-us-iii-us-2429-24.html.gz",
+        "src/handlers/case-law/ingestion/parsers/__fixtures__/cz-us-iv-us-1394-24.html.gz",
         "src/handlers/case-law/ingestion/adapters/__fixtures__/cz-us-page.json.gz",
       ),
     ),
   },
   [ADAPTER_KEYS.SK_COURTS]: {
-    "court-paragraph-numbers": providedField(
-      PARAGRAPH_NUMBERS_FROM_TEXT,
+    "court-paragraph-numbers": skippedField(
+      PROCESSED_FIELD_SKIP_REASONS.UNASSESSED,
+      "the PDF parser runs the shared extractor, but no recording shows it on a general-court decision with numbered reasoning, so whether the field is provided is unverified",
       unrecordedEvidence(
-        "no general-court PDF is recorded; the portal answered HTTP 500 for the seeded decision's document on 2026-10-12",
+        "the two general-court PDFs checked on 2026-10-12 (a district and a regional decision) had unnumbered reasoning; the seeded decision's document was unavailable",
       ),
     ),
   },

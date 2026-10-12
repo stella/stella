@@ -213,6 +213,47 @@ describe("numbered reasoning set without blank lines", () => {
     ]);
   });
 
+  test("a quoted petit's own points do not split the paragraph quoting it", () => {
+    const blocks = reasoning([
+      "1. Sťažovateľ navrhuje, aby ústavný súd rozhodol takto:",
+      "„1. Základné právo sťažovateľa podľa čl. 46 ods. 1 ústavy bolo porušené.",
+      "2. Napadnuté uznesenie sa zrušuje.“",
+      "2. Sudca spravodajca oznámil námietku.",
+    ]);
+    expect(blocks.map((block) => block.plainText)).toEqual([
+      "Sťažovateľ navrhuje, aby ústavný súd rozhodol takto: „1. Základné právo sťažovateľa podľa čl. 46 ods. 1 ústavy bolo porušené. 2. Napadnuté uznesenie sa zrušuje.“",
+      "Sudca spravodajca oznámil námietku.",
+    ]);
+  });
+
+  test("a petit point that repeats the court's next number later is not its paragraph", () => {
+    const blocks = reasoning([
+      "1. Sťažovateľ navrhuje, aby ústavný súd rozhodol takto:",
+      "1. Základné právo sťažovateľa bolo porušené.",
+      "2. Napadnuté uznesenie sa zrušuje.",
+      "2. Sudca spravodajca oznámil námietku.",
+    ]);
+    expect(blocks.map((block) => block.plainText)).toEqual([
+      "Sťažovateľ navrhuje, aby ústavný súd rozhodol takto: 1. Základné právo sťažovateľa bolo porušené. 2. Napadnuté uznesenie sa zrušuje.",
+      "Sudca spravodajca oznámil námietku.",
+    ]);
+  });
+
+  test("a line ending in an abbreviation's number or a lettered point is not a sentence end", () => {
+    for (const ending of [
+      "podľa § 49 ods. 1",
+      "uvedené pod č. 2",
+      "podľa písm. a)",
+      "rozhodol takto:",
+    ]) {
+      const blocks = reasoning([
+        `1. Sťažovateľ namieta porušenie práva ${ending}`,
+        "2. Februárom sa lehota skončila.",
+      ]);
+      expect({ ending, count: blocks.length }).toEqual({ ending, count: 1 });
+    }
+  });
+
   test("a date wrapped to the start of a line does not split a sentence", () => {
     const blocks = reasoning([
       "1. Sťažovateľ podal ústavnú sťažnosť dňa",

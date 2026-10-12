@@ -123,6 +123,11 @@ const PROCESSED_FIELD_CHECKS: Readonly<
       return problems;
     }
     switch (disposition.reason) {
+      // "Numbering left in the text" is read with the extractor's marker
+      // shapes — `[N]`, `N.`, `N)` opening a paragraph, as Czech and Slovak
+      // courts print them. A source that numbers paragraphs another way
+      // (a margin cell, "Rn. N") is not caught by it, so a factual skip for
+      // such a source also has to hold against `numbered` alone, which is.
       case PROCESSED_FIELD_SKIP_REASONS.SOURCE_LACKS:
       case PROCESSED_FIELD_SKIP_REASONS.PUBLISHER_REMOVES:
         return [...numbered, ...leftInText].map(
@@ -153,6 +158,25 @@ describe("processed-field inventory", () => {
       .map(({ source }) => source.key)
       .toSorted();
     expect(SOURCES.toSorted()).toEqual(registered);
+  });
+
+  test("states every how, justification and missing-recording reason in words", () => {
+    // The constructors reject a blank literal at compile time; a value built
+    // at run time reaches them as `string` and is checked here.
+    const blank = declarations.flatMap(({ source, field, disposition }) => {
+      const texts = [
+        disposition.disposition === "provided"
+          ? disposition.how
+          : disposition.justification,
+        ...(disposition.evidence.kind === "unrecorded"
+          ? [disposition.evidence.reason]
+          : disposition.evidence.fixtures),
+      ];
+      return texts.some((text) => text.trim().length === 0)
+        ? [pairKey(source, field)]
+        : [];
+    });
+    expect(blank).toEqual([]);
   });
 
   test("names only recordings that exist and that the source can read", () => {

@@ -213,15 +213,166 @@ describe("regional courts and the Slovak Constitutional Court", () => {
   });
 });
 
-describe("implausible numbering", () => {
-  const paragraph = (index: number, plainText: string): Block => ({
-    id: `b${String(index)}`,
-    anchorId: `p-${String(index)}`,
-    type: "paragraph",
-    inlines: [{ type: "text", text: plainText }],
-    plainText,
+const paragraph = (index: number, plainText: string): Block => ({
+  id: `b${String(index)}`,
+  anchorId: `p-${String(index)}`,
+  type: "paragraph",
+  inlines: [{ type: "text", text: plainText }],
+  plainText,
+});
+
+describe("a list in the court's own marker style inside its numbering", () => {
+  /** Court paragraphs ("court") and list items ("item"), all "N. …". */
+  const read = (layout: readonly (readonly ["court" | "item", number])[]) => {
+    const blocks = layout.map(([kind, number], index) =>
+      paragraph(
+        index,
+        `${String(number)}. ${kind === "court" ? "Soud uvážil" : "Položka"} ${String(index)}.`,
+      ),
+    );
+    const numbering = extractCourtParagraphNumbers(blocks);
+    return layout.map(([kind], index) => {
+      const block = numbering.blocks[index];
+      return [kind, block?.type === "paragraph" ? block.number : undefined];
+    });
+  };
+
+  test("keeps the court's numbers when the list runs past them", () => {
+    expect(
+      read([
+        ["court", 1],
+        ["court", 2],
+        ["item", 1],
+        ["item", 2],
+        ["item", 3],
+        ["item", 4],
+        ["court", 3],
+        ["court", 4],
+        ["court", 5],
+      ]),
+    ).toEqual([
+      ["court", 1],
+      ["court", 2],
+      ["item", undefined],
+      ["item", undefined],
+      ["item", undefined],
+      ["item", undefined],
+      ["court", 3],
+      ["court", 4],
+      ["court", 5],
+    ]);
   });
 
+  test("keeps the court's numbers when the list starts right after paragraph 1", () => {
+    expect(
+      read([
+        ["court", 1],
+        ["item", 1],
+        ["item", 2],
+        ["item", 3],
+        ["court", 2],
+        ["court", 3],
+      ]),
+    ).toEqual([
+      ["court", 1],
+      ["item", undefined],
+      ["item", undefined],
+      ["item", undefined],
+      ["court", 2],
+      ["court", 3],
+    ]);
+  });
+});
+
+describe("the hard invariants of a numbering", () => {
+  const numbersOfMarked = (markers: readonly number[]) => {
+    const numbering = extractCourtParagraphNumbers(
+      markers.map((number, index) =>
+        paragraph(
+          index,
+          `${String(number)}. Soud uvážil věc ${String(index)}.`,
+        ),
+      ),
+    );
+    return {
+      type: numbering.type,
+      numbers: numbering.blocks.map((block) =>
+        block.type === "paragraph" ? (block.number ?? null) : null,
+      ),
+    };
+  };
+
+  test("a list after paragraph 4 keeps 1 and 2 as its items", () => {
+    expect(numbersOfMarked([1, 2, 3, 4, 1, 2, 5])).toEqual({
+      type: "numbered",
+      numbers: [1, 2, 3, 4, null, null, 5],
+    });
+  });
+
+  test("a quoted provision's lowercase points are not the court's markers", () => {
+    const texts = [
+      "1. Soud uvážil.",
+      "2. Soud cituje zákon:",
+      '"1. Německá říše a osoby veřejného práva;',
+      "2. osoby fysické národnosti německé;",
+      '3. osoby fysické, které vyvíjely činnost."',
+      "3. Soud dále uvážil.",
+    ];
+    const numbering = extractCourtParagraphNumbers(
+      texts.map((text, index) => paragraph(index, text)),
+    );
+    expect(
+      numbering.blocks.map((block) =>
+        block.type === "paragraph" ? (block.number ?? null) : null,
+      ),
+    ).toEqual([1, 2, null, null, null, 3]);
+  });
+
+  test("a forward skip the court made is kept as printed", () => {
+    expect(numbersOfMarked([1, 2, 3, 5, 6, 7])).toEqual({
+      type: "numbered",
+      numbers: [1, 2, 3, 5, 6, 7],
+    });
+  });
+
+  test("a number the court printed twice rejects the decision", () => {
+    expect(numbersOfMarked([1, 2, 3, 3, 4, 5])).toEqual({
+      type: "rejected",
+      numbers: [null, null, null, null, null, null],
+    });
+  });
+
+  test("a number that could be the court's or the list's rejects the decision", () => {
+    // Court 1, 2, then 1-4 to the end: either a list of four, or a list of
+    // two and the court's 3 and 4. Nothing later tells them apart.
+    expect(numbersOfMarked([1, 2, 1, 2, 3, 4])).toEqual({
+      type: "rejected",
+      numbers: [null, null, null, null, null, null],
+    });
+  });
+
+  test("a numbering that looks rising but leaves the court's own markers unassigned is rejected", () => {
+    // Read greedily, the list's 3 and 4 would take the court's numbers and
+    // the court's own "3." and "4." would be left over.
+    const { type } = numbersOfMarked([1, 2, 1, 2, 3, 4, 3, 4, 5]);
+    expect(type).toBe("numbered");
+    expect(numbersOfMarked([1, 2, 1, 2, 3, 4, 3, 4, 5]).numbers).toEqual([
+      1,
+      2,
+      null,
+      null,
+      null,
+      null,
+      3,
+      4,
+      5,
+    ]);
+    // A stray the walk cannot place, between the court's 3 and 4, rejects.
+    expect(numbersOfMarked([1, 2, 3, 2, 4, 5]).type).toBe("rejected");
+  });
+});
+
+describe("implausible numbering", () => {
   test("is rejected with its defect and leaves every marker in the text", () => {
     const blocks = [1, 2, 3, 9, 14, 2, 30, 31, 7].map((number, index) =>
       paragraph(index, `${String(number)}. Soud posoudil věc znovu.`),

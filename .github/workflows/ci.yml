@@ -2551,6 +2551,12 @@ jobs:
           bun apps/api/scripts/deployment-feature-guard.ts --self-test
           bun apps/api/scripts/deployment-feature-guard.ts --base "$RATCHET_BASE_REF"
 
+      - name: Processed-field backlog guard
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # The case-law processed-field backlog (debts and unrecorded claims)
+        # may only shrink against the measured base.
+        run: bun apps/api/scripts/processed-field-backlog-guard.ts --base "$RATCHET_BASE_REF"
+
       - name: GitHub API command ownership
         env:
           STELLA_VERIFY: check

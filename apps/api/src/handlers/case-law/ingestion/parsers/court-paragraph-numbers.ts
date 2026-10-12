@@ -41,12 +41,14 @@ export type CourtParagraphMarkerStyle =
  * A marker is the number, its punctuation, then horizontal space. The space
  * is required for `12.` and `12)`: without it the shape is an amount, a date
  * or a section reference. A digit right after the space is a date
- * (`12. 3. 2020`), never a paragraph.
+ * (`12. 3. 2020`), never a paragraph; a lowercase letter is an item of a
+ * list or of a quoted provision ("2. osoby fysické …"), because a court's
+ * paragraph opens a sentence.
  */
 const MARKER_PATTERNS = {
-  bracket: /^\[(?<number>\d{1,4})\][ \t ]*(?!\d)/u,
-  dot: /^(?<number>\d{1,4})\.[ \t ]+(?!\d)/u,
-  paren: /^(?<number>\d{1,4})\)[ \t ]+(?!\d)/u,
+  bracket: /^\[(?<number>\d{1,4})\][ \t ]*(?![\d\p{Ll}])/u,
+  dot: /^(?<number>\d{1,4})\.[ \t ]+(?![\d\p{Ll}])/u,
+  paren: /^(?<number>\d{1,4})\)[ \t ]+(?![\d\p{Ll}])/u,
 } as const satisfies Record<CourtParagraphMarkerStyle, RegExp>;
 
 /** Preference when two styles explain the same number of paragraphs. */
@@ -57,10 +59,14 @@ const STYLE_PRIORITY: Readonly<Record<CourtParagraphMarkerStyle, number>> = {
 };
 
 /**
- * Bounds of "monotonic-ish". A court occasionally skips a number or prints
- * one twice; the stated value is kept, because the number is what the court
- * published and what a citation names. Beyond these bounds the markers are
- * not numbering a reader can rely on.
+ * Bounds of a numbering. A court occasionally skips a number forward; the
+ * stated value is kept, because the number is what the court published and
+ * what a citation names. Two things are never allowed, whatever the count:
+ * a number that does not rise (a repeat, or one going backwards), and a
+ * marker of the numbering's style left unassigned that is not provably an
+ * item of a nested list. Either means a reader could not tell which
+ * paragraph a number names, and the whole decision keeps its markers as
+ * text.
  */
 export const COURT_PARAGRAPH_NUMBERING_LIMITS = {
   /**
@@ -73,7 +79,7 @@ export const COURT_PARAGRAPH_NUMBERING_LIMITS = {
   minParagraphs: { bracket: 1, dot: 2, paren: 2 },
   /** Largest forward jump: 4 → 6 skips one number. */
   maxJump: 3,
-  /** Irregular steps (skips, repeats) allowed: a base plus one per 20. */
+  /** Forward skips allowed: a base plus one per 20 numbered paragraphs. */
   irregularBase: 2,
   irregularPer: 20,
   /**
@@ -95,7 +101,10 @@ export const COURT_PARAGRAPH_NUMBERING_LIMITS = {
  * A closed set: the outcome is reported, and an operator sweeps by code.
  */
 export const COURT_PARAGRAPH_NUMBERING_DEFECTS = {
-  /** Numbers that go backwards or jump too far for a numbering. */
+  /**
+   * Numbers that repeat, go backwards or jump too far, or a marker of the
+   * numbering's style that no reading assigns unambiguously.
+   */
   IRREGULAR_SEQUENCE: "irregular-sequence",
 } as const;
 
@@ -195,44 +204,57 @@ const bodyOf = (blocks: readonly Block[]): Body => {
 };
 
 /**
- * Whether the candidate that would continue the court's run is instead the
- * next item of a nested list: the court's own paragraph with the same
- * number follows before the court's next one does.
+ * Whose a number is when it both continues the court's run and the open
+ * nested list. Past the list's own continuation (value + 1, value + 2, …):
+ * the court's paragraph with this very number follows, so this one is the
+ * list's; or something that continues neither breaks the list off, so this
+ * one is the court's. Reaching the end with only the continuation seen,
+ * both readings hold, and neither may be stored.
  */
-const continuesNestedList = (
+const readContinuation = (
   candidates: readonly Candidate[],
   from: number,
   value: number,
-): boolean => {
+): "list" | "court" | "ambiguous" => {
+  let listNext = value + 1;
   for (const later of candidates.slice(from + 1)) {
     if (later.number === value) {
-      return true;
+      return "list";
     }
-    if (later.number === value + 1) {
-      return false;
+    if (later.number !== listNext) {
+      return "court";
     }
+    listNext += 1;
   }
-  return false;
+  return "ambiguous";
 };
 
 type Walk = {
+  /** The court's paragraphs, in order. */
   readonly accepted: Candidate[];
-  readonly irregular: number;
-  readonly firstIrregular: Candidate | null;
+  /** Forward skips the court made (4 → 6), kept as printed. */
+  readonly skips: number;
+  /**
+   * Markers of this style that are neither the court's paragraph nor
+   * provably an item of a nested list: a repeat, a step backwards, a jump
+   * too far, or a number both readings could claim.
+   */
+  readonly unassigned: Candidate[];
 };
 
 /**
  * Read a style's candidates as the court's run beside nested lists. A
- * nested list starts at 1 and counts up; a separate opinion may start the
- * run again at 1; anything else that does not continue the run is an
- * irregular step.
+ * nested list starts at 1 after a court paragraph and counts up; a separate
+ * opinion may start the run again at 1; a forward skip of a few numbers is
+ * the court's own. Everything else is left unassigned, and an unassigned
+ * marker rejects the reading.
  */
 const walk = (candidates: readonly Candidate[]): Walk => {
   const accepted: Candidate[] = [];
+  const unassigned: Candidate[] = [];
   let expected = 1;
   let nestedNext: number | null = null;
-  let irregular = 0;
-  let firstIrregular: Candidate | null = null;
+  let skips = 0;
   for (const [index, candidate] of candidates.entries()) {
     const { number } = candidate;
     if (candidate.opensOpinion && number === 1) {
@@ -243,10 +265,19 @@ const walk = (candidates: readonly Candidate[]): Walk => {
     }
     const courtNext = number === expected;
     const listNext = nestedNext !== null && number === nestedNext;
-    if (
-      courtNext &&
-      !(listNext && continuesNestedList(candidates, index, number))
-    ) {
+    if (courtNext && listNext) {
+      const reading = readContinuation(candidates, index, number);
+      if (reading === "ambiguous") {
+        unassigned.push(candidate);
+        nestedNext = number + 1;
+        continue;
+      }
+      if (reading === "list") {
+        nestedNext = number + 1;
+        continue;
+      }
+    }
+    if (courtNext) {
       accepted.push(candidate);
       expected = number + 1;
       nestedNext = null;
@@ -260,16 +291,35 @@ const walk = (candidates: readonly Candidate[]): Walk => {
     // (its paragraph 1 merged into the preamble) still reads as numbering.
     const last = accepted.at(-1)?.number ?? 0;
     const jump = number - last;
-    irregular += 1;
-    firstIrregular ??= candidate;
-    if (jump >= 0 && jump <= COURT_PARAGRAPH_NUMBERING_LIMITS.maxJump) {
-      // A repeated or skipped number, kept as the court printed it.
+    if (jump > 1 && jump <= COURT_PARAGRAPH_NUMBERING_LIMITS.maxJump) {
       accepted.push(candidate);
+      skips += 1;
       expected = number + 1;
       nestedNext = null;
+      continue;
     }
+    unassigned.push(candidate);
   }
-  return { accepted, irregular, firstIrregular };
+  return { accepted, skips, unassigned };
+};
+
+/**
+ * The court's paragraphs strictly rise, starting again at 1 only where a
+ * separate opinion begins.
+ */
+const strictlyRising = (accepted: readonly Candidate[]): boolean => {
+  let previous = 0;
+  for (const { number, opensOpinion } of accepted) {
+    if (opensOpinion && number === 1) {
+      previous = 1;
+      continue;
+    }
+    if (number <= previous) {
+      return false;
+    }
+    previous = number;
+  }
+  return true;
 };
 
 const candidatesOf = (
@@ -362,19 +412,29 @@ const readNumbering = (blocks: readonly Block[]): Reading => {
     return { type: "unnumbered" };
   }
 
-  const allowedIrregular =
+  const rejected = (detail: string): Reading => ({
+    type: "rejected",
+    defect: COURT_PARAGRAPH_NUMBERING_DEFECTS.IRREGULAR_SEQUENCE,
+    detail: `${best.style}: ${detail}`,
+  });
+  // Hard invariants, with no allowance: every number rises, and every
+  // marker of the style is either the court's or provably a list item.
+  if (!strictlyRising(best.accepted)) {
+    return rejected("the numbers do not strictly rise");
+  }
+  const stray = best.unassigned.at(0);
+  if (stray !== undefined) {
+    return rejected(
+      `${String(best.unassigned.length)} markers no reading assigns; first at ${String(stray.number)}`,
+    );
+  }
+  const allowedSkips =
     limits.irregularBase +
     Math.floor(best.accepted.length / limits.irregularPer);
-  if (best.irregular > allowedIrregular) {
-    return {
-      type: "rejected",
-      defect: COURT_PARAGRAPH_NUMBERING_DEFECTS.IRREGULAR_SEQUENCE,
-      detail: `${best.style}: ${String(best.irregular)} irregular steps in ${String(best.accepted.length)} numbered paragraphs${
-        best.firstIrregular === null
-          ? ""
-          : `; first at ${String(best.firstIrregular.number)}`
-      }`,
-    };
+  if (best.skips > allowedSkips) {
+    return rejected(
+      `${String(best.skips)} forward skips in ${String(best.accepted.length)} numbered paragraphs`,
+    );
   }
   return {
     type: "numbered",

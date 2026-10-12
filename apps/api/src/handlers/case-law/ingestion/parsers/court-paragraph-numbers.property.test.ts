@@ -79,6 +79,80 @@ const decision = fc
 
 const MARKER_PREFIX = /^(?:\[(\d+)\][ \t]*|(\d+)\.[ \t]+|(\d+)\)[ \t]+)/u;
 
+const STYLE_MARKER = {
+  bracket: /^\[(?<n>\d+)\][ \t]*(?![\d\p{Ll}])/u,
+  dot: /^(?<n>\d+)\.[ \t]+(?![\d\p{Ll}])/u,
+  paren: /^(?<n>\d+)\)[ \t]+(?![\d\p{Ll}])/u,
+} as const;
+
+const isBody = (block: Block): block is ParagraphBlock =>
+  block.type === "paragraph" &&
+  (block.role === undefined || block.role === "dissent");
+
+/**
+ * The two hard invariants of a stored numbering, checked from the outside:
+ * the numbers strictly rise (starting again only at 1), and every marker of
+ * the numbering's style left in the text is an item of a list that started
+ * at 1 after a numbered paragraph and counts up without a gap.
+ */
+const invariantViolations = (
+  before: readonly Block[],
+  after: readonly Block[],
+): string[] => {
+  const numbered = after.flatMap((block, index) =>
+    block.type === "paragraph" && block.number !== undefined
+      ? [{ index, number: block.number }]
+      : [],
+  );
+  const first = numbered.at(0);
+  if (first === undefined) {
+    return [];
+  }
+  const source = before[first.index];
+  const style = (
+    Object.keys(STYLE_MARKER) as (keyof typeof STYLE_MARKER)[]
+  ).find(
+    (candidate) =>
+      source?.type === "paragraph" &&
+      STYLE_MARKER[candidate].test(source.plainText),
+  );
+  if (style === undefined) {
+    return ["a numbered paragraph had no marker"];
+  }
+  const problems: string[] = [];
+  for (const [position, { number }] of numbered.entries()) {
+    const previous = numbered[position - 1]?.number ?? 0;
+    if (number <= previous && number !== 1) {
+      problems.push(`${String(number)} after ${String(previous)}`);
+    }
+  }
+  let seenNumbered = false;
+  let listLength = 0;
+  for (const block of after) {
+    if (!isBody(block)) {
+      continue;
+    }
+    if (block.number !== undefined) {
+      seenNumbered = true;
+      listLength = 0;
+      continue;
+    }
+    const raw = STYLE_MARKER[style].exec(block.plainText)?.groups?.["n"];
+    if (raw === undefined || !seenNumbered) {
+      continue;
+    }
+    const value = Number(raw);
+    if (value === 1) {
+      listLength = 1;
+    } else if (value === listLength + 1) {
+      listLength = value;
+    } else {
+      problems.push(`unassigned marker ${String(value)}`);
+    }
+  }
+  return problems;
+};
+
 test("court paragraph numbers are faithful, structure-preserving and idempotent", () => {
   assertProperty(
     "court paragraph numbers are faithful, structure-preserving and idempotent",
@@ -115,6 +189,72 @@ test("court paragraph numbers are faithful, structure-preserving and idempotent"
       expect(extractCourtParagraphNumbers(numbering.blocks).blocks).toEqual(
         numbering.blocks,
       );
+      expect(invariantViolations(blocks, numbering.blocks)).toEqual([]);
+    }),
+  );
+});
+
+/**
+ * A court's numbered run with lists in the same marker style after some of
+ * its paragraphs. Every list is followed by the court's next paragraph, so
+ * the court's numbering is what a reader reads off: 1..n, lists aside.
+ */
+const numberedWithLists = fc
+  .record({
+    style: fc.constantFrom("bracket", "dot", "paren"),
+    lists: fc.array(fc.integer({ min: 0, max: 6 }), {
+      minLength: 2,
+      maxLength: 15,
+    }),
+  })
+  .map(({ style, lists }) => {
+    const layout: { court: number | null; text: string }[] = [];
+    for (const [index, listLength] of lists.entries()) {
+      const court = index + 1;
+      layout.push({
+        court,
+        text: `${MARKERS[style](court)}Soud uvážil bod ${String(court)}.`,
+      });
+      if (court < lists.length) {
+        for (let item = 1; item <= listLength; item += 1) {
+          layout.push({
+            court: null,
+            text: `${MARKERS[style](item)}Položka ${String(item)}.`,
+          });
+        }
+      }
+    }
+    const blocks: Block[] = layout.map(({ text }, index) => ({
+      id: `b${String(index)}`,
+      anchorId: `p-${String(index)}`,
+      type: "paragraph",
+      inlines: [{ type: "text", text }],
+      plainText: text,
+    }));
+    // A list after paragraph i that counts exactly to i, with no list after
+    // it, reads two ways to the end: the court's i+1, i+2, … or the list's.
+    // Nothing tells them apart, so the decision must be rejected.
+    const lastList = lists.findLastIndex(
+      (length, index) => length > 0 && index + 1 < lists.length,
+    );
+    const ambiguous = lastList !== -1 && lists[lastList] === lastList + 1;
+    return { blocks, courts: layout.map(({ court }) => court), ambiguous };
+  });
+
+test("lists in the court's own marker style never take the court's numbers", () => {
+  assertProperty(
+    "lists in the court's own marker style never take the court's numbers",
+    fc.property(numberedWithLists, ({ blocks, courts, ambiguous }) => {
+      const numbering = extractCourtParagraphNumbers(blocks);
+      // Ambiguous: rejected, or — when what is left is too short to be a
+      // numbering at all — unnumbered. Either way, nothing is stored.
+      expect(numbering.type === "numbered").toBe(!ambiguous);
+      expect(
+        numbering.blocks.map((block) =>
+          block.type === "paragraph" ? (block.number ?? null) : null,
+        ),
+      ).toEqual(ambiguous ? courts.map(() => null) : courts);
+      expect(invariantViolations(blocks, numbering.blocks)).toEqual([]);
     }),
   );
 });

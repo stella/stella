@@ -142,7 +142,9 @@ test("CZ numbered prefixes share normalized offsets with rendered inline text", 
         maxLength: 5,
       }),
       (whitespace, number, words) => {
-        const body = words.join(" ");
+        // A court paragraph opens a sentence: the first word is capitalised,
+        // and the rest is whatever the court wrote.
+        const body = ["Soud", ...words].join(" ");
         const block = numberedRtfBlocks(whitespace.join(""), number, body).at(
           0,
         );

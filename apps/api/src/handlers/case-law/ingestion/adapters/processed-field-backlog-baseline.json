@@ -6,6 +6,7 @@
       "pl-nsa": ["court-paragraph-numbers"]
     },
     "unassessed": {
+      "sk-courts": ["court-paragraph-numbers"],
       "pl-sn": ["court-paragraph-numbers"],
       "pl-kio": ["court-paragraph-numbers"],
       "pl-ncourt": ["court-paragraph-numbers"],
