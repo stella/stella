@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import { mkdtemp, mkdir, writeFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -272,6 +273,69 @@ test("execution deadline kills a real command group and reports unconfirmed stre
       "received",
     );
   } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test("a delegated fallback cannot orphan a TERM-resistant descendant after the outer deadline", async () => {
+  const cwd = await scratch();
+  const pidFile = Bun.file(path.join(cwd, "delegated-descendant-pid"));
+  try {
+    const module = path.join(
+      import.meta.dirname,
+      "code-quality-task-budget.ts",
+    );
+    const descendant = [
+      "const fs = require('fs');",
+      "fs.writeFileSync('delegated-descendant-pid', String(process.pid));",
+      "process.on('SIGTERM', () => {});",
+      "process.stdout.write('delegated descendant ready\\n');",
+      "setInterval(() => {}, 1000);",
+    ].join("\n");
+    await writeFile(
+      path.join(cwd, "package.json"),
+      JSON.stringify({ scripts: { "code-check": "bun delegated.ts" } }),
+    );
+    await writeFile(
+      path.join(cwd, "delegated.ts"),
+      `
+        import { runBudgetedCheck } from ${JSON.stringify(module)};
+        const result = await runBudgetedCheck({
+          command: [process.execPath, '-e', ${JSON.stringify(descendant)}],
+          cwd: ${JSON.stringify(cwd)}, timeoutMs: 5000, graceMs: 200,
+          writeStdout: text => process.stdout.write(text),
+          writeStderr: text => process.stderr.write(text), writeSummary: () => {},
+        });
+        process.exit(result.exitCode);
+      `,
+    );
+    const result = await run([process.execPath, "run", "code-check"], cwd, 1000)
+      .result;
+    expect(result.exitCode).toBe(124);
+    expect(result.output).toContain("delegated descendant ready");
+    expect(result.output).toContain("execution deadline exceeded");
+    const pid = Number(await pidFile.text());
+    expect(Number.isSafeInteger(pid) && pid > 0).toBe(true);
+    const state = Bun.spawnSync(["ps", "-p", String(pid), "-o", "stat="], {
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+      .stdout.toString()
+      .trim();
+    expect(state === "" || state.startsWith("Z")).toBe(true);
+  } finally {
+    if (await pidFile.exists()) {
+      const pid = Number(await pidFile.text());
+      if (Number.isSafeInteger(pid) && pid > 0) {
+        const cleanup = Result.try({
+          try: () => process.kill(pid, "SIGKILL"),
+          catch: (cause) => cause,
+        });
+        if (cleanup.isErr()) {
+          expect(cleanup.error).toMatchObject({ code: "ESRCH" });
+        }
+      }
+    }
     await rm(cwd, { recursive: true, force: true });
   }
 });

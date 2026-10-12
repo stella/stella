@@ -273,6 +273,8 @@ type RunBudgetedCheckOptions = {
   graceMs?: number;
 };
 
+const PROCESS_GROUP_ENV = "CODE_QUALITY_PROCESS_GROUP";
+
 export const ownedProcessGroupMembers = (snapshot: string, group: number) =>
   snapshot.split(/\r?\n/u).flatMap((line) => {
     const trimmed = line.trimStart();
@@ -409,15 +411,23 @@ export const runBudgetedCheck = async ({
   let termination: string | undefined;
   let killTimer: ReturnType<typeof setTimeout> | undefined;
   const startedAt = Date.now();
+  // A delegated supervisor shares the outer group so its descendants cannot
+  // outlive the owner when equal cleanup deadlines race.
+  const ownsGroup = process.env[PROCESS_GROUP_ENV] !== "inherited";
   const child = spawn(executable, command.slice(1), {
     cwd,
-    detached: process.platform !== "win32",
+    detached: ownsGroup && process.platform !== "win32",
+    env: { ...process.env, [PROCESS_GROUP_ENV]: "inherited" },
     stdio: ["ignore", "pipe", "pipe"],
   });
   const killGroup = (signal: NodeJS.Signals) => {
     const attempt = Result.try({
       try: () => {
-        if (child.pid !== undefined && process.platform !== "win32") {
+        if (
+          ownsGroup &&
+          child.pid !== undefined &&
+          process.platform !== "win32"
+        ) {
           process.kill(-child.pid, signal);
         } else {
           child.kill(signal);
@@ -490,7 +500,7 @@ export const runBudgetedCheck = async ({
     });
   });
   const endedAt = Date.now();
-  if (child.pid !== undefined && process.platform !== "win32") {
+  if (ownsGroup && child.pid !== undefined && process.platform !== "win32") {
     cleanupFailed = await auditExitedProcessGroup({
       group: child.pid,
       report: (diagnostic) => {
