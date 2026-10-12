@@ -48,7 +48,7 @@ const READER_SCROLL_OFFSET_PX = 48;
 // the block above is smaller, so that block stays wholly out of view.
 const READER_TOP_INSET_PX = 12;
 // How many blocks, from the target's own upward, the frame may open on.
-const READER_FRAME_CANDIDATES = 6;
+const READER_FRAME_CANDIDATES = 12;
 // Duplicated from apps/web/src/components/inspector/inspector-storage-keys.ts,
 // for the same reason as the theme key below.
 const INSPECTOR_STATE_STORAGE_PREFIX = "stella:inspector-state:v1:";
@@ -699,7 +699,26 @@ const frameReader = async (
         }
         failures.push(`block ${String(index)}: ${problems.join(", ")}`);
       }
-      throw new Error(`No frame fits the reader shot: ${failures.join("; ")}`);
+      // The measured layout at the current scroll, rounded, so one log read
+      // shows why no candidate fit and where the gaps are.
+      const span = (box: DOMRect) =>
+        `${String(Math.round(box.top))}-${String(Math.round(box.bottom))}`;
+      const first = Math.max(0, targetBlock - candidates);
+      const layout = [
+        `frame ${String(Math.round(top))}-${String(Math.round(bottom))}`,
+        `header to ${String(Math.round(notesTop))}`,
+        `target ${span(targetBox)}`,
+        `blocks ${blocks
+          .slice(first, targetBlock + candidates)
+          .map((box, offset) => `${String(first + offset)}:${span(box)}`)
+          .join(" ")}`,
+        `notes ${notes
+          .map(({ box, kind }) => `${kind}:${span(box)}`)
+          .join(" ")}`,
+      ].join("; ");
+      throw new Error(
+        `No frame fits the reader shot: ${failures.join("; ")}. Layout: ${layout}`,
+      );
     },
     {
       bandBottom: clip.y + clip.height,

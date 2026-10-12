@@ -78,8 +78,8 @@ type ReaderStory = {
  * it: a Supreme Court judgment on a board member's statutory guarantee to
  * the company's creditors (§ 159 odst. 3 o. z.). The capture scrolls the
  * reader to the first mark, in the court's paragraph [31], so the frame
- * holds the reasoning of [31]–[35] with the stored analysis' margin notes,
- * two highlights and a comment. The later marks sit further down, where a
+ * holds the reasoning from [31] on with the stored analysis' margin note
+ * on it, two highlights and a comment. The later marks sit further down, where a
  * reader who scrolls on finds them.
  *
  * The court numbers its paragraphs in the text ("[31]"), and the anchors
@@ -97,6 +97,16 @@ export const CASE_LAW_READER_STORY: ReaderStory = {
   createdAt: new Date("2026-07-20T09:30:00.000Z"),
   marks: [
     {
+      // On [31] itself, so the card stacks right under the analysis' note
+      // for the same paragraph and the pair fits the frame together.
+      key: "existence-comment",
+      kind: "comment",
+      anchor: "p-65",
+      quote:
+        "jednou z podmínek ručení podle § 159 odst. 3 o. z. je existence závazku",
+      body: "Key point for creditor claims: the guarantee needs only the director's duty to compensate, performable rather than due (¶ 40), so we can sue him without the company or its administrator first demanding payment.",
+    },
+    {
       key: "open-question",
       kind: "highlight",
       anchor: "p-65",
@@ -104,14 +114,6 @@ export const CASE_LAW_READER_STORY: ReaderStory = {
         "Otázka, zda se musí jednat o závazek splatný, však dosud v rozhodovací praxi dovolacího soudu nebyla řešena.",
       color: "yellow",
       style: "highlight",
-    },
-    {
-      key: "three-readings-comment",
-      kind: "comment",
-      anchor: "p-66",
-      quote:
-        "Sousloví „ačkoli byl povinen škodu nahradit“ lze přitom vyložit trojím způsobem.",
-      body: "Key point for creditor claims: the Court settles on performability (¶ 40), so we can sue the director as guarantor without the company or its administrator first demanding compensation.",
     },
     {
       key: "performability",
