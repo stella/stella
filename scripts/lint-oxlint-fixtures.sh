@@ -23,30 +23,8 @@ bun scripts/calendar-day-ledger.ts --self-test
 bun scripts/calendar-day-ledger.ts
 bun scripts/fill-diagnostics-ledger.ts --self-test
 
-# Plugin sources have to load under Node's ESM resolver, not only Bun's.
-#
-# The lint below runs them through `bun --bun`, which infers a missing file
-# extension on a relative import. `node_modules/.bin/oxlint` is a Node shim and
-# does not, so a plugin importing a sibling without its extension loads in one
-# invocation and not the other. That asymmetry is expensive to meet in the
-# wild: the whole plugin set fails at config-parse time, and the error names
-# the offending import rather than whatever was being linted, which reads like
-# a broken toolchain rather than a one-character omission.
-#
-# Lint target is irrelevant — plugins load while the config is parsed, so any
-# file exercises it. The lint result is discarded on purpose; only the loader
-# is under test here.
-plugin_load_output=$(./node_modules/.bin/oxlint \
-  .oxlint-plugins/physical-properties.ts 2>&1 || true)
-
-if grep -qE "Failed to load JS plugin|ERR_MODULE_NOT_FOUND" \
-  <<<"$plugin_load_output"; then
-  echo "An oxlint plugin does not load under Node." >&2
-  echo "Usual cause: a relative import missing its file extension." >&2
-  echo "" >&2
-  echo "$plugin_load_output" >&2
-  exit 1
-fi
+bash scripts/check-oxlint-node-loader.test.sh
+bash scripts/check-oxlint-node-loader.sh
 
 # The rule sources sit outside every Turbo workspace, so no workspace `lint`
 # reaches them. The fixtures are excluded: they violate rules on purpose and

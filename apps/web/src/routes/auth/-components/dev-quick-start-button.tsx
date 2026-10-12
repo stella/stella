@@ -16,6 +16,7 @@ import { fetchDevOtp } from "@/lib/dev-otp";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { createRandomValue } from "@/lib/uuid";
 
 import { devQuickStartRuntime } from "./dev-quick-start-runtime";
 import {
@@ -186,7 +187,7 @@ export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
 
   const runQuickStart = async () => {
     const createIdentity = () =>
-      createDevQuickStartIdentity(crypto.randomUUID());
+      createDevQuickStartIdentity(createRandomValue());
     const retainedAttempt = devQuickStartRuntime.getAttempt(
       () =>
         readDevQuickStartAttempt() ??
@@ -289,7 +290,7 @@ export const DevQuickStartContinuation = ({
         readDevQuickStartAttempt() ??
         ({
           completedPhase: DEV_QUICK_START_PHASE.authenticate,
-          identity: createDevQuickStartIdentity(crypto.randomUUID()),
+          identity: createDevQuickStartIdentity(createRandomValue()),
           organizationId: null,
         } satisfies DevQuickStartAttempt),
     );

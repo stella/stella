@@ -7,7 +7,7 @@ export {
 } from "../packages/scripts/src/generated-files";
 
 type GeneratorCheck =
-  | { check: readonly string[]; checkedBy?: never; unchecked?: never }
+  | { check: readonly string[]; checkedBy?: string; unchecked?: never }
   | { check: null; checkedBy: string; unchecked?: never }
   | { check: null; checkedBy?: never; unchecked: string };
 
@@ -254,8 +254,8 @@ export const GENERATORS = [
       "packages/scan-engine/src/*.rs",
     ],
     write: ["bun", "--cwd=packages/scan-engine", "run", "build:wasm"],
-    check: null,
-    checkedBy: "Check generated WebAssembly",
+    check: ["bash", "packages/scan-engine/scripts/test-wasm-offline.sh"],
+    checkedBy: "Check generated WebAssembly from a fresh Cargo cache",
     autofix: false,
     after: [],
   },
@@ -535,6 +535,8 @@ export const GENERATORS = [
     inputs: [
       "apps/web/src/i18n/glossary.json",
       "packages/scripts/src/glossary-gen.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+      ".oxfmtrc.json",
     ],
     write: ["bun", "packages/scripts/src/glossary-gen.ts", "apps/web/src/i18n"],
     check: [

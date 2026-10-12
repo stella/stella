@@ -1,6 +1,5 @@
 {
   "case-law-results": [
-    "apps/api/src/lib/case-law/decision-lookup-vocabulary.ts",
     "apps/api/src/lib/case-law/search-warnings.ts",
     "apps/api/src/lib/chat/case-law-court-projection.ts",
     "apps/api/src/lib/chat/case-law-result-projections.ts",
@@ -43,6 +42,7 @@
     "packages/api-contract/src/index.ts",
     "packages/api-contract/src/launch-readiness.json",
     "packages/api-contract/src/legal-citation-links.ts",
+    "packages/api-contract/src/legal-resolve.ts",
     "packages/api-contract/src/limits.ts",
     "packages/api-contract/src/mcp-capability-executors.ts",
     "packages/api-contract/src/public-country-capability.ts",
@@ -78,6 +78,7 @@
     "packages/text-normalize/src/ascii-fold.ts",
     "packages/text-normalize/src/index.ts",
     "packages/text-normalize/src/spaced-letters.ts",
+    "packages/text-normalize/src/unicode.ts",
     "packages/time/src/dates.ts",
     "packages/time/src/index.ts",
     "packages/ui/src/components/accordion.tsx",
@@ -120,7 +121,6 @@
     "packages/ui/src/review/text-mark.tsx"
   ],
   "decision-reader": [
-    "apps/api/src/lib/case-law/decision-lookup-vocabulary.ts",
     "apps/api/src/lib/case-law/search-warnings.ts",
     "apps/api/src/lib/chat/case-law-court-projection.ts",
     "apps/api/src/lib/chat/case-law-result-projections.ts",
@@ -182,6 +182,7 @@
     "packages/locales/src/languages.ts",
     "packages/text-normalize/src/index.ts",
     "packages/text-normalize/src/spaced-letters.ts",
+    "packages/text-normalize/src/unicode.ts",
     "packages/ui/src/components/bidi-text.tsx",
     "packages/ui/src/components/breadcrumb.tsx",
     "packages/ui/src/components/button.tsx",
