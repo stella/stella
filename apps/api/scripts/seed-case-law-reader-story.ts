@@ -11,7 +11,7 @@
  * offsets and quotes are derived from the decision's AST, never typed in.
  */
 import { panic } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { toChatDecisionPassageHref } from "@stll/api-contract";
 import type {
@@ -368,8 +368,8 @@ const readStoryDecision = async (db: MaintenanceDb) => {
 };
 
 /**
- * Seeds the story for one user. Idempotent: the user's marks on the decision
- * and the fixed-id thread are replaced on every run, the thread's messages
+ * Seeds the story for one user. Idempotent: the story's fixed-id marks and
+ * thread are replaced on every run, the thread's messages
  * going with it by cascade.
  */
 export const seedCaseLawReaderStory = async ({
@@ -383,18 +383,18 @@ export const seedCaseLawReaderStory = async ({
   const chat = buildReaderStoryChatRows(input);
   await withAggregateTransaction(db, async (tx) => {
     // audit: skip — dev seed replaces its own fixed-id rows.
-    // Every mark this user has on the decision, not only today's ids: a mark
-    // dropped from the story must not linger in the shot after a reseed.
-    await tx
-      .delete(legalReaderAnnotations)
-      .where(
-        and(
-          eq(legalReaderAnnotations.organizationId, organizationId),
-          eq(legalReaderAnnotations.userId, userId),
-          eq(legalReaderAnnotations.targetType, "decision"),
-          eq(legalReaderAnnotations.targetId, decisionId),
+    // Only the story's own ids: the seed can run against an account whose
+    // owner marked this decision too, and those marks are theirs to keep.
+    await tx.delete(legalReaderAnnotations).where(
+      and(
+        eq(legalReaderAnnotations.organizationId, organizationId),
+        eq(legalReaderAnnotations.userId, userId),
+        inArray(
+          legalReaderAnnotations.id,
+          annotations.map(({ id }) => id),
         ),
-      );
+      ),
+    );
     await tx.delete(chatThreads).where(eq(chatThreads.id, chat.thread.id));
     await tx.insert(legalReaderAnnotations).values(annotations);
     await tx.insert(chatThreads).values(chat.thread);
