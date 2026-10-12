@@ -21,9 +21,7 @@ const windowSchema = v.pipe(
 );
 const windowsSchema = v.tupleWithRest([windowSchema], windowSchema);
 
-export type CitationEvidenceWindow = Readonly<
-  v.InferOutput<typeof windowSchema>
->;
+type CitationEvidenceWindow = Readonly<v.InferOutput<typeof windowSchema>>;
 export type CitationEvidenceWindows = readonly [
   CitationEvidenceWindow,
   ...CitationEvidenceWindow[],
