@@ -38,12 +38,22 @@ test("research provenance keeps the complete passage before its court chip", () 
       <FormattingProvider locale="en" timeZone="UTC">
         <DecisionPassageCitation
           decision={decision}
-          citation={{ kind: "decision-passage", anchorId: "p-12", excerpt }}
+          citation={{
+            kind: "decision-passage",
+            anchorId: "p-12",
+            courtParagraphNumber: 8,
+            excerpt,
+          }}
           onOpen={() => undefined}
         />
         <DecisionPassageCitation
           decision={decision}
-          citation={{ kind: "decision-passage", anchorId: "p-13", excerpt }}
+          citation={{
+            kind: "decision-passage",
+            anchorId: "p-13",
+            courtParagraphNumber: null,
+            excerpt,
+          }}
           onOpen={() => undefined}
         />
       </FormattingProvider>
@@ -58,4 +68,8 @@ test("research provenance keeps the complete passage before its court chip", () 
   );
   expect(markup).toContain("#p-12");
   expect(markup).toContain("#p-13");
+  // The numbered passage names its paragraph on the chip and in its
+  // accessible name; the unnumbered one names none.
+  expect(markup.match(/\u00b6\u00a08/gu)).toHaveLength(1);
+  expect(markup.match(/, paragraph 8"/gu)).toHaveLength(1);
 });
