@@ -4,6 +4,7 @@ import { Result } from "better-result";
 import type { Transaction } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
@@ -33,6 +34,7 @@ type WithVisibleSignalOptions = {
   actorUserId: SafeId<"user">;
   memberRole: AuthorizedMemberRole;
   signalId: SafeId<"signal">;
+  entityCreationWorkspaceId?: SafeId<"workspace">;
   expectedUpdatedAt?: Date;
 };
 
@@ -44,6 +46,7 @@ export const withVisibleSignal = async <R, E>(
     actorUserId,
     memberRole,
     signalId,
+    entityCreationWorkspaceId,
     expectedUpdatedAt,
   }: WithVisibleSignalOptions,
   run: <U, S, T, O>(context: {
@@ -86,6 +89,10 @@ export const withVisibleSignal = async <R, E>(
               message: "Signal action is not permitted",
             }),
           );
+        }
+        // Entity creation holds its matter fence before the signal row.
+        if (entityCreationWorkspaceId !== undefined) {
+          await lockWorkspacesForEntityCap(tx, [entityCreationWorkspaceId]);
         }
         // Lock only the signal table: the display joins include nullable sides.
         await withAggregateLock({
