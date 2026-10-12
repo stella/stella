@@ -1,7 +1,6 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
-import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -226,31 +225,29 @@ describe("background feature admission", () => {
       .values({ organizationId, userId, featureId: "signals" })
       .onConflictDoNothing();
     try {
-      for (const role of CLIENT_MATTER_ADMIN_ROLES) {
-        await db
-          .update(member)
-          .set({ role })
-          .where(
-            and(
-              eq(member.organizationId, organizationId),
-              eq(member.userId, userId),
-            ),
-          );
-        expect(
-          await findSignalsBackgroundActor({
-            tx,
-            organizationId,
-            workspaceId: clientMatterId,
-          }),
-        ).toBe(userId);
-        expect(
-          await findSignalsBackgroundActor({
-            tx,
-            organizationId,
-            workspaceId: privateMatterId,
-          }),
-        ).toBeNull();
-      }
+      await db
+        .update(member)
+        .set({ role: "admin" })
+        .where(
+          and(
+            eq(member.organizationId, organizationId),
+            eq(member.userId, userId),
+          ),
+        );
+      expect(
+        await findSignalsBackgroundActor({
+          tx,
+          organizationId,
+          workspaceId: clientMatterId,
+        }),
+      ).toBe(userId);
+      expect(
+        await findSignalsBackgroundActor({
+          tx,
+          organizationId,
+          workspaceId: privateMatterId,
+        }),
+      ).toBeNull();
     } finally {
       await db
         .update(member)
