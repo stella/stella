@@ -3,16 +3,23 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
-GlobalRegistrator.register({ url: "http://localhost:3000/auth/error" });
 const originalFetch = globalThis.fetch;
+GlobalRegistrator.register({ url: "http://localhost:3000/auth/error" });
+// Auth plugins subscribe to session state during initialization. Keep those
+// background reads inside the fake transport until the DOM has closed.
+const backgroundFetch = Object.assign(async () => Response.json(null), {
+  preconnect: () => undefined,
+});
+globalThis.fetch = backgroundFetch;
 const { loadSocialLinkHint, NO_SOCIAL_LINK_HINT } =
   await import("./social-link-hint");
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  globalThis.fetch = backgroundFetch;
 });
 afterAll(async () => {
   await unregisterDomEnvironment();
+  globalThis.fetch = originalFetch;
 });
 
 const respond = (reply: () => Promise<Response>) => {

@@ -11,10 +11,12 @@
    of reading an unhandled one as "stop". Remove when upstream exposes the
    raw reason.
 
+
 diff --git a/dist/esm/adapters/converse-text.js b/dist/esm/adapters/converse-text.js
+index 174e3156c0d6f3287f0f405644662a34cb650394..31174a1a47b11b31ad20245e62b26c45fa9aa42c 100644
 --- a/dist/esm/adapters/converse-text.js
 +++ b/dist/esm/adapters/converse-text.js
-@@ -6,7 +6,7 @@
+@@ -6,7 +6,7 @@ import { processConverseStream, throwIfConverseStreamError } from "../converse/s
  import { buildStructuredToolConfig } from "../converse/structured-output.js";
  import { EventType, convertSchemaToJsonSchema } from "@tanstack/ai";
  import { BaseTextAdapter } from "@tanstack/ai/adapters";
@@ -23,7 +25,7 @@ diff --git a/dist/esm/adapters/converse-text.js b/dist/esm/adapters/converse-tex
  //#region src/adapters/converse-text.ts
  /**
  * Bedrock Converse text adapter. Wires the Converse translation modules (message
-@@ -126,6 +126,7 @@
+@@ -126,6 +126,7 @@ var BedrockConverseTextAdapter = class extends BaseTextAdapter {
  			});
  		} catch (error) {
  			const errorPayload = toRunErrorPayload(error, `${this.name}.chatStream failed`);
@@ -31,7 +33,7 @@ diff --git a/dist/esm/adapters/converse-text.js b/dist/esm/adapters/converse-tex
  			options.logger.errors(`${this.name}.chatStream fatal`, {
  				error: errorPayload,
  				source: `${this.name}.chatStream`
-@@ -136,6 +137,7 @@
+@@ -136,6 +137,7 @@ var BedrockConverseTextAdapter = class extends BaseTextAdapter {
  				timestamp: Date.now(),
  				message: errorPayload.message,
  				...errorPayload.code !== void 0 && { code: errorPayload.code },
@@ -40,9 +42,10 @@ diff --git a/dist/esm/adapters/converse-text.js b/dist/esm/adapters/converse-tex
  					message: errorPayload.message,
  					...errorPayload.code !== void 0 && { code: errorPayload.code }
 diff --git a/dist/esm/converse/stream-processor.js b/dist/esm/converse/stream-processor.js
+index baef7cac6284264c0bcb4483ebb406399d5d729d..cabb2253462757345a7e4c8222b47437b962c59f 100644
 --- a/dist/esm/converse/stream-processor.js
 +++ b/dist/esm/converse/stream-processor.js
-@@ -59,6 +59,7 @@
+@@ -59,6 +59,7 @@ async function* processConverseStream(stream, newMessageId, lifecycle = {}) {
  	const toolCallsByIndex = /* @__PURE__ */ new Map();
  	let usage;
  	let finishReason;
@@ -50,7 +53,7 @@ diff --git a/dist/esm/converse/stream-processor.js b/dist/esm/converse/stream-pr
  	function* ensureRunStarted() {
  		if (hasEmittedRunStarted) return;
  		hasEmittedRunStarted = true;
-@@ -180,6 +181,7 @@
+@@ -180,6 +181,7 @@ async function* processConverseStream(stream, newMessageId, lifecycle = {}) {
  		}
  		if ("messageStop" in ev) {
  			const stopReason = ev.messageStop?.stopReason;
@@ -58,7 +61,7 @@ diff --git a/dist/esm/converse/stream-processor.js b/dist/esm/converse/stream-pr
  			finishReason = stopReason === "tool_use" ? "tool_calls" : stopReason === "max_tokens" ? "length" : stopReason === "content_filtered" ? "content_filter" : "stop";
  			continue;
  		}
-@@ -207,13 +209,16 @@
+@@ -207,13 +209,16 @@ async function* processConverseStream(stream, newMessageId, lifecycle = {}) {
  		timestamp: Date.now()
  	};
  	yield* closeReasoning();

@@ -1,24 +1,15 @@
-1. stop_reason refusal finishes as content_filter; it read as stop.
-2. The max_tokens RUN_ERROR carries the message_delta usage, so a reply cut
-   off at the output ceiling still reports what it spent.
-3. A stream with no stop reason ends in a RUN_ERROR (code
-   incomplete-stream) instead of no terminal event, or a stop when
-   message_stop arrives alone, and every RUN_ERROR carries the latest
-   usage message_start or message_delta reported.
-   Upstream PR to be opened for 1-3; remove when released.
-4. The terminal event of a stop reason carries it as
-   metadata.providerStopReason, so the service decides every stop reason from
-   the SDK's union (apps/api/src/lib/chat/provider-stop-reasons.ts) instead
-   of reading an unhandled one as "stop". Remove when upstream exposes the
-   raw reason.
+Incomplete and failed streams retain reported usage; terminal events
+retain provider stop evidence. Upstream handles max_tokens usage.
+Regression: apps/api/src/lib/tanstack-ai-provider-wire.test.ts.
 
 diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
+index d69ca4cea5412bbaf2d490963b5c022822696cf8..5b3fda96bea8b28e4bd23e3d6dd4a42595e4507c 100644
 --- a/dist/esm/adapters/text.js
 +++ b/dist/esm/adapters/text.js
-@@ -508,9 +508,12 @@
- 		let hasEmittedTextMessageStart = false;
+@@ -519,9 +519,12 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
  		let hasEmittedRunFinished = false;
  		let currentBlockType = null;
+ 		let messageStartUsage;
 +		let reportedUsage;
  		try {
  			for await (const event of stream) {
@@ -28,7 +19,7 @@ diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
  				if (!hasEmittedRunStarted) {
  					hasEmittedRunStarted = true;
  					yield {
-@@ -779,14 +782,6 @@
+@@ -852,14 +855,6 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
  							timestamp: Date.now()
  						};
  					}
@@ -43,29 +34,25 @@ diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
  				} else if (event.type === "message_delta") {
  					if (event.delta.stop_reason) {
  						hasEmittedRunFinished = true;
-@@ -814,7 +809,8 @@
+@@ -888,7 +883,8 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
  									model,
  									timestamp: Date.now(),
  									finishReason: "tool_calls",
--									usage: buildAnthropicUsage(event.usage)
-+									usage: buildAnthropicUsage(event.usage),
+-									usage
++									usage,
 +									metadata: { providerStopReason: event.delta.stop_reason }
  								};
  								break;
  							case "max_tokens":
-@@ -832,12 +828,26 @@
- 									timestamp: Date.now(),
- 									message: "The response was cut off because the maximum token limit was reached.",
- 									code: "max_tokens",
-+									usage: buildAnthropicUsage(event.usage),
- 									error: {
+@@ -910,7 +906,20 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
  										message: "The response was cut off because the maximum token limit was reached.",
  										code: "max_tokens"
--									}
-+									},
+ 									},
+-									usage
++									usage,
 +									metadata: { providerStopReason: event.delta.stop_reason }
- 								};
- 								break;
++								};
++								break;
 +							case "refusal":
 +								yield {
 +									type: EventType.RUN_FINISHED,
@@ -74,19 +61,17 @@ diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
 +									model,
 +									timestamp: Date.now(),
 +									finishReason: "content_filter",
-+									usage: buildAnthropicUsage(event.usage),
++									usage,
 +									metadata: { providerStopReason: event.delta.stop_reason }
-+								};
-+								break;
+ 								};
+ 								break;
  							default: yield {
- 								type: EventType.RUN_FINISHED,
- 								runId,
-@@ -845,12 +855,26 @@
+@@ -920,12 +929,26 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
  								model,
  								timestamp: Date.now(),
  								finishReason: "stop",
--								usage: buildAnthropicUsage(event.usage)
-+								usage: buildAnthropicUsage(event.usage),
+-								usage
++								usage,
 +								metadata: { providerStopReason: event.delta.stop_reason }
  							};
  						}
@@ -100,7 +85,7 @@ diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
 +				timestamp: Date.now(),
 +				message: "The provider stream ended before a stop reason.",
 +				code: "incomplete-stream",
-+				...reportedUsage && { usage: buildAnthropicUsage(reportedUsage) },
++				...reportedUsage && { usage: buildAnthropicUsage(reportedUsage, messageStartUsage) },
 +				error: {
 +					message: "The provider stream ended before a stop reason.",
 +					code: "incomplete-stream"
@@ -109,11 +94,11 @@ diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
  		} catch (error) {
  			const err = error;
  			const rawEvent = toRunErrorRawEvent(error);
-@@ -865,6 +889,7 @@
+@@ -940,6 +963,7 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
  				message: err.message || "Unknown error occurred",
  				code: err.code || String(err.status),
  				...rawEvent !== void 0 && { rawEvent },
-+				...reportedUsage && { usage: buildAnthropicUsage(reportedUsage) },
++				...reportedUsage && { usage: buildAnthropicUsage(reportedUsage, messageStartUsage) },
  				error: {
  					message: err.message || "Unknown error occurred",
  					code: err.code || String(err.status)
