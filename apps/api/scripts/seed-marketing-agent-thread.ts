@@ -6,6 +6,7 @@ import {
   toChatSourceCitationHref,
   type ChatSourceCitationTarget,
 } from "@stll/api-contract";
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import { generatedVisualInputSchema } from "@stll/api-contract/generated-visual";
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
@@ -449,7 +450,10 @@ export const buildMarketingAgentThread = ({
           input: visualInput,
           state: "complete",
           output: visualOutput,
-          metadata: { stellaStepId: visualToolCallId },
+          metadata: {
+            [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server",
+            stellaStepId: visualToolCallId,
+          },
         },
         visualPart,
         {

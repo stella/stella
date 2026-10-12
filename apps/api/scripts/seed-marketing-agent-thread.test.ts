@@ -5,6 +5,7 @@ import {
   CHAT_SOURCE_CITATION_HREF_PREFIX,
   parseCanonicalChatSourceCitationHref,
 } from "@stll/api-contract";
+import { chatToolExecutor } from "@stll/api-contract/chat";
 import {
   GENERATED_VISUAL_URI_PREFIX,
   generatedVisualInputSchema,
@@ -221,6 +222,8 @@ describe("marketing agent thread", () => {
       state: "complete",
       id: resource.toolCallId,
     });
+    // show_visual runs on the server; persisted calls record who executes them.
+    expect(chatToolExecutor(call)).toBe("server");
     expect(v.is(visualPreviewToolOutputSchema, call?.output)).toBe(true);
     expect(resource).toEqual(visualFile.part);
     expect(resource.resource.uri).toBe(
@@ -253,7 +256,7 @@ describe("marketing agent thread", () => {
     );
   });
 
-  test("rebuilding yields the same rows, so a re-seed overwrites rather than duplicates", () => {
+  test("rebuilding is deterministic", () => {
     expect(build()).toEqual(build());
   });
 });
