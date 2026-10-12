@@ -58,13 +58,12 @@ const isDrizzleViewDefinitionSelect = (
   source: ts.SourceFile,
 ): boolean => {
   let callback: ts.Node | undefined;
-  for (
-    let current: ts.Node | undefined = node;
-    current;
-    current = current.parent
-  ) {
+  for (let current: ts.Node = node; ; current = current.parent) {
     if (ts.isArrowFunction(current) || ts.isFunctionExpression(current)) {
       callback = current;
+      break;
+    }
+    if (current === source) {
       break;
     }
   }

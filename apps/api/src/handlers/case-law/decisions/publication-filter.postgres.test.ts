@@ -331,7 +331,7 @@ if (!databaseUrl || !runPostgresTests) {
             }),
         );
         if (!("items" in citations)) {
-          return panic("Expected a citation page for a valid cursor");
+          panic("Expected a citation page for a valid cursor");
         }
         expect(
           citations.items.map(({ citingDecisionId }) => citingDecisionId),
@@ -471,7 +471,7 @@ if (!databaseUrl || !runPostgresTests) {
         for (const [index, state] of states.entries()) {
           const row = rows[index];
           if (row === undefined) {
-            return panic("Expected a row for each publication state");
+            panic("Expected a row for each publication state");
           }
           expect(publishedIds.has(row.id)).toBe(state.visibility);
         }

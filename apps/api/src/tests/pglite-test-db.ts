@@ -645,7 +645,9 @@ const applyStellaTablePrivileges = async (client: PGlite): Promise<void> => {
   await client.exec(statements.join(";\n"));
 };
 
-const installTestPublicLawViews = async (db: AnyDrizzle): Promise<void> => {
+const installTestPublicLawViews = async (
+  db: Pick<ReturnType<typeof drizzle>, "execute">,
+): Promise<void> => {
   const dialect = new PgDialect();
   for (const view of publicLawViews) {
     const config = getViewConfig(view);

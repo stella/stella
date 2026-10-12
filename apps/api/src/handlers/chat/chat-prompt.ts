@@ -2223,7 +2223,10 @@ export const buildActiveDecisionSection = async ({
                   documentAst: publishedCaseLawDecisions.documentAst,
                   fulltext: publishedCaseLawDecisions.fulltext,
                   textS3Key: publishedCaseLawDecisions.textS3Key,
-                  source: { descriptor: caseLawSources.descriptor },
+                  source: {
+                    id: caseLawSources.id,
+                    descriptor: caseLawSources.descriptor,
+                  },
                 })
                 .from(publishedCaseLawDecisions)
                 .leftJoin(

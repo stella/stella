@@ -33,6 +33,9 @@ const TURBO_ROOT_INPUT_PREFIX = "$TURBO_ROOT$/";
 const DESKTOP_DIR = "apps/desktop";
 const CRATE_DIR = "apps/desktop/src-tauri";
 const CRATE_SUBTREE_INPUT = "src-tauri/**";
+// rustup resolves the crate's compiler from this file, so a change to it
+// changes every native test result.
+const TOOLCHAIN_FILE = "apps/desktop/rust-toolchain.toml";
 const TASK_NAME = "@stll/desktop#test:native";
 const DETECTOR_SCRIPT = "scripts/detect-tauri-rust-changes.sh";
 const NEGATION_PREFIX = "!";
@@ -290,6 +293,15 @@ export const checkDesktopRustInputs = (root: string): readonly string[] => {
 
   const inputs = declaredInputs(root);
 
+  if (
+    !inputs.some((input) => matchesRootInput(TOOLCHAIN_FILE, input.resolved))
+  ) {
+    errors.push(
+      `${TOOLCHAIN_FILE} selects the crate's compiler, but no ${TASK_NAME} input covers it.\n` +
+        `    Fix: add "rust-toolchain.toml" to tasks["${TASK_NAME}"].inputs in ${TURBO_CONFIG}.`,
+    );
+  }
+
   for (const [target, { file, line }] of embeds) {
     const covered = inputs.some((input) =>
       matchesRootInput(target, input.resolved),
@@ -306,7 +318,7 @@ export const checkDesktopRustInputs = (root: string): readonly string[] => {
     if (input.raw === CRATE_SUBTREE_INPUT) {
       continue;
     }
-    const matched = [...embeds.keys()].some((target) =>
+    const matched = [...embeds.keys(), TOOLCHAIN_FILE].some((target) =>
       matchesRootInput(target, input.resolved),
     );
     if (!matched) {
@@ -317,7 +329,7 @@ export const checkDesktopRustInputs = (root: string): readonly string[] => {
     }
   }
 
-  for (const target of embeds.keys()) {
+  for (const target of [...embeds.keys(), TOOLCHAIN_FILE]) {
     const result = Bun.spawnSync(["bash", DETECTOR_SCRIPT, target], {
       cwd: root,
       stderr: "inherit",

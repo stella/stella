@@ -379,7 +379,7 @@ describe.serial("public-law relation scan", () => {
     ).toEqual([]);
   });
 
-  test("schema re-exports stay restricted while private helper reads stay owned", async () => {
+  test("schema re-exports and helper reads keep the restricted view boundary", async () => {
     for (const binding of [
       {
         fixture: "case-law-unredacted-reexport",
@@ -408,7 +408,7 @@ describe.serial("public-law relation scan", () => {
         "void caseLawPublicReadDb;",
         "void rows;",
       ].join("\n");
-      const expectedOutsideOwner = binding.name === "helper" ? [] : [2];
+      const expectedOutsideOwner = [2];
       expect(
         await lint(source, "apps/api/src/handlers/case-law/read.ts"),
       ).toEqual(expectedOutsideOwner);

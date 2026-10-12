@@ -216,6 +216,115 @@ const isSchemaOrReexportModule = (moduleId: string | null): boolean => {
   return result;
 };
 
+type SchemaReadCollectionOptions = {
+  readonly identities: Set<RestrictedSchemaImport>;
+  readonly readSource: LocalModuleSourceReader;
+  readonly seen: Set<string>;
+  readonly exportName?: string;
+};
+
+const includeSchemaDependency = (
+  dependency: string,
+  { identities, readSource, seen }: SchemaReadCollectionOptions,
+  importedName?: string,
+): void => {
+  for (const identity of moduleRestrictedSchemaReadsFromSources(dependency, {
+    readSource,
+    seen,
+    ...(importedName === undefined ? {} : { exportName: importedName }),
+  })) {
+    identities.add(identity);
+  }
+};
+
+const addImportedSchemaReads = (
+  statement: ts.ImportDeclaration,
+  moduleId: string,
+  options: SchemaReadCollectionOptions,
+): void => {
+  const clause = statement.importClause;
+  if (
+    clause === undefined ||
+    clause.phaseModifier === ts.SyntaxKind.TypeKeyword ||
+    !ts.isStringLiteral(statement.moduleSpecifier)
+  ) {
+    return;
+  }
+  const dependency = canonicalModuleId(
+    statement.moduleSpecifier.text,
+    moduleId,
+  );
+  if (!moduleReexportsSchema(dependency, { readSource: options.readSource })) {
+    return;
+  }
+  const bindings = clause.namedBindings;
+  if (clause.name !== undefined) {
+    includeSchemaDependency(
+      dependency,
+      options,
+      isSchemaModule(dependency) ? undefined : "default",
+    );
+  }
+  if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
+    includeSchemaDependency(dependency, options);
+  } else if (bindings !== undefined && ts.isNamedImports(bindings)) {
+    for (const element of bindings.elements) {
+      if (element.isTypeOnly) {
+        continue;
+      }
+      includeSchemaDependency(
+        dependency,
+        options,
+        element.propertyName?.text ?? element.name.text,
+      );
+    }
+  }
+};
+
+const addReexportedSchemaReads = (
+  statement: ts.ExportDeclaration,
+  moduleId: string,
+  options: SchemaReadCollectionOptions,
+): void => {
+  if (
+    statement.isTypeOnly ||
+    statement.moduleSpecifier === undefined ||
+    !ts.isStringLiteral(statement.moduleSpecifier)
+  ) {
+    return;
+  }
+  const dependency = canonicalModuleId(
+    statement.moduleSpecifier.text,
+    moduleId,
+  );
+  const clause = statement.exportClause;
+  if (clause === undefined) {
+    includeSchemaDependency(dependency, options, options.exportName);
+  } else if (ts.isNamespaceExport(clause)) {
+    if (
+      options.exportName === undefined ||
+      clause.name.text === options.exportName
+    ) {
+      includeSchemaDependency(dependency, options);
+    }
+  } else {
+    for (const element of clause.elements) {
+      if (
+        element.isTypeOnly ||
+        (options.exportName !== undefined &&
+          element.name.text !== options.exportName)
+      ) {
+        continue;
+      }
+      includeSchemaDependency(
+        dependency,
+        options,
+        element.propertyName?.text ?? element.name.text,
+      );
+    }
+  }
+};
+
 export const moduleRestrictedSchemaReadsFromSources = (
   moduleId: string,
   {
@@ -257,84 +366,22 @@ export const moduleRestrictedSchemaReadsFromSources = (
     true,
     sourceFile.filename.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
-  const includeDependency = (dependency: string, name?: string) => {
-    for (const identity of moduleRestrictedSchemaReadsFromSources(dependency, {
-      readSource,
-      seen,
-      ...(name === undefined ? {} : { exportName: name }),
-    })) {
-      identities.add(identity);
-    }
-  };
   for (const statement of file.statements) {
     if (ts.isImportDeclaration(statement)) {
-      const clause = statement.importClause;
-      if (
-        clause === undefined ||
-        clause.phaseModifier === ts.SyntaxKind.TypeKeyword ||
-        !ts.isStringLiteral(statement.moduleSpecifier)
-      ) {
-        continue;
-      }
-      const dependency = canonicalModuleId(
-        statement.moduleSpecifier.text,
-        moduleId,
-      );
-      if (!moduleReexportsSchema(dependency, { readSource })) {
-        continue;
-      }
-      const bindings = clause.namedBindings;
-      if (clause.name !== undefined) {
-        includeDependency(
-          dependency,
-          isSchemaModule(dependency) ? undefined : "default",
-        );
-      }
-      if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
-        includeDependency(dependency);
-      } else if (bindings !== undefined && ts.isNamedImports(bindings)) {
-        for (const element of bindings.elements) {
-          if (!element.isTypeOnly) {
-            includeDependency(
-              dependency,
-              element.propertyName?.text ?? element.name.text,
-            );
-          }
-        }
-      }
+      addImportedSchemaReads(statement, moduleId, {
+        identities,
+        readSource,
+        seen,
+      });
       continue;
     }
-    if (
-      !ts.isExportDeclaration(statement) ||
-      statement.isTypeOnly ||
-      statement.moduleSpecifier === undefined ||
-      !ts.isStringLiteral(statement.moduleSpecifier)
-    ) {
-      continue;
-    }
-    const dependency = canonicalModuleId(
-      statement.moduleSpecifier.text,
-      moduleId,
-    );
-    const clause = statement.exportClause;
-    if (clause === undefined) {
-      includeDependency(dependency, exportName);
-    } else if (ts.isNamespaceExport(clause)) {
-      if (exportName === undefined || clause.name.text === exportName) {
-        includeDependency(dependency);
-      }
-    } else {
-      for (const element of clause.elements) {
-        if (
-          !element.isTypeOnly &&
-          (exportName === undefined || element.name.text === exportName)
-        ) {
-          includeDependency(
-            dependency,
-            element.propertyName?.text ?? element.name.text,
-          );
-        }
-      }
+    if (ts.isExportDeclaration(statement)) {
+      addReexportedSchemaReads(statement, moduleId, {
+        identities,
+        readSource,
+        seen,
+        ...(exportName === undefined ? {} : { exportName }),
+      });
     }
   }
   return identities;
@@ -1611,7 +1658,7 @@ export default eslintCompatPlugin({
               )) {
                 if (
                   identity === "unredactedCaseLawDecisions" &&
-                  !isSchemaOrReexportModule(importedModule)
+                  canUseUnredactedView(`${importedModule}.ts`)
                 ) {
                   continue;
                 }

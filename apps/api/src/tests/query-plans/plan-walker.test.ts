@@ -526,16 +526,22 @@ test("does not merge separate OR and subplan predicates", () => {
 
 test("excludes only the real workspace authorization subplan", () => {
   const scan = scanOccurrences(workspaceRlsPlan).at(0);
-  expect(scan?.relation).toBe("entities");
-  expect(scan?.filter).toContain("SubPlan 3");
-  expect(scan?.subplans[0]?.relations).toContain("aw");
   if (scan === undefined) {
     panic("Workspace RLS fixture has no scan");
   }
-  expect(withoutAuthorizationSubplans(scan)).not.toContain("SubPlan 3");
+  const authorization = scan.subplans.find(({ relations }) =>
+    relations.includes("aw"),
+  );
+  if (authorization?.name === undefined || authorization.name === null) {
+    panic("Workspace RLS fixture has no authorization subplan");
+  }
+  expect(scan.relation).toBe("entities");
+  expect(scan.filter).toContain(authorization.name);
+  expect(withoutAuthorizationSubplans(scan)).not.toContain(authorization.name);
+  const otherName = `${authorization.name}0`;
   const otherSubplan = {
     ...scan,
-    filter: `${scan.filter ?? ""} AND (hashed SubPlan 30)`,
+    filter: `${scan.filter ?? ""} AND (hashed ${otherName})`,
   };
-  expect(withoutAuthorizationSubplans(otherSubplan)).toContain("SubPlan 30");
+  expect(withoutAuthorizationSubplans(otherSubplan)).toContain(otherName);
 });

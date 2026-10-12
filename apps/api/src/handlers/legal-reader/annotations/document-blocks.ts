@@ -56,7 +56,10 @@ const resolveDecision = async (
           contentHash: publishedCaseLawDecisions.contentHash,
           documentAst: publishedCaseLawDecisions.documentAst,
           id: publishedCaseLawDecisions.id,
-          source: { descriptor: caseLawSources.descriptor },
+          source: {
+            id: caseLawSources.id,
+            descriptor: caseLawSources.descriptor,
+          },
         })
         .from(publishedCaseLawDecisions)
         .leftJoin(

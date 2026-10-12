@@ -10,6 +10,8 @@ import {
   resolveModuleFile,
 } from "@/api/tests/module-mock-factories";
 
+import { isCaseLawPublicReadModule } from "../../../../../.oxlint-plugins/public-case-law-db-boundary.ts";
+
 const readRootFixture = (relativePath: string) =>
   readFileSync(
     path.join(import.meta.dir, "../../../../..", relativePath),
@@ -118,7 +120,18 @@ describe("custom oxlint guardrails", () => {
     );
     // The rule scopes itself to importers of the public read connection.
     expect(pluginSource).toContain("apps/api/src/lib/case-law-public-read-db");
-    expect(pluginSource).toContain("importsPublicReadDb");
+    expect(
+      isCaseLawPublicReadModule(
+        "apps/api/src/handlers/case-law/decisions/read.ts",
+        new Set(["apps/api/src/lib/case-law-public-read-db"]),
+      ),
+    ).toBe(true);
+    expect(
+      isCaseLawPublicReadModule(
+        "apps/api/src/handlers/case-law/decisions/read.ts",
+        new Set(),
+      ),
+    ).toBe(false);
     expect(pluginSource).toContain("privateCaseLawImport");
     expect(pluginSource).toContain("privateTxQuery");
     expect(pluginSource).toContain("privateSqlText");
