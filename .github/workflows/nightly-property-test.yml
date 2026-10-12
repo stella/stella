@@ -251,6 +251,8 @@ jobs:
         run: bash scripts/retry.sh bun install --ignore-scripts
         env:
           NPM_TOKEN: ""
+          # A tolerated failure is a warning, not a failure annotation.
+          RETRY_FAILURE_LEVEL: warning
 
       - name: Prepare environment
         run: |
