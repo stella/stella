@@ -839,11 +839,8 @@ process.exit(childExitStatus(result));
         tasks,
         `${name}#typecheck`,
         "dependsOn",
-      ).filter(
-        (dependency) =>
-          dependency.startsWith("generate:") ||
-          dependency === "typecheck:declarations" ||
-          dependency.endsWith("#typecheck:declarations"),
+      ).filter((dependency) =>
+        dependency.split("#").at(-1)?.startsWith("generate:"),
       );
       if (producers.length > 0) {
         // A dedicated cached producer owns the artifact; both compiler tasks

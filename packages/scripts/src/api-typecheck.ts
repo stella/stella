@@ -15,7 +15,7 @@ if (!process.env["TURBO_HASH"]) {
       "turbo",
       "run",
       process.argv.includes("--declarations")
-        ? "typecheck:declarations"
+        ? "generate:typecheck-declarations"
         : "typecheck",
       "--filter=@stll/api",
     ],

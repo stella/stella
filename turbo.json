@@ -734,13 +734,13 @@
       ]
     },
     "@stll/legal-atlas-runner#typecheck": {
-      "dependsOn": ["transit", "@stll/api#typecheck:declarations"]
+      "dependsOn": ["transit", "@stll/api#generate:typecheck-declarations"]
     },
     "@stll/legal-atlas-runner#lint": {
       "dependsOn": [
         "transit",
         "^generate:capability-runtime",
-        "@stll/api#typecheck:declarations"
+        "@stll/api#generate:typecheck-declarations"
       ]
     },
     "@stll/api#typecheck": {
@@ -989,7 +989,7 @@
         "transit",
         "@stll/cli#codegen:runtime",
         "generate:capability-runtime",
-        "typecheck:declarations"
+        "generate:typecheck-declarations"
       ],
       "inputs": [
         "$TURBO_ROOT$/.oxlint-plugins/**",
@@ -1071,7 +1071,7 @@
         "transit",
         "@stll/cli#codegen:runtime",
         "generate:capability-runtime",
-        "typecheck:declarations"
+        "generate:typecheck-declarations"
       ],
       "inputs": [
         "$TURBO_ROOT$/packages/agent-input/**",
