@@ -33,6 +33,7 @@ import type {
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import type { ConditionNode } from "@stll/conditions";
 import { logErrorOutput, printError } from "@stll/errors";
 import { deriveBlockId } from "@stll/folio-core/server";
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
@@ -5097,7 +5098,7 @@ export const seedPlaybooks = async (
                         right: { type: "literal", value: 30 },
                       },
                     ],
-                  },
+                  } satisfies ConditionNode,
                 },
                 guidance: "Splatnost nad 30 dnů zhoršuje cash flow.",
                 enabled: true,

@@ -734,7 +734,18 @@
       ]
     },
     "@stll/legal-atlas-runner#typecheck": {
-      "dependsOn": ["transit", "@stll/api#generate:typecheck-declarations"]
+      "cache": true,
+      "dependsOn": ["transit", "@stll/api#generate:typecheck-declarations"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.npmrc",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/packages/typescript-config/**",
+        "$TURBO_ROOT$/patches/**",
+        "$TURBO_ROOT$/types/**"
+      ],
+      "outputs": []
     },
     "@stll/legal-atlas-runner#lint": {
       "dependsOn": [

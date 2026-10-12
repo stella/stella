@@ -7,6 +7,7 @@ import ts from "typescript";
 
 import { typescriptModuleReferences } from "../packages/scripts/src/api-typecheck-declarations";
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
+import { withoutTsgoOnlyOptionDiagnostics } from "../packages/scripts/src/tsgo-compiler-options";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const SECONDARY_PROJECTS = [
@@ -32,7 +33,7 @@ const readProject = (filename: string) => {
         panic(ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")),
     },
   );
-  if (!parsed || parsed.errors.length > 0) {
+  if (!parsed || withoutTsgoOnlyOptionDiagnostics(parsed.errors).length > 0) {
     panic(`Cannot read TypeScript project ${filename}`);
   }
   return parsed;
@@ -102,7 +103,7 @@ export const apiSourceBoundaryViolations = (
   sourceRoot: string,
 ) =>
   files.filter((file) => {
-    if (/\.d\.[cm]?ts$/u.test(file)) {
+    if (/\.d\.[cm]?ts$/u.test(file) || !/\.[cm]?[jt]sx?$/u.test(file)) {
       return false;
     }
     const relative = path.relative(sourceRoot, path.resolve(file));
