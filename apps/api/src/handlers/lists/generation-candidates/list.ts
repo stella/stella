@@ -40,6 +40,7 @@ const querySchema = t.Object({
   cursor: t.Optional(tPaginationCursor()),
 });
 const config = {
+  contract: "patch",
   featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "List one generation run's candidates in proposal order with cursor " +

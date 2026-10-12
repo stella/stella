@@ -351,7 +351,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Report case-law availability, decision counts, year ranges and court breakdowns per jurisdiction. Use before concluding that a decision is missing from the corpus; in-preparation counts describe held decisions that public search cannot yet find.",
+    "description": "Report case-law availability per jurisdiction and source: searchable year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,
@@ -2123,7 +2123,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Preview template conditions does not change state.",
       "openWorldHint": "Preview template conditions is confined to the private workspace or a bounded computation."
     },
-    "description": "Ask what current values decide without filling. Returns every AI condition with \`path\`, \`label\`, and either \`state: \\"decided\\"\`, its \`value\`, \`decided_by\` (\`user\` or \`decision_model\`), and \`probability\` for model answers; or \`state: \\"undecided\\"\` and \`reason\` (\`no_decision_model\`, \`below_floor\`, \`failed\`). Only the decision model runs; fill may later use the generative model. A boolean in \`values\` wins. Nothing is written.",
+    "description": "Ask what current values decide without filling. Returns every AI condition with \`path\`, \`label\`, and either \`state: \\"decided\\"\`, its \`value\`, \`decided_by\` (\`user\`, \`decision_model\`, or \`generative_model\`), and \`probability\` for model answers; or \`state: \\"undecided\\"\` and \`reason\` (\`failed\` or \`refusal\`). The decision model uses the generative model when it cannot settle a question. Consumes AI usage. A boolean in \`values\` wins. Nothing is written.",
     "annotations": {
       "title": "Preview template conditions",
       "destructiveHint": false,
@@ -6706,7 +6706,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Report case-law availability, decision counts, year ranges and court breakdowns per jurisdiction. Use before concluding that a decision is missing from the corpus; in-preparation counts describe held decisions that public search cannot yet find.",
+    "description": "Report case-law availability per jurisdiction and source: searchable year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,
@@ -8478,7 +8478,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Preview template conditions does not change state.",
       "openWorldHint": "Preview template conditions is confined to the private workspace or a bounded computation."
     },
-    "description": "Ask what current values decide without filling. Returns every AI condition with \`path\`, \`label\`, and either \`state: \\"decided\\"\`, its \`value\`, \`decided_by\` (\`user\` or \`decision_model\`), and \`probability\` for model answers; or \`state: \\"undecided\\"\` and \`reason\` (\`no_decision_model\`, \`below_floor\`, \`failed\`). Only the decision model runs; fill may later use the generative model. A boolean in \`values\` wins. Nothing is written.",
+    "description": "Ask what current values decide without filling. Returns every AI condition with \`path\`, \`label\`, and either \`state: \\"decided\\"\`, its \`value\`, \`decided_by\` (\`user\`, \`decision_model\`, or \`generative_model\`), and \`probability\` for model answers; or \`state: \\"undecided\\"\` and \`reason\` (\`failed\` or \`refusal\`). The decision model uses the generative model when it cannot settle a question. Consumes AI usage. A boolean in \`values\` wins. Nothing is written.",
     "annotations": {
       "title": "Preview template conditions",
       "destructiveHint": false,
@@ -13843,7 +13843,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Report case-law availability, decision counts, year ranges and court breakdowns per jurisdiction. Use before concluding that a decision is missing from the corpus; in-preparation counts describe held decisions that public search cannot yet find.",
+    "description": "Report case-law availability per jurisdiction and source: searchable year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,
@@ -14625,7 +14625,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "destructiveHint": "Preview template conditions does not change state.",
       "openWorldHint": "Preview template conditions is confined to the private workspace or a bounded computation."
     },
-    "description": "Ask what current values decide without filling. Returns every AI condition with \`path\`, \`label\`, and either \`state: \\"decided\\"\`, its \`value\`, \`decided_by\` (\`user\` or \`decision_model\`), and \`probability\` for model answers; or \`state: \\"undecided\\"\` and \`reason\` (\`no_decision_model\`, \`below_floor\`, \`failed\`). Only the decision model runs; fill may later use the generative model. A boolean in \`values\` wins. Nothing is written.",
+    "description": "Ask what current values decide without filling. Returns every AI condition with \`path\`, \`label\`, and either \`state: \\"decided\\"\`, its \`value\`, \`decided_by\` (\`user\`, \`decision_model\`, or \`generative_model\`), and \`probability\` for model answers; or \`state: \\"undecided\\"\` and \`reason\` (\`failed\` or \`refusal\`). The decision model uses the generative model when it cannot settle a question. Consumes AI usage. A boolean in \`values\` wins. Nothing is written.",
     "annotations": {
       "title": "Preview template conditions",
       "destructiveHint": false,
@@ -15692,7 +15692,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Report case-law availability, decision counts, year ranges and court breakdowns per jurisdiction. Use before concluding that a decision is missing from the corpus; in-preparation counts describe held decisions that public search cannot yet find.",
+    "description": "Report case-law availability per jurisdiction and source: searchable year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,

@@ -19,6 +19,7 @@ import {
   CHAT_TURN_INTENT,
 } from "@stll/api-contract";
 import type { ChatSendRequest } from "@stll/api-contract";
+import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
   ChatReconnectError,
   createDurableChatTransport,
@@ -59,11 +60,16 @@ import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { APIError, chatRefusal, toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
+import {
+  providerDiagnosticFromThrown,
+  withProviderDiagnostic,
+} from "@/lib/errors/provider-diagnostic";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 import { LifecycleRegistry } from "@/stores/lifecycle-registry";
 
 import { chatFetchClient } from "./chat-fetch";
+import { observeChatProviderDiagnostic } from "./chat-provider-diagnostic";
 import { SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE } from "./chat-query-contract";
 import type {
   ActiveFileContext,
@@ -124,7 +130,11 @@ export type ChatToolResultInput = Omit<TanStackClientToolResult, "output"> & {
 
 const CHAT_RUNTIME_BRAND: unique symbol = Symbol("StellaChatRuntime");
 
-export type ChatRuntime = {
+export type ChatActivitySession = {
+  readonly reportedUnknownActivityTypes: Set<string>;
+};
+
+export type ChatRuntime = ChatActivitySession & {
   readonly [CHAT_RUNTIME_BRAND]: true;
   resolveToolApproval: (
     response: {
@@ -377,8 +387,12 @@ export const createChatRuntime = ({
     emit();
   };
 
+  let providerDiagnostic: ProviderDiagnostic | undefined;
   const captureRuntimeError = (error: unknown): Error => {
-    const normalized = toError(error);
+    const normalized = withProviderDiagnostic(
+      toError(error),
+      providerDiagnostic,
+    );
     if (snapshot.error !== normalized) {
       onError(normalized);
       setSnapshot({ error: normalized });
@@ -581,20 +595,26 @@ export const createChatRuntime = ({
       if (!messages.every(isChatUiMessage)) {
         return panic("Stella chat connection received model messages");
       }
-      return keepPostedMessagesInSnapshots(
-        messages,
-        upstreamConnection.connect(
+      providerDiagnostic = undefined;
+      return observeChatProviderDiagnostic(
+        keepPostedMessagesInSnapshots(
           messages,
-          buildSendRequestBody({
-            context,
-            key,
-            messages: toPersistedChatMessages(messages),
-            run: runContext,
-            requestBody: normalizeChatContinuationRequestBody(data),
-          }),
-          abortSignal,
-          runContext,
+          upstreamConnection.connect(
+            messages,
+            buildSendRequestBody({
+              context,
+              key,
+              messages: toPersistedChatMessages(messages),
+              run: runContext,
+              requestBody: normalizeChatContinuationRequestBody(data),
+            }),
+            abortSignal,
+            runContext,
+          ),
         ),
+        (diagnostic) => {
+          providerDiagnostic = diagnostic;
+        },
       );
     },
   } satisfies ConnectConnectionAdapter;
@@ -635,8 +655,9 @@ export const createChatRuntime = ({
       ) {
         activeToolResultOperation.rejection = error;
       }
-      onError(error);
-      setSnapshot({ error });
+      const normalized = withProviderDiagnostic(error, providerDiagnostic);
+      onError(normalized);
+      setSnapshot({ error: normalized });
     },
     onErrorChange: (error) => {
       // The SDK can replay a transport failure as a generic RUN_ERROR after
@@ -645,12 +666,21 @@ export const createChatRuntime = ({
         error !== undefined &&
         ((actionAdmissionOutcome(snapshot.error) &&
           !actionAdmissionOutcome(error)) ||
-          (chatRefusal(snapshot.error) !== null && chatRefusal(error) === null))
+          (chatRefusal(snapshot.error) !== null &&
+            chatRefusal(error) === null) ||
+          (providerDiagnosticFromThrown(snapshot.error) !== undefined &&
+            providerDiagnosticFromThrown(error) === undefined &&
+            providerDiagnostic === undefined))
       ) {
         return;
       }
       if (error === undefined || !isStoppedTurn()) {
-        setSnapshot({ error });
+        setSnapshot({
+          error:
+            error === undefined
+              ? undefined
+              : withProviderDiagnostic(error, providerDiagnostic),
+        });
       }
     },
     onFinish: () => {
@@ -970,6 +1000,7 @@ export const createChatRuntime = ({
 
   const runtime = {
     [CHAT_RUNTIME_BRAND]: true,
+    reportedUnknownActivityTypes: new Set<string>(),
     resolveToolApproval: async (response, options) => {
       if (isStoppedTurn()) {
         return;
@@ -1201,9 +1232,22 @@ export const buildSendRequestBody = ({
     panic("Missing chat message");
   }
 
+  switch (message.role) {
+    case "activity":
+      return panic("An activity cannot submit or continue a chat turn");
+    case "assistant":
+    case "system":
+    case "user":
+      break;
+    default:
+      message.role satisfies never;
+      return panic(`Unhandled chat role: ${String(message.role)}`);
+  }
+
   const body: ChatSendRequestDraft = {
     message: {
       ...message,
+      role: message.role,
       id: toSafeId<"chatMessage">(message.id),
     },
     sendMode: resolveChatRequestSendMode({

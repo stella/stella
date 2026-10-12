@@ -2,7 +2,10 @@ import { test } from "bun:test";
 
 import { defaultConfig } from "@stll/db-load-gate/health";
 
-import { withGatedTestClients } from "../tests/gated-test-database";
+import {
+  GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS,
+  withGatedTestClients,
+} from "../tests/gated-test-database";
 import { createOnlineIndexGate } from "./online-index-gate";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 
@@ -96,7 +99,7 @@ test.skipIf(process.env["ONLINE_INDEX_TEST_TABLE"] === undefined)(
           observer.release();
         }
       },
-      { closeTimeout: 0 },
+      { closeTimeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS },
     );
   },
 );

@@ -321,7 +321,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "case_law_coverage",
-    "description": "Report case-law availability, decision counts, year ranges and court breakdowns per jurisdiction. Use before concluding that a decision is missing from the corpus; in-preparation counts describe held decisions that public search cannot yet find.",
+    "description": "Report case-law availability per jurisdiction and source: searchable year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -1947,7 +1947,7 @@
       "inputOnly": ["values"]
     },
     "name": "preview_template_conditions",
-    "description": "Ask what current values decide without filling. Returns every AI condition with `path`, `label`, and either `state: \"decided\"`, its `value`, `decided_by` (`user` or `decision_model`), and `probability` for model answers; or `state: \"undecided\"` and `reason` (`no_decision_model`, `below_floor`, `failed`). Only the decision model runs; fill may later use the generative model. A boolean in `values` wins. Nothing is written.",
+    "description": "Ask what current values decide without filling. Returns every AI condition with `path`, `label`, and either `state: \"decided\"`, its `value`, `decided_by` (`user`, `decision_model`, or `generative_model`), and `probability` for model answers; or `state: \"undecided\"` and `reason` (`failed` or `refusal`). The decision model uses the generative model when it cannot settle a question. Consumes AI usage. A boolean in `values` wins. Nothing is written.",
     "inputSchema": {
       "type": "object",
       "required": ["template_id", "values"],

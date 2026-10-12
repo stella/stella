@@ -109,6 +109,19 @@ describe("spawnWorker", () => {
     ).toBe(SUBPROCESS_TERMINATION_REASON.crashed);
   });
 
+  test.each([34, 35, 64])(
+    "classifies unnamed signal %i as external",
+    (signalCode) => {
+      expect(
+        classifySubprocessTermination({
+          callerAbort: false,
+          signalCode,
+          timeoutAbort: false,
+        }),
+      ).toBe(SUBPROCESS_TERMINATION_REASON.external);
+    },
+  );
+
   // The class this pins: a caller abort must kill the subprocess, not
   // leave it burning CPU until the hard timeout expires. The fixture
   // sleeps for ten minutes; the call must return in bounded time once

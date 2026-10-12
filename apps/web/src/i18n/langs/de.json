@@ -128,6 +128,11 @@
     "orSignInWithEmail": "oder mit E-Mail anmelden",
     "organizationNamePlaceholder": "Meine Organisation",
     "password": "Passwort",
+    "professionalUse": {
+      "description": "Bei der Einrichtung Ihres Kontos wurde Ihnen diese Erklärung nicht angezeigt. Nehmen Sie sie an, um fortzufahren.",
+      "title": "Berufliche Nutzung bestätigen"
+    },
+    "professionalUseStatement": "Mit der Erstellung eines Kontos bestätigen Sie, dass Sie stella für berufliche Zwecke nutzen, und nehmen zur Kenntnis, dass stella ein Werkzeug für Rechtsfachleute ist und keine Rechtsberatung ersetzt.",
     "rateLimitExceeded": "Zu viele Versuche. Bitte versuchen Sie es später erneut.",
     "resendCode": "Code erneut an <email>{emailAddress}</email> senden",
     "selectOrganization": "Organisation auswählen",
@@ -799,7 +804,7 @@
       "courtCount": "{count, plural, one {# Gericht} other {# Gerichte}}",
       "newLast24Hours": "{count} in den letzten 24 h",
       "newLast7Days": "Neu in den letzten 7 Tagen",
-      "unlistedCourts": "{count, plural, one {Gerichte jenseits des größten} other {Gerichte jenseits der # größten}}"
+      "otherCourts": "Andere Gerichte"
     },
     "courtTiers": {
       "constitutional": "Verfassungsgerichte",
@@ -815,6 +820,7 @@
       "decisionYears": "Entscheidungsjahre",
       "description": "Wie viel Rechtsprechung der Bestand enthält, nach Land und Gericht, und wie aktuell jede Quelle ist.",
       "exceedsReportedTotal": "Enthält mehr als die zuletzt vom Herausgeber genannte Gesamtzahl vom {date}",
+      "gapStatusUnknown": "Lückenstatus unbekannt",
       "generatedAt": "Zahlen vom {date}",
       "globeLabel": "Länder, deren Rechtsprechung der Korpus enthält, auf einem Globus",
       "healthCurrent": "Aktuell",
@@ -823,9 +829,12 @@
       "healthStalled": "Stockt",
       "healthUnknown": "Noch nie gelaufen",
       "inPreparation": "In Vorbereitung",
+      "knownGaps": "Bekannte Lücken",
       "lastSync": "Letzte Synchronisierung",
+      "noGapsRecorded": "Keine Lücken verzeichnet",
       "notCountedYet": "Noch nicht gezählt",
       "notMeasuredYet": "Noch nicht gemessen",
+      "pendingTexts": "Ausstehende Texte",
       "reportedByListing": "Aus der Liste des Herausgebers gezählt",
       "reportedByOperator": "Manuell erfasst",
       "reportedByPublisher": "Eigene Zählung des Herausgebers",
@@ -1089,6 +1098,9 @@
       "toastDescription": "Der ganzseitige Chat mit dauerhaft gespeicherten Konversationen kommt bald.",
       "toastTitle": "Vollansicht noch nicht verfügbar"
     },
+    "activity": {
+      "review": "Aktualisierung zur Prüfung"
+    },
     "aiPrompt": "KI-Nachrichtenfeld",
     "aiThread": "KI-Konversation",
     "analyzingSources": "Quellen werden analysiert",
@@ -1274,6 +1286,9 @@
       "noMatters": "Noch keine Akten",
       "noRecentChats": "Keine letzten Chats",
       "noSkills": "Noch keine Skills",
+      "openAllMatters": "Alle Akten öffnen",
+      "openChatHistory": "Chatverlauf öffnen",
+      "openSkillsLibrary": "Skill-Bibliothek öffnen",
       "pinnedMatters": "Angeheftete Akten",
       "recentChats": "Letzte Chats",
       "skillEditedBy": "Bearbeitet von {name} · {time}",
@@ -1924,6 +1939,7 @@
     "noResults": "Keine Ergebnisse",
     "noVersions": "Kein Versionsverlauf",
     "none": "Keine",
+    "notStated": "Nicht angegeben",
     "notes": "Notizen",
     "open": "Öffnen",
     "openInNewTab": "In neuem Tab öffnen",
@@ -1993,6 +2009,7 @@
     "sort": "Sortieren",
     "source": "Quelle",
     "stale": "Veraltet",
+    "start": "Starten",
     "status": "Status",
     "stepCount": "{count, plural, one {# Schritt} other {# Schritte}}",
     "stepProgress": "{current} von {total}",
@@ -2807,7 +2824,6 @@
       },
       "selectFlow": "Workflow auswählen",
       "sizeConfirmTitle": "Umfangreicher Ablauf",
-      "start": "Starten",
       "startFailed": "Der Workflow konnte nicht gestartet werden.",
       "started": "Workflow gestartet",
       "stepProgress": "Schritt {current} von {total}",
@@ -3024,8 +3040,7 @@
   "guides": {
     "action": {
       "replay": "Neu starten",
-      "skip": "Überspringen",
-      "start": "Starten"
+      "skip": "Überspringen"
     },
     "checklist": {
       "progress": "{completed} von {total} abgeschlossen"
@@ -3705,6 +3720,10 @@
         "nameMissing": "Nicht gespeichert: Fügen Sie einen Namen hinzu",
         "positionsNeedAttention": "Nicht gespeichert: {count, plural, one {# Standpunkt muss} other {# Standpunkte müssen}} überprüft werden"
       },
+      "buildWithAi": {
+        "description": "Beantworten Sie im Chat ein paar Fragen – das Playbook wird dabei laufend gespeichert.",
+        "title": "Mit KI erstellen"
+      },
       "check": "Exakte Regel statt KI verwenden",
       "checkHint": "Für messbare Bedingungen, etwa: Zahlungsziel ≤ 30 Tage.",
       "checkKind": {
@@ -4155,6 +4174,10 @@
     "aiConfig": {
       "addProvider": "Provider hinzufügen",
       "addProviderFirst": "Zuerst Provider hinzufügen",
+      "anthropicKeyDisabled": "Erstellen Sie in der Anthropic-Konsole einen aktiven API-Schlüssel und ersetzen Sie diesen Schlüssel.",
+      "anthropicNoCredits": "Laden Sie in der Abrechnung der Anthropic-Konsole API-Guthaben auf und versuchen Sie es erneut.",
+      "anthropicOrganizationRestricted": "Bitten Sie die Administration Ihrer Anthropic-Organisation um Zugriff oder verwenden Sie einen Schlüssel aus einer zugelassenen Organisation.",
+      "anthropicSubscriptionToken": "Verwenden Sie einen in der Anthropic-Konsole erstellten API-Schlüssel anstelle eines Tokens für ein Claude-Abonnement.",
       "anthropicWorkspaceId": "Workspace-ID",
       "anthropicWorkspaceRequired": "Dieser Anthropic-Schlüssel benötigt einen Workspace. Geben Sie dessen ID aus der Anthropic-Konsole ein und speichern Sie erneut.",
       "anthropicWorkspaces": "Anthropic-Workspaces öffnen",
@@ -4163,7 +4186,9 @@
       "apiKeyPlaceholder": "API-Schlüssel eingeben",
       "apiKeySaved": "Gespeicherter Schlüssel {key}",
       "apiKeyUpdatePlaceholder": "Neuen Schlüssel zum Aktualisieren eingeben",
+      "azureModelNotEnabled": "Prüfen Sie, ob die Modellbereitstellung in der ausgewählten Azure-Ressource und Region existiert und ob dieser Schlüssel darauf zugreifen kann.",
       "baseUrl": "Basis-URL",
+      "bedrockModelNotEnabled": "Prüfen Sie die Modellverfügbarkeit in der ausgewählten AWS-Region, den Modellzugriff und Ihre IAM-Berechtigungen. Aktivieren Sie ein Modell oder wählen Sie ein zugängliches Modell aus und versuchen Sie es erneut.",
       "chooseModelsSubtitle": "Wählen Sie ein Modell pro Rolle. Preise erscheinen rechts.",
       "chooseModelsTitle": "Modelle wählen",
       "configure": "Konfigurieren",
@@ -4171,11 +4196,16 @@
       "customModelDescription": "Diese Modell-ID ist nicht im stella-Katalog. Sie wird unverändert an den gewählten Provider gesendet.",
       "customModelHint": "Kein Katalogtreffer. Geben Sie eine beliebige Modell-ID ein; benutzerdefinierte IDs werden unverändert gespeichert.",
       "decision": {
+        "dataRegion": "Datenregion",
         "description": "Fragen mit festen Antworten (Dokumentkategorien, Polarität von Zitaten)",
         "generativeFallback": "Verwendet das generative Modell für die jeweilige Aufgabe.",
         "incomplete": "Geben Sie für das Entscheidungsmodell einen API-Schlüssel und ein Modell an oder entfernen Sie es.",
         "instanceProvided": "stella stellt bereits ein Entscheidungsmodell bereit; fügen Sie nur dann ein eigenes hinzu, wenn Sie ein anderes nutzen möchten.",
-        "label": "Entscheidungsfindung"
+        "label": "Entscheidungsfindung",
+        "regionEu": "Europäische Union",
+        "regionGlobal": "Weltweit",
+        "reuseOpenAIKey": "Meinen OpenAI-Schlüssel verwenden",
+        "separateKey": "Separaten Schlüssel verwenden"
       },
       "defaultModel": "Standard: {model}",
       "defaultModelOption": "Standard",
@@ -4189,6 +4219,8 @@
       "editProviders": "Anbieter bearbeiten",
       "endpoint": "Endpunkt",
       "endpointDescription": "Verwenden Sie den Azure OpenAI- oder Azure Foundry-Endpunkt /openai/v1. stella speichert den normalisierten Endpunkt.",
+      "googleApiNotEnabled": "Aktivieren Sie die Generative Language API im Google-Cloud-Projekt, zu dem dieser Schlüssel gehört, und versuchen Sie es erneut.",
+      "googleKeyRestricted": "Prüfen Sie die API-, IP-Adress- und Referrer-Einschränkungen dieses Schlüssels in Google Cloud. Lassen Sie die benötigte API und Anfragen Ihres Servers zu und versuchen Sie es erneut.",
       "keepSavedKey": "Gespeicherten Schlüssel behalten",
       "keyFormatHint": "Dieser Schlüssel hat ein ungewöhnliches Format für {provider}. Speichern Sie ihn, um ihn beim Anbieter zu prüfen.",
       "modelForRole": "Modell für {role}",
@@ -4198,6 +4230,9 @@
       "newApiKey": "Neuer API-Schlüssel",
       "newApiKeyDescription": "Er ersetzt den gespeicherten Schlüssel beim Speichern.",
       "noModelResults": "Keine passenden angebotenen Modelle",
+      "openaiInsufficientQuota": "Prüfen Sie das Budget Ihres OpenAI-Projekts und die API-Abrechnung. Laden Sie Guthaben auf oder erhöhen Sie das betreffende Limit und versuchen Sie es erneut.",
+      "openaiProjectOrganizationMismatch": "Verwenden Sie einen API-Schlüssel aus dem vorgesehenen OpenAI-Projekt und der vorgesehenen Organisation. Prüfen Sie deren Zugriffseinstellungen und versuchen Sie es erneut.",
+      "openrouterNoCredits": "Laden Sie in der OpenRouter-Abrechnung Guthaben auf und versuchen Sie es erneut.",
       "overrideRoles": "Rollen überschreiben",
       "overrideRolesDescription": "Wählen Sie aus, welche Rollen diesen Schlüssel verwenden, und legen Sie für jede Rolle ein Modell fest. Nicht ausgewählte Rollen verwenden den Plattformstandard.",
       "prices": {
@@ -4217,6 +4252,7 @@
       "providerForRole": "Provider für {role}",
       "providerKeyInvalid": "{provider} hat den Schlüssel abgelehnt. Bitte überprüfen Sie ihn.",
       "providerKeyInvalidShort": "Ungültig",
+      "providerSetupConsole": "Anbietereinstellungen öffnen",
       "providersDescription": "Fügen Sie die Provider-Zugangsdaten hinzu, die stella verwenden soll.",
       "providersPanel": "Provider",
       "removeLastProviderConfirm": "{provider} entfernen? Dadurch wird auch die benutzerdefinierte Auswahl der KI-Modelle zurückgesetzt.",
@@ -6113,12 +6149,30 @@
         "addPDF": "PDF hinzufügen",
         "applyCrop": "Zuschnitt anwenden",
         "crop": "Zuschneiden",
-        "cropBottom": "Unten",
-        "cropDescription": "{count, plural, one {Legen Sie die Schnittbereiche für die ausgewählte Seite fest.} other {Legen Sie die Schnittbereiche für die # ausgewählten Seiten fest.}}",
-        "cropLeft": "Links",
-        "cropRight": "Rechts",
+        "cropAdvanced": "Erweitert",
+        "cropBottom": "Unten (mm)",
+        "cropDescription": "{count, plural, one {Legen Sie die Schnittbereiche für die ausgewählte Seite in Millimetern fest.} other {Legen Sie die Schnittbereiche für die # ausgewählten Seiten in Millimetern fest.}}",
+        "cropHandle": "Zuschnittgröße ändern: {position}",
+        "cropHandleBottom": "unten",
+        "cropHandleBottomLeft": "unten links",
+        "cropHandleBottomRight": "unten rechts",
+        "cropHandleLeft": "links",
+        "cropHandleRight": "rechts",
+        "cropHandleTop": "oben",
+        "cropHandleTopLeft": "oben links",
+        "cropHandleTopRight": "oben rechts",
+        "cropHint": "Ziehen Sie den Bereich oder seine Ziehpunkte. Die Pfeiltasten ändern den Zuschnitt um 1 mm, mit Umschalt um 10 mm. Für alle ausgewählten Seiten gelten dieselben Ränder.",
+        "cropLeft": "Links (mm)",
+        "cropMove": "Zuschnittbereich verschieben",
+        "cropNextPage": "Nächste ausgewählte Seite",
+        "cropPage": "Seite {page, number} von {count, number}",
+        "cropPreview": "Zuschnittvorschau, Seite {page, number}",
+        "cropPreviewFailed": "Die Seitenvorschau konnte nicht gerendert werden.",
+        "cropPreviousPage": "Vorherige ausgewählte Seite",
+        "cropRight": "Rechts (mm)",
         "cropTitle": "Seiten zuschneiden",
-        "cropTop": "Oben",
+        "cropTooSmall": "Diese Seite ist zu klein für einen Zuschnitt mit mindestens 10 mm Kantenlänge.",
+        "cropTop": "Oben (mm)",
         "delete": "Löschen",
         "deselectAll": "Auswahl aufheben",
         "discard": "Verwerfen",

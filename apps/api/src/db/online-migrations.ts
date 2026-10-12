@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 
+import { CASE_LAW_COVERAGE_INDEX } from "@/api/lib/case-law/coverage-index";
 import {
   DOCUMENT_OUTSTANDING_DATE_INDEX,
   DOCUMENT_OUTSTANDING_INDEX,
@@ -78,6 +79,7 @@ type OnlineIndex = RequiredMigrationIndex & {
 };
 
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
+  CASE_LAW_COVERAGE_INDEX,
   {
     createSql: `CREATE INDEX CONCURRENTLY "apikey_personal_owner_keyset_idx" ON public."apikey" (((metadata::jsonb ->> 'organizationId')), reference_id, created_at DESC, id DESC) WHERE metadata IS NOT NULL AND metadata::jsonb ->> 'kind' = 'personal'`,
     definitionBody:

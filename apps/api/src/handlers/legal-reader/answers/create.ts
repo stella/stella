@@ -8,6 +8,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 const config = {
+  contract: "patch",
   permissions: { legalReaderAnnotation: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   description:

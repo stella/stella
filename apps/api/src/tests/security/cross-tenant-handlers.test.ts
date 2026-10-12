@@ -2749,7 +2749,7 @@ function readerAnswerIsolationCases(): IsolationCase[] {
     decisionId: SafeId<"caseLawDecision">,
   ) =>
     await runHandler(listReaderAnswers, context, {
-      query: { decisionId, limit: 100 },
+      query: { decisionId, limit: 50 },
     });
   const update = async (context: TestHandlerContext) =>
     await runHandler(updateReaderAnswer, context, {

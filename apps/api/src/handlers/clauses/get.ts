@@ -11,6 +11,7 @@ const getClauseParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Read one clause in full: its body, category, language, description, " +
     "usage notes, metadata, and current version number, plus every variant " +

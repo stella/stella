@@ -28,6 +28,7 @@ import {
   installPgliteAgentSkillRevisionTrigger,
   installPgliteCaseLawObservationFence,
   installPgliteCorpusProjectionRevisionFence,
+  installPgliteServiceClientCredentialCascade,
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
   installPgliteProvisionExtractionState,
@@ -677,6 +678,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteAgentSkillRevisionTrigger(db);
   await installPgliteDecisionAliases(db);
   await installPgliteCorpusProjectionRevisionFence(db);
+  await installPgliteServiceClientCredentialCascade(db);
   await installPgliteStatuteCitationCounts(db);
   await installPgliteLegislationPayloadRevision(db);
   await installPgliteLegislationExpressionIdentity(db);

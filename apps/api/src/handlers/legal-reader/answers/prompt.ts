@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type {
   ReaderAnswerAnchor,
   ReaderAnswerCitation,
@@ -6,6 +8,7 @@ import type {
 import type { ReaderAnswerDecision } from "@/api/lib/case-law/reader-answer-corpus";
 
 export const READER_ANSWER_CONTEXT_CHARS = 32_000;
+const SELECTION_PREFIX_CHARS = 2000;
 
 type ReaderAnswerPromptOptions = {
   decision: ReaderAnswerDecision;
@@ -18,9 +21,15 @@ export const buildReaderAnswerPrompt = ({
   anchor,
   locale,
 }: ReaderAnswerPromptOptions) => {
-  const selected = decision.paragraphs.findIndex(
-    ({ paragraphId }) => paragraphId === anchor.paragraphId,
-  );
+  const selectedParagraph =
+    decision.paragraphs.find(
+      ({ paragraphId }) => paragraphId === anchor.paragraphId,
+    ) ?? panic("Selected reader paragraph is missing");
+  const selected = decision.paragraphs.indexOf(selectedParagraph);
+  const sliceStart =
+    selectedParagraph.text.length > READER_ANSWER_CONTEXT_CHARS
+      ? Math.max(0, anchor.startOffset - SELECTION_PREFIX_CHARS)
+      : 0;
   const byDistance = decision.paragraphs
     .map((paragraph, index) => ({
       paragraph:
@@ -29,9 +38,8 @@ export const buildReaderAnswerPrompt = ({
           ? {
               paragraphId: paragraph.paragraphId,
               text: paragraph.text.slice(
-                Math.max(0, anchor.startOffset - 2000),
-                Math.max(0, anchor.startOffset - 2000) +
-                  READER_ANSWER_CONTEXT_CHARS,
+                sliceStart,
+                sliceStart + READER_ANSWER_CONTEXT_CHARS,
               ),
             }
           : paragraph,
@@ -56,7 +64,11 @@ export const buildReaderAnswerPrompt = ({
       decisionId: decision.decisionId,
       decisionDate: decision.decisionDate,
       court: decision.court,
-      selection: anchor,
+      selection: {
+        ...anchor,
+        startOffset: anchor.startOffset - sliceStart,
+        endOffset: anchor.endOffset - sliceStart,
+      },
       paragraphs: ordered.map(({ paragraph }) => paragraph),
     }),
     citations: ordered.map(({ paragraph }) => ({
@@ -88,8 +100,8 @@ export const validateReaderAnswerCitations = ({
   let untouchedStart = 0;
   let markerStart: number | undefined;
   let cursor = 0;
-  // A failed marker's nested openings share its same closing delimiter, so
-  // scanning each character once avoids retrying every opening bracket.
+  // Track the latest opening so unfinished prefixes stay literal;
+  // each character is scanned once.
   while (cursor < content.length) {
     const character = content[cursor];
     if (markerStart === undefined) {
@@ -99,6 +111,11 @@ export const validateReaderAnswerCitations = ({
         continue;
       }
       cursor++;
+      continue;
+    }
+    if (character === "[" && content[cursor + 1] === "[") {
+      markerStart = cursor;
+      cursor += 2;
       continue;
     }
     if (character !== "]" && character !== "\n") {

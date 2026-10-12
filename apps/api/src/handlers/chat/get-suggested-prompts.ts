@@ -8,6 +8,7 @@ import {
 } from "@/api/handlers/chat/chat-scope";
 import { buildRecapTranscript } from "@/api/handlers/chat/thread-recap-transcript";
 import { loadRecapMessageWindow } from "@/api/handlers/chat/thread-recap-window";
+import type { ChatMessage } from "@/api/handlers/chat/types";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { isUnanticipatedAIFailure } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -41,6 +42,7 @@ Do not include headings, bullet points, numbering, or introductory text. Respond
 Write the suggestions in the same language as the conversation. Be specific to the actual topics, documents, and decisions discussed.`;
 
 const config = {
+  contract: "patch",
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
@@ -52,7 +54,7 @@ type SuggestedPromptsResult = { prompts: string[] };
 
 type SuggestedPromptMessage = {
   parts: ReturnType<typeof normalizePersistedChatMessageContent>["parts"];
-  role: "assistant" | "system" | "user";
+  role: ChatMessage["role"];
 };
 
 type SuggestedPromptToolCallState = Extract<
@@ -70,10 +72,19 @@ const ASK_USER_STATE_AWAITS_USER = {
   "input-streaming": true,
 } as const satisfies Record<SuggestedPromptToolCallState, boolean>;
 
+const SUGGESTION_CONVERSATION_ROLES = {
+  activity: false,
+  assistant: true,
+  system: true,
+  user: true,
+} as const satisfies Record<SuggestedPromptMessage["role"], boolean>;
+
 export const latestAssistantTurnAwaitsUser = (
   messages: readonly SuggestedPromptMessage[],
 ): boolean => {
-  const latest = messages.at(-1);
+  const latest = messages.findLast(
+    (message) => SUGGESTION_CONVERSATION_ROLES[message.role],
+  );
   if (latest?.role !== "assistant") {
     return false;
   }

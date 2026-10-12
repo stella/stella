@@ -19,6 +19,7 @@ import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declar
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contract: "patch",
   permissions: { legalReaderAnnotation: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   description:

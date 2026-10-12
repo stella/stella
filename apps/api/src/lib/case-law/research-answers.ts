@@ -91,6 +91,7 @@ export const selectPassagesWithinBudget = (
   let invalid = 0;
   let truncated = 0;
   let budget = 0;
+  let budgetSpent = false;
   for (const passage of passages) {
     const trimmed = passage.excerpt.trim();
     if (trimmed.length === 0 || passage.anchorId.length === 0) {
@@ -102,9 +103,14 @@ export const selectPassagesWithinBudget = (
       continue;
     }
     const excerpt = trimmed.slice(0, passageChars);
-    if (used + excerpt.length > budgetChars) {
-      budget = passages.length - selected.length - duplicate - invalid;
-      break;
+    if (budgetSpent || used + excerpt.length > budgetChars) {
+      // The order is the ranking: once a passage does not fit, nothing ranked
+      // below it takes its place. Later passages still count under their own
+      // reason, so a repeat of a dropped anchor is a duplicate.
+      budgetSpent = true;
+      seen.add(passage.anchorId);
+      budget += 1;
+      continue;
     }
     truncated += Number(excerpt.length < trimmed.length);
     seen.add(passage.anchorId);

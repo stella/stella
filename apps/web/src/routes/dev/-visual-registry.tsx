@@ -12,6 +12,13 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "page-crop": {
+    load: async () => {
+      const { PageCropPlayground } =
+        await import("./-components/page-crop-playground");
+      return { default: PageCropPlayground };
+    },
+  },
   "chat-long-paste": {
     load: async () => {
       const { ChatLongPastePlayground } =

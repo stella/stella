@@ -24,6 +24,7 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 
 const config = {
+  contract: "patch",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   description:

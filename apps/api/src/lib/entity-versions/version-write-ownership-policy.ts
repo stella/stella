@@ -34,7 +34,7 @@ export const REVIEWED_VERSION_MUTATION_OWNERS = {
     VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION,
     VERSION_WRITE_CAPABILITY.USE_VERSION_UTILS,
   ],
-  "handlers/entities/publish-folio-collab-version.ts": [
+  "lib/entity-versions/publish-folio-collab-checkpoint.ts": [
     VERSION_WRITE_CAPABILITY.REQUEST_NATIVE_EXTRACTION,
   ],
   "handlers/entities/versions/restore.ts": [

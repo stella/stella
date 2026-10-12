@@ -10,6 +10,7 @@ import * as v from "valibot";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import {
   INCOMPLETE_STREAM_CODE,
+  readOutputCeilingStopAsLength,
   withProviderStreamContract,
   withRunToolCallIds,
 } from "@/api/lib/chat/provider-stream-contract";
@@ -84,6 +85,43 @@ const run = async (adapter: AnyTextAdapter, signal?: AbortSignal) => {
 };
 
 describe("the provider stream contract", () => {
+  test("preserves activity snapshots and deltas while holding an output ceiling finish", async () => {
+    const activities = [
+      {
+        type: "ACTIVITY_SNAPSHOT",
+        messageId: "progress",
+        activityType: "review",
+        content: { progress: 1 },
+      },
+      {
+        type: "ACTIVITY_DELTA",
+        messageId: "progress",
+        activityType: "review",
+        patch: [{ op: "replace", path: "/progress", value: 2 }],
+      },
+    ] satisfies StreamChunk[];
+    const source = async function* () {
+      yield started;
+      yield { ...failed, code: "max_tokens" };
+      yield* activities;
+    };
+    const received: StreamChunk[] = [];
+    for await (const chunk of readOutputCeilingStopAsLength(source())) {
+      received.push(chunk);
+    }
+    expect(received).toEqual([
+      started,
+      ...activities,
+      {
+        type: EventType.RUN_FINISHED,
+        finishReason: "length",
+        runId: "run",
+        threadId: "thread",
+        timestamp: 1,
+      },
+    ]);
+  });
+
   test("SDK iterations count reasoning drops once per turn and a later turn counts again", async () => {
     const lines: string[] = [];
     setMetricLineSinkForTesting((line) => {
@@ -417,13 +455,12 @@ const reasoningSignedBy = async (provider: ReasoningProvider) => {
     messages: [{ role: "user", content: "Delete the draft." }],
     model: adapter.model,
   })) {
-    // The adapters carry a thinking step's signature on its finish.
-    const signature: unknown =
-      chunk.type === EventType.STEP_FINISHED
-        ? Reflect.get(chunk, "signature")
-        : undefined;
-    if (typeof signature === "string" && signature !== "") {
-      signatures.push(signature);
+    if (
+      chunk.type === EventType.REASONING_ENCRYPTED_VALUE &&
+      chunk.subtype === "message" &&
+      chunk.encryptedValue !== ""
+    ) {
+      signatures.push(chunk.encryptedValue);
     }
   }
   expect(signatures).toHaveLength(1);

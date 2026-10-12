@@ -141,12 +141,32 @@ export const resolveExplainCase = (
           ),
     )
     .slice(0, MAX_EXCERPTS);
-  const context = corpus.decisions
+  const contextParagraphs = corpus.decisions
     .filter(({ decisionId }) => decisionId === selection.decisionId)
     .flatMap(({ decisionId, paragraphs }) =>
       paragraphs.map((paragraph) => ({ decisionId, ...paragraph })),
-    )
-    .slice(0, MAX_CONTEXT_PARAGRAPHS);
+    );
+  const selectionIndex = contextParagraphs.findIndex(
+    ({ paragraphId, publisherParagraph }) =>
+      paragraphId === selection.paragraphId &&
+      publisherParagraph === selection.publisherParagraph,
+  );
+  if (selectionIndex === -1) {
+    return panic(
+      `Selected paragraph is missing from context for ${scenario.id}`,
+    );
+  }
+  const contextStart = Math.max(
+    0,
+    Math.min(
+      selectionIndex - Math.floor(MAX_CONTEXT_PARAGRAPHS / 2),
+      contextParagraphs.length - MAX_CONTEXT_PARAGRAPHS,
+    ),
+  );
+  const context = contextParagraphs.slice(
+    contextStart,
+    contextStart + MAX_CONTEXT_PARAGRAPHS,
+  );
   return { selection, expected, excerpts, context };
 };
 
