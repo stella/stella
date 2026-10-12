@@ -1,30 +1,6 @@
-// The browser chrome colour (Android Chrome's toolbar, an installed app's
-// title bar) matches the page background, so the app does not sit inside a
-// differently coloured frame.
-//
-// The server cannot know the stored theme or palette, so the document head
-// carries the default palette's background per OS colour scheme. Once the
-// theme provider has applied the active theme and palette, it measures the
-// painted background and publishes it through one meta element it owns, ahead
-// of the static ones: the first matching `theme-color` wins, so an explicit
-// light/dark choice or a palette overrides the OS scheme.
+import { THEME_COLOR } from "../routes/-root-head";
 
-const THEME_COLOR = "theme-color";
 const ACTIVE_THEME_COLOR_ATTRIBUTE = "data-active-theme-color";
-
-/** The default palette's `--background` per scheme (packages/ui theme.css). */
-export const THEME_COLOR_META = [
-  {
-    name: THEME_COLOR,
-    media: "(prefers-color-scheme: light)",
-    content: "#ffffff",
-  },
-  {
-    name: THEME_COLOR,
-    media: "(prefers-color-scheme: dark)",
-    content: "#161616",
-  },
-] as const;
 
 /**
  * A computed colour as an `rgb()` the meta element accepts everywhere.

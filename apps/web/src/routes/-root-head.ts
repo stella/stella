@@ -1,4 +1,18 @@
-import { THEME_COLOR_META } from "../components/theme-color";
+export const THEME_COLOR = "theme-color";
+
+/** The default palette's `--background` per scheme (packages/ui theme.css). */
+const THEME_COLOR_META = [
+  {
+    name: THEME_COLOR,
+    media: "(prefers-color-scheme: light)",
+    content: "#ffffff",
+  },
+  {
+    name: THEME_COLOR,
+    media: "(prefers-color-scheme: dark)",
+    content: "#161616",
+  },
+] as const;
 
 export const PUBLIC_KNOWLEDGE_META = {
   name: "public-knowledge",

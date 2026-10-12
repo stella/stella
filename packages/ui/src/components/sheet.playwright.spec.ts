@@ -29,6 +29,7 @@ for (const direction of ["ltr", "rtl"] as const) {
       const inspector = page.getByRole("dialog", {
         name: "Full-width inspector",
       });
+      await expect(inspector).toHaveCSS("translate", "none");
       await expect(inspector).toHaveCSS("padding-inline-start", "44px");
       await expect(inspector).toHaveCSS("padding-inline-end", "28px");
       const clearance = await page
