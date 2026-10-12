@@ -128,6 +128,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "legal_list_generation_candidate_sources.locator",
   "legal_list_item_sources.locator",
   "legal_list_verification_runs.evidence",
+  "legal_reader_answer_messages.citations",
+  "legal_reader_answer_messages.usage",
   "legislation_documents.sections",
   "legislation_documents.document_ast",
   "legislation_documents.metadata",
@@ -338,6 +340,8 @@ const RETAINED_MEMBER_COLUMNS = {
   "legal_lists.created_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_reader_annotations.user_id":
+    "User-owned matter content or preferences; current organization/matter membership gates access.",
+  "legal_reader_answers.user_id":
     "User-owned matter content or preferences; current organization/matter membership gates access.",
   "matter_inbound_addresses.created_by":
     "Retained attribution or request history; this column grants no matter membership.",

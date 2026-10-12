@@ -352,6 +352,10 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
     opaqueKeys: { "readerAnnotationKeys.forTarget(key)": KEY_TYPE_HAS_USER },
   },
+  "legal-reader/answers/list.ts": {
+    kind: "no-web-caller",
+    calls: ["api.reader.answers.get"],
+  },
   "lists/items/list.ts": {
     kind: "keyed",
     calls: ["api.lists()().items.get"],

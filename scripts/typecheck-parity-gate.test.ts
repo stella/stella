@@ -28,6 +28,7 @@ const snapshot = (
   native = "7.0.2",
   other = "1.0.0",
 ) => ({
+  changedConfigs: "",
   manifest: { packageManager: `bun@${bun}` },
   lock: {
     packages: {
@@ -46,6 +47,10 @@ const evaluate = (
 ) => {
   const directory = mkdtempSync(path.join(tmpdir(), "parity-gate-"));
   try {
+    writeFileSync(
+      path.join(directory, "changed-configs.txt"),
+      head?.changedConfigs ?? "",
+    );
     for (const [ref, value] of [
       ["base", base],
       ["HEAD", head],
@@ -69,6 +74,7 @@ const evaluate = (
       `#!${process.execPath}\nimport { readFileSync } from "node:fs";
 const args = process.argv.slice(2);
 if (args[0] === "rev-parse") { console.log("base"); }
+else if (args[0] === "diff") { process.stdout.write(readFileSync(${JSON.stringify(directory)} + "/changed-configs.txt", "utf8")); }
 else { try { console.log(readFileSync(${JSON.stringify(directory)} + "/" + args[1].replace(":", "-"), "utf8")); }
 catch { process.stderr.write("Missing comparison tree"); process.exit(1); } }\n`,
     );
@@ -107,6 +113,20 @@ test("parity compares resolved compilers while ignoring unrelated lockfile edits
 test("scheduled and manual proofs run without a comparison tree", () => {
   for (const event of ["schedule", "workflow_dispatch"]) {
     const result = evaluate(undefined, undefined, event, "");
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(result.stdout.toString().trim()).toBe("required=true");
+  }
+});
+
+test("API project configuration changes require compiler parity", () => {
+  for (const changedConfig of [
+    "apps/api/tsconfig.src.json",
+    "apps/api/tsconfig.tests.json",
+    "apps/api/tsconfig.declarations.json",
+  ]) {
+    const changed = snapshot();
+    changed.changedConfigs = changedConfig;
+    const result = evaluate(snapshot(), changed);
     expect(result.exitCode, result.stderr.toString()).toBe(0);
     expect(result.stdout.toString().trim()).toBe("required=true");
   }
