@@ -376,7 +376,7 @@ describe("model dispatch admission guard", () => {
       "lib/workflow/ai-generate-batch.ts",
       "lib/flows/flow-executor.ts",
       "lib/scheduler/tasks/memory-extractor.ts",
-      "handlers/case-law/polarity/llm-classifier.ts",
+      "lib/workflow/decisions/decide.ts",
       "scripts/ai-provider-canary.ts",
     ]) {
       expect(files.has(owner)).toBe(true);

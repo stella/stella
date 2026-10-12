@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import {
   existsSync,
@@ -17,6 +17,7 @@ import {
 } from "../packages/scripts/src/code-quality-partition";
 import {
   ALL_WORKSPACE_CACHE_INPUTS,
+  WORKSPACE_TYPECHECK_CACHE_INPUTS,
   CommandFailedError,
   DEPENDENCY_CACHE_INPUTS,
   failureExitCode,
@@ -612,7 +613,7 @@ describe("Turbo cache input contract", () => {
     const tasks = turboTasks();
 
     expect(taskInputs(tasks, "typecheck").filter(isRootInput)).toEqual(
-      [...ALL_WORKSPACE_CACHE_INPUTS].toSorted(),
+      [...WORKSPACE_TYPECHECK_CACHE_INPUTS].toSorted(),
     );
     expect(taskInputs(tasks, "//#typecheck:repo").filter(isRootInput)).toEqual(
       [
@@ -832,6 +833,37 @@ process.exit(childExitStatus(result));
         ),
       ).not.toEqual([]);
     }
+  });
+
+  test("API lint awaits generated sources while remaining independent of all typecheck tasks", () => {
+    const tasks = turboTasks();
+    const pending = ["@stll/api#lint"];
+    const visited = new Set<string>();
+    for (const id of pending) {
+      if (visited.has(id)) {
+        continue;
+      }
+      visited.add(id);
+      const taskName = tasks[id] ? id : (id.split("#")[1] ?? id);
+      if (tasks[taskName]?.["dependsOn"] === undefined) {
+        continue;
+      }
+      for (const dependency of taskField(tasks, taskName, "dependsOn")) {
+        const owner = id.split("#").at(0);
+        if (!owner) {
+          panic(`Missing task owner: ${id}`);
+        }
+        const qualified = dependency.includes("#")
+          ? dependency
+          : `${owner}#${dependency.replace(/^\^/u, "")}`;
+        expect(qualified).not.toMatch(/#typecheck(?:$|:)/u);
+        pending.push(qualified);
+      }
+    }
+    expect(taskField(tasks, "@stll/api#lint", "dependsOn")).toEqual([
+      "@stll/cli#codegen:runtime",
+      "generate:capability-runtime",
+    ]);
   });
 
   test("landing generates Astro types once, in its typecheck", () => {

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import { buildSearchResults } from "./reader-search";
 
 describe("buildSearchResults", () => {
@@ -128,7 +130,7 @@ describe("buildSearchResults", () => {
     // Decomposed here rather than written as a literal: a formatter or an
     // editor may compose the literal back into one code point and leave the
     // decomposition this test is about untested. The length says it did not.
-    const decomposed = "أحمد".normalize("NFD");
+    const decomposed = normalizeUnicode("أحمد", "NFD");
     expect(decomposed).toHaveLength(5);
 
     const result = buildSearchResults({

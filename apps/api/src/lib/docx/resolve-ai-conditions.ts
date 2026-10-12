@@ -54,7 +54,8 @@ const aiConditionLabel = (field: FieldMeta): string =>
  */
 type AiConditionDecision =
   | { decidedBy: "decision_model"; value: boolean; probability: number }
-  | { decidedBy: "generative_model"; value: boolean };
+  | { decidedBy: "generative_model"; value: boolean }
+  | { decidedBy: "undecided"; reason: DecisionUndecidedReason };
 
 export type AiConditionDecider = (input: {
   prompt: string;
@@ -184,6 +185,15 @@ export const resolveAiConditions = async ({
         label,
         state: "undecided",
         reason: "failed",
+      });
+      continue;
+    }
+    if (decision.decidedBy === "undecided") {
+      conditions.push({
+        path: field.path,
+        label,
+        state: "undecided",
+        reason: decision.reason,
       });
       continue;
     }

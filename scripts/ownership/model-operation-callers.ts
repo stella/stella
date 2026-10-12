@@ -9,7 +9,6 @@ export default {
     "apps/api/src/handlers/case-law/analysis/significance-run.ts",
     "apps/api/src/handlers/case-law/decisions/search-expand.ts",
     "apps/api/src/handlers/case-law/decisions/search-refine.ts",
-    "apps/api/src/handlers/case-law/polarity/llm-classifier.ts",
     "apps/api/src/handlers/chat/chat-request.ts",
     "apps/api/src/handlers/chat/chat-turn-run.ts",
     "apps/api/src/handlers/chat/compaction.ts",
@@ -50,6 +49,7 @@ export default {
     "apps/api/src/lib/structured-output-budget-probe.ts",
     "apps/api/src/lib/templates/suggest-template-fields.ts",
     "apps/api/src/lib/workflow/ai-generate-batch.ts",
+    "apps/api/src/lib/workflow/decisions/decide.ts",
     "apps/api/src/lib/workflow/verdict-engine.ts",
   ],
   summary:

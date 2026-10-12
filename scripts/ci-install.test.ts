@@ -1,15 +1,23 @@
 import { afterEach, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { installTimeoutMs, runLoggedInstall } from "./ci-install";
 
 const roots: string[] = [];
-test("cache-restored installs retain the short budget and cold Windows installs get measured headroom", () => {
-  expect(installTimeoutMs("true")).toBe(120_000);
-  expect(installTimeoutMs("false")).toBe(240_000);
-  expect(installTimeoutMs(undefined)).toBe(120_000);
+test("Windows installs retain cold-install headroom regardless of cache contents", () => {
+  expect(installTimeoutMs("win32")).toBe(240_000);
+  expect(installTimeoutMs("linux")).toBe(120_000);
+  expect(installTimeoutMs("darwin")).toBe(120_000);
+});
+test("the workflow leaves install budgets to the platform owner", () => {
+  const workflow = readFileSync(
+    new URL("../.github/workflows/ci.yml", import.meta.url),
+    "utf-8",
+  );
+  expect(workflow).not.toContain("CI_INSTALL_CACHE_RESTORED");
+  expect(workflow).not.toContain("Select install budget from restored cache");
 });
 afterEach(() => {
   for (const root of roots.splice(0)) {
@@ -89,24 +97,3 @@ test.each([0, 7])(
     }
   },
 );
-
-test("invalid cache evidence fails before starting an installer", async () => {
-  const root = mkdtempSync(path.join(tmpdir(), "ci-install-invalid-"));
-  roots.push(root);
-  const logFile = path.join(root, "install.log");
-  const child = Bun.spawn({
-    cmd: [
-      process.execPath,
-      path.join(import.meta.dir, "ci-install.ts"),
-      logFile,
-    ],
-    env: { ...process.env, CI_INSTALL_CACHE_RESTORED: "unknown" },
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  expect(await child.exited).toBe(1);
-  expect(await new Response(child.stderr).text()).toContain(
-    "CI_INSTALL_CACHE_RESTORED must be true or false",
-  );
-  expect(existsSync(logFile)).toBe(false);
-});

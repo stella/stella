@@ -16,10 +16,12 @@ import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbou
 import { toSafeId } from "@/api/lib/branded-types";
 import { DOCX_MAX_ENTRIES } from "@/api/lib/docx-archive";
 import type { TemplateStructureError } from "@/api/lib/docx/types";
+import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { CONTACT_FIELDS } from "@/api/lib/template-binding/binding-sources";
+import type { templateDecideConditionsLogic } from "@/api/lib/templates/template-decide-conditions";
 import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
 import { MCP_MAX_REQUEST_BODY_BYTES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -30,7 +32,7 @@ import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemet
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
+import { createScopedDbMock, toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 const describeStoredTemplateMock = mock();
 const fillStoredTemplateDocxMock = mock();
@@ -50,6 +52,23 @@ const releaseTemplatePersistenceClaimMock = mock();
 const fingerprintTemplatePersistenceRequestMock = mock();
 const configureTemplateFieldsMock = mock();
 const templateDecideConditionsLogicMock = mock();
+const decideTemplateConditionsMock = mock();
+const invokePreviewDecisions = async ({
+  body,
+  abortSignal,
+  runDecisions,
+}: Parameters<typeof templateDecideConditionsLogic>[0]) =>
+  await runDecisions({
+    fields: [
+      {
+        path: "is_consumer",
+        inputType: "boolean",
+        aiPrompt: "Is this a consumer contract?",
+      },
+    ],
+    values: body.values,
+    abortSignal,
+  });
 const loadOrgAIConfigMock = mock();
 const anonymizeTextFieldsMock = mock();
 /** Empty catalogs, one entry per requested id, like the real loaders. */
@@ -273,6 +292,7 @@ const createContext = ({
     releaseTemplatePersistenceClaim: releaseTemplatePersistenceClaimMock,
     configureTemplateFields: configureTemplateFieldsMock,
     templateDecideConditionsLogic: templateDecideConditionsLogicMock,
+    decideTemplateConditions: decideTemplateConditionsMock,
     loadOrgAIConfig: loadOrgAIConfigMock,
     loadManagedAIResidency: async () => "eu",
     anonymizeTextFields: anonymizeTextFieldsMock,
@@ -436,6 +456,7 @@ describe("MCP template tools", () => {
     );
     configureTemplateFieldsMock.mockReset();
     templateDecideConditionsLogicMock.mockReset();
+    decideTemplateConditionsMock.mockReset();
     loadOrgAIConfigMock.mockReset();
     loadOrgAIConfigMock.mockResolvedValue(Result.ok(null));
     anonymizeTextFieldsMock.mockReset();
@@ -1385,35 +1406,37 @@ describe("MCP template tools", () => {
   );
 
   test("preview_template_conditions answers each condition without filling anything", async () => {
-    templateDecideConditionsLogicMock.mockResolvedValue(
-      Result.ok({
-        conditions: [
-          {
-            path: "is_consumer",
-            label: "Consumer contract",
-            decision: {
-              state: "decided",
-              decidedBy: "decision_model",
-              value: true,
-              probability: 0.94,
-              confidence: 0.88,
-            },
+    decideTemplateConditionsMock.mockResolvedValue({
+      conditions: [
+        {
+          path: "is_consumer",
+          label: "Consumer contract",
+          decision: {
+            state: "decided",
+            decidedBy: "decision_model",
+            value: true,
+            probability: 0.94,
+            confidence: 0.88,
           },
-          {
-            path: "has_arbitration",
-            label: "has_arbitration",
-            // The no carries the probability of the no, not of the yes.
-            decision: {
-              state: "decided",
-              decidedBy: "decision_model",
-              value: false,
-              probability: 0.96,
-              confidence: 0.92,
-            },
+        },
+        {
+          path: "has_arbitration",
+          label: "has_arbitration",
+          // The no carries the probability of the no, not of the yes.
+          decision: {
+            state: "decided",
+            decidedBy: "decision_model",
+            value: false,
+            probability: 0.96,
+            confidence: 0.92,
           },
-        ],
-        model: "jev-1.13.0",
-      }),
+        },
+      ],
+      model: "jev-1.13.0",
+    });
+
+    templateDecideConditionsLogicMock.mockImplementation(
+      invokePreviewDecisions,
     );
 
     const result = await handleMcpToolCall({
@@ -1425,14 +1448,37 @@ describe("MCP template tools", () => {
       toolName: "preview_template_conditions",
     });
 
-    expect(templateDecideConditionsLogicMock).toHaveBeenCalledWith(
+    expect(decideTemplateConditionsMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        templateId: TEMPLATE_ID,
-        organizationId: toSafeId<"organization">("org_1"),
-        body: { values: { party_name: "Acme s.r.o." } },
+        values: { party_name: "Acme s.r.o." },
+        skillContext: {
+          organizationId: toSafeId<"organization">("org_1"),
+          userId: toSafeId<"user">("user_1"),
+          safeDb: expect.any(Function),
+        },
         orgAIConfig: null,
-        client: null,
         abortSignal: expect.any(AbortSignal),
+        generation: expect.objectContaining({
+          dataClass: "customer",
+          task: "classify",
+          orgAIConfig: null,
+          organizationId: toSafeId<"organization">("org_1"),
+          managedAIResidency: "eu",
+          tenantWorkspaceIds: [],
+          admission: expect.objectContaining({
+            type: "organization",
+            organizationId: toSafeId<"organization">("org_1"),
+          }),
+          analytics: expect.objectContaining({
+            usageMetering: expect.objectContaining({
+              actionType: "chat",
+              organizationId: toSafeId<"organization">("org_1"),
+              serviceTier: "standard",
+              userId: toSafeId<"user">("user_1"),
+              workspaceId: null,
+            }),
+          }),
+        }),
         usageMetering: expect.objectContaining({
           actionType: "chat",
           organizationId: toSafeId<"organization">("org_1"),
@@ -1474,6 +1520,140 @@ describe("MCP template tools", () => {
     expect(recordTemplateFillMock).not.toHaveBeenCalled();
     expect(recordTemplateUseMock).not.toHaveBeenCalled();
   });
+
+  test("preview_template_conditions projects generative answers without a decision-model probability", async () => {
+    templateDecideConditionsLogicMock.mockResolvedValue(
+      Result.ok({
+        conditions: [
+          {
+            path: "is_consumer",
+            label: "Consumer contract",
+            decision: {
+              state: "decided",
+              decidedBy: "generative_model",
+              value: true,
+            },
+          },
+        ],
+        model: "test-generative",
+      }),
+    );
+    const result = await handleMcpToolCall({
+      args: { template_id: TEMPLATE_ID, values: {} },
+      context: createContext(),
+      toolName: "preview_template_conditions",
+    });
+    expect(parseToolPayload(result)).toEqual({
+      conditions: [
+        {
+          path: "is_consumer",
+          label: "Consumer contract",
+          state: "decided",
+          value: true,
+          decided_by: "generative_model",
+        },
+      ],
+      model: "test-generative",
+    });
+  });
+
+  test("preview_template_conditions refuses unauthorized callers before model work", async () => {
+    const result = await handleMcpToolCall({
+      args: { template_id: TEMPLATE_ID, values: {} },
+      context: createContext({ memberRole: "external" }),
+      toolName: "preview_template_conditions",
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content).toEqual([{ type: "text", text: "Forbidden" }]);
+    expect(templateDecideConditionsLogicMock).not.toHaveBeenCalled();
+    expect(loadOrgAIConfigMock).not.toHaveBeenCalled();
+  });
+
+  test("preview_template_conditions stops when organization AI configuration cannot be read", async () => {
+    templateDecideConditionsLogicMock.mockImplementation(
+      invokePreviewDecisions,
+    );
+    loadOrgAIConfigMock.mockResolvedValue(
+      Result.err(
+        new HandlerError({
+          status: 503,
+          message: "Organization AI configuration unavailable",
+        }),
+      ),
+    );
+    const result = await handleMcpToolCall({
+      args: { template_id: TEMPLATE_ID, values: {} },
+      context: createContext(),
+      toolName: "preview_template_conditions",
+    });
+    expect(result.isError).toBe(true);
+    expect(validationEnvelope(result)).toMatchObject({
+      code: "internal_error",
+    });
+    expect(decideTemplateConditionsMock).not.toHaveBeenCalled();
+  });
+
+  test.each(["empty", "supplied"] as const)(
+    "preview_template_conditions with %s conditions bypasses AI configuration and admission",
+    async (mode) => {
+      const { scopedDb } = createScopedDbMock({
+        query: {
+          templates: {
+            findFirst: async () => ({
+              manifest: {
+                fields:
+                  mode === "empty"
+                    ? []
+                    : [
+                        {
+                          path: "is_consumer",
+                          inputType: "boolean",
+                          aiPrompt: "Is this a consumer contract?",
+                        },
+                      ],
+                clauseSlots: [],
+              },
+            }),
+          },
+        },
+      });
+      const context = createContext({ scopedDb });
+      delete context.testDependencies?.templateDecideConditionsLogic;
+      const result = await handleMcpToolCall({
+        args: { template_id: TEMPLATE_ID, values: { is_consumer: false } },
+        context,
+        toolName: "preview_template_conditions",
+      });
+      expect(result.isError).not.toBe(true);
+      expect(loadOrgAIConfigMock).not.toHaveBeenCalled();
+      expect(decideTemplateConditionsMock).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each([
+    { reason: "busy", code: "action_concurrency_busy" },
+    { reason: "unavailable", code: "action_admission_unavailable" },
+  ] as const)(
+    "preview_template_conditions maps action admission %s to its canonical envelope",
+    async ({ reason, code }) => {
+      templateDecideConditionsLogicMock.mockImplementation(
+        invokePreviewDecisions,
+      );
+      decideTemplateConditionsMock.mockRejectedValue(
+        new ActionAdmissionError({
+          reason,
+          message: "Model action refused",
+        }),
+      );
+      const result = await handleMcpToolCall({
+        args: { template_id: TEMPLATE_ID, values: {} },
+        context: createContext(),
+        toolName: "preview_template_conditions",
+      });
+      expect(result.isError).toBe(true);
+      expect(validationEnvelope(result)).toMatchObject({ code });
+    },
+  );
 
   test("preview_template_conditions names why a condition stayed undecided", async () => {
     templateDecideConditionsLogicMock.mockResolvedValue(

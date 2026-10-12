@@ -213,7 +213,8 @@ type OutputTokenBudgetOption =
 
 type GenerateTanStackObjectForTaskOptions<TSchema extends v.GenericSchema> =
   TanStackTextForTaskOptions &
-    OutputTokenBudgetOption & {
+    OutputTokenBudgetOption &
+    Pick<StreamChatChunksOptions, "tools" | "agentLoopStrategy"> & {
       /** Explicit exception for a generative fallback or provider-path probe. */
       outputMode?: "generative" | undefined;
       outputSchema: TSchema;
@@ -275,7 +276,7 @@ const GENERATION_DEADLINE_LABEL = "model generation deadline";
  * also receives the deadline as an abort signal, so work that does listen
  * stops with it.
  */
-const withGenerationDeadline = async <T>(
+export const withGenerationDeadline = async <T>(
   {
     abortSignal,
     deadlineMs,
@@ -1157,6 +1158,8 @@ const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>({
             adapter: model.adapter,
             messages: requestMessages,
             outputSchema: tanStackOutputSchema,
+            tools: options.tools,
+            agentLoopStrategy: options.agentLoopStrategy,
             ...systemPromptsPatch({
               caching: options.caching,
               model,
