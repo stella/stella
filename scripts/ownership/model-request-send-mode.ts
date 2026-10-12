@@ -129,6 +129,11 @@ export default {
           "Claims skip anonymized threads; reads the send mode after the transcript, right before sending.",
       },
       {
+        path: "apps/api/src/lib/workflow/decisions/decide.ts",
+        reason:
+          "Typed document and corpus questions; chat tool callers prepare their values through the turn boundary before requesting a decision.",
+      },
+      {
         path: "apps/api/src/lib/docx/ai-field-generator.ts",
         reason:
           "Template AI fields: chat's fill_template sends their prompts and values through the turn's boundary; the fill routes carry no chat content.",

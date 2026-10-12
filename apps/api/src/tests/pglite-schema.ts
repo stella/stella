@@ -656,6 +656,32 @@ export const installPgliteCorpusProjectionRevisionFence = async (
   }
 };
 
+const SERVICE_OAUTH_CLIENTS_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261009190500_service_oauth_clients",
+  "migration.sql",
+);
+const SERVICE_CLIENT_CREDENTIAL_STATEMENT_PREFIXES = [
+  "CREATE FUNCTION",
+  "CREATE TRIGGER",
+] as const;
+
+/** Install the trigger that removes a service binding's credential with it. */
+export const installPgliteServiceClientCredentialCascade = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    SERVICE_OAUTH_CLIENTS_MIGRATION_PATH,
+  ).filter((statement) =>
+    SERVICE_CLIENT_CREDENTIAL_STATEMENT_PREFIXES.some((prefix) =>
+      executableSql(statement).startsWith(prefix),
+    ),
+  );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 const LEGISLATION_PAYLOAD_REVISION_STATEMENT_PREFIXES = [
   'ALTER TABLE "legislation_work_changes" FORCE ROW LEVEL SECURITY',
   "CREATE FUNCTION",

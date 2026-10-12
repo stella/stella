@@ -101,6 +101,7 @@ const compareOutputSchema = t.Union([
 ]);
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason:

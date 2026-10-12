@@ -13,6 +13,7 @@ import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
+import { createUuid } from "@/lib/uuid";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
 import { shouldReuseCollaborationPublication } from "./docx-browser-editor.logic";
@@ -73,7 +74,7 @@ const prepareCollaborationPublication = async ({
     documentMutationRevision: flushResult.value.documentMutationRevision,
     downloadUrl: checkpoint.downloadUrl,
     generation: checkpoint.generation,
-    idempotencyKey: crypto.randomUUID(),
+    idempotencyKey: createUuid(),
     roomId: room.roomId,
     sha256Hex: checkpoint.sha256Hex,
   };

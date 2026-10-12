@@ -44,6 +44,7 @@ const querySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "List one list's items in list order with cursor pagination. Each item " +
@@ -213,13 +214,13 @@ const readListItems = createSafeHandler(config, async function* (context) {
             // Drizzle reads a left-joined object as absent when its first
             // column is null, so a non-null column must lead.
             factDetails: {
+              scoring: legalListFactDetails.scoring,
               confidence: legalListFactDetails.confidence,
               occurredOn: legalListFactDetails.occurredOn,
               occurredOnPrecision: legalListFactDetails.occurredOnPrecision,
               evidenceKind: legalListFactDetails.evidenceKind,
               medium: legalListFactDetails.medium,
               interpretationNote: legalListFactDetails.interpretationNote,
-              scoring: legalListFactDetails.scoring,
             },
             firstSource: {
               documentId: firstSource.documentId,

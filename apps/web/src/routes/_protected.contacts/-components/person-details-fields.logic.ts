@@ -1,4 +1,4 @@
-import { ARABIC_DIGIT_FOLDS } from "@stll/text-normalize";
+import { normalizeUnicode, ARABIC_DIGIT_FOLDS } from "@stll/text-normalize";
 
 import type { PersonDateOfBirth } from "@/lib/contacts/mutations";
 
@@ -11,7 +11,7 @@ export type BirthDateDraft = {
 
 export const normalizeBirthDateDigits = (value: string): string =>
   Array.from(
-    value.normalize("NFKC"),
+    normalizeUnicode(value, "NFKC"),
     (char) => ARABIC_DIGIT_FOLDS[char] ?? char,
   )
     .join("")

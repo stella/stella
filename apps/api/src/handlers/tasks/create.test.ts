@@ -253,6 +253,7 @@ describe("createTaskHandler validation", () => {
   test("assigns legacy task creation to its workspace-member creator", async () => {
     const assigneeRows: Record<string, unknown>[] = [];
     const { safeDb } = createScopedDbMock({
+      execute: async () => [{ id: workspaceId }],
       $count: async () => 0,
       select: () => ({
         from: (table: unknown) =>
@@ -334,6 +335,7 @@ describe("createTaskHandler validation", () => {
   test("creates unassigned work for an authorized caller without workspace membership", async () => {
     const obligationRows: Record<string, unknown>[] = [];
     const { safeDb } = createScopedDbMock({
+      execute: async () => [{ id: workspaceId }],
       $count: async () => 0,
       select: () => ({
         from: (table: unknown) =>
@@ -375,7 +377,7 @@ describe("createTaskHandler validation", () => {
       }),
     );
 
-    expect(Result.isOk(result)).toBe(true);
+    expect(result).toMatchObject({ status: "ok" });
     expect(obligationRows).toEqual([
       expect.objectContaining({
         ownerUserId: null,
@@ -417,7 +419,7 @@ describe("createTaskHandler validation", () => {
   test("a non-task List row is created without governed work", async () => {
     const obligationRows: Record<string, unknown>[] = [];
     const { safeDb } = createScopedDbMock({
-      execute: async () => [{ enabled: true }],
+      execute: async () => [{ id: workspaceId, enabled: true }],
       $count: async () => 0,
       select: () => ({
         from: (table: unknown) =>
@@ -452,7 +454,7 @@ describe("createTaskHandler validation", () => {
       }),
     );
 
-    expect(Result.isOk(result)).toBe(true);
+    expect(result).toMatchObject({ status: "ok" });
     expect(obligationRows).toEqual([]);
   });
 

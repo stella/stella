@@ -20,6 +20,7 @@ import { parseViewLayoutSafe } from "@/api/lib/views-schema";
 import { cleanStalePropertyIds } from "@/api/lib/views/utils";
 
 const config = {
+  contract: "patch",
   description:
     "List a matter's views in tab order, each with its layout, position, and " +
     "creation time. Default view names come back localized for the request's " +

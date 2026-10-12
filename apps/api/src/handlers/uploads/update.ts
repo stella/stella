@@ -68,6 +68,7 @@ const finalizeParamsSchema = workspaceParams({
 });
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason: "Verifies an upload without delivering file content.",

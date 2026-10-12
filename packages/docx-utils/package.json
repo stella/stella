@@ -42,7 +42,7 @@
     "test": "bun test src",
     "check:office-fixture-metadata": "bun scripts/check-office-fixture-metadata.ts",
     "test:office-fixture-metadata": "bun test scripts/check-office-fixture-metadata.test.ts",
-    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
+    "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/docx-utils",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/docx-utils",
     "format": "bun ../../scripts/run-oxfmt.ts .",

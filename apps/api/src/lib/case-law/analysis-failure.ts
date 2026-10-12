@@ -15,6 +15,7 @@ import type { AnalysisInputFingerprint } from "@stll/legal-ast/analysis";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import type { SafeId } from "@/api/lib/branded-types";
+import type { RedactedProviderDiagnostic } from "@/api/lib/errors/redacted-provider-diagnostic";
 
 /**
  * How long a failed run's record answers the reader whose key it ran with.
@@ -65,6 +66,7 @@ export type AnalysisFailureRecord = {
   /** The organization's provider; null for the platform's key. */
   provider: string | null;
   recordedAt: Date;
+  providerDiagnostic?: RedactedProviderDiagnostic | undefined;
 };
 
 export const analysisFailureRecord = ({
@@ -72,17 +74,20 @@ export const analysisFailureRecord = ({
   fingerprint,
   now,
   reader,
+  providerDiagnostic,
 }: {
   code: CaseLawAnalysisFailureCode;
   fingerprint: AnalysisInputFingerprint;
   now: Date;
   reader: AnalysisReaderKey;
+  providerDiagnostic?: RedactedProviderDiagnostic | undefined;
 }): AnalysisFailureRecord => ({
   code,
   inputFingerprint: fingerprint,
   keySource: reader.source,
   provider: reader.source === "organization" ? reader.provider : null,
   recordedAt: now,
+  ...(providerDiagnostic === undefined ? {} : { providerDiagnostic }),
 });
 
 /**
