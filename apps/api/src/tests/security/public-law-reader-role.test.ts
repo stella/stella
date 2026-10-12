@@ -1342,9 +1342,9 @@ describe("public-law reader migrations", () => {
 
     const grants = foldReaderSelectGrants(sources, ROLLOUT_READER_ROLE);
 
-    expect([...grants.tables].toSorted()).toEqual([
-      ...ROLLOUT_CASE_LAW_WHOLE_RELATIONS,
-    ]);
+    expect([...grants.tables].toSorted()).toEqual(
+      [...ROLLOUT_CASE_LAW_WHOLE_RELATIONS].toSorted(),
+    );
     expect(sortedColumns(grants)).toEqual({
       [ROLLOUT_CASE_LAW_SOURCE_RELATION]: [
         ...ROLLOUT_CASE_LAW_SOURCE_COLUMNS,

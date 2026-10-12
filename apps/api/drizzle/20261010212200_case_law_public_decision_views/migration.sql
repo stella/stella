@@ -2,12 +2,12 @@
 SET lock_timeout = '5s';--> statement-breakpoint
 SET statement_timeout = '30s';--> statement-breakpoint
 
-CREATE VIEW "case_law_published_decisions" WITH (security_barrier = true) AS
+CREATE VIEW "case_law_published_decisions" AS
 SELECT *
 FROM "case_law_decisions"
 WHERE (redacted_at IS NULL AND jsonb_extract_path_text(metadata, '_stellaPartialObservation', 'isListingOnly') is distinct from 'true');--> statement-breakpoint
 
-CREATE VIEW "case_law_unredacted_decisions" WITH (security_barrier = true) AS
+CREATE VIEW "case_law_unredacted_decisions" AS
 SELECT *
 FROM "case_law_decisions"
 WHERE redacted_at IS NULL;--> statement-breakpoint

@@ -527,12 +527,19 @@ const sqlTableName = (name: string): string =>
   schemaRelationNames.get(name) ??
   name.replaceAll(/([a-z\d])([A-Z])/gu, "$1_$2").toLowerCase();
 
-const selectedColumnOf = (
-  expression: ts.Expression,
-  name: string,
-  bindings: ConstBindings,
+type SelectedColumnOfOptions = {
+  expression: ts.Expression;
+  name: string;
+  bindings: ConstBindings;
+  seen?: Set<string>;
+};
+
+const selectedColumnOf = ({
+  expression,
+  name,
+  bindings,
   seen = new Set<string>(),
-): ts.Expression | undefined => {
+}: SelectedColumnOfOptions): ts.Expression | undefined => {
   let current = expression;
   if (
     ts.isCallExpression(current) &&
@@ -543,7 +550,12 @@ const selectedColumnOf = (
     const producer = bindings.get(current.expression.text)?.at(0)?.initializer;
     if (producer !== undefined && ts.isArrowFunction(producer)) {
       if (!ts.isBlock(producer.body)) {
-        return selectedColumnOf(producer.body, name, bindings, seen);
+        return selectedColumnOf({
+          expression: producer.body,
+          name,
+          bindings,
+          seen,
+        });
       }
       const statement = producer.body.statements.at(0);
       if (
@@ -552,7 +564,12 @@ const selectedColumnOf = (
         ts.isReturnStatement(statement) &&
         statement.expression !== undefined
       ) {
-        return selectedColumnOf(statement.expression, name, bindings, seen);
+        return selectedColumnOf({
+          expression: statement.expression,
+          name,
+          bindings,
+          seen,
+        });
       }
     }
   }
@@ -584,11 +601,17 @@ const selectedColumnOf = (
   return undefined;
 };
 
-const isCorpusColumn = (
-  column: string,
-  bindings: ConstBindings,
+type IsCorpusColumnOptions = {
+  column: string;
+  bindings: ConstBindings;
+  seen?: Set<string>;
+};
+
+const isCorpusColumn = ({
+  column,
+  bindings,
   seen = new Set<string>(),
-): boolean => {
+}: IsCorpusColumnOptions): boolean => {
   const owner = column.slice(0, column.lastIndexOf("."));
   if (owner.length === 0) {
     return false;
@@ -616,15 +639,19 @@ const isCorpusColumn = (
     declarations !== undefined &&
     declarations.length > 0 &&
     declarations.every(({ initializer }) => {
-      const selected = selectedColumnOf(
-        initializer,
-        column.slice(column.lastIndexOf(".") + 1),
+      const selected = selectedColumnOf({
+        expression: initializer,
+        name: column.slice(column.lastIndexOf(".") + 1),
         bindings,
-      );
+      });
       return (
         selected !== undefined &&
         ts.isPropertyAccessExpression(selected) &&
-        isCorpusColumn(selected.getText(), bindings, new Set(seen))
+        isCorpusColumn({
+          column: selected.getText(),
+          bindings,
+          seen: new Set(seen),
+        })
       );
     })
   );
@@ -763,8 +790,8 @@ const isSourceRestrictionColumn = (
   const owner = resolve(column.expression, bindings).getText(file);
   if (column.name.text === "sourceId") {
     return (
-      isCorpusColumn(column.getText(file), bindings) ||
-      isCorpusColumn(`${owner}.sourceId`, bindings)
+      isCorpusColumn({ column: column.getText(file), bindings }) ||
+      isCorpusColumn({ column: `${owner}.sourceId`, bindings })
     );
   }
   return (
@@ -822,11 +849,14 @@ const drizzleSourceCount = (
   const state = {
     corpus:
       countTable !== undefined &&
-      (isCorpusColumn(`${countTable.getText(file)}.sourceId`, bindings) ||
-        isCorpusColumn(
-          `${resolve(countTable, bindings).getText(file)}.sourceId`,
+      (isCorpusColumn({
+        column: `${countTable.getText(file)}.sourceId`,
+        bindings,
+      }) ||
+        isCorpusColumn({
+          column: `${resolve(countTable, bindings).getText(file)}.sourceId`,
           bindings,
-        )),
+        })),
     count: dollarCount,
     source: false,
   };
@@ -871,11 +901,14 @@ const drizzleSourceCount = (
           const table = value.arguments.at(0);
           if (table !== undefined) {
             state.corpus ||=
-              isCorpusColumn(`${table.getText(file)}.sourceId`, bindings) ||
-              isCorpusColumn(
-                `${resolve(table, bindings).getText(file)}.sourceId`,
+              isCorpusColumn({
+                column: `${table.getText(file)}.sourceId`,
                 bindings,
-              );
+              }) ||
+              isCorpusColumn({
+                column: `${resolve(table, bindings).getText(file)}.sourceId`,
+                bindings,
+              });
           }
         }
       }
@@ -948,7 +981,10 @@ const drizzleSourceCount = (
             otherValue !== undefined &&
             (!ts.isPropertyAccessExpression(otherValue) ||
               (!isSourceRestrictionColumn(otherValue, context) &&
-                !isCorpusColumn(otherValue.getText(file), bindings)))
+                !isCorpusColumn({
+                  column: otherValue.getText(file),
+                  bindings,
+                })))
           ) {
             state.source ||= isSourceRestrictionColumn(column, context);
           }
@@ -1095,7 +1131,7 @@ export const reportSqlPerfOrColumns = (
       if (
         columns.size > 1 &&
         !isKeysetOr(node, imports, bindings, file) &&
-        [...columns].some((column) => isCorpusColumn(column, bindings))
+        [...columns].some((column) => isCorpusColumn({ column, bindings }))
       ) {
         hits.push(location(file, node.getStart(file)));
       }
@@ -1119,7 +1155,7 @@ export const reportSqlPerfOrColumns = (
           const expression = expressions[Number(expressionIndex)];
           return (
             expression !== undefined &&
-            isCorpusColumn(expression.getText(file), bindings)
+            isCorpusColumn({ column: expression.getText(file), bindings })
           );
         }
         const owner = column.slice(0, column.lastIndexOf("."));

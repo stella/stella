@@ -12,6 +12,7 @@ import {
 } from "@/api/tests/pglite-test-db";
 import {
   deriveStellaTablePrivileges,
+  migrationSqlWithoutLineComments,
   readCommittedMigrations,
 } from "@/api/tests/stella-table-privileges";
 import type {
@@ -52,7 +53,7 @@ const MIGRATION_REPLAYED_ROLES = new Set(["stella_entity_gate"]);
 const COLUMN_UNSCOPED_ROLES = new Set(["public"]);
 
 const GRANT_OR_REVOKE_STATEMENT =
-  /\b(GRANT|REVOKE)\b([\s\S]*?)\b(TO|FROM)\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*(?:;|$)/gu;
+  /\b(GRANT|REVOKE)\b([^;]*?)\b(TO|FROM)\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*(?:;|$)/gu;
 
 const OBJECT_CLAUSE = /\bON\s+(?:TABLE\s+)?([\s\S]*?)$/u;
 
@@ -96,7 +97,9 @@ const unquote = (value: string): string => value.replaceAll('"', "");
 /** Effective relation-wide grants, as `role:relation`. */
 const grantedPairs = (sqlText: string): Set<string> => {
   const pairs = new Set<string>();
-  for (const match of sqlText.matchAll(GRANT_OR_REVOKE_STATEMENT)) {
+  for (const match of migrationSqlWithoutLineComments(sqlText).matchAll(
+    GRANT_OR_REVOKE_STATEMENT,
+  )) {
     const [, verb = "", body = "", , rawRole = ""] = match;
     if (NOT_A_TABLE_GRANT.test(body)) {
       continue;
@@ -134,7 +137,9 @@ const grantedPairs = (sqlText: string): Set<string> => {
  */
 const grantedColumnPairs = (sqlText: string): Set<string> => {
   const pairs = new Set<string>();
-  for (const match of sqlText.matchAll(GRANT_OR_REVOKE_STATEMENT)) {
+  for (const match of migrationSqlWithoutLineComments(sqlText).matchAll(
+    GRANT_OR_REVOKE_STATEMENT,
+  )) {
     const [, verb = "", body = "", , rawRole = ""] = match;
     const role = unquote(rawRole);
     const objects = OBJECT_CLAUSE.exec(body)?.[1];
@@ -539,6 +544,18 @@ describe("stella table privilege derivation", () => {
         "t",
       ),
     ).toEqual([]);
+  });
+
+  test("column grants are read from statements rather than comments or view projections", () => {
+    const pairs = grantedColumnPairs(`
+      -- GRANT access through the published view.
+      CREATE VIEW published_rows AS
+        SELECT (redacted_at IS NULL AND jsonb_extract_path_text(metadata, 'marker', 'field') IS DISTINCT FROM 'true') AS published
+        FROM decisions;
+      -- GRANT SELECT (comment_field) ON decisions TO reader;
+      GRANT SELECT (id) ON published_rows TO reader;
+    `);
+    expect([...pairs]).toEqual(["reader:published_rows:id:SELECT"]);
   });
 
   test("reads mixed column grants on schema-qualified tables", () => {

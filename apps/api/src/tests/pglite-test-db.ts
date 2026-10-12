@@ -68,27 +68,18 @@ const allSchema = {
   ...rlsExports,
 };
 
-const securityBarrierViews = Object.values(allSchema).flatMap((entity) => {
+const publicLawRelations = new Set(
+  Object.keys(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION),
+);
+const publicLawViews = Object.values(allSchema).flatMap((entity) => {
   if (!isPgView(entity)) {
     return [];
   }
   const config = getViewConfig(entity);
-  if (config.isExisting || config.with === undefined) {
-    return [];
-  }
-  if (
-    config.with.securityBarrier !== true ||
-    Object.keys(config.with).some((key) => key !== "securityBarrier")
-  ) {
-    panic(`Unsupported PGlite view options for ${config.name}`);
-  }
-  return [entity];
+  return !config.isExisting && publicLawRelations.has(config.name)
+    ? [entity]
+    : [];
 });
-const pglitePushSchema = Object.fromEntries(
-  Object.entries(allSchema).filter(
-    ([, entity]) => !securityBarrierViews.some((view) => view === entity),
-  ),
-);
 
 const quoteSqlIdentifier = (identifier: string) =>
   `"${identifier.replaceAll('"', '""')}"`;
@@ -654,37 +645,39 @@ const applyStellaTablePrivileges = async (client: PGlite): Promise<void> => {
   await client.exec(statements.join(";\n"));
 };
 
-const installTestSecurityBarrierViews = async (
-  db: AnyDrizzle,
-): Promise<void> => {
+const installTestPublicLawViews = async (db: AnyDrizzle): Promise<void> => {
   const dialect = new PgDialect();
-  for (const view of securityBarrierViews) {
+  for (const view of publicLawViews) {
     const config = getViewConfig(view);
     const query = config.query;
     if (query === undefined) {
-      panic(`Security-barrier view ${config.name} has no query`);
+      panic(`Public-law view ${config.name} has no query`);
+    }
+    if (config.with !== undefined) {
+      panic(
+        `Public-law fixture view ${config.name} must use plain view semantics`,
+      );
     }
     const rendered = dialect.sqlToQuery(query);
     if (rendered.params.length > 0) {
-      panic(`Security-barrier view ${config.name} query has bound parameters`);
+      panic(`Public-law view ${config.name} query has bound parameters`);
     }
     await db.execute(sql`
       CREATE VIEW ${sql.identifier(config.schema ?? "public")}.${sql.identifier(
         config.name,
       )}
-      WITH (security_barrier = true)
       AS (${sql.raw(rendered.sql)})
     `);
   }
 };
 
 /** Rebuild schema-derived views and their grants after a fixture column change. */
-export const rebuildTestSecurityBarrierViews = async (
+export const rebuildTestPublicLawViews = async (
   client: PGlite,
   change: () => Promise<void>,
 ): Promise<void> => {
   const db = drizzle({ client });
-  for (const view of securityBarrierViews) {
+  for (const view of publicLawViews) {
     const config = getViewConfig(view);
     await db.execute(sql`
       DROP VIEW ${sql.identifier(config.schema ?? "public")}.${sql.identifier(
@@ -693,7 +686,7 @@ export const rebuildTestSecurityBarrierViews = async (
     `);
   }
   await change();
-  await installTestSecurityBarrierViews(db);
+  await installTestPublicLawViews(db);
   await applyStellaTablePrivileges(client);
   for (const statement of ROLE_GRANT_STATEMENTS) {
     await db.execute(sql.raw(statement));
@@ -734,16 +727,12 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteSchemaPrerequisites(db);
 
   // drizzle-kit is a heavyweight dev dependency; import it only on this
-  // build path so snapshot-booted test processes never load it. RC4's API
-  // converter crashes on view WITH options because its String helper is only
-  // initialized by the CLI path, so barrier views are rendered from Drizzle's
-  // existing query config below.
+  // build path so snapshot-booted test processes never load it.
   const { pushSchema } = await import("drizzle-kit/api-postgres");
-  const { sqlStatements } = await pushSchema(pglitePushSchema, pushSchemaDb);
+  const { sqlStatements } = await pushSchema(allSchema, pushSchemaDb);
   for (const statement of sqlStatements) {
     await db.execute(sql.raw(statement));
   }
-  await installTestSecurityBarrierViews(db);
   await installPgliteFlowTransitions(db);
   await installPgliteWorkspaceAccessObjects(db);
   await db.transaction(async (tx) => {

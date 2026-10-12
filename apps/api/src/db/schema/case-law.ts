@@ -1012,7 +1012,6 @@ export const caseLawDecisions = p.pgTable(
 /** Published decisions, with columns and types derived from the base table. */
 export const publishedCaseLawDecisions = p
   .pgView("case_law_published_decisions")
-  .with({ securityBarrier: true })
   .as((qb) =>
     qb
       .select()
@@ -1023,7 +1022,6 @@ export const publishedCaseLawDecisions = p
 /** Unredacted decisions for the public subject's narrowly scoped locator. */
 export const unredactedCaseLawDecisions = p
   .pgView("case_law_unredacted_decisions")
-  .with({ securityBarrier: true })
   .as((qb) =>
     qb
       .select()
