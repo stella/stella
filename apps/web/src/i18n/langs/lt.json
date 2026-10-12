@@ -776,6 +776,8 @@
       "none": "Citavimų dar neužfiksuota.",
       "openAtCitation": "Atverti citatos vietoje",
       "openDecision": "Atverti sprendimą",
+      "paragraphMark": "¶ {paragraph, number}",
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, {paragraph, number} punktas",
       "partialSummary": "Citavimų sumos ir laiko juosta yra nepilnos.",
       "passageNotFound": "Cituojanti ištrauka tekste nerasta",
       "positiveCount": "{count, plural, one {# teigiama} few {# teigiamos} many {# teigiamos} other {# teigiamų}}",

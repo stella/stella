@@ -779,6 +779,8 @@ type Messages = {
       "none": "No citations recorded yet.";
       "openAtCitation": "Open at the citation";
       "openDecision": "Open decision";
+      "paragraphMark": "¶ {paragraph, number}";
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, paragraph {paragraph, number}";
       "partialSummary": "Citation totals and timeline are partial.";
       "passageNotFound": "The citing passage was not located in the text";
       "positiveCount": "{count, plural, one {# positive} other {# positive}}";

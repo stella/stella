@@ -776,6 +776,8 @@
       "none": "Zatiaľ nie sú zaznamenané žiadne citácie.",
       "openAtCitation": "Otvoriť na mieste citácie",
       "openDecision": "Otvoriť rozhodnutie",
+      "paragraphMark": "¶ {paragraph, number}",
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, bod {paragraph, number}",
       "partialSummary": "Súčty citácií a časová os sú neúplné.",
       "passageNotFound": "Citujúcu pasáž sa v texte nepodarilo nájsť",
       "positiveCount": "{count, plural, one {# pozitívna} few {# pozitívne} many {# pozitívnych} other {# pozitívnych}}",

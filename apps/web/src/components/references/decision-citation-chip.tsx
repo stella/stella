@@ -35,20 +35,36 @@ type DecisionCitationChipProps = {
   decision: DecisionCitationMetadata;
   passage?: ReactNode;
   presentation?: DecisionCitationPresentation | undefined;
+  /** The court's own number on the cited block; null when it printed none. */
+  paragraphNumber?: number | null | undefined;
   onOpen?: (() => void) | undefined;
 };
 
 const DecisionCitationLabel = ({
   decision,
   presentation,
+  paragraphNumber,
 }: {
   decision: DecisionCitationMetadata;
   presentation: DecisionCitationPresentation;
+  paragraphNumber: number | null;
 }) => {
+  const t = useTranslations();
+  const paragraph =
+    paragraphNumber === null ? null : (
+      <span className="whitespace-nowrap">
+        {t("caseLaw.citation.paragraphMark", { paragraph: paragraphNumber })}
+      </span>
+    );
   switch (presentation) {
     case DECISION_CITATION_PRESENTATION.compact:
-      return (
+      return paragraph === null ? (
         <CourtBadge abbreviation={decision.courtShortCode} weight="outline" />
+      ) : (
+        <span className="inline-flex items-center gap-1">
+          <CourtBadge abbreviation={decision.courtShortCode} weight="outline" />
+          {paragraph}
+        </span>
       );
     case DECISION_CITATION_PRESENTATION.expanded:
       return (
@@ -56,6 +72,7 @@ const DecisionCitationLabel = ({
           <LandmarkIcon aria-hidden="true" className="size-3 shrink-0" />
           <CourtBadge abbreviation={decision.courtShortCode} weight="outline" />
           <BidiText as="span">{decision.caseNumber}</BidiText>
+          {paragraph}
         </span>
       );
     default:
@@ -71,6 +88,7 @@ export const DecisionCitationChip = ({
   decision,
   passage,
   presentation = DECISION_CITATION_PRESENTATION.compact,
+  paragraphNumber = null,
   onOpen,
 }: DecisionCitationChipProps) => {
   const t = useTranslations();
@@ -81,11 +99,19 @@ export const DecisionCitationChip = ({
   const date =
     formatDecisionDate(decision.decisionDate, format) ??
     t("caseLaw.citation.dateUnavailable");
-  const reference = t("caseLaw.citation.referenceLabel", {
-    court: decision.court,
-    caseNumber: decision.caseNumber,
-    date,
-  });
+  const reference =
+    paragraphNumber === null
+      ? t("caseLaw.citation.referenceLabel", {
+          court: decision.court,
+          caseNumber: decision.caseNumber,
+          date,
+        })
+      : t("caseLaw.citation.paragraphReferenceLabel", {
+          court: decision.court,
+          caseNumber: decision.caseNumber,
+          date,
+          paragraph: paragraphNumber,
+        });
   const links = resolveLegalCitationLinks({
     appUrl: decision.readerUrl,
     sourceUrl: decision.originalUrl,
@@ -129,6 +155,7 @@ export const DecisionCitationChip = ({
         <DecisionCitationLabel
           decision={decision}
           presentation={presentation}
+          paragraphNumber={paragraphNumber}
         />
       </PopoverTrigger>
       <PopoverPanel
