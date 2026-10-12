@@ -9,6 +9,7 @@ import {
   watchTestProcessMemory,
 } from "@stll/scripts/src/test-process-memory";
 import { attachTestProcessShutdown } from "@stll/scripts/src/test-process-shutdown";
+import { forwardTestStderr } from "@stll/scripts/src/test-process-stderr";
 
 import { planTestRuns } from "./test-run-plan";
 import type { PathKind } from "./test-run-plan";
@@ -83,24 +84,34 @@ for (const run of runs) {
       process.stderr.write(`${message}\n`);
     },
   });
+  let outputFailure: string | undefined;
   try {
     const decoder = new TextDecoder();
     let pending = "";
-    for await (const chunk of child.stderr) {
-      process.stderr.write(chunk);
-      pending += decoder.decode(chunk, { stream: true });
-      const lines = pending.split("\n");
-      pending = (lines.pop() ?? "").slice(-16 * 1024);
-      for (const line of lines) {
-        const match = /^(.+\.(?:test|spec)\.[cm]?[jt]sx?):\s*$/u.exec(
-          Bun.stripANSI(line),
-        );
-        if (match?.[1] !== undefined) {
-          currentFile = match[1];
+    const output = await forwardTestStderr({
+      child,
+      destination: process.stderr,
+      onWarning: (message) => {
+        process.stderr.write(`${message}\n`);
+      },
+      onChunk: (chunk) => {
+        pending += decoder.decode(chunk, { stream: true });
+        const lines = pending.split("\n");
+        pending = (lines.pop() ?? "").slice(-16 * 1024);
+        for (const line of lines) {
+          const match = /^(.+\.(?:test|spec)\.[cm]?[jt]sx?):\s*$/u.exec(
+            Bun.stripANSI(line),
+          );
+          if (match?.[1] !== undefined) {
+            currentFile = match[1];
+          }
         }
-      }
+      },
+    });
+    if (output.isErr()) {
+      outputFailure = output.error.message;
+      process.stderr.write(`${outputFailure}\n`);
     }
-    await child.exited;
   } finally {
     watchdog.stop();
     shutdown.dispose();
@@ -113,8 +124,16 @@ for (const run of runs) {
   if (interruptedExitCode !== undefined) {
     process.exit(interruptedExitCode);
   }
-  if (watchdog.failure() !== undefined || childExitStatus(child) !== 0) {
+  if (
+    outputFailure !== undefined ||
+    watchdog.failure() !== undefined ||
+    childExitStatus(child) !== 0
+  ) {
     console.error(`The ${run.label} tests failed.`);
-    process.exit(watchdog.failure() === undefined ? childExitStatus(child) : 1);
+    process.exit(
+      outputFailure === undefined && watchdog.failure() === undefined
+        ? childExitStatus(child)
+        : 1,
+    );
   }
 }

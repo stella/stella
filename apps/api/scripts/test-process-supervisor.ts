@@ -267,6 +267,10 @@ export class TestProcessSupervisor {
     if (this.signal.aborted) {
       return { exitCode: TIMEOUT_EXIT_CODE, usage: undefined, output: "" };
     }
+    const readBytes = await this.memoryReader;
+    if (this.stopped()) {
+      return { exitCode: TIMEOUT_EXIT_CODE, usage: undefined, output: "" };
+    }
     const id = ++this.sequence;
     const logPath = path.join(this.options.directory, `${id}.log`);
     const junitPath = path.join(this.options.directory, `${id}.xml`);
@@ -394,7 +398,7 @@ export class TestProcessSupervisor {
       memoryWatchdog = watchTestProcessMemory({
         child,
         limitBytes: this.memoryLimitBytes,
-        readBytes: await this.memoryReader,
+        readBytes,
         file: () => identity.files.join(", ") || identity.label,
         onFailure: (message) => this.stop(message),
         onWarning: (message) => this.diagnose(message),

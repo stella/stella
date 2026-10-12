@@ -27,10 +27,12 @@ const createFixture = (
   const diagnostics: string[] = [];
   const stdout: string[] = [];
   const stderr: string[] = [];
+  const started = Promise.withResolvers<undefined>();
   const supervisor = new TestProcessSupervisor({
     directory,
     onProgress: (text) => {
       progress.push(text);
+      started.resolve(undefined);
     },
     onDiagnostic: (text) => {
       diagnostics.push(text);
@@ -52,6 +54,7 @@ const createFixture = (
     diagnostics,
     stdout,
     stderr,
+    started: started.promise,
     supervisor,
     cleanup: () => {
       supervisor.kill();
@@ -91,7 +94,8 @@ for (const kind of ["batch", "snapshot"] as const) {
         identity: { kind, label, files, lane: 3 },
         mode: "buffered",
       });
-      // Startup is visible synchronously, before the buffered child completes.
+      // Reader initialization completes before startup, which remains visible before completion.
+      await fixture.started;
       expect(fixture.progress.join("")).toContain(label);
       expect(fixture.progress.join("")).toMatch(
         /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/u,
