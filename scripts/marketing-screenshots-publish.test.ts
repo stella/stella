@@ -10,25 +10,19 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { Script } from "node:vm";
 import * as v from "valibot";
 
-import { workflowJobSteps } from "./workflow-steps";
+import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
-const reusable = Bun.YAML.parse(
+const read = (name: string) =>
   readFileSync(
-    new URL("../.github/workflows/marketing-screenshots.yml", import.meta.url),
+    new URL(`../.github/workflows/${name}`, import.meta.url),
     "utf-8",
-  ),
-);
-const updateWorkflow = Bun.YAML.parse(
-  readFileSync(
-    new URL(
-      "../.github/workflows/marketing-screenshots-update.yml",
-      import.meta.url,
-    ),
-    "utf-8",
-  ),
-);
+  );
+// Built, not written literally: a `${...}` in a plain string reads as a
+// broken template literal to the linter.
+const githubExpression = (value: string) => ["$", "{{ ", value, " }}"].join("");
 
 const stepSchema = v.looseObject({
   name: v.optional(v.string()),
@@ -40,16 +34,27 @@ const stepSchema = v.looseObject({
   env: v.optional(v.record(v.string(), v.unknown())),
 });
 const jobSchema = v.looseObject({
-  needs: v.optional(v.union([v.string(), v.array(v.string())])),
+  if: v.optional(v.string()),
   environment: v.optional(v.string()),
+  permissions: v.optional(v.record(v.string(), v.string())),
   steps: v.optional(v.array(stepSchema)),
 });
-const updateJobs = v.parse(
-  v.looseObject({ jobs: v.record(v.string(), jobSchema) }),
-  updateWorkflow,
-).jobs;
+const jobsOf = (workflow: unknown) =>
+  v.parse(v.looseObject({ jobs: v.record(v.string(), jobSchema) }), workflow)
+    .jobs;
 const stepsOf = (workflow: unknown, job: string) =>
   workflowJobSteps(workflow, job).map((step) => v.parse(stepSchema, step));
+
+const reusable = Bun.YAML.parse(read("marketing-screenshots.yml"));
+const captureWorkflow = Bun.YAML.parse(
+  read("marketing-screenshots-capture.yml"),
+);
+const publishWorkflow = Bun.YAML.parse(
+  read("marketing-screenshots-publish.yml"),
+);
+const updateWorkflow = Bun.YAML.parse(read("marketing-screenshots-update.yml"));
+
+const HEAD = "a".repeat(40);
 
 // Commands the publish job's shell steps may run: shell builtins and
 // coreutils that read or copy files, nothing that executes a file.
@@ -98,7 +103,7 @@ const commandsOf = (script: string): string[] =>
         !/^(?:!|\]\]|\)\)?|\(\(|\\|count|done<|fi\)?)$/u.test(word),
     );
 
-describe("screenshot update trust boundary", () => {
+describe("screenshot regeneration trust boundary", () => {
   test("the shell allowlist sees commands that would run branch files", () => {
     for (const script of [
       "bash scripts/x.sh",
@@ -117,48 +122,55 @@ describe("screenshot update trust boundary", () => {
     }
   });
 
-  test("the push key never reaches a reusable workflow", () => {
-    // Environment secrets cannot cross workflow_call, and a reusable workflow
-    // would have to declare the key as an input; the jobs that need it live
-    // in the dispatched workflow itself.
-    expect(JSON.stringify(reusable)).not.toContain(
-      "STELLA_RELEASE_APP_PRIVATE_KEY",
-    );
-    const on: unknown =
-      typeof updateWorkflow === "object" && updateWorkflow !== null
-        ? Reflect.get(updateWorkflow, "on")
-        : undefined;
-    expect(
-      typeof on === "object" && on !== null ? Object.keys(on) : [],
-    ).toEqual(["workflow_dispatch"]);
-    for (const job of Object.values(updateJobs)) {
-      expect(JSON.stringify(job)).not.toContain("./.github/workflows/");
+  test("only the publish job can read the push key, in its environment", () => {
+    for (const workflow of [reusable, captureWorkflow, updateWorkflow]) {
+      expect(JSON.stringify(workflow)).not.toContain(
+        "STELLA_RELEASE_APP_PRIVATE_KEY",
+      );
+      for (const job of Object.values(jobsOf(workflow))) {
+        expect(job.environment).toBeUndefined();
+      }
     }
+    expect(jobsOf(publishWorkflow)["publish"]?.environment).toBe("release-app");
   });
 
-  test("only the publish job can reach the push key, and it runs no branch code", () => {
-    const withKey = Object.entries(updateJobs)
-      .filter(([, job]) =>
-        JSON.stringify(job.steps ?? []).includes(
-          "STELLA_RELEASE_APP_PRIVATE_KEY",
-        ),
-      )
-      .map(([name]) => name);
-    expect(withKey).toEqual(["publish"]);
+  test("branch code runs only on the branch's own ref, never on main", () => {
+    const capture = jobsOf(captureWorkflow)["capture"];
+    expect(capture?.if).toContain("github.ref != 'refs/heads/main'");
+    expect(capture?.if).toContain("startsWith(github.ref, 'refs/heads/')");
+    expect(capture?.permissions).toEqual({ contents: "read" });
+    const steps = stepsOf(captureWorkflow, "capture");
+    expect(steps.find((step) => step.name === "Checkout")?.with?.["ref"]).toBe(
+      githubExpression("github.sha"),
+    );
     expect(
-      Object.entries(updateJobs)
-        .filter(([, job]) => job.environment !== undefined)
-        .map(([name, job]) => [name, job.environment]),
-    ).toEqual([["publish", "release-app"]]);
+      steps.find((step) => step.name === "Upload regenerated baselines")
+        ?.with?.["name"],
+    ).toBe("marketing-screenshots");
+    for (const step of steps) {
+      expect(step.uses?.startsWith("actions/cache") ?? false).toBe(false);
+    }
+    // The dispatch on main runs no branch code: it only starts the capture.
+    for (const step of stepsOf(updateWorkflow, "update")) {
+      expect(step.uses?.startsWith("./") ?? false).toBe(false);
+      expect(step.uses?.startsWith("actions/checkout@") ?? false).toBe(false);
+    }
+    // The comparison workflow no longer regenerates anything.
+    expect(Object.keys(jobsOf(reusable))).toEqual(["check"]);
+  });
 
-    const publish = stepsOf(updateWorkflow, "publish");
+  test("the publish job runs no branch code and mints the token last", () => {
+    const publish = stepsOf(publishWorkflow, "publish");
     // An allowlist, not a denylist: the job holds the push key, so every
     // step is pinned by name and action, and shell steps may only call the
-    // commands below. Anything new fails here until reviewed.
+    // commands above. Anything new fails here until reviewed.
     expect(publish.map((step) => [step.name, step.uses ?? "run"])).toEqual([
-      ["Validate inputs", "run"],
       [
-        "Checkout the regenerated head",
+        "Select the branch",
+        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3",
+      ],
+      [
+        "Checkout the captured head",
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
       ],
       [
@@ -189,6 +201,16 @@ describe("screenshot update trust boundary", () => {
     );
     expect(checkout?.with?.["persist-credentials"]).toBe(false);
     expect(checkout?.with?.["submodules"]).toBeUndefined();
+    expect(checkout?.with?.["ref"]).toBe(
+      githubExpression("steps.select.outputs.head"),
+    );
+    const download = publish.find(
+      (step) => step.name === "Download regenerated baselines",
+    );
+    expect(download?.with).toMatchObject({
+      name: "marketing-screenshots",
+      "run-id": githubExpression("steps.select.outputs.run"),
+    });
     const index = (name: string) =>
       publish.findIndex((step) => step.name === name);
     expect(index("Stage validated baselines")).toBeGreaterThan(
@@ -198,28 +220,166 @@ describe("screenshot update trust boundary", () => {
       index("Stage validated baselines"),
     );
     expect(index("Push regenerated baselines")).toBe(publish.length - 1);
-    const push = publish.at(-1);
-    // Append mode builds on the checked-out head, which is the commit the
-    // capture job recorded before running branch code.
-    expect(push?.with?.["mode"]).toBe("append");
-    expect(checkout?.with?.["ref"]).toBe(
-      ["$", "{{ needs.update.outputs.sha }}"].join(""),
-    );
-    expect(push?.with?.["paths"]).toBe(
-      "apps/landing/public/media/products/*.png",
-    );
-
-    const update = stepsOf(updateWorkflow, "update");
-    expect(JSON.stringify(update)).not.toContain("app-token");
-    const updateCheckout = update.find((step) => step.name === "Checkout");
-    expect(updateCheckout?.with?.["persist-credentials"]).toBe(false);
-    expect(updateJobs["publish"]?.needs).toBe("update");
+    // Append mode builds on the checked-out head, the commit the capture ran
+    // on, so a push that landed since fails instead of being overwritten.
+    expect(publish.at(-1)?.with).toMatchObject({
+      mode: "append",
+      branch: githubExpression("steps.select.outputs.branch"),
+      paths: "apps/landing/public/media/products/*.png",
+    });
   });
+});
+
+describe("publish selection", () => {
+  const select = new Script(
+    `(async () => { ${
+      v.parse(
+        v.object({ script: v.string() }),
+        workflowStepByName(
+          workflowJobSteps(publishWorkflow, "publish"),
+          "Select the branch",
+        )["with"],
+      ).script
+    } })()`,
+  );
+  type Scenario = {
+    run: Record<string, unknown>;
+    pulls: Record<string, unknown>[];
+    artifacts: { name: string; expired: boolean }[];
+  };
+  const scenario = (): Scenario => ({
+    run: {
+      id: 7,
+      path: ".github/workflows/marketing-screenshots-capture.yml",
+      event: "workflow_dispatch",
+      head_branch: "feat/ui",
+      head_sha: HEAD,
+      head_repository: { full_name: "stella/stella" },
+    },
+    pulls: [
+      {
+        head: {
+          ref: "feat/ui",
+          sha: HEAD,
+          repo: { full_name: "stella/stella" },
+        },
+      },
+    ],
+    artifacts: [{ name: "marketing-screenshots", expired: false }],
+  });
+  const selectFor = async (input: Scenario) => {
+    const outputs: Record<string, string> = {};
+    await select.runInNewContext({
+      context: {
+        repo: { owner: "stella", repo: "stella" },
+        payload: { workflow_run: input.run },
+      },
+      core: {
+        setOutput: (name: string, value: string) => {
+          outputs[name] = value;
+        },
+      },
+      github: {
+        paginate: async (_route: unknown, params: Record<string, unknown>) => {
+          expect(params["head"]).toBe(
+            `stella:${String(input.run["head_branch"])}`,
+          );
+          return input.pulls;
+        },
+        rest: {
+          pulls: { list: "pulls.list" },
+          actions: {
+            listWorkflowRunArtifacts: async (
+              params: Record<string, unknown>,
+            ) => {
+              expect(params["run_id"]).toBe(input.run["id"]);
+              return { data: { artifacts: input.artifacts } };
+            },
+          },
+        },
+      },
+    });
+    return outputs;
+  };
+
+  test("publishes to the branch the capture ran on", async () => {
+    expect(await selectFor(scenario())).toEqual({
+      branch: "feat/ui",
+      head: HEAD,
+      run: "7",
+    });
+  });
+
+  const refused: { name: string; change: (input: Scenario) => void }[] = [
+    {
+      name: "another workflow's run",
+      change: (input) => {
+        input.run["path"] = ".github/workflows/x.yml";
+      },
+    },
+    {
+      name: "a non-dispatch run",
+      change: (input) => {
+        input.run["event"] = "push";
+      },
+    },
+    {
+      name: "main",
+      change: (input) => {
+        input.run["head_branch"] = "main";
+      },
+    },
+    {
+      name: "a fork",
+      change: (input) => {
+        input.run["head_repository"] = { full_name: "someone/stella" };
+      },
+    },
+    {
+      name: "a branch with no pull request",
+      change: (input) => {
+        input.pulls = [];
+      },
+    },
+    {
+      name: "a branch that moved since the capture",
+      change: (input) => {
+        input.pulls = [
+          {
+            head: {
+              ref: "feat/ui",
+              sha: "e".repeat(40),
+              repo: { full_name: "stella/stella" },
+            },
+          },
+        ];
+      },
+    },
+    {
+      name: "a run without baselines",
+      change: (input) => {
+        input.artifacts = [];
+      },
+    },
+    {
+      name: "expired baselines",
+      change: (input) => {
+        input.artifacts = [{ name: "marketing-screenshots", expired: true }];
+      },
+    },
+  ];
+  for (const { name, change } of refused) {
+    test(`refuses ${name}`, async () => {
+      const input = scenario();
+      change(input);
+      expect(await selectFor(input)).toEqual({});
+    });
+  }
 });
 
 describe("regenerated baseline validation", () => {
   const command = (() => {
-    const step = stepsOf(updateWorkflow, "publish").find(
+    const step = stepsOf(publishWorkflow, "publish").find(
       (candidate) => candidate.name === "Stage validated baselines",
     );
     if (step?.run === undefined) {
