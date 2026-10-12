@@ -128,6 +128,11 @@
     "orSignInWithEmail": "أو سجّل الدخول بالبريد الإلكتروني",
     "organizationNamePlaceholder": "مؤسستي",
     "password": "كلمة المرور",
+    "professionalUse": {
+      "description": "لم يُعرض عليك هذا البيان عند إنشاء حسابك. اقبله للمتابعة.",
+      "title": "تأكيد الاستخدام المهني"
+    },
+    "professionalUseStatement": "بإنشاء حساب، تؤكد أنك تستخدم stella لأغراض مهنية، وتقرّ بأن stella أداة مخصّصة للمهنيين القانونيين ولا تُغني عن الاستشارة القانونية.",
     "rateLimitExceeded": "محاولات كثيرة جدًا. يُرجى المحاولة مرة أخرى لاحقًا.",
     "resendCode": "إرسال الرمز مرة أخرى إلى <email>{emailAddress}</email>",
     "selectOrganization": "اختر مؤسسة",
@@ -1089,6 +1094,9 @@
       "toastDescription": "ستتوفّر الدردشة بملء الصفحة مع إطلاق السلاسل المحفوظة.",
       "toastTitle": "العرض الكامل غير متاح بعد"
     },
+    "activity": {
+      "review": "تحديث المراجعة"
+    },
     "aiPrompt": "أداة تحرير رسائل الذكاء الاصطناعي",
     "aiThread": "محادثة مع الذكاء الاصطناعي",
     "analyzingSources": "جارٍ تحليل المصادر",
@@ -1274,6 +1282,9 @@
       "noMatters": "لا توجد ملفات قانونية بعد",
       "noRecentChats": "لا توجد دردشات حديثة",
       "noSkills": "لا توجد مهارات بعد",
+      "openAllMatters": "فتح جميع الملفات القانونية",
+      "openChatHistory": "فتح سجل الدردشات",
+      "openSkillsLibrary": "فتح مكتبة المهارات",
       "pinnedMatters": "الملفات القانونية المثبّتة",
       "recentChats": "الدردشات الحديثة",
       "skillEditedBy": "عُدِّل بواسطة {name} · {time}",

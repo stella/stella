@@ -3,6 +3,8 @@ import { inArray } from "drizzle-orm";
 import { readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { chatToolExecutor } from "@stll/api-contract/chat";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
@@ -267,6 +269,11 @@ const findServedLosses = (
         return [{ unservedMessage: row["id"] }];
       }
       const lost = lostParts(storedPartsOf(row), message.parts);
+      for (const part of message.parts) {
+        if (part["type"] === "tool-call" && chatToolExecutor(part) === null) {
+          lost.push({ unownedToolCall: part["id"] });
+        }
+      }
       return lost.length === 0 ? [] : [{ messageId: row["id"], served: lost }];
     }),
   );
@@ -521,7 +528,6 @@ describe("a thread an earlier release stored", () => {
 
   for (const fixture of FIXTURES) {
     const label = `${fixture.release ?? "main"} (${fixture.sourceCommit.slice(0, 10)})`;
-
     test(`${label} reloads, takes its approval, a follow-up and a retry`, async () => {
       const { executions, violations } = await continueSavedThread(
         fixture,
