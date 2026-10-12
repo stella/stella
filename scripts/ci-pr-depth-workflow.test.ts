@@ -364,6 +364,7 @@ const statusScript = new URL("main-pr-depth-status.sh", import.meta.url)
 const statusSha = "b".repeat(40);
 type WorkflowRun = {
   id: number;
+  event: string;
   display_title: string;
   status: string;
   conclusion: string | null;
@@ -413,17 +414,20 @@ const publishStatus = ({ results, runs = [] }: StatusCase) => {
 };
 type LaterRunOptions = {
   id?: number;
+  event?: string;
   sha?: string;
   status?: string;
   conclusion?: string | null;
 };
 const laterRun = ({
   id = 101,
+  event = "schedule",
   sha = statusSha,
   status = "in_progress",
   conclusion = null,
 }: LaterRunOptions): WorkflowRun => ({
   id,
+  event,
   display_title: `Main PR-depth checks ${sha}`,
   status,
   conclusion,
@@ -460,6 +464,8 @@ test("a cancelled run defers only to a later live or green run for the same comm
     laterRun({ status: "completed", conclusion: "failure" }),
     laterRun({ status: "completed", conclusion: "cancelled" }),
     laterRun({ id: 99 }),
+    // A dispatched run may stop before it knows its SHA, so it never owns the status.
+    laterRun({ event: "workflow_dispatch" }),
   ]) {
     expect(publishStatus({ results: cancelled, runs: [run] })).toEqual({
       exitCode: 1,
