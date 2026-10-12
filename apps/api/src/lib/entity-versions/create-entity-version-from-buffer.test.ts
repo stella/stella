@@ -170,7 +170,7 @@ const dependencies = {
   createRootScopedDb: () =>
     asTestRaw<ReturnType<typeof createRootScopedDb>>(mock()),
   broadcast: (workspaceId, event) => {
-    void broadcastMock(workspaceId, event);
+    void broadcastMock(workspaceId, event.toJSON());
   },
 } satisfies CreateEntityVersionFromBufferDependencies;
 const baseInput = {
@@ -364,6 +364,7 @@ describe("createEntityVersionFromBuffer", () => {
     expect(processExtractionMock).toHaveBeenCalledWith("entity_1", {
       filePropertyId: "property_1",
     });
+    expect(broadcastMock).toHaveBeenCalledTimes(1);
     expect(broadcastMock).toHaveBeenCalledWith("ws_1", {
       type: REALTIME_EVENT_TYPE.RESOURCE_UPDATED,
       resource: { type: RESOURCE_TYPE.ENTITY, id: "entity_1" },

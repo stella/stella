@@ -1357,7 +1357,10 @@ describe("copy-to-workspace", () => {
           isRecord(selection) &&
           ("entityId" in selection || "entityVersionId" in selection)
         ) {
-          const grouped = { having: () => ({ limit: async () => [] }) };
+          const grouped = {
+            limit: async () => [],
+            having: () => ({ limit: async () => [] }),
+          };
           const where = () => ({ groupBy: () => grouped });
           return { from: () => ({ where, innerJoin: () => ({ where }) }) };
         }
