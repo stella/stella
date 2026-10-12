@@ -463,7 +463,10 @@ describe("projected chat write approvals", () => {
       const tool = DEFAULT_MCP_TOOL_DEFINITIONS.find(
         (definition) => definition.name === name,
       );
-      return tool?.accountAccess === ACCOUNT_ACCESS.accountControl;
+      return (
+        tool?.access === "write" &&
+        tool.accountAccess === ACCOUNT_ACCESS.accountControl
+      );
     });
     const accountControlTools = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
       (tool) =>

@@ -37,6 +37,12 @@ const MODEL_CATALOG_INPUTS = [
   "packages/scripts/src/model-catalog-rates-gen.ts",
 ] as const;
 
+// Retired CLI outputs still present in the merge-base CI guard. Remove these
+// entries once the target branch's guard no longer references them.
+export const RETIRED_CLI_REGISTRY_OUTPUTS = [
+  "chatgpt-app-submission.json",
+] as const;
+
 export const GENERATORS = [
   {
     id: "status-tables",

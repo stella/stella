@@ -12,6 +12,7 @@ import { assertProperty } from "@stll/property-testing";
 import { testProcessBudgets } from "../apps/api/scripts/test-process-supervisor";
 import { CUSTOM_LINT_TEST_ARGS } from "./check-oxlint-rule-coverage.ts";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
+import { RETIRED_CLI_REGISTRY_OUTPUTS } from "./generated-files";
 import { jobCachePolicy } from "./workflow-cache-policy.ts";
 import { flattenWorkflowSteps, isWorkflowBarrier } from "./workflow-steps";
 
@@ -652,6 +653,23 @@ const stepFields = (step: Step | undefined) =>
   v.parse(stepFieldsSchema, step ?? {});
 const baseSteps = legSteps(baseline, baselineIds).map((step) => {
   const fields = stepFields(step);
+  if (
+    step.name === "CLI sharded registry and derived runtime guard" &&
+    fields.run !== undefined
+  ) {
+    return {
+      ...step,
+      run: fields.run
+        .split("\n")
+        .filter(
+          (line) =>
+            !RETIRED_CLI_REGISTRY_OUTPUTS.some(
+              (output) => line.trim() === `${output} \\`,
+            ),
+        )
+        .join("\n"),
+    };
+  }
   if (
     step.name !== "Documentation source policy rule" ||
     fields.run !== `${lintFixtureCommand}\nbun run check:docs-sources\n`
