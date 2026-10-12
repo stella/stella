@@ -75,10 +75,14 @@ const AuthenticatedDecisionWorkspace = ({
   );
 };
 
+/** Keys the opener when the server names no conversation. */
+const NO_CONVERSATION = "none";
+
 /**
  * Seeds the decision's conversation once the server has said which it is. A
  * failed lookup still gives the reader a chat: a fresh one, as before there
- * was anything to find.
+ * was anything to find. The opener is keyed by the answer, so a refetch that
+ * names another conversation (one started in another window) opens it too.
  */
 const AutoOpenDecisionChat = ({
   decisionId,
@@ -97,11 +101,18 @@ const AutoOpenDecisionChat = ({
     case "pending":
       return null;
     case "error":
-      return <OpenDecisionChat decisionId={decisionId} threadId={null} />;
+      return (
+        <OpenDecisionChat
+          decisionId={decisionId}
+          key={NO_CONVERSATION}
+          threadId={null}
+        />
+      );
     case "success":
       return (
         <OpenDecisionChat
           decisionId={decisionId}
+          key={conversation.data.threadId ?? NO_CONVERSATION}
           threadId={conversation.data.threadId}
         />
       );
