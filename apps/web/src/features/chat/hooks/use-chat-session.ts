@@ -21,6 +21,7 @@ import { sha256Hex } from "@stll/sha256/browser";
 import { stellaToast } from "@stll/ui/toast";
 import { useIsMobile } from "@stll/ui/use-mobile";
 
+import { createDocumentDraftReviewId } from "@/components/ai-suggestions/file-review-session";
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import type {
@@ -65,7 +66,6 @@ import {
   buildCreateDocumentDraftPayload,
   buildCreateDocumentDownloadFileName,
   CREATE_DOCUMENT_DRAFT_VIEW,
-  createDocumentDraftReviewId,
   createDocumentDraftTabId,
   type CreateDocumentDraft,
   findReadyCreateDocumentDraftMessageId,
@@ -1778,6 +1778,7 @@ export const useChatSession = ({
   ]);
 
   return {
+    activitySession: chat,
     clientStatus: status,
     reconnecting,
     refreshAnswers,

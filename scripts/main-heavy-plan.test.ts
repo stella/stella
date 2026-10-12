@@ -857,7 +857,7 @@ test("every main heavy event requires the planned compiler to succeed", () => {
   }
 }, 30_000);
 
-test("heavy failures require a successful queue job with every executed step", async () => {
+test("heavy failures stay CODE without test-scope evidence even when every queue step passed", async () => {
   const { classifyMainHeavyFailures } =
     await import("./main-heavy-classification.mjs");
   const job = {
@@ -888,7 +888,7 @@ test("heavy failures require a successful queue job with every executed step", a
     expect(
       failures.map(({ type }) => type),
       conclusion,
-    ).toEqual(["INFRA"]);
+    ).toEqual(["CODE"]);
   }
   const insufficientEvidence = [
     [],
@@ -1004,7 +1004,11 @@ test("heavy queue evidence follows Git tree identity and remains conservative wh
     expect(
       failures.map(({ type }) => type),
       evidence,
-    ).toEqual([evidence === "matching-tree" ? "INFRA" : "CODE"]);
+    ).toEqual(["CODE"]);
+    expect(
+      failures.at(0)?.reason.includes("test-scope equivalence is unproven"),
+      evidence,
+    ).toBe(evidence === "matching-tree");
     expect(warnings.length, evidence).toBe(evidence === "unavailable" ? 1 : 0);
   }
 });
@@ -1088,12 +1092,15 @@ test("heavy classification uses passing evidence from any matching-tree run", as
           warnings.push(message);
         },
       });
-      const expected =
-        firstKind === "passed" || secondKind === "passed" ? "INFRA" : "CODE";
+      const hasQueuePass = firstKind === "passed" || secondKind === "passed";
       expect(
         failures.map(({ type }) => type),
         `${firstKind}/${secondKind}`,
-      ).toEqual([expected]);
+      ).toEqual(["CODE"]);
+      expect(
+        failures.at(0)?.reason.includes("test-scope equivalence is unproven"),
+        `${firstKind}/${secondKind}`,
+      ).toBe(hasQueuePass);
       expect(warnings).toEqual([]);
     }
   }

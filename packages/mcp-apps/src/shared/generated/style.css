@@ -7022,6 +7022,9 @@
   .\[\&\>svg\]\:shrink-0 > svg {
     flex-shrink: 0;
   }
+  .\[\&\>svg\]\:text-muted-foreground > svg {
+    color: var(--muted-foreground);
+  }
   .\[\&\>svg\]\:text-sidebar-accent-foreground > svg {
     color: var(--sidebar-accent-foreground);
   }

@@ -21,6 +21,7 @@ import {
   REACT_COMPILER_EXCLUDE as REACT_PLUGIN_EXCLUDE,
 } from "@stll/scripts/src/react-compiler-options";
 
+import { chatRuntimeBuildGuard } from "./chat-runtime-build-guard.ts";
 import { devRouteBuildGuard } from "./dev-route-build-guard.ts";
 import { routeTreeOptions } from "./route-tree.config.ts";
 
@@ -321,6 +322,7 @@ export default defineConfig(({ mode, command }) => {
     ),
     versionManifestPlugin(),
     devRouteBuildGuard(),
+    chatRuntimeBuildGuard(),
     // Emits @stll/anonymize-wasm's binding + glue as build assets and
     // rewrites its runtime asset URLs so `vite build` can resolve them
     // (the package computes them at runtime, which Rollup can't follow
@@ -436,7 +438,6 @@ export default defineConfig(({ mode, command }) => {
               return "vendor-react";
             }
             if (
-              id.includes("node_modules/@tanstack/ai-react/") ||
               id.includes("node_modules/@mcp-ui/client/") ||
               id.includes("node_modules/@modelcontextprotocol/ext-apps/") ||
               id.includes("node_modules/@modelcontextprotocol/sdk/")
@@ -446,9 +447,13 @@ export default defineConfig(({ mode, command }) => {
               // chunk so users without MCP App output never download it.
               return "mcp-app";
             }
-            if (id.includes("node_modules/@tanstack/ai-client/")) {
-              // Keep the chat client in the lazy runtime graph instead of the
-              // router/query vendor chunk preloaded alongside the entry.
+            if (
+              id.includes("node_modules/@tanstack/ai/") ||
+              id.includes("node_modules/@tanstack/ai-client/") ||
+              id.includes("node_modules/@tanstack/ai-react/")
+            ) {
+              // Let the chat boundary own its SDK graph; the eager router/query
+              // vendor must never pull the AI runtime into every route.
               return undefined;
             }
             if (id.includes("node_modules/@tanstack/start-client-core/")) {
