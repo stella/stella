@@ -170,11 +170,12 @@ const uniqueEntryName = (fileName: string, taken: Set<string>): string => {
   const dot = fileName.lastIndexOf(".");
   const stem = dot > 0 ? fileName.slice(0, dot) : fileName;
   const extension = dot > 0 ? fileName.slice(dot) : "";
+  // Case-insensitive file systems would still merge FV_1.xml and fv_1.xml.
   let name = fileName;
-  for (let copy = 2; taken.has(name); copy += 1) {
+  for (let copy = 2; taken.has(name.toLowerCase()); copy += 1) {
     name = `${stem}-${copy}${extension}`;
   }
-  taken.add(name);
+  taken.add(name.toLowerCase());
   return name;
 };
 

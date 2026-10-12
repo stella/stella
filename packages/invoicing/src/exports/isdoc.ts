@@ -98,7 +98,31 @@ const document = (record: InvoiceExportRecord): string => {
       el("Item", mandatoryText("Description", line.description)),
     ]);
   });
-  const subtotals = record.totals.vatBreakdown.map((band) =>
+  // One subtotal per rate the lines are charged at, so a reverse-charge or
+  // exempt line sits in the 0 % band its line states, not its stored rate.
+  const bands = new Map<
+    number,
+    {
+      vatRateBps: number;
+      netAmountMinor: number;
+      vatAmountMinor: number;
+      grossAmountMinor: number;
+    }
+  >();
+  for (const line of record.lines) {
+    const rate = effectiveVatRateBps(line);
+    const band = bands.get(rate) ?? {
+      vatRateBps: rate,
+      netAmountMinor: 0,
+      vatAmountMinor: 0,
+      grossAmountMinor: 0,
+    };
+    band.netAmountMinor += line.netAmountMinor;
+    band.vatAmountMinor += line.vatAmountMinor;
+    band.grossAmountMinor += line.grossAmountMinor;
+    bands.set(rate, band);
+  }
+  const subtotals = [...bands.values()].map((band) =>
     el("TaxSubTotal", [
       mandatoryText("TaxableAmount", amount(band.netAmountMinor)),
       mandatoryText("TaxAmount", amount(band.vatAmountMinor)),

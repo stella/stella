@@ -173,6 +173,23 @@ describe("ISDOC", () => {
   test("refuses an invoice outside the local currency", () => {
     expect(buildIsdocFiles([EURO_INVOICE]).isErr()).toBe(true);
   });
+
+  test("states a reverse charge at 0 % in its line and its subtotal", () => {
+    const reverseCharge = {
+      ...DOMESTIC_INVOICE,
+      lines: DOMESTIC_INVOICE.lines.map((line) => ({
+        ...line,
+        vatTreatment: "reverse_charge" as const,
+        vatRateBps: 2100,
+        vatAmountMinor: cents(0),
+        grossAmountMinor: line.netAmountMinor,
+      })),
+    };
+    const [file] = buildIsdocFiles([reverseCharge]).unwrap();
+    const percents = between(file?.content ?? "", "Percent");
+    expect(percents.length).toBeGreaterThan(1);
+    expect(new Set(percents)).toEqual(new Set(["0"]));
+  });
 });
 
 describe("UBL 2.1 (EN 16931)", () => {
@@ -304,6 +321,24 @@ describe("spreadsheets", () => {
   test("keeps a domestic reverse charge out of the export columns", () => {
     const domestic = {
       ...MIXED_RATES_INVOICE,
+      lines: MIXED_RATES_INVOICE.lines.map((line) => ({
+        ...line,
+        vatTreatment: "reverse_charge" as const,
+        vatAmountMinor: cents(0),
+      })),
+    };
+    const [row] = buildEso9Table([domestic]).rows;
+    const amount = (cell: InvoiceTableCell | undefined) =>
+      cell?.type === "amount" ? cell.amountMinor : undefined;
+    expect(amount(row?.[11])).toBe(0);
+    expect(amount(row?.[12])).toBe(0);
+  });
+
+  test("reads a seller without a country code as Czech", () => {
+    const domestic = {
+      ...MIXED_RATES_INVOICE,
+      seller: { ...MIXED_RATES_INVOICE.seller, country: "Česká republika" },
+      buyer: { ...MIXED_RATES_INVOICE.buyer, country: "CZ" },
       lines: MIXED_RATES_INVOICE.lines.map((line) => ({
         ...line,
         vatTreatment: "reverse_charge" as const,

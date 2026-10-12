@@ -296,9 +296,10 @@ export const buildEso9Table = (
     let exportEu = 0;
     let exportOther = 0;
     const buyerCountry = countryCodeOf(record.buyer.country);
+    // ESO9 is a Czech ERP: a seller stored without a country code is Czech.
+    const sellerCountry = countryCodeOf(record.seller.country) ?? "CZ";
     const foreignBuyer =
-      buyerCountry !== null &&
-      buyerCountry !== countryCodeOf(record.seller.country);
+      buyerCountry !== null && buyerCountry !== sellerCountry;
     for (const line of record.lines) {
       // A supply abroad at no Czech VAT is an export. The sheet has no column
       // for a domestic one (reverse charge, exempt); it counts in Celkem only.
