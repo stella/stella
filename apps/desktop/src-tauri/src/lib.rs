@@ -8,12 +8,17 @@ mod app_lifecycle;
 mod app_window;
 mod autostart;
 mod bridge;
+#[path = "../crates/clipboard-history/src/clipboard.rs"]
 mod clipboard;
 mod clipboard_commands;
 #[cfg(target_os = "macos")]
+#[path = "../crates/clipboard-history/src/clipboard_image_export.rs"]
 mod clipboard_image_export;
+#[path = "../crates/clipboard-history/src/clipboard_screen_capture.rs"]
 mod clipboard_screen_capture;
+#[path = "../crates/clipboard-history/src/clipboard_store.rs"]
 mod clipboard_store;
+#[path = "../crates/clipboard-history/src/clipboard_welcome.rs"]
 mod clipboard_welcome;
 mod clipboard_window;
 mod commands;

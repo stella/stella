@@ -1,0 +1,24 @@
+[package]
+name = "stella-desktop-local-store"
+version = "0.0.1"
+edition = "2024"
+description = "Encrypted JSON envelopes and private atomic files for desktop local stores"
+license = "Apache-2.0"
+publish = false
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.rustdoc]
+bare_urls = "deny"
+broken_intra_doc_links = "deny"
+
+[dependencies]
+aes-gcm = "0.11"
+hex = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4"] }

@@ -47,6 +47,7 @@ unsafe_code = "forbid"
 # safe APIs.
 [workspace]
 members = [
+  "crates/local-store",
   "crates/macos-park",
   "crates/macos-signing",
   "crates/signing-core",
@@ -69,6 +70,7 @@ incremental = false
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+stella-desktop-local-store = { path = "crates/local-store", version = "0.0.1" }
 tauri = { version = "2", features = [
   "macos-private-api",
   "tray-icon",
