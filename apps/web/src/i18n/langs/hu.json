@@ -9,6 +9,7 @@
       "noOtherSessions": "Nincs más aktív munkamenet",
       "revokeOtherSessions": "Kijelentkezés más eszközökről",
       "revokeOtherSessionsConfirm": "Ezzel az összes munkamenet megszűnik, kivéve a jelenlegit.",
+      "signedInFrom": "Bejelentkezés innen: {clientName}",
       "unknownDevice": "Ismeretlen eszköz"
     }
   },
@@ -114,6 +115,8 @@
       "generic": "A bejelentkezés során hiba történt. Kérjük, próbálja újra.",
       "title": "Nem sikerült bejelentkeztetni"
     },
+    "handoffAccount": "Folytatja <account>{email}</account> fiókkal a(z) <organization>{organizationName}</organization> szervezetben?",
+    "handoffTitle": "Tovább a Stellába",
     "headline": "Tisztán látás minden ügyben.",
     "invitation": {
       "declined": "Meghívó elutasítva",
@@ -134,6 +137,7 @@
     },
     "professionalUseStatement": "A fiók létrehozásával megerősíti, hogy a stellát szakmai célokra használja, és tudomásul veszi, hogy a stella jogi szakembereknek szóló eszköz, és nem helyettesíti a jogi tanácsadást.",
     "rateLimitExceeded": "Túl sok próbálkozás. Kérjük, próbálja újra később.",
+    "reauthenticationRequired": "A művelet folytatásához jelentkezzen be újra.",
     "resendCode": "Kód újraküldése erre: <email>{emailAddress}</email>",
     "selectOrganization": "Válasszon szervezetet",
     "signIn": "Bejelentkezés",
@@ -4680,7 +4684,7 @@
       "description": "Használd a stellát az AI-asszisztensedből, és lásd, mi fér hozzá a fiókodhoz.",
       "developerDescription": "Szervercímek és a parancssori eszköz technikai beállításokhoz.",
       "developerTitle": "Fejlesztői hozzáférés",
-      "disconnectConfirmDescription": "Ez megvonja a(z) {clientName} hozzáférését a fiókjához, valamint érvényteleníti az összes általa kibocsátott tokent. Bármikor újra csatlakozhat.",
+      "disconnectConfirmDescription": "Ez megvonja a(z) {clientName} hozzáférését a fiókjához, valamint érvényteleníti az összes általa kibocsátott tokent. Bármikor újra csatlakozhat. A kapcsolaton keresztül létrehozott böngésző-munkamenetek is kijelentkeznek.",
       "disconnectConfirmTitle": "Leválasztja a(z) {clientName} alkalmazást?",
       "disconnectSuccess": "A(z) {clientName} leválasztva",
       "integrationsDescription": "Külső szolgáltatások, amelyeket az AI a nevedben használhat, például a dokumentumtárad.",

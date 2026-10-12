@@ -9,7 +9,9 @@ import {
 } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 import { Result } from "better-result";
+import * as v from "valibot";
 
+import { mcpHandoffSessionsSchema } from "@stll/api-contract/mcp-web-handoff";
 import { fetchWithTimeout } from "@stll/fetch";
 import { ac, roles } from "@stll/permissions";
 
@@ -21,6 +23,7 @@ import {
 import { getTranslator, useI18nStore } from "@/i18n/i18n-store";
 import { browserAuthBaseUrl } from "@/lib/api-url";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyStepUp } from "@/lib/mcp-step-up";
 import { getSignedOauthQueryFromHash } from "@/lib/oauth-provider";
 
 export const HTTP_TOO_MANY_REQUESTS = 429;
@@ -107,6 +110,9 @@ const authClientPlugins = [
   lastLoginMethodClient(),
   organizationClient({ ac, roles }),
   inferAdditionalFields({
+    session: {
+      originConsentId: { type: "string", required: false },
+    },
     user: {
       preferredName: { type: "string", required: false },
       timezoneId: { type: "string" },
@@ -165,6 +171,9 @@ const createStellaAuthClient = (redirectMode: "automatic" | "manual") =>
       },
       onRequest: withOauthQueryFromHash,
       onError: (context) => {
+        if (notifyStepUp(context.error)) {
+          return;
+        }
         if (context.response.status === HTTP_TOO_MANY_REQUESTS) {
           const t = getTranslator();
           notifyUserError(context.error, t("auth.rateLimitExceeded"));
@@ -182,14 +191,25 @@ export const submitOAuthConsent = async (accept: boolean) => {
 };
 
 export const listAuthSessions = async () => {
-  const result = await authClient.listSessions();
+  const [result, handoffSessions] = await Promise.all([
+    authClient.listSessions(),
+    authClient.$fetch<unknown>("/mcp-handoff/sessions"),
+  ]);
 
   if (result.error) {
     return result;
   }
+  if (handoffSessions.error) {
+    return { data: null, error: handoffSessions.error };
+  }
 
+  const handoffs = v.parse(mcpHandoffSessionsSchema, handoffSessions.data);
+  const clientsBySessionId = new Map(
+    handoffs.sessions.map(({ id, clientName }) => [id, clientName]),
+  );
   return {
     data: result.data.map((session) => ({
+      originClientName: clientsBySessionId.get(session.id),
       createdAt: session.createdAt,
       expiresAt: session.expiresAt,
       id: session.id,

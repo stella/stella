@@ -12,6 +12,13 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "handoff-confirmation": {
+    load: async () => {
+      const { HandoffConfirmationPlayground } =
+        await import("./-components/handoff-confirmation-playground");
+      return { default: HandoffConfirmationPlayground };
+    },
+  },
   "page-crop": {
     load: async () => {
       const { PageCropPlayground } =

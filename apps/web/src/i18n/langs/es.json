@@ -9,6 +9,7 @@
       "noOtherSessions": "No hay otras sesiones activas",
       "revokeOtherSessions": "Cerrar sesión en otros dispositivos",
       "revokeOtherSessionsConfirm": "Se cerrarán todas las sesiones excepto la actual.",
+      "signedInFrom": "Sesión iniciada desde {clientName}",
       "unknownDevice": "Dispositivo desconocido"
     }
   },
@@ -114,6 +115,8 @@
       "generic": "Algo salió mal al iniciar tu sesión. Inténtalo de nuevo.",
       "title": "No pudimos iniciar tu sesión"
     },
+    "handoffAccount": "¿Continuar como <account>{email}</account> en <organization>{organizationName}</organization>?",
+    "handoffTitle": "Continuar a stella",
     "headline": "Claridad en cada caso.",
     "invitation": {
       "declined": "Invitación rechazada",
@@ -134,6 +137,7 @@
     },
     "professionalUseStatement": "Al crear una cuenta, confirma que utiliza stella con fines profesionales y reconoce que stella es una herramienta para profesionales del derecho y no sustituye el asesoramiento jurídico.",
     "rateLimitExceeded": "Demasiados intentos. Inténtelo de nuevo más tarde.",
+    "reauthenticationRequired": "Vuelva a iniciar sesión para continuar con esta acción.",
     "resendCode": "Enviar código de nuevo a <email>{emailAddress}</email>",
     "selectOrganization": "Seleccione una organización",
     "signIn": "Iniciar sesión",
@@ -4680,7 +4684,7 @@
       "description": "Usa stella desde tu asistente de IA y ve qué tiene acceso a tu cuenta.",
       "developerDescription": "Direcciones del servidor y la herramienta de línea de comandos, para configuraciones técnicas.",
       "developerTitle": "Acceso para desarrolladores",
-      "disconnectConfirmDescription": "Esto revoca el acceso de {clientName} a su cuenta, junto con cualquier token que haya emitido. Puede volver a conectarse en cualquier momento.",
+      "disconnectConfirmDescription": "Esto revoca el acceso de {clientName} a su cuenta, junto con cualquier token que haya emitido. Puede volver a conectarse en cualquier momento. También se cerrarán las sesiones del navegador creadas desde esta conexión.",
       "disconnectConfirmTitle": "¿Desconectar {clientName}?",
       "disconnectSuccess": "Se desconectó {clientName}",
       "integrationsDescription": "Servicios externos que la IA puede usar por ti, como tu almacén de documentos.",

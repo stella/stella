@@ -9,6 +9,7 @@
       "noOtherSessions": "Nėra kitų aktyvių sesijų",
       "revokeOtherSessions": "Atsijungti nuo kitų įrenginių",
       "revokeOtherSessionsConfirm": "Bus baigtos visos sesijos, išskyrus dabartinę.",
+      "signedInFrom": "Prisijungta per {clientName}",
       "unknownDevice": "Nežinomas įrenginys"
     }
   },
@@ -114,6 +115,8 @@
       "generic": "Prijungiant kažkas nepavyko. Bandykite dar kartą.",
       "title": "Nepavyko jūsų prijungti"
     },
+    "handoffAccount": "Tęsti kaip <account>{email}</account> organizacijoje <organization>{organizationName}</organization>?",
+    "handoffTitle": "Tęsti į stella",
     "headline": "Aiškumas kiekvienai bylai.",
     "invitation": {
       "declined": "Kvietimas atmestas",
@@ -134,6 +137,7 @@
     },
     "professionalUseStatement": "Sukurdami paskyrą patvirtinate, kad stella naudojatės profesiniais tikslais, ir suprantate, kad stella yra įrankis teisės specialistams ir nepakeičia teisinės konsultacijos.",
     "rateLimitExceeded": "Per daug bandymų. Bandykite dar kartą vėliau.",
+    "reauthenticationRequired": "Norėdami tęsti šį veiksmą, prisijunkite iš naujo.",
     "resendCode": "Siųsti kodą dar kartą adresu <email>{emailAddress}</email>",
     "selectOrganization": "Pasirinkite organizaciją",
     "signIn": "Prisijungti",
@@ -4680,7 +4684,7 @@
       "description": "Naudokite stella per savo DI asistentą ir matykite, kas turi prieigą prie jūsų paskyros.",
       "developerDescription": "Serverio adresai ir komandinės eilutės įrankis techniniams nustatymams.",
       "developerTitle": "Prieiga kūrėjams",
-      "disconnectConfirmDescription": "Tai panaikins {clientName} prieigą prie jūsų paskyros ir visus jos išduotus prieigos raktus. Bet kada galėsite prisijungti iš naujo.",
+      "disconnectConfirmDescription": "Tai panaikins {clientName} prieigą prie jūsų paskyros ir visus jos išduotus prieigos raktus. Bet kada galėsite prisijungti iš naujo. Taip pat bus atsijungta nuo naršyklės seansų, sukurtų per šį ryšį.",
       "disconnectConfirmTitle": "Atjungti {clientName}?",
       "disconnectSuccess": "{clientName} atjungta",
       "integrationsDescription": "Išorinės paslaugos, kurias DI gali naudoti jūsų vardu, pvz., dokumentų saugykla.",

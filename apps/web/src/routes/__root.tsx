@@ -9,6 +9,7 @@ import {
   Outlet,
   Scripts,
   useRouterState,
+  useNavigate,
   type ErrorComponentProps,
 } from "@tanstack/react-router";
 
@@ -18,7 +19,7 @@ import {
   DefaultErrorComponent,
   DefaultPendingComponent,
 } from "@/components/route-components";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useMountEffect, useExternalSyncEffect } from "@/hooks/use-effect";
 import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
 import {
   applyDocumentLanguage,
@@ -29,11 +30,13 @@ import "@/fonts.css";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
 import type { RouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
 import { RouteErrorLifecycleProvider } from "@/lib/analytics/route-error-lifecycle-context";
+import { detached } from "@/lib/detached";
 import {
   isPublicKnowledgeEnabled,
   isPublicKnowledgeCrawlAllowed,
 } from "@/lib/knowledge/public-knowledge-launch";
 import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
+import { loadMcpHandoff, pendingHandoffPath } from "@/lib/mcp-handoff";
 import { isPublicLawCrawlAllowed } from "@/lib/public-law-launch";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 import { isPublicToolsCrawlAllowed } from "@/lib/public-tools-launch";
@@ -55,6 +58,7 @@ export const Route = createRootRouteWithContext<{
 }>()({
   ssr: ({ location: routeLocation }) => isPublicSsrPath(routeLocation.pathname),
   beforeLoad: async ({ context, location }) => {
+    await loadMcpHandoff();
     await requireFreshDocument({ queryClient: context.queryClient, location });
   },
   shellComponent: RootDocument,
@@ -95,6 +99,22 @@ function RootErrorComponent(props: ErrorComponentProps) {
 }
 
 function RootComponent() {
+  const navigate = useNavigate();
+  // Public documents reuse server route context during hydration. Re-enter
+  // the clean location so the client root guard handles a captured handoff.
+  useMountEffect(() => {
+    const href = pendingHandoffPath();
+    if (!href) {
+      return;
+    }
+    detached(
+      navigate({
+        href,
+        replace: true,
+      }),
+      "mcp-handoff.route-entry",
+    );
+  });
   const appContext = Route.useRouteContext({
     select: (context) => ({
       analyticsValue: context.analyticsValue,
@@ -155,6 +175,7 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
       <head>
         <HeadContent />
 
+        <script src="/handoff-init.js" />
         <script src="/prepaint-init.js" />
       </head>
       <body>

@@ -25,6 +25,7 @@ import type {
 } from "@/lib/analytics/types";
 import { API_ERROR_TAG } from "@/lib/errors/api-tag";
 import { logDevError } from "@/lib/errors/telemetry";
+import { sanitizeHandoffUrl } from "@/lib/handoff-url";
 
 const isWebAnalyticsEvent = (event: string): event is WebAnalyticsEvent =>
   Object.values(WEB_ANALYTICS_EVENTS).some((value) => value === event);
@@ -632,7 +633,20 @@ const sanitizeSdkUrlContext = (
   ) {
     delete properties["$session_entry_referrer"];
   }
-  return { ...event, properties };
+  return {
+    ...event,
+    properties: {
+      ...properties,
+      ...Object.fromEntries(
+        ["$referrer", "$session_entry_referrer"].flatMap((key) => {
+          const value = properties[key];
+          return typeof value === "string"
+            ? [[key, sanitizeHandoffUrl(value)]]
+            : [];
+        }),
+      ),
+    },
+  };
 };
 
 const errorContextProperties = (

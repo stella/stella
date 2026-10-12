@@ -9,6 +9,7 @@
       "noOtherSessions": "Keine weiteren aktiven Sitzungen",
       "revokeOtherSessions": "Andere Geräte abmelden",
       "revokeOtherSessionsConfirm": "Dadurch werden alle Sitzungen außer Ihrer aktuellen beendet.",
+      "signedInFrom": "Angemeldet über {clientName}",
       "unknownDevice": "Unbekanntes Gerät"
     }
   },
@@ -114,6 +115,8 @@
       "generic": "Bei der Anmeldung ist etwas schiefgelaufen. Bitte versuchen Sie es erneut.",
       "title": "Wir konnten Sie nicht anmelden"
     },
+    "handoffAccount": "Als <account>{email}</account> in <organization>{organizationName}</organization> fortfahren?",
+    "handoffTitle": "Weiter zu stella",
     "headline": "Klarheit für jeden Fall.",
     "invitation": {
       "declined": "Einladung abgelehnt",
@@ -134,6 +137,7 @@
     },
     "professionalUseStatement": "Mit der Erstellung eines Kontos bestätigen Sie, dass Sie stella für berufliche Zwecke nutzen, und nehmen zur Kenntnis, dass stella ein Werkzeug für Rechtsfachleute ist und keine Rechtsberatung ersetzt.",
     "rateLimitExceeded": "Zu viele Versuche. Bitte versuchen Sie es später erneut.",
+    "reauthenticationRequired": "Melden Sie sich erneut an, um diese Aktion fortzusetzen.",
     "resendCode": "Code erneut an <email>{emailAddress}</email> senden",
     "selectOrganization": "Organisation auswählen",
     "signIn": "Anmelden",
@@ -4680,7 +4684,7 @@
       "description": "Nutzen Sie stella in Ihrem KI-Assistenten und sehen Sie, was auf Ihr Konto zugreifen kann.",
       "developerDescription": "Serveradressen und das Kommandozeilen-Tool für technische Einrichtungen.",
       "developerTitle": "Entwicklerzugang",
-      "disconnectConfirmDescription": "Dies entzieht {clientName} den Zugriff auf Ihr Konto sowie alle ausgestellten Tokens. Sie können sich jederzeit erneut verbinden.",
+      "disconnectConfirmDescription": "Dies entzieht {clientName} den Zugriff auf Ihr Konto sowie alle ausgestellten Tokens. Sie können sich jederzeit erneut verbinden. Browsersitzungen, die über diese Verbindung erstellt wurden, werden ebenfalls abgemeldet.",
       "disconnectConfirmTitle": "{clientName} trennen?",
       "disconnectSuccess": "{clientName} wurde getrennt",
       "integrationsDescription": "Externe Dienste, die die KI für Sie nutzen kann, etwa Ihre Dokumentenablage.",

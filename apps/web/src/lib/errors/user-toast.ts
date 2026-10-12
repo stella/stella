@@ -13,6 +13,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyStepUp } from "@/lib/mcp-step-up";
 
 type UserErrorToastOptions = Omit<
   Parameters<typeof stellaToast.add>[0],
@@ -24,6 +25,9 @@ export const notifyUserError = (
   fallback: string,
   { toastId, ...options }: UserErrorToastOptions = {},
 ): boolean => {
+  if (notifyStepUp(error)) {
+    return false;
+  }
   // The stable refusal id coalesces Eden's observer and local error handlers;
   // raw fetch and SDK errors also need to emit the same notice here.
   if (notifyActionAdmissionRefusal(error)) {

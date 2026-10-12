@@ -9,6 +9,7 @@
       "noOtherSessions": "لا توجد جلسات نشطة أخرى",
       "revokeOtherSessions": "تسجيل الخروج من الأجهزة الأخرى",
       "revokeOtherSessionsConfirm": "سيؤدي هذا إلى إنهاء جميع الجلسات باستثناء جلستك الحالية.",
+      "signedInFrom": "تم تسجيل الدخول عبر {clientName}",
       "unknownDevice": "جهاز غير معروف"
     }
   },
@@ -114,6 +115,8 @@
       "generic": "حدث خطأ ما أثناء تسجيل دخولك. يُرجى المحاولة مرة أخرى.",
       "title": "تعذّر تسجيل دخولك"
     },
+    "handoffAccount": "هل تريد المتابعة باسم <account>{email}</account> في <organization>{organizationName}</organization>؟",
+    "handoffTitle": "المتابعة إلى stella",
     "headline": "وضوح لكل قضية.",
     "invitation": {
       "declined": "تم رفض الدعوة",
@@ -134,6 +137,7 @@
     },
     "professionalUseStatement": "بإنشاء حساب، تؤكد أنك تستخدم stella لأغراض مهنية، وتقرّ بأن stella أداة مخصّصة للمهنيين القانونيين ولا تُغني عن الاستشارة القانونية.",
     "rateLimitExceeded": "محاولات كثيرة جدًا. يُرجى المحاولة مرة أخرى لاحقًا.",
+    "reauthenticationRequired": "سجّل الدخول مرة أخرى للمتابعة بهذا الإجراء.",
     "resendCode": "إرسال الرمز مرة أخرى إلى <email>{emailAddress}</email>",
     "selectOrganization": "اختر مؤسسة",
     "signIn": "تسجيل الدخول",
@@ -4680,7 +4684,7 @@
       "description": "استخدم stella من مساعد الذكاء الاصطناعي واطّلع على ما يمكنه الوصول إلى حسابك.",
       "developerDescription": "عناوين الخادم وأداة سطر الأوامر للإعدادات التقنية.",
       "developerTitle": "وصول المطوّرين",
-      "disconnectConfirmDescription": "سيؤدي هذا إلى إلغاء وصول {clientName} إلى حسابك، بالإضافة إلى أي رموز أصدرها. يمكنك إعادة الاتصال في أي وقت.",
+      "disconnectConfirmDescription": "سيؤدي هذا إلى إلغاء وصول {clientName} إلى حسابك، بالإضافة إلى أي رموز أصدرها. يمكنك إعادة الاتصال في أي وقت. سيتم أيضًا تسجيل الخروج من جلسات المتصفح التي أُنشئت عبر هذا الاتصال.",
       "disconnectConfirmTitle": "هل تريد قطع الاتصال بـ {clientName}؟",
       "disconnectSuccess": "تم قطع الاتصال بـ {clientName}",
       "integrationsDescription": "خدمات خارجية يمكن للذكاء الاصطناعي استخدامها نيابةً عنك، مثل مستودع مستنداتك.",

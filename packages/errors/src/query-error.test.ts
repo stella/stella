@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { inspect } from "node:util";
 
-import { sanitizeErrorForOutput } from "./query-error";
+import { sanitizeErrorForOutput, sanitizeQueryErrorText } from "./query-error";
 
 test("standalone database diagnostics hide row values and retain schema metadata", () => {
   const value = "fixture-diagnostic-value";
@@ -72,4 +72,16 @@ test("ordinary errors retain their diagnostics in a fresh projection", () => {
     cause: { code: "ECONNRESET" },
   });
   expect(projected.cause).not.toBe(ordinary.cause);
+});
+
+test("handoff credentials are removed from diagnostic text and nested output", () => {
+  const code = `sh1_${"a".repeat(43)}`;
+  expect(sanitizeQueryErrorText(`Request ${code} refused`)).toBe(
+    "Request [redacted] refused",
+  );
+  expect(
+    JSON.stringify(
+      sanitizeErrorForOutput({ detail: code, message: `Request ${code}` }),
+    ),
+  ).not.toContain(code);
 });

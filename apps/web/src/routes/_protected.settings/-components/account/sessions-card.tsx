@@ -152,7 +152,16 @@ const SessionsCardContent = () => {
 
               return (
                 <TableRow key={session.id}>
-                  <TableCell>{deviceLabel}</TableCell>
+                  <TableCell>
+                    {deviceLabel}
+                    {session.originClientName && (
+                      <p className="text-muted-foreground text-sm">
+                        {t("account.sessions.signedInFrom", {
+                          clientName: session.originClientName,
+                        })}
+                      </p>
+                    )}
+                  </TableCell>
                   <TableCell>{session.ipAddress || MISSING_VALUE}</TableCell>
                   <TableCell>
                     <Tooltip
