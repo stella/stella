@@ -89,10 +89,7 @@ import {
   unenumeratedJson,
 } from "./projection-schema";
 
-export {
-  SEARCH_CASE_LAW_PROJECTION,
-  LOOKUP_CASE_LAW_PROJECTION,
-} from "./case-law-result-projections";
+export { SEARCH_CASE_LAW_PROJECTION } from "./case-law-result-projections";
 
 /**
  * Per-tool chat projection schemas, one artifact per projected registry tool.
