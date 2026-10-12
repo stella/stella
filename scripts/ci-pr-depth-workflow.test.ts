@@ -444,21 +444,17 @@ test("green suites publish success and red suites publish failure", () => {
 
 test("a cancelled run defers only to a later live or green run for the same commit", () => {
   const cancelled = { validate: "success", suites: "cancelled" };
-  for (const run of [laterRun({}), laterRun({ status: "queued" })]) {
+  for (const run of [
+    laterRun({}),
+    laterRun({ status: "queued" }),
+    laterRun({ status: "completed", conclusion: "success" }),
+  ]) {
+    // Writing nothing means a successor's terminal status can never be overwritten.
     expect(publishStatus({ results: cancelled, runs: [run] })).toEqual({
       exitCode: 0,
-      posted: ["pending"],
+      posted: [],
     });
   }
-  expect(
-    publishStatus({
-      results: cancelled,
-      runs: [
-        laterRun({ status: "completed", conclusion: "success" }),
-        laterRun({ id: 102 }),
-      ],
-    }),
-  ).toEqual({ exitCode: 0, posted: [] });
   for (const run of [
     laterRun({ sha: "c".repeat(40) }),
     laterRun({ status: "completed", conclusion: "failure" }),
@@ -483,4 +479,39 @@ test("a cancellation next to a failed job is never treated as superseded", () =>
       runs: [laterRun({})],
     }),
   ).toEqual({ exitCode: 1, posted: ["failure"] });
+});
+
+const statusStep = v
+  .parse(
+    v.object({
+      jobs: v.object({
+        status: v.object({
+          steps: v.array(
+            v.looseObject({
+              name: v.string(),
+              env: v.optional(v.record(v.string(), v.string())),
+            }),
+          ),
+        }),
+      }),
+    }),
+    main,
+  )
+  .jobs.status.steps.find(
+    (step) => step.name === "Publish PR-depth conclusion",
+  );
+
+test("a scheduled successor publishes even when validation stops before its SHA output", () => {
+  const source = v.parse(v.string(), statusStep?.env?.["SHA"]);
+  const sha = (event: string, validated: string) =>
+    evaluate(source, {
+      values: {
+        "needs.validate.outputs.sha": validated,
+        "github.event_name": event,
+        "github.sha": statusSha,
+      },
+    });
+  expect(sha("schedule", "")).toBe(statusSha);
+  expect(sha("schedule", "d".repeat(40))).toBe("d".repeat(40));
+  expect(sha("workflow_dispatch", "")).toBe("");
 });

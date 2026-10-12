@@ -136,7 +136,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
-          SHA: ${{ needs.validate.outputs.sha }}
+          # A scheduled run always publishes, even when validation stops early,
+          # because a cancelled earlier run for the same commit defers to it.
+          SHA: ${{ needs.validate.outputs.sha || (github.event_name == 'schedule' && github.sha) || '' }}
           RESULTS: ${{ toJSON(needs) }}
           RUN_ID: ${{ github.run_id }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
