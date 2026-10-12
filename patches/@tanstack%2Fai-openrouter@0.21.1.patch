@@ -9,10 +9,12 @@
    of reading an unhandled one as "stop". Remove when upstream exposes the
    raw reason.
 
+
 diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
+index 05cdc2833612fa150ef7ae399e6704e5a65198e1..2d9be3daf7a9c97ed404cb35c3ceb0f7b504757c 100644
 --- a/dist/esm/adapters/text.js
 +++ b/dist/esm/adapters/text.js
-@@ -748,7 +748,29 @@
+@@ -748,7 +748,29 @@ var OpenRouterTextAdapter = class extends BaseTextAdapter {
  						content: accumulatedReasoning
  					};
  				}
@@ -43,7 +45,7 @@ diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
  				const finalUsage = buildOpenRouterUsage(lastUsage);
  				yield {
  					type: EventType.RUN_FINISHED,
-@@ -760,12 +782,14 @@
+@@ -760,12 +782,14 @@ var OpenRouterTextAdapter = class extends BaseTextAdapter {
  						...finalUsage,
  						...extractUsageCost(lastUsage)
  					} },
@@ -59,7 +61,7 @@ diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
  			options.logger.errors(`${this.name}.processStreamChunks fatal`, {
  				error: errorPayload,
  				source: `${this.name}.processStreamChunks`
-@@ -777,6 +801,10 @@
+@@ -777,6 +801,10 @@ var OpenRouterTextAdapter = class extends BaseTextAdapter {
  				message: errorPayload.message,
  				...errorPayload.code !== void 0 && { code: errorPayload.code },
  				...rawEvent !== void 0 && { rawEvent },

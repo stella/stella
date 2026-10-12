@@ -1089,6 +1089,9 @@
       "toastDescription": "El chat a pantalla completa llegará con conversaciones guardadas.",
       "toastTitle": "La vista completa aún no está disponible"
     },
+    "activity": {
+      "review": "Actualización de la revisión"
+    },
     "aiPrompt": "Campo de mensaje de IA",
     "aiThread": "Conversación de IA",
     "analyzingSources": "Analizando fuentes",

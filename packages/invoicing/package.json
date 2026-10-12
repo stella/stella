@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@stll/money": "workspace:*",
+    "@stll/text-normalize": "workspace:*",
     "better-result": "catalog:"
   },
   "devDependencies": {

@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { normalizeUnicode } from "@stll/text-normalize";
+
 type SearchHistoryIdentity =
   | { kind: "search"; query: string }
   | { kind: "decision" | "statute"; documentId: string };
@@ -8,8 +10,7 @@ type SearchHistoryIdentity =
 export const searchHistoryEntryMatch = (entry: SearchHistoryIdentity) => {
   switch (entry.kind) {
     case "search":
-      return entry.query
-        .normalize("NFC")
+      return normalizeUnicode(entry.query, "NFC")
         .trim()
         .replaceAll(/\s+/gu, " ")
         .toLowerCase();

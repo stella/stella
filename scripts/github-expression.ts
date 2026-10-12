@@ -429,9 +429,8 @@ export const contextWithPlanOutputs = ({
       /^\$\{\{\s*([\w-]+(?:\.[\w-]+)+)(?:\s*\|\|\s*(?:'(?:[^']|'')*'|true|false|null|\d+))?\s*\}\}$/u.exec(
         expression,
       )?.[1];
-    if (reference === undefined) {
-      computed.set(output, expression);
-    } else {
+    computed.set(output, expression);
+    if (reference !== undefined) {
       projections.set(reference, output);
     }
   }

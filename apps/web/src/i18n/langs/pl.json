@@ -1089,6 +1089,9 @@
       "toastDescription": "Pełnoekranowy czat zostanie udostępniony wraz z zapisanymi wątkami.",
       "toastTitle": "Pełny widok niedostępny"
     },
+    "activity": {
+      "review": "Aktualizacja przeglądu"
+    },
     "aiPrompt": "Pole wiadomości AI",
     "aiThread": "Konwersacja AI",
     "analyzingSources": "Analizowanie źródeł",

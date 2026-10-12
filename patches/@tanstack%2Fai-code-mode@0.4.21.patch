@@ -1,11 +1,9 @@
-create-code-mode-tool.js: a failed execute_typescript run no longer logs its
-error to the console or includes its message and stack in the completion
-event. The tool result still returns the error details to the model.
-apps/api/src/handlers/chat/tools/execute/chat-code-mode.test.ts guards both
-paths. Remove when upstream stops emitting failure details there.
+Failed code execution keeps error details in the tool result, but omits
+messages and stacks from completion events and console output.
+Regression: apps/api/src/handlers/chat/tools/execute/chat-code-mode.test.ts.
 
 diff --git a/dist/esm/create-code-mode-tool.js b/dist/esm/create-code-mode-tool.js
-index b0436892977411b253f86c4c8252ab9443ddd975..138a6f639b97fc81372af4a4c610015051caf814 100644
+index 2dbb70062c821d870bc676f95f34656819958dde..576502e2c7e99c39ec9ef788d275daf271d42f76 100644
 --- a/dist/esm/create-code-mode-tool.js
 +++ b/dist/esm/create-code-mode-tool.js
 @@ -74,14 +74,11 @@ function createCodeModeTool(config) {

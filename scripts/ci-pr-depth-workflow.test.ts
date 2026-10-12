@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { evaluate } from "./github-expression";
 import { prDepthJobs } from "./main-heavy-plan";
 
 const readWorkflow = (name: string) =>
@@ -152,7 +153,7 @@ const skipViolations = ({ jobs, depthJobs }: SkipViolationsOptions) =>
     return depth === reuseSkip && depth !== mainSkip ? [] : [job];
   });
 
-test("PR-depth jobs and only they skip on reuse; every other job stays off the main PR-depth run", () => {
+test("PR-depth jobs retain reuse guards; other jobs stay off the main PR-depth run", () => {
   const depthJobs = prDepthJobs(ci);
   expect(skipViolations({ jobs: ciJobs, depthJobs })).toEqual([]);
   const docs = ciJobs["ci-checks-docs"];
@@ -165,6 +166,43 @@ test("PR-depth jobs and only they skip on reuse; every other job stays off the m
   expect(
     skipViolations({ jobs: ciJobs, depthJobs: [...depthJobs, "ci-tests"] }),
   ).toEqual(["ci-tests"]);
+});
+
+test("reused PR-depth evidence still schedules every merge-group code check", () => {
+  for (const event of ["pull_request", "merge_group"]) {
+    for (const queueDepth of ["thin", "full"]) {
+      for (const job of prDepthJobs(ci)) {
+        const scheduled = evaluate(ciJobs[job]?.if ?? "false", {
+          values: {
+            "github.event_name": event,
+            "inputs.heavy_only": false,
+            "inputs.pr_depth_only": false,
+            "needs.ci-plan.outputs.pr_depth_reused": "true",
+            "needs.ci-plan.outputs.run_required": "true",
+            "needs.ci-plan.outputs.trusted": "true",
+            "needs.ci-plan.outputs.suite_depth": "full",
+            "needs.ci-plan.outputs.queue_depth": queueDepth,
+            "needs.ci-plan.outputs.coverage_profile": "normal-v1",
+            "needs.ci-plan.outputs.pilot_fast_jobs": "[]",
+          },
+          fallback: (name) =>
+            name.startsWith("needs.ci-plan.outputs.") &&
+            name.endsWith("_required")
+              ? "true"
+              : undefined,
+          status: {
+            always: true,
+            success: true,
+            failure: false,
+            cancelled: false,
+          },
+        });
+        expect(scheduled, `${event}/${queueDepth}/${job}`).toBe(
+          event === "merge_group",
+        );
+      }
+    }
+  }
 });
 
 const planSteps = v.parse(

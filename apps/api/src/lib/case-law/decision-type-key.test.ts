@@ -4,6 +4,7 @@ import {
   DECISION_TYPE_KIND_OTHER,
   DECISION_TYPE_KINDS,
 } from "@stll/api-contract/case-law-decision-types";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   decisionTypeKey,
@@ -19,13 +20,13 @@ import {
 } from "@/api/lib/case-law/decision-type-kind";
 
 test("decision type comparison converges across casing and Unicode spellings", () => {
-  expect("Nález".normalize("NFD")).not.toBe("Nález");
+  expect(normalizeUnicode("Nález", "NFD")).not.toBe("Nález");
   for (const stated of ["Uznesenie", "Nález", "Rozsudok"]) {
     for (const variant of [
       stated,
       stated.toUpperCase(),
       ` ${stated} `,
-      stated.normalize("NFD"),
+      normalizeUnicode(stated, "NFD"),
     ]) {
       expect(decisionTypeKey(variant)).toBe(decisionTypeKey(stated));
       expect(decisionTypeKey(decisionTypeKey(variant))).toBe(
@@ -40,14 +41,14 @@ test("decision type comparison converges across casing and Unicode spellings", (
 });
 
 test("an abbreviation and a casing of one stated type fold into its canonical kind", () => {
-  expect("usnesení".normalize("NFD")).not.toBe("usnesení");
+  expect(normalizeUnicode("usnesení", "NFD")).not.toBe("usnesení");
   for (const stated of [
     "usn.",
     "Usn.",
     " USN. ",
     "usnesení",
     "Usnesení",
-    "usnesení".normalize("NFD"),
+    normalizeUnicode("usnesení", "NFD"),
   ]) {
     expect(decisionTypeKind(stated)).toBe("order");
   }
