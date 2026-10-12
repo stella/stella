@@ -1118,7 +1118,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Report case-law availability, decision counts, year ranges and court breakdowns per jurisdiction. Use before concluding that a decision is missing from the corpus; in-preparation counts describe held decisions that public search cannot yet find.",
+      "Report case-law availability per jurisdiction and source: searchable year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
     inputSchema: caseLawCoverageArgsSchema,
     inputNormalization: {
       country: countryNormalization({
@@ -3801,6 +3801,18 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
             decisions: entry.stored.decisions,
             decisionYearFrom: null,
             decisionYearTo: null,
+            sources: entry.sources.map((source) => ({
+              adapterKey: source.adapterKey,
+              name: source.name,
+              lastSyncAt: source.lastSyncAt,
+              decisionYearFrom: source.decisionYearFrom,
+              decisionYearTo: source.decisionYearTo,
+              pendingTextCount: source.pendingTextCount,
+              knownGaps:
+                source.knownGaps.type === "known"
+                  ? { ...source.knownGaps, gaps: [...source.knownGaps.gaps] }
+                  : source.knownGaps,
+            })),
             courts: null,
           };
         case "searchable":
@@ -3810,6 +3822,18 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
             decisions: entry.searchable,
             decisionYearFrom: entry.decisionYearFrom,
             decisionYearTo: entry.decisionYearTo,
+            sources: entry.sources.map((source) => ({
+              adapterKey: source.adapterKey,
+              name: source.name,
+              lastSyncAt: source.lastSyncAt,
+              decisionYearFrom: source.decisionYearFrom,
+              decisionYearTo: source.decisionYearTo,
+              pendingTextCount: source.pendingTextCount,
+              knownGaps:
+                source.knownGaps.type === "known"
+                  ? { ...source.knownGaps, gaps: [...source.knownGaps.gaps] }
+                  : source.knownGaps,
+            })),
             courts:
               entry.courts === null
                 ? null
@@ -3828,8 +3852,12 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
                           courts: row.courts,
                           decisions: row.decisions,
                         };
-                      case "unlisted":
-                        return { type: row.type, decisions: row.decisions };
+                      case "other-courts":
+                        return {
+                          type: row.type,
+                          courts: row.courts,
+                          decisions: row.decisions,
+                        };
                       default: {
                         row satisfies never;
                         return panic("Unknown case-law coverage court row");

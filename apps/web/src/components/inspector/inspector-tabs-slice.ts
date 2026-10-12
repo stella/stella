@@ -1,6 +1,5 @@
 import { panic } from "better-result";
 import { current, type Draft } from "immer";
-import { v7 as uuidv7 } from "uuid";
 
 import { forgetDocxDocuments } from "@/components/docx/docx-document-cache";
 import {
@@ -29,6 +28,7 @@ import { normalizeOptionalArray } from "@/lib/arrays";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
 import { isEmailFile } from "@/lib/consts";
+import { createUuid } from "@/lib/uuid";
 
 export const buildSkillResourceTabId = ({
   skillName,
@@ -124,7 +124,7 @@ const upsertFileTab = (
       (candidate.entityId === tab.entityId || candidate.id === tab.id),
   );
   if (matchIndex === -1) {
-    state.tabs.push({ type: "pdf", renderId: uuidv7(), ...tab });
+    state.tabs.push({ type: "pdf", renderId: createUuid(), ...tab });
     return null;
   }
 
@@ -160,7 +160,7 @@ const upsertFileTab = (
     renderIdPolicy === FILE_TAB_RENDER_ID_POLICY.always ||
     previousId !== tab.id
   ) {
-    existing.renderId = uuidv7();
+    existing.renderId = createUuid();
   }
   state.tabs = state.tabs.filter(
     (candidate, index) =>
@@ -303,7 +303,7 @@ export const createInspectorTabsSlice = (
   reviveSuggestion: null,
 
   createGroup: ({ name, color }) => {
-    const id = `custom:${uuidv7()}`;
+    const id = `custom:${createUuid()}`;
     set((state) => {
       state.groups.push({ id, type: "custom", name, color });
     });
@@ -417,7 +417,7 @@ export const createInspectorTabsSlice = (
   openTabs: (args) => openTabs(set, args),
 
   openPendingTask: ({ workspaceId, label = "" }) => {
-    const pendingTaskId = `pending-task:${uuidv7()}`;
+    const pendingTaskId = `pending-task:${createUuid()}`;
     set((state) => {
       state.tabs.push({
         type: "task",
@@ -956,7 +956,7 @@ export const createInspectorTabsSlice = (
         removeGroupAssignment(state, oldFieldId);
       }
       if (idChanged) {
-        tab.renderId = uuidv7();
+        tab.renderId = createUuid();
         // A new version supersedes the document behind both ids: the old field
         // will never be read again, and the new one must not be served the
         // bytes a previous tab left under that id.

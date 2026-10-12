@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+
 import {
   chatMessageContentFromMessage,
   toPersistableChatMessage,
@@ -28,6 +30,7 @@ const message = toPersistableChatMessage({
         success: true,
       },
       state: "complete",
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
       type: "tool-call",
     },
   ],
@@ -100,6 +103,7 @@ describe("generated document draft boundary", () => {
             workspaceId: "workspace-1",
           },
           state: "complete",
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: "tool-call",
         },
       ],
