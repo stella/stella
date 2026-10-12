@@ -13,10 +13,7 @@ import { Temporal } from "@stll/time";
 
 import { readOnlineIndexConfig } from "../env-online-index";
 import { CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT } from "../lib/decision-date-bounds-sql";
-import {
-  GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS,
-  withGatedTestClients,
-} from "../tests/gated-test-database";
+import { withGatedTestClients } from "../tests/gated-test-database";
 import { createCorpusProjectionDeleteReceiptRepair } from "./corpus-projection-delete-receipt-repair";
 import { createDecisionDateCeilingRepair } from "./decision-date-ceiling-repair";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
@@ -272,9 +269,7 @@ describe.skipIf(!enabled)(
                 return await builder.unsafe(statement, [...parameters]);
               },
               terminate: async () => {
-                await builder.close({
-                  timeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS,
-                });
+                await builder.close({ timeout: 0 });
               },
               release: () => undefined,
             };

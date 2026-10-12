@@ -33,7 +33,7 @@ const connectionAdapter = (
   },
   release: () => connection.release(),
   terminate: async () => {
-    await connection.close({ timeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS });
+    await connection.close({ timeout: 0 });
   },
 });
 
@@ -410,9 +410,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         ...fixture.gate,
         wait: async () => {
           await waitForPhase(fixture.observer, fixture.pid);
-          await fixture.builder.close({
-            timeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS,
-          });
+          await fixture.builder.close({ timeout: 0 });
         },
       });
       const outcome = await Result.tryPromise(
@@ -1038,9 +1036,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         ...fixture.connection,
         terminate: async () => {
           terminated = true;
-          await fixture.builder.close({
-            timeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS,
-          });
+          await fixture.builder.close({ timeout: 0 });
         },
       };
       const gate = createOnlineIndexGate({

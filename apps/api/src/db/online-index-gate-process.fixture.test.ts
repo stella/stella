@@ -36,9 +36,7 @@ test.skipIf(process.env["ONLINE_INDEX_TEST_TABLE"] === undefined)(
           },
           release: () => connection.release(),
           terminate: async () => {
-            await connection.close({
-              timeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS,
-            });
+            await connection.close({ timeout: 0 });
           },
         });
         const rows = await builder<
