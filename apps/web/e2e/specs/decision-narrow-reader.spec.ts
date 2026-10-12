@@ -47,7 +47,7 @@ const topmostAtCentreIsInside = async (
   );
 };
 
-const readerTextScale = (page: Page) =>
+const readerTextScale = async (page: Page) =>
   page
     .locator('[data-slot="reader-text-root"]')
     .first()
@@ -109,14 +109,16 @@ for (const viewport of NARROW_VIEWPORTS) {
       expect(await readerTextScale(page)).toBe(1);
 
       await page.getByRole("button", { name: "Zoom in" }).click();
-      await expect.poll(() => readerTextScale(page)).toBeGreaterThan(1);
+      await expect.poll(async () => readerTextScale(page)).toBeGreaterThan(1);
       const enlarged = await readerTextScale(page);
 
       await openDecision(page);
-      await expect.poll(() => readerTextScale(page)).toBe(enlarged);
+      await expect.poll(async () => readerTextScale(page)).toBe(enlarged);
 
       await page.getByRole("button", { name: "Zoom out" }).click();
-      await expect.poll(() => readerTextScale(page)).toBeLessThan(enlarged);
+      await expect
+        .poll(async () => readerTextScale(page))
+        .toBeLessThan(enlarged);
     });
 
     test("header crumbs never paint over each other", async ({ page }) => {
