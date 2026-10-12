@@ -10,6 +10,7 @@ import {
 } from "@stll/api-contract/browser-control";
 
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
+import { createUuid } from "@/lib/uuid";
 
 import {
   BROWSER_APPROVAL_MODE,
@@ -101,7 +102,7 @@ const report = (
     controlledTabId,
     controllerId,
     protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
-    requestId: crypto.randomUUID(),
+    requestId: createUuid(),
     source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
     type: "pong",
   });
