@@ -6,7 +6,9 @@ import {
   visualShellReadySchema,
 } from "@stll/api-contract/visual-sandbox";
 
-type VisualShellSessionOptions = { url: string; newNonce: () => string };
+import { createRandomUuid } from "@/lib/uuid";
+
+type VisualShellSessionOptions = { url: string; newNonce?: () => string };
 type VisualShellSessionState =
   | { type: "uninitialized" }
   | { type: "awaiting-ready"; nonce: string }
@@ -42,7 +44,7 @@ const VISUAL_SHELL_LOAD_PARAMETER = "load";
 
 export const createVisualShellSession = ({
   url,
-  newNonce,
+  newNonce = createRandomUuid,
 }: VisualShellSessionOptions) => {
   let state: VisualShellSessionState = { type: "uninitialized" };
   let loads = 0;
