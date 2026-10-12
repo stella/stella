@@ -17,6 +17,7 @@ export * from "./schema/corpus-index-jobs";
 export * from "./schema/case-law";
 export * from "./schema/case-law-provision-extraction";
 export * from "./schema/legal-reader";
+export * from "./schema/reader-answers";
 export * from "./schema/legislation";
 export * from "./schema/sanctions";
 export * from "./schema/sanctions-monitoring";
