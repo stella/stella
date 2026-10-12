@@ -110,9 +110,3 @@ export const storedObservationHasDetailSqlFor = (
   metadataColumn: string,
 ): string =>
   `jsonb_extract_path_text(${metadataColumn}, '${PARTIAL_OBSERVATION_KEY}', '${PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY}') is distinct from 'true'`;
-
-/** Raw SQL form of the listing-only predicate for a code-owned table alias. */
-export const storedObservationIsListingOnlySqlFor = (
-  metadataColumn: string,
-): string =>
-  `jsonb_extract_path_text(${metadataColumn}, '${PARTIAL_OBSERVATION_KEY}', '${PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY}') = 'true'`;

@@ -25,6 +25,7 @@ import {
 } from "@/api/handlers/case-law/decisions/status-courts";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { readPendingTextCountsBySource } from "@/api/lib/case-law/public-subject";
 import {
   publishedCaseLawDecisionFor,
   publishedCaseLawDecisionSqlFor,
@@ -514,6 +515,60 @@ test(
         decisionYearFrom: null,
         decisionYearTo: null,
       });
+    } finally {
+      await db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, sourceId));
+      await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+    }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "pending-text aggregates count listing-only rows and exclude erased or completed rows",
+  async () => {
+    const db = drizzle({ client });
+    const sourceId = createSafeId<"caseLawSource">();
+    await db.insert(caseLawSources).values(
+      caseLawSourceRow({
+        id: sourceId,
+        adapterKey: `pending-text-${sourceId}`,
+        name: "Pending-text fixture",
+      }),
+    );
+    try {
+      await db.insert(caseLawDecisions).values(
+        [
+          { caseNumber: "pending a", metadata: LISTING_ONLY },
+          { caseNumber: "pending b", metadata: LISTING_ONLY },
+          { caseNumber: "erased", metadata: LISTING_ONLY, redactedAt: NOW },
+          {
+            caseNumber: "completed",
+            metadata: LISTING_ONLY,
+            fulltext: "Decision text",
+          },
+          { caseNumber: "detail", metadata: {} },
+        ].map((row) =>
+          decisionRow({
+            ...row,
+            country: "CZE",
+            court: "Nejvyšší soud",
+            sourceId,
+            createdAt: NOW,
+          }),
+        ),
+      );
+      const counts = await readAsReader(
+        async (tx) =>
+          await readPendingTextCountsBySource(tx, [sourceId, withheldSourceId]),
+      );
+      expect(counts).toEqual([{ sourceId, pendingTextCount: 2 }]);
+      expect(
+        await readAsReader(
+          async (tx) => await readPendingTextCountsBySource(tx, []),
+        ),
+      ).toEqual([]);
     } finally {
       await db
         .delete(caseLawDecisions)

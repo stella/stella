@@ -10,7 +10,6 @@ import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-re
 import {
   caseLawSources,
   publishedCaseLawDecisions,
-  unredactedCaseLawDecisions,
   SOURCE_TOTAL_ORIGIN,
 } from "@/api/db/schema";
 import type { SourceTotalOrigin } from "@/api/db/schema";
@@ -44,12 +43,12 @@ import type {
 } from "@/api/lib/case-law-public-read-db";
 import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-redistributable-sources";
 import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
+import { readPendingTextCountsBySource } from "@/api/lib/case-law/public-subject";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { servedCaseLawSearchDocumentFor } from "@/api/lib/case-law/search-sql";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
-import { storedObservationIsListingOnlySqlFor } from "@/api/lib/legal-search/partial-observation-sql";
 import { createUnrecognizedSourceReporter } from "@/api/lib/legal-search/source-registry-membership";
 import type {
   LegalBrowseFacets,
@@ -244,10 +243,6 @@ type CaseLawCoverageSourceRow = {
  * nothing a reader of the corpus needs. The redistribution gate is applied
  * here rather than per number, so a withheld source contributes to nothing.
  */
-const LISTING_ONLY_COVERAGE_DECISION_SQL = sql.raw(
-  storedObservationIsListingOnlySqlFor("coverage_decisions.metadata"),
-);
-
 export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawCoverageSources,
   async (
@@ -260,7 +255,7 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
     );
     // The external serving index cannot prove SQL membership: no endpoints means unknown.
     const served = eligibility ?? sql`FALSE`;
-    return await tx
+    const sources = await tx
       .select({
         id: caseLawSources.id,
         adapterKey: caseLawSources.adapterKey,
@@ -289,18 +284,25 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
           ORDER BY coverage_decisions.decision_date DESC
           LIMIT 1
         )`,
-        pendingTextCount: sql<number>`(
-          SELECT count(*)::integer
-          FROM ${unredactedCaseLawDecisions} AS coverage_decisions
-          WHERE coverage_decisions.source_id = case_law_sources.id
-            AND coverage_decisions.fulltext IS NULL
-            AND ${LISTING_ONLY_COVERAGE_DECISION_SQL}
-        )`,
       })
       .from(caseLawSources)
       .where(redistributableCaseLawSource)
       .orderBy(caseLawSources.adapterKey)
       .limit(CASE_LAW_SOURCE_ROWS_BOUND);
+    const counts = await readPendingTextCountsBySource(
+      tx,
+      sources.map(({ id }) => id),
+    );
+    const countsBySource = new Map(
+      counts.map(({ sourceId, pendingTextCount }) => [
+        sourceId,
+        pendingTextCount,
+      ]),
+    );
+    return sources.map((source) => ({
+      ...source,
+      pendingTextCount: countsBySource.get(source.id) ?? 0,
+    }));
   },
 );
 

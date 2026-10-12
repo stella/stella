@@ -68,8 +68,6 @@ const PUBLIC_LAW_SHARED_QUERY_MODULE =
   "apps/api/src/lib/public-law-shared-query";
 export const UNREDACTED_VIEW_ALLOWED_MODULES: readonly string[] = [
   "apps/api/src/lib/case-law/public-subject.ts",
-  // Coverage exposes only the pending-text aggregate for listing-only rows.
-  "apps/api/src/handlers/case-law/decisions/coverage.ts",
 ];
 const canUseUnredactedView = (filename: string): boolean =>
   UNREDACTED_VIEW_ALLOWED_MODULES.some((modulePath) =>
@@ -448,13 +446,6 @@ export const REVIEWED_SQL_PRODUCERS: readonly {
     sqlArguments: [0],
     reason:
       "The canonical published-detail predicate over a literal metadata column.",
-  },
-  {
-    modules: ["apps/api/src/lib/legal-search/partial-observation-sql"],
-    name: "storedObservationIsListingOnlySqlFor",
-    sqlArguments: [0],
-    reason:
-      "The canonical listing-only predicate over a literal metadata column.",
   },
   {
     modules: [
@@ -1516,7 +1507,7 @@ export default eslintCompatPlugin({
           baseCaseLawRead:
             "Public case-law reads must use the published decisions view, not the base decision table.",
           unredactedView:
-            "The unredacted decisions view is reserved for subject lookup and pending-text coverage.",
+            "The unredacted decisions view is reserved for the public subject owner.",
           namedSchemaImport: "Import schema tables by name.",
         },
       },

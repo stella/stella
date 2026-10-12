@@ -361,7 +361,7 @@ describe.serial("public-law relation scan", () => {
     ).toEqual([]);
   });
 
-  test("coverage may count pending text through the unredacted view", async () => {
+  test("coverage cannot import the unredacted view directly", async () => {
     const source = [
       'import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";',
       'import { unredactedCaseLawDecisions } from "@/api/db/schema";',
@@ -372,13 +372,12 @@ describe.serial("public-law relation scan", () => {
         source,
         "apps/api/src/handlers/case-law/decisions/coverage.ts",
       ),
-    ).toEqual([]);
+    ).toEqual([2]);
   });
 
-  test("the unredacted view allowance stays scoped to subject and coverage owners", () => {
+  test("the unredacted view allowance stays scoped to the subject owner", () => {
     expect(UNREDACTED_VIEW_ALLOWED_MODULES).toEqual([
       "apps/api/src/lib/case-law/public-subject.ts",
-      "apps/api/src/handlers/case-law/decisions/coverage.ts",
     ]);
   });
 
