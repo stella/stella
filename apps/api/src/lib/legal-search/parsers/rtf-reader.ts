@@ -504,7 +504,8 @@ const readRtfToken = (
     }
     const hex = asciiRange(source, first + 1, first + 3);
     const valid =
-      hex.length === 2 && [...hex].every((digit) => HEX_DIGITS.includes(digit));
+      hex.length === 2 &&
+      Array.from(hex).every((digit) => HEX_DIGITS.includes(digit));
     return {
       type: "symbol",
       symbol,

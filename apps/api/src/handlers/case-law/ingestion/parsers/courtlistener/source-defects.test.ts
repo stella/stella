@@ -305,9 +305,9 @@ test("courtlistener-published-entities-decode-once", () => {
 
 test("long zero-padded numeric entities remain published literals", () => {
   const zeros = "0".repeat(40);
-  for (const [escaped, literal] of [
-    [`&amp;#${zeros}253;`, `&#${zeros}253;`],
-    [`&amp;#x${zeros}FD;`, `&#x${zeros}FD;`],
+  for (const { escaped, literal } of [
+    { escaped: `&amp;#${zeros}253;`, literal: `&#${zeros}253;` },
+    { escaped: `&amp;#x${zeros}FD;`, literal: `&#x${zeros}FD;` },
   ]) {
     const wording = `The published token ${literal} stays.`;
     const result = select(`<p>The published token ${escaped} stays.</p>`);

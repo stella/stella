@@ -99,6 +99,7 @@ export const mapCourtListenerRecord = (
                 case "content-loss":
                 case "markup-residue":
                 case "text-not-conserved":
+                case "unclassified-page-chrome":
                   return [];
                 default:
                   reason satisfies never;
