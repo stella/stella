@@ -1294,7 +1294,9 @@ describe("check failure reporting", () => {
           "-e",
           "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000);",
         ],
-        report: (diagnostic) => diagnostics.push(diagnostic),
+        report: (diagnostic) => {
+          diagnostics.push(diagnostic);
+        },
       });
       expect(result.unwrap()).toEqual({
         type: "fallback",
@@ -1327,7 +1329,9 @@ describe("check failure reporting", () => {
           "-e",
           "console.log(JSON.stringify({packages:{items:[{path:'apps/web'}]}}))",
         ],
-        report: (diagnostic) => diagnostics.push(diagnostic),
+        report: (diagnostic) => {
+          diagnostics.push(diagnostic);
+        },
       });
       expect(result.unwrap()).toEqual({ type: "scoped", paths: ["apps/web"] });
       expect(diagnostics.join("")).toContain("outcome=completed");
