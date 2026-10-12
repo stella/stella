@@ -12,7 +12,6 @@ import { assertProperty } from "@stll/property-testing";
 import { testProcessBudgets } from "../apps/api/scripts/test-process-supervisor";
 import { CUSTOM_LINT_TEST_ARGS } from "./check-oxlint-rule-coverage.ts";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
-import { RETIRED_CLI_REGISTRY_OUTPUTS } from "./generated-files";
 import { jobCachePolicy } from "./workflow-cache-policy.ts";
 import { flattenWorkflowSteps, isWorkflowBarrier } from "./workflow-steps";
 
@@ -200,6 +199,47 @@ const git = (args: string[]) => {
   }
   return result.stdout.toString().trim();
 };
+const trackedFiles = new Set(
+  git(["ls-files", "-z"]).split("\0").filter(Boolean),
+);
+
+const normalizeGuardPathLines = (run: string, tracked: ReadonlySet<string>) =>
+  run.replace(
+    /^([ \t]*git diff --exit-code --)[ \t]*\\\n((?:[^\n]*\\\n)*[^\n]*)/gmu,
+    (command, prefix: string, argumentsBlock: string) => {
+      const lines = argumentsBlock.split("\n");
+      const kept = lines.filter((line) => {
+        const argument = line.trim().replace(/ ?\\$/u, "");
+        const match =
+          /^(?:"([^"$\x60]+)"|'([^']+)'|([^\s"'$\x60;&|<>\\()]+))$/u.exec(
+            argument,
+          );
+        const path = match?.at(1) ?? match?.at(2) ?? match?.at(3);
+        // Commands and nonliteral shell expressions must survive comparison.
+        if (path === undefined) {
+          return true;
+        }
+        if (tracked.has(path)) {
+          return true;
+        }
+        const glob = new Bun.Glob(path);
+        for (const file of tracked) {
+          if (file.startsWith(`${path}/`) || glob.match(file)) {
+            return true;
+          }
+        }
+        return false;
+      });
+      if (kept.length === lines.length) {
+        return command;
+      }
+      if (kept.length === 0) {
+        // An empty explicit path list must not match an unscoped diff guard.
+        return `${prefix} \\\n`;
+      }
+      return `${prefix} \\\n${kept.map((line) => line.replace(/[ \t]*\\$/u, "")).join(" \\\n")}`;
+    },
+  );
 const mergeBase = git(["merge-base", "origin/main", "HEAD"]);
 const baseCancellationSource = new Bun.Transpiler({
   loader: "ts",
@@ -522,6 +562,11 @@ const ownedSteps = (steps: readonly Step[]) =>
     .map(withoutTestTimeout)
     .map(withoutApiProjectParityTrigger)
     .map(withoutStepId)
+    .map((step) =>
+      typeof step["run"] === "string"
+        ? { ...step, run: normalizeGuardPathLines(step["run"], trackedFiles) }
+        : step,
+    )
     .map((step) => {
       const { background, ...check } = step;
       if (background !== true) {
@@ -653,23 +698,6 @@ const stepFields = (step: Step | undefined) =>
   v.parse(stepFieldsSchema, step ?? {});
 const baseSteps = legSteps(baseline, baselineIds).map((step) => {
   const fields = stepFields(step);
-  if (
-    step.name === "CLI sharded registry and derived runtime guard" &&
-    fields.run !== undefined
-  ) {
-    return {
-      ...step,
-      run: fields.run
-        .split("\n")
-        .filter(
-          (line) =>
-            !RETIRED_CLI_REGISTRY_OUTPUTS.some(
-              (output) => line.trim() === `${output} \\`,
-            ),
-        )
-        .join("\n"),
-    };
-  }
   if (
     step.name !== "Documentation source policy rule" ||
     fields.run !== `${lintFixtureCommand}\nbun run check:docs-sources\n`
@@ -1109,6 +1137,96 @@ test("CI check scope preserves whitespace inside quoted condition values", () =>
       base,
     }),
   ).toThrow("Expected:");
+});
+
+test("CI coverage ignores untracked guard paths on either side of the comparison", () => {
+  expect(trackedFiles.has(workflowPath)).toBe(true);
+  for (const path of [
+    "untracked-base-output.json",
+    "untracked-head-output.json",
+  ]) {
+    expect(trackedFiles.has(path)).toBe(false);
+  }
+  expectCoverage({
+    base: [
+      {
+        name: "Generated output check",
+        run: [
+          "git diff --exit-code -- \\",
+          "  untracked-base-output.json \\",
+          `  ${workflowPath}`,
+        ].join("\n"),
+      },
+    ],
+    current: [
+      {
+        name: "Generated output check",
+        run: [
+          "git diff --exit-code -- \\",
+          `  ${workflowPath} \\`,
+          "  untracked-head-output.json",
+        ].join("\n"),
+      },
+    ],
+    removed: [],
+  });
+});
+
+test("CI coverage rejects removal of a tracked guard path", () => {
+  const path = "scripts/generated-files.ts";
+  expect(trackedFiles.has(workflowPath)).toBe(true);
+  expect(trackedFiles.has(path)).toBe(true);
+  expect(() =>
+    expectCoverage({
+      base: [
+        {
+          name: "Generated output check",
+          run: [
+            "git diff --exit-code -- \\",
+            `  ${workflowPath} \\`,
+            `  ${path}`,
+          ].join("\n"),
+        },
+      ],
+      current: [
+        {
+          name: "Generated output check",
+          run: ["git diff --exit-code -- \\", `  ${workflowPath}`].join("\n"),
+        },
+      ],
+      removed: [],
+    }),
+  ).toThrow("toEqual");
+});
+
+test("guard normalization preserves directories, glob coverage and nonliteral commands", () => {
+  const tracked = new Set(["generated/kept.json"]);
+  const guarded = [
+    "git diff --exit-code -- \\",
+    "  generated \\",
+    '  "generated/*.json" \\',
+    "  untracked-output.json",
+  ].join("\n");
+  expect(normalizeGuardPathLines(guarded, tracked)).toBe(
+    [
+      "git diff --exit-code -- \\",
+      "  generated \\",
+      '  "generated/*.json"',
+    ].join("\n"),
+  );
+  expect(
+    normalizeGuardPathLines(
+      ["git diff --exit-code -- \\", "  untracked-output.json"].join("\n"),
+      tracked,
+    ),
+  ).not.toBe("git diff --exit-code --");
+  const commands = [
+    "echo untracked-output.json",
+    "git diff --exit-code -- \\",
+    '  "$GENERATED_OUTPUT"',
+    "echo done",
+  ].join("\n");
+  expect(normalizeGuardPathLines(commands, tracked)).toBe(commands);
 });
 
 test("CI coverage rejects a dropped check and accepts only an explicitly listed removal", () => {

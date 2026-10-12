@@ -12,7 +12,6 @@ import { pinnedParserInputs } from "../packages/catalogue/scripts/pinned-content
 import { API_TYPECHECK_REGENERATION_COMMANDS } from "../packages/scripts/src/api-typecheck-regenerate";
 import {
   GENERATORS,
-  RETIRED_CLI_REGISTRY_OUTPUTS,
   CI_GENERATED_FILES,
   allowedOutputs,
   GUARD_A_EXCLUSIONS,
@@ -515,14 +514,6 @@ test("manifest paths and named guards resolve against tracked files and CI", asy
   const steps = new Set(
     [...ci.matchAll(/^\s+- name: (.+)$/gmu)].map((match) => match[1]),
   );
-  for (const output of RETIRED_CLI_REGISTRY_OUTPUTS) {
-    expect(tracked).not.toContain(output);
-    expect(
-      GENERATORS.some((entry) =>
-        entry.outputs.some((glob) => matchesGeneratedGlob(glob, output)),
-      ),
-    ).toBe(false);
-  }
   for (const entry of GENERATORS) {
     for (const glob of entry.inputs) {
       expect(
