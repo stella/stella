@@ -132,7 +132,7 @@ const PENDING_TOOL_CALL_ID = "call-lease";
  * The conversation every fixture stores, sent through the release's own send
  * path with a scripted model: a text answer, a server tool that runs without
  * asking, an approved call, a denied call, a provider failure, and an
- * approval the thread is left waiting on. Returns the pending call's id.
+ * approval with a deferred server call. Returns the pending approval's id.
  */
 export const writeSavedStateConversation = async (
   harness: SavedStateWriter,
@@ -221,7 +221,19 @@ export const writeSavedStateConversation = async (
   ]);
   await userSays("Summarize the lease.");
 
-  harness.script(threadId, [approvalCall(PENDING_TOOL_CALL_ID, "lease")]);
+  harness.script(threadId, [
+    {
+      type: "step",
+      toolCalls: [
+        approvalCall(PENDING_TOOL_CALL_ID, "lease"),
+        {
+          arguments: PLAIN_TOOL_ARGUMENTS,
+          toolCallId: "call-deferred-templates",
+          toolName: PLAIN_TOOL_NAME,
+        },
+      ],
+    },
+  ]);
   await userSays("Delete the lease.");
   return PENDING_TOOL_CALL_ID;
 };
