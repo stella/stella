@@ -1,4 +1,4 @@
-// parser-output-unchanged: shared exclusion and text helpers discard the same script/style content as the existing walks.
+// parser-output-unchanged: shared exclusion and text helpers discard the same script/style content as the existing walks; page-chrome text normalization uses the shared normalizeUnicode owner with the same NFC form.
 /**
  * CourtListener's HTML columns: `html_with_citations` where it holds HTML,
  * `html_lawbox`, `html_columbia`, `html_anon_2020`, `html`, and the
@@ -19,6 +19,8 @@ import {
   isText,
   type ParentNode,
 } from "domhandler";
+
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { buildValidationHtml } from "@/api/lib/legal-search/parsers/validate-ast";
 
@@ -491,7 +493,7 @@ export const PAGE_CHROME_SIGNATURES = {
 } as const;
 
 const normalizePageChromeText = (text: string): string =>
-  text.normalize("NFC").replace(/\s+/gu, " ").trim();
+  normalizeUnicode(text, "NFC").replace(/\s+/gu, " ").trim();
 
 const pageChromeTextVocabulary = {
   paragraphs: PARAGRAPHS,
