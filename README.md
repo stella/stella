@@ -22,6 +22,14 @@
   <a href="https://discord.gg/8dZjmVFjTK"><img src="https://img.shields.io/badge/discord-join%20chat-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="apps/landing/public/media/products/story-public-data-1-dark.png" />
+    <img src="apps/landing/public/media/products/story-public-data-1.png" alt="stella's case-law reader open on a Czech Supreme Court judgment, 27 Cdo 59/2022, on a company director's statutory guarantee to creditors. The decision's numbered paragraphs fill the centre with a reader's highlight and underline; the margin shows an AI note on the issue and a lawyer's comment; the chat on the right answers whether a creditor must first make the company demand compensation, citing the decision." width="100%" />
+  </picture>
+  <br /><sub><b>Case law</b> from public sources: read the decision, mark it up, and ask questions answered from its own paragraphs.</sub>
+</p>
+
 ---
 
 stella is an open-source legal workspace and data stack for legal teams,
@@ -63,6 +71,57 @@ knowledge tools in one workspace.
 access and control stella data, including matters, documents and case law.
 
 **Outlook add-in.** Coming soon.
+
+## A tour
+
+Every screenshot below is stella itself, captured by its own end-to-end suite
+from a seeded demo organization and kept current by CI
+([how](apps/landing/public/media/products/README.md)). The matters, parties and
+people in them are fictional.
+
+<table>
+<tr>
+<td colspan="2" valign="top">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="apps/landing/public/media/products/agent-dark.png" />
+  <img src="apps/landing/public/media/products/agent.png" alt="A chat thread where the user asks to turn a change-of-control review into a view for a partner meeting. The answer cites the two critical agreements as document chips, then renders a generated view: total contract value needing consent or termination review, consent to confirm, and notice only, a bar splitting the value between them, and a table of counterparties with agreement, document count, value, risk and change-of-control position" width="100%" />
+</picture>
+<p align="center"><sub><b>AI agent.</b> Cited answers across a whole matter, turned into a view you can take to the meeting.</sub></p>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="apps/landing/public/media/products/workspace-dark.png" />
+  <img src="apps/landing/public/media/products/workspace.png" alt="The Files tab of the Meridian supply agreement matter: a list of PDF, Word and email files with author, last updated, version, status (Active, In Review, Closed, On Hold) and notes columns" width="100%" />
+</picture>
+<p align="center"><sub><b>Matters.</b> Documents, emails and versions per matter, with status, notes and owners.</sub></p>
+</td>
+<td width="50%" valign="top">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="apps/landing/public/media/products/tabular-review-dark.png" />
+  <img src="apps/landing/public/media/products/tabular-review.png" alt="The Table tab of the Export Review matter: one row per document with coloured status pills, notes, due dates and an extracted document type such as Shareholder Register, Supplier Agreement or Loan Agreement" width="100%" />
+</picture>
+<p align="center"><sub><b>Tabular Review.</b> Extract structured answers from a document set into a review table.</sub></p>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="apps/landing/public/media/products/editor-dark.png" />
+  <img src="apps/landing/public/media/products/editor.png" alt="A supplier agreement open in the Word editor, with the inspector on the right showing metadata, version history, review and anonymization tabs, the current version v2 and the matter status In Review" width="100%" />
+</picture>
+<p align="center"><sub><b>Editor.</b> Edit .docx in the browser, with version history and matter context beside the page.</sub></p>
+</td>
+<td width="50%" valign="top">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="apps/landing/public/media/products/templates-dark.png" />
+  <img src="apps/landing/public/media/products/templates.png" alt="The Templates library listing nine agreements, such as Supply Agreement, Non-Disclosure Agreement and Share Purchase Agreement, grouped into Corporate, Employment, Commercial and Real Estate categories" width="100%" />
+</picture>
+<p align="center"><sub><b>Templates.</b> A shared library of firm templates, grouped by practice area.</sub></p>
+</td>
+</tr>
+</table>
 
 ## Quickstart
 
@@ -142,7 +201,10 @@ Local development uses mock AI by default. To use real AI, set provider keys in
 stella does not aim to replace human judgment or provide legal advice. stella
 relies on AI models, which can produce incorrect or misleading output. We aim
 to ground AI flows in citations and traceable source material, but we encourage
-users to always validate the answers.
+users to always validate the answers. AI summaries, notes and analyses of court
+decisions are generated by stella, not endorsed by the courts, and do not
+represent the courts' own reasoning; they are aids for legal professionals, and
+the decision text remains the authoritative source.
 
 ## Contributing
 
