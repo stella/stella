@@ -106,6 +106,7 @@ import { COMPAT_SEARCH_CURSOR_MAX_LENGTH } from "@/api/mcp/compat-shared";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { resolveMcpToolOutputContract } from "@/api/mcp/gateway/list-tools";
 import { deriveContactDisplayName } from "@/api/mcp/matter-tools";
+import { windowProvisionText } from "@/api/mcp/provision-text-window";
 import { getMcpResourceModeConfig } from "@/api/mcp/resource-policy-contract";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import {
@@ -4800,7 +4801,7 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(chunks.join("")).toBe(`§ 1729\n${LONG_PROVISION_BODY}`);
   });
 
-  test("read_statute_provisions refuses an invalid text cursor", async () => {
+  test("read_statute_provisions keeps cursor failures within their entries on MCP and CLI", async () => {
     resolveStatuteExpressionMock.mockResolvedValue({
       type: "expression",
       id: STATUTE_ID,
@@ -4809,33 +4810,89 @@ describe("OpenAI-compatible MCP tools", () => {
       createProvisionVersionRow(),
     ]);
     readVersionBlocksMock.mockResolvedValue(createStatuteBlocks());
-    const error = validationEnvelope(
-      await handleMcpToolCall({
-        args: {
-          items: [
-            {
-              anchor: PROVISION_ANCHOR,
-              eli: STATUTE_ELI,
-              text_cursor: "ptw1.invalid",
-            },
-          ],
-        },
-        context: createContext(),
-        toolName: "read_statute_provisions",
-      }),
-    );
-    expect(error["code"]).toBe("validation_error");
-    expect(error["message"]).toBe("Invalid cursor");
-    expect(error["issues"]).toEqual([
-      {
-        path: "cursor",
-        message:
-          '"ptw1.invalid" is not a cursor read_statute_provisions issued.',
+    const stale = windowProvisionText({
+      limit: 3,
+      subject: JSON.stringify([STATUTE_ELI, PROVISION_ANCHOR, STATUTE_ID]),
+      text: "Previous provision wording",
+    });
+    if (stale.type !== "window" || stale.nextTextCursor === null) {
+      panic("Expected a stale provision continuation");
+    }
+    const entry = { anchor: PROVISION_ANCHOR, eli: STATUTE_ELI };
+    const result = await handleMcpToolCall({
+      args: {
+        items: [
+          entry,
+          { ...entry, text_cursor: "ptw1.invalid" },
+          { ...entry, text_cursor: stale.nextTextCursor },
+        ],
       },
-    ]);
-    expect(error["hint"]).toBe(
-      "This cursor does not decode, so the position it held is lost. Call read_statute_provisions again without cursor to start from the first page, or pass nextCursor exactly as the previous response returned it.",
-    );
+      context: createContext(),
+      toolName: "read_statute_provisions",
+    });
+    expect(result.isError).not.toBe(true);
+    const payload = parseToolPayload(result);
+    const message =
+      "Invalid text_cursor. Retry this entry without text_cursor to read its current wording.";
+    expect(payload).toMatchObject({
+      items: [
+        {
+          status: "found",
+          text: `§ 1729\n${LONG_PROVISION_BODY}`.slice(
+            0,
+            LIMITS.legislationProvisionTextChars,
+          ),
+        },
+        {
+          index: 1,
+          status: "invalid",
+          message,
+          issues: [{ path: "items[].text_cursor", message }],
+        },
+        {
+          index: 2,
+          status: "invalid",
+          message,
+          issues: [{ path: "items[].text_cursor", message }],
+        },
+      ],
+    });
+    if (!isRecord(payload) || !Array.isArray(payload["items"])) {
+      panic("Expected provision batch entries");
+    }
+    expect(payload["items"]).toHaveLength(3);
+    const content = result.content.at(0);
+    if (content?.type !== "text") {
+      panic("Expected a text MCP response");
+    }
+    const cliPayload = parseCliPayload({ content: [content] });
+    expect(cliPayload).toEqual(payload);
+    const annotation = DEFAULT_MCP_CLI_ANNOTATIONS.read_statute_provisions;
+    const plan = buildCliRenderPlan({
+      payload: cliPayload,
+      itemsKey: annotation.itemsKey,
+      textPath: undefined,
+      singleReadActive: false,
+      columns: undefined,
+    });
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    renderCliResult({
+      plan,
+      format: "json",
+      writers: {
+        stdout: (text) => {
+          stdout.push(text);
+        },
+        stderr: (text) => {
+          stderr.push(text);
+        },
+      },
+      allActive: false,
+    });
+    expect(JSON.parse(stdout.join(""))).toEqual(payload);
+    expect(stderr).toEqual([]);
+    expect(cliRenderPlanExitCode(plan) ?? 0).toBe(0);
   });
 
   test("read_statute_provisions withholds one entry's wording without failing the batch", async () => {

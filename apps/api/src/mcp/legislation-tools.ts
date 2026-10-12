@@ -824,7 +824,7 @@ const provisionRequestKey = (item: ProvisionRequest): string =>
 
 type ProvisionItemBuildResult =
   | { type: "item"; item: ProvisionItemResult }
-  | { type: "invalid-cursor"; cursor: string };
+  | { type: "invalid-cursor" };
 
 const provisionItemResult = ({
   blocksByDocumentId,
@@ -935,7 +935,7 @@ const provisionItemResult = ({
         text,
       });
       if (window.type === "invalid-cursor") {
-        return { type: "invalid-cursor", cursor: item.text_cursor ?? "" };
+        return { type: "invalid-cursor" };
       }
       return {
         type: "item",
@@ -1137,19 +1137,27 @@ const handleReadStatuteProvisionsTool: TypedMcpToolHandler<
           versionsByDocumentId,
         }),
   );
-  const invalidCursor = built.find(
-    (result) => result.type === "invalid-cursor",
-  );
-  if (invalidCursor?.type === "invalid-cursor") {
-    return invalidCursorError("read_statute_provisions", invalidCursor.cursor);
-  }
   return toolDataResult(
     projectionPayload(READ_STATUTE_PROVISIONS_PROJECTION, {
-      items: built.map((result) =>
-        result.type === "item"
-          ? result.item
-          : panic("Invalid cursor was not returned"),
-      ),
+      items: built.map((result, index) => {
+        switch (result.type) {
+          case "item":
+            return result.item;
+          case "invalid-cursor": {
+            const message =
+              "Invalid text_cursor. Retry this entry without text_cursor to read its current wording.";
+            return {
+              index,
+              issues: [{ message, path: "items[].text_cursor" }],
+              message,
+              status: PROVISION_STATUS.invalid,
+            } satisfies ProvisionItemResult;
+          }
+          default:
+            result satisfies never;
+            return panic("Unhandled provision item result");
+        }
+      }),
     }),
   );
 };
