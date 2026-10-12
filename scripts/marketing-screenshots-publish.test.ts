@@ -269,6 +269,8 @@ describe("publish selection", () => {
   });
   const selectFor = async (input: Scenario) => {
     const outputs: Record<string, string> = {};
+    const failures: string[] = [];
+    const notices: string[] = [];
     await select.runInNewContext({
       context: {
         repo: { owner: "stella", repo: "stella" },
@@ -277,6 +279,12 @@ describe("publish selection", () => {
       core: {
         setOutput: (name: string, value: string) => {
           outputs[name] = value;
+        },
+        setFailed: (message: string) => {
+          failures.push(message);
+        },
+        notice: (message: string) => {
+          notices.push(message);
         },
       },
       github: {
@@ -299,15 +307,25 @@ describe("publish selection", () => {
         },
       },
     });
-    return outputs;
+    return { outputs, failures, notices };
   };
 
   test("publishes to the branch the capture ran on", async () => {
     expect(await selectFor(scenario())).toEqual({
-      branch: "feat/ui",
-      head: HEAD,
-      run: "7",
+      outputs: { branch: "feat/ui", head: HEAD, run: "7" },
+      failures: [],
+      notices: [],
     });
+  });
+
+  // The capture for a fork's pull request runs on a branch without one.
+  test("leaves a branch with no pull request to its artifact", async () => {
+    const input = scenario();
+    input.pulls = [];
+    const result = await selectFor(input);
+    expect(result.outputs).toEqual({});
+    expect(result.failures).toEqual([]);
+    expect(result.notices).toHaveLength(1);
   });
 
   const refused: { name: string; change: (input: Scenario) => void }[] = [
@@ -336,9 +354,9 @@ describe("publish selection", () => {
       },
     },
     {
-      name: "a branch with no pull request",
+      name: "a branch heading two pull requests",
       change: (input) => {
-        input.pulls = [];
+        input.pulls = [...input.pulls, ...input.pulls];
       },
     },
     {
@@ -369,10 +387,13 @@ describe("publish selection", () => {
     },
   ];
   for (const { name, change } of refused) {
+    // A refusal fails the run instead of finishing green with nothing pushed.
     test(`refuses ${name}`, async () => {
       const input = scenario();
       change(input);
-      expect(await selectFor(input)).toEqual({});
+      const result = await selectFor(input);
+      expect(result.outputs).toEqual({});
+      expect(result.failures).toHaveLength(1);
     });
   }
 });

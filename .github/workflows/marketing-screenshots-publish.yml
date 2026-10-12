@@ -54,25 +54,43 @@ jobs:
           script: |
             const { owner, repo } = context.repo;
             const run = context.payload.workflow_run;
+            // A refusal fails the run, so a capture that was not published
+            // never finishes green.
+            const refuse = (reason) => core.setFailed(`Not publishing: ${reason}`);
             if (run.path !== '.github/workflows/marketing-screenshots-capture.yml'
               || run.event !== 'workflow_dispatch'
-              || run.head_repository?.full_name !== `${owner}/${repo}`
-              || !/^[A-Za-z0-9._/-]+$/u.test(run.head_branch ?? '')
+              || run.head_repository?.full_name !== `${owner}/${repo}`) {
+              return refuse('not a dispatched capture run of this repository');
+            }
+            if (!/^[A-Za-z0-9._/-]+$/u.test(run.head_branch ?? '')
               || run.head_branch.includes('..') || run.head_branch.startsWith('-')
               || run.head_branch === 'main'
-              || !/^[0-9a-f]{40}$/u.test(run.head_sha ?? '')) return;
+              || !/^[0-9a-f]{40}$/u.test(run.head_sha ?? '')) {
+              return refuse('the run names no plain branch other than main');
+            }
             const pulls = await github.paginate(github.rest.pulls.list, {
               owner, repo, state: 'open', head: `${owner}:${run.head_branch}`, per_page: 100,
             });
             const candidates = pulls.filter(pull => pull.head.ref === run.head_branch
               && pull.head.repo?.full_name === `${owner}/${repo}`);
-            if (candidates.length !== 1) return;
-            // The branch must still be where the capture ran.
-            if (candidates[0].head.sha !== run.head_sha) return;
+            // A capture made for a fork's pull request runs on a branch with
+            // no pull request of its own; its PNGs stay in the artifact.
+            if (candidates.length === 0) {
+              core.notice(`${run.head_branch} has no open pull request; the PNGs stay in the capture run's artifact`);
+              return;
+            }
+            if (candidates.length !== 1) {
+              return refuse(`${run.head_branch} heads more than one open pull request`);
+            }
+            if (candidates[0].head.sha !== run.head_sha) {
+              return refuse(`${run.head_branch} moved since the capture; dispatch the update again`);
+            }
             const { data: { artifacts } } = await github.rest.actions.listWorkflowRunArtifacts({
               owner, repo, run_id: run.id, name: 'marketing-screenshots',
             });
-            if (artifacts.length !== 1 || artifacts[0].expired) return;
+            if (artifacts.length !== 1 || artifacts[0].expired) {
+              return refuse('the capture run has no unexpired marketing-screenshots artifact');
+            }
             core.setOutput('branch', run.head_branch);
             core.setOutput('head', run.head_sha);
             core.setOutput('run', String(run.id));

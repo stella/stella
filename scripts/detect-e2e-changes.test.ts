@@ -936,7 +936,8 @@ describe("detect-e2e-changes", () => {
     expect(update).toContain(
       "workflow_id: 'marketing-screenshots-capture.yml'",
     );
-    expect(update).toContain("ref: process.env.BRANCH");
+    // Workflow source text, not an env read of this process.
+    expect(update).toMatch(/ref: process\.env\.BRANCH,/u);
     expect(marketingUpdateWorkflow).not.toContain("secrets.");
 
     // The capture runs on the branch's ref and never on main; it holds no
