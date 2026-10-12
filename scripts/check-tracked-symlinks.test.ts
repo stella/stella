@@ -172,17 +172,19 @@ test("repeated finite aliases are valid while active recursion cycles are reject
   ]);
 });
 
-test("a gitlink does not provide an archived submodule target", () => {
+test("a gitlink archives its directory but not its contents", () => {
   expect(
     trackedSymlinkProblems([
       { path: "vendor/submodule", kind: "gitlink" },
+      { path: "directory-alias", kind: "symlink", target: "vendor/submodule" },
+      { path: "parent-alias", kind: "symlink", target: "vendor/submodule/.." },
       { path: "alias", kind: "symlink", target: "vendor/submodule/file.txt" },
     ]),
   ).toEqual([
     {
       path: "alias",
       target: "vendor/submodule/file.txt",
-      message: "target is unavailable inside an archived submodule",
+      message: "target is missing from the tracked archive",
     },
   ]);
 });

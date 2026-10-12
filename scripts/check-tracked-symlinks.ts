@@ -119,12 +119,6 @@ export const trackedSymlinkProblems = (
       }
       const candidate = [...current, segment].join("/");
       const node = nodes.get(candidate);
-      if (node?.kind === "gitlink") {
-        return {
-          status: "invalid",
-          message: "target is unavailable inside an archived submodule",
-        };
-      }
       if (node?.kind === "symlink") {
         if (active.has(candidate)) {
           return {
@@ -162,7 +156,7 @@ export const trackedSymlinkProblems = (
         kind = "file";
         continue;
       }
-      if (directories.has(candidate)) {
+      if (node?.kind === "gitlink" || directories.has(candidate)) {
         current.push(segment);
         continue;
       }
