@@ -182,17 +182,19 @@ const FactRow = ({ workspaceId, listId, fact }: FactRowProps) => {
   const held = details?.scoring === "held";
   const evidenceKind = details?.evidenceKind ?? null;
 
-  // The endpoint stores a fact's whole detail, and its confidence is
-  // required: a fact nobody has described gets a detail once a reviewer
-  // picks a confidence, and the other edits wait for that.
   const save = (changes: Partial<EditableFactDetails>) => {
-    if (details?.scoring === undefined) {
+    if (!canEdit) {
+      return;
+    }
+    const scoring =
+      details === null ? UNDESCRIBED_FACT.scoring : details.scoring;
+    if (scoring === undefined) {
       return;
     }
     saveDetails(fact.id, {
-      ...details,
+      ...(details ?? UNDESCRIBED_FACT),
       ...changes,
-      scoring: changes.scoring ?? details.scoring,
+      scoring: changes.scoring ?? scoring,
     });
   };
 
@@ -247,22 +249,11 @@ const FactRow = ({ workspaceId, listId, fact }: FactRowProps) => {
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <ConfidenceSelect
             disabled={!canEdit}
-            onChange={(confidence) => {
-              const scoring =
-                details === null ? UNDESCRIBED_FACT.scoring : details.scoring;
-              if (scoring === undefined) {
-                return;
-              }
-              saveDetails(fact.id, {
-                ...(details ?? UNDESCRIBED_FACT),
-                scoring,
-                confidence,
-              });
-            }}
+            onChange={(confidence) => save({ confidence })}
             value={details?.confidence ?? null}
           />
           <Button
-            disabled={!canEdit || details === null}
+            disabled={!canEdit}
             onClick={() => save({ scoring: held ? "included" : "held" })}
             size="sm"
             variant="outline"
@@ -274,8 +265,17 @@ const FactRow = ({ workspaceId, listId, fact }: FactRowProps) => {
           <SaveIndicator state={saveState} />
         </div>
       </div>
+      {!canEdit && (
+        <p className="text-muted-foreground text-xs">
+          {t(
+            canUpdate
+              ? "errors.actionAdmission.notEnabled"
+              : "errors.api.forbidden",
+          )}
+        </p>
+      )}
       <InterpretationNoteEditor
-        disabled={!canEdit || details === null}
+        disabled={!canEdit}
         key={details?.interpretationNote ?? ""}
         note={details?.interpretationNote ?? null}
         onSave={(interpretationNote) => save({ interpretationNote })}
@@ -292,12 +292,13 @@ const UNDESCRIBED_FACT = {
   medium: null,
   interpretationNote: null,
   scoring: "included",
-} as const satisfies Omit<EditableFactDetails, "confidence">;
+  confidence: null,
+} as const satisfies EditableFactDetails;
 
 type ConfidenceSelectProps = {
   value: FactConfidence | null;
   disabled: boolean;
-  onChange: (confidence: FactConfidence) => void;
+  onChange: (confidence: FactConfidence | null) => void;
 };
 
 const ConfidenceSelect = ({
@@ -310,7 +311,7 @@ const ConfidenceSelect = ({
     <Select
       disabled={disabled}
       onValueChange={(next) => {
-        if (next !== null && next !== value) {
+        if (next !== value) {
           onChange(next);
         }
       }}
@@ -323,6 +324,7 @@ const ConfidenceSelect = ({
         <SelectValue placeholder={t("avt.anchorFacts.setConfidence")} />
       </SelectTrigger>
       <SelectPopup>
+        <SelectItem value={null}>{t("common.notStated")}</SelectItem>
         {FACT_CONFIDENCES.map((level) => (
           <SelectItem key={level} value={level}>
             {t(CONFIDENCE_LABEL_KEYS[level])}

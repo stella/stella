@@ -12,6 +12,7 @@ import {
   splitStatuteTitleCitation,
   statuteTitleCitationMentionRegex,
 } from "@stll/api-contract/statute-route";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -57,7 +58,7 @@ const FIRST_CLAUSE_END = /[,;]/u;
  */
 export const legislationNameMatchKey = (text: string): string | null => {
   const tokens = Array.from(
-    text.normalize("NFC").toLowerCase().matchAll(WORD_TOKEN),
+    normalizeUnicode(text, "NFC").toLowerCase().matchAll(WORD_TOKEN),
     (match) => match[0],
   );
   // A bare number, or no word at all, names no act.
