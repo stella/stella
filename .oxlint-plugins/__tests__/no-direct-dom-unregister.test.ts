@@ -15,3 +15,15 @@ test("rejects direct GlobalRegistrator teardown", async () => {
     ),
   ).toEqual([1, 2]);
 });
+
+test("accepts drained DOM teardown and unrelated registrators", async () => {
+  expect(
+    await lintSingleRule(
+      "no-direct-dom-unregister",
+      [
+        "await unregisterDomEnvironment();",
+        "await OtherRegistrator.unregister();",
+      ].join("\n"),
+    ),
+  ).toEqual([]);
+});

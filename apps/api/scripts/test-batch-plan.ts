@@ -27,14 +27,15 @@ export const dbTestBatchSize = (propertyOnly: boolean) =>
  */
 export const SOLO_TEST_PATHS: ReadonlySet<string> = new Set([
   ...Object.values(RECORDED_CONVERSATION_SUITES),
-  // The 20,000-entry corpus plus PGlite leaves no room for another DB suite.
-  "src/handlers/sanctions/public-routes.db.test.ts",
   // Its 25,000-row plan fixture grows PGlite's retained WASM memory; closing
   // the client cannot reclaim it, and a three-file Linux batch peaked at 2816 MB.
   "src/lib/scheduler/tasks/legislation-expression-id-backfill-plan.db.test.ts",
   // Seeds 32,000 legislation versions; a three-file batch with it peaked at
   // 2909 MB on Linux.
   "src/handlers/legislation/work-names-plan.db.test.ts",
+  // The full-size refresh corpus retains PGlite and screening-index memory;
+  // sharing with monitoring-drain peaked at 2633 MB against the 2560 MB cap.
+  "src/lib/lists/sanctions/refresh-event-loop.db.test.ts",
   // Sets the deployment's public address before the environment is read.
   "src/lib/oauth-cli-client-document.db.test.ts",
   // Owns the CIMD transport module and the AS JWKS fetch for the whole process.
@@ -61,7 +62,15 @@ export const splitSoloTests = (
 // Shared batches reserve headroom for interaction between retained module graphs.
 export const TEST_BATCH_RSS_HEADROOM_RATIO = 0.7;
 export const UNMEASURED_TEST_RSS_RATIO = 0.4;
+export const MIN_TEST_RSS_CLASS_MEASUREMENTS = 20;
 export const SOLO_TEST_RSS_RATIO = 0.6;
+
+export const TEST_RSS_EXECUTION_CLASS = {
+  db: "db",
+  ordinary: "ordinary",
+} as const;
+export type TestRssExecutionClass =
+  (typeof TEST_RSS_EXECUTION_CLASS)[keyof typeof TEST_RSS_EXECUTION_CLASS];
 
 export type TestRssEnvironment = {
   os: string;
@@ -185,18 +194,91 @@ export const staleTestRssTableAnnotation = (measuredAt: string, now: Date) => {
   );
 };
 
-export const unmeasuredTestPeakRss = (budgetMb: number) =>
+const fallbackUnmeasuredTestPeakRss = (budgetMb: number) =>
   Math.ceil(
     budgetMb * TEST_BATCH_RSS_HEADROOM_RATIO * UNMEASURED_TEST_RSS_RATIO,
   );
 
-const rssFileWeight = (file: string, table: TestRssTable, budgetMb: number) => {
-  const observation = table.files[file];
+type UnmeasuredTestPeakRssOptions = {
+  file: string;
+  rssTable: TestRssTable;
+  dbTestPaths: ReadonlySet<string>;
+  budgetMb: number;
+};
+type ClassPeakRss = Record<TestRssExecutionClass, number | undefined>;
+
+// One nearest-rank 95th percentile per class, computed once per table and
+// class split: planning weighs every unmeasured file against the same values.
+const classPeakRssCache = new WeakMap<
+  TestRssTable,
+  WeakMap<ReadonlySet<string>, ClassPeakRss>
+>();
+
+const percentile95 = (increments: number[]) => {
+  if (increments.length < MIN_TEST_RSS_CLASS_MEASUREMENTS) {
+    return undefined;
+  }
+  const sorted = increments.toSorted((left, right) => left - right);
+  return sorted.at(Math.ceil(sorted.length * 0.95) - 1);
+};
+
+const classPeakRss = (
+  rssTable: TestRssTable,
+  dbTestPaths: ReadonlySet<string>,
+): ClassPeakRss => {
+  const byTable = classPeakRssCache.get(rssTable) ?? new WeakMap();
+  classPeakRssCache.set(rssTable, byTable);
+  const cached = byTable.get(dbTestPaths);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const db: number[] = [];
+  const ordinary: number[] = [];
+  for (const [file, observation] of Object.entries(rssTable.files)) {
+    const increment = Math.max(0, observation.peakMb - observation.baselineMb);
+    (dbTestPaths.has(file) ? db : ordinary).push(increment);
+  }
+  const computed: ClassPeakRss = {
+    [TEST_RSS_EXECUTION_CLASS.db]: percentile95(db),
+    [TEST_RSS_EXECUTION_CLASS.ordinary]: percentile95(ordinary),
+  };
+  byTable.set(dbTestPaths, computed);
+  return computed;
+};
+
+export const unmeasuredTestPeakRss = ({
+  file,
+  rssTable,
+  dbTestPaths,
+  budgetMb,
+}: UnmeasuredTestPeakRssOptions) => {
+  const executionClass = dbTestPaths.has(file)
+    ? TEST_RSS_EXECUTION_CLASS.db
+    : TEST_RSS_EXECUTION_CLASS.ordinary;
+  return (
+    classPeakRss(rssTable, dbTestPaths)[executionClass] ??
+    fallbackUnmeasuredTestPeakRss(budgetMb)
+  );
+};
+
+type RssFileWeightOptions = UnmeasuredTestPeakRssOptions;
+const rssFileWeight = ({
+  file,
+  rssTable,
+  budgetMb,
+  dbTestPaths,
+}: RssFileWeightOptions) => {
+  const observation = rssTable.files[file];
   if (observation === undefined) {
-    const incrementalMb = unmeasuredTestPeakRss(budgetMb);
+    const incrementalMb = unmeasuredTestPeakRss({
+      file,
+      rssTable,
+      dbTestPaths,
+      budgetMb,
+    });
     return {
       type: "unmeasured",
-      peakMb: table.baselineMb + incrementalMb,
+      peakMb: rssTable.baselineMb + incrementalMb,
       incrementalMb,
     } as const;
   }
@@ -211,15 +293,23 @@ type BatchPeakRssOptions = {
   files: readonly string[];
   rssTable: TestRssTable;
   budgetMb: number;
+  /** Files the runner executes in its db class; their estimate differs. */
+  dbTestPaths: ReadonlySet<string>;
 };
 export const batchPeakRss = ({
   files,
   rssTable,
   budgetMb,
+  dbTestPaths,
 }: BatchPeakRssOptions) => {
   let peakMb = rssTable.baselineMb;
   for (const file of files) {
-    peakMb += rssFileWeight(file, rssTable, budgetMb).incrementalMb;
+    peakMb += rssFileWeight({
+      file,
+      rssTable,
+      budgetMb,
+      dbTestPaths,
+    }).incrementalMb;
   }
   return peakMb;
 };
@@ -229,6 +319,8 @@ type SplitMemoryBoundedBatchesOptions = {
   rssTable?: TestRssTable;
   /** Hard execution-class cap; shared composition additionally reserves headroom. */
   budgetMb: number;
+  /** Files the runner executes in its db class; their estimate differs. */
+  dbTestPaths: ReadonlySet<string>;
 };
 
 /** Split existing batches without introducing new process neighbours. */
@@ -236,6 +328,7 @@ export const splitMemoryBoundedBatches = ({
   batches,
   rssTable = measuredTestRssTable(),
   budgetMb,
+  dbTestPaths,
 }: SplitMemoryBoundedBatchesOptions): string[][] => {
   if (!Number.isFinite(budgetMb) || budgetMb <= 0) {
     panic("test batch memory budget must be positive and finite");
@@ -246,7 +339,12 @@ export const splitMemoryBoundedBatches = ({
     let current: string[] = [];
     let totalMb = rssTable.baselineMb;
     for (const file of batch) {
-      const weight = rssFileWeight(file, rssTable, budgetMb);
+      const weight = rssFileWeight({
+        file,
+        rssTable,
+        budgetMb,
+        dbTestPaths,
+      });
       if (
         !Number.isFinite(weight.peakMb) ||
         weight.peakMb <= 0 ||
@@ -289,7 +387,12 @@ export const splitMemoryBoundedBatches = ({
     }
   }
   for (const batch of result) {
-    const peak = batchPeakRss({ files: batch, rssTable, budgetMb });
+    const peak = batchPeakRss({
+      files: batch,
+      rssTable,
+      budgetMb,
+      dbTestPaths,
+    });
     if (peak > budgetMb) {
       panic(
         `Cannot plan API test batch [${batch.join(", ")}]: requires ${peak} MB, class budget ${budgetMb} MB`,
@@ -393,6 +496,7 @@ export const parseRssMeasurementArguments = (arguments_: readonly string[]) => {
 export const TEST_BATCH_KIND = {
   db: "db",
   heavyLogic: "heavy-logic",
+  heavyDb: "heavy-db",
   moduleMock: "module-mock",
   regular: "regular",
 } as const;
@@ -403,21 +507,31 @@ export type TestBatchKind =
 type ClassifyTestBatchOptions = {
   dbBacked: boolean;
   heavyLogic: boolean;
+  heavyDb: boolean;
   installsModuleMock: boolean;
   propertyOnly: boolean;
 };
 
 /**
- * Select the one execution class a test belongs to. Property DB isolation
+ * Heavy DB markers require a DB-backed file and exclude heavy logic markers.
+ * Heavy DB isolation takes precedence over mocks and property mode: a singleton
+ * process satisfies all three constraints. Property DB isolation
  * takes precedence over module-mock batching because either class may retain
  * process-wide state, while a singleton process satisfies both constraints.
  */
 export const classifyTestBatch = ({
   dbBacked,
+  heavyDb,
   heavyLogic,
   installsModuleMock,
   propertyOnly,
 }: ClassifyTestBatchOptions) => {
+  if (heavyDb) {
+    if (!dbBacked || heavyLogic) {
+      panic("Heavy DB tests must be DB-backed and cannot also be heavy logic");
+    }
+    return TEST_BATCH_KIND.heavyDb;
+  }
   if (propertyOnly && dbBacked) {
     return TEST_BATCH_KIND.db;
   }

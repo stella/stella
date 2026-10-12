@@ -10,9 +10,12 @@ import * as v from "valibot";
 import { assertProperty } from "@stll/property-testing";
 import { createSha256 } from "@stll/sha256/node";
 
-import { pilotQueueJobs } from "./ci-pr-pilot-plan";
+import { PILOT_ALWAYS } from "./ci-pr-pilot-plan";
 import { contextWithPlanOutputs, evaluate } from "./github-expression";
-import { prDepthJobs, thinJobs } from "./main-heavy-plan";
+import { prDepthJobs, queueAdmittedJobs, thinJobs } from "./main-heavy-plan";
+
+// Wall-clock checks: no reused or queued plan can certify them, so they run.
+const ALWAYS_RUN: readonly string[] = PILOT_ALWAYS;
 
 const stepSchema = v.looseObject({
   name: v.string(),
@@ -402,8 +405,11 @@ test("push, dispatch and queue events always run without querying evidence", asy
 test("reused depth prevents every nonstructural CI job and expensive planner step", () => {
   const reused = contextWithPlanOutputs({
     context: {
+      status: { cancelled: false },
       values: {
         "github.event_name": "pull_request",
+        "github.event.pull_request.draft": false,
+        "inputs.heavy_only": false,
         "needs.ci-plan.outputs.run_required": "false",
       },
     },
@@ -413,7 +419,9 @@ test("reused depth prevents every nonstructural CI job and expensive planner ste
     if (name === "ci-plan" || name === "ci-result") {
       continue;
     }
-    expect(evaluate(job.if ?? "true", reused), name).toBe(false);
+    expect(evaluate(job.if ?? "true", reused), name).toBe(
+      ALWAYS_RUN.includes(name),
+    );
   }
   const checkout = planner.steps.findIndex((step) => step.name === "Checkout");
   expect(checkout).toBeGreaterThan(-1);
@@ -963,8 +971,11 @@ test("enqueue events leave every PR suite to unchanged merge-group validation", 
   expect(requests).toHaveLength(0);
   const enqueued = contextWithPlanOutputs({
     context: {
+      status: { cancelled: false },
       values: {
         "github.event_name": "pull_request",
+        "github.event.pull_request.draft": false,
+        "inputs.heavy_only": false,
         "needs.ci-plan.outputs.run_required": "false",
         "needs.ci-plan.outputs.coverage_profile": "normal-v1",
       },
@@ -975,7 +986,9 @@ test("enqueue events leave every PR suite to unchanged merge-group validation", 
     if (["ci-plan", "ci-result"].includes(name)) {
       continue;
     }
-    expect(evaluate(job.if ?? "true", enqueued), name).toBe(false);
+    expect(evaluate(job.if ?? "true", enqueued), name).toBe(
+      ALWAYS_RUN.includes(name),
+    );
   }
 });
 
@@ -1062,13 +1075,10 @@ test("thin groups certify only normal-profile completion on a head included in t
   }
 });
 
-test("thin groups run and require every deferred normal PR check unless normal completion is certified", async () => {
-  const deferred = pilotQueueJobs(workflow);
-  if (deferred.status !== "valid") {
-    throw new Error(deferred.message);
-  }
-  expect(deferred.jobs).toContain("ci-browser");
-  expect(deferred.jobs).toContain("dependency-malware");
+test("thin groups require queued code checks regardless of normal PR completion", async () => {
+  const admitted = queueAdmittedJobs(workflow);
+  expect(admitted).toContain("ci-browser");
+  expect(admitted).toContain("dependency-malware");
   const aggregation = result.steps.find(
     (step) => step.name === "Evaluate CI outcome",
   );
@@ -1111,25 +1121,37 @@ test("thin groups run and require every deferred normal PR check unless normal c
       context: {
         values: {
           "github.event_name": "merge_group",
+          "vars.QUEUE_BROWSER_SUITES": "on",
           "inputs.heavy_only": false,
           "steps.completed-depth.outputs.normal_completion": completion,
-          "steps.pilot-queue-plan.outputs.queue_jobs": JSON.stringify(
-            deferred.jobs,
-          ),
+          "steps.heavy-plan.outputs.queue_jobs": JSON.stringify(admitted),
           "needs.ci-plan.outputs.run_required": "true",
           "needs.ci-plan.outputs.coverage_profile": "normal-v1",
           "needs.ci-plan.outputs.trusted": "true",
           "needs.ci-plan.outputs.suite_depth": "full",
           "needs.ci-plan.outputs.queue_depth": "thin",
+          "needs.web-build.result": "success",
+          "needs.heavy-web-build.result": "skipped",
           "inputs.pr_depth_only": false,
           ...Object.fromEntries(
-            Object.entries(allScopes).map(([name, value]) => [
-              `needs.ci-plan.outputs.${name}`,
-              value,
-            ]),
+            Object.keys(planner.outputs)
+              .filter((name) => name.endsWith("_required"))
+              .map((name) => [`needs.ci-plan.outputs.${name}`, "true"]),
           ),
         },
-        status: { success: true, failure: false, cancelled: false },
+        // GitHub exposes an unset output of this completed producer as empty.
+        fallback: (name) =>
+          name.startsWith("steps.completed-depth.outputs.")
+            ? (evidence.outputs.get(
+                name.slice("steps.completed-depth.outputs.".length),
+              ) ?? "")
+            : undefined,
+        status: {
+          always: true,
+          success: true,
+          failure: false,
+          cancelled: false,
+        },
       },
     });
     const queueJobs = v.parse(
@@ -1141,20 +1163,22 @@ test("thin groups run and require every deferred normal PR check unless normal c
         ),
       ),
     );
-    expect(queueJobs).toEqual(completion === "complete" ? [] : deferred.jobs);
+    expect(queueJobs).toEqual(admitted);
     const dependencies = Object.fromEntries(
       Object.entries(scopes).map(([name]) => [
         name,
         {
           result:
-            thin.includes(name) || queueJobs.includes(name)
+            thin.includes(name) ||
+            queueJobs.includes(name) ||
+            name === "desktop-rust-tests"
               ? "success"
               : "skipped",
         },
       ]),
     );
     dependencies["ci-plan"] = { result: "success" };
-    const runAggregation = (needs: typeof dependencies) =>
+    const runAggregation = (needs: typeof dependencies, plan = allScopes) =>
       Bun.spawnSync(["bash", "-e", "-c", aggregation.run ?? ""], {
         env: {
           ...process.env,
@@ -1167,30 +1191,48 @@ test("thin groups run and require every deferred normal PR check unless normal c
           PATCH_ID: patchId,
           WORKFLOW_VERSION: pr.head.sha,
           PR_DEPTH_JOBS: JSON.stringify(prDepth),
+          GITHUB_STEP_SUMMARY: "/dev/null",
+          PR_DEPTH_REUSED: evidence.outputs.get("pr_depth_reused") ?? "false",
+          PR_DEPTH_SOURCE_RUN_ID:
+            evidence.outputs.get("pr_depth_source_run_id") ?? "",
           QUEUE_VALIDATION: "false",
           PLAN_RESULT: "success",
           TRUSTED: "true",
           THIN_JOBS: JSON.stringify(thin),
           QUEUE_REQUIRED_JOBS: JSON.stringify(queueJobs),
-          PLAN: JSON.stringify(allScopes),
+          PLAN: JSON.stringify(plan),
           NEEDS: JSON.stringify(needs),
         },
       });
-    expect(runAggregation(dependencies).exitCode).toBe(0);
-    for (const job of deferred.jobs) {
+    const successfulAggregation = runAggregation(dependencies);
+    expect(
+      successfulAggregation.exitCode,
+      successfulAggregation.stdout.toString() +
+        successfulAggregation.stderr.toString(),
+    ).toBe(0);
+    expect(evaluate(jobs["desktop-rust-tests"]?.if ?? "false", context)).toBe(
+      true,
+    );
+    for (const outcome of ["skipped", "failure", "cancelled"]) {
+      expect(
+        runAggregation({
+          ...dependencies,
+          "desktop-rust-tests": { result: outcome },
+        }).exitCode,
+        `desktop-rust-tests/${completion}/${outcome}`,
+      ).toBe(1);
+    }
+    for (const job of admitted) {
       const scheduled = evaluate(jobs[job]?.if ?? "true", context);
-      if (completion !== "complete") {
-        expect(scheduled, job).toBe(true);
-        for (const outcome of ["skipped", "failure"]) {
-          expect(
-            runAggregation({ ...dependencies, [job]: { result: outcome } })
-              .exitCode,
-            `${job}/${outcome}`,
-          ).toBe(1);
-        }
-      } else if (!thin.includes(job)) {
-        expect(scheduled, job).toBe(false);
+      expect(typeof scheduled, job).toBe("boolean");
+      expect(scheduled, job).toBe(true);
+      for (const outcome of ["skipped", "failure"]) {
+        expect(
+          runAggregation({ ...dependencies, [job]: { result: outcome } })
+            .exitCode,
+          `${job}/${outcome}`,
+        ).toBe(1);
       }
     }
   }
-});
+}, 35_000);

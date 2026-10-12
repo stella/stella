@@ -64,8 +64,8 @@ impl DeviceProofRequest {
     self.client.execute(self.request).await
   }
   #[cfg(test)]
-  pub(crate) fn build(self) -> reqwest::Result<reqwest::Request> {
-    Ok(self.request)
+  pub(crate) fn build(self) -> reqwest::Request {
+    self.request
   }
 }
 

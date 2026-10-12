@@ -1,5 +1,9 @@
 name: Audit image
 
+defaults:
+  run:
+    shell: bash
+
 on:
   pull_request:
     paths:

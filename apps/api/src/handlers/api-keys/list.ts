@@ -27,6 +27,7 @@ const listMachineApiKeysQuerySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   query: listMachineApiKeysQuerySchema,
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.accountControl,

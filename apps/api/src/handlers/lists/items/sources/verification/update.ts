@@ -23,6 +23,7 @@ const bodySchema = t.Object({
   status: t.String({ minLength: 1, maxLength: 32 }),
 });
 const config = {
+  contract: "patch",
   featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "Set the verification status of one source attached to a list item. Any " +

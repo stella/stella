@@ -1,3 +1,4 @@
+import { memoryStream } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
@@ -221,7 +222,10 @@ const produceUntilCut = ({
         }),
     );
   };
-  const response = run.produce(output());
+  const response = run.produce(
+    output(),
+    memoryStream({ runId: Bun.randomUUIDv7() }),
+  );
   return { response, run, stored };
 };
 
@@ -334,7 +338,10 @@ describe("a producing run", () => {
       });
       yield* [];
     };
-    const response = run.produce(output());
+    const response = run.produce(
+      output(),
+      memoryStream({ runId: Bun.randomUUIDv7() }),
+    );
     await response.text();
 
     expect(run.control.abortController.signal.aborted).toBe(false);
@@ -493,7 +500,9 @@ describe("a producing run", () => {
       });
       yield* [];
     };
-    await run.produce(output()).text();
+    await run
+      .produce(output(), memoryStream({ runId: Bun.randomUUIDv7() }))
+      .text();
     expect(ownership.run(execution.executionId)).toBeUndefined();
 
     // Giving up the process's turns from here still waits for that beat.

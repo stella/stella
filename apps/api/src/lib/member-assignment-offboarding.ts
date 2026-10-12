@@ -15,6 +15,7 @@ import {
   organization,
   session,
 } from "@/api/db/auth-schema";
+import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import { abortTransaction } from "@/api/db/safe-db";
 import {
@@ -35,6 +36,9 @@ import {
   sharepointOAuthState,
   mcpOAuthState,
   contacts,
+  searchHistoryEntries,
+  searchHistoryOwners,
+  searchHistoryTombstones,
   taskAssignees,
   workspaceMembers,
   workspaces,
@@ -43,6 +47,7 @@ import {
   WORK_OBLIGATION_STATUS,
   WORK_OBLIGATION_EVENT_TYPE,
 } from "@/api/db/schema";
+import { runScopedWorkInTransaction } from "@/api/db/scoped";
 import { ACTIVE_TASK_REASSIGNMENT_STATUSES } from "@/api/lib/account-deletion-reassignment";
 import {
   AUDIT_ACTION,
@@ -54,6 +59,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { removeOrganizationMemberWithAuthArtifacts } from "@/api/lib/auth-artifacts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockOpenSigningPage } from "@/api/lib/db/aggregate-lock";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionBatch } from "@/api/lib/db/transitions";
 import { clearOrganizationCorrespondenceAssignments } from "@/api/lib/email/correspondence/offboarding";
@@ -503,7 +509,7 @@ const closeMemberExchanges = async ({
     remaining > 0;
     remaining -= LIMITS.memberRemovalCleanupBatchSize
   ) {
-    // db-await-in-loop: lock a bounded signing session page after the matter prefix.
+    // db-await-in-loop: discover a bounded signing page after the matter prefix.
     const signing = await tx
       .select({
         id: pdfSigningSessions.id,
@@ -513,41 +519,75 @@ const closeMemberExchanges = async ({
       .from(pdfSigningSessions)
       .innerJoin(workspaces, eq(workspaces.id, pdfSigningSessions.workspaceId))
       .where(signingScope)
-      .orderBy(pdfSigningSessions.id)
-      .limit(LIMITS.memberRemovalCleanupBatchSize)
-      .for("update", { of: pdfSigningSessions });
+      .orderBy(
+        sql`${workspaces.organizationId} COLLATE "C"`,
+        pdfSigningSessions.id,
+      )
+      .limit(LIMITS.memberRemovalCleanupBatchSize);
     if (signing.length === 0) {
       break;
     }
-    // db-await-in-loop: transition and audit the held signing page before consuming the next counted batch.
-    const changed = await transitionBatch({
-      tx,
-      spec: TRANSITIONS.pdfSigningSessions,
-      ids: signing.map(({ id }) => id),
-      options: {
-        from: ["open"],
-        to: "cancelled",
-        set: {
-          closeReason: "expired",
-          closedAt: now,
-          handoffExpiresAt: now,
-          tokenExpiresAt: now,
+    const byOrganization = Map.groupBy(
+      signing,
+      (signingSession) => signingSession.organizationId,
+    );
+    const organizations = [...byOrganization];
+    const closeNextOrganization = async (index: number): Promise<number> => {
+      const next = organizations.at(index);
+      if (next === undefined) {
+        return 0;
+      }
+      const [organizationId, organizationSessions] = next;
+      const changed = await runScopedWorkInTransaction({
+        tx,
+        organizationId,
+        userId,
+        workspaceScope: {
+          type: WORKSPACE_ACCESS_MODE.explicit,
+          workspaceIds: [
+            ...new Set(organizationSessions.map((row) => row.workspaceId)),
+          ],
         },
-      },
-      recordTransitionAuditEvent: async (auditTx, rows) => {
-        const ids = new Set(rows.map(({ id }) => id));
-        await recordMemberSessionTransitions({
-          tx: auditTx,
-          actorUserId,
-          resourceType: AUDIT_RESOURCE_TYPE.PDF_SIGNING_SESSION,
-          rows: signing.filter(({ id }) => ids.has(id)),
-          recordAuditEvent,
-        });
-      },
-    });
-    if (changed.length !== signing.length) {
-      panic("Locked signing sessions changed during member removal");
-    }
+        fn: async (scopedTx) => {
+          const held = await lockOpenSigningPage({
+            tx: scopedTx,
+            sessions: organizationSessions,
+          });
+          const transitioned = await transitionBatch({
+            tx: scopedTx,
+            spec: TRANSITIONS.pdfSigningSessions,
+            ids: held.map(({ id }) => id),
+            options: {
+              from: ["open"],
+              to: "cancelled",
+              set: {
+                closeReason: "expired",
+                closedAt: now,
+                handoffExpiresAt: now,
+                tokenExpiresAt: now,
+              },
+            },
+            recordTransitionAuditEvent: async (auditTx, rows) => {
+              const ids = new Set(rows.map(({ id }) => id));
+              await recordMemberSessionTransitions({
+                tx: auditTx,
+                actorUserId,
+                resourceType: AUDIT_RESOURCE_TYPE.PDF_SIGNING_SESSION,
+                rows: organizationSessions.filter(({ id }) => ids.has(id)),
+                recordAuditEvent,
+              });
+            },
+          });
+          if (transitioned.length !== held.length) {
+            panic("Locked signing sessions changed during member removal");
+          }
+          return transitioned.length;
+        },
+      });
+      return changed + (await closeNextOrganization(index + 1));
+    };
+    // db-await-in-loop: bounded signing pages must lock, transition and audit in organization/session order before the next page.
+    await closeNextOrganization(0);
   }
 };
 
@@ -1359,6 +1399,42 @@ const cancelMemberDesktopSessions = async ({
   }
 };
 
+type ClearMemberPresenceOptions = Pick<
+  RemoveOrganizationMemberOptions,
+  "tx" | "organizationId" | "userId" | "memberId"
+> & { recordAuditEvent: AuditRecorder };
+
+const clearMemberPresence = async ({
+  tx,
+  organizationId,
+  userId,
+  memberId,
+  recordAuditEvent,
+}: ClearMemberPresenceOptions) => {
+  await runScopedWorkInTransaction({
+    tx,
+    organizationId,
+    userId,
+    workspaceScope: { type: WORKSPACE_ACCESS_MODE.explicit, workspaceIds: [] },
+    fn: async (scopedTx) => {
+      await scopedTx
+        .delete(desktopPresence)
+        .where(
+          and(
+            eq(desktopPresence.organizationId, organizationId),
+            eq(desktopPresence.userId, userId),
+          ),
+        );
+      await recordAuditEvent(scopedTx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+        resourceId: organizationId,
+        metadata: { change: "member-presence-cleared", memberId, userId },
+      });
+    },
+  });
+};
+
 /**
  * Better Auth's permission/owner checks precede this transactional operation.
  * The membership row, its credentials and every assignment leave in the
@@ -1439,12 +1515,44 @@ export const removeOrganizationMemberInTransaction = async (
     userId,
     actorUserId,
   });
+  const recordAuditEvent = createBackgroundAuditRecorder({
+    organizationId,
+    workspaceId: null,
+    userId: actorUserId,
+    execution: {
+      performer: { type: "user", id: actorUserId },
+      trigger: { type: "system", source: "membership_removal" },
+    },
+  });
+  await clearMemberPresence({
+    tx,
+    organizationId,
+    userId,
+    memberId,
+    recordAuditEvent,
+  });
   await tx
-    .delete(desktopPresence)
+    .delete(searchHistoryTombstones)
     .where(
       and(
-        eq(desktopPresence.organizationId, organizationId),
-        eq(desktopPresence.userId, userId),
+        eq(searchHistoryTombstones.organizationId, organizationId),
+        eq(searchHistoryTombstones.userId, userId),
+      ),
+    );
+  await tx
+    .delete(searchHistoryOwners)
+    .where(
+      and(
+        eq(searchHistoryOwners.organizationId, organizationId),
+        eq(searchHistoryOwners.userId, userId),
+      ),
+    );
+  await tx
+    .delete(searchHistoryEntries)
+    .where(
+      and(
+        eq(searchHistoryEntries.organizationId, organizationId),
+        eq(searchHistoryEntries.userId, userId),
       ),
     );
   await tx
@@ -1513,15 +1621,6 @@ export const removeOrganizationMemberInTransaction = async (
     organizationId,
     userId,
   });
-  const recordAuditEvent = createBackgroundAuditRecorder({
-    organizationId,
-    workspaceId: null,
-    userId: actorUserId,
-    execution: {
-      performer: { type: "user", id: actorUserId },
-      trigger: { type: "system", source: "membership_removal" },
-    },
-  });
   await recordAuditEvent(tx, {
     action: AUDIT_ACTION.UPDATE,
     resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
@@ -1545,6 +1644,9 @@ export type MemberCleanupDisposition =
 export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [member.userId, "cleared"],
   [desktopPresence.userId, "cleared"],
+  [searchHistoryEntries.userId, "cleared"],
+  [searchHistoryOwners.userId, "cleared"],
+  [searchHistoryTombstones.userId, "cleared"],
   [workspaceMembers.userId, "cleared"],
   [taskAssignees.userId, "reassigned"],
   [workObligations.ownerUserId, "reassigned"],

@@ -1,12 +1,9 @@
 import { Result } from "better-result";
 
-import type {
-  DataRegion,
-  DecisionModelProvider,
-  OrgAIConfig,
-} from "@/api/lib/ai-config";
+import type { DataRegion, OrgAIConfig } from "@/api/lib/ai-config";
 import { decryptAIConfig, maskApiKey } from "@/api/lib/ai-config-crypto";
 import {
+  decisionModelResponse,
   providerResponseExtras,
   providerResponseRegion,
   storedAIConfigUnreadableError,
@@ -38,20 +35,18 @@ type AIConfigResult = {
       providers: {
         provider: OrgAIConfig["providers"][number]["provider"];
         apiKeyMasked: string;
+        anthropicWorkspaceId?: string | undefined;
         endpoint?: string | undefined;
         apiVersion?: string | undefined;
         region: DataRegion;
       }[];
       overrideModels: OrgAIConfig["overrideModels"];
-      decision: {
-        provider: DecisionModelProvider;
-        apiKeyMasked: string;
-        modelId: string;
-      } | null;
+      decision: ReturnType<typeof decisionModelResponse>;
     }
 );
 
 const config = {
+  contract: "patch",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
@@ -59,8 +54,7 @@ const config = {
 
 /**
  * Read the org's AI config. Returns provider, region, and
- * override roles. The API key is masked (first 8 chars only)
- * to prevent exposure.
+ * override roles. Credentials are returned only as masked identifiers.
  */
 const readAIConfig = createSafeRootHandler(
   config,
@@ -116,14 +110,7 @@ const readAIConfig = createSafeRootHandler(
           ...providerResponseExtras(providerConfig),
         })),
         overrideModels: aiConfig.overrideModels,
-        decision:
-          aiConfig.decision === null
-            ? null
-            : {
-                provider: aiConfig.decision.provider,
-                apiKeyMasked: maskApiKey(aiConfig.decision.apiKey),
-                modelId: aiConfig.decision.modelId,
-              },
+        decision: decisionModelResponse(aiConfig.decision),
         instanceProvisioned,
         decisionInstanceProvisioned,
       };

@@ -300,7 +300,7 @@ export const COMPARE_DOCUMENTS_TOOL_DEFINITION = defineValibotMcpTool({
   consumesServices: true,
   annotations: {
     title: "Compare document versions",
-    destructiveHint: true,
+    destructiveHint: false,
     idempotentHint: true,
     openWorldHint: false,
     readOnlyHint: false,
@@ -322,6 +322,8 @@ export const COMPARE_DOCUMENTS_TOOL_DEFINITION = defineValibotMcpTool({
   access: "write",
   accountAccess: "sandbox",
   permissions: { type: "all", permissions: { entity: ["update"] } },
+  nonDestructiveReason:
+    "Comparison creates previews, downloads, or derived versions without replacing a stored version.",
   anonymized: { exposure: "excluded", reason: "write" },
   name: "compare_documents",
   scope: "stella:documents_write",

@@ -1,5 +1,9 @@
 name: Model Catalog Upstream Check
 
+defaults:
+  run:
+    shell: bash
+
 # Providers retire and rename models on their own schedules. This
 # nightly job compares stella's picker (@stll/ai-catalog) bidirectionally
 # with live, public, keyless listings (OpenRouter + models.dev). It fails
@@ -96,7 +100,6 @@ jobs:
 
       - name: Refresh upstream catalog snapshots
         id: refresh
-        shell: bash
         run: |
           set -euo pipefail
           # Rates owns acquisition of both shared inputs; capabilities stays offline.

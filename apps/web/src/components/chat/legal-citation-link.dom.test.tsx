@@ -145,6 +145,7 @@ const fullDecision = {
   caseNumberType: "case-number",
   country: "CZE",
   court: "Nejvyšší soud",
+  courtId: null,
   courtAbbreviation: "NS",
   courtTier: "supreme",
   decisionDate: "2017-01-12",

@@ -1,6 +1,7 @@
 import type { StreamChunk } from "@tanstack/ai";
 
 import { REASONING_EFFORTS } from "@stll/ai-catalog";
+import type { ChatSendRequest } from "@stll/api-contract/chat";
 import type { ChatMessageRevisionEdit } from "@stll/api-contract/chat-message-revisions";
 
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
@@ -114,6 +115,11 @@ export const chatThreads = p.pgTable(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    /** Skill selected when the thread starts; null means an ordinary chat. */
+    activeSkill:
+      jsonb("active_skill").$type<
+        NonNullable<ChatSendRequest["activeSkill"]>
+      >(),
     title: p.varchar({ length: CHAT_THREAD_TITLE_MAX_LENGTH }).notNull(),
     // Provenance of `title`; gates whether background AI titling may replace it.
     // See ChatTitleSource in ./common. New threads start "default"; a rename
@@ -214,6 +220,16 @@ export const chatThreads = p.pgTable(
       { onDelete: "set null" },
     ),
     forkedFromMessageId: safeUuid<"chatMessage">("forked_from_message_id"),
+    /**
+     * The case-law decision this chat is about: the reader's decision chat
+     * sends it with its first message, and the thread keeps it so history can
+     * show the decision beside the chat. Written once, when the thread is
+     * created, because a decision's chat is one conversation per decision.
+     * No foreign key: decisions live in the public corpus, which is gated and
+     * re-ingested on its own schedule, and the history read already drops a
+     * decision the public gate no longer serves.
+     */
+    subjectDecisionId: safeUuid<"caseLawDecision">("subject_decision_id"),
     /**
      * Durable queue address for incremental thread compaction. Null means no
      * compaction work is pending. A send whose history window crosses the

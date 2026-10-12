@@ -41,6 +41,7 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Attach a source to one list item: the document version it comes from " +

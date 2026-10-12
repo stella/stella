@@ -17,6 +17,7 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Set or clear the short label on one version of a document, up to 128 " +
     "characters, for marking a version as a draft, an execution copy, and so " +

@@ -3,12 +3,13 @@ import { Temporal } from "@stll/time";
 /**
  * Boot-time auth prefetch.
  *
- * Loaded from index.html as its own module script, BEFORE the main
- * application graph. Its import graph is deliberately tiny (env resolution
- * only), so the two auth requests every protected route blocks on —
- * `GET /get-session` and `GET /organization/get-active-member-role` — leave
- * the browser while the multi-megabyte route graph is still downloading,
- * instead of after the router has booted (measured ~850ms later in prod).
+ * Started by `boot-prefetch-entry.ts`, which index.html loads as its own
+ * module script BEFORE the main application graph. Its import graph is
+ * deliberately tiny (env resolution only), so the two auth requests every
+ * protected route blocks on — `GET /get-session` and
+ * `GET /organization/get-active-member-role` — leave the browser while the
+ * multi-megabyte route graph is still downloading, instead of after the
+ * router has booted (measured ~850ms later in prod).
  *
  * The auth client does not fetch these itself when a prefetch is pending:
  * its `customFetchImpl` (see `lib/auth.ts`) calls `takeBootPrefetch` and
@@ -32,7 +33,7 @@ import { Temporal } from "@stll/time";
 
 import { browserAuthBaseUrl } from "@/lib/api-origins";
 
-export const BOOT_PREFETCH_PATHS = [
+const BOOT_PREFETCH_PATHS = [
   "/get-session",
   "/organization/get-active-member-role",
 ] as const;
@@ -140,8 +141,9 @@ type StartBootPrefetchOptions = {
   wasDiscarded?: boolean;
 };
 
-/** Exported for the unit test only; the module fires it at evaluation time
- *  in the browser (guard below). */
+/** Fired once by `boot-prefetch-entry.ts`. Evaluating this module has no
+ *  side effect: the auth client imports it for `takeBootPrefetch`, and every
+ *  importer of the auth client (tests, SSR) would otherwise send requests. */
 export const startBootPrefetch = ({
   fetchImpl = fetch,
   now = () => Temporal.Now.instant().epochMilliseconds,
@@ -237,10 +239,3 @@ export const startBootPrefetch = ({
       .catch(reportAndDrop),
   };
 };
-
-// Module scripts never execute during SSR, but the main graph also imports
-// this module for `takeBootPrefetch`; the guard keeps a server evaluation
-// from firing browser fetches.
-if (typeof document !== "undefined") {
-  startBootPrefetch();
-}

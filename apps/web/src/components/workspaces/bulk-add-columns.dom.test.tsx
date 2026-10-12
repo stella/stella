@@ -23,6 +23,7 @@ const { resolveActionCapabilities } =
   await import("@/lib/organization/feature-access/action-capabilities.logic");
 const { propertiesOptions } =
   await import("@/lib/workspaces/queries/properties");
+const { sessionOptions } = await import("@/lib/auth-query-options");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { BulkAddColumns } = await import("./bulk-add-columns");
@@ -89,6 +90,9 @@ test("member can change a manual bulk draft's content type and save while AI dra
   });
   clients.push(client);
   client.setQueryData(propertiesOptions("matter").queryKey, []);
+  // The surface reads the session through the cache; seed it so the auth
+  // client sends nothing.
+  client.setQueryData(sessionOptions.queryKey, null);
   const capabilities = resolveActionCapabilities({
     role: "member",
     ai: false,

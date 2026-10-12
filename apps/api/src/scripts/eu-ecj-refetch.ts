@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 
+import { printError } from "@stll/errors";
+
 import { caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
@@ -441,7 +443,7 @@ const runCelexRefresh = async ({
         }
       } catch (error) {
         celexFailed = true;
-        console.error(`${celex}: failed —`, error);
+        printError(`${celex}: failed`, error);
       }
       if (celexFailed) {
         failedCelex.push(celex);
