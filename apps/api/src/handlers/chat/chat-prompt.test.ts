@@ -9,6 +9,7 @@ import {
 } from "@stll/api-contract";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import { sha256Hex as legacyHex } from "@stll/sha256/node";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
@@ -638,6 +639,9 @@ describe("chat prompt builders", () => {
     expect(first.cacheStablePrefix).not.toContain("Current date");
     expect(first.fullPrompt).not.toBe(second.fullPrompt);
     expect(buildChatPromptCacheKey(first.cacheStablePrefix)).toBe(
+      `stella-chat:v1:${legacyHex(first.cacheStablePrefix).slice(0, 24)}`,
+    );
+    expect(buildChatPromptCacheKey(first.cacheStablePrefix)).toBe(
       buildChatPromptCacheKey(second.cacheStablePrefix),
     );
   });
@@ -793,7 +797,7 @@ describe("chat prompt builders", () => {
       id: toSafeId<"agentSkill">("skill_active"),
       origin: "authored",
       requiredTools: [],
-      resources: [{ kind: "knowledge", path: "knowledge/checklist.md" }],
+      resources: [{ path: "references/checklist.md" }],
       source: "installed",
       toolName: "active-workflow",
       version: "1.0",
@@ -808,7 +812,7 @@ describe("chat prompt builders", () => {
     );
     expect(section).toContain('When the user says "this skill"');
     expect(section).toContain("This skill is editable in this chat");
-    expect(section).toContain("- knowledge/checklist.md (knowledge)");
+    expect(section).toContain("- references/checklist.md");
     expect(section).toContain("# Skill body");
   });
 

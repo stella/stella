@@ -32,6 +32,14 @@
       {
         "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
         "tokens": 32475
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 33250
+      },
+      {
+        "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
+        "tokens": 32845
       }
     ],
     "anthropic/extended": [
@@ -66,6 +74,14 @@
       {
         "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
         "tokens": 32966
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 33740
+      },
+      {
+        "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
+        "tokens": 33336
       }
     ],
     "bedrock/default": [
@@ -100,6 +116,14 @@
       {
         "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
         "tokens": 32697
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 33483
+      },
+      {
+        "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
+        "tokens": 33078
       }
     ],
     "bedrock/extended": [
@@ -134,6 +158,14 @@
       {
         "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
         "tokens": 33187
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 33971
+      },
+      {
+        "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
+        "tokens": 33567
       }
     ],
     "google/default": [
@@ -164,6 +196,14 @@
       {
         "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
         "tokens": 31964
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 32592
+      },
+      {
+        "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
+        "tokens": 32188
       }
     ],
     "google/extended": [
@@ -190,6 +230,14 @@
       {
         "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
         "tokens": 32443
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 33071
+      },
+      {
+        "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
+        "tokens": 32666
       }
     ],
     "mistral/default": [
@@ -224,6 +272,14 @@
       {
         "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
         "tokens": 33922
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34735
+      },
+      {
+        "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
+        "tokens": 34330
       }
     ],
     "mistral/extended": [
@@ -258,6 +314,14 @@
       {
         "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
         "tokens": 34449
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 35261
+      },
+      {
+        "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
+        "tokens": 34857
       }
     ],
     "openai/default": [
@@ -292,6 +356,14 @@
       {
         "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
         "tokens": 33535
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34338
+      },
+      {
+        "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
+        "tokens": 33933
       }
     ],
     "openai/extended": [
@@ -326,6 +398,14 @@
       {
         "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
         "tokens": 34051
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34853
+      },
+      {
+        "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
+        "tokens": 34449
       }
     ],
     "openrouter-anthropic/default": [
@@ -360,6 +440,10 @@
       {
         "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
         "tokens": 33502
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34298
       }
     ],
     "openrouter-anthropic/extended": [
@@ -394,6 +478,10 @@
       {
         "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
         "tokens": 34002
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34797
       }
     ],
     "openrouter/default": [
@@ -428,6 +516,10 @@
       {
         "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
         "tokens": 33502
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34298
       }
     ],
     "openrouter/extended": [
@@ -462,6 +554,10 @@
       {
         "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
         "tokens": 34002
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34797
       }
     ]
   },

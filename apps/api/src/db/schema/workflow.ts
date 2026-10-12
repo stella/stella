@@ -7,6 +7,10 @@ import type { WorkObligationStatus } from "@stll/api-contract/workflow-status";
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
 
 import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+} from "../entity-feature-gate-columns";
+import {
   isNotNull,
   jsonb,
   p,
@@ -162,6 +166,7 @@ const WORK_OBLIGATION_EVENT_TYPE_SQL_VALUES = WORK_OBLIGATION_EVENT_TYPES.map(
 export const workObligations = p.pgTable(
   "work_obligations",
   {
+    ...entityFeatureGateColumns(),
     entityId: safeUuid<"entity">("entity_id").primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
@@ -202,6 +207,7 @@ export const workObligations = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .unique("work_obligations_entity_ws_unq")
       .on(table.entityId, table.workspaceId),
@@ -281,6 +287,7 @@ export const workObligations = p.pgTable(
 export const workObligationEvents = p.pgTable(
   "work_obligation_events",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"workObligationEvent">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     obligationEntityId: safeUuid<"entity">("obligation_entity_id").notNull(),
@@ -293,6 +300,7 @@ export const workObligationEvents = p.pgTable(
     occurredAt: timestamptz("occurred_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .foreignKey({
         columns: [table.obligationEntityId, table.workspaceId],

@@ -81,6 +81,8 @@ import {
 } from "@/api/lib/api-handlers";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { readCourtRegistry } from "@/api/lib/case-law/court-presentation";
+import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
@@ -94,6 +96,7 @@ import { projectResponseText } from "@/api/lib/search/project-response-text";
 
 const listDecisions = createSafeBoundedPublicHandler(
   {
+    contract: "patch",
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
@@ -130,6 +133,7 @@ const listDecisions = createSafeBoundedPublicHandler(
 
 export const readStatuteCitationCounts = createSafeBoundedPublicHandler(
   {
+    contract: "patch",
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
@@ -155,6 +159,7 @@ export const readStatuteCitationCounts = createSafeBoundedPublicHandler(
 
 const listDecisionFacets = createSafeBoundedPublicHandler(
   {
+    contract: "patch",
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
@@ -178,6 +183,7 @@ const listDecisionFacets = createSafeBoundedPublicHandler(
 
 const listLatestDecisions = createSafeBoundedPublicHandler(
   {
+    contract: "patch",
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
@@ -204,6 +210,7 @@ const listLatestDecisions = createSafeBoundedPublicHandler(
 
 const readCaseLawCorpusStatus = createSafeBoundedPublicHandler(
   {
+    contract: "patch",
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
@@ -228,6 +235,7 @@ const readCaseLawCorpusStatus = createSafeBoundedPublicHandler(
 
 const readDecision = createSafePublicSubjectFollowUpHandler({
   config: {
+    contract: "patch",
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "read_case_law_decision" },
     cache: { kind: "none" },
@@ -254,6 +262,7 @@ const readDecision = createSafePublicSubjectFollowUpHandler({
 
 const readDecisionBySlug = createSafePublicSubjectFollowUpHandler({
   config: {
+    contract: "patch",
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "read_case_law_decision" },
     cache: { kind: "none" },
@@ -319,6 +328,7 @@ const projectDecisionProvisionPage = async (
  */
 const listDecisionProvisions = createSafePublicSubjectFollowUpHandler({
   config: {
+    contract: "patch",
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
@@ -343,6 +353,7 @@ const listDecisionProvisions = createSafePublicSubjectFollowUpHandler({
 /** Decisions citing a provision. */
 const listCitingDecisions = createSafeBoundedPublicHandler(
   {
+    contract: "patch",
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
@@ -357,7 +368,10 @@ const listCitingDecisions = createSafeBoundedPublicHandler(
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
-          await listCitingDecisionsHandler(query, caseLawPublicReadDb),
+          await listCitingDecisionsHandler(query, {
+            caseLawDb: caseLawPublicReadDb,
+            courtRegistry: await readCourtRegistry(loadPublicCourtWeights),
+          }),
       ),
     );
 
@@ -369,6 +383,7 @@ const listCitingDecisions = createSafeBoundedPublicHandler(
 
 const searchDecisions = createSafeBoundedPublicHandler(
   {
+    contract: "patch",
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "search_case_law" },
     cache: { kind: "none" },
@@ -393,6 +408,7 @@ const searchDecisions = createSafeBoundedPublicHandler(
 
 const listSitemapShardDecisions = createSafeBoundedPublicHandler(
   {
+    contract: "patch",
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
@@ -436,6 +452,7 @@ const listSitemapShardDecisions = createSafeBoundedPublicHandler(
 
 const listSitemapShards = createSafeBoundedPublicHandler(
   {
+    contract: "patch",
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },

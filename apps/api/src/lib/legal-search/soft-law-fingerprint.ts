@@ -1,14 +1,22 @@
 import { Result } from "better-result";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+import { normalizeUnicode } from "@stll/text-normalize";
 import { parsePlainDate } from "@stll/time";
 
 import { SoftLawItemError } from "./soft-law-types";
 import type { SoftLawDocumentInput, SoftLawMetadata } from "./soft-law-types";
 
 const normalizeTitle = (value: string) =>
-  value.normalize("NFC").trim().replace(/\s+/gu, " ").toLocaleLowerCase("und");
+  normalizeUnicode(value, "NFC")
+    .trim()
+    .replace(/\s+/gu, " ")
+    .toLocaleLowerCase("und");
 const normalizeReference = (value: string) =>
-  value.normalize("NFKC").trim().replace(/\s+/gu, " ").toLocaleLowerCase("und");
+  normalizeUnicode(value, "NFKC")
+    .trim()
+    .replace(/\s+/gu, " ")
+    .toLocaleLowerCase("und");
 const compareCanonicalKeys = (left: string, right: string) => {
   if (left === right) {
     return 0;
@@ -85,19 +93,17 @@ export const softLawContentHash = (input: SoftLawDocumentInput) => {
   const raw = input.raw
     .map((part) => ({
       role: part.role,
-      digest: new Bun.CryptoHasher("sha256").update(part.bytes).digest("hex"),
+      digest: hashSha256Hex(part.bytes),
     }))
     .toSorted((a, b) => compareCanonicalKeys(a.role, b.role));
   const sourceDates = Object.entries(input.sourceDates).toSorted(
     ([left], [right]) => compareCanonicalKeys(left, right),
   );
-  return new Bun.CryptoHasher("sha256")
-    .update(
-      JSON.stringify({
-        metadata: canonical,
-        raw,
-        sourceDates,
-      }),
-    )
-    .digest("hex");
+  return hashSha256Hex(
+    JSON.stringify({
+      metadata: canonical,
+      raw,
+      sourceDates,
+    }),
+  );
 };

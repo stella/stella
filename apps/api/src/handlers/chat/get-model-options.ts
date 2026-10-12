@@ -19,6 +19,7 @@ import {
 import { readManagedModelTier } from "@/api/lib/usage/organization-access-state";
 
 const config = {
+  contract: "patch",
   // Any org member picking a chat model needs to see the catalog; the
   // response carries only model identifiers, never key material, so this
   // does not require admin scope (mirrors read-ai-availability.ts).

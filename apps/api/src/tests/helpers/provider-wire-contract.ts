@@ -12,10 +12,10 @@ import * as v from "valibot";
 import { BYOK_DEFAULT_MODELS, BYOK_MODEL_OPTIONS } from "@stll/ai-catalog";
 import { sleep } from "@stll/concurrency/sleep";
 
-import { chatAttemptRequestOptions } from "@/api/handlers/chat/chat-request";
 import { classifyRunErrorChunk } from "@/api/handlers/chat/stream-chat";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { chatAttemptRequestOptions } from "@/api/lib/chat/chat-request";
 import { chatToolMapToArray } from "@/api/lib/chat/chat-tool-types";
 import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
 import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
@@ -115,7 +115,7 @@ export const UNKNOWN_MODEL_ID = "stella-cassette-no-such-model";
 
 /** The chat model a provider's corpus is recorded with by default. */
 export const wireChatModel = (provider: ProviderWireProvider): string =>
-  BYOK_DEFAULT_MODELS[provider].chat;
+  BYOK_DEFAULT_MODELS[provider].chat.modelId;
 
 /** A model of the provider's other than `chat`, for side calls such as
  *  thread titles. */

@@ -24,6 +24,7 @@ import type {
 } from "@/api/lib/projection-totality";
 
 const config = {
+  contract: "patch",
   featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "Read the latest list verification of each named document file (entity " +
@@ -68,12 +69,12 @@ const readLatestVerifications = createSafeHandler(
 type MissingProjectedRunColumn = UnprojectedColumns<
   RunRow,
   RunSummaryColumnProjection,
-  (typeof UNPROJECTED_RUN_SUMMARY_COLUMNS)[number]
+  (typeof UNPROJECTED_RUN_SUMMARY_COLUMNS)[number] | "entityFeatureGate"
 >;
 type UnexpectedProjectedRunColumn = UnbackedProjectionKeys<
   RunRow,
   RunSummaryColumnProjection,
-  (typeof UNPROJECTED_RUN_SUMMARY_COLUMNS)[number]
+  (typeof UNPROJECTED_RUN_SUMMARY_COLUMNS)[number] | "entityFeatureGate"
 >;
 
 true satisfies MissingProjectedRunColumn extends never ? true : never;

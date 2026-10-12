@@ -129,9 +129,6 @@ export const isCapturedFixture = (relativePath: string): boolean => {
 export const provenancePathOf = (fixturePath: string): string =>
   `${fixturePath}${PROVENANCE_SUFFIX}`;
 
-export const sha256Of = (bytes: Uint8Array): string =>
-  new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
-
 /**
  * Serialize a sidecar.
  *

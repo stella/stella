@@ -99,6 +99,8 @@ const axes = [
   ["steps.check.outputs.trusted", ["", "false", "true"]],
   ["steps.completed-depth.outputs.run_required", ["", "false", "true"]],
   ["github.event.pull_request.draft", [false, true]],
+  ["github.event.pull_request.head.repo.fork", [false, true]],
+  ["github.token", ["", "fixture-token"]],
   ["steps.pilot.outputs.coverage_profile", ["normal-v1", "pilot-fast-v1"]],
   ["steps.changed-files.outputs.package_checks_required", ["false", "true"]],
   ["steps.changed-files.outputs.api_scope_unknown", ["false", "true"]],
@@ -135,6 +137,13 @@ const contexts = combinations
       return false;
     }
     if (
+      values["github.event.pull_request.head.repo.fork"] &&
+      (event !== "pull_request" ||
+        values["steps.check.outputs.trusted"] === "true")
+    ) {
+      return false;
+    }
+    if (
       values["steps.pilot.outputs.coverage_profile"] === "pilot-fast-v1" &&
       (event !== "pull_request" ||
         values["steps.check.outputs.trusted"] !== "true")
@@ -147,7 +156,12 @@ const contexts = combinations
     (values) =>
       ({
         values,
-        status: { success: true, failure: false, cancelled: false },
+        status: {
+          always: true,
+          success: true,
+          failure: false,
+          cancelled: false,
+        },
       }) satisfies Context,
   );
 
@@ -169,12 +183,10 @@ test("ci-plan sets up Bun exactly once before every Bun consumer across event, d
 test("Bun setup contract rejects duplicate setup and missing setup fixtures", () => {
   const setup = (step: (typeof plan.steps)[number]) =>
     step.uses?.startsWith("stella/.github/actions/setup-bun-cached@");
-  expect(plan.steps.filter(setup)).toHaveLength(2);
+  expect(plan.steps.filter(setup)).toHaveLength(1);
   const duplicate = {
     ...plan,
-    steps: plan.steps.map((step) =>
-      setup(step) ? { ...step, if: "true" } : step,
-    ),
+    steps: plan.steps.flatMap((step) => (setup(step) ? [step, step] : [step])),
   };
   const missing = { ...plan, steps: plan.steps.filter((step) => !setup(step)) };
   const context =

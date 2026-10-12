@@ -18,6 +18,8 @@ import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { initialBatchState, type BatchState } from "@stll/db-load-gate/health";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { createSha256 } from "@stll/sha256/bun";
 import { DAY_IN_MS } from "@stll/time";
 
 import { decodeCheckpoint } from "@/api/db/backfill-runtime";
@@ -1302,8 +1304,7 @@ const createPayloadOperations = ({ transaction, now }: StoreContext) => {
       );
     }
     if (
-      new Bun.CryptoHasher("sha256").update(payload).digest("hex") !==
-        payloadHash ||
+      createSha256().update(payload).digest("hex") !== payloadHash ||
       !payloadHash ||
       !claimedFingerprint ||
       provenance.requestHashes.length > 100 ||

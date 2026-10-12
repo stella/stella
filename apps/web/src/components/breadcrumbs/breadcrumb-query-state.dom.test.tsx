@@ -81,6 +81,7 @@ const persistedThread = {
   contextMatterIds: [],
   lastActivityAt: null,
   threadRevision: null,
+  activeSkill: null,
   threadExists: true,
   usedAnonymization: false,
   webSearchAvailable: false,

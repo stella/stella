@@ -4,9 +4,9 @@ export const MCP_CAPABILITY_EXECUTORS = {
   read: "read_capability",
   write: "write_capability",
 } as const;
-export const MCP_HTTP_PATH = "/mcp" as const;
+export const MCP_HTTP_PATH = "/mcp/advanced" as const;
 export const MCP_DISCOVERY_PATH =
-  "/.well-known/oauth-protected-resource/mcp" as const;
+  "/.well-known/oauth-protected-resource/mcp/advanced" as const;
 export const MCP_TOOL_NAME_MAX_LENGTH = 71;
 export const MCP_TOOL_NAME_PATTERN_SOURCE = "^[a-z][a-z0-9_-]{0,70}$" as const;
 export const MCP_TOOL_NAME_PATTERN_FLAGS = "u" as const;
@@ -17,6 +17,7 @@ export const CLI_KNOWN_SCOPES = [
   "offline_access",
   "stella:search",
   "stella:read",
+  "stella:law_read",
   "stella:templates",
   "stella:documents_write",
   "stella:matters_write",
@@ -28,12 +29,13 @@ export const CLI_KNOWN_SCOPES = [
   "stella:admin_write",
   "stella:onboarding",
   "stella:skills",
-  "stella:external_mcps",
   "stella:feedback",
+  "stella:external_mcps",
 ] as const;
 export const CLI_REQUIRED_RESOURCE_SCOPES = [
   "stella:search",
   "stella:read",
+  "stella:law_read",
   "stella:templates",
   "stella:documents_write",
   "stella:matters_write",
@@ -45,8 +47,8 @@ export const CLI_REQUIRED_RESOURCE_SCOPES = [
   "stella:admin_write",
   "stella:onboarding",
   "stella:skills",
-  "stella:external_mcps",
   "stella:feedback",
+  "stella:external_mcps",
 ] as const;
 export const MCP_ERROR_CODES = [
   "action_period_exhausted",
@@ -106,6 +108,7 @@ export const ACTION_ADMISSION_REFUSALS = {
 export type ActionAdmissionCode = keyof typeof ACTION_ADMISSION_REFUSALS;
 export const MCP_CLI_TOOL_SCOPES = [
   "read",
+  "law_read",
   "contacts_write",
   "matters_write",
   "chat",
@@ -118,5 +121,11 @@ export const MCP_CLI_TOOL_SCOPES = [
   "admin_read",
   "admin_write",
   "feedback",
+] as const;
+export const MCP_SCOPE_IMPLICATIONS = [
+  {
+    grant: "stella:read",
+    scope: "stella:law_read",
+  },
 ] as const;
 export type McpCliToolScope = (typeof MCP_CLI_TOOL_SCOPES)[number];

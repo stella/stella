@@ -26,6 +26,7 @@ type DesktopRenewalResponse = {
 
 const renewDesktopAccount = createSafeBoundedPublicHandler(
   {
+    contract: "patch",
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "auth_plumbing" },
     cache: { kind: "none" },
@@ -100,6 +101,7 @@ const renewDesktopAccount = createSafeBoundedPublicHandler(
         organizationId: context.organizationId,
         currentKey: authorization.slice(7),
         successorKey: body.successorKey,
+        consumedProof: context.consumedProof,
         recordAuditEvent,
       }),
     );

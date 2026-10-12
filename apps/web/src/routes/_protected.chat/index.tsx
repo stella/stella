@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import type { MouseEvent } from "react";
 
 import {
   useInfiniteQuery,
@@ -50,6 +51,11 @@ import {
 import { ChatInputSurface } from "@/components/chat-input-surface";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
+import {
+  ChatThreadDecisionLabel,
+  drawableChatThreadDecision,
+  useOpenChatThreadDecision,
+} from "@/components/chat/chat-thread-decision";
 import { ChatThreadOriginPrefix } from "@/components/chat/chat-thread-origin-prefix";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -61,12 +67,12 @@ import Tooltip from "@/components/tooltip";
 import { UserIdentityAvatar } from "@/components/user-avatar";
 import { MatterContextMenu } from "@/components/workspaces/matter-context-menu";
 import { chatKeys } from "@/features/chat/chat-query-contract";
+import { acquireChatRuntime } from "@/features/chat/chat-runtime-registry";
 import { useChatDraftMeta } from "@/features/chat/hooks/use-chat-draft-meta";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import {
-  acquireChatRuntime,
   applyChatModelChange,
   chatThreadOptions,
   groupedChatThreadsOptions,
@@ -74,6 +80,7 @@ import {
   listChatHistoryItems,
   mergeGroupedChatThreadPages,
 } from "@/features/chat/queries";
+import type { ChatHistoryItem } from "@/features/chat/queries";
 import { TeamAvatars } from "@/features/workspaces/team-avatars";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -413,6 +420,11 @@ function ChatIndex() {
     () => listChatHistoryItems(groupedThreads).slice(0, 5),
     [groupedThreads],
   );
+  const openChatThreadDecision = useOpenChatThreadDecision();
+  const openDecisionChatOnClick =
+    (chat: ChatHistoryItem) => (event: MouseEvent<HTMLAnchorElement>) => {
+      openChatThreadDecision(event, chat);
+    };
   const storedMatterColor = (workspaceId: string) =>
     workspaces?.find(({ id }) => id === workspaceId)?.color ?? null;
 
@@ -668,14 +680,22 @@ function ChatIndex() {
     >
       <LandingSection
         heading={
-          <Link className={LANDING_SECTION_HEADING_CLASS} to="/workspaces">
+          <Tooltip
+            content={t("chat.landing.openAllMatters")}
+            render={
+              <Link
+                className={LANDING_SECTION_HEADING_CLASS}
+                to="/workspaces"
+              />
+            }
+          >
             {pinnedMatters.length > 0 ? (
               <PinIcon className="size-4" />
             ) : (
               <MatterIcon className="size-4" variant="all" />
             )}
             {mattersHeading}
-          </Link>
+          </Tooltip>
         }
       >
         <QueryViewFeedback view={workspacesDataView} />
@@ -740,14 +760,19 @@ function ChatIndex() {
       </LandingSection>
       <LandingSection
         heading={
-          <Link
-            className={LANDING_SECTION_HEADING_CLASS}
-            search={{ kind: "skill" }}
-            to="/knowledge/tools"
+          <Tooltip
+            content={t("chat.landing.openSkillsLibrary")}
+            render={
+              <Link
+                className={LANDING_SECTION_HEADING_CLASS}
+                search={{ kind: "skill" }}
+                to="/knowledge/tools"
+              />
+            }
           >
             <SkillIcon className="size-4" />
             {t("chat.landing.skills")}
-          </Link>
+          </Tooltip>
         }
       >
         {suggestedSkills.length > 0 ? (
@@ -780,6 +805,7 @@ function ChatIndex() {
                 <Link
                   className={cn(LANDING_ROW_CLASS, "flex items-center gap-3")}
                   key={chat.id}
+                  onClick={openDecisionChatOnClick(chat)}
                   params={{
                     workspaceId: chat.workspaceId,
                     threadId: chat.id,
@@ -805,6 +831,7 @@ function ChatIndex() {
                           />
                           <BidiText>{chat.workspaceName}</BidiText>
                           {" · "}
+                          <ChatDecisionMetaPrefix chat={chat} />
                           {formatRelativeTime(chat.updatedAt)}
                         </>
                       }
@@ -821,6 +848,7 @@ function ChatIndex() {
                 <Link
                   className={cn(LANDING_ROW_CLASS, "flex items-center gap-3")}
                   key={chat.id}
+                  onClick={openDecisionChatOnClick(chat)}
                   params={{ threadId: chat.id }}
                   to="/chat/$threadId"
                 >
@@ -829,6 +857,7 @@ function ChatIndex() {
                       meta={
                         <>
                           <ChatThreadOriginPrefix origin={chat.origin} />
+                          <ChatDecisionMetaPrefix chat={chat} />
                           {formatRelativeTime(chat.updatedAt)}
                         </>
                       }
@@ -862,6 +891,17 @@ function ChatIndex() {
     </LandingLayout>
   );
 }
+
+/** A decision chat's decision, leading its row's time; nothing for others. */
+const ChatDecisionMetaPrefix = ({ chat }: { chat: ChatHistoryItem }) => {
+  const decision = drawableChatThreadDecision(chat);
+  return decision === null ? null : (
+    <>
+      <ChatThreadDecisionLabel decision={decision} />
+      {" · "}
+    </>
+  );
+};
 
 type SuggestedSkillRowProps = {
   onSelect: () => void;

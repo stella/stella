@@ -4,6 +4,7 @@ import { BYOK_MODEL_OPTIONS, TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import type { BYOKProvider } from "@stll/ai-catalog";
 
 import { env } from "@/api/env";
+import { resolveOrgAIModelForRole } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 
@@ -323,7 +324,9 @@ describe("getDefaultChatModelValue", () => {
     ).toBe(
       encodeChatModelSelection({
         provider: "anthropic",
-        modelId: orgAIConfig.overrideModels.chat.modelId,
+        modelId:
+          resolveOrgAIModelForRole(orgAIConfig, "chat")?.modelId ??
+          "unexpected-missing-chat-default",
       }),
     );
   });

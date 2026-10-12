@@ -2,9 +2,16 @@ import { panic } from "better-result";
 
 import {
   BYOK_MODEL_OPTIONS,
+  DEFAULT_MODELS,
+  BYOK_DEFAULT_MODELS,
   resolveWorkingBYOKModelForRole,
 } from "@stll/ai-catalog";
-import type { AIProvider, BYOKProvider, ModelRole } from "@stll/ai-catalog";
+import type {
+  AIProvider,
+  BYOKProvider,
+  ModelRole,
+  DecisionModelProvider,
+} from "@stll/ai-catalog";
 
 import type { UsageServiceTier } from "@/api/db/schema";
 
@@ -82,33 +89,45 @@ export type OrgAIConfig = {
    * configured provider. Additional configured providers may
    * be stored for later assignment.
    */
-  overrideModels: Record<ModelRole, OrgAIModelSelection>;
+  overrideModels: Partial<
+    Record<ModelRole, OrgAIModelSelection | undefined>
+  > | null;
   /**
    * The model typed decisions go to (see `lib/decisions/decide.ts`). It is
    * not one of the generative roles: a decision model answers choice and
    * yes/no questions with probabilities and writes no text, so it has its
-   * own provider space and its own key. Null means the org has none; the
-   * instance's, if any, answers then.
+   * own provider space. OpenAI may reuse the org's generative key. Null means
+   * the org has none; the instance's, if any, answers then.
    */
   decision: OrgDecisionModelConfig | null;
 };
 
-export const DECISION_MODEL_PROVIDERS = ["typesafe"] as const;
-export type DecisionModelProvider = (typeof DECISION_MODEL_PROVIDERS)[number];
+export { DECISION_MODEL_PROVIDERS } from "@stll/ai-catalog";
+export type { DecisionModelProvider };
 
-export type OrgDecisionModelConfig = {
-  provider: DecisionModelProvider;
-  /** Decrypted API key. */
-  apiKey: string;
-  /** The provider's model id; a versioned id holds calibrated confidence floors. */
-  modelId: string;
-};
+export type OrgDecisionModelConfig =
+  | { provider: "typesafe"; apiKey: string; modelId: string }
+  | {
+      provider: "openai";
+      /** Absent reuses the organization's generative OpenAI key. */
+      apiKey?: string | undefined;
+      region: "eu" | "global";
+      modelId: string;
+    };
 
 export type StandardOrgAIProviderConfig = {
-  provider: Exclude<AIProvider, "azure_foundry" | "huggingface">;
+  provider: Exclude<AIProvider, "azure_foundry" | "huggingface" | "anthropic">;
   /** Decrypted API key. */
   apiKey: string;
   /** Stored endpoint selection; validated against the provider on save. */
+  region?: DataRegion | undefined;
+};
+
+type AnthropicOrgAIProviderConfig = {
+  provider: "anthropic";
+  apiKey: string;
+  /** Stored in the encrypted configuration alongside the key. */
+  anthropicWorkspaceId?: string | undefined;
   region?: DataRegion | undefined;
 };
 
@@ -134,6 +153,7 @@ export type HuggingFaceOrgAIProviderConfig = {
 
 export type OrgAIProviderConfig =
   | StandardOrgAIProviderConfig
+  | AnthropicOrgAIProviderConfig
   | AzureFoundryOrgAIProviderConfig
   | HuggingFaceOrgAIProviderConfig;
 
@@ -153,7 +173,7 @@ export const normalizeProviderRegion = (
   return "global";
 };
 
-export const normalizeOrgAIProviderConfig = (
+const normalizeOrgAIProviderConfig = (
   config: OrgAIProviderConfig,
 ): OrgAIProviderConfig => {
   switch (config.provider) {
@@ -214,13 +234,50 @@ const healOverrideModel = (
 };
 
 const healOverrideModels = (
-  overrideModels: Record<ModelRole, OrgAIModelSelection>,
-): Record<ModelRole, OrgAIModelSelection> => ({
-  fast: healOverrideModel("fast", overrideModels.fast),
-  chat: healOverrideModel("chat", overrideModels.chat),
-  reasoning: healOverrideModel("reasoning", overrideModels.reasoning),
-  pdf: healOverrideModel("pdf", overrideModels.pdf),
-});
+  overrideModels: OrgAIConfig["overrideModels"],
+): OrgAIConfig["overrideModels"] => {
+  if (overrideModels === null) {
+    return null;
+  }
+  return {
+    ...(overrideModels.fast === undefined
+      ? {}
+      : { fast: healOverrideModel("fast", overrideModels.fast) }),
+    ...(overrideModels.chat === undefined
+      ? {}
+      : { chat: healOverrideModel("chat", overrideModels.chat) }),
+    ...(overrideModels.reasoning === undefined
+      ? {}
+      : {
+          reasoning: healOverrideModel("reasoning", overrideModels.reasoning),
+        }),
+    ...(overrideModels.pdf === undefined
+      ? {}
+      : { pdf: healOverrideModel("pdf", overrideModels.pdf) }),
+  };
+};
+
+/** Resolve defaults without turning them into persisted custom selections. */
+export const resolveOrgAIModelForRole = (
+  config: OrgAIConfig,
+  role: ModelRole,
+): OrgAIModelSelection | null => {
+  const override = config.overrideModels?.[role];
+  if (override !== undefined) {
+    return override;
+  }
+  for (const { provider } of config.providers) {
+    if (isBYOKProviderId(provider)) {
+      const entry = BYOK_DEFAULT_MODELS[provider][role];
+      if (entry.kind === "unsupported") {
+        continue;
+      }
+      return { provider, modelId: entry.modelId };
+    }
+    return { provider, modelId: DEFAULT_MODELS[provider][role] };
+  }
+  return null;
+};
 
 export const normalizeOrgAIConfig = (config: OrgAIConfig): OrgAIConfig => ({
   providers: config.providers.map(normalizeOrgAIProviderConfig),

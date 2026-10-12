@@ -1,8 +1,14 @@
 import { sql } from "drizzle-orm";
 
+import { timestamptz } from "@/api/db/columns";
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
 import { DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 
+import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+  entityFeatureWorkspaceGateColumns,
+} from "../entity-feature-gate-columns";
 import {
   organization,
   p,
@@ -104,9 +110,11 @@ export const SCOPED_NATIVE_EXTRACTION_ENQUEUE = {
   deadlineScoutStatus: "not_requested",
   errorAt: null,
   errorCode: null,
+  errorMessage: null,
   finishedAt: null,
   kind: "native-extraction",
   nextAttemptAt: null,
+  nextDeliveryAt: null,
   processorVersion: DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION,
   progressCompleted: 0,
   progressTotal: null,
@@ -124,9 +132,11 @@ export const SCOPED_NATIVE_EXTRACTION_ENQUEUE = {
   deadlineScoutStatus: DocumentDeadlineScoutStatus;
   errorAt: null;
   errorCode: null;
+  errorMessage: null;
   finishedAt: null;
   kind: DocumentProcessingKind;
   nextAttemptAt: null;
+  nextDeliveryAt: null;
   processorVersion: number;
   progressCompleted: number;
   progressTotal: null;
@@ -154,6 +164,7 @@ const scopedEnqueueShapeCheck = sql`(
   AND progress_completed = ${sql.raw(String(SCOPED_NATIVE_EXTRACTION_ENQUEUE.progressCompleted))}
   AND progress_total IS NULL
   AND error_code IS NULL
+  AND error_message IS NULL
   AND error_at IS NULL
   AND claimed_at IS NULL
   AND claimed_by IS NULL
@@ -162,6 +173,7 @@ const scopedEnqueueShapeCheck = sql`(
   AND deadline_scout_error_code IS NULL
   AND deadline_scout_status = ${sql.raw(`'${SCOPED_NATIVE_EXTRACTION_ENQUEUE.deadlineScoutStatus}'`)}
   AND next_attempt_at IS NULL
+  AND next_delivery_at IS NULL
   AND started_at IS NULL
   AND finished_at IS NULL
   AND created_at = CURRENT_TIMESTAMP
@@ -193,6 +205,8 @@ const scopedEnqueueShapeCheck = sql`(
 export const documentProcessingRuns = p.pgTable(
   "document_processing_runs",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"documentProcessingRun">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
@@ -248,10 +262,14 @@ export const documentProcessingRuns = p.pgTable(
     progressCompleted: p.integer("progress_completed").notNull().default(0),
     progressTotal: p.integer("progress_total"),
     errorCode: p.varchar("error_code", { length: 128 }),
+    /** Sanitized last failure retained on a terminal run. */
+    errorMessage: p.text("error_message"),
     errorAt: p.timestamp("error_at", { withTimezone: true }),
     claimedAt: p.timestamp("claimed_at", { withTimezone: true }),
     claimedBy: p.varchar("claimed_by", { length: 128 }),
     nextAttemptAt: p.timestamp("next_attempt_at", { withTimezone: true }),
+    /** Queue visibility deadline, independent of the processing retry fence. */
+    nextDeliveryAt: timestamptz("next_delivery_at"),
     startedAt: p.timestamp("started_at", { withTimezone: true }),
     finishedAt: p.timestamp("finished_at", { withTimezone: true }),
     createdAt: p
@@ -265,6 +283,7 @@ export const documentProcessingRuns = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     ...entityFeaturePolicies(
       table,
       new Map([
@@ -326,6 +345,14 @@ export const documentProcessingRuns = p.pgTable(
       .index("document_processing_runs_queued_schedule_idx")
       .on(table.nextAttemptAt.asc().nullsFirst(), table.createdAt, table.id)
       .where(sql`${table.status} = 'queued'`),
+    /** Scheduled system retries omit terminal failures without a deadline. */
+    p
+      .index("document_processing_runs_scheduled_retry_idx")
+      .on(table.nextAttemptAt, table.createdAt, table.id)
+      .where(
+        sql`${table.status} IN ('queued', 'failed')
+          AND ${table.nextAttemptAt} IS NOT NULL`,
+      ),
     p
       .index("document_processing_runs_running_lease_idx")
       .on(table.claimedAt, table.id)

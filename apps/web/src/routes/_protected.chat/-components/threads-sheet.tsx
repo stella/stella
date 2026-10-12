@@ -30,6 +30,11 @@ import {
 } from "@stll/ui/sheet";
 import { cn } from "@stll/ui/utils";
 
+import {
+  ChatThreadDecisionLabel,
+  drawableChatThreadDecision,
+  useOpenChatThreadDecision,
+} from "@/components/chat/chat-thread-decision";
 import { ChatThreadOriginPrefix } from "@/components/chat/chat-thread-origin-prefix";
 import Tooltip from "@/components/tooltip";
 import {
@@ -152,14 +157,22 @@ export const ThreadsSheet = ({
   return (
     <Sheet onOpenChange={setIsOpen} open={isOpen}>
       {triggerVariant === "section" ? (
-        <SheetTrigger
+        <Tooltip
+          content={t("chat.landing.openChatHistory")}
           render={
-            <button className={LANDING_SECTION_HEADING_CLASS} type="button" />
+            <SheetTrigger
+              render={
+                <button
+                  className={LANDING_SECTION_HEADING_CLASS}
+                  type="button"
+                />
+              }
+            />
           }
         >
           {icon ?? <HistoryIcon className="size-4" />}
           {triggerLabel}
-        </SheetTrigger>
+        </Tooltip>
       ) : (
         <SheetTrigger
           render={
@@ -373,6 +386,8 @@ const ThreadRow = ({
   thread,
 }: ThreadRowProps) => {
   const format = useFormatter();
+  const openChatThreadDecision = useOpenChatThreadDecision();
+  const decision = drawableChatThreadDecision(thread);
   const threadRef: ChatThreadRef =
     thread.scope === "workspace"
       ? {
@@ -391,6 +406,9 @@ const ThreadRow = ({
   const contextLine = (
     <span className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs font-normal whitespace-nowrap">
       <ChatThreadOriginPrefix origin={thread.origin} />
+      {decision === null ? null : (
+        <ChatThreadDecisionLabel decision={decision} />
+      )}
       <ThreadContextLine context={thread.context} />
       <span className="shrink-0 tabular-nums">
         {format.dateTime(new Date(thread.updatedAt).getTime())}
@@ -431,7 +449,10 @@ const ThreadRow = ({
               render={
                 <Link
                   className="flex flex-1 flex-col gap-0.5 overflow-hidden px-3 py-2 text-start"
-                  onClick={() => onOpenChange(false)}
+                  onClick={(event) => {
+                    openChatThreadDecision(event, thread);
+                    onOpenChange(false);
+                  }}
                   {...(threadRef.scope === "global"
                     ? {
                         to: "/chat/$threadId",

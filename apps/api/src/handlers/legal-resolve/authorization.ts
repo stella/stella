@@ -1,0 +1,180 @@
+import { Result } from "better-result";
+import { decodeJwt } from "jose";
+
+import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
+import { hasLawReadScope } from "@/api/handlers/legal-resolve/scope";
+import { captureRequestError } from "@/api/lib/analytics/capture";
+import { isServiceResolveSession } from "@/api/lib/db/service-client-contract";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
+import { getMcpResourceUrl } from "@/api/mcp/constants";
+import { resolveMcpSessionContext } from "@/api/mcp/context";
+import {
+  McpOrganizationAccessError,
+  McpTokenVerificationError,
+} from "@/api/mcp/errors";
+
+import { authenticateLegalResolveToken } from "./authentication";
+
+export type LegalResolveAuthorizationDependencies = {
+  authenticate?: typeof authenticateLegalResolveToken;
+  captureError?: typeof captureRequestError;
+  publicLawEnabled?: () => boolean;
+  resolveSessionContext?: (
+    ...args: Parameters<typeof resolveMcpSessionContext>
+  ) => Promise<unknown>;
+};
+
+const legalResolveAuthenticationMode = (token: string) => {
+  const decoded = Result.try(() => decodeJwt(token));
+  if (Result.isError(decoded)) {
+    return "law" as const;
+  }
+  const audiences = Array.isArray(decoded.value.aud)
+    ? decoded.value.aud
+    : [decoded.value.aud];
+  return audiences.includes(getMcpResourceUrl("default"))
+    ? ("default" as const)
+    : ("law" as const);
+};
+
+export const authorizeLegalResolveRequest = async (
+  request: Request,
+  {
+    authenticate = authenticateLegalResolveToken,
+    captureError = captureRequestError,
+    publicLawEnabled = () => isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW"),
+    resolveSessionContext = resolveMcpSessionContext,
+  }: LegalResolveAuthorizationDependencies = {},
+) => {
+  const authorization = request.headers.get("authorization");
+  if (authorization === null || !authorization.startsWith("Bearer ")) {
+    return { status: 401 as const, body: { error: "unauthorized" as const } };
+  }
+  const token = authorization.slice(7);
+  const session = await authenticate(token, {
+    mode: legalResolveAuthenticationMode(token),
+  });
+  if (Result.isError(session)) {
+    if (session.error instanceof McpTokenVerificationError) {
+      captureError(session.error, {
+        request,
+        context: { source: "legal-resolve", phase: "authentication" },
+      });
+      return {
+        status: 503 as const,
+        body: { error: "access_unavailable" as const },
+      };
+    }
+    return { status: 401 as const, body: { error: "unauthorized" as const } };
+  }
+  if (!hasLawReadScope(session.value.scopes)) {
+    return {
+      session: session.value,
+      status: 403 as const,
+      body: { error: "missing_scope" as const },
+    };
+  }
+  if (!isServiceResolveSession(session.value)) {
+    const userSession = session.value;
+    const liveSession = await Result.tryPromise({
+      try: async () => await resolveSessionContext(userSession, { request }),
+      catch: (error) => error,
+    });
+    if (Result.isError(liveSession)) {
+      if (!(liveSession.error instanceof McpOrganizationAccessError)) {
+        captureError(liveSession.error, {
+          request,
+          context: { source: "legal-resolve", phase: "session-resolution" },
+        });
+        return {
+          session: session.value,
+          status: 503 as const,
+          body: { error: "access_unavailable" as const },
+        };
+      }
+      return {
+        session: session.value,
+        status: 403 as const,
+        body: { error: "missing_scope" as const },
+      };
+    }
+  }
+  const organizationId = parseAuthProviderId<"organization">(
+    session.value.organizationId,
+  );
+  if (organizationId === null) {
+    return {
+      status: 503 as const,
+      body: { error: "access_unavailable" as const },
+    };
+  }
+  const admission = admitLawRead({
+    organizationId,
+    publicLawEnabled,
+  });
+  if (Result.isError(admission)) {
+    return {
+      session: session.value,
+      status: 403 as const,
+      body: { error: admission.error.type },
+    };
+  }
+  return {
+    status: 200 as const,
+    session: session.value,
+    admission: admission.value,
+  };
+};
+
+type LegalResolveAuthorization = ReturnType<
+  typeof authorizeLegalResolveRequest
+>;
+
+/**
+ * Runs `authorize` once per request. The rate limiter keys its counter on the
+ * caller and the handler admits the read; both read the same verification.
+ * An unexpected throw is captured and answered as the retryable 503, never
+ * cached as a rejection that would surface as a 500.
+ */
+export const authorizeOncePerRequest = (
+  authorize: (request: Request) => LegalResolveAuthorization,
+  captureError: typeof captureRequestError = captureRequestError,
+) => {
+  const byRequest = new WeakMap<Request, LegalResolveAuthorization>();
+  const settle = async (request: Request) => {
+    const authorization = await Result.tryPromise({
+      try: async () => await authorize(request),
+      catch: (error) => error,
+    });
+    if (Result.isOk(authorization)) {
+      return authorization.value;
+    }
+    captureError(authorization.error, {
+      request,
+      context: { source: "legal-resolve", phase: "authorization" },
+    });
+    return {
+      status: 503 as const,
+      body: { error: "access_unavailable" as const },
+    };
+  };
+  const authorizeRequest = async (request: Request) => {
+    const existing = byRequest.get(request);
+    if (existing !== undefined) {
+      return await existing;
+    }
+    const authorization = settle(request);
+    byRequest.set(request, authorization);
+    return await authorization;
+  };
+  return Object.assign(authorizeRequest, {
+    getExistingAuthorization: async (request: Request) =>
+      await byRequest.get(request),
+  });
+};
+
+/** The production authorization, shared by the endpoints and the limiter. */
+export const authorizeLegalResolveRequestOnce = authorizeOncePerRequest(
+  async (request) => await authorizeLegalResolveRequest(request),
+);

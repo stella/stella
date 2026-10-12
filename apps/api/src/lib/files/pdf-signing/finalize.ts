@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * Phase 2 end to end: embed the stored signature and write the signed
  * version, classifying every failure as one a retry can fix or one it
@@ -5,11 +6,10 @@
  * exchange open and the second into a closed exchange, so no failure leaves
  * an exchange open that nothing can finish.
  */
-
-import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { pdfSigningSessions } from "@/api/db/schema";
 import type {
@@ -138,9 +138,7 @@ const signatureSource = ({
 }): DocumentSource => ({
   kind: "signature",
   baseVersionId,
-  certificateSha256Hex: new Bun.CryptoHasher("sha256")
-    .update(prepared.signerCertificateDer)
-    .digest("hex"),
+  certificateSha256Hex: hashSha256Hex(prepared.signerCertificateDer),
   level: applied.level,
   signingTime: prepared.signingTime.toISOString(),
   timestampAuthorityUrl: applied.timestampAuthorityUrl,

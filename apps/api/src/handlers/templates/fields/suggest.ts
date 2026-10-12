@@ -21,6 +21,7 @@ const suggestFieldsBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   actionAdmission: { type: "handler", actionKind: "templates.suggest-fields" },
   description:
     "Ask the model which literal values in a slice of template text (a whole " +

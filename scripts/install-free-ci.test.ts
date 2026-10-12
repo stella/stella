@@ -10,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { installTimeoutMs } from "./ci-install";
 import {
   boundedInstallProblems,
   installWorkflowPolicy,
@@ -23,6 +24,7 @@ import {
   type Classification,
   type InstallFreeInvocation,
 } from "./install-free-ci";
+import { workflowJobSteps } from "./workflow-steps";
 
 // CI runs this file in "Test install-free CI commands" without the dependency
 // install, which the check below enforces for this file too.
@@ -57,6 +59,55 @@ test("Windows installs and every explicit CI cold install retain bounded logs", 
   }
 });
 
+test("the real Windows dry-run deadline retains platform headroom regardless of cache restoration", () => {
+  const workflow: unknown = Bun.YAML.parse(
+    readFileSync(path.join(REPO_ROOT, CI_WORKFLOW), "utf-8"),
+  );
+  const steps = workflowJobSteps(workflow, "desktop-windows-dry-run");
+  const install = steps.find(
+    (step) =>
+      typeof step["run"] === "string" &&
+      step["run"].includes("scripts/ci-install.ts"),
+  );
+  if (install === undefined) {
+    expect.unreachable("Missing bounded Windows install");
+  }
+  const minimum = Math.ceil(installTimeoutMs("win32") / 60_000) + 1;
+  expect(install["timeout-minutes"]).toBe(minimum);
+  const check = (candidateSteps: unknown[]) =>
+    boundedInstallProblems(
+      {
+        jobs: {
+          fixture: {
+            "runs-on": "windows-latest",
+            "timeout-minutes": 10,
+            steps: candidateSteps,
+          },
+        },
+      },
+      "windows",
+    );
+  expect(check(steps)).toEqual([]);
+  expect(
+    check(
+      steps.filter(
+        (step) =>
+          typeof step["uses"] !== "string" ||
+          !step["uses"].startsWith("stella/.github/actions/setup-bun-cached@"),
+      ),
+    ),
+  ).toEqual([]);
+  for (const limit of [minimum - 1, minimum + 1]) {
+    expect(
+      check(
+        steps.map((step) =>
+          step === install ? { ...step, "timeout-minutes": limit } : step,
+        ),
+      ),
+    ).toContain("fixture: install needs a bounded step timeout");
+  }
+});
+
 test("the install guard rejects bypasses, unbounded steps and lost logs", () => {
   const upload = {
     uses: "actions/upload-artifact@fixture",
@@ -65,7 +116,7 @@ test("the install guard rejects bypasses, unbounded steps and lost logs", () => 
   };
   const install = {
     run: 'bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/scripts.log" --ignore-scripts',
-    "timeout-minutes": 3,
+    "timeout-minutes": 5,
   };
   const workflow = (steps: unknown[]) => ({
     jobs: {
@@ -330,7 +381,14 @@ describe("shell lexing", () => {
       const lexed = commands(run);
       return run
         .split("\n")
-        .map((line) => line.trim().split(/\s+/u).slice(0, 2).join(" "))
+        .map((line) =>
+          line
+            .trim()
+            .split(/\s+/u)
+            .slice(0, 2)
+            .map((word) => word.replace(/^['"]|['"]$/gu, ""))
+            .join(" "),
+        )
         .filter((start) => start.startsWith("bun "))
         .filter((start) => !lexed.some((command) => command.includes(start)));
     });
@@ -403,6 +461,151 @@ describe("install-free invocation classification", () => {
       "scripts/pre.ts": "",
       ...extra,
     });
+
+  test("resolves pinned same-repository checkout paths and enforces sparse import availability", () => {
+    const source = (options: string, condition = "") => `jobs:
+  tooling:
+    steps:
+      - uses: actions/checkout@${"a".repeat(40)}
+        ${condition}
+        with:
+          path: .tooling
+          ${options}
+      - run: bun .tooling/scripts/check.ts
+`;
+    const complete = repository(source("sparse-checkout: scripts"));
+    const invocations = installFreeInvocations({
+      root: complete,
+      workflow: CI_WORKFLOW,
+    });
+    expect(invocations.at(0)?.classification).toEqual({
+      type: "files",
+      cwd: "",
+      entries: ["scripts/check.ts"],
+    });
+    expect(
+      invocations.flatMap((invocation) =>
+        invocationProblems(complete, invocation),
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("imports better-result"),
+      ]),
+    );
+    for (const options of [
+      "sparse-checkout: scripts/check.ts",
+      "sparse-checkout: scripts/helper.ts",
+    ]) {
+      const root = repository(source(options));
+      const [invocation] = installFreeInvocations({
+        root,
+        workflow: CI_WORKFLOW,
+      });
+      expect(invocation?.classification).toEqual({
+        type: "unclassified",
+        reason: expect.stringContaining("outside sparse checkout"),
+      });
+    }
+    for (const options of [
+      "repository: other/repository",
+      `repository: \${{ inputs.repository }}`,
+    ]) {
+      const root = repository(source(options));
+      expect(
+        installFreeInvocations({ root, workflow: CI_WORKFLOW }).at(0)
+          ?.classification,
+      ).toEqual({
+        type: "unclassified",
+        reason: ".tooling/scripts/check.ts does not exist",
+      });
+    }
+    const conditional = repository(
+      source("sparse-checkout: scripts", "if: inputs.tooling == true"),
+    );
+    expect(
+      installFreeInvocations({ root: conditional, workflow: CI_WORKFLOW }).at(0)
+        ?.classification,
+    ).toEqual({
+      type: "unclassified",
+      reason: ".tooling/scripts/check.ts does not exist",
+    });
+  });
+
+  test("checkout mappings cannot survive replacement or leak from parallel steps", () => {
+    const checkout = {
+      uses: `actions/checkout@${"a".repeat(40)}`,
+      with: { path: ".tooling", "sparse-checkout": "scripts" },
+    };
+    for (const steps of [
+      [
+        checkout,
+        {
+          ...checkout,
+          with: { path: ".tooling", repository: "other/repository" },
+        },
+        { run: "bun .tooling/scripts/check.ts" },
+      ],
+      [{ parallel: [checkout, { run: "bun .tooling/scripts/check.ts" }] }],
+    ]) {
+      const root = repository(JSON.stringify({ jobs: { job: { steps } } }));
+      const invocations = installFreeInvocations({
+        root,
+        workflow: CI_WORKFLOW,
+      });
+      expect(invocations).toHaveLength(1);
+      expect(invocations.at(0)?.classification).toEqual({
+        type: "unclassified",
+        reason: ".tooling/scripts/check.ts does not exist",
+      });
+    }
+  });
+
+  test("every checkout form invalidates overlapping recorded source mappings", () => {
+    const trustedCheckout = {
+      uses: `actions/checkout@${"a".repeat(40)}`,
+      with: { path: ".tooling", "sparse-checkout": "scripts" },
+    };
+    const replacementOptions = [
+      undefined,
+      {},
+      { repository: "other/repository" },
+      { path: ".", repository: "other/repository" },
+      { path: ".tooling", repository: "other/repository" },
+      { path: ".tooling/scripts", repository: "other/repository" },
+      { path: `\${{ inputs.path }}`, repository: "other/repository" },
+    ];
+    for (const ref of ["b".repeat(40), "v7"]) {
+      for (const options of replacementOptions) {
+        const replacement =
+          options === undefined
+            ? { uses: `actions/checkout@${ref}` }
+            : { uses: `actions/checkout@${ref}`, with: options };
+        const root = repository(
+          JSON.stringify({
+            jobs: {
+              tooling: {
+                steps: [
+                  trustedCheckout,
+                  { run: "bun .tooling/scripts/check.ts" },
+                  replacement,
+                  { run: "bun .tooling/scripts/check.ts" },
+                ],
+              },
+            },
+          }),
+        );
+        const invocations = installFreeInvocations({
+          root,
+          workflow: CI_WORKFLOW,
+        });
+        expect(invocations.at(0)?.classification.type).toBe("files");
+        expect(invocations.at(1)?.classification).toEqual({
+          type: "unclassified",
+          reason: ".tooling/scripts/check.ts does not exist",
+        });
+      }
+    }
+  });
 
   const classify = (run: string, extra: Record<string, string> = {}) => {
     const root = repository(
@@ -1274,6 +1477,7 @@ test("everything CI runs without the dependency install imports only built-ins",
     "scripts/check-api-deployment.test.ts",
     "scripts/check-standalone-lockfiles.ts",
     "scripts/detect-e2e-changes.test.ts",
+    "scripts/e2e-spec-shards-core.ts",
     "scripts/install-free-ci.test.ts",
   ]) {
     expect(loaded).toContain(file);

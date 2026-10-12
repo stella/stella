@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test";
 import path from "node:path";
 
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
+import { E2E_SHARD_COUNT, partitionRoundRobin } from "../execution-profile";
 import {
   createDockedChatWorld,
   deleteDockedChatWorld,
@@ -67,7 +68,7 @@ const routePath = (host: DockedChatHost, world: DockedChatWorld): string => {
     exportId: world.document.entityId,
     packId: "general-legal",
     templateId: "mutual-nda",
-    entry: "contract-review",
+    entry: "contract-review-anthropic",
   };
   return host.template.replaceAll(/\$([A-Za-z]+)/gu, (_, parameter: string) => {
     const value = values[parameter];
@@ -141,10 +142,12 @@ const expectDockGeometry = async (page: Page) => {
     });
 };
 
-for (const viewport of viewports) {
-  test.describe(`docked chat geometry ${viewport.width}x${viewport.height}`, () => {
-    test.use({ viewport });
-    for (const host of hosts) {
+// Interleave route families between shard-sized blocks; keep viewports paired
+// so neither public-law navigation nor mobile checks collect on one shard.
+for (const host of partitionRoundRobin(hosts, E2E_SHARD_COUNT).flat()) {
+  for (const viewport of viewports) {
+    test.describe(`docked chat geometry ${viewport.width}x${viewport.height}`, () => {
+      test.use({ viewport });
       test(`${host.template} keeps the thread inside its composer column`, async ({
         page,
         world,
@@ -214,6 +217,6 @@ for (const viewport of viewports) {
           description: providerSources.join(", "),
         });
       });
-    }
-  });
+    });
+  }
 }

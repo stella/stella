@@ -1,3 +1,4 @@
+// parser-output-unchanged: Adding search-history, chat revision and reader answer ID kinds does not change parser IDs or parsed records.
 import * as v from "valibot";
 
 export { isUuid } from "@stll/uuid-codec";
@@ -35,6 +36,7 @@ export type SafeIdType =
   | "caseLawSource"
   | "caseLawSourceIngestionLease"
   | "chatMessage"
+  | "chatMessageRevision"
   | "chatTurn"
   | "chatThreadCompaction"
   | "chatThread"
@@ -132,6 +134,8 @@ export type SafeIdType =
   | "legalListItemSource"
   | "legalListSection"
   | "legalReaderAnnotation"
+  | "legalReaderAnswer"
+  | "legalReaderAnswerMessage"
   | "matter"
   | "matterCounter"
   | "mcpConnector"
@@ -152,6 +156,7 @@ export type SafeIdType =
   | "sanctionsEdition"
   | "sanctionsScreeningEvent"
   | "savedSearch"
+  | "searchHistoryEntry"
   | "vatRate"
   | "sellerProfile"
   | "numberSeries"

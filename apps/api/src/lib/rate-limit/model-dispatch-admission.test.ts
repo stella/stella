@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import ts from "typescript";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -9,6 +9,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
@@ -21,6 +22,8 @@ import {
   assertModelDispatchScope,
   NO_ORGANIZATION_MODEL_DISPATCH,
 } from "./model-dispatch-admission";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const apiRoot = new URL("../../../", import.meta.url);
 
@@ -384,7 +387,7 @@ describe("model dispatch admission guard", () => {
       "lib/workflow/ai-generate-batch.ts",
       "lib/flows/flow-executor.ts",
       "lib/scheduler/tasks/memory-extractor.ts",
-      "handlers/case-law/polarity/llm-classifier.ts",
+      "lib/workflow/decisions/decide.ts",
       "scripts/ai-provider-canary.ts",
     ]) {
       expect(files.has(owner)).toBe(true);
@@ -481,13 +484,8 @@ describe("model dispatch scope", () => {
 });
 
 describe("minted model tier", () => {
-  const freeTierBefore = env.FEATURE_FREE_TIER;
-  afterEach(() => {
-    env.FEATURE_FREE_TIER = freeTierBefore;
-  });
-
   test("a proof minted without the free tier is standard and reads nothing", async () => {
-    env.FEATURE_FREE_TIER = false;
+    testState.setConfig("FEATURE_FREE_TIER", false);
     const scopedDb = mock(async () => await Promise.reject(new Error("read")));
     const modelTier = await admitModelDispatch({
       organizationId: mintAuthProviderId<"organization">(),
@@ -501,7 +499,7 @@ describe("minted model tier", () => {
   });
 
   test("a proof minted under the free tier reads its organization's standing", async () => {
-    env.FEATURE_FREE_TIER = true;
+    testState.setConfig("FEATURE_FREE_TIER", true);
     const failure = new Error("access state unavailable");
     const scopedDb = mock(async () => await Promise.reject(failure));
     // The tier comes only from the organization's scope: a failed read

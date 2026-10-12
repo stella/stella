@@ -5,6 +5,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { parseChangesetEntry } from "./changeset-entry";
+import {
+  checkChangesetPackages,
+  decideChangesetGate,
+  loadChangesetPolicy,
+} from "./changeset-guard";
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const workflowDocument = Bun.YAML.parse(
@@ -142,7 +148,14 @@ const refreshStep = workflowStepByName(
 const refreshCommand = v.parse(v.string(), refreshStep["run"]);
 
 const runRefresh = async (
-  mode: "unchanged" | "changed" | "unexpected" | "failed",
+  mode:
+    | "unchanged"
+    | "changed"
+    | "rates"
+    | "capabilities"
+    | "unexpected"
+    | "failed",
+  existingChangeset?: string,
 ) => {
   const directory = await mkdtemp(path.join(tmpdir(), "catalog-refresh-"));
   directories.push(directory);
@@ -170,9 +183,15 @@ const runRefresh = async (
     path.join(directory, "packages/ai-catalog/src/capabilities.gen.ts"),
     "// capabilities\n",
   );
+  if (existingChangeset !== undefined) {
+    await Bun.write(
+      path.join(directory, ".changeset/model-catalog-refresh.md"),
+      existingChangeset,
+    );
+  }
   for (const command of [
     ["git", "init", "-q"],
-    ["git", "add", "packages"],
+    ["git", "add", "packages", ".changeset"],
     [
       "git",
       "-c",
@@ -207,8 +226,15 @@ if [[ "$*" == *gen:rates* ]]; then
   case "$FIXTURE_MODE" in
     failed) exit 1 ;;
     changed) echo '{"updated":true}' > packages/ai-catalog/upstream/models.dev.gen.json ;;
+    rates) echo '// updated rates' > packages/ai-catalog/src/model-rates.gen.ts ;;
     unexpected) echo unexpected > packages/ai-catalog/src/unexpected.ts ;;
   esac
+fi
+if [[ "$*" == *gen:capabilities* && "$FIXTURE_MODE" == capabilities ]]; then
+  echo '// updated capabilities' > packages/ai-catalog/src/capabilities.gen.ts
+fi
+if [[ "$*" == 'run changeset --empty' ]]; then
+  printf '%s\\n' '---' '---' > .changeset/fixture-empty.md
 fi
 `,
   );
@@ -237,7 +263,17 @@ fi
     new Response(child.stderr).text(),
     child.exited,
   ]);
+  const changed = Bun.spawn(
+    ["git", "ls-files", "--modified", "--others", "--exclude-standard"],
+    { cwd: directory, stdout: "pipe", stderr: "pipe" },
+  );
+  const changedFiles = (await new Response(changed.stdout).text())
+    .trim()
+    .split("\n")
+    .filter((file) => file !== "");
+  expect(await changed.exited).toBe(0);
   return {
+    changedFiles,
     exitCode,
     log: stdout + stderr,
     output: (await Bun.file(outputFile).exists())
@@ -251,6 +287,44 @@ fi
 };
 
 describe("scheduled catalog refresh", () => {
+  test.each([
+    ["LF", '---\n"@stll/ai-catalog": patch\n---\n\nAdd a new model route.\n'],
+    [
+      "CRLF",
+      '---\r\n"@stll/ai-catalog": patch\r\n---\r\n\r\nAdd a new model route.\r\n',
+    ],
+    ["no frontmatter", "Add a new model route.\n"],
+    [
+      "extra package",
+      '---\n"@stll/ai-catalog": patch\n"@stll/web": patch\n---\n\nRefresh upstream model rates and request capabilities.\n',
+    ],
+    [
+      "major bump",
+      '---\n"@stll/ai-catalog": major\n---\n\nRefresh upstream model rates and request capabilities.\n',
+    ],
+  ])(
+    "a hand-written changeset (%s) at the refresh path stops the refresh",
+    async (_, note) => {
+      const result = await runRefresh("rates", note);
+      expect(result.exitCode).toBe(1);
+      expect(result.log).toContain("move it to its own changeset file");
+      expect(await result.changeset.text()).toBe(note);
+    },
+  );
+
+  test("the refresh replaces its own earlier changesets", async () => {
+    for (const earlier of [
+      "---\n---\n",
+      '---\n"@stll/ai-catalog": patch\n---\n\nRefresh upstream model rates and request capabilities.\n',
+    ]) {
+      const result = await runRefresh("rates", earlier);
+      expect(result.exitCode, result.log).toBe(0);
+      expect(
+        parseChangesetEntry(await result.changeset.text()).packages,
+      ).toEqual(["@stll/ai-catalog"]);
+    }
+  });
+
   test("unchanged inputs produce no proposal", async () => {
     const result = await runRefresh("unchanged");
     expect(result.exitCode).toBe(0);
@@ -258,18 +332,77 @@ describe("scheduled catalog refresh", () => {
     expect(await result.changeset.exists()).toBe(false);
   });
 
-  test("upstream input drift produces one batched patch proposal", async () => {
+  test("snapshot-only drift produces empty intent accepted by the release guard", async () => {
     const result = await runRefresh("changed");
     expect(result.exitCode).toBe(0);
     expect(result.output).toBe("changed=true\n");
-    expect(result.calls.trim().split("\n")).toEqual([
-      "--filter @stll/ai-catalog gen:rates --refresh",
-      "--filter @stll/ai-catalog gen:capabilities --from-snapshot",
-    ]);
-    expect(await result.changeset.text()).toContain(
-      '"@stll/ai-catalog": patch',
-    );
+    const contents = await result.changeset.text();
+    expect(parseChangesetEntry(contents).packages).toEqual([]);
+    const policy = loadChangesetPolicy();
+    const file = ".changeset/model-catalog-refresh.md";
+    expect(
+      checkChangesetPackages({
+        changedFiles: result.changedFiles,
+        entries: [{ file, contents }],
+        policy,
+      }),
+    ).toEqual([]);
+    expect(
+      decideChangesetGate({
+        changedFiles: result.changedFiles,
+        addedFiles: [file],
+        releasePaths: policy.releasePaths,
+      }).status,
+    ).toBe("not-required");
+    expect(() =>
+      checkChangesetPackages({
+        changedFiles: result.changedFiles,
+        entries: [
+          {
+            file,
+            contents: '---\n"@stll/ai-catalog": patch\n---\nRefresh models.\n',
+          },
+        ],
+        policy,
+      }),
+    ).toThrow("Changeset packages have no changed release-gated files");
   });
+
+  test.each(["rates", "capabilities"] as const)(
+    "%s output drift produces a patch accepted and required by the release guard",
+    async (mode) => {
+      const result = await runRefresh(mode);
+      expect(result.exitCode).toBe(0);
+      expect(result.output).toBe("changed=true\n");
+      const contents = await result.changeset.text();
+      expect(parseChangesetEntry(contents).packages).toEqual([
+        "@stll/ai-catalog",
+      ]);
+      const policy = loadChangesetPolicy();
+      const file = ".changeset/model-catalog-refresh.md";
+      expect(
+        checkChangesetPackages({
+          changedFiles: result.changedFiles,
+          entries: [{ file, contents }],
+          policy,
+        }),
+      ).toEqual([]);
+      expect(
+        decideChangesetGate({
+          changedFiles: result.changedFiles,
+          addedFiles: [file],
+          releasePaths: policy.releasePaths,
+        }).status,
+      ).toBe("satisfied");
+      expect(
+        decideChangesetGate({
+          changedFiles: result.changedFiles,
+          addedFiles: [],
+          releasePaths: policy.releasePaths,
+        }).status,
+      ).toBe("missing");
+    },
+  );
 
   test("unrelated generator writes cannot enter a proposal", async () => {
     const result = await runRefresh("unexpected");

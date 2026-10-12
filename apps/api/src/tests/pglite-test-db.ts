@@ -21,10 +21,14 @@ import {
   installPgliteDesktopPresenceRls,
   installPgliteFlowTransitions,
   installPgliteChatRunLogRls,
+  installPgliteChatMessageRevisionsRls,
+  installPgliteChatSecretRls,
+  installPgliteReaderAnswerRls,
   installPgliteChatTurnRunIdLookup,
   installPgliteAgentSkillRevisionTrigger,
   installPgliteCaseLawObservationFence,
   installPgliteCorpusProjectionRevisionFence,
+  installPgliteServiceClientCredentialCascade,
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
   installPgliteProvisionExtractionState,
@@ -35,6 +39,7 @@ import {
   installPglitePdfSigningTokenScopes,
   installPglitePlaybookDocumentTypeKey,
   installPgliteSchemaPrerequisites,
+  installPgliteEntityFeatureGateMaintenance,
   readPglitePublicSanctionsGrants,
   installPgliteStatuteCitationCounts,
   installPgliteTimeEntryTimerSignals,
@@ -638,6 +643,11 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   const pushSchemaDb = drizzle({ client });
 
   await db.execute(sql.raw("CREATE ROLE stella NOLOGIN"));
+  await db.execute(
+    sql.raw(
+      "CREATE ROLE stella_entity_gate NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION",
+    ),
+  );
   await db.execute(sql.raw("CREATE ROLE stella_ingestion NOLOGIN"));
   await db.execute(sql.raw("CREATE ROLE stella_caselaw_reader NOLOGIN"));
   await db.execute(sql.raw("CREATE ROLE stella_public_law_reader NOLOGIN"));
@@ -662,9 +672,13 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   }
   await installPgliteFlowTransitions(db);
   await installPgliteWorkspaceAccessObjects(db);
+  await db.transaction(async (tx) => {
+    await installPgliteEntityFeatureGateMaintenance(tx);
+  });
   await installPgliteAgentSkillRevisionTrigger(db);
   await installPgliteDecisionAliases(db);
   await installPgliteCorpusProjectionRevisionFence(db);
+  await installPgliteServiceClientCredentialCascade(db);
   await installPgliteStatuteCitationCounts(db);
   await installPgliteLegislationPayloadRevision(db);
   await installPgliteLegislationExpressionIdentity(db);
@@ -677,6 +691,9 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteWorkspaceContactCapacity(db);
   await installPgliteListVerificationBudgets(db);
   await installPgliteChatRunLogRls(db);
+  await installPgliteChatMessageRevisionsRls(db);
+  await installPgliteChatSecretRls(db);
+  await installPgliteReaderAnswerRls(db);
   await installPgliteSchedulerJobPauseLog(db);
   await installPgliteTreeParentGuards(db);
 

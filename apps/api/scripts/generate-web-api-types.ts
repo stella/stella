@@ -31,10 +31,17 @@
 //   expanded). The identity check runs on the same printout with `Date` kept.
 
 import { panic } from "better-result";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { withGenerationLock } from "../../../packages/scripts/src/generation-lock";
 import { hasPreparedGeneratedSources } from "../../../packages/scripts/src/prepared-generated-sources";
 import { withoutTsgoOnlyOptionDiagnostics } from "../../../packages/scripts/src/tsgo-compiler-options";
 import {
@@ -427,6 +434,23 @@ export const printContract = ({
   const packageReference = (type: ts.Type): string | undefined => {
     let symbol = type.aliasSymbol;
     let typeArguments: readonly ts.Type[] = type.aliasTypeArguments ?? [];
+    // A local alias of an imported generic interface still has the
+    // interface's identity. Print that reference rather than its expanded
+    // members when the alias itself cannot be imported by the browser.
+    const aliasFile = symbol?.declarations?.at(0)?.getSourceFile().fileName;
+    const aliasPackage =
+      aliasFile === undefined ? undefined : packageOfFile(aliasFile);
+    if (
+      symbol !== undefined &&
+      (aliasPackage === undefined || !webDependencies.has(aliasPackage)) &&
+      isTypeReference(type) &&
+      isInterfaceOrClass(type.target.objectFlags)
+    ) {
+      symbol = type.target.symbol;
+      typeArguments = checker
+        .getTypeArguments(type)
+        .slice(0, type.target.typeParameters?.length ?? 0);
+    }
     if (symbol === undefined && isTypeReference(type)) {
       const { target } = type;
       if (isInterfaceOrClass(target.objectFlags)) {
@@ -1302,7 +1326,13 @@ const main = () => {
     );
   }
   mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
-  writeFileSync(OUTPUT_PATH, output);
+  const temporary = `${OUTPUT_PATH}.${process.pid}.tmp`;
+  try {
+    writeFileSync(temporary, output);
+    renameSync(temporary, OUTPUT_PATH);
+  } finally {
+    rmSync(temporary, { force: true });
+  }
   console.log(
     `generate-web-api-types: ${check ? "verified deterministic" : "wrote"} ${path.relative(REPO_ROOT, OUTPUT_PATH)} ` +
       `(${Buffer.byteLength(output)} bytes) in ${Math.round(performance.now() - started)} ms`,
@@ -1310,5 +1340,9 @@ const main = () => {
 };
 
 if (import.meta.main) {
-  main();
+  const generated = await withGenerationLock({
+    lockPath: path.join(REPO_ROOT, ".cache/web-api-generation.sqlite"),
+    run: main,
+  });
+  generated.unwrap("API type generation failed");
 }

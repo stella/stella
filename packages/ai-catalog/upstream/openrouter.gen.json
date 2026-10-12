@@ -823,6 +823,18 @@
       }
     },
     {
+      "id": "openai/gpt-6.1-sol-pro:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.1-sol:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
       "id": "openai/gpt-oss-120b",
       "reasoning": {
         "default_effort": "medium"
@@ -920,6 +932,12 @@
     },
     {
       "id": "stepfun/step-3.7-flash",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "stepfun/step-5-preview",
       "reasoning": {
         "default_effort": "medium"
       }

@@ -34,6 +34,8 @@ export type ReaderDecision = {
 };
 
 export type CitedDecisionTarget = {
+  courtAbbreviation?: string | null | undefined;
+  sourceUrl?: string | null | undefined;
   caseNumber: string;
   caseNumberType: DecisionPrimaryReferenceType;
   ecli: string | null;

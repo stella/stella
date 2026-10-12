@@ -136,6 +136,7 @@ import { isUnauthorizedError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getExtension } from "@/lib/files/file-extension";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   OcrExportStatus,
@@ -145,6 +146,7 @@ import type {
 } from "@/lib/types";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
+import { createUuid } from "@/lib/uuid";
 import {
   useCreateEntities,
   useDeleteEntities,
@@ -865,8 +867,7 @@ export const RowActions = ({
     try {
       for (const target of bulkTargets) {
         const targetEntityId =
-          duplicateTargetIdsRef.current.get(target.entityId) ??
-          crypto.randomUUID();
+          duplicateTargetIdsRef.current.get(target.entityId) ?? createUuid();
         duplicateTargetIdsRef.current.set(target.entityId, targetEntityId);
         const result = await Result.tryPromise(async () => {
           // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- sequential bulk action: each source owns a stable target identity, so retries converge and a partial failure has an exact per-item result
@@ -1259,7 +1260,7 @@ const RowOpenMenuActions = ({
   );
 };
 
-const RowOcrMenuActions = ({
+export const RowOcrMenuActions = ({
   canRunOcr,
   isPending,
   onRun,
@@ -1276,32 +1277,52 @@ const RowOcrMenuActions = ({
   return (
     <>
       {canRunOcr && (
-        <MenuItem
-          disabled={isPending}
-          onClick={() => detached(onRun(selectedSource), "row-actions.run-ocr")}
-        >
-          <ScanTextIcon />
-          {t("workspaces.files.runOcr")}
-        </MenuItem>
+        <CapabilityAction action={{ capability: "ocr" }}>
+          {(capabilityProps) => (
+            <MenuItem
+              disabled={isPending}
+              onClick={() =>
+                detached(onRun(selectedSource), "row-actions.run-ocr")
+              }
+              {...capabilityProps}
+            >
+              <ScanTextIcon />
+              {t("workspaces.files.runOcr")}
+            </MenuItem>
+          )}
+        </CapabilityAction>
       )}
       {rowSources.length > 0 && (
         <MenuSub>
-          <MenuSubTrigger>
-            <ScanTextIcon />
-            {t("workspaces.files.runOcr")}
-          </MenuSubTrigger>
+          <CapabilityAction action={{ capability: "ocr" }}>
+            {(capabilityProps) => (
+              <MenuSubTrigger {...capabilityProps}>
+                <ScanTextIcon />
+                {t("workspaces.files.runOcr")}
+              </MenuSubTrigger>
+            )}
+          </CapabilityAction>
           <MenuSubPopup>
             {rowSources.map((source) => (
-              <MenuItem
-                disabled={isPending}
+              <CapabilityAction
                 key={source.fieldId}
-                onClick={() => detached(onRun(source), "row-actions.run-ocr")}
+                action={{ capability: "ocr" }}
               >
-                <ScanTextIcon />
-                <BidiText as="span" className="max-w-64 truncate">
-                  {source.fileName}
-                </BidiText>
-              </MenuItem>
+                {(capabilityProps) => (
+                  <MenuItem
+                    disabled={isPending}
+                    onClick={() =>
+                      detached(onRun(source), "row-actions.run-ocr")
+                    }
+                    {...capabilityProps}
+                  >
+                    <ScanTextIcon />
+                    <BidiText as="span" className="max-w-64 truncate">
+                      {source.fileName}
+                    </BidiText>
+                  </MenuItem>
+                )}
+              </CapabilityAction>
             ))}
           </MenuSubPopup>
         </MenuSub>
@@ -1398,10 +1419,14 @@ const RowFolderDesktopMenuActions = ({
         />
       )}
       {canOpenInDesktop && (
-        <MenuItem onClick={onOpenInDesktop}>
-          <LaptopIcon />
-          {openInDesktopLabel}
-        </MenuItem>
+        <CapabilityAction action={{ capability: "desktop" }}>
+          {(capabilityProps) => (
+            <MenuItem onClick={onOpenInDesktop} {...capabilityProps}>
+              <LaptopIcon />
+              {openInDesktopLabel}
+            </MenuItem>
+          )}
+        </CapabilityAction>
       )}
       {canReleaseDesktopLock && (
         <MenuItem
@@ -1417,7 +1442,7 @@ const RowFolderDesktopMenuActions = ({
   );
 };
 
-const RowFeatureMenuActions = ({
+export const RowFeatureMenuActions = ({
   canCreateEntity,
   entity,
   file,
@@ -1439,7 +1464,6 @@ const RowFeatureMenuActions = ({
   onChatAbout: () => void;
   onEditPages: (() => void) | undefined;
   onOpenVersionHistory: (() => void) | undefined;
-  /** Always offered for a signable PDF; the label says what it needs. */
   onSign: (() => void) | undefined;
   onTranslate: () => void;
   signLabel: string;
@@ -1468,20 +1492,43 @@ const RowFeatureMenuActions = ({
         </MenuItem>
       )}
       {onSign !== undefined && (
-        <MenuItem onClick={onSign}>
-          <SignatureIcon />
-          {signLabel}
-        </MenuItem>
+        <CapabilityAction action={{ capability: "desktop" }}>
+          {(capabilityProps) => (
+            <MenuItem onClick={onSign} {...capabilityProps}>
+              <SignatureIcon />
+              {signLabel}
+            </MenuItem>
+          )}
+        </CapabilityAction>
       )}
-      <MenuItem onClick={onChatAbout}>
-        <MessageSquareIcon />
-        {t("chat.chatAbout")}
-      </MenuItem>
+      <CapabilityAction action={{ capability: "ai" }}>
+        {(capabilityProps) => (
+          <MenuItem onClick={onChatAbout} {...capabilityProps}>
+            <MessageSquareIcon />
+            {t("chat.chatAbout")}
+          </MenuItem>
+        )}
+      </CapabilityAction>
       {translationTarget !== null && (
-        <MenuItem disabled={!canCreateEntity} onClick={onTranslate}>
-          <LanguagesIcon />
-          {t("common.translate")}
-        </MenuItem>
+        <CapabilityAction
+          action={{
+            capability:
+              translationTarget.mimeType === DOCX_MIME
+                ? "translation"
+                : "deepl",
+          }}
+        >
+          {(capabilityProps) => (
+            <MenuItem
+              disabled={!canCreateEntity}
+              onClick={onTranslate}
+              {...capabilityProps}
+            >
+              <LanguagesIcon />
+              {t("common.translate")}
+            </MenuItem>
+          )}
+        </CapabilityAction>
       )}
     </>
   );

@@ -15,9 +15,14 @@ publicHoistPattern = ["*"]
 # scripts/check-standalone-lockfiles.ts enforces.
 minimumReleaseAge = 432_000
 minimumReleaseAgeExcludes = [
+  "bun-types", # quarantine-expires: 2026-10-15T05:25:00.000Z
   # quarantine exception granted 2026-10-07: @gdp-ts/core can be installed now
-  "@gdp-ts/core", # quarantine-expires: 2026-10-10T13:31:08.275Z
-  # TanStack Charts is needed before its quarantine ends.
+  # TanStack AI and its adapters share runtime contracts; keep the release family together.
+  "@tanstack/ai", # quarantine-expires: 2026-10-12T12:53:35.784Z
+  "@tanstack/ai-client", # quarantine-expires: 2026-10-12T12:56:04.627Z
+  "@tanstack/ai-gemini", # quarantine-expires: 2026-10-12T13:45:40.252Z
+  "@tanstack/ai-openrouter", # quarantine-expires: 2026-10-12T12:53:35.689Z
+  "@tanstack/ai-react", # quarantine-expires: 2026-10-12T12:54:04.366Z
   # Temporary third-party exceptions must carry the exact instant at which
   # the normal five-day quarantine admits the currently pinned release.
   # Turbo 2.11.2 adds production pruning and devEngines support. Keep every
@@ -29,8 +34,6 @@ minimumReleaseAgeExcludes = [
   # Oxlint 1.82 and Ultracite 7.11.1 add branch-wise loop-condition checking.
   # Keep the plugin SDK and every native binding with the pinned release;
   # quarantined optional bindings otherwise leave the executable unavailable.
-  # TanStack AI 0.61.0 and its adapters publish as one release family; keep
-  # direct and transitive packages coherent until the normal quarantine admits them.
   "@stll/oxlint-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/typescript-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/aho-corasick-wasm", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z

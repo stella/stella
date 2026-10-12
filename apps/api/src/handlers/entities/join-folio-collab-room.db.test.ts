@@ -8,12 +8,15 @@ import {
 } from "bun:test";
 import { and, eq, inArray, lt, sql } from "drizzle-orm";
 
+import { sha256Hex as legacyHex } from "@stll/sha256/node";
+
 import { folioCollabRooms, folioCollabRoomTokens } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { FOLIO_COLLAB_SEED_CLAIM_STALE_MS } from "@/api/lib/folio-collab-room-contract";
 import {
   cleanupExpiredFolioCollabRoomTokens,
+  issueFolioCollabToken,
   folioCollabSeedClaimLeaseOnHeartbeat,
 } from "@/api/lib/folio-collab-rooms";
 import {
@@ -311,4 +314,23 @@ describe("folio collaboration room token retention", () => {
       );
     expect(remainingExpired).toHaveLength(1);
   });
+});
+
+test("issued collaboration tokens store the legacy createHash digest", async () => {
+  const roomId = await insertRoom({ generation: 0, seedState: "empty" });
+  const { token } = await testDb.transaction(async (tx) =>
+    issueFolioCollabToken({
+      generation: 0,
+      permissions: { canEdit: true },
+      roomId,
+      tx,
+      userId: ids.userA1,
+      workspaceId: ids.wsA1,
+    }),
+  );
+  const stored = await testDb
+    .select({ tokenHash: folioCollabRoomTokens.tokenHash })
+    .from(folioCollabRoomTokens)
+    .where(eq(folioCollabRoomTokens.roomId, roomId));
+  expect(stored).toEqual([{ tokenHash: legacyHex(token) }]);
 });

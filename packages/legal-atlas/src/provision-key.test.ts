@@ -1,11 +1,12 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
-import { createHash } from "node:crypto";
 
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import { formatProvisionKey } from "@stll/api-contract/provision-key";
 import { assertProperty } from "@stll/property-testing";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import suffixFixture from "./__fixtures__/cz-esbirka-262-2006-par-1a.json" with { type: "json" };
 import suffixProvenance from "./__fixtures__/cz-esbirka-262-2006-par-1a.json.provenance.json" with { type: "json" };
@@ -104,9 +105,7 @@ describe("provision identity construction", () => {
       const bytes = await Bun.file(
         new URL(`__fixtures__/${capture.file}`, import.meta.url),
       ).bytes();
-      expect(createHash("sha256").update(bytes).digest("hex")).toBe(
-        capture.provenance.sha256,
-      );
+      expect(hashSha256Hex(bytes)).toBe(capture.provenance.sha256);
       expect(capture.provenance.capture).toBe("recorded");
       expect(capture.fixture.results.bindings).toHaveLength(capture.rows);
       for (const { citace, url } of capture.fixture.results.bindings) {
@@ -165,12 +164,14 @@ describe("provision identity construction", () => {
         fc.integer({ min: 0, max: 2 }),
         fc.constantFrom(" ", "\u00a0", "\u202f"),
         (row, padding, space) => {
-          const heading = row.citace.value
-            .replace(/\d+/gu, (digits) =>
-              digits.padStart(digits.length + padding, "0"),
-            )
-            .replaceAll(" ", () => space)
-            .normalize("NFD");
+          const heading = normalizeUnicode(
+            row.citace.value
+              .replace(/\d+/gu, (digits) =>
+                digits.padStart(digits.length + padding, "0"),
+              )
+              .replaceAll(" ", () => space),
+            "NFD",
+          );
           const ref = grammar.parseReference(heading);
           expect(ref).not.toBeNull();
           if (ref === null) {

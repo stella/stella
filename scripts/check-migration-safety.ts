@@ -15,7 +15,6 @@
 // reason shorter than MIN_ACKNOWLEDGEMENT_REASON_LENGTH is itself an error.
 
 import { panic } from "better-result";
-import { createHash } from "node:crypto";
 import {
   existsSync,
   readdirSync,
@@ -24,6 +23,8 @@ import {
   statSync,
 } from "node:fs";
 import path from "node:path";
+
+import { createSha256 } from "@stll/sha256/node";
 
 import { CODE_OWNED_TABLES } from "../apps/api/src/db/code-owned-tables";
 import { HIGH_VOLUME_TABLES } from "../apps/api/src/db/high-volume-tables";
@@ -1878,9 +1879,7 @@ export const checkMigrationIndexBuilds = (
             file,
             line: statement.line,
             ruleId: HIGH_VOLUME_INDEX_BUILD_RULE_ID,
-            statementHash: createHash("sha256")
-              .update(statement.raw)
-              .digest("hex"),
+            statementHash: createSha256().update(statement.raw).digest("hex"),
             description:
               "builds indexes on a high-volume table or an unresolved REINDEX target during a schema migration",
             guidance:

@@ -15,6 +15,7 @@ import { DECISION_READER_TOOL_SET } from "@/api/mcp/decision-reader-tools";
 import { DOCUMENT_TOOL_SET } from "@/api/mcp/document-tools";
 import { FEEDBACK_TOOL_SET } from "@/api/mcp/feedback-tools";
 import { KNOWLEDGE_TOOL_SET } from "@/api/mcp/knowledge-tools";
+import { LEGAL_RESOLVE_TOOL_SET } from "@/api/mcp/legal-resolve-tools";
 import { LEGISLATION_TOOL_SET } from "@/api/mcp/legislation-tools";
 import { MATTER_TOOL_SET } from "@/api/mcp/matter-tools";
 import { READER_ANNOTATION_TOOL_SET } from "@/api/mcp/reader-annotation-tools";
@@ -38,6 +39,7 @@ export const DEFAULT_MCP_TOOL_SETS = [
   STELLA_TOOL_SET,
   DECISION_READER_TOOL_SET,
   LEGISLATION_TOOL_SET,
+  LEGAL_RESOLVE_TOOL_SET,
   TEMPLATE_TOOL_SET,
   DOCUMENT_TOOL_SET,
   MATTER_TOOL_SET,
@@ -59,6 +61,7 @@ export const DEFAULT_MCP_TOOL_DEFINITIONS = [
   ...STELLA_TOOL_SET.definitions,
   ...DECISION_READER_TOOL_SET.definitions,
   ...LEGISLATION_TOOL_SET.definitions,
+  ...LEGAL_RESOLVE_TOOL_SET.definitions,
   ...TEMPLATE_TOOL_SET.definitions,
   ...DOCUMENT_TOOL_SET.definitions,
   ...MATTER_TOOL_SET.definitions,
@@ -69,6 +72,14 @@ export const DEFAULT_MCP_TOOL_DEFINITIONS = [
   ...FEEDBACK_TOOL_SET.definitions,
   ...CAPABILITY_TOOL_SET.definitions,
 ] as const satisfies readonly McpToolDefinition[];
+
+const PURPOSE_BUILT_MCP_TOOL_DEFINITIONS = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
+  ({ name }) =>
+    name !== "list_capabilities" &&
+    name !== "describe_capability" &&
+    name !== MCP_CAPABILITY_EXECUTORS.read &&
+    name !== MCP_CAPABILITY_EXECUTORS.write,
+);
 
 export type AnonymizingMcpToolName = Extract<
   (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number],
@@ -324,7 +335,8 @@ export const LAW_MCP_TOOL_DISPOSITION = {
   search: "corpus",
   fetch: "corpus",
   search_case_law: "corpus",
-  lookup_case_law: "corpus",
+  resolve_case_law_decision: "corpus",
+  resolve_law_citation: "corpus",
   case_law_coverage: "corpus",
   read_case_law_decision: "corpus",
   open_case_law_decision: "corpus",
@@ -374,7 +386,8 @@ export const LAW_MCP_TOOL_DEFINITIONS = scopeDefinitionsToSurface([
  * one's by falling through a conditional.
  */
 const MCP_TOOL_DEFINITIONS_BY_MODE = {
-  default: DEFAULT_MCP_TOOL_DEFINITIONS,
+  advanced: DEFAULT_MCP_TOOL_DEFINITIONS,
+  default: PURPOSE_BUILT_MCP_TOOL_DEFINITIONS,
   anonymized: ANONYMIZED_MCP_TOOL_DEFINITIONS,
   documents: DOCUMENTS_MCP_TOOL_DEFINITIONS,
   law: LAW_MCP_TOOL_DEFINITIONS,
@@ -386,6 +399,7 @@ const toToolDefinitionMap = (definitions: readonly McpToolDefinition[]) =>
   );
 
 const MCP_TOOL_DEFINITION_MAPS = {
+  advanced: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.advanced),
   default: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.default),
   anonymized: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.anonymized),
   documents: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.documents),

@@ -4,6 +4,13 @@ import { TOOLBAR_ROW_HEIGHT, TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
 
 const WORKSPACE_TABLE_COLUMNS_VAR = "var(--workspace-table-columns)";
 
+/**
+ * The element a workspace table scrolls its rows in. Named so a screen that
+ * moves the reader to the top of new rows reaches the same element the table
+ * draws.
+ */
+export const WORKSPACE_TABLE_SCROLL_SLOT = "workspace-table-scroll";
+
 export const WorkspaceGridRow = ({
   className,
   style,

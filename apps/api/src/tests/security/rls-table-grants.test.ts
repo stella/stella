@@ -147,7 +147,10 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
 
 // Request transactions append names alongside chat messages and read them on
 // later requests. The role needs SELECT and INSERT, never UPDATE or DELETE.
-const POST_BOOTSTRAP_APPEND_ONLY_TABLES = new Set(["chat_thread_names"]);
+const POST_BOOTSTRAP_APPEND_ONLY_TABLES = new Set([
+  "chat_thread_names",
+  "chat_message_revisions",
+]);
 
 // Audit trails the request role may only append to: INSERT, nothing else.
 // The table owner reads them and purges rows past retention.
@@ -196,16 +199,25 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "action_cost_calls",
   // Search backfill retries are ingestion control state, not request data.
   "case_law_search_backfill_failures",
+  // Professional-use acceptances are written once at account or
+  // organization creation on the owner connection.
+  "user_professional_use_acceptances",
+  "organization_professional_use_acceptances",
+  // A reader's failed analysis run: written and read only by the owner
+  // connection that runs the analysis.
+  "case_law_analysis_failures",
   "registration_daily_budget",
   "agent_registration",
   "agent_trusted_issuer",
   "agent_delegation",
   "agent_assertion_replay",
+  "desktop_device_proof_replays",
   // Better Auth OAuth control-plane state. Request-role access would expose
   // resource policy or let tenant traffic change token authorization rules.
   "oauth_resource",
   "oauth_client_resource",
   "oauth_client_assertion",
+  "service_oauth_clients",
   // Machine API keys: credential digests plus the permission set each key
   // carries. A tenant-scoped connection must be able to neither read a digest
   // nor widen a key's permissions, so every access goes through better-auth on

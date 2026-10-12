@@ -12,7 +12,11 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { checkRouteTreeDeterminism } from "./generate-route-tree";
+import { routeTreeOptions } from "../route-tree.config";
+import {
+  checkRouteTreeDeterminism,
+  generateRouteTree,
+} from "./generate-route-tree";
 
 const withDirectory = async (run: (directory: string) => Promise<void>) => {
   const directory = await mkdtemp(
@@ -26,6 +30,33 @@ const withDirectory = async (run: (directory: string) => Promise<void>) => {
 };
 
 describe("route tree determinism", () => {
+  test("production router excludes the visual route and its import graph", async () => {
+    await withDirectory(async (directory) => {
+      const output = path.join(directory, "routeTree.gen.ts");
+      await generateRouteTree(output, "serve");
+      const development = await readFile(output, "utf-8");
+      expect(development).toContain("/dev");
+      expect(development).toContain("routes/dev");
+      await generateRouteTree(output, "build");
+      const production = await readFile(output, "utf-8");
+      expect(production).not.toMatch(/['"]\/dev(?:['"/])/u);
+      expect(production).not.toMatch(/routes\/dev(?:[.'"/])/u);
+      expect(production).not.toContain("playground");
+      expect(production).toContain("routes/index");
+    });
+  });
+
+  test("production ignores every dev route file and the whole fixture directory", () => {
+    const pattern = routeTreeOptions("build").routeFileIgnorePattern;
+    expect(pattern).toBeDefined();
+    const ignored = new RegExp(pattern ?? "", "u");
+    for (const name of ["dev", "dev.tsx", "dev.new-fixture.tsx"]) {
+      expect(ignored.test(name)).toBe(true);
+    }
+    expect(ignored.test("device.tsx")).toBe(false);
+    expect(routeTreeOptions("serve").routeFileIgnorePattern).toBeUndefined();
+  });
+
   test.each(["missing", "stale"])(
     "compares fresh outputs when the normal tree is %s",
     async (state) => {

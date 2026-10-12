@@ -61,6 +61,7 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { snoozeUntil } from "@/lib/inbox/inbox.logic";
 import { inboxKeys } from "@/lib/inbox/queries";
 import type { InboxSignal } from "@/lib/inbox/queries";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { organizationOptions } from "@/lib/organization/queries";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
@@ -219,10 +220,19 @@ export const SignalCard = ({
         ))}
       <span className="flex-1" />
       {canChat && (
-        <Button onClick={askAboutThis} size="sm" variant="muted">
-          <MessageSquareIcon />
-          {t("inbox.ask")}
-        </Button>
+        <CapabilityAction action={{ capability: "ai" }} surface="control">
+          {(capabilityProps) => (
+            <Button
+              onClick={askAboutThis}
+              size="sm"
+              variant="muted"
+              {...capabilityProps}
+            >
+              <MessageSquareIcon />
+              {t("inbox.ask")}
+            </Button>
+          )}
+        </CapabilityAction>
       )}
       {canResolve && (
         <>
@@ -517,17 +527,22 @@ const SuggestionButton = ({
       );
     case SUGGESTION_KIND.OPEN_CHAT:
       return (
-        <Button
-          disabled={disabled}
-          onClick={() => {
-            onOpenChat(suggestion.prompt);
-            detached(onAccept(suggestion.kind), "inbox.accept");
-          }}
-          size="sm"
-          variant="outline"
-        >
-          {label}
-        </Button>
+        <CapabilityAction action={{ capability: "ai" }} surface="control">
+          {(capabilityProps) => (
+            <Button
+              disabled={disabled}
+              onClick={() => {
+                onOpenChat(suggestion.prompt);
+                detached(onAccept(suggestion.kind), "inbox.accept");
+              }}
+              size="sm"
+              variant="outline"
+              {...capabilityProps}
+            >
+              {label}
+            </Button>
+          )}
+        </CapabilityAction>
       );
     default: {
       suggestion satisfies never;

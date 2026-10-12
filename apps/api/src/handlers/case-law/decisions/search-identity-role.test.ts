@@ -6,6 +6,7 @@ import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
 import { propertyConfig } from "@stll/property-testing";
 
 import {
+  identityAnswerPage,
   searchIdentityRole,
   withPinnedDecisions,
 } from "@/api/handlers/case-law/decisions/search-identity-role";
@@ -87,5 +88,36 @@ describe("a page with the named decisions pinned above it", () => {
         ranked: [{ id: "a" }, { id: "named" }, { id: "b" }],
       }),
     ).toEqual([{ id: "a" }, { id: "b" }]);
+  });
+});
+
+describe("paging an entry answered by identity", () => {
+  // A docket naming three decisions at three courts.
+  const named = [{ id: "a" }, { id: "b" }, { id: "c" }];
+
+  test("the first page holds what the reference names", () => {
+    expect(identityAnswerPage({ limit: 25, offset: 0, ranked: named })).toEqual(
+      { type: "answer", page: named },
+    );
+  });
+
+  test("a page past what the reference names is the answer's end, not a text search", () => {
+    // The fault this guards: an empty slice read as "nothing answered", which
+    // sent the page to the corpus search and swapped the result set.
+    expect(named.slice(25, 50)).toEqual([]);
+    for (const offset of [25, 50, 475]) {
+      expect(identityAnswerPage({ limit: 25, offset, ranked: named })).toEqual({
+        type: "answer",
+        page: [],
+      });
+    }
+  });
+
+  test("only a reference that names nothing falls back to the text search", () => {
+    for (const offset of [0, 25]) {
+      expect(identityAnswerPage({ limit: 25, offset, ranked: [] })).toEqual({
+        type: "none",
+      });
+    }
   });
 });

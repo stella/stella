@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 
+import { CASE_LAW_COVERAGE_INDEX } from "@/api/lib/case-law/coverage-index";
 import {
   DOCUMENT_OUTSTANDING_DATE_INDEX,
   DOCUMENT_OUTSTANDING_INDEX,
@@ -14,6 +15,7 @@ import { BETTER_AUTH_OAUTH_RESOURCE_REPAIR } from "./better-auth-oauth-resource-
 import { CORPUS_PROJECTION_CLEANUP_STALL_REPAIR } from "./corpus-projection-cleanup-stall-repair";
 import { CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR } from "./corpus-projection-delete-receipt-repair";
 import { DECISION_DATE_CEILING_REPAIR } from "./decision-date-ceiling-repair";
+import { ENTITY_FEATURE_GATE_REPAIR } from "./entity-feature-gate-repair";
 import { LIST_VERIFICATION_CONSTRAINT_VALIDATION } from "./list-verification-constraint-validation";
 import { createOnlineIndexGate } from "./online-index-gate";
 import type { OnlineIndexGateOptions } from "./online-index-gate";
@@ -77,6 +79,7 @@ type OnlineIndex = RequiredMigrationIndex & {
 };
 
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
+  CASE_LAW_COVERAGE_INDEX,
   {
     createSql: `CREATE INDEX CONCURRENTLY "apikey_personal_owner_keyset_idx" ON public."apikey" (((metadata::jsonb ->> 'organizationId')), reference_id, created_at DESC, id DESC) WHERE metadata IS NOT NULL AND metadata::jsonb ->> 'kind' = 'personal'`,
     definitionBody:
@@ -344,6 +347,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   },
   {
     createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "legal_reader_answer_messages_answer_sequence_idx" ON public."legal_reader_answer_messages" USING btree ("answer_id", "sequence")',
+    definitionBody:
+      "ON public.legal_reader_answer_messages USING btree (answer_id, sequence)",
+    isUnique: true,
+    name: "legal_reader_answer_messages_answer_sequence_idx",
+    tableName: "legal_reader_answer_messages",
+  },
+  {
+    createSql:
       'CREATE UNIQUE INDEX CONCURRENTLY "case_law_ingestion_failures_source_record_uidx" ON public."case_law_ingestion_failures" USING btree ("source_id", "record_identity") WHERE "record_identity" IS NOT NULL',
     definitionBody:
       "ON public.case_law_ingestion_failures USING btree (source_id, record_identity) WHERE (record_identity IS NOT NULL)",
@@ -423,6 +435,10 @@ type OnlineIndexReplacement = {
 
 const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
   {
+    legacyName: "legal_reader_answer_messages_answer_idx",
+    replacementNames: ["legal_reader_answer_messages_answer_sequence_idx"],
+  },
+  {
     legacyName: "case_law_decisions_document_pending_date_idx",
     replacementNames: [DOCUMENT_OUTSTANDING_DATE_INDEX.name],
   },
@@ -473,6 +489,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR,
   ...SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
   LIST_VERIFICATION_CONSTRAINT_VALIDATION,
+  ENTITY_FEATURE_GATE_REPAIR,
   CORPUS_PROJECTION_CLEANUP_STALL_REPAIR,
   // Not behind one migration: the OAuth resource set is derived from the MCP
   // audiences in application code, so it is the code that moves and the rows

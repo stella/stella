@@ -1,5 +1,9 @@
 name: Nightly Full Typecheck
 
+defaults:
+  run:
+    shell: bash
+
 on:
   schedule:
     # 03:17 UTC daily (off-minute to avoid :00 stampede)
@@ -39,6 +43,9 @@ jobs:
           # .npmrc references NPM_TOKEN, but installs must not expose
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
+
+      - name: Typecheck parity (all checked projects)
+        run: bun run check:typecheck-parity
 
       - name: Full typecheck (no --affected, no turbo cache)
         # The API compiler and web contract generator each build the API graph.

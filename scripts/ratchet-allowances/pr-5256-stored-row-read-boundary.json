@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 2,
+  "reason": "Stored-row read boundary rejects malformed legacy tool metadata with a typed 422 HandlerError resolved by the handler error boundary; threading Result through every persisted-message reader is out of scope for this change."
+}

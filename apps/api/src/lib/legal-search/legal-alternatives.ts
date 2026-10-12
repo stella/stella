@@ -1,3 +1,4 @@
+import { type Static, t } from "elysia";
 /**
  * Legal-vocabulary alternatives for a case-law search: per word the reader
  * typed, the words the jurisdiction's statutes and courts use for the same
@@ -10,7 +11,7 @@
  * group, and a word the rules below reject simply gets no alternative.
  */
 
-import { type Static, t } from "elysia";
+import { createSha256 } from "@stll/sha256/bun";
 
 import {
   type CorpusTermExpander,
@@ -179,7 +180,7 @@ export const withLegalAlternativesIdentity = (
   if (alternatives.length === 0) {
     return dictionary;
   }
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   hasher.update(serializeExpansionDictionaryIdentity(dictionary));
   hasher.update("\u0000");
   hasher.update(JSON.stringify(alternatives));

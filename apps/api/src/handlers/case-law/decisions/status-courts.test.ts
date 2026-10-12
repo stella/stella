@@ -28,11 +28,15 @@ const activity = (
 
 /** The breakdown of a corpus the buckets account for in full. */
 const courtStatusRows = (
-  options: Omit<Parameters<typeof caseLawCourtStatusRows>[0], "total">,
+  options: Omit<
+    Parameters<typeof caseLawCourtStatusRows>[0],
+    "total" | "courtCount"
+  >,
 ): ReturnType<typeof caseLawCourtStatusRows> =>
   caseLawCourtStatusRows({
     ...options,
     total: options.buckets.reduce((sum, { count }) => sum + count, 0),
+    courtCount: options.buckets.length,
   });
 
 const CZ_REGIONAL = [
@@ -140,13 +144,24 @@ test("names a regional tier the corpus holds only a few courts of", () => {
   expect(rows.map((row) => row.type)).toEqual(["court", "court"]);
 });
 
-test("a court with no known abbreviation carries no chip", () => {
+test("a registered regional court carries its citation code", () => {
   const [row] = courtStatusRows({
     activity: activity({}),
     buckets: [bucket("Krajský soud v Brně", 10)],
     country: "CZE",
     courtWeights,
   });
+
+  expect(row).toMatchObject({ type: "court", courtAbbreviation: "KS" });
+});
+
+test("a court with no known abbreviation carries no chip", () => {
+  const row = courtStatusRows({
+    activity: activity({}),
+    buckets: [bucket("Synthetic unregistered court", 10)],
+    country: "CZE",
+    courtWeights,
+  }).at(0);
 
   expect(row).toMatchObject({ type: "court", courtAbbreviation: null });
 });
@@ -169,18 +184,36 @@ test("a total the buckets do not reach ends the breakdown with the rest", () => 
     country: "CZE",
     courtWeights,
     total: 1500,
+    courtCount: 7,
   });
 
   // The facets list the largest courts up to a limit; the rows still sum to
   // the corpus, with the courts beyond the limit as one row that names how
   // many were listed and carries no activity, because none was read.
   expect(rows.at(-1)).toEqual({
-    type: "unlisted",
+    type: "other-courts",
     tier: "other",
-    listed: 2,
+    courts: 5,
     decisions: 480,
   });
   expect(rows.reduce((sum, row) => sum + row.decisions, 0)).toBe(1500);
+});
+
+test("an unavailable court aggregate keeps the unlisted court count unknown", () => {
+  const rows = caseLawCourtStatusRows({
+    activity: activity({}),
+    buckets: [bucket("Nejvyšší soud", 900)],
+    country: "CZE",
+    courtWeights,
+    total: 1000,
+    courtCount: null,
+  });
+  expect(rows.at(-1)).toEqual({
+    type: "other-courts",
+    tier: "other",
+    courts: null,
+    decisions: 100,
+  });
 });
 
 test("a total the buckets account for adds no row for the rest", () => {
@@ -190,6 +223,7 @@ test("a total the buckets account for adds no row for the rest", () => {
     country: "CZE",
     courtWeights,
     total: 900,
+    courtCount: 1,
   });
 
   expect(rows.map(({ type }) => type)).toEqual(["court"]);

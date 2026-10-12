@@ -1,5 +1,9 @@
 name: API test memory measurements
 
+defaults:
+  run:
+    shell: bash
+
 on:
   schedule:
     - cron: "23 2 * * 0"
@@ -108,7 +112,6 @@ jobs:
         id: refresh
         env:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        shell: bash
         run: |
           set -euo pipefail
           bun apps/api/scripts/refresh-test-peak-rss.ts "$RUNNER_TEMP/api-test-rss" "$PEAK_RSS_TABLE" > "$RUNNER_TEMP/refresh-report.json"

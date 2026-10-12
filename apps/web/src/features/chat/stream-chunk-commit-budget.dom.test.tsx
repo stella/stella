@@ -57,7 +57,7 @@ const testing = await import("@testing-library/react");
 const { openChatThreadDomPage } =
   await import("@/components/chat/chat-thread-dom-page");
 const { __resetChatRequestStateForTests } =
-  await import("@/features/chat/queries");
+  await import("@/features/chat/chat-runtime-registry");
 const { toSafeId } = await import("@/lib/safe-id");
 
 const actEnvironment: unknown = Reflect.get(
@@ -333,6 +333,7 @@ const createStreamingServer = (
       model: null,
       olderCursor: null,
       reasoningEffort: null,
+      activeSkill: null,
       threadExists: false,
       threadRevision: "revision-0",
       usedAnonymization: false,

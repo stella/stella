@@ -2,12 +2,13 @@ import { PDF } from "@libpdf/core";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
+
 import {
   joinSkCollectionRecords,
   parseSkCollectionPages,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-collection-parser";
 import { createSkCollectionConnector } from "@/api/handlers/case-law/ingestion/adapters/sk-collections";
-import { courtAbbreviation } from "@/api/lib/case-law/court-abbreviations";
 import {
   SK_COLLECTION_SERIES,
   SK_COLLECTION_PARSER_VERSION,

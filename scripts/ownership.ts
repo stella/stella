@@ -42,6 +42,11 @@ export const CI_MARKDOWN_READER_INPUTS = [
 
 export const SCHEMA_INTROSPECTION = [
   {
+    path: "apps/api/scripts/generate-entity-feature-gate-propagation.ts",
+    reason:
+      "Renders static gate propagation SQL from full-schema metadata without database operations.",
+  },
+  {
     path: "apps/api/scripts/generate-status-tables.ts",
     reason: "Enumerates full-schema metadata without database operations.",
   },
@@ -150,6 +155,9 @@ const enforcementCell = (enforcement: OwnershipEnforcement): string => {
     case "none": {
       return "none";
     }
+    case "custom-rule": {
+      return `custom rule \`${enforcement.rule}\` (${enforcement.reason})`;
+    }
     case "import": {
       const specifiers = enforcement.specifiers.join("`, `");
       return enforcement.names === undefined
@@ -164,6 +172,12 @@ const enforcementCell = (enforcement: OwnershipEnforcement): string => {
     }
     case "function-call": {
       return `call \`${enforcement.name}()\` in \`${enforcement.within.join("`, `")}\``;
+    }
+    case "table-column-read": {
+      const columns = enforcement.columns.map(
+        (column) => `${enforcement.table}.${column}`,
+      );
+      return `read \`${columns.join("`, `")}\`, including implicit full-row selections`;
     }
     case "status-set": {
       return "lifecycle updates, conflict sets and visible SQL assignments; lint errors plus measured per-file backlog and shrink-only ratchet";
@@ -181,7 +195,9 @@ const enforcementCell = (enforcement: OwnershipEnforcement): string => {
 const allowedFiles = (
   enforcement: OwnershipEnforcement,
 ): readonly AllowedFile[] =>
-  enforcement.kind === "none" ? [] : enforcement.allowed;
+  enforcement.kind === "none" || enforcement.kind === "custom-rule"
+    ? []
+    : enforcement.allowed;
 
 const allowedCell = (enforcement: OwnershipEnforcement): string => {
   const allowed = allowedFiles(enforcement);

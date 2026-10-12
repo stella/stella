@@ -452,6 +452,7 @@ describe("time billing on agent surfaces", () => {
         errorOf(
           await handleMcpToolCall({
             args: { capability, input: {} },
+            mode: "advanced",
             context: { ...enrolledContext(), grantedScopes: [] },
             toolName: MCP_CAPABILITY_EXECUTORS[access],
           }),

@@ -1,7 +1,7 @@
 import { Result, panic } from "better-result";
-import { createHash } from "node:crypto";
 
 import type { MatterActivityFilters } from "@stll/api-contract/matter-activity";
+import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
@@ -36,9 +36,9 @@ const matterActivityFilterKey = ({
   from,
   toExclusive,
 }: MatterActivityFilters): string =>
-  createHash("sha256")
-    .update(JSON.stringify([category, action, actorId, from, toExclusive]))
-    .digest("base64url");
+  hashSha256Base64Url(
+    JSON.stringify([category, action, actorId, from, toExclusive]),
+  );
 
 export const timestampMicroseconds = (value: string): bigint | null => {
   const instant = Result.try(() => Temporal.Instant.from(value));
@@ -150,6 +150,8 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   statute_annotation: "court",
   // Organization-scoped, so never part of one matter's activity.
   case_law_research_column: null,
+  // Reader answers follow personal sharing scope, never a matter's membership.
+  case_law_reader_answer: null,
   correspondence: "correspondence",
   bilingual_translation_run: "translationRun",
   document_translation_run: "translationRun",
@@ -164,6 +166,8 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   ai_memory: null,
   announcement: null,
   audit_log: null,
+  legal_resolve: null,
+  service_oauth_client: null,
   billing_code: null,
   chat_file: null,
   chat_message: null,
@@ -194,6 +198,8 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   rate_table: null,
   report_export: null,
   saved_search: null,
+  // Personal history is never shared through a matter's activity feed.
+  search_history: null,
   seller_profile: null,
   saved_time_narrative: null,
   number_series: null,

@@ -1,3 +1,4 @@
+// parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
 import { panic, Result } from "better-result";
 /**
  * Polish Constitutional Tribunal (Trybunał Konstytucyjny) adapter.
@@ -44,10 +45,13 @@ import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 
 import { isPolishConstitutionalDocket } from "@stll/api-contract/decision-docket-grammar";
+// parser-output-unchanged: error output projection only; parsed decision fields are unchanged.
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
@@ -95,10 +99,7 @@ import {
   fetchWithRetry,
   parsePublisherRetryAfter,
 } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import {
-  adapterCatch,
-  hashContent,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   listPlTkPageFields,
   parsePlTkText,
@@ -126,6 +127,7 @@ import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
 
+import { logDocumentParseFailure } from "./document-parse-failure";
 import { PL_TK_METADATA_URL_SCHEMA } from "./pl-tk.metadata-urls";
 
 // ── Publisher boundary ───────────────────────────────────
@@ -1081,10 +1083,10 @@ export const assemblePlTkDecision = ({
   if (parsed !== null && Result.isError(parsed)) {
     // The case page is stored verbatim below, so the text is recoverable by
     // re-parsing it rather than by asking the portal again.
-    logger.warn("case_law.ingestion.document_parse_failed", {
+    logDocumentParseFailure({
       adapterKey: ADAPTER_KEYS.PL_TK,
       caseNumber,
-      "error.type": parsed.error,
+      error: parsed.error,
     });
   }
   const document = parsed !== null && Result.isOk(parsed) ? parsed.value : null;

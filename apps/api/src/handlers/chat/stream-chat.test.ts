@@ -14,6 +14,7 @@ import type {
   StreamChunk,
   TokenUsage,
   ToolCallPart,
+  ToolResultPart,
   UIMessage,
 } from "@tanstack/ai";
 import { createOpenaiChat } from "@tanstack/ai-openai";
@@ -30,6 +31,7 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import {
   VISUAL_PREVIEW_TOOL_NAME,
   visualPreviewToolOutputSchema,
@@ -104,6 +106,7 @@ import {
   buildWireSnapshot,
   unsafeFixture,
 } from "@/api/tests/helpers/chat-fixtures";
+import { diffLiveAgainstReload } from "@/api/tests/helpers/chat-live-reload-invariants";
 import { memberDocumentWriteAccess } from "@/api/tests/helpers/document-write-access";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -136,6 +139,7 @@ import {
   remapOutgoingMessageIds,
 } from "./stream-message-identity";
 import type { MessageIdMapper, StoredHistory } from "./stream-message-identity";
+import type { TANSTACK_TOOL_RESULT_STATE_LIFECYCLE } from "./tanstack-chat-lifecycle";
 
 /** A run whose history the engine holds exactly as stored. */
 const NOTHING_REWRITTEN: StoredHistory = {
@@ -331,6 +335,7 @@ const createScriptedAdapter = (
       } satisfies AdapterYieldChunk;
     }
     yield {
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
       type: EventType.TOOL_CALL_START,
       toolCallId: callId,
       toolCallName: toolName,
@@ -456,9 +461,15 @@ const uncutTurnSignals = (): TurnSignals => {
 /** Run the loop's emission through the same persistence path as `streamChat`. */
 const persistNativeInterruptTurn = async (
   chunks: AsyncIterable<StreamChunk>,
-  signals: TurnSignals = uncutTurnSignals(),
+  signals: TurnSignals & {
+    initialMessages?: ChatMessage[];
+  } = uncutTurnSignals(),
 ) => {
-  const { teardownAfterSourceChunks, ...streamSignals } = signals;
+  const {
+    initialMessages = [],
+    teardownAfterSourceChunks,
+    ...streamSignals
+  } = signals;
   const messageId = toSafeId<"chatMessage">(
     "11111111-1111-4111-8111-111111111111",
   );
@@ -484,7 +495,7 @@ const persistNativeInterruptTurn = async (
   const output = processServerChatStream({
     ...streamSignals,
     getResponseMessage: () => responseMessage,
-    initialMessages: [],
+    initialMessages,
     mapMessageId,
     onFinish: (event) => {
       terminal.finish = event;
@@ -504,6 +515,792 @@ const persistNativeInterruptTurn = async (
   }
   return { emitted, finish: terminal.finish, source };
 };
+
+describe("snapshot tool-result reconciliation", () => {
+  const olderHistory = [
+    {
+      id: "older-user",
+      role: "user",
+      parts: [{ type: "text", content: "Earlier question" }],
+    },
+    {
+      id: "older-assistant",
+      role: "assistant",
+      parts: [{ type: "text", content: "Earlier answer" }],
+    },
+  ] satisfies ChatMessage[];
+  for (const historyLength of [0, 1, 2]) {
+    test(`history-only snapshots retain the streamed response with ${String(historyLength)} older messages`, async () => {
+      const history = olderHistory.slice(0, historyLength);
+      const snapshot = buildEngineSnapshot(history);
+      const { emitted, finish } = await persistNativeInterruptTurn(
+        streamChunks([
+          {
+            type: EventType.RUN_STARTED,
+            runId: "history-run",
+            threadId: "history-thread",
+          },
+          {
+            type: EventType.TEXT_MESSAGE_START,
+            messageId: "current-assistant",
+            role: "assistant",
+          },
+          {
+            type: EventType.TEXT_MESSAGE_CONTENT,
+            messageId: "current-assistant",
+            delta: "Current answer",
+          },
+          snapshot,
+          snapshot,
+          {
+            type: EventType.TEXT_MESSAGE_CONTENT,
+            messageId: "current-assistant",
+            delta: " continues.",
+          },
+          {
+            type: EventType.RUN_FINISHED,
+            runId: "history-run",
+            threadId: "history-thread",
+            finishReason: "stop",
+          },
+        ]),
+        { ...uncutTurnSignals(), initialMessages: history },
+      );
+      if (finish === null) {
+        panic("History-only snapshot did not persist its turn");
+      }
+      const client = new StreamProcessor();
+      let snapshots = 0;
+      for (const chunk of emitted) {
+        client.processChunk(chunk);
+        if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
+          continue;
+        }
+        snapshots += 1;
+        expect(
+          client
+            .getMessages()
+            .find(({ id }) => id === finish.responseMessage.id)?.parts,
+        ).toMatchObject([{ type: "text", content: "Current answer" }]);
+      }
+      expect(snapshots).toBe(2);
+      expect(finish.responseMessage.parts).toMatchObject([
+        { type: "text", content: "Current answer continues." },
+      ]);
+      const reload = chatMessageFromPersisted({
+        id: finish.responseMessage.id,
+        role: finish.responseMessage.role,
+        content: structuredClone(
+          chatMessageContentFromMessage(finish.responseMessage),
+        ),
+      });
+      expect(
+        diffLiveAgainstReload({
+          live: client.getMessages(),
+          reload: [...history, reload],
+        }),
+      ).toEqual([]);
+    });
+  }
+
+  for (const approved of [false, true]) {
+    for (const withResult of [false, true]) {
+      test(`snapshot-only ${approved ? "approval" : "denial"} survives reconciliation ${withResult ? "with" : "without"} a result and stale replay`, async () => {
+        const requested = {
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
+          type: "tool-call",
+          id: "snapshot-call",
+          name: "lookup",
+          arguments: "{}",
+          input: {},
+          state: "approval-requested",
+          approval: { id: "approval_snapshot-call", needsApproval: true },
+        } as const satisfies ToolCallPart;
+        const result = {
+          type: "tool-result",
+          toolCallId: requested.id,
+          state: approved ? "complete" : "error",
+          content: JSON.stringify(approved ? { ok: true } : { denied: true }),
+          ...(approved ? {} : { outcome: "denied" }),
+        } as const satisfies ToolResultPart;
+        const decided = {
+          ...requested,
+          approval: { ...requested.approval, approved },
+          state: withResult ? result.state : "approval-responded",
+          ...(withResult ? { output: JSON.parse(result.content) } : {}),
+        } satisfies ToolCallPart;
+        const initial = {
+          id: "snapshot-assistant",
+          role: "assistant",
+          parts: [requested],
+        } satisfies UIMessage;
+        const updated = {
+          ...initial,
+          parts: [decided, ...(withResult ? [result] : [])],
+        } satisfies UIMessage;
+        const snapshot = (message: typeof initial | typeof updated) =>
+          unsafeFixture(
+            "Approval reconciliation exercises the server's UI-parts snapshot extension",
+            {
+              type: EventType.MESSAGES_SNAPSHOT,
+              messages: [message],
+            } satisfies StreamChunk,
+          );
+        const { emitted, finish } = await persistNativeInterruptTurn(
+          streamChunks([
+            {
+              type: EventType.RUN_STARTED,
+              runId: "snapshot-run",
+              threadId: "snapshot-thread",
+            },
+            {
+              type: EventType.TEXT_MESSAGE_START,
+              messageId: initial.id,
+              role: "assistant",
+            },
+            {
+              type: EventType.TEXT_MESSAGE_CONTENT,
+              messageId: initial.id,
+              delta: "Checking the request.",
+            },
+            {
+              metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
+              type: EventType.TOOL_CALL_START,
+              parentMessageId: initial.id,
+              toolCallId: requested.id,
+              toolCallName: requested.name,
+            },
+            {
+              type: EventType.TOOL_CALL_ARGS,
+              toolCallId: requested.id,
+              delta: requested.arguments,
+            },
+            {
+              type: EventType.TOOL_CALL_END,
+              toolCallId: requested.id,
+              input: requested.input,
+            },
+            {
+              type: EventType.CUSTOM,
+              name: "approval-requested",
+              value: {
+                approval: requested.approval,
+                input: requested.input,
+                toolCallId: requested.id,
+                toolName: requested.name,
+              },
+            },
+            snapshot(initial),
+            snapshot(updated),
+            snapshot(initial),
+            {
+              type: EventType.RUN_FINISHED,
+              runId: "snapshot-run",
+              threadId: "snapshot-thread",
+              finishReason: "stop",
+            },
+          ]),
+        );
+        if (finish === null) {
+          panic("Snapshot decision did not persist its turn");
+        }
+        const client = new StreamProcessor();
+        let snapshots = 0;
+        for (const chunk of emitted) {
+          client.processChunk(chunk);
+          if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
+            continue;
+          }
+          snapshots += 1;
+          const call = client
+            .getMessages()
+            .flatMap(({ parts }) => parts)
+            .find(
+              (part) => part.type === "tool-call" && part.id === requested.id,
+            );
+          expect(call).toMatchObject(snapshots === 1 ? requested : decided);
+        }
+        expect(snapshots).toBe(3);
+        expect(
+          finish.responseMessage.parts.find(
+            (part) => part.type === "tool-call",
+          ),
+        ).toMatchObject(decided);
+        const content = structuredClone(
+          chatMessageContentFromMessage(finish.responseMessage),
+        );
+        const reload = chatMessageFromPersisted({
+          id: finish.responseMessage.id,
+          role: finish.responseMessage.role,
+          content,
+        });
+        expect(
+          reload.parts.find((part) => part.type === "tool-call"),
+        ).toMatchObject({
+          approval: { approved },
+          state: decided.state,
+        });
+        expect(
+          diffLiveAgainstReload({
+            live: client.getMessages(),
+            reload: [reload],
+          }),
+        ).toEqual([]);
+      });
+    }
+  }
+
+  for (const terminal of [false, true]) {
+    test(`streaming snapshot progress persists its latest content${terminal ? " without downgrading a terminal result" : ""}`, async () => {
+      const call = {
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
+        type: "tool-call",
+        id: "snapshot-call",
+        name: "lookup",
+        arguments: "{}",
+        input: {},
+        state: "input-complete",
+      } as const satisfies ToolCallPart;
+      const first = {
+        type: "tool-result",
+        toolCallId: call.id,
+        state: "streaming",
+        content: '{"progress":1}',
+      } as const satisfies ToolResultPart;
+      const second = { ...first, content: '{"progress":2}' };
+      const completed = {
+        ...second,
+        state: "complete",
+        content: '{"progress":3}',
+      } as const satisfies ToolResultPart;
+      const results = terminal
+        ? [first, second, completed, first]
+        : [first, second];
+      const expected = terminal
+        ? [first, second, completed, completed]
+        : [first, second];
+      const snapshots = results.map((result) => {
+        const message = {
+          id: "snapshot-assistant",
+          role: "assistant",
+          parts: [
+            {
+              ...call,
+              state:
+                result.state === "streaming" ? "input-complete" : result.state,
+            },
+            result,
+          ],
+        } satisfies UIMessage;
+        return unsafeFixture(
+          "The server snapshot extension carries incremental UI tool results",
+          {
+            type: EventType.MESSAGES_SNAPSHOT,
+            messages: [message],
+          } satisfies StreamChunk,
+        );
+      });
+      const { emitted, finish } = await persistNativeInterruptTurn(
+        streamChunks([
+          {
+            type: EventType.RUN_STARTED,
+            runId: "snapshot-run",
+            threadId: "snapshot-thread",
+          },
+          {
+            type: EventType.TEXT_MESSAGE_START,
+            messageId: "snapshot-assistant",
+            role: "assistant",
+          },
+          {
+            type: EventType.TEXT_MESSAGE_CONTENT,
+            messageId: "snapshot-assistant",
+            delta: "Checking progress.",
+          },
+          ...snapshots,
+          {
+            type: EventType.RUN_FINISHED,
+            runId: "snapshot-run",
+            threadId: "snapshot-thread",
+            finishReason: "stop",
+          },
+        ]),
+      );
+      if (finish === null) {
+        panic("Snapshot progress did not persist its turn");
+      }
+      const client = new StreamProcessor();
+      let snapshotIndex = 0;
+      for (const chunk of emitted) {
+        client.processChunk(chunk);
+        if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
+          continue;
+        }
+        const expectedResult = expected.at(snapshotIndex);
+        if (expectedResult === undefined) {
+          panic("Unexpected progress snapshot");
+        }
+        expect(
+          client
+            .getMessages()
+            .flatMap(({ parts }) => parts)
+            .find((part) => part.type === "tool-result"),
+        ).toMatchObject(expectedResult);
+        snapshotIndex += 1;
+      }
+      expect(snapshotIndex).toBe(results.length);
+      const latest = terminal ? completed : second;
+      expect(
+        finish.responseMessage.parts.find(
+          (part) => part.type === "tool-result",
+        ),
+      ).toMatchObject(latest);
+      expect(
+        finish.responseMessage.parts.find((part) => part.type === "tool-call"),
+      ).toMatchObject({
+        state: "complete",
+        output: { progress: terminal ? 3 : 2 },
+      });
+      const reload = chatMessageFromPersisted({
+        id: finish.responseMessage.id,
+        role: finish.responseMessage.role,
+        content: structuredClone(
+          chatMessageContentFromMessage(finish.responseMessage),
+        ),
+      });
+      expect(
+        reload.parts.find((part) => part.type === "tool-result"),
+      ).toMatchObject(latest);
+      expect(
+        diffLiveAgainstReload({ live: client.getMessages(), reload: [reload] }),
+      ).toEqual([]);
+    });
+  }
+
+  test("snapshot completion replaces partial call arguments without deltas", async () => {
+    const partial = {
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
+      type: "tool-call",
+      id: "snapshot-call",
+      name: "lookup",
+      arguments: '{"query":',
+      state: "input-streaming",
+    } as const satisfies ToolCallPart;
+    const complete = {
+      ...partial,
+      arguments: '{"query":"complete"}',
+      input: { query: "complete" },
+      metadata: { ...partial.metadata, provider: "snapshot" },
+      state: "input-complete",
+    } as const satisfies ToolCallPart;
+    const snapshots = [partial, complete].map((call) => {
+      const message = {
+        id: "snapshot-assistant",
+        role: "assistant",
+        parts: [call],
+      } satisfies UIMessage;
+      return unsafeFixture(
+        "The server snapshot extension carries complete UI call parts",
+        {
+          type: EventType.MESSAGES_SNAPSHOT,
+          messages: [message],
+        } satisfies StreamChunk,
+      );
+    });
+    const { emitted, finish } = await persistNativeInterruptTurn(
+      streamChunks([
+        {
+          type: EventType.RUN_STARTED,
+          runId: "snapshot-run",
+          threadId: "snapshot-thread",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: "snapshot-assistant",
+          role: "assistant",
+        },
+        ...snapshots,
+        {
+          type: EventType.RUN_FINISHED,
+          runId: "snapshot-run",
+          threadId: "snapshot-thread",
+          finishReason: "stop",
+        },
+      ]),
+    );
+    if (finish === null) {
+      panic("Snapshot arguments did not persist their turn");
+    }
+    const client = new StreamProcessor();
+    for (const chunk of emitted) {
+      client.processChunk(chunk);
+    }
+    expect(
+      finish.responseMessage.parts.find((part) => part.type === "tool-call"),
+    ).toMatchObject(complete);
+    const reload = chatMessageFromPersisted({
+      id: finish.responseMessage.id,
+      role: finish.responseMessage.role,
+      content: structuredClone(
+        chatMessageContentFromMessage(finish.responseMessage),
+      ),
+    });
+    expect(
+      reload.parts.find((part) => part.type === "tool-call"),
+    ).toMatchObject(complete);
+    expect(
+      diffLiveAgainstReload({ live: client.getMessages(), reload: [reload] }),
+    ).toEqual([]);
+  });
+
+  test("snapshot activity updates persist beside the streamed transcript", async () => {
+    const activity = {
+      type: "activity",
+      activityType: "review",
+      content: { status: "running" },
+    } as const;
+    const updated = { ...activity, content: { status: "complete" } };
+    const scoped = { ...activity, subagentRunId: "child-1" };
+    const snapshots = [activity, updated].map((part) => {
+      const message = {
+        id: "snapshot-assistant",
+        role: "assistant",
+        parts: [{ type: "text", content: "Flattened history" }, part, scoped],
+      } satisfies UIMessage;
+      return unsafeFixture(
+        "The server snapshot extension carries embedded activity parts",
+        {
+          type: EventType.MESSAGES_SNAPSHOT,
+          messages: [message],
+        } satisfies StreamChunk,
+      );
+    });
+    const { emitted, finish } = await persistNativeInterruptTurn(
+      streamChunks([
+        {
+          type: EventType.RUN_STARTED,
+          runId: "snapshot-run",
+          threadId: "snapshot-thread",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: "snapshot-assistant",
+          role: "assistant",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: "snapshot-assistant",
+          delta: "Checking the request.",
+        },
+        ...snapshots,
+        {
+          type: EventType.RUN_FINISHED,
+          runId: "snapshot-run",
+          threadId: "snapshot-thread",
+          finishReason: "stop",
+        },
+      ]),
+    );
+    if (finish === null) {
+      panic("Snapshot activity did not persist its turn");
+    }
+    const client = new StreamProcessor();
+    let snapshotCount = 0;
+    for (const chunk of emitted) {
+      client.processChunk(chunk);
+      if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
+        continue;
+      }
+      snapshotCount += 1;
+      expect(
+        client
+          .getMessages()
+          .flatMap(({ parts }) => parts)
+          .filter((part) => part.type === "activity"),
+      ).toEqual([snapshotCount === 1 ? activity : updated, scoped]);
+    }
+    expect(snapshotCount).toBe(2);
+    expect(finish.responseMessage.parts).toEqual([
+      { type: "text", content: "Checking the request." },
+      updated,
+      scoped,
+    ]);
+    const reload = chatMessageFromPersisted({
+      id: finish.responseMessage.id,
+      role: finish.responseMessage.role,
+      content: structuredClone(
+        chatMessageContentFromMessage(finish.responseMessage),
+      ),
+    });
+    expect(reload.parts.filter((part) => part.type === "activity")).toEqual([
+      updated,
+      scoped,
+    ]);
+    expect(
+      diffLiveAgainstReload({ live: client.getMessages(), reload: [reload] }),
+    ).toEqual([]);
+  });
+
+  test("snapshot presentation parts retain terminal structured output and media", async () => {
+    const media = {
+      type: "audio",
+      source: {
+        type: "url",
+        value: "https://example.test/answer.mp3",
+        mimeType: "audio/mpeg",
+      },
+    } as const;
+    const complete = {
+      type: "structured-output",
+      status: "complete",
+      raw: '{"answer":"ready"}',
+      data: { answer: "ready" },
+    } as const;
+    const partial = {
+      type: "structured-output",
+      status: "streaming",
+      raw: '{"answer":',
+      partial: {},
+    } as const;
+    const snapshots = [partial, complete, partial].map((part) => {
+      const message = {
+        id: "snapshot-assistant",
+        role: "assistant",
+        parts: [part, media],
+      } satisfies UIMessage;
+      return unsafeFixture(
+        "The server snapshot extension carries presentation parts",
+        {
+          type: EventType.MESSAGES_SNAPSHOT,
+          messages: [message],
+        } satisfies StreamChunk,
+      );
+    });
+    const { emitted, finish } = await persistNativeInterruptTurn(
+      streamChunks([
+        {
+          type: EventType.RUN_STARTED,
+          runId: "snapshot-run",
+          threadId: "snapshot-thread",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: "snapshot-assistant",
+          role: "assistant",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: "snapshot-assistant",
+          delta: "Answer",
+        },
+        ...snapshots,
+        {
+          type: EventType.RUN_FINISHED,
+          runId: "snapshot-run",
+          threadId: "snapshot-thread",
+          finishReason: "stop",
+        },
+      ]),
+    );
+    if (finish === null) {
+      panic("Snapshot presentation did not persist its turn");
+    }
+    expect(finish.responseMessage.parts).toEqual([
+      { type: "text", content: "Answer" },
+      complete,
+      media,
+    ]);
+    const client = new StreamProcessor();
+    for (const chunk of emitted) {
+      client.processChunk(chunk);
+    }
+    const reload = chatMessageFromPersisted({
+      id: finish.responseMessage.id,
+      role: finish.responseMessage.role,
+      content: structuredClone(
+        chatMessageContentFromMessage(finish.responseMessage),
+      ),
+    });
+    expect(
+      diffLiveAgainstReload({ live: client.getMessages(), reload: [reload] }),
+    ).toEqual([]);
+  });
+
+  const canonicalResults = {
+    streaming: {
+      type: "tool-result",
+      toolCallId: "snapshot-call",
+      state: "streaming",
+      content: "Canonical partial result",
+    },
+    complete: {
+      type: "tool-result",
+      toolCallId: "snapshot-call",
+      state: "complete",
+      content: "Canonical completed result",
+    },
+    error: {
+      type: "tool-result",
+      toolCallId: "snapshot-call",
+      state: "error",
+      content: "Canonical denied result",
+      error: "The user declined the call",
+      outcome: "denied",
+    },
+  } as const satisfies Record<
+    keyof typeof TANSTACK_TOOL_RESULT_STATE_LIFECYCLE,
+    ToolResultPart
+  >;
+  const results = Object.values(canonicalResults);
+  const previousResults = [...results, undefined];
+  for (const previous of previousResults) {
+    for (const next of results) {
+      test(`selects the more final result for ${previous?.state ?? "absent"} followed by ${next.state}`, async () => {
+        const incoming = {
+          ...next,
+          content: `Snapshot ${next.state} result`,
+        };
+        const expected =
+          previous === undefined || previous.state === "streaming"
+            ? incoming
+            : previous;
+        const toolCall = {
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
+          type: "tool-call",
+          id: "snapshot-call",
+          name: "lookup",
+          arguments: "{}",
+          input: {},
+          state:
+            previous === undefined || previous.state === "streaming"
+              ? "input-complete"
+              : previous.state,
+          ...(previous === undefined ? {} : { output: previous.content }),
+        } as const satisfies ToolCallPart;
+        const initial = {
+          id: "snapshot-assistant",
+          role: "assistant",
+          parts: [toolCall, ...(previous === undefined ? [] : [previous])],
+        } satisfies UIMessage;
+        const updated = {
+          id: initial.id,
+          role: "assistant",
+          parts: [
+            {
+              ...toolCall,
+              state: next.state === "streaming" ? "input-complete" : next.state,
+              output: incoming.content,
+            },
+            incoming,
+          ],
+        } satisfies UIMessage;
+        const { emitted, finish } = await persistNativeInterruptTurn(
+          streamChunks([
+            {
+              type: EventType.RUN_STARTED,
+              runId: "snapshot-run",
+              threadId: "snapshot-thread",
+            },
+            {
+              type: EventType.TEXT_MESSAGE_START,
+              messageId: initial.id,
+              role: "assistant",
+            },
+            {
+              type: EventType.TEXT_MESSAGE_CONTENT,
+              messageId: initial.id,
+              delta: "Checking the result.",
+            },
+            unsafeFixture(
+              "Exhaustive result-state matrix preserves the server's UI-parts snapshot extension without model-history conversion",
+              {
+                type: EventType.MESSAGES_SNAPSHOT,
+                messages: [initial],
+              } satisfies StreamChunk,
+            ),
+            unsafeFixture(
+              "Exhaustive result-state matrix preserves the server's UI-parts snapshot extension without model-history conversion",
+              {
+                type: EventType.MESSAGES_SNAPSHOT,
+                messages: [updated],
+              } satisfies StreamChunk,
+            ),
+            {
+              type: EventType.RUN_FINISHED,
+              runId: "snapshot-run",
+              threadId: "snapshot-thread",
+              finishReason: "stop",
+            },
+          ]),
+        );
+        if (finish === null) {
+          panic("Snapshot reconciliation did not persist its turn");
+        }
+        const client = new StreamProcessor();
+        let snapshots = 0;
+        for (const chunk of emitted) {
+          client.processChunk(chunk);
+          if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
+            continue;
+          }
+          snapshots += 1;
+          const visibleResults = client
+            .getMessages()
+            .flatMap(({ parts }) =>
+              parts.filter((part) => part.type === "tool-result"),
+            );
+          const initialResults = previous === undefined ? [] : [previous];
+          const expectedResults = snapshots === 1 ? initialResults : [expected];
+          expect(visibleResults).toHaveLength(expectedResults.length);
+          expect(visibleResults).toMatchObject(expectedResults);
+          const visibleCalls = client
+            .getMessages()
+            .flatMap(({ parts }) =>
+              parts.filter((part) => part.type === "tool-call"),
+            );
+          const selected = snapshots === 1 ? previous : expected;
+          expect(visibleCalls).toHaveLength(1);
+          expect(visibleCalls.every((call) => !("approval" in call))).toBe(
+            true,
+          );
+          const selectedState =
+            selected?.state === "streaming" ? "complete" : selected?.state;
+          expect(visibleCalls).toMatchObject([
+            {
+              id: toolCall.id,
+              state: selectedState ?? "input-complete",
+              ...(selected === undefined ? {} : { output: selected.content }),
+            },
+          ]);
+        }
+        expect(snapshots).toBe(2);
+        const storedResults = finish.responseMessage.parts.filter(
+          (part) => part.type === "tool-result",
+        );
+        expect(storedResults).toHaveLength(1);
+        expect(storedResults).toMatchObject([expected]);
+        expect(
+          finish.responseMessage.parts.filter(
+            (part) => part.type === "tool-call",
+          ),
+        ).toHaveLength(1);
+        const reload = chatMessageFromPersisted({
+          id: finish.responseMessage.id,
+          role: finish.responseMessage.role,
+          content: structuredClone(
+            chatMessageContentFromMessage(finish.responseMessage),
+          ),
+        });
+        expect(
+          diffLiveAgainstReload({
+            live: client.getMessages(),
+            reload: [reload],
+          }),
+        ).toEqual([]);
+      });
+    }
+  }
+});
 
 test("transient visual preview reaches the in-turn model but not wire, persistence or reload", async () => {
   const preview = {
@@ -715,6 +1512,7 @@ describe("transient visual preview fault persistence", () => {
               role: "assistant",
             };
             yield {
+              metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
               type: EventType.TOOL_CALL_START,
               toolCallId: "preview-call",
               toolCallName: VISUAL_PREVIEW_TOOL_NAME,
@@ -898,6 +1696,7 @@ const createAbortedAfterToolCallAdapter = (cut: () => void): AnyTextAdapter => {
         timestamp,
       } satisfies AdapterYieldChunk;
       yield {
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: EventType.TOOL_CALL_START,
         toolCallId: "call-1",
         toolCallName: "run-code",
@@ -1428,6 +2227,7 @@ describe("admission lost before continuation production retains the original che
         role: "assistant",
         parts: [
           {
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             type: "tool-call",
             id: "original_call",
             name: "web_search",
@@ -1513,6 +2313,7 @@ describe("native interrupt boundary persistence", () => {
         input: { name: "NDA", source: "@title NDA" },
         name: "create-document",
         state: "input-complete",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
       },
     ]);
@@ -1553,6 +2354,7 @@ describe("native interrupt boundary persistence", () => {
         id: "call-1",
         name: "mcp__external__delete",
         state: "approval-requested",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
       },
     ]);
@@ -1713,6 +2515,7 @@ describe("native interrupt boundary persistence", () => {
         id: "call-1",
         name: SUGGEST_CHANGES_TOOL_NAME,
         state: "approval-requested",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
       },
     ]);
@@ -1797,6 +2600,7 @@ describe("native interrupt boundary persistence", () => {
         input: { subagents: [{ title: "List matters", task: "list matters" }] },
         name: SPAWN_SUBAGENTS_TOOL_NAME,
         state: "approval-requested",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
       },
     ]);
@@ -1849,6 +2653,17 @@ describe("native interrupt boundary persistence", () => {
       { toolCallId: "call-1", type: "tool-result" },
       { id: "call-2", name: "create-document", state: "input-complete" },
     ]);
+    const client = createStreamMessageCapture({
+      initialMessages: [],
+      capture: toChatMessage,
+    });
+    for (const chunk of emitted) {
+      client.processor.processChunk(chunk);
+    }
+    const visible = client.processor
+      .getMessages()
+      .find(({ id }) => id === finish?.responseMessage.id);
+    expect(visible?.parts).toEqual(finish?.responseMessage.parts);
     // The client-facing snapshot presents the same single assistant message,
     // under the persisted id, so the continuation targets the persisted turn.
     const snapshot = emitted.find(
@@ -1905,6 +2720,7 @@ describe("native continuation persistence", () => {
         input: { name: "Repro", source: "@title Repro" },
         name: "save_playbook",
         state: "approval-responded",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
       },
     ],
@@ -2002,6 +2818,7 @@ describe("native continuation persistence", () => {
         name: "save_playbook",
         output: { playbookId: "playbook-1" },
         state: "complete",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
       },
       { state: "complete", toolCallId: "call-1", type: "tool-result" },
@@ -2089,6 +2906,7 @@ describe("native continuation persistence", () => {
             name: "list_templates",
             output: { templates: [] },
             state: "complete",
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             type: "tool-call",
           },
           {
@@ -2165,6 +2983,7 @@ describe("outgoing chat stream message ids", () => {
     const askUserCallSequences = [
       [
         {
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: EventType.TOOL_CALL_START,
           parentMessageId: "provider-message",
           toolCallId: "ask-awaiting-input",
@@ -2173,6 +2992,7 @@ describe("outgoing chat stream message ids", () => {
       ],
       [
         {
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: EventType.TOOL_CALL_START,
           parentMessageId: "provider-message",
           toolCallId: "ask-input-complete",
@@ -2191,6 +3011,7 @@ describe("outgoing chat stream message ids", () => {
       ],
       [
         {
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: EventType.TOOL_CALL_START,
           parentMessageId: "provider-message",
           toolCallId: "ask-input-streaming",
@@ -2300,6 +3121,7 @@ describe("outgoing chat stream message ids", () => {
               value: { messageId: "openrouter-responses-a" },
             },
             {
+              metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
               type: EventType.TOOL_CALL_START,
               parentMessageId: "openrouter-responses-b",
               toolCallId: "tool-1",
@@ -2335,6 +3157,7 @@ describe("outgoing chat stream message ids", () => {
         value: { messageId: firstId },
       },
       {
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: EventType.TOOL_CALL_START,
         parentMessageId: firstId,
         toolCallId: "tool-1",
@@ -2417,6 +3240,7 @@ describe("outgoing chat stream message ids", () => {
             toolCallId: "tool-existing",
           },
           {
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             type: EventType.TOOL_CALL_START,
             parentMessageId: "assistant-previous",
             toolCallId: "tool-follow-up",
@@ -2479,6 +3303,7 @@ describe("outgoing chat stream message ids", () => {
         toolCallId: "tool-existing",
       },
       {
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: EventType.TOOL_CALL_START,
         parentMessageId: "assistant-previous",
         toolCallId: "tool-follow-up",
@@ -2540,6 +3365,7 @@ describe("outgoing chat stream message ids", () => {
             },
           ]),
           {
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             type: EventType.TOOL_CALL_START,
             parentMessageId: "provider-message-2",
             toolCallId: "call-2",
@@ -2567,6 +3393,7 @@ describe("outgoing chat stream message ids", () => {
         },
       ]),
       {
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: EventType.TOOL_CALL_START,
         parentMessageId: owningMessageId,
         toolCallId: "call-2",
@@ -2598,6 +3425,7 @@ describe("outgoing chat stream message ids", () => {
               id: "tool-1",
               name: "ask-user",
               state: "input-complete",
+              metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
               type: "tool-call",
             },
           ],
@@ -2617,6 +3445,7 @@ describe("outgoing chat stream message ids", () => {
             id: "tool-1",
             name: "ask-user",
             state: "input-complete",
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             type: "tool-call",
           },
         ],
@@ -2949,6 +3778,7 @@ describe("outgoing chat stream message ids", () => {
           threadId: "thread-1",
         },
         {
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: EventType.TOOL_CALL_START,
           parentMessageId: "provider-list-message",
           toolCallId: "list-call",
@@ -2981,6 +3811,7 @@ describe("outgoing chat stream message ids", () => {
           threadId: "thread-1",
         },
         {
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: EventType.TOOL_CALL_START,
           parentMessageId: "provider-ask-message",
           toolCallId: "ask-call",
@@ -3101,6 +3932,7 @@ describe("outgoing chat stream message ids", () => {
       source: streamChunks([
         { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
         {
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: EventType.TOOL_CALL_START,
           parentMessageId: "provider-message",
           toolCallId: "tool-1",
@@ -3707,27 +4539,30 @@ describe("interrupt snapshot assistant message identity", () => {
     input: { question: "Which side?" },
     name: "ask-user",
     state: "input-complete",
+    metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
     type: "tool-call",
   });
 
   /** A tool call the user has answered, followed by its result part. */
-  const answeredCall = (id: string): [ToolCallChatPart, ChatMessagePart] => [
-    {
-      arguments: '{"question":"Which side?"}',
-      id,
-      input: { question: "Which side?" },
-      name: "ask-user",
-      output: { answers: [{ answer: id, question: "Which side?" }] },
-      state: "complete",
-      type: "tool-call",
-    },
-    {
-      content: JSON.stringify({ answers: [{ answer: id }] }),
-      state: "complete",
-      toolCallId: id,
-      type: "tool-result",
-    },
-  ];
+  const answeredCall = (id: string) =>
+    [
+      {
+        arguments: '{"question":"Which side?"}',
+        id,
+        input: { question: "Which side?" },
+        name: "ask-user",
+        output: { answers: [{ answer: id, question: "Which side?" }] },
+        state: "complete",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
+        type: "tool-call",
+      },
+      {
+        content: JSON.stringify({ answers: [{ answer: id }] }),
+        state: "complete",
+        toolCallId: id,
+        type: "tool-result",
+      },
+    ] as const satisfies readonly [ToolCallChatPart, ChatMessagePart];
 
   type RemapSnapshotOptions = {
     history: readonly ChatMessage[];
@@ -3895,7 +4730,7 @@ describe("interrupt snapshot assistant message identity", () => {
           id: "provider-message-2",
           role: "assistant",
           parts: [
-            { ...askTwo, metadata: { signature: "ask-2" } },
+            { ...askTwo, metadata: { ...askTwo.metadata, signature: "ask-2" } },
             askTwoResult,
           ],
         },
@@ -3903,7 +4738,13 @@ describe("interrupt snapshot assistant message identity", () => {
           id: "provider-message-3",
           role: "assistant",
           parts: [
-            { ...pendingCall("ask-3"), metadata: { signature: "ask-3" } },
+            {
+              ...pendingCall("ask-3"),
+              metadata: {
+                [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client",
+                signature: "ask-3",
+              },
+            },
           ],
         },
       ],
@@ -3918,10 +4759,28 @@ describe("interrupt snapshot assistant message identity", () => {
         ),
       ),
     ).toEqual([
-      { id: "load-skill", metadata: undefined },
-      { id: "ask-1", metadata: undefined },
-      { id: "ask-2", metadata: { signature: "ask-2" } },
-      { id: "ask-3", metadata: { signature: "ask-3" } },
+      {
+        id: "load-skill",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
+      },
+      {
+        id: "ask-1",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
+      },
+      {
+        id: "ask-2",
+        metadata: {
+          [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client",
+          signature: "ask-2",
+        },
+      },
+      {
+        id: "ask-3",
+        metadata: {
+          [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client",
+          signature: "ask-3",
+        },
+      },
     ]);
   });
 
@@ -4125,6 +4984,7 @@ describe("chat stream client-disconnect persistence", () => {
       source: streamChunks([
         { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
         {
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: EventType.TOOL_CALL_START,
           parentMessageId: "provider-message",
           toolCallId: "search-call",
@@ -4163,6 +5023,7 @@ describe("chat stream client-disconnect persistence", () => {
         id: "search-call",
         name: "ask-user",
         state: "input-streaming",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: "tool-call",
       },
     ]);
@@ -4652,6 +5513,7 @@ describe("chat stream refs", () => {
       source: streamChunks([
         { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
         {
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: EventType.TOOL_CALL_START,
           parentMessageId: "provider-message",
           toolCallId: "tool-1",
@@ -4744,6 +5606,7 @@ describe("chat stream refs", () => {
             input: { name: `[NDA](${ref})` },
             name: "mcp__external__delete",
             state: "approval-responded",
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             type: "tool-call",
           },
         ],
@@ -4980,6 +5843,7 @@ describe("chat stream refs", () => {
     const matterRef = registry.toMatterRef(workspaceId);
     const chunks: StreamChunk[] = [
       {
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: EventType.TOOL_CALL_START,
         toolCallId: "tool_1",
         toolCallName: "list_matters",
@@ -5036,6 +5900,7 @@ describe("chat stream refs", () => {
         restorationPairs: [],
         source: streamChunks([
           {
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             type: EventType.TOOL_CALL_START,
             toolCallId: "tool_1",
             toolCallName: "mcp__external__opaque",
@@ -5540,6 +6405,7 @@ describe("a superseded client-tool call in the engine's history", () => {
           id: "call-ask",
           name: "ask-user",
           state: "error",
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: "tool-call",
         },
       ],
@@ -5565,6 +6431,7 @@ describe("a superseded client-tool call in the engine's history", () => {
         threadId: "thread-1",
         tools: [askUserTool],
       }),
+      { ...uncutTurnSignals(), initialMessages: messages },
     );
 
   test("canary: the engine ends the raw history with an empty completion", async () => {
@@ -5611,6 +6478,7 @@ describe("native visual stream persistence", () => {
         threadId: "visual-thread",
       },
       {
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: EventType.TOOL_CALL_START,
         parentMessageId: messageId,
         toolCallId: "visual-call",
@@ -5618,6 +6486,7 @@ describe("native visual stream persistence", () => {
       },
       { type: EventType.CUSTOM, name: "ui-resource", value: part },
       {
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
         type: EventType.TOOL_CALL_START,
         parentMessageId: messageId,
         toolCallId: "client-call",
@@ -5750,4 +6619,144 @@ describe("native visual stream persistence", () => {
       content: "Selection received.",
     });
   });
+});
+
+test("an error after a snapshot reasserts its assistant owner without opening another message", async () => {
+  const result = await persistNativeInterruptTurn(
+    streamChunks([
+      {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId: "snapshot-owner",
+        role: "assistant",
+      },
+      {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: "snapshot-owner",
+        delta: "Saved answer",
+      },
+      buildWireSnapshot([
+        {
+          id: "snapshot-owner",
+          role: "assistant",
+          parts: [{ type: "text", content: "Saved answer" }],
+        },
+      ]),
+      {
+        type: EventType.RUN_ERROR,
+        message: "Provider failed",
+        code: "overloaded",
+      },
+    ]),
+  );
+  const errorIndex = result.emitted.findIndex(
+    (chunk) => chunk.type === EventType.RUN_ERROR,
+  );
+  expect(result.emitted.at(errorIndex - 1)).toMatchObject({
+    type: EventType.TEXT_MESSAGE_START,
+    messageId: result.finish?.responseMessage.id,
+  });
+  const capture = createStreamMessageCapture({
+    initialMessages: [],
+    capture: (message) => message,
+  });
+  for (const chunk of result.emitted) {
+    capture.processor.processChunk(chunk);
+  }
+  expect(capture.processor.getMessages()).toHaveLength(1);
+  expect(capture.processor.getMessages().at(0)?.id).toBe(
+    result.finish?.responseMessage.id,
+  );
+  expect(capture.processor.getMessages().at(0)?.parts).toEqual(
+    result.finish?.responseMessage.parts,
+  );
+});
+
+test("a provider diagnostic is redacted in what is streamed, stored and reloaded", async () => {
+  const keyFragment = "sk-proj-********************wxyz";
+  const providerDiagnostic = {
+    provider: "openai",
+    code: null,
+    message: `Incorrect API key provided: ${keyFragment}. Bearer fixture.token.value at https://fixture-user:fixture-secret@provider.example.test`,
+  };
+  const chunks = async function* (): AsyncIterable<StreamChunk> {
+    yield {
+      type: EventType.RUN_ERROR,
+      message: "invalid_request_error",
+      metadata: { providerDiagnostic },
+    };
+  };
+  const result = await persistNativeInterruptTurn(chunks());
+  const terminal = result.emitted.find(
+    (chunk) => chunk.type === EventType.RUN_ERROR,
+  );
+  const response = result.finish?.responseMessage;
+  if (response === undefined) {
+    throw new TypeError("Expected terminal response");
+  }
+  const reloaded = normalizePersistedChatMessageContent(
+    toPersistedChatMessageContentV3({
+      data: response.parts,
+      metadata: response.metadata,
+    }),
+  );
+  const surfaces = {
+    streamed: JSON.stringify(terminal?.metadata),
+    stored: JSON.stringify(response.metadata.turnOutcome),
+    reloaded: JSON.stringify(reloaded.metadata.turnOutcome),
+  };
+  for (const [surface, text] of Object.entries(surfaces)) {
+    expect(text, surface).toContain("Incorrect API key provided:");
+    for (const fragment of [
+      "wxyz",
+      "fixture.token.value",
+      "fixture-user",
+      "fixture-secret",
+    ]) {
+      expect(text, `${surface} keeps ${fragment}`).not.toContain(fragment);
+    }
+  }
+});
+
+test("provider diagnostic matches the wire and persisted terminal outcome", async () => {
+  const providerDiagnostic = {
+    provider: "anthropic",
+    code: "ai_config_anthropic_workspace_required",
+    message: "Workspace required",
+  } as const;
+  const chunks = async function* (): AsyncIterable<StreamChunk> {
+    yield {
+      type: EventType.RUN_ERROR,
+      message: "invalid_request_error",
+      metadata: { providerDiagnostic },
+      rawEvent: {
+        error: { type: "invalid_request_error", message: "Workspace required" },
+      },
+    };
+  };
+  const result = await persistNativeInterruptTurn(chunks());
+  const terminal = result.emitted.find(
+    (chunk) => chunk.type === EventType.RUN_ERROR,
+  );
+  expect(terminal?.metadata?.["providerDiagnostic"]).toEqual(
+    providerDiagnostic,
+  );
+  expect(result.finish?.outcome).toMatchObject({
+    type: "failed",
+    providerDiagnostic,
+  });
+  const response = result.finish?.responseMessage;
+  expect(response?.metadata.turnOutcome).toMatchObject({
+    type: "failed",
+    providerDiagnostic,
+  });
+  if (response === undefined) {
+    throw new TypeError("Expected terminal response");
+  }
+  const reloaded = normalizePersistedChatMessageContent(
+    toPersistedChatMessageContentV3({
+      data: response.parts,
+      metadata: response.metadata,
+    }),
+  );
+  expect(reloaded.metadata.turnOutcome).toEqual(response.metadata.turnOutcome);
 });

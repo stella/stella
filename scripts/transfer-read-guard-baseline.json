@@ -588,7 +588,7 @@
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
-    "file": "apps/api/src/handlers/entities/publish-folio-collab-version.ts",
+    "file": "apps/api/src/lib/entity-versions/publish-folio-collab-checkpoint.ts",
     "function": "module/loadRoomContributors",
     "kind": "constant-limit",
     "count": 1,
@@ -1158,7 +1158,7 @@
     "file": "apps/api/src/lib/document-processing-queue.ts",
     "function": "module/persistMissingNativeExtractionRuns",
     "kind": "constant-limit",
-    "count": 3,
+    "count": 2,
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
@@ -1178,13 +1178,6 @@
   {
     "file": "apps/api/src/lib/document-processing-queue.ts",
     "function": "module/recoverMissingNativeExtractionRuns",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-queue.ts",
-    "function": "module/recoverRetryableOcrFailures",
     "kind": "constant-limit",
     "count": 1,
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
@@ -1957,13 +1950,6 @@
     "function": "module/MessageExportMenu/handleExport",
     "kind": "total-timeout-body",
     "count": 2,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/components/dev/autocomplete-playground.tsx",
-    "function": "module/startStream",
-    "kind": "numeric-timeout",
-    "count": 1,
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {

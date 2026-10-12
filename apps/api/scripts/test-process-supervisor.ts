@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import { appendFileSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { printError } from "@stll/errors";
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
 // A measured CI solo batch (254 chat turn tests) took 250.9s. Ten minutes
@@ -175,9 +176,7 @@ export class TestProcessSupervisor {
       catch: operationError,
     });
     if (reported.isErr()) {
-      process.stderr.write(
-        `${text}\nDiagnostic callback failed: ${reported.error.message}\n`,
-      );
+      printError(text, "Diagnostic callback failed:", reported.error);
     }
   }
 

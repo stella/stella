@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { stableStringify } from "@stll/stable-stringify";
 
 import type { SafeId } from "@/api/lib/branded-types";
@@ -19,15 +20,13 @@ type ComparisonVersionIdentity = {
 
 /** Immutable comparison inputs identify one saved artifact, including on retry. */
 export const comparisonVersionId = (identity: ComparisonVersionIdentity) => {
-  const digest = new Bun.CryptoHasher("sha256")
-    .update(
-      stableStringify({
-        operation: "documents.compare",
-        revisionFormat: "folio-exact",
-        ...identity,
-      }),
-    )
-    .digest("hex");
+  const digest = hashSha256Hex(
+    stableStringify({
+      operation: "documents.compare",
+      revisionFormat: "folio-exact",
+      ...identity,
+    }),
+  );
   // UUIDv8 reserves application-defined bits; keep 122 bits of the digest.
   const variant =
     UUID_V8_VARIANTS.at(Number.parseInt(digest.slice(16, 17), 16) % 4) ??

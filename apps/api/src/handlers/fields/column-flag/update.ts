@@ -54,6 +54,7 @@ const COLUMN_METADATA_FLAG = {
 } as const;
 
 const config = {
+  contract: "patch",
   description:
     "Set or clear the verified or locked flag on one column's cells across " +
     "every document a filter selects in a matter, working in batches until " +

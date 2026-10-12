@@ -1,3 +1,4 @@
+import { Result, TaggedError } from "better-result";
 /**
  * The stored raw of a CourtListener record and the hash that decides whether
  * a later edition of it changed anything.
@@ -8,11 +9,10 @@
  * publisher text survive storage and decode to the exact original strings.
  */
 
-import { Result, TaggedError } from "better-result";
-
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { stableStringify } from "@stll/stable-stringify";
 
-import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,

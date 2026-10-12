@@ -1,4 +1,6 @@
 import { useRef, useState } from "react";
+
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 /**
  * Unified document translation trigger and background run dialog.
  *
@@ -6,8 +8,6 @@ import { useRef, useState } from "react";
  * while the run is in progress; the mounted toolbar keeps polling and posts a
  * toast with an Open action when the output is ready.
  */
-
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouteContext } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
@@ -63,6 +63,10 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import {
+  CapabilityAction,
+  useActionCapabilities,
+} from "@/lib/organization/feature-access/capability-actions";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
@@ -185,11 +189,20 @@ export const TranslateDocumentDialog = (
     );
   }
   const canUseDeepL = availability?.configured === true;
-  const choice = activeTranslationChoice({
-    selected: selectedChoice,
-    canUseDeepL,
-    isDocx,
-  });
+  const actionCapabilities = useActionCapabilities(
+    isDocx ? "translation" : "deepl",
+  );
+  const translationCapability =
+    actionCapabilities.capabilities[isDocx ? "translation" : "deepl"];
+  const canUseAI = actionCapabilities.capabilities.ai.type === "available";
+  const choice =
+    !canUseAI && canUseDeepL
+      ? "translated:deepl"
+      : activeTranslationChoice({
+          selected: selectedChoice,
+          canUseDeepL,
+          isDocx,
+        });
   const isDeepL = choice === "translated:deepl";
   const targetLang =
     targetSelection?.documentKey === documentKey
@@ -408,6 +421,7 @@ export const TranslateDocumentDialog = (
   const isLoadingRun = runId !== null && runQuery.isPending;
   const isRunning = run ? isDocumentTranslationRunActive(run.status) : false;
   const canStart =
+    (isDeepL ? canUseDeepL : canUseAI) &&
     canTranslateDocument({ canUseDeepL, isDocx }) &&
     canStartDocumentTranslation({
       canUseDeepL,
@@ -423,6 +437,9 @@ export const TranslateDocumentDialog = (
   return (
     <Dialog
       onOpenChange={(nextOpen) => {
+        if (nextOpen && translationCapability.type !== "available") {
+          return;
+        }
         if (nextOpen && run && !isRunning) {
           setRunId(null);
           setCommentPolicyState({ type: "unchecked" });
@@ -432,20 +449,28 @@ export const TranslateDocumentDialog = (
       open={open}
     >
       {props.mode !== "controlled" && (
-        <DialogTrigger
-          disabled={disabled}
-          render={
-            <Button
-              aria-label={t("common.translate")}
+        <CapabilityAction
+          action={{ capability: isDocx ? "translation" : "deepl" }}
+          surface="control"
+        >
+          {(capabilityProps) => (
+            <DialogTrigger
               disabled={disabled}
-              size="icon-xs"
-              tooltip={t("common.translate")}
-              variant="ghost"
-            >
-              <LanguagesIcon className="size-3.5" />
-            </Button>
-          }
-        />
+              render={
+                <Button
+                  aria-label={t("common.translate")}
+                  disabled={disabled}
+                  size="icon-xs"
+                  tooltip={t("common.translate")}
+                  variant="ghost"
+                >
+                  <LanguagesIcon className="size-3.5" />
+                </Button>
+              }
+              {...capabilityProps}
+            />
+          )}
+        </CapabilityAction>
       )}
       <DialogPopup>
         <DialogFormState
@@ -514,7 +539,7 @@ export const TranslateDocumentDialog = (
                 </legend>
                 <RadioCard
                   checked={choice === "translated:ai"}
-                  disabled={!isDocx}
+                  disabled={!isDocx || !canUseAI}
                   label={t("translate.dialog.translatedDocumentAi")}
                   onChange={() => setChoice("translated:ai")}
                   description={t("translate.dialog.aiDescription")}
@@ -522,7 +547,7 @@ export const TranslateDocumentDialog = (
                 />
                 <RadioCard
                   checked={choice === "bilingual:ai"}
-                  disabled={!isDocx}
+                  disabled={!isDocx || !canUseAI}
                   label={t("translate.dialog.bilingualDocument")}
                   onChange={() => setChoice("bilingual:ai")}
                   description={t("translate.dialog.bilingualDescription")}

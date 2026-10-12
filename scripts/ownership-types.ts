@@ -8,6 +8,11 @@ export type AllowedFile = {
 export type OwnershipEnforcement =
   | { readonly kind: "none" }
   | {
+      readonly kind: "custom-rule";
+      readonly rule: string;
+      readonly reason: string;
+    }
+  | {
       readonly kind: "literal-pattern";
       readonly pattern: string;
       readonly allowed: readonly AllowedFile[];
@@ -48,6 +53,13 @@ export type OwnershipEnforcement =
       readonly kind: "function-call";
       readonly name: string;
       readonly within: readonly string[];
+      readonly allowed: readonly AllowedFile[];
+    }
+  | {
+      readonly kind: "table-column-read";
+      readonly specifiers: readonly string[];
+      readonly table: string;
+      readonly columns: readonly string[];
       readonly allowed: readonly AllowedFile[];
     };
 

@@ -2,6 +2,7 @@ import { Result, UnhandledException } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import {
@@ -55,6 +56,10 @@ import type {
   S3ObjectWriteCertainty,
 } from "@/api/lib/s3";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+
+export const hashFolioCollabCheckpoint = (
+  checkpointBytes: Uint8Array,
+): string => hashSha256Hex(checkpointBytes);
 
 const CHECKPOINT_CLEANUP_GRACE_MS = 60_000;
 
@@ -126,12 +131,13 @@ export const writeFolioCollabCheckpointObject = async ({
           organizationId,
           objectKey: checkpointKey,
           sizeBytes: checkpointBytes.byteLength,
-          write: async () =>
+          content: checkpointBytes,
+          write: async ({ content, objectKey }) =>
             await writeS3ObjectWithRetry(
               {
                 contentType: DOCX_MIME_TYPE,
-                data: checkpointBytes,
-                key: checkpointKey,
+                data: content,
+                key: objectKey,
               },
               ownership,
             ),
@@ -142,6 +148,7 @@ export const writeFolioCollabCheckpointObject = async ({
 
 const checkpointFolioCollabRoom = createSafeHandler(
   {
+    contract: "patch",
     contentDelivery: {
       type: "none",
       reason: "Processes collaboration content without returning stored files.",
@@ -325,9 +332,7 @@ const checkpointFolioCollabRoom = createSafeHandler(
             .map(({ message }) => message)
         : null;
     const checkpointBytes = new Uint8Array(materialized);
-    const sha256Hex = new Bun.CryptoHasher("sha256")
-      .update(checkpointBytes)
-      .digest("hex");
+    const sha256Hex = hashFolioCollabCheckpoint(checkpointBytes);
     const nextFileId = createSafeId<"userFile">();
     const checkpointKey = createFileKey({
       fileId: nextFileId,
@@ -388,7 +393,11 @@ const checkpointFolioCollabRoom = createSafeHandler(
 
     const checkpointedAt = new Date();
     const storedResult = await safeDb(async (tx) => {
-      await lockActiveWorkspaceForBufferIntent(tx, workspaceId);
+      await lockActiveWorkspaceForBufferIntent({
+        tx,
+        workspaceId,
+        mode: "share",
+      });
       const rooms = await tx
         .select({
           baseVersionId: folioCollabRooms.baseVersionId,

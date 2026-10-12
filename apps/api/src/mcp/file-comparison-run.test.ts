@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import type { CompareResult } from "@stll/folio-core";
+import { createSha256 } from "@stll/sha256/node";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
@@ -31,7 +32,7 @@ const BASE_BYTES = new Uint8Array([1, 2, 3, 4]);
 const TARGET_BYTES = new Uint8Array([5, 6, 7, 8, 9]);
 
 const sha256Of = (bytes: Uint8Array): string =>
-  new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
+  createSha256().update(bytes).digest("hex");
 
 const hexToBase64 = (hex: string): string =>
   Buffer.from(hex, "hex").toString("base64");

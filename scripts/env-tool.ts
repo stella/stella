@@ -1008,6 +1008,7 @@ const validateApiEnvironment = (input: DoctorInput): DoctorValidationResult => {
     contentEncryptionKey: output.CONTENT_ENCRYPTION_KEY,
     redisUrl: output.REDIS_URL,
     runtimeMode,
+    scheduledJobsMode: output.SCHEDULED_JOBS_MODE,
   });
   if (documentProcessingIssue !== null) {
     issues.push(documentProcessingIssue);

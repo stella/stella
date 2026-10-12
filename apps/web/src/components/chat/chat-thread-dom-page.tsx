@@ -102,12 +102,17 @@ const ChatThreadDomPage = ({
           handleAlwaysAllow: session.handleAlwaysAllow,
           handleApprove: session.handleApprove,
           handleDeny: session.handleDeny,
+          handleRequestSecret: session.handleRequestSecret,
+          continueRequestSecret: session.continueRequestSecret,
+          resolveSecretTarget: session.resolveSecretTarget,
+          secretAvailabilityKey: session.secretAvailabilityKey,
         }}
       >
         {/* The selection bar quotes into the composer through the editor
             manager, as on the real page. */}
         <ChatEditorProvider>
           <ChatThreadMessages
+            activitySession={session.activitySession}
             approvalPendingMessageId={session.approvalPendingMessageId}
             error={session.error}
             hasOlderMessages={session.olderCursor !== null}

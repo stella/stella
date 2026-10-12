@@ -1,6 +1,5 @@
 import { panic } from "better-result";
 import { and, eq, isNull, lte, ne, or, sql } from "drizzle-orm";
-import { createHash } from "node:crypto";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { createEventLoopSlicer } from "@stll/concurrency/event-loop";
@@ -12,6 +11,7 @@ import {
   type SanctionsEntry,
   type SanctionsSource,
 } from "@stll/sanctions";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { stableStringify } from "@stll/stable-stringify";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -75,9 +75,6 @@ type RefreshOptions = {
   fetchEdition?: typeof fetchSanctionsEdition | undefined;
 };
 
-const sha256 = (value: string): string =>
-  createHash("sha256").update(value).digest("hex");
-
 /**
  * The change key of an edition. Some publishers state only the calendar date
  * of a list, so the HTTP validator of the list response joins the key when the
@@ -88,7 +85,7 @@ const markerKeyOf = ({
   version,
   lastModified,
 }: Pick<FetchedMarker, "version" | "lastModified">): string =>
-  sha256(
+  hashSha256Hex(
     stableStringify(
       lastModified === null
         ? { parserVersion: SANCTIONS_PARSER_VERSION, version }
@@ -576,7 +573,7 @@ const stageAcceptedEdition = async ({
     }
     hashedEntries.push({
       sourceEntryId: entry.sourceId,
-      contentHash: sha256(stableStringify(entry)),
+      contentHash: hashSha256Hex(stableStringify(entry)),
       payload: entry,
     });
   }

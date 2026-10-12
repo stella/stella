@@ -1,5 +1,6 @@
 // parser-output-unchanged: threads an optional static metadata URL schema; ordinary source assembly is unchanged
 import { stripDangerousChars } from "@stll/legal-ast/text-sanitize";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import {
   absentDecisionTextFields,
@@ -25,9 +26,7 @@ export const plainTextIngestionResult = <T extends RawIngestionResult>(
     return result.value;
   }
   const error = result.error;
-  const quarantineId = `plaintext-quarantine:${new Bun.CryptoHasher("sha256")
-    .update(JSON.stringify([raw.country, raw.rawHash, raw.sourceRaw]))
-    .digest("hex")}`;
+  const quarantineId = `plaintext-quarantine:${hashSha256Hex(JSON.stringify([raw.country, raw.rawHash, raw.sourceRaw]))}`;
   const sourceDocumentId =
     raw.sourceDocumentId !== undefined &&
     persistableIdentity(raw.sourceDocumentId)

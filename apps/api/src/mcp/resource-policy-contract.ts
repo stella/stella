@@ -1,4 +1,6 @@
 import {
+  MCP_ADVANCED_HTTP_PATH,
+  MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_HTTP_PATH,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_DEFAULT_RESOURCE_SCOPES,
@@ -7,6 +9,8 @@ import {
   MCP_LAW_HTTP_PATH,
   MCP_OAUTH_PROTOCOL_SCOPES,
 } from "@stll/api-contract";
+
+import type { ToolScope } from "@/api/mcp/tool-types";
 
 /**
  * Least-privilege remote-host surface for document workflows. Hosted clients
@@ -30,15 +34,42 @@ export const MCP_DOCUMENTS_RESOURCE_SCOPES = [
  * `registry.test.ts` pins this list to the scopes its projected tools actually
  * carry, so a tool added to that surface cannot widen the grant silently.
  */
-export const MCP_LAW_RESOURCE_SCOPES = [
+const LAW_PROJECTED_TOOL_SCOPES = [
   "stella:search",
   "stella:read",
-] as const;
+  "stella:law_read",
+] as const satisfies readonly ToolScope[];
+
+export const LEGAL_RESOLVE_RESOURCE_ROUTES = {
+  decision: {
+    path: "/case/:country/decisions/resolve",
+    requiredScope: "stella:law_read",
+  },
+  law: {
+    path: "/law/:country/citations/resolve",
+    requiredScope: "stella:law_read",
+  },
+} as const satisfies Record<
+  "decision" | "law",
+  { path: string; requiredScope: ToolScope }
+>;
+
+// One entry per scope: a tool and a REST route may consume the same one.
+export const MCP_LAW_RESOURCE_SCOPES = [
+  ...new Set([
+    ...LAW_PROJECTED_TOOL_SCOPES,
+    ...Object.values(LEGAL_RESOLVE_RESOURCE_ROUTES).map(
+      ({ requiredScope }) => requiredScope,
+    ),
+  ]),
+];
 
 export const ROOT_MCP_DISCOVERY_PATH =
   "/.well-known/oauth-protected-resource" as const;
 export const MCP_DISCOVERY_PATH =
   `/.well-known/oauth-protected-resource${MCP_HTTP_PATH}` as const;
+export const MCP_ADVANCED_DISCOVERY_PATH =
+  `/.well-known/oauth-protected-resource${MCP_ADVANCED_HTTP_PATH}` as const;
 export const MCP_DOCUMENTS_DISCOVERY_PATH =
   `/.well-known/oauth-protected-resource${MCP_DOCUMENTS_HTTP_PATH}` as const;
 export const MCP_ANONYMIZED_DISCOVERY_PATH =
@@ -47,6 +78,12 @@ export const MCP_LAW_DISCOVERY_PATH =
   `/.well-known/oauth-protected-resource${MCP_LAW_HTTP_PATH}` as const;
 
 export const MCP_RESOURCE_MODE_CONFIG = {
+  advanced: {
+    discoveryPath: MCP_ADVANCED_DISCOVERY_PATH,
+    httpPath: MCP_ADVANCED_HTTP_PATH,
+    resourceName: "Stella MCP advanced",
+    resourceScopes: MCP_ADVANCED_RESOURCE_SCOPES,
+  },
   default: {
     discoveryPath: MCP_DISCOVERY_PATH,
     httpPath: MCP_HTTP_PATH,
@@ -76,6 +113,7 @@ export const MCP_RESOURCE_MODE_CONFIG = {
 export type McpMode = keyof typeof MCP_RESOURCE_MODE_CONFIG;
 
 export const MCP_MODES = [
+  "advanced",
   "default",
   "documents",
   "anonymized",

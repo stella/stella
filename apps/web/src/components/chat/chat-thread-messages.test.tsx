@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { renderToReadableStream, renderToStaticMarkup } from "react-dom/server";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Result } from "better-result";
 import { afterAll, describe, expect, test } from "bun:test";
 import { Window } from "happy-dom";
 import { IntlProvider } from "use-intl";
@@ -10,8 +11,14 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import { createChatPastedTextPart } from "@stll/api-contract/chat";
+import {
+  PROVIDER_SETUP_ERROR_CATALOGUE,
+  PROVIDER_SETUP_ERROR_CODE,
+} from "@stll/api-contract/provider-setup";
 
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
+import { testChatApprovalContextValue } from "@/components/chat/chat-approval-context.test-fixtures";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { getChatAssistantTurnError } from "@/components/chat/chat-ui-tools";
 import type {
@@ -22,15 +29,16 @@ import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { ChatThreadTestRouter } from "@/lib/chat-thread-test-router";
+import { ProviderDiagnosticError } from "@/lib/errors/provider-diagnostic";
 
 const previousApiUrl = process.env["VITE_API_URL"];
 process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";
 
 const { ChatEditorProvider } =
   await import("@/components/chat-editor-provider");
-const { ChatThreadMessages } =
+const { ChatThreadMessages, ChatErrorMessage } =
   await import("@/components/chat/chat-thread-messages");
-const { buildMessageTurns } =
+const { buildMessageTurns, CHAT_MESSAGE_RENDER_POLICY } =
   await import("@/components/chat/chat-thread-messages.logic");
 
 afterAll(() => {
@@ -41,38 +49,44 @@ afterAll(() => {
   process.env["VITE_API_URL"] = previousApiUrl;
 });
 
-const withProviders = (children: ReactNode) => (
-  <ChatThreadTestRouter>
-    <QueryClientProvider client={new QueryClient()}>
-      <IntlProvider locale="en" messages={messages} timeZone="UTC">
-        <ChatMattersContext
-          value={{
-            createDocumentMattersView: { type: "empty" },
-          }}
-        >
-          <ChatApprovalContext
+const withProviders = (children: ReactNode, savedSecretAvailable = false) => {
+  const queryClient = new QueryClient();
+  if (savedSecretAvailable) {
+    queryClient.setQueryData(["chat-saved-secret", "test-thread", "sample"], {
+      available: true,
+      connector: {
+        connectionId: "sample-connection",
+        displayName: "Sample connector",
+        host: "sample.test",
+        responseDisposition: "receipt-only",
+      },
+    });
+  }
+  return (
+    <ChatThreadTestRouter>
+      <QueryClientProvider client={queryClient}>
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <ChatMattersContext
             value={{
-              activeOrganizationId: "test-active-organization",
-              alwaysApprovedTools: new Set(),
-              conversationApprovedTools: new Set(),
-              handleAllowInConversation: () => {},
-              handleAlwaysAllow: () => {},
-              handleApprove: () => {},
-              handleDeny: () => {},
+              createDocumentMattersView: { type: "empty" },
             }}
           >
-            <FormattingProvider locale="en" timeZone="UTC">
-              <ChatEditorProvider>{children}</ChatEditorProvider>
-            </FormattingProvider>
-          </ChatApprovalContext>
-        </ChatMattersContext>
-      </IntlProvider>
-    </QueryClientProvider>
-  </ChatThreadTestRouter>
-);
+            <ChatApprovalContext value={testChatApprovalContextValue}>
+              <FormattingProvider locale="en" timeZone="UTC">
+                <ChatEditorProvider>{children}</ChatEditorProvider>
+              </FormattingProvider>
+            </ChatApprovalContext>
+          </ChatMattersContext>
+        </IntlProvider>
+      </QueryClientProvider>
+    </ChatThreadTestRouter>
+  );
+};
 
-const renderWithProviders = (children: ReactNode) =>
-  renderToStaticMarkup(withProviders(children));
+const renderWithProviders = (
+  children: ReactNode,
+  savedSecretAvailable = false,
+) => renderToStaticMarkup(withProviders(children, savedSecretAvailable));
 
 const renderWithLoadedMarkdown = async (children: ReactNode) => {
   const stream = await renderToReadableStream(withProviders(children));
@@ -89,6 +103,161 @@ const renderedText = (html: string) => {
 };
 
 describe("chat thread messages", () => {
+  test("activity roles and embedded parts show translated labels without internal payloads", () => {
+    for (const role of Object.values(CHAT_MESSAGE_RENDER_POLICY)) {
+      if (role === "text") {
+        continue;
+      }
+      for (const stickyUserMessages of [false, true]) {
+        const content = {
+          status: "Review complete",
+          detail: "<script>activity payload</script>",
+        };
+        const activity = {
+          id: "activity-progress",
+          role,
+          parts: [{ type: "activity", activityType: "review", content }],
+        } satisfies ChatUIMessage;
+        const html = renderWithProviders(
+          <ChatThreadMessages
+            activitySession={{
+              reportedUnknownActivityTypes: new Set<string>(),
+            }}
+            approvalPendingMessageId={null}
+            messages={[activity]}
+            onAskUserSubmit={() => {}}
+            onCreateDocumentResolve={() => {}}
+            onOpenCreatedDocument={() => {}}
+            stickyUserMessages={stickyUserMessages}
+            streamdownComponents={{
+              a: ({ children, ...props }) => <a {...props}>{children}</a>,
+            }}
+          />,
+        );
+        expect(renderedText(html)).toContain(messages.chat.activity.review);
+        expect(
+          renderedText(html),
+          JSON.stringify({ oracle: "chat.render.cards-match-stored" }),
+        ).not.toContain(content.status);
+        expect(renderedText(html)).not.toContain(content.detail);
+        expect(html).toContain("<figcaption");
+        expect(html).not.toContain("<script>activity payload</script>");
+      }
+    }
+  });
+
+  test("unknown activity types and malformed activity messages leave the thread readable", () => {
+    const activities = [
+      {
+        id: "activity-unknown",
+        role: "activity",
+        parts: [
+          {
+            type: "activity",
+            activityType: "internal-event",
+            content: { secret: "internal-payload" },
+          },
+        ],
+      },
+      { id: "activity-empty", role: "activity", parts: [] },
+      {
+        id: "activity-text",
+        role: "activity",
+        parts: [{ type: "text", content: "malformed-activity" }],
+      },
+      {
+        id: "activity-multiple",
+        role: "activity",
+        parts: [
+          { type: "activity", activityType: "review", content: {} },
+          { type: "activity", activityType: "progress", content: {} },
+        ],
+      },
+    ] satisfies ChatUIMessage[];
+    const rendered = Result.try(() =>
+      renderWithProviders(
+        <ChatThreadMessages
+          activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+          approvalPendingMessageId={null}
+          messages={[
+            ...activities,
+            {
+              id: "readable-user",
+              role: "user",
+              parts: [{ type: "text", content: "Still readable" }],
+            },
+            {
+              id: "activity-progress",
+              role: "assistant",
+              parts: [
+                {
+                  type: "activity",
+                  activityType: "progress",
+                  content: { secret: "internal-payload" },
+                },
+              ],
+            },
+          ]}
+          onAskUserSubmit={() => {}}
+          onCreateDocumentResolve={() => {}}
+          onOpenCreatedDocument={() => {}}
+          streamdownComponents={{
+            a: ({ children, ...props }) => <a {...props}>{children}</a>,
+          }}
+        />,
+      ),
+    );
+    expect(
+      rendered.isOk(),
+      JSON.stringify({ oracle: "chat.client.no-errors" }),
+    ).toBe(true);
+    if (!rendered.isOk()) {
+      return;
+    }
+    const html = rendered.value;
+    expect(renderedText(html)).toContain("Still readable");
+    expect(renderedText(html)).toContain(messages.chat.thinking);
+    expect(renderedText(html)).not.toContain("internal-event");
+    expect(renderedText(html)).not.toContain("internal-payload");
+    expect(renderedText(html)).not.toContain("malformed-activity");
+    expect(
+      html.match(/<figcaption/gu),
+      JSON.stringify({ oracle: "chat.render.cards-match-stored" }),
+    ).toHaveLength(1);
+  });
+
+  test("labels a reloaded user stop without labelling other terminal outcomes", () => {
+    for (const outcome of [
+      { type: "cancelled", reason: "user-stop" },
+      { type: "cancelled", reason: "superseded" },
+      { type: "completed" },
+    ] as const) {
+      const stored = {
+        id: "assistant-terminal",
+        role: "assistant",
+        parts: [{ type: "text", content: "A partial answer" }],
+        metadata: { turnOutcome: outcome },
+      } satisfies ChatUIMessage;
+      const html = renderWithProviders(
+        <ChatThreadMessages
+          activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+          approvalPendingMessageId={null}
+          messages={[structuredClone(stored)]}
+          onAskUserSubmit={() => {}}
+          onCreateDocumentResolve={() => {}}
+          onOpenCreatedDocument={() => {}}
+          onResend={() => {}}
+          streamdownComponents={{
+            a: ({ children, ...props }) => <a {...props}>{children}</a>,
+          }}
+        />,
+      );
+      expect(renderedText(html).includes(messages.chat.stopped)).toBe(
+        outcome.type === "cancelled" && outcome.reason === "user-stop",
+      );
+    }
+  });
+
   test("renders every reloaded admission refusal with its recovery action", () => {
     for (const code of Object.values(ACTION_ADMISSION_CODES)) {
       const refusal = {
@@ -107,6 +276,7 @@ describe("chat thread messages", () => {
       const reloaded = structuredClone(stored);
       const html = renderWithProviders(
         <ChatThreadMessages
+          activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
           approvalPendingMessageId={null}
           messages={[reloaded]}
           error={getChatAssistantTurnError(reloaded)}
@@ -140,6 +310,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -159,6 +330,7 @@ describe("chat thread messages", () => {
   test("treats an error as terminal even if generation state is stale", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         error={new Error("provider failed")}
         isGenerating
@@ -182,6 +354,7 @@ describe("chat thread messages", () => {
   test("says a reply cut off before it finished can be tried again", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         error={new Error("provider_stream_incomplete")}
         isGenerating={false}
@@ -212,6 +385,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -265,6 +439,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -302,6 +477,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         isGenerating
         messages={chatMessages}
@@ -344,6 +520,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -385,6 +562,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -422,6 +600,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -463,6 +642,7 @@ describe("chat thread messages", () => {
   test("offers a decision on the approval the conversation waits on", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId="message-approval"
         messages={approvalRequestMessages()}
         onAskUserSubmit={() => {}}
@@ -483,6 +663,7 @@ describe("chat thread messages", () => {
   test("withdraws the decision once a later message supersedes the turn", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         isGenerating
         messages={[
@@ -537,6 +718,7 @@ describe("chat thread messages", () => {
   test("offers the form of the user-input card the conversation waits on", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={askUserMessages()}
         onAskUserSubmit={() => {}}
@@ -552,11 +734,61 @@ describe("chat thread messages", () => {
     expect(html).toContain("Which matter?");
   });
 
+  test("renders a private credential form in the user-owned turn", () => {
+    const secretInput = {
+      purpose: "Authenticate the sample connector",
+      kind: "token" as const,
+      target: { type: "mcp-connector" as const, connectorSlug: "sample" },
+    };
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+        approvalPendingMessageId={null}
+        messages={[
+          {
+            id: "message-user",
+            parts: [{ type: "text", content: "Continue the lookup" }],
+            role: "user",
+          },
+          {
+            id: "message-secret",
+            parts: [
+              {
+                arguments: JSON.stringify(secretInput),
+                id: "tool-call-secret",
+                input: secretInput,
+                name: "request_secret",
+                state: "input-complete",
+                type: "tool-call",
+              },
+            ],
+            role: "assistant",
+          },
+        ]}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+      true,
+    );
+
+    expect(html).toContain("Authenticate the sample connector");
+    expect(html).toContain('type="password"');
+    expect(html).toContain("The assistant will not see this value.");
+    expect(html).toContain("Provide");
+    expect(html).toContain("Decline");
+    expect(html).toContain("Use saved credential");
+  });
+
   // The same supersession withdraws a user-input card: the runtime has no
   // interrupt left to answer it, and the server rejects a late answer.
   test("withdraws the user-input form once a later message supersedes the turn", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         isGenerating
         messages={[
@@ -630,6 +862,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -652,6 +885,48 @@ describe("chat thread messages", () => {
     expect(html).toContain("Here is the answer.");
   });
 
+  test("shows an approval-gated call as a card while its input streams", () => {
+    const chatMessages: ChatUIMessage[] = [
+      {
+        id: "message-A",
+        parts: [
+          { type: "thinking", content: "Drafting the positions." },
+          {
+            type: "tool-call",
+            id: "tool-call-save",
+            name: "save_playbook",
+            arguments: '{"name":"Mutual NDA","positions":[',
+            state: "input-streaming",
+          },
+        ],
+        role: "assistant",
+      },
+    ];
+
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+        approvalPendingMessageId={null}
+        isGenerating
+        messages={chatMessages}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+
+    // The save always ends in a question for the user, so it renders as its
+    // own card with a running indicator from the first input byte; only the
+    // reasoning stays folded, and as a settled step rather than a live one.
+    expect(html).toContain("1 step");
+    expect(html).toContain(">Save playbook<");
+    expect(html).toContain('data-slot="loader"');
+    expect(html).not.toContain("animate-skeleton");
+  });
+
   test("keeps streaming reasoning visible and immediately collapsible", async () => {
     const chatMessages: ChatUIMessage[] = [
       {
@@ -668,6 +943,7 @@ describe("chat thread messages", () => {
 
     const content = (
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         isGenerating
         messages={chatMessages}
@@ -706,6 +982,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -751,6 +1028,7 @@ describe("chat thread messages", () => {
 
     const content = (
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -794,6 +1072,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -838,6 +1117,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -876,6 +1156,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -911,6 +1192,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -945,6 +1227,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -974,6 +1257,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         isGenerating
         messages={chatMessages}
@@ -995,6 +1279,7 @@ describe("chat thread messages", () => {
   test("shows a resendable chat message when the chat runtime errors", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         error={new Error("provider details must stay hidden")}
         messages={[]}
@@ -1016,6 +1301,7 @@ describe("chat thread messages", () => {
   test("maps model-unavailable stream errors to admin-facing copy", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         error={new Error("model_unavailable")}
         messages={[]}
@@ -1037,6 +1323,7 @@ describe("chat thread messages", () => {
   test("offers a raw-send override when anonymization blocks an attachment", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         error={
           new Error(
@@ -1122,6 +1409,7 @@ describe("buildMessageTurns", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -1147,6 +1435,7 @@ describe("buildMessageTurns", () => {
   test("keeps the actions menu off the sticky user header", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={[
           {
@@ -1182,6 +1471,7 @@ describe("buildMessageTurns", () => {
   test("offers no assistant-message actions on a user message", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={[
           {
@@ -1221,6 +1511,7 @@ describe("buildMessageTurns", () => {
   test("omits thread actions on surfaces that carry no thread reference", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={[
           {
@@ -1261,4 +1552,82 @@ describe("buildMessageTurns", () => {
     }
     expect(orphan.body.map((item) => item.index)).toEqual([0, 1]);
   });
+});
+
+test.each([...Object.values(PROVIDER_SETUP_ERROR_CODE), null])(
+  "runtime chat error %s renders full provider reason and guidance after reload",
+  (code) => {
+    const provider =
+      code === null
+        ? "custom-provider"
+        : PROVIDER_SETUP_ERROR_CATALOGUE[code].provider;
+    const diagnostic = {
+      provider,
+      code,
+      message: `The exact upstream reason\n${"full detail ".repeat(30)}`,
+    };
+    const stored = {
+      id: "failed-diagnostic",
+      role: "assistant",
+      parts: [],
+      metadata: {
+        turnOutcome: {
+          type: "failed",
+          error: "provider_credentials_rejected",
+          providerDiagnostic: diagnostic,
+        },
+      },
+    } satisfies PersistedChatMessage;
+    const error = getChatAssistantTurnError(structuredClone(stored));
+    expect(error).toBeDefined();
+    // Reload is the authoritative message path; live streaming uses the same tagged diagnostic.
+    expect(ProviderDiagnosticError.is(error)).toBe(true);
+    if (!ProviderDiagnosticError.is(error)) {
+      return;
+    }
+    const restored = error;
+    const html = renderWithProviders(
+      <ChatErrorMessage error={restored} isGenerating={false} />,
+    );
+    expect(renderedText(html)).toContain(`${provider}: ${diagnostic.message}`);
+    expect(html).toContain(messages.common.copy);
+    expect(html).not.toContain(
+      messages.chat.sendErrorProviderCredentialsRejected,
+    );
+    if (code !== null) {
+      expect(html).toContain(
+        PROVIDER_SETUP_ERROR_CATALOGUE[code].url.replaceAll("&", "&amp;"),
+      );
+    }
+  },
+);
+test("sent pasted text renders once as a collapsed attachment", () => {
+  const text = "First line\n  <literal> & whitespace\n";
+  const html = renderWithProviders(
+    <ChatThreadMessages
+      activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+      approvalPendingMessageId={null}
+      messages={[
+        {
+          id: "message-pasted",
+          role: "user",
+          parts: [createChatPastedTextPart(text)],
+        },
+      ]}
+      onAskUserSubmit={() => {}}
+      onCreateDocumentResolve={() => {}}
+      onOpenCreatedDocument={() => {}}
+      streamdownComponents={{
+        a: ({ children, ...props }) => <a {...props}>{children}</a>,
+      }}
+    />,
+  );
+  const window = new Window();
+  const { body } = new window.DOMParser().parseFromString(html, "text/html");
+  const content = body.querySelector("pre");
+  expect(content?.hidden).toBe(true);
+  expect(content?.textContent).toBe(text);
+  expect(body.querySelectorAll("pre")).toHaveLength(1);
+  expect(body.querySelector('[aria-expanded="false"]')).not.toBeNull();
+  expect(body.querySelectorAll("literal")).toHaveLength(0);
 });

@@ -12,6 +12,11 @@ import {
 } from "../../lib/lists/fact-details";
 import type { LegalListSourceLocator } from "../../lib/lists/types";
 import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+  entityFeatureWorkspaceGateColumns,
+} from "../entity-feature-gate-columns";
+import {
   LIST_ITEM_TYPES,
   jsonb,
   p,
@@ -236,6 +241,7 @@ export const legalListColumns = p.pgTable(
 export const legalListItems = p.pgTable(
   "legal_list_items",
   {
+    ...entityFeatureGateColumns(),
     entityId: safeUuid<"entity">("entity_id").primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     listId: safeUuid<"legalList">("list_id").notNull(),
@@ -253,6 +259,7 @@ export const legalListItems = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .foreignKey({
         name: "legal_list_items_entity_fk",
@@ -316,6 +323,7 @@ export const legalListItems = p.pgTable(
 export const legalListFactDetails = p.pgTable(
   "legal_list_fact_details",
   {
+    ...entityFeatureGateColumns(),
     itemEntityId: safeUuid<"entity">("item_entity_id").primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     listId: safeUuid<"legalList">("list_id").notNull(),
@@ -327,7 +335,8 @@ export const legalListFactDetails = p.pgTable(
       length: FACT_DETAIL_LIMITS.EVIDENCE_KIND_MAX,
     }),
     medium: p.varchar({ length: FACT_DETAIL_LIMITS.MEDIUM_MAX }),
-    confidence: p.text("confidence", { enum: FACT_CONFIDENCES }).notNull(),
+    // Null means the interpretive confidence has not been stated.
+    confidence: p.text("confidence", { enum: FACT_CONFIDENCES }),
     // Set only where the meaning is genuinely contested; its presence is what
     // makes a claim citing this fact need a human.
     interpretationNote: p.varchar("interpretation_note", {
@@ -344,6 +353,7 @@ export const legalListFactDetails = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     ...entityFeaturePolicies(
       table,
       new Map([
@@ -396,6 +406,7 @@ export const legalListFactDetails = p.pgTable(
 export const legalListItemSources = p.pgTable(
   "legal_list_item_sources",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"legalListItemSource">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     listId: safeUuid<"legalList">("list_id").notNull(),
@@ -423,6 +434,7 @@ export const legalListItemSources = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     ...entityFeaturePolicies(
       table,
       new Map([
@@ -505,6 +517,9 @@ export const legalListItemSources = p.pgTable(
       to: stella,
       using: sql`false`,
     }),
+    p
+      .index("legal_list_item_sources_ef_source_entity_id_idx")
+      .on(table.workspaceId, table.sourceEntityId),
   ],
 );
 
@@ -555,6 +570,7 @@ export const legalListGenerationRuns = p.pgTable(
 export const legalListGenerationSources = p.pgTable(
   "legal_list_generation_sources",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"legalListGenerationSource">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     listId: safeUuid<"legalList">("list_id").notNull(),
@@ -566,6 +582,7 @@ export const legalListGenerationSources = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     ...entityFeaturePolicies(
       table,
       new Map([
@@ -637,12 +654,20 @@ export const legalListGenerationSources = p.pgTable(
       to: stella,
       using: sql`false`,
     }),
+    p
+      .index("legal_list_generation_sources_ef_source_entity_id_idx")
+      .on(table.workspaceId, table.sourceEntityId),
+    p
+      .index("legal_list_generation_sources_ef_source_entity_version_id_idx")
+      .on(table.workspaceId, table.sourceEntityVersionId),
   ],
 );
 
 export const legalListGenerationCandidates = p.pgTable(
   "legal_list_generation_candidates",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"legalListGenerationCandidate">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     listId: safeUuid<"legalList">("list_id").notNull(),
@@ -673,6 +698,7 @@ export const legalListGenerationCandidates = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .foreignKey({
         name: "legal_list_generation_candidates_run_fk",
@@ -732,12 +758,17 @@ export const legalListGenerationCandidates = p.pgTable(
         [table.acceptedEntityId, { target: "entities", kind: "owned-content" }],
       ]),
     }),
+    p
+      .index("legal_list_generation_candidates_ef_accepted_entity_id_idx")
+      .on(table.acceptedEntityId),
   ],
 );
 
 export const legalListGenerationCandidateSources = p.pgTable(
   "legal_list_generation_candidate_sources",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"legalListGenerationCandidateSource">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     listId: safeUuid<"legalList">("list_id").notNull(),
@@ -753,6 +784,7 @@ export const legalListGenerationCandidateSources = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     ...entityFeaturePolicies(
       table,
       new Map([
@@ -842,12 +874,19 @@ export const legalListGenerationCandidateSources = p.pgTable(
       to: stella,
       using: sql`false`,
     }),
+    p
+      .index("legal_list_generation_candidate_sources_ef_source_enti_1530c551")
+      .on(table.workspaceId, table.sourceEntityVersionId),
+    p
+      .index("legal_list_generation_candidate_sources_ef_source_entity_id_idx")
+      .on(table.workspaceId, table.sourceEntityId),
   ],
 );
 
 export const legalListItemComments = p.pgTable(
   "legal_list_item_comments",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"legalListItemComment">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     listId: safeUuid<"legalList">("list_id").notNull(),
@@ -859,6 +898,7 @@ export const legalListItemComments = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     ...entityFeaturePolicies(
       table,
       new Map([
@@ -886,6 +926,7 @@ export const legalListItemComments = p.pgTable(
 export const legalListItemReviews = p.pgTable(
   "legal_list_item_reviews",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"legalListItemReview">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     listId: safeUuid<"legalList">("list_id").notNull(),
@@ -900,6 +941,7 @@ export const legalListItemReviews = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     ...entityFeaturePolicies(
       table,
       new Map([

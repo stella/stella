@@ -145,6 +145,7 @@ const settledAnswer = (alternatives: LegalAlternatives): ExpansionAnswer => ({
 });
 
 const config = {
+  contract: "patch",
   actionAdmission: { type: "handler", actionKind: "case-law.search-expand" },
   description:
     "Propose legal-vocabulary alternatives for a case-law search's words: " +

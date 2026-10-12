@@ -1,6 +1,7 @@
 import { afterEach, expect, mock, test } from "bun:test";
 
 import { createDevErrorLogger } from "./dev-error";
+import { QUERY_ERROR_OUTPUT_FIELDS } from "./query-field-policy";
 
 const consoleError = console.error;
 
@@ -43,4 +44,23 @@ test("works without a sink", () => {
   log(new Error("boom"));
 
   expect(spy).toHaveBeenCalledTimes(1);
+});
+
+test("dev sinks drop every shared query field from context", () => {
+  const fields = Object.fromEntries(
+    QUERY_ERROR_OUTPUT_FIELDS.flatMap((key) => [
+      [key, "fixture-query-value"],
+      [key.toUpperCase(), "fixture-query-value"],
+      [`database.${key.split("").join("_")}`, "fixture-query-value"],
+    ]),
+  );
+  const sink = mock(() => undefined);
+  const log = createDevErrorLogger({ echoErrors: true, sink });
+  console.error = mock(() => undefined);
+  const error = new Error("fixture error");
+  log(error, { requestId: "fixture-request", ...fields, nested: fields });
+  expect(sink).toHaveBeenCalledWith({
+    error,
+    context: { requestId: "fixture-request", nested: {} },
+  });
 });

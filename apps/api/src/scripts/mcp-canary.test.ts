@@ -12,7 +12,9 @@ import {
   DESKTOP_ACCOUNT_PROTOCOL_HEADER,
 } from "@stll/api-contract/desktop-registry";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { sha256Base64Url as legacySha256Base64Url } from "@stll/sha256/node";
 
+import { VerifiedDesktopDeviceProof } from "@/api/lib/business-registries/desktop/proof";
 import { bridgeOauthUiRedirect } from "@/api/lib/oauth-ui-fragment";
 import { SAMPLE_MATTERS } from "@/api/lib/review-organization/sample-data";
 import api from "@/api/server";
@@ -206,7 +208,9 @@ const reviewFetcher = (
   const observed = options.observed ?? [];
   return async (input, init) => {
     const request = input instanceof Request ? input : undefined;
-    const url = new URL(input instanceof Request ? input.url : input);
+    const url = new URL(
+      input instanceof Request ? input.url : input.toString(),
+    );
     const headers = new Headers(init.headers ?? request?.headers);
     const body = await readFakeRequestBody(init.body, request);
     observed.push({ url: url.toString(), headers, body });
@@ -511,9 +515,7 @@ describe("restricted review-account journey", () => {
       }
       expect(authorize.searchParams.get("code_challenge_method")).toBe("S256");
       expect(authorize.searchParams.get("code_challenge")).toBe(
-        await crypto.subtle
-          .digest("SHA-256", new TextEncoder().encode(verifier))
-          .then((hash) => Buffer.from(hash).toString("base64url")),
+        legacySha256Base64Url(verifier),
       );
       expect(authorize.searchParams.get("scope")).toContain(
         "stella:admin_write",
@@ -1067,8 +1069,9 @@ describe("authenticated notification-stream probe", () => {
     const fetcher: CanaryFetcher = async (input, init) => {
       requestHeaders = new Headers(init.headers);
       requestMethod = init.method;
-      requestPath = new URL(input instanceof Request ? input.url : input)
-        .pathname;
+      requestPath = new URL(
+        input instanceof Request ? input.url : input.toString(),
+      ).pathname;
       return new Response(
         new ReadableStream<Uint8Array>({
           cancel: () => {
@@ -1469,7 +1472,9 @@ describe("OAuth client journeys", () => {
   const fakeOAuth = () => {
     const requests: { url: URL; init: Parameters<CanaryFetcher>[1] }[] = [];
     const fetcher: CanaryFetcher = async (input, init) => {
-      const requestUrl = new URL(input instanceof Request ? input.url : input);
+      const requestUrl = new URL(
+        input instanceof Request ? input.url : input.toString(),
+      );
       requests.push({ url: requestUrl, init });
       if (requestUrl.pathname === "/.well-known/oauth-protected-resource/mcp") {
         return Response.json({
@@ -1619,13 +1624,25 @@ describe("desktop handoff probes", () => {
     });
 
   test("mints, redeems, and revokes a per-run desktop credential", async () => {
-    const requests: { path: string; headers: Headers; body: string }[] = [];
+    const requests: {
+      path: string;
+      method: string;
+      headers: Headers;
+      body: string;
+    }[] = [];
     let redeemCount = 0;
     const fetcher: CanaryFetcher = async (input, init) => {
-      const url = new URL(input instanceof Request ? input.url : input);
+      const url = new URL(
+        input instanceof Request ? input.url : input.toString(),
+      );
       const headers = new Headers(init.headers);
       const body = await new Response(init.body).text();
-      requests.push({ path: url.pathname, headers, body });
+      requests.push({
+        path: url.pathname,
+        method: init.method ?? "GET",
+        headers,
+        body,
+      });
       if (url.pathname === "/api/auth/get-session") {
         return sessionResponse();
       }
@@ -1670,6 +1687,79 @@ describe("desktop handoff probes", () => {
       "Bearer new-desktop-key",
     );
     expect(JSON.parse(requests[5]?.body ?? "{}")).toEqual({ type: "revoke" });
+    const grants = requests
+      .filter(({ path }) => path.endsWith("/grant"))
+      .map(({ body }) =>
+        v.parse(
+          v.object({ correlationId: v.string(), deviceJkt: v.string() }),
+          JSON.parse(body),
+        ),
+      );
+    expect(grants).toHaveLength(2);
+    expect(new Set(grants.map(({ deviceJkt }) => deviceJkt)).size).toBe(1);
+    const proofIds = new Set<string>();
+    for (const { path, method, headers, body } of redeems) {
+      const payload = v.parse(
+        v.object({ correlationId: v.string(), deviceJkt: v.string() }),
+        JSON.parse(body),
+      );
+      const grant = grants.find(
+        ({ correlationId }) => correlationId === payload.correlationId,
+      );
+      if (!grant) {
+        throw new TypeError("Canary redemption must have a matching grant");
+      }
+      expect(payload.deviceJkt).toBe(grant.deviceJkt);
+      const credential = headers.get("authorization");
+      const verified = await VerifiedDesktopDeviceProof.verify({
+        request: new Request(new URL(path, REVIEW_BASE_URL).toString(), {
+          method,
+          headers,
+        }),
+        expectedUrl: new URL(path, REVIEW_BASE_URL).toString(),
+        expectedThumbprint: grant.deviceJkt,
+        binding: credential
+          ? {
+              type: "account",
+              keyId: "canary-desktop-key",
+              credential: "new-desktop-key",
+            }
+          : { type: "link", nonce: payload.correlationId },
+      });
+      expect(verified.isOk()).toBe(true);
+      if (verified.isErr()) {
+        throw new TypeError("Canary redemption device proof must verify");
+      }
+      expect(verified.value.nonce).toBe(payload.correlationId);
+      expect(verified.value.binding.type).toBe(credential ? "account" : "link");
+      proofIds.add(verified.value.jti);
+    }
+    const cleanup = requests.at(-1);
+    const grant = grants.at(0);
+    if (!cleanup || !grant) {
+      throw new TypeError("Canary cleanup must follow a desktop grant");
+    }
+    const cleanupProof = await VerifiedDesktopDeviceProof.verify({
+      request: new Request(new URL(cleanup.path, REVIEW_BASE_URL).toString(), {
+        method: cleanup.method,
+        headers: cleanup.headers,
+      }),
+      expectedUrl: new URL(cleanup.path, REVIEW_BASE_URL).toString(),
+      expectedThumbprint: grant.deviceJkt,
+      binding: {
+        type: "account",
+        keyId: "canary-desktop-key",
+        credential: "new-desktop-key",
+      },
+    });
+    expect(cleanupProof.isOk()).toBe(true);
+    if (cleanupProof.isErr()) {
+      throw new TypeError("Canary cleanup device proof must verify");
+    }
+    expect(cleanupProof.value.binding.type).toBe("account");
+    expect(cleanupProof.value.nonce).toBeUndefined();
+    proofIds.add(cleanupProof.value.jti);
+    expect(proofIds.size).toBe(3);
   });
 
   test.each([
@@ -1683,7 +1773,9 @@ describe("desktop handoff probes", () => {
       let redeemCount = 0;
       let grantCount = 0;
       const fetcher: CanaryFetcher = async (input, init) => {
-        const url = new URL(input instanceof Request ? input.url : input);
+        const url = new URL(
+          input instanceof Request ? input.url : input.toString(),
+        );
         const headers = new Headers(init.headers);
         requests.push({ path: url.pathname, headers });
         if (url.pathname === "/api/auth/get-session") {
@@ -1731,8 +1823,9 @@ describe("desktop handoff probes", () => {
   test("reports a failed desktop credential cleanup", async () => {
     let redemption = 0;
     const fetcher: CanaryFetcher = async (input) => {
-      const path = new URL(input instanceof Request ? input.url : input)
-        .pathname;
+      const path = new URL(
+        input instanceof Request ? input.url : input.toString(),
+      ).pathname;
       if (path === "/api/auth/get-session") {
         return sessionResponse();
       }
@@ -1944,7 +2037,9 @@ describe("staging credential journeys", () => {
   test("revokes an MCP key id returned alongside a malformed bootstrap response", async () => {
     const requests: { path: string; body: string }[] = [];
     const fetcher: CanaryFetcher = async (input, init) => {
-      const url = new URL(input instanceof Request ? input.url : input);
+      const url = new URL(
+        input instanceof Request ? input.url : input.toString(),
+      );
       requests.push({
         path: url.pathname,
         body: await new Response(init.body).text(),
@@ -1978,8 +2073,9 @@ describe("staging credential journeys", () => {
 
   test("reports MCP credential cleanup failures", async () => {
     const fetcher: CanaryFetcher = async (input) => {
-      const path = new URL(input instanceof Request ? input.url : input)
-        .pathname;
+      const path = new URL(
+        input instanceof Request ? input.url : input.toString(),
+      ).pathname;
       if (path === "/smoke/session") {
         return Response.json({ cookieName: "session", cookieValue: "session" });
       }
@@ -2107,7 +2203,7 @@ describe("deployment fetch boundary", () => {
     const origins: string[] = [];
     const fetcher: CanaryFetcher = async (input) => {
       origins.push(
-        new URL(input instanceof Request ? input.url : input).origin,
+        new URL(input instanceof Request ? input.url : input.toString()).origin,
       );
       return new Response(null);
     };

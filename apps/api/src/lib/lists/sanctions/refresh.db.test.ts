@@ -2,10 +2,10 @@ import { Result, panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
-import { createHash } from "node:crypto";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 import type { ParsedList } from "@stll/sanctions";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { stableStringify } from "@stll/stable-stringify";
 
 import type { Transaction } from "@/api/db/root";
@@ -81,10 +81,7 @@ const markerFor = (parsed: ParsedList) => async () =>
 const markerKey = (
   parsed: ParsedList,
   parserVersion = SANCTIONS_PARSER_VERSION,
-) =>
-  createHash("sha256")
-    .update(stableStringify({ parserVersion, version: parsed.version }))
-    .digest("hex");
+) => hashSha256Hex(stableStringify({ parserVersion, version: parsed.version }));
 
 test(
   "activates a complete edition and verifies the same marker without re-downloading",
@@ -570,9 +567,7 @@ const datedRefresh = (
         downloads += 1;
         return Result.ok({
           parsed,
-          contentHash: createHash("sha256")
-            .update(lastModified ?? "none")
-            .digest("hex"),
+          contentHash: hashSha256Hex(lastModified ?? "none"),
           lastModified,
         });
       },

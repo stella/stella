@@ -36,7 +36,7 @@ import {
   createAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
-import { resolveMemberAuthorization } from "@/api/lib/auth";
+import { resolveWorkspaceMemberAccess } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
@@ -246,7 +246,7 @@ export const executeFlowStep = async (
     ) {
       return null;
     }
-    const authorization = await resolveMemberAuthorization(
+    const workspace = await resolveWorkspaceMemberAccess(
       {
         organizationId: scope.organizationId,
         workspaceId: run.workspaceId,
@@ -254,7 +254,7 @@ export const executeFlowStep = async (
       },
       tx,
     );
-    if (!authorization?.workspace) {
+    if (workspace === null) {
       abortTransaction(
         new FlowStepError({
           message: "The workflow actor is no longer a member of this matter.",

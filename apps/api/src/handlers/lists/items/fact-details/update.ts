@@ -24,6 +24,7 @@ import {
   FACT_SCORING,
 } from "@/api/lib/lists/fact-details";
 import type { FactDatePrecision } from "@/api/lib/lists/fact-details";
+import { LIST_VERIFICATION_ITEM_OPERATION } from "@/api/lib/lists/item-operations";
 import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
@@ -47,7 +48,7 @@ const bodySchema = t.Object({
   medium: t.Nullable(
     t.String({ minLength: 1, maxLength: FACT_DETAIL_LIMITS.MEDIUM_MAX }),
   ),
-  confidence: t.UnionEnum(FACT_CONFIDENCES),
+  confidence: t.Nullable(t.UnionEnum(FACT_CONFIDENCES)),
   interpretationNote: t.Nullable(
     t.String({
       minLength: 1,
@@ -58,12 +59,17 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/lists/items/fact-details/update.ts",
+  },
   featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "Set the evidential detail of one fact item, replacing what it had: when " +
     "it happened (a date with day, month or year precision; a partial date " +
     "is stored as its first day), what kind of evidence and medium carry it, " +
-    "how unambiguous its meaning is (confidence), a note where that meaning " +
+    "how unambiguous its meaning is (confidence; null when not stated), a note where that meaning " +
     "is contested, and whether verifications may rely on it (`held` keeps it " +
     "out until confirmed). Only `fact` items carry detail.",
   permissions: { entity: ["update"] },
@@ -193,7 +199,10 @@ const updateFactDetails = createSafeHandler(
           resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM,
           resourceId: itemEntityId,
           changes,
-          metadata: { operation: "fact_details_set", listId },
+          metadata: {
+            operation: LIST_VERIFICATION_ITEM_OPERATION.factDetailsSet,
+            listId,
+          },
         });
         return { type: "updated" } as const;
       }),
@@ -225,6 +234,7 @@ type FactDetailsProjection = Pick<
 >;
 
 const UNPROJECTED_FACT_DETAIL_COLUMNS = [
+  "entityFeatureGate", // RLS state is internal to the gate.
   // Scope keys the caller sent in the request.
   "workspaceId",
   "listId",

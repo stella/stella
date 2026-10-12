@@ -33,13 +33,13 @@ import {
   lockObjectCleanupIntentsForWriter,
   retirePublishedObjectCleanupIntentsInTransaction,
 } from "@/api/lib/buffer-intent-reconciliation";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { writeScannedObject } from "@/api/lib/file-scan/stored-object";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
+import type { CheckedFileWrite } from "@/api/lib/files/organization-file-usage";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -164,31 +164,25 @@ const writeTemplateObject = async ({
 }): Promise<
   Result<Awaited<ReturnType<typeof writeScannedObject>>, HandlerError>
 > => {
-  const writeObject = async () => {
+  const writeObject = async ({
+    content,
+    objectKey,
+  }: CheckedFileWrite<ScannedFile>) => {
     recordWriteState(S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN);
     const written = await writeScannedObject(
-      { file, key: s3Key },
+      { file: content, key: objectKey },
       { type: "cleanup-intent", intent: intentId },
     );
     recordWriteState(written.certainty);
     return written;
   };
-  return isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")
-    ? await writeOrganizationFile({
-        organizationId,
-        objectKey: s3Key,
-        sizeBytes: file.bytes.byteLength,
-        write: writeObject,
-      })
-    : await Result.tryPromise({
-        try: writeObject,
-        catch: (cause) =>
-          new HandlerError({
-            status: 503,
-            message: "Object storage is unavailable",
-            cause,
-          }),
-      });
+  return await writeOrganizationFile({
+    organizationId,
+    objectKey: s3Key,
+    sizeBytes: file.bytes.byteLength,
+    content: file,
+    write: writeObject,
+  });
 };
 
 export const createStoredTemplate = async function* ({

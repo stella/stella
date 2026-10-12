@@ -8,10 +8,10 @@ import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import {
   InMemoryRateLimitContext,
-  type RateLimitContext,
   type RateLimitContextConfig,
   type RateLimitGenerator,
   type RateLimitOptions,
+  type ReadableRateLimitContext,
   scopedGenerator,
 } from "@/api/lib/rate-limit/rate-limit";
 import {
@@ -28,7 +28,7 @@ const REFUND_PROVENANCE_CLEANUP_INTERVAL_MS = 60_000;
 const FAIL_CLOSED_COUNT = Number.MAX_SAFE_INTEGER;
 
 // Every increment attempt is tagged with a client-generated attempt id
-// (ARGV[2]) that the script records unconditionally, independent of
+// (ARGV[2]) that the script records for refundable attempts, independent of
 // whether it started a fresh window. A later refund matches on that same
 // attempt id (see DECREMENT_SCRIPT) rather than on the window as a whole,
 // so the caller never needs to learn a server-assigned window id to issue
@@ -41,7 +41,9 @@ if current == 1 or ttl < 0 then
   redis.call("PEXPIRE", KEYS[1], ARGV[1])
   ttl = tonumber(ARGV[1])
 end
-redis.call("HSET", KEYS[1], "attempt:" .. ARGV[2], "1")
+if ARGV[2] ~= "" then
+  redis.call("HSET", KEYS[1], "attempt:" .. ARGV[2], "1")
+end
 return { current, ttl }
 `;
 
@@ -61,6 +63,12 @@ if current <= 0 then
   return 0
 end
 return redis.call("HINCRBY", KEYS[1], "count", -1)
+`;
+
+const READ_SCRIPT = `
+local ttl = redis.call("PTTL", KEYS[1])
+if ttl <= 0 then return { 0, -1 } end
+return { tonumber(redis.call("HGET", KEYS[1], "count") or "0"), ttl }
 `;
 
 const REDIS_RATE_LIMIT_FAILURE_POLICIES = [
@@ -83,7 +91,13 @@ type RedisRateLimitClient = {
   send: (command: string, args: string[]) => Promise<unknown>;
 };
 
-type RedisRateLimitOperation = "connect" | "decrement" | "increment" | "reset";
+type RedisRateLimitOperation =
+  | "connect"
+  | "decrement"
+  | "increment"
+  | "read"
+  | "reset"
+  | "complete";
 
 type RedisRateLimitContextOptions = {
   commandTimeoutMs?: number;
@@ -112,21 +126,21 @@ type RateLimitCounter = {
 };
 
 type RefundProvenance = {
-  /**
-   * The attempt id sent with the increment EVAL. Kept even when the
-   * increment's own reply never arrived (client-side timeout): Redis may
-   * have already applied that EVAL before the timeout fired, and
-   * DECREMENT_SCRIPT's attempt-id match makes refunding against an
-   * unconfirmed attempt safe either way -- it decrements only if Redis
-   * actually recorded this attempt, and no-ops otherwise. Discarding
-   * provenance on timeout (the previous behavior) traded that bounded
-   * ambiguity for a guaranteed permanent over-count whenever the EVAL had
-   * in fact landed.
-   */
-  attemptId: string;
   counterKey: string;
   expiresAt: number;
-};
+  fallbackStart: number;
+} & (
+  | { type: "local" }
+  | {
+      type: "redis";
+      /**
+       * The attempt id sent with the increment EVAL, retained when its reply
+       * times out. DECREMENT_SCRIPT refunds only a matching recorded attempt;
+       * an unrecorded attempt leaves the counter unchanged.
+       */
+      attemptId: string;
+    }
+);
 
 class RedisRateLimitReplyError extends TaggedError("RedisRateLimitReplyError")<{
   message: string;
@@ -134,7 +148,7 @@ class RedisRateLimitReplyError extends TaggedError("RedisRateLimitReplyError")<{
 }> {}
 
 /** Replica-safe fixed-window context with a bounded, explicit outage policy. */
-export class RedisRateLimitContext implements RateLimitContext {
+export class RedisRateLimitContext implements ReadableRateLimitContext {
   private readonly commandTimeoutMs: number;
   private readonly createRedis: () => RedisRateLimitClient;
   private readonly failurePolicy: RedisRateLimitFailurePolicy;
@@ -203,6 +217,62 @@ export class RedisRateLimitContext implements RateLimitContext {
     this.fallback.init(options);
   }
 
+  async read(key: string): Promise<RateLimitCounter | null> {
+    const { counterKey } = parseRequestScopedKey(key);
+    const now = Temporal.Now.instant().epochMilliseconds;
+    const result = await Result.tryPromise({
+      try: async () => {
+        const reply = await this.sendCommand("EVAL", [
+          READ_SCRIPT,
+          "1",
+          redisRateLimitKey(counterKey),
+        ]);
+        if (
+          Array.isArray(reply) &&
+          reply.length === 2 &&
+          Number(reply.at(0)) === 0 &&
+          Number(reply.at(1)) === -1
+        ) {
+          return null;
+        }
+        if (
+          Array.isArray(reply) &&
+          reply.length === 2 &&
+          Number(reply.at(0)) === 0 &&
+          Number.isFinite(Number(reply.at(1))) &&
+          Number(reply.at(1)) >= 0
+        ) {
+          const nextReset = new Date(now + Number(reply.at(1)));
+          return {
+            count: 0,
+            nextReset,
+            start: nextReset.getTime() - this.durationMs,
+          };
+        }
+        return parseIncrementReply(reply, this.durationMs, now);
+      },
+      catch: (error: unknown) => error,
+    });
+    if (Result.isOk(result)) {
+      return result.value;
+    }
+    this.onRedisError(result.error, "read");
+    if (this.failurePolicy === "fail_open_local") {
+      this.onLocalFallback?.();
+      const counter = this.fallback.read(counterKey);
+      return counter &&
+        this.localMax !== undefined &&
+        counter.count > this.localMax
+        ? { ...counter, count: FAIL_CLOSED_COUNT }
+        : counter;
+    }
+    return {
+      count: FAIL_CLOSED_COUNT,
+      nextReset: new Date(now + this.durationMs),
+      start: now,
+    };
+  }
+
   async increment(
     key: string,
     duration?: number,
@@ -216,7 +286,8 @@ export class RedisRateLimitContext implements RateLimitContext {
       effectiveDuration,
       now,
     );
-    const attemptId = Bun.randomUUIDv7();
+    // Plain counters cannot refund: do not allocate an identity they cannot settle.
+    const attemptId = requestId === null ? "" : Bun.randomUUIDv7();
     // Identity `catch` keeps the raw thrown error (e.g. TimeoutError)
     // instead of Result.tryPromise's default UnhandledException wrapping,
     // so the TimeoutError.is() check below can actually discriminate an
@@ -245,12 +316,19 @@ export class RedisRateLimitContext implements RateLimitContext {
           // decrement() can still attempt a refund; DECREMENT_SCRIPT
           // resolves the ambiguity server-side.
           this.refundProvenanceByRequest.set(requestId, {
+            type: "redis",
             attemptId,
             counterKey,
             expiresAt: now + effectiveDuration,
+            fallbackStart: fallbackCounter.start,
           });
         } else {
-          this.refundProvenanceByRequest.delete(requestId);
+          this.refundProvenanceByRequest.set(requestId, {
+            type: "local",
+            counterKey,
+            expiresAt: fallbackCounter.nextReset.getTime(),
+            fallbackStart: fallbackCounter.start,
+          });
         }
       }
       if (this.failurePolicy === "fail_open_local") {
@@ -271,23 +349,53 @@ export class RedisRateLimitContext implements RateLimitContext {
     }
     if (requestId !== null) {
       this.refundProvenanceByRequest.set(requestId, {
+        type: "redis",
         attemptId,
         counterKey,
         expiresAt: redisResult.value.nextReset.getTime(),
+        fallbackStart: fallbackCounter.start,
       });
     }
     return redisResult.value;
   }
 
-  async decrement(key: string): Promise<void> {
-    const { counterKey, requestId } = parseRequestScopedKey(key);
-    this.fallback.decrement(counterKey);
+  async complete(key: string): Promise<void> {
+    const { requestId } = parseRequestScopedKey(key);
     if (requestId === null) {
       return;
     }
     const provenance = this.refundProvenanceByRequest.get(requestId);
     this.refundProvenanceByRequest.delete(requestId);
+    if (provenance === undefined || provenance.type === "local") {
+      return;
+    }
+    // No handler refund can occur after the response is sent. The counter and
+    // its expiry survive; long budgets retain only in-flight refund identities.
+    const result = await Result.tryPromise(
+      async () =>
+        await this.sendCommand("HDEL", [
+          redisRateLimitKey(provenance.counterKey),
+          `attempt:${provenance.attemptId}`,
+        ]),
+    );
+    if (Result.isError(result)) {
+      this.onRedisError(result.error, "complete");
+    }
+  }
+
+  async decrement(key: string, windowStart?: number): Promise<void> {
+    const { counterKey, requestId } = parseRequestScopedKey(key);
+    if (requestId === null) {
+      this.fallback.decrement(counterKey, windowStart);
+      return;
+    }
+    const provenance = this.refundProvenanceByRequest.get(requestId);
+    this.refundProvenanceByRequest.delete(requestId);
     if (provenance === undefined) {
+      return;
+    }
+    this.fallback.decrement(counterKey, provenance.fallbackStart);
+    if (provenance.type === "local") {
       return;
     }
     const result = await Result.tryPromise(

@@ -1,3 +1,10 @@
+import { PDF, PdfArray, PdfString, PlaceholderError } from "@libpdf/core";
+import type {
+  DigestAlgorithm,
+  Signer,
+  SignWarning,
+  TimestampAuthority,
+} from "@libpdf/core";
 /**
  * Two-phase remote signing against LibPDF.
  *
@@ -24,15 +31,10 @@
  * signing time is therefore persisted in phase 1 and replayed in phase 2,
  * never re-read from the clock.
  */
-
-import { PDF, PdfArray, PdfString, PlaceholderError } from "@libpdf/core";
-import type {
-  DigestAlgorithm,
-  Signer,
-  SignWarning,
-  TimestampAuthority,
-} from "@libpdf/core";
 import { panic, Result, TaggedError } from "better-result";
+
+import { sha256Bytes as browserHashSha256Bytes } from "@stll/sha256/browser";
+import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/bun";
 
 import type { PdfSigningKeyType } from "@/api/db/schema";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -207,10 +209,7 @@ const pinFileIdentifier = (pdf: PDF, source: Uint8Array) => {
     return;
   }
   const identifier = new Uint8Array(
-    new Bun.CryptoHasher("sha256")
-      .update(source)
-      .digest()
-      .subarray(0, FILE_IDENTIFIER_BYTES),
+    hashSha256Bytes(source).subarray(0, FILE_IDENTIFIER_BYTES),
   );
   trailer.set(
     "ID",
@@ -253,9 +252,9 @@ const prepareSignatureField = async (
  * hash on the same async boundary keeps both phases computing it identically.
  */
 const signedAttributesDigestHex = async (data: Uint8Array) =>
-  Buffer.from(
-    await crypto.subtle.digest("SHA-256", new Uint8Array(data)),
-  ).toString("hex");
+  Buffer.from(await browserHashSha256Bytes(new Uint8Array(data))).toString(
+    "hex",
+  );
 
 /**
  * What only phase 2 adds: trusted time. The timestamp is an unsigned

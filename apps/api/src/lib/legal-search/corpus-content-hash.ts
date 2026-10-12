@@ -1,4 +1,5 @@
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { createSha256 } from "@stll/sha256/bun";
 
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import type {
@@ -28,7 +29,7 @@ export const corpusContentHash = ({
   sections,
   ast,
 }: CorpusPayload): string => {
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   hasher.update(text ?? "");
   hasher.update(FIELD_SEPARATOR);
   hasher.update(JSON.stringify(sections ?? null));

@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 import {
   existsSync,
@@ -13,6 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { DevProcessRegistrationError } from "./dev-process-groups";
 import {
   AUTO_INFRA_OFFSET_GRID,
   buildPersistentSteps,
@@ -23,6 +25,7 @@ import {
   createWebEnv,
   describeFailedProbes,
   dockerComposeDownCommand,
+  dockerComposeCommand,
   dockerProjectBelongsToWorktree,
   dockerProjectName,
   ensureWorktreeEnvLinks,
@@ -44,7 +47,9 @@ import {
   requiredPortsForMode,
   resolveAutoInfraOffset,
   resolveMainRootFromCommonDir,
+  reportGroupStopFailure,
   resolveOffset,
+  runMainAndExit,
   shouldAutoOpenBrowser,
 } from "./dev-runner";
 import {
@@ -58,6 +63,7 @@ import {
   devStatePath,
   readOrCreateDevContentEncryptionKey,
 } from "./dev-runtime";
+import { formatErrorChain } from "./error-chain";
 
 const tempDirs: string[] = [];
 
@@ -71,6 +77,44 @@ afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { force: true, recursive: true });
   }
+});
+
+test("worktree Compose commands build that checkout's Postgres image", async () => {
+  // Resolved, so Windows compares drive-qualified paths on both sides.
+  const worktree = path.resolve("/tmp/stella-worktree");
+  const command = dockerComposeCommand({
+    args: ["up", "-d", "--build"],
+    composeFile: path.resolve(worktree, "docker-compose.yml"),
+    dockerProject: "worktree-parity",
+  });
+  expect(command).toContain(path.resolve(worktree, "docker-compose.yml"));
+  expect(command).toContain("--build");
+  const source = await Bun.file(
+    new URL("dev-runner.ts", import.meta.url),
+  ).text();
+  expect(source).toMatch(
+    /const composeFile = path\.resolve\(\s*gitContext\.currentRoot,\s*"docker-compose\.yml",?\s*\)/u,
+  );
+  const compose: unknown = Bun.YAML.parse(
+    await Bun.file(
+      new URL("../../../docker-compose.yml", import.meta.url),
+    ).text(),
+  );
+  if (
+    typeof compose !== "object" ||
+    compose === null ||
+    !("services" in compose)
+  ) {
+    throw new TypeError("Expected Compose services");
+  }
+  expect(compose.services).toMatchObject({
+    postgres: {
+      build: { context: ".", dockerfile: "docker/postgres/Dockerfile" },
+    },
+  });
+  expect(path.resolve(worktree, ".", "docker/postgres/Dockerfile")).toBe(
+    path.join(worktree, "docker", "postgres", "Dockerfile"),
+  );
 });
 
 describe("parseDevRunnerConfig", () => {
@@ -1308,7 +1352,7 @@ describe("dev env factories", () => {
         seeded,
       }).primary.map((step) => step.env?.["LEGAL_SEARCH_PROVIDER"]);
 
-    expect(apiProviders(true)).toEqual(["pg-fts", "pg-fts"]);
+    expect(apiProviders(true)).toEqual(["pg-fts"]);
     expect(apiProviders(false)).toEqual(["corpus-index", "corpus-index"]);
   });
 
@@ -1319,7 +1363,7 @@ describe("dev env factories", () => {
       path.resolve(rootDir, "apps/api/.env"),
       "SCHEDULED_JOBS_MODE=enabled\n",
     );
-    const scheduledJobsModes = (seeded: boolean) =>
+    const primarySteps = (seeded: boolean) =>
       buildPersistentSteps({
         infraOffset: 0,
         infraPorts: infraPortsForOffset(0),
@@ -1327,10 +1371,45 @@ describe("dev env factories", () => {
         ports: portsForOffset(0),
         rootDir,
         seeded,
-      }).primary.map((step) => step.env?.["SCHEDULED_JOBS_MODE"]);
-
-    expect(scheduledJobsModes(true)).toEqual(["disabled", "disabled"]);
+      }).primary;
+    const scheduledJobsModes = (seeded: boolean) =>
+      primarySteps(seeded).map((step) => step.env?.["SCHEDULED_JOBS_MODE"]);
+    // Every process the mode starts hosts background writers; a step missing
+    // from this list would keep writing after the seed. A seeded stack starts
+    // no document-processing worker: with its writers disabled it would exit
+    // at once, which the runner treats as a crash of the whole stack.
+    expect(scheduledJobsModes(true)).toEqual(["disabled"]);
     expect(scheduledJobsModes(false)).toEqual(["enabled", "enabled"]);
+    expect(primarySteps(true).map((step) => step.label)).not.toContain(
+      "Document processing worker",
+    );
+    expect(primarySteps(false).map((step) => step.label)).toContain(
+      "Document processing worker",
+    );
+  });
+
+  test("a developer env that disables background workers starts no document-processing worker", () => {
+    const rootDir = createTempDir();
+    mkdirSync(path.resolve(rootDir, "apps/api"), { recursive: true });
+    writeFileSync(
+      path.resolve(rootDir, "apps/api/.env"),
+      "SCHEDULED_JOBS_MODE=disabled\n",
+    );
+    const { primary } = buildPersistentSteps({
+      infraOffset: 0,
+      infraPorts: infraPortsForOffset(0),
+      mode: "dev:api",
+      ports: portsForOffset(0),
+      rootDir,
+      seeded: false,
+    });
+
+    expect(primary.map((step) => step.env?.["SCHEDULED_JOBS_MODE"])).toEqual([
+      "disabled",
+    ]);
+    expect(primary.map((step) => step.label)).not.toContain(
+      "Document processing worker",
+    );
   });
 
   test("keeps scheduled jobs inside the API process", () => {
@@ -1417,7 +1496,8 @@ describe("dev env factories", () => {
         .map((step) => step.cmd.includes("--watch"));
 
     expect(watching(false)).toEqual([true, true]);
-    expect(watching(true)).toEqual([false, false]);
+    // A seeded stack starts only the API: its document worker is not started.
+    expect(watching(true)).toEqual([false]);
   });
 
   test("prepares API databases by applying migrations", () => {
@@ -1689,5 +1769,124 @@ describe("loadEnvFile and expandEnvMap", () => {
       B: "nested-value",
       C: "nested-value",
     });
+  });
+});
+
+describe("startup failure reporting", () => {
+  test("reports a seed failure and its cause chain, then exits non-zero", async () => {
+    const reports: string[] = [];
+    const exits: number[] = [];
+    const failure = new Error("Seed step failed", {
+      cause: new Error("relation does not exist", {
+        cause: { pgCode: "42P01" },
+      }),
+    });
+
+    await runMainAndExit({
+      exit: (code) => {
+        exits.push(code);
+      },
+      report: (message) => {
+        reports.push(message);
+      },
+      run: async () => await Promise.reject(failure),
+    });
+
+    expect(exits).toEqual([1]);
+    expect(reports).toHaveLength(1);
+    expect(reports[0]).toContain("Seed step failed");
+    expect(reports[0]).toContain("caused by: Error: relation does not exist");
+    expect(reports[0]).toContain("42P01");
+  });
+
+  test("a failed group stop during cleanup is reported without throwing", () => {
+    const reports: string[] = [];
+    const groupStop = Result.err(
+      new DevProcessRegistrationError({
+        message: "Could not signal process group",
+        cause: "ESRCH",
+      }),
+    );
+
+    expect(
+      reportGroupStopFailure(groupStop, (m) => {
+        reports.push(m);
+      }),
+    ).toBe(false);
+    expect(reports.join("\n")).toContain("Could not signal process group");
+    expect(reports.join("\n")).toContain("caused by: ESRCH");
+  });
+
+  test("formatting survives cyclic, empty and non-Error values", () => {
+    const cyclic = new Error("a");
+    cyclic.cause = cyclic;
+    expect(formatErrorChain(cyclic)).toBe("Error: a");
+    expect(formatErrorChain(undefined)).toBe("");
+    expect(formatErrorChain(null)).toContain("null");
+    expect(formatErrorChain(Object.create(null))).toBeString();
+  });
+});
+
+describe("startup failure reporting with hostile errors", () => {
+  const throwingGetter = (target: Error, key: "cause" | "message") =>
+    Object.defineProperty(target, key, {
+      get: () => {
+        throw new Error("getter exploded");
+      },
+    });
+
+  test("an Error whose cause getter throws is reported and exits 1", async () => {
+    const reports: string[] = [];
+    const exits: number[] = [];
+    const failure = throwingGetter(new Error("Seed step failed"), "cause");
+
+    await runMainAndExit({
+      exit: (code) => {
+        exits.push(code);
+      },
+      report: (message) => {
+        reports.push(message);
+      },
+      run: async () => await Promise.reject(failure),
+    });
+
+    expect(exits).toEqual([1]);
+    expect(reports.join("\n")).toContain("Seed step failed");
+    expect(reports.join("\n")).toContain("<unreadable cause>");
+  });
+
+  test("an Error whose message getter throws is reported and exits 1", async () => {
+    const reports: string[] = [];
+    const exits: number[] = [];
+    const failure = throwingGetter(new Error("hidden"), "message");
+
+    await runMainAndExit({
+      exit: (code) => {
+        exits.push(code);
+      },
+      report: (message) => {
+        reports.push(message);
+      },
+      run: async () => await Promise.reject(failure),
+    });
+
+    expect(exits).toEqual([1]);
+    expect(reports.join("\n")).toContain("Error: <unreadable>");
+  });
+
+  test("exits 1 even when the reporter throws", async () => {
+    const exits: number[] = [];
+
+    await runMainAndExit({
+      exit: (code) => {
+        exits.push(code);
+      },
+      report: () => {
+        throw new Error("stderr closed");
+      },
+      run: async () => await Promise.reject(new Error("boom")),
+    });
+
+    expect(exits).toEqual([1]);
   });
 });

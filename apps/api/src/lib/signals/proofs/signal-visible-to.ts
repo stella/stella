@@ -1,10 +1,9 @@
 import type { Named } from "@gdp-ts/core";
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { signals } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
@@ -60,7 +59,7 @@ export const withVisibleSignal = async <R, E>(
       organizationId,
       actorUserId,
       entityId: signalId,
-      check: async () => {
+      check: async (checkedEntityId) => {
         if (!hasMemberPermission(memberRole, { signal: ["resolve"] })) {
           return Result.err(
             new HandlerError({
@@ -70,22 +69,17 @@ export const withVisibleSignal = async <R, E>(
           );
         }
         // Lock only the signal table: the display joins include nullable sides.
-        await tx
-          .select({ id: signals.id })
-          .from(signals)
-          .where(
-            and(
-              eq(signals.id, signalId),
-              eq(signals.organizationId, organizationId),
-            ),
-          )
-          .for("update")
-          .limit(1);
+        await withAggregateLock({
+          aggregate: "signal",
+          mode: "update",
+          id: { id: checkedEntityId, organizationId },
+          tx,
+        });
         const rows = await selectVisibleSignalInTransaction({
           tx,
           organizationId,
           canTriage: canTriageSignals(memberRole),
-          signalId,
+          signalId: checkedEntityId,
         });
         const existing = rows.at(0);
         if (!existing) {

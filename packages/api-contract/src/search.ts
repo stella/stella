@@ -135,6 +135,20 @@ export const GLOBAL_SEARCH_RESULT_TYPES = [
 export type GlobalSearchResultType =
   (typeof GLOBAL_SEARCH_RESULT_TYPES)[number];
 
+/**
+ * Whether a page addressed by offset ranked every result in front of it. A
+ * scan that stopped on its budget first could not place the page: its rows,
+ * however few, say nothing about where the results end, so a client must not
+ * read a short or empty page as the end of the list.
+ */
+export const SEARCH_PAGE_REACH = {
+  REACHED: "reached",
+  SCAN_BUDGET: "scan_budget",
+} as const;
+
+export type SearchPageReach =
+  (typeof SEARCH_PAGE_REACH)[keyof typeof SEARCH_PAGE_REACH];
+
 /** A page can stop before exhaustion when its continuation exceeds a bound. */
 export const SEARCH_PAGINATION_COMPLETE = { type: "complete" } as const;
 export const SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET = {
@@ -145,3 +159,42 @@ export const SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET = {
 export type SearchPaginationOutcome =
   | typeof SEARCH_PAGINATION_COMPLETE
   | typeof SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET;
+
+/**
+ * What follows a page of search results, read from everything the search
+ * answered about it. The one place a client decides whether it has seen the
+ * whole result set: `complete` only when no cursor follows, the search
+ * reached the page, and its outcome is complete. A missing cursor alone
+ * proves nothing, since a budget stop ends a scan without one.
+ */
+export const SEARCH_PAGE_END = {
+  /** A cursor follows: results remain. */
+  MORE: "more",
+  /** No cursor, the page was reached and nothing was truncated: the set ends here. */
+  COMPLETE: "complete",
+  /** No cursor, but a budget or truncation stopped the scan: results may remain. */
+  STOPPED: "stopped",
+} as const;
+
+export type SearchPageEnd =
+  (typeof SEARCH_PAGE_END)[keyof typeof SEARCH_PAGE_END];
+
+type SearchPageAnswer = {
+  nextCursor: unknown;
+  reach: SearchPageReach;
+  paginationOutcome: { readonly type: string };
+};
+
+export const searchPageEnd = ({
+  nextCursor,
+  paginationOutcome,
+  reach,
+}: SearchPageAnswer): SearchPageEnd => {
+  if (nextCursor !== null) {
+    return SEARCH_PAGE_END.MORE;
+  }
+  return reach === SEARCH_PAGE_REACH.REACHED &&
+    paginationOutcome.type === SEARCH_PAGINATION_COMPLETE.type
+    ? SEARCH_PAGE_END.COMPLETE
+    : SEARCH_PAGE_END.STOPPED;
+};

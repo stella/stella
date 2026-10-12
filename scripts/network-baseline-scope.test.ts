@@ -277,6 +277,7 @@ describe("network baseline workflows", () => {
     expect(jobs["build"]?.permissions).toEqual({ contents: "read" });
     expect(jobs["record"]?.permissions).toEqual({
       contents: "read",
+      packages: "read",
       actions: "read",
     });
     const record = jobs["record"] ?? expect.unreachable("record job");
@@ -301,7 +302,32 @@ describe("network baseline workflows", () => {
     expect(source).toContain(
       `E2E_NETWORK_BASELINE: ${githubExpression("inputs.mode || 'write'")}`,
     );
-    expect(source).not.toMatch(/\bsecrets\.\w/u);
+    expect(source).not.toMatch(/\bsecrets\.(?!GITHUB_TOKEN\b)\w/u);
+    expect(
+      record.steps.filter((step) =>
+        step.run?.includes("setup-playwright/run-in-image.sh"),
+      ),
+    ).toHaveLength(2);
+    const browserPreparation = record.steps.findIndex(
+      (step) =>
+        step.run?.includes("setup-playwright/run-in-image.sh") &&
+        step.run.endsWith(" --prepare"),
+    );
+    const registryCleanup = record.steps.findIndex(
+      (step) => step.run === "docker logout ghcr.io",
+    );
+    const browserRecording = record.steps.findIndex(
+      (step) =>
+        step.run?.includes("setup-playwright/run-in-image.sh") &&
+        step.run.includes("test:e2e -- route-smoke.spec.ts"),
+    );
+    expect(browserPreparation).toBeGreaterThan(seed);
+    expect(registryCleanup).toBeGreaterThan(browserPreparation);
+    expect(record.steps.at(registryCleanup)?.if).toBe("always()");
+    expect(browserRecording).toBeGreaterThan(registryCleanup);
+    expect(record.steps.at(browserRecording)?.env).toMatchObject({
+      E2E_NETWORK_BASELINE: githubExpression("inputs.mode || 'write'"),
+    });
     for (const job of Object.values(jobs)) {
       for (const step of job.steps) {
         if (step.uses?.startsWith("actions/checkout@")) {

@@ -2,8 +2,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
-
-import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { sha256Hex as hashContent, createSha256 } from "@stll/sha256/node";
 
 import { sourceFingerprint } from "./source-fingerprint";
 
@@ -88,7 +87,7 @@ test("an envelope with no objects keeps the digest adapters already store", () =
 
 test("objects contribute the digest of their bytes in the order they are listed", () => {
   const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
-  const pdfDigest = new Bun.CryptoHasher("sha256").update(pdf).digest("hex");
+  const pdfDigest = createSha256().update(pdf).digest("hex");
   expect<string>(
     sourceFingerprint({
       sourceRaw: "envelope",

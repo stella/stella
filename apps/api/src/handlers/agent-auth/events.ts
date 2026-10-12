@@ -16,6 +16,7 @@ import {
  * abused to mutate state.
  */
 const config = {
+  contract: "patch",
   // A SET is a signed JWT delivered as application/secevent+jwt. We accept
   // the compact serialization as an opaque string and bound its size.
   body: t.String({ minLength: 1, maxLength: 16_384 }),

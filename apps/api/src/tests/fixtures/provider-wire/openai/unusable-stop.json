@@ -16,6 +16,8 @@
             "content-type": "application/json"
           },
           "body": {
+            "include": ["reasoning.encrypted_content"],
+            "store": false,
             "max_output_tokens": 128000,
             "service_tier": "default",
             "model": "gpt-6-luna",

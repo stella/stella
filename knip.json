@@ -46,7 +46,7 @@
       "entry": [
         "src/server.ts!",
         // Browser entrypoints bundled by build-mcp-apps.ts.
-        "src/mcp/apps/*/app.tsx",
+        "src/mcp/apps/*/app.{ts,tsx}",
         // Ignored runtime aggregates import every committed capability shard.
         "src/mcp/generated/capability-dispatch.ts!",
         "src/mcp/generated/capability-catalog.ts!",
@@ -62,6 +62,7 @@
         "scripts/*.ts",
         // Compiler contract tests are checked by the API typecheck script.
         "contracts/**/*.ts",
+        "src/**/*.type-test.ts",
         "src/scripts/*.ts",
         "src/dev/register-mock-ai.ts",
         "src/lib/__fixtures__/*.ts",
@@ -101,6 +102,9 @@
       // imports it through @stll/ui/icons; the app keeps the dependency so
       // vite's `resolve.dedupe` and icon chunking resolve one copy.
       "ignoreDependencies": [
+        // The gitignored API contract imports schema interfaces by name to
+        // preserve ClientTool generic identity; CI checks that generated output.
+        "@standard-schema/spec",
         // Dynamically imported from the inline bootstrap in index.html.
         "react-grab",
         "lucide-react",
@@ -122,7 +126,8 @@
         "src/**/*.astro",
         "src/content.config.ts",
         "src/pages/**/*.ts",
-        "astro.config.*"
+        "astro.config.*",
+        "e2e/**/*.ts"
       ],
       // Tailwind scans workspace-ui through the CSS @source directive.
       "ignoreDependencies": ["@tailwindcss/postcss", "@stll/workspace-ui"]
@@ -172,6 +177,9 @@
     "packages/permissions": {
       "entry": ["src/index.ts"]
     },
+    "packages/playwright-tools": {
+      "entry": ["src/marketing-config.ts"]
+    },
     "packages/redis-config": {
       "entry": ["src/connection.ts", "src/**/*.test.ts"]
     },
@@ -180,6 +188,10 @@
     },
     "packages/sanctions": {
       "entry": ["src/index.ts", "src/**/*.test.ts", "scripts/evaluate.ts"]
+    },
+    "packages/scan-engine": {
+      "entry": ["src/scan-engine.ts", "src/**/*.test.ts"],
+      "ignore": ["generated/**"]
     },
     "packages/scripts": {
       "entry": ["src/i18n-check.ts", "src/i18n-typegen.ts"]

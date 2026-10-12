@@ -15,7 +15,7 @@ covered by one, or through `read_capability` or
 A capability id is its handler path under `apps/api/src/handlers/`, joined
 with `.`: `<domain>[.<resource>…].<action>`. The action is one word:
 a canonical verb (`list`, `get`, `create`, `update`, `delete`)
-or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clip`, `clone`, `compare`, `confirm`, `convert`, `copy`, `count`, `diff`, `discover`, `discard`, `download`, `duplicate`, `export`, `fill`, `generate`, `import`, `install`, `link`, `lookup`, `move`, `pause`, `prefill`, `prepare`, `preview`, `remove`, `rename`, `reorder`, `replace`, `resolve`, `return`, `restore`, `resume`, `retry`, `review`, `rewrite`, `run`, `search`, `split`, `start`, `stop`, `suggest`, `summarize`, `sync`, `transition`, `unarchive`, `unlink`, `upload`, `upsert`).
+or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clear`, `clip`, `clone`, `compare`, `confirm`, `convert`, `copy`, `count`, `diff`, `discover`, `discard`, `download`, `duplicate`, `export`, `fill`, `generate`, `import`, `install`, `link`, `lookup`, `move`, `pause`, `prefill`, `prepare`, `preview`, `remove`, `rename`, `reorder`, `replace`, `resolve`, `return`, `restore`, `resume`, `retry`, `review`, `rewrite`, `run`, `search`, `split`, `start`, `stop`, `suggest`, `summarize`, `sync`, `transition`, `unarchive`, `unlink`, `upload`, `upsert`).
 A compound action is a nested resource: `clauses.categories.create`, not
 `clauses.categories-create`.
 
@@ -59,6 +59,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `chat.export.create` | write | stella:chat | — | generic invoke → `stella capability chat export-create` |
 | `chat.fork.create` | write | stella:chat | — | generic invoke → `stella capability chat fork-create` |
 | `chat.messages.list` | read | stella:chat | — | generic invoke → `stella capability chat messages-list` |
+| `chat.messages.revisions.list` | read | stella:chat | — | generic invoke → `stella capability chat messages-revisions-list` |
 | `chat.older-messages.list` | read | stella:chat | — | generic invoke → `stella capability chat older-messages-list` |
 | `chat.threads.delete` | write, destructive | stella:chat | — | generic invoke → `stella capability chat threads-delete` |
 | `chat.threads.list` | read | stella:chat | — | generic invoke → `stella capability chat threads-list` |
@@ -417,6 +418,14 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `saved-time-narratives.list` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability saved-time-narratives list` |
 | `saved-time-narratives.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability saved-time-narratives update` |
 
+## search-history
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `search-history.clear` | write, destructive | stella:knowledge_write | — | generic invoke → `stella capability search-history clear` |
+| `search-history.delete` | write, destructive | stella:knowledge_write | — | generic invoke → `stella capability search-history delete` |
+| `search-history.list` | read | stella:read | — | generic invoke → `stella capability search-history list` |
+
 ## seller-profiles
 
 | Capability | Access | Scope | Feature | Reachable via |
@@ -672,9 +681,9 @@ mechanics, and similar), not gaps in coverage.
 | --- | --- |
 | account_lifecycle | 4 |
 | assistant_chat | 16 |
-| auth_plumbing | 21 |
+| auth_plumbing | 27 |
 | billing_ui | 1 |
-| chat_thread_ui | 2 |
+| chat_thread_ui | 11 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 25 |
@@ -684,8 +693,8 @@ mechanics, and similar), not gaps in coverage.
 | native_tool_ui | 10 |
 | provider_secret | 33 |
 | public_indexing | 9 |
-| realtime_stream | 4 |
-| search_ui | 15 |
+| realtime_stream | 9 |
+| search_ui | 18 |
 | session_token_exchange | 20 |
 | ui_navigation_state | 14 |
 | upload_mechanics | 20 |

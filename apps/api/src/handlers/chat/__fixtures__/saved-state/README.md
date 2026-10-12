@@ -22,6 +22,13 @@ approved call its continuation never closed). The harness must report exactly
 those on the loaded thread, and continuing the thread must add nothing to
 them.
 
+New tool calls record executor ownership when written. Older rows without a
+tag are normalized once at the persisted-message read boundary using the
+fixed catalog of historically client-executed names; all other names are
+server-owned. Request tool sets cannot change that decision, and recorded tags
+remain authoritative. All archived fixtures still exercise reload and
+continuation; their stored files remain intact.
+
 The older files were written by backporting the writer into a checkout of the
 release and sending requests the way today's web client builds them.
 
@@ -42,3 +49,7 @@ states, turn rows, thread-name kinds) with every file here. When it fails:
 
 Once a release ships, you may rename a `main-*` file after it and set its
 `release`. Files contain only test data from the scripted conversation.
+
+`main-2026-10-07-reattach.json` also stores native interrupt resume state on
+awaiting-user assistant messages. That state restores approvals after reload
+and after the delivery log expires.

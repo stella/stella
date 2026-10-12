@@ -72,6 +72,7 @@ import { safePublicHandlerErrorOrStatusTextResponseSchema } from "@/api/lib/sear
 
 const listStatutes = createSafeBoundedPublicHandler(
   {
+    contract: "patch",
     response: withPublicCountryUnavailable(
       safePublicHandlerResponseSchemasWithStatusText(
         listStatutesSuccessResponseSchema,
@@ -95,6 +96,7 @@ const listStatutes = createSafeBoundedPublicHandler(
 
 const readLegislationShelf = createSafeBoundedPublicHandler(
   {
+    contract: "patch",
     response: withPublicCountryUnavailable(
       safePublicHandlerResponseSchemasWithStatusText(
         legislationShelfSuccessResponseSchema,
@@ -119,6 +121,7 @@ const readLegislationShelf = createSafeBoundedPublicHandler(
 
 const readLegislationFacets = createSafeBoundedPublicHandler(
   {
+    contract: "patch",
     response: withPublicCountryUnavailable(
       safePublicHandlerResponseSchemasWithStatusText(
         legislationFacetsSuccessResponseSchema,
@@ -143,6 +146,7 @@ const readLegislationFacets = createSafeBoundedPublicHandler(
 
 const readStatuteByEli = createSafeBoundedPublicHandler(
   {
+    contract: "patch",
     response: {
       ...safePublicHandlerResponseSchemasWithStatusText(
         statuteReaderSuccessResponseSchema,
@@ -171,6 +175,7 @@ const readStatuteByEli = createSafeBoundedPublicHandler(
 
 const resolveStatutes = createSafeBoundedPublicHandler(
   {
+    contract: "patch",
     response: safePublicHandlerResponseSchemasWithStatusText(
       resolveStatutesSuccessResponseSchema,
     ),
@@ -194,6 +199,7 @@ const resolveStatutes = createSafeBoundedPublicHandler(
 
 const readStatuteBySlug = createSafeBoundedPublicHandler(
   {
+    contract: "patch",
     response: withPublicCountryUnavailable({
       ...safePublicHandlerResponseSchemasWithStatusText(
         statuteReaderSuccessResponseSchema,
@@ -227,6 +233,7 @@ const readStatuteBySlug = createSafeBoundedPublicHandler(
 
 const readStatute = createSafeBoundedPublicHandler(
   {
+    contract: "patch",
     response: safePublicHandlerResponseSchemasWithStatusText(
       statuteReaderSuccessResponseSchema,
     ),
@@ -252,6 +259,7 @@ const readStatute = createSafeBoundedPublicHandler(
 
 const listStatuteVersions = createSafeBoundedPublicHandler(
   {
+    contract: "patch",
     response: safePublicHandlerResponseSchemasWithStatusText(
       statuteVersionsSuccessResponseSchema,
     ),
@@ -279,6 +287,7 @@ const listStatuteVersions = createSafeBoundedPublicHandler(
 
 const readProvisionHistory = createSafeBoundedPublicHandler(
   {
+    contract: "patch",
     response: safePublicHandlerResponseSchemasWithStatusText(
       provisionHistorySuccessResponseSchema,
     ),
@@ -307,6 +316,7 @@ const readProvisionHistory = createSafeBoundedPublicHandler(
 
 const listStatuteSitemapShards = createSafeBoundedPublicHandler(
   {
+    contract: "patch",
     response: safePublicHandlerResponseSchemasWithStatusText(
       statuteSitemapShardsSuccessResponseSchema,
     ),
@@ -328,6 +338,7 @@ const listStatuteSitemapShards = createSafeBoundedPublicHandler(
 
 const listStatuteSitemapStatutes = createSafeBoundedPublicHandler(
   {
+    contract: "patch",
     response: withPublicCountryUnavailable(
       safePublicHandlerResponseSchemasWithStatusText(
         statuteSitemapStatutesSuccessResponseSchema,

@@ -15,6 +15,14 @@ import {
 } from "@stll/api-contract/correspondence";
 
 import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+} from "../entity-feature-gate-columns";
+import {
+  REVIEW_RESET_ORGANIZATION_SETTING,
+  reviewResetOwnerPolicies,
+} from "../review-reset-policies";
+import {
   jsonb,
   organization,
   orgPolicies,
@@ -53,6 +61,10 @@ export const CORRESPONDENCE_ERASURE_SETTING = {
   recordIds: "app.correspondence_erasure_record_ids",
 } as const;
 
+export const CORRESPONDENCE_REVIEW_RESET_SETTING = {
+  organizationId: REVIEW_RESET_ORGANIZATION_SETTING,
+} as const;
+
 // Resolve the owner through the catalog because deployment login names differ.
 const currentUserOwnsCorrespondence = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence'::regclass)`;
 
@@ -66,6 +78,7 @@ const offboardingAssigneeCheck = sql`assignee_id = nullif(current_setting(${sql.
 export const correspondence = p.pgTable.withRLS(
   "correspondence",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"correspondence">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
@@ -118,6 +131,8 @@ export const correspondence = p.pgTable.withRLS(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...reviewResetOwnerPolicies("correspondence"),
+    ...entityFeatureGateChecks(table),
     p
       .foreignKey({
         name: "correspondence_workspace_organization_fk",
@@ -210,6 +225,7 @@ export const correspondence = p.pgTable.withRLS(
 export const correspondenceFilers = p.pgTable.withRLS(
   "correspondence_filers",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"correspondenceFiler">().primaryKey(),
     organizationId: safeOrganizationId("organization_id").notNull(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
@@ -225,6 +241,8 @@ export const correspondenceFilers = p.pgTable.withRLS(
     filedAt: timestamptz("filed_at").notNull().defaultNow(),
   },
   (table) => [
+    ...reviewResetOwnerPolicies("correspondence_filers"),
+    ...entityFeatureGateChecks(table),
     p
       .foreignKey({
         name: "correspondence_filers_workspace_organization_fk",
@@ -302,6 +320,7 @@ export const correspondenceFilers = p.pgTable.withRLS(
 export const correspondenceAttachments = p.pgTable.withRLS(
   "correspondence_attachments",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"correspondenceAttachment">().primaryKey(),
     organizationId: safeOrganizationId("organization_id").notNull(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
@@ -317,6 +336,8 @@ export const correspondenceAttachments = p.pgTable.withRLS(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...reviewResetOwnerPolicies("correspondence_attachments"),
+    ...entityFeatureGateChecks(table),
     p
       .foreignKey({
         name: "correspondence_attachments_workspace_organization_fk",
@@ -477,10 +498,21 @@ export const correspondenceAllowedSenders = p.pgTable.withRLS(
       using: sql`(current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_allowed_senders'::regclass) AND approved_by = nullif(current_setting('app.correspondence_erasure_user_id', true), ''))`,
       withCheck: sql`(current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_allowed_senders'::regclass) AND approved_by = nullif(current_setting('app.correspondence_erasure_user_id', true), '') AND id = ANY(COALESCE(NULLIF(current_setting('app.correspondence_erasure_record_ids', true), '')::uuid[], ARRAY[]::uuid[])) AND approved_by_display = '{"status":"deleted"}'::jsonb)`,
     }),
+    // Remove this legacy owner read only after context-writing reset callers have drained old tasks.
     p.pgPolicy("correspondence_allowed_senders_owner_lookup", {
       for: "select",
       to: "public",
       using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_allowed_senders'::regclass)`,
+    }),
+    p.pgPolicy("correspondence_allowed_senders_owner_lifecycle_lookup", {
+      for: "select",
+      to: "public",
+      using: sql`(current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_allowed_senders'::regclass) AND (approved_by = nullif(current_setting('app.correspondence_erasure_user_id', true), '') OR organization_id = nullif(current_setting('app.correspondence_review_reset_organization_id', true), '')))`,
+    }),
+    p.pgPolicy("correspondence_allowed_senders_owner_review_reset_delete", {
+      for: "delete",
+      to: "public",
+      using: sql`(current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_allowed_senders'::regclass) AND organization_id = nullif(current_setting('app.correspondence_review_reset_organization_id', true), ''))`,
     }),
     ...orgPolicies(),
   ],

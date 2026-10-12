@@ -1,6 +1,11 @@
 import { DESKTOP_HANDOFF_FAILURE_REASONS } from "@stll/api-contract/desktop-handoff";
 
 import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+  entityFeatureWorkspaceGateColumns,
+} from "../entity-feature-gate-columns";
+import {
   jsonb,
   p,
   pUuid,
@@ -105,6 +110,8 @@ const currentUserOwnsSessions = sql`current_user = (SELECT pg_catalog.pg_get_use
 export const pdfSigningSessions = p.pgTable(
   "pdf_signing_sessions",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"pdfSigningSession">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
@@ -174,6 +181,7 @@ export const pdfSigningSessions = p.pgTable(
     closedAt: timestamptz("closed_at"),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p.index("pdf_signing_sessions_workspace_id_idx").on(table.workspaceId),
     p.index("pdf_signing_sessions_entity_id_idx").on(table.entityId),
     p
@@ -256,5 +264,11 @@ export const pdfSigningSessions = p.pgTable(
       to: "public",
       using: currentUserOwnsSessions,
     }),
+    p
+      .index("pdf_signing_sessions_ef_base_version_id_idx")
+      .on(table.baseVersionId),
+    p
+      .index("pdf_signing_sessions_ef_finalized_version_id_idx")
+      .on(table.finalizedVersionId),
   ],
 );

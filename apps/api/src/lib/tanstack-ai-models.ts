@@ -18,7 +18,7 @@ import * as v from "valibot";
 
 import {
   AI_PROVIDERS,
-  ANTHROPIC_ADAPTIVE_THINKING_MODELS,
+  getModelReasoningCapabilities,
   BYOK_MODEL_OPTIONS,
   DEFAULT_MODELS,
   FALLBACK_CHAT_MODEL_BY_PROVIDER,
@@ -39,9 +39,11 @@ import type {
   ResolvedReasoningEffort,
   TanStackAIProvider,
 } from "@stll/ai-catalog";
+import { createSha256 } from "@stll/sha256/bun";
 
 import { env } from "@/api/env";
 import {
+  resolveOrgAIModelForRole,
   normalizeProviderRegion,
   type AIRequestServiceTier,
   type DataRegion,
@@ -56,6 +58,7 @@ import type {
   AIRequestPolicy,
   ManagedAIResidency,
 } from "@/api/lib/chat/ai-data-policy";
+import { anthropicClientOptions } from "@/api/lib/chat/anthropic-config";
 import {
   getManagedOpenRouterConfiguration,
   type ManagedOpenRouterCredential,
@@ -70,6 +73,7 @@ import {
 import { withProviderImageInput } from "@/api/lib/chat/provider-image-input";
 import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
 import { validateDataUrl } from "@/api/lib/data-url";
+import { registerProviderDiagnosticCredentials } from "@/api/lib/errors/redacted-provider-diagnostic";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import {
@@ -342,6 +346,7 @@ type ModelOverride = {
 type TanStackModelFactoryOptions = {
   provider: AIProvider;
   region?: DataRegion | undefined;
+  anthropicWorkspaceId?: string | undefined;
 } & (
   | { apiKey: string; dataClass: AIDataClass }
   | ({
@@ -569,17 +574,28 @@ const createExtendedGeminiAdapter = (
   return gemini(modelId, apiKey);
 };
 
-const createExtendedAnthropicAdapter = (
-  modelId: string,
-  apiKey: string,
-): AnyTextAdapter => {
+type AnthropicAdapterOptions = {
+  modelId: string;
+  apiKey: string;
+  anthropicWorkspaceId: string | undefined;
+};
+
+const createExtendedAnthropicAdapter = ({
+  modelId,
+  apiKey,
+  anthropicWorkspaceId,
+}: AnthropicAdapterOptions): AnyTextAdapter => {
   const anthropic = extendAdapter(createAnthropicChat, [
     createModel(modelId, {
       input: ["text", "image", "document"] as const,
       features: ["structured_outputs"] as const,
     }),
   ]);
-  return anthropic(modelId, apiKey);
+  return anthropic(
+    modelId,
+    apiKey,
+    anthropicClientOptions(anthropicWorkspaceId),
+  );
 };
 
 const createExtendedOpenAIAdapter = (
@@ -888,7 +904,12 @@ const createProviderTextAdapterFactory = (
         apiKey ?? env.ANTHROPIC_API_KEY,
         "ANTHROPIC_API_KEY",
       );
-      return (modelId) => createExtendedAnthropicAdapter(modelId, key);
+      return (modelId) =>
+        createExtendedAnthropicAdapter({
+          modelId,
+          apiKey: key,
+          anthropicWorkspaceId: options.anthropicWorkspaceId,
+        });
     }
     case "bedrock": {
       const key = apiKey ?? env.BEDROCK_API_KEY;
@@ -1212,7 +1233,10 @@ export const requireTanStackAIAvailableForRole = ({
     return Result.ok(undefined);
   }
 
-  const selection = orgConfig.overrideModels[role];
+  const selection = resolveOrgAIModelForRole(orgConfig, role);
+  if (selection === null) {
+    return Result.err(byokRoleNotConfiguredError(role));
+  }
   const providerConfig = getOrgProviderConfig(orgConfig, selection.provider);
   const support = resolveTanStackAIProviderSupport({
     provider: providerConfig.provider,
@@ -1263,7 +1287,10 @@ export const isDeferredServiceTierAvailableForRole = (
   orgConfig: OrgAIConfig | null | undefined,
 ): boolean => {
   if (orgConfig) {
-    const selection = orgConfig.overrideModels[role];
+    const selection = resolveOrgAIModelForRole(orgConfig, role);
+    if (selection === null) {
+      return false;
+    }
     const providerConfig = getOrgProviderConfig(orgConfig, selection.provider);
     const region = providerRegion(providerConfig);
     return (
@@ -1345,7 +1372,7 @@ export const clearByokAdapterCache = () => {
 };
 
 const byokCacheKey = (config: OrgAIProviderConfig): string => {
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   hasher.update(config.provider);
   hasher.update(config.apiKey);
   switch (config.provider) {
@@ -1356,10 +1383,13 @@ const byokCacheKey = (config: OrgAIProviderConfig): string => {
     case "huggingface":
       hasher.update(config.baseURL);
       break;
+    case "anthropic":
+      hasher.update(config.anthropicWorkspaceId ?? "");
+      hasher.update(providerRegion(config) ?? "global");
+      break;
     case "google":
     case "openrouter":
     case "openai":
-    case "anthropic":
     case "bedrock":
     case "mistral":
     case "openai_compatible":
@@ -1367,9 +1397,7 @@ const byokCacheKey = (config: OrgAIProviderConfig): string => {
       break;
     default: {
       config satisfies never;
-      return panic(
-        `Unsupported BYOK provider configuration: ${JSON.stringify(config)}`,
-      );
+      return panic("Unsupported BYOK provider configuration");
     }
   }
   const hash = hasher.digest("hex").slice(0, 16);
@@ -1378,15 +1406,19 @@ const byokCacheKey = (config: OrgAIProviderConfig): string => {
 
 const factoryExtras = (
   config: OrgAIProviderConfig,
-): Pick<TanStackModelFactoryOptions, "region"> => {
+): Pick<TanStackModelFactoryOptions, "region" | "anthropicWorkspaceId"> => {
   switch (config.provider) {
     case "azure_foundry":
     case "huggingface":
       return {};
+    case "anthropic":
+      return {
+        region: providerRegion(config),
+        anthropicWorkspaceId: config.anthropicWorkspaceId,
+      };
     case "google":
     case "openrouter":
     case "openai":
-    case "anthropic":
     case "bedrock":
     case "mistral":
     case "openai_compatible":
@@ -1485,7 +1517,12 @@ const instanceModelIdForRole = ({
   modelTier: ManagedModelTier;
 }): string => {
   const servingRole = managedModelRole(role, modelTier);
-  return MODEL_OVERRIDES[servingRole] ?? DEFAULT_MODELS[provider][servingRole];
+  const modelId =
+    MODEL_OVERRIDES[servingRole] ?? DEFAULT_MODELS[provider][servingRole];
+  if (modelId === null) {
+    return panic("Supported instance role has no catalog default");
+  }
+  return modelId;
 };
 
 const GOOGLE_SAFETY_SETTINGS_BASELINE = [
@@ -1518,18 +1555,16 @@ const deterministicSamplingForModel = (
 ): { temperature: 0 } | Record<never, never> =>
   shouldEmitTemperature(modelId) ? { temperature: 0 } : {};
 
-const usesAnthropicAdaptiveThinking = (modelId: string): boolean =>
-  ANTHROPIC_ADAPTIVE_THINKING_MODELS.some((adaptiveModelId) =>
-    modelId.includes(adaptiveModelId),
-  );
-
 const anthropicThinkingForModel = (
   modelId: string,
 ): StellaAnthropicThinking => {
-  if (usesAnthropicAdaptiveThinking(modelId)) {
+  const capability = getModelReasoningCapabilities(modelId);
+  if (capability === null || capability.anthropicThinking === "none") {
+    return { type: "disabled" };
+  }
+  if (capability.anthropicThinking === "adaptive") {
     return { type: "adaptive" };
   }
-
   return {
     type: "enabled",
     budget_tokens: ANTHROPIC_LEGACY_THINKING_BUDGET_TOKENS,
@@ -1646,14 +1681,24 @@ const tanStackOpenAIModelOptionsForRole = ({
   modelId,
   reasoningEffort,
 }: TanStackModelOptionsForRoleInput<"openai">): StellaOpenAITextProviderOptions => {
+  const capability = getModelReasoningCapabilities(modelId);
+  const replayOptions: StellaOpenAITextProviderOptions = {
+    include: capability?.openAIIncludeEncryptedContent
+      ? ["reasoning.encrypted_content"]
+      : [],
+    ...(capability?.openAIStore === false ? { store: false } : {}),
+  };
   if (role !== "reasoning" && reasoningEffort === undefined) {
-    return deterministicSamplingForModel(modelId);
+    return { ...deterministicSamplingForModel(modelId), ...replayOptions };
   }
   const effort = resolveReasoningEffort({
     modelId,
     requested: reasoningEffort ?? "medium",
   });
-  return effort === null ? {} : { reasoning: { effort } };
+  return {
+    ...replayOptions,
+    ...(effort === null ? {} : { reasoning: { effort } }),
+  };
 };
 
 /**
@@ -1952,7 +1997,7 @@ const resolveByokTextModel = ({
   assertTanStackBYOKModelRoleSupport({ provider, modelId, role });
 
   const factory = getCachedFactory(providerConfig);
-  return buildResolvedTextModel({
+  const resolved = buildResolvedTextModel({
     adapter: factory(modelId),
     keySource: "byok",
     provider,
@@ -1963,6 +2008,8 @@ const resolveByokTextModel = ({
     reasoningEffort,
     useRoleReasoningDefault,
   });
+  registerProviderDiagnosticCredentials(resolved, [providerConfig.apiKey]);
+  return resolved;
 };
 
 /**
@@ -2048,8 +2095,10 @@ export const getTanStackTextModelForRole = (
     managedOpenRouterCredential?: ManagedOpenRouterCredential | undefined;
   } & AIRequestPolicy,
 ): ResolvedTanStackTextModel => {
-  if (orgConfig) {
-    const selection = orgConfig.overrideModels[role];
+  const selection = orgConfig
+    ? resolveOrgAIModelForRole(orgConfig, role)
+    : null;
+  if (orgConfig && selection !== null) {
     return resolveByokTextModel({
       role,
       providerConfig: getOrgProviderConfig(orgConfig, selection.provider),
@@ -2058,7 +2107,7 @@ export const getTanStackTextModelForRole = (
     });
   }
 
-  if (!hasConfiguredTanStackInstanceProvider()) {
+  if (orgConfig || !hasConfiguredTanStackInstanceProvider()) {
     throw byokRoleNotConfiguredError(role);
   }
 
@@ -2072,6 +2121,10 @@ export const getTanStackTextModelForRole = (
       throw availability.error;
     }
   }
+  assertTanStackProviderRoleSupport(
+    resolveTanStackTextProvider({ provider }),
+    role,
+  );
   const modelId = instanceModelIdForRole({ provider, role, modelTier });
   return resolveInstanceTextModel({
     role,
@@ -2090,8 +2143,10 @@ export const getTanStackTextModelInfoForRole = (
     modelTier: ManagedModelTier;
   },
 ): ResolvedTanStackTextModelInfo => {
-  if (orgConfig) {
-    const selection = orgConfig.overrideModels[role];
+  const selection = orgConfig
+    ? resolveOrgAIModelForRole(orgConfig, role)
+    : null;
+  if (orgConfig && selection !== null) {
     const providerConfig = getOrgProviderConfig(orgConfig, selection.provider);
     const region = providerRegion(providerConfig);
     const provider = resolveTanStackTextProvider({
@@ -2114,7 +2169,7 @@ export const getTanStackTextModelInfoForRole = (
     };
   }
 
-  if (!hasConfiguredTanStackInstanceProvider()) {
+  if (orgConfig || !hasConfiguredTanStackInstanceProvider()) {
     throw byokRoleNotConfiguredError(role);
   }
 

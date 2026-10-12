@@ -46,7 +46,6 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   },
   staticRoute("/chat/new", { expectation: { kind: "settles" } }),
   staticRoute("/contacts"),
-  staticRoute("/dev/autocomplete", { expectation: { kind: "settles" } }),
   staticRoute("/knowledge"),
   staticRoute("/knowledge/clauses"),
   // Reachable in dev/staging (playbooks preview gate is open there); redirects

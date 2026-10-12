@@ -1,11 +1,3 @@
-/**
- * The per-decision provision-citation state, on the embedded test database:
- * the input digest, the decision enqueue trigger, `ensure_…_state`, and the
- * guards on scopes and revisions. PGlite is one session, so everything that
- * needs two connections (a scope row inserted concurrently, lock waits) is
- * in `case-law-provision-extraction-state.postgres.test.ts`.
- */
-
 import {
   afterAll,
   beforeAll,
@@ -14,6 +6,13 @@ import {
   expect,
   test,
 } from "bun:test";
+/**
+ * The per-decision provision-citation state, on the embedded test database:
+ * the input digest, the decision enqueue trigger, `ensure_…_state`, and the
+ * guards on scopes and revisions. PGlite is one session, so everything that
+ * needs two connections (a scope row inserted concurrently, lock waits) is
+ * in `case-law-provision-extraction-state.postgres.test.ts`.
+ */
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -24,6 +23,7 @@ import {
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -388,16 +388,14 @@ describe("input digest", () => {
         redacted_at: "2026-01-01T00:00:00+00:00",
       },
     ]);
-    const sha256 = (text: string) =>
-      new Bun.CryptoHasher("sha256").update(text).digest("hex");
     const dayOffset = (Date.UTC(2020, 2, 1) - EPOCH_2000) / DAY_MS;
     expect(dated).toBe(
-      sha256(
+      hashSha256Hex(
         `["case-law-provision-extraction-input/1", "abc", ${String(dayOffset)}, "CZE", "cs", true]`,
       ),
     );
     expect(undated).toBe(
-      sha256(
+      hashSha256Hex(
         `["case-law-provision-extraction-input/1", null, null, "CZE", "cs", false]`,
       ),
     );

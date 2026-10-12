@@ -3,6 +3,7 @@ import { panic, TaggedError } from "better-result";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
   corpusIndexFastFields,
+  corpusIndexPositionalFields,
   corpusIndexPublisherFields,
   corpusIndexStemFields,
   requireCorpusIndexManifest,
@@ -46,6 +47,11 @@ export type CaseLawIndexReadContract = {
    * narrower query but an invalid one.
    */
   stemFields: CorpusIndexStemFields | null;
+  /**
+   * The fields this generation indexes with positions, read off its mapping.
+   * Only these can answer a phrase.
+   */
+  positionalFields: ReadonlySet<string>;
   /**
    * Full-text fields this generation maps beside the ones a bare term already
    * reaches. Named explicitly by a query or not matched at all.
@@ -163,6 +169,7 @@ export function corpusIndexReadContract(
         openingPassageQuery: `${manifest.projection.openingField}:true`,
         yearFacetField: manifest.projection.yearFacetField,
         stemFields: corpusIndexStemFields(manifest),
+        positionalFields: corpusIndexPositionalFields(manifest),
         ...publisherQueryFields(corpusIndexPublisherFields(manifest)),
       };
     case "legislation":
@@ -244,7 +251,7 @@ export const caseLawCorpusQueryFields = ({
   jurisdiction,
   language,
 }: CaseLawCorpusQueryFieldsOptions): CaseLawCorpusQueryFields => {
-  const { stemFields, searchableFields, keywordFields } =
+  const { stemFields, positionalFields, searchableFields, keywordFields } =
     corpusIndexReadContract("case_law", generation);
   const stemLanguage = caseLawQueryLanguage({ jurisdiction, language });
   const legacyStemmer =
@@ -267,6 +274,10 @@ export const caseLawCorpusQueryFields = ({
         : {
             language: stemLanguage,
             fields: [stemFields.text, stemFields.publisherSummary],
+            positionlessFields: [
+              stemFields.text,
+              stemFields.publisherSummary,
+            ].filter((field) => !positionalFields.has(field)),
           },
   };
 };

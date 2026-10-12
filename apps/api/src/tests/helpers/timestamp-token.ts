@@ -1,3 +1,4 @@
+import type { DigestAlgorithm, TimestampAuthority } from "@libpdf/core";
 /**
  * An in-process RFC 3161 timestamp authority for signing tests.
  *
@@ -6,10 +7,10 @@
  * time (wrong imprint, missing nonce, stale time, a key not meant for
  * timestamping) so each check has a token that differs only there.
  */
-
-import type { DigestAlgorithm, TimestampAuthority } from "@libpdf/core";
 import * as asn1js from "asn1js";
 import * as pkijs from "pkijs";
+
+import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/browser";
 
 import type { PkiFetcher } from "@/api/lib/files/pdf-signing/pki-fetch";
 import { createTestCertificate } from "@/api/tests/helpers/test-pki";
@@ -134,7 +135,7 @@ export const issueTestTimestampToken = async ({
           type: ID_MESSAGE_DIGEST,
           values: [
             new asn1js.OctetString({
-              valueHex: await crypto.subtle.digest("SHA-256", content),
+              valueHex: await hashSha256Bytes(content),
             }),
           ],
         }),

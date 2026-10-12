@@ -5,6 +5,7 @@ import {
   getModelImageInputCapability,
   type TanStackAIProvider,
 } from "@stll/ai-catalog";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { runError } from "@/api/lib/chat/provider-stream-contract";
 import { validateDataUrl } from "@/api/lib/data-url";
@@ -76,7 +77,7 @@ const prepareBedrockImage = async (
   const cacheKey =
     preparedImages === undefined
       ? undefined
-      : `${BEDROCK_IMAGE_MAX_BYTES}:${BEDROCK_IMAGE_MAX_EDGE}:${REENCODE_MAX_EDGE}:${REENCODE_WEBP_QUALITY}:${payload.length}:${new Bun.CryptoHasher("sha256").update(payload).digest("hex")}`;
+      : `${BEDROCK_IMAGE_MAX_BYTES}:${BEDROCK_IMAGE_MAX_EDGE}:${REENCODE_MAX_EDGE}:${REENCODE_WEBP_QUALITY}:${payload.length}:${hashSha256Hex(payload)}`;
   const cached =
     cacheKey === undefined ? undefined : preparedImages?.sources.get(cacheKey);
   if (

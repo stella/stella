@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty, propertyConfig } from "@stll/property-testing";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   DECISION_DOCKET_GRAMMARS,
@@ -97,7 +98,7 @@ const spellingOf = (docket: Docket, tail: Tail) =>
         "č.j. ",
         "čj. ",
         "č. k. ",
-        "č. j. ".normalize("NFD"),
+        normalizeUnicode("č. j. ", "NFD"),
       ),
       senateGap: fc.constantFrom(" ", "", "  ", " "),
       numberGap: fc.constantFrom(" ", "", "  "),
@@ -479,6 +480,7 @@ const idsOf = (resolution: ReturnType<typeof resolve>): string[] => {
     case "unique":
       return [resolution.decision.id];
     case "ambiguous":
+    case "incomplete_identifier":
       return resolution.candidates.map(({ id }) => id).toSorted();
     default: {
       resolution satisfies never;
@@ -684,8 +686,8 @@ describe("resolving a reference to one decision or to its candidates", () => {
       },
     ];
     expect(resolve("3 Afs 41/2008", lone)).toMatchObject({
-      status: "ambiguous",
-      reason: "file_incomplete",
+      status: "incomplete_identifier",
+      missing: ["sheet"],
     });
     // A jurisdiction whose stored dockets never carry a sheet names it.
     const read = parseDecisionQuery("II CSK 123/19", {
@@ -1189,7 +1191,7 @@ describe.each(
       const resolution = resolved(docket, [plain, otherFile]);
       expect(resolution).toMatchObject(
         DECISION_DOCKETS_STORED_WITH_SHEETS[jurisdiction]
-          ? { status: "ambiguous", reason: "file_incomplete" }
+          ? { status: "incomplete_identifier", missing: ["sheet"] }
           : { status: "unique", basis: "docket" },
       );
       expect(idsOf(resolution)).toEqual(["plain"]);

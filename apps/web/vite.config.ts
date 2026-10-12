@@ -17,8 +17,10 @@ import {
 
 import stllAnonymizeWasm from "@stll/anonymize-wasm/vite";
 
+import { chatRuntimeBuildGuard } from "./chat-runtime-build-guard.ts";
+import { devRouteBuildGuard } from "./dev-route-build-guard.ts";
 import { REACT_COMPILER_OPTIONS } from "./react-compiler-options.ts";
-import { ROUTE_TREE_OPTIONS } from "./route-tree.config.ts";
+import { routeTreeOptions } from "./route-tree.config.ts";
 
 const APP_ROOT = import.meta.dirname;
 const BUN_GLOBAL_STORE_ROOT = path.resolve(
@@ -310,7 +312,8 @@ const isPromiseLikePluginOption = (
   return typeof value.then === "function";
 };
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
+  const routeOptions = routeTreeOptions(command);
   const shouldAnalyze = mode === ANALYZE_MODE || process.env["ANALYZE"] === "1";
   const devApiProxyTarget = process.env["DEV_API_PROXY_TARGET"];
   const plugins: PluginOption[] = [
@@ -320,6 +323,8 @@ export default defineConfig(({ mode }) => {
       "@tanstack/devtools-vite",
     ),
     versionManifestPlugin(),
+    devRouteBuildGuard(),
+    chatRuntimeBuildGuard(),
     // Emits @stll/anonymize-wasm's binding + glue as build assets and
     // rewrites its runtime asset URLs so `vite build` can resolve them
     // (the package computes them at runtime, which Rollup can't follow
@@ -332,10 +337,11 @@ export default defineConfig(({ mode }) => {
     ensurePluginOption(tailwindcss(), "@tailwindcss/vite"),
     ensurePluginOption(
       tanstackStart({
-        srcDirectory: ROUTE_TREE_OPTIONS.srcDirectory,
+        srcDirectory: routeOptions.srcDirectory,
         router: {
-          routesDirectory: ROUTE_TREE_OPTIONS.routesDirectory,
-          generatedRouteTree: ROUTE_TREE_OPTIONS.generatedRouteTree,
+          routesDirectory: routeOptions.routesDirectory,
+          generatedRouteTree: routeOptions.generatedRouteTree,
+          routeFileIgnorePattern: routeOptions.routeFileIgnorePattern,
           codeSplittingOptions: {
             defaultBehavior: [
               ["component"],
@@ -434,7 +440,6 @@ export default defineConfig(({ mode }) => {
               return "vendor-react";
             }
             if (
-              id.includes("node_modules/@tanstack/ai-react/") ||
               id.includes("node_modules/@mcp-ui/client/") ||
               id.includes("node_modules/@modelcontextprotocol/ext-apps/") ||
               id.includes("node_modules/@modelcontextprotocol/sdk/")
@@ -443,6 +448,15 @@ export default defineConfig(({ mode }) => {
               // import. Keep it out of the eagerly preloaded TanStack vendor
               // chunk so users without MCP App output never download it.
               return "mcp-app";
+            }
+            if (
+              id.includes("node_modules/@tanstack/ai/") ||
+              id.includes("node_modules/@tanstack/ai-client/") ||
+              id.includes("node_modules/@tanstack/ai-react/")
+            ) {
+              // Let the chat boundary own its SDK graph; the eager router/query
+              // vendor must never pull the AI runtime into every route.
+              return undefined;
             }
             if (id.includes("node_modules/@tanstack/start-client-core/")) {
               return "vendor-tanstack-server-fn";

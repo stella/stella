@@ -114,6 +114,7 @@ describe("verification handler access admission", () => {
       id: createSafeId<"legalListVerificationRun">(),
       organizationId: toSafeId<"organization">("org_a"),
       workspaceId,
+      entityFeatureGate: "open",
       entityId: createSafeId<"entity">(),
       fileFieldId: createSafeId<"field">(),
       entityVersionId: createSafeId<"entityVersion">(),
@@ -191,6 +192,7 @@ describe("verification handler access admission", () => {
     };
     try {
       const config = {
+        contract: "patch",
         featureAccess: { featureId: "list-verification", type: "required" },
         permissions: { workspace: ["read"] },
         access: "read",

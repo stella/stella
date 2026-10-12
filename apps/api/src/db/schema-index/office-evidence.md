@@ -4,25 +4,27 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## office_file_evidence · `officeFileEvidence` · office-evidence.ts:32
+## office_file_evidence · `officeFileEvidence` · office-evidence.ts:37
 
 ```text
-office_file_evidence.organization_id     safeOrganizationId  fk,not null       office-evidence.ts:35
-office_file_evidence.workspace_id        safeWorkspaceId     fk,not null       office-evidence.ts:38
-office_file_evidence.entity_id           safeUuid            not null          office-evidence.ts:41
-office_file_evidence.entity_version_id   safeUuid            fk,not null       office-evidence.ts:42
-office_file_evidence.field_id            safeUuid            not null          office-evidence.ts:45
-office_file_evidence.source_file_id      uuid                not null          office-evidence.ts:46
-office_file_evidence.source_sha256_hex   varchar             not null          office-evidence.ts:47
-office_file_evidence.format              text                not null          office-evidence.ts:48
-office_file_evidence.parser_version      integer             not null          office-evidence.ts:49
-office_file_evidence.status              text                not null          office-evidence.ts:50
-office_file_evidence.claim_token         uuid                null              office-evidence.ts:51
-office_file_evidence.claim_expires_at    timestamptz         null              office-evidence.ts:52
-office_file_evidence.payload_ciphertext  bytea               null              office-evidence.ts:53
-office_file_evidence.payload_iv          bytea               null              office-evidence.ts:54
-office_file_evidence.block_count         integer             not null          office-evidence.ts:55
-office_file_evidence.error_code          varchar             null              office-evidence.ts:56
-office_file_evidence.created_at          timestamptz         default,not null  office-evidence.ts:57
-office_file_evidence.updated_at          timestamptz         default,not null  office-evidence.ts:58
+office_file_evidence.{...entityFeatureGateColumns()}           spread                                office-evidence.ts:40
+office_file_evidence.{...entityFeatureWorkspaceGateColumns()}  spread                                office-evidence.ts:41
+office_file_evidence.organization_id                           safeOrganizationId  fk,not null       office-evidence.ts:42
+office_file_evidence.workspace_id                              safeWorkspaceId     fk,not null       office-evidence.ts:45
+office_file_evidence.entity_id                                 safeUuid            not null          office-evidence.ts:48
+office_file_evidence.entity_version_id                         safeUuid            fk,not null       office-evidence.ts:49
+office_file_evidence.field_id                                  safeUuid            not null          office-evidence.ts:52
+office_file_evidence.source_file_id                            uuid                not null          office-evidence.ts:53
+office_file_evidence.source_sha256_hex                         varchar             not null          office-evidence.ts:54
+office_file_evidence.format                                    text                not null          office-evidence.ts:55
+office_file_evidence.parser_version                            integer             not null          office-evidence.ts:56
+office_file_evidence.status                                    text                not null          office-evidence.ts:57
+office_file_evidence.claim_token                               uuid                null              office-evidence.ts:58
+office_file_evidence.claim_expires_at                          timestamptz         null              office-evidence.ts:59
+office_file_evidence.payload_ciphertext                        bytea               null              office-evidence.ts:60
+office_file_evidence.payload_iv                                bytea               null              office-evidence.ts:61
+office_file_evidence.block_count                               integer             not null          office-evidence.ts:62
+office_file_evidence.error_code                                varchar             null              office-evidence.ts:63
+office_file_evidence.created_at                                timestamptz         default,not null  office-evidence.ts:64
+office_file_evidence.updated_at                                timestamptz         default,not null  office-evidence.ts:65
 ```

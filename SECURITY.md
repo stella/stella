@@ -4,7 +4,7 @@
 
 **Do not open a public issue for security vulnerabilities.**
 
-If you discover a security vulnerability in Stella, please report it
+If you discover a security vulnerability in stella, please report it
 privately so we can address it before public disclosure:
 
 - **Email:** [security@stll.app](mailto:security@stll.app)

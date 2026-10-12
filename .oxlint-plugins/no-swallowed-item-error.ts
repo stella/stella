@@ -5,7 +5,8 @@
 import type { ESTree } from "@oxlint/plugins";
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import { panic } from "better-result";
-import { createHash } from "node:crypto";
+
+import { createSha256 } from "@stll/sha256/node";
 
 import ledger from "../scripts/swallowed-item-error-ledger.json" with { type: "json" };
 import {
@@ -15,6 +16,9 @@ import {
   memberPropertyName,
   unwrapExpression,
 } from "./utils.ts";
+
+export const hashSwallowedItemTokens = (tokens: readonly string[]) =>
+  createSha256().update(JSON.stringify(tokens)).digest("hex");
 
 const RULE_NAME = "no-swallowed-item-error";
 const MIN_REASON_LENGTH = 12;
@@ -297,9 +301,7 @@ export default eslintCompatPlugin({
           const tokens = context.sourceCode
             .getTokens(owner)
             .map((token) => token.value);
-          const id = createHash("sha256")
-            .update(JSON.stringify(tokens))
-            .digest("hex");
+          const id = hashSwallowedItemTokens(tokens);
           const duplicate = seen.has(id);
           seen.add(id);
           if (!budget.has(id) || duplicate) {

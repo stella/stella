@@ -3,17 +3,18 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import {
-  collectGithubTargets,
-  validatePinnedSource,
-} from "../scripts/check-pinned-content";
+import { validatePinnedSource } from "../scripts/check-pinned-content";
 import {
   buildPinnedSnapshot,
+  collectGithubTargets,
   PINNED_SNAPSHOT_PATH,
   PinnedContentError,
+  pinnedParserFingerprint,
+  pinnedParserInputs,
   projectFrontmatter,
   readPinnedSnapshot,
   recordingPinnedSource,
+  repositoryPath,
   serializePinnedSnapshot,
 } from "../scripts/pinned-content-facts";
 import type { PinnedSource } from "../scripts/pinned-content-facts";
@@ -33,6 +34,7 @@ const fixtureEntry = () => ({
     byteLength: 128,
     utf16Length: 126,
     bodyUtf16Length: 12,
+    referencedResourcePaths: [],
     frontmatter: projectFrontmatter({
       name: "example",
       description: "Synthetic description",
@@ -62,6 +64,31 @@ const expectSnapshotFailure = async (file: string, message: string) => {
   expect(
     failure instanceof PinnedContentError ? failure.message : null,
   ).toContain(message);
+};
+
+const withFirstSkill = async (
+  mutate: (
+    skill: NonNullable<Awaited<ReturnType<PinnedSource["skill"]>>>,
+  ) => NonNullable<Awaited<ReturnType<PinnedSource["skill"]>>>,
+): Promise<PinnedSource> => {
+  const targets = collectGithubTargets();
+  const firstTarget = targets.at(0);
+  expect(firstTarget).toBeDefined();
+  if (!firstTarget) {
+    throw new PinnedContentError({ message: "Catalogue fixture is empty" });
+  }
+  const source = await readPinnedSnapshot(targets);
+  return {
+    skill: async (candidate) => {
+      const skill = await source.skill(candidate);
+      if (skill === null || candidate.slug !== firstTarget.slug) {
+        return skill;
+      }
+      return mutate(skill);
+    },
+    directory: source.directory,
+    resource: source.resource,
+  };
 };
 
 describe("committed pinned facts", () => {
@@ -131,7 +158,95 @@ process.on("exit", () => console.log("PINNED_FETCH_ATTEMPTS=" + calls));
   });
 });
 
+describe("pinned validation facts", () => {
+  test("accepts registered stella metadata reconstructed verbatim", async () => {
+    const source = await withFirstSkill((skill) => ({
+      ...skill,
+      frontmatter: {
+        ...skill.frontmatter,
+        metadata: [
+          {
+            key: "stella-display-name",
+            type: "stella",
+            value: "Pinned display name",
+          },
+        ],
+      },
+    }));
+    expect(await validatePinnedSource(source)).toEqual([]);
+  });
+
+  test.each([
+    {
+      expected: "unknown stella metadata key",
+      metadata: [
+        { key: "stella-unknown", type: "stella", value: "value" },
+      ] as const,
+    },
+    {
+      expected: 'invalid value for metadata key "stella-display-name"',
+      metadata: [
+        { key: "stella-display-name", type: "stella", value: "" },
+      ] as const,
+    },
+  ])("rejects $expected", async ({ expected, metadata }) => {
+    const source = await withFirstSkill((skill) => ({
+      ...skill,
+      frontmatter: { ...skill.frontmatter, metadata: [...metadata] },
+    }));
+    expect(await validatePinnedSource(source)).toContainEqual(
+      expect.stringContaining(expected),
+    );
+  });
+
+  test("rejects a referenced resource absent from pinned resources", async () => {
+    const source = await withFirstSkill((skill) => ({
+      ...skill,
+      referencedResourcePaths: ["references/missing.md"],
+    }));
+    expect(await validatePinnedSource(source)).toContainEqual(
+      expect.stringContaining(
+        "referenced resource references/missing.md is missing",
+      ),
+    );
+  });
+});
+
 describe("pinned facts trust boundary", () => {
+  test("binds the snapshot to every reached parser source", async () => {
+    const inputs = pinnedParserInputs();
+    expect(inputs).toContain("packages/skills/src/frontmatter.ts");
+    expect(inputs).not.toContain("packages/skills/src/loader.ts");
+
+    const frontmatter = path.resolve(
+      import.meta.dir,
+      "../../skills/src/frontmatter.ts",
+    );
+    const changedReader = async (file: string) => {
+      const source = await Bun.file(file).text();
+      return file === frontmatter ? `${source}\n// parser mutation\n` : source;
+    };
+    const current = await pinnedParserFingerprint();
+    expect(await pinnedParserFingerprint(changedReader)).not.toBe(current);
+
+    await withSnapshotFile(async (file) => {
+      const snapshot = await buildPinnedSnapshot([fixtureEntry()]);
+      await Bun.write(file, serializePinnedSnapshot(snapshot));
+      const failure: unknown = await readPinnedSnapshot(
+        [target],
+        file,
+        changedReader,
+      ).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      expect(failure).toBeInstanceOf(PinnedContentError);
+      expect(
+        failure instanceof PinnedContentError ? failure.message : null,
+      ).toContain("parser fingerprint is stale");
+    });
+  });
+
   test("rejects an edited fact without its matching digest", async () => {
     await withSnapshotFile(async (file) => {
       const entry = fixtureEntry();
@@ -259,7 +374,7 @@ describe("pinned facts trust boundary", () => {
 });
 
 describe("refresh facts reduction", () => {
-  test("records only file measurements, reduced listings, and frontmatter facts", async () => {
+  test("records validation facts, file measurements, and reduced listings", async () => {
     const entry = fixtureEntry();
     const description = "Private synthetic prose 😀";
     const frontmatter = projectFrontmatter({
@@ -268,7 +383,10 @@ describe("refresh facts reduction", () => {
       version: "v😀",
       license: " MIT ",
       compatibility: "😀",
-      metadata: { "😀": "Synthetic metadata value" },
+      metadata: {
+        "stella-display-name": "Synthetic display name",
+        "😀": "Synthetic metadata value",
+      },
     });
     const resource = {
       sha256: "d".repeat(64),
@@ -293,6 +411,7 @@ describe("refresh facts reduction", () => {
     const serialized = serializePinnedSnapshot(snapshot);
     expect(serialized).not.toContain(description);
     expect(serialized).not.toContain("Synthetic metadata value");
+    expect(serialized).toContain("Synthetic display name");
     expect(serialized).not.toContain('"content"');
     expect(serialized).not.toContain('"body"');
     expect(frontmatter).toEqual({
@@ -302,7 +421,14 @@ describe("refresh facts reduction", () => {
       versionUtf16Length: 3,
       licenseUtf16Length: 5,
       compatibilityUtf16Length: 2,
-      metadata: [{ keyUtf16Length: 2, valueUtf16Length: 24 }],
+      metadata: [
+        {
+          key: "stella-display-name",
+          type: "stella",
+          value: "Synthetic display name",
+        },
+        { keyUtf16Length: 2, type: "other", valueUtf16Length: 24 },
+      ],
     });
     expect(resource).toMatchObject({ byteLength: 4, utf16Length: 2 });
     await withSnapshotFile(async (file) => {
@@ -317,4 +443,15 @@ describe("refresh facts reduction", () => {
       expect(await replay.skill(target)).toMatchObject({ frontmatter });
     });
   });
+});
+
+test("parser input paths use forward slashes on every platform", () => {
+  expect(
+    repositoryPath(
+      "C:\\repo",
+      "C:\\repo\\packages\\skills\\src\\a.ts",
+      path.win32,
+    ),
+  ).toBe("packages/skills/src/a.ts");
+  expect(pinnedParserInputs().some((file) => file.includes("\\"))).toBe(false);
 });

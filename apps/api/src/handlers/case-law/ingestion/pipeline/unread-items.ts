@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * Listed items whose read did not produce them, and what each costs the page.
  *
@@ -16,10 +17,11 @@
  * cleared when the page advances. A successful read drops the item from the
  * page's unread set, which resets its count.
  */
-
-import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
+
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { createSha256 } from "@stll/sha256/bun";
 
 import type { IngestionScopedDb } from "@/api/db/safe-db";
 import { caseLawSources } from "@/api/db/schema";
@@ -123,7 +125,7 @@ const storedOutcome = (
 };
 
 const contentHash = (input: string): string =>
-  new Bun.CryptoHasher("sha256").update(input).digest("hex");
+  createSha256().update(input).digest("hex");
 
 /**
  * The listing-only row an unread item stores: the adapter's listing with the

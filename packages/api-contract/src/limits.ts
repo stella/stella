@@ -108,6 +108,16 @@ export const CASE_LAW_RESEARCH_COLUMNS_PER_ORGANIZATION_MAX = 20;
 export const CASE_LAW_RESEARCH_SUGGEST_SAMPLES_MAX = 5;
 
 /**
+ * Deepest result a page of case-law decisions may reach (`offset + limit`),
+ * on the search and on the browse listing alike. A page addressed by offset
+ * costs one request whatever its depth, but the search still ranks every
+ * result in front of it: past this depth the reader is better served by a
+ * narrower search than by a slower page. The web pager derives its last page
+ * button from it, and the API refuses a request past it before any read.
+ */
+export const CASE_LAW_RESULT_DEPTH_MAX = 500;
+
+/**
  * Page sizes the public law tables offer. Shared so a server-side check (the
  * seeded case-law corpus spanning several pages) reads the sizes the pager
  * actually offers.
@@ -116,6 +126,12 @@ export const PUBLIC_LAW_PAGE_SIZES = [25, 50, 100] as const;
 
 /** Shared search bounds enforced by the API and its clients. */
 export const SEARCH_QUERY_MAX_LENGTH = 500;
+
+/** Display title of a saved law-history document, shared with its writer. */
+export const SEARCH_HISTORY_TITLE_MAX_LENGTH = 512;
+
+/** Entries one best-effort history import request accepts. */
+export const SEARCH_HISTORY_IMPORT_MAX = 300;
 
 /** Max quoted characters when attaching a document source to a list item. */
 export const LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH = 10_000;
