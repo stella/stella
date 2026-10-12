@@ -848,6 +848,7 @@
     "@stll/desktop#test:native": {
       "dependsOn": [],
       "inputs": [
+        "rust-toolchain.toml",
         "src-tauri/**",
         "!src-tauri/target/**",
         "!src-tauri/gen/**",
