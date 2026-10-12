@@ -135,6 +135,11 @@ export const createMcpWebHandoffPlugin = ({
               request,
               ipAddress: address === "unknown" ? null : address,
               sessionId: sameUser ? existing.session.id : null,
+              previousOrganizationId:
+                sameUser &&
+                typeof existing.session["activeOrganizationId"] === "string"
+                  ? existing.session["activeOrganizationId"]
+                  : null,
             });
             if (!consumed) {
               return await refuse("unavailable");

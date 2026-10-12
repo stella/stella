@@ -325,12 +325,14 @@ const createHandoffRedemption = ({
     request,
     ipAddress,
     sessionId,
+    previousOrganizationId,
   }: {
     code: string;
     path: string;
     request: Request;
     ipAddress: string | null;
     sessionId: string | null;
+    previousOrganizationId: string | null;
   }) =>
     await withAggregateTransaction(db, async (tx) => {
       if (!enabled()) {
@@ -378,7 +380,12 @@ const createHandoffRedemption = ({
         action: AUDIT_ACTION.MCP_WEB_HANDOFF_REDEEMED,
         resourceType: AUDIT_RESOURCE_TYPE.MCP_WEB_HANDOFF,
         resourceId: consumed.id,
-        metadata: { kind: consumed.kind, clientId: consumed.oauthClientId },
+        metadata: {
+          kind: consumed.kind,
+          clientId: consumed.oauthClientId,
+          previousOrganizationId,
+          newOrganizationId: consumed.organizationId,
+        },
       });
       return {
         handoff: consumed,

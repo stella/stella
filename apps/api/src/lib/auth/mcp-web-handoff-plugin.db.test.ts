@@ -7,7 +7,7 @@ import {
 } from "better-auth/api";
 import { organization as organizationPlugin } from "better-auth/plugins";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import * as v from "valibot";
 
@@ -24,6 +24,8 @@ import {
   user,
 } from "@/api/db/auth-schema";
 import { databaseRelations } from "@/api/db/database-relations";
+import { auditLogs } from "@/api/db/schema";
+import { AUDIT_ACTION } from "@/api/lib/audit-log.constants";
 import { requiresHandoffStepUpForAuthPath } from "@/api/lib/auth/handoff-step-up-policy";
 import { createMcpWebHandoffPlugin } from "@/api/lib/auth/mcp-web-handoff-plugin";
 import { SESSION_LIFETIME_FIELDS } from "@/api/lib/auth/session-lifetime";
@@ -351,9 +353,32 @@ describe("MCP link sign-in", () => {
     expect(retained?.session.originConsentId).toBe(
       current?.session.originConsentId,
     );
-    expect((await service.inspect(code))?.handoff.consumedSessionId).toBe(
-      current?.session.id,
-    );
+    const receipt = await service.inspect(code);
+    expect(receipt?.handoff.consumedSessionId).toBe(current?.session.id);
+    expect(receipt).not.toBeNull();
+    const redeemedAudit = await db
+      .select({
+        organizationId: auditLogs.organizationId,
+        metadata: auditLogs.metadata,
+      })
+      .from(auditLogs)
+      .where(
+        and(
+          eq(auditLogs.resourceId, receipt!.handoff.id),
+          eq(auditLogs.action, AUDIT_ACTION.MCP_WEB_HANDOFF_REDEEMED),
+        ),
+      );
+    expect(redeemedAudit).toEqual([
+      {
+        organizationId: fixture.organizationId,
+        metadata: expect.objectContaining({
+          kind: "click",
+          clientId: fixture.clientId,
+          previousOrganizationId: browserOrganizationId,
+          newOrganizationId: fixture.organizationId,
+        }),
+      },
+    ]);
     expect(
       (await auth.api.getSession({ headers: { cookie: existingCookie } }))
         ?.session.id,

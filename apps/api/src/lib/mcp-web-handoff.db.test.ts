@@ -89,6 +89,7 @@ const consume = async (code: string, path = "/matters/example") =>
     request,
     ipAddress: null,
     sessionId: null,
+    previousOrganizationId: null,
   });
 const mint = async (kind: "text" | "click" = "text") => {
   const code = await service.mint(
