@@ -128,6 +128,11 @@
     "orSignInWithEmail": "vagy jelentkezzen be e-maillel",
     "organizationNamePlaceholder": "Szervezetem",
     "password": "Jelszó",
+    "professionalUse": {
+      "description": "Fiókja létrehozásakor ez a nyilatkozat nem jelent meg Önnek. A folytatáshoz fogadja el.",
+      "title": "Szakmai célú használat megerősítése"
+    },
+    "professionalUseStatement": "A fiók létrehozásával megerősíti, hogy a stellát szakmai célokra használja, és tudomásul veszi, hogy a stella jogi szakembereknek szóló eszköz, és nem helyettesíti a jogi tanácsadást.",
     "rateLimitExceeded": "Túl sok próbálkozás. Kérjük, próbálja újra később.",
     "resendCode": "Kód újraküldése erre: <email>{emailAddress}</email>",
     "selectOrganization": "Válasszon szervezetet",
@@ -799,7 +804,7 @@
       "courtCount": "{count, plural, one {# bíróság} other {# bíróság}}",
       "newLast24Hours": "{count} az elmúlt 24 órában",
       "newLast7Days": "Új az elmúlt 7 napban",
-      "unlistedCourts": "{count, plural, one {A legnagyobbon kívüli bíróságok} other {A # legnagyobbon kívüli bíróságok}}"
+      "otherCourts": "Egyéb bíróságok"
     },
     "courtTiers": {
       "constitutional": "Alkotmánybíróságok",
@@ -815,6 +820,7 @@
       "decisionYears": "Határozatok évei",
       "description": "Mennyi ítélkezési gyakorlatot tartalmaz a korpusz országonként és bíróságonként, és mennyire friss az egyes források tartalma.",
       "exceedsReportedTotal": "Többet tartalmaz, mint a közzétevő legutóbbi, {date} szerinti összesítése",
+      "gapStatusUnknown": "A hiányok állapota ismeretlen",
       "generatedAt": "Adatok: {date}",
       "globeLabel": "Országok, amelyek ítélkezési gyakorlatát a korpusz tartalmazza, földgömbön",
       "healthCurrent": "Naprakész",
@@ -823,9 +829,12 @@
       "healthStalled": "Elakadt",
       "healthUnknown": "Még nem futott",
       "inPreparation": "Előkészületben",
+      "knownGaps": "Ismert hiányok",
       "lastSync": "Utolsó szinkronizálás",
+      "noGapsRecorded": "Nincs rögzített hiány",
       "notCountedYet": "Még nincs megszámolva",
       "notMeasuredYet": "Még nincs megmérve",
+      "pendingTexts": "Függőben lévő szövegek",
       "reportedByListing": "A közzétevő jegyzékéből megszámolva",
       "reportedByOperator": "Kézzel rögzítve",
       "reportedByPublisher": "A közzétevő saját adata",
@@ -1096,6 +1105,9 @@
       "toastDescription": "A teljes oldalas csevegés a csevegések mentésével együtt érkezik.",
       "toastTitle": "A teljes nézet még nem érhető el"
     },
+    "activity": {
+      "review": "Frissítés az áttekintésről"
+    },
     "aiPrompt": "AI-üzenetmező",
     "aiThread": "AI-beszélgetés",
     "analyzingSources": "Források elemzése",
@@ -1281,6 +1293,9 @@
       "noMatters": "Még nincsenek ügyek",
       "noRecentChats": "Nincsenek legutóbbi csevegések",
       "noSkills": "Még nincsenek készségek",
+      "openAllMatters": "Összes ügy megnyitása",
+      "openChatHistory": "Csevegési előzmények megnyitása",
+      "openSkillsLibrary": "Készségtár megnyitása",
       "pinnedMatters": "Kitűzött ügyek",
       "recentChats": "Legutóbbi csevegések",
       "skillEditedBy": "{name} szerkesztette · {time}",

@@ -131,6 +131,11 @@ type Messages = {
     "orSignInWithEmail": "or sign in with email";
     "organizationNamePlaceholder": "My organization";
     "password": "Password";
+    "professionalUse": {
+      "description": "Your account was set up without showing you this statement. Accept it to continue.";
+      "title": "Confirm professional use";
+    };
+    "professionalUseStatement": "By creating an account, you confirm that you use stella for professional purposes and understand that stella is a tool for legal professionals and not a substitute for legal advice.";
     "rateLimitExceeded": "Too many attempts. Please try again later.";
     "resendCode": "Send code again to <email>{emailAddress}</email>";
     "selectOrganization": "Select an organization";
@@ -802,7 +807,7 @@ type Messages = {
       "courtCount": "{count, plural, one {# court} other {# courts}}";
       "newLast24Hours": "{count} in the last 24 h";
       "newLast7Days": "New in the last 7 days";
-      "unlistedCourts": "{count, plural, one {Courts beyond the largest one} other {Courts beyond the # largest}}";
+      "otherCourts": "Other courts";
     };
     "courtTiers": {
       "constitutional": "Constitutional courts";
@@ -818,6 +823,7 @@ type Messages = {
       "decisionYears": "Decision years";
       "description": "How much case law the corpus holds, per country and per court, and how fresh each source is.";
       "exceedsReportedTotal": "Holds more than the publisher's last stated total of {date}";
+      "gapStatusUnknown": "Gap status unknown";
       "generatedAt": "Figures from {date}";
       "globeLabel": "Countries whose case law the corpus holds, on a globe";
       "healthCurrent": "Up to date";
@@ -826,9 +832,12 @@ type Messages = {
       "healthStalled": "Stalled";
       "healthUnknown": "Never run";
       "inPreparation": "In preparation";
+      "knownGaps": "Known gaps";
       "lastSync": "Last sync";
+      "noGapsRecorded": "No gaps recorded";
       "notCountedYet": "Not counted yet";
       "notMeasuredYet": "Not measured yet";
+      "pendingTexts": "Pending texts";
       "reportedByListing": "Counted from the publisher's listing";
       "reportedByOperator": "Recorded by hand";
       "reportedByPublisher": "Publisher's own count";
@@ -1099,6 +1108,9 @@ type Messages = {
       "toastDescription": "Full-page chat lands with persisted threads.";
       "toastTitle": "Full view not yet available";
     };
+    "activity": {
+      "review": "Review update";
+    };
     "aiPrompt": "AI message composer";
     "aiThread": "AI conversation";
     "analyzingSources": "Analyzing sources";
@@ -1284,6 +1296,9 @@ type Messages = {
       "noMatters": "No matters yet";
       "noRecentChats": "No recent chats";
       "noSkills": "No skills yet";
+      "openAllMatters": "Open all matters";
+      "openChatHistory": "Open chat history";
+      "openSkillsLibrary": "Open the skills library";
       "pinnedMatters": "Pinned matters";
       "recentChats": "Recent chats";
       "skillEditedBy": "Edited by {name} · {time}";
