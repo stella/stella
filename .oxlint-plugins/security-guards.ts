@@ -845,20 +845,29 @@ export default eslintCompatPlugin({
           ) {
             return;
           }
-          // Foreign-key callbacks declare schema metadata; they do not read rows.
+          // Only a concise foreign-key column reference declares schema metadata.
           if (
             repoRelativeFilename(context).startsWith("apps/api/src/db/schema/")
           ) {
-            let ancestor = node.parent;
-            while (isAstNode(ancestor)) {
-              if (
-                ancestor.type === "CallExpression" &&
-                isAstNode(ancestor.callee) &&
-                memberPropertyName(ancestor.callee) === "references"
-              ) {
-                return;
-              }
-              ancestor = ancestor.parent;
+            const column = node.parent;
+            const callback = isAstNode(column) ? column.parent : null;
+            const call = isAstNode(callback) ? callback.parent : null;
+            if (
+              isAstNode(column) &&
+              column.type === "MemberExpression" &&
+              column.object === node &&
+              isAstNode(callback) &&
+              callback.type === "ArrowFunctionExpression" &&
+              callback.body === column &&
+              isAstNode(call) &&
+              call.type === "CallExpression" &&
+              Array.isArray(call.arguments) &&
+              call.arguments.at(0) === callback &&
+              isAstNode(call.callee) &&
+              call.callee.type === "MemberExpression" &&
+              memberPropertyName(call.callee) === "references"
+            ) {
+              return;
             }
           }
           const chain = queryChainRoot(node);
