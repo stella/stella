@@ -5906,7 +5906,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Add matter member is additive and does not overwrite or remove existing state.",
       "openWorldHint": "Add matter member is confined to the private workspace or a bounded computation."
     },
-    "description": "Grant an existing organization member matter access.",
+    "description": "Grant an organization member matter access.",
     "annotations": {
       "title": "Add matter member",
       "readOnlyHint": false,
@@ -5944,7 +5944,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Remove matter member can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Remove matter member is confined to the private workspace or a bounded computation."
     },
-    "description": "Revoke matter access and cancel desktop editing sessions. Reassign work or leave it unassigned. Requires human approval (confirm: true); organization membership remains.",
+    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Requires human approval (confirm: true).",
     "annotations": {
       "title": "Remove matter member",
       "readOnlyHint": false,
@@ -5991,7 +5991,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Update organization settings is additive and does not overwrite or remove existing state.",
       "openWorldHint": "Update organization settings is confined to the private workspace or a bounded computation."
     },
-    "description": "Update supplied non-secret organization settings. Pair matter_number_pattern with matter_number_padding. Provider secrets: dashboard; practice jurisdictions: set_practice_jurisdictions.",
+    "description": "Update supplied non-secret settings. Pair matter_number_pattern with matter_number_padding. Provider secrets: dashboard; jurisdictions: set_practice_jurisdictions.",
     "annotations": {
       "title": "Update organization settings",
       "readOnlyHint": false,
@@ -12446,7 +12446,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Add matter member is additive and does not overwrite or remove existing state.",
       "openWorldHint": "Add matter member is confined to the private workspace or a bounded computation."
     },
-    "description": "Grant an existing organization member matter access.",
+    "description": "Grant an organization member matter access.",
     "annotations": {
       "title": "Add matter member",
       "readOnlyHint": false,
@@ -12484,7 +12484,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Remove matter member can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Remove matter member is confined to the private workspace or a bounded computation."
     },
-    "description": "Revoke matter access and cancel desktop editing sessions. Reassign work or leave it unassigned. Requires human approval (confirm: true); organization membership remains.",
+    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Requires human approval (confirm: true).",
     "annotations": {
       "title": "Remove matter member",
       "readOnlyHint": false,
@@ -12531,7 +12531,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Update organization settings is additive and does not overwrite or remove existing state.",
       "openWorldHint": "Update organization settings is confined to the private workspace or a bounded computation."
     },
-    "description": "Update supplied non-secret organization settings. Pair matter_number_pattern with matter_number_padding. Provider secrets: dashboard; practice jurisdictions: set_practice_jurisdictions.",
+    "description": "Update supplied non-secret settings. Pair matter_number_pattern with matter_number_padding. Provider secrets: dashboard; jurisdictions: set_practice_jurisdictions.",
     "annotations": {
       "title": "Update organization settings",
       "readOnlyHint": false,

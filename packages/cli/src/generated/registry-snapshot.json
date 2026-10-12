@@ -5309,7 +5309,7 @@
       "scope": "admin_write"
     },
     "name": "add_matter_member",
-    "description": "Grant an existing organization member matter access.",
+    "description": "Grant an organization member matter access.",
     "inputSchema": {
       "type": "object",
       "required": ["matter_id", "user_id"],
@@ -5341,7 +5341,7 @@
       "scope": "admin_write"
     },
     "name": "remove_matter_member",
-    "description": "Revoke matter access and cancel desktop editing sessions. Reassign work or leave it unassigned. Requires human approval (confirm: true); organization membership remains.",
+    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Requires human approval (confirm: true).",
     "inputSchema": {
       "type": "object",
       "required": ["matter_id", "user_id"],
@@ -5382,7 +5382,7 @@
       "scope": "admin_write"
     },
     "name": "update_organization_settings",
-    "description": "Update supplied non-secret organization settings. Pair matter_number_pattern with matter_number_padding. Provider secrets: dashboard; practice jurisdictions: set_practice_jurisdictions.",
+    "description": "Update supplied non-secret settings. Pair matter_number_pattern with matter_number_padding. Provider secrets: dashboard; jurisdictions: set_practice_jurisdictions.",
     "inputSchema": {
       "type": "object",
       "required": [],

@@ -26,6 +26,7 @@ import {
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
+import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
 import { pickDefined } from "@/api/lib/pick-defined";
 import {
   MCP_ADVANCED_DISCOVERY_PATH,
@@ -143,9 +144,12 @@ for (const tool of DEFAULT_MCP_TOOL_DEFINITIONS) {
   }
 
   projectedChatPolicyKinds[tool.name] = "mutation";
-  projectedChatGrantPolicies[tool.name] = tool.annotations.destructiveHint
-    ? "approve-once"
-    : "grantable";
+  // Account-control changes need fresh consent even when they are reversible.
+  projectedChatGrantPolicies[tool.name] =
+    tool.accountAccess === ACCOUNT_ACCESS.accountControl ||
+    tool.annotations.destructiveHint
+      ? "approve-once"
+      : "grantable";
 }
 
 const generatedChatPolicyPath = new URL(

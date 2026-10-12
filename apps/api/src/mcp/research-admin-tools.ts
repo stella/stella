@@ -809,7 +809,7 @@ const updateOrganizationSettingsArgsSchema = nullAsAbsent(
 const ADD_MATTER_MEMBER_TOOL_DEFINITION = defineValibotMcpTool({
   consumesServices: false,
   name: "add_matter_member",
-  description: "Grant an existing organization member matter access.",
+  description: "Grant an organization member matter access.",
   inputSchema: addMatterMemberArgsSchema,
   nonDestructiveReason:
     "Only inserts a new matter membership and its audit event; existing membership returns a conflict without changing it.",
@@ -831,7 +831,7 @@ const REMOVE_MATTER_MEMBER_TOOL_DEFINITION = defineValibotMcpTool({
   consumesServices: false,
   name: "remove_matter_member",
   description:
-    "Revoke matter access and cancel desktop editing sessions. Reassign work or leave it unassigned. Requires human approval (confirm: true); organization membership remains.",
+    "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Requires human approval (confirm: true).",
   inputSchema: removeMatterMemberArgsSchema,
   annotations: {
     title: "Remove matter member",
@@ -852,7 +852,7 @@ const UPDATE_ORGANIZATION_SETTINGS_TOOL_DEFINITION = defineValibotMcpTool({
   consumesServices: false,
   name: "update_organization_settings",
   description:
-    "Update supplied non-secret organization settings. Pair matter_number_pattern with matter_number_padding. Provider secrets: dashboard; practice jurisdictions: set_practice_jurisdictions.",
+    "Update supplied non-secret settings. Pair matter_number_pattern with matter_number_padding. Provider secrets: dashboard; jurisdictions: set_practice_jurisdictions.",
   inputSchema: updateOrganizationSettingsArgsSchema,
   nonDestructiveReason:
     "Updates reversible non-secret settings without deleting resources or revoking access.",

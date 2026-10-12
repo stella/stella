@@ -8,8 +8,8 @@
   },
   "tools": {
     "add_matter_member": {
-      "advanced": {"title": 17, "description": 52, "inputSchema": 258, "outputSchema": 114, "annotations": 119, "payloadUtf8Bytes": 662},
-      "default": {"title": 17, "description": 52, "inputSchema": 258, "outputSchema": 114, "annotations": 119, "payloadUtf8Bytes": 662}
+      "advanced": {"title": 17, "description": 43, "inputSchema": 258, "outputSchema": 114, "annotations": 119, "payloadUtf8Bytes": 653},
+      "default": {"title": 17, "description": 43, "inputSchema": 258, "outputSchema": 114, "annotations": 119, "payloadUtf8Bytes": 653}
     },
     "case_law_coverage": {
       "advanced": {"title": 22, "description": 294, "inputSchema": 451, "outputSchema": 712, "annotations": 100, "payloadUtf8Bytes": 1681},
@@ -254,8 +254,8 @@
       "law": {"title": 23, "description": 703, "inputSchema": 1913, "outputSchema": 859, "annotations": 101, "payloadUtf8Bytes": 3708}
     },
     "remove_matter_member": {
-      "advanced": {"title": 20, "description": 169, "inputSchema": 423, "outputSchema": 155, "annotations": 121, "payloadUtf8Bytes": 993},
-      "default": {"title": 20, "description": 169, "inputSchema": 423, "outputSchema": 155, "annotations": 121, "payloadUtf8Bytes": 993}
+      "advanced": {"title": 20, "description": 125, "inputSchema": 423, "outputSchema": 155, "annotations": 121, "payloadUtf8Bytes": 949},
+      "default": {"title": 20, "description": 125, "inputSchema": 423, "outputSchema": 155, "annotations": 121, "payloadUtf8Bytes": 949}
     },
     "resolve_case_law_decision": {
       "advanced": {"title": 27, "description": 766, "inputSchema": 671, "outputSchema": 1722, "annotations": 105, "payloadUtf8Bytes": 3492},
@@ -353,8 +353,8 @@
       "default": {"title": 15, "description": 588, "inputSchema": 2374, "outputSchema": 607, "annotations": 114, "payloadUtf8Bytes": 3798}
     },
     "update_organization_settings": {
-      "advanced": {"title": 28, "description": 185, "inputSchema": 1138, "outputSchema": 558, "annotations": 129, "payloadUtf8Bytes": 2151},
-      "default": {"title": 28, "description": 185, "inputSchema": 1138, "outputSchema": 558, "annotations": 129, "payloadUtf8Bytes": 2151}
+      "advanced": {"title": 28, "description": 163, "inputSchema": 1138, "outputSchema": 558, "annotations": 129, "payloadUtf8Bytes": 2129},
+      "default": {"title": 28, "description": 163, "inputSchema": 1138, "outputSchema": 558, "annotations": 129, "payloadUtf8Bytes": 2129}
     },
     "update_reader_annotation": {
       "advanced": {"title": 24, "description": 202, "inputSchema": 1590, "outputSchema": 175, "annotations": 124, "payloadUtf8Bytes": 2224},

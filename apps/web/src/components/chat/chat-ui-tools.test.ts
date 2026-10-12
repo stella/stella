@@ -575,6 +575,9 @@ describe("tool approval grants", () => {
     expect(isApprovalOnceChatToolName("update_organization_settings")).toBe(
       true,
     );
+    expect(
+      isNonPersistentGrantChatToolName("update_organization_settings"),
+    ).toBe(true);
     expect(isApprovalOnceChatToolName("save_clause")).toBe(true);
   });
 

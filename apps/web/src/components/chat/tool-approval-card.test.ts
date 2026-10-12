@@ -28,15 +28,29 @@ describe("automatic tool approval", () => {
   ] as const)(
     "never reuses a stored grant for approve-once tool %s",
     (name) => {
-      expect(
-        hasAutomaticApproval({
+      for (const grants of [
+        {
           alwaysApprovedTools: new Set([name]),
-          canAlwaysAllow: true,
+          conversationApprovedTools: noGrants,
+        },
+        {
+          alwaysApprovedTools: noGrants,
           conversationApprovedTools: new Set([name]),
-          isPublicOfficialApproval: false,
-          name,
-        }),
-      ).toBe(false);
+        },
+        {
+          alwaysApprovedTools: new Set([name]),
+          conversationApprovedTools: new Set([name]),
+        },
+      ]) {
+        expect(
+          hasAutomaticApproval({
+            ...grants,
+            canAlwaysAllow: true,
+            isPublicOfficialApproval: false,
+            name,
+          }),
+        ).toBe(false);
+      }
     },
   );
 });
