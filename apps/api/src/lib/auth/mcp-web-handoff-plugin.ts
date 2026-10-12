@@ -55,11 +55,14 @@ export const createMcpWebHandoffPlugin = ({
         async (ctx) => {
           ctx.setHeader(CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL);
           ctx.setHeader("Referrer-Policy", "no-referrer");
+          const refusalResponse = async () => {
+            ctx.setStatus(403);
+            return ctx.json({ status: "refused" as const });
+          };
           // A browser-origin request is mandatory even when the instance allows other auth clients.
           const origin = ctx.headers.get("origin");
           if (!origin || !ctx.context.isTrustedOrigin(origin)) {
-            ctx.setStatus(403);
-            return ctx.json({ status: "refused" as const });
+            return refusalResponse();
           }
           const currentService = service();
           const request = ctx.request;
@@ -67,6 +70,24 @@ export const createMcpWebHandoffPlugin = ({
             panic("Handoff endpoint requires HTTP dispatch");
           }
           const { code, path, confirmation } = ctx.body;
+          if (!currentService.isEnabled()) {
+            return refusalResponse();
+          }
+          const address =
+            ctx.headers.get(AUTH_CLIENT_ADDRESS_HEADER) ?? "unknown";
+          const admitted = await Result.tryPromise(
+            async () => await currentService.admitRedeem(address),
+          );
+          if (Result.isError(admitted)) {
+            captureError(admitted.error, {
+              operation: "mcp_web_handoff.admission",
+            });
+            return refusalResponse();
+          }
+          if (!admitted.value) {
+            return refusalResponse();
+          }
+          // Receipt-specific work is allowed only after address and global admission.
           const refuse = async (reason: string) => {
             const audited = await Result.tryPromise(
               async () =>
@@ -77,18 +98,9 @@ export const createMcpWebHandoffPlugin = ({
                 operation: "mcp_web_handoff.refusal_audit",
               });
             }
-            ctx.setStatus(403);
-            return ctx.json({ status: "refused" as const });
+            return refusalResponse();
           };
-          if (!currentService.isEnabled()) {
-            return await refuse("disabled");
-          }
           const outcome = await Result.tryPromise(async () => {
-            const address =
-              ctx.headers.get(AUTH_CLIENT_ADDRESS_HEADER) ?? "unknown";
-            if (!(await currentService.admitRedeem(address))) {
-              return await refuse("budget");
-            }
             const canonical = canonicalHandoffPath(path);
             if (
               !WEB_HANDOFF_CODE_PATTERN.test(code) ||
@@ -98,8 +110,25 @@ export const createMcpWebHandoffPlugin = ({
               return await refuse("input");
             }
             const grant = await currentService.inspect(code);
+            if (!grant) {
+              return await refuse("unavailable");
+            }
+            const userAdmitted = await Result.tryPromise(
+              async () =>
+                await currentService.admitUser(
+                  brandPersistedUserId(grant.userId),
+                ),
+            );
+            if (Result.isError(userAdmitted)) {
+              captureError(userAdmitted.error, {
+                operation: "mcp_web_handoff.admission",
+              });
+              return refusalResponse();
+            }
+            if (!userAdmitted.value) {
+              return refusalResponse();
+            }
             if (
-              !grant ||
               grant.handoff.consumedAt ||
               grant.handoff.expiresAt <= now() ||
               !hasWebHandoffScopes(grant.scopes)
@@ -120,13 +149,6 @@ export const createMcpWebHandoffPlugin = ({
                 email: grant.email,
                 organizationName: grant.organizationName,
               });
-            }
-            if (
-              !(await currentService.admitUser(
-                brandPersistedUserId(grant.userId),
-              ))
-            ) {
-              return await refuse("budget");
             }
             const sameUser = existing?.user.id === grant.userId;
             const consumed = await currentService.consume({

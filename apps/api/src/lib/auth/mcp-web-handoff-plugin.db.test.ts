@@ -32,6 +32,10 @@ import { createMcpWebHandoffPlugin } from "@/api/lib/auth/mcp-web-handoff-plugin
 import { SESSION_LIFETIME_FIELDS } from "@/api/lib/auth/session-lifetime";
 import { toSafeId } from "@/api/lib/branded-types";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
+import {
+  queryCountLogger,
+  runWithQueryCounter,
+} from "@/api/lib/db-query-counter";
 import { createWebHandoffService } from "@/api/lib/mcp-web-handoff";
 import { MCP_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
@@ -41,7 +45,7 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 const baseURL = "https://example.test";
 const browserOrganizationId = "00000000-0000-4000-8000-000000000014";
 const makeDb = (client: Awaited<ReturnType<typeof createTestPglite>>) =>
-  drizzle({ client, relations: databaseRelations });
+  drizzle({ client, relations: databaseRelations, logger: queryCountLogger });
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof makeDb>;
 let service: ReturnType<typeof createWebHandoffService>;
@@ -216,6 +220,124 @@ const cookieOf = (response: Response) =>
     ).values(),
   ].join("; ");
 describe("MCP link sign-in", () => {
+  test.each([
+    "address",
+    "global",
+    "user",
+    "disabled",
+    "unavailable",
+    "user-unavailable",
+  ] as const)(
+    "%s refusals keep database work bounded across repeated requests",
+    async (mode) => {
+      for (const state of ["pending", "consumed"] as const) {
+        const budget = new InMemoryRateLimitContext();
+        let enabled = true;
+        const limited = createWebHandoffService({
+          db,
+          budget,
+          enabled: () => enabled,
+          textEnabled: () => true,
+        });
+        try {
+          const code = await limited.mint(fixture, ["/law/example"], "click");
+          expect(code).not.toBeNull();
+          if (!code) {
+            throw new TypeError("Expected handoff fixture");
+          }
+          if (state === "consumed") {
+            expect(
+              await limited.consume({
+                code,
+                path: "/law/example",
+                request: new Request(baseURL),
+                ipAddress: null,
+                sessionId: null,
+                previousOrganizationId: null,
+              }),
+            ).not.toBeNull();
+          }
+          const address = "192.0.2.3";
+          if (mode === "address" || mode === "global" || mode === "user") {
+            const limits = {
+              address: {
+                key: `redeem:address:${address}`,
+                limit: MCP_RATE_LIMITS.handoffRedeemAddress,
+              },
+              global: {
+                key: "redeem:global",
+                limit: MCP_RATE_LIMITS.handoffRedeemGlobal,
+              },
+              user: {
+                key: `redeem:user:${fixture.userId}`,
+                limit: MCP_RATE_LIMITS.handoffRedeemUser,
+              },
+            };
+            const { key, limit } = limits[mode];
+            for (let attempt = 0; attempt < limit.max; attempt += 1) {
+              budget.increment(
+                `mcp-web-handoff:${sha256Hex(key)}`,
+                limit.windowMs,
+              );
+            }
+          }
+          if (mode === "disabled") {
+            enabled = false;
+          }
+          const endpointService = {
+            ...limited,
+            admitRedeem:
+              mode === "unavailable"
+                ? async () => {
+                    throw new TypeError("Admission unavailable");
+                  }
+                : limited.admitRedeem,
+            admitUser:
+              mode === "user-unavailable"
+                ? async () => {
+                    throw new TypeError("Admission unavailable");
+                  }
+                : limited.admitUser,
+          };
+          const limitedAuth = makeAuth(endpointService);
+          await limitedAuth.$context;
+          const before = await db.$count(auditLogs);
+          await runWithQueryCounter(async (counter) => {
+            const attempts =
+              mode === "user" || mode === "user-unavailable"
+                ? MCP_RATE_LIMITS.handoffRedeemAddress.max + 8
+                : 8;
+            for (let attempt = 0; attempt < attempts; attempt += 1) {
+              const response = await limitedAuth.handler(
+                new Request(`${baseURL}/api/auth/mcp-handoff/redeem`, {
+                  method: "POST",
+                  headers: {
+                    origin: baseURL,
+                    "content-type": "application/json",
+                    [AUTH_CLIENT_ADDRESS_HEADER]: address,
+                  },
+                  body: JSON.stringify({ code, path: "/law/example" }),
+                }),
+              );
+              expect(response.status).toBe(403);
+              expect(await response.json()).toEqual({ status: "refused" });
+              expect(counter.count).toBe(
+                mode === "user" || mode === "user-unavailable"
+                  ? Math.min(
+                      attempt + 1,
+                      MCP_RATE_LIMITS.handoffRedeemAddress.max,
+                    )
+                  : 0,
+              );
+            }
+          });
+          expect(await db.$count(auditLogs)).toBe(before);
+        } finally {
+          budget.kill();
+        }
+      }
+    },
+  );
   test("another address redeems after an exhausted address repeats requests", async () => {
     const budget = new InMemoryRateLimitContext();
     const limited = createWebHandoffService({
