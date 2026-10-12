@@ -42,6 +42,7 @@
     "nightly-typecheck.yml/full-typecheck": "main",
     "nightly-typecheck.yml/cumulative-type-cost": "main",
     "nightly-typecheck.yml/fresh-web-sources": "main",
+    "typecheck-proofs.yml/typecheck-proofs": "main",
     "quarantine-prune.yml/prune": "main",
     "dated-waiver-healing.yml/heal": "main",
     "release-pr.yml/gate": "main",
