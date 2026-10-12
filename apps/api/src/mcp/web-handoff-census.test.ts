@@ -4,6 +4,7 @@ import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolOutputContract,
 } from "./static-tool-definitions";
+import { isMcpToolVisibleTo } from "./tool-visibility";
 import { handoffLinkResult, webHandoffPaths } from "./web-handoff-links-core";
 
 const collectUrlFields = (schema: unknown, fields: Set<string>) => {
@@ -34,6 +35,22 @@ const collectUrlFields = (schema: unknown, fields: Set<string>) => {
 };
 
 describe("MCP web link census", () => {
+  test("handoff creation is an app-only write under its live read grant", () => {
+    const definition = DEFAULT_MCP_TOOL_DEFINITIONS.find(
+      ({ name }) => name === "mint_web_handoff",
+    );
+    expect(definition).toBeDefined();
+    if (definition === undefined) {
+      return;
+    }
+
+    expect(definition.access).toBe("write");
+    expect(definition.scope).toBe("stella:read");
+    expect(definition.annotations.readOnlyHint).toBe(false);
+    expect(isMcpToolVisibleTo(definition, "app")).toBe(true);
+    expect(isMcpToolVisibleTo(definition, "model")).toBe(false);
+  });
+
   test("every registry link field reaches the shared result wrapper", async () => {
     const fields = new Set<string>();
     for (const definition of DEFAULT_MCP_TOOL_DEFINITIONS) {

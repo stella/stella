@@ -6485,16 +6485,17 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
   {
     "name": "mint_web_handoff",
     "scope": "stella:read",
-    "access": "read",
+    "access": "write",
     "annotationReasons": {
-      "readOnlyHint": "Open web link only retrieves or computes data.",
-      "destructiveHint": "Open web link does not change state.",
+      "readOnlyHint": "Open web link changes state or starts stateful work.",
+      "destructiveHint": "Open web link is additive and does not overwrite or remove existing state.",
       "openWorldHint": "Open web link is confined to the private workspace or a bounded computation."
     },
     "description": "App-only: refresh a web link when the user opens it. Returns a plain link when sign-in handoff is unavailable.",
     "annotations": {
       "title": "Open web link",
-      "readOnlyHint": true,
+      "readOnlyHint": false,
+      "idempotentHint": false,
       "destructiveHint": false,
       "openWorldHint": false
     },
@@ -12794,16 +12795,17 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
   {
     "name": "mint_web_handoff",
     "scope": "stella:read",
-    "access": "read",
+    "access": "write",
     "annotationReasons": {
-      "readOnlyHint": "Open web link only retrieves or computes data.",
-      "destructiveHint": "Open web link does not change state.",
+      "readOnlyHint": "Open web link changes state or starts stateful work.",
+      "destructiveHint": "Open web link is additive and does not overwrite or remove existing state.",
       "openWorldHint": "Open web link is confined to the private workspace or a bounded computation."
     },
     "description": "App-only: refresh a web link when the user opens it. Returns a plain link when sign-in handoff is unavailable.",
     "annotations": {
       "title": "Open web link",
-      "readOnlyHint": true,
+      "readOnlyHint": false,
+      "idempotentHint": false,
       "destructiveHint": false,
       "openWorldHint": false
     },

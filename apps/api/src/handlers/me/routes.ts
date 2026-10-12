@@ -23,20 +23,29 @@ const isTwoFactorManageOtpSendPath = (pathname: string): boolean =>
 export const meRoute = new Elysia({ prefix: "/me" })
   .use(sessionAuthMacro)
   .guard({ validateSession: true })
-  .get("/oauth-connections", listOAuthConnections.handler)
+  .get("/oauth-connections", listOAuthConnections.handler, {
+    accountAccess: listOAuthConnections.config.accountAccess,
+  })
   .patch("/guide-progress", updateGuideProgress.handler, {
+    accountAccess: updateGuideProgress.config.accountAccess,
     body: updateGuideProgress.config.body,
   })
-  .get("/professional-use", readProfessionalUse.handler)
+  .get("/professional-use", readProfessionalUse.handler, {
+    accountAccess: readProfessionalUse.config.accountAccess,
+  })
   .post("/professional-use", acceptProfessionalUse.handler, {
+    accountAccess: acceptProfessionalUse.config.accountAccess,
     body: acceptProfessionalUse.config.body,
   })
   .delete("/oauth-connections/:consentId", disconnectOAuthConnection.handler, {
+    accountAccess: disconnectOAuthConnection.config.accountAccess,
     params: disconnectOAuthConnection.config.params,
   })
   .group("/delete", (app) =>
     app
-      .get("/pending-tasks", deleteAccountPendingTasks.handler)
+      .get("/pending-tasks", deleteAccountPendingTasks.handler, {
+        accountAccess: deleteAccountPendingTasks.config.accountAccess,
+      })
       .use(
         rateLimit({
           duration: API_RATE_LIMITS.deleteAccountOtp.duration,
@@ -52,8 +61,11 @@ export const meRoute = new Elysia({ prefix: "/me" })
           skip: (req) => !isDeleteAccountOtpSendPath(new URL(req.url).pathname),
         }),
       )
-      .post("/send-otp", deleteAccountSendOtp.handler)
+      .post("/send-otp", deleteAccountSendOtp.handler, {
+        accountAccess: deleteAccountSendOtp.config.accountAccess,
+      })
       .post("/verify", deleteAccountVerify.handler, {
+        accountAccess: deleteAccountVerify.config.accountAccess,
         body: deleteAccountVerify.config.body,
       }),
   )
@@ -75,5 +87,7 @@ export const meRoute = new Elysia({ prefix: "/me" })
             !isTwoFactorManageOtpSendPath(new URL(req.url).pathname),
         }),
       )
-      .post("/send-otp", twoFactorSendManageOtp.handler),
+      .post("/send-otp", twoFactorSendManageOtp.handler, {
+        accountAccess: twoFactorSendManageOtp.config.accountAccess,
+      }),
   );

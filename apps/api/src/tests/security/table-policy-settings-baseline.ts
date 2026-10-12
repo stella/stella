@@ -149,7 +149,6 @@ export const TABLE_POLICY_SETTINGS_BASELINE: readonly string[] = [
   "oauth_access_token",
   "oauth_client",
   "oauth_client_assertion",
-  "mcp_web_handoff",
   "oauth_client_resource",
   "oauth_consent",
   "oauth_refresh_token",

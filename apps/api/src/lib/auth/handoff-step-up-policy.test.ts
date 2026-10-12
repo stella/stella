@@ -1,37 +1,167 @@
 import { describe, expect, test } from "bun:test";
+import { Elysia } from "elysia";
 
+import { MCP_HANDOFF_STEP_UP_REQUIRED } from "@stll/api-contract/mcp-web-handoff";
+
+import { getSafeHandlerAccessMetadata } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/account-access";
 import {
+  HANDOFF_ACCESS_DETAIL,
   requiresHandoffStepUpForAuthPath,
   requiresHandoffStepUpForRequest,
+  isHandoffStepUpGuard,
 } from "@/api/lib/auth/handoff-step-up-policy";
 import api from "@/api/server";
 
 const request = (method: string, path: string) =>
   new Request(`https://example.test${path}`, { method });
 
-describe("handoff sessions require recent account authentication", () => {
-  test("every mounted sensitive application route is covered", () => {
-    const sensitive = api.routes.filter(({ method, path }) => {
-      if (
-        /(?:^|[/-])exports?(?:[/-]|$)/u.test(path) ||
-        /\/style-sets\/[^/]+\/download$/u.test(path) ||
-        /\/entities\/zip(?:\/|$)/u.test(path) ||
-        /\/invoices\/[^/]+\/pdf$/u.test(path) ||
-        /^\/(?:api\/)?v1\/me\/(?:delete|two-factor)(?:\/|$)/u.test(path)
-      ) {
-        return true;
+const SENSITIVE_PERMISSION_RESOURCES: ReadonlySet<string> = new Set([
+  "organizationSettings",
+  "member",
+  "apiKey",
+  "integration",
+]);
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const hasSensitivePermissions = (permissions: unknown) => {
+  if (!isRecord(permissions)) {
+    return false;
+  }
+  return Object.entries(permissions).some(
+    ([resource, actions]) =>
+      SENSITIVE_PERMISSION_RESOURCES.has(resource) &&
+      Array.isArray(actions) &&
+      actions.length > 0,
+  );
+};
+
+const isHandoffStepUpRefusal = (value: unknown) =>
+  isRecord(value) &&
+  value.code === 403 &&
+  isRecord(value.response) &&
+  value.response.code === MCP_HANDOFF_STEP_UP_REQUIRED;
+
+const routeRequiresStepUp = (route: (typeof api.routes)[number]) => {
+  const metadata = getSafeHandlerAccessMetadata(route.handler);
+  const detail = route.hooks.detail;
+  let detailAccountAccess: unknown;
+  let detailPermissions: unknown;
+  if (typeof detail === "object" && detail !== null) {
+    if (HANDOFF_ACCESS_DETAIL.accountAccess in detail) {
+      detailAccountAccess = detail[HANDOFF_ACCESS_DETAIL.accountAccess];
+    }
+    if (HANDOFF_ACCESS_DETAIL.permissions in detail) {
+      detailPermissions = detail[HANDOFF_ACCESS_DETAIL.permissions];
+    }
+  }
+
+  return (
+    metadata?.accountAccess === ACCOUNT_ACCESS.accountControl ||
+    detailAccountAccess === ACCOUNT_ACCESS.accountControl ||
+    hasSensitivePermissions(metadata?.permissions) ||
+    hasSensitivePermissions(detailPermissions)
+  );
+};
+
+const registeredHandoffGuards = (route: (typeof api.routes)[number]) => {
+  const hooks = route.hooks.beforeHandle;
+  let candidates: unknown[];
+  if (Array.isArray(hooks)) {
+    candidates = hooks;
+  } else if (hooks === undefined) {
+    candidates = [];
+  } else {
+    candidates = [hooks];
+  }
+  return candidates
+    .flatMap((hook) => {
+      if (typeof hook === "function") {
+        return [hook];
       }
-      return (
-        !["GET", "HEAD", "OPTIONS"].includes(method) &&
-        (/(?:^|\/)(?:members|roles)(?:\/|$)/u.test(path) ||
-          /^\/(?:api\/)?v1\/(?:organization-settings|organizations|members|api-keys|me\/oauth-connections)(?:\/|$)/u.test(
-            path,
-          ))
-      );
+      if (
+        typeof hook === "object" &&
+        hook !== null &&
+        "fn" in hook &&
+        typeof hook.fn === "function"
+      ) {
+        return [hook.fn];
+      }
+      return [];
+    })
+    .filter(isHandoffStepUpGuard);
+};
+
+const missingHandoffStepUpCoverage = (
+  routes: readonly (typeof api.routes)[number][],
+) =>
+  routes.flatMap((route) => {
+    if (!routeRequiresStepUp(route)) {
+      return [];
+    }
+    const guarded = registeredHandoffGuards(route).some((guard) => {
+      const denied = guard({ handoffOriginConsentId: "consent-id" });
+      const allowed = guard({ handoffOriginConsentId: null });
+      return isHandoffStepUpRefusal(denied) && allowed === undefined;
     });
+    return guarded ? [] : [`${route.method} ${route.path}`];
+  });
+
+describe("handoff sessions require recent account authentication", () => {
+  test("every mounted handler with sensitive access metadata has a live guard", () => {
+    const sensitive = api.routes.filter(routeRequiresStepUp);
     expect(sensitive.length).toBeGreaterThan(20);
-    for (const { method, path } of sensitive) {
-      expect(requiresHandoffStepUpForRequest(request(method, path))).toBe(true);
+    expect(missingHandoffStepUpCoverage(api.routes)).toEqual([]);
+  });
+
+  test("the census detects a sensitive route without a registered refusal", () => {
+    const sensitiveRoute = api.routes.find(routeRequiresStepUp);
+    expect(sensitiveRoute).toBeDefined();
+    if (sensitiveRoute === undefined) {
+      return;
+    }
+    const unguardedRoute = {
+      ...sensitiveRoute,
+      hooks: { ...sensitiveRoute.hooks, beforeHandle: [] },
+    };
+
+    expect(missingHandoffStepUpCoverage([unguardedRoute])).toEqual([
+      `${sensitiveRoute.method} ${sensitiveRoute.path}`,
+    ]);
+  });
+
+  test("raw route detail retains account-control sensitivity beside ordinary permissions", () => {
+    const rawRoute = new Elysia()
+      .get("/raw-account-control", () => "ok", {
+        detail: {
+          [HANDOFF_ACCESS_DETAIL.accountAccess]: ACCOUNT_ACCESS.accountControl,
+          [HANDOFF_ACCESS_DETAIL.permissions]: { workspace: ["read"] },
+        },
+      })
+      .routes.at(0);
+    expect(rawRoute).toBeDefined();
+    if (rawRoute === undefined) {
+      return;
+    }
+
+    expect(getSafeHandlerAccessMetadata(rawRoute.handler)).toBeUndefined();
+    expect(routeRequiresStepUp(rawRoute)).toBe(true);
+    expect(missingHandoffStepUpCoverage([rawRoute])).toEqual([
+      "GET /raw-account-control",
+    ]);
+  });
+
+  test("sensitive export routes require step-up", () => {
+    for (const path of [
+      "/api/exports",
+      "/api/export/document",
+      "/api/style-sets/style-id/download",
+      "/api/entities/zip",
+      "/api/invoices/invoice-id/pdf",
+    ]) {
+      expect(requiresHandoffStepUpForRequest(request("GET", path))).toBe(true);
     }
   });
 

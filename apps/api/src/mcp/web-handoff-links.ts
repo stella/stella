@@ -47,7 +47,6 @@ export const withWebHandoffLinks = async (
           organizationId: context.organizationId,
           credentialType: context.credentialType ?? "anonymous",
           clientId: context.clientId ?? null,
-          consentId: context.consentId ?? null,
           grantedScopes: context.grantedScopes,
           ipAddress: context.clientIp ?? null,
           userAgent: context.request?.headers.get("user-agent") ?? null,
@@ -69,16 +68,24 @@ const definition = defineValibotMcpTool({
     "App-only: refresh a web link when the user opens it. Returns a plain link when sign-in handoff is unavailable.",
   inputSchema,
   consumesServices: false,
-  access: "read",
-  readClass: "tenant",
+  access: "write",
+  permissions: {
+    type: "delegated",
+    reason:
+      "The mint operation verifies the current OAuth consent and its live user grant.",
+  },
+  accountAccess: "standard",
   anonymized: { exposure: "excluded", reason: "credential_authority" },
   scope: "stella:read",
   annotations: {
     title: "Open web link",
-    readOnlyHint: true,
+    readOnlyHint: false,
+    idempotentHint: false,
     destructiveHint: false,
     openWorldHint: false,
   },
+  nonDestructiveReason:
+    "Adds an expiring handoff credential tied to existing user consent; it does not modify workspace records.",
   _meta: { ui: { visibility: ["app"] } },
 });
 const handler: TypedMcpToolHandler<v.InferInput<typeof outputSchema>> = async ({

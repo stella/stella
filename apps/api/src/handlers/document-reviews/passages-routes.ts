@@ -14,4 +14,5 @@ export const documentReviewPassagesRoute = new Elysia({
   .post("/passages", readDocumentReviewPassages.handler, {
     body: readDocumentReviewPassages.config.body,
     permissions: readDocumentReviewPassages.config.permissions,
+    accountAccess: readDocumentReviewPassages.config.accountAccess,
   });

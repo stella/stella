@@ -204,6 +204,23 @@ describe("MCP web handoff lifecycle", () => {
       await service.mint(fixture, ["/law/example"], "text"),
     ).not.toBeNull();
   });
+  test("issuance uses the latest matching consent", async () => {
+    const latestId = Bun.randomUUIDv7();
+    await db.insert(oauthConsent).values({
+      id: latestId,
+      clientId: fixture.clientId,
+      userId: fixture.userId,
+      referenceId: fixture.organizationId,
+      scopes: [...MCP_OAUTH_SCOPES],
+      updatedAt: new Date(Date.now() + 60_000),
+    });
+    try {
+      const code = await mint("click");
+      expect((await service.inspect(code))?.handoff.consentId).toBe(latestId);
+    } finally {
+      await db.delete(oauthConsent).where(eq(oauthConsent.id, latestId));
+    }
+  });
   test("disabled issuance keeps connected-app links plain", async () => {
     const disabled = createWebHandoffService({
       db,

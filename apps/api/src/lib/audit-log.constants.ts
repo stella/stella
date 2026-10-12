@@ -1,4 +1,5 @@
 export const AUDIT_ACTION = {
+  MCP_WEB_HANDOFF_CONFIRMATION_SHOWN: "mcp_web_handoff.confirmation_shown",
   MCP_WEB_HANDOFF_ISSUED: "mcp_web_handoff.issued",
   MCP_WEB_HANDOFF_REDEEMED: "mcp_web_handoff.redeemed",
   MCP_WEB_HANDOFF_REFUSED: "mcp_web_handoff.refused",

@@ -1,5 +1,5 @@
 import { Result, panic } from "better-result";
-import { and, eq, exists, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, exists, isNull, ne, sql } from "drizzle-orm";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { randomBytes } from "node:crypto";
 
@@ -50,7 +50,6 @@ export type WebHandoffMintContext = {
   credentialType: "oauth" | "api-key" | "anonymous";
   grantedScopes: readonly string[];
   clientId: string | null;
-  consentId: string | null;
   userId: string | null;
   organizationId: string | null;
   ipAddress?: string | null;
@@ -153,7 +152,7 @@ export const createWebHandoffService = ({
     paths: readonly string[],
     kind: HandoffKind,
   ): Promise<string | null> => {
-    const { credentialType, userId, organizationId, clientId, consentId } = ctx;
+    const { credentialType, userId, organizationId, clientId } = ctx;
     if (
       !enabled() ||
       credentialType !== "oauth" ||
@@ -161,7 +160,6 @@ export const createWebHandoffService = ({
       !userId ||
       !organizationId ||
       !clientId ||
-      !consentId ||
       (kind === "text" && !textEnabled())
     ) {
       return null;
@@ -177,7 +175,7 @@ export const createWebHandoffService = ({
     const normalizedPaths = allowedPaths.filter((path) => path !== undefined);
     if (
       !(await consumeBudget(
-        `mint:${userId}:${consentId}`,
+        `mint:${userId}:${organizationId}:${clientId}`,
         MCP_RATE_LIMITS.handoffMint,
       ))
     ) {
@@ -188,12 +186,12 @@ export const createWebHandoffService = ({
         await liveGrant(tx)
           .where(
             and(
-              eq(oauthConsent.id, consentId),
               eq(oauthConsent.userId, userId),
               eq(oauthConsent.clientId, clientId),
               eq(oauthConsent.referenceId, organizationId),
             ),
           )
+          .orderBy(desc(oauthConsent.updatedAt), desc(oauthConsent.id))
           .limit(1)
       ).at(0);
       if (!grant || !hasWebHandoffScopes(grant.scopes)) {
@@ -236,7 +234,13 @@ export const createWebHandoffService = ({
   return {
     mint,
     isEnabled: enabled,
-    ...createHandoffRedemption({ db, now, consumeBudget, enabled }),
+    ...createHandoffRedemption({
+      db,
+      now,
+      consumeBudget,
+      enabled,
+      textEnabled,
+    }),
   };
 };
 
@@ -280,6 +284,7 @@ const inspectWebHandoff = async (db: HandoffDatabase, code: string) => {
 };
 
 type HandoffRedemptionOptions = {
+  textEnabled: () => boolean;
   enabled: () => boolean;
   db: HandoffDatabase;
   now: () => Date;
@@ -312,6 +317,7 @@ const createHandoffRedemption = ({
   now,
   consumeBudget,
   enabled,
+  textEnabled,
 }: HandoffRedemptionOptions) => {
   const auditRefusal = async (
     code: string,
@@ -378,6 +384,7 @@ const createHandoffRedemption = ({
               eq(mcpWebHandoff.codeHash, sha256Hex(code)),
               isNull(mcpWebHandoff.consumedAt),
               grantIsLive,
+              textEnabled() ? sql`true` : ne(mcpWebHandoff.kind, "text"),
               sql`${mcpWebHandoff.expiresAt} > ${now()}::timestamptz`,
               sql`${path} = ANY(${mcpWebHandoff.allowedPaths})`,
             ),
@@ -439,6 +446,32 @@ const createHandoffRedemption = ({
       `redeem:user:${userId}`,
       MCP_RATE_LIMITS.handoffRedeemUser,
     );
+  const recordConfirmation = async (code: string, request: Request) =>
+    await withAggregateTransaction(db, async (tx) => {
+      const shown = (
+        await tx
+          .update(mcpWebHandoff)
+          .set({ confirmationShownAt: now() })
+          .where(
+            and(
+              eq(mcpWebHandoff.codeHash, sha256Hex(code)),
+              isNull(mcpWebHandoff.confirmationShownAt),
+              isNull(mcpWebHandoff.consumedAt),
+              sql`${mcpWebHandoff.expiresAt} > ${now()}::timestamptz`,
+            ),
+          )
+          .returning()
+      ).at(0);
+      if (!shown) {
+        return;
+      }
+      await createAuditRecorder(auditBindings(shown, request))(tx, {
+        action: AUDIT_ACTION.MCP_WEB_HANDOFF_CONFIRMATION_SHOWN,
+        resourceType: AUDIT_RESOURCE_TYPE.MCP_WEB_HANDOFF,
+        resourceId: shown.id,
+        metadata: { kind: shown.kind, clientId: shown.oauthClientId },
+      });
+    });
   const listSessionClients = async (userId: SafeId<"user">) =>
     await db
       .select({
@@ -456,7 +489,11 @@ const createHandoffRedemption = ({
       )
       .limit(100);
   return {
-    inspect: async (code: string) => await inspectWebHandoff(db, code),
+    inspect: async (code: string) => {
+      const grant = await inspectWebHandoff(db, code);
+      return grant?.handoff.kind === "text" && !textEnabled() ? null : grant;
+    },
+    recordConfirmation,
     consume,
     auditRefusal,
     admitRedeem,

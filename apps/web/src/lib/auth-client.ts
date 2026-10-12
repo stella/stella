@@ -21,6 +21,7 @@ import {
   takeBootPrefetch,
 } from "@/boot-prefetch";
 import { getTranslator, useI18nStore } from "@/i18n/i18n-store";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { browserAuthBaseUrl } from "@/lib/api-url";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { notifyStepUp } from "@/lib/mcp-step-up";
@@ -191,21 +192,46 @@ export const submitOAuthConsent = async (accept: boolean) => {
 };
 
 export const listAuthSessions = async () => {
-  const [result, handoffSessions] = await Promise.all([
+  const [result, handoffSessionsResult] = await Promise.all([
     authClient.listSessions(),
-    authClient.$fetch<unknown>("/mcp-handoff/sessions"),
+    Result.tryPromise({
+      try: async () =>
+        await authClient.$fetch<unknown>("/mcp-handoff/sessions"),
+      catch: (cause) => cause,
+    }),
   ]);
 
   if (result.error) {
     return result;
   }
-  if (handoffSessions.error) {
-    return { data: null, error: handoffSessions.error };
-  }
 
-  const handoffs = v.parse(mcpHandoffSessionsSchema, handoffSessions.data);
+  let handoffs: v.InferOutput<typeof mcpHandoffSessionsSchema> | null = null;
+  if (Result.isError(handoffSessionsResult)) {
+    getAnalytics().captureError(handoffSessionsResult.error, {
+      type: "detached",
+      operation: "auth.list_sessions.handoffs",
+    });
+  } else if (handoffSessionsResult.value.error) {
+    getAnalytics().captureError(handoffSessionsResult.value.error, {
+      type: "detached",
+      operation: "auth.list_sessions.handoffs",
+    });
+  } else {
+    const handoffsResult = v.safeParse(
+      mcpHandoffSessionsSchema,
+      handoffSessionsResult.value.data,
+    );
+    if (handoffsResult.success) {
+      handoffs = handoffsResult.output;
+    } else {
+      getAnalytics().captureError(
+        new Error("Invalid MCP handoff session response"),
+        { type: "detached", operation: "auth.list_sessions.handoffs" },
+      );
+    }
+  }
   const clientsBySessionId = new Map(
-    handoffs.sessions.map(({ id, clientName }) => [id, clientName]),
+    handoffs?.sessions.map(({ id, clientName }) => [id, clientName]),
   );
   return {
     data: result.data.map((session) => ({

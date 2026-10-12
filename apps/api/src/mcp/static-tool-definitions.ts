@@ -33,6 +33,7 @@ import type {
   McpToolSet,
   ToolScope,
 } from "@/api/mcp/tool-types";
+import { isMcpToolVisibleTo } from "@/api/mcp/tool-visibility";
 import { WEB_HANDOFF_TOOL_SET } from "@/api/mcp/web-handoff-links";
 
 type DefaultMcpToolSets = readonly [
@@ -93,6 +94,24 @@ export const DEFAULT_MCP_TOOL_DEFINITIONS = [
   ...CAPABILITY_TOOL_SET.definitions,
   ...WEB_HANDOFF_TOOL_SET.definitions,
 ] as const satisfies readonly McpToolDefinition[];
+
+type ModelVisibleMcpTool<TTool> = TTool extends {
+  _meta: { ui: { visibility: infer TVisibility extends readonly string[] } };
+}
+  ? "model" extends TVisibility[number]
+    ? TTool
+    : never
+  : TTool;
+type ModelVisibleMcpToolDefinition = ModelVisibleMcpTool<
+  (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number]
+>;
+
+/** Static definitions visible to the model; app-only tools cannot enter chat registries. */
+export const MODEL_VISIBLE_MCP_TOOL_DEFINITIONS =
+  DEFAULT_MCP_TOOL_DEFINITIONS.filter(
+    (tool): tool is ModelVisibleMcpToolDefinition =>
+      isMcpToolVisibleTo(tool, "model"),
+  );
 
 const PURPOSE_BUILT_MCP_TOOL_DEFINITIONS = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
   ({ name }) =>

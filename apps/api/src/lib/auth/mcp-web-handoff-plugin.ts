@@ -233,6 +233,7 @@ export const createMcpWebHandoffPlugin = ({
                 (existing && existing.user.id !== grant.userId)) &&
               confirmation !== "confirmed"
             ) {
+              await currentService.recordConfirmation(code, request);
               return ctx.json({
                 status: "needs_confirmation" as const,
                 email: grant.email,

@@ -33,54 +33,66 @@ export const ratesRoute = new Elysia({
   })
   .get("/arrangement", readBillingArrangement.handler, {
     permissions: readBillingArrangement.config.permissions,
+    accountAccess: readBillingArrangement.config.accountAccess,
   })
   .put("/arrangement", setBillingArrangement.handler, {
     permissions: setBillingArrangement.config.permissions,
+    accountAccess: setBillingArrangement.config.accountAccess,
     body: setBillingArrangement.config.body,
   })
   .get("/summary", readMatterBillingSummary.handler, {
     permissions: readMatterBillingSummary.config.permissions,
+    accountAccess: readMatterBillingSummary.config.accountAccess,
   })
   // Rate tables
   .get("/", readRateTables.handler, {
     permissions: readRateTables.config.permissions,
+    accountAccess: readRateTables.config.accountAccess,
     query: readRateTables.config.query,
   })
   .put("/", createRateTable.handler, {
     body: createRateTable.config.body,
     permissions: createRateTable.config.permissions,
+    accountAccess: createRateTable.config.accountAccess,
   })
   .patch("/", updateRateTable.handler, {
     body: updateRateTable.config.body,
     permissions: updateRateTable.config.permissions,
+    accountAccess: updateRateTable.config.accountAccess,
   })
   .delete("/", deleteRateTable.handler, {
     body: deleteRateTable.config.body,
     permissions: deleteRateTable.config.permissions,
+    accountAccess: deleteRateTable.config.accountAccess,
   })
   // Rate resolution
   .get("/resolve", resolveRate.handler, {
     permissions: resolveRate.config.permissions,
+    accountAccess: resolveRate.config.accountAccess,
     query: resolveRate.config.query,
   })
   // Rate entries
   .get("/:rateTableId/entries", readRateEntries.handler, {
     params: readRateEntries.config.params,
     permissions: readRateEntries.config.permissions,
+    accountAccess: readRateEntries.config.accountAccess,
     query: readRateEntries.config.query,
   })
   .put("/:rateTableId/entries", createRateEntry.handler, {
     body: createRateEntry.config.body,
     params: createRateEntry.config.params,
     permissions: createRateEntry.config.permissions,
+    accountAccess: createRateEntry.config.accountAccess,
   })
   .patch("/:rateTableId/entries", updateRateEntry.handler, {
     body: updateRateEntry.config.body,
     params: updateRateEntry.config.params,
     permissions: updateRateEntry.config.permissions,
+    accountAccess: updateRateEntry.config.accountAccess,
   })
   .delete("/:rateTableId/entries", deleteRateEntry.handler, {
     body: deleteRateEntry.config.body,
     params: deleteRateEntry.config.params,
     permissions: deleteRateEntry.config.permissions,
+    accountAccess: deleteRateEntry.config.accountAccess,
   });

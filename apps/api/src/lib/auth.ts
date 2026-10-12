@@ -81,6 +81,7 @@ import {
 } from "@/api/lib/auth-adapter-options";
 import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth-user-additional-fields";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
+import type { AccountAccess } from "@/api/lib/auth/account-access";
 import { createAgentUserPlugin } from "@/api/lib/auth/agent-auth-user";
 import { authCookiePolicy } from "@/api/lib/auth/auth-cookie-name";
 import {
@@ -114,6 +115,8 @@ import { buildFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/contex
 import {
   requiresHandoffStepUpForAuthPath,
   requiresHandoffStepUpForRequest,
+  createHandoffStepUpGuard,
+  HANDOFF_ACCESS_DETAIL,
 } from "@/api/lib/auth/handoff-step-up-policy";
 import {
   createMcpWebHandoffPlugin,
@@ -2557,6 +2560,7 @@ export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
       });
 
       return {
+        handoffOriginConsentId: session.originConsentId ?? null,
         user: {
           id: userId,
           email: user.email,
@@ -2564,6 +2568,11 @@ export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
       };
     },
   },
+  accountAccess: (accountAccess: AccountAccess) => ({
+    validateSession: true,
+    detail: { [HANDOFF_ACCESS_DETAIL.accountAccess]: accountAccess },
+    beforeHandle: createHandoffStepUpGuard({ accountAccess }),
+  }),
 });
 
 /**
@@ -3145,6 +3154,7 @@ const resolveValidateAuth = async ({
   return {
     ok: true as const,
     value: {
+      handoffOriginConsentId: session.originConsentId ?? null,
       user: {
         id: toSafeId<"user">(user.id),
         email: user.email,
@@ -3250,38 +3260,49 @@ export const createAuthMacro = ({
     ? createRequestAuthResolver(getSession)
     : resolveRequestAuth;
 
-  return new Elysia({ name: "authMacro" }).macro({
-    validateAuth: {
-      detail: { [TENANT_ACTION_DETAIL]: true },
-      async resolve({ params, query, status, request, server, set }) {
-        const result = await resolveAuth({
-          params,
-          query,
-          request,
-          server,
-          set,
-        });
-
-        if (!result.ok) {
-          return status(
-            result.statusCode,
-            VALIDATE_AUTH_REJECTION_BODY[result.statusCode],
-          );
-        }
-
-        if (
-          result.value.session.originConsentId &&
-          requiresHandoffStepUpForRequest(request)
-        ) {
-          return status(403, {
-            code: MCP_HANDOFF_STEP_UP_REQUIRED,
-            message: "Sign in again to continue.",
+  return new Elysia({ name: "authMacro" })
+    .macro({
+      validateAuth: {
+        detail: { [TENANT_ACTION_DETAIL]: true },
+        async resolve({ params, query, status, request, server, set }) {
+          const result = await resolveAuth({
+            params,
+            query,
+            request,
+            server,
+            set,
           });
-        }
-        return result.value;
+
+          if (!result.ok) {
+            return status(
+              result.statusCode,
+              VALIDATE_AUTH_REJECTION_BODY[result.statusCode],
+            );
+          }
+
+          if (
+            result.value.session.originConsentId &&
+            requiresHandoffStepUpForRequest(request)
+          ) {
+            return status(403, {
+              code: MCP_HANDOFF_STEP_UP_REQUIRED,
+              message: "Sign in again to continue.",
+            });
+          }
+          return result.value;
+        },
       },
-    },
-  });
+    })
+    .macro("accountAccess", (accountAccess: AccountAccess) => ({
+      validateAuth: true,
+      detail: { [HANDOFF_ACCESS_DETAIL.accountAccess]: accountAccess },
+      beforeHandle: createHandoffStepUpGuard({ accountAccess }),
+    }))
+    .macro("permissions", (permissions: PermissionInput) => ({
+      validateAuth: true,
+      detail: { [HANDOFF_ACCESS_DETAIL.permissions]: permissions },
+      beforeHandle: createHandoffStepUpGuard({ permissions }),
+    }));
 };
 
 export const authMacro = createAuthMacro();
@@ -3292,17 +3313,21 @@ export const permissionMacro = new Elysia({ name: "permissionMacro" })
     // Reuse authMacro's resolved member role instead of asking better-auth to
     // perform the same permission check through a second session read.
     validateAuth: true,
+    detail: { [HANDOFF_ACCESS_DETAIL.permissions]: permissions },
     // Without this, when this macro is used with another macro that extends the body,
     // the final merged body would not include the first macro's body extension.
     body: t.Object({}),
-    beforeHandle(ctx) {
-      const memberRole = readAuthorizedMemberRole(ctx);
-      if (!memberRole || !hasMemberPermission(memberRole, permissions)) {
-        return ctx.status(403, AUTH_REJECTION_BODY[403]);
-      }
+    beforeHandle: [
+      createHandoffStepUpGuard({ permissions }),
+      (ctx) => {
+        const memberRole = readAuthorizedMemberRole(ctx);
+        if (!memberRole || !hasMemberPermission(memberRole, permissions)) {
+          return ctx.status(403, AUTH_REJECTION_BODY[403]);
+        }
 
-      return undefined;
-    },
+        return undefined;
+      },
+    ],
   }));
 
 const bindWorkspaceRecorder = (

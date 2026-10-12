@@ -385,7 +385,9 @@ describe("MCP registry access coherence", () => {
     for (const { definitions } of SURFACES) {
       const delegated = definitions.filter(
         (tool) =>
-          tool.access === "write" && tool.permissions.type === "delegated",
+          tool.access === "write" &&
+          tool.permissions.type === "delegated" &&
+          isMcpToolVisibleTo(tool, "model"),
       );
       for (const tool of delegated) {
         expect(tool.name).toBe(MCP_CAPABILITY_EXECUTORS.write);
@@ -436,11 +438,14 @@ describe("MCP registry access coherence", () => {
     }
   });
 
-  test('anonymized-exclusion reason "write" and access: "write" imply each other', () => {
+  test("write and credential-authority tools are excluded from anonymized access", () => {
     for (const tool of defaultTools) {
       const isWriteExcluded =
         tool.anonymized.exposure === "excluded" &&
         tool.anonymized.reason === "write";
+      const isCredentialAuthorityExcluded =
+        tool.anonymized.exposure === "excluded" &&
+        tool.anonymized.reason === "credential_authority";
       if (isWriteExcluded) {
         expect(
           tool.access,
@@ -449,8 +454,8 @@ describe("MCP registry access coherence", () => {
       }
       if (tool.access === "write") {
         expect(
-          isWriteExcluded,
-          `Tool ${tool.name} is access: "write" but is not anonymized-excluded with reason "write"`,
+          isWriteExcluded || isCredentialAuthorityExcluded,
+          `Tool ${tool.name} is access: "write" but is not excluded from anonymized access`,
         ).toBe(true);
       }
     }
@@ -957,7 +962,7 @@ describe("destructive write-tool behavior", () => {
         grants = authority.alternatives;
         break;
       case "delegated":
-        return true;
+        return tool.nonDestructiveReason === undefined;
       default:
         authority satisfies never;
         return panic(`Unhandled tool authority: ${String(authority)}`);

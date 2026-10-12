@@ -6,6 +6,7 @@ import {
   getAuthoritativeSessionFromCtx,
 } from "better-auth/api";
 import { organization as organizationPlugin } from "better-auth/plugins";
+import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -51,6 +52,7 @@ let db: ReturnType<typeof makeDb>;
 let service: ReturnType<typeof createWebHandoffService>;
 let auth: ReturnType<typeof makeAuth>;
 let handoffEnabled = true;
+let handoffTextEnabled = true;
 const fixture = {
   credentialType: "oauth" as const,
   grantedScopes: [...MCP_OAUTH_SCOPES],
@@ -174,7 +176,7 @@ beforeAll(async () => {
     db,
     budget: new InMemoryRateLimitContext(),
     enabled: () => handoffEnabled,
-    textEnabled: () => true,
+    textEnabled: () => handoffTextEnabled,
   });
   auth = makeAuth();
 });
@@ -316,6 +318,30 @@ describe("MCP link sign-in", () => {
     }
     expect((await redeem(code)).status).toBe(200);
   });
+  test("turning off text links refuses an outstanding text link", async () => {
+    const code = await mint("text");
+    handoffTextEnabled = false;
+    try {
+      expect(await service.inspect(code)).toBeNull();
+      const response = await redeem(code, "confirmed");
+      expect(
+        v.parse(mcpHandoffRedeemResultSchema, await response.json()).status,
+      ).toBe("refused");
+      expect(
+        await service.consume({
+          code,
+          path: "/law/example",
+          request: new Request(`${baseURL}/mcp-handoff/redeem`),
+          ipAddress: null,
+          previousOrganizationId: null,
+          complete: async () => Result.ok(null),
+        }),
+      ).toBeNull();
+    } finally {
+      handoffTextEnabled = true;
+    }
+    expect((await redeem(code, "confirmed")).status).toBe(200);
+  });
   test("text links request confirmation before creating a session", async () => {
     const code = await mint("text");
     const first = await redeem(code);
@@ -324,7 +350,17 @@ describe("MCP link sign-in", () => {
       email: "handoff@example.test",
       organizationName: "Organization",
     });
-    expect((await service.inspect(code))?.handoff.consumedAt).toBeNull();
+    const receipt = await service.inspect(code);
+    expect(receipt?.handoff.consumedAt).toBeNull();
+    expect(
+      await db.$count(
+        auditLogs,
+        and(
+          eq(auditLogs.resourceId, receipt!.handoff.id),
+          eq(auditLogs.action, AUDIT_ACTION.MCP_WEB_HANDOFF_CONFIRMATION_SHOWN),
+        ),
+      ),
+    ).toBe(1);
     const response = await redeem(code, "confirmed");
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("private, no-store");
@@ -558,7 +594,7 @@ describe("MCP link sign-in", () => {
     });
     const existingCookie = cookieOf(signedIn);
     const code = await service.mint(
-      { ...fixture, userId: otherUserId, consentId: "other-consent" },
+      { ...fixture, userId: otherUserId },
       ["/law/example"],
       "click",
     );

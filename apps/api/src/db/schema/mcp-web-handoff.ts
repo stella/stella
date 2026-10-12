@@ -1,5 +1,12 @@
 import { inArray, sql } from "drizzle-orm";
-import { check, index, pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
+import {
+  check,
+  index,
+  pgPolicy,
+  pgTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 
 import {
   oauthClient,
@@ -35,6 +42,7 @@ export const mcpWebHandoff = pgTable(
     kind: text("kind", { enum: MCP_WEB_HANDOFF_KINDS }).notNull(),
     expiresAt: timestamptz("expires_at").notNull(),
     consumedAt: timestamptz("consumed_at"),
+    confirmationShownAt: timestamptz("confirmation_shown_at"),
     // Audit reference retained independently of browser session deletion.
     consumedSessionId: text("consumed_session_id"),
     createdIpHash: text("created_ip_hash"),
@@ -64,6 +72,12 @@ export const mcpWebHandoff = pgTable(
       "mcp_web_handoff_codeHash_check",
       sql`${table.codeHash} ~ '^[0-9a-f]{64}$'`,
     ),
+    pgPolicy("mcp_web_handoff_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.mcp_web_handoff'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.mcp_web_handoff'::regclass)`,
+    }),
     ...denyStellaAccessPolicies(),
   ],
 );

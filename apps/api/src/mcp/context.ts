@@ -83,7 +83,6 @@ import type { readVersionBlocks } from "@/api/lib/legal-search/legislation-versi
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
-import { resolveOAuthConsentId } from "@/api/lib/oauth-connections";
 import {
   brandActorSessionIdentity,
   brandPersistedWorkspaceId,
@@ -243,7 +242,6 @@ export type McpRequestContext = {
   clientIp?: string | null;
   credentialType?: "oauth" | "api-key" | "anonymous";
   clientId?: string | null;
-  consentId?: string | null;
   /**
    * The credential's own permission set, when it carries one (machine API
    * keys). Authorization ANDs it with `memberRole` through
@@ -379,28 +377,17 @@ export const loadAccessibleMcpWorkspaces = async ({
         .where(eq(workspaces.organizationId, organizationId)),
   );
 
-type McpWebHandoffActor = Pick<McpRequestContext, "userId" | "organizationId">;
-const resolveMcpWebHandoffIdentity = async (
-  session: McpSession,
-  actor: McpWebHandoffActor,
-) => {
+const resolveMcpWebHandoffIdentity = (session: McpSession) => {
   const credential = session.credential;
   if (credential?.type === "oauth_client") {
-    return {
-      credentialType: "oauth",
-      clientId: credential.clientId,
-      consentId: await resolveOAuthConsentId({
-        ...actor,
-        clientId: credential.clientId,
-      }),
-    } as const;
+    return { credentialType: "oauth", clientId: credential.clientId } as const;
   }
   const credentialType =
     credential?.type === "machine_api_key" ||
     credential?.type === "personal_api_key"
       ? "api-key"
       : "anonymous";
-  return { credentialType, clientId: null, consentId: null } as const;
+  return { credentialType, clientId: null } as const;
 };
 
 export const resolveMcpSessionContext = async (
@@ -575,10 +562,7 @@ export const resolveMcpSessionContext = async (
           dispatch: registryDispatch,
         }).map((handler) => handler.slug);
 
-  const webHandoffIdentity = await resolveMcpWebHandoffIdentity(session, {
-    userId,
-    organizationId,
-  });
+  const webHandoffIdentity = resolveMcpWebHandoffIdentity(session);
 
   return {
     ...webHandoffIdentity,

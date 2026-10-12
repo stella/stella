@@ -2,7 +2,6 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
-import { MCP_WEB_HANDOFF_TOOL_NAME } from "@stll/api-contract/mcp-web-handoff";
 
 import {
   containsRawUuid,
@@ -47,7 +46,6 @@ import type {
   TypedHandlerDataByName,
 } from "@/api/mcp/tool-types";
 import { validationErrorResult } from "@/api/mcp/tool-utils";
-import { WEB_HANDOFF_TOOL_SET } from "@/api/mcp/web-handoff-links";
 
 import type {
   ChatProjectableToolName,
@@ -65,8 +63,6 @@ import { toRegistryChatToolError } from "./registry-tool-error";
  * no handler wired here cannot compile.
  */
 const REGISTRY_READ_TOOL_HANDLERS = {
-  [MCP_WEB_HANDOFF_TOOL_NAME]:
-    WEB_HANDOFF_TOOL_SET.handlers[MCP_WEB_HANDOFF_TOOL_NAME],
   fetch: COMPAT_TOOL_HANDLERS.fetch,
   search: COMPAT_TOOL_HANDLERS.search,
   list_matters: STELLA_TOOL_HANDLERS.list_matters,

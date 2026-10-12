@@ -29,4 +29,5 @@ export const desktopRegistryRoute = new Elysia({
   .post("/grant", grant.handler, {
     body: grant.config.body,
     permissions: grant.config.permissions,
+    accountAccess: grant.config.accountAccess,
   });

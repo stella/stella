@@ -15,13 +15,16 @@ export const bilingualTranslationsRoute = new Elysia({
     body: prepareBilingualTranslation.config.body,
     params: prepareBilingualTranslation.config.params,
     permissions: prepareBilingualTranslation.config.permissions,
+    accountAccess: prepareBilingualTranslation.config.accountAccess,
   })
   .post("/runs", createBilingualRun.handler, {
     body: createBilingualRun.config.body,
     params: createBilingualRun.config.params,
     permissions: createBilingualRun.config.permissions,
+    accountAccess: createBilingualRun.config.accountAccess,
   })
   .get("/runs/:runId", readBilingualRun.handler, {
     params: readBilingualRun.config.params,
     permissions: readBilingualRun.config.permissions,
+    accountAccess: readBilingualRun.config.accountAccess,
   });

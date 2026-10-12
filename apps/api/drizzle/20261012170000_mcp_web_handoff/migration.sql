@@ -12,6 +12,7 @@ CREATE TABLE "mcp_web_handoff" (
   "kind" text NOT NULL,
   "expires_at" timestamptz NOT NULL,
   "consumed_at" timestamptz,
+  "confirmation_shown_at" timestamptz,
   "consumed_session_id" text,
   "created_ip_hash" text,
   "consumed_ip_hash" text,
@@ -23,6 +24,10 @@ CREATE TABLE "mcp_web_handoff" (
 );--> statement-breakpoint
 
 ALTER TABLE "mcp_web_handoff" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "mcp_web_handoff" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE POLICY "mcp_web_handoff_owner_access" ON "mcp_web_handoff" FOR ALL TO public
+  USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.mcp_web_handoff'::regclass))
+  WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.mcp_web_handoff'::regclass));--> statement-breakpoint
 CREATE POLICY "auth_no_stella_access" ON "mcp_web_handoff"
   AS PERMISSIVE FOR ALL TO "stella" USING (false) WITH CHECK (false);--> statement-breakpoint
 

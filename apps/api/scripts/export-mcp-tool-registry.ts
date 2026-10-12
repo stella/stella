@@ -54,6 +54,7 @@ import {
   type McpCliToolAnnotation,
   type McpToolDefinition,
 } from "@/api/mcp/tool-types";
+import { isMcpToolVisibleTo } from "@/api/mcp/tool-visibility";
 
 type StaticMcpToolDefinition = (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number];
 
@@ -147,6 +148,7 @@ const projectedChatGrantPolicies: Record<string, "approve-once" | "grantable"> =
 for (const tool of DEFAULT_MCP_TOOL_DEFINITIONS) {
   if (
     tool.access !== "write" ||
+    !isMcpToolVisibleTo(tool, "model") ||
     !WRITE_TOOL_REF_FIELD_MAP[tool.name].chatProjectable
   ) {
     continue;
@@ -190,6 +192,10 @@ const submissionTools = Object.fromEntries(
     if (tool.name === "upload_document_version") {
       readOnlyJustification =
         "Starts or completes a private document-version upload in the user’s stella workspace.";
+    }
+    if (tool.name === "mint_web_handoff") {
+      readOnlyJustification =
+        "Creates a short-lived handoff credential so the user can open the selected stella page.";
     }
     if (tool.name === MCP_CAPABILITY_EXECUTORS.write) {
       readOnlyJustification =

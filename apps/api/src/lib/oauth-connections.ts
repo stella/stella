@@ -130,27 +130,3 @@ export const disconnectOAuthConnectionForUser = async (
         cause: err,
       }),
   });
-
-type ResolveOAuthConsentIdOptions = {
-  userId: SafeId<"user">;
-  organizationId: SafeId<"organization">;
-  clientId: string;
-};
-export const resolveOAuthConsentId = async ({
-  userId,
-  organizationId,
-  clientId,
-}: ResolveOAuthConsentIdOptions): Promise<string | null> => {
-  const rows = await rootDb
-    .select({ id: oauthConsent.id })
-    .from(oauthConsent)
-    .where(
-      and(
-        eq(oauthConsent.userId, userId),
-        eq(oauthConsent.referenceId, organizationId),
-        eq(oauthConsent.clientId, clientId),
-      ),
-    )
-    .limit(1);
-  return rows.at(0)?.id ?? null;
-};

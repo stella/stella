@@ -15,12 +15,22 @@ import type { DEFAULT_MCP_TOOL_DEFINITIONS } from "./static-tool-definitions";
 
 type Tool = (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number];
 type ReadToolName = Extract<Tool, { access: "read" }>["name"];
+type AppOnlyWriteToolName = Extract<
+  Tool,
+  {
+    access: "write";
+    _meta: { ui: { visibility: readonly ["app"] } };
+  }
+>["name"];
 type AppManifest = {
   directory: string;
   uri: `ui://${string}`;
   linkedTools: readonly Tool["name"][];
 } & (
-  | { type: "presentation"; callableTools: readonly ReadToolName[] }
+  | {
+      type: "presentation";
+      callableTools: readonly (ReadToolName | AppOnlyWriteToolName)[];
+    }
   | {
       type: "host-approved-mutation";
       reason: string;

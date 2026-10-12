@@ -1,3 +1,15 @@
+import { status } from "elysia";
+
+import { MCP_HANDOFF_STEP_UP_REQUIRED } from "@stll/api-contract/mcp-web-handoff";
+
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/account-access";
+import type { AccountAccess } from "@/api/lib/auth/account-access";
+
+export const HANDOFF_ACCESS_DETAIL = {
+  accountAccess: "__stellaHandoffAccountAccess",
+  permissions: "__stellaHandoffPermissions",
+} as const;
+
 const isPathFamily = (path: string, family: string) =>
   path === family || path.startsWith(`${family}/`);
 
@@ -9,34 +21,54 @@ const normalizePath = (path: string) =>
 
 export const requiresHandoffStepUpForRequest = (request: Request): boolean => {
   const path = normalizePath(new URL(request.url).pathname);
-  if (
+  return (
     /(?:^|[/-])exports?(?:[/-]|$)/u.test(path) ||
     /^\/style-sets\/[^/]+\/download$/u.test(path) ||
     /^\/entities\/zip(?:\/|$)/u.test(path) ||
     /^\/invoices\/[^/]+\/pdf$/u.test(path)
-  ) {
-    return true;
-  }
-  if (
-    isPathFamily(path, "/me/delete") ||
-    isPathFamily(path, "/me/two-factor")
-  ) {
-    return true;
-  }
-  if (["GET", "HEAD", "OPTIONS"].includes(request.method)) {
-    return false;
-  }
-  if (/(?:^|\/)(?:members|roles)(?:\/|$)/u.test(path)) {
-    return true;
-  }
-  return [
-    "/organization-settings",
-    "/organizations",
-    "/members",
-    "/api-keys",
-    "/me/oauth-connections",
-  ].some((family) => isPathFamily(path, family));
+  );
 };
+
+type HandoffAccessMetadata = {
+  accountAccess?: AccountAccess;
+  permissions?: Readonly<Record<string, readonly string[] | undefined>>;
+};
+export const requiresHandoffStepUpForMetadata = ({
+  accountAccess,
+  permissions,
+}: HandoffAccessMetadata) =>
+  accountAccess === ACCOUNT_ACCESS.accountControl ||
+  (permissions?.organizationSettings?.length ?? 0) > 0 ||
+  (permissions?.member?.length ?? 0) > 0 ||
+  (permissions?.apiKey?.length ?? 0) > 0 ||
+  (permissions?.integration?.length ?? 0) > 0;
+
+const registeredGuards = new WeakSet<object>();
+export const createHandoffStepUpGuard = (metadata: HandoffAccessMetadata) => {
+  const required = requiresHandoffStepUpForMetadata(metadata);
+  const guard = ({
+    handoffOriginConsentId,
+  }: {
+    handoffOriginConsentId: string | null;
+  }) =>
+    required && handoffOriginConsentId
+      ? status(403, {
+          code: MCP_HANDOFF_STEP_UP_REQUIRED,
+          message: "Sign in again to continue.",
+        })
+      : undefined;
+  registeredGuards.add(guard);
+  return guard;
+};
+
+export type HandoffStepUpGuard = (context: {
+  handoffOriginConsentId: string | null;
+}) => unknown;
+
+export const isHandoffStepUpGuard = (
+  value: unknown,
+): value is HandoffStepUpGuard =>
+  typeof value === "function" && registeredGuards.has(value);
 
 export const requiresHandoffStepUpForAuthPath = (path: string): boolean => {
   const normalized = normalizePath(path).replace(/^\/auth(?=\/|$)/u, "");

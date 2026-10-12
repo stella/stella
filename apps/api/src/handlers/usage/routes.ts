@@ -49,31 +49,40 @@ export const usageRoute = new Elysia({ prefix: USAGE_PATH })
   .guard({ validateAuth: true })
   .get("/entitlement", getEntitlement.handler, {
     permissions: getEntitlement.config.permissions,
+    accountAccess: getEntitlement.config.accountAccess,
   })
   .get("/access", getAccess.handler, {
     permissions: getAccess.config.permissions,
+    accountAccess: getAccess.config.accountAccess,
   })
   .get("/lane", getLane.handler, {
     permissions: getLane.config.permissions,
+    accountAccess: getLane.config.accountAccess,
   })
   .get("/policies", listPolicies.handler, {
     permissions: listPolicies.config.permissions,
+    accountAccess: listPolicies.config.accountAccess,
   })
   .get("/assignments", listSeatAssignments.handler, {
     permissions: listSeatAssignments.config.permissions,
+    accountAccess: listSeatAssignments.config.accountAccess,
   })
   .post("/assignments", assignSeat.handler, {
     body: assignSeat.config.body,
     permissions: assignSeat.config.permissions,
+    accountAccess: assignSeat.config.accountAccess,
   })
   .delete("/assignments", unassignSeat.handler, {
     body: unassignSeat.config.body,
     permissions: unassignSeat.config.permissions,
+    accountAccess: unassignSeat.config.accountAccess,
   })
   .post("/hosted/setup", createHostedSetup.handler, {
     body: createHostedSetup.config.body,
     permissions: createHostedSetup.config.permissions,
+    accountAccess: createHostedSetup.config.accountAccess,
   })
   .post("/hosted/management", createHostedManagement.handler, {
     permissions: createHostedManagement.config.permissions,
+    accountAccess: createHostedManagement.config.accountAccess,
   });

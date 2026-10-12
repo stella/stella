@@ -10,6 +10,7 @@ import {
 import { eq } from "drizzle-orm";
 
 import { oauthClient, oauthConsent, session } from "@/api/db/auth-schema";
+import { agentAuthConfirmRoute } from "@/api/handlers/agent-auth/routes";
 import { apiKeysRoute } from "@/api/handlers/api-keys/routes";
 import { meRoute } from "@/api/handlers/me/routes";
 import { getAuth } from "@/api/lib/auth";
@@ -88,6 +89,15 @@ describe("handoff sessions enforce recent authentication at real entry points", 
         new Request(`http://localhost/me/oauth-connections/${consentId}`, {
           method: "DELETE",
           headers,
+        }),
+      ),
+    );
+    await expectStepUp(
+      await agentAuthConfirmRoute.handle(
+        new Request("http://localhost/agent/identity/confirm", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ user_code: "EXAMPLE" }),
         }),
       ),
     );

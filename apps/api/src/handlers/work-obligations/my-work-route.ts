@@ -10,4 +10,5 @@ export const myWorkRoute = new Elysia({ prefix: "/my-work" })
   .get("/", myWork.handler, {
     query: myWork.config.query,
     permissions: myWork.config.permissions,
+    accountAccess: myWork.config.accountAccess,
   });

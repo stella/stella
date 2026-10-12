@@ -68,4 +68,5 @@ export const agentAuthConfirmRoute = new Elysia()
   .post(AGENT_AUTH_CONFIRM_PATH, agentConfirmHandler.handler, {
     body: agentConfirmHandler.config.body,
     permissions: agentConfirmHandler.config.permissions,
+    accountAccess: agentConfirmHandler.config.accountAccess,
   });
