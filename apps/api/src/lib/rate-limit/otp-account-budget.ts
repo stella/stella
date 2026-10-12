@@ -15,7 +15,7 @@ import {
   recordBudgetRejection,
   type BudgetName,
 } from "@/api/lib/rate-limit/budget-observability";
-import type { RateLimitContext } from "@/api/lib/rate-limit/rate-limit";
+import type { RateLimitContext } from "@/api/lib/rate-limit/contracts";
 import { createRedisRateLimitRequestKey } from "@/api/lib/rate-limit/redis-context";
 import { isRecord } from "@/api/lib/type-guards";
 

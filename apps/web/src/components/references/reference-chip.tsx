@@ -330,7 +330,9 @@ export const useReferenceActivation = (reference: ChatReference) => {
           openCaseLawDecision(
             reference.locator,
             openDecision,
-            reference.anchorId === null ? {} : { anchorId: reference.anchorId },
+            reference.paragraph === null
+              ? {}
+              : { anchorId: reference.paragraph.anchorId },
           ),
           "reference-chip.open-decision",
         );

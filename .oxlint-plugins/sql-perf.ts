@@ -13,7 +13,7 @@ import {
 import baselineCounts from "./sql-perf-baseline.json" with { type: "json" };
 import { filenameForContext } from "./utils.ts";
 
-const ROOT = path.resolve(import.meta.dir, "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 const baseline = new Map(Object.entries(baselineCounts));
 
 const message = (shape: string) =>

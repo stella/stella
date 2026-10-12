@@ -159,7 +159,7 @@ const ReferenceCitationLink = ({
       <ChatDecisionCitation
         decisionId={decision.locator.ref}
         passage={children}
-        anchorId={decision.anchorId ?? undefined}
+        paragraph={decision.paragraph ?? undefined}
         interactive={interactive}
       />
     );
@@ -169,7 +169,7 @@ const ReferenceCitationLink = ({
       <ChatRouteDecisionCitation
         params={decision.locator.params}
         passage={children}
-        anchorId={decision.anchorId ?? undefined}
+        paragraph={decision.paragraph ?? undefined}
         interactive={interactive}
       />
     );
@@ -180,7 +180,7 @@ const ReferenceCitationLink = ({
   return (
     <LegalCitationLink
       appearance="inline"
-      anchorId={decision?.anchorId ?? undefined}
+      anchorId={decision?.paragraph?.anchorId}
       fallback={fallback}
       interactive={interactive}
       source={source}
