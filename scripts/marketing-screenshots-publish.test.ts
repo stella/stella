@@ -328,6 +328,23 @@ describe("publish selection", () => {
     expect(result.notices).toHaveLength(1);
   });
 
+  // A fork's pull request from a same-named branch is not this branch's.
+  test("never publishes to a fork's pull request of the same branch name", async () => {
+    const input = scenario();
+    input.pulls = [
+      {
+        head: {
+          ref: "feat/ui",
+          sha: HEAD,
+          repo: { full_name: "someone/stella" },
+        },
+      },
+    ];
+    const result = await selectFor(input);
+    expect(result.outputs).toEqual({});
+    expect(result.failures).toEqual([]);
+  });
+
   const refused: { name: string; change: (input: Scenario) => void }[] = [
     {
       name: "another workflow's run",
@@ -345,6 +362,18 @@ describe("publish selection", () => {
       name: "main",
       change: (input) => {
         input.run["head_branch"] = "main";
+      },
+    },
+    ...["feat/a..b", "-feat", "feat ui", ""].map((branch) => ({
+      name: `the branch name ${JSON.stringify(branch)}`,
+      change: (input: Scenario) => {
+        input.run["head_branch"] = branch;
+      },
+    })),
+    {
+      name: "a malformed head SHA",
+      change: (input) => {
+        input.run["head_sha"] = "abc123";
       },
     },
     {
