@@ -9,8 +9,10 @@
 // The comparison knows where entries live through `collection`: the JSON path
 // of the one array or record whose members may be deleted. Everything outside
 // it must be unchanged.
-
-import { Result } from "better-result";
+//
+// No imports: the autofix workflow runs this file, with
+// `autofix-baseline-prune.ts` and `baseline-paths.ts`, from the base
+// revision's copies in an empty directory, without dependencies.
 
 type Json =
   | null
@@ -182,12 +184,20 @@ export const shrinkTextViolations = (
   after: string,
   collection: CollectionPath,
 ): string[] => {
-  const parsedBefore = Result.try((): unknown => JSON.parse(before));
-  if (Result.isError(parsedBefore)) {
+  const parse = (text: string): { value: unknown } | null => {
+    // Dependency-free on purpose (see the header), so no Result helper.
+    try {
+      return { value: JSON.parse(text) };
+    } catch {
+      return null;
+    }
+  };
+  const parsedBefore = parse(before);
+  if (parsedBefore === null) {
     return ["the committed baseline is not JSON"];
   }
-  const parsedAfter = Result.try((): unknown => JSON.parse(after));
-  if (Result.isError(parsedAfter)) {
+  const parsedAfter = parse(after);
+  if (parsedAfter === null) {
     return ["the rewritten baseline is not JSON"];
   }
   return shrinkViolations(parsedBefore.value, parsedAfter.value, collection);

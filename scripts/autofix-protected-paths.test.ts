@@ -1,11 +1,9 @@
 import { expect, test } from "bun:test";
 import {
-  appendFileSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
   rmSync,
-  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -83,12 +81,6 @@ test("workflow rejects every protected edit despite broad changed-path and gener
   };
   try {
     git(["init", "-q"]);
-    // The shrink-only verifier needs the repository's dependencies.
-    symlinkSync(
-      path.join(import.meta.dirname, "../node_modules"),
-      path.join(root, "node_modules"),
-    );
-    appendFileSync(path.join(root, ".git/info/exclude"), "node_modules\n");
     for (const file of paths) {
       write(file, "original\n");
     }
@@ -121,6 +113,7 @@ test("workflow rejects every protected edit despite broad changed-path and gener
       return git(["rev-parse", "HEAD"]);
     };
     let head = commit();
+    let base = head;
     const run = (file: string) => {
       writeFileSync(path.join(root, "autofix-changed-paths"), `${file}\0`);
       return Bun.spawnSync(["bash", "-c", command], {
@@ -128,7 +121,7 @@ test("workflow rejects every protected edit despite broad changed-path and gener
         env: {
           ...process.env,
           HEAD_SHA: head,
-          BASE_SHA: head,
+          BASE_SHA: base,
           RUNNER_TEMP: root,
           GENERATOR_ALLOWED: "**",
           TAURI_ALLOWED: "unused",
@@ -160,6 +153,7 @@ test("workflow rejects every protected edit despite broad changed-path and gener
     write(baseline, '{\n  "a.ts": 1,\n  "b.ts": 2\n}\n');
     write("changed.ts", "original\n");
     head = commit();
+    base = head;
     write(baseline, '{\n  "b.ts": 2\n}\n');
     const pruned = run("changed.ts");
     expect(pruned.exitCode, pruned.stderr.toString()).toBe(0);
@@ -172,6 +166,18 @@ test("workflow rejects every protected edit despite broad changed-path and gener
       expect(refused.exitCode).toBe(1);
       expect(refused.stdout.toString()).toContain("Autofix cannot modify");
     }
+    // The pull request cannot loosen the verifier that judges it: the
+    // base revision's copy runs, whatever the head carries.
+    write(
+      "scripts/baseline-shrink.ts",
+      "export const shrinkTextViolations = () => [];\nexport const sameEntries = () => false;\n",
+    );
+    write(baseline, '{\n  "a.ts": 1,\n  "b.ts": 2\n}\n');
+    head = commit();
+    write(baseline, '{\n  "a.ts": 1,\n  "b.ts": 2,\n  "c.ts": 1\n}\n');
+    expect(run("changed.ts").exitCode).toBe(1);
+    base = head;
+
     // A baseline outside the shrink-only registry stays fully protected.
     write(baseline, '{\n  "a.ts": 1,\n  "b.ts": 2\n}\n');
     write(BASELINE_PATHS.bundle, "{}\n");

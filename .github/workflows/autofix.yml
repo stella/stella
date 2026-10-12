@@ -430,8 +430,8 @@ jobs:
 
           # No changed-path or generator grant can authorize decision records.
           # The only exception is a shrink-only baseline whose rewrite deletes
-          # entries, checked against the head commit by a verifier this pull
-          # request did not change.
+          # entries, checked against the head commit by the base revision's
+          # verifier, run from an empty directory without dependencies.
           bun scripts/autofix-protected-paths.ts > "$RUNNER_TEMP/autofix-protected-paths"
           protected=()
           while IFS= read -r pattern; do
@@ -453,15 +453,13 @@ jobs:
             pruned+=("$path")
           done < <(git diff --name-only -z "$HEAD_SHA" -- "${protected_specs[@]}")
           if (( ${#pruned[@]} > 0 )); then
-            prune_sources=(
-              scripts/autofix-baseline-prune.ts
-              scripts/baseline-shrink.ts
-              scripts/baseline-paths.ts
-              scripts/autofix-protected-paths.ts
-            )
-            if [[ ! -f scripts/autofix-baseline-prune.ts ]] \
-              || ! git diff --quiet "$BASE_SHA"..."$HEAD_SHA" -- "${prune_sources[@]}" \
-              || ! bun scripts/autofix-baseline-prune.ts verify --ref "$HEAD_SHA" "${pruned[@]}"; then
+            verifier=$(mktemp -d)
+            for source in autofix-baseline-prune.ts baseline-shrink.ts baseline-paths.ts; do
+              git show "$BASE_SHA:scripts/$source" > "$verifier/$source" || refuse_protected
+            done
+            repository=$(pwd)
+            if ! (cd "$verifier" && bun --no-install --no-env-file autofix-baseline-prune.ts \
+              verify --repo "$repository" --ref "$HEAD_SHA" "${pruned[@]}"); then
               refuse_protected
             fi
           fi

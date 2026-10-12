@@ -9,7 +9,11 @@
 // request's head commit rather than trusting this runner.
 //
 //   bun scripts/autofix-baseline-prune.ts prune
-//   bun scripts/autofix-baseline-prune.ts verify --ref <sha> <path>...
+//   bun autofix-baseline-prune.ts verify --repo <dir> --ref <sha> <path>...
+//
+// The workflow runs `verify` from the base revision's copy of this file and
+// its two imports, in an empty directory with `--no-install --no-env-file`,
+// so a pull request cannot change the rules that judge its own baselines.
 //
 // Only writers whose output is a static scan of committed source are listed:
 // nothing that measures builds, timing, registries or a database.
@@ -155,23 +159,32 @@ const prune = () => {
   }
 };
 
-const committedText = (ref: string, path: string): string | null => {
-  const shown = Bun.spawnSync(["git", "show", `${ref}:${path}`], {
+const committedText = (
+  repo: string,
+  ref: string,
+  path: string,
+): string | null => {
+  const shown = Bun.spawnSync(["git", "-C", repo, "show", `${ref}:${path}`], {
     stdout: "pipe",
     stderr: "pipe",
   });
   return shown.exitCode === 0 ? shown.stdout.toString() : null;
 };
 
-const verify = (ref: string, paths: readonly string[]) => {
+const verify = (repo: string, ref: string, paths: readonly string[]) => {
   if (!/^[0-9a-f]{40}$/u.test(ref)) {
     console.error("verify needs --ref <full commit sha>");
     return false;
   }
   let valid = true;
   for (const path of paths) {
-    const before = committedText(ref, path);
-    const after = readText(path);
+    if (path.startsWith("/") || path.split("/").includes("..")) {
+      console.error(`${path} is not a repository path`);
+      valid = false;
+      continue;
+    }
+    const before = committedText(repo, ref, path);
+    const after = readText(`${repo}/${path}`);
     let violations = [`${path} is not in ${ref}`];
     if (before !== null) {
       violations =
@@ -191,13 +204,18 @@ if (import.meta.main) {
   const [mode, ...args] = process.argv.slice(2);
   if (mode === "prune") {
     prune();
-  } else if (mode === "verify" && args[0] === "--ref" && args.length > 2) {
-    if (!verify(args[1] ?? "", args.slice(2))) {
+  } else if (
+    mode === "verify" &&
+    args[0] === "--repo" &&
+    args[2] === "--ref" &&
+    args.length > 4
+  ) {
+    if (!verify(args[1] ?? "", args[3] ?? "", args.slice(4))) {
       process.exitCode = 1;
     }
   } else {
     console.error(
-      "Usage: bun scripts/autofix-baseline-prune.ts prune | verify --ref <sha> <path>...",
+      "Usage: bun scripts/autofix-baseline-prune.ts prune | verify --repo <dir> --ref <sha> <path>...",
     );
     process.exitCode = 1;
   }
