@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { decisionChatKey } from "@/features/chat/legal-document-chat-key";
@@ -16,7 +16,7 @@ const decisionId = toSafeId<"caseLawDecision">(
 );
 const serverThread = toChatThreadId("0b1c2d3e-4f50-4a6b-8c7d-000000000001");
 
-beforeEach(() => {
+const resetStores = (minimized: boolean) => {
   useLegalDocumentChatThreads.setState({ threadIdByDocumentKey: {} });
   useInspectorTabsStore.setState({
     tabs: [],
@@ -24,9 +24,19 @@ beforeEach(() => {
     groupAssignments: {},
     collapsedGroupIds: [],
     activeId: null,
-    minimized: true,
+    minimized,
     reviveSuggestion: null,
   });
+};
+
+// Folded, so the tests see the pane left as the reader had it.
+beforeEach(() => {
+  resetStores(true);
+});
+
+// The stores are process-wide: hand the next file the defaults.
+afterEach(() => {
+  resetStores(false);
 });
 
 const chatTabs = () =>
