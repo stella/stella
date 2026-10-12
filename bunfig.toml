@@ -18,11 +18,6 @@ minimumReleaseAgeExcludes = [
   "bun-types", # quarantine-expires: 2026-10-15T05:25:00.000Z
   # quarantine exception granted 2026-10-07: @gdp-ts/core can be installed now
   # TanStack AI and its adapters share runtime contracts; keep the release family together.
-  "@tanstack/ai", # quarantine-expires: 2026-10-12T12:53:35.784Z
-  "@tanstack/ai-client", # quarantine-expires: 2026-10-12T12:56:04.627Z
-  "@tanstack/ai-gemini", # quarantine-expires: 2026-10-12T13:45:40.252Z
-  "@tanstack/ai-openrouter", # quarantine-expires: 2026-10-12T12:53:35.689Z
-  "@tanstack/ai-react", # quarantine-expires: 2026-10-12T12:54:04.366Z
   # Temporary third-party exceptions must carry the exact instant at which
   # the normal five-day quarantine admits the currently pinned release.
   # Turbo 2.11.2 adds production pruning and devEngines support. Keep every
