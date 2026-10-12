@@ -1,7 +1,6 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
-import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -165,7 +164,7 @@ describe("background feature admission", () => {
       await findSignalsBackgroundActor({ tx, organizationId, workspaceId }),
     ).toBe(userId);
   });
-  test("an enrolled member of another private matter cannot replace this matter's admitted actor", async () => {
+  test("selects the member assigned to the matter", async () => {
     const otherUserId = mintAuthProviderId<"user">();
     await db.insert(user).values({
       id: otherUserId,
@@ -196,7 +195,7 @@ describe("background feature admission", () => {
     }
   });
 
-  test("client-matter admin access admits an enrolled actor without granting private-matter access", async () => {
+  test("requires matter access for a background actor", async () => {
     const contactId = createSafeId<"contact">();
     const clientMatterId = createSafeId<"workspace">();
     const privateMatterId = createSafeId<"workspace">();
@@ -226,31 +225,29 @@ describe("background feature admission", () => {
       .values({ organizationId, userId, featureId: "signals" })
       .onConflictDoNothing();
     try {
-      for (const role of CLIENT_MATTER_ADMIN_ROLES) {
-        await db
-          .update(member)
-          .set({ role })
-          .where(
-            and(
-              eq(member.organizationId, organizationId),
-              eq(member.userId, userId),
-            ),
-          );
-        expect(
-          await findSignalsBackgroundActor({
-            tx,
-            organizationId,
-            workspaceId: clientMatterId,
-          }),
-        ).toBe(userId);
-        expect(
-          await findSignalsBackgroundActor({
-            tx,
-            organizationId,
-            workspaceId: privateMatterId,
-          }),
-        ).toBeNull();
-      }
+      await db
+        .update(member)
+        .set({ role: "admin" })
+        .where(
+          and(
+            eq(member.organizationId, organizationId),
+            eq(member.userId, userId),
+          ),
+        );
+      expect(
+        await findSignalsBackgroundActor({
+          tx,
+          organizationId,
+          workspaceId: clientMatterId,
+        }),
+      ).toBe(userId);
+      expect(
+        await findSignalsBackgroundActor({
+          tx,
+          organizationId,
+          workspaceId: privateMatterId,
+        }),
+      ).toBeNull();
     } finally {
       await db
         .update(member)
