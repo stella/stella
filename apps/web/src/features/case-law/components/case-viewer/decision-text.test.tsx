@@ -608,11 +608,16 @@ const sectionSummary = (markup: string, text: string): string => {
 
 /** The origin mark on the row of the section whose body contains `text`. */
 const sectionMark = (markup: string, text: string): string => {
-  const section = sectionOf(markup, text);
-  const start = section.indexOf('data-slot="headnote-origin"');
+  // The mark precedes the `<details>` inside the section's block.
+  const block =
+    markup
+      .split('data-slot="headnote-block"')
+      .slice(1)
+      .find((candidate) => candidate.includes(text)) ?? "";
+  const start = block.indexOf('data-slot="headnote-origin"');
   return start === -1
     ? ""
-    : section.slice(start, section.indexOf("</span></div>", start));
+    : block.slice(start, block.indexOf("</span><details", start));
 };
 
 // Two authors write the same two sections, and a reader must be able to tell

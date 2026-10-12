@@ -216,6 +216,11 @@ describe("the AI mark at each place the reader marks generated text", () => {
       ?.closest('[data-slot="headnote-block"]')
       ?.querySelector("details");
     expect(details?.textContent).toContain(MODEL_HOLDING);
+    // Announced before the text it describes, not after the whole section.
+    expect(
+      mark !== undefined &&
+        details?.previousElementSibling?.contains(mark) === true,
+    ).toBe(true);
 
     await act(async () => {
       if (mark !== undefined) {
