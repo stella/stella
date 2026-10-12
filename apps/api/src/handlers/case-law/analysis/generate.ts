@@ -165,7 +165,7 @@ export type GenerateAnalysisResponse =
        * What the reader is told about the analysis, carried beside it: the
        * same disclosure the reader's AI mark opens on the web.
        */
-      aiDisclosure: AiDisclosure<"caseLaw">;
+      aiDisclosure: AiDisclosure;
     }
   | { status: "generating" }
   | { status: "error"; code: AnalysisUnavailableCode; error: string }

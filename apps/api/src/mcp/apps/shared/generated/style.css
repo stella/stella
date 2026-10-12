@@ -1240,6 +1240,9 @@
   .max-w-70 {
     max-width: calc(var(--spacing) * 70);
   }
+  .max-w-72 {
+    max-width: calc(var(--spacing) * 72);
+  }
   .max-w-90 {
     max-width: calc(var(--spacing) * 90);
   }
@@ -2562,6 +2565,10 @@
     --tw-font-weight: var(--font-weight-semibold);
     font-weight: var(--font-weight-semibold);
   }
+  .tracking-\[inherit\] {
+    --tw-tracking: inherit;
+    letter-spacing: inherit;
+  }
   .tracking-normal {
     --tw-tracking: var(--tracking-normal);
     letter-spacing: var(--tracking-normal);
@@ -2701,6 +2708,9 @@
   }
   .text-warning-foreground {
     color: var(--warning-foreground);
+  }
+  .\[text-transform\:inherit\] {
+    text-transform: inherit;
   }
   .capitalize {
     text-transform: capitalize;
@@ -3216,6 +3226,9 @@
   }
   .\[background\:linear-gradient\(120deg\,transparent_40\%\,var\(--skeleton-highlight\)\,transparent_60\%\)_var\(--color-muted\)_0_0\/200\%_100\%_fixed\] {
     background: linear-gradient(120deg,transparent 40%,var(--skeleton-highlight),transparent 60%) var(--color-muted) 0 0/200% 100% fixed;
+  }
+  .\[font\:inherit\] {
+    font: inherit;
   }
   .\[transition\:background-color_5000000s_ease-in-out_0s\] {
     transition: background-color 5000000s ease-in-out 0s;
@@ -3851,6 +3864,9 @@
     .hover\:text-sidebar-accent-foreground:hover {
       color: var(--sidebar-accent-foreground);
     }
+    .hover\:underline:hover {
+      text-decoration-line: underline;
+    }
     .hover\:decoration-current:hover {
       text-decoration-color: currentcolor;
     }
@@ -4425,6 +4441,9 @@
   }
   .data-popup-open\:text-accent-foreground[data-popup-open] {
     color: var(--accent-foreground);
+  }
+  .data-popup-open\:underline[data-popup-open] {
+    text-decoration-line: underline;
   }
   .data-position\:data-expanded\:transform-\[translateX\(var\(--toast-swipe-movement-x\)\)_translateY\(var\(--toast-calc-offset-y\)\)\][data-position][data-expanded] {
     transform: translateX(var(--toast-swipe-movement-x)) translateY(var(--toast-calc-offset-y));
@@ -5416,6 +5435,10 @@
     .pointer-coarse\:after\:absolute::after {
       content: var(--tw-content);
       position: absolute;
+    }
+    .pointer-coarse\:after\:-inset-3::after {
+      content: var(--tw-content);
+      inset: calc(var(--spacing) * -3);
     }
     .pointer-coarse\:after\:inset-x-0::after {
       content: var(--tw-content);
