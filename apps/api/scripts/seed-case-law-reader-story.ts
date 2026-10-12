@@ -75,87 +75,107 @@ type ReaderStory = {
 
 /**
  * The decision the reader shots film, and what the seeded user has done on
- * it. The capture scrolls the reader to the first mark, so the marks sit in
- * one stretch of the body ("I. Podstata věci") that also carries the stored
- * analysis' margin note on p-7, and all of them share the frame.
+ * it: a Supreme Court judgment on a board member's statutory guarantee to
+ * the company's creditors (§ 159 odst. 3 o. z.). The capture scrolls the
+ * reader to the first mark, in the court's paragraph [31], so the frame
+ * holds the reasoning of [31]–[35] with the stored analysis' margin notes,
+ * two highlights and a comment. The later marks sit further down, where a
+ * reader who scrolls on finds them.
+ *
+ * The court numbers its paragraphs in the text ("[31]"), and the anchors
+ * here name blocks of the decision's parse; the comments quote the court's
+ * numbers, which stay right once a parser records them on the blocks.
  */
 export const CASE_LAW_READER_STORY: ReaderStory = {
   decision: {
-    adapterKey: "cz-us",
-    caseNumber: "IV.ÚS 1394/24",
+    adapterKey: "cz-ns",
+    caseNumber: "27 Cdo 59/2022",
     language: "cs",
   },
   /** Also the capture spec's lookup key for the thread. */
-  threadTitle: "Why the Court quashed the restitution rulings",
+  threadTitle: "Director's guarantee under § 159(3): when it arises",
   createdAt: new Date("2026-07-20T09:30:00.000Z"),
   marks: [
     {
-      key: "statutory-basis",
+      key: "open-question",
       kind: "highlight",
-      anchor: "p-7",
+      anchor: "p-65",
       quote:
-        "Restituční nárok stěžovatele vycházel z § 2 odst. 2 zákona č. 243/1992 Sb.",
+        "Otázka, zda se musí jednat o závazek splatný, však dosud v rozhodovací praxi dovolacího soudu nebyla řešena.",
       color: "yellow",
       style: "highlight",
     },
     {
-      // On the framed paragraph itself, so a whole comment card sits in the
-      // shot beside the AI note rather than below the frame's edge.
-      key: "confiscation-comment",
+      key: "three-readings-comment",
       kind: "comment",
-      anchor: "p-7",
+      anchor: "p-66",
       quote:
-        "V roce 1942 mu byl veškerý majetek zkonfiskován ve prospěch Německé říše a po válce nebyl vrácen.",
-      body: "Confiscated for the Reich in 1942 and never returned: the claim rests on § 2(2) of Act 243/1992, so the 1948 cut-off in the Land Act does not bite (Part VI.B(b)).",
+        "Sousloví „ačkoli byl povinen škodu nahradit“ lze přitom vyložit trojím způsobem.",
+      body: "Key point for creditor claims: the Court settles on performability (¶ 40), so we can sue the director as guarantor without the company or its administrator first demanding compensation.",
     },
     {
-      key: "extreme-conflict",
+      key: "performability",
       kind: "highlight",
-      anchor: "p-8",
-      quote: "je v extrémním rozporu s obsahem soudního spisu",
-      color: "yellow",
+      anchor: "p-68",
+      quote:
+        "Splnitelnost dluhu je dána okamžikem, od kterého je dlužník oprávněn závazek splnit.",
+      color: "green",
       style: "highlight",
     },
     {
-      key: "non-filing",
+      key: "guarantee-arises",
       kind: "highlight",
-      anchor: "p-9",
-      quote: "nepodal žádost o navrácení majetku",
+      anchor: "p-74",
+      quote:
+        "ke vzniku jeho ručení tak postačí, je-li oprávněn svou povinnost k náhradě škody plnit",
       color: "sky",
       style: "underline",
     },
     {
-      key: "non-filing-comment",
+      key: "adverse-costs-comment",
       kind: "comment",
-      anchor: "p-9",
+      anchor: "p-87",
       quote:
-        "Takový výklad ve svém důsledku popřel samotný smysl rozhodné právní úpravy",
-      body: "Not filing under Act 128/1946 is no bar to the § 2(2) claim (Part VI.B(c)). Check whether the Land Office relies on the missing application in our file.",
+        "musí vycházet z toho, že v případě jejího neúspěchu v řízení může společnosti vzniknout povinnost nahradit protistraně její náklady",
+      body: "For board advice: before authorising a claim, record the adverse-costs risk. The careful-manager test is objective (¶ 44), and how the case later ended is irrelevant (¶ 47).",
     },
   ],
   question:
-    "Why did the Court quash the decisions? Focus on the Fragebogen and the missing 1946 application.",
+    "Does a creditor need the company to demand compensation from its director before suing him as guarantor under § 159(3)? And how is foreseeability of the loss judged?",
   answer: [
-    "The Court quashed all three decisions on two independent grounds.\n\n",
-    "**1. The Fragebogen finding was arbitrary.** The lower courts read the questionnaire as an attempt to obtain Reich citizenship, although ",
-    { cite: "p-8", text: "its contents were never established" },
-    ". The Court found that assessment ",
-    { cite: "p-8", text: "in extreme conflict with the case file" },
-    ": it ignored the sustained Nazi pressure on the family and disregarded the ",
-    { cite: "p-132", text: "certificates of state reliability" },
-    " altogether.\n\n",
-    "**2. Not applying under Act No. 128/1946 is no bar.** Under § 2(2) of Act No. 243/1992 what matters is that ",
+    "No demand is needed. The Court held that the guarantee arises once the director's debt to compensate the company can be performed; it does not have to be due.\n\n",
+    "**1. Performability, not maturity.** The Court found that the words “although obliged to compensate” ",
+    { cite: "p-66", text: "admit three readings" },
+    " and distinguished ",
+    { cite: "p-68", text: "performability, the moment the debtor may pay" },
+    ", from ",
+    { cite: "p-69", text: "maturity, which follows the creditor's demand" },
+    ". Because the guarantee protects creditors, tying it to the company's demand would defeat its purpose: the company ",
     {
-      cite: "p-103",
-      text: "the substantive conditions of the post-war claim were met",
+      cite: "p-72",
+      text: "may be unable or unwilling to act against its own director",
     },
-    ", not that a procedural application was lodged — and the state had in fact ",
-    { cite: "p-102", text: "prevented the grandfather from applying" },
+    ". It is therefore enough that ",
+    { cite: "p-74", text: "the director is entitled to pay" },
     ".\n\n",
-    "**Takeaway:** a § 2(2) claim must not be assessed ",
-    { cite: "p-92", text: "over-formalistically" },
-    "; the formalism here amounted to arbitrariness ",
-    { cite: "p-139", text: "contrary to Article 36(1) of the Charter" },
+    "**2. Foreseeability is objective.** The question is whether ",
+    {
+      cite: "p-85",
+      text: "an imaginary reasonably careful manager could recognise the risk",
+    },
+    ", not what this director knew. A director who sues on the company's behalf ",
+    {
+      cite: "p-87",
+      text: "must assume the company may have to pay the other side's costs",
+    },
+    ", and judging him by how the case later ended is ",
+    { cite: "p-88", text: "forbidden hindsight" },
+    ".\n\n",
+    "**Outcome:** both judgments were quashed and the case went to the Municipal Court in Prague, because ",
+    {
+      cite: "p-94",
+      text: "guarantee claims belong to the regional courts at first instance",
+    },
     ".",
   ],
 };

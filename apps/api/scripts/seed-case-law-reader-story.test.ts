@@ -23,6 +23,9 @@ import {
 
 const { adapterKey, caseNumber, language } = CASE_LAW_READER_STORY.decision;
 
+/** How many blocks from the first mark the capture's frame shows. */
+const FRAMED_BLOCKS = 4;
+
 type FixtureDecision = {
   case_number: string;
   language: string;
@@ -122,7 +125,7 @@ describe("the seeded case-law reader story", () => {
     }
   });
 
-  test("the marks share the frame with an AI margin note", async () => {
+  test("the framed stretch carries an AI note, highlights and a comment", async () => {
     const { analysis, blocks } = await storyDecision();
     const rows = buildReaderStoryAnnotationRows({ ...scope, blocks });
     const tree = analysis !== null && "tree" in analysis ? analysis.tree : [];
@@ -135,18 +138,20 @@ describe("the seeded case-law reader story", () => {
     // The capture scrolls to the first mark; a margin note must sit there.
     expect(first && noteAnchors.has(first.blockAnchorId)).toBe(true);
 
-    // And every mark sits in that one stretch of text, before the next
-    // heading, so all of them are on screen at once.
+    // Every mark follows the first, so the scroll lands above all of them,
+    // and the paragraphs on screen with it hold at least two highlights and
+    // a comment: what the shot promises.
     const anchors = blocks.map((block) => block.anchorId);
     const firstIndex = anchors.indexOf(first?.blockAnchorId ?? "");
-    const nextHeading = blocks.findIndex(
-      (block, index) => index > firstIndex && block.type === "heading",
-    );
-    for (const row of rows) {
+    const framed = rows.filter((row) => {
       const index = anchors.indexOf(row.blockAnchorId);
       expect(index).toBeGreaterThanOrEqual(firstIndex);
-      expect(index).toBeLessThan(nextHeading);
-    }
+      return index - firstIndex < FRAMED_BLOCKS;
+    });
+    expect(
+      framed.filter((row) => row.kind === "highlight").length,
+    ).toBeGreaterThanOrEqual(2);
+    expect(framed.some((row) => row.kind === "comment")).toBe(true);
   });
 
   test("ids are fixed per user, so a rerun replaces rather than duplicates", async () => {

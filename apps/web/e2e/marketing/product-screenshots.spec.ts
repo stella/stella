@@ -37,10 +37,10 @@ const MARKETING_ORGANIZATION_ID = "test-org-stella-dev";
 // there. Filming another decision is a change to that constant plus a
 // capture's `decisionText`.
 const READER_STORY_THREAD_TITLE =
-  "Why the Court quashed the restitution rulings";
+  "Director's guarantee under § 159(3): when it arises";
 // Words from the seeded answer, proving it rendered rather than the empty
 // chat's prompt cards.
-const READER_STORY_ANSWER_TEXT = /two independent grounds/u;
+const READER_STORY_ANSWER_TEXT = /No demand is needed/u;
 // Where the framed paragraph lands below the reader's top edge: room for its
 // section heading, and for the comment cards beside it to fit the clip.
 const READER_SCROLL_OFFSET_PX = 48;
@@ -102,7 +102,7 @@ const captures = [
     name: "story-public-data-1",
     prepare: "open-decision",
     country: "CZE",
-    decisionText: "IV.ÚS 1394/24",
+    decisionText: "27 Cdo 59/2022",
     readerStory: true,
     readyText: "Case Law",
     clip: { x: 0, y: 0, width: 1440, height: 760 },
@@ -152,7 +152,7 @@ const captures = [
     name: "public-data",
     prepare: "open-decision",
     country: "CZE",
-    decisionText: "IV.ÚS 1394/24",
+    decisionText: "27 Cdo 59/2022",
     readerStory: true,
     readyText: "Case Law",
   },
@@ -372,33 +372,45 @@ test("capture landing product screenshots", async ({
         const readerMark = page
           .locator('[data-slot="reader-document-column"] [data-annotation-id]')
           .first();
-        // The kind marker wraps each note with `display: contents`, so the
-        // note's own box is its child.
-        const aiMarginNote = page
-          .locator('[data-margin-note="card"] > *')
-          .first();
         await scrollReaderTo(
-          "readerStory" in capture ? readerMark : aiMarginNote,
+          "readerStory" in capture
+            ? readerMark
+            : page.locator(AI_MARGIN_NOTE_SELECTOR).first(),
         );
-        // Notes are placed beside their passages once the reader measured
-        // them, so these also wait out that layout. Whole notes, inside the
-        // shot's own clip: a card cut at the frame's edge reads as a glitch.
         const captureClip = "clip" in capture ? capture.clip : DEFAULT_CLIP;
-        await expectWithinClip(aiMarginNote, captureClip, "The AI margin note");
+        // Notes are placed beside their passages once the reader measured
+        // them, so this also waits out that layout.
+        await expectSomeWithinClip(
+          page,
+          AI_MARGIN_NOTE_SELECTOR,
+          captureClip,
+          "an AI margin note",
+        );
+        // Notes stack by measured height, so where the last one in view
+        // ends depends on the fonts the runner renders with: lower the text
+        // until no note crosses the frame's bottom edge, then hold the line.
+        await settleReaderFrame(page, captureClip);
+        // Whole notes, inside the shot's own clip: a card cut at the frame's
+        // edge reads as a glitch.
+        await expectSomeWithinClip(
+          page,
+          AI_MARGIN_NOTE_SELECTOR,
+          captureClip,
+          "an AI margin note",
+        );
         if ("readerStory" in capture) {
           await expectWithinClip(
             readerMark,
             captureClip,
             "The first mark in the text",
           );
-          await expectWithinClip(
-            page.locator('[data-margin-note="comment"] > *').first(),
+          await expectSomeWithinClip(
+            page,
+            '[data-margin-note="comment"] > *',
             captureClip,
-            "The first comment card",
+            "a comment card",
           );
         }
-        // More notes than those three sit in the margin, and they stack by
-        // measured height: none of them may be cut by the frame's edges.
         await expectNoMarginNoteCut(page, captureClip);
         // Keep the breadcrumb in frame: only the nested reader scrolls.
         await page.evaluate(() => window.scrollTo({ left: 0, top: 0 }));
@@ -481,6 +493,44 @@ const clearPersistedInspectorState = async (page: Page) => {
   }, INSPECTOR_STORAGE_PREFIXES);
 };
 
+// The AI's notes: a section card or a further note under it. The kind marker
+// wraps each note with `display: contents`, so the note's own box is its
+// child.
+const AI_MARGIN_NOTE_SELECTOR =
+  '[data-margin-note="card"] > *, [data-margin-note="annotation"] > *';
+
+// Waits until at least one element matching `selector` lies wholly inside
+// the recorded clip.
+const expectSomeWithinClip = async (
+  page: Page,
+  selector: string,
+  clip: CaptureClip,
+  label: string,
+) => {
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          ({ band, query }) =>
+            [...document.querySelectorAll(query)].some((element) => {
+              const box = element.getBoundingClientRect();
+              return (
+                box.height > 0 &&
+                box.top >= band.y &&
+                box.left >= band.x &&
+                box.bottom <= band.y + band.height &&
+                box.right <= band.x + band.width
+              );
+            }),
+          { band: clip, query: selector },
+        ),
+      {
+        message: `Expected ${label} wholly inside the ${String(clip.width)}x${String(clip.height)} capture clip`,
+      },
+    )
+    .toBe(true);
+};
+
 // Waits until the element's whole box lies inside the recorded clip, so a
 // note half past the frame's edge fails here, naming itself, rather than
 // shipping in the shot.
@@ -511,6 +561,41 @@ const expectWithinClip = async (
 // Every margin note is either wholly in the shot or wholly out of it: the
 // visible band is where the reader's scroller and the clip overlap, and a
 // note crossing either edge of it would ship half drawn.
+// Scrolls the reader up (content down) until no margin note crosses the
+// bottom of the visible band, a few steps at most: each step pushes the
+// crossing note wholly below the frame, which may bring the next one to the
+// edge. The text above the first mark has room to spare, so the marks stay
+// in view; `expectNoMarginNoteCut` then checks both edges.
+const settleReaderFrame = async (page: Page, clip: CaptureClip) => {
+  await page.evaluate(
+    ({ bottomEdge, steps }) => {
+      const scroller = document
+        .querySelector('[data-slot="reader-document-column"]')
+        ?.closest(".reader-scroll");
+      if (!(scroller instanceof HTMLElement)) {
+        throw new Error("The reader's scroller is missing");
+      }
+      for (let step = 0; step < steps; step += 1) {
+        const bottom = Math.min(
+          scroller.getBoundingClientRect().bottom,
+          bottomEdge,
+        );
+        const crossing = [
+          ...document.querySelectorAll("[data-margin-note] > *"),
+        ].find((note) => {
+          const box = note.getBoundingClientRect();
+          return box.top < bottom && box.bottom > bottom;
+        });
+        if (crossing === undefined) {
+          return;
+        }
+        scroller.scrollTop -= bottom - crossing.getBoundingClientRect().top + 8;
+      }
+    },
+    { bottomEdge: clip.y + clip.height, steps: 4 },
+  );
+};
+
 const expectNoMarginNoteCut = async (page: Page, clip: CaptureClip) => {
   await expect
     .poll(
