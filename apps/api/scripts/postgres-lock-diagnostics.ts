@@ -209,7 +209,9 @@ export const spawnPostgresTestProcess = (
   const observed = observePostgresTestProcess({
     child,
     capture: async () => {
-      const connection = (await observer).unwrap();
+      const connection = (await observer).unwrap(
+        "PostgreSQL lock observer must be connected before sampling",
+      );
       const rows = await connection.query(POSTGRES_LOCK_SNAPSHOT_SQL);
       return rows.map((row) => {
         if (
