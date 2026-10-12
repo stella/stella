@@ -1,0 +1,311 @@
+name: Resolve generated-only conflicts
+
+defaults:
+  run:
+    shell: bash
+
+# When main moves, a same-repository pull request can start to conflict only
+# in generated outputs. Such a conflict carries no human decision, so this
+# workflow merges main into the branch, lets the owning generators rewrite the
+# conflicted outputs, and pushes one signed merge commit. Any conflicted path
+# that is not an autofix-eligible generator output (source, lockfiles,
+# baselines, files with hand-written regions, delete/modify) leaves the pull
+# request to people. scripts/generated-conflicts.ts holds the rules.
+#
+# Trust: `select` and `publish` run only main's code. `resolve` runs the merged
+# branch's generators and holds no credential beyond a read-only token; its
+# result reaches `publish` as data, which rebuilds the merge itself, accepts
+# only the owning generators' outputs, and requires the identical tree before
+# minting the push token. The ref update is a fast-forward from the head the
+# resolution was built on, so a newer push to the branch is never overwritten.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  select:
+    if: github.repository == 'stella/stella'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      main: ${{ steps.select.outputs.main }}
+      pulls: ${{ steps.select.outputs.pulls }}
+    steps:
+      # API calls only; nothing from a pull request runs here.
+      - name: Select conflicting pull requests
+        id: select
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const { data: branch } = await github.rest.repos.getBranch({ owner, repo, branch: 'main' });
+            const query = `query($owner: String!, $repo: String!, $cursor: String) {
+              repository(owner: $owner, name: $repo) {
+                pullRequests(states: OPEN, baseRefName: "main", first: 50, after: $cursor) {
+                  pageInfo { hasNextPage endCursor }
+                  nodes { number mergeable isCrossRepository headRefName headRefOid author { login } }
+                }
+              }
+            }`;
+            const list = async () => {
+              const nodes = [];
+              let cursor = null;
+              do {
+                const page = await github.graphql(query, { owner, repo, cursor });
+                const pulls = page.repository.pullRequests;
+                nodes.push(...pulls.nodes);
+                cursor = pulls.pageInfo.hasNextPage ? pulls.pageInfo.endCursor : null;
+              } while (cursor);
+              return nodes;
+            };
+            // Mergeability is computed lazily after main moves; the first
+            // listing starts it, and a short wait lets it settle.
+            let nodes = await list();
+            for (let attempt = 0; attempt < 3 && nodes.some(pull => pull.mergeable === 'UNKNOWN'); attempt += 1) {
+              await new Promise(resolve => setTimeout(resolve, 20_000));
+              nodes = await list();
+            }
+            const pulls = nodes
+              .filter(pull => pull.mergeable === 'CONFLICTING'
+                && !pull.isCrossRepository
+                && pull.author?.login !== 'dependabot[bot]'
+                && /^[A-Za-z0-9._/-]+$/u.test(pull.headRefName)
+                && !pull.headRefName.includes('..') && !pull.headRefName.startsWith('-')
+                && pull.headRefName !== 'main'
+                && /^[0-9a-f]{40}$/u.test(pull.headRefOid))
+              .slice(0, 8)
+              .map(pull => ({ number: pull.number, branch: pull.headRefName, head: pull.headRefOid }));
+            core.setOutput('main', branch.commit.sha);
+            core.setOutput('pulls', JSON.stringify(pulls));
+
+  resolve:
+    needs: select
+    if: needs.select.outputs.pulls != '' && needs.select.outputs.pulls != '[]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        pull: ${{ fromJSON(needs.select.outputs.pulls) }}
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      RUSTUP_TOOLCHAIN: 1.99.0
+    steps:
+      - name: Checkout trusted conflict rules
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .trusted
+          persist-credentials: false
+          sparse-checkout: |
+            /scripts/
+            /packages/scripts/src/generated-files.ts
+            /package.json
+          sparse-checkout-cone-mode: false
+
+      - name: Checkout pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ matrix.pull.head }}
+          path: pr
+          submodules: true
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: false
+          bun-version-file: .trusted/package.json
+
+      - name: Merge main and classify conflicts
+        id: merge
+        env:
+          MAIN_SHA: ${{ needs.select.outputs.main }}
+        working-directory: .trusted
+        run: |
+          set -euo pipefail
+          bun --no-install --no-env-file scripts/generated-conflicts.ts merge \
+            --repo "$GITHUB_WORKSPACE/pr" --main "$MAIN_SHA" > "$RUNNER_TEMP/classification.json"
+          cat "$RUNNER_TEMP/classification.json"
+          eligible=$(jq -r '.eligible' "$RUNNER_TEMP/classification.json")
+          echo "eligible=$eligible" >> "$GITHUB_OUTPUT"
+          if [[ "$eligible" == true ]]; then
+            echo "ids=$(jq -r '.ids | join(",")' "$RUNNER_TEMP/classification.json")" >> "$GITHUB_OUTPUT"
+          else
+            jq -r '.reasons[]' "$RUNNER_TEMP/classification.json" | sed 's/^/::notice::Left to people: /'
+          fi
+
+      - name: Take main's side of conflicted outputs
+        id: take-main
+        if: steps.merge.outputs.eligible == 'true'
+        working-directory: .trusted
+        run: |
+          baseline=$(bun --no-install --no-env-file scripts/generated-conflicts.ts take-main \
+            --repo "$GITHUB_WORKSPACE/pr" --plan "$RUNNER_TEMP/classification.json")
+          echo "baseline=$baseline" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        if: steps.merge.outputs.eligible == 'true'
+        working-directory: pr
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          # .npmrc references NPM_TOKEN; this job gets none.
+          NPM_TOKEN: ""
+
+      - name: Regenerate conflicted outputs
+        if: steps.merge.outputs.eligible == 'true'
+        working-directory: pr
+        env:
+          STELLA_LOCAL_AUTOFIX: "true"
+          GENERATOR_IDS: ${{ steps.merge.outputs.ids }}
+        run: |
+          set -euo pipefail
+          for app in apps/api apps/web; do
+            [[ -f "$app/.env" ]] || cp "$app/.env.example" "$app/.env"
+          done
+          # Main's side is only a starting point: each owning generator
+          # checks it against the merged inputs and rewrites it when stale.
+          bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
+
+      - name: Collect the resolution
+        if: steps.merge.outputs.eligible == 'true'
+        working-directory: .trusted
+        env:
+          HEAD_SHA: ${{ matrix.pull.head }}
+          MAIN_SHA: ${{ needs.select.outputs.main }}
+          BASELINE: ${{ steps.take-main.outputs.baseline }}
+        run: |
+          bun --no-install --no-env-file scripts/generated-conflicts.ts collect \
+            --repo "$GITHUB_WORKSPACE/pr" --head "$HEAD_SHA" --main "$MAIN_SHA" \
+            --plan "$RUNNER_TEMP/classification.json" --baseline "$BASELINE" \
+            --out "$RUNNER_TEMP/resolution"
+
+      - name: Upload the resolution
+        if: steps.merge.outputs.eligible == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: generated-conflicts-${{ matrix.pull.number }}
+          path: ${{ runner.temp }}/resolution
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: [select, resolve]
+    if: always() && needs.resolve.result != 'skipped' && needs.select.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    # The push key lives in this environment (main and v* tags only).
+    environment: release-app
+    strategy:
+      fail-fast: false
+      matrix:
+        pull: ${{ fromJSON(needs.select.outputs.pulls) }}
+    steps:
+      - name: Checkout trusted conflict rules
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .trusted
+          persist-credentials: false
+          sparse-checkout: |
+            /scripts/
+            /packages/scripts/src/generated-files.ts
+            /package.json
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling
+        run: |
+          cp "$GITHUB_WORKSPACE/.trusted/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
+      - name: Download the resolution
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: generated-conflicts-${{ matrix.pull.number }}
+          path: ${{ runner.temp }}/resolution
+
+      # No resolution means the conflict was left to people (or resolving
+      # failed); nothing below runs.
+      - name: Checkout pull request head
+        if: steps.download.outcome == 'success'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ matrix.pull.head }}
+          path: pr
+
+      - name: Setup Bun
+        if: steps.download.outcome == 'success'
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: false
+          bun-version-file: .trusted/package.json
+
+      # Main's rules run from main's checkout (its bunfig and env files, not
+      # the branch's); the branch checkout is only read and merged by git.
+      - name: Rebuild and verify the merge
+        if: steps.download.outcome == 'success'
+        working-directory: .trusted
+        env:
+          HEAD_SHA: ${{ matrix.pull.head }}
+          MAIN_SHA: ${{ needs.select.outputs.main }}
+        run: |
+          bun --no-install --no-env-file scripts/generated-conflicts.ts prepare \
+            --repo "$GITHUB_WORKSPACE/pr" --head "$HEAD_SHA" --main "$MAIN_SHA" \
+            --collected "$RUNNER_TEMP/resolution" --out "$RUNNER_TEMP/requests"
+
+      - name: Mint App token
+        if: steps.download.outcome == 'success'
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+
+      # Created through the API without an author, so GitHub signs the merge
+      # commit as the App. `force=false` makes the ref update a fast-forward
+      # from the resolved head: if the branch moved, it fails.
+      - name: Push the merge commit
+        if: steps.download.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          BRANCH: ${{ matrix.pull.branch }}
+          REQUESTS: ${{ runner.temp }}/requests
+        run: |
+          set -euo pipefail
+          api() { bash "$GH_RETRY_SCRIPT" api "$@"; }
+          for request in "$REQUESTS"/blobs/*.json; do
+            [[ -e "$request" ]] || continue
+            api --method POST "repos/$GITHUB_REPOSITORY/git/blobs" --input "$request" --jq '.sha' > /dev/null
+          done
+          tree=$(api --method POST "repos/$GITHUB_REPOSITORY/git/trees" --input "$REQUESTS/tree.json" --jq '.sha')
+          if [[ "$tree" != "$(cat "$REQUESTS/expected-tree")" ]]; then
+            echo "::error::GitHub built tree $tree, not the verified tree"
+            exit 1
+          fi
+          commit=$(api --method POST "repos/$GITHUB_REPOSITORY/git/commits" --input "$REQUESTS/commit.json" --jq '.sha')
+          api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/$BRANCH" \
+            -f sha="$commit" -F force=false --silent
+          echo "Merged main into $BRANCH as $commit"
