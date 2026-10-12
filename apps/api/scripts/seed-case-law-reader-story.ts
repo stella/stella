@@ -106,7 +106,7 @@ export const CASE_LAW_READER_STORY: ReaderStory = {
       anchor: "p-7",
       quote:
         "V roce 1942 mu byl veškerý majetek zkonfiskován ve prospěch Německé říše a po válce nebyl vrácen.",
-      body: "Confiscated for the Reich in 1942 and never returned: the claim rests on § 2(2) of Act 243/1992, so the 1948 cut-off in the Land Act does not bite (¶ 96).",
+      body: "Confiscated for the Reich in 1942 and never returned: the claim rests on § 2(2) of Act 243/1992, so the 1948 cut-off in the Land Act does not bite (Part VI.B(b)).",
     },
     {
       key: "extreme-conflict",
@@ -122,7 +122,7 @@ export const CASE_LAW_READER_STORY: ReaderStory = {
       anchor: "p-8",
       quote:
         "Přestože obsah dotazníku nebyl znám, obecné soudy vyložily jeho vyplnění paušálně jako snahu o získání říšského občanství",
-      body: "Our strongest point: a questionnaire nobody has read cannot carry a finding of state unreliability. Pair with ¶¶ 119–129 on the Nazi pressure on the family.",
+      body: "Our strongest point: a questionnaire nobody has read cannot carry a finding of state unreliability. Pair it with Part VI.C on the Nazi pressure on the family.",
     },
     {
       key: "non-filing",
@@ -138,7 +138,7 @@ export const CASE_LAW_READER_STORY: ReaderStory = {
       anchor: "p-9",
       quote:
         "Takový výklad ve svém důsledku popřel samotný smysl rozhodné právní úpravy",
-      body: "Not filing under Act 128/1946 is no bar to the § 2(2) claim (¶ 103). Check whether the Land Office relies on the missing application in our file.",
+      body: "Not filing under Act 128/1946 is no bar to the § 2(2) claim (Part VI.B(c)). Check whether the Land Office relies on the missing application in our file.",
     },
   ],
   question:
