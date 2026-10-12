@@ -208,7 +208,12 @@ describe("workspace app boundaries", () => {
 
     writeFileSync(
       path.join(rootDir, "apps/api/tsconfig.tests.json"),
-      JSON.stringify({ extends: ["./tsconfig.json", "./.cache/other.json"] }),
+      JSON.stringify({
+        extends: [
+          "./tsconfig.json",
+          "./.cache/typecheck-declarations/other.json",
+        ],
+      }),
     );
 
     expect(validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([

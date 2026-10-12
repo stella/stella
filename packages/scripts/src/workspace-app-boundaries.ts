@@ -236,8 +236,9 @@ const readDependencyNames = (packageJson: unknown): string[] => {
 };
 
 const UNREADABLE_CONFIG_FILE_DIAGNOSTIC_CODE = 5083;
-const GENERATED_API_TYPECHECK_CONFIG_DIRECTORY =
-  "/.cache/typecheck-declarations/";
+// Exactly the three configs the API declaration generator writes.
+const GENERATED_API_TYPECHECK_CONFIG =
+  /\/apps\/api\/\.cache\/typecheck-declarations\/(?:roots|src|tests)\.json'/u;
 
 const readTsconfig = (
   tsconfigPath: string,
@@ -269,7 +270,7 @@ const readTsconfig = (
       ({ code, message }) =>
         !(
           code === UNREADABLE_CONFIG_FILE_DIAGNOSTIC_CODE &&
-          message.includes(GENERATED_API_TYPECHECK_CONFIG_DIRECTORY)
+          GENERATED_API_TYPECHECK_CONFIG.test(message)
         ),
     )
     .map(({ message }) => message)
