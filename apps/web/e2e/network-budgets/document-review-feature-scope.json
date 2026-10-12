@@ -1,6 +1,6 @@
 {
   "route": "/workspaces/$workspaceId/$viewId/document",
-  "reason": "Resolve live feature visibility in each bounded document-review transaction",
+  "reason": "Resolve live feature visibility in each bounded document-review transaction; load professional-use acceptance before protected route data.",
   "budget": {
     "depth": 9,
     "requests": [
@@ -17,6 +17,7 @@
       "GET /v1/files/:id/document-properties/:id",
       "GET /v1/files/:id/url/:id",
       "GET /v1/mcp/connectors",
+      "GET /v1/me/professional-use",
       "GET /v1/notifications",
       "GET /v1/notifications/events",
       "GET /v1/organization-settings",
@@ -75,7 +76,8 @@
       "GET /v1/workspaces/navigation": 1,
       "POST /v1/workspaces/:id/active": 1,
       "POST /v1/workspaces/:id/document-reviews/parties": 1,
-      "POST /v1/workspaces/:id/justifications/query": 1
+      "POST /v1/workspaces/:id/justifications/query": 1,
+      "GET /v1/me/professional-use": 1
     },
     "dbQueries": {
       "GET /api/auth/get-session": 4,
@@ -88,8 +90,8 @@
       "GET /v1/docx-suggestions/:id/entity/:id": 6,
       "GET /v1/entities/:id/entity/:id": 8,
       "GET /v1/entities/:id/entity/:id/versions": 10,
-      "GET /v1/files/:id/document-properties/:id": 6,
-      "GET /v1/files/:id/url/:id": 6,
+      "GET /v1/files/:id/document-properties/:id": 8,
+      "GET /v1/files/:id/url/:id": 8,
       "GET /v1/mcp/connectors": 8,
       "GET /v1/notifications": 6,
       "GET /v1/notifications/events": 4,
@@ -111,8 +113,9 @@
       "GET /v1/workspaces/:id/workflow": 4,
       "GET /v1/workspaces/navigation": 7,
       "POST /v1/workspaces/:id/active": 6,
-      "POST /v1/workspaces/:id/document-reviews/parties": 14,
-      "POST /v1/workspaces/:id/justifications/query": 6
+      "POST /v1/workspaces/:id/document-reviews/parties": 17,
+      "POST /v1/workspaces/:id/justifications/query": 6,
+      "GET /v1/me/professional-use": 1
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -147,7 +150,8 @@
       "GET /v1/workspaces/navigation": 20480,
       "POST /v1/workspaces/:id/active": 1024,
       "POST /v1/workspaces/:id/document-reviews/parties": 1024,
-      "POST /v1/workspaces/:id/justifications/query": 1024
+      "POST /v1/workspaces/:id/justifications/query": 1024,
+      "GET /v1/me/professional-use": 1024
     }
   }
 }

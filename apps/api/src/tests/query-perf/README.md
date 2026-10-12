@@ -20,10 +20,21 @@ Each registry query runs once to warm the cache, then five times sequentially.
 The primary metric is the maximum root shared hit-plus-read block count;
 child counters already contribute to the root and are not added again.
 Execution time is the median of the five samples. A run fails above 1.25 times
-the buffer baseline, or above twice the time baseline and 10 ms. Measurements
+the buffer baseline. Execution time is only a hang guard: the greater of 25
+times the time baseline and 1,000 ms. Measurements
 at or above 95% of the buffer budget are flagged in the report.
 The growth profile also rejects sequential scans on `search_documents`;
 both profiles reject per-row policy subplans.
+Row counts must match exactly. Every measurement logs all samples before
+asserting the bounds, and violations report measured values and budgets.
+
+Each profile shares a 150-second deadline across database creation, seed and
+entries. Fixture sessions use a 3-second lock timeout and a 30-second statement
+timeout, including seed, VACUUM and policy DDL. Teardown has its own 35-second
+deadline and closes clients without waiting for outstanding queries. Phase
+logs identify pending work; failures dump bounded activity and lock diagnostics
+through a separate connection before teardown. Two profiles and cleanup finish
+within the suite's seven-minute timeout.
 
 The baseline records each profile and entry separately and binds the seed and planner
 settings. To record a reviewed new baseline locally, run
@@ -43,4 +54,5 @@ Baseline increases require the PR-scoped declarations described in
 
 The restrictive policy fixture adds a correlated relation probe. The test
 requires it to exceed the committed buffer budget independently of the
-plan-walker shape check, then removes the fixture in `finally`.
+plan-walker shape check, then removes the policy before the next entry. Failed
+entries leave the policy in the disposable database for fixture teardown.

@@ -1348,6 +1348,8 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // Workflow lint resolves the checksum-verified actionlint executable.
+  "ACTIONLINT_BIN",
   "QUERY_PERF_BASELINE_MODE",
   "QUERY_PERF_BASE_REF",
   "QUERY_PERF_CHANGED_PATHS",

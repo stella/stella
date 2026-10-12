@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import { CHAT_MESSAGE_EDIT_TYPE } from "@stll/api-contract/chat-message-revisions";
 import { sha256Hex } from "@stll/sha256/bun";
 
@@ -1066,6 +1067,7 @@ if (!databaseUrl || !runPostgres) {
               { type: "text", content: "Hello" },
               {
                 type: "tool-call",
+                metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
                 id: "settled-call",
                 name: "mcp__external__search",
                 arguments: '{"query":"answer"}',
@@ -1147,6 +1149,7 @@ if (!databaseUrl || !runPostgres) {
         outcome: "denied approval",
         toolCall: {
           type: "tool-call",
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
           id: "denied-call",
           name: "mcp__external__search",
           arguments: '{"query":"answer"}',
@@ -1162,6 +1165,7 @@ if (!databaseUrl || !runPostgres) {
         outcome: "failed tool call",
         toolCall: {
           type: "tool-call",
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
           id: "failed-call",
           name: "mcp__external__search",
           arguments: '{"query":"answer"}',
