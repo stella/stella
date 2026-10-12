@@ -29,8 +29,19 @@ head the capture ran on, so a push that landed on the branch in the meantime
 makes it fail. The push re-runs the PR's checks against the new head.
 
 The capture body is the composite action `.github/actions/marketing-capture`
-resolved from the branch, and the capture workflow must exist on the branch,
-so a branch created before either existed must be rebased onto `main` first.
+resolved from the branch, and GitHub runs the capture workflow from the
+branch's own copy. A branch created before `marketing-screenshots-capture.yml`
+existed on `main` has no such copy, so the update dispatch fails for it with a
+"workflow not found" error: rebase the branch onto `main` first, then dispatch
+again.
+
+You can also start the capture directly on the branch, skipping the update
+dispatch; the publish run follows the same way:
+
+```sh
+gh workflow run marketing-screenshots-capture.yml --ref <pr-branch>
+```
+
 Because baselines and comparison render on the same runner image, the pixel
 tolerance only has to cover run-to-run noise.
 
