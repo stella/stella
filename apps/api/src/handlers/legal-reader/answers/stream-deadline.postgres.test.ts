@@ -12,7 +12,7 @@ import {
   legalReaderAnswerMessages,
   legalReaderAnswers,
 } from "@/api/db/schema";
-import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
+import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import {
   READER_ANSWER_DEADLINE_MS,
   readerAnswerDeadlineAt,
@@ -82,71 +82,80 @@ const seedFixture = async (db: GatedTestDb) => {
     name: "Reader deadline fixture",
     email: `${userId}@example.test`,
   });
-  const answer =
-    (
-      await db
-        .insert(legalReaderAnswers)
-        .values({
-          id: answerId,
-          organizationId,
-          userId,
-          decisionId,
-          kind: "explain",
-          visibility: "private",
-          ...anchor,
-        })
-        .returning()
-    ).at(0) ?? panic("Reader deadline answer fixture is missing");
-  const history = await db
-    .insert(legalReaderAnswerMessages)
-    .values({
-      id: createSafeId<"legalReaderAnswerMessage">(),
-      answerId,
-      sequence: 1,
-      role: "user",
-      content: "Explain the holding",
-      status: "complete",
-    })
-    .returning();
-  // PostgreSQL owns the clock; shortening the remaining lease avoids a two-minute test.
-  const assistant =
-    (
-      await db
-        .insert(legalReaderAnswerMessages)
-        .values({
-          id: messageId,
-          answerId,
-          sequence: 2,
-          role: "assistant",
-          content: "",
-          status: "streaming",
-          updatedAt: sql`date_trunc('milliseconds', clock_timestamp()) - (${READER_ANSWER_DEADLINE_MS - CLAIM_REMAINING_MS} * interval '1 millisecond')`,
-        })
-        .returning({
-          updatedAt: legalReaderAnswerMessages.updatedAt,
-          claimToken: timestampCasToken(legalReaderAnswerMessages.updatedAt),
-        })
-    ).at(0) ?? panic("Reader deadline message fixture is missing");
-  const prepared = {
-    answer,
-    messageId,
-    claimToken: assistant.claimToken,
-    deadlineAt: readerAnswerDeadlineAt(assistant.updatedAt),
-    history,
-    decision: {
-      decisionId,
-      court: "Test court",
-      decisionDate: "2026-01-01",
-      paragraphs: [
-        { paragraphId: anchor.paragraphId, text: "The holding follows." },
-      ],
-    },
-    anchor,
-    locale: "cs-CZ",
-    modelId: undefined,
-  } satisfies PreparedReaderAnswer;
+  const scopedDb = createScopedDb(
+    markRlsDatabase(db),
+    [],
+    organizationId,
+    userId,
+  );
+  const prepared = await scopedDb(async (tx) => {
+    const answer =
+      (
+        await tx
+          .insert(legalReaderAnswers)
+          .values({
+            id: answerId,
+            organizationId,
+            userId,
+            decisionId,
+            kind: "explain",
+            visibility: "private",
+            ...anchor,
+          })
+          .returning()
+      ).at(0) ?? panic("Reader deadline answer fixture is missing");
+    const history = await tx
+      .insert(legalReaderAnswerMessages)
+      .values({
+        id: createSafeId<"legalReaderAnswerMessage">(),
+        answerId,
+        sequence: 1,
+        role: "user",
+        content: "Explain the holding",
+        status: "complete",
+      })
+      .returning();
+    // PostgreSQL owns the clock; shortening the remaining lease avoids a two-minute test.
+    const assistant =
+      (
+        await tx
+          .insert(legalReaderAnswerMessages)
+          .values({
+            id: messageId,
+            answerId,
+            sequence: 2,
+            role: "assistant",
+            content: "",
+            status: "streaming",
+            updatedAt: sql`date_trunc('milliseconds', clock_timestamp()) - (${READER_ANSWER_DEADLINE_MS - CLAIM_REMAINING_MS} * interval '1 millisecond')`,
+          })
+          .returning({
+            updatedAt: legalReaderAnswerMessages.updatedAt,
+            claimToken: timestampCasToken(legalReaderAnswerMessages.updatedAt),
+          })
+      ).at(0) ?? panic("Reader deadline message fixture is missing");
+    return {
+      answer,
+      messageId,
+      claimToken: assistant.claimToken,
+      deadlineAt: readerAnswerDeadlineAt(assistant.updatedAt),
+      history,
+      decision: {
+        decisionId,
+        court: "Test court",
+        decisionDate: "2026-01-01",
+        paragraphs: [
+          { paragraphId: anchor.paragraphId, text: "The holding follows." },
+        ],
+      },
+      anchor,
+      locale: "cs-CZ",
+      modelId: undefined,
+    } satisfies PreparedReaderAnswer;
+  });
   return {
     prepared,
+    scopedDb,
     organizationId,
     userId,
     cleanUp: async () => {
@@ -157,14 +166,14 @@ const seedFixture = async (db: GatedTestDb) => {
 };
 
 type ObserveBlockedSettlementOptions = {
-  db: GatedTestDb;
+  scopedDb: Awaited<ReturnType<typeof seedFixture>>["scopedDb"];
   writerPid: number;
   holderPid: number;
   deadlineAt: number;
   messageId: PreparedReaderAnswer["messageId"];
 };
 const observeBlockedSettlement = async ({
-  db,
+  scopedDb,
   writerPid,
   holderPid,
   deadlineAt,
@@ -174,14 +183,17 @@ const observeBlockedSettlement = async ({
   while (performance.now() < observationDeadline) {
     const row =
       (
-        await db
-          .select({
-            blocked: sql<boolean>`${holderPid} = ANY(pg_blocking_pids(${writerPid}))`,
-            beforeDeadline: sql<boolean>`clock_timestamp() < to_timestamp(${deadlineAt} / 1000.0)`,
-          })
-          .from(legalReaderAnswerMessages)
-          .where(eq(legalReaderAnswerMessages.id, messageId))
-          .limit(1)
+        await scopedDb(
+          async (tx) =>
+            await tx
+              .select({
+                blocked: sql<boolean>`${holderPid} = ANY(pg_blocking_pids(${writerPid}))`,
+                beforeDeadline: sql<boolean>`clock_timestamp() < to_timestamp(${deadlineAt} / 1000.0)`,
+              })
+              .from(legalReaderAnswerMessages)
+              .where(eq(legalReaderAnswerMessages.id, messageId))
+              .limit(1),
+        )
       ).at(0) ?? panic("Reader deadline lock observation is missing");
     expect(row.beforeDeadline).toBe(true);
     if (row.blocked) {
@@ -211,21 +223,38 @@ if (!databaseUrl || !runPostgres) {
           }).db;
           const holder = openClient().db;
           const fixture = await seedFixture(db);
-          const { prepared, organizationId, userId } = fixture;
+          const { prepared, scopedDb, organizationId, userId } = fixture;
           const held = Promise.withResolvers<number>();
           const release = Promise.withResolvers<undefined>();
           let holding: Promise<void> | undefined;
           let consumed: Promise<string> | undefined;
           try {
+            const scopedWriter = createScopedDb(
+              markRlsDatabase(writer),
+              [],
+              organizationId,
+              userId,
+            );
+            const scopedHolder = createScopedDb(
+              markRlsDatabase(holder),
+              [],
+              organizationId,
+              userId,
+            );
             const writerPid =
               (
-                await writer
-                  .select({ pid: sql<number>`pg_backend_pid()` })
-                  .from(legalReaderAnswerMessages)
-                  .where(eq(legalReaderAnswerMessages.id, prepared.messageId))
-                  .limit(1)
+                await scopedWriter(
+                  async (tx) =>
+                    await tx
+                      .select({ pid: sql<number>`pg_backend_pid()` })
+                      .from(legalReaderAnswerMessages)
+                      .where(
+                        eq(legalReaderAnswerMessages.id, prepared.messageId),
+                      )
+                      .limit(1),
+                )
               ).at(0)?.pid ?? panic("Reader settlement backend is missing");
-            holding = holder.transaction(async (tx) => {
+            holding = scopedHolder(async (tx) => {
               await tx
                 .select({ id: legalReaderAnswerMessages.id })
                 .from(legalReaderAnswerMessages)
@@ -293,7 +322,7 @@ if (!databaseUrl || !runPostgres) {
             });
             consumed = response.text();
             await observeBlockedSettlement({
-              db,
+              scopedDb,
               writerPid,
               holderPid,
               deadlineAt: prepared.deadlineAt,
@@ -301,22 +330,30 @@ if (!databaseUrl || !runPostgres) {
             });
             expect(providerCalls).toBe(1);
             // Release is tied to PostgreSQL's execution clock, not JS timers or transaction now().
-            await db.execute(sql`SELECT pg_sleep(GREATEST(0,
+            await scopedDb(
+              async (tx) =>
+                await tx.execute(sql`SELECT pg_sleep(GREATEST(0,
               extract(epoch FROM (to_timestamp(${prepared.deadlineAt} / 1000.0) - clock_timestamp()))
-            ) + 0.05)`);
+            ) + 0.05)`),
+            );
             const locked =
               (
-                await db
-                  .select({
-                    status: legalReaderAnswerMessages.status,
-                    content: legalReaderAnswerMessages.content,
-                    claimToken: timestampCasToken(
-                      legalReaderAnswerMessages.updatedAt,
-                    ),
-                    expired: sql<boolean>`clock_timestamp() >= to_timestamp(${prepared.deadlineAt} / 1000.0)`,
-                  })
-                  .from(legalReaderAnswerMessages)
-                  .where(eq(legalReaderAnswerMessages.id, prepared.messageId))
+                await scopedDb(
+                  async (tx) =>
+                    await tx
+                      .select({
+                        status: legalReaderAnswerMessages.status,
+                        content: legalReaderAnswerMessages.content,
+                        claimToken: timestampCasToken(
+                          legalReaderAnswerMessages.updatedAt,
+                        ),
+                        expired: sql<boolean>`clock_timestamp() >= to_timestamp(${prepared.deadlineAt} / 1000.0)`,
+                      })
+                      .from(legalReaderAnswerMessages)
+                      .where(
+                        eq(legalReaderAnswerMessages.id, prepared.messageId),
+                      ),
+                )
               ).at(0) ?? panic("Locked reader message is missing");
             expect(locked).toEqual({
               status: "streaming",
@@ -337,14 +374,17 @@ if (!databaseUrl || !runPostgres) {
                 content: "Partial explanation",
               },
             ]);
-            const saved = await db
-              .select({
-                status: legalReaderAnswerMessages.status,
-                errorCode: legalReaderAnswerMessages.errorCode,
-                content: legalReaderAnswerMessages.content,
-              })
-              .from(legalReaderAnswerMessages)
-              .where(eq(legalReaderAnswerMessages.id, prepared.messageId));
+            const saved = await scopedDb(
+              async (tx) =>
+                await tx
+                  .select({
+                    status: legalReaderAnswerMessages.status,
+                    errorCode: legalReaderAnswerMessages.errorCode,
+                    content: legalReaderAnswerMessages.content,
+                  })
+                  .from(legalReaderAnswerMessages)
+                  .where(eq(legalReaderAnswerMessages.id, prepared.messageId)),
+            );
             expect(saved).toEqual([
               {
                 status: "failed",
@@ -352,18 +392,21 @@ if (!databaseUrl || !runPostgres) {
                 content: "Partial explanation",
               },
             ]);
-            const audits = await db
-              .select({
-                action: auditLogs.action,
-                resourceType: auditLogs.resourceType,
-              })
-              .from(auditLogs)
-              .where(
-                and(
-                  eq(auditLogs.organizationId, organizationId),
-                  eq(auditLogs.resourceId, prepared.answer.id),
-                ),
-              );
+            const audits = await scopedDb(
+              async (tx) =>
+                await tx
+                  .select({
+                    action: auditLogs.action,
+                    resourceType: auditLogs.resourceType,
+                  })
+                  .from(auditLogs)
+                  .where(
+                    and(
+                      eq(auditLogs.organizationId, organizationId),
+                      eq(auditLogs.resourceId, prepared.answer.id),
+                    ),
+                  ),
+            );
             expect(audits).toEqual([
               {
                 action: AUDIT_ACTION.UPDATE,
