@@ -35,6 +35,7 @@ import {
   buildExportReviewCitationSeeds,
   buildExportReviewMetadata,
   EXPORT_REVIEW_DOC_NAMES,
+  EXPORT_REVIEW_RISK_LEVELS,
   exportReviewCitationBlockId,
   exportReviewDocumentIds,
   type ExportReviewMetadata,
@@ -92,7 +93,7 @@ type CounterpartyExposure = {
   agreement: string;
   documents: number;
   value: number;
-  risk: string;
+  risk: ExportReviewMetadata["riskLevel"];
   position: ChangeOfControlPosition;
 };
 
@@ -133,6 +134,25 @@ export const aggregateChangeOfControlExposure = (): CounterpartyExposure[] => {
   }
   return [...byCounterparty.values()];
 };
+
+/** Risk levels, most severe first. */
+export const RISK_SEVERITY = EXPORT_REVIEW_RISK_LEVELS.toReversed();
+
+/**
+ * The order the answer's table and the generated view list counterparties
+ * in: by change-of-control position, then the most severe risk, then the
+ * largest contract value, so the Critical rows the prose cites lead.
+ */
+export const rankChangeOfControlExposure = (
+  rows: readonly CounterpartyExposure[],
+): CounterpartyExposure[] =>
+  rows.toSorted(
+    (a, b) =>
+      CHANGE_OF_CONTROL_POSITIONS.indexOf(a.position) -
+        CHANGE_OF_CONTROL_POSITIONS.indexOf(b.position) ||
+      RISK_SEVERITY.indexOf(a.risk) - RISK_SEVERITY.indexOf(b.risk) ||
+      b.value - a.value,
+  );
 
 type CitedDocument = {
   fileName: string;
@@ -322,8 +342,9 @@ export const buildMarketingAgentThread = ({
   const visualFileId = seedId<"userFile">("marketing-agent-visual");
   const visualToolCallId = "call-marketing-agent-visual";
   const exposure = aggregateChangeOfControlExposure();
+  const ranked = rankChangeOfControlExposure(exposure);
   const rowFor = (position: ChangeOfControlPosition) =>
-    exposure.filter((row) => row.position === position);
+    ranked.filter((row) => row.position === position);
   const documentFor = new Map(
     exposure.map((row) => [row.name, citedDocumentFor(row.name)]),
   );

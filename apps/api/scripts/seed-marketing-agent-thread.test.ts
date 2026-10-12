@@ -35,6 +35,8 @@ import {
   CHANGE_OF_CONTROL_POSITIONS,
   MARKETING_AGENT_QUESTIONS,
   MARKETING_AGENT_THREAD_TITLE,
+  rankChangeOfControlExposure,
+  RISK_SEVERITY,
 } from "./seed-marketing-agent-thread";
 
 const workspaceId = toSafeId<"workspace">(
@@ -157,7 +159,7 @@ describe("marketing agent thread", () => {
     }
   });
 
-  test("the first answer's table gives every counterparty its aggregated position", () => {
+  test("the first answer's table ranks every counterparty by position, severity and value", () => {
     const { messages } = build();
     const firstAnswer = messages.at(1);
     if (!firstAnswer) {
@@ -170,20 +172,29 @@ describe("marketing agent thread", () => {
       .map((line) =>
         line.split(" | ").map((cell) => cell.replaceAll("|", "").trim()),
       );
-    const exposure = aggregateChangeOfControlExposure();
     expect(
       tableRows.map((cells) => [cells.at(0), cells.at(2), cells.at(3)]),
     ).toEqual(
-      CHANGE_OF_CONTROL_POSITIONS.flatMap((position) =>
-        exposure
-          .filter((row) => row.position === position)
-          .map((row) => [
-            row.name,
-            row.risk,
-            exposureView.data.labels.positions[position],
-          ]),
+      rankChangeOfControlExposure(aggregateChangeOfControlExposure()).map(
+        (row) => [
+          row.name,
+          row.risk,
+          exposureView.data.labels.positions[row.position],
+        ],
       ),
     );
+    // The lead-ins cite the Critical agreements as leading the review, so
+    // they head the table.
+    expect(tableRows.map((cells) => cells.at(0))).toEqual([
+      "Delta Logistics Kft.",
+      "Helios Energy a.s.",
+      "Granite Properties B.V.",
+      "Cedar Cloud Ltd.",
+      "BluePeak Manufacturing s.r.o.",
+      "Fjord Analytics AB",
+      "Aurora Retail GmbH",
+      "Edison Bank plc",
+    ]);
   });
 
   test("the final turn shows the stored generated view through a completed show_visual call", () => {
@@ -236,6 +247,7 @@ describe("marketing agent thread", () => {
     expect(exposureView.data.positions).toEqual([
       ...CHANGE_OF_CONTROL_POSITIONS,
     ]);
+    expect(exposureView.data.risks).toEqual([...RISK_SEVERITY]);
     expect(exposureView.data.counterparties).toEqual(
       aggregateChangeOfControlExposure(),
     );

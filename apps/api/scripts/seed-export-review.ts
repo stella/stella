@@ -66,7 +66,7 @@ export const EXPORT_REVIEW_JURISDICTIONS = [
   "United Kingdom",
 ] as const;
 
-const EXPORT_REVIEW_RISK_LEVELS = [
+export const EXPORT_REVIEW_RISK_LEVELS = [
   "Low",
   "Medium",
   "High",

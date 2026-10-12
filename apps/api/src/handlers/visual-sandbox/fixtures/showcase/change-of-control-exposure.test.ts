@@ -111,7 +111,7 @@ describe("change-of-control exposure page", () => {
     expect(ready()).toBe(1);
   });
 
-  test("orders the matrix by position, then by value, without dropping a counterparty", () => {
+  test("orders the matrix by position, then severity, then value, without dropping a counterparty", () => {
     const { element } = render(fixture.data);
     expect(element("matrix-head").children.map(({ text }) => text)).toEqual(
       fixture.data.labels.columns,
@@ -120,16 +120,16 @@ describe("change-of-control exposure page", () => {
       row.children.map((cell) => cell.text),
     );
     expect(rows.map((cells) => cells.at(0))).toEqual([
-      "Granite Properties B.V.",
-      "Cedar Cloud Ltd.",
       "Delta Logistics Kft.",
       "Helios Energy a.s.",
+      "Granite Properties B.V.",
+      "Cedar Cloud Ltd.",
       "BluePeak Manufacturing s.r.o.",
       "Fjord Analytics AB",
       "Aurora Retail GmbH",
       "Edison Bank plc",
     ]);
-    expect(rows.at(2)).toEqual([
+    expect(rows.at(0)).toEqual([
       "Delta Logistics Kft.",
       "Customer Contract",
       "9",

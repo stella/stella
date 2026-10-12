@@ -1,6 +1,14 @@
 <main style="margin: 0; line-height: 1.5">
-  <header style="margin-block: 0 16px">
-    <h1 id="title" style="font-size: 20px; margin-block: 0 4px"></h1>
+  <header
+    style="
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      column-gap: 12px;
+      margin-block: 0 12px;
+    "
+  >
+    <h1 id="title" style="font-size: 20px; margin: 0"></h1>
     <p id="scope" class="stella-muted" style="font-size: 13px; margin: 0"></p>
   </header>
   <dl
@@ -9,8 +17,8 @@
       display: flex;
       flex-wrap: wrap;
       gap: 24px;
-      margin-block: 0 12px;
-      padding-block: 12px;
+      margin-block: 0 10px;
+      padding-block: 10px;
       border-width: 1px 0;
       border-style: solid;
       border-color: var(--border);
@@ -19,7 +27,7 @@
   <div
     id="split"
     role="img"
-    style="display: flex; gap: 2px; height: 8px; margin-block: 0 16px"
+    style="display: flex; gap: 2px; height: 8px; margin-block: 0 12px"
   ></div>
   <table id="matrix" class="stella-table" style="font-size: 13px">
     <thead>
@@ -35,8 +43,14 @@
 </main>
 <script>
   (() => {
-    const { formattingLocale, currency, labels, positions, counterparties } =
-      stella.data;
+    const {
+      formattingLocale,
+      currency,
+      labels,
+      positions,
+      risks,
+      counterparties,
+    } = stella.data;
     const money = new Intl.NumberFormat(formattingLocale, {
       style: "currency",
       currency,
@@ -117,21 +131,24 @@
       );
     }
 
+    const compact = "padding-block:5px";
     for (const [index, column] of labels.columns.entries()) {
       const cell = element(
         "th",
         column,
-        index === 2 || index === 3 ? "text-align:end" : "",
+        index === 2 || index === 3 ? `${compact};text-align:end` : compact,
       );
       cell.scope = "col";
       document.getElementById("matrix-head").append(cell);
     }
+    // Within each change-of-control group, the most severe risk leads, then
+    // the largest contract value. `risks` lists severities most severe first.
     const ordered = [...counterparties].sort(
       (a, b) =>
         positions.indexOf(a.position) - positions.indexOf(b.position) ||
+        risks.indexOf(a.risk) - risks.indexOf(b.risk) ||
         b.value - a.value,
     );
-    const compact = "padding-block:6px";
     for (const row of ordered) {
       const line = document.createElement("tr");
       const marker = element(

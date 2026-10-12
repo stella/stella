@@ -108,8 +108,14 @@ const THEME_TOKENS = ["--foreground", "--border", "--chart-1"];
  * Wait until the whole thread has painted: the cited table, the inline chips,
  * the generated view's guest page (content, fonts, final height and the host
  * theme), and the pinned recap. Then scroll the transcript to the final turn.
+ * With `frameBottom` (the screenshot clip's bottom edge, in page pixels), also
+ * require the matrix's last row to sit wholly above it, so a taller view or a
+ * moved anchor fails here instead of shipping a shot that cuts the table.
  */
-export const settleMarketingAgentThread = async (page: Page) => {
+export const settleMarketingAgentThread = async (
+  page: Page,
+  { frameBottom }: { frameBottom?: number } = {},
+) => {
   const transcript = page
     .getByRole("log")
     .locator('[data-slot="scroll-area-viewport"]');
@@ -177,6 +183,23 @@ export const settleMarketingAgentThread = async (page: Page) => {
   ).toBeVisible();
 
   await anchorMarketingAgentFinalTurn(page);
+  if (frameBottom !== undefined) {
+    // boundingBox reports nested-frame elements in the host page's pixels.
+    const lastRow = guest.locator("#matrix-body tr").last();
+    await expect
+      .poll(
+        async () => {
+          const box = await lastRow.boundingBox();
+          return (
+            box !== null && box.y >= 0 && box.y + box.height <= frameBottom
+          );
+        },
+        {
+          message: `the matrix's last row ends above the ${String(frameBottom)}px frame edge`,
+        },
+      )
+      .toBe(true);
+  }
 };
 
 /**

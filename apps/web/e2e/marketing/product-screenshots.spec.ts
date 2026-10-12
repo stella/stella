@@ -58,6 +58,10 @@ const COLD_COMPILE_TIMEOUT = 60_000;
 // either boundary, and reads as a natural "just edited" label.
 const VERSION_CAPTION_OFFSET_MS = 5 * 60_000;
 
+// The product-shot frame for captures without their own clip: the app's main
+// column, below the sidebar.
+const DEFAULT_CLIP = { x: 255, y: 0, width: 1137, height: 710 } as const;
+
 const captures = [
   {
     name: "workspace",
@@ -349,7 +353,9 @@ test("capture landing product screenshots", async ({
         // frames the final turn. The guest page has no animations or
         // transitions of its own, so the animation freeze below, which the
         // style tag applies to this document only, misses nothing.
-        await settleMarketingAgentThread(page);
+        await settleMarketingAgentThread(page, {
+          frameBottom: DEFAULT_CLIP.y + DEFAULT_CLIP.height,
+        });
       }
       await page.locator("body").waitFor({ state: "visible" });
       await page.evaluate(async () => document.fonts.ready);
@@ -375,10 +381,7 @@ test("capture landing product screenshots", async ({
         .toHaveScreenshot(`${capture.name}${themeSuffix}.png`, {
           animations: "disabled",
           caret: "hide",
-          clip:
-            "clip" in capture
-              ? capture.clip
-              : { x: 255, y: 0, width: 1137, height: 710 },
+          clip: "clip" in capture ? capture.clip : DEFAULT_CLIP,
           // Baselines are produced on the CI runner by the "Update marketing
           // screenshots" workflow (.github/workflows/
           // marketing-screenshots-update.yml) and compared on that same runner

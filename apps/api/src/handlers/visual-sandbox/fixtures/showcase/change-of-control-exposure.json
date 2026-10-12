@@ -24,6 +24,7 @@
       "note": "Contract value sums each counterparty's agreements in the data room. Positions follow each review extract's risk finding and tags; every agreement also requires written notice before an assignment."
     },
     "positions": ["consent", "confirm", "notice"],
+    "risks": ["Critical", "High", "Medium", "Low"],
     "counterparties": [
       {
         "name": "Aurora Retail GmbH",
