@@ -4,6 +4,7 @@
 export const LIBRARY_PACKAGE_ORDER = [
   "auth-model",
   "ai-catalog",
+  "text-normalize",
   "anonymize-chat",
   "ui",
   "chat",
@@ -21,7 +22,6 @@ export const LIBRARY_PACKAGE_ORDER = [
   "workspace-ui",
   "stable-stringify",
   "time",
-  "text-normalize",
   "agent-input",
   "mcp-kit",
 ] as const;

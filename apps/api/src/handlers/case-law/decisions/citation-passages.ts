@@ -46,7 +46,6 @@ import {
   readDecisionTextCompletions,
   readDecisionTextCompletionSafely,
 } from "@/api/handlers/case-law/decisions/text-completion";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -66,7 +65,9 @@ import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
@@ -334,15 +335,31 @@ export class CitationTextGateError extends TaggedError(
   cause?: unknown;
 }> {}
 
-const CITATION_TEXT_FAILURE_STAGE = {
-  read: "case_law.citation_passage.text_gate",
-  completion: "case_law.citation_passage.post_read_gate",
-} as const;
+const citationTextReadFailure = failureSink({
+  event: "case_law.citation_passage.text_gate",
+  expected: [],
+});
+const citationTextCompletionFailure = failureSink({
+  event: "case_law.citation_passage.post_read_gate",
+  expected: [],
+});
 
-const captureCitationTextGateFailure = (
+const observeCitationTextGateFailure = (
   error: CitationTextGateError | DecisionTextCompletionReadError,
-  stage: keyof typeof CITATION_TEXT_FAILURE_STAGE,
-) => captureError(error, { step: CITATION_TEXT_FAILURE_STAGE[stage] });
+  stage: "read" | "completion",
+) => {
+  switch (stage) {
+    case "read":
+      observeFailure(error, { sink: citationTextReadFailure });
+      break;
+    case "completion":
+      observeFailure(error, { sink: citationTextCompletionFailure });
+      break;
+    default:
+      stage satisfies never;
+      panic("Unhandled citation text failure stage");
+  }
+};
 
 export type CitationDecisionText =
   | { type: "eligible"; ast: DocumentAst; sections: DecisionSection[] | null }
@@ -503,7 +520,7 @@ export const readDecisionTextByDecision = async ({
           readTombstones,
         });
         if (text.type === "gate-failed") {
-          captureCitationTextGateFailure(text.error, "read");
+          observeCitationTextGateFailure(text.error, "read");
         }
         return { id: pointer.id, text };
       }),
@@ -559,7 +576,7 @@ export const readDecisionTextByDecision = async ({
         return panic("Unhandled post-read text completion state");
     }
     if (text.type === "gate-failed" && readText.type !== "gate-failed") {
-      captureCitationTextGateFailure(text.error, "completion");
+      observeCitationTextGateFailure(text.error, "completion");
     }
     textByDecision.set(String(pointer.id), text);
   }
