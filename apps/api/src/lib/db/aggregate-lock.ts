@@ -42,6 +42,7 @@ import { isRecord } from "@/api/lib/type-guards";
 /** Registered blocking chains share one physical transaction order. */
 export const AGGREGATE_LOCKS = {
   organization: { rank: 0, kind: "row" },
+  professionalUseAcceptance: { rank: 5, kind: "advisory" },
   orgFeatureAdmission: { rank: 10, kind: "advisory" },
   schedulerClaim: { rank: 20, kind: "row" },
   definitionCap: { rank: 30, kind: "advisory" },
@@ -117,6 +118,7 @@ export const AGGREGATE_CHAINS = {
     "obligation",
     "entity",
   ],
+  professionalUseAcceptance: ["professionalUseAcceptance"],
   desktopRenewal: ["desktopMembership", "desktopCredential"],
   desktopBatch: ["desktopBatch", "workspace"],
   documentSource: [
@@ -171,6 +173,7 @@ const modeCovers = (
 
 type AggregateIdentities = {
   organization: SafeId<"organization">;
+  professionalUseAcceptance: { userId: SafeId<"user"> };
   desktopMembership: {
     organizationId: SafeId<"organization">;
     userId: SafeId<"user">;
@@ -1061,6 +1064,12 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
           options.id.userId,
           options.id.idempotencyKey,
         ],
+      };
+    case "professionalUseAcceptance":
+      return {
+        first: sql`hashtext('professional-use')`,
+        second: sql`hashtext(${options.id.userId})`,
+        order: [options.aggregate, options.id.userId],
       };
     case "automatedFlowRunCap":
       return {
