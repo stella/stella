@@ -1351,6 +1351,8 @@ export const TOOLING_ENV_KEYS = new Set([
   // Manual regeneration binds the requested PR and checks available job services.
   "PR_NUMBER",
   "JOB_SERVICES",
+  // Workflow lint resolves the checksum-verified actionlint executable.
+  "ACTIONLINT_BIN",
   "QUERY_PERF_BASELINE_MODE",
   "QUERY_PERF_BASE_REF",
   "QUERY_PERF_CHANGED_PATHS",

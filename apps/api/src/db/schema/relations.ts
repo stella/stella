@@ -116,6 +116,10 @@ import {
   properties,
   propertyDependencies,
 } from "./properties";
+import {
+  legalReaderAnswers,
+  legalReaderAnswerMessages,
+} from "./reader-answers";
 import { reportExports } from "./reports";
 import { savedSearches } from "./saved-searches";
 import { scoutRuns, signalEvents, signals } from "./signals";
@@ -141,6 +145,8 @@ import {
 
 export const relations = defineRelations(
   {
+    legalReaderAnswers,
+    legalReaderAnswerMessages,
     agentSkills,
     agentSkillResources,
     savedSearches,
