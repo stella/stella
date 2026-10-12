@@ -1620,6 +1620,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-auth-token-in-web-storage.ts",
     "./.oxlint-plugins/no-path-prefix-containment.ts",
     "./.oxlint-plugins/no-direct-unicode-normalize.ts",
+    "./.oxlint-plugins/no-ambient-dev-docker.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
     "./.oxlint-plugins/no-network-await-in-loop.ts",
     "./.oxlint-plugins/require-cached-collator.ts",
@@ -1656,6 +1657,17 @@ const config = defineConfig({
   ],
 
   overrides: [
+    {
+      files: [
+        "packages/scripts/src/dev-*.ts",
+        "packages/scripts/src/agent-session.ts",
+      ],
+      excludeFiles: [
+        "packages/scripts/src/*.test.ts",
+        "packages/scripts/src/dev-docker.ts",
+      ],
+      rules: { "no-ambient-dev-docker/no-ambient-dev-docker": "error" },
+    },
     {
       files: [
         "apps/**/*.{ts,tsx,js,mjs}",

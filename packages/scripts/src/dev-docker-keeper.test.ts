@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { resolveDockerTarget } from "./dev-docker";
 import { dockerKeeperCommand, ensureDockerKeeper } from "./dev-docker-keeper";
 
 describe("protected Docker runtime recovery", () => {
@@ -9,6 +10,10 @@ describe("protected Docker runtime recovery", () => {
     const calls: string[][] = [];
     let started = false;
     await ensureDockerKeeper({
+      dockerTarget: resolveDockerTarget({
+        env: {},
+        inspect: () => "unix:///tmp/test-docker.sock",
+      }),
       label: "dev.test.docker-keeper",
       run: (command) => {
         calls.push(command);
@@ -22,9 +27,9 @@ describe("protected Docker runtime recovery", () => {
       sleep: async () => {},
     });
     expect(calls).toEqual([
-      ["docker", "info"],
+      ["docker", "--host", "unix:///tmp/test-docker.sock", "info"],
       ["launchctl", "kickstart", "system/dev.test.docker-keeper"],
-      ["docker", "info"],
+      ["docker", "--host", "unix:///tmp/test-docker.sock", "info"],
     ]);
     expect(calls.some((command) => command.includes("colima"))).toBe(false);
   });
@@ -32,6 +37,10 @@ describe("protected Docker runtime recovery", () => {
   test("a healthy runtime never touches its keeper", async () => {
     const calls: string[][] = [];
     await ensureDockerKeeper({
+      dockerTarget: resolveDockerTarget({
+        env: {},
+        inspect: () => "unix:///tmp/test-docker.sock",
+      }),
       label: "dev.test.docker-keeper",
       run: (command) => {
         calls.push(command);
@@ -40,7 +49,9 @@ describe("protected Docker runtime recovery", () => {
       now: () => 0,
       sleep: async () => {},
     });
-    expect(calls).toEqual([["docker", "info"]]);
+    expect(calls).toEqual([
+      ["docker", "--host", "unix:///tmp/test-docker.sock", "info"],
+    ]);
   });
 
   test("recovery has a deadline even when the keeper accepts its kickstart", async () => {
@@ -48,6 +59,10 @@ describe("protected Docker runtime recovery", () => {
     expect(
       await rejectionOf(
         ensureDockerKeeper({
+          dockerTarget: resolveDockerTarget({
+            env: {},
+            inspect: () => "unix:///tmp/test-docker.sock",
+          }),
           label: "dev.test.docker-keeper",
           run: (command) => command.at(0) === "launchctl",
           now: () => elapsed,
@@ -86,11 +101,14 @@ test("system keeper requests use stable cwd and noninteractive privilege", () =>
   });
   expect(
     dockerKeeperCommand({
-      command: ["docker", "info"],
+      command: ["docker", "--host", "unix:///tmp/test-docker.sock", "info"],
       platform: "darwin",
       uid: 501,
     }),
-  ).toEqual({ command: ["docker", "info"], cwd: "/" });
+  ).toEqual({
+    command: ["docker", "--host", "unix:///tmp/test-docker.sock", "info"],
+    cwd: "/",
+  });
 });
 
 test("invalid keeper labels are refused before executing a command", async () => {
@@ -98,6 +116,10 @@ test("invalid keeper labels are refused before executing a command", async () =>
   expect(
     await rejectionOf(
       ensureDockerKeeper({
+        dockerTarget: resolveDockerTarget({
+          env: {},
+          inspect: () => "unix:///tmp/test-docker.sock",
+        }),
         label: "../other-keeper",
         run: () => {
           ran = true;
@@ -117,6 +139,10 @@ test("a refused keeper kickstart surfaces the failure", async () => {
   expect(
     await rejectionOf(
       ensureDockerKeeper({
+        dockerTarget: resolveDockerTarget({
+          env: {},
+          inspect: () => "unix:///tmp/test-docker.sock",
+        }),
         label: "dev.test.docker-keeper",
         run: () => false,
         now: () => 0,

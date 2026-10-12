@@ -21,6 +21,11 @@ import { Temporal } from "@stll/time";
 
 import { isSealTrusted, parseSealStatus } from "./agent-evidence";
 import { childExitStatus } from "./child-exit-status";
+import {
+  dockerCommand,
+  type DockerTarget,
+  resolveDockerTarget,
+} from "./dev-docker";
 import { dockerKeeperCommand, ensureDockerKeeper } from "./dev-docker-keeper";
 import { decideHostAdmission, probeHostFileUsage } from "./dev-host-admission";
 import {
@@ -639,10 +644,12 @@ export const parseForeignPortOwners = ({
 };
 
 const findForeignContainersOnSharedPorts = ({
+  dockerTarget,
   dockerProject,
   infraPorts,
   rootDir,
 }: {
+  dockerTarget: DockerTarget;
   dockerProject: string;
   infraPorts: InfraPorts;
   rootDir: string;
@@ -650,19 +657,21 @@ const findForeignContainersOnSharedPorts = ({
   parseForeignPortOwners({
     expectedProject: dockerProject,
     output: runCommandText({
-      cmd: [
-        resolveCommandPath("docker"),
+      ...dockerCommand(dockerTarget, [
         "ps",
         "--format",
         '{{.Names}}\t{{.Label "com.docker.compose.project"}}\t{{.Ports}}',
-      ],
+      ]),
       cwd: rootDir,
     }),
     sharedPorts: sharedInfraPortList(infraPorts),
   });
 
-const dockerComposeEnv = (infraPorts: InfraPorts) => ({
-  ...process.env,
+const dockerComposeEnv = (
+  dockerTarget: DockerTarget,
+  infraPorts: InfraPorts,
+) => ({
+  ...dockerTarget.env,
   STELLA_GOTENBERG_HOST_PORT: String(infraPorts.gotenberg),
   STELLA_PG_HOST_PORT: String(infraPorts.postgres),
   STELLA_RUSTFS_CONSOLE_PORT: String(infraPorts.rustfsConsole),
@@ -792,26 +801,28 @@ export const getSharedDockerServicesWaitFailure = (
 };
 
 type DockerComposeCommandOptions = {
+  dockerTarget: DockerTarget;
   args: readonly string[];
   composeFile: string;
   dockerProject: string;
 };
 
 export const dockerComposeCommand = ({
+  dockerTarget,
   args,
   composeFile,
   dockerProject,
-}: DockerComposeCommandOptions) => [
-  resolveCommandPath("docker"),
-  "compose",
-  "--project-name",
-  dockerProject,
-  "--file",
-  composeFile,
-  "--profile",
-  "dev",
-  ...args,
-];
+}: DockerComposeCommandOptions) =>
+  dockerCommand(dockerTarget, [
+    "compose",
+    "--project-name",
+    dockerProject,
+    "--file",
+    composeFile,
+    "--profile",
+    "dev",
+    ...args,
+  ]);
 
 export const projectsForDeletedWorktrees = ({
   output,
@@ -896,51 +907,67 @@ export const hasConflictingDockerOwner = ({
   parseDockerProjectOwnership(output).has(dockerProject);
 
 export const dockerComposeDownCommand = ({
+  dockerTarget,
   composeFile,
   dockerProject,
 }: {
+  dockerTarget: DockerTarget;
   composeFile: string;
   dockerProject: string;
 }) =>
   dockerComposeCommand({
+    dockerTarget,
     args: ["down", "--remove-orphans"],
     composeFile,
     dockerProject,
   });
 
-const readDockerComposeProjectOwnershipOutput = (rootDir: string) =>
+const readDockerComposeProjectOwnershipOutput = ({
+  rootDir,
+  dockerTarget,
+}: {
+  rootDir: string;
+  dockerTarget: DockerTarget;
+}) =>
   runCommandText({
-    cmd: [
-      resolveCommandPath("docker"),
+    ...dockerCommand(dockerTarget, [
       "ps",
       "--all",
       "--format",
       '{{.Label "com.docker.compose.project"}}\t{{.Label "com.docker.compose.project.working_dir"}}',
-    ],
+    ]),
     cwd: rootDir,
   });
 
 const stopDockerProject = ({
+  dockerTarget,
   composeFile,
   dockerProject,
   rootDir,
 }: {
+  dockerTarget: DockerTarget;
   composeFile: string;
   dockerProject: string;
   rootDir: string;
 }) => {
   runStep({
-    cmd: dockerComposeDownCommand({ composeFile, dockerProject }),
+    ...dockerComposeDownCommand({
+      dockerTarget,
+      composeFile,
+      dockerProject,
+    }),
     cwd: rootDir,
     label: `Stopping Docker project ${dockerProject}`,
   });
 };
 
 const removeProjectsForDeletedWorktrees = ({
+  dockerTarget,
   composeFile,
   ownershipOutput,
   rootDir,
 }: {
+  dockerTarget: DockerTarget;
   composeFile: string;
   ownershipOutput: string;
   rootDir: string;
@@ -951,6 +978,7 @@ const removeProjectsForDeletedWorktrees = ({
 
   for (const dockerProject of deletedWorktreeProjects) {
     stopDockerProject({
+      dockerTarget,
       composeFile,
       dockerProject,
       rootDir,
@@ -959,31 +987,36 @@ const removeProjectsForDeletedWorktrees = ({
 };
 
 const readSharedDockerServiceStatuses = ({
+  dockerTarget,
   dockerProject,
   infraPorts,
   rootDir,
 }: {
+  dockerTarget: DockerTarget;
   dockerProject: string;
   infraPorts: InfraPorts;
   rootDir: string;
 }) =>
   parseDockerComposePsJson(
     runCommandText({
-      cmd: dockerComposeCommand({
+      ...dockerComposeCommand({
+        dockerTarget,
         args: ["ps", "--all", "--format", "json"],
         composeFile: path.resolve(rootDir, "docker-compose.yml"),
         dockerProject,
       }),
       cwd: rootDir,
-      env: dockerComposeEnv(infraPorts),
+      env: dockerComposeEnv(dockerTarget, infraPorts),
     }),
   );
 
 const waitForSharedDockerServices = async ({
+  dockerTarget,
   dockerProject,
   infraPorts,
   rootDir,
 }: {
+  dockerTarget: DockerTarget;
   dockerProject: string;
   infraPorts: InfraPorts;
   rootDir: string;
@@ -996,6 +1029,7 @@ const waitForSharedDockerServices = async ({
     DOCKER_SERVICES_READY_TIMEOUT_MS
   ) {
     const statuses = readSharedDockerServiceStatuses({
+      dockerTarget,
       dockerProject,
       infraPorts,
       rootDir,
@@ -1020,34 +1054,28 @@ const ensureHostDockerKeeper = async ({
   dryRun: boolean;
   mode: DevMode;
 }) => {
-  if (dryRun || !modeIncludesApi(mode)) {
-    return;
+  if (!modeIncludesApi(mode)) {
+    return null;
+  }
+  const dockerTarget = resolveDockerTarget({ env: process.env });
+  if (dryRun) {
+    return dockerTarget;
   }
   const resolver = Bun.which("docker-keeper");
   let label = process.env["STELLA_DOCKER_KEEPER_LABEL"];
   if (!label && resolver) {
-    const dockerHost =
-      process.env["DOCKER_HOST"] ||
-      runCommandText({
-        cmd: [
-          "docker",
-          "context",
-          "inspect",
-          "--format",
-          "{{.Endpoints.docker.Host}}",
-        ],
-        cwd: "/",
-      }).trim();
     label = runCommandText({
-      cmd: [resolver, "--host", dockerHost],
+      cmd: [resolver, "--host", dockerTarget.host],
+      env: dockerTarget.env,
       cwd: "/",
     }).trim();
   }
   if (!label) {
-    return;
+    return dockerTarget;
   }
   await ensureDockerKeeper({
     label,
+    dockerTarget,
     run: (command) => {
       const spec = dockerKeeperCommand({
         command,
@@ -1056,7 +1084,7 @@ const ensureHostDockerKeeper = async ({
       });
       return Bun.spawnSync(spec.command, {
         cwd: spec.cwd,
-        env: resolveEnv(),
+        env: dockerTarget.env,
         stdout: "pipe",
         stderr: "pipe",
         timeout: 5000,
@@ -1065,14 +1093,17 @@ const ensureHostDockerKeeper = async ({
     now: () => Temporal.Now.instant().epochMilliseconds,
     sleep: (milliseconds) => Bun.sleep(milliseconds),
   });
+  return dockerTarget;
 };
 
 const ensureDockerServices = async ({
+  dockerTarget,
   dockerProject,
   infraPorts,
   markStarted,
   rootDir,
 }: {
+  dockerTarget: DockerTarget;
   dockerProject: string;
   infraPorts: InfraPorts;
   markStarted: () => void;
@@ -1081,6 +1112,7 @@ const ensureDockerServices = async ({
   if (
     hasLegacyObjectStoreService(
       readSharedDockerServiceStatuses({
+        dockerTarget,
         dockerProject,
         infraPorts,
         rootDir,
@@ -1088,18 +1120,20 @@ const ensureDockerServices = async ({
     )
   ) {
     runStep({
-      cmd: dockerComposeCommand({
+      ...dockerComposeCommand({
+        dockerTarget,
         args: ["down", "--remove-orphans"],
         composeFile: path.resolve(rootDir, "docker-compose.yml"),
         dockerProject,
       }),
       cwd: rootDir,
-      env: dockerComposeEnv(infraPorts),
+      env: dockerComposeEnv(dockerTarget, infraPorts),
       label: "Replacing the legacy object-store service",
     });
   }
 
   const foreignOwners = findForeignContainersOnSharedPorts({
+    dockerTarget,
     dockerProject,
     infraPorts,
     rootDir,
@@ -1123,6 +1157,7 @@ const ensureDockerServices = async ({
   if (failedProbes.length === 0) {
     const currentFailure = getSharedDockerServicesWaitFailure(
       readSharedDockerServiceStatuses({
+        dockerTarget,
         dockerProject,
         infraPorts,
         rootDir,
@@ -1150,18 +1185,20 @@ const ensureDockerServices = async ({
   markStarted();
   runStep({
     // Refresh the seed image on reconciliation; healthy stacks return above.
-    cmd: dockerComposeCommand({
+    ...dockerComposeCommand({
+      dockerTarget,
       args: ["up", "-d", "--build"],
       composeFile: path.resolve(rootDir, "docker-compose.yml"),
       dockerProject,
     }),
     cwd: rootDir,
-    env: dockerComposeEnv(infraPorts),
+    env: dockerComposeEnv(dockerTarget, infraPorts),
     label: "Starting Docker services",
   });
 
   console.log("==> Waiting for shared Docker services to become ready...");
   await waitForSharedDockerServices({
+    dockerTarget,
     dockerProject,
     infraPorts,
     rootDir,
@@ -2372,23 +2409,29 @@ const printDryRun = ({
   }
 };
 
-const readKnownDockerProjects = (rootDir: string) => [
-  ...readDockerComposeProjectOwnershipOutput(rootDir)
+const readKnownDockerProjects = ({
+  rootDir,
+  dockerTarget,
+}: {
+  rootDir: string;
+  dockerTarget: DockerTarget;
+}) => [
+  ...readDockerComposeProjectOwnershipOutput({ rootDir, dockerTarget })
     .split("\n")
     .map((line) => line.split("\t").at(0) ?? ""),
   ...runCommandText({
-    cmd: [
-      resolveCommandPath("docker"),
+    ...dockerCommand(dockerTarget, [
       "volume",
       "ls",
       "--format",
       '{{.Label "com.docker.compose.project"}}',
-    ],
+    ]),
     cwd: rootDir,
   }).split("\n"),
 ];
 
 type ResolveInfraOffsetOptions = {
+  dockerTarget: DockerTarget | null;
   gitContext: GitContext;
   mode: DevMode;
   ports: DevPorts;
@@ -2396,6 +2439,7 @@ type ResolveInfraOffsetOptions = {
 };
 
 const resolveInfraOffset = async ({
+  dockerTarget,
   gitContext,
   mode,
   ports,
@@ -2411,9 +2455,15 @@ const resolveInfraOffset = async ({
       if (!modeIncludesApi(mode) || !gitContext.isWorktree) {
         return { offset: 0, source: "default ports" };
       }
+      if (dockerTarget === null) {
+        panic("API infrastructure requires a resolved Docker endpoint.");
+      }
       return await resolveAutoInfraOffset({
         isPortFree: async (port) => await checkPortAvailabilityOnHosts(port),
-        knownProjects: readKnownDockerProjects(gitContext.mainRoot),
+        knownProjects: readKnownDockerProjects({
+          rootDir: gitContext.mainRoot,
+          dockerTarget,
+        }),
         reservedPorts: requiredPortsForMode(mode, ports),
         worktreePath: gitContext.canonicalRoot,
       });
@@ -2443,6 +2493,10 @@ const main = async () => {
   const preparedEnvFiles = preparedEnvFilesResult.value;
 
   const { devInstance, mode, portOffset } = parsedArgs;
+  const dockerTarget = await ensureHostDockerKeeper({
+    dryRun: parsedArgs.dryRun,
+    mode,
+  });
   // Offsets resolve before any process or container starts, so a signal
   // during resolution has nothing to clean up.
   const initialOffset = resolveOffset({
@@ -2460,8 +2514,13 @@ const main = async () => {
     resolvedOffset === initialOffset.offset
       ? initialOffset.source
       : `${initialOffset.source}; adjusted for free ports`;
-  await ensureHostDockerKeeper({ dryRun: parsedArgs.dryRun, mode });
+  await ensureHostDockerKeeper({
+    dryRun: parsedArgs.dryRun,
+    mode,
+    dockerTarget,
+  });
   const resolvedInfraOffset = await resolveInfraOffset({
+    dockerTarget,
     gitContext,
     mode,
     ports,
@@ -2478,7 +2537,7 @@ const main = async () => {
     gitContext.currentRoot,
     "docker-compose.yml",
   );
-  const managesDocker = !parsedArgs.dryRun && modeIncludesApi(mode);
+  const managesDocker = !parsedArgs.dryRun && dockerTarget !== null;
   const children: RunningStep[] = [];
   // One-shot steps running beside the servers; kept apart from `children`,
   // whose first exit means a server died.
@@ -2511,13 +2570,14 @@ const main = async () => {
       }
 
       const groupStopped = reportGroupStopFailure(groupStop);
-      if (!ownsDockerProject) {
+      if (!ownsDockerProject || dockerTarget === null) {
         return groupStopped;
       }
 
       const stopped = Result.try({
         try: () =>
           stopDockerProject({
+            dockerTarget,
             composeFile,
             dockerProject,
             rootDir: gitContext.mainRoot,
@@ -2641,13 +2701,14 @@ const main = async () => {
     if (managesDocker) {
       console.log("==> Checking Docker engine...");
       runStep({
-        cmd: [resolveCommandPath("docker"), "ps"],
+        ...dockerCommand(dockerTarget, ["ps"]),
         cwd: gitContext.currentRoot,
         label: "Verifying Docker engine health",
       });
-      const ownershipOutput = readDockerComposeProjectOwnershipOutput(
-        gitContext.mainRoot,
-      );
+      const ownershipOutput = readDockerComposeProjectOwnershipOutput({
+        rootDir: gitContext.mainRoot,
+        dockerTarget,
+      });
       if (
         hasConflictingDockerOwner({
           dockerProject,
@@ -2663,6 +2724,7 @@ const main = async () => {
       ownsDockerProject =
         parseDockerProjectOwnership(ownershipOutput).has(dockerProject);
       removeProjectsForDeletedWorktrees({
+        dockerTarget,
         composeFile,
         ownershipOutput,
         rootDir: gitContext.mainRoot,
@@ -2677,12 +2739,14 @@ const main = async () => {
         })
       ) {
         stopDockerProject({
+          dockerTarget,
           composeFile,
           dockerProject: legacyDockerProject,
           rootDir: gitContext.mainRoot,
         });
       }
       await ensureDockerServices({
+        dockerTarget,
         dockerProject,
         infraPorts,
         markStarted: () => {
@@ -2691,13 +2755,14 @@ const main = async () => {
         rootDir: gitContext.currentRoot,
       });
       const postgresContainer = runCommandText({
-        cmd: dockerComposeCommand({
+        ...dockerComposeCommand({
+          dockerTarget,
           args: ["ps", "-q", "postgres"],
           composeFile,
           dockerProject,
         }),
         cwd: gitContext.currentRoot,
-        env: dockerComposeEnv(infraPorts),
+        env: dockerComposeEnv(dockerTarget, infraPorts),
       });
       runStep({
         cmd: [
@@ -2705,8 +2770,11 @@ const main = async () => {
           "scripts/configure-test-postgres.sh",
           postgresContainer.trim(),
           "postgres",
+          "stella",
+          dockerTarget.host,
         ],
         cwd: gitContext.currentRoot,
+        env: dockerTarget.env,
         label: "Verifying Postgres execution and owner parity",
       });
     }

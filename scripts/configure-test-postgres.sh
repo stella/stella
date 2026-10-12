@@ -5,6 +5,31 @@ repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 container=${1:?Postgres container ID required}
 owner=${2:?Database owner login required}
 database=${3:-stella}
+docker_host=${4:-}
+if [[ -z "$docker_host" ]]; then
+  # Capture bytes before Bash can discard NUL or trailing newlines.
+  docker_bytes=$(command docker context inspect --format '{{.Endpoints.docker.Host}}' | LC_ALL=C od -An -v -t x1)
+  encoded_endpoint=""
+  for byte in $docker_bytes; do
+    case "$byte" in
+      00|0d) echo 'Docker context returned an ambiguous endpoint.' >&2; exit 1 ;;
+      [0-9a-f][0-9a-f]) encoded_endpoint+="\\x$byte" ;;
+      *) echo 'Docker endpoint byte capture failed.' >&2; exit 1 ;;
+    esac
+  done
+  printf -v docker_host '%b' "$encoded_endpoint"
+  docker_host=${docker_host%$'\n'}
+fi
+if [[ "$docker_host" =~ ^[[:space:]]|[[:space:]]$ || "$docker_host" == *$'\r'* || "$docker_host" == *$'\n'* ]]; then
+  echo 'Docker context returned an ambiguous endpoint.' >&2
+  exit 1
+fi
+case "$docker_host" in
+  unix:///*|tcp://*|ssh://*|npipe://*) ;;
+  *) echo 'Docker context did not resolve a supported endpoint.' >&2; exit 1 ;;
+esac
+unset DOCKER_HOST DOCKER_CONTEXT
+docker() { command docker --host "$docker_host" "$@"; }
 
 # Derive the complete expectation from the fragment; there is no second list.
 # Only the committed setting syntax (name = scalar) is accepted here.

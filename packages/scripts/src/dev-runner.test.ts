@@ -14,6 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { resolveDockerTarget } from "./dev-docker";
 import { DevProcessRegistrationError } from "./dev-process-groups";
 import {
   AUTO_INFRA_OFFSET_GRID,
@@ -83,10 +84,14 @@ test("worktree Compose commands build that checkout's Postgres image", async () 
   // Resolved, so Windows compares drive-qualified paths on both sides.
   const worktree = path.resolve("/tmp/stella-worktree");
   const command = dockerComposeCommand({
+    dockerTarget: resolveDockerTarget({
+      env: {},
+      inspect: () => "unix:///tmp/test-docker.sock",
+    }),
     args: ["up", "-d", "--build"],
     composeFile: path.resolve(worktree, "docker-compose.yml"),
     dockerProject: "worktree-parity",
-  });
+  }).cmd;
   expect(command).toContain(path.resolve(worktree, "docker-compose.yml"));
   expect(command).toContain("--build");
   const source = await Bun.file(
@@ -501,9 +506,13 @@ describe("Docker project ownership", () => {
 
   test("builds cleanup against the durable main compose file without deleting volumes", () => {
     const command = dockerComposeDownCommand({
+      dockerTarget: resolveDockerTarget({
+        env: {},
+        inspect: () => "unix:///tmp/test-docker.sock",
+      }),
       composeFile: "/Users/dev/stella/docker-compose.yml",
       dockerProject: "stella-dev-44000-cafef00dbeef",
-    });
+    }).cmd;
 
     expect(command).toContain("/Users/dev/stella/docker-compose.yml");
     expect(command).toContain("stella-dev-44000-cafef00dbeef");

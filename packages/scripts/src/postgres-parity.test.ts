@@ -158,6 +158,8 @@ describe("Postgres execution and owner parity", () => {
           docker,
           `#!/usr/bin/env bash
 set -euo pipefail
+[[ "$1" == --host && "$2" == unix:///tmp/test-docker.sock ]] || exit 1
+[[ -z "\${DOCKER_HOST+x}" && -z "\${DOCKER_CONTEXT+x}" ]] || exit 1
 if [[ "$*" == *"SELECT rolsuper, rolbypassrls"* ]]; then
   cat "$PARITY_FIXTURE/posture"
   exit
@@ -180,12 +182,16 @@ fi
               path.join(root, "scripts/configure-test-postgres.sh"),
               "fixture-postgres",
               "postgres",
+              "stella",
+              "unix:///tmp/test-docker.sock",
             ],
             {
               env: {
                 ...process.env,
                 PATH: `${fixture}:${process.env["PATH"] ?? ""}`,
                 PARITY_FIXTURE: fixture,
+                DOCKER_HOST: "unix:///tmp/other-docker.sock",
+                DOCKER_CONTEXT: "other-context",
               },
               stdout: "pipe",
               stderr: "pipe",
@@ -237,3 +243,57 @@ fi
     expect(definitions).toBeGreaterThan(0);
   });
 });
+
+test.each([
+  "unix:///tmp/socket \n",
+  "unix:///tmp/socket\r\n",
+  "unix:///tmp/socket\0\n",
+  "unix://./socket\n",
+  "unix:///tmp/first\nunix:///tmp/second\n",
+])(
+  "Postgres helper refuses ambiguous raw Docker endpoint %j before mutations",
+  async (endpoint) => {
+    const fixture = await mkdtemp(path.join(tmpdir(), "postgres-endpoint-"));
+    try {
+      await writeFile(path.join(fixture, "endpoint"), endpoint);
+      const docker = path.join(fixture, "docker");
+      await writeFile(
+        docker,
+        `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" == context && "$2" == inspect ]]; then
+  cat "$PARITY_FIXTURE/endpoint"
+  exit
+fi
+printf '%s\\n' "$@" > "$PARITY_FIXTURE/mutation"
+exit 99
+`,
+      );
+      await chmod(docker, 0o700);
+      const child = Bun.spawn(
+        [
+          "bash",
+          path.join(root, "scripts/configure-test-postgres.sh"),
+          "fixture-postgres",
+          "postgres",
+        ],
+        {
+          env: {
+            PATH: `${fixture}:${process.env["PATH"] ?? ""}`,
+            PARITY_FIXTURE: fixture,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      const stderr = await new Response(child.stderr).text();
+      expect(await child.exited, stderr).toBe(1);
+      expect(stderr).toContain("endpoint");
+      expect(await Bun.file(path.join(fixture, "mutation")).exists()).toBe(
+        false,
+      );
+    } finally {
+      await rm(fixture, { recursive: true, force: true });
+    }
+  },
+);

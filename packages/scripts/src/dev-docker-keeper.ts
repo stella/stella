@@ -1,5 +1,7 @@
 import { TaggedError } from "better-result";
 
+import { dockerCommand, type DockerTarget } from "./dev-docker";
+
 const KEEPER_READY_TIMEOUT_MS = 120_000;
 const KEEPER_POLL_MS = 1000;
 
@@ -9,6 +11,7 @@ class DockerKeeperError extends TaggedError("DockerKeeperError")<{
 
 type EnsureDockerKeeperOptions = {
   label: string;
+  dockerTarget: DockerTarget;
   run: (command: string[]) => boolean;
   now: () => number;
   sleep: (milliseconds: number) => Promise<void>;
@@ -16,6 +19,7 @@ type EnsureDockerKeeperOptions = {
 
 export const ensureDockerKeeper = async ({
   label,
+  dockerTarget,
   run,
   now,
   sleep,
@@ -23,7 +27,7 @@ export const ensureDockerKeeper = async ({
   if (!/^[A-Za-z0-9_.-]+$/u.test(label)) {
     throw new DockerKeeperError({ message: "Invalid Docker keeper label." });
   }
-  if (run(["docker", "info"])) {
+  if (run(dockerCommand(dockerTarget, ["info"]).cmd)) {
     return;
   }
   const target = `system/${label}`;
@@ -35,7 +39,7 @@ export const ensureDockerKeeper = async ({
   }
   const deadline = now() + KEEPER_READY_TIMEOUT_MS;
   while (now() < deadline) {
-    if (run(["docker", "info"])) {
+    if (run(dockerCommand(dockerTarget, ["info"]).cmd)) {
       return;
     }
     await sleep(KEEPER_POLL_MS);
