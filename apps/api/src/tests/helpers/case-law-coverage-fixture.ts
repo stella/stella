@@ -17,12 +17,16 @@ const base = {
   },
   sources: [
     {
-      adapterKey: "00000000-0000-4000-8000-000000000001",
+      adapterKey: "synthetic-source",
       name: "Synthetic publisher",
       publicHomeUrl:
         "https://example.test/00000000-0000-4000-8000-000000000002",
       health: "current",
       lastSyncAt: storedAsOf,
+      decisionYearFrom: 1993,
+      decisionYearTo: 2026,
+      pendingTextCount: 3,
+      knownGaps: { type: "unknown" },
       completeness: { state: "not-measured-yet" },
       addedLastWeek: 5,
     },
@@ -60,7 +64,7 @@ export const CASE_LAW_COVERAGE_FIXTURE = {
           addedLastWeek: 0,
           updatedAt: null,
         },
-        { type: "unlisted", tier: "other", listed: 9, decisions: 10 },
+        { type: "other-courts", tier: "other", courts: null, decisions: 10 },
       ],
     },
     { ...base, country: "SVK", availability: "in-preparation" },
@@ -77,6 +81,18 @@ export const CASE_LAW_COVERAGE_FIXTURE = {
   ],
 } as const satisfies Awaited<ReturnType<typeof readCaseLawCoverageHandler>>;
 
+const expectedSources = [
+  {
+    adapterKey: "synthetic-source",
+    name: "Synthetic publisher",
+    lastSyncAt: storedAsOf,
+    decisionYearFrom: 1993,
+    decisionYearTo: 2026,
+    pendingTextCount: 3,
+    knownGaps: { type: "unknown" },
+  },
+] as const;
+
 export const CASE_LAW_COVERAGE_EXPECTED = {
   asOf,
   countries: [
@@ -86,10 +102,11 @@ export const CASE_LAW_COVERAGE_EXPECTED = {
       decisions: 100,
       decisionYearFrom: 1993,
       decisionYearTo: 2026,
+      sources: expectedSources,
       courts: [
         { type: "court", court: "Nejvyšší soud", decisions: 60 },
         { type: "tier", tier: "regional", courts: 8, decisions: 30 },
-        { type: "unlisted", decisions: 10 },
+        { type: "other-courts", courts: null, decisions: 10 },
       ],
     },
     {
@@ -98,6 +115,7 @@ export const CASE_LAW_COVERAGE_EXPECTED = {
       decisions: 150,
       decisionYearFrom: null,
       decisionYearTo: null,
+      sources: expectedSources,
       courts: null,
     },
     {
@@ -106,6 +124,7 @@ export const CASE_LAW_COVERAGE_EXPECTED = {
       decisions: 0,
       decisionYearFrom: null,
       decisionYearTo: null,
+      sources: expectedSources,
       courts: null,
     },
   ],

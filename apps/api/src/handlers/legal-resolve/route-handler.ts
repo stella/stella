@@ -23,10 +23,11 @@ export type GetLegalResolveAuthorization = (
 
 export type LegalResolveRouteResponse =
   | LegalResolveResponse
-  | { error: "access_unavailable" | "missing_scope" };
+  | { error: "access_unavailable" | "missing_scope" | "unauthorized" };
 
 const legalResolveResponseSchema = {
   200: t.Any(),
+  401: t.Object({ error: t.Literal("unauthorized") }),
   403: t.Object({
     error: t.Literal("missing_scope"),
   }),
