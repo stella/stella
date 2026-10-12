@@ -303,6 +303,8 @@
       },
       "devDependencies": {
         "@astrojs/check": "^0.9.9",
+        "@playwright/test": "^1.63.0",
+        "@stll/playwright-tools": "workspace:*",
         "@types/react": "catalog:react19",
         "@types/react-dom": "catalog:react19",
         "bun-types": "catalog:",
@@ -516,6 +518,7 @@
       "devDependencies": {
         "@happy-dom/global-registrator": "20.14.5",
         "@playwright/test": "^1.63.0",
+        "@stll/playwright-tools": "workspace:*",
         "@stll/property-testing": "workspace:*",
         "@stll/scripts": "workspace:*",
         "@stll/ssr-testkit": "workspace:^",
@@ -1035,6 +1038,15 @@
         "better-auth": "catalog:",
       },
       "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+      },
+    },
+    "packages/playwright-tools": {
+      "name": "@stll/playwright-tools",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@playwright/test": "^1.63.0",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
       },
@@ -3071,6 +3083,8 @@
     "@stll/permissions": ["@stll/permissions@workspace:packages/permissions"],
 
     "@stll/playground": ["@stll/playground@workspace:apps/playground"],
+
+    "@stll/playwright-tools": ["@stll/playwright-tools@workspace:packages/playwright-tools"],
 
     "@stll/property-testing": ["@stll/property-testing@workspace:packages/property-testing"],
 

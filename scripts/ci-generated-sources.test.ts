@@ -433,6 +433,47 @@ const generationCommandViolations = (command: readonly string[]) => {
   if (binary !== "bun" || target === undefined) {
     return ["Expected Bun generator command"];
   }
+  if (target === "node_modules/turbo/bin/turbo") {
+    const filter = extra.at(0);
+    const packageName = filter?.match(/^--filter=(@stll\/([a-z-]+))$/u);
+    const workspace = packageName?.at(1);
+    const directory = packageName?.at(2);
+    if (
+      action !== "run" ||
+      script === undefined ||
+      extra.length !== 1 ||
+      workspace === undefined ||
+      directory === undefined ||
+      !existsSync(new URL(`../${target}`, import.meta.url))
+    ) {
+      return ["Expected rooted Turbo launcher and one explicit workspace task"];
+    }
+    const config = v.parse(
+      v.object({ tasks: v.record(v.string(), v.unknown()) }),
+      Bun.JSONC.parse(
+        readFileSync(new URL("../turbo.json", import.meta.url), "utf-8"),
+      ),
+    );
+    if (!Object.hasOwn(config.tasks, `${workspace}#${script}`)) {
+      return ["Turbo owner task does not exist"];
+    }
+    const manifestPath = ["apps", "packages"]
+      .map(
+        (scope) =>
+          new URL(`../${scope}/${directory}/package.json`, import.meta.url),
+      )
+      .find((filename) => existsSync(filename));
+    if (manifestPath === undefined) {
+      return ["Workspace package does not exist"];
+    }
+    const owner = v.parse(
+      v.object({ name: v.string(), scripts: v.record(v.string(), v.string()) }),
+      JSON.parse(readFileSync(manifestPath, "utf-8")),
+    );
+    return owner.name === workspace && Object.hasOwn(owner.scripts, script)
+      ? []
+      : ["Turbo owner package script does not exist"];
+  }
   if (!target.startsWith("--cwd=")) {
     return command.length === 2 &&
       existsSync(new URL(`../${target}`, import.meta.url))
@@ -462,6 +503,36 @@ const generationCommandViolations = (command: readonly string[]) => {
 test("every preparation command resolves a real generator file or package script", () => {
   for (const command of CI_GENERATION_COMMANDS) {
     expect(generationCommandViolations(command), command.join(" ")).toEqual([]);
+  }
+  for (const command of [
+    [
+      "bun",
+      "node_modules/turbo/bin/turbo",
+      "run",
+      "missing-task",
+      "--filter=@stll/web",
+    ],
+    ["bun", "node_modules/turbo/bin/turbo", "run", "generate:api-types"],
+    [
+      "bun",
+      "node_modules/turbo/bin/turbo",
+      "run",
+      "generate:api-types",
+      "--filter=@stll/missing",
+    ],
+    [
+      "bun",
+      "node_modules/turbo/bin/turbo",
+      "run",
+      "generate:api-types",
+      "--filter=@stll/web",
+      "--filter=@stll/api",
+    ],
+    ["bun", "exec", "turbo", "run", "generate:api-types", "--filter=@stll/web"],
+  ]) {
+    expect(generationCommandViolations(command), command.join(" ")).not.toEqual(
+      [],
+    );
   }
   const producer = readFileSync(
     new URL("ci-generated-sources.ts", import.meta.url),
