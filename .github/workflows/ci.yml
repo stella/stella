@@ -614,6 +614,15 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
 
+      - name: Check tracked symlink archive targets
+        if: >-
+          steps.completed-depth.outputs.run_required != 'false'
+          && (
+          steps.check.outputs.trusted == 'true'
+          || github.event_name == 'workflow_dispatch'
+          )
+        run: bun scripts/check-tracked-symlinks.ts
+
       - name: Login to GitHub Container Registry for image resolution
         id: registry
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch') && github.event.pull_request.head.repo.fork != true && github.token != ''
