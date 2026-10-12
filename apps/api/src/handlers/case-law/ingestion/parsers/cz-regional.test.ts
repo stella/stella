@@ -351,6 +351,33 @@ describe("parseRegionalDecision", () => {
       ]);
     });
 
+    test("a numbered paragraph naming the judge is the court's paragraph, not a signature", () => {
+      const input = baseInput({
+        justification: [
+          makePara("1. Žalobce podal žalobu dne 1. 1. 2025."),
+          makePara("2. Žalovaný se nevyjádřil."),
+          makePara("3. Věc projednala samosoudkyně."),
+          makePara("4. Žaloba je důvodná."),
+          makePara("Mgr. Jana Nová samosoudkyně"),
+        ],
+      });
+
+      const { documentAst } = parseRegionalDecision(input);
+
+      expect(
+        documentAst.blocks
+          .filter(isParagraph)
+          .filter((b) => b.number !== undefined || b.role === "signature")
+          .map((b) => [b.number ?? null, b.role ?? null, b.plainText]),
+      ).toEqual([
+        [1, null, "Žalobce podal žalobu dne 1. 1. 2025."],
+        [2, null, "Žalovaný se nevyjádřil."],
+        [3, null, "Věc projednala samosoudkyně."],
+        [4, null, "Žaloba je důvodná."],
+        [null, "signature", "Mgr. Jana Nová samosoudkyně"],
+      ]);
+    });
+
     test("a lone '1.' is a list item, not a numbering, and stays as printed", () => {
       const input = baseInput({
         justification: [makePara("1. Žalobce podal žalobu dne 1. 1. 2025.")],

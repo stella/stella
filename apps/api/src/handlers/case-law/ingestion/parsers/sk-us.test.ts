@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
-import { hasInlineChildren } from "@stll/legal-ast/document-ast";
+import { hasInlineChildren, plainTextOf } from "@stll/legal-ast/document-ast";
 
 import { parseSkUsDocumentXhtml } from "@/api/handlers/case-law/ingestion/parsers/sk-us";
 import { readGzipJson } from "@/api/lib/gzip-json";
@@ -181,15 +181,9 @@ describe("numbered reasoning set without blank lines", () => {
       `<html><body><div><span style="font-size: 12px; ">O d ôvod n eni e : <br/><br/>${lines
         .map((line) => `${line} <br/>`)
         .join("\n")}<br/></span></div></body></html>`,
-    )
-      .documentAst.blocks.filter(
-        (block) => block.type === "paragraph" && block.role === undefined,
-      )
-      // The markup's line ends carry their own spaces; the words are the test.
-      .map((block) => ({
-        ...block,
-        plainText: block.plainText.replaceAll(/\s+/gu, " "),
-      }));
+    ).documentAst.blocks.filter(
+      (block) => block.type === "paragraph" && block.role === undefined,
+    );
 
   test("the court's next number on a new line starts the next paragraph", () => {
     const blocks = reasoning([
@@ -211,6 +205,12 @@ describe("numbered reasoning set without blank lines", () => {
       [2, "Sudca spravodajca oznámil, že sa dozvedel o komunikácii."],
       [3, "Sťažovateľ vzniesol námietku zaujatosti."],
     ]);
+    // The inlines read exactly as the text, joined lines included.
+    expect(
+      blocks.map((block) =>
+        block.type === "paragraph" ? plainTextOf(block.inlines) : null,
+      ),
+    ).toEqual(blocks.map((block) => block.plainText));
   });
 
   test("a number the court skipped still starts its paragraph", () => {
@@ -254,6 +254,55 @@ describe("numbered reasoning set without blank lines", () => {
     expect(blocks.map((block) => block.plainText)).toEqual([
       "Sťažovateľ navrhuje, aby ústavný súd rozhodol takto: 1. Základné právo sťažovateľa bolo porušené. 2. Napadnuté uznesenie sa zrušuje.",
       "Sudca spravodajca oznámil námietku.",
+    ]);
+  });
+
+  test("a quoted point repeating the court's number later does not merge the court's paragraph", () => {
+    const blocks = reasoning([
+      "1. Sťažovateľ podal ústavnú sťažnosť.",
+      "2. Sudca spravodajca oznámil námietku.",
+      "3. Sťažovateľ navrhol: „1. Základné právo bolo porušené.",
+      "2. Napadnuté uznesenie sa zrušuje.“",
+      "4. Námietka nie je dôvodná.",
+    ]);
+    expect(
+      blocks.map((block) => [
+        block.type === "paragraph" ? block.number : null,
+        block.plainText,
+      ]),
+    ).toEqual([
+      [1, "Sťažovateľ podal ústavnú sťažnosť."],
+      [2, "Sudca spravodajca oznámil námietku."],
+      [
+        3,
+        "Sťažovateľ navrhol: „1. Základné právo bolo porušené. 2. Napadnuté uznesenie sa zrušuje.“",
+      ],
+      [4, "Námietka nie je dôvodná."],
+    ]);
+  });
+
+  test("a list later in the reasoning repeating the court's number does not merge the court's paragraph", () => {
+    const blocks = reasoning([
+      "1. Sťažovateľ podal ústavnú sťažnosť.",
+      "2. Sudca spravodajca oznámil námietku.",
+      "3. Ústavný súd zistil tieto skutočnosti.",
+      "1. Prvá skutočnosť je nesporná.",
+      "2. Druhá skutočnosť je nesporná.",
+      "4. Námietka nie je dôvodná.",
+    ]);
+    expect(
+      blocks.map((block) => [
+        block.type === "paragraph" ? block.number : null,
+        block.plainText,
+      ]),
+    ).toEqual([
+      [1, "Sťažovateľ podal ústavnú sťažnosť."],
+      [2, "Sudca spravodajca oznámil námietku."],
+      [
+        3,
+        "Ústavný súd zistil tieto skutočnosti. 1. Prvá skutočnosť je nesporná. 2. Druhá skutočnosť je nesporná.",
+      ],
+      [4, "Námietka nie je dôvodná."],
     ]);
   });
 

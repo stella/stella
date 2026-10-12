@@ -34,13 +34,41 @@ type CourtParagraphMarkerStyle = (typeof COURT_PARAGRAPH_MARKER_STYLES)[number];
  * or a section reference. A digit right after the space is a date
  * (`12. 3. 2020`), never a paragraph; a lowercase letter is an item of a
  * list or of a quoted provision ("2. osoby fysické …"), because a court's
- * paragraph opens a sentence.
+ * paragraph opens a sentence. The look-ahead also refuses more space, so it
+ * judges the character after the whole run: backtracking into a run of two
+ * spaces must not let "12.  3. 2020" through.
  */
 const MARKER_PATTERNS = {
-  bracket: /^\[(?<number>\d{1,4})\][ \t ]*(?![\d\p{Ll}])/u,
-  dot: /^(?<number>\d{1,4})\.[ \t ]+(?![\d\p{Ll}])/u,
-  paren: /^(?<number>\d{1,4})\)[ \t ]+(?![\d\p{Ll}])/u,
+  bracket: /^\[(?<number>\d{1,4})\][ \t ]*(?![ \t \d\p{Ll}])/u,
+  dot: /^(?<number>\d{1,4})\.[ \t ]+(?![ \t \d\p{Ll}])/u,
+  paren: /^(?<number>\d{1,4})\)[ \t ]+(?![ \t \d\p{Ll}])/u,
 } as const satisfies Record<CourtParagraphMarkerStyle, RegExp>;
+
+const markerNumber = (
+  style: CourtParagraphMarkerStyle,
+  text: string,
+): number | null => {
+  const raw = MARKER_PATTERNS[style].exec(text)?.groups?.["number"];
+  if (raw === undefined) {
+    return null;
+  }
+  const value = Number(raw);
+  return value >= 1 ? value : null;
+};
+
+/**
+ * Whether a line opens with a marker in any of the court's paragraph styles.
+ * A parser that assigns roles line by line asks this first: a line the court
+ * numbered is body text, never a closing or a signature, even when its words
+ * read like one ("3. Věc projednala samosoudkyně …"). Leaving it in the body
+ * keeps the decision's numbering whole.
+ */
+export const opensWithCourtParagraphMarker = (text: string): boolean => {
+  const line = text.trimStart();
+  return COURT_PARAGRAPH_MARKER_STYLES.some(
+    (style) => markerNumber(style, line) !== null,
+  );
+};
 
 /**
  * Any item marker, whatever follows it: a court marker, a list's lowercase
@@ -156,18 +184,6 @@ const isBodyParagraph = (block: Block): block is ParagraphBlock =>
   block.type === "paragraph" &&
   block.note === undefined &&
   NUMBERABLE_ROLES.has(block.role);
-
-const markerNumber = (
-  style: CourtParagraphMarkerStyle,
-  text: string,
-): number | null => {
-  const raw = MARKER_PATTERNS[style].exec(text)?.groups?.["number"];
-  if (raw === undefined) {
-    return null;
-  }
-  const value = Number(raw);
-  return value >= 1 ? value : null;
-};
 
 type Body = {
   /** Block indexes of the body paragraphs, in document order. */

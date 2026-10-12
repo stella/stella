@@ -28,6 +28,7 @@ import * as cheerio from "cheerio";
 import { isComment, isText } from "domhandler";
 import type { AnyNode } from "domhandler";
 
+import { opensWithCourtParagraphMarker } from "@stll/legal-ast/court-paragraph-numbers";
 import {
   CZ_CLOSING_RE as CLOSING_RE,
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
@@ -898,8 +899,13 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
       continue;
     }
 
+    // A line the court numbered ("[3] Věc projednal senát …") is body text,
+    // never a closing or a signature, however it reads: classifying it away
+    // would leave a gap in the court's numbering.
+    const courtNumbered = opensWithCourtParagraphMarker(plainText);
+
     // Closing: "V Brně dne ..."
-    if (CLOSING_RE.test(plainText)) {
+    if (!courtNumbered && CLOSING_RE.test(plainText)) {
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
@@ -913,7 +919,11 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     }
 
     // Signature: judge title (short, centered lines only)
-    if (SIGNATURE_RE.test(plainText) && plainText.length < 80) {
+    if (
+      !courtNumbered &&
+      SIGNATURE_RE.test(plainText) &&
+      plainText.length < 80
+    ) {
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),

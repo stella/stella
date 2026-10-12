@@ -1946,6 +1946,7 @@ jobs:
           path: ${{ runner.temp }}/generated-sources/
           retention-days: 1
           if-no-files-found: error
+          include-hidden-files: true
       - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
@@ -2898,7 +2899,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
-        # Compare resolved compiler versions, not dependency ranges or unrelated
+        # Compare resolved compilers and API project configuration, not unrelated
         # lockfile edits. Scheduled and manual proofs always compare both checkers.
         run: |
           bun test scripts/typecheck-parity-gate.test.ts
@@ -2926,7 +2927,7 @@ jobs:
           };
           const forced = ["schedule", "workflow_dispatch"].includes(process.env.EVENT_NAME);
           const base = process.env.BASE_SHA || (forced ? "" : git("rev-parse", "HEAD^"));
-          const required = forced || versions(base) !== versions("HEAD");
+          const required = forced || versions(base) !== versions("HEAD") || git("diff", "--name-only", base, "HEAD", "--", "apps/api/tsconfig*.json", "scripts/typecheck-parity.ts") !== "";
           console.log(`required=${required}`);
           ' >> "$GITHUB_OUTPUT"
 
@@ -7886,7 +7887,7 @@ jobs:
 
       - name: Install dependencies
         timeout-minutes: 5
-        run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/desktop-windows-dry-run.log" --frozen-lockfile --ignore-scripts
+        run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/desktop-windows-dry-run.log" --frozen-lockfile --ignore-scripts --filter @stll/desktop... --filter '!stella'
         env:
           BUN_INSTALL_GLOBAL_STORE: "0"
           NPM_TOKEN: ""

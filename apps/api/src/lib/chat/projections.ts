@@ -89,10 +89,7 @@ import {
   unenumeratedJson,
 } from "./projection-schema";
 
-export {
-  SEARCH_CASE_LAW_PROJECTION,
-  LOOKUP_CASE_LAW_PROJECTION,
-} from "./case-law-result-projections";
+export { SEARCH_CASE_LAW_PROJECTION } from "./case-law-result-projections";
 
 /**
  * Per-tool chat projection schemas, one artifact per projected registry tool.
@@ -1920,6 +1917,7 @@ export const READ_STATUTE_PROVISIONS_PROJECTION = v.strictObject({
           resourceName: passthroughId(),
           status: v.literal(PROVISION_STATUS.found),
           text: v.string(),
+          nextTextCursor: v.nullable(passthroughId()),
           truncated: v.boolean(),
           versionValidFrom: v.nullable(v.string()),
           versionValidTo: v.nullable(v.string()),
@@ -1980,6 +1978,7 @@ export const READ_PROVISION_HISTORY_PROJECTION = v.strictObject({
       projectionBranch(
         v.strictObject({
           ...statuteProvisionVersion,
+          nextTextCursor: v.nullable(passthroughId()),
           status: v.literal(PROVISION_STATUS.found),
           text: v.string(),
           truncated: v.boolean(),

@@ -37,6 +37,12 @@ export type ChatTab = {
   contextMatterIds: string[];
   /** The legal document this chat is about, when it was opened from one. */
   activeLegalKey?: LegalDocumentChatKey | undefined;
+  /**
+   * The conversation has a message on the server. A document's chat that
+   * never got one is not kept across reloads: the document reopens its
+   * conversation from the server, so an empty tab would only pile up.
+   */
+  started?: true | undefined;
   activeSkill?:
     | {
         /** Absent for a built-in skill, which has no row: `skillName` names it. */
@@ -342,9 +348,13 @@ type InspectorTabsActions = {
     contextMatterIds?: string[];
     activeLegalKey?: LegalDocumentChatKey;
     activeSkill?: ChatTab["activeSkill"];
+    /** The thread is known to have messages on the server. */
+    started?: true;
     pane?: InspectorPaneIntent;
   }) => void;
   setChatContext: (tabId: string, matterIds: string[]) => void;
+  /** Records that a chat tab's conversation has a message on the server. */
+  markChatStarted: (tabId: string) => void;
   resetChatTabId: (oldId: ChatThreadId, newId: ChatThreadId) => void;
   openView: <P>(args: {
     type: string;
