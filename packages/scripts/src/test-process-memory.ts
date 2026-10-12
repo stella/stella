@@ -27,7 +27,7 @@ const processGone = ({ cause }: ProcessMemoryReadError) =>
 type ProcessTreeSample = {
   readings: Map<number, Result<number, ProcessMemoryReadError>>;
   children: Map<number, number[]>;
-  unavailable?: ProcessMemoryReadError;
+  unavailable: ProcessMemoryReadError | undefined;
 };
 
 type ProcessMemoryReader = ((
