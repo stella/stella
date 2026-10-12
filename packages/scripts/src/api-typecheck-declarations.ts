@@ -22,7 +22,7 @@ const declarationProfile = (
   phase: string,
   details: Record<string, string | number>,
 ) => {
-  if (process.env["API_TYPECHECK_DECLARATIONS_PROFILE"] !== "1") {
+  if (!process.argv.includes("--profile")) {
     return;
   }
   process.stderr.write(
@@ -501,9 +501,15 @@ if (import.meta.main) {
   if (!writeSurface) {
     const config = ts.readConfigFile(project, (file) => ts.sys.readFile(file));
     const roots = apiDeclarationSurfaceFiles(project, files);
-    if (JSON.stringify(config.config.files) !== JSON.stringify(roots)) {
+    const configured = v.parse(
+      v.object({ files: v.array(v.string()) }),
+      config.config,
+    ).files;
+    if (JSON.stringify(configured) !== JSON.stringify(roots)) {
+      const missing = roots.filter((root) => !configured.includes(root));
+      const stale = configured.filter((root) => !roots.includes(root));
       panic(
-        "API declaration roots must match the retained declaration surface; regenerate with --write-surface",
+        `API declaration roots must match the retained declaration surface; regenerate with --write-surface (missing=${missing.join(",")}; stale=${stale.join(",")})`,
       );
     }
   }

@@ -28,7 +28,6 @@ import path from "node:path";
 import ts from "typescript";
 
 import { withoutTsgoOnlyOptionDiagnostics } from "../packages/scripts/src/tsgo-compiler-options.ts";
-import { typecheckCacheContractIssues } from "../packages/scripts/src/typecheck-cache-contract";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const TSC_NATIVE = "packages/scripts/src/tsc-native.ts";
@@ -964,7 +963,7 @@ const selfTest = (): void => {
   console.log("typecheck-coverage --self-test: PASS");
 };
 
-const main = (): void => {
+const main = async (): Promise<void> => {
   if (process.argv.at(2) === "--autofix") {
     typecheckAutofixFiles(process.argv.slice(3));
     return;
@@ -986,6 +985,9 @@ const main = (): void => {
 
   run(["bun", "packages/scripts/src/api-typecheck-partition.ts", "--resolved"]);
 
+  // Autofix checks supplied projects without loading the repository cache audit.
+  const { typecheckCacheContractIssues } =
+    await import("../packages/scripts/src/typecheck-cache-contract");
   const cacheIssues = typecheckCacheContractIssues(REPO_ROOT);
   if (cacheIssues.length > 0) {
     panic(cacheIssues.join("\n"));
@@ -1053,4 +1055,4 @@ const main = (): void => {
   );
 };
 
-main();
+await main();

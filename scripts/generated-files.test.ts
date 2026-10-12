@@ -386,6 +386,7 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
     "cli-registry",
     "cli-runtime",
     "mcp-surface",
+    "api-typecheck-projects",
   ] satisfies readonly (typeof GENERATORS)[number]["id"][];
   expect(
     generatorsForFiles(["apps/web/src/routes/law/index.tsx"]).map(
@@ -396,7 +397,7 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
     generatorsForFiles(["scripts/ownership/new-capability.ts"]).map(
       ({ id }) => id,
     ),
-  ).toEqual(["module-ownership"]);
+  ).toEqual(["api-typecheck-projects", "module-ownership"]);
   expect(generatorsForFiles(["docs/unrelated.md"]).map(({ id }) => id)).toEqual(
     [],
   );

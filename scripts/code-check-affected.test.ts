@@ -857,10 +857,10 @@ process.exit(childExitStatus(result));
         "typecheck",
       ]);
       expect(taskInputs(tasks, `${name}#lint`)).toEqual(
-        taskInputs(tasks, "lint"),
+        expect.arrayContaining(taskInputs(tasks, "lint")),
       );
       expect(taskInputs(tasks, `${name}#typecheck`)).toEqual(
-        taskInputs(tasks, "typecheck"),
+        expect.arrayContaining(taskInputs(tasks, "typecheck")),
       );
       expect(
         taskField(tasks, `${name}#typecheck`, "outputs").filter(

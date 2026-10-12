@@ -220,7 +220,7 @@ export const GENERATORS = [
       "patches/**",
     ],
     write: ["bun", "packages/scripts/src/api-typecheck-regenerate.ts"],
-    check: null,
+    check: ["bun", "scripts/typecheck-coverage.ts"],
     checkedBy: "Typecheck coverage",
     autofix: true,
     after: ["cli-runtime", "capability-runtime"],
