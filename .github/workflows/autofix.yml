@@ -327,16 +327,6 @@ jobs:
             [[ -f "$app/.env" ]] || cp "$app/.env.example" "$app/.env"
           done
 
-      - name: Regenerate selected files
-        if: needs.regenerate-scope.outputs.run == 'true'
-        env:
-          STELLA_LOCAL_AUTOFIX: "true"
-          GENERATOR_IDS: ${{ needs.regenerate-scope.outputs.ids }}
-        run: |
-          if [[ -n "$GENERATOR_IDS" ]]; then
-            bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
-          fi
-
       - name: Fix changed files
         env:
           STELLA_LOCAL_AUTOFIX: "true"
@@ -391,6 +381,18 @@ jobs:
           if (( ${#format_paths[@]} > 0 )); then
             bun run format:guard
             bun --bun oxfmt -c .oxfmtrc.json --no-error-on-unmatched-pattern "${format_paths[@]}"
+          fi
+
+      # Final outputs must reflect lint and formatting rewrites, including
+      # sources prepared earlier for the type-aware fixer.
+      - name: Regenerate selected files
+        if: needs.regenerate-scope.outputs.run == 'true'
+        env:
+          STELLA_LOCAL_AUTOFIX: "true"
+          GENERATOR_IDS: ${{ needs.regenerate-scope.outputs.ids }}
+        run: |
+          if [[ -n "$GENERATOR_IDS" ]]; then
+            bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
           fi
 
       - name: Restrict autofix changes
