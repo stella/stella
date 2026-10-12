@@ -76,7 +76,10 @@ describe("dispatch", () => {
     ...overrides,
   });
 
-  test("starts one run per pull request, on that pull request's own branch", async () => {
+  const run = async (
+    nodes: Record<string, unknown>[],
+    plannedHeads: string[] = [],
+  ) => {
     const dispatched: Record<string, unknown>[] = [];
     await dispatch.runInNewContext({
       setTimeout,
@@ -88,6 +91,16 @@ describe("dispatch", () => {
             getBranch: async () => ({ data: { commit: { sha: MAIN } } }),
           },
           actions: {
+            listWorkflowRuns: async (request: Record<string, unknown>) => {
+              expect(request["workflow_id"]).toBe(RESOLVE);
+              return {
+                data: {
+                  workflow_runs: plannedHeads.map((head) => ({
+                    head_sha: head,
+                  })),
+                },
+              };
+            },
             createWorkflowDispatch: async (
               request: Record<string, unknown>,
             ) => {
@@ -99,35 +112,44 @@ describe("dispatch", () => {
           repository: {
             pullRequests: {
               pageInfo: { hasNextPage: false, endCursor: null },
-              nodes: [
-                pull({}),
-                pull({
-                  number: 2,
-                  headRefName: "feat/b",
-                  headRefOid: "c".repeat(40),
-                }),
-                pull({
-                  number: 3,
-                  isCrossRepository: true,
-                  headRefName: "fork",
-                }),
-                pull({ number: 4, headRefName: "main" }),
-                pull({
-                  number: 5,
-                  mergeable: "MERGEABLE",
-                  headRefName: "clean",
-                }),
-                pull({
-                  number: 6,
-                  author: { login: "dependabot[bot]" },
-                  headRefName: "dep",
-                }),
-              ],
+              nodes,
             },
           },
         }),
       },
     });
+    return dispatched;
+  };
+  const sha = (index: number) => index.toString(16).padStart(40, "0");
+  const updatedAt = (day: number) =>
+    `2026-10-${String(day).padStart(2, "0")}T00:00:00Z`;
+
+  test("starts one run per pull request, on that pull request's own branch", async () => {
+    const dispatched = await run([
+      pull({ updatedAt: updatedAt(2) }),
+      pull({
+        number: 2,
+        headRefName: "feat/b",
+        headRefOid: "c".repeat(40),
+        updatedAt: updatedAt(1),
+      }),
+      pull({
+        number: 3,
+        isCrossRepository: true,
+        headRefName: "fork",
+      }),
+      pull({ number: 4, headRefName: "main" }),
+      pull({
+        number: 5,
+        mergeable: "MERGEABLE",
+        headRefName: "clean",
+      }),
+      pull({
+        number: 6,
+        author: { login: "dependabot[bot]" },
+        headRefName: "dep",
+      }),
+    ]);
     expect(dispatched).toEqual([
       {
         owner: "stella",
@@ -143,6 +165,61 @@ describe("dispatch", () => {
         ref: "feat/b",
         inputs: { head: "c".repeat(40), main: MAIN },
       },
+    ]);
+  });
+
+  test("ineligible pull requests never take a slot", async () => {
+    const ineligible = Array.from({ length: 10 }, (_, index) =>
+      pull({
+        number: 100 + index,
+        isCrossRepository: true,
+        headRefName: `fork/${String(index)}`,
+        updatedAt: updatedAt(20),
+      }),
+    );
+    const dispatched = await run([
+      ...ineligible,
+      pull({ headRefName: "feat/late", updatedAt: updatedAt(1) }),
+    ]);
+    expect(dispatched.map((request) => request["ref"])).toEqual(["feat/late"]);
+  });
+
+  test("unplanned heads go first, then the most recently updated", async () => {
+    const stale = Array.from({ length: 8 }, (_, index) =>
+      pull({
+        number: 10 + index,
+        headRefName: `stale/${String(index)}`,
+        headRefOid: sha(10 + index),
+        updatedAt: updatedAt(20 + index),
+      }),
+    );
+    const dispatched = await run(
+      [
+        ...stale,
+        pull({
+          number: 2,
+          headRefName: "fresh/old",
+          headRefOid: sha(2),
+          updatedAt: updatedAt(1),
+        }),
+        pull({
+          number: 3,
+          headRefName: "fresh/new",
+          headRefOid: sha(3),
+          updatedAt: updatedAt(5),
+        }),
+      ],
+      stale.map((entry) => entry.headRefOid),
+    );
+    expect(dispatched.map((request) => request["ref"])).toEqual([
+      "fresh/new",
+      "fresh/old",
+      "stale/7",
+      "stale/6",
+      "stale/5",
+      "stale/4",
+      "stale/3",
+      "stale/2",
     ]);
   });
 

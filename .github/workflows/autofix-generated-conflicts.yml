@@ -45,7 +45,7 @@ jobs:
               repository(owner: $owner, name: $repo) {
                 pullRequests(states: OPEN, baseRefName: "main", first: 50, after: $cursor) {
                   pageInfo { hasNextPage endCursor }
-                  nodes { number mergeable isCrossRepository headRefName headRefOid author { login } }
+                  nodes { number mergeable isCrossRepository headRefName headRefOid updatedAt author { login } }
                 }
               }
             }`;
@@ -67,14 +67,27 @@ jobs:
               await new Promise(resolve => setTimeout(resolve, 20_000));
               nodes = await list();
             }
-            const pulls = nodes
-              .filter(pull => pull.mergeable === 'CONFLICTING'
-                && !pull.isCrossRepository
-                && pull.author?.login !== 'dependabot[bot]'
-                && /^[A-Za-z0-9._/-]+$/u.test(pull.headRefName)
-                && !pull.headRefName.includes('..') && !pull.headRefName.startsWith('-')
-                && pull.headRefName !== 'main'
-                && /^[0-9a-f]{40}$/u.test(pull.headRefOid))
+            const eligible = nodes.filter(pull => pull.mergeable === 'CONFLICTING'
+              && !pull.isCrossRepository
+              && pull.author?.login !== 'dependabot[bot]'
+              && /^[A-Za-z0-9._/-]+$/u.test(pull.headRefName)
+              && !pull.headRefName.includes('..') && !pull.headRefName.startsWith('-')
+              && pull.headRefName !== 'main'
+              && /^[0-9a-f]{40}$/u.test(pull.headRefOid));
+            // A head that already had a resolve run usually conflicts in
+            // source files, which a newer main does not clear. Heads not yet
+            // planned go first, then the most recently updated, so a few stale
+            // pull requests never take every slot from new generated-only
+            // conflicts. Planned heads still get a slot when one is free.
+            const { data: { workflow_runs: runs } } = await github.rest.actions.listWorkflowRuns({
+              owner, repo, workflow_id: 'generated-conflicts-resolve.yml',
+              event: 'workflow_dispatch', per_page: 100,
+            });
+            const planned = new Set(runs.map(run => run.head_sha));
+            const updated = pull => Date.parse(pull.updatedAt) || 0;
+            const pulls = eligible
+              .sort((a, b) => Number(planned.has(a.headRefOid)) - Number(planned.has(b.headRefOid))
+                || updated(b) - updated(a))
               .slice(0, 8);
             for (const pull of pulls) {
               try {
