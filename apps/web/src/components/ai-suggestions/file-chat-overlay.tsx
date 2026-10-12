@@ -26,7 +26,6 @@ import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
-import { v7 as uuidv7 } from "uuid";
 
 import {
   DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
@@ -199,6 +198,7 @@ import {
   runReservedChatCommand,
 } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
+import { createUuid } from "@/lib/uuid";
 
 type ActiveFile = {
   docxEditSnapshot?:
@@ -385,7 +385,7 @@ const prepareOperations = (
   operations: readonly FolioAIEditOperation[],
 ): PreparedOperation[] =>
   operations.map((operation, index) => {
-    const id = `ai-docx-${String(index + 1)}-${uuidv7()}`;
+    const id = `ai-docx-${String(index + 1)}-${createUuid()}`;
     return {
       folio: { ...normalizeQueuedOperation(operation), id },
       id,
@@ -446,7 +446,7 @@ const queueReviewSuggestions = ({
   const queuedIds: string[] = [];
   const skipped: { id: string; reason: "noopOperation" | "missingBlock" }[] =
     [];
-  const proposalBatchId = uuidv7();
+  const proposalBatchId = createUuid();
   const items: ReviewSuggestion[] = prepared.flatMap(
     ({ id, reportId, folio }) => {
       // Drop true no-ops before they ever reach the panel: the model

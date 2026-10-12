@@ -29,6 +29,7 @@
     "clean": "git clean -xdf .cache .turbo node_modules",
     "typecheck": "bun --cwd=../../packages/cli run codegen:runtime && bun run generate:capability-runtime && bun check --no-pretty --all --project=tsconfig.json && bun check --no-pretty --all --project=tsconfig.contracts.json && bun check --no-pretty --all --project=tsconfig.scripts.json && bun check --no-pretty --all --project=tsconfig.visual-sandbox.json",
     "lint": "bun --cwd=../../packages/cli run codegen:runtime && bun run generate:capability-runtime && cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check apps/api",
+    "lint:profile": "bun run lint --debug timings --format=default",
     "lint:fix": "bun --cwd=../../packages/cli run codegen:runtime && bun run generate:capability-runtime && cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/api",
     "format": "bun ../../scripts/run-oxfmt.ts .",
     "ocr:fetch-models": "bun src/scripts/fetch-ocr-models.ts",

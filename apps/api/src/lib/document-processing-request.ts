@@ -17,7 +17,10 @@ import {
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
-import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
+import {
+  DOCUMENT_PROCESSING_MAX_ATTEMPTS,
+  DOCUMENT_OCR_PROCESSOR_VERSION,
+} from "@/api/lib/document-processing-contract";
 
 const RETRYABLE_MANUAL_OCR_CANCELLATION_CODES = [
   "policy_disabled",
@@ -36,17 +39,22 @@ const MANUAL_OCR_COLLISION_ACTION = {
 type ManualOcrProjectionState = "absent" | "different" | "matching";
 
 export const classifyManualOcrCollision = ({
+  attemptCount,
   errorCode,
   projectionState,
   requestSource,
   status,
 }: {
+  attemptCount: number;
   errorCode: string | null;
   projectionState: ManualOcrProjectionState;
   requestSource: (typeof documentProcessingRuns.$inferSelect)["requestSource"];
   status: (typeof documentProcessingRuns.$inferSelect)["status"];
 }): (typeof MANUAL_OCR_COLLISION_ACTION)[keyof typeof MANUAL_OCR_COLLISION_ACTION] => {
   if (status === "queued") {
+    if (attemptCount >= DOCUMENT_PROCESSING_MAX_ATTEMPTS) {
+      return MANUAL_OCR_COLLISION_ACTION.RETRY;
+    }
     return requestSource === "manual"
       ? MANUAL_OCR_COLLISION_ACTION.REUSE
       : MANUAL_OCR_COLLISION_ACTION.PROMOTE;
@@ -210,10 +218,7 @@ export const persistManualOcrRun = async ({
     if (!run) {
       const existingRows = await tx
         .select({
-          errorCode: documentProcessingRuns.errorCode,
           id: documentProcessingRuns.id,
-          requestSource: documentProcessingRuns.requestSource,
-          status: documentProcessingRuns.status,
         })
         .from(documentProcessingRuns)
         .where(
@@ -232,9 +237,18 @@ export const persistManualOcrRun = async ({
             ),
           ),
         )
-        .limit(1)
-        .for("update");
-      const existing = existingRows.at(0);
+        .limit(1);
+      const identity = existingRows.at(0);
+      const locked = identity
+        ? await withAggregateRowQuery({
+            tx,
+            aggregate: "processingClaim",
+            id: { id: identity.id, workspaceId },
+            mode: "update",
+            select: (queryTx) => queryTx.select().from(documentProcessingRuns),
+          })
+        : null;
+      const existing = locked?.rows.at(0);
       const projectionRows =
         existing?.status === "running" || existing?.status === "succeeded"
           ? await tx
@@ -269,6 +283,7 @@ export const persistManualOcrRun = async ({
       }
       const collisionAction = existing
         ? classifyManualOcrCollision({
+            attemptCount: existing.attemptCount,
             errorCode: existing.errorCode,
             projectionState,
             requestSource: existing.requestSource,
@@ -302,6 +317,7 @@ export const persistManualOcrRun = async ({
         const retried = await tx
           .update(documentProcessingRuns)
           .set({
+            attemptCount: 0,
             requestSource: "manual",
             requestedBy: userId,
             updatedAt: new Date(),
@@ -309,8 +325,10 @@ export const persistManualOcrRun = async ({
             claimedBy: null,
             errorAt: null,
             errorCode: null,
+            errorMessage: null,
             finishedAt: null,
             nextAttemptAt: null,
+            nextDeliveryAt: null,
             progressCompleted: 0,
             progressTotal: null,
             startedAt: null,
@@ -321,6 +339,7 @@ export const persistManualOcrRun = async ({
               eq(documentProcessingRuns.id, existing.id),
               or(
                 eq(documentProcessingRuns.status, "failed"),
+                eq(documentProcessingRuns.status, "queued"),
                 eq(documentProcessingRuns.status, "succeeded"),
                 and(
                   eq(documentProcessingRuns.status, "running"),
