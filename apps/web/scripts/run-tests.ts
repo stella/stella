@@ -113,7 +113,7 @@ for (const run of runs) {
       process.stderr.write(`${outputFailure}\n`);
     }
   } finally {
-    watchdog.stop();
+    await watchdog.stop();
     shutdown.dispose();
     if (child.exitCode === null && child.signalCode === null) {
       child.kill("SIGKILL");

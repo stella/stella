@@ -21,6 +21,124 @@ class ProcessMemoryReadError extends TaggedError("ProcessMemoryReadError")<{
   cause?: unknown;
 }> {}
 
+const processGone = ({ cause }: ProcessMemoryReadError) =>
+  cause instanceof Error && "code" in cause && cause.code === "ESRCH";
+
+type ProcessTreeSample = {
+  readings: Map<number, Result<number, ProcessMemoryReadError>>;
+  children: Map<number, number[]>;
+  unavailable?: ProcessMemoryReadError;
+};
+
+type ProcessMemoryReader = ((
+  pid: number,
+) => Result<number, ProcessMemoryReadError>) & {
+  sampleTree?: (
+    pid: number,
+    signal: AbortSignal,
+  ) => Promise<Result<ProcessTreeSample, ProcessMemoryReadError>>;
+};
+
+/** Ignore foreign rows even if a sampler returns more than the owned tree. */
+export const parseWindowsProcessTree = (rootPid: number, output: string) => {
+  const rows = new Map<number, { parent: number; bytes: number }>();
+  let unavailable: ProcessMemoryReadError | undefined;
+  for (const line of output.trim().split(/\r?\n/u)) {
+    if (line === "unknown") {
+      unavailable = new ProcessMemoryReadError({
+        message: "Process ancestry sample unavailable",
+      });
+      continue;
+    }
+    const values = line.trim().split(/\s+/u).map(Number);
+    const [pid, parent, bytes] = values;
+    if (
+      values.length !== 3 ||
+      pid === undefined ||
+      parent === undefined ||
+      bytes === undefined ||
+      !Number.isSafeInteger(pid) ||
+      pid <= 0 ||
+      !Number.isSafeInteger(parent) ||
+      parent < 0
+    ) {
+      return Result.err(
+        new ProcessMemoryReadError({ message: "Invalid process tree sample" }),
+      );
+    }
+    rows.set(pid, { parent, bytes });
+  }
+  const sample: ProcessTreeSample = {
+    readings: new Map(),
+    children: new Map(),
+    unavailable,
+  };
+  const owned = [rootPid];
+  for (const pid of owned) {
+    const row = rows.get(pid);
+    sample.readings.set(
+      pid,
+      row !== undefined && Number.isFinite(row.bytes) && row.bytes >= 0
+        ? Result.ok(row.bytes)
+        : Result.err(
+            new ProcessMemoryReadError({
+              message: `Cannot read memory for PID ${pid}`,
+            }),
+          ),
+    );
+    const descendants: number[] = [];
+    for (const [candidate, value] of rows) {
+      if (value.parent === pid && !owned.includes(candidate)) {
+        descendants.push(candidate);
+        owned.push(candidate);
+      }
+    }
+    sample.children.set(pid, descendants);
+  }
+  return Result.ok(sample);
+};
+
+const sampleWindowsProcessTree = (rootPid: number, signal: AbortSignal) =>
+  Result.tryPromise({
+    try: async () => {
+      // Ancestry uses metadata only. Working sets are queried only for owned PIDs.
+      const command = `$ErrorActionPreference='Stop'; $rows=@(); try { $rows=@(Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId) } catch { Write-Output 'unknown' }; $owned=[System.Collections.Generic.HashSet[int]]::new(); $queue=[System.Collections.Generic.Queue[int]]::new(); [void]$owned.Add(${rootPid}); $queue.Enqueue(${rootPid}); while($queue.Count -gt 0) { $pidValue=$queue.Dequeue(); foreach($row in $rows) { if($row.ParentProcessId -eq $pidValue -and $owned.Add([int]$row.ProcessId)) { $queue.Enqueue([int]$row.ProcessId) } } }; $memory=@{}; Get-Process -Id @($owned) -ErrorAction SilentlyContinue | ForEach-Object { $memory[[int]$_.Id]=$_.WorkingSet64 }; foreach($pidValue in $owned) { $parent=0; foreach($row in $rows) { if($row.ProcessId -eq $pidValue) { $parent=$row.ParentProcessId; break } }; $bytes=-1; if($memory.ContainsKey($pidValue)) { $bytes=$memory[$pidValue] }; Write-Output "$pidValue $parent $bytes" }`;
+      const child = Bun.spawn(
+        [
+          "powershell.exe",
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
+          command,
+        ],
+        {
+          stdout: "pipe",
+          stderr: "ignore",
+          signal,
+          timeout: 5000,
+          killSignal: "SIGKILL",
+        },
+      );
+      const [output, exitCode] = await Promise.all([
+        new Response(child.stdout).text(),
+        child.exited,
+      ]);
+      if (exitCode !== 0) {
+        return Result.err(
+          new ProcessMemoryReadError({
+            message: `Cannot sample process tree rooted at PID ${rootPid}`,
+          }),
+        );
+      }
+      return parseWindowsProcessTree(rootPid, output);
+    },
+    catch: (cause) =>
+      new ProcessMemoryReadError({
+        message: `Cannot sample process tree rooted at PID ${rootPid}`,
+        cause,
+      }),
+  }).then((result) => result.andThen((sample) => sample));
+
 /** Read the child's memory, never the host's free-memory counters. */
 const loadProcessMemoryReader = async () => {
   if (process.platform === "darwin") {
@@ -78,27 +196,15 @@ const loadProcessMemoryReader = async () => {
     };
   }
   if (process.platform === "win32") {
-    return (pid: number) => {
-      const result = Bun.spawnSync(
-        [
-          "powershell.exe",
-          "-NoProfile",
-          "-NonInteractive",
-          "-Command",
-          `(Get-Process -Id ${pid} -ErrorAction Stop).WorkingSet64`,
-        ],
-        { timeout: 1000 },
-      );
-      const bytes = Number(result.stdout.toString().trim());
-      if (!result.success || !Number.isFinite(bytes) || bytes <= 0) {
-        return Result.err(
+    return Object.assign(
+      (pid: number) =>
+        Result.err(
           new ProcessMemoryReadError({
-            message: `Cannot read memory for PID ${pid}`,
+            message: `No completed memory sample for PID ${pid}`,
           }),
-        );
-      }
-      return Result.ok(bytes);
-    };
+        ),
+      { sampleTree: sampleWindowsProcessTree },
+    );
   }
   return panic(`No test process memory reader for ${process.platform}`);
 };
@@ -108,24 +214,9 @@ export const createProcessMemoryReader = async () =>
   (memoryReader ??= loadProcessMemoryReader());
 
 const processChildren = (pid: number) => {
-  const result =
-    process.platform === "win32"
-      ? Bun.spawnSync(
-          [
-            "powershell.exe",
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            `Get-CimInstance Win32_Process -Filter 'ParentProcessId = ${pid}' | Select-Object -ExpandProperty ProcessId`,
-          ],
-          { timeout: 1000 },
-        )
-      : Bun.spawnSync(["pgrep", "-P", String(pid)], { timeout: 1000 });
+  const result = Bun.spawnSync(["pgrep", "-P", String(pid)], { timeout: 1000 });
   // pgrep uses status 1 to report an empty child set.
-  if (
-    !result.success &&
-    !(process.platform !== "win32" && result.exitCode === 1)
-  ) {
+  if (!result.success && result.exitCode !== 1) {
     return Result.err(
       new ProcessMemoryReadError({
         message: `Cannot enumerate children of PID ${pid}`,
@@ -154,7 +245,7 @@ const processChildren = (pid: number) => {
 type WatchTestProcessMemoryOptions = {
   child: Pick<Bun.Subprocess, "pid" | "exitCode" | "signalCode" | "kill">;
   limitBytes: number;
-  readBytes: (pid: number) => Result<number, ProcessMemoryReadError>;
+  readBytes: ProcessMemoryReader;
   file: () => string;
   onFailure: (message: string) => void;
   onWarning: (message: string) => void;
@@ -191,14 +282,7 @@ export const watchTestProcessMemory = ({
         catch: (cause) =>
           new ProcessMemoryReadError({ message: String(cause), cause }),
       });
-      if (
-        killed.isErr() &&
-        !(
-          killed.error.cause instanceof Error &&
-          "code" in killed.error.cause &&
-          killed.error.cause.code === "ESRCH"
-        )
-      ) {
+      if (killed.isErr() && !processGone(killed.error)) {
         onFailure(
           `Could not kill test process group ${child.pid}: ${killed.error.message}`,
         );
@@ -213,14 +297,7 @@ export const watchTestProcessMemory = ({
         catch: (cause) =>
           new ProcessMemoryReadError({ message: String(cause), cause }),
       });
-      if (
-        killed.isErr() &&
-        !(
-          killed.error.cause instanceof Error &&
-          "code" in killed.error.cause &&
-          killed.error.cause.code === "ESRCH"
-        )
-      ) {
+      if (killed.isErr() && !processGone(killed.error)) {
         onFailure(
           `Could not kill test descendant PID ${pid}: ${killed.error.message}`,
         );
@@ -229,7 +306,7 @@ export const watchTestProcessMemory = ({
     child.kill("SIGKILL");
     onFailure(message);
   };
-  const sample = () => {
+  const sample = (tree?: ProcessTreeSample) => {
     if (
       stopped ||
       failure !== undefined ||
@@ -239,11 +316,14 @@ export const watchTestProcessMemory = ({
       return;
     }
     sampledPids = [child.pid];
-    let unavailable: ProcessMemoryReadError | undefined;
+    let unavailable = tree?.unavailable;
     for (let index = 0; index < sampledPids.length; index += 1) {
       const pid = sampledPids.at(index) ?? panic("Missing sampled PID");
       const descendants = Result.try({
-        try: () => children(pid),
+        try: () =>
+          tree === undefined
+            ? children(pid)
+            : Result.ok(tree.children.get(pid) ?? []),
         catch: (cause) =>
           new ProcessMemoryReadError({ message: String(cause), cause }),
       }).andThen((result) => result);
@@ -260,7 +340,15 @@ export const watchTestProcessMemory = ({
     let totalBytes = 0;
     for (const pid of sampledPids) {
       const read = Result.try({
-        try: () => readBytes(pid),
+        try: () =>
+          tree === undefined
+            ? readBytes(pid)
+            : (tree.readings.get(pid) ??
+              Result.err(
+                new ProcessMemoryReadError({
+                  message: `Cannot read memory for PID ${pid}`,
+                }),
+              )),
         catch: (cause) =>
           new ProcessMemoryReadError({ message: String(cause), cause }),
       }).andThen((result) => result);
@@ -270,13 +358,7 @@ export const watchTestProcessMemory = ({
           catch: (cause) =>
             new ProcessMemoryReadError({ message: String(cause), cause }),
         });
-        if (
-          pid !== child.pid &&
-          alive.isErr() &&
-          alive.error.cause instanceof Error &&
-          "code" in alive.error.cause &&
-          alive.error.cause.code === "ESRCH"
-        ) {
+        if (pid !== child.pid && alive.isErr() && processGone(alive.error)) {
           continue;
         }
         unavailable ??= read.error;
@@ -306,12 +388,52 @@ export const watchTestProcessMemory = ({
       );
     }
   };
-  const timer = setInterval(sample, intervalMs);
-  sample();
+  const cancellation = new AbortController();
+  let pendingSample: Promise<void> | undefined;
+  const tick = () => {
+    if (
+      stopped ||
+      failure !== undefined ||
+      pendingSample !== undefined ||
+      child.exitCode !== null ||
+      child.signalCode !== null
+    ) {
+      return;
+    }
+    const sampleTree = readBytes.sampleTree;
+    if (sampleTree === undefined) {
+      sample();
+      return;
+    }
+    // The watchdog owns one asynchronous query at a time; stop aborts it.
+    pendingSample = sampleTree(child.pid, cancellation.signal)
+      .then((result) => {
+        if (stopped) {
+          return undefined;
+        }
+        sample(
+          result.isOk()
+            ? result.value
+            : {
+                readings: new Map(),
+                children: new Map(),
+                unavailable: result.error,
+              },
+        );
+        return undefined;
+      })
+      .finally(() => {
+        pendingSample = undefined;
+      });
+  };
+  const timer = setInterval(tick, intervalMs);
+  tick();
   return {
     stop: () => {
       stopped = true;
       clearInterval(timer);
+      cancellation.abort();
+      return pendingSample;
     },
     failure: () => failure,
     peakBytes: () => peakBytes,

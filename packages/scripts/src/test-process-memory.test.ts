@@ -3,10 +3,119 @@ import { expect, test } from "bun:test";
 
 import {
   createProcessMemoryReader,
+  parseWindowsProcessTree,
   testInvocationMemoryLimit,
   TEST_INVOCATION_MEMORY_GIB_ENV,
   watchTestProcessMemory,
 } from "./test-process-memory";
+
+test("Windows snapshots retain only owned PID readings and preserve unknown lower bounds", () => {
+  const parsed = parseWindowsProcessTree(
+    42,
+    "unknown\n42 1 700\n43 42 -1\n44 43 500\n99 1 9000",
+  );
+  expect(parsed.isOk()).toBe(true);
+  if (parsed.isErr()) {
+    throw new TypeError(parsed.error.message);
+  }
+  expect([...parsed.value.readings.keys()]).toEqual([42, 43, 44]);
+  expect(parsed.value.readings.get(42)?.unwrap()).toBe(700);
+  expect(parsed.value.readings.get(43)?.isErr()).toBe(true);
+  expect(parsed.value.readings.get(44)?.unwrap()).toBe(500);
+  expect(parsed.value.unavailable?.message).toContain("ancestry");
+  expect(parseWindowsProcessTree(42, "bad row").isErr()).toBe(true);
+});
+
+test("asynchronous tree queries do not overlap, enforce readable sums, and abort on stop", async () => {
+  const failures: string[] = [];
+  const warnings: string[] = [];
+  let queries = 0;
+  let finish:
+    | ((sample: ReturnType<typeof parseWindowsProcessTree>) => void)
+    | undefined;
+  let observedSignal: AbortSignal | undefined;
+  const readBytes = Object.assign(() => Result.ok(0), {
+    sampleTree: (_pid: number, signal: AbortSignal) => {
+      queries += 1;
+      observedSignal = signal;
+      return new Promise<ReturnType<typeof parseWindowsProcessTree>>(
+        (resolve) => {
+          finish = resolve;
+        },
+      );
+    },
+  });
+  const watchdog = watchTestProcessMemory({
+    child: { pid: 42, exitCode: null, signalCode: null, kill: () => {} },
+    readBytes,
+    limitBytes: 1000,
+    intervalMs: 5,
+    file: () => "snapshot.test.ts",
+    onFailure: (message) => {
+      failures.push(message);
+    },
+    onWarning: (message) => {
+      warnings.push(message);
+    },
+    signalPid: () => {},
+  });
+  try {
+    await Bun.sleep(20);
+    expect(queries).toBe(1);
+    finish?.(
+      parseWindowsProcessTree(42, "unknown\n42 1 700\n43 42 -1\n44 42 500"),
+    );
+    await Bun.sleep(20);
+    expect(failures).toHaveLength(1);
+    expect(warnings).toHaveLength(1);
+    expect(watchdog.peakBytes()).toBe(1200);
+    expect(queries).toBe(1);
+  } finally {
+    finish?.(parseWindowsProcessTree(42, "42 1 0"));
+    await watchdog.stop();
+  }
+  expect(observedSignal?.aborted).toBe(true);
+});
+
+test("stopping a pending tree query aborts and joins it without measuring unknown bytes", async () => {
+  let queries = 0;
+  let cancelled = false;
+  const failures: string[] = [];
+  const readBytes = Object.assign(() => Result.ok(0), {
+    sampleTree: (_pid: number, signal: AbortSignal) => {
+      queries += 1;
+      return new Promise<ReturnType<typeof parseWindowsProcessTree>>(
+        (resolve) => {
+          signal.addEventListener(
+            "abort",
+            () => {
+              cancelled = true;
+              resolve(parseWindowsProcessTree(42, "unknown\n42 1 -1"));
+            },
+            { once: true },
+          );
+        },
+      );
+    },
+  });
+  const watchdog = watchTestProcessMemory({
+    child: { pid: 42, exitCode: null, signalCode: null, kill: () => {} },
+    readBytes,
+    limitBytes: 1000,
+    file: () => "pending.test.ts",
+    onFailure: (message) => {
+      failures.push(message);
+    },
+    onWarning: (message) => {
+      failures.push(message);
+    },
+  });
+  await watchdog.stop();
+  expect(queries).toBe(1);
+  expect(cancelled).toBe(true);
+  expect(watchdog.peakBytes()).toBe(0);
+  expect(failures).toEqual([]);
+});
 
 test("memory budgets default to six GiB and reject unbounded overrides", () => {
   expect(testInvocationMemoryLimit({})).toBe(6 * 1024 ** 3);
@@ -59,7 +168,7 @@ for (const fixture of ["memory-allocation.ts", "memory-allocation-parent.ts"]) {
       expect(failures.at(0)).toContain("peak ");
       expect(failures.at(0)).toContain("cap 0.125 GiB");
     } finally {
-      watchdog.stop();
+      await watchdog.stop();
       if (child.exitCode === null && child.signalCode === null) {
         child.kill("SIGKILL");
         await child.exited;
@@ -118,7 +227,7 @@ for (const boundary of ["census", "reading"] as const) {
     expect(signals).toEqual([]);
     expect(failures).toEqual([]);
     await Bun.sleep(75);
-    watchdog.stop();
+    await watchdog.stop();
     expect(signals).toEqual(["SIGKILL"]);
     expect(failures).toHaveLength(1);
     expect(failures.at(0)).toContain(
@@ -133,7 +242,7 @@ for (const boundary of ["census", "reading"] as const) {
   });
 }
 
-test("the cap sums measured workers instead of allowing each worker a full budget", () => {
+test("the cap sums measured workers instead of allowing each worker a full budget", async () => {
   const signals: (number | NodeJS.Signals | undefined)[] = [];
   const failures: string[] = [];
   const warnings: string[] = [];
@@ -158,7 +267,7 @@ test("the cap sums measured workers instead of allowing each worker a full budge
       warnings.push(message);
     },
   });
-  watchdog.stop();
+  await watchdog.stop();
   expect(watchdog.peakBytes()).toBe(1200);
   expect(signals).toEqual(["SIGKILL"]);
   expect(failures.at(0)).toContain(
@@ -234,13 +343,13 @@ for (const boundary of ["census", "reading"] as const) {
           "enforcing readable lower bound and retrying",
         );
       } finally {
-        watchdog.stop();
+        await watchdog.stop();
       }
     });
   }
 }
 
-test("an unavailable root census still enforces the measured root memory", () => {
+test("an unavailable root census still enforces the measured root memory", async () => {
   const signals: (number | NodeJS.Signals | undefined)[] = [];
   const warnings: string[] = [];
   const failures: string[] = [];
@@ -267,7 +376,7 @@ test("an unavailable root census still enforces the measured root memory", () =>
       warnings.push(message);
     },
   });
-  watchdog.stop();
+  await watchdog.stop();
   expect(watchdog.peakBytes()).toBe(1200);
   expect(signals).toEqual(["SIGKILL"]);
   expect(failures.at(0)).toContain(

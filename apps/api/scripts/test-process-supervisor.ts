@@ -419,7 +419,7 @@ export class TestProcessSupervisor {
       throw error;
     } finally {
       clearTimeout(watchdog);
-      memoryWatchdog?.stop();
+      await memoryWatchdog?.stop();
       // A stopped leader may exit before its descendants, which still need escalation.
       if (!this.stopped()) {
         this.active.delete(id);
