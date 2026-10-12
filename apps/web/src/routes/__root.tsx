@@ -7,11 +7,13 @@ import {
   createRootRouteWithContext,
   HeadContent,
   Outlet,
+  redirect,
   Scripts,
   useRouterState,
   useNavigate,
   type ErrorComponentProps,
 } from "@tanstack/react-router";
+import { panic } from "better-result";
 
 import { AppProviders } from "@/app-providers";
 import { ApiVersionMismatchProvider } from "@/components/api-version-mismatch-refresh";
@@ -58,7 +60,11 @@ export const Route = createRootRouteWithContext<{
 }>()({
   ssr: ({ location: routeLocation }) => isPublicSsrPath(routeLocation.pathname),
   beforeLoad: async ({ context, location }) => {
-    await loadMcpHandoff();
+    const handoffRedirect = await loadMcpHandoff();
+    if (handoffRedirect) {
+      redirect({ ...handoffRedirect.options, throw: true });
+      return panic("TanStack Router did not throw the handoff redirect.");
+    }
     await requireFreshDocument({ queryClient: context.queryClient, location });
   },
   shellComponent: RootDocument,

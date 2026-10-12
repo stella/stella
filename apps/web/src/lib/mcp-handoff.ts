@@ -110,15 +110,15 @@ export const loadMcpHandoff = async () => {
         email: result.email,
         organizationName: result.organizationName,
       };
-      throw redirect({ to: "/auth/handoff", replace: true });
+      return redirect({ to: "/auth/handoff", replace: true });
     case "redeemed":
-      throw redirect({
+      return redirect({
         href: pending.destination,
         replace: true,
         reloadDocument: true,
       });
     case "refused":
-      throw redirect({
+      return redirect({
         href: handoffNavigationDestination(pending.destination, "refused"),
         replace: true,
         reloadDocument: true,

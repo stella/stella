@@ -1,5 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -15,7 +16,8 @@ export const Route = createFileRoute("/auth/handoff")({
   beforeLoad: () => {
     const confirmation = handoffConfirmation();
     if (!confirmation) {
-      throw redirect({ to: "/auth", replace: true });
+      redirect({ to: "/auth", replace: true, throw: true });
+      return panic("TanStack Router did not throw the sign-in redirect.");
     }
     return { confirmation };
   },

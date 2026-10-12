@@ -4,7 +4,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { getTranslator } from "@/i18n/translator";
 import { normalizeRedirectTo } from "@/lib/redirect";
 
-export const requiresStepUp = (error: unknown): boolean => {
+const requiresStepUp = (error: unknown): boolean => {
   if (typeof error !== "object" || error === null) {
     return false;
   }
