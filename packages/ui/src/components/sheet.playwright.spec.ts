@@ -44,14 +44,45 @@ for (const direction of ["ltr", "rtl"] as const) {
       expect(clearance.right).toBeGreaterThanOrEqual(
         direction === "ltr" ? 28 : 44,
       );
+      const inspectorCloseClearance = await inspector
+        .getByRole("button", { name: "Close", exact: true })
+        .evaluate((element) => {
+          const { left, right } = element.getBoundingClientRect();
+          return document.documentElement.dir === "rtl"
+            ? left
+            : window.innerWidth - right;
+        });
+      expect(
+        inspectorCloseClearance,
+        `Full-width close button inline-end clearance (${direction}, ${width}px)`,
+      ).toBeGreaterThanOrEqual(28 + 8);
       await page.keyboard.press("Escape");
       await expect(inspector).not.toBeVisible();
       await page
         .getByRole("button", { name: "Normal-width sheet", exact: true })
         .click();
       const normal = page.getByRole("dialog", { name: "Normal-width sheet" });
+      await expect(normal).toHaveCSS("translate", "none");
       await expect(normal).toHaveCSS("padding-inline-start", "0px");
       await expect(normal).toHaveCSS("padding-inline-end", "28px");
+      const normalCloseClearance = await normal
+        .getByRole("button", { name: "Close", exact: true })
+        .evaluate((element) => {
+          const { left, right } = element.getBoundingClientRect();
+          return document.documentElement.dir === "rtl"
+            ? left
+            : window.innerWidth - right;
+        });
+      expect(
+        normalCloseClearance,
+        `Normal-width close button inline-end clearance (${direction}, ${width}px)`,
+      ).toBeGreaterThanOrEqual(28 + 8);
+      console.info({
+        direction,
+        width,
+        inspectorCloseClearance,
+        normalCloseClearance,
+      });
     });
   }
 }

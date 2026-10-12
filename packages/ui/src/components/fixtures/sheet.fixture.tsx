@@ -12,7 +12,7 @@ const SheetFixture = () => (
       <SheetPopup
         className="h-dvh w-full max-w-none border-0"
         side="inline-end"
-        showCloseButton={false}
+        showCloseButton
       >
         <SheetTitle>Full-width inspector</SheetTitle>
         <div data-testid="inspector-content">Inspector content</div>
@@ -20,7 +20,7 @@ const SheetFixture = () => (
     </Sheet>
     <Sheet>
       <SheetTrigger>Normal-width sheet</SheetTrigger>
-      <SheetPopup showCloseButton={false}>
+      <SheetPopup showCloseButton>
         <SheetTitle>Normal-width sheet</SheetTitle>
         <div data-testid="normal-content">Sheet content</div>
       </SheetPopup>

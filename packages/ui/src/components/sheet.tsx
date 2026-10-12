@@ -132,7 +132,7 @@ const SheetPopup = ({
           <SheetPrimitive.Close
             aria-label="Close"
             className={cn(
-              "absolute end-2 top-2",
+              "absolute end-[calc(--spacing(2)+var(--safe-area-inline-end))] top-2",
               // Beside the status bar when the popup reaches the top edge.
               side !== "block-end" &&
                 "top-[calc(--spacing(2)+var(--safe-area-top))]",
