@@ -2,11 +2,10 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { ReaderAiLabel } from "@stll/decision-reader/reader-ai-label";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import { analysisLayersOf } from "@stll/legal-ast/analysis";
 import { BidiText } from "@stll/ui/bidi-text";
-
-import { AiDisclosureLabel } from "@/components/ai-disclosure-label";
 
 type AnalysisLayersProps = {
   analysis: DecisionAnalysis;
@@ -30,7 +29,7 @@ const Layer = ({
   return (
     <section className="px-2 pt-4">
       <h3 className="text-foreground-disabled text-3xs pb-1 font-medium tracking-wider uppercase">
-        <AiDisclosureLabel
+        <ReaderAiLabel
           context="caseLaw"
           label={t("caseLaw.analysis.aiLayer", { layer: label })}
         />

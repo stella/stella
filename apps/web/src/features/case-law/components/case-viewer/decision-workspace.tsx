@@ -8,6 +8,7 @@ import {
   decisionCaseName,
   visibleDecisionBlocks,
 } from "@stll/decision-reader/decision-text.logic";
+import { ReaderAiLabel } from "@stll/decision-reader/reader-ai-label";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -19,7 +20,6 @@ import type { OutlineItem } from "@stll/ui/outline-rail";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
-import { AiDisclosureLabel } from "@/components/ai-disclosure-label";
 import { activeLegalFromReaderTarget } from "@/components/ai-suggestions/active-legal-document";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
@@ -761,7 +761,7 @@ const GatedAnalysisInvitation = ({
         role="region"
       >
         <span className="text-muted-foreground text-xs">
-          <AiDisclosureLabel
+          <ReaderAiLabel
             context="caseLaw"
             label={t("caseLaw.notesFilter.ai")}
           />

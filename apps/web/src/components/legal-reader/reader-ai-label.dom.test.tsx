@@ -19,7 +19,7 @@ const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { messageLoaders } = await import("@/i18n/i18n-store");
 const { AnalysisLayers } =
   await import("@/features/case-law/components/case-viewer/analysis/analysis-layers");
-const { AiDisclosureLabel } = await import("./ai-disclosure-label");
+const { ReaderAiLabel } = await import("@stll/decision-reader/reader-ai-label");
 
 afterEach(() => {
   cleanup();
@@ -51,11 +51,11 @@ const Providers = ({
 /** The disclosure is in the document only while its popover is open. */
 const disclosureShown = () => screen.queryByText(disclosure) !== null;
 
-describe("AiDisclosureLabel", () => {
+describe("ReaderAiLabel", () => {
   test("is a button named by its visible words, closed until asked", () => {
     render(
       <Providers>
-        <AiDisclosureLabel
+        <ReaderAiLabel
           context="caseLaw"
           label={messages.caseLaw.notesFilter.ai}
         />
@@ -79,7 +79,7 @@ describe("AiDisclosureLabel", () => {
   test("a click opens the disclosure in a named dialog, Escape closes it", async () => {
     render(
       <Providers>
-        <AiDisclosureLabel
+        <ReaderAiLabel
           context="caseLaw"
           label={messages.caseLaw.notesFilter.ai}
         />
@@ -116,7 +116,7 @@ describe("AiDisclosureLabel", () => {
   test("the keyboard reaches it and opens it without a pointer", async () => {
     render(
       <Providers>
-        <AiDisclosureLabel
+        <ReaderAiLabel
           context="caseLaw"
           label={messages.caseLaw.notesFilter.ai}
         />
@@ -160,7 +160,7 @@ describe("AiDisclosureLabel", () => {
 
       render(
         <Providers catalogue={catalogue} locale={locale}>
-          <AiDisclosureLabel
+          <ReaderAiLabel
             context="caseLaw"
             label={catalogue.caseLaw.notesFilter.ai}
           />

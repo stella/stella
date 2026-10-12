@@ -801,6 +801,7 @@ test("the AI label is reached only through a typed disclosure context", async ()
   ]) {
     for (const sourcePath of [
       "apps/web/src/features/chat/components/answer-mark.tsx",
+      "apps/web/src/components/ai-disclosure-label.tsx",
       "packages/decision-reader/src/headnote-block.tsx",
       "apps/desktop/src/renderer/ai-mark.tsx",
     ]) {
@@ -811,16 +812,11 @@ test("the AI label is reached only through a typed disclosure context", async ()
         }),
       ).toEqual([1]);
     }
-    for (const sourcePath of [
-      "apps/web/src/components/ai-disclosure-label.tsx",
-      "packages/decision-reader/src/reader-ai-label.tsx",
-    ]) {
-      expect(
-        await lintSingleRule("confine-owner", source, {
-          ...options,
-          sourcePath,
-        }),
-      ).toEqual([]);
-    }
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ...options,
+        sourcePath: "packages/decision-reader/src/reader-ai-label.tsx",
+      }),
+    ).toEqual([]);
   }
 });
