@@ -11,6 +11,19 @@ test("Windows installs retain cold-install headroom regardless of cache contents
   expect(installTimeoutMs("linux")).toBe(120_000);
   expect(installTimeoutMs("darwin")).toBe(120_000);
 });
+test("caller budgets can only reduce the platform process limit", () => {
+  expect(installTimeoutMs("linux", "90000")).toBe(90_000);
+  expect(installTimeoutMs("win32", "90000")).toBe(90_000);
+  expect(installTimeoutMs("linux", "")).toBe(120_000);
+  for (const value of ["0", "-1", "1.5", "NaN", "Infinity", "120001", "1e3"]) {
+    expect(() => installTimeoutMs("linux", value)).toThrow(
+      "within the platform limit",
+    );
+  }
+  expect(() => installTimeoutMs("win32", "240001")).toThrow(
+    "within the platform limit",
+  );
+});
 test("the workflow leaves install budgets to the platform owner", () => {
   const workflow = readFileSync(
     new URL("../.github/workflows/ci.yml", import.meta.url),
@@ -51,7 +64,7 @@ test("failed and hung installers preserve output and never retry", async () => {
         'console.log("partial output before hang"); setInterval(() => {}, 1000)',
       ],
       logFile,
-      timeoutMs: 500,
+      timeoutMs: installTimeoutMs("linux", "500"),
     }),
   ).not.toBe(0);
   const hung = readFileSync(logFile, "utf-8");

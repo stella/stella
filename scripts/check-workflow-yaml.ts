@@ -190,13 +190,46 @@ export const actionlintWorkflowSource = ({
     uses.startsWith("$/"),
   );
   const rewritten: string[] = [];
-  const normalized = source.replace(
-    /^([ \t]*(?:-[ \t]+)?uses:[ \t]*["']?)(\$\/[^\s"']+)(["']?[ \t]*(?:#.*)?)$/gmu,
-    (_match, prefix: string, uses: string, suffix: string) => {
+  const normalized = source
+    .split("\n")
+    .map((line) => {
+      let content = line.trimStart();
+      if (content.startsWith("- ") || content.startsWith("-\t")) {
+        content = content.slice(1).trimStart();
+      }
+      if (!content.startsWith("uses:")) {
+        return line;
+      }
+      const scalar = content.slice("uses:".length).trimStart();
+      const quote =
+        scalar.startsWith('"') || scalar.startsWith("'")
+          ? scalar.charAt(0)
+          : "";
+      const actionValue = scalar.slice(quote.length);
+      if (!actionValue.startsWith("$/")) {
+        return line;
+      }
+      let end = 0;
+      while (
+        end < actionValue.length &&
+        !/\s|["']/u.test(actionValue.charAt(end))
+      ) {
+        end += 1;
+      }
+      const uses = actionValue.slice(0, end);
+      const remainder = actionValue.slice(end);
+      if (quote !== "" && !remainder.startsWith(quote)) {
+        return line;
+      }
+      const tail = remainder.slice(quote.length).trimStart();
+      if (tail !== "" && !tail.startsWith("#")) {
+        return line;
+      }
       rewritten.push(uses);
-      return `${prefix}./${uses.slice(2)}${suffix}`;
-    },
-  );
+      const offset = line.length - scalar.length + quote.length;
+      return `${line.slice(0, offset)}.${line.slice(offset + 1)}`;
+    })
+    .join("\n");
   if (
     JSON.stringify(rewritten.toSorted()) !== JSON.stringify(expected.toSorted())
   ) {

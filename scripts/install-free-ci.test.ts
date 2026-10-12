@@ -15,6 +15,8 @@ import {
   boundedInstallProblems,
   installWorkflowPolicy,
   SCOPED_INSTALL_STEP_MINUTES,
+  SCOPED_INSTALL_PHASE_MS,
+  compositeInstallProblems,
 } from "./ci-install-policy";
 import {
   conditionOperands,
@@ -58,6 +60,32 @@ test("Windows installs and every explicit CI cold install retain bounded logs", 
       }
     }
   }
+});
+
+test("every composite caller covers restore/verify, its installer budget and cleanup", () => {
+  for (const file of readdirSync(path.join(REPO_ROOT, ".github/workflows"))) {
+    if (!/\.ya?ml$/u.test(file)) {
+      continue;
+    }
+    const workflow: unknown = Bun.YAML.parse(
+      readFileSync(path.join(REPO_ROOT, ".github/workflows", file), "utf-8"),
+    );
+    expect(compositeInstallProblems(workflow), file).toEqual([]);
+  }
+  const steps = workflowJobSteps(
+    Bun.YAML.parse(readFileSync(path.join(REPO_ROOT, CI_WORKFLOW), "utf-8")),
+    "e2e-production-shard",
+  );
+  const install = steps.find(
+    (step) => step["uses"] === "$/.github/actions/ci-install",
+  );
+  if (!install) {
+    throw new TypeError("Missing E2E composite install");
+  }
+  expect(install).toHaveProperty(
+    "with.installer-budget-ms",
+    String(SCOPED_INSTALL_PHASE_MS.e2eInstaller),
+  );
 });
 
 test("the real Windows dry-run deadline retains platform headroom regardless of cache restoration", () => {
@@ -202,7 +230,51 @@ test("the fixed local composite owns its bounded install and failure log", () =>
       [{ ...action, "timeout-minutes": SCOPED_INSTALL_STEP_MINUTES.minimum }],
       "ubuntu-latest",
     ),
+  ).toContain(
+    "smoke: caller deadline must cover restore/verify, installer and cleanup",
+  );
+  expect(
+    check(
+      [
+        {
+          ...action,
+          "timeout-minutes": 2,
+          with: {
+            ...action.with,
+            "installer-budget-ms": String(SCOPED_INSTALL_PHASE_MS.e2eInstaller),
+          },
+        },
+      ],
+      "ubuntu-latest",
+    ),
   ).toEqual([]);
+  expect(
+    check(
+      [
+        {
+          ...action,
+          "timeout-minutes": 2,
+          with: { ...action.with, "installer-budget-ms": "91000" },
+        },
+      ],
+      "ubuntu-latest",
+    ),
+  ).toContain(
+    "smoke: caller deadline must cover restore/verify, installer and cleanup",
+  );
+  for (const budget of ["0", "invalid", "120001"]) {
+    expect(
+      check(
+        [
+          {
+            ...action,
+            with: { ...action.with, "installer-budget-ms": budget },
+          },
+        ],
+        "ubuntu-latest",
+      ),
+    ).toContain("smoke: invalid installer budget");
+  }
   expect(
     check([
       {
@@ -258,6 +330,10 @@ test("the fixed ci-install composite owns the bounded wrapper and failure artifa
       'bun scripts/ci-install.ts "$',
       '{INSTALL_LOG:-$RUNNER_TEMP/bun-install/$GITHUB_JOB.log}"',
     ].join(""),
+  );
+  expect(install).toHaveProperty(
+    "env.STELLA_CI_INSTALL_BUDGET_MS",
+    `\${{ inputs.installer-budget-ms }}`,
   );
   const upload = steps.find(
     (step) =>

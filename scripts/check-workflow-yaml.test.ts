@@ -37,6 +37,30 @@ test("archive action lint rewrites are one-to-one and preserve workflow semantic
   expect(normalized).toContain("run: echo '$/.github/actions/ci-install'");
 });
 
+test("archive normalization preserves scalar spelling, indentation and line endings", () => {
+  for (const quote of ["", "'", '"']) {
+    for (const newline of ["\n", "\r\n"]) {
+      const source = [
+        "jobs:",
+        "  check:",
+        "    steps:",
+        `      - uses: ${quote}$/.github/actions/ci-install${quote} # archive`,
+        "      - name: padding",
+        `        run: echo ${" ".repeat(10_000)}safe`,
+        "",
+      ].join(newline);
+      expect(
+        actionlintWorkflowSource({ source, root: ROOT, file: "fixture.yml" }),
+      ).toBe(
+        source.replace(
+          "$/.github/actions/ci-install",
+          "./.github/actions/ci-install",
+        ),
+      );
+    }
+  }
+});
+
 test("missing archive targets fail both the workflow guard and lint normalization", () => {
   const source =
     "jobs:\n  check:\n    steps:\n      - uses: $/.github/actions/absent-archive-target\n";

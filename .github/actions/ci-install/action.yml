@@ -8,6 +8,10 @@ inputs:
     description: Complete installer log path.
     required: false
     default: ""
+  installer-budget-ms:
+    description: Optional smaller installer process budget within the platform limit.
+    required: false
+    default: ""
 outputs:
   cache-hit:
     description: Whether the exact scoped archive was restored.
@@ -61,6 +65,7 @@ runs:
         BUN_INSTALL_CACHE_DIR: ${{ steps.identity.outputs.store }}
         STELLA_CI_INSTALL_FLAGS: ${{ inputs.flags }}
         INSTALL_LOG: ${{ inputs.log-file }}
+        STELLA_CI_INSTALL_BUDGET_MS: ${{ inputs.installer-budget-ms }}
         NPM_TOKEN: ""
       run: bun scripts/ci-install.ts "${INSTALL_LOG:-$RUNNER_TEMP/bun-install/$GITHUB_JOB.log}"
     - name: Record install time and seal successful store

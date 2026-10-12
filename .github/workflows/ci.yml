@@ -6613,10 +6613,9 @@ jobs:
         uses: $/.github/actions/ci-install
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
+          installer-budget-ms: "90000"
         env:
           NPM_TOKEN: ""
-          # Three attempts and both waits fit inside the step deadline.
-          RETRY_DELAYS_SECONDS: "5 10"
 
       # The recorder uses this exact setup, build artifact, seed and browser.
       - name: Setup production browser stack

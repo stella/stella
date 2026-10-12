@@ -73,6 +73,14 @@ export const SCOPED_INSTALL_STEP_MINUTES = {
   maximum: 10,
 } as const;
 
+// Linux full-scope cold restore + install measured 19.331 s in benchmark
+// run 38259500894. A 90 s installer cap reserves 30 s inside the 2 minute caller.
+export const SCOPED_INSTALL_PHASE_MS = {
+  restoreVerify: 15_000,
+  cleanup: 15_000,
+  e2eInstaller: 90_000,
+} as const;
+
 const scopedActionProblems = ({
   name,
   job,
@@ -114,6 +122,32 @@ const scopedActionProblems = ({
       limit >= job["timeout-minutes"])
   ) {
     problems.push(`${name}: install needs a bounded step timeout`);
+  }
+  const requested = inputs["installer-budget-ms"];
+  if (requested !== undefined && typeof requested !== "string") {
+    problems.push(
+      `${name}: installer budget must be a literal millisecond string`,
+    );
+    return problems;
+  }
+  let installerMs: number;
+  try {
+    installerMs = installTimeoutMs(
+      windowsInstall ? "win32" : "linux",
+      requested,
+    );
+  } catch {
+    problems.push(`${name}: invalid installer budget`);
+    return problems;
+  }
+  const requiredMs =
+    SCOPED_INSTALL_PHASE_MS.restoreVerify +
+    installerMs +
+    SCOPED_INSTALL_PHASE_MS.cleanup;
+  if (typeof limit === "number" && limit * 60_000 < requiredMs) {
+    problems.push(
+      `${name}: caller deadline must cover restore/verify, installer and cleanup`,
+    );
   }
   return problems;
 };
@@ -225,4 +259,23 @@ export const boundedInstallProblems = (
     }
   }
   return problems;
+};
+
+/** Audit every scoped composite caller, including non-Windows auxiliary jobs. */
+export const compositeInstallProblems = (workflow: unknown) => {
+  if (!isRecord(workflow) || !isRecord(workflow["jobs"])) {
+    return boundedInstallProblems(workflow, "all");
+  }
+  const jobs = new Map<string, unknown>();
+  for (const [name, job] of Object.entries(workflow["jobs"])) {
+    if (!isRecord(job) || !Array.isArray(job["steps"])) {
+      jobs.set(name, job);
+      continue;
+    }
+    const steps = flattenWorkflowSteps(job["steps"]).filter(
+      (step) => isCiInstallAction(step) || isMisownedCiInstallAction(step),
+    );
+    jobs.set(name, { ...job, steps });
+  }
+  return boundedInstallProblems({ jobs: Object.fromEntries(jobs) }, "all");
 };

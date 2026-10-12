@@ -285,13 +285,16 @@ test("dropping save from a real Bun caller violates the repository contract", ()
         .map((step) => ({ id, step })),
     )
     .at(0);
-  const step = caller?.step;
-  if (!step?.with) {
+  if (caller === undefined) {
+    expect.unreachable("Missing real Bun cache caller");
+  }
+  const { step, id } = caller;
+  if (!step.with) {
     expect.unreachable("Missing real Bun cache caller");
   }
   expect(workflowCacheProblems(workflow)).toEqual([]);
   delete step.with["save"];
   expect(workflowCacheProblems(workflow)).toContain(
-    `job '${caller?.id}': Bun install cache saves must be main-only`,
+    `job '${id}': Bun install cache saves must be main-only`,
   );
 });
