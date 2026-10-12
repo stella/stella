@@ -166,3 +166,12 @@ describe("browser approval card", () => {
     expect(markup).not.toContain(messages.chat.approval.alwaysAllow);
   });
 });
+
+test("a snapshot-denied approval remains denied when its result settles as an error", () => {
+  const html = renderCard({
+    ...browserPart(readPage, "error", { denied: true }),
+    approval: { id: "approval-1", needsApproval: true, approved: false },
+  });
+  expect(html).toContain(messages.chat.approval.denied);
+  expect(html).not.toContain(browserQuestion);
+});

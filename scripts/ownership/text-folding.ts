@@ -2,11 +2,17 @@ import type { OwnershipEntry } from "../ownership-types.ts";
 
 export default {
   id: "text-folding",
-  capability: "Diacritic and ASCII folding for search and slugs",
+  capability: "Unicode normalization, diacritic and ASCII folding",
   owner: ["packages/text-normalize/"],
   summary:
-    "Folding decides which strings compare equal, so search, highlighting, " +
-    "and slugs have to agree on it. Build slug helpers on the folds exported " +
-    "here rather than on a local regex.",
-  enforcement: { kind: "none" },
+    "Normalization and folding decide which strings compare equal, so search, " +
+    "highlighting, storage keys, and slugs have to agree on them. Use the " +
+    "Unicode normalization and fold helpers exported here.",
+  enforcement: {
+    kind: "custom-rule",
+    rule: "no-direct-unicode-normalize/no-direct-unicode-normalize",
+    reason:
+      "The guard must distinguish String.normalize from node:path normalize " +
+      "and recognize equivalent Unicode mark-removal regular expressions.",
+  },
 } as const satisfies OwnershipEntry;

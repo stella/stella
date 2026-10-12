@@ -8,6 +8,7 @@ import {
   screen,
 } from "@stll/sanctions";
 import type { ParsedList, ScreeningQuery } from "@stll/sanctions";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -98,7 +99,7 @@ const multilingualCases = [
 test.each(multilingualCases)(
   "real worker preserves multilingual identity and partial-date evidence ($name)",
   async (fixture) => {
-    expect("Čeněk Říha".normalize("NFD")).not.toBe("Čeněk Říha");
+    expect(normalizeUnicode("Čeněk Říha", "NFD")).not.toBe("Čeněk Říha");
     const pool = createSanctionsMatcherPool({
       size: 1,
       clock: createMatcherTestClock(),
@@ -106,7 +107,10 @@ test.each(multilingualCases)(
     const list = personList(fixture.listed);
     const index = buildScreeningIndex([list]);
     try {
-      for (const name of [fixture.name, fixture.name.normalize("NFD")]) {
+      for (const name of [
+        fixture.name,
+        normalizeUnicode(fixture.name, "NFD"),
+      ]) {
         const query = {
           name,
           entityType: "person",
