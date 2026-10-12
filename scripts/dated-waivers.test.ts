@@ -116,9 +116,10 @@ test("complete owner UTC day and exact five-day grace boundary are preserved", (
 });
 test("an elapsed waiver annotates the change instead of failing it", () => {
   const entries = inventory();
-  const exclusion = entries.find(
+  const exclusionLine = entries.find(
     ({ kind }) => kind === "release-age-exclusion",
-  );
+  )?.line;
+  expect(exclusionLine).toBeNumber();
   expect(
     expiredWaiverAnnotations(entries, new Date("2026-10-02T01:02:02.999Z")),
   ).toEqual([]);
@@ -128,7 +129,7 @@ test("an elapsed waiver annotates the change instead of failing it", () => {
   );
   expect(annotations).toHaveLength(1);
   expect(annotations[0]).toStartWith(
-    `::warning file=bunfig.toml,line=${exclusion?.line}::`,
+    `::warning file=bunfig.toml,line=${String(exclusionLine)}::`,
   );
   expect(annotations[0]).toContain(
     "new-package (release-age-exclusion) expired at 2026-10-02T01:02:03.000Z",
