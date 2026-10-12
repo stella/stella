@@ -3,10 +3,12 @@ import { panic } from "better-result";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
+import * as v from "valibot";
 
 import {
   apiResolvedTypecheckInputs,
   nativeTypecheckProgramFiles,
+  requireApiTypecheckGeneratedSources,
 } from "./api-typecheck-inputs";
 import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
 import {
@@ -136,7 +138,8 @@ export const missingDeclarationCacheInputs = (
     return [];
   }
   const config = readTurboTypecheckInputs(turbo);
-  const inputs = config.tasks["@stll/api#typecheck:declarations"]?.inputs ?? [];
+  const inputs =
+    config.tasks["@stll/api#generate:typecheck-declarations"]?.inputs ?? [];
   const exact = new Set(
     inputs
       .filter((input) => !/[!*?{]/u.test(input))
@@ -422,6 +425,34 @@ const nativeRequiredDeclarationRoots = (project: string) => {
 };
 
 export const regenerateApiDeclarationSurface = (project: string) => {
+  // Generated explicit roots can outlive a deleted or moved source file.
+  // Prune those stale roots before native resolution; the following census
+  // and dependency closure derive the replacement owners and declarations.
+  for (const filename of [
+    path.resolve(project),
+    path.resolve(path.dirname(project), "tsconfig.tests.json"),
+  ]) {
+    if (!existsSync(filename)) {
+      continue;
+    }
+    const config = ts.readConfigFile(filename, (file) => ts.sys.readFile(file));
+    const roots = v.parse(
+      v.object({ files: v.optional(v.array(v.string())) }),
+      config.config,
+    ).files;
+    if (!roots) {
+      continue;
+    }
+    const files = roots.filter((file) =>
+      existsSync(path.resolve(path.dirname(filename), file)),
+    );
+    if (files.length !== roots.length) {
+      writeFileSync(
+        filename,
+        `${JSON.stringify({ ...config.config, files }, null, 2)}\n`,
+      );
+    }
+  }
   const refreshInputs = () => {
     const turbo = path.resolve(path.dirname(project), "../../turbo.json");
     if (existsSync(turbo)) {
@@ -431,7 +462,7 @@ export const regenerateApiDeclarationSurface = (project: string) => {
         turbo,
         new Map([
           [
-            "@stll/api#typecheck:declarations",
+            "@stll/api#generate:typecheck-declarations",
             apiResolvedTypecheckInputs(project),
           ],
         ]),
@@ -478,6 +509,9 @@ if (import.meta.main) {
   if (!project) {
     panic("Expected API declaration project path");
   }
+  requireApiTypecheckGeneratedSources(
+    path.resolve(path.dirname(path.resolve(project)), "../.."),
+  );
   const writeSurface = process.argv.includes("--write-surface");
   const { diagnostics, files } = writeSurface
     ? regenerateApiDeclarationSurface(project)

@@ -28,6 +28,7 @@ import path from "node:path";
 import ts from "typescript";
 
 import { withoutTsgoOnlyOptionDiagnostics } from "../packages/scripts/src/tsgo-compiler-options.ts";
+import { typecheckCacheContractIssues } from "../packages/scripts/src/typecheck-cache-contract";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const TSC_NATIVE = "packages/scripts/src/tsc-native.ts";
@@ -262,7 +263,10 @@ const typecheckProjects = (): string[] => {
         if (name !== "typecheck" && !name.startsWith("typecheck:")) {
           continue;
         }
-        if (name === "typecheck:declarations" || typeof command !== "string") {
+        if (
+          name === "generate:typecheck-declarations" ||
+          typeof command !== "string"
+        ) {
           continue;
         }
         for (const project of supplementalProjects(command)) {
@@ -976,11 +980,16 @@ const main = (): void => {
     "--no-install",
     "turbo",
     "run",
-    "typecheck:declarations",
+    "generate:typecheck-declarations",
     "--filter=@stll/api",
   ]);
 
   run(["bun", "packages/scripts/src/api-typecheck-partition.ts", "--resolved"]);
+
+  const cacheIssues = typecheckCacheContractIssues(REPO_ROOT);
+  if (cacheIssues.length > 0) {
+    panic(cacheIssues.join("\n"));
+  }
 
   const projects = typecheckProjects();
   assertOxcProjectDiscovery(projects);

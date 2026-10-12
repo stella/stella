@@ -54,7 +54,7 @@ for (const [cwd, command] of [
       "--no-install",
       "turbo",
       "run",
-      "typecheck:declarations",
+      "generate:typecheck-declarations",
       "--filter=@stll/api",
     ],
   ],

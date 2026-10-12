@@ -10,12 +10,18 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { apiResolvedTypecheckInputs } from "./api-typecheck-inputs";
+import {
+  apiResolvedTypecheckInputs,
+  missingApiTypecheckGeneratedSources,
+  requireApiTypecheckGeneratedSources,
+} from "./api-typecheck-inputs";
 import {
   apiTestPartitionIssues,
   apiTypecheckInputIssues,
   deriveApiTestPartition,
 } from "./api-typecheck-partition";
+import { childExitStatus } from "./child-exit-status";
+import { CI_GENERATED_OUTPUTS } from "./generated-files";
 
 test("API test ownership follows transitive imports and fails when its derived partition drifts", () => {
   const root = mkdtempSync(path.join(tmpdir(), "api-test-partition-"));
@@ -179,6 +185,73 @@ test("API test ownership follows transitive imports and fails when its derived p
       "import type { Value } from '@stll/shared';\n",
     );
     expect(deriveApiTestPartition(root).independent).toEqual([]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("native input capture requires every canonical runtime generated source", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "api-generated-inputs-"));
+  const outputs = [
+    ...CI_GENERATED_OUTPUTS.capabilityRuntime,
+    ...CI_GENERATED_OUTPUTS.cliRuntime,
+  ];
+  try {
+    expect(missingApiTypecheckGeneratedSources(root)).toEqual(outputs);
+    const project = path.join(root, "apps/api/tsconfig.declarations.json");
+    mkdirSync(path.join(root, "apps/api/src"), { recursive: true });
+    writeFileSync(
+      path.join(root, "apps/api/src/value.ts"),
+      "export const value = 1;\n",
+    );
+    writeFileSync(
+      project,
+      JSON.stringify({
+        files: ["src/value.ts"],
+        include: [],
+        compilerOptions: {
+          noEmit: false,
+          noCheck: true,
+          declaration: true,
+          emitDeclarationOnly: true,
+          composite: true,
+          rootDir: ".",
+          outDir: ".cache/declarations",
+          module: "Preserve",
+          moduleResolution: "Bundler",
+          types: [],
+        },
+      }),
+    );
+    const cli = Bun.spawnSync(
+      [
+        process.execPath,
+        path.join(import.meta.dirname, "api-typecheck-declarations.ts"),
+        project,
+        "--write-surface",
+      ],
+      { cwd: root, stdout: "pipe", stderr: "pipe" },
+    );
+    expect(childExitStatus(cli)).not.toBe(0);
+    expect(cli.stderr.toString()).toContain(
+      "Prepare API and CLI generated sources before native typecheck input capture",
+    );
+    expect(() => requireApiTypecheckGeneratedSources(root)).toThrow(
+      "Prepare API and CLI generated sources before native typecheck input capture",
+    );
+    for (const file of outputs) {
+      const target = path.join(root, file);
+      mkdirSync(path.dirname(target), { recursive: true });
+      writeFileSync(target, "export {};\n");
+    }
+    expect(missingApiTypecheckGeneratedSources(root)).toEqual([]);
+    for (const file of outputs) {
+      const target = path.join(root, file);
+      rmSync(target);
+      expect(missingApiTypecheckGeneratedSources(root)).toEqual([file]);
+      expect(() => requireApiTypecheckGeneratedSources(root)).toThrow(file);
+      writeFileSync(target, "export {};\n");
+    }
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

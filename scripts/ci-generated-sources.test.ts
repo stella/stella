@@ -641,7 +641,7 @@ test("API boot entry points prepare capability runtime sources before starting",
     const script =
       api.scripts[command] ?? panic(`Missing API ${command} script`);
     const emission = script.indexOf(
-      "turbo run typecheck:declarations --filter=@stll/api",
+      "turbo run generate:typecheck-declarations --filter=@stll/api",
     );
     expect(emission).toBeGreaterThanOrEqual(0);
     expect(script.indexOf("bun --bun oxlint")).toBeGreaterThan(emission);

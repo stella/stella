@@ -14,7 +14,7 @@ import path from "node:path";
 import { apiResolvedTypecheckInputs } from "./api-typecheck-inputs";
 
 const ROOT = path.resolve(import.meta.dir, "../../..");
-const EMITTER = "@stll/api#typecheck:declarations";
+const EMITTER = "@stll/api#generate:typecheck-declarations";
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const readObject = (filename: string) => {
@@ -32,7 +32,7 @@ test("declaration consumers run after emission and invalidate with API source ch
     panic("Missing Turbo tasks");
   }
   for (const [id, task] of Object.entries(tasks)) {
-    if (!id.startsWith("@stll/api#typecheck:")) {
+    if (!id.startsWith("@stll/api#typecheck:") && id !== EMITTER) {
       continue;
     }
     if (!isRecord(task) || !Array.isArray(task["inputs"])) {
@@ -185,7 +185,7 @@ test("declaration consumers run after emission and invalidate with API source ch
     if (!apiScripts) {
       panic("Missing API consumer");
     }
-    apiScripts["typecheck:declarations"] = `${record} ${EMITTER}`;
+    apiScripts["generate:typecheck-declarations"] = `${record} ${EMITTER}`;
     write(
       "package.json",
       JSON.stringify({
@@ -239,7 +239,7 @@ test("declaration consumers run after emission and invalidate with API source ch
         "import path from 'node:path';",
         "const root = import.meta.dir;",
         "const output = path.join(root, 'apps/api/.cache/typecheck-declarations/apps/api/src/mcp/apps/manifest.d.ts');",
-        "if (process.argv[2] === '@stll/api#typecheck:declarations') {",
+        "if (process.argv[2] === '@stll/api#generate:typecheck-declarations') {",
         "mkdirSync(path.dirname(output), { recursive: true });",
         "writeFileSync(output, readFileSync(path.join(root, 'apps/api/src/mcp/apps/manifest.ts'), 'utf8').split('\\n')[0]);",
         "} else if (!existsSync(output)) process.exit(1);",
@@ -275,7 +275,7 @@ test("declaration consumers run after emission and invalidate with API source ch
     }
     const dependencies = testsTask["dependsOn"];
     testsTask["dependsOn"] = dependencies.filter(
-      (edge) => edge !== "typecheck:declarations" && edge !== EMITTER,
+      (edge) => edge !== "generate:typecheck-declarations" && edge !== EMITTER,
     );
     writeTasks();
     expect(graphIssues(run([...command, "--dry=json"]))).toContain(

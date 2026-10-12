@@ -4,6 +4,40 @@ import ts from "typescript";
 import * as v from "valibot";
 
 import { childExitStatus } from "./child-exit-status";
+import { CI_GENERATED_OUTPUTS } from "./generated-files";
+
+export const missingApiTypecheckGeneratedSources = (root: string) =>
+  [
+    ...CI_GENERATED_OUTPUTS.capabilityRuntime,
+    ...CI_GENERATED_OUTPUTS.cliRuntime,
+  ].filter((file) => !ts.sys.fileExists(path.join(root, file)));
+
+export const requireApiTypecheckGeneratedSources = (root: string) => {
+  const missing = missingApiTypecheckGeneratedSources(root);
+  if (missing.length > 0) {
+    panic(
+      `Prepare API and CLI generated sources before native typecheck input capture: ${missing.join(", ")}`,
+    );
+  }
+};
+
+export const nativeProgramSpansWorkspaces = (
+  files: readonly string[],
+  root: string,
+) => {
+  const workspaces = new Set<string>();
+  const directory = ts.sys.realpath?.(root) ?? root;
+  for (const file of files) {
+    const relative = path.relative(directory, ts.sys.realpath?.(file) ?? file);
+    const workspace = /^(?:apps|packages)[/\\][^/\\]+(?=[/\\])/u.exec(
+      relative,
+    )?.[0];
+    if (workspace && !/(?:^|[/\\])node_modules(?:[/\\]|$)/u.test(relative)) {
+      workspaces.add(workspace);
+    }
+  }
+  return workspaces.size > 1;
+};
 
 // Root exclusions do not exclude imported modules, so cache the resolved program.
 export const nativeTypecheckProgramFiles = (project: string) => {
@@ -47,7 +81,8 @@ export const apiResolvedTypecheckInputs = (project: string) => {
     parsed.options.outDir,
     parsed.options.declarationDir,
   ].flatMap((directory) => (directory ? [path.resolve(directory)] : []));
-  const resolved = nativeTypecheckProgramFiles(config).filter(
+  const nativeFiles = nativeTypecheckProgramFiles(config);
+  const resolved = nativeFiles.filter(
     (file) =>
       path.isAbsolute(file) &&
       file.startsWith(`${root}${path.sep}`) &&
@@ -109,9 +144,13 @@ export const apiResolvedTypecheckInputs = (project: string) => {
     "$TURBO_ROOT$/.npmrc",
     "$TURBO_ROOT$/bunfig.toml",
     "$TURBO_ROOT$/package.json",
-    "$TURBO_ROOT$/bun.lock",
+    ...(nativeProgramSpansWorkspaces(nativeFiles, root)
+      ? ["$TURBO_ROOT$/bun.lock"]
+      : []),
     "$TURBO_ROOT$/patches/**",
+    "$TURBO_ROOT$/types/**",
     "$TURBO_ROOT$/packages/typescript-config/**",
+    "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
     "$TURBO_ROOT$/packages/scripts/src/{api-typecheck-*,tsc-native,tsgo-compiler-options,child-exit-status,turbo-typecheck-inputs}.ts",
     "$TURBO_ROOT$/{apps,packages}/**/package.json",
     "!$TURBO_ROOT$/packages/**/.cache/**",

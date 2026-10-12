@@ -111,7 +111,8 @@ test("the API declaration command emits its public surface", () => {
   const api = JSON.parse(
     readFileSync(path.join(REPO_ROOT, "apps/api/package.json"), "utf-8"),
   );
-  const [, wrapper, ...args] = api.scripts["typecheck:declarations"].split(" ");
+  const [, wrapper, ...args] =
+    api.scripts["generate:typecheck-declarations"].split(" ");
   const directory = mkdtempSync(
     path.join(tmpdir(), "api-native-declarations-"),
   );

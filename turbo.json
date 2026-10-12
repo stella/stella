@@ -739,10 +739,20 @@
         "typecheck:mcp-apps",
         "typecheck:visual-sandbox"
       ],
-      "inputs": ["package.json"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.npmrc",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/packages/typescript-config/**",
+        "$TURBO_ROOT$/patches/**",
+        "$TURBO_ROOT$/types/**",
+        "package.json"
+      ],
       "outputs": []
     },
     "@stll/api#typecheck:src": {
+      "cache": true,
       "dependsOn": [
         "transit",
         "@stll/cli#codegen:runtime",
@@ -7705,6 +7715,7 @@
       "outputs": []
     },
     "@stll/api#generate:typecheck-declarations": {
+      "cache": true,
       "dependsOn": [
         "transit",
         "@stll/cli#codegen:runtime",
@@ -10136,6 +10147,7 @@
       "outputs": [".cache/typecheck-declarations/**"]
     },
     "@stll/api#typecheck:tests": {
+      "cache": true,
       "dependsOn": [
         "transit",
         "@stll/cli#codegen:runtime",
@@ -11062,6 +11074,7 @@
       "outputs": []
     },
     "@stll/api#typecheck:scripts": {
+      "cache": true,
       "dependsOn": [
         "transit",
         "@stll/cli#codegen:runtime",
@@ -14889,6 +14902,7 @@
       "outputs": []
     },
     "@stll/api#typecheck:contracts": {
+      "cache": true,
       "dependsOn": [
         "transit",
         "@stll/cli#codegen:runtime",
@@ -16895,6 +16909,7 @@
       "outputs": []
     },
     "@stll/api#typecheck:mcp-apps": {
+      "cache": true,
       "dependsOn": [
         "transit",
         "@stll/cli#codegen:runtime",
@@ -17187,6 +17202,7 @@
       "outputs": []
     },
     "@stll/api#typecheck:visual-sandbox": {
+      "cache": true,
       "dependsOn": [
         "transit",
         "@stll/cli#codegen:runtime",

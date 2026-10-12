@@ -807,14 +807,26 @@ process.exit(childExitStatus(result));
       ).filter((dependency) => dependency.startsWith("typecheck:"));
       if (compilerTasks.length > 0) {
         // An aggregate delegates compiler work and cache outputs to its children.
-        expect(taskField(tasks, `${name}#lint`, "dependsOn")).toContain(
-          "typecheck",
+        const producers = new Set(
+          compilerTasks.flatMap((compiler) =>
+            taskField(tasks, `${name}#${compiler}`, "dependsOn").filter(
+              (dependency) => dependency.startsWith("generate:"),
+            ),
+          ),
+        );
+        expect(producers.size).toBeGreaterThan(0);
+        expect(taskField(tasks, `${name}#lint`, "dependsOn")).toEqual(
+          expect.arrayContaining([...producers]),
         );
         expect(
           taskField(tasks, `${name}#typecheck:tests`, "dependsOn"),
-        ).toContain("typecheck:declarations");
+        ).toContain("generate:typecheck-declarations");
         expect(
-          taskField(tasks, `${name}#typecheck:declarations`, "outputs"),
+          taskField(
+            tasks,
+            `${name}#generate:typecheck-declarations`,
+            "outputs",
+          ),
         ).toContain(".cache/typecheck-declarations/**");
         for (const compiler of compilerTasks) {
           expect(
@@ -886,6 +898,7 @@ process.exit(childExitStatus(result));
     expect(taskField(tasks, "@stll/api#lint", "dependsOn")).toEqual([
       "@stll/cli#codegen:runtime",
       "generate:capability-runtime",
+      "generate:typecheck-declarations",
     ]);
   });
 

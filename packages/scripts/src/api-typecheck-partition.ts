@@ -6,7 +6,10 @@ import ts from "typescript";
 import * as v from "valibot";
 
 import { typescriptModuleReferences } from "./api-typecheck-declarations";
-import { apiResolvedTypecheckInputs } from "./api-typecheck-inputs";
+import {
+  apiResolvedTypecheckInputs,
+  requireApiTypecheckGeneratedSources,
+} from "./api-typecheck-inputs";
 import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
 import {
   readTurboTypecheckInputs,
@@ -187,14 +190,17 @@ export const deriveApiTestPartition = (directory: string) => {
   };
 };
 
-const apiProjectInputs = (api: string) => {
+export const apiTypecheckProjects = (api: string) => {
   const manifest = v.parse(
     v.object({ scripts: v.record(v.string(), v.string()) }),
     JSON.parse(readFileSync(path.join(api, "package.json"), "utf-8")),
   );
-  const programs = new Map<string, string[]>();
+  const programs = new Map<string, string>();
   for (const [task, command] of Object.entries(manifest.scripts)) {
-    if (!task.startsWith("typecheck:")) {
+    if (
+      !task.startsWith("typecheck:") &&
+      !command.includes("/api-typecheck-declarations.ts ")
+    ) {
       continue;
     }
     const project =
@@ -203,13 +209,18 @@ const apiProjectInputs = (api: string) => {
     if (!project) {
       panic(`API typecheck task has no compiler project: ${task}`);
     }
-    programs.set(
-      `@stll/api#${task}`,
-      apiResolvedTypecheckInputs(path.resolve(api, project)),
-    );
+    programs.set(`@stll/api#${task}`, path.resolve(api, project));
   }
   return programs;
 };
+
+const apiProjectInputs = (api: string) =>
+  new Map(
+    [...apiTypecheckProjects(api)].map(([task, project]) => [
+      task,
+      apiResolvedTypecheckInputs(project),
+    ]),
+  );
 
 export const apiTestPartitionIssues = (root: string) => {
   const { independent, coupled } = deriveApiTestPartition(root);
@@ -346,6 +357,7 @@ const checkResolvedApiTestPartition = (root: string) => {
 
 if (import.meta.main) {
   const root = path.resolve(import.meta.dir, "../../..");
+  requireApiTypecheckGeneratedSources(root);
   if (process.argv.includes("--resolved")) {
     checkResolvedApiTestPartition(root);
     process.stdout.write("API tests declaration boundary: ok\n");

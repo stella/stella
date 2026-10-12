@@ -190,7 +190,9 @@ test("declaration cache inputs cover roots and transitive emitted dependencies w
       writeFileSync(
         path.join(root, "turbo.json"),
         JSON.stringify({
-          tasks: { "@stll/api#typecheck:declarations": { inputs: values } },
+          tasks: {
+            "@stll/api#generate:typecheck-declarations": { inputs: values },
+          },
         }),
       );
     writeInputs(inputs);
@@ -344,7 +346,7 @@ test("workspace symlink imports hash their source files and satisfy emitted-inpu
     writeFileSync(
       path.join(root, "turbo.json"),
       JSON.stringify({
-        tasks: { "@stll/api#typecheck:declarations": { inputs } },
+        tasks: { "@stll/api#generate:typecheck-declarations": { inputs } },
       }),
     );
     const result = emitApiTypecheckDeclarations(project);
@@ -470,7 +472,7 @@ test("declaration aliases resolve transitive API contracts without checking thei
       turbo,
       `// retain configuration comments\n${JSON.stringify({
         tasks: {
-          "@stll/api#typecheck:declarations": {
+          "@stll/api#generate:typecheck-declarations": {
             inputs: apiDeclarationCacheInputs(project),
           },
         },
@@ -486,7 +488,7 @@ test("declaration aliases resolve transitive API contracts without checking thei
     expect(readFileSync(turbo, "utf-8")).toContain(
       "// retain configuration comments",
     );
-    const producer = "@stll/api#typecheck:declarations";
+    const producer = "@stll/api#generate:typecheck-declarations";
     const generated = readTurboTypecheckInputs(turbo);
     expect(generated.tasks[producer]?.inputs).toContain("src/extra.ts");
     writeFileSync(
@@ -497,6 +499,23 @@ test("declaration aliases resolve transitive API contracts without checking thei
       "Emitted API sources missing from declaration cache inputs",
     );
     expect(regenerateApiDeclarationSurface(project).diagnostics).toEqual([]);
+    const stale = JSON.parse(readFileSync(project, "utf-8"));
+    stale.files.push("src/deleted.ts");
+    writeFileSync(project, JSON.stringify(stale));
+    const testsProject = path.join(api, "tsconfig.tests.json");
+    const staleTests = JSON.parse(readFileSync(consumer, "utf-8"));
+    staleTests.files.push("src/deleted.test.ts");
+    writeFileSync(testsProject, JSON.stringify(staleTests));
+    expect(() => emitApiTypecheckDeclarations(project)).toThrow(
+      "Missing declaration source",
+    );
+    expect(regenerateApiDeclarationSurface(project).diagnostics).toEqual([]);
+    expect(JSON.parse(readFileSync(project, "utf-8")).files).not.toContain(
+      "src/deleted.ts",
+    );
+    expect(JSON.parse(readFileSync(testsProject, "utf-8")).files).toEqual([
+      "consumer.test.ts",
+    ]);
     expect(JSON.parse(readFileSync(project, "utf-8")).files).toContain(
       "src/extra.ts",
     );
