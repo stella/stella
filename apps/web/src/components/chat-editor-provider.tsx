@@ -93,6 +93,7 @@ import {
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
+import { createUuid } from "@/lib/uuid";
 
 const CHAT_FILES_PER_MESSAGE = 5;
 const CHAT_MAX_FILE_BYTES = CHAT_CONTEXT_FILE_MAX_BYTES;
@@ -1020,7 +1021,7 @@ export const useChatEditor = ({
           ...readPastedTextAttachments(
             targetEditor.state.doc.attrs[PASTED_TEXT_ATTACHMENTS_ATTR],
           ),
-          { type: "pasted_text", id: crypto.randomUUID(), text },
+          { type: "pasted_text", id: createUuid(), text },
         ],
       ),
     );
