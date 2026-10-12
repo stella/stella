@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import {
   mkdtempSync,
@@ -8,104 +9,238 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript";
 import * as v from "valibot";
 
-const taskSchema = v.looseObject({
-  cache: v.optional(v.boolean()),
-  inputs: v.optional(v.array(v.string())),
-  outputs: v.optional(v.array(v.string())),
-  dependsOn: v.optional(v.array(v.string())),
-});
+import {
+  apiResolvedTypecheckInputs,
+  nativeProgramSpansWorkspaces as spansWorkspaces,
+} from "../packages/scripts/src/api-typecheck-inputs";
+import {
+  explicitTypecheckProjects,
+  nativeProjectsForCommand,
+  readTypecheckCacheTasks,
+  resolvedTypecheckCachePrograms,
+  TYPECHECK_CACHE_INPUTS as requiredInputs,
+  typecheckCacheContractIssues,
+  typecheckCacheProblems as cacheProblems,
+  typecheckCacheStructuralProblems,
+} from "../packages/scripts/src/typecheck-cache-contract";
+
 const root = path.resolve(import.meta.dirname, "..");
-const { tasks } = v.parse(
-  v.object({ tasks: v.record(v.string(), taskSchema) }),
-  ts.parseConfigFileTextToJson(
-    "turbo.json",
-    readFileSync(path.join(root, "turbo.json"), "utf-8"),
-  ).config,
-);
-const requiredInputs = [
-  "$TURBO_DEFAULT$",
-  "$TURBO_ROOT$/.npmrc",
-  "$TURBO_ROOT$/bunfig.toml",
-  "$TURBO_ROOT$/packages/typescript-config/**",
-  "$TURBO_ROOT$/patches/**",
-  "$TURBO_ROOT$/types/**",
-];
-const typecheckTasks = Object.entries(tasks).filter(([name]) =>
-  /(?:^|#)typecheck(?::|$)/u.test(name),
-);
-const cacheProblems = (
-  name: string,
-  task: v.InferOutput<typeof taskSchema>,
-) => [
-  ...(task.cache === true ? [] : ["must explicitly enable caching"]),
-  ...requiredInputs
-    .filter(
-      (input) =>
-        !task.inputs?.some((pattern) => new Bun.Glob(pattern).match(input)),
-    )
-    .map((input) => `missing input ${input}`),
-  ...(name.startsWith("//#") &&
-  !task.inputs?.includes("$TURBO_ROOT$/package.json")
-    ? ["root programs must hash the full manifest"]
-    : []),
-  ...(name.startsWith("//#") && !task.inputs?.includes("$TURBO_ROOT$/bun.lock")
-    ? ["root programs must hash the full lockfile"]
-    : []),
-  ...(!name.startsWith("//#") && task.inputs?.includes("$TURBO_ROOT$/bun.lock")
-    ? ["must let Turbo hash relevant lock entries"]
-    : []),
-  ...(task.outputs === undefined ? ["must declare outputs"] : []),
-];
+const tasksByName = new Map(readTypecheckCacheTasks(root));
 
 test("every typecheck task declares cacheable program inputs and outputs", () => {
-  expect(typecheckTasks.length).toBeGreaterThan(0);
+  const tasks = readTypecheckCacheTasks(root);
+  const resolved = resolvedTypecheckCachePrograms(root);
+  expect(tasks.length).toBeGreaterThan(0);
+  // Prepared coverage audits the actual native graphs and their lock policy.
   expect(
-    typecheckTasks.flatMap(([name, task]) =>
-      cacheProblems(name, task).map((problem) => `${name}: ${problem}`),
+    tasks.flatMap(([name, task]) =>
+      typecheckCacheStructuralProblems(
+        task,
+        resolved.has(name) ? "resolved" : "workspace",
+      ).map((problem) => `${name}: ${problem}`),
     ),
   ).toEqual([]);
 });
 
 test("the cache contract rejects missing inputs, disabled caching and stale lock hashing", () => {
   const valid = { cache: true, inputs: requiredInputs, outputs: [] };
-  expect(cacheProblems("typecheck", valid)).toEqual([]);
-  expect(cacheProblems("//#typecheck:repo", valid)).toContain(
-    "root programs must hash the full lockfile",
+  expect(cacheProblems({ name: "typecheck", task: valid })).toEqual([]);
+  expect(cacheProblems({ name: "//#typecheck:repo", task: valid })).toContain(
+    "root and cross-workspace programs must hash the full lockfile",
   );
   expect(
-    cacheProblems("//#typecheck:repo", {
-      ...valid,
-      inputs: [
-        ...requiredInputs,
-        "$TURBO_ROOT$/bun.lock",
-        "$TURBO_ROOT$/package.json",
-      ],
+    cacheProblems({
+      name: "//#typecheck:repo",
+      task: {
+        ...valid,
+        inputs: [...requiredInputs, "$TURBO_ROOT$/bun.lock"],
+      },
     }),
   ).toEqual([]);
   expect(
-    cacheProblems("//#typecheck:repo", {
-      ...valid,
-      inputs: [...requiredInputs, "$TURBO_ROOT$/bun.lock"],
-    }),
-  ).toContain("root programs must hash the full manifest");
-  expect(
-    cacheProblems("typecheck", { ...valid, inputs: [] }).length,
+    cacheProblems({ name: "typecheck", task: { ...valid, inputs: [] } }).length,
   ).toBeGreaterThan(0);
-  expect(cacheProblems("typecheck", { ...valid, cache: false })).toContain(
-    "must explicitly enable caching",
-  );
   expect(
-    cacheProblems("typecheck", { ...valid, outputs: undefined }),
+    cacheProblems({ name: "typecheck", task: { ...valid, cache: false } }),
+  ).toContain("must explicitly enable caching");
+  expect(
+    cacheProblems({
+      name: "typecheck",
+      task: { ...valid, outputs: undefined },
+    }),
   ).toContain("must declare outputs");
   expect(
-    cacheProblems("typecheck", {
-      ...valid,
-      inputs: [...requiredInputs, "$TURBO_ROOT$/bun.lock"],
+    cacheProblems({
+      name: "typecheck",
+      task: {
+        ...valid,
+        inputs: [...requiredInputs, "$TURBO_ROOT$/bun.lock"],
+      },
     }),
   ).toContain("must let Turbo hash relevant lock entries");
+});
+
+test("full lock hashing follows resolved workspace boundaries", () => {
+  const own = path.join(root, "apps/example/src/entry.ts");
+  expect(
+    spansWorkspaces([own, path.join(root, "apps/example/src/helper.ts")], root),
+  ).toBe(false);
+  expect(
+    spansWorkspaces(
+      [own, path.join(root, "packages/helper/src/value.ts")],
+      root,
+    ),
+  ).toBe(true);
+  expect(
+    spansWorkspaces(
+      [own, path.join(root, "packages/helper/node_modules/lib/index.d.ts")],
+      root,
+    ),
+  ).toBe(false);
+  const name = "@stll/example#typecheck";
+  const programs = new Set([name]);
+  const valid = {
+    cache: true,
+    inputs: [...requiredInputs, "$TURBO_ROOT$/bun.lock"],
+    outputs: [],
+  };
+  expect(
+    cacheProblems({
+      name,
+      task: valid,
+      crossWorkspacePrograms: programs,
+    }),
+  ).toEqual([]);
+  expect(
+    cacheProblems({
+      name,
+      task: { ...valid, inputs: requiredInputs },
+      crossWorkspacePrograms: programs,
+    }),
+  ).toContain("root and cross-workspace programs must hash the full lockfile");
+  expect(
+    cacheProblems({
+      name,
+      task: {
+        ...valid,
+        inputs: valid.inputs.filter(
+          (input) => input !== "$TURBO_ROOT$/package.json",
+        ),
+      },
+      crossWorkspacePrograms: programs,
+    }),
+  ).toContain("missing input $TURBO_ROOT$/package.json");
+  expect(cacheProblems({ name, task: valid })).toContain(
+    "must let Turbo hash relevant lock entries",
+  );
+  expect(
+    cacheProblems({
+      name: "@stll/example#typecheck:aggregate",
+      task: valid,
+      crossWorkspacePrograms: programs,
+    }),
+  ).toContain("must let Turbo hash relevant lock entries");
+  expect(
+    cacheProblems({
+      name,
+      task: { ...valid, cache: false },
+      crossWorkspacePrograms: programs,
+    }),
+  ).toContain("must explicitly enable caching");
+});
+
+test("native discovery binds multi-project commands and single-workspace lock policy", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "typecheck-native-lock-"));
+  const app = path.join(directory, "apps/fixture");
+  const write = (file: string, text: string) => {
+    mkdirSync(path.dirname(path.join(directory, file)), { recursive: true });
+    writeFileSync(path.join(directory, file), text);
+  };
+  try {
+    const command =
+      'bun check --project=single.json && bun check --project "multi.json"';
+    write(
+      "apps/fixture/package.json",
+      JSON.stringify({
+        name: "@stll/fixture",
+        scripts: {
+          typecheck: command,
+          "typecheck:single": "bun check --project single.json",
+          "typecheck:aggregate": "bun wrapper.ts --project=single.json",
+        },
+      }),
+    );
+    write("apps/fixture/src/single.ts", "export const local = 1;\n");
+    write(
+      "apps/fixture/src/multi.ts",
+      'export { value } from "../../../packages/helper/src/value";\n',
+    );
+    write("packages/helper/src/value.ts", "export const value = 1;\n");
+    for (const name of ["single", "multi"]) {
+      write(
+        `apps/fixture/${name}.json`,
+        JSON.stringify({
+          compilerOptions: {
+            noEmit: true,
+            module: "ESNext",
+            moduleResolution: "Bundler",
+            types: [],
+          },
+          files: [`src/${name}.ts`],
+        }),
+      );
+    }
+    const valid = { cache: true, inputs: requiredInputs, outputs: [] };
+    const tasks = {
+      typecheck: valid,
+      "@stll/fixture#typecheck": {
+        ...valid,
+        inputs: [...requiredInputs, "$TURBO_ROOT$/bun.lock"],
+      },
+      "@stll/fixture#typecheck:single": valid,
+      "@stll/fixture#typecheck:aggregate": valid,
+    };
+    const writeTasks = () => write("turbo.json", JSON.stringify({ tasks }));
+    writeTasks();
+    expect(nativeProjectsForCommand(command, app)).toEqual([
+      path.join(app, "single.json"),
+      path.join(app, "multi.json"),
+    ]);
+    const projects = explicitTypecheckProjects(directory);
+    expect(projects.get("@stll/fixture#typecheck")).toEqual([
+      path.join(app, "single.json"),
+      path.join(app, "multi.json"),
+    ]);
+    expect(projects.has("@stll/fixture#typecheck:aggregate")).toBe(false);
+    expect(typecheckCacheContractIssues(directory)).toEqual([]);
+    expect(
+      apiResolvedTypecheckInputs(path.join(app, "single.json")),
+    ).not.toContain("$TURBO_ROOT$/bun.lock");
+    expect(apiResolvedTypecheckInputs(path.join(app, "multi.json"))).toContain(
+      "$TURBO_ROOT$/bun.lock",
+    );
+    tasks["@stll/fixture#typecheck"].inputs = requiredInputs;
+    writeTasks();
+    expect(typecheckCacheContractIssues(directory)).toContain(
+      "@stll/fixture#typecheck: root and cross-workspace programs must hash the full lockfile",
+    );
+    tasks["@stll/fixture#typecheck"].inputs = [
+      ...requiredInputs,
+      "$TURBO_ROOT$/bun.lock",
+    ];
+    tasks["@stll/fixture#typecheck:single"] = {
+      ...valid,
+      inputs: [...requiredInputs, "$TURBO_ROOT$/bun.lock"],
+    };
+    writeTasks();
+    expect(typecheckCacheContractIssues(directory)).toContain(
+      "@stll/fixture#typecheck:single: must let Turbo hash relevant lock entries",
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("CI writes remote task caches only from main", () => {
@@ -224,7 +359,11 @@ for (const taskName of ["typecheck", "//#typecheck:repo"] as const) {
           "turbo.json",
           JSON.stringify({
             tasks: {
-              [taskName]: { ...tasks[taskName], dependsOn: [] },
+              [taskName]: {
+                ...(tasksByName.get(taskName) ??
+                  panic(`Missing cache fixture task ${taskName}`)),
+                dependsOn: [],
+              },
             },
           }),
         );
@@ -286,3 +425,31 @@ for (const taskName of ["typecheck", "//#typecheck:repo"] as const) {
     }, 30_000);
   }
 }
+
+test("cache input exclusions cannot impersonate dependency inputs", () => {
+  const valid = { cache: true, inputs: requiredInputs, outputs: [] };
+  const missing = {
+    ...valid,
+    inputs: [
+      ...requiredInputs.filter((input) => input !== "$TURBO_ROOT$/.npmrc"),
+      "!src/example.test.ts",
+    ],
+  };
+  expect(cacheProblems({ name: "typecheck", task: missing })).toContain(
+    "missing input $TURBO_ROOT$/.npmrc",
+  );
+  expect(
+    cacheProblems({
+      name: "typecheck",
+      task: { ...valid, inputs: [...requiredInputs, "!$TURBO_ROOT$/.npmrc"] },
+    }),
+  ).toContain("missing input $TURBO_ROOT$/.npmrc");
+  const native = {
+    ...valid,
+    inputs: requiredInputs.filter((input) => input !== "$TURBO_DEFAULT$"),
+  };
+  expect(typecheckCacheStructuralProblems(native, "resolved")).toEqual([]);
+  expect(typecheckCacheStructuralProblems(native)).toContain(
+    "missing input $TURBO_DEFAULT$",
+  );
+});

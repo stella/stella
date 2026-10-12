@@ -661,6 +661,8 @@ test("the repository-pinned Turbo produces compatible MISS and HIT summaries for
       "--log-order=stream",
       "--log-prefix=task",
       "--cache=local:rw",
+      "--cache-dir",
+      path.join(cwd, "cache"),
       "--remote-cache-timeout=20",
     ];
     const miss = run(command, cwd);

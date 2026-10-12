@@ -257,26 +257,6 @@ const getSuggestedPrompts = createSafeRootHandler(
       const checked = proof.input.value;
       const admittedContext = cloneOperationInput(checked.ctx);
       return await Result.gen(async function* () {
-        const aiAnalytics = createTanStackAIAnalyticsCallbacks({
-          dataClass: "customer",
-          usageMetering: {
-            actionType: "chat",
-            organizationId: checked.organizationId,
-            safeDb: checked.safeDb,
-            serviceTier: "standard",
-            userId: checked.userId,
-            workspaceId: checked.workspaceId,
-          },
-          feature: "chat.suggested_prompts",
-          modelRole: "fast",
-          organizationId: checked.organizationId,
-          orgAIConfig: checked.orgAIConfig,
-          properties: checked.workspaceId
-            ? { workspace_id: checked.workspaceId }
-            : {},
-          traceId: Bun.randomUUIDv7(),
-        });
-
         const suggestPrompts = async ({
           actionSignal,
           modelAdmission,
@@ -284,6 +264,27 @@ const getSuggestedPrompts = createSafeRootHandler(
           actionSignal: AbortSignal;
           modelAdmission: ModelDispatchAdmission;
         }): Promise<Result<SuggestedPromptsResult, never>> => {
+          const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+            dataClass: "customer",
+            usageMetering: {
+              actionType: "chat",
+              organizationId: checked.organizationId,
+              safeDb: checked.safeDb,
+              serviceTier: "standard",
+              userId: checked.userId,
+              workspaceId: checked.workspaceId,
+            },
+            feature: "chat.suggested_prompts",
+            modelRole: "fast",
+            organizationId: checked.organizationId,
+            orgAIConfig: checked.orgAIConfig,
+            modelTier: modelAdmission.modelTier,
+            properties: checked.workspaceId
+              ? { workspace_id: checked.workspaceId }
+              : {},
+            traceId: Bun.randomUUIDv7(),
+          });
+
           try {
             const text = await generateTanStackTextForRole({
               dataClass: "customer",

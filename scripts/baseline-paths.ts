@@ -69,6 +69,9 @@ export const BASELINE_PATHS = {
   /** apps/api/src/handlers/case-law/ingestion/adapters/source-surface-census.test.ts */
   caseLawSourceSurfaceBacklog:
     "apps/api/src/handlers/case-law/ingestion/adapters/source-surface-backlog-baseline.json",
+  /** apps/api/scripts/processed-field-backlog-guard.ts */
+  caseLawProcessedFieldBacklog:
+    "apps/api/src/handlers/case-law/ingestion/adapters/processed-field-backlog-baseline.json",
   /** apps/api/src/handlers/case-law/ingestion/adapters/silent-drop-guard.test.ts */
   caseLawSilentDrop:
     "apps/api/src/handlers/case-law/ingestion/adapters/silent-drop-guard-baseline.json",

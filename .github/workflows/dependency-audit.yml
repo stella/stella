@@ -59,7 +59,8 @@ jobs:
 
       - name: Install dependencies
         if: github.event_name != 'pull_request' || steps.lockfile.outputs.changed == 'true'
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        # The audit reads bun.lock; its scripts import root workspace packages only.
+        run: bash scripts/retry.sh bun ci --frozen-lockfile --ignore-scripts --filter stella
         env:
           NPM_TOKEN: ""
 

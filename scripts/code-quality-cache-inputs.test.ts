@@ -34,15 +34,16 @@ const qualityInputProblems = ({
   const problems: string[] = [];
   for (const [name, task] of Object.entries(tasks)) {
     const baseName = name.split("#").at(-1) ?? "";
-    if (name.startsWith("//#") || !["lint", "typecheck"].includes(baseName)) {
+    if (name.startsWith("//#") || baseName !== "lint") {
       continue;
     }
     const inputs = task.inputs ??
       tasks[baseName]?.inputs ?? ["$TURBO_DEFAULT$"];
-    for (const forbidden of [
+    const forbiddenInputs = [
       "$TURBO_ROOT$/bun.lock",
       "$TURBO_ROOT$/package.json",
-    ]) {
+    ];
+    for (const forbidden of forbiddenInputs) {
       if (inputs.includes(forbidden)) {
         problems.push(`${name}: ${forbidden}`);
       }
@@ -54,13 +55,13 @@ const qualityInputProblems = ({
   return problems;
 };
 
-test("quality tasks leave dependency resolution to Turbo instead of hashing the whole root manifest and lock", () => {
+test("lint tasks avoid redundant dependency inputs; native typecheck keeps its separate contract", () => {
   expect(Object.keys(configuration.tasks)).toContain("lint");
   expect(Object.keys(configuration.tasks)).toContain("typecheck");
   expect(qualityInputProblems(configuration)).toEqual([]);
 });
 
-test("quality input guard accepts inheritance and rejects restored whole-file inputs in every quality task", () => {
+test("lint input guard accepts inheritance and rejects restored whole-file inputs in every lint task", () => {
   expect(
     qualityInputProblems({
       tasks: {
@@ -73,15 +74,16 @@ test("quality input guard accepts inheritance and rejects restored whole-file in
   ).toEqual([]);
   for (const [name, task] of Object.entries(configuration.tasks)) {
     const baseName = name.split("#").at(-1) ?? "";
-    if (name.startsWith("//#") || !["lint", "typecheck"].includes(baseName)) {
+    if (name.startsWith("//#") || baseName !== "lint") {
       continue;
     }
     const inputs = task.inputs ??
       configuration.tasks[baseName]?.inputs ?? ["$TURBO_DEFAULT$"];
-    for (const forbidden of [
+    const forbiddenInputs = [
       "$TURBO_ROOT$/bun.lock",
       "$TURBO_ROOT$/package.json",
-    ]) {
+    ];
+    for (const forbidden of forbiddenInputs) {
       const mutated = {
         tasks: {
           ...configuration.tasks,

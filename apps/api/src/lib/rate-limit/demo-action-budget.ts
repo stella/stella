@@ -11,7 +11,7 @@ import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
 import { DEMO_ACTION_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 import { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability";
-import type { RateLimitContext } from "@/api/lib/rate-limit/rate-limit";
+import type { RateLimitContext } from "@/api/lib/rate-limit/contracts";
 import {
   createRedisRateLimitRequestKey,
   RedisRateLimitContext,
