@@ -10,6 +10,8 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { ElysiaCustomStatusResponse } from "elysia/error";
 
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   auditLogs,
@@ -244,7 +246,11 @@ if (!databaseUrl || !enabled) {
           "Na\u0301hrada  škody",
           "náhrada škody",
         ];
-        expect(spellings[2]).not.toBe(spellings[2]?.normalize("NFC"));
+        expect(spellings[2]).not.toBe(
+          spellings[2] === undefined
+            ? undefined
+            : normalizeUnicode(spellings[2], "NFC"),
+        );
         const written = await Promise.all(
           spellings.map(async (query) => await recordQuery(fixture, query)),
         );
