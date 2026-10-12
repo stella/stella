@@ -27,7 +27,7 @@
   <div
     id="split"
     role="img"
-    style="display: flex; gap: 2px; height: 8px; margin-block: 0 12px"
+    style="display: flex; gap: 2px; height: 8px; margin-block: 0 10px"
   ></div>
   <table id="matrix" class="stella-table" style="font-size: 13px">
     <thead>
@@ -35,11 +35,6 @@
     </thead>
     <tbody id="matrix-body"></tbody>
   </table>
-  <p
-    id="note"
-    class="stella-muted"
-    style="font-size: 12px; margin-block: 12px 0"
-  ></p>
 </main>
 <script>
   (() => {
@@ -87,7 +82,6 @@
     document.documentElement.lang = formattingLocale;
     text("title", labels.title);
     text("scope", labels.scope);
-    text("note", labels.note);
 
     const allValue = total(counterparties, "value");
     const split = document.getElementById("split");

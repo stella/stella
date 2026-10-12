@@ -5,7 +5,7 @@
     "currency": "EUR",
     "labels": {
       "title": "Change-of-control exposure",
-      "scope": "Project Atlas data room · every reviewed agreement, grouped by counterparty",
+      "scope": "Project Atlas data room · every agreement, contract value summed per counterparty",
       "positions": {
         "consent": "Consent or termination review",
         "confirm": "Consent to confirm",
@@ -20,8 +20,7 @@
         "Contract value",
         "Risk",
         "Change of control"
-      ],
-      "note": "Contract value sums each counterparty's agreements in the data room. Positions follow each review extract's risk finding and tags; every agreement also requires written notice before an assignment."
+      ]
     },
     "positions": ["consent", "confirm", "notice"],
     "risks": ["Critical", "High", "Medium", "Low"],

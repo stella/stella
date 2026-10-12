@@ -109,8 +109,9 @@ const THEME_TOKENS = ["--foreground", "--border", "--chart-1"];
  * the generated view's guest page (content, fonts, final height and the host
  * theme), and the pinned recap. Then scroll the transcript to the final turn.
  * With `frameBottom` (the screenshot clip's bottom edge, in page pixels), also
- * require the matrix's last row to sit wholly above it, so a taller view or a
- * moved anchor fails here instead of shipping a shot that cuts the table.
+ * require the whole view, down to its bordered frame's bottom edge, to sit
+ * above it, so a taller view or a moved anchor fails here instead of shipping
+ * a shot that cuts the matrix or anything under it.
  */
 export const settleMarketingAgentThread = async (
   page: Page,
@@ -184,21 +185,29 @@ export const settleMarketingAgentThread = async (
 
   await anchorMarketingAgentFinalTurn(page);
   if (frameBottom !== undefined) {
-    // boundingBox reports nested-frame elements in the host page's pixels.
+    // The iframe's parent is the view's bordered frame; boundingBox reports
+    // nested-frame elements in the host page's pixels, so the guest's last
+    // row is checked on the same scale.
+    const viewFrame = outer.locator("xpath=..");
     const lastRow = guest.locator("#matrix-body tr").last();
-    await expect
-      .poll(
-        async () => {
-          const box = await lastRow.boundingBox();
-          return (
-            box !== null && box.y >= 0 && box.y + box.height <= frameBottom
-          );
-        },
-        {
-          message: `the matrix's last row ends above the ${String(frameBottom)}px frame edge`,
-        },
-      )
-      .toBe(true);
+    for (const [name, part] of [
+      ["the matrix's last row", lastRow],
+      ["the generated view's frame", viewFrame],
+    ] as const) {
+      await expect
+        .poll(
+          async () => {
+            const box = await part.boundingBox();
+            return (
+              box !== null && box.y >= 0 && box.y + box.height <= frameBottom
+            );
+          },
+          {
+            message: `${name} ends above the ${String(frameBottom)}px frame edge`,
+          },
+        )
+        .toBe(true);
+    }
   }
 };
 
@@ -220,7 +229,7 @@ export const anchorMarketingAgentFinalTurn = async (page: Page) => {
     .filter({ hasText: MARKETING_AGENT_LAST_QUESTION })
     .last();
   await expect(finalQuestion).toBeVisible();
-  const anchorGap = 12;
+  const anchorGap = 8;
   // Distance from the turn's top to the viewport's top, or null once the
   // transcript cannot scroll further (a short final turn on a tall viewport).
   const misalignment = async () =>

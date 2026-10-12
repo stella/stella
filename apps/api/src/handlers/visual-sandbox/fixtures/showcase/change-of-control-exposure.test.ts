@@ -183,7 +183,7 @@ describe("prepared exposure page", () => {
     expect(prepared.links).toEqual([]);
     const $ = load(prepared.html);
     expect($("script").text()).toContain("stella.ready()");
-    for (const id of ["title", "stats", "split", "matrix-body", "note"]) {
+    for (const id of ["title", "scope", "stats", "split", "matrix-body"]) {
       expect($(`#${id}`).length).toBe(1);
     }
   });
