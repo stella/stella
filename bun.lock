@@ -484,7 +484,7 @@
         "@tiptap/pm": "^3.31.4",
         "@tiptap/react": "^3.31.4",
         "@tiptap/suggestion": "^3.31.4",
-        "@vscode/markdown-editor": "0.0.2-112",
+        "@vscode/markdown-editor": "0.0.2-113",
         "@vscode/observables": "0.1.1-0",
         "better-auth": "catalog:",
         "better-result": "catalog:",
@@ -3646,7 +3646,7 @@
 
     "@vscode/l10n": ["@vscode/l10n@0.0.18", "", {}, "sha512-KYSIHVmslkaCDyw013pphY+d7x1qV8IZupYfeIfzNA+nsaWHbn5uPuQRvdRFsa9zFzGeudPuoGoZ1Op4jrJXIQ=="],
 
-    "@vscode/markdown-editor": ["@vscode/markdown-editor@0.0.2-112", "", { "dependencies": { "@vscode/codicons": "0.0.46-36", "@vscode/diff": "0.0.2-0", "@vscode/observables": "^0.1.1-0", "entities": "6.0.1", "katex": "^0.16.33", "micromark": "^4.0.1", "micromark-extension-frontmatter": "^2.0.0", "micromark-extension-gfm": "^3.0.0", "micromark-extension-gfm-strikethrough": "^2.1.0", "micromark-extension-gfm-table": "^2.1.1", "micromark-extension-gfm-task-list-item": "^2.1.0", "micromark-extension-math": "^3.1.0" } }, "sha512-813UUVlwD1MWw4DAOAiyJmzAyJGYtByEsRFloSJmbl8M/EzVtLTKCknycmxyy46peoh4MbW2z1hjsdMgLDNQ/Q=="],
+    "@vscode/markdown-editor": ["@vscode/markdown-editor@0.0.2-113", "", { "dependencies": { "@vscode/codicons": "0.0.46-36", "@vscode/diff": "0.0.2-0", "@vscode/observables": "^0.1.1-0", "entities": "6.0.1", "katex": "^0.16.33", "micromark": "^4.0.1", "micromark-extension-frontmatter": "^2.0.0", "micromark-extension-gfm": "^3.0.0", "micromark-extension-gfm-strikethrough": "^2.1.0", "micromark-extension-gfm-table": "^2.1.1", "micromark-extension-gfm-task-list-item": "^2.1.0", "micromark-extension-math": "^3.1.0" } }, "sha512-9W8rdsSpCTPh60YHXEUwZ4zQRDoWnQjYEXNVJnTy0TMZGNZyP2kiXGJ9abZR83i2qVUUM4h82APNl++zFd+tNg=="],
 
     "@vscode/observables": ["@vscode/observables@0.1.1-0", "", {}, "sha512-Ppl/2o6DPQdLOfJCqMyHhGutoVVOl4Xgwxqtfd6Mxl0wMnaNjwSovWNGR88UWdXJIU8RVRzS+tpPFwwiBGwD4g=="],
 
