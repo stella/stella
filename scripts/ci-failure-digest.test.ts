@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -334,7 +340,12 @@ test("only steps that failed are digested; negative tests that pass are not", ()
   expect(records[0]?.lines.at(0)?.message).toBe(
     "ratchet --check: invalid increase allowances:",
   );
-  expect(records[1]?.lines).toEqual([{ message: "Job log unavailable." }]);
+  expect(records[1]?.lines).toEqual([
+    {
+      message:
+        'Log of job "web-build" was unavailable to the digest. See https://github.com/o/r/actions/runs/1/job/13',
+    },
+  ]);
 });
 
 test("log steps split at their run groups and end at the runner's exit line", () => {
@@ -517,19 +528,178 @@ test("timed-out jobs and cancelled jobs with a failed step are digested", () => 
   ]);
 });
 
-test("the workflow downloads logs for exactly the digested jobs", () => {
-  const run =
-    ciWorkflow().jobs["ci-result"]?.steps?.find(
-      ({ name }) => name === "Digest failed steps",
-    )?.run ?? "";
-  const program = /jq -r '([^']+)'/u.exec(run)?.[1];
-  expect(program).toBeDefined();
-  const result = Bun.spawnSync(["jq", "-r", program ?? ""], {
-    stdin: new TextEncoder().encode(JSON.stringify(GATED_JOBS)),
-    stdout: "pipe",
+// Stands in for scripts/gh-retry.sh: job 1's log is served at once, job 2's
+// only from the second request (not ready yet), job 7's never.
+const FAKE_GH_RETRY = [
+  "#!/usr/bin/env bash",
+  'printf "%s\\n" "$*" >> "$FAKE_CALLS"',
+  "for endpoint; do :; done",
+  'id=$(basename "$(dirname "$endpoint")")',
+  'count=$(( $(cat "$FAKE_STATE/$id" 2>/dev/null || echo 0) + 1 ))',
+  'echo "$count" > "$FAKE_STATE/$id"',
+  'case "$id" in',
+  '  1) printf "log one\\n" ;;',
+  '  2) if ((count < 2)); then exit 1; fi; printf "log two\\n" ;;',
+  "  *) exit 1 ;;",
+  "esac",
+].join("\n");
+
+const fetchLogs = (jobs: unknown) => {
+  const directory = mkdtempSync(path.join(tmpdir(), "fetch-job-logs-"));
+  const state = path.join(directory, "state");
+  writeFileSync(path.join(directory, "gh-retry.sh"), FAKE_GH_RETRY);
+  writeFileSync(path.join(directory, "jobs.json"), JSON.stringify(jobs));
+  Bun.spawnSync(["mkdir", "-p", state]);
+  const result = Bun.spawnSync(
+    [
+      "bash",
+      path.join(ROOT, "scripts/fetch-failed-job-logs.sh"),
+      "o/r",
+      path.join(directory, "jobs.json"),
+      path.join(directory, "logs"),
+      "3",
+      "0",
+    ],
+    {
+      stdout: "pipe",
+      stderr: "pipe",
+      env: {
+        PATH: process.env["PATH"] ?? "",
+        GH_RETRY_SCRIPT: path.join(directory, "gh-retry.sh"),
+        FAKE_CALLS: path.join(directory, "calls"),
+        FAKE_STATE: state,
+      },
+    },
+  );
+  const read = (name: string): string | undefined => {
+    const file = path.join(directory, name);
+    return existsSync(file) ? readFileSync(file, "utf-8") : undefined;
+  };
+  return { directory, result, read };
+};
+
+test("job logs are fetched for exactly the digested jobs, retrying until served", () => {
+  const { directory, result, read } = fetchLogs(GATED_JOBS);
+  try {
+    expect(result.exitCode).toBe(0);
+    expect(read("logs/1.log")).toBe("log one\n");
+    // Not served on the first request: fetched on the second.
+    expect(read("logs/2.log")).toBe("log two\n");
+    expect(result.stdout.toString()).toContain(
+      "Log of job 2 not available yet (attempt 1/3)",
+    );
+    const calls = (read("calls") ?? "").trim().split("\n");
+    expect(calls).toEqual([
+      "api --allow-escape-sequences repos/o/r/actions/jobs/1/logs",
+      "api --allow-escape-sequences repos/o/r/actions/jobs/2/logs",
+      "api --allow-escape-sequences repos/o/r/actions/jobs/2/logs",
+    ]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("a log that is never served is bounded and named in the digest", () => {
+  const jobs = [
+    {
+      jobs: [
+        {
+          id: 7,
+          name: "slow job",
+          conclusion: "failure",
+          html_url: "https://example.test/job/7",
+          steps: [{ name: "Build web", number: 2, conclusion: "failure" }],
+        },
+      ],
+    },
+  ];
+  const { directory, result, read } = fetchLogs(jobs);
+  try {
+    expect(result.exitCode).toBe(0);
+    expect(read("logs/7.log")).toBeUndefined();
+    expect((read("calls") ?? "").trim().split("\n")).toHaveLength(3);
+    expect(result.stdout.toString()).toContain(
+      "Log of job 7 unavailable after 3 attempts.",
+    );
+    const [digested] = buildDigest({
+      jobs: parseJobs(jobs),
+      logFor: () => undefined,
+    });
+    expect(digested?.lines).toEqual([
+      {
+        message:
+          'Log of job "slow job" was unavailable to the digest. See https://example.test/job/7',
+      },
+    ]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+// Shapes from a real failing run: a guard that panics after a catalog
+// check, a lint rule id, background steps and their wait step.
+const REAL_JOB_LOG = [
+  ...runStep(5, "bun scripts/generated-files-guard.ts --guard-b", []),
+  ...runStep(6, "bash scripts/pull-base-images.test.sh", [
+    "Running pull-base-images.sh tests...",
+    "  PASS  fails on an ARG with no default",
+    "scripts/retry.sh:15: uncataloged env RETRY_FAILURE_LEVEL",
+    'error: script "env:check" exited with code 1',
+    "Panic: Generator check failed: env-examples",
+    "      at guardB (/home/runner/work/stella/stella/scripts/generated-files-guard.ts:218:7)",
+    "##[error]",
+    "      at guardB (/home/runner/work/stella/stella/scripts/generated-files-guard.ts:218:7)",
+    "Bun v1.4.3 (Linux x64)",
+    "##[error]Process completed with exit code 1.",
+    "  PASS  every repository Dockerfile resolves in buildx mode",
+  ]),
+  ...runStep(8, "bash scripts/check-bridge-version.sh", [
+    "No bridge-surface changes detected since origin/main. OK.",
+  ]),
+  ...stamp(8, [
+    "Waiting for all background step(s) to complete: Generated files manifest guard",
+    "Finished waiting for all background step(s).",
+    "  Generated files manifest guard: Failed",
+    "Post job cleanup.",
+    "[command]/usr/bin/git version",
+  ]),
+].join("\n");
+
+test("a real run's guard, lint and wait-step failures digest to their causes", () => {
+  const steps = [
+    ["Generated files manifest guard", "10:00:05Z", "10:00:07Z"],
+    ["Wait for independent repository checks", "10:00:08Z", "10:00:08Z"],
+  ].map(([name, started, completed], index) => ({
+    name,
+    number: index + 1,
+    conclusion: "failure",
+    started_at: `2026-10-12T${started}`,
+    completed_at: `2026-10-12T${completed}`,
+  }));
+  const records = buildDigest({
+    jobs: [{ id: 1, name: "ci-checks-rest", conclusion: "failure", steps }],
+    logFor: () => REAL_JOB_LOG,
   });
-  expect(result.exitCode).toBe(0);
-  expect(result.stdout.toString().trim().split("\n")).toEqual(["1", "2"]);
+  expect(records.map(({ lines }) => lines)).toEqual([
+    [
+      {
+        message: "scripts/retry.sh:15: uncataloged env RETRY_FAILURE_LEVEL",
+        file: "scripts/retry.sh",
+        line: 15,
+      },
+    ],
+    [{ message: "Generated files manifest guard: Failed" }],
+  ]);
+  expect(
+    classify("Code quality (rest)", [
+      { message: "typescript(no-base-to-string): a.ts:1:2: bad" },
+    ]),
+  ).toBe("lint");
+  expect(
+    testFailures([
+      "@stll/docx-utils test:office-fixture-metadata: (fail) a > b [1ms]",
+    ]).map(({ scope }) => scope),
+  ).toEqual(["@stll/docx-utils"]);
 });
 
 test("a retry summary never hides the error output above it", () => {
@@ -643,7 +813,7 @@ type WorkflowStep = {
   "timeout-minutes"?: number;
   run?: string;
   uses?: string;
-  with?: Record<string, unknown>;
+  with?: Record<string, string | number | boolean>;
 };
 type Workflow = {
   env?: Record<string, string>;
@@ -685,6 +855,12 @@ test("CI logs are plain text and failures are digested by the result gate", () =
   expect(digest?.["timeout-minutes"]).toBe(5);
   expect(digest?.run).toContain(
     "bun .workflow-tooling/scripts/ci-failure-digest.ts digest",
+  );
+  expect(digest?.run).toContain(
+    'bash .workflow-tooling/scripts/fetch-failed-job-logs.sh "$REPO"',
+  );
+  expect(String(tooling?.with?.["sparse-checkout"])).toContain(
+    "scripts/fetch-failed-job-logs.sh",
   );
   // The digest reports; the verdict stays with the evaluation step.
   const names = steps.map(({ name }) => name);

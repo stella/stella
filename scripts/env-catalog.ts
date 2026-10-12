@@ -1535,6 +1535,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "REPOSITORY",
   "RETRY_ATTEMPTS",
   "RETRY_DELAYS_SECONDS",
+  // scripts/retry.sh: `warning` for callers that tolerate the failure.
+  "RETRY_FAILURE_LEVEL",
   // Credential used only by the restricted account canary.
   "REVIEW_ACCOUNT_PASSWORD",
   // Nightly issue reporter: workflow run linked from the failure issue.

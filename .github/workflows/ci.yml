@@ -8693,6 +8693,7 @@ jobs:
             scripts/gh-retry.sh
             scripts/retry.sh
             scripts/ci-failure-digest.ts
+            scripts/fetch-failed-job-logs.sh
             /package.json
           sparse-checkout-cone-mode: false
 
@@ -9069,7 +9070,7 @@ jobs:
         if: failure() && steps.outcome.outcome == 'failure'
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
-          save: false
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: .workflow-tooling/package.json
 
       - name: Digest failed steps
@@ -9085,13 +9086,7 @@ jobs:
             echo "Failure digest unavailable: the jobs lookup failed."
             exit 0
           fi
-          # Logs of the first 20 jobs the result gate fails on (as in the digest);
-          # a missing log is reported as such.
-          jq -r '[.[].jobs[] | select(.conclusion == "failure" or .conclusion == "timed_out" or (.conclusion == "cancelled" and any(.steps[]?; .conclusion == "failure"))) | .id] | .[:20][]' "$dir/jobs.json" |
-            while read -r id; do
-              [[ "$id" =~ ^[0-9]+$ ]] || continue
-              bash "$GH_RETRY_SCRIPT" api "repos/$REPO/actions/jobs/$id/logs" > "$dir/logs/$id.log" || rm -f "$dir/logs/$id.log"
-            done
+          bash .workflow-tooling/scripts/fetch-failed-job-logs.sh "$REPO" "$dir/jobs.json" "$dir/logs" || echo "Job log download failed; the digest names each job without a log."
           bun .workflow-tooling/scripts/ci-failure-digest.ts digest --jobs "$dir/jobs.json" --logs "$dir/logs" --json "$dir/ci-failures.json" --summary "$GITHUB_STEP_SUMMARY"
 
       - name: Upload failure digest

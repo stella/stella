@@ -73,9 +73,14 @@ const ANSI = new RegExp(
 );
 const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z ?/u;
 // Turbo prefixes task output with `<package>:<task>: `.
-const TURBO_PREFIX = /^(@[\w.-]+\/[\w.-]+|[\w.-]+):([a-z][\w:-]*): ?/u;
+// Turbo prefixes task output with `<package>:<task>: `; a scoped package can
+// also be followed by a space (`@scope/pkg task: `).
+const TURBO_PREFIX =
+  /^(?:(@[\w.-]+\/[\w.-]+)[: ]|([\w.-]+):)([a-z][\w:-]*): ?/u;
 const EXIT_MARKER = /^##\[error\]Process completed with exit code \d+\.?$/u;
 const GROUP_RUN = "##[group]Run ";
+const BACKGROUND_WAIT = "Waiting for all background step(s)";
+const POST_JOB = "Post job cleanup.";
 
 export const stripAnsi = (value: string): string => value.replaceAll(ANSI, "");
 
@@ -131,7 +136,7 @@ const logLine = (raw: string): LogLine => {
   );
   const turbo = TURBO_PREFIX.exec(text);
   return turbo
-    ? { text: text.slice(turbo[0].length), scope: turbo[1] ?? "" }
+    ? { text: text.slice(turbo[0].length), scope: turbo[1] ?? turbo[2] ?? "" }
     : { text, scope: "" };
 };
 
@@ -152,6 +157,9 @@ const ERROR_HEADLINE =
 const PLAYWRIGHT_HEAD = /^\s*(?:\d+\)|[✘x]\s+\d+) \[([^\]]+)\] › /u;
 const PLAYWRIGHT_DURATION = /^[\d.]+m?s$/u;
 const OXLINT_LOCATION = /^\s*[,╭]─?-?\[(.+?):(\d+):\d+\]/u;
+// oxlint and ESLint rule ids: `typescript(no-base-to-string)`.
+const LINT_RULE =
+  /\b(?:eslint|typescript|unicorn|oxc|react|react-hooks|import|jsx-a11y|jest|promise|node|regexp|vitest)\([\w-]+\)/u;
 const ERRORISH = /\b(?:error|errors|failed|failure|fail)\b/iu;
 const ANCHOR =
   /\b(?:error|errors|fail|failed|failure|invalid|violat\w*|regress\w*|mismatch\w*|missing|not allowed|forbidden|must|expected)\b/iu;
@@ -400,10 +408,17 @@ const where = (failure: TestFailure): string => {
   return ` (${failure.file}${line})`;
 };
 
-const headline = (failure: TestFailure): string =>
-  failure.detail.find((text) => ERROR_HEADLINE.test(text))?.trim() ??
-  failure.detail.at(0)?.trim() ??
-  "";
+// The first added line of an expectation diff (`+   "value",`).
+const DIFF_ADDED = /^\+ {2,}\S/u;
+
+const headline = (failure: TestFailure): string => {
+  const error =
+    failure.detail.find((text) => ERROR_HEADLINE.test(text))?.trim() ??
+    failure.detail.at(0)?.trim() ??
+    "";
+  const added = failure.detail.find((text) => DIFF_ADDED.test(text));
+  return added === undefined ? error : `${error} | ${added.slice(1).trim()}`;
+};
 
 const testFailureLine = (failure: TestFailure): FailureLine => {
   const prefix = failure.scope === "" ? "" : `${failure.scope}: `;
@@ -458,17 +473,20 @@ const oxlintLines = (lines: readonly LogLine[]): FailureLine[] =>
     return [];
   });
 
+/** A compiler-style diagnostic: the line opens with `path:line: `. */
+const opensWithLocation = (text: string, location: SourceLocation): boolean =>
+  text.startsWith(`${location.path}:${location.line}: `);
+
 const genericLines = (lines: readonly LogLine[]): FailureLine[] =>
   lines.flatMap(({ text, scope }) => {
-    if (
-      !ERRORISH.test(text) ||
-      BUN_RESULT.test(text) ||
-      text.startsWith("##[")
-    ) {
+    if (BUN_RESULT.test(text) || text.startsWith("##[")) {
       return [];
     }
     const location = findLocation(text);
-    if (location === undefined) {
+    if (
+      location === undefined ||
+      !(ERRORISH.test(text) || opensWithLocation(text, location))
+    ) {
       return [];
     }
     const prefix = scope === "" ? "" : `${scope}: `;
@@ -495,6 +513,8 @@ const isRetrySummary = (text: string): boolean => {
 const isNoise = (text: string): boolean =>
   text.trim() === "" ||
   text.startsWith(RETRY_ATTEMPT_PREFIX) ||
+  // Shell test harnesses report passing cases as `  PASS  name`.
+  text.trimStart().startsWith("PASS ") ||
   (text.startsWith("##[") && !text.startsWith(ERROR_COMMAND)) ||
   BUN_RESULT.test(text) ||
   /^[-=─_*#\s]+$/u.test(text);
@@ -513,8 +533,14 @@ const closingLines = (lines: readonly LogLine[]): FailureLine[] => {
       if (!text.startsWith(ERROR_COMMAND)) {
         return { text, scope, command: false };
       }
+      // An error command anchors only with its own message: an empty one
+      // (a runtime echoing a stack) or a retry summary does not.
       const message = text.slice(ERROR_COMMAND.length);
-      return { text: message, scope, command: !isRetrySummary(message) };
+      const anchors =
+        message.trim() !== "" &&
+        !isStackFrame(message) &&
+        !isRetrySummary(message);
+      return { text: message, scope, command: anchors };
     });
   const command = window.findIndex((line) => line.command);
   const anchor =
@@ -595,7 +621,10 @@ export const classify = (
   ) {
     return "test";
   }
-  if (/lint|format|oxlint|oxfmt|biome|prettier|stylelint/u.test(name)) {
+  if (
+    /lint|format|oxlint|oxfmt|biome|prettier|stylelint/u.test(name) ||
+    LINT_RULE.test(text)
+  ) {
     return "lint";
   }
   if (/build|bundle|image|docker|compile|package/u.test(name)) {
@@ -659,6 +688,15 @@ export const splitSteps = (log: string): LogSegment[] => {
       }
       continue;
     }
+    if (text.startsWith(BACKGROUND_WAIT)) {
+      // The runner's wait for background steps is a step of its own.
+      segments.push(current);
+      current = { startedAt: timestampOf(raw), lines: [] };
+    } else if (text.startsWith(POST_JOB)) {
+      // Post-job cleanup belongs to no step.
+      segments.push(current);
+      current = { startedAt: undefined, lines: [] };
+    }
     current.lines.push(raw);
     if (EXIT_MARKER.test(text)) {
       // The runner's exit line closes the step: later lines (post-job
@@ -672,9 +710,11 @@ export const splitSteps = (log: string): LogSegment[] => {
     .filter(({ lines }) => lines.length > 0)
     .map((segment) => ({
       ...segment,
-      failed: segment.lines.some((raw) =>
-        EXIT_MARKER.test(stripAnsi(scanned(raw).replace(TIMESTAMP, ""))),
-      ),
+      failed: segment.lines.some((raw) => {
+        const text = stripAnsi(scanned(raw).replace(TIMESTAMP, ""));
+        // A background step reported as failed fails the wait step.
+        return EXIT_MARKER.test(text) || text.trimEnd().endsWith(": Failed");
+      }),
     }));
 };
 
@@ -824,10 +864,11 @@ export const buildDigest = ({ jobs, logFor }: DigestOptions): FailureRecord[] =>
         unused.splice(position, 1);
       }
       const found = segment === undefined ? [] : failureLines(segment.lines);
+      const link = job.html_url ? ` See ${job.html_url}` : "";
       const missing =
         log === undefined
-          ? "Job log unavailable."
-          : "No log output found for this step.";
+          ? `Log of job "${job.name}" was unavailable to the digest.${link}`
+          : `No log output found for this step.${link}`;
       const lines = found.length > 0 ? found : [{ message: missing }];
       return {
         job: job.name,
