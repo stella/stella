@@ -188,9 +188,9 @@ const courtStatus = t.Union([
   ),
   t.Object(
     {
-      type: t.Literal("unlisted"),
+      type: t.Literal("other-courts"),
       tier: t.Literal("other"),
-      listed: t.Number(),
+      courts: t.Union([t.Number(), t.Null()]),
       decisions: t.Number(),
     },
     { additionalProperties: false },
@@ -393,6 +393,37 @@ const countryCoverage = {
         publicHomeUrl: boundedString(8192),
         health: t.Enum(CASE_LAW_COVERAGE_HEALTH),
         lastSyncAt: date,
+        decisionYearFrom: numberOrNull,
+        decisionYearTo: numberOrNull,
+        pendingTextCount: t.Number(),
+        knownGaps: t.Union([
+          t.Object(
+            { type: t.Literal("unknown") },
+            { additionalProperties: false },
+          ),
+          t.Object(
+            { type: t.Literal("none-recorded") },
+            { additionalProperties: false },
+          ),
+          t.Object(
+            {
+              type: t.Literal("known"),
+              gaps: t.Array(
+                t.Object(
+                  {
+                    from: boundedString(128),
+                    to: boundedString(128),
+                    reason: boundedString(2048),
+                    evidenceRef: boundedString(8192),
+                  },
+                  { additionalProperties: false },
+                ),
+                { maxItems: 100 },
+              ),
+            },
+            { additionalProperties: false },
+          ),
+        ]),
         completeness: sourceCompleteness,
         addedLastWeek: numberOrNull,
       },

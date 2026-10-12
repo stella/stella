@@ -1666,6 +1666,9 @@ const SHARED_CHAT_RENDERER_MESSAGES = [
 ] satisfies PersistedChatMessage[];
 
 function SharedChatRendererSample() {
+  const [activitySession] = useState(() => ({
+    reportedUnknownActivityTypes: new Set<string>(),
+  }));
   return (
     <div className="bg-popover/40 flex flex-col gap-4 rounded-2xl border p-4">
       <ChatMattersContext
@@ -1677,6 +1680,7 @@ function SharedChatRendererSample() {
           value={createPlaygroundChatApproval("dev-active-organization")}
         >
           <ChatThreadMessages
+            activitySession={activitySession}
             approvalPendingMessageId={null}
             messages={SHARED_CHAT_RENDERER_MESSAGES}
             onAskUserSubmit={() => {
