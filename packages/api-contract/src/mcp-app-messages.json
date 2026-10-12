@@ -80,7 +80,11 @@
     "redlineNext": "تم الرفع. ستُجرى مقارنة التغييرات بعد ذلك.",
     "redlineAsk": "تم الرفع. {ask}",
     "copyEcli": "نسخ ECLI",
-    "invalidFilters": "عوامل تصفية البحث غير صالحة. ابدأ بحثًا جديدًا مع تحديد الدولة وتواريخ صالحة."
+    "invalidFilters": "عوامل تصفية البحث غير صالحة. ابدأ بحثًا جديدًا مع تحديد الدولة وتواريخ صالحة.",
+    "resolveAmbiguous": "تطابق عدة أحكام هذا المرجع. اختر الحكم الذي تريد فتحه.",
+    "resolveMissing": "أكمل المرجع بإضافة: {parts}.",
+    "resolveNotFound": "لم يُعثر على حكم مطابق تمامًا. ابحث في الاجتهاد القضائي بدلًا من ذلك.",
+    "resolveUnavailable": "لا تتوفر خدمة العثور على الأحكام باستخدام مراجعها لهذا البلد."
   },
   "cs": {
     "constitutional": "Ústavní soudy",
@@ -163,7 +167,11 @@
     "redlineNext": "Nahráno. Následuje porovnání redline.",
     "redlineAsk": "Nahráno. {ask}",
     "copyEcli": "Kopírovat ECLI",
-    "invalidFilters": "Filtry hledání jsou neplatné. Spusťte nové hledání se zvoleným státem a platnými daty."
+    "invalidFilters": "Filtry hledání jsou neplatné. Spusťte nové hledání se zvoleným státem a platnými daty.",
+    "resolveAmbiguous": "Odkazu odpovídá více rozhodnutí. Vyberte rozhodnutí k otevření.",
+    "resolveMissing": "Doplňte do odkazu: {parts}.",
+    "resolveNotFound": "Přesné rozhodnutí nenalezeno. Zkuste vyhledávání judikatury.",
+    "resolveUnavailable": "Pro tuto zemi není dostupné dohledání rozhodnutí podle odkazu."
   },
   "de": {
     "constitutional": "Verfassungsgerichte",
@@ -246,7 +254,11 @@
     "redlineNext": "Hochgeladen. Der Änderungsvergleich folgt.",
     "redlineAsk": "Hochgeladen. {ask}",
     "copyEcli": "ECLI kopieren",
-    "invalidFilters": "Die Suchfilter sind ungültig. Starten Sie eine neue Suche mit einem Land und gültigen Datumsangaben."
+    "invalidFilters": "Die Suchfilter sind ungültig. Starten Sie eine neue Suche mit einem Land und gültigen Datumsangaben.",
+    "resolveAmbiguous": "Mehrere Entscheidungen passen. Wählen Sie eine Entscheidung zum Öffnen.",
+    "resolveMissing": "Ergänzen Sie die Fundstelle um: {parts}.",
+    "resolveNotFound": "Keine passende Entscheidung gefunden. Suchen Sie stattdessen nach Rechtsprechung.",
+    "resolveUnavailable": "Die Auflösung von Entscheidungsfundstellen ist für dieses Land nicht verfügbar."
   },
   "en": {
     "constitutional": "Constitutional courts",
@@ -329,7 +341,11 @@
     "redlineNext": "Uploaded. The redline runs next.",
     "redlineAsk": "Uploaded. {ask}",
     "copyEcli": "Copy ECLI",
-    "invalidFilters": "The search filters are invalid. Start a new search with a country and valid dates."
+    "invalidFilters": "The search filters are invalid. Start a new search with a country and valid dates.",
+    "resolveAmbiguous": "Several decisions match. Choose the decision to open.",
+    "resolveMissing": "Complete the reference with: {parts}.",
+    "resolveNotFound": "No exact decision found. Search case law instead.",
+    "resolveUnavailable": "Case-law resolution is unavailable for this country."
   },
   "et": {
     "constitutional": "Põhiseaduslikkuse järelevalve kohtud",
@@ -412,7 +428,11 @@
     "redlineNext": "Üles laaditud. Järgmisena võrreldakse muudatusi.",
     "redlineAsk": "Üles laaditud. {ask}",
     "copyEcli": "Kopeeri ECLI",
-    "invalidFilters": "Otsingufiltrid on vigased. Alusta uut otsingut riigi ja kehtivate kuupäevadega."
+    "invalidFilters": "Otsingufiltrid on vigased. Alusta uut otsingut riigi ja kehtivate kuupäevadega.",
+    "resolveAmbiguous": "Viitele vastab mitu kohtulahendit. Valige avatav lahend.",
+    "resolveMissing": "Täiendage viidet: {parts}.",
+    "resolveNotFound": "Täpselt vastavat kohtulahendit ei leitud. Otsige selle asemel kohtupraktikast.",
+    "resolveUnavailable": "Selle riigi kohtulahendeid ei saa viite järgi leida."
   },
   "fr": {
     "constitutional": "Juridictions constitutionnelles",
@@ -495,7 +515,11 @@
     "redlineNext": "Import terminé. La comparaison des modifications suit.",
     "redlineAsk": "Import terminé. {ask}",
     "copyEcli": "Copier l’ECLI",
-    "invalidFilters": "Les filtres de recherche ne sont pas valides. Lancez une nouvelle recherche avec un pays et des dates valides."
+    "invalidFilters": "Les filtres de recherche ne sont pas valides. Lancez une nouvelle recherche avec un pays et des dates valides.",
+    "resolveAmbiguous": "Plusieurs décisions correspondent. Choisissez la décision à ouvrir.",
+    "resolveMissing": "Complétez la référence avec : {parts}.",
+    "resolveNotFound": "Aucune décision exacte trouvée. Recherchez plutôt dans la jurisprudence.",
+    "resolveUnavailable": "La recherche de décisions par référence est indisponible pour ce pays."
   },
   "hu": {
     "constitutional": "Alkotmánybíróságok",
@@ -578,7 +602,11 @@
     "redlineNext": "Feltöltve. A változások összehasonlítása következik.",
     "redlineAsk": "Feltöltve. {ask}",
     "copyEcli": "ECLI másolása",
-    "invalidFilters": "A keresési szűrők érvénytelenek. Indítson új keresést egy ország és érvényes dátumok megadásával."
+    "invalidFilters": "A keresési szűrők érvénytelenek. Indítson új keresést egy ország és érvényes dátumok megadásával.",
+    "resolveAmbiguous": "Több határozat is megfelel. Válassza ki a megnyitandó határozatot.",
+    "resolveMissing": "Egészítse ki a hivatkozást: {parts}.",
+    "resolveNotFound": "Nem található pontosan egyező határozat. Keressen inkább a joggyakorlatban.",
+    "resolveUnavailable": "Ebben az országban nem érhető el a határozatok keresése hivatkozás alapján."
   },
   "lv": {
     "constitutional": "Konstitucionālās tiesas",
@@ -661,7 +689,11 @@
     "redlineNext": "Augšupielādēts. Tālāk tiks salīdzinātas izmaiņas.",
     "redlineAsk": "Augšupielādēts. {ask}",
     "copyEcli": "Kopēt ECLI",
-    "invalidFilters": "Meklēšanas filtri nav derīgi. Sāciet jaunu meklēšanu, norādot valsti un derīgus datumus."
+    "invalidFilters": "Meklēšanas filtri nav derīgi. Sāciet jaunu meklēšanu, norādot valsti un derīgus datumus.",
+    "resolveAmbiguous": "Atsaucei atbilst vairāki nolēmumi. Izvēlieties atveramo nolēmumu.",
+    "resolveMissing": "Papildiniet atsauci ar: {parts}.",
+    "resolveNotFound": "Precīzi atbilstošs nolēmums nav atrasts. Meklējiet judikatūrā.",
+    "resolveUnavailable": "Šīs valsts nolēmumus nevar atrast pēc atsauces."
   },
   "lt": {
     "constitutional": "Konstituciniai teismai",
@@ -744,7 +776,11 @@
     "redlineNext": "Įkelta. Toliau bus lyginami pakeitimai.",
     "redlineAsk": "Įkelta. {ask}",
     "copyEcli": "Kopijuoti ECLI",
-    "invalidFilters": "Paieškos filtrai netinkami. Pradėkite naują paiešką pasirinkę šalį ir tinkamas datas."
+    "invalidFilters": "Paieškos filtrai netinkami. Pradėkite naują paiešką pasirinkę šalį ir tinkamas datas.",
+    "resolveAmbiguous": "Nuorodą atitinka keli sprendimai. Pasirinkite sprendimą, kurį norite atverti.",
+    "resolveMissing": "Papildykite nuorodą: {parts}.",
+    "resolveNotFound": "Tiksliai atitinkančio sprendimo nerasta. Ieškokite teismų praktikoje.",
+    "resolveUnavailable": "Šios šalies sprendimų paieška pagal nuorodą neprieinama."
   },
   "pl": {
     "constitutional": "Trybunały konstytucyjne",
@@ -827,7 +863,11 @@
     "redlineNext": "Przesłano. Teraz zostanie wykonane porównanie zmian.",
     "redlineAsk": "Przesłano. {ask}",
     "copyEcli": "Kopiuj ECLI",
-    "invalidFilters": "Filtry wyszukiwania są nieprawidłowe. Rozpocznij nowe wyszukiwanie, wybierając kraj i prawidłowe daty."
+    "invalidFilters": "Filtry wyszukiwania są nieprawidłowe. Rozpocznij nowe wyszukiwanie, wybierając kraj i prawidłowe daty.",
+    "resolveAmbiguous": "Pasuje kilka orzeczeń. Wybierz orzeczenie do otwarcia.",
+    "resolveMissing": "Uzupełnij sygnaturę o: {parts}.",
+    "resolveNotFound": "Nie znaleziono dokładnie pasującego orzeczenia. Spróbuj wyszukać w orzecznictwie.",
+    "resolveUnavailable": "Wyszukiwanie orzeczeń według sygnatury jest niedostępne dla tego kraju."
   },
   "pt-BR": {
     "constitutional": "Tribunais constitucionais",
@@ -910,7 +950,11 @@
     "redlineNext": "Envio concluído. A comparação de alterações será executada a seguir.",
     "redlineAsk": "Envio concluído. {ask}",
     "copyEcli": "Copiar ECLI",
-    "invalidFilters": "Os filtros de pesquisa são inválidos. Inicie uma nova pesquisa com um país e datas válidas."
+    "invalidFilters": "Os filtros de pesquisa são inválidos. Inicie uma nova pesquisa com um país e datas válidas.",
+    "resolveAmbiguous": "Várias decisões correspondem. Escolha a decisão a abrir.",
+    "resolveMissing": "Complete a referência com: {parts}.",
+    "resolveNotFound": "Nenhuma decisão exata foi encontrada. Pesquise na jurisprudência.",
+    "resolveUnavailable": "A pesquisa de decisões por referência não está disponível para este país."
   },
   "sk": {
     "constitutional": "Ústavné súdy",
@@ -993,7 +1037,11 @@
     "redlineNext": "Nahraté. Nasleduje porovnanie redline.",
     "redlineAsk": "Nahraté. {ask}",
     "copyEcli": "Kopírovať ECLI",
-    "invalidFilters": "Filtre vyhľadávania sú neplatné. Spustite nové vyhľadávanie so zvoleným štátom a platnými dátumami."
+    "invalidFilters": "Filtre vyhľadávania sú neplatné. Spustite nové vyhľadávanie so zvoleným štátom a platnými dátumami.",
+    "resolveAmbiguous": "Odkazu zodpovedá viacero rozhodnutí. Vyberte rozhodnutie na otvorenie.",
+    "resolveMissing": "Doplňte do odkazu: {parts}.",
+    "resolveNotFound": "Presné rozhodnutie sa nenašlo. Skúste vyhľadávanie judikatúry.",
+    "resolveUnavailable": "Pre túto krajinu nie je dostupné dohľadanie rozhodnutia podľa odkazu."
   },
   "es": {
     "constitutional": "Tribunales constitucionales",
@@ -1076,6 +1124,10 @@
     "redlineNext": "Subida completada. A continuación se compararán los cambios.",
     "redlineAsk": "Subida completada. {ask}",
     "copyEcli": "Copiar ECLI",
-    "invalidFilters": "Los filtros de búsqueda no son válidos. Inicie una nueva búsqueda con un país y fechas válidas."
+    "invalidFilters": "Los filtros de búsqueda no son válidos. Inicie una nueva búsqueda con un país y fechas válidas.",
+    "resolveAmbiguous": "Coinciden varias resoluciones. Elija la resolución que desea abrir.",
+    "resolveMissing": "Complete la referencia con: {parts}.",
+    "resolveNotFound": "No se ha encontrado una resolución exacta. Busque en la jurisprudencia.",
+    "resolveUnavailable": "La búsqueda de resoluciones por referencia no está disponible para este país."
   }
 }
