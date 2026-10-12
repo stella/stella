@@ -49,6 +49,46 @@ const resolveImport = (filename: string, specifier: string) => {
     .replace(/\.(?:tsx?|jsx?)$/u, "");
 };
 
+/**
+ * A code-split component (`lazy(() => import("./x"))`) renders the export its
+ * loader resolves to: `default`, or the member mapped onto `default`.
+ */
+const lazyComponentTarget = (
+  declaration: ts.VariableDeclaration,
+  file: ts.SourceFile,
+) => {
+  const call = declaration.initializer;
+  if (
+    call === undefined ||
+    !ts.isCallExpression(call) ||
+    !/^(?:React\.)?lazy$/u.test(call.expression.getText(file))
+  ) {
+    return undefined;
+  }
+  let specifier: string | undefined;
+  let member = "default";
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments[0] !== undefined &&
+      ts.isStringLiteralLike(node.arguments[0])
+    ) {
+      specifier = node.arguments[0].text;
+    }
+    if (
+      ts.isPropertyAssignment(node) &&
+      node.name.getText(file) === "default" &&
+      ts.isPropertyAccessExpression(node.initializer)
+    ) {
+      member = node.initializer.name.text;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(call);
+  return specifier === undefined ? undefined : { specifier, member };
+};
+
 type SourceReferencesOptions = {
   filename: string;
   file: ts.SourceFile;
@@ -62,20 +102,39 @@ const sourceReferences = ({
 }: SourceReferencesOptions) => {
   const imports = new Map<string, string>();
   const namespaces = new Map<string, string>();
+  const resolveSource = (specifier: string) => {
+    const stem = resolveImport(filename, specifier);
+    return stem === null
+      ? undefined
+      : [stem, `${stem}.tsx`, `${stem}.ts`].find((candidate) =>
+          sources.has(candidate),
+        );
+  };
   for (const statement of file.statements) {
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        const lazyTarget = lazyComponentTarget(declaration, file);
+        const target =
+          lazyTarget === undefined
+            ? undefined
+            : resolveSource(lazyTarget.specifier);
+        if (
+          lazyTarget !== undefined &&
+          target !== undefined &&
+          ts.isIdentifier(declaration.name)
+        ) {
+          imports.set(declaration.name.text, `${target}#${lazyTarget.member}`);
+        }
+      }
+      continue;
+    }
     if (
       !ts.isImportDeclaration(statement) ||
       !ts.isStringLiteral(statement.moduleSpecifier)
     ) {
       continue;
     }
-    const stem = resolveImport(filename, statement.moduleSpecifier.text);
-    const target =
-      stem === null
-        ? undefined
-        : [stem, `${stem}.tsx`, `${stem}.ts`].find((candidate) =>
-            sources.has(candidate),
-          );
+    const target = resolveSource(statement.moduleSpecifier.text);
     if (target === undefined) {
       continue;
     }

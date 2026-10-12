@@ -272,6 +272,30 @@ describe("document identity ownership guard", () => {
     ]);
   });
 
+  test.each([
+    'const LazyCourtName = lazy(async () => { const module = await import("./court-name"); return { default: module.CourtName }; });',
+    'const LazyCourtName = lazy(() => import("./court-name").then((module) => ({ default: module.CourtName })));',
+  ])(
+    "code-split components follow the export their loader resolves to",
+    (loader) => {
+      const filename = "apps/web/src/components/decision-row.tsx";
+      const target = "apps/web/src/components/court-name.tsx";
+      const sources = fixture(
+        filename,
+        `${loader}\nexport const DecisionRow = ({ row }) => <li><Suspense fallback={<span />}><LazyCourtName identity={row.identity} /></Suspense>{row.caseNumber}</li>;`,
+      );
+      sources.set(
+        target,
+        `${IMPORT}export const CourtName = ({ identity }) => <DocumentIdentityBadge identity={identity} />;`,
+      );
+      expect(checkDocumentIdentitySources(sources).violations).toEqual([]);
+      sources.set(target, `${IMPORT}export const CourtName = () => <span />;`);
+      expect(checkDocumentIdentitySources(sources).violations).toEqual([
+        `${filename}#DecisionRow`,
+      ]);
+    },
+  );
+
   test("every discovered repository document row or rail reaches the shared badge", () => {
     const sources = readDocumentIdentitySources(
       path.resolve(import.meta.dir, ".."),
