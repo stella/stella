@@ -3,7 +3,7 @@ import { panic, Result, TaggedError } from "better-result";
 import type { PermissionInput } from "@stll/permissions";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ChatToolError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ChatToolErrorKind } from "@/api/lib/errors/tagged-errors";

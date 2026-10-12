@@ -83,6 +83,7 @@ const suggestFields = createSafeRootHandler(
       feature: "templates.suggestFields",
       modelRole: "fast",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: organizationId },
       traceId: Bun.randomUUIDv7(),
     });
