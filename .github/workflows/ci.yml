@@ -339,8 +339,10 @@ jobs:
           fi
           workflow_version=$(git show "$WORKFLOW_SHA:.github/workflows/ci.yml" | git hash-object --stdin)
           [[ "$workflow_version" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Unable to identify CI workflow version."; exit 1; }
-          echo "patch_id=$patch_id" >> "$GITHUB_OUTPUT"
-          echo "workflow_version=$workflow_version" >> "$GITHUB_OUTPUT"
+          {
+            echo "patch_id=$patch_id"
+            echo "workflow_version=$workflow_version"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Derive PR-depth jobs
         id: pr-depth-plan
@@ -1238,9 +1240,11 @@ jobs:
           API_SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
         run: |
           if ! timeout --kill-after=10s 120s bun scripts/ci-api-test-plan.ts; then
-            echo 'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","rest-web"]}' >> "$GITHUB_OUTPUT"
-            echo 'api_test_shards=4' >> "$GITHUB_OUTPUT"
-            echo 'api_test_files=' >> "$GITHUB_OUTPUT"
+            {
+              echo 'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","rest-web"]}'
+              echo 'api_test_shards=4'
+              echo 'api_test_files='
+            } >> "$GITHUB_OUTPUT"
           fi
 
       - name: Select affected Postgres test files
@@ -1259,8 +1263,10 @@ jobs:
             timeout --kill-after=10s 120s bun --cwd=apps/api run generate:capability-runtime &&
             timeout --kill-after=10s 120s bun scripts/ci-postgres-test-plan.ts
           ); then
-            echo 'postgres_test_selection={"mode":"all"}' >> "$GITHUB_OUTPUT"
-            echo 'postgres_selection_reason=Runtime generation or selection unavailable; full suite retained.' >> "$GITHUB_OUTPUT"
+            {
+              echo 'postgres_test_selection={"mode":"all"}'
+              echo 'postgres_selection_reason=Runtime generation or selection unavailable; full suite retained.'
+            } >> "$GITHUB_OUTPUT"
           fi
 
       - name: Summarize Postgres test selection
@@ -1373,9 +1379,11 @@ jobs:
           matrix=$(jq -c .matrix <<< "$plan")
           mode=$(jq -r .status <<< "$plan")
           specs=$(jq -c .specs <<< "$plan")
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-          echo "mode=$mode" >> "$GITHUB_OUTPUT"
-          echo "specs=$specs" >> "$GITHUB_OUTPUT"
+          {
+            echo "matrix=$matrix"
+            echo "mode=$mode"
+            echo "specs=$specs"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Plan changed PR e2e shards
         id: e2e-pr-plan
@@ -1399,15 +1407,21 @@ jobs:
             mode=$SELECTED_MODE
             specs=$SELECTED_SPECS
           fi
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-          echo "mode=$mode" >> "$GITHUB_OUTPUT"
-          echo "specs=$specs" >> "$GITHUB_OUTPUT"
+          {
+            echo "matrix=$matrix"
+            echo "mode=$mode"
+            echo "specs=$specs"
+          } >> "$GITHUB_OUTPUT"
           if [[ "$matrix" == '{"shard":[]}' ]]; then
-            echo "selection_required=false" >> "$GITHUB_OUTPUT"
-            echo "required=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "selection_required=false"
+              echo "required=false"
+            } >> "$GITHUB_OUTPUT"
           else
-            echo "selection_required=true" >> "$GITHUB_OUTPUT"
-            echo "required=$E2E_PRODUCTION_REQUIRED" >> "$GITHUB_OUTPUT"
+            {
+              echo "selection_required=true"
+              echo "required=$E2E_PRODUCTION_REQUIRED"
+            } >> "$GITHUB_OUTPUT"
           fi
 
       - name: Plan API test files and shards
@@ -1422,17 +1436,21 @@ jobs:
           SELECTED_SHARDS: ${{ steps.api-test-selection.outputs.api_test_shards }}
         run: |
           if [[ -n "$SELECTED_MATRIX" && -n "$SELECTED_SHARDS" ]]; then
-            echo "ci_tests_matrix=$SELECTED_MATRIX" >> "$GITHUB_OUTPUT"
-            echo "api_test_shards=$SELECTED_SHARDS" >> "$GITHUB_OUTPUT"
+            {
+              echo "ci_tests_matrix=$SELECTED_MATRIX"
+              echo "api_test_shards=$SELECTED_SHARDS"
+            } >> "$GITHUB_OUTPUT"
             {
               echo 'api_test_files<<API_TEST_FILES_END'
               printf '%s\n' "$SELECTED_FILES"
               echo 'API_TEST_FILES_END'
             } >> "$GITHUB_OUTPUT"
           elif [[ "$EVENT_NAME" == pull_request && "$PACKAGE_CHECKS_REQUIRED" != true && "$API_SCOPE_UNKNOWN" != true ]]; then
-            echo 'ci_tests_matrix={"shard":["rest-web"]}' >> "$GITHUB_OUTPUT"
-            echo 'api_test_shards=0' >> "$GITHUB_OUTPUT"
-            echo 'api_test_files=' >> "$GITHUB_OUTPUT"
+            {
+              echo 'ci_tests_matrix={"shard":["rest-web"]}'
+              echo 'api_test_shards=0'
+              echo 'api_test_files='
+            } >> "$GITHUB_OUTPUT"
           else
             bun scripts/api-test-shard-plan.ts >> "$GITHUB_OUTPUT"
             echo 'api_test_files=' >> "$GITHUB_OUTPUT"
@@ -3372,6 +3390,21 @@ jobs:
       - name: Workflow cache policy
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/workflow-cache-policy.test.ts scripts/workflow-run-trust.test.ts scripts/workflow-concurrency.test.ts
+
+      - name: Workflow lint
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        env:
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+          ACTIONLINT_VERSION: 1.7.12
+        run: |
+          bash scripts/install-actionlint.sh "$ACTIONLINT_VERSION" "$ACTIONLINT_SHA256" "$RUNNER_TEMP"
+          ACTIONLINT_BIN="$RUNNER_TEMP/actionlint" bun scripts/check-actionlint-baseline.ts
+
+      - name: Workflow YAML
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun test scripts/check-workflow-yaml.test.ts
+          bun scripts/check-workflow-yaml.ts
 
       - name: Module ownership
         env:

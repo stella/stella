@@ -44,8 +44,8 @@
       "description": "Look up a case-law decision by its published identifier.",
       "user_prompt": "Using stella, look up Czech decision ECLI:CZ:NS:2020:22.CDO.1000.2020.1 and show its court and reference.",
       "file_attachment_urls": null,
-      "tools_triggered": "lookup_case_law",
-      "expected_output": "Returns the decision identity, canonical courtAbbreviation (or null where unknown), court name, date and decision link; the court abbreviation matches search_case_law.",
+      "tools_triggered": "resolve_case_law_decision",
+      "expected_output": "Returns the shared legal resolve status envelope: an exact identity with public metadata and permitted text, ambiguity candidates, missing identifier parts, not_found or country_unavailable.",
       "expected_output_url": null
     },
     {
@@ -153,18 +153,6 @@
       }
     },
     "case_law_coverage": {
-      "annotations": {
-        "readOnlyHint": true,
-        "openWorldHint": false,
-        "destructiveHint": false
-      },
-      "justifications": {
-        "read_only_justification": "Retrieves or computes data from the user’s authorized stella workspace or configured source without changing stored records.",
-        "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
-        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
-      }
-    },
-    "lookup_case_law": {
       "annotations": {
         "readOnlyHint": true,
         "openWorldHint": false,
@@ -309,6 +297,30 @@
       }
     },
     "read_provision_history": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves or computes data from the user’s authorized stella workspace or configured source without changing stored records.",
+        "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
+        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+      }
+    },
+    "resolve_case_law_decision": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves or computes data from the user’s authorized stella workspace or configured source without changing stored records.",
+        "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
+        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+      }
+    },
+    "resolve_law_citation": {
       "annotations": {
         "readOnlyHint": true,
         "openWorldHint": false,

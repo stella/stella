@@ -167,17 +167,19 @@ type RouteFreshenableQueryOptions = {
   staleTime?: unknown;
 };
 
-const resolveRouteStaleTime = ({
-  staleTime,
-}: RouteFreshenableQueryOptions): number =>
-  typeof staleTime === "number" ? staleTime : ROUTE_QUERY_STALE_TIME_MS;
-
 export const routeQueryOptions = <TOptions extends object>(
-  options: TOptions,
-): TOptions & { staleTime: number } => ({
-  ...options,
-  staleTime: resolveRouteStaleTime(options),
-});
+  options: TOptions & RouteFreshenableQueryOptions,
+) => {
+  const { staleTime } = options;
+  if (
+    typeof staleTime === "number" ||
+    typeof staleTime === "function" ||
+    staleTime === "static"
+  ) {
+    return options;
+  }
+  return { ...options, staleTime: ROUTE_QUERY_STALE_TIME_MS };
+};
 
 export const ensureRouteQueryData = async <
   TQueryFnData,
