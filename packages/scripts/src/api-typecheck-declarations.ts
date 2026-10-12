@@ -482,7 +482,7 @@ export const discoverApiDeclarationEntries = (project: string) => {
       ) {
         continue;
       }
-      const read = ts.readConfigFile(consumer, ts.sys.readFile);
+      const read = ts.readConfigFile(consumer, (file) => ts.sys.readFile(file));
       const parsed = ts.parseJsonConfigFileContent(
         read.config,
         ts.sys,

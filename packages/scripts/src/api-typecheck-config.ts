@@ -12,7 +12,7 @@ export const apiTypecheckArtifact = (
 ) => path.join(api, ".cache/typecheck-declarations", `${name}.json`);
 
 export const usesGeneratedApiConfig = (project: string) => {
-  const read = ts.readConfigFile(project, ts.sys.readFile);
+  const read = ts.readConfigFile(project, (file) => ts.sys.readFile(file));
   const config = v.parse(
     v.object({
       extends: v.optional(v.union([v.string(), v.array(v.string())])),
@@ -29,7 +29,7 @@ export const usesGeneratedApiConfig = (project: string) => {
 
 export const readApiTypecheckConfig = (project: string) => {
   const filename = path.resolve(project);
-  const read = ts.readConfigFile(filename, ts.sys.readFile);
+  const read = ts.readConfigFile(filename, (file) => ts.sys.readFile(file));
   if (usesGeneratedApiConfig(filename)) {
     const config = v.parse(
       v.object({ extends: v.array(v.string()) }),
@@ -95,7 +95,7 @@ export const apiDeclarationConsumers = (project: string) => {
       if (consumer === config) {
         continue;
       }
-      const read = ts.readConfigFile(consumer, ts.sys.readFile);
+      const read = ts.readConfigFile(consumer, (file) => ts.sys.readFile(file));
       const parsed = ts.parseJsonConfigFileContent(
         read.config,
         ts.sys,
