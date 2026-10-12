@@ -213,7 +213,7 @@ const citedSourceChip = async (
   const chip = page.getByText(source.chipLabel).first();
   await chip.waitFor();
   const inViewport = await chip.evaluate(
-    (element) =>
+    async (element) =>
       new Promise<boolean>((resolve) => {
         const observer = new IntersectionObserver((entries) => {
           observer.disconnect();
@@ -1004,7 +1004,8 @@ const recordCapture = async ({
     viewport: capture.viewport,
   });
   try {
-    return await recordCaptureInContext({ capture, context, theme, views });
+    await recordCaptureInContext({ capture, context, theme, views });
+    return;
   } finally {
     // Closing the page never unmounts the editor, so an editor take's lock
     // would outlive it and badge the document in later scenes. Release it
