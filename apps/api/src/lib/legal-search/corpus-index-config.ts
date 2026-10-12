@@ -128,7 +128,10 @@ const CORPUS_INDEX_MERGE_POLICY = {
   min_level_num_docs: 100_000,
 } as const satisfies CorpusIndexMergePolicy;
 
-/** Final-index merge window and asynchronous-delete settlement bound. */
+/**
+ * Final-index age-based merge window. Each merge output starts a new maturity
+ * clock, so this period does not bound asynchronous-delete settlement.
+ */
 const CORPUS_FINAL_INDEX_MERGE_POLICY = {
   ...CORPUS_INDEX_MERGE_POLICY,
   maturation_period: "4hours",
