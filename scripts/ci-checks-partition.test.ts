@@ -493,6 +493,24 @@ const withoutLocalVerification = (step: Step): Step => {
   return original;
 };
 
+// Project topology changes need parity too; the executable selection tests
+// guard this widening while the partition census still checks every other byte.
+const withoutApiProjectParityTrigger = (step: Step): Step => {
+  if (
+    step.name !== "Select typecheck parity coverage" ||
+    typeof step["run"] !== "string"
+  ) {
+    return step;
+  }
+  return {
+    ...step,
+    run: step["run"].replace(
+      ' || git("diff", "--name-only", base, "HEAD", "--", "apps/api/tsconfig*.json", "scripts/typecheck-parity.ts") !== ""',
+      "",
+    ),
+  };
+};
+
 const ownedSteps = (steps: readonly Step[]) =>
   steps
     .filter(({ name }) => !prerequisites.has(name))
@@ -501,6 +519,7 @@ const ownedSteps = (steps: readonly Step[]) =>
     .map(withoutContinuation)
     .map(withoutPreparedGeneration)
     .map(withoutTestTimeout)
+    .map(withoutApiProjectParityTrigger)
     .map(withoutStepId)
     .map((step) => {
       const { background, ...check } = step;

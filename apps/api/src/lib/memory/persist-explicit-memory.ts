@@ -8,7 +8,7 @@ import { AI_MEMORY_SCOPE_FREE_KINDS, aiMemories } from "@/api/db/schema";
 import type { AiMemoryKind, AiMemoryScope } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ChatToolError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createMemoryDedupIdentity } from "@/api/lib/memory/memory-dedup";

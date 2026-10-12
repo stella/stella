@@ -10,14 +10,8 @@ defaults:
 #
 #   check  — PR CI and the nightly run compare the committed PNGs against a
 #            freshly seeded app.
-#   update — dispatched on main against the branch whose UI legitimately
-#            changed; rewrites every baseline on the runner and pushes the
-#            result to that branch.
-#
-# They are separate jobs because only update may hold the release App key:
-# update runs in the `release-app` environment, whose deployment policy
-# allows main and release tags only, so the key is structurally unavailable
-# to a run on any other ref.
+#   update — marketing-screenshots-update.yml, dispatched on main against
+#            the branch whose UI legitimately changed, runs the same body.
 #
 # Both render on the same runner image from a production web build (the
 # e2e shards' artifact on PRs, built in place otherwise), which is why the
@@ -28,11 +22,11 @@ on:
   workflow_call:
     inputs:
       mode:
-        description: check compares committed baselines; update regenerates and pushes them
+        description: Must be check; regeneration runs in marketing-screenshots-update.yml
         required: true
         type: string
       ref:
-        description: Branch to check out and push regenerated baselines to; empty uses the triggering ref
+        description: Commit the main-heavy caller compares; empty uses the triggering ref
         required: false
         default: ""
         type: string
@@ -48,17 +42,11 @@ on:
       DOCKERHUB_TOKEN:
         description: Docker Hub token for authenticated infrastructure image pulls
         required: false
-      STELLA_RELEASE_APP_PRIVATE_KEY:
-        description: Private key of the release App; update mode pushes the regenerated PNGs with its token
-        required: false
 
 permissions: {}
 
 jobs:
   check:
-    # Anything that is not update, so an unrecognised mode reaches the
-    # capture action's validation instead of skipping both jobs green.
-    if: inputs.mode != 'update'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -67,6 +55,17 @@ jobs:
       contents: read
 
     steps:
+      # Unconditional job plus an explicit check, so a wrong mode fails
+      # instead of skipping green.
+      - name: Require check mode
+        env:
+          MODE: ${{ inputs.mode }}
+        run: |
+          if [[ "$MODE" != check ]]; then
+            echo "::error::This workflow only compares baselines; regenerate with marketing-screenshots-update.yml"
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -83,153 +82,6 @@ jobs:
           web-build-artifact: ${{ inputs.web-build-artifact }}
           dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Upload failure diagnostics
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          # Mode and run keep the nightly, PR, and dispatched artifacts apart.
-          name: marketing-screenshots-${{ inputs.mode }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            /tmp/api.log
-            /tmp/web.log
-            apps/web/test-results/
-          if-no-files-found: ignore
-          retention-days: 7
-
-  update:
-    if: inputs.mode == 'update'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      # The update push runs on the App token, not GITHUB_TOKEN: a push made
-      # with GITHUB_TOKEN does not re-trigger the PR's checks, so the branch
-      # would sit on a failed marketing check with the fix already committed.
-      contents: read
-    # Release App key lives in this environment (main and v* tags only).
-    environment: release-app
-
-    steps:
-      - name: Checkout GitHub API tooling
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ${{ github.repository }}
-          ref: ${{ github.workflow_sha }}
-          path: .gh-retry
-          persist-credentials: false
-          sparse-checkout: scripts/gh-retry.sh
-          sparse-checkout-cone-mode: false
-
-      - name: Preserve GitHub API tooling across source checkouts
-        run: |
-          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
-          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
-
-      - name: Validate inputs
-        env:
-          BRANCH: ${{ inputs.ref }}
-          WORKFLOW_REF: ${{ github.ref_name }}
-        run: |
-          # `ref` reaches a checkout and a push refspec, so it has to be a
-          # plain branch name and nothing that reads as an option or a path
-          # traversal.
-          if [[ -n "$BRANCH" ]]; then
-            if [[ "$BRANCH" == "main" ]]; then
-              echo "::error::main's baselines are regenerated through a pull request, never pushed in place"
-              exit 1
-            fi
-            if [[ ! "$BRANCH" =~ ^[A-Za-z0-9._/-]+$ || "$BRANCH" == *".."* || "$BRANCH" == -* ]]; then
-              echo "::error::Not a plain branch name: $BRANCH"
-              exit 1
-            fi
-          fi
-
-          # The release App key must only ever run workflow code from main
-          # (the posture of release-tag.yml): dispatching this on a
-          # branch would hand the key that branch's job body. Update mode is
-          # therefore dispatched on main and told which branch to regenerate,
-          # so only the app and spec code checked out below is branch-owned.
-          if [[ "$WORKFLOW_REF" != "main" ]]; then
-            echo "::error::Update mode must be dispatched on main, not $WORKFLOW_REF; pass the branch with -f branch=<pr-branch>"
-            exit 1
-          fi
-          if [[ -z "$BRANCH" ]]; then
-            echo "::error::Update mode needs the branch whose baselines to regenerate"
-            exit 1
-          fi
-
-      - name: Verify the branch exists
-        # Before the token is minted: a typo must not reach the App, and a
-        # fork PR's branch does not exist here at all (its baselines travel as
-        # the artifact uploaded below).
-        env:
-          BRANCH: ${{ inputs.ref }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if ! bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/branches/${BRANCH}" --silent; then
-            echo "::error::Branch ${BRANCH} does not exist in ${GITHUB_REPOSITORY}"
-            exit 1
-          fi
-
-      - name: Mint App token
-        id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
-          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: ${{ github.event.repository.name }}
-          permission-contents: write
-
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # The App token is injected into the push step's environment only,
-          # so it never reaches disk as a persisted git credential, and the
-          # code checked out here never sees it.
-          persist-credentials: false
-          ref: ${{ inputs.ref }}
-          submodules: true
-
-      - name: Capture marketing screenshots
-        uses: ./.github/actions/marketing-capture
-        with:
-          mode: ${{ inputs.mode }}
-          dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
-          dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Upload regenerated baselines
-        # The App token can only push to a branch of this repository, so the
-        # PNGs are published unconditionally: a pull request from a fork takes
-        # them from here.
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: marketing-screenshots-${{ github.run_id }}
-          path: apps/landing/public/media/products/*.png
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Note the artifact for fork pull requests
-        env:
-          ARTIFACT: marketing-screenshots-${{ github.run_id }}
-        run: |
-          {
-            echo "### Regenerated PNGs: \`$ARTIFACT\`"
-            echo
-            echo "The push below only reaches a branch of this repository. A pull request from a fork downloads that artifact and commits the PNGs itself."
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      # The commit is created through the API so GitHub signs it; the branch
-      # belongs to a person, and a signed-commits rule would otherwise block
-      # their pull request on this one commit.
-      - name: Push regenerated baselines
-        uses: stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8
-        with:
-          token: ${{ steps.app-token.outputs.token }}
-          mode: append
-          branch: ${{ inputs.ref }}
-          paths: apps/landing/public/media/products/*.png
-          commit-message: "chore(landing): regenerate marketing screenshots"
 
       - name: Upload failure diagnostics
         if: failure()

@@ -1,6 +1,6 @@
 import { TaggedError } from "better-result";
 
-import { failureSink } from "@/api/lib/observability/failure";
+import { failureSink, type FailureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { emitActionCostDropMetric } from "@/api/lib/observability/request-metrics";
@@ -14,7 +14,7 @@ class ActionCostObservationError extends TaggedError(
   dropped: number;
   cause?: unknown;
 }> {}
-export const COST_FAILURE = failureSink({
+export const COST_FAILURE: FailureSink = failureSink({
   event: "action_cost.observation_dropped",
   expected: [],
 });

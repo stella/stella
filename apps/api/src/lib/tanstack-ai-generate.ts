@@ -1417,7 +1417,9 @@ const isStructuredOutputPartial = <TOutput>(
 
 export const resolveTanStackTextModel = async (
   options: ResolveTextModelOptions,
-  credentials = getManagedOpenRouterCredentialProvider(),
+  credentials: ReturnType<
+    typeof getManagedOpenRouterCredentialProvider
+  > = getManagedOpenRouterCredentialProvider(),
 ): Promise<ResolvedTanStackTextModel> => {
   // Every inference path resolves its model here with the proof that its
   // action was admitted; the type requires the proof, this binds it to the

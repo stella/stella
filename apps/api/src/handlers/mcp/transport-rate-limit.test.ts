@@ -17,10 +17,10 @@ import {
 } from "@/api/handlers/mcp/transport-rate-limit";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import type { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability";
+import type { RequestIpServer } from "@/api/lib/rate-limit/contracts";
 import {
   InMemoryRateLimitContext,
   rateLimit,
-  type RequestIpServer,
 } from "@/api/lib/rate-limit/rate-limit";
 import {
   MCP_ANONYMIZED_HTTP_PATH,
