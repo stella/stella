@@ -4151,7 +4151,12 @@ const comparisonBase = (headRef?: string): string => {
     return resolveCommit(explicitBase);
   }
   if (headRef !== undefined) {
-    readGit(["fetch", "--no-tags", "origin", "main"]);
+    readGit([
+      "fetch",
+      "--no-tags",
+      "origin",
+      "+refs/heads/main:refs/remotes/origin/main",
+    ]);
   }
   return resolveCommit(
     readGit(["merge-base", "origin/main", headRef ?? "HEAD"]),
