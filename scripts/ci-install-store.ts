@@ -66,11 +66,6 @@ export const completeInstallStoreKey = ({
   ] as const) {
     assertIdentity(name, value);
   }
-  if (globalStoreMode !== "enabled" && globalStoreMode !== "disabled") {
-    throw new InstallStoreInvariantError(
-      "Invalid global Bun install-store mode",
-    );
-  }
   if (flags.length === 0 || flags.some((flag) => flag.trim() === "")) {
     throw new InstallStoreInvariantError(
       "Install-store cache requires non-empty ordered flags",
