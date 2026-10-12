@@ -6,9 +6,12 @@ import {
   readFileSync,
   rmSync,
   writeFileSync,
+  writeSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { installTimeoutMs, runLoggedInstall } from "./ci-install";
 
@@ -29,6 +32,58 @@ test("the workflow leaves install budgets to the platform owner", () => {
 afterEach(() => {
   for (const root of roots.splice(0)) {
     rmSync(root, { force: true, recursive: true });
+  }
+});
+
+class InstallRecordingFixtureError extends Error {
+  override name = "InstallRecordingFixtureError";
+  readonly _tag = "InstallRecordingFixtureError";
+}
+
+test("a failed recorder kills and reaps an installer that is still alive", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "install-recording-failure-"));
+  roots.push(root);
+  let installerPid: number | undefined;
+  try {
+    const failure = await rejectionOf(
+      runLoggedInstall({
+        command: [
+          process.execPath,
+          "-e",
+          `console.log(\`live installer \${process.pid}\`); setInterval(() => {}, 1000)`,
+        ],
+        logFile: path.join(root, "install.log"),
+        report: () => {},
+        writeLog: (descriptor, chunk) => {
+          const match = /live installer (\d+)/u.exec(
+            Buffer.from(chunk).toString(),
+          );
+          if (match?.[1]) {
+            installerPid = Number(match[1]);
+            process.kill(installerPid, 0);
+            throw new InstallRecordingFixtureError("Fixture log write failure");
+          }
+          writeSync(descriptor, chunk);
+        },
+      }),
+    );
+    expect(failure).toBeInstanceOf(InstallRecordingFixtureError);
+    expect(failure).toMatchObject({ message: "Fixture log write failure" });
+    if (installerPid === undefined) {
+      expect.unreachable(
+        "The fixture must reach recording with a live installer",
+      );
+    }
+    const stoppedPid = installerPid;
+    expect(() => process.kill(stoppedPid, 0)).toThrow(/ESRCH|No such process/u);
+  } finally {
+    if (installerPid !== undefined) {
+      try {
+        process.kill(installerPid, "SIGKILL");
+      } catch (error) {
+        expect(error).toMatchObject({ code: "ESRCH" });
+      }
+    }
   }
 });
 

@@ -33,12 +33,16 @@ type LoggedInstallOptions = {
   timeoutMs?: number;
   report?: (message: string) => void;
   timeoutDiagnostics?: (pid: number) => string;
+  writeLog?: (descriptor: number, chunk: Uint8Array) => void;
 };
 
 export const runLoggedInstall = async ({
   command,
   logFile,
   timeoutMs = installTimeoutMs(process.platform),
+  writeLog = (descriptor, chunk) => {
+    writeSync(descriptor, chunk);
+  },
   report = (message) => {
     process.stdout.write(message);
   },
@@ -63,7 +67,7 @@ export const runLoggedInstall = async ({
   mkdirSync(path.dirname(logFile), { recursive: true });
   const descriptor = openSync(logFile, "w+");
   const record = (chunk: string | Uint8Array) => {
-    writeSync(
+    writeLog(
       descriptor,
       typeof chunk === "string" ? Buffer.from(chunk) : chunk,
     );
@@ -103,6 +107,17 @@ export const runLoggedInstall = async ({
         child.stderr.pipeTo(new WritableStream({ write: record })),
         child.exited,
       ]);
+    } catch (error) {
+      // A failed recorder must not leave an installer alive after its pipes fail.
+      // Keep the deadline armed until the process is reaped.
+      try {
+        if (child.exitCode === null) {
+          child.kill("SIGKILL");
+        }
+      } finally {
+        await child.exited;
+      }
+      throw error;
     } finally {
       clearTimeout(deadline);
     }
