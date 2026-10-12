@@ -3,6 +3,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
+import {
+  createProcessMemoryReader,
+  testProcessMemoryLimit,
+  watchTestProcessMemory,
+} from "@stll/scripts/src/test-process-memory";
 
 import { planTestRuns } from "./test-run-plan";
 import type { PathKind } from "./test-run-plan";
@@ -43,13 +48,53 @@ if (runs.length === 0) {
   process.exit(1);
 }
 
+const limitBytes = testProcessMemoryLimit(process.env);
+const readBytes = await createProcessMemoryReader();
 for (const run of runs) {
-  const child = Bun.spawnSync(["bun", "test", ...run.args], {
+  let currentFile =
+    run.args
+      .filter((arg) => /\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(arg))
+      .join(", ") || `${run.label} suite (before first file)`;
+  const child = Bun.spawn(["bun", "--smol", "test", ...run.args], {
     cwd: WEB_ROOT_PATH,
-    stdio: ["inherit", "inherit", "inherit"],
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "pipe",
   });
-  if (!child.success) {
+  const watchdog = watchTestProcessMemory({
+    child,
+    limitBytes,
+    readBytes,
+    file: () => currentFile,
+    onFailure: (message) => process.stderr.write(`${message}\n`),
+  });
+  try {
+    const decoder = new TextDecoder();
+    let pending = "";
+    for await (const chunk of child.stderr) {
+      process.stderr.write(chunk);
+      pending += decoder.decode(chunk, { stream: true });
+      const lines = pending.split("\n");
+      pending = (lines.pop() ?? "").slice(-16 * 1024);
+      for (const line of lines) {
+        const match = /^(.+\.(?:test|spec)\.[cm]?[jt]sx?):\s*$/u.exec(
+          Bun.stripANSI(line),
+        );
+        if (match?.[1] !== undefined) {
+          currentFile = match[1];
+        }
+      }
+    }
+    await child.exited;
+  } finally {
+    watchdog.stop();
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill("SIGKILL");
+      await child.exited;
+    }
+  }
+  if (watchdog.failure() !== undefined || childExitStatus(child) !== 0) {
     console.error(`The ${run.label} tests failed.`);
-    process.exit(childExitStatus(child));
+    process.exit(watchdog.failure() === undefined ? childExitStatus(child) : 1);
   }
 }

@@ -4,6 +4,11 @@ import path from "node:path";
 
 import { printError } from "@stll/errors";
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
+import {
+  createProcessMemoryReader,
+  testProcessMemoryLimit,
+  watchTestProcessMemory,
+} from "@stll/scripts/src/test-process-memory";
 
 // A measured CI solo batch (254 chat turn tests) took 250.9s. Ten minutes
 // gives it more than twice that headroom, while bounding imports, snapshot
@@ -114,6 +119,8 @@ export class TestProcessSupervisor {
   private stopped(): boolean {
     return this.signal.aborted;
   }
+  private readonly memoryReader = createProcessMemoryReader();
+  private readonly memoryLimitBytes = testProcessMemoryLimit(process.env);
   private readonly active = new Map<number, ActiveProcess>();
   private readonly deadline: ReturnType<typeof setTimeout>;
   private escalation: ReturnType<typeof setTimeout> | undefined;
@@ -372,6 +379,7 @@ export class TestProcessSupervisor {
         `${identity.kind} ${identity.label} exceeded ${this.childTimeoutMs}ms wall-clock budget`,
       );
     }, this.childTimeoutMs);
+    let memoryWatchdog: ReturnType<typeof watchTestProcessMemory> | undefined;
     const streams: Promise<void>[] = [];
     try {
       this.writeRegistry("active.json");
@@ -383,6 +391,13 @@ export class TestProcessSupervisor {
         collect(stdout, this.options.onStdout),
         collect(stderr, this.options.onStderr),
       );
+      memoryWatchdog = watchTestProcessMemory({
+        child,
+        limitBytes: this.memoryLimitBytes,
+        readBytes: await this.memoryReader,
+        file: () => identity.files.join(", ") || identity.label,
+        onFailure: (message) => this.stop(message),
+      });
       await Promise.all([child.exited, ...streams]);
       const result = {
         exitCode:
@@ -399,6 +414,7 @@ export class TestProcessSupervisor {
       throw error;
     } finally {
       clearTimeout(watchdog);
+      memoryWatchdog?.stop();
       // A stopped leader may exit before its descendants, which still need escalation.
       if (!this.stopped()) {
         this.active.delete(id);
