@@ -2297,7 +2297,7 @@ export const buildActiveDecisionSection = async ({
           // not read the decision again to learn that.
           const passageNumbers = decisionPassageNumbers(
             row.id,
-            ast?.blocks ?? [],
+            ast === null ? null : ast.blocks,
           );
           return { status: "available", row, text, passageNumbers } as const;
         },

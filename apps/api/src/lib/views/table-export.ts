@@ -4,7 +4,7 @@ import { isReviewFlag } from "@stll/api-contract";
 import type { ReviewFlag } from "@stll/api-contract";
 
 import type { JustificationContent } from "@/api/db/schema";
-import { formatCourtParagraphMark } from "@/api/lib/court-paragraph-mark";
+import { formatCourtParagraphMark } from "@/api/lib/case-law/court-paragraph-mark";
 import { escapeCSV } from "@/api/lib/csv";
 import type { QueryEntityResult } from "@/api/lib/entities/query-entities";
 import { LIMITS } from "@/api/lib/limits";

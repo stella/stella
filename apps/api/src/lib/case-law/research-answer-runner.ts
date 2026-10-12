@@ -655,7 +655,9 @@ const resolveDecisionText = async (
   if (passages.length === 0) {
     return { kind: "none" };
   }
-  const courtParagraphNumbers = courtParagraphNumbersByAnchor(blocks ?? []);
+  // Flat text has no blocks, so it numbers nothing.
+  const courtParagraphNumbers: ReadonlyMap<string, number> =
+    blocks === null ? new Map() : courtParagraphNumbersByAnchor(blocks);
   const total = passages.reduce(
     (sum, passage) => sum + passage.excerpt.length,
     0,

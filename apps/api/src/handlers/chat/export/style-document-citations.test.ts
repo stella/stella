@@ -8,7 +8,7 @@ import {
   styleDocumentCitations,
   styleDocumentCitationsWithCounts,
 } from "@/api/handlers/chat/export/style-document-citations";
-import { formatCourtParagraphMark } from "@/api/lib/court-paragraph-mark";
+import { formatCourtParagraphMark } from "@/api/lib/case-law/court-paragraph-mark";
 import { markdownToStellaDocument } from "@/api/lib/docx-authoring/from-markdown";
 
 const collectParagraphContent = (

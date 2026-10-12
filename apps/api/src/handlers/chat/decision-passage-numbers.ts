@@ -6,9 +6,15 @@ import type { SafeId } from "@stll/api-contract/safe-id";
 import { courtParagraphNumbersByAnchor } from "@stll/legal-ast/court-paragraph-number";
 import type { Block } from "@stll/legal-ast/document-ast";
 
-import { captureError } from "@/api/lib/analytics/capture";
 import { COURT_PARAGRAPH_NUMBER_DECISIONS_MAX } from "@/api/lib/case-law/court-paragraph-numbers";
 import type { CourtParagraphNumbersByDecision } from "@/api/lib/case-law/court-paragraph-numbers";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+
+const PASSAGE_NUMBER_LOOKUP_FAILED_SINK = failureSink({
+  event: "chat.decision_passage_number_lookup_failed",
+  expected: [],
+});
 
 /**
  * Court paragraph numbers a turn already holds: per decision, every numbered
@@ -17,14 +23,24 @@ import type { CourtParagraphNumbersByDecision } from "@/api/lib/case-law/court-p
  */
 export type DecisionPassageNumbers = CourtParagraphNumbersByDecision;
 
+/** A decision resolved as numbering no block. */
+const NOTHING_NUMBERED: ReadonlyMap<string, number> = new Map();
+
 export const NO_DECISION_PASSAGE_NUMBERS: DecisionPassageNumbers = new Map();
 
 /** The numbers of the decision the prompt rendered, from that very AST. */
 export const decisionPassageNumbers = (
   decisionId: SafeId<"caseLawDecision">,
-  blocks: readonly Block[],
+  blocks: readonly Block[] | null,
 ): DecisionPassageNumbers =>
-  new Map([[decisionId, courtParagraphNumbersByAnchor(blocks)]]);
+  new Map([
+    [
+      decisionId,
+      blocks === null
+        ? NOTHING_NUMBERED
+        : courtParagraphNumbersByAnchor(blocks),
+    ],
+  ]);
 
 /**
  * Stamps the court's number into an answer's passage citations.
@@ -63,8 +79,6 @@ export const DECISION_PASSAGE_TURN_DECISIONS_MAX = 32;
  * slow corpus may cost a citation its number but never stall the answer.
  */
 export const DECISION_PASSAGE_LOOKUP_TIMEOUT_MS = 1500;
-
-const NOTHING_NUMBERED: ReadonlyMap<string, number> = new Map();
 
 class DecisionPassageLookupTimeoutError extends Error {
   override name = "DecisionPassageLookupTimeoutError";
@@ -126,7 +140,9 @@ export const createDecisionPassageStamper = ({
           // answer, and is not retried within the turn.
           const loaded = await withinTimeout(load(sent), timeoutMs).catch(
             (error: unknown) => {
-              captureError(error, { source: "chat-decision-passage-numbers" });
+              observeFailure(error, {
+                sink: PASSAGE_NUMBER_LOOKUP_FAILED_SINK,
+              });
               return NO_DECISION_PASSAGE_NUMBERS;
             },
           );
