@@ -19,6 +19,7 @@ import {
   getStaticMcpToolOutputContract,
   LAW_MCP_TOOL_DEFINITIONS,
   LAW_MCP_TOOL_DISPOSITION,
+  listStaticMcpToolDefinitions,
 } from "@/api/mcp/static-tool-definitions";
 import { surfaceToolVocabulary } from "@/api/mcp/surface-tool-mentions";
 import { scopeProseToSurface } from "@/api/mcp/tool-mentions";
@@ -125,19 +126,18 @@ describe("MCP tool registry", () => {
     );
   });
 
-  test("every default tool scope is an advertised default scope", () => {
-    const definitions: readonly McpToolDefinition[] =
-      DEFAULT_MCP_TOOL_DEFINITIONS;
-    const defaultScopes: readonly ToolScope[] = MCP_DEFAULT_RESOURCE_SCOPES;
-    for (const tool of definitions) {
-      expect(defaultScopes).toContain(tool.scope);
-      if (tool.additionalScopes !== undefined) {
-        for (const scope of tool.additionalScopes) {
-          expect(defaultScopes).toContain(scope);
-          expect(scope).not.toBe(tool.scope);
-        }
+  test("advertises exactly the scopes required by the default surface", () => {
+    const requiredScopes = new Set<ToolScope>();
+    for (const tool of listStaticMcpToolDefinitions("default")) {
+      requiredScopes.add(tool.scope);
+      for (const scope of tool.additionalScopes ?? []) {
+        expect(scope).not.toBe(tool.scope);
+        requiredScopes.add(scope);
       }
     }
+    expect([...MCP_DEFAULT_RESOURCE_SCOPES].toSorted()).toEqual(
+      [...requiredScopes].toSorted(),
+    );
   });
 
   test("documents projection contains document tools and only the write executor", () => {

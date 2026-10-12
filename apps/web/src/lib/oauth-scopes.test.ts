@@ -4,6 +4,11 @@ import path from "node:path";
 import { createTranslator } from "use-intl";
 import * as v from "valibot";
 
+import {
+  MCP_DEFAULT_RESOURCE_SCOPES,
+  MCP_ADVANCED_RESOURCE_SCOPES,
+} from "@stll/api-contract";
+
 import en from "@/i18n/langs/en.json";
 import {
   groupOAuthScopeDisplayEntries,
@@ -14,6 +19,35 @@ import {
 } from "@/lib/oauth-scopes";
 
 describe("OAuth scope display groups", () => {
+  test("discloses every scope in each resource grant using translated consent copy", () => {
+    const translate = createTranslator({ locale: "en", messages: en });
+    for (const scopes of [
+      MCP_DEFAULT_RESOURCE_SCOPES,
+      MCP_ADVANCED_RESOURCE_SCOPES,
+    ]) {
+      const entries = toOAuthScopeDisplayEntries(scopes);
+      expect(entries).toHaveLength(scopes.length);
+      for (const entry of entries) {
+        expect(entry.type).toBe("known");
+        if (entry.type !== "known") {
+          throw new TypeError("Resource scope lacks consent copy");
+        }
+        expect(translate(entry.label)).not.toBe(entry.label);
+        expect(translate(entry.summary)).not.toBe(entry.summary);
+      }
+    }
+    expect(
+      toOAuthScopeDisplayEntries(MCP_DEFAULT_RESOURCE_SCOPES).map((entry) =>
+        entry.type === "known" ? entry.label : entry.scope,
+      ),
+    ).not.toContain("consent.scopeChat");
+    expect(
+      toOAuthScopeDisplayEntries(MCP_DEFAULT_RESOURCE_SCOPES).map((entry) =>
+        entry.type === "known" ? entry.label : entry.scope,
+      ),
+    ).not.toContain("consent.scopeSkills");
+  });
+
   test("groups every requested entry exactly once", () => {
     const entries = toOAuthScopeDisplayEntries([
       "stella:search",
