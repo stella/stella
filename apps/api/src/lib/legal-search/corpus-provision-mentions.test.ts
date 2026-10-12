@@ -3,7 +3,7 @@ import fc from "fast-check";
 
 import { PROVISION_CITATION_PROFILES } from "@stll/legal-atlas/provision-citation-profiles";
 import { assertProperty } from "@stll/property-testing";
-import { foldToAscii } from "@stll/text-normalize";
+import { normalizeUnicode, foldToAscii } from "@stll/text-normalize";
 
 import { readCorpusProvisionMentions } from "./corpus-provision-mentions";
 import { tokenizeCorpusFreeText } from "./corpus-query";
@@ -202,7 +202,7 @@ test("corpus-provision-mentions/profile-title-normalization", () => {
           typed: spelling,
           lowercase: spelling.toLowerCase(),
           ascii: foldToAscii(spelling).toLowerCase(),
-          decomposed: spelling.normalize("NFD"),
+          decomposed: normalizeUnicode(spelling, "NFD"),
         };
         const tokens = tokenizeCorpusFreeText(`§ 451 ${variants[form]}`);
         const mentions = readCorpusProvisionMentions(tokens, profile);

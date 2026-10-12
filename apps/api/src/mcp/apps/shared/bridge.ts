@@ -1,6 +1,7 @@
 import {
   App,
   applyDocumentTheme,
+  applyHostFonts,
   applyHostStyleVariables,
 } from "@modelcontextprotocol/ext-apps";
 import type {
@@ -15,6 +16,33 @@ import { createDetached } from "@stll/errors";
 import type { PresentationApp } from "../manifest";
 import { appLocale } from "./locale";
 
+type AppToolResult = Awaited<ReturnType<App["callServerTool"]>>;
+
+export const parseAppToolPayload = (result: AppToolResult): unknown => {
+  if (result.structuredContent !== undefined) {
+    return result.structuredContent;
+  }
+  const text = result.content.find((part) => part.type === "text")?.text;
+  if (text === undefined) {
+    return undefined;
+  }
+  const parsed = Result.try((): unknown => JSON.parse(text));
+  return Result.isError(parsed) ? undefined : parsed.value;
+};
+
+export const applyHostStyles = (context: McpUiHostContext) => {
+  if (context.theme !== undefined) {
+    applyDocumentTheme(context.theme);
+    document.documentElement.classList.toggle("dark", context.theme === "dark");
+  }
+  if (context.styles?.variables !== undefined) {
+    applyHostStyleVariables(context.styles.variables);
+  }
+  if (context.styles?.css?.fonts !== undefined) {
+    applyHostFonts(context.styles.css.fonts);
+  }
+};
+
 const applyHostPresentation = (
   context: McpUiHostContext,
   title: string | undefined,
@@ -23,13 +51,7 @@ const applyHostPresentation = (
   document.documentElement.lang = locale.locale;
   document.documentElement.dir = locale.direction;
   document.title = title ?? locale.messages.title;
-  if (context.theme !== undefined) {
-    applyDocumentTheme(context.theme);
-    document.documentElement.classList.toggle("dark", context.theme === "dark");
-  }
-  if (context.styles?.variables !== undefined) {
-    applyHostStyleVariables(context.styles.variables);
-  }
+  applyHostStyles(context);
 };
 
 type OpenPresentationLinkOptions = {
@@ -267,6 +289,7 @@ export const createPresentationBridge = <View>({
     await openPresentationLink({ app, url, fail });
   };
   const connect = async (): Promise<void> => {
+    applyHostPresentation(snapshot.context, title?.(snapshot.context));
     const connected = await Result.tryPromise(async () => app.connect());
     if (Result.isError(connected)) {
       publish({ status: "error", message: connected.error.message });

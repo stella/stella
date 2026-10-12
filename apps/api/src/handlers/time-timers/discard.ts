@@ -16,6 +16,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const discardTimer = createSafeRootHandler(
   {
+    contract: "patch",
     description:
       "Discard your timer and its unconfirmed time. This creates no time entry.",
     permissions: { timeEntry: ["delete"] },

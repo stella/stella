@@ -1,5 +1,9 @@
 name: Staging response policy
 
+defaults:
+  run:
+    shell: bash
+
 # Runs the post-deploy response policy checks against the running staging
 # environment without deploying: the declared cache and robots headers of
 # Knowledge responses. Deploy main to staging runs the same checks after each

@@ -23,9 +23,8 @@ import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
 const organizationId =
   parseAuthProviderId<"organization">("organization") ??
   panic("Fixture organization id is invalid");
-const admissionResult = await admitLawRead({
+const admissionResult = admitLawRead({
   organizationId,
-  mayReadPublicLaw: async () => Result.ok(true),
   publicLawEnabled: () => true,
 });
 const admission = Result.isOk(admissionResult)
@@ -171,12 +170,15 @@ describe("law citation resolution", () => {
     });
   });
 
-  test("normalizes section spaces and letter suffixes", async () => {
-    await resolveCzechLaw(
-      { collection: "sb", year: "2024", number: "1", section: " 12 A " },
-      dependencies(),
-    );
-  });
+  test.each([" 12 A ", "§ 12a", "§12 A"])(
+    "normalizes section spelling %s",
+    async (section) => {
+      await resolveCzechLaw(
+        { collection: "sb", year: "2024", number: "1", section },
+        dependencies(),
+      );
+    },
+  );
 
   test("uses only the supported Collection of Laws identifier", async () => {
     let resolveCount = 0;

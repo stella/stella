@@ -19,6 +19,11 @@ import {
 
 const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/style-sets/from-editor/update.ts",
+  },
   contentDelivery: {
     type: "none",
     reason: "Updates a style package without delivering stored-file bytes.",

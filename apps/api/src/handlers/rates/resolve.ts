@@ -18,6 +18,7 @@ const resolveRateQuerySchema = t.Object({
 
 const resolveRateHandler = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Resolve the effective hourly rate for a user on a given date in a " +
       "matter, using the matter's default rate table (user-specific rate " +

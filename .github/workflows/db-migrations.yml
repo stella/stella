@@ -1,5 +1,9 @@
 name: Database Migrations
 
+defaults:
+  run:
+    shell: bash
+
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
@@ -168,6 +172,11 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Test Postgres owner replacement and helper replay
+        run: |
+          bash scripts/configure-test-postgres.integration.sh "${{ job.services.postgres.id }}" stella_owner
+          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
+
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
@@ -320,12 +329,7 @@ jobs:
             bun src/server.ts >"$log_file" 2>&1 &
           api_pid=$!
 
-          # shellcheck disable=SC2329
-          cleanup() {
-            kill "$api_pid" >/dev/null 2>&1 || true
-            wait "$api_pid" >/dev/null 2>&1 || true
-          }
-          trap cleanup EXIT
+          trap 'kill "$api_pid" >/dev/null 2>&1 || true; wait "$api_pid" >/dev/null 2>&1 || true' EXIT
 
           for _ in {1..60}; do
             if curl -fsS http://127.0.0.1:3001/live >/dev/null \

@@ -1,5 +1,9 @@
 name: autofix.ci # autofix.ci uses this exact name as a security boundary
 
+defaults:
+  run:
+    shell: bash
+
 # No `paths` filter: each job scopes itself. Dependency updates and ordinary
 # same-repository PRs share the Tauri alignment fixer and existing App push.
 on:
@@ -29,7 +33,7 @@ jobs:
       # autofix-ci/action v1.3.4 declares Node 24 support, but its action
       # metadata still names node20 for compatibility with older runners.
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      RUSTUP_TOOLCHAIN: stable
+      RUSTUP_TOOLCHAIN: 1.99.0
 
     steps:
       - name: Checkout Dependabot head
@@ -114,7 +118,6 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           TAURI_ALLOWED: ${{ steps.tauri.outputs.allowed }}
-        shell: bash
         run: |
           set -euo pipefail
 
@@ -196,7 +199,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPOSITORY: ${{ github.repository }}
-        shell: bash
         run: |
           set -euo pipefail
           bash "$GH_RETRY_SCRIPT" api --paginate "repos/$REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename' > "$RUNNER_TEMP/changed-paths"
@@ -220,7 +222,6 @@ jobs:
 
       - name: Check planner availability
         id: planner
-        shell: bash
         run: |
           set -euo pipefail
           for path in scripts/autofix-plan.ts scripts/autofix-protected-paths.ts scripts/baseline-paths.ts scripts/generated-files.ts packages/scripts/src/generated-files.ts; do
@@ -242,7 +243,6 @@ jobs:
       - name: Match generator inputs
         id: scope
         if: steps.planner.outputs.ready == 'true'
-        shell: bash
         run: |
           set -euo pipefail
           if [[ "$(wc -l < "$RUNNER_TEMP/changed-paths")" -ge 3000 ]]; then
@@ -261,7 +261,7 @@ jobs:
     timeout-minutes: 20
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      RUSTUP_TOOLCHAIN: stable
+      RUSTUP_TOOLCHAIN: 1.99.0
 
     steps:
       - name: Checkout pull request head
@@ -276,7 +276,6 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        shell: bash
         run: |
           set -euo pipefail
           if [[ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]]; then
@@ -328,20 +327,9 @@ jobs:
             [[ -f "$app/.env" ]] || cp "$app/.env.example" "$app/.env"
           done
 
-      - name: Regenerate selected files
-        if: needs.regenerate-scope.outputs.run == 'true'
-        env:
-          STELLA_LOCAL_AUTOFIX: "true"
-          GENERATOR_IDS: ${{ needs.regenerate-scope.outputs.ids }}
-        run: |
-          if [[ -n "$GENERATOR_IDS" ]]; then
-            bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
-          fi
-
       - name: Fix changed files
         env:
           STELLA_LOCAL_AUTOFIX: "true"
-        shell: bash
         run: |
           set -euo pipefail
           changed=()
@@ -363,7 +351,7 @@ jobs:
             fi
             protected_path=false
             for pattern in "${protected[@]}"; do
-              if [[ "$path" == $pattern ]]; then
+              if [[ "$path" == @($pattern) ]]; then
                 protected_path=true
                 break
               fi
@@ -395,13 +383,24 @@ jobs:
             bun --bun oxfmt -c .oxfmtrc.json --no-error-on-unmatched-pattern "${format_paths[@]}"
           fi
 
+      # Final outputs must reflect lint and formatting rewrites, including
+      # sources prepared earlier for the type-aware fixer.
+      - name: Regenerate selected files
+        if: needs.regenerate-scope.outputs.run == 'true'
+        env:
+          STELLA_LOCAL_AUTOFIX: "true"
+          GENERATOR_IDS: ${{ needs.regenerate-scope.outputs.ids }}
+        run: |
+          if [[ -n "$GENERATOR_IDS" ]]; then
+            bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
+          fi
+
       - name: Restrict autofix changes
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           GENERATOR_ALLOWED: ${{ needs.regenerate-scope.outputs.allowed }}
           TAURI_ALLOWED: ${{ steps.tauri.outputs.allowed }}
-        shell: bash
         run: |
           set -euo pipefail
 

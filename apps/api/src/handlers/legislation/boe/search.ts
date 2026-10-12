@@ -76,6 +76,7 @@ const querySchema = t.Object({
 
 const boeSearch = createSafeRootHandler(
   {
+    contract: "patch",
     description:
       "Search Spanish consolidated legislation on the BOE. At least one " +
       "filter is required: free text, title, department code, legal-range " +

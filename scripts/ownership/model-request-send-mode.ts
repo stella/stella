@@ -2,6 +2,7 @@ import type { OwnershipEntry } from "../ownership-types.ts";
 // Model requests whose content never comes from a chat thread: documents,
 // matters, templates, playbooks and public corpora, requested outside chat.
 const MODEL_REQUESTS_WITHOUT_CHAT_CONTENT = [
+  "apps/api/src/handlers/legal-reader/answers/model.ts",
   "apps/api/src/handlers/ai-autocomplete/stream.ts",
   "apps/api/src/handlers/case-law/analysis/generate.ts",
   "apps/api/src/handlers/case-law/analysis/significance-run.ts",
@@ -126,6 +127,11 @@ export default {
         path: "apps/api/src/lib/scheduler/tasks/memory-extractor.ts",
         reason:
           "Claims skip anonymized threads; reads the send mode after the transcript, right before sending.",
+      },
+      {
+        path: "apps/api/src/lib/workflow/decisions/decide.ts",
+        reason:
+          "Typed document and corpus questions; chat tool callers prepare their values through the turn boundary before requesting a decision.",
       },
       {
         path: "apps/api/src/lib/docx/ai-field-generator.ts",

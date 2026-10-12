@@ -98,7 +98,7 @@ const commit = (root: string, message: string) => {
 
 // Copy the real guard and its import closure; the clone's scans and Git
 // history stay small while both branches execute production CLI behavior.
-const withClone = (exercise: (root: string) => void) => {
+const withClone = (exercise: (root: string) => void, branch?: string) => {
   const temporary = mkdtempSync(path.join(tmpdir(), "ratchet-derived-totals-"));
   const seed = path.join(temporary, "seed");
   const clone = path.join(temporary, "clone");
@@ -129,7 +129,17 @@ const withClone = (exercise: (root: string) => void) => {
     git(seed, "config", "user.name", "Ratchet fixture");
     git(seed, "config", "user.email", "ratchet@example.invalid");
     commit(seed, "fixture base");
-    git(temporary, "clone", "--quiet", seed, clone);
+    if (branch !== undefined) {
+      git(seed, "branch", branch);
+    }
+    git(
+      temporary,
+      "clone",
+      "--quiet",
+      ...(branch === undefined ? [] : ["--single-branch", "--branch", branch]),
+      seed,
+      clone,
+    );
     git(clone, "config", "user.name", "Ratchet fixture");
     git(clone, "config", "user.email", "ratchet@example.invalid");
     symlinkSync(
@@ -233,6 +243,58 @@ test("the measured base overrides stale headroom and explicit merge-group bases"
     expect(badBase.output).toContain("rev-parse failed");
   });
 }, 30_000);
+
+test.each([
+  { label: "all-branch clone", branch: undefined },
+  { label: "single-branch clone", branch: "feature-only" },
+])(
+  "--head refreshes main independently of the checkout ($label)",
+  ({ branch }) => {
+    withClone((root) => {
+      if (branch !== undefined) {
+        expect(git(root, "config", "--get", "remote.origin.fetch")).toBe(
+          `+refs/heads/${branch}:refs/remotes/origin/${branch}`,
+        );
+      }
+      const fork = git(root, "rev-parse", "HEAD");
+      const origin = git(root, "remote", "get-url", "origin");
+      write({ root: origin, relative: FIRST, contents: casts(1) });
+      commit(origin, "main improvement");
+      git(root, "fetch", "origin", "+refs/heads/main:refs/remotes/origin/main");
+      const main = git(root, "rev-parse", "origin/main");
+      git(root, "checkout", "-b", "selected-head", main);
+      write({ root, relative: FIRST, contents: casts(2) });
+      commit(root, "selected head increase");
+      const head = git(root, "rev-parse", "HEAD");
+      git(root, "checkout", "-b", "other-branch", fork);
+      git(root, "update-ref", "refs/remotes/origin/main", fork);
+
+      expect(check(root).code).toBe(0);
+      expect(git(root, "rev-parse", "origin/main")).toBe(fork);
+      for (const checkoutBranch of ["other-branch", "selected-head"]) {
+        git(root, "checkout", checkoutBranch);
+        if (checkoutBranch === "selected-head") {
+          git(root, "update-ref", "-d", "refs/remotes/origin/main");
+        }
+        const checkout = git(root, "rev-parse", "HEAD");
+        const result = check(root, "--head", head);
+        expect(result.code, result.output).toBe(1);
+        expect(result.output).toContain("as-casts: 5 -> 6");
+        expect(result.output).toContain(`(${main})`);
+        expect(git(root, "rev-parse", "origin/main")).toBe(main);
+        expect(git(root, "rev-parse", "HEAD")).toBe(checkout);
+      }
+
+      git(root, "checkout", "other-branch");
+      write({ root, relative: FIRST, contents: casts(3) });
+      const worktree = check(root);
+      expect(worktree.code, worktree.output).toBe(1);
+      expect(worktree.output).toContain("as-casts: 6 -> 7");
+      expect(worktree.output).toContain(`(${fork})`);
+    }, branch);
+  },
+  30_000,
+);
 
 test("--head measures a commit as data with that commit's allowances", () => {
   withClone((root) => {
@@ -359,10 +421,36 @@ test("CI selects the merge base on PRs and the event base on merge groups", () =
   });
 }, 30_000);
 
-test("removed writer options fail explicitly", () => {
-  const result = run(ROOT, [process.execPath, "scripts/ratchet.ts", "--write"]);
-  expect(result.code).not.toBe(0);
-  expect(result.output).toContain("unsupported ratchet option: --write");
+describe("ratchet command-line usage", () => {
+  for (const flag of ["--help", "-h"]) {
+    test(`${flag} prints usage successfully`, () => {
+      const result = run(ROOT, [process.execPath, "scripts/ratchet.ts", flag]);
+      expect(result.code).toBe(0);
+      expect(result.output).toContain("Usage: bun scripts/ratchet.ts");
+      expect(result.output).toContain("--check");
+      expect(result.output).toContain("scripts/ratchet-allowances/<slug>.json");
+      expect(result.output).toContain('"delta": <positive integer>');
+    });
+  }
+
+  for (const flag of ["--write", "-x"]) {
+    test(`${flag} prints usage and fails`, () => {
+      const result = run(ROOT, [process.execPath, "scripts/ratchet.ts", flag]);
+      expect(result.code).not.toBe(0);
+      expect(result.output).toContain(`unsupported ratchet option: ${flag}`);
+      expect(result.output).toContain("Usage: bun scripts/ratchet.ts");
+    });
+  }
+
+  test("the supported self-test mode retains its behavior", () => {
+    const result = run(ROOT, [
+      process.execPath,
+      "scripts/ratchet.ts",
+      "--self-test",
+    ]);
+    expect(result.code).toBe(0);
+    expect(result.output).toContain("ratchet --self-test: PASS");
+  });
 });
 
 test("the lint planner inherits only result-boundary debt measured in the base tree", () => {

@@ -75,6 +75,8 @@ type GatedTestClient = {
 };
 
 type OpenClientOptions = {
+  /** A separately authenticated fixture login on the same test server. */
+  readonly databaseUrl?: string;
   readonly logger?: Logger;
   /** Connections in this client's pool. */
   readonly max?: number;
@@ -82,6 +84,7 @@ type OpenClientOptions = {
   readonly idleTimeout?: number;
   /** PostgreSQL settings sent when each connection opens. */
   readonly connection?: {
+    readonly application_name?: string;
     readonly statement_timeout?: number;
     readonly lock_timeout?: number;
   };
@@ -92,10 +95,13 @@ type GatedTestClientScope = {
   readonly openClient: (options?: OpenClientOptions) => GatedTestClient;
 };
 
+// Bun's pinned driver treats zero like an unbounded close; use a positive bound.
+export const GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS = 0.001;
+
 type GatedTestClientsOptions = {
   /**
    * Seconds each close waits for in-flight queries before it terminates
-   * them; the driver waits for them by default. `0` closes at once.
+   * them. Omit to drain queries; forced termination needs a positive value.
    */
   readonly closeTimeout?: number;
 };
@@ -111,14 +117,28 @@ export const withGatedTestClients = async <T>(
   fn: (scope: GatedTestClientScope) => Promise<T>,
   { closeTimeout }: GatedTestClientsOptions = {},
 ): Promise<T> => {
+  if (
+    closeTimeout !== undefined &&
+    (!Number.isFinite(closeTimeout) || closeTimeout <= 0)
+  ) {
+    panic(
+      "Gated test closeTimeout must be finite and positive; omit it to drain queries",
+    );
+  }
   const opened: SQL[] = [];
   const openClient = ({
+    databaseUrl: clientDatabaseUrl = databaseUrl,
     max = 1,
     idleTimeout,
     connection,
     logger,
   }: OpenClientOptions = {}) => {
-    const client = new SQL({ url: databaseUrl, max, idleTimeout, connection });
+    const client = new SQL({
+      url: clientDatabaseUrl,
+      max,
+      idleTimeout,
+      connection,
+    });
     opened.push(client);
     return { sql: client, db: openDatabase(client, logger) };
   };

@@ -74,7 +74,7 @@ import {
   LOOP_NODE_TYPES,
   memberPropertyName,
   resolveChainRootName,
-  resolveImportedExpression,
+  resolveImportedExpressionForEnforcement,
   resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
@@ -261,7 +261,9 @@ export default eslintCompatPlugin({
           }
           const root = chainRootReference(node);
           const imported =
-            root === null ? null : resolveImportedExpression(context, root);
+            root === null
+              ? null
+              : resolveImportedExpressionForEnforcement(context, root);
           return (
             imported !== null &&
             (FETCH_MODULES.has(imported.source) ||
