@@ -135,8 +135,8 @@ describe("MCP tool registry", () => {
         requiredScopes.add(scope);
       }
     }
-    expect([...MCP_DEFAULT_RESOURCE_SCOPES].toSorted()).toEqual(
-      [...requiredScopes].toSorted(),
+    expect([...requiredScopes].toSorted()).toEqual(
+      [...MCP_DEFAULT_RESOURCE_SCOPES].toSorted(),
     );
   });
 

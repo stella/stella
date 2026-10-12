@@ -140,7 +140,7 @@ requires (request it at `stella auth login --scopes`).
 | matter | `stella matter remove-member` | admin_write | destructive (needs `--yes` off a TTY) |
 | matter | `stella matter save` | matters_write | destructive (needs `--yes` off a TTY) |
 | organization | `stella organization set-jurisdictions` | onboarding | destructive (needs `--yes` off a TTY) |
-| organization | `stella organization update-settings` | admin_write | destructive (needs `--yes` off a TTY) |
+| organization | `stella organization update-settings` | admin_write |  |
 | playbook | `stella playbook list` | read | paginated |
 | playbook | `stella playbook run` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | playbook | `stella playbook save` | knowledge_write | destructive (needs `--yes` off a TTY) |
@@ -314,8 +314,8 @@ are omitted here. Input union keys are required unless marked `?`.
   - `--country` — Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
   - optional: --document-type, --status, --language, --date-from, --date-to
 - `stella matter add-member`
-  - `--matter-id` — Matter ID whose membership to change (string)
-  - `--user-id` — Organization member's user ID to grant matter access (string)
+  - `--matter-id` — Matter ID (string)
+  - `--user-id` — Existing organization member ID (string)
 - `stella matter delete`
   - `--matter-id` — Matter ID to delete (string)
 - `stella matter link-contact`
@@ -324,8 +324,8 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella matter list`
   - optional: --matter-id, --status (active|all)
 - `stella matter remove-member`
-  - `--matter-id` — Matter ID whose membership to change (string)
-  - `--user-id` — Matter member's user ID whose access to revoke (string)
+  - `--matter-id` — Matter ID (string)
+  - `--user-id` — Matter member ID (string)
   - optional: --reassign-to
 - `stella matter save`
   - optional: --matter-id, --name, --client-id, --reference, --billing-reference, --status (active|archived)

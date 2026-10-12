@@ -259,10 +259,10 @@ describe("matter membership and organization settings", () => {
       },
       update_organization_settings: {
         title: "Update organization settings",
-        destructiveHint: true,
+        destructiveHint: false,
         idempotentHint: true,
       },
-    };
+    } as const;
     for (const [name, annotations] of Object.entries(expected)) {
       const definition = DEFAULT_MCP_TOOL_DEFINITIONS.find(
         (tool) => tool.name === name,
@@ -273,15 +273,13 @@ describe("matter membership and organization settings", () => {
         openWorldHint: false,
       });
       expect(definition?.inputSchema.properties).not.toHaveProperty("action");
-      expect(definition?.inputSchema.required ?? []).toEqual(
+      expect(definition?.inputSchema["required"] ?? []).toEqual(
         name === "update_organization_settings" ? [] : ["matter_id", "user_id"],
       );
     }
-    expect(
-      DEFAULT_MCP_TOOL_DEFINITIONS.some(
-        (tool) => tool.name === "manage_organization",
-      ),
-    ).toBe(false);
+    expect(DEFAULT_MCP_TOOL_DEFINITIONS.map((tool) => tool.name)).not.toContain(
+      "manage_organization",
+    );
     expect(DEFAULT_MCP_CLI_ANNOTATIONS.remove_matter_member.command).toEqual([
       "matter",
       "remove-member",

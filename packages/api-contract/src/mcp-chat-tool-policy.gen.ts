@@ -53,5 +53,5 @@ export const MCP_CHAT_TOOL_GRANT_POLICIES = {
   "delete_time_entry": "approve-once",
   "add_matter_member": "grantable",
   "remove_matter_member": "approve-once",
-  "update_organization_settings": "approve-once"
+  "update_organization_settings": "grantable"
 } as const;

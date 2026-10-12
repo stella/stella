@@ -1681,13 +1681,21 @@ describe("matter membership commands", () => {
   test("update-settings forwards settings without an action discriminator", async () => {
     const server = startMockServer(() => ({ toolPayload: { ok: true } }));
     const result = await runCli({
-      args: ["organization", "update-settings", "--matter-number-padding", "4"],
+      args: [
+        "organization",
+        "update-settings",
+        "--matter-number-pattern",
+        "{year}-{number}",
+        "--matter-number-padding",
+        "4",
+      ],
       url: server.url,
       token: makeToken(["admin_write"]),
     });
     server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.arguments).toEqual({
+      matter_number_pattern: "{year}-{number}",
       matter_number_padding: 4,
     });
   });

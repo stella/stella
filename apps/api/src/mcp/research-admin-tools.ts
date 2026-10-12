@@ -692,39 +692,32 @@ const handleListAuditLogTool: McpToolHandler<
 
 const addMatterMemberArgsSchema = nullAsAbsent(
   v.strictObject({
-    matter_id: uuidInputSchema("Matter ID whose membership to change"),
+    matter_id: uuidInputSchema("Matter ID"),
     user_id: v.pipe(
       v.string(),
       v.nonEmpty(),
-      v.description("Organization member's user ID to grant matter access"),
+      v.description("Existing organization member ID"),
     ),
   }),
 );
 
 const removeMatterMemberArgsSchema = nullAsAbsent(
   v.strictObject({
-    matter_id: uuidInputSchema("Matter ID whose membership to change"),
+    matter_id: uuidInputSchema("Matter ID"),
     user_id: v.pipe(
       v.string(),
       v.nonEmpty(),
-      v.description("Matter member's user ID whose access to revoke"),
+      v.description("Matter member ID"),
     ),
     reassign_to: v.optional(
       v.pipe(
         v.string(),
         v.nonEmpty(),
-        v.description(
-          "Replacement matter member for work obligations; omit to leave them unassigned",
-        ),
+        v.description("Reassign work to this member; omit to unassign"),
       ),
     ),
     confirm: v.optional(
-      v.pipe(
-        v.boolean(),
-        v.description(
-          "Set true only after a human approves revoking the member's matter access",
-        ),
-      ),
+      v.pipe(v.boolean(), v.description("True after human approval")),
     ),
   }),
 );
@@ -737,9 +730,7 @@ const updateOrganizationSettingsArgsSchema = nullAsAbsent(
           v.string(),
           v.minLength(LIMITS.matterNumberPatternMinLength),
           v.maxLength(LIMITS.matterNumberPatternMaxLength),
-          v.description(
-            "Matter-number pattern; send with matter_number_padding",
-          ),
+          v.description("Number pattern; pair with matter_number_padding"),
         ),
       ),
       matter_number_padding: v.optional(
@@ -748,9 +739,7 @@ const updateOrganizationSettingsArgsSchema = nullAsAbsent(
           v.integer(),
           v.minValue(LIMITS.matterNumberPaddingMin),
           v.maxValue(LIMITS.matterNumberPaddingMax),
-          v.description(
-            "Matter-number zero-padding width; send with matter_number_pattern",
-          ),
+          v.description("Zero-padding width"),
         ),
       ),
       prompt_caching_enabled: v.optional(
@@ -759,7 +748,7 @@ const updateOrganizationSettingsArgsSchema = nullAsAbsent(
       document_processing_mode: v.optional(
         v.pipe(
           v.picklist(DOCUMENT_PROCESSING_MODES),
-          v.description("Set automatic PDF searchable-text extraction"),
+          v.description("Automatic PDF text extraction"),
         ),
       ),
       time_minimum_unit_minutes: v.optional(
@@ -768,7 +757,7 @@ const updateOrganizationSettingsArgsSchema = nullAsAbsent(
           v.integer(),
           v.minValue(LIMITS.timeMinimumUnitMinutesMin),
           v.maxValue(LIMITS.timeMinimumUnitMinutesMax),
-          v.description("Minimum time increment in minutes; must divide 60"),
+          v.description("Minutes per increment; must divide 60"),
         ),
       ),
       time_edit_window_days: v.optional(
@@ -776,22 +765,17 @@ const updateOrganizationSettingsArgsSchema = nullAsAbsent(
           v.number(),
           v.integer(),
           v.minValue(LIMITS.timeEditWindowDaysMin),
-          v.description("Days a timekeeper may edit an entry"),
+          v.description("Entry edit window in days"),
         ),
       ),
       time_locked_through_month: v.optional(
         v.pipe(
           v.nullable(v.pipe(v.string(), v.isoDate())),
-          v.description(
-            "Last day of the latest locked month, or null to unlock",
-          ),
+          v.description("Locked month-end date; null unlocks"),
         ),
       ),
       time_narrative_required: v.optional(
-        v.pipe(
-          v.boolean(),
-          v.description("Require a narrative on time entries"),
-        ),
+        v.pipe(v.boolean(), v.description("Require time-entry narrative")),
       ),
       time_zone: v.optional(
         v.pipe(
@@ -803,8 +787,7 @@ const updateOrganizationSettingsArgsSchema = nullAsAbsent(
             ),
           ),
           v.description(
-            "IANA time zone, e.g. Europe/Prague; null follows the primary " +
-              "practice jurisdiction",
+            "IANA zone; null follows the primary practice jurisdiction",
           ),
         ),
       ),
@@ -826,8 +809,7 @@ const updateOrganizationSettingsArgsSchema = nullAsAbsent(
 const ADD_MATTER_MEMBER_TOOL_DEFINITION = defineValibotMcpTool({
   consumesServices: false,
   name: "add_matter_member",
-  description:
-    "Grant one existing organization member access to a matter. Requires matter_id and user_id. Refuses an existing membership or a matter at its member limit. Does not add a member to the organization.",
+  description: "Grant an existing organization member matter access.",
   inputSchema: addMatterMemberArgsSchema,
   nonDestructiveReason:
     "Only inserts a new matter membership and its audit event; existing membership returns a conflict without changing it.",
@@ -849,7 +831,7 @@ const REMOVE_MATTER_MEMBER_TOOL_DEFINITION = defineValibotMcpTool({
   consumesServices: false,
   name: "remove_matter_member",
   description:
-    "Revoke one member's access to a matter and cancel their open desktop editing sessions. Reassign active work obligations to reassign_to or leave them unassigned. Refuses the last member, running timers, or too many obligations to unassign in one call. Does not remove organization membership. Requires human confirmation with confirm: true.",
+    "Revoke matter access and cancel desktop editing sessions. Reassign work or leave it unassigned. Requires human approval (confirm: true); organization membership remains.",
   inputSchema: removeMatterMemberArgsSchema,
   annotations: {
     title: "Remove matter member",
@@ -870,8 +852,10 @@ const UPDATE_ORGANIZATION_SETTINGS_TOOL_DEFINITION = defineValibotMcpTool({
   consumesServices: false,
   name: "update_organization_settings",
   description:
-    "Update the active organization's non-secret settings: matter numbering, prompt caching, document processing, time-entry policy, and time zone. Only supplied fields change; send matter_number_pattern and matter_number_padding together. Manage provider secrets in the dashboard and practice jurisdictions with set_practice_jurisdictions.",
+    "Update supplied non-secret organization settings. Pair matter_number_pattern with matter_number_padding. Provider secrets: dashboard; practice jurisdictions: set_practice_jurisdictions.",
   inputSchema: updateOrganizationSettingsArgsSchema,
+  nonDestructiveReason:
+    "Updates reversible non-secret settings without deleting resources or revoking access.",
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["check", "partial_check"],
     reason:
@@ -880,7 +864,7 @@ const UPDATE_ORGANIZATION_SETTINGS_TOOL_DEFINITION = defineValibotMcpTool({
   annotations: {
     title: "Update organization settings",
     readOnlyHint: false,
-    destructiveHint: true,
+    destructiveHint: false,
     idempotentHint: true,
     openWorldHint: false,
   },

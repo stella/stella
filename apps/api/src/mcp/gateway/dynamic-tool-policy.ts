@@ -150,22 +150,6 @@ export const DYNAMIC_TOOL_FAMILY_POLICIES = {
   },
 } as const satisfies Record<DynamicToolNamespace, DynamicToolFamilyPolicy>;
 
-/** Families whose tools serve a Stella contract; derived, never listed twice. */
-export type StellaOwnedDynamicToolNamespace = {
-  [
-    TNamespace in DynamicToolNamespace
-  ]: (typeof DYNAMIC_TOOL_FAMILY_POLICIES)[TNamespace] extends {
-    owner: "stella";
-  }
-    ? TNamespace
-    : never;
-}[DynamicToolNamespace];
-
-export const isStellaOwnedDynamicToolNamespace = (
-  namespace: DynamicToolNamespace,
-): namespace is StellaOwnedDynamicToolNamespace =>
-  DYNAMIC_TOOL_FAMILY_POLICIES[namespace].owner === "stella";
-
 export const getDynamicMcpToolOutputContract = (
   toolName: string,
 ): RuntimeMcpToolOutputContract | undefined => {
