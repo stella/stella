@@ -1097,6 +1097,7 @@ const processWorkflowJob = async (
       actionKind: BACKGROUND_ACTION_KIND.extraction,
       organizationId: actor.organizationId,
       userId: actor.userId,
+      organizationStateDb: actor.writeDb,
       job,
       signal: controller.signal,
       run: async (signal, admission) =>

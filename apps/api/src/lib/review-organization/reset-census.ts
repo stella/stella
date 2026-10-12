@@ -59,6 +59,7 @@ export const REVIEW_RESET_SWEEP = [
   ["invoice_lines", "generic"],
   ["invoices", "generic"],
   ["legal_reader_annotations", "generic"],
+  ["legal_reader_answers", "generic"],
   ["matter_counters", "generic"],
   ["matter_inbound_addresses", "generic"],
   ["notifications", "generic"],

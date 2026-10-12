@@ -1,5 +1,10 @@
 import { expect, type APIRequestContext } from "@playwright/test";
 
+import {
+  PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
+  PROFESSIONAL_USE_STATEMENT_VERSION,
+} from "@stll/api-contract/professional-use";
+
 import { E2E_API_ORIGIN } from "./api";
 
 /**
@@ -32,7 +37,14 @@ export const signInWithEmailOtp = async (
 
   const signInResponse = await api.post(
     `${E2E_API_ORIGIN}/api/auth/sign-in/email-otp`,
-    { data: { email, otp: otpPayload.otp } },
+    {
+      data: {
+        email,
+        otp: otpPayload.otp,
+        [PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]:
+          PROFESSIONAL_USE_STATEMENT_VERSION,
+      },
+    },
   );
   expect(signInResponse.ok(), await signInResponse.text()).toBe(true);
 };

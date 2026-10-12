@@ -39,7 +39,7 @@ import {
   createAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
-import { resolveMemberAuthorization } from "@/api/lib/auth";
+import { resolveWorkspaceMemberAccess } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
@@ -310,7 +310,7 @@ export const executeFlowStep = async (
     if (!admitted) {
       return { type: "paused" } as const;
     }
-    const authorization = await resolveMemberAuthorization(
+    const workspace = await resolveWorkspaceMemberAccess(
       {
         organizationId: scope.organizationId,
         workspaceId: run.workspaceId,
@@ -318,7 +318,7 @@ export const executeFlowStep = async (
       },
       tx,
     );
-    if (!authorization?.workspace) {
+    if (workspace === null) {
       abortTransaction(
         new FlowStepError({
           message: "The workflow actor is no longer a member of this matter.",
@@ -729,6 +729,7 @@ const runAiStep = async ({
     feature: "flows.ai-step",
     modelRole: "chat",
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: {
       organization_id: organizationId,
       workspace_id: run.workspaceId,
@@ -1742,10 +1743,10 @@ export const failFlowRunFromWorker = async (
 
   // Actor removal records a terminal reason without deleting outputs or admitting
   // another feature effect. A live actor's opt-out remains a recoverable pause.
-  const actorAuthorization =
+  const actorWorkspace =
     scope.actorUserId === null
       ? null
-      : await resolveMemberAuthorization(
+      : await resolveWorkspaceMemberAccess(
           {
             organizationId: scope.organizationId,
             workspaceId: run.workspaceId,
@@ -1755,7 +1756,7 @@ export const failFlowRunFromWorker = async (
         );
   const failed =
     scope.actorUserId === null ||
-    !actorAuthorization?.workspace ||
+    actorWorkspace === null ||
     !(await flowRunActorExists(scope.actorUserId, database))
       ? await withAggregateTransaction(database, writeFailure)
       : await makeScopedDb({

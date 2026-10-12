@@ -484,7 +484,9 @@ const runSelfTest = (): number => {
   expectClass("index-D1PgnKxZ.js", "routes", "export class WasmBinding {}");
   expectClass("rolldown-runtime-CJJwijRH.js", "entry");
   expectClass("vendor-react-DTPWpeFk.js", "vendor-react");
-  expectClass("vendor-tanstack-C8imk9BY.js", "vendor-tanstack");
+  for (const group of VENDOR_GROUPS) {
+    expectClass(`${group}-C8imk9BY.js`, group);
+  }
   expectClass(
     "vendor-tanstack-server-fn-C8imk9BY.js",
     "vendor-tanstack-server-fn",

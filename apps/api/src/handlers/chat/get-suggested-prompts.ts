@@ -8,6 +8,7 @@ import {
 } from "@/api/handlers/chat/chat-scope";
 import { buildRecapTranscript } from "@/api/handlers/chat/thread-recap-transcript";
 import { loadRecapMessageWindow } from "@/api/handlers/chat/thread-recap-window";
+import type { ChatMessage } from "@/api/handlers/chat/types";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { isUnanticipatedAIFailure } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -53,7 +54,7 @@ type SuggestedPromptsResult = { prompts: string[] };
 
 type SuggestedPromptMessage = {
   parts: ReturnType<typeof normalizePersistedChatMessageContent>["parts"];
-  role: "assistant" | "system" | "user";
+  role: ChatMessage["role"];
 };
 
 type SuggestedPromptToolCallState = Extract<
@@ -71,10 +72,19 @@ const ASK_USER_STATE_AWAITS_USER = {
   "input-streaming": true,
 } as const satisfies Record<SuggestedPromptToolCallState, boolean>;
 
+const SUGGESTION_CONVERSATION_ROLES = {
+  activity: false,
+  assistant: true,
+  system: true,
+  user: true,
+} as const satisfies Record<SuggestedPromptMessage["role"], boolean>;
+
 export const latestAssistantTurnAwaitsUser = (
   messages: readonly SuggestedPromptMessage[],
 ): boolean => {
-  const latest = messages.at(-1);
+  const latest = messages.findLast(
+    (message) => SUGGESTION_CONVERSATION_ROLES[message.role],
+  );
   if (latest?.role !== "assistant") {
     return false;
   }
@@ -247,26 +257,6 @@ const getSuggestedPrompts = createSafeRootHandler(
       const checked = proof.input.value;
       const admittedContext = cloneOperationInput(checked.ctx);
       return await Result.gen(async function* () {
-        const aiAnalytics = createTanStackAIAnalyticsCallbacks({
-          dataClass: "customer",
-          usageMetering: {
-            actionType: "chat",
-            organizationId: checked.organizationId,
-            safeDb: checked.safeDb,
-            serviceTier: "standard",
-            userId: checked.userId,
-            workspaceId: checked.workspaceId,
-          },
-          feature: "chat.suggested_prompts",
-          modelRole: "fast",
-          organizationId: checked.organizationId,
-          orgAIConfig: checked.orgAIConfig,
-          properties: checked.workspaceId
-            ? { workspace_id: checked.workspaceId }
-            : {},
-          traceId: Bun.randomUUIDv7(),
-        });
-
         const suggestPrompts = async ({
           actionSignal,
           modelAdmission,
@@ -274,6 +264,27 @@ const getSuggestedPrompts = createSafeRootHandler(
           actionSignal: AbortSignal;
           modelAdmission: ModelDispatchAdmission;
         }): Promise<Result<SuggestedPromptsResult, never>> => {
+          const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+            dataClass: "customer",
+            usageMetering: {
+              actionType: "chat",
+              organizationId: checked.organizationId,
+              safeDb: checked.safeDb,
+              serviceTier: "standard",
+              userId: checked.userId,
+              workspaceId: checked.workspaceId,
+            },
+            feature: "chat.suggested_prompts",
+            modelRole: "fast",
+            organizationId: checked.organizationId,
+            orgAIConfig: checked.orgAIConfig,
+            modelTier: modelAdmission.modelTier,
+            properties: checked.workspaceId
+              ? { workspace_id: checked.workspaceId }
+              : {},
+            traceId: Bun.randomUUIDv7(),
+          });
+
           try {
             const text = await generateTanStackTextForRole({
               dataClass: "customer",

@@ -23,6 +23,7 @@ import {
 } from "@/api/lib/flows/start-flow-run";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
+import { readManagedModelTier } from "@/api/lib/usage/organization-access-state";
 
 const config = {
   featureAccess: { featureId: "flows", type: "required" },
@@ -46,6 +47,7 @@ const startFlowRunHandler = createSafeHandler(
   config,
   async function* ({
     safeDb,
+    scopedDb,
     workspaceId,
     session,
     body,
@@ -98,7 +100,11 @@ const startFlowRunHandler = createSafeHandler(
           const stepModel = getTanStackTextModelInfoForRole(
             "chat",
             orgAIConfig,
-            { dataClass: "customer", organizationId },
+            {
+              dataClass: "customer",
+              organizationId,
+              modelTier: await readManagedModelTier(scopedDb, organizationId),
+            },
           );
           return await authorizeHandlerRunSize({
             metering: { actionType: "background", modelRole: "chat" },

@@ -128,6 +128,11 @@
     "orSignInWithEmail": "ou connectez-vous avec l'e-mail",
     "organizationNamePlaceholder": "Mon organisation",
     "password": "Mot de passe",
+    "professionalUse": {
+      "description": "Votre compte a été créé sans que cette déclaration vous soit présentée. Acceptez-la pour continuer.",
+      "title": "Confirmer l’usage professionnel"
+    },
+    "professionalUseStatement": "En créant un compte, vous confirmez utiliser stella à des fins professionnelles et reconnaissez que stella est un outil destiné aux professionnels du droit et ne remplace pas un conseil juridique.",
     "rateLimitExceeded": "Trop de tentatives. Veuillez réessayer plus tard.",
     "resendCode": "Renvoyer le code à <email>{emailAddress}</email>",
     "selectOrganization": "Sélectionner une organisation",
@@ -771,6 +776,9 @@
       "none": "Aucune citation enregistrée pour l'instant.",
       "openAtCitation": "Ouvrir à la citation",
       "openDecision": "Ouvrir la décision",
+      "paragraphLabel": "Point {paragraph}",
+      "paragraphMark": "¶ {paragraph}",
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, point {paragraph}",
       "partialSummary": "Les totaux des citations et la chronologie sont partiels.",
       "passageNotFound": "Le passage citant n'a pas été trouvé dans le texte",
       "positiveCount": "{count, plural, one {# positive} many {# positives} other {# positives}}",
@@ -799,7 +807,7 @@
       "courtCount": "{count, plural, one {# juridiction} other {# juridictions}}",
       "newLast24Hours": "{count} depuis 24 h",
       "newLast7Days": "Nouvelles depuis 7 jours",
-      "unlistedCourts": "{count, plural, one {Juridictions au-delà de la plus grande} other {Juridictions au-delà des # plus grandes}}"
+      "otherCourts": "Autres juridictions"
     },
     "courtTiers": {
       "constitutional": "Juridictions constitutionnelles",
@@ -815,6 +823,7 @@
       "decisionYears": "Années des décisions",
       "description": "Le volume de jurisprudence contenu dans le corpus, par pays et par juridiction, et la fraîcheur de chaque source.",
       "exceedsReportedTotal": "Contient plus que le dernier total annoncé par le diffuseur le {date}",
+      "gapStatusUnknown": "État des lacunes inconnu",
       "generatedAt": "Chiffres au {date}",
       "globeLabel": "Pays dont la jurisprudence figure dans le corpus, sur un globe",
       "healthCurrent": "À jour",
@@ -823,9 +832,12 @@
       "healthStalled": "À l’arrêt",
       "healthUnknown": "Jamais exécuté",
       "inPreparation": "En préparation",
+      "knownGaps": "Lacunes connues",
       "lastSync": "Dernière synchronisation",
+      "noGapsRecorded": "Aucune lacune enregistrée",
       "notCountedYet": "Pas encore décompté",
       "notMeasuredYet": "Pas encore mesuré",
+      "pendingTexts": "Textes en attente",
       "reportedByListing": "Compté à partir de la liste du diffuseur",
       "reportedByOperator": "Saisi manuellement",
       "reportedByPublisher": "Décompte du diffuseur",
@@ -1089,6 +1101,9 @@
       "toastDescription": "L’affichage des conversations en plein écran arrivera avec leur enregistrement.",
       "toastTitle": "Vue plein écran pas encore disponible"
     },
+    "activity": {
+      "review": "Mise à jour de la révision"
+    },
     "aiPrompt": "Champ de message IA",
     "aiThread": "Conversation IA",
     "analyzingSources": "Analyse des sources",
@@ -1274,6 +1289,9 @@
       "noMatters": "Aucun dossier pour le moment",
       "noRecentChats": "Aucune conversation récente",
       "noSkills": "Aucune compétence pour le moment",
+      "openAllMatters": "Ouvrir tous les dossiers",
+      "openChatHistory": "Ouvrir l’historique des conversations",
+      "openSkillsLibrary": "Ouvrir la bibliothèque de compétences",
       "pinnedMatters": "Dossiers épinglés",
       "recentChats": "Conversations récentes",
       "skillEditedBy": "Modifié par {name} · {time}",

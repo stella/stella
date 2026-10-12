@@ -20,6 +20,7 @@ const workflow: unknown = Bun.YAML.parse(
 );
 const targets = {
   "e2e-report": ["@stll/playwright-tools", "!stella"],
+  "desktop-windows-dry-run": ["@stll/desktop...", "!stella"],
   "docker-checks": ["@stll/agent-engine...", "stella"],
   "landing-build": ["@stll/landing...", "@stll/cli...", "stella"],
   "e2e-landing": ["@stll/landing...", "@stll/cli...", "stella"],
@@ -29,7 +30,11 @@ const installFilters = (command: string) => {
   const invocations = [...lexShell(command)]
     .filter((event) => event.type === "command")
     .map(({ words }) => words.slice(words.indexOf("bun")))
-    .filter((words) => words.at(0) === "bun" && words.at(1) === "ci");
+    .filter(
+      (words) =>
+        words.at(0) === "bun" &&
+        (words.at(1) === "ci" || words.at(1) === "scripts/ci-install.ts"),
+    );
   expect(invocations).toHaveLength(1);
   const words = invocations.at(0) ?? [];
   expect(words).toContain("--frozen-lockfile");
@@ -138,6 +143,30 @@ test("the scoped closures exclude the API and ONNX runtime", () => {
         ),
       ).toEqual(["@stll/playwright-tools", "@stll/typescript-config"]);
     }
+  }
+});
+
+test("the Windows desktop install excludes unrelated application graphs", () => {
+  const installed = closure(["@stll/desktop"]);
+  for (const name of [
+    "@stll/mobile",
+    "@stll/web",
+    "@stll/api",
+    "expo",
+    "expo-router",
+    "react-native",
+  ]) {
+    expect(installed.has(name), name).toBe(false);
+  }
+  for (const name of [
+    "@stll/ui",
+    "@tauri-apps/cli",
+    "@tailwindcss/vite",
+    "@vitejs/plugin-react",
+    "vite",
+    "react",
+  ]) {
+    expect(installed.has(name), name).toBe(true);
   }
 });
 
@@ -412,3 +441,45 @@ test("landing diagnostics follow the browser configuration output directory", ()
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+const workflowFile = (file: string): unknown =>
+  Bun.YAML.parse(readFileSync(path.join(root, file), "utf-8"));
+
+test("the dependency audit installs only the root workspace", () => {
+  const install = workflowJobSteps(
+    workflowFile(".github/workflows/dependency-audit.yml"),
+    "audit",
+  ).find((step) => step["name"] === "Install dependencies");
+  const command = v.parse(v.string(), install?.["run"]);
+  expect(installFilters(command)).toEqual(["stella"]);
+  expect(closure(["stella"]).has("@stll/api")).toBe(false);
+});
+
+const installFreeJobs = [
+  [".github/workflows/ci.yml", "parser-version-guard"],
+  [".github/workflows/db-migrations.yml", "scope"],
+  [".github/workflows/autofix.yml", "regenerate-scope"],
+] as const;
+const setupSchema = v.looseObject({
+  uses: v.string(),
+  with: v.looseObject({ "no-cache": v.literal(true) }),
+});
+const installCommand = /\bbun (?:ci|i|install)\b/u;
+
+for (const [file, job] of installFreeJobs) {
+  test(`${job} sets up Bun without restoring the package cache`, () => {
+    const steps = workflowJobSteps(workflowFile(file), job);
+    const setups = steps.filter(
+      (step) =>
+        typeof step["uses"] === "string" && step["uses"].includes("setup-bun"),
+    );
+    expect(setups).toHaveLength(1);
+    const setup = v.parse(setupSchema, setups.at(0));
+    expect(setup.uses).toStartWith("oven-sh/setup-bun@");
+    const installs = steps.filter(
+      (step) =>
+        typeof step["run"] === "string" && installCommand.test(step["run"]),
+    );
+    expect(installs).toEqual([]);
+  });
+}

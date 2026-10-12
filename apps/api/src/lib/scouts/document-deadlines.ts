@@ -16,6 +16,7 @@ import {
   extractedContent,
   workspaces,
 } from "@/api/db/schema";
+import type { RlsDatabase } from "@/api/db/scoped";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -38,6 +39,7 @@ import {
 } from "@/api/lib/feature-access/background";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { logger } from "@/api/lib/observability/logger";
+import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import {
@@ -61,6 +63,7 @@ import {
 import type { NewSignal } from "@/api/lib/signals/emit";
 import { runScout } from "@/api/lib/signals/scout";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
 
 const DEADLINE_GENERATION_TIMEOUT_MS = 60_000;
 // Ten bounded excerpts plus reasoning share the provider's output ceiling.
@@ -86,6 +89,10 @@ type DeadlineScoutDb = Pick<typeof rootDb, "select" | "update" | "transaction">;
 export type RunDocumentDeadlineScoutArgs = {
   db: DeadlineScoutDb;
   sourceRunId: SafeId<"documentProcessingRun">;
+  /** The RLS database the run's member scopes open; the application's when omitted. */
+  database?: RlsDatabase<Transaction>;
+  /** The scan's action admission; `withActionAdmission` when omitted. */
+  admit?: typeof withActionAdmission;
 };
 
 type ClaimedRun = typeof documentProcessingRuns.$inferSelect & {
@@ -130,7 +137,10 @@ const claimRun = async (
 };
 
 type ExtractDeadlinesOptions = {
-  analytics: ReturnType<typeof createTanStackAIAnalyticsCallbacks>;
+  /** Built once admission has fixed the managed model tier the scan runs on. */
+  createAnalytics: (
+    modelTier: ManagedModelTier,
+  ) => ReturnType<typeof createTanStackAIAnalyticsCallbacks>;
   managedAIResidency: ManagedAIResidency;
   orgAIConfig: OrgAIConfig | null;
   prompt: string;
@@ -138,6 +148,7 @@ type ExtractDeadlinesOptions = {
   scopedDb: ScopedDb;
   userId: SafeId<"user">;
   onRefused: (admission: DeadlineScoutAdmission) => void;
+  admit: typeof withActionAdmission | undefined;
 };
 
 /**
@@ -146,7 +157,7 @@ type ExtractDeadlinesOptions = {
  * its observation and retries like any other failure.
  */
 const extractDeadlines = async ({
-  analytics,
+  createAnalytics,
   managedAIResidency,
   orgAIConfig,
   prompt,
@@ -154,6 +165,7 @@ const extractDeadlines = async ({
   scopedDb,
   userId,
   onRefused,
+  admit,
 }: ExtractDeadlinesOptions) => {
   const admitted = await createModelActionAdmitter({
     organizationId: run.organizationId,
@@ -184,6 +196,7 @@ const extractDeadlines = async ({
         await reservePeriod();
       });
     },
+    ...(admit === undefined ? {} : { admit }),
   })(
     async ({ admission }) =>
       await generateTanStackObjectForRole({
@@ -194,7 +207,7 @@ const extractDeadlines = async ({
         tenantWorkspaceIds: [run.workspaceId],
         orgAIConfig,
         managedAIResidency,
-        analytics,
+        analytics: createAnalytics(admission.modelTier),
         system: DEADLINE_SYSTEM_PROMPT,
         prompt,
         maxOutputTokens: DEADLINE_MAX_OUTPUT_TOKENS,
@@ -726,6 +739,8 @@ const claimAdmittedDeadlineSource = async ({
 export const runDocumentDeadlineScout = async ({
   db,
   sourceRunId,
+  database,
+  admit,
 }: RunDocumentDeadlineScoutArgs): Promise<void> => {
   const actorUserId = await admittedDeadlineScoutActor({ db, sourceRunId });
   if (!actorUserId) {
@@ -740,16 +755,13 @@ export const runDocumentDeadlineScout = async ({
     return;
   }
 
-  const scopedDb = createRootScopedDb({
+  const member = {
     organizationId: run.organizationId,
     userId: actorUserId,
     workspaceIds: [run.workspaceId],
-  });
-  const safeDb = createRootSafeDb({
-    organizationId: run.organizationId,
-    userId: actorUserId,
-    workspaceIds: [run.workspaceId],
-  });
+  };
+  const scopedDb = createRootScopedDb(member, database);
+  const safeDb = createRootSafeDb(member, database);
 
   const scan: { admission: DeadlineScoutAdmission } = {
     admission: { type: "admitted" },
@@ -789,27 +801,28 @@ export const runDocumentDeadlineScout = async ({
               return [];
             }
 
-            const analytics = createTanStackAIAnalyticsCallbacks({
-              dataClass: "customer",
-              feature: "inbox.deadline-scout",
-              modelRole: "chat",
-              orgAIConfig,
-              properties: {
-                organization_id: run.organizationId,
-                workspace_id: run.workspaceId,
-              },
-              traceId: Bun.randomUUIDv7(),
-              usageMetering: {
-                actionType: "background",
-                organizationId: run.organizationId,
-                safeDb,
-                serviceTier: "flex",
-                userId: actorUserId,
-                workspaceId: run.workspaceId,
-              },
-            });
             const extraction = await extractDeadlines({
-              analytics,
+              createAnalytics: (modelTier) =>
+                createTanStackAIAnalyticsCallbacks({
+                  dataClass: "customer",
+                  feature: "inbox.deadline-scout",
+                  modelRole: "chat",
+                  orgAIConfig,
+                  modelTier,
+                  properties: {
+                    organization_id: run.organizationId,
+                    workspace_id: run.workspaceId,
+                  },
+                  traceId: Bun.randomUUIDv7(),
+                  usageMetering: {
+                    actionType: "background",
+                    organizationId: run.organizationId,
+                    safeDb,
+                    serviceTier: "flex",
+                    userId: actorUserId,
+                    workspaceId: run.workspaceId,
+                  },
+                }),
               managedAIResidency,
               orgAIConfig,
               prompt: `Document "${source.entityName}":\n\n${text}`,
@@ -819,6 +832,7 @@ export const runDocumentDeadlineScout = async ({
               onRefused: (admission) => {
                 scan.admission = admission;
               },
+              admit,
             });
 
             const now = new Date();

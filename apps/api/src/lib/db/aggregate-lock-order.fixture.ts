@@ -19,6 +19,7 @@ export const aggregateFences = () => {
   const definitionId = createSafeId<"flowDefinition">();
   const threadId = createSafeId<"chatThread">();
   const userId = mintAuthProviderId<"user">();
+  const answerId = createSafeId<"legalReaderAnswer">();
   return {
     signingSession: {
       aggregate: "signingSession",
@@ -33,6 +34,10 @@ export const aggregateFences = () => {
       aggregate: "organization",
       id: organizationId,
       mode: "update",
+    },
+    professionalUseAcceptance: {
+      aggregate: "professionalUseAcceptance",
+      id: { userId: mintAuthProviderId<"user">() },
     },
     orgFeatureAdmission: {
       aggregate: "orgFeatureAdmission",
@@ -82,6 +87,16 @@ export const aggregateFences = () => {
     chatThread: {
       aggregate: "chatThread",
       id: { id: threadId, organizationId, userId },
+      mode: "update",
+    },
+    readerAnswer: {
+      aggregate: "readerAnswer",
+      id: { id: answerId, organizationId, userId },
+      mode: "update",
+    },
+    readerAnswerMessage: {
+      aggregate: "readerAnswerMessage",
+      id: { id: createSafeId<"legalReaderAnswerMessage">(), answerId },
       mode: "update",
     },
     chatTurn: {

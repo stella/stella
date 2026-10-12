@@ -12,7 +12,7 @@
 import { RedisClient } from "bun";
 import { afterAll, describe, expect, test } from "bun:test";
 
-import type { RateLimitOptions } from "@/api/lib/rate-limit/rate-limit";
+import type { RateLimitOptions } from "@/api/lib/rate-limit/contracts";
 
 // Any count the per-process fallback cannot produce on a first increment, so
 // the assertion below can only pass when the reply came from the peer.

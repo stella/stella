@@ -56,6 +56,7 @@ import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { BACKGROUND_ACTION_KIND } from "@/api/lib/rate-limit/action-kinds";
 import { runBackgroundJob } from "@/api/lib/rate-limit/queued-action-admission";
 import { createBullMqConnection } from "@/api/lib/redis-client";
+import { createRootMembershipScopedDb } from "@/api/lib/root-scoped-db";
 import {
   brandPersistedFlowRunId,
   brandPersistedUserId,
@@ -147,6 +148,10 @@ const executeAdmittedFlowStep = async ({
     actionKind: BACKGROUND_ACTION_KIND.flow,
     organizationId: workspace.organizationId,
     userId: actor,
+    organizationStateDb: createRootMembershipScopedDb({
+      organizationId: workspace.organizationId,
+      userId: actor,
+    }),
     job,
     signal,
     run: async (executionSignal, admission) =>

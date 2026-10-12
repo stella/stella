@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import { useLayoutEffect, type RefObject } from "react";
 
 import { matchesKeyboardEvent } from "@tanstack/react-hotkeys";
 import type { Hotkey } from "@tanstack/react-hotkeys";
@@ -29,6 +29,23 @@ type FindSurface = {
 // older instance's cleanup delete the live one's registration. Nothing
 // subscribes: ownership is decided per key press, not per render.
 const surfaces = new LifecycleRegistry<symbol, FindSurface>();
+const modalBoundaries = new LifecycleRegistry<symbol, true>();
+
+/** Exclude app surfaces from find as soon as a lazy modal is opened. */
+export const useFindModalBoundary = (open: boolean): void => {
+  // The shell commits before the modal chunk arrives. A layout effect closes
+  // that gap before another key press, without waiting for DOM isolation.
+  useLayoutEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+    const id = Symbol("find-modal-boundary");
+    modalBoundaries.set(id, true);
+    return () => {
+      modalBoundaries.delete(id);
+    };
+  }, [open]);
+};
 
 /**
  * The binding every surface answers, refreshed by each mounted surface from
@@ -90,7 +107,7 @@ const toCandidate = (
  * binding a listener is not how a surface takes part.
  */
 const handleFindKeyDown = (event: KeyboardEvent) => {
-  if (!matchesKeyboardEvent(event, findHotkey)) {
+  if (!matchesKeyboardEvent(event, findHotkey) || modalBoundaries.size !== 0) {
     return;
   }
 

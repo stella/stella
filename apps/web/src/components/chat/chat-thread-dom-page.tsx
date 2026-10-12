@@ -112,6 +112,7 @@ const ChatThreadDomPage = ({
             manager, as on the real page. */}
         <ChatEditorProvider>
           <ChatThreadMessages
+            activitySession={session.activitySession}
             approvalPendingMessageId={session.approvalPendingMessageId}
             error={session.error}
             hasOlderMessages={session.olderCursor !== null}

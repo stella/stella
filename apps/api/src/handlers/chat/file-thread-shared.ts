@@ -42,6 +42,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
 import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
+import { readManagedModelTierOnTx } from "@/api/lib/usage/organization-access-state";
 import { resolveWebSearchProvidersFromOrgSettingsRow } from "@/api/lib/web-search/load-org-keys";
 
 /**
@@ -238,6 +239,7 @@ export const loadResolvedThreadMessagePage = async ({
     chatModelOverride,
     orgAIConfig,
     organizationId,
+    modelTier: await readManagedModelTierOnTx(tx, organizationId),
   });
   const context: ThreadContextUsage | null = hasContext
     ? computeThreadContextUsage({

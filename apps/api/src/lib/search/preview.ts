@@ -125,7 +125,7 @@ const SEARCH_PREVIEW_BODY_CHARACTER_LIMIT =
 const SEARCH_PREVIEW_NORMALIZED_SOURCE_CHARACTER_LIMIT = 100_000;
 
 type PreviewTextConfig = {
-  normalize: (text: SQL) => SQL;
+  normalizeSourceContent: (text: SQL) => SQL;
   regconfig: SQL;
   useUnaccent: SQL;
 };
@@ -179,7 +179,7 @@ const previewHeadline = (options: PreviewHeadlineOptions) => sql`
       FROM (VALUES (${options.sourceContent})) AS preview_source(content)
       CROSS JOIN LATERAL (
         SELECT left(
-          ${options.normalize(sql`preview_source.content`)},
+          ${options.normalizeSourceContent(sql`preview_source.content`)},
           ${SEARCH_PREVIEW_NORMALIZED_SOURCE_CHARACTER_LIMIT}
         ) AS content
       ) normalized_preview_source
@@ -198,7 +198,7 @@ const previewUnhighlighted = (title: SQL, body: SQL) => sql`
 const previewContent = ({
   body,
   passageContent,
-  normalize,
+  normalizeSourceContent,
   regconfig,
   title,
   headlineTsQuery,
@@ -212,7 +212,7 @@ const previewContent = ({
           left(${body}, ${SEARCH_PREVIEW_BODY_CHARACTER_LIMIT})
         `;
         return previewHeadline({
-          normalize,
+          normalizeSourceContent,
           regconfig,
           sourceContent: passageContent
             ? sql`coalesce(${passageContent}, ${boundedHead})`
@@ -374,7 +374,7 @@ export const buildSearchPreviewQuery = ({
         SELECT ${previewContent({
           body: sql`wsd.searchable_text`,
           headlineTsQuery: locatorTsQuery,
-          normalize: normalizeSearchPreviewText,
+          normalizeSourceContent: normalizeSearchPreviewText,
           passageContent: sql`preview_passage.content`,
           regconfig: sql`'simple'::regconfig`,
           title: sql`wsd.title`,
@@ -403,7 +403,7 @@ export const buildSearchPreviewQuery = ({
         SELECT ${previewContent({
           body: sql`csd.searchable_text`,
           headlineTsQuery: locatorTsQuery,
-          normalize: normalizeSearchPreviewText,
+          normalizeSourceContent: normalizeSearchPreviewText,
           passageContent: sql`preview_passage.content`,
           regconfig: sql`'simple'::regconfig`,
           title: sql`csd.title`,
@@ -430,7 +430,7 @@ export const buildSearchPreviewQuery = ({
         SELECT ${previewContent({
           body: sql`clsd.searchable_text`,
           headlineTsQuery: locatorTsQuery,
-          normalize: normalizeCaseLawPreviewText,
+          normalizeSourceContent: normalizeCaseLawPreviewText,
           passageContent: sql`preview_passage.content`,
           regconfig: sql`clsd.regconfig::regconfig`,
           title: sql`clsd.title`,
@@ -479,7 +479,7 @@ export const buildSearchPreviewQuery = ({
         SELECT ${previewContent({
           body: sql`sd.searchable_text`,
           headlineTsQuery: locatorTsQuery,
-          normalize: normalizeSearchPreviewText,
+          normalizeSourceContent: normalizeSearchPreviewText,
           passageContent: sql`preview_passage.content`,
           regconfig: sql`coalesce(sd.language, 'simple')::regconfig`,
           title: sql`sd.title`,
