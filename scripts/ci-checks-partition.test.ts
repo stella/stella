@@ -1716,9 +1716,6 @@ const simulateRestLeg = ({ failures, lockfileScope }: SimulateLegOptions) => {
     if (id !== undefined) {
       outcomes[id] = {
         outcome,
-        ...(id === "typecheck_parity_gate"
-          ? { outputs: { required: outcome === "success" ? "true" : "" } }
-          : {}),
       };
     }
     if (outcome === "failure") {
@@ -1728,16 +1725,69 @@ const simulateRestLeg = ({ failures, lockfileScope }: SimulateLegOptions) => {
   return results;
 };
 
-test("a failed parity selection keeps the seeded-error probe while skipping the full comparison", () => {
-  const results = simulateRestLeg({
-    failures: ["Select typecheck parity coverage"],
-    lockfileScope: "false",
+test("typecheck proofs run only in the dispatch workflow", () => {
+  const proofWorkflowPath = ".github/workflows/typecheck-proofs.yml";
+  const schema = v.looseObject({
+    on: v.record(v.string(), v.unknown()),
+    permissions: v.record(v.string(), v.string()),
+    jobs: v.record(v.string(), v.looseObject({ steps: v.unknown() })),
   });
-  expect(results["Select typecheck parity coverage"]).toBe("failure");
-  expect(results["Typecheck parity (all checked projects)"]).toBe("skipped");
-  expect(results["Record typecheck parity report"]).toBe("skipped");
-  expect(results["Upload typecheck parity report"]).toBe("skipped");
-  expect(results["Typecheck command rejects errors"]).toBe("success");
+  const proofWorkflow = v.parse(
+    schema,
+    Bun.YAML.parse(
+      readFileSync(
+        new URL(`../${proofWorkflowPath}`, import.meta.url),
+        "utf-8",
+      ),
+    ),
+  );
+  expect(Object.keys(proofWorkflow.on)).toEqual(["workflow_dispatch"]);
+  expect(proofWorkflow.permissions).toEqual({ contents: "read" });
+  const commands = Object.values(proofWorkflow.jobs).flatMap(({ steps }) =>
+    flattenWorkflowSteps(steps).map((step) => step["run"]),
+  );
+  expect(
+    commands.some(
+      (command) =>
+        typeof command === "string" &&
+        command.includes("bun run check:typecheck-parity"),
+    ),
+  ).toBe(true);
+  expect(
+    commands.some(
+      (command) =>
+        typeof command === "string" &&
+        command.includes("typecheck-command-probe.ts"),
+    ),
+  ).toBe(true);
+  for (const file of new Bun.Glob(".github/workflows/*.{yml,yaml}").scanSync({
+    cwd: repository,
+  })) {
+    if (file === proofWorkflowPath) {
+      continue;
+    }
+    const workflow = v.parse(
+      workflowSchema,
+      Bun.YAML.parse(
+        readFileSync(new URL(`../${file}`, import.meta.url), "utf-8"),
+      ),
+    );
+    for (const job of Object.values(workflow.jobs)) {
+      const { steps } = v.parse(
+        v.looseObject({ steps: v.optional(v.unknown()) }),
+        job,
+      );
+      for (const step of flattenWorkflowSteps(steps ?? [])) {
+        const command = step["run"];
+        if (typeof command !== "string") {
+          continue;
+        }
+        expect(command, file).not.toMatch(
+          /check:typecheck-parity|typecheck-command-probe\.ts/u,
+        );
+      }
+    }
+  }
 });
 
 test("an unrelated pre-install failure still runs planned safety, installation and later guards", () => {

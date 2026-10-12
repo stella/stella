@@ -66,5 +66,25 @@
   {
     "name": "Test merge queue jump-reset recovery",
     "reason": "Removed with the repository merge CLI and its queue-position recovery behavior."
+  },
+  {
+    "name": "Typecheck parity (all checked projects)",
+    "reason": "Moved to the dispatch-only typecheck-proofs workflow."
+  },
+  {
+    "name": "Record typecheck parity report",
+    "reason": "Moved to the dispatch-only typecheck-proofs workflow."
+  },
+  {
+    "name": "Upload typecheck parity report",
+    "reason": "Moved to the dispatch-only typecheck-proofs workflow."
+  },
+  {
+    "name": "Typecheck command rejects errors",
+    "reason": "Moved to the dispatch-only typecheck-proofs workflow."
+  },
+  {
+    "name": "Select typecheck parity coverage",
+    "reason": "Removed with automatic typecheck proof scheduling."
   }
 ]

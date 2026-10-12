@@ -303,10 +303,10 @@ rules.
 `bun run typecheck` uses Bun 1.4.3’s native checker through the workspace
 tasks. Direct project checks use
 `bun check --no-pretty --all --project=<tsconfig path>`; add `--build` for
-solution configs with project references. CI runs `bun run check:typecheck-parity`
-to compare TypeScript and Bun diagnostics on repository code and seeded cases
-when the Bun pin or resolved TypeScript compiler versions change, and nightly or
-on manual dispatch. Every PR retains Bun checks and a seeded-error probe.
+solution configs with project references. The dispatch-only `typecheck-proofs.yml`
+workflow runs `bun run check:typecheck-parity` to compare TypeScript and Bun
+diagnostics on repository code and seeded cases, plus a seeded-error command
+probe. Every PR retains the ordinary Bun checks.
 Editors keep the TypeScript language service because Bun provides no LSP.
 Keep TypeScript and its compatibility alias for compiler-API tools and declaration
 generation.
