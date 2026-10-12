@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 import {
   createProcessMemoryReader,
-  testRunMemoryLimit,
+  testInvocationMemoryLimit,
   watchTestProcessMemory,
 } from "@stll/scripts/src/test-process-memory";
 import { attachTestProcessShutdown } from "@stll/scripts/src/test-process-shutdown";
@@ -49,7 +49,7 @@ if (runs.length === 0) {
   process.exit(1);
 }
 
-const limitBytes = testRunMemoryLimit(process.env);
+const limitBytes = testInvocationMemoryLimit(process.env);
 const readBytes = await createProcessMemoryReader();
 for (const run of runs) {
   let currentFile =

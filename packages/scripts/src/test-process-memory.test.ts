@@ -2,20 +2,20 @@ import { expect, test } from "bun:test";
 
 import {
   createProcessMemoryReader,
-  testRunMemoryLimit,
-  TEST_RUN_MEMORY_GIB_ENV,
+  testInvocationMemoryLimit,
+  TEST_INVOCATION_MEMORY_GIB_ENV,
   watchTestProcessMemory,
 } from "./test-process-memory";
 
 test("memory budgets default to six GiB and reject unbounded overrides", () => {
-  expect(testRunMemoryLimit({})).toBe(6 * 1024 ** 3);
-  expect(testRunMemoryLimit({ [TEST_RUN_MEMORY_GIB_ENV]: "0.125" })).toBe(
-    128 * 1024 ** 2,
-  );
+  expect(testInvocationMemoryLimit({})).toBe(6 * 1024 ** 3);
+  expect(
+    testInvocationMemoryLimit({ [TEST_INVOCATION_MEMORY_GIB_ENV]: "0.125" }),
+  ).toBe(128 * 1024 ** 2);
   for (const value of ["", "0", "-1", "Infinity", "NaN", "garbage"]) {
     expect(() =>
-      testRunMemoryLimit({ [TEST_RUN_MEMORY_GIB_ENV]: value }),
-    ).toThrow(`${TEST_RUN_MEMORY_GIB_ENV} must be a positive number`);
+      testInvocationMemoryLimit({ [TEST_INVOCATION_MEMORY_GIB_ENV]: value }),
+    ).toThrow(`${TEST_INVOCATION_MEMORY_GIB_ENV} must be a positive number`);
   }
 });
 
@@ -51,7 +51,7 @@ for (const fixture of ["memory-allocation.ts", "memory-allocation-parent.ts"]) {
       expect(watchdog.peakBytes()).toBeGreaterThan(limitBytes);
       expect(failures).toHaveLength(1);
       expect(failures.at(0)).toContain(
-        `Test run memory limit exceeded for ${filename}`,
+        `Test invocation memory limit exceeded for ${filename}`,
       );
       expect(failures.at(0)).toContain("peak ");
       expect(failures.at(0)).toContain("cap 0.125 GiB");
@@ -115,11 +115,11 @@ for (const boundary of ["census", "reading"] as const) {
     expect(signals).toEqual(["SIGKILL"]);
     expect(failures).toHaveLength(1);
     expect(failures.at(0)).toContain(
-      "Test run memory limit exceeded for fixture.test.ts",
+      "Test invocation memory limit exceeded for fixture.test.ts",
     );
     expect(warnings).toHaveLength(1);
     expect(warnings.at(0)).toContain(
-      "Test memory sample unavailable for fixture.test.ts",
+      "Test memory sample partially unavailable for fixture.test.ts",
     );
     expect(attempts).toBeGreaterThan(2);
     expect(watchdog.peakBytes()).toBe(1200);
@@ -151,7 +151,108 @@ test("the cap sums measured workers instead of allowing each worker a full budge
   expect(watchdog.peakBytes()).toBe(1200);
   expect(signals).toEqual(["SIGKILL"]);
   expect(failures.at(0)).toContain(
-    "Test run memory limit exceeded for workers.test.ts",
+    "Test invocation memory limit exceeded for workers.test.ts",
   );
   expect(warnings).toEqual([]);
+});
+
+for (const boundary of ["census", "reading"] as const) {
+  for (const total of ["below", "above"] as const) {
+    test(`a partial ${boundary} sample ${total} the cap enforces its readable lower bound`, async () => {
+      const signals: (number | NodeJS.Signals | undefined)[] = [];
+      const failures: string[] = [];
+      const warnings: string[] = [];
+      let samples = 0;
+      const watchdog = watchTestProcessMemory({
+        child: {
+          pid: 42,
+          exitCode: null,
+          signalCode: null,
+          kill: (signal) => {
+            signals.push(signal);
+          },
+        },
+        limitBytes: 1024,
+        children: (pid) => {
+          if (pid === 42) {
+            samples += 1;
+            return [43, 44];
+          }
+          if (boundary === "census" && pid === 43) {
+            throw new TypeError("fixture descendant census unavailable");
+          }
+          return [];
+        },
+        readBytes: (pid) => {
+          if (pid === 44) {
+            if (boundary === "reading") {
+              throw new TypeError("fixture descendant reading unavailable");
+            }
+            return 0;
+          }
+          return total === "above" ? 600 : 300;
+        },
+        signalPid: () => {},
+        file: () => "partial-tree.test.ts",
+        onFailure: (message) => failures.push(message),
+        onWarning: (message) => warnings.push(message),
+        intervalMs: 10,
+      });
+      try {
+        if (total === "below") {
+          expect(signals).toEqual([]);
+          await Bun.sleep(50);
+          expect(samples).toBeGreaterThan(1);
+          expect(signals).toEqual([]);
+          expect(failures).toEqual([]);
+          expect(watchdog.peakBytes()).toBe(600);
+        } else {
+          expect(signals).toEqual(["SIGKILL"]);
+          expect(failures).toHaveLength(1);
+          expect(failures.at(0)).toContain(
+            "Test invocation memory limit exceeded for partial-tree.test.ts",
+          );
+          expect(watchdog.peakBytes()).toBe(1200);
+        }
+        expect(warnings).toHaveLength(1);
+        expect(warnings.at(0)).toContain(
+          "enforcing readable lower bound and retrying",
+        );
+      } finally {
+        watchdog.stop();
+      }
+    });
+  }
+}
+
+test("an unavailable root census still enforces the measured root memory", () => {
+  const signals: (number | NodeJS.Signals | undefined)[] = [];
+  const warnings: string[] = [];
+  const failures: string[] = [];
+  const watchdog = watchTestProcessMemory({
+    child: {
+      pid: 42,
+      exitCode: null,
+      signalCode: null,
+      kill: (signal) => {
+        signals.push(signal);
+      },
+    },
+    limitBytes: 1024,
+    children: () => {
+      throw new TypeError("fixture root census timed out");
+    },
+    readBytes: () => 1200,
+    signalPid: () => {},
+    file: () => "root-tree.test.ts",
+    onFailure: (message) => failures.push(message),
+    onWarning: (message) => warnings.push(message),
+  });
+  watchdog.stop();
+  expect(watchdog.peakBytes()).toBe(1200);
+  expect(signals).toEqual(["SIGKILL"]);
+  expect(failures.at(0)).toContain(
+    "Test invocation memory limit exceeded for root-tree.test.ts",
+  );
+  expect(warnings).toHaveLength(1);
 });

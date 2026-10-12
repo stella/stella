@@ -3,14 +3,15 @@ import { readFileSync } from "node:fs";
 
 const GIB = 1024 ** 3;
 const SAMPLE_INTERVAL_MS = 2000;
-export const TEST_RUN_MEMORY_GIB_ENV = "TEST_RUN_MEMORY_GIB";
+export const TEST_INVOCATION_MEMORY_GIB_ENV = "TEST_INVOCATION_MEMORY_GIB";
 
-export const testRunMemoryLimit = (environment: NodeJS.ProcessEnv) => {
-  const value = environment[TEST_RUN_MEMORY_GIB_ENV];
+/** Each invocation owns a root-and-descendants budget; API lanes have separate budgets. */
+export const testInvocationMemoryLimit = (environment: NodeJS.ProcessEnv) => {
+  const value = environment[TEST_INVOCATION_MEMORY_GIB_ENV];
   const gib = value === undefined ? 6 : Number(value);
   const bytes = gib * GIB;
   if (!Number.isFinite(bytes) || gib <= 0) {
-    panic(`${TEST_RUN_MEMORY_GIB_ENV} must be a positive number`);
+    panic(`${TEST_INVOCATION_MEMORY_GIB_ENV} must be a positive number`);
   }
   return bytes;
 };
@@ -213,69 +214,76 @@ export const watchTestProcessMemory = ({
     ) {
       return;
     }
-    const reading = Result.try({
-      try: () => {
-        sampledPids = [child.pid];
-        for (let index = 0; index < sampledPids.length; index += 1) {
-          const pid = sampledPids.at(index) ?? panic("Missing sampled PID");
-          for (const childPid of children(pid)) {
-            if (!sampledPids.includes(childPid)) {
-              sampledPids.push(childPid);
-            }
-          }
-        }
-        let totalBytes = 0;
-        for (const pid of sampledPids) {
-          const read = Result.try({
-            try: () => readBytes(pid),
-            catch: (cause) =>
-              new ProcessMemoryReadError({ message: String(cause), cause }),
-          });
-          if (read.isErr()) {
-            const alive = Result.try({
-              try: () => signalPid(pid, 0),
-              catch: (cause) =>
-                new ProcessMemoryReadError({ message: String(cause), cause }),
-            });
-            if (
-              pid !== child.pid &&
-              alive.isErr() &&
-              alive.error.cause instanceof Error &&
-              "code" in alive.error.cause &&
-              alive.error.cause.code === "ESRCH"
-            ) {
-              continue;
-            }
-            throw read.error;
-          }
-          const bytes = read.value;
-          if (!Number.isFinite(bytes) || bytes < 0) {
-            throw new ProcessMemoryReadError({
-              message: `Invalid memory reading for PID ${pid}`,
-            });
-          }
-          totalBytes += bytes;
-        }
-        return totalBytes;
-      },
-      catch: (cause) =>
-        new ProcessMemoryReadError({ message: String(cause), cause }),
-    });
-    if (reading.isErr()) {
-      // An unreadable sample is unknown, not evidence of exceeding the cap.
-      // Retry on the next tick; bound diagnostics to one warning per run.
-      if (!warned && child.exitCode === null && child.signalCode === null) {
-        warned = true;
-        onWarning(
-          `Test memory sample unavailable for ${file()}; retrying: ${reading.error.message}`,
-        );
+    sampledPids = [child.pid];
+    let unavailable: ProcessMemoryReadError | undefined;
+    for (let index = 0; index < sampledPids.length; index += 1) {
+      const pid = sampledPids.at(index) ?? panic("Missing sampled PID");
+      const descendants = Result.try({
+        try: () => children(pid),
+        catch: (cause) =>
+          new ProcessMemoryReadError({ message: String(cause), cause }),
+      });
+      if (descendants.isErr()) {
+        unavailable ??= descendants.error;
+        continue;
       }
-      return;
+      for (const childPid of descendants.value) {
+        if (!sampledPids.includes(childPid)) {
+          sampledPids.push(childPid);
+        }
+      }
     }
-    peakBytes = Math.max(peakBytes, reading.value);
+    let totalBytes = 0;
+    for (const pid of sampledPids) {
+      const read = Result.try({
+        try: () => readBytes(pid),
+        catch: (cause) =>
+          new ProcessMemoryReadError({ message: String(cause), cause }),
+      });
+      if (read.isErr()) {
+        const alive = Result.try({
+          try: () => signalPid(pid, 0),
+          catch: (cause) =>
+            new ProcessMemoryReadError({ message: String(cause), cause }),
+        });
+        if (
+          pid !== child.pid &&
+          alive.isErr() &&
+          alive.error.cause instanceof Error &&
+          "code" in alive.error.cause &&
+          alive.error.cause.code === "ESRCH"
+        ) {
+          continue;
+        }
+        unavailable ??= read.error;
+        continue;
+      }
+      const bytes = read.value;
+      if (!Number.isFinite(bytes) || bytes < 0) {
+        unavailable ??= new ProcessMemoryReadError({
+          message: `Invalid memory reading for PID ${pid}`,
+        });
+        continue;
+      }
+      totalBytes += bytes;
+    }
+    // Missing readings contribute no invented bytes. The readable sum is still
+    // a lower bound that can prove a breach; retry unknowns on the next sample.
+    if (
+      unavailable !== undefined &&
+      !warned &&
+      child.exitCode === null &&
+      child.signalCode === null
+    ) {
+      warned = true;
+      onWarning(
+        `Test memory sample partially unavailable for ${file()}; enforcing readable lower bound and retrying: ${unavailable.message}`,
+      );
+    }
+    peakBytes = Math.max(peakBytes, totalBytes);
     if (peakBytes > limitBytes) {
       fail(
-        `Test run memory limit exceeded for ${file()} (process tree rooted at PID ${child.pid}): peak ${(peakBytes / GIB).toFixed(3)} GiB, cap ${(limitBytes / GIB).toFixed(3)} GiB`,
+        `Test invocation memory limit exceeded for ${file()} (process tree rooted at PID ${child.pid}): measured peak ${(peakBytes / GIB).toFixed(3)} GiB, cap ${(limitBytes / GIB).toFixed(3)} GiB`,
       );
     }
   };
