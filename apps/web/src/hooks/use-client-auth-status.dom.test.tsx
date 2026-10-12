@@ -1,6 +1,6 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { DataTag, QueryClient as Client } from "@tanstack/react-query";
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, spyOn, test } from "bun:test";
 
 import { MEMBER_SESSION } from "@/lib/account/auth-session.test-fixtures";
 
@@ -110,17 +110,39 @@ describe("client auth status", () => {
 
   // The API refuses its member requests until it accepts, so public pages
   // serve it exactly as they serve a visitor.
-  test("a member whose account has not accepted the professional-use statement is a visitor", () => {
+  test("a member whose account has not accepted the professional-use statement is a visitor", async () => {
+    const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
+      Object.assign(
+        async (input: RequestInfo | URL) => {
+          const url = input instanceof Request ? input.url : input;
+          expect(new URL(url).href).toBe(
+            "http://localhost:3001/v1/me/professional-use",
+          );
+          return Response.json({ status: "required" });
+        },
+        { preconnect: () => undefined },
+      ),
+    );
     const queryClient = new QueryClient();
     queryClient.setQueryData(sessionOptions.queryKey, MEMBER_SESSION);
     queryClient.setQueryData(
       professionalUseOptions(MEMBER_SESSION.session.userId).queryKey,
       { status: "required" },
     );
-    const { result } = renderAuthStatus(queryClient);
-
-    expect(result.current.status).toBe("anonymous");
-    expect(resolveFeedbackChannel(result.current.status)).toBe("public");
+    const { result, unmount } = renderAuthStatus(queryClient);
+    try {
+      expect(result.current.status).toBe("anonymous");
+      expect(resolveFeedbackChannel(result.current.status)).toBe("public");
+      await waitFor(() => {
+        expect(fetchBoundary).toHaveBeenCalledTimes(1);
+        expect(queryClient.isFetching()).toBe(0);
+      });
+      expect(result.current.status).toBe("anonymous");
+    } finally {
+      unmount();
+      queryClient.clear();
+      fetchBoundary.mockRestore();
+    }
   });
 
   test("a read that answers with no session is a visitor", async () => {
