@@ -57,7 +57,7 @@ export const euVatPrefix = (vatId: string | null): string | null => {
  * usual two-letter prefix ("DE298765432", "GB123456789"); null for a bare
  * number, which names no country.
  */
-export const vatIdCountry = (vatId: string | null): string | null => {
+const vatIdCountry = (vatId: string | null): string | null => {
   const compact = compactVatId(vatId);
   return /^[A-Z]{2}[0-9A-Z]{2,}$/u.test(compact) ? compact.slice(0, 2) : null;
 };
@@ -88,7 +88,7 @@ export const addressCountry = (country: string | null): string | null => {
 };
 
 /** Why the invoice carries the VAT treatment it was given. */
-export const INVOICE_VAT_REASONS = [
+const INVOICE_VAT_REASONS = [
   "no_seller_profile",
   "seller_not_vat_payer",
   "reverse_charge",

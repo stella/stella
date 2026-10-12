@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import type { VatTreatment } from "@stll/invoicing";
+
 import {
   addressCountry,
   buyerSnapshotFromContact,
@@ -8,113 +10,127 @@ import {
   invoiceDueDays,
   latestDate,
 } from "./invoice-prefill.logic";
+import type { InvoiceVatReason } from "./invoice-prefill.logic";
+
+type VatCase = {
+  name: string;
+  seller: { vatId: string | null; vatPayer: boolean } | null;
+  buyerVatId: string | null;
+  buyerCountry: string | null;
+  expected: [VatTreatment, number, InvoiceVatReason];
+};
+
+const VAT_CASES: VatCase[] = [
+  {
+    name: "no seller profile keeps lines at 0 %",
+    seller: null,
+    buyerVatId: "CZ87654321",
+    buyerCountry: "CZ",
+    expected: ["domestic_vat", 0, "no_seller_profile"],
+  },
+  {
+    name: "a seller who is not a VAT payer charges none",
+    seller: { vatId: null, vatPayer: false },
+    buyerVatId: "DE298765432",
+    buyerCountry: "DE",
+    expected: ["not_vat_payer", 0, "seller_not_vat_payer"],
+  },
+  {
+    name: "a registered person with a VAT ID who is not a payer charges none",
+    seller: { vatId: "CZ12345678", vatPayer: false },
+    buyerVatId: null,
+    buyerCountry: null,
+    expected: ["not_vat_payer", 0, "seller_not_vat_payer"],
+  },
+  {
+    name: "a business in another member state with a matching address is reverse charged",
+    seller: { vatId: "CZ12345678", vatPayer: true },
+    buyerVatId: "de 298 765 432",
+    buyerCountry: "DE",
+    expected: ["reverse_charge", 0, "reverse_charge"],
+  },
+  {
+    name: "a country written out in full confirms the VAT ID",
+    seller: { vatId: "CZ12345678", vatPayer: true },
+    buyerVatId: "DE298765432",
+    buyerCountry: "Germany",
+    expected: ["reverse_charge", 0, "reverse_charge"],
+  },
+  {
+    name: "a Greek VAT ID (EL) matches a Greek address (GR)",
+    seller: { vatId: "CZ12345678", vatPayer: true },
+    buyerVatId: "EL123456789",
+    buyerCountry: "GR",
+    expected: ["reverse_charge", 0, "reverse_charge"],
+  },
+  {
+    name: "a business client outside the EU with a matching address is reverse charged",
+    seller: { vatId: "CZ12345678", vatPayer: true },
+    buyerVatId: "GB123456789",
+    buyerCountry: "United Kingdom",
+    expected: ["reverse_charge", 0, "reverse_charge"],
+  },
+  {
+    name: "a free-text tax ID of a Czech client keeps the standard rate",
+    seller: { vatId: "CZ12345678", vatPayer: true },
+    buyerVatId: "HRB123456",
+    buyerCountry: "CZ",
+    expected: ["domestic_vat", 2100, "client_country_unconfirmed"],
+  },
+  {
+    name: "a VAT ID the address does not confirm keeps the standard rate",
+    seller: { vatId: "CZ12345678", vatPayer: true },
+    buyerVatId: "DE298765432",
+    buyerCountry: "AT",
+    expected: ["domestic_vat", 2100, "client_country_unconfirmed"],
+  },
+  {
+    name: "a missing address country keeps the standard rate",
+    seller: { vatId: "CZ12345678", vatPayer: true },
+    buyerVatId: "DE298765432",
+    buyerCountry: null,
+    expected: ["domestic_vat", 2100, "client_country_unconfirmed"],
+  },
+  {
+    name: "a client in the seller's own state pays the standard rate",
+    seller: { vatId: "CZ12345678", vatPayer: true },
+    buyerVatId: "CZ87654321",
+    buyerCountry: "DE",
+    expected: ["domestic_vat", 2100, "domestic_rate"],
+  },
+  {
+    name: "a bare registration number names no country",
+    seller: { vatId: "CZ12345678", vatPayer: true },
+    buyerVatId: "27145689",
+    buyerCountry: "CZ",
+    expected: ["domestic_vat", 2100, "domestic_rate"],
+  },
+  {
+    name: "a private client pays the standard rate",
+    seller: { vatId: "CZ12345678", vatPayer: true },
+    buyerVatId: null,
+    buyerCountry: "AT",
+    expected: ["domestic_vat", 2100, "domestic_rate"],
+  },
+];
 
 describe("invoice VAT decision", () => {
-  test.each([
-    {
-      name: "no seller profile keeps lines at 0 %",
-      seller: null,
-      buyerVatId: "CZ87654321",
-      buyerCountry: "CZ",
-      expected: ["domestic_vat", 0, "no_seller_profile"],
+  test.each(VAT_CASES)(
+    "$name",
+    ({ seller, buyerVatId, buyerCountry, expected }) => {
+      const decision = decideInvoiceVat({
+        seller,
+        buyerVatId,
+        buyerCountry,
+        standardRateBps: 2100,
+      });
+      expect([
+        decision.vatTreatment,
+        decision.vatRateBps,
+        decision.reason,
+      ]).toEqual(expected);
     },
-    {
-      name: "a seller who is not a VAT payer charges none",
-      seller: { vatId: null, vatPayer: false },
-      buyerVatId: "DE298765432",
-      buyerCountry: "DE",
-      expected: ["not_vat_payer", 0, "seller_not_vat_payer"],
-    },
-    {
-      name: "a registered person with a VAT ID who is not a payer charges none",
-      seller: { vatId: "CZ12345678", vatPayer: false },
-      buyerVatId: null,
-      buyerCountry: null,
-      expected: ["not_vat_payer", 0, "seller_not_vat_payer"],
-    },
-    {
-      name: "a business in another member state with a matching address is reverse charged",
-      seller: { vatId: "CZ12345678", vatPayer: true },
-      buyerVatId: "de 298 765 432",
-      buyerCountry: "DE",
-      expected: ["reverse_charge", 0, "reverse_charge"],
-    },
-    {
-      name: "a country written out in full confirms the VAT ID",
-      seller: { vatId: "CZ12345678", vatPayer: true },
-      buyerVatId: "DE298765432",
-      buyerCountry: "Germany",
-      expected: ["reverse_charge", 0, "reverse_charge"],
-    },
-    {
-      name: "a Greek VAT ID (EL) matches a Greek address (GR)",
-      seller: { vatId: "CZ12345678", vatPayer: true },
-      buyerVatId: "EL123456789",
-      buyerCountry: "GR",
-      expected: ["reverse_charge", 0, "reverse_charge"],
-    },
-    {
-      name: "a business client outside the EU with a matching address is reverse charged",
-      seller: { vatId: "CZ12345678", vatPayer: true },
-      buyerVatId: "GB123456789",
-      buyerCountry: "United Kingdom",
-      expected: ["reverse_charge", 0, "reverse_charge"],
-    },
-    {
-      name: "a free-text tax ID of a Czech client keeps the standard rate",
-      seller: { vatId: "CZ12345678", vatPayer: true },
-      buyerVatId: "HRB123456",
-      buyerCountry: "CZ",
-      expected: ["domestic_vat", 2100, "client_country_unconfirmed"],
-    },
-    {
-      name: "a VAT ID the address does not confirm keeps the standard rate",
-      seller: { vatId: "CZ12345678", vatPayer: true },
-      buyerVatId: "DE298765432",
-      buyerCountry: "AT",
-      expected: ["domestic_vat", 2100, "client_country_unconfirmed"],
-    },
-    {
-      name: "a missing address country keeps the standard rate",
-      seller: { vatId: "CZ12345678", vatPayer: true },
-      buyerVatId: "DE298765432",
-      buyerCountry: null,
-      expected: ["domestic_vat", 2100, "client_country_unconfirmed"],
-    },
-    {
-      name: "a client in the seller's own state pays the standard rate",
-      seller: { vatId: "CZ12345678", vatPayer: true },
-      buyerVatId: "CZ87654321",
-      buyerCountry: "DE",
-      expected: ["domestic_vat", 2100, "domestic_rate"],
-    },
-    {
-      name: "a bare registration number names no country",
-      seller: { vatId: "CZ12345678", vatPayer: true },
-      buyerVatId: "27145689",
-      buyerCountry: "CZ",
-      expected: ["domestic_vat", 2100, "domestic_rate"],
-    },
-    {
-      name: "a private client pays the standard rate",
-      seller: { vatId: "CZ12345678", vatPayer: true },
-      buyerVatId: null,
-      buyerCountry: "AT",
-      expected: ["domestic_vat", 2100, "domestic_rate"],
-    },
-  ])("$name", ({ seller, buyerVatId, buyerCountry, expected }) => {
-    const decision = decideInvoiceVat({
-      seller,
-      buyerVatId,
-      buyerCountry,
-      standardRateBps: 2100,
-    });
-    expect([
-      decision.vatTreatment,
-      decision.vatRateBps,
-      decision.reason,
-    ]).toEqual(expected);
-  });
+  );
 
   test("a VAT payer without a configured rate says so instead of inventing one", () => {
     expect(

@@ -576,7 +576,6 @@
       "timeSummary": "{count, plural, one {# įrašas} few {# įrašai} many {# įrašo} other {# įrašų}} · {hours} val.",
       "title": "Nauja sąskaita",
       "totalsSummary": "Be PVM {net} · PVM {vat} · Iš viso {total}",
-      "truncated": "Rodoma 500 seniausių eilučių. Pirmiausia išrašykite sąskaitą už jas, o likusias įtraukite į kitą sąskaitą.",
       "vat": "PVM režimas",
       "vatRate": "PVM {rate} %",
       "vatReasons": {

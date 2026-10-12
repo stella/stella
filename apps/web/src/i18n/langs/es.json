@@ -576,7 +576,6 @@
       "timeSummary": "{count, plural, one {# registro} other {# registros}} · {hours} h",
       "title": "Nueva factura",
       "totalsSummary": "Base {net} · IVA {vat} · Total {total}",
-      "truncated": "Se muestran los 500 conceptos más antiguos. Factúrelos primero y el resto en otra factura.",
       "vat": "Tratamiento del IVA",
       "vatRate": "IVA {rate} %",
       "vatReasons": {

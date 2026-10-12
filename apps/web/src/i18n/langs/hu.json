@@ -576,7 +576,6 @@
       "timeSummary": "{count, plural, one {# bejegyzés} other {# bejegyzés}} · {hours} óra",
       "title": "Új számla",
       "totalsSummary": "Nettó {net} · ÁFA {vat} · Összesen {total}",
-      "truncated": "A legrégebbi 500 tétel látható. Előbb ezeket számlázza ki, a többit egy újabb számlán.",
       "vat": "ÁFA-kezelés",
       "vatRate": "{rate} % ÁFA",
       "vatReasons": {

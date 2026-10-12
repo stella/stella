@@ -576,7 +576,6 @@
       "timeSummary": "{count, plural, zero {# ierakstu} one {# ieraksts} other {# ieraksti}} · {hours} h",
       "title": "Jauns rēķins",
       "totalsSummary": "Bez PVN {net} · PVN {vat} · Kopā {total}",
-      "truncated": "Tiek rādītas 500 vecākās pozīcijas. Vispirms izrakstiet rēķinu par tām, bet pārējās iekļaujiet nākamajā rēķinā.",
       "vat": "PVN režīms",
       "vatRate": "PVN {rate} %",
       "vatReasons": {

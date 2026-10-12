@@ -17,6 +17,7 @@ import {
   invoices,
   timeEntries,
 } from "@/api/db/schema";
+import { claimInvoiceExpenses } from "@/api/handlers/invoices/entries/add";
 import {
   ATTACHED_ENTRY_LINE_VAT,
   expenseLineDraft,
@@ -405,44 +406,6 @@ const applyEntryAdjustments = async (
   return Result.ok(undefined);
 };
 
-type ClaimExpensesOptions = {
-  workspaceId: SafeId<"workspace">;
-  invoiceId: SafeId<"invoice">;
-  expenseIds: readonly SafeId<"expense">[];
-  currency: string;
-  now: Date;
-};
-const claimExpenses = async (
-  tx: Transaction,
-  { workspaceId, invoiceId, expenseIds, currency, now }: ClaimExpensesOptions,
-) => {
-  if (expenseIds.length === 0) {
-    return [];
-  }
-  // audit: skip - the caller records each claimed expense with the invoice create event
-  return await tx
-    .update(expenses)
-    .set({ invoiceId, status: BILLING_STATUS.BILLED, updatedAt: now })
-    .where(
-      and(
-        eq(expenses.workspaceId, workspaceId),
-        inArray(expenses.id, [...expenseIds]),
-        eq(expenses.status, BILLING_STATUS.APPROVED),
-        eq(expenses.billable, true),
-        isNull(expenses.invoiceId),
-        eq(expenses.currency, currency),
-      ),
-    )
-    .returning({
-      id: expenses.id,
-      dateIncurred: expenses.dateIncurred,
-      amount: expenses.amount,
-      markup: expenses.markup,
-      description: expenses.description,
-      invoiceDescription: expenses.invoiceDescription,
-    });
-};
-
 type SupplyDateOptions = {
   workspaceId: SafeId<"workspace">;
   body: Static<typeof createInvoiceBodySchema>;
@@ -706,13 +669,17 @@ const billCreatedDraft = async (
       noCharge: timeEntries.noCharge,
     });
 
-  const attachedExpenses = await claimExpenses(tx, {
-    workspaceId,
-    invoiceId: created.id,
-    expenseIds: body.expenseIds ?? [],
-    currency: body.currency,
-    now,
-  });
+  const expenseIds = body.expenseIds ?? [];
+  const attachedExpenses =
+    expenseIds.length === 0
+      ? []
+      : await claimInvoiceExpenses(tx, {
+          workspaceId,
+          invoiceId: created.id,
+          expenseIds,
+          currency: body.currency,
+          now,
+        });
   const linkedCount = updated.length;
   if (
     linkedCount !== body.timeEntryIds.length ||

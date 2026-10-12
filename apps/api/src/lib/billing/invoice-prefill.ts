@@ -137,5 +137,3 @@ export const resolveInvoicePrefill = async (
     dueDaysSource: due.source,
   };
 };
-
-export type InvoicePrefill = Awaited<ReturnType<typeof resolveInvoicePrefill>>;

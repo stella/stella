@@ -579,7 +579,6 @@ type Messages = {
       "timeSummary": "{count, plural, one {# entry} other {# entries}} · {hours} h";
       "title": "New invoice";
       "totalsSummary": "Excl. VAT {net} · VAT {vat} · Total {total}";
-      "truncated": "Showing the oldest 500 items. Invoice these first, then create another invoice for the rest.";
       "vat": "VAT treatment";
       "vatRate": "{rate} % VAT";
       "vatReasons": {

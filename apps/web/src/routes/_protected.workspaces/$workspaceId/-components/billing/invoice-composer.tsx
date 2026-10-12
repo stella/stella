@@ -490,9 +490,6 @@ const ItemsStep = ({
           })}
         </Callout>
       )}
-      {prefill.truncated && (
-        <Callout>{t("billing.invoiceComposer.truncated")}</Callout>
-      )}
       <Frame>
         <FrameHeader>
           <FrameTitle>{t("billing.invoiceComposer.timeEntries")}</FrameTitle>

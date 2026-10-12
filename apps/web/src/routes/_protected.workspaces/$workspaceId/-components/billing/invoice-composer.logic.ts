@@ -30,12 +30,12 @@ export type EntryChoice = {
   noCharge: boolean;
 };
 
-export type ComposerVat = {
+type ComposerVat = {
   vatTreatment: VatTreatment;
   vatRateBps: number;
 };
 
-export const initialEntryChoice = (entry: ComposerEntry): EntryChoice => ({
+const initialEntryChoice = (entry: ComposerEntry): EntryChoice => ({
   included: true,
   billedMinutes: entry.billedMinutes,
   noCharge: entry.noCharge,

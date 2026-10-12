@@ -576,7 +576,6 @@
       "timeSummary": "{count, plural, one {# saisie} other {# saisies}} · {hours} h",
       "title": "Nouvelle facture",
       "totalsSummary": "HT {net} · TVA {vat} · Total {total}",
-      "truncated": "Affichage des 500 éléments les plus anciens. Facturez-les d’abord, puis le reste sur une autre facture.",
       "vat": "Régime de TVA",
       "vatRate": "TVA {rate} %",
       "vatReasons": {

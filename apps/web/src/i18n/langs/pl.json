@@ -576,7 +576,6 @@
       "timeSummary": "{count, plural, one {# wpis} few {# wpisy} many {# wpisów} other {# wpisu}} · {hours} h",
       "title": "Nowa faktura",
       "totalsSummary": "Netto {net} · VAT {vat} · Razem {total}",
-      "truncated": "Wyświetlono 500 najstarszych pozycji. Najpierw je zafakturuj, a resztę na kolejnej fakturze.",
       "vat": "Rozliczenie VAT",
       "vatRate": "VAT {rate} %",
       "vatReasons": {

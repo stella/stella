@@ -576,7 +576,6 @@
       "timeSummary": "{count, plural, one {# Eintrag} other {# Einträge}} · {hours} Std.",
       "title": "Neue Rechnung",
       "totalsSummary": "Netto {net} · USt. {vat} · Gesamt {total}",
-      "truncated": "Angezeigt werden die ältesten 500 Positionen. Rechnen Sie diese zuerst ab und den Rest mit einer weiteren Rechnung.",
       "vat": "Umsatzsteuerliche Behandlung",
       "vatRate": "{rate} % Umsatzsteuer",
       "vatReasons": {

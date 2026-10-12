@@ -20,6 +20,8 @@ import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { resolveInvoicePrefill } from "@/api/lib/billing/invoice-prefill";
 import { latestDate } from "@/api/lib/billing/invoice-prefill.logic";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { readBounded } from "@/api/lib/db/read-bounded";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
 
 /** One invoice holds at most this many entries; `invoices.create` accepts as many. */
@@ -45,7 +47,7 @@ const prefillInvoice = createSafeHandler(
     description:
       "Prepare a new invoice for a matter without creating it: the matter's " +
       "approved, billable, not-yet-invoiced time entries (with timekeeper names) " +
-      "and approved billable expenses, oldest first, up to 500 each; the proposed " +
+      "and approved billable expenses, oldest first (a matter with more than 500 of either is refused); the proposed " +
       "currency, issue date (today in the organization's zone) and payment term; " +
       "the default seller profile (or sellerProfileId); the buyer copied from " +
       "the matter's client; and the VAT treatment and rate the lines would get, " +
@@ -69,61 +71,65 @@ const prefillInvoice = createSafeHandler(
     const organizationId = session.activeOrganizationId;
     const loaded = yield* Result.await(
       safeDb(async (tx) => {
-        const [entries, expenseRows, arrangement, timeZone] = await Promise.all(
-          [
-            tx
-              .select({
-                id: timeEntries.id,
-                userId: timeEntries.userId,
-                dateWorked: timeEntries.dateWorked,
-                durationMinutes: timeEntries.durationMinutes,
-                billedMinutes: timeEntries.billedMinutes,
-                rateAtEntry: timeEntries.rateAtEntry,
-                currency: timeEntries.currency,
-                narrative: timeEntries.narrative,
-                invoiceNarrative: timeEntries.invoiceNarrative,
-                noCharge: timeEntries.noCharge,
-                taskCode: timeEntries.taskCode,
-                activityCode: timeEntries.activityCode,
-              })
-              .from(timeEntries)
-              .where(
-                and(
-                  eq(timeEntries.workspaceId, workspaceId),
-                  eq(
-                    timeEntries.activityGroup,
-                    TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
+        const [entryRead, expenseRead, arrangement, timeZone] =
+          await Promise.all([
+            readBounded(
+              tx
+                .select({
+                  id: timeEntries.id,
+                  userId: timeEntries.userId,
+                  dateWorked: timeEntries.dateWorked,
+                  durationMinutes: timeEntries.durationMinutes,
+                  billedMinutes: timeEntries.billedMinutes,
+                  rateAtEntry: timeEntries.rateAtEntry,
+                  currency: timeEntries.currency,
+                  narrative: timeEntries.narrative,
+                  invoiceNarrative: timeEntries.invoiceNarrative,
+                  noCharge: timeEntries.noCharge,
+                  taskCode: timeEntries.taskCode,
+                  activityCode: timeEntries.activityCode,
+                })
+                .from(timeEntries)
+                .where(
+                  and(
+                    eq(timeEntries.workspaceId, workspaceId),
+                    eq(
+                      timeEntries.activityGroup,
+                      TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
+                    ),
+                    eq(timeEntries.status, BILLING_STATUS.APPROVED),
+                    eq(timeEntries.billable, true),
+                    isNull(timeEntries.invoiceId),
+                    ne(timeEntries.currency, UNPRICED_TIME_ENTRY_CURRENCY),
                   ),
-                  eq(timeEntries.status, BILLING_STATUS.APPROVED),
-                  eq(timeEntries.billable, true),
-                  isNull(timeEntries.invoiceId),
-                  ne(timeEntries.currency, UNPRICED_TIME_ENTRY_CURRENCY),
-                ),
-              )
-              .orderBy(asc(timeEntries.dateWorked), asc(timeEntries.id))
-              .limit(PREFILL_ENTRY_LIMIT + 1),
-            tx
-              .select({
-                id: expenses.id,
-                dateIncurred: expenses.dateIncurred,
-                amount: expenses.amount,
-                markup: expenses.markup,
-                currency: expenses.currency,
-                category: expenses.category,
-                description: expenses.description,
-                invoiceDescription: expenses.invoiceDescription,
-              })
-              .from(expenses)
-              .where(
-                and(
-                  eq(expenses.workspaceId, workspaceId),
-                  eq(expenses.status, BILLING_STATUS.APPROVED),
-                  eq(expenses.billable, true),
-                  isNull(expenses.invoiceId),
-                ),
-              )
-              .orderBy(asc(expenses.dateIncurred), asc(expenses.id))
-              .limit(PREFILL_ENTRY_LIMIT + 1),
+                )
+                .orderBy(asc(timeEntries.dateWorked), asc(timeEntries.id)),
+              PREFILL_ENTRY_LIMIT,
+            ),
+            readBounded(
+              tx
+                .select({
+                  id: expenses.id,
+                  dateIncurred: expenses.dateIncurred,
+                  amount: expenses.amount,
+                  markup: expenses.markup,
+                  currency: expenses.currency,
+                  category: expenses.category,
+                  description: expenses.description,
+                  invoiceDescription: expenses.invoiceDescription,
+                })
+                .from(expenses)
+                .where(
+                  and(
+                    eq(expenses.workspaceId, workspaceId),
+                    eq(expenses.status, BILLING_STATUS.APPROVED),
+                    eq(expenses.billable, true),
+                    isNull(expenses.invoiceId),
+                  ),
+                )
+                .orderBy(asc(expenses.dateIncurred), asc(expenses.id)),
+              PREFILL_ENTRY_LIMIT,
+            ),
             tx
               .select({
                 mode: billingArrangements.mode,
@@ -134,15 +140,17 @@ const prefillInvoice = createSafeHandler(
               .where(eq(billingArrangements.workspaceId, workspaceId))
               .limit(1),
             readOrganizationTimeZone(tx, organizationId),
-          ],
-        );
-        const userIds = timekeeperIdsOf(entries);
+          ]);
+        if (entryRead.type === "overflow" || expenseRead.type === "overflow") {
+          return null;
+        }
+        const shownEntries = entryRead.rows;
+        const shownExpenses = expenseRead.rows;
+        const userIds = timekeeperIdsOf(shownEntries);
         const names =
           userIds.size === 0
             ? []
             : await selectTimekeeperNames(tx, { organizationId, userIds });
-        const shownEntries = entries.slice(0, PREFILL_ENTRY_LIMIT);
-        const shownExpenses = expenseRows.slice(0, PREFILL_ENTRY_LIMIT);
         const invoiceDate = todayFor(timeZone).toString();
         const supplyDate = latestDate(
           [
@@ -158,9 +166,7 @@ const prefillInvoice = createSafeHandler(
           supplyDate,
         });
         return {
-          entries,
           shownEntries,
-          expenseRows,
           shownExpenses,
           arrangement: arrangement.at(0) ?? null,
           names: new Map(names.map((row) => [row.id, row.name])),
@@ -170,6 +176,16 @@ const prefillInvoice = createSafeHandler(
         };
       }),
     );
+    if (loaded === null) {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          code: "too_many_unbilled_items",
+          message: `This matter has more than ${PREFILL_ENTRY_LIMIT} unbilled time entries or expenses; an invoice bills at most ${PREFILL_ENTRY_LIMIT} of each`,
+          hint: `Read the matter's approved entries with time-entries.list and call invoices.create with up to ${PREFILL_ENTRY_LIMIT} timeEntryIds at a time.`,
+        }),
+      );
+    }
     const { prefill, arrangement } = loaded;
     const currency =
       arrangement?.currency ??
@@ -208,9 +224,6 @@ const prefillInvoice = createSafeHandler(
             : (loaded.names.get(entry.userId) ?? null),
       })),
       expenses: loaded.shownExpenses,
-      truncated:
-        loaded.entries.length > PREFILL_ENTRY_LIMIT ||
-        loaded.expenseRows.length > PREFILL_ENTRY_LIMIT,
     });
   },
 );

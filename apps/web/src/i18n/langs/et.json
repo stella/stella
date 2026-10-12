@@ -576,7 +576,6 @@
       "timeSummary": "{count, plural, one {# kanne} other {# kannet}} · {hours} h",
       "title": "Uus arve",
       "totalsSummary": "Käibemaksuta {net} · Käibemaks {vat} · Kokku {total}",
-      "truncated": "Kuvatakse 500 vanimat rida. Arveldage need esmalt ja ülejäänud järgmisel arvel.",
       "vat": "Käibemaksu käsitlus",
       "vatRate": "Käibemaks {rate} %",
       "vatReasons": {

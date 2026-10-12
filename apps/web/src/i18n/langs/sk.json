@@ -576,7 +576,6 @@
       "timeSummary": "{count, plural, one {# záznam} few {# záznamy} many {# záznamu} other {# záznamov}} · {hours} h",
       "title": "Nová faktúra",
       "totalsSummary": "Bez DPH {net} · DPH {vat} · Spolu {total}",
-      "truncated": "Zobrazuje sa 500 najstarších položiek. Najprv vyfakturujte tie, zvyšok potom na ďalšej faktúre.",
       "vat": "Režim DPH",
       "vatRate": "DPH {rate} %",
       "vatReasons": {
