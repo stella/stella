@@ -45,6 +45,8 @@ import {
   SecretCredentialField,
 } from "./password-sign-in-form";
 import { PasswordSignInOption } from "./password-sign-in-option";
+import { SIGN_IN_MODE } from "./sign-in-mode";
+import type { SignInMode } from "./sign-in-mode";
 import {
   resolveLastUsedSignInMethod,
   resolveSignInOptions,
@@ -54,10 +56,15 @@ import {
 import type { AuthCapabilities, SignInMethod } from "./sign-in-panel.logic";
 
 type SignInPanelProps = {
+  mode?: SignInMode;
   className?: string;
   redirectTo: string;
   showHeading?: boolean;
-  onOtpSent?: (payload: { email: string; redirectTo: string }) => void;
+  onOtpSent?: (payload: {
+    email: string;
+    redirectTo: string;
+    mode: SignInMode;
+  }) => void;
 };
 
 const formSchema = v.strictObject({
@@ -91,6 +98,7 @@ const SignInOptionsPanel = ({
   className,
   redirectTo,
   showHeading = true,
+  mode = SIGN_IN_MODE.signIn,
   onOtpSent,
   authCapabilities,
 }: SignInPanelProps & { authCapabilities: AuthCapabilities }) => {
@@ -125,13 +133,13 @@ const SignInOptionsPanel = ({
 
   const handleOtpSent = async (email: string) => {
     if (onOtpSent) {
-      onOtpSent({ email, redirectTo });
+      onOtpSent({ email, redirectTo, mode });
       return;
     }
 
     await navigate({
       to: "/auth/otp",
-      search: { email, redirectTo },
+      search: { email, redirectTo, mode },
     });
   };
 
