@@ -15,6 +15,7 @@ import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
+import { measuredInstallBudget } from "./ci-install-budgets";
 
 const INSTALL_TIMEOUT_MS = 120_000;
 // Windows Bun 1.4.3 completed 1,680 extractions from a 2,502-package resolved
@@ -150,9 +151,16 @@ if (import.meta.main) {
     );
     process.exit(1);
   }
+  const budget = measuredInstallBudget({
+    platform: process.platform,
+    flags: args,
+  });
+  console.log(
+    `Install class: ${budget.key}; ${budget.status}; budget ${budget.timeoutMs} ms`,
+  );
   process.exitCode = await runLoggedInstall({
     command: [process.execPath, "install", "--verbose", ...args],
     logFile,
-    timeoutMs: installTimeoutMs(process.platform),
+    timeoutMs: budget.timeoutMs,
   });
 }

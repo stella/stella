@@ -1,0 +1,228 @@
+{
+  "percentileMethod": "nearest-rank",
+  "marginMs": 60000,
+  "classes": [
+    {
+      "key": "linux|development|frozen|ignored|@stll/scripts",
+      "status": "unmeasured",
+      "currentBudgetMs": 120000,
+      "reason": "No completed cold install-store sample in the inspected CI logs. Current platform limit retained.",
+      "samples": []
+    },
+    {
+      "key": "linux|global:turbo|mutable|scripts|all",
+      "status": "unmeasured",
+      "currentBudgetMs": 120000,
+      "reason": "No completed cold install-store sample in the inspected CI logs. Current platform limit retained.",
+      "samples": []
+    },
+    {
+      "key": "linux|development|frozen|ignored|@stll/api,@stll/collab,@stll/legal-atlas-runner",
+      "status": "unmeasured",
+      "currentBudgetMs": 120000,
+      "reason": "No completed cold install-store sample in the inspected CI logs. Current platform limit retained.",
+      "samples": []
+    },
+    {
+      "key": "linux|production|frozen|ignored|@stll/legal-atlas-runner",
+      "status": "unmeasured",
+      "currentBudgetMs": 120000,
+      "reason": "No completed cold install-store sample in the inspected CI logs. Current platform limit retained.",
+      "samples": []
+    },
+    {
+      "key": "linux|development|frozen|ignored|@stll/api",
+      "status": "unmeasured",
+      "currentBudgetMs": 120000,
+      "reason": "No completed cold install-store sample in the inspected CI logs. Current platform limit retained.",
+      "samples": []
+    },
+    {
+      "key": "linux|development|frozen|ignored|@stll/api,@stll/cli",
+      "status": "measured",
+      "currentBudgetMs": 120000,
+      "reason": "Cold install-store samples; Bun binary cache hits are not install-store restores.",
+      "samples": [
+        {
+          "runId": 38089283216,
+          "jobId": 114323772278,
+          "bunVersion": "1.4.2",
+          "cache": "cold",
+          "outcome": "completed",
+          "durationMs": 13138
+        },
+        {
+          "runId": 38089283216,
+          "jobId": 114323772321,
+          "bunVersion": "1.4.2",
+          "cache": "cold",
+          "outcome": "completed",
+          "durationMs": 10734
+        },
+        {
+          "runId": 38089283216,
+          "jobId": 114323772380,
+          "bunVersion": "1.4.2",
+          "cache": "cold",
+          "outcome": "completed",
+          "durationMs": 7881
+        },
+        {
+          "runId": 38194954951,
+          "jobId": 114635895343,
+          "bunVersion": "1.4.3",
+          "cache": "cold",
+          "outcome": "completed",
+          "durationMs": 7645
+        },
+        {
+          "runId": 38194954951,
+          "jobId": 114635895363,
+          "bunVersion": "1.4.3",
+          "cache": "cold",
+          "outcome": "completed",
+          "durationMs": 10374
+        },
+        {
+          "runId": 38194954951,
+          "jobId": 114635895395,
+          "bunVersion": "1.4.3",
+          "cache": "cold",
+          "outcome": "completed",
+          "durationMs": 9371
+        },
+        {
+          "runId": 38196195911,
+          "jobId": 114640438036,
+          "bunVersion": "1.4.3",
+          "cache": "cold",
+          "outcome": "timeout",
+          "durationMs": 120037
+        },
+        {
+          "runId": 38196195911,
+          "jobId": 114640438046,
+          "bunVersion": "1.4.3",
+          "cache": "cold",
+          "outcome": "completed",
+          "durationMs": 9585
+        },
+        {
+          "runId": 38196195911,
+          "jobId": 114640438111,
+          "bunVersion": "1.4.3",
+          "cache": "cold",
+          "outcome": "completed",
+          "durationMs": 8516
+        },
+        {
+          "runId": 38197199041,
+          "jobId": 114643387025,
+          "bunVersion": "1.4.3",
+          "cache": "cold",
+          "outcome": "completed",
+          "durationMs": 7559
+        },
+        {
+          "runId": 38197199041,
+          "jobId": 114643387099,
+          "bunVersion": "1.4.3",
+          "cache": "cold",
+          "outcome": "completed",
+          "durationMs": 8875
+        },
+        {
+          "runId": 38197708640,
+          "jobId": 114644385801,
+          "bunVersion": "1.4.3",
+          "cache": "cold",
+          "outcome": "completed",
+          "durationMs": 8357
+        },
+        {
+          "runId": 38197708640,
+          "jobId": 114644385825,
+          "bunVersion": "1.4.3",
+          "cache": "cold",
+          "outcome": "completed",
+          "durationMs": 8386
+        },
+        {
+          "runId": 38197707557,
+          "jobId": 114644395293,
+          "bunVersion": "1.4.3",
+          "cache": "cold",
+          "outcome": "completed",
+          "durationMs": 10756
+        },
+        {
+          "runId": 38197707557,
+          "jobId": 114644395303,
+          "bunVersion": "1.4.3",
+          "cache": "cold",
+          "outcome": "completed",
+          "durationMs": 8708
+        },
+        {
+          "runId": 38197707557,
+          "jobId": 114644395307,
+          "bunVersion": "1.4.3",
+          "cache": "cold",
+          "outcome": "completed",
+          "durationMs": 8002
+        },
+        {
+          "runId": 38197709873,
+          "jobId": 114644485644,
+          "bunVersion": "1.4.3",
+          "cache": "cold",
+          "outcome": "completed",
+          "durationMs": 8852
+        },
+        {
+          "runId": 38197709873,
+          "jobId": 114644485671,
+          "bunVersion": "1.4.3",
+          "cache": "cold",
+          "outcome": "completed",
+          "durationMs": 8528
+        }
+      ]
+    },
+    {
+      "key": "linux|production|frozen|ignored|@stll/web",
+      "status": "unmeasured",
+      "currentBudgetMs": 120000,
+      "reason": "No completed cold install-store sample in the inspected CI logs. Current platform limit retained.",
+      "samples": []
+    },
+    {
+      "key": "win32|development|frozen|ignored|all",
+      "status": "unmeasured",
+      "currentBudgetMs": 240000,
+      "reason": "No completed cold install-store sample in the inspected CI logs. Current platform limit retained.",
+      "samples": []
+    },
+    {
+      "key": "win32|development|frozen|ignored|@stll/scripts",
+      "status": "unmeasured",
+      "currentBudgetMs": 240000,
+      "reason": "No completed cold install-store sample in the inspected CI logs. Current platform limit retained.",
+      "samples": []
+    },
+    {
+      "key": "linux|development|frozen|ignored|@stll/scan-engine,stella",
+      "status": "unmeasured",
+      "currentBudgetMs": 120000,
+      "reason": "No completed cold install-store sample in the inspected CI logs. Current platform limit retained.",
+      "samples": []
+    },
+    {
+      "key": "linux|development|frozen|ignored|all",
+      "status": "unmeasured",
+      "currentBudgetMs": 120000,
+      "reason": "No completed cold install-store sample in the inspected CI logs. Current platform limit retained.",
+      "samples": []
+    }
+  ]
+}

@@ -115,7 +115,7 @@ test("the install guard rejects bypasses, unbounded steps and lost logs", () => 
     with: { path: `\${{ runner.temp }}/bun-install/*.log` },
   };
   const install = {
-    run: 'bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/scripts.log" --ignore-scripts',
+    run: 'bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/scripts.log" --frozen-lockfile --ignore-scripts',
     "timeout-minutes": 5,
   };
   const workflow = (steps: unknown[]) => ({

@@ -1,4 +1,5 @@
 import { installTimeoutMs } from "./ci-install";
+import { measuredInstallBudget } from "./ci-install-budgets";
 import { lexShell } from "./install-free-ci";
 import { flattenWorkflowSteps } from "./workflow-steps";
 
@@ -32,6 +33,39 @@ export const installWorkflowPolicy = (file: string): InstallWorkflowPolicy => {
   );
 };
 
+const installPlatforms = (job: Record<string, unknown>) => {
+  const runner = job["runs-on"];
+  const matrixVariable =
+    typeof runner === "string"
+      ? /^\$\{\{\s*matrix\.(\w+)\s*\}\}$/u.exec(runner)?.at(1)
+      : undefined;
+  const strategy = job["strategy"];
+  const matrix = isRecord(strategy) ? strategy["matrix"] : undefined;
+  const include =
+    isRecord(matrix) && Array.isArray(matrix["include"])
+      ? matrix["include"]
+      : [];
+  const hints = JSON.stringify(
+    matrixVariable && isRecord(matrix)
+      ? [
+          matrix[matrixVariable],
+          ...include.filter(isRecord).map((entry) => entry[matrixVariable]),
+        ]
+      : (runner ?? null),
+  ).toLowerCase();
+  const platforms: NodeJS.Platform[] = [];
+  if (hints.includes("windows")) {
+    platforms.push("win32");
+  }
+  if (hints.includes("ubuntu") || hints.includes("linux")) {
+    platforms.push("linux");
+  }
+  if (hints.includes("macos")) {
+    platforms.push("darwin");
+  }
+  return platforms;
+};
+
 /** Windows workflows and CI's explicit cold installs must share the owner. */
 export const boundedInstallProblems = (
   workflow: unknown,
@@ -45,13 +79,8 @@ export const boundedInstallProblems = (
     if (!isRecord(job) || !Array.isArray(job["steps"])) {
       continue;
     }
-    const windows = JSON.stringify([
-      job["runs-on"],
-      isRecord(job["strategy"]) ? job["strategy"]["matrix"] : null,
-    ]).includes("windows");
-    if (scope === "windows" && !windows) {
-      continue;
-    }
+    const platforms = installPlatforms(job);
+    const windows = platforms.includes("win32");
     const steps = flattenWorkflowSteps(job["steps"]);
     const uploads = steps.filter(
       (step) =>
@@ -69,8 +98,13 @@ export const boundedInstallProblems = (
         if (event.type !== "command" || event.words.at(0) !== "bun") {
           continue;
         }
-        const program = event.words.at(1);
-        const owner = program?.endsWith("/ci-install.ts") === true;
+        const program = event.words.findIndex(
+          (word) => word === "ci-install.ts" || word.endsWith("/ci-install.ts"),
+        );
+        const owner = program >= 1;
+        if (scope === "windows" && !windows && !owner) {
+          continue;
+        }
         const install = event.words.some((word) =>
           ["install", "i", "ci", "add"].includes(word),
         );
@@ -80,8 +114,27 @@ export const boundedInstallProblems = (
         if (!owner) {
           continue;
         }
-        const minimum =
-          Math.ceil(installTimeoutMs(windows ? "win32" : "linux") / 60_000) + 1;
+        let timeoutMs = installTimeoutMs(windows ? "win32" : "linux");
+        if (platforms.length === 0) {
+          problems.push(`${name}: cannot determine the install platform`);
+        }
+        const budgets: number[] = [];
+        for (const platform of platforms) {
+          try {
+            budgets.push(
+              measuredInstallBudget({
+                platform,
+                flags: event.words.slice(program + 2),
+              }).timeoutMs,
+            );
+          } catch (error) {
+            problems.push(`${name}: ${String(error)}`);
+          }
+        }
+        if (budgets.length > 0) {
+          timeoutMs = Math.max(...budgets);
+        }
+        const minimum = Math.ceil(timeoutMs / 60_000) + 1;
         const maximum = windows ? minimum : 10;
         const limit = step["timeout-minutes"];
         if (
