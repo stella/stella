@@ -1348,6 +1348,11 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // Workflow lint resolves the checksum-verified actionlint executable.
+  "ACTIONLINT_BIN",
+  // CI verification steps set it; workspace hygiene then requires prepared
+  // API typecheck configs instead of skipping their install-time absence.
+  "STELLA_VERIFY",
   "QUERY_PERF_BASELINE_MODE",
   "QUERY_PERF_BASE_REF",
   "QUERY_PERF_CHANGED_PATHS",

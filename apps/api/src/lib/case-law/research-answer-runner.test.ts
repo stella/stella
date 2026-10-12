@@ -199,6 +199,7 @@ describe("research passage retrieval", () => {
           retrieved: result.unwrapOr([]),
           retrievalFailed: result.isErr(),
           budgetChars: 100,
+          courtParagraphNumbers: new Map(),
         }),
       ).toMatchObject({
         kind: "passages",
@@ -295,12 +296,14 @@ describe("selectDecisionPassages", () => {
         retrieved: [],
         retrievalFailed: false,
         budgetChars: 100,
+        courtParagraphNumbers: new Map(),
       }),
     ).toEqual({
       kind: "passages",
       passages,
       retrieved: false,
       retrievalFailed: false,
+      courtParagraphNumbers: new Map(),
     });
   });
 
@@ -313,17 +316,21 @@ describe("selectDecisionPassages", () => {
         retrieved: [],
         retrievalFailed: true,
         budgetChars: 100,
+        courtParagraphNumbers: new Map(),
       }),
     ).toEqual({
       kind: "passages",
       passages,
       retrieved: false,
       retrievalFailed: true,
+      courtParagraphNumbers: new Map(),
     });
   });
 
-  test("marks passages as retrieved only when the index supplied them", () => {
+  test("marks passages as retrieved only when the index supplied them, keeping the decision's court numbers", () => {
     const retrieved = [{ anchorId: "b2", excerpt: "A ranked passage." }];
+    // The index hit names only its anchor; its number comes from the AST.
+    const courtParagraphNumbers = new Map([["b2", 4]]);
 
     expect(
       selectDecisionPassages({
@@ -331,12 +338,14 @@ describe("selectDecisionPassages", () => {
         retrieved,
         retrievalFailed: false,
         budgetChars: 100,
+        courtParagraphNumbers,
       }),
     ).toEqual({
       kind: "passages",
       passages: retrieved,
       retrieved: true,
       retrievalFailed: false,
+      courtParagraphNumbers,
     });
   });
 });
@@ -421,6 +430,7 @@ test("a mixed research run sends only planned typed questions to its generative 
       ],
       retrieved: false,
       retrievalFailed: false,
+      courtParagraphNumbers: new Map([["b1", 14]]),
     },
     orgAIConfig: null,
     decisionModel: null,
@@ -463,7 +473,15 @@ test("a mixed research run sends only planned typed questions to its generative 
   expect(run.outcomes).toMatchObject([
     {
       columnId: typedQuestion.columnId,
-      outcome: { state: "answered", run: { model: "test-model" } },
+      outcome: {
+        state: "answered",
+        run: {
+          model: "test-model",
+          justification: {
+            blocks: [{ anchorId: "b1", courtParagraphNumber: 14 }],
+          },
+        },
+      },
     },
   ]);
 });

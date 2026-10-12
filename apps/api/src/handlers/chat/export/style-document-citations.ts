@@ -97,6 +97,7 @@ type CitationTransformContext = {
   footnoteByTarget: Map<string, number>;
   footnotes: Footnote[];
   folioSourceTitle: string | undefined;
+  formatParagraphMark: (courtParagraphNumber: number) => string;
   internalCitationFallback: string;
   internalReferenceMode: InternalReferenceMode;
   nextFootnoteId: number;
@@ -122,12 +123,37 @@ const isVerifiedSearchSummaryTarget = (
     target.startsWith(CHAT_RESOURCE_HREF_PREFIX.entity) ||
     target.startsWith(CHAT_RESOURCE_HREF_PREFIX.workspace));
 
+/**
+ * The court's paragraph number a passage citation carries, as the reader
+ * prints it (`¶ 8`). The server stamped it from the decision's AST when the
+ * answer was stored; a passage without one names no paragraph.
+ */
+const citedParagraphMark = (
+  hyperlink: Hyperlink,
+  context: CitationTransformContext,
+): string | null => {
+  const courtParagraphNumber =
+    hyperlink.href === undefined
+      ? null
+      : (parseChatDecisionPassageHref(hyperlink.href)?.courtParagraphNumber ??
+        null);
+  return courtParagraphNumber === null
+    ? null
+    : context.formatParagraphMark(courtParagraphNumber);
+};
+
+const paragraphMarkRun = (mark: string): Run => ({
+  type: "run",
+  content: [{ type: "text", text: ` (${mark})` }],
+});
+
 const citationFootnoteText = (
   hyperlink: Hyperlink,
   context: CitationTransformContext,
 ): string => {
   const target = citationTarget(hyperlink);
   const visibleText = hyperlinkVisibleText(hyperlink);
+  const paragraphMark = citedParagraphMark(hyperlink, context);
   if (isVerifiedSearchSummaryTarget(target, context.internalReferenceMode)) {
     return visibleText || context.internalCitationFallback;
   }
@@ -141,6 +167,9 @@ const citationFootnoteText = (
       visibleText.length === 0
         ? context.folioSourceTitle
         : `${context.folioSourceTitle}: ${visibleText}`;
+  }
+  if (paragraphMark !== null) {
+    description = `${description} (${paragraphMark})`;
   }
   return `${context.unverifiedCitationLabel}: ${description}`;
 };
@@ -172,6 +201,14 @@ const transformHyperlink = (
   }
   if (context.style === "none") {
     return hyperlink.children;
+  }
+  if (context.style === "inline") {
+    // The link stays where the answer put it; the paragraph it names follows
+    // it in the text, as the chip shows it beside the court.
+    const paragraphMark = citedParagraphMark(hyperlink, context);
+    return paragraphMark === null
+      ? [hyperlink]
+      : [hyperlink, paragraphMarkRun(paragraphMark)];
   }
 
   const target = citationTarget(hyperlink);
@@ -385,6 +422,8 @@ const nextFootnoteId = (footnotes: readonly Footnote[]): number => {
  */
 type StyleDocumentCitationsOptions = {
   folioSourceTitle: string | undefined;
+  /** The court paragraph number as the export's locale prints it (`¶ 8`). */
+  formatParagraphMark: (courtParagraphNumber: number) => string;
   internalCitationFallback: string;
   internalReferenceMode: InternalReferenceMode;
   /** Parsed from a persisted search-summary Sources block. This remains
@@ -422,6 +461,7 @@ export const styleDocumentCitationsWithCounts = (
   style: ChatExportCitationStyle,
   {
     folioSourceTitle,
+    formatParagraphMark,
     internalCitationFallback,
     internalReferenceMode,
     trustedSearchSummaryCitationSources,
@@ -437,6 +477,7 @@ export const styleDocumentCitationsWithCounts = (
     footnoteByTarget: new Map(),
     footnotes,
     folioSourceTitle,
+    formatParagraphMark,
     internalCitationFallback,
     internalReferenceMode,
     nextFootnoteId: nextFootnoteId(footnotes),
@@ -505,13 +546,6 @@ export const styleDocumentCitationsWithCounts = (
     for (const block of document.package.document.content) {
       countInlineCitations(block);
     }
-    return {
-      citationCounts: {
-        unverified: context.unverifiedCitationCount,
-        verified: context.verifiedCitationCount,
-      },
-      document,
-    };
   }
   const content = document.package.document.content.map((block) =>
     transformBlock(block, context),
@@ -530,7 +564,8 @@ export const styleDocumentCitationsWithCounts = (
           ...document.package.document,
           content,
         },
-        footnotes: context.footnotes,
+        // Inline citations add no notes: the package keeps whatever it had.
+        ...(style === "inline" ? {} : { footnotes: context.footnotes }),
       },
     },
   };

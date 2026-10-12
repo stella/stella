@@ -88,7 +88,7 @@ import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools"
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import { availableRegistryHandlersForOrg } from "@/api/lib/business-registries/credentials";
 import type {
