@@ -1348,6 +1348,9 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // Manual regeneration binds the requested PR and checks available job services.
+  "PR_NUMBER",
+  "JOB_SERVICES",
   // Workflow lint resolves the checksum-verified actionlint executable.
   "ACTIONLINT_BIN",
   // CI verification steps set it; workspace hygiene then requires prepared
