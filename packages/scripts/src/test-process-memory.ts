@@ -3,14 +3,14 @@ import { readFileSync } from "node:fs";
 
 const GIB = 1024 ** 3;
 const SAMPLE_INTERVAL_MS = 2000;
-export const TEST_PROCESS_MEMORY_GIB_ENV = "TEST_PROCESS_MEMORY_GIB";
+export const TEST_RUN_MEMORY_GIB_ENV = "TEST_RUN_MEMORY_GIB";
 
-export const testProcessMemoryLimit = (environment: NodeJS.ProcessEnv) => {
-  const value = environment[TEST_PROCESS_MEMORY_GIB_ENV];
+export const testRunMemoryLimit = (environment: NodeJS.ProcessEnv) => {
+  const value = environment[TEST_RUN_MEMORY_GIB_ENV];
   const gib = value === undefined ? 6 : Number(value);
   const bytes = gib * GIB;
   if (!Number.isFinite(bytes) || gib <= 0) {
-    panic(`${TEST_PROCESS_MEMORY_GIB_ENV} must be a positive number`);
+    panic(`${TEST_RUN_MEMORY_GIB_ENV} must be a positive number`);
   }
   return bytes;
 };
@@ -134,9 +134,11 @@ type WatchTestProcessMemoryOptions = {
   readBytes: (pid: number) => number;
   file: () => string;
   onFailure: (message: string) => void;
+  onWarning: (message: string) => void;
   termination?: "process" | "group";
   intervalMs?: number;
   children?: (pid: number) => readonly number[];
+  signalPid?: (pid: number, signal: NodeJS.Signals | 0) => void;
 };
 
 export const watchTestProcessMemory = ({
@@ -145,20 +147,22 @@ export const watchTestProcessMemory = ({
   readBytes,
   file,
   onFailure,
+  onWarning,
   termination = "process",
   intervalMs = SAMPLE_INTERVAL_MS,
   children = processChildren,
+  signalPid = process.kill,
 }: WatchTestProcessMemoryOptions) => {
   let peakBytes = 0;
   let failure: string | undefined;
   let sampledPids: number[] = [];
   let stopped = false;
-  let readFailureTimer: ReturnType<typeof setTimeout> | undefined;
+  let warned = false;
   const fail = (message: string) => {
     failure = message;
     if (termination === "group") {
       const killed = Result.try({
-        try: () => process.kill(-child.pid, "SIGKILL"),
+        try: () => signalPid(-child.pid, "SIGKILL"),
         catch: (cause) =>
           new ProcessMemoryReadError({ message: String(cause), cause }),
       });
@@ -180,7 +184,7 @@ export const watchTestProcessMemory = ({
         continue;
       }
       const killed = Result.try({
-        try: () => process.kill(pid, "SIGKILL"),
+        try: () => signalPid(pid, "SIGKILL"),
         catch: (cause) =>
           new ProcessMemoryReadError({ message: String(cause), cause }),
       });
@@ -203,7 +207,6 @@ export const watchTestProcessMemory = ({
   const sample = () => {
     if (
       stopped ||
-      readFailureTimer !== undefined ||
       failure !== undefined ||
       child.exitCode !== null ||
       child.signalCode !== null
@@ -221,7 +224,7 @@ export const watchTestProcessMemory = ({
             }
           }
         }
-        let largest = { pid: child.pid, bytes: 0 };
+        let totalBytes = 0;
         for (const pid of sampledPids) {
           const read = Result.try({
             try: () => readBytes(pid),
@@ -230,7 +233,7 @@ export const watchTestProcessMemory = ({
           });
           if (read.isErr()) {
             const alive = Result.try({
-              try: () => process.kill(pid, 0),
+              try: () => signalPid(pid, 0),
               catch: (cause) =>
                 new ProcessMemoryReadError({ message: String(cause), cause }),
             });
@@ -251,32 +254,28 @@ export const watchTestProcessMemory = ({
               message: `Invalid memory reading for PID ${pid}`,
             });
           }
-          if (bytes > largest.bytes) {
-            largest = { pid, bytes };
-          }
+          totalBytes += bytes;
         }
-        return largest;
+        return totalBytes;
       },
       catch: (cause) =>
         new ProcessMemoryReadError({ message: String(cause), cause }),
     });
     if (reading.isErr()) {
-      // Give a concurrent exit notification time to settle before refusing
-      // a live process whose memory cannot be read.
-      readFailureTimer = setTimeout(() => {
-        readFailureTimer = undefined;
-        if (!stopped && child.exitCode === null && child.signalCode === null) {
-          fail(
-            `Test memory monitoring failed for ${file()}: ${reading.error.message}`,
-          );
-        }
-      }, 50);
+      // An unreadable sample is unknown, not evidence of exceeding the cap.
+      // Retry on the next tick; bound diagnostics to one warning per run.
+      if (!warned && child.exitCode === null && child.signalCode === null) {
+        warned = true;
+        onWarning(
+          `Test memory sample unavailable for ${file()}; retrying: ${reading.error.message}`,
+        );
+      }
       return;
     }
-    peakBytes = Math.max(peakBytes, reading.value.bytes);
+    peakBytes = Math.max(peakBytes, reading.value);
     if (peakBytes > limitBytes) {
       fail(
-        `Test memory limit exceeded for ${file()} (PID ${reading.value.pid}): peak ${(peakBytes / GIB).toFixed(3)} GiB, cap ${(limitBytes / GIB).toFixed(3)} GiB`,
+        `Test run memory limit exceeded for ${file()} (process tree rooted at PID ${child.pid}): peak ${(peakBytes / GIB).toFixed(3)} GiB, cap ${(limitBytes / GIB).toFixed(3)} GiB`,
       );
     }
   };
@@ -286,7 +285,6 @@ export const watchTestProcessMemory = ({
     stop: () => {
       stopped = true;
       clearInterval(timer);
-      clearTimeout(readFailureTimer);
     },
     failure: () => failure,
     peakBytes: () => peakBytes,

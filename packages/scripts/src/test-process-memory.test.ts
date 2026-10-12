@@ -2,20 +2,20 @@ import { expect, test } from "bun:test";
 
 import {
   createProcessMemoryReader,
-  testProcessMemoryLimit,
-  TEST_PROCESS_MEMORY_GIB_ENV,
+  testRunMemoryLimit,
+  TEST_RUN_MEMORY_GIB_ENV,
   watchTestProcessMemory,
 } from "./test-process-memory";
 
 test("memory budgets default to six GiB and reject unbounded overrides", () => {
-  expect(testProcessMemoryLimit({})).toBe(6 * 1024 ** 3);
-  expect(
-    testProcessMemoryLimit({ [TEST_PROCESS_MEMORY_GIB_ENV]: "0.125" }),
-  ).toBe(128 * 1024 ** 2);
+  expect(testRunMemoryLimit({})).toBe(6 * 1024 ** 3);
+  expect(testRunMemoryLimit({ [TEST_RUN_MEMORY_GIB_ENV]: "0.125" })).toBe(
+    128 * 1024 ** 2,
+  );
   for (const value of ["", "0", "-1", "Infinity", "NaN", "garbage"]) {
     expect(() =>
-      testProcessMemoryLimit({ [TEST_PROCESS_MEMORY_GIB_ENV]: value }),
-    ).toThrow(`${TEST_PROCESS_MEMORY_GIB_ENV} must be a positive number`);
+      testRunMemoryLimit({ [TEST_RUN_MEMORY_GIB_ENV]: value }),
+    ).toThrow(`${TEST_RUN_MEMORY_GIB_ENV} must be a positive number`);
   }
 });
 
@@ -40,6 +40,9 @@ for (const fixture of ["memory-allocation.ts", "memory-allocation-parent.ts"]) {
       termination: process.platform === "win32" ? "process" : "group",
       file: () => filename,
       onFailure: (message) => failures.push(message),
+      onWarning: (message) => {
+        throw new TypeError(message);
+      },
       intervalMs: 100,
     });
     try {
@@ -48,7 +51,7 @@ for (const fixture of ["memory-allocation.ts", "memory-allocation-parent.ts"]) {
       expect(watchdog.peakBytes()).toBeGreaterThan(limitBytes);
       expect(failures).toHaveLength(1);
       expect(failures.at(0)).toContain(
-        `Test memory limit exceeded for ${filename}`,
+        `Test run memory limit exceeded for ${filename}`,
       );
       expect(failures.at(0)).toContain("peak ");
       expect(failures.at(0)).toContain("cap 0.125 GiB");
@@ -62,12 +65,74 @@ for (const fixture of ["memory-allocation.ts", "memory-allocation-parent.ts"]) {
   });
 }
 
-test("a failed memory reader stops the process rather than disabling the cap", async () => {
-  const failures: string[] = [];
+for (const boundary of ["census", "reading"] as const) {
+  test(`unknown ${boundary} samples warn once and only kill after a measured cap breach`, async () => {
+    const failures: string[] = [];
+    const signals: (number | NodeJS.Signals | undefined)[] = [];
+    const warnings: string[] = [];
+    let attempts = 0;
+    const failUntilRecovered = () => {
+      attempts += 1;
+      if (attempts < 3) {
+        throw new TypeError(`fixture ${boundary} timed out`);
+      }
+    };
+    const watchdog = watchTestProcessMemory({
+      child: {
+        pid: 42,
+        exitCode: null,
+        signalCode: null,
+        kill: (signal) => {
+          signals.push(signal);
+        },
+      },
+      limitBytes: 1024,
+      children: (pid) => {
+        if (pid !== 42) {
+          return [];
+        }
+        if (boundary === "census") {
+          failUntilRecovered();
+        }
+        return [43, 44];
+      },
+      signalPid: () => {},
+      readBytes: () => {
+        if (boundary === "reading") {
+          failUntilRecovered();
+        }
+        return 400;
+      },
+      file: () => "fixture.test.ts",
+      onFailure: (message) => failures.push(message),
+      onWarning: (message) => warnings.push(message),
+      intervalMs: 10,
+    });
+    expect(signals).toEqual([]);
+    expect(failures).toEqual([]);
+    await Bun.sleep(75);
+    watchdog.stop();
+    expect(signals).toEqual(["SIGKILL"]);
+    expect(failures).toHaveLength(1);
+    expect(failures.at(0)).toContain(
+      "Test run memory limit exceeded for fixture.test.ts",
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings.at(0)).toContain(
+      "Test memory sample unavailable for fixture.test.ts",
+    );
+    expect(attempts).toBeGreaterThan(2);
+    expect(watchdog.peakBytes()).toBe(1200);
+  });
+}
+
+test("the cap sums measured workers instead of allowing each worker a full budget", () => {
   const signals: (number | NodeJS.Signals | undefined)[] = [];
+  const failures: string[] = [];
+  const warnings: string[] = [];
   const watchdog = watchTestProcessMemory({
     child: {
-      pid: 42,
+      pid: process.pid,
       exitCode: null,
       signalCode: null,
       kill: (signal) => {
@@ -75,17 +140,18 @@ test("a failed memory reader stops the process rather than disabling the cap", a
       },
     },
     limitBytes: 1024,
-    children: () => [],
-    readBytes: () => {
-      throw new TypeError("fixture reader unavailable");
-    },
-    file: () => "fixture.test.ts",
+    children: (pid) => (pid === process.pid ? [42, 43] : []),
+    signalPid: () => {},
+    readBytes: () => 400,
+    file: () => "workers.test.ts",
     onFailure: (message) => failures.push(message),
+    onWarning: (message) => warnings.push(message),
   });
-  await Bun.sleep(75);
   watchdog.stop();
+  expect(watchdog.peakBytes()).toBe(1200);
   expect(signals).toEqual(["SIGKILL"]);
   expect(failures.at(0)).toContain(
-    "Test memory monitoring failed for fixture.test.ts",
+    "Test run memory limit exceeded for workers.test.ts",
   );
+  expect(warnings).toEqual([]);
 });

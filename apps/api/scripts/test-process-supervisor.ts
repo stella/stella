@@ -6,7 +6,7 @@ import { printError } from "@stll/errors";
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 import {
   createProcessMemoryReader,
-  testProcessMemoryLimit,
+  testRunMemoryLimit,
   watchTestProcessMemory,
 } from "@stll/scripts/src/test-process-memory";
 
@@ -120,7 +120,7 @@ export class TestProcessSupervisor {
     return this.signal.aborted;
   }
   private readonly memoryReader = createProcessMemoryReader();
-  private readonly memoryLimitBytes = testProcessMemoryLimit(process.env);
+  private readonly memoryLimitBytes = testRunMemoryLimit(process.env);
   private readonly active = new Map<number, ActiveProcess>();
   private readonly deadline: ReturnType<typeof setTimeout>;
   private escalation: ReturnType<typeof setTimeout> | undefined;
@@ -397,6 +397,7 @@ export class TestProcessSupervisor {
         readBytes: await this.memoryReader,
         file: () => identity.files.join(", ") || identity.label,
         onFailure: (message) => this.stop(message),
+        onWarning: (message) => this.diagnose(message),
       });
       await Promise.all([child.exited, ...streams]);
       const result = {

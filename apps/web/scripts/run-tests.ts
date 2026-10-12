@@ -5,9 +5,10 @@ import { fileURLToPath } from "node:url";
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 import {
   createProcessMemoryReader,
-  testProcessMemoryLimit,
+  testRunMemoryLimit,
   watchTestProcessMemory,
 } from "@stll/scripts/src/test-process-memory";
+import { attachTestProcessShutdown } from "@stll/scripts/src/test-process-shutdown";
 
 import { planTestRuns } from "./test-run-plan";
 import type { PathKind } from "./test-run-plan";
@@ -48,7 +49,7 @@ if (runs.length === 0) {
   process.exit(1);
 }
 
-const limitBytes = testProcessMemoryLimit(process.env);
+const limitBytes = testRunMemoryLimit(process.env);
 const readBytes = await createProcessMemoryReader();
 for (const run of runs) {
   let currentFile =
@@ -62,6 +63,11 @@ for (const run of runs) {
     stderr: "pipe",
     detached: process.platform !== "win32",
   });
+  const shutdown = attachTestProcessShutdown({
+    child,
+    termination: process.platform === "win32" ? "process" : "group",
+    onWarning: (message) => process.stderr.write(`${message}\n`),
+  });
   const watchdog = watchTestProcessMemory({
     child,
     limitBytes,
@@ -69,6 +75,7 @@ for (const run of runs) {
     termination: process.platform === "win32" ? "process" : "group",
     file: () => currentFile,
     onFailure: (message) => process.stderr.write(`${message}\n`),
+    onWarning: (message) => process.stderr.write(`${message}\n`),
   });
   try {
     const decoder = new TextDecoder();
@@ -90,10 +97,15 @@ for (const run of runs) {
     await child.exited;
   } finally {
     watchdog.stop();
+    shutdown.dispose();
     if (child.exitCode === null && child.signalCode === null) {
       child.kill("SIGKILL");
       await child.exited;
     }
+  }
+  const interruptedExitCode = shutdown.exitCode();
+  if (interruptedExitCode !== undefined) {
+    process.exit(interruptedExitCode);
   }
   if (watchdog.failure() !== undefined || childExitStatus(child) !== 0) {
     console.error(`The ${run.label} tests failed.`);
