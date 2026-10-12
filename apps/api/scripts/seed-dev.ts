@@ -6112,6 +6112,7 @@ export async function seed(organizationId?: string, userId?: string) {
         legalName: "Stella Demo Legal s.r.o.",
         registrationId: "12345678",
         vatId: "CZ12345678",
+        vatPayer: true,
         addressLine1: "Vodičkova 12",
         city: "Praha",
         postalCode: "110 00",

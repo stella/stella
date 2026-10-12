@@ -585,7 +585,7 @@
         "noSellerProfile": "Chybí profil dodavatele, DPH se proto neúčtuje, dokud ji na faktuře nenastavíte",
         "noVatRate": "V nastavení fakturace není nastavena žádná sazba DPH",
         "reverseCharge": "DIČ klienta je registrováno v jiné zemi",
-        "sellerNotVatPayer": "Váš profil dodavatele nemá DIČ"
+        "sellerNotVatPayer": "Dodavatel není plátcem DPH"
       }
     },
     "invoiceNarrative": "Popis faktury",
@@ -720,7 +720,10 @@
       "registrationId": "Registrační číslo",
       "setDefault": "Nastavit jako výchozí",
       "title": "Profily dodavatelů",
-      "vatId": "DIČ"
+      "vatId": "DIČ",
+      "vatPayer": "Plátce DPH",
+      "vatPayerHelp": "Faktury tohoto dodavatele účtují DPH. Vypněte u identifikované osoby, která má DIČ, ale není plátcem DPH.",
+      "vatPayerRequiresVatId": "Pro vystavování faktur jako plátce DPH zadejte DIČ."
     },
     "settingsTitle": "Fakturace",
     "split": {

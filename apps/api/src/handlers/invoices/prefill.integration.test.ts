@@ -185,7 +185,7 @@ const seedExpense = async (dateIncurred: string, amount: number) => {
   return id;
 };
 
-const seedSeller = async (vatId: string | null) => {
+const seedSeller = async (vatId: string | null, vatPayer = vatId !== null) => {
   const id = createSafeId<"sellerProfile">();
   sellerIds.push(id);
   await db.insert(sellerProfiles).values({
@@ -194,6 +194,7 @@ const seedSeller = async (vatId: string | null) => {
     legalName: "Example Legal s.r.o.",
     registrationId: "12345678",
     vatId,
+    vatPayer,
     defaultCurrency: "CZK",
     iban: "CZ6508000000192000145399",
     isDefault: true,
@@ -315,6 +316,33 @@ describe("invoice prefill", () => {
       vatRateBps: 0,
     });
     expect(invoice.totalAmount).toBe(cents(375_000));
+  });
+
+  test("a registered person with a VAT ID who is not a payer charges no VAT", async () => {
+    await seedSeller("CZ12345678", false);
+    await seedVatRates();
+    await setClient("CZ87654321");
+    const entry = await seedEntry("2026-09-15");
+
+    const prefill = await prefillInvoice.handler(
+      context<Parameters<typeof prefillInvoice.handler>[0]>({}),
+    );
+    expect(prefill).toMatchObject({
+      seller: { vatId: "CZ12345678", vatPayer: false },
+      vat: {
+        vatTreatment: "not_vat_payer",
+        vatRateBps: 0,
+        reason: "seller_not_vat_payer",
+      },
+    });
+    const invoice = await readInvoice(
+      createdId(await create({ timeEntryIds: [entry] })),
+    );
+    expect(invoice.lines.at(0)).toMatchObject({
+      vatTreatment: "not_vat_payer",
+      vatRateBps: 0,
+    });
+    expect(invoice.vatAmount).toBe(cents(0));
   });
 
   test("a business client registered in another member state is reverse charged", async () => {

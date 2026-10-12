@@ -585,7 +585,7 @@
         "noSellerProfile": "Sem perfil de vendedor, nenhum IVA é cobrado até você defini-lo na fatura",
         "noVatRate": "Nenhuma alíquota de IVA configurada no faturamento",
         "reverseCharge": "O número de IVA do cliente está registrado em outro país",
-        "sellerNotVatPayer": "Seu perfil de vendedor não tem número de IVA"
+        "sellerNotVatPayer": "O vendedor não é contribuinte de IVA"
       }
     },
     "invoiceNarrative": "Narrativa da fatura",
@@ -720,7 +720,10 @@
       "registrationId": "Número de registro",
       "setDefault": "Definir como padrão",
       "title": "Perfis de vendedor",
-      "vatId": "Número de IVA"
+      "vatId": "Número de IVA",
+      "vatPayer": "Contribuinte de IVA",
+      "vatPayerHelp": "As faturas deste vendedor cobram IVA. Desative para uma pessoa registrada que tem número de IVA, mas não é contribuinte.",
+      "vatPayerRequiresVatId": "Informe o número de IVA para emitir faturas como contribuinte de IVA."
     },
     "settingsTitle": "Faturamento",
     "split": {

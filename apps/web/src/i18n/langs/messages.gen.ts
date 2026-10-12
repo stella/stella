@@ -588,7 +588,7 @@ type Messages = {
         "noSellerProfile": "No seller profile, so no VAT is charged until you set it on the invoice";
         "noVatRate": "No VAT rate is set up in billing settings";
         "reverseCharge": "The client's VAT ID is registered in another country";
-        "sellerNotVatPayer": "Your seller profile has no VAT ID";
+        "sellerNotVatPayer": "The seller is not a VAT payer";
       };
     };
     "invoiceNarrative": "Invoice narrative";
@@ -724,6 +724,9 @@ type Messages = {
       "setDefault": "Make default";
       "title": "Seller profiles";
       "vatId": "VAT ID";
+      "vatPayer": "VAT payer";
+      "vatPayerHelp": "Invoices from this seller charge VAT. Turn off for a registered person who has a VAT ID but is not a VAT payer.";
+      "vatPayerRequiresVatId": "Enter the VAT ID to issue invoices as a VAT payer.";
     };
     "settingsTitle": "Billing";
     "split": {

@@ -585,7 +585,7 @@
         "noSellerProfile": "Müüja profiil puudub, seega käibemaksu ei arvestata enne, kui selle arvele määrate",
         "noVatRate": "Arvelduse seadetes pole käibemaksumäära seadistatud",
         "reverseCharge": "Kliendi käibemaksukohustuslase number on registreeritud teises riigis",
-        "sellerNotVatPayer": "Teie müüja profiilil pole käibemaksukohustuslase numbrit"
+        "sellerNotVatPayer": "Müüja ei ole käibemaksukohustuslane"
       }
     },
     "invoiceNarrative": "Arve selgitus",
@@ -720,7 +720,10 @@
       "registrationId": "Registrikood",
       "setDefault": "Määra vaikimisi",
       "title": "Müüja profiilid",
-      "vatId": "Käibemaksukohustuslase number"
+      "vatId": "Käibemaksukohustuslase number",
+      "vatPayer": "Käibemaksukohustuslane",
+      "vatPayerHelp": "Selle müüja arved sisaldavad käibemaksu. Lülitage välja registreeritud isiku puhul, kellel on käibemaksukohustuslase number, kuid kes ei ole maksukohustuslane.",
+      "vatPayerRequiresVatId": "Sisestage käibemaksukohustuslase number, et väljastada arveid käibemaksukohustuslasena."
     },
     "settingsTitle": "Arveldus",
     "split": {

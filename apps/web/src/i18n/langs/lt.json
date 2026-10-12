@@ -585,7 +585,7 @@
         "noSellerProfile": "Nėra pardavėjo profilio, todėl PVM netaikomas, kol jo nenustatysite sąskaitoje",
         "noVatRate": "Atsiskaitymo nustatymuose nenustatytas joks PVM tarifas",
         "reverseCharge": "Kliento PVM mokėtojo kodas įregistruotas kitoje šalyje",
-        "sellerNotVatPayer": "Jūsų pardavėjo profilis neturi PVM mokėtojo kodo"
+        "sellerNotVatPayer": "Pardavėjas nėra PVM mokėtojas"
       }
     },
     "invoiceNarrative": "Sąskaitos aprašas",
@@ -720,7 +720,10 @@
       "registrationId": "Registracijos numeris",
       "setDefault": "Nustatyti kaip numatytąjį",
       "title": "Pardavėjo profiliai",
-      "vatId": "PVM mokėtojo kodas"
+      "vatId": "PVM mokėtojo kodas",
+      "vatPayer": "PVM mokėtojas",
+      "vatPayerHelp": "Šio pardavėjo sąskaitose taikomas PVM. Išjunkite registruotam asmeniui, kuris turi PVM mokėtojo kodą, bet nėra PVM mokėtojas.",
+      "vatPayerRequiresVatId": "Įveskite PVM mokėtojo kodą, kad galėtumėte išrašyti sąskaitas kaip PVM mokėtojas."
     },
     "settingsTitle": "Atsiskaitymas",
     "split": {

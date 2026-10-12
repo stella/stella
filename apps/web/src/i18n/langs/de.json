@@ -585,7 +585,7 @@
         "noSellerProfile": "Kein Verkäuferprofil, daher keine Umsatzsteuer, bis Sie sie in der Rechnung festlegen",
         "noVatRate": "In den Abrechnungseinstellungen ist kein Umsatzsteuersatz eingerichtet",
         "reverseCharge": "Die Umsatzsteuer-ID des Mandanten ist in einem anderen Land registriert",
-        "sellerNotVatPayer": "Ihr Verkäuferprofil hat keine Umsatzsteuer-ID"
+        "sellerNotVatPayer": "Der Verkäufer ist nicht umsatzsteuerpflichtig"
       }
     },
     "invoiceNarrative": "Rechnungstext",
@@ -720,7 +720,10 @@
       "registrationId": "Registrierungsnummer",
       "setDefault": "Als Standard festlegen",
       "title": "Verkäuferprofile",
-      "vatId": "Umsatzsteuer-ID"
+      "vatId": "Umsatzsteuer-ID",
+      "vatPayer": "Umsatzsteuerpflichtig",
+      "vatPayerHelp": "Rechnungen dieses Verkäufers weisen Umsatzsteuer aus. Ausschalten für eine registrierte Person, die eine Umsatzsteuer-ID hat, aber nicht umsatzsteuerpflichtig ist.",
+      "vatPayerRequiresVatId": "Geben Sie die Umsatzsteuer-ID an, um als umsatzsteuerpflichtiger Verkäufer Rechnungen auszustellen."
     },
     "settingsTitle": "Abrechnung",
     "split": {

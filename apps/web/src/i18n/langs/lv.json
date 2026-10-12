@@ -585,7 +585,7 @@
         "noSellerProfile": "Nav pārdevēja profila, tāpēc PVN netiek piemērots, kamēr to neiestatāt rēķinā",
         "noVatRate": "Norēķinu iestatījumos nav iestatīta neviena PVN likme",
         "reverseCharge": "Klienta PVN numurs ir reģistrēts citā valstī",
-        "sellerNotVatPayer": "Jūsu pārdevēja profilam nav PVN numura"
+        "sellerNotVatPayer": "Pārdevējs nav PVN maksātājs"
       }
     },
     "invoiceNarrative": "Rēķina apraksts",
@@ -720,7 +720,10 @@
       "registrationId": "Reģistrācijas numurs",
       "setDefault": "Iestatīt kā noklusējumu",
       "title": "Pārdevēja profili",
-      "vatId": "PVN numurs"
+      "vatId": "PVN numurs",
+      "vatPayer": "PVN maksātājs",
+      "vatPayerHelp": "Šī pārdevēja rēķinos tiek piemērots PVN. Izslēdziet reģistrētai personai, kurai ir PVN numurs, bet kura nav PVN maksātāja.",
+      "vatPayerRequiresVatId": "Ievadiet PVN numuru, lai izrakstītu rēķinus kā PVN maksātājs."
     },
     "settingsTitle": "Norēķini",
     "split": {

@@ -585,7 +585,7 @@
         "noSellerProfile": "Chýba profil dodávateľa, DPH sa preto neúčtuje, kým ju na faktúre nenastavíte",
         "noVatRate": "V nastaveniach fakturácie nie je nastavená žiadna sadzba DPH",
         "reverseCharge": "IČ DPH klienta je registrované v inej krajine",
-        "sellerNotVatPayer": "Váš profil dodávateľa nemá IČ DPH"
+        "sellerNotVatPayer": "Dodávateľ nie je platiteľom DPH"
       }
     },
     "invoiceNarrative": "Popis faktúry",
@@ -720,7 +720,10 @@
       "registrationId": "Registračné číslo",
       "setDefault": "Nastaviť ako predvolený",
       "title": "Profily dodávateľov",
-      "vatId": "IČ DPH"
+      "vatId": "IČ DPH",
+      "vatPayer": "Platiteľ DPH",
+      "vatPayerHelp": "Faktúry tohto dodávateľa účtujú DPH. Vypnite pri registrovanej osobe, ktorá má IČ DPH, ale nie je platiteľom DPH.",
+      "vatPayerRequiresVatId": "Na vystavovanie faktúr ako platiteľ DPH zadajte IČ DPH."
     },
     "settingsTitle": "Fakturácia",
     "split": {

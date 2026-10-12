@@ -585,7 +585,7 @@
         "noSellerProfile": "Aucun profil vendeur : pas de TVA tant que vous ne la fixez pas sur la facture",
         "noVatRate": "Aucun taux de TVA n’est configuré dans la facturation",
         "reverseCharge": "Le numéro de TVA du client est enregistré dans un autre pays",
-        "sellerNotVatPayer": "Votre profil vendeur n’a pas de numéro de TVA"
+        "sellerNotVatPayer": "Le vendeur n’est pas assujetti à la TVA"
       }
     },
     "invoiceNarrative": "Description de la facture",
@@ -720,7 +720,10 @@
       "registrationId": "Numéro d’immatriculation",
       "setDefault": "Définir par défaut",
       "title": "Profils de vendeur",
-      "vatId": "Numéro de TVA"
+      "vatId": "Numéro de TVA",
+      "vatPayer": "Assujetti à la TVA",
+      "vatPayerHelp": "Les factures de ce vendeur facturent la TVA. Désactivez pour une personne identifiée qui a un numéro de TVA sans être assujettie.",
+      "vatPayerRequiresVatId": "Saisissez le numéro de TVA pour facturer en tant qu’assujetti à la TVA."
     },
     "settingsTitle": "Facturation",
     "split": {

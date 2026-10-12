@@ -190,6 +190,7 @@ const prefillInvoice = createSafeHandler(
               id: prefill.seller.id,
               legalName: prefill.seller.legalName,
               vatId: prefill.seller.vatId,
+              vatPayer: prefill.seller.vatPayer,
               defaultCurrency: prefill.seller.defaultCurrency,
             },
       sellerSource: prefill.sellerSource,

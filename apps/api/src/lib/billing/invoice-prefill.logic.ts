@@ -106,7 +106,7 @@ export type InvoiceVatDecision = {
 
 type DecideInvoiceVatOptions = {
   /** Null when the invoice has no seller profile. */
-  seller: { vatId: string | null } | null;
+  seller: { vatId: string | null; vatPayer: boolean } | null;
   buyerVatId: string | null;
   /** The country of the client's address, as written on the contact. */
   buyerCountry: string | null;
@@ -124,7 +124,8 @@ const domesticVat = (
 
 /**
  * The VAT an invoice's lines get from who sells and who buys. A seller
- * profile without a VAT ID is not a VAT payer and charges none. A VAT payer
+ * profile that is not a VAT payer charges none, even with a VAT ID (a
+ * registered person who is not a payer has one). A VAT payer
  * registered in a member state reverse charges a business client abroad
  * (legal services to a business are taxed where the client is), but only
  * when the client's address names a country, that country differs from the
@@ -148,7 +149,7 @@ export const decideInvoiceVat = ({
       reason: "no_seller_profile",
     };
   }
-  if (seller.vatId === null || seller.vatId.trim() === "") {
+  if (!seller.vatPayer) {
     return {
       vatTreatment: "not_vat_payer",
       vatRateBps: 0,

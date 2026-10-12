@@ -30,6 +30,7 @@ const SELLER_COLUMNS = {
   id: sellerProfiles.id,
   legalName: sellerProfiles.legalName,
   vatId: sellerProfiles.vatId,
+  vatPayer: sellerProfiles.vatPayer,
   defaultCurrency: sellerProfiles.defaultCurrency,
 } as const;
 

@@ -917,7 +917,7 @@ const createInvoice = createSafeHandler(
       "and no-charge on included entries first (approvers only). The draft is " +
       "prefilled like invoices.prefill returns it: the default seller profile " +
       "(or sellerProfileId), the buyer copied from the matter's client, every " +
-      "line's VAT from the seller's VAT status and the buyer (not a VAT payer, " +
+      "line's VAT from the seller's VAT-payer flag and the buyer (not a VAT payer, " +
       "reverse charge when the client's VAT ID names another country, or the highest organization VAT rate in force), the taxable " +
       "supply date as the last included work day, and the due date from the " +
       "client's payment term or 14 days; explicit dueDate and taxableSupplyDate win. " +

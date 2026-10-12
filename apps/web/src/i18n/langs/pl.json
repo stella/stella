@@ -585,7 +585,7 @@
         "noSellerProfile": "Brak profilu sprzedawcy, więc VAT nie jest naliczany, dopóki nie ustawisz go na fakturze",
         "noVatRate": "W ustawieniach rozliczeń nie skonfigurowano stawki VAT",
         "reverseCharge": "Numer VAT klienta jest zarejestrowany w innym kraju",
-        "sellerNotVatPayer": "Twój profil sprzedawcy nie ma numeru VAT"
+        "sellerNotVatPayer": "Sprzedawca nie jest czynnym podatnikiem VAT"
       }
     },
     "invoiceNarrative": "Opis na fakturze",
@@ -720,7 +720,10 @@
       "registrationId": "Numer rejestracyjny",
       "setDefault": "Ustaw jako domyślny",
       "title": "Profile sprzedawcy",
-      "vatId": "Numer VAT"
+      "vatId": "Numer VAT",
+      "vatPayer": "Czynny podatnik VAT",
+      "vatPayerHelp": "Faktury tego sprzedawcy naliczają VAT. Wyłącz dla osoby zarejestrowanej, która ma numer VAT, ale nie jest czynnym podatnikiem.",
+      "vatPayerRequiresVatId": "Podaj numer VAT, aby wystawiać faktury jako czynny podatnik VAT."
     },
     "settingsTitle": "Rozliczenia",
     "split": {
