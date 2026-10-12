@@ -1,6 +1,7 @@
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { panic } from "better-result";
+import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
 
-import type { rootDb } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   documentProcessingRuns,
   entities,
@@ -14,8 +15,13 @@ import {
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
+import { transition } from "@/api/lib/db/transitions";
 import { isExactOcrProjection } from "@/api/lib/document-processing-automatic-request-state";
-import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
+import {
+  DOCUMENT_PROCESSING_MAX_ATTEMPTS,
+  DOCUMENT_OCR_PROCESSOR_VERSION,
+} from "@/api/lib/document-processing-contract";
+import { DOCUMENT_PROCESSING_RETRY_TRANSITIONS } from "@/api/lib/document-processing-retry";
 
 const RETRYABLE_MANUAL_OCR_CANCELLATION_CODES = [
   "policy_disabled",
@@ -30,6 +36,7 @@ const restorableRunFilter = () =>
     eq(documentProcessingRuns.status, "succeeded"),
     and(
       eq(documentProcessingRuns.status, "failed"),
+      lt(documentProcessingRuns.attemptCount, DOCUMENT_PROCESSING_MAX_ATTEMPTS),
       eq(documentProcessingRuns.errorCode, SEARCH_INDEX_FAILURE_CODE),
     ),
     and(
@@ -41,6 +48,17 @@ const restorableRunFilter = () =>
     ),
   );
 
+type RestoreManualOcrRunOptions = {
+  db: { transaction: ScopedDb };
+  entityId: SafeId<"entity">;
+  entityVersionId: SafeId<"entityVersion">;
+  fieldId: SafeId<"field">;
+  organizationId: SafeId<"organization">;
+  sourceFileId: string;
+  sourceSha256Hex: string;
+  workspaceId: SafeId<"workspace">;
+};
+
 export const restoreManualOcrRunAfterProjectionLoss = async ({
   entityId,
   entityVersionId,
@@ -50,16 +68,7 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
   sourceSha256Hex,
   workspaceId,
   db,
-}: {
-  db: Pick<typeof rootDb, "transaction">;
-  entityId: SafeId<"entity">;
-  entityVersionId: SafeId<"entityVersion">;
-  fieldId: SafeId<"field">;
-  organizationId: SafeId<"organization">;
-  sourceFileId: string;
-  sourceSha256Hex: string;
-  workspaceId: SafeId<"workspace">;
-}): Promise<void> => {
+}: RestoreManualOcrRunOptions): Promise<void> => {
   await withAggregateTransaction(db, async (tx) => {
     const parents = await lockForWrite(tx, {
       organizationIds: [organizationId],
@@ -125,10 +134,7 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
 
     const existingRows = await tx
       .select({
-        errorCode: documentProcessingRuns.errorCode,
         id: documentProcessingRuns.id,
-        requestSource: documentProcessingRuns.requestSource,
-        status: documentProcessingRuns.status,
       })
       .from(documentProcessingRuns)
       .where(
@@ -146,12 +152,31 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
             documentProcessingRuns.processorVersion,
             DOCUMENT_OCR_PROCESSOR_VERSION,
           ),
-          restorableRunFilter(),
         ),
       )
-      .limit(1)
-      .for("update");
-    const existing = existingRows.at(0);
+      .limit(1);
+    const identity = existingRows.at(0);
+    const locked = identity
+      ? await withAggregateRowQuery({
+          tx,
+          aggregate: "processingClaim",
+          id: { id: identity.id, workspaceId },
+          mode: "update",
+          select: (queryTx) =>
+            queryTx
+              .select({
+                id: documentProcessingRuns.id,
+                workspaceId: documentProcessingRuns.workspaceId,
+                status: documentProcessingRuns.status,
+                attemptCount: documentProcessingRuns.attemptCount,
+              })
+              .from(documentProcessingRuns),
+          where:
+            restorableRunFilter() ??
+            panic("Missing manual OCR restore predicate"),
+        })
+      : null;
+    const existing = locked?.rows.at(0);
     if (!existing) {
       return;
     }
@@ -188,27 +213,42 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
       return;
     }
 
-    await tx
-      .update(documentProcessingRuns)
-      .set({
-        claimedAt: null,
-        claimedBy: null,
-        errorAt: null,
-        errorCode: null,
-        finishedAt: null,
-        nextAttemptAt: null,
-        progressCompleted: 0,
-        progressTotal: null,
-        startedAt: null,
-        status: "queued",
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(documentProcessingRuns.id, existing.id),
-          eq(documentProcessingRuns.requestSource, "manual"),
-          restorableRunFilter(),
-        ),
-      );
+    const changed = await transition({
+      tx,
+      spec: DOCUMENT_PROCESSING_RETRY_TRANSITIONS,
+      id: existing.id,
+      options: {
+        from: ["failed", "succeeded", "cancelled"],
+        to: "queued",
+        set: {
+          attemptCount:
+            existing.status === "failed" ? existing.attemptCount : 0,
+          claimedAt: null,
+          claimedBy: null,
+          errorAt: null,
+          errorCode: null,
+          errorMessage: null,
+          finishedAt: null,
+          nextAttemptAt: null,
+          nextDeliveryAt: null,
+          progressCompleted: 0,
+          progressTotal: null,
+          startedAt: null,
+          updatedAt: new Date(),
+        },
+      },
+      // Projection repair changes worker bookkeeping; the manual request owns its audit event.
+      recordTransitionAuditEvent: async () => await Promise.resolve(),
+    });
+    switch (changed.type) {
+      case "transitioned":
+        return;
+      case "stale":
+        break;
+      default:
+        changed satisfies never;
+        panic("Unknown document processing transition outcome");
+    }
+    panic("Locked manual OCR run changed during projection repair");
   });
 };

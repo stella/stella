@@ -97,6 +97,7 @@
     "@stll/api-contract": "workspace:*",
     "@stll/concurrency": "workspace:*",
     "@stll/legal-ast": "workspace:*",
+    "@stll/text-normalize": "workspace:*",
     "better-result": "catalog:",
     "valibot": "catalog:"
   },

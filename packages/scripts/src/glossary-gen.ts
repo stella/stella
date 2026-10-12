@@ -17,6 +17,7 @@ import { panic } from "better-result";
 import path from "node:path";
 
 import type { UiLocale } from "@stll/locales";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { formattedLikeRepository } from "./generated-artifact-format";
 
@@ -325,7 +326,7 @@ export const parseGlossary = (json: string): Glossary => {
 // Code-point padding provides a readable table before the canonical formatter
 // resolves display widths, including Arabic combining characters.
 const width = (cell: string): number =>
-  Array.from(cell.normalize("NFC")).length;
+  Array.from(normalizeUnicode(cell, "NFC")).length;
 
 export const renderTable = (headers: string[], rows: string[][]): string => {
   const widths = headers.map((header, col) =>
