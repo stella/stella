@@ -5,6 +5,12 @@ import path from "node:path";
 import ts from "typescript";
 import * as v from "valibot";
 
+import {
+  apiTypecheckArtifact,
+  readApiTypecheckConfig,
+  usesGeneratedApiConfig,
+  writeApiTypecheckArtifact,
+} from "./api-typecheck-config";
 import { typescriptModuleReferences } from "./api-typecheck-declarations";
 import {
   apiResolvedTypecheckInputs,
@@ -58,12 +64,10 @@ export const deriveApiTestPartition = (directory: string) => {
     (file) => file,
     parsed.options,
   );
-  const surface: { files: string[] } = JSON.parse(
-    readFileSync(path.join(api, "tsconfig.declarations.json"), "utf-8"),
+  const surface = readApiTypecheckConfig(
+    path.join(api, "tsconfig.declarations.json"),
   );
-  const declared = new Set(
-    surface.files.map((file) => path.resolve(api, file)),
-  );
+  const declared = new Set(surface.fileNames);
   const testFiles = new Set(parsed.fileNames.filter(isTest));
   const modules = new Map<
     string,
@@ -228,14 +232,21 @@ const apiProjectInputs = (api: string) =>
 export const apiTestPartitionIssues = (root: string) => {
   const { independent, coupled } = deriveApiTestPartition(root);
   const api = path.join(root, "apps/api");
-  const tests: { files?: string[] } = JSON.parse(
-    readFileSync(path.join(api, "tsconfig.tests.json"), "utf-8"),
+  const testsProject = path.join(api, "tsconfig.tests.json");
+  const sourceProject = path.join(api, "tsconfig.src.json");
+  const actual = new Set(
+    readApiTypecheckConfig(testsProject)
+      .fileNames.map((file) => path.relative(api, file))
+      .filter((file) => !/\.d\.[cm]?ts$/u.test(file)),
   );
-  const source: { exclude?: string[] } = JSON.parse(
-    readFileSync(path.join(api, "tsconfig.src.json"), "utf-8"),
+  const sourceFiles = new Set(
+    readApiTypecheckConfig(sourceProject).fileNames.map((file) =>
+      path.relative(api, file),
+    ),
   );
-  const actual = new Set(tests.files);
-  const excluded = new Set(source.exclude);
+  const excluded = new Set(
+    [...independent, ...coupled].filter((file) => !sourceFiles.has(file)),
+  );
   const issues: { path: string; message: string }[] = [];
   for (const file of independent) {
     if (!actual.has(file) || !excluded.has(file)) {
@@ -341,23 +352,16 @@ const checkResolvedApiTestPartition = (root: string) => {
     panic(inputIssues.map(({ message }) => message).join("\n"));
   }
 
-  const surface: {
-    files: string[];
-    compilerOptions: { rootDir: string; outDir: string };
-  } = JSON.parse(
-    readFileSync(path.join(api, "tsconfig.declarations.json"), "utf-8"),
+  const surface = readApiTypecheckConfig(
+    path.join(api, "tsconfig.declarations.json"),
   );
-  for (const file of surface.files) {
-    const relative = path.relative(
-      path.resolve(api, surface.compilerOptions.rootDir),
-      path.resolve(api, file),
-    );
-    const declaration = path.resolve(
-      api,
-      surface.compilerOptions.outDir,
-      relative.replace(/\.[cm]?tsx?$/u, ".d.ts"),
-    );
-    if (!existsSync(declaration)) {
+  for (const file of surface.fileNames.filter(
+    (source) => !/\.d\.[cm]?ts$/u.test(source),
+  )) {
+    const declaration = ts
+      .getOutputFileNames(surface, file, false)
+      .find((output) => /\.d\.[cm]?ts$/u.test(output));
+    if (!declaration || !existsSync(declaration)) {
       panic(`Missing API declaration for ${file}`);
     }
   }
@@ -397,6 +401,51 @@ const checkResolvedApiTestPartition = (root: string) => {
   }
 };
 
+export const writeApiTestPartition = (root: string) => {
+  const api = path.join(root, "apps/api");
+  const partition = deriveApiTestPartition(root);
+  const project = path.join(api, "tsconfig.declarations.json");
+  if (usesGeneratedApiConfig(project)) {
+    const source = apiTypecheckArtifact(api, "src");
+    const tests = apiTypecheckArtifact(api, "tests");
+    const relative = (file: string) =>
+      path.relative(path.dirname(source), path.resolve(api, file));
+    writeApiTypecheckArtifact(source, {
+      exclude: [
+        "src/mcp/apps",
+        "src/handlers/visual-sandbox/browser",
+        ...partition.independent,
+      ].map(relative),
+    });
+    writeApiTypecheckArtifact(tests, {
+      files: partition.independent.map(relative),
+      include: [
+        path.relative(path.dirname(tests), path.join(root, "types/**/*.d.ts")),
+      ],
+      exclude: ["src/mcp/apps", "src/handlers/visual-sandbox/browser"].map(
+        relative,
+      ),
+    });
+    return partition;
+  }
+  const sourceFile = path.join(api, "tsconfig.src.json");
+  const testsFile = path.join(api, "tsconfig.tests.json");
+  const source = JSON.parse(readFileSync(sourceFile, "utf-8"));
+  source.exclude = [
+    "src/mcp/apps",
+    "src/handlers/visual-sandbox/browser",
+    ...partition.independent,
+  ];
+  writeFileSync(sourceFile, `${JSON.stringify(source, null, 2)}\n`);
+  const tests = JSON.parse(readFileSync(testsFile, "utf-8"));
+  tests.extends = "./tsconfig.json";
+  tests.files = partition.independent;
+  tests.include = ["../../types/**/*.d.ts"];
+  tests.exclude = ["src/mcp/apps", "src/handlers/visual-sandbox/browser"];
+  writeFileSync(testsFile, `${JSON.stringify(tests, null, 2)}\n`);
+  return partition;
+};
+
 if (import.meta.main) {
   const root = path.resolve(import.meta.dir, "../../..");
   requireApiTypecheckGeneratedSources(root);
@@ -407,32 +456,12 @@ if (import.meta.main) {
   }
   const partition = deriveApiTestPartition(root);
   if (process.argv.includes("--write")) {
+    writeApiTestPartition(root);
     const api = path.join(root, "apps/api");
-    const source = JSON.parse(
-      readFileSync(path.join(api, "tsconfig.src.json"), "utf-8"),
+    writeTurboTypecheckInputs(
+      path.join(root, "turbo.json"),
+      apiProjectInputs(api),
     );
-    source.exclude = [
-      "src/mcp/apps",
-      "src/handlers/visual-sandbox/browser",
-      ...partition.independent,
-    ];
-    writeFileSync(
-      path.join(api, "tsconfig.src.json"),
-      `${JSON.stringify(source, null, 2)}\n`,
-    );
-    const tests = JSON.parse(
-      readFileSync(path.join(api, "tsconfig.tests.json"), "utf-8"),
-    );
-    tests.extends = "./tsconfig.json";
-    tests.files = partition.independent;
-    tests.include = ["../../types/**/*.d.ts"];
-    tests.exclude = ["src/mcp/apps", "src/handlers/visual-sandbox/browser"];
-    writeFileSync(
-      path.join(api, "tsconfig.tests.json"),
-      `${JSON.stringify(tests, null, 2)}\n`,
-    );
-    const turboPath = path.join(root, "turbo.json");
-    writeTurboTypecheckInputs(turboPath, apiProjectInputs(api));
   }
   process.stdout.write(
     `API test partition: ${partition.independent.length} declaration-safe, ${partition.coupled.length} coupled\n`,

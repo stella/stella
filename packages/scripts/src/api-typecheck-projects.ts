@@ -55,7 +55,7 @@ export const validateApiTypecheckProjects = (rootDir: string) => {
     if (!name.startsWith("typecheck:") || typeof command !== "string") {
       continue;
     }
-    if (!command.startsWith("bun check ")) {
+    if (!command.includes("bun check ")) {
       continue;
     }
     const project = /--project=([^\s]+)/u.exec(command)?.[1];

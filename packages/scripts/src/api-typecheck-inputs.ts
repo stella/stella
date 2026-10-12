@@ -2,6 +2,10 @@ import { panic } from "better-result";
 import path from "node:path";
 import ts from "typescript";
 
+import {
+  apiDeclarationConsumers,
+  usesGeneratedApiConfig,
+} from "./api-typecheck-config";
 import { childExitStatus } from "./child-exit-status";
 import { CI_GENERATED_OUTPUTS } from "./generated-files";
 
@@ -99,6 +103,35 @@ export const apiProgramTypecheckInputs = (
     undefined,
     config,
   );
+  if (
+    parsed.options.noCheck &&
+    parsed.options.emitDeclarationOnly &&
+    usesGeneratedApiConfig(config)
+  ) {
+    for (const consumer of apiDeclarationConsumers(config)) {
+      for (const file of consumer.fileNames) {
+        const relative = path.relative(root, file).replaceAll(path.sep, "/");
+        if (
+          relative.startsWith("../") ||
+          /(?:^|\/)(?:node_modules|\.cache|\.turbo)(?:\/|$)/u.test(relative)
+        ) {
+          continue;
+        }
+        const workspace = /^(?:apps|packages)\/[^/]+(?=\/)/u.exec(
+          relative,
+        )?.[0];
+        if (workspace === "apps/api") {
+          continue;
+        }
+        const covering = workspace ?? relative.split("/").at(0);
+        if (covering) {
+          roots.add(
+            `$TURBO_ROOT$/${covering}${relative.includes("/") ? "/**" : ""}`,
+          );
+        }
+      }
+    }
+  }
   const outputs = [
     parsed.options.outDir,
     parsed.options.declarationDir,
@@ -124,6 +157,8 @@ export const apiProgramTypecheckInputs = (
       "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
       "$TURBO_ROOT$/packages/scripts/src/{api-typecheck-*,tsc-native,tsgo-compiler-options,child-exit-status,turbo-typecheck-inputs}.ts",
       "$TURBO_ROOT$/{apps,packages}/**/package.json",
+      "$TURBO_ROOT$/tsconfig*.json",
+      "$TURBO_ROOT$/{apps,packages}/*/tsconfig*.json",
       "!$TURBO_ROOT$/{apps,packages}/**/node_modules/**",
       "!$TURBO_ROOT$/{apps,packages}/**/.cache/**",
       "!$TURBO_ROOT$/{apps,packages}/**/.turbo/**",

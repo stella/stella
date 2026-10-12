@@ -11,6 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { readApiTypecheckConfig } from "./api-typecheck-config";
 import { apiResolvedTypecheckInputs } from "./api-typecheck-inputs";
 
 const ROOT = path.resolve(import.meta.dir, "../../..");
@@ -46,7 +47,10 @@ test("declaration consumers run after emission and invalidate with API source ch
       "!$TURBO_ROOT$/{apps,packages}/**/.turbo/**",
     );
   }
-  const consumers = new Set(["@stll/api#typecheck:tests"]);
+  const consumers = new Set([
+    "@stll/api#typecheck:src",
+    "@stll/api#typecheck:tests",
+  ]);
   for (const [id, task] of Object.entries(tasks)) {
     if (
       isRecord(task) &&
@@ -243,10 +247,13 @@ test("declaration consumers run after emission and invalidate with API source ch
         "import path from 'node:path';",
         "const root = import.meta.dir;",
         "const output = path.join(root, 'apps/api/.cache/typecheck-declarations/apps/api/src/mcp/apps/manifest.d.ts');",
+        "const prepared = path.join(root, 'apps/api/.cache/typecheck-declarations');",
+        "const configs = ['roots.json', 'src.json', 'tests.json'];",
         "if (process.argv[2] === '@stll/api#generate:typecheck-declarations') {",
         "mkdirSync(path.dirname(output), { recursive: true });",
         "writeFileSync(output, readFileSync(path.join(root, 'apps/api/src/mcp/apps/manifest.ts'), 'utf8').split('\\n')[0]);",
-        "} else if (!existsSync(output)) process.exit(1);",
+        "for (const name of configs) writeFileSync(path.join(prepared, name), JSON.stringify({ files: [], prepared: true }));",
+        "} else if (!existsSync(output) || configs.some(name => !existsSync(path.join(prepared, name)))) process.exit(1);",
         "appendFileSync(path.join(root, 'runs.log'), JSON.stringify({ task: process.argv[2], hash: process.env.TURBO_HASH }) + '\\n');",
       ].join("\n"),
     );
@@ -305,12 +312,25 @@ test("declaration consumers run after emission and invalidate with API source ch
       directory,
       "apps/api/.cache/typecheck-declarations/apps/api/src/mcp/apps/manifest.d.ts",
     );
-    rmSync(output);
+    rmSync(path.join(directory, "apps/api/.cache/typecheck-declarations"), {
+      recursive: true,
+    });
     run(command);
     expect(executions()).toEqual(cold);
     expect(readFileSync(output, "utf-8")).toBe(
       "export type Contract = string;",
     );
+    for (const name of ["roots", "src", "tests"]) {
+      expect(
+        readObject(
+          path.join(
+            directory,
+            "apps/api/.cache/typecheck-declarations",
+            `${name}.json`,
+          ),
+        )["prepared"],
+      ).toBe(true);
+    }
     write(
       "apps/api/src/mcp/apps/manifest.ts",
       "export type Contract = number;\nconst internal = 1;\n",
@@ -409,20 +429,21 @@ test("declaration consumers run after emission and invalidate with API source ch
 
 test("each API test owner invalidates cached checking and rejects a newly introduced type error", () => {
   const api = path.join(ROOT, "apps/api");
-  const tests = readObject(path.join(api, "tsconfig.tests.json"))["files"];
-  const sourceExcludes = readObject(path.join(api, "tsconfig.src.json"))[
-    "exclude"
-  ];
-  if (!Array.isArray(tests) || !Array.isArray(sourceExcludes)) {
-    panic("Missing API ownership roots");
-  }
+  const tests = readApiTypecheckConfig(
+    path.join(api, "tsconfig.tests.json"),
+  ).fileNames.map((file) => path.relative(api, file));
+  const sourceRoots = new Set(
+    readApiTypecheckConfig(path.join(api, "tsconfig.src.json")).fileNames.map(
+      (file) => path.relative(api, file),
+    ),
+  );
   const safe = tests.find(
     (file): file is string =>
       typeof file === "string" && file.endsWith(".test.ts"),
   );
   const coupled = [...new Bun.Glob("src/**/*.test.ts").scanSync(api)].find(
     (file) =>
-      !sourceExcludes.includes(file) &&
+      sourceRoots.has(file) &&
       !file.startsWith("src/mcp/apps/") &&
       !file.startsWith("src/handlers/visual-sandbox/browser/"),
   );

@@ -6,6 +6,12 @@ import ts from "typescript";
 import * as v from "valibot";
 
 import {
+  apiTypecheckArtifact,
+  readApiTypecheckConfig,
+  usesGeneratedApiConfig,
+  writeApiTypecheckArtifact,
+} from "./api-typecheck-config";
+import {
   apiResolvedTypecheckInputs,
   uncoveredApiTypecheckFiles,
   nativeTypecheckProgramFiles,
@@ -116,6 +122,18 @@ export const writeApiDeclarationSurface = (
 ) => {
   const configPath = path.resolve(project);
   const roots = apiDeclarationSurfaceFiles(project, files);
+  if (usesGeneratedApiConfig(configPath)) {
+    const artifact = apiTypecheckArtifact(path.dirname(configPath), "roots");
+    writeApiTypecheckArtifact(artifact, {
+      files: roots.map((file) =>
+        path.relative(
+          path.dirname(artifact),
+          path.resolve(path.dirname(configPath), file),
+        ),
+      ),
+    });
+    return roots;
+  }
   const config = ts.readConfigFile(configPath, (file) => ts.sys.readFile(file));
   if (config.error) {
     panic(ts.flattenDiagnosticMessageText(config.error.messageText, "\n"));
@@ -326,6 +344,15 @@ export const emitApiTypecheckDeclarations = (project: string) => {
   }
   // Replace the surface only after serialization succeeds, removing stale
   // declarations for modules that no longer belong to the public surface.
+  if (usesGeneratedApiConfig(configPath)) {
+    for (const name of ["roots", "src", "tests"] as const) {
+      const artifact = apiTypecheckArtifact(path.dirname(configPath), name);
+      const contents = ts.sys.readFile(artifact);
+      if (contents !== undefined) {
+        outputs.set(artifact, contents);
+      }
+    }
+  }
   rmSync(outDir, { recursive: true, force: true });
   for (const [filename, text] of outputs) {
     if (
@@ -396,7 +423,154 @@ const nativeRequiredDeclarationRoots = (project: string) => {
   return [...required];
 };
 
-export const regenerateApiDeclarationSurface = (project: string) => {
+// External consumers define the required surface. Test candidates are admitted
+// only when their import graph cannot reach a runtime declaration boundary.
+export const discoverApiDeclarationEntries = (project: string) => {
+  const config = path.resolve(project);
+  const api = path.dirname(config);
+  const root = path.resolve(api, "../..");
+  const prefix = `${path.join(api, "src")}${path.sep}`;
+  const base = readApiTypecheckConfig(path.join(api, "tsconfig.json"));
+  const cache = ts.createModuleResolutionCache(
+    api,
+    (file) => file,
+    base.options,
+  );
+  const isSource = (file: string) =>
+    file.startsWith(prefix) &&
+    /\.[cm]?tsx?$/u.test(file) &&
+    !/\.d\.[cm]?ts$/u.test(file);
+  const importsOf = (file: string, options = base.options) => {
+    const text = ts.sys.readFile(file);
+    if (text === undefined) {
+      panic(`Missing API declaration entry: ${file}`);
+    }
+    const references = typescriptModuleReferences(text, file);
+    const dependencies = new Set<string>();
+    for (const specifier of references.imports) {
+      const resolved = ts.resolveModuleName(
+        specifier,
+        file,
+        options,
+        ts.sys,
+        options === base.options ? cache : undefined,
+      ).resolvedModule;
+      if (!resolved) {
+        continue;
+      }
+      const filename =
+        ts.sys.realpath?.(resolved.resolvedFileName) ??
+        resolved.resolvedFileName;
+      if (isSource(filename)) {
+        dependencies.add(filename);
+      }
+    }
+    return { dependencies, dynamic: references.dynamic, text };
+  };
+  const entries = new Set<string>();
+  for (const pattern of [
+    "tsconfig*.json",
+    "apps/*/tsconfig*.json",
+    "packages/*/tsconfig*.json",
+  ]) {
+    for (const filename of new Bun.Glob(pattern).scanSync({ cwd: root })) {
+      const consumer = path.join(root, filename);
+      if (
+        consumer === config ||
+        consumer === path.join(api, "tsconfig.tests.json")
+      ) {
+        continue;
+      }
+      const read = ts.readConfigFile(consumer, ts.sys.readFile);
+      const parsed = ts.parseJsonConfigFileContent(
+        read.config,
+        ts.sys,
+        path.dirname(consumer),
+        undefined,
+        consumer,
+      );
+      if (
+        !parsed.projectReferences?.some(
+          (reference) => ts.resolveProjectReferencePath(reference) === config,
+        )
+      ) {
+        continue;
+      }
+      for (const file of parsed.fileNames) {
+        for (const dependency of importsOf(file, parsed.options).dependencies) {
+          entries.add(dependency);
+        }
+      }
+    }
+  }
+  const candidates = new Set<string>();
+  for (const file of base.fileNames.filter((source) =>
+    /\.test\.tsx?$/u.test(source),
+  )) {
+    for (const dependency of importsOf(file).dependencies) {
+      if (!/\.test\.tsx?$/u.test(dependency)) {
+        candidates.add(dependency);
+      }
+    }
+  }
+  const unsafe = new Set<string>();
+  const parents = new Map<string, Set<string>>();
+  const visited = new Set<string>();
+  const queue = [...candidates];
+  for (const file of queue) {
+    if (visited.has(file)) {
+      continue;
+    }
+    visited.add(file);
+    const info = importsOf(file);
+    if (
+      info.dynamic ||
+      isApiRuntimeBoundary(
+        ts.createSourceFile(file, info.text, ts.ScriptTarget.Latest),
+      )
+    ) {
+      unsafe.add(file);
+      continue;
+    }
+    for (const dependency of info.dependencies) {
+      const predecessors = parents.get(dependency) ?? new Set<string>();
+      predecessors.add(file);
+      parents.set(dependency, predecessors);
+      queue.push(dependency);
+    }
+  }
+  const unsafeQueue = [...unsafe];
+  for (const file of unsafeQueue) {
+    for (const parent of parents.get(file) ?? []) {
+      if (unsafe.has(parent)) {
+        continue;
+      }
+      unsafe.add(parent);
+      unsafeQueue.push(parent);
+    }
+  }
+  for (const file of candidates) {
+    if (!unsafe.has(file)) {
+      entries.add(file);
+    }
+  }
+  return [...entries].toSorted();
+};
+
+export const regenerateApiDeclarationSurface = async (project: string) => {
+  if (usesGeneratedApiConfig(project)) {
+    const api = path.dirname(path.resolve(project));
+    writeApiDeclarationSurface(project, discoverApiDeclarationEntries(project));
+    for (const name of ["src", "tests"] as const) {
+      const artifact = apiTypecheckArtifact(api, name);
+      if (!existsSync(artifact)) {
+        writeApiTypecheckArtifact(
+          artifact,
+          name === "tests" ? { files: [] } : {},
+        );
+      }
+    }
+  }
   // Generated explicit roots can outlive a deleted or moved source file.
   // Prune those stale roots before native resolution; the following census
   // and dependency closure derive the replacement owners and declarations.
@@ -451,6 +625,11 @@ export const regenerateApiDeclarationSurface = (project: string) => {
   let result = emitApiTypecheckDeclarations(project);
   while (result.diagnostics.length === 0) {
     const roots = writeApiDeclarationSurface(project, result.files);
+    if (usesGeneratedApiConfig(project)) {
+      const { writeApiTestPartition } =
+        await import("./api-typecheck-partition");
+      writeApiTestPartition(path.resolve(path.dirname(project), "../.."));
+    }
     refreshInputs();
     const required = nativeRequiredDeclarationRoots(project);
     const directory = path.dirname(path.resolve(project));
@@ -484,9 +663,10 @@ if (import.meta.main) {
   requireApiTypecheckGeneratedSources(
     path.resolve(path.dirname(path.resolve(project)), "../.."),
   );
-  const writeSurface = process.argv.includes("--write-surface");
+  const generated = usesGeneratedApiConfig(project);
+  const writeSurface = generated || process.argv.includes("--write-surface");
   const { diagnostics, files } = writeSurface
-    ? regenerateApiDeclarationSurface(project)
+    ? await regenerateApiDeclarationSurface(project)
     : emitApiTypecheckDeclarations(project);
   if (diagnostics.length > 0) {
     process.stderr.write(
