@@ -11,12 +11,11 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import { repoRelativePath } from "@stll/portable-path";
-
 import {
   PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
   PROFESSIONAL_USE_STATEMENT_VERSION,
 } from "@stll/api-contract/professional-use";
+import { repoRelativePath } from "@stll/portable-path";
 
 import {
   CAPTURE_DPR,
