@@ -1,5 +1,12 @@
 import { expect, test } from "bun:test";
-import { copyFile, mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
+import {
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -90,13 +97,16 @@ for (const runner of ["run-postgres-tests.ts", "run-valkey-tests.ts"]) {
     await withFixture(async (directory) => {
       const entrypoint = path.join(directory, "scripts", runner);
       await copyFile(path.join(apiRoot, "scripts", runner), entrypoint);
-      for (const dependency of [
-        "run-gated-tests.ts",
-        "postgres-test-plan.ts",
-      ]) {
+      const imports = new Bun.Transpiler({ loader: "ts" }).scanImports(
+        await readFile(entrypoint, "utf-8"),
+      );
+      for (const { path: dependency } of imports) {
+        if (!dependency.startsWith("./") || dependency === "./load-test-env") {
+          continue;
+        }
         await symlink(
-          path.join(apiRoot, "scripts", dependency),
-          path.join(directory, "scripts", dependency),
+          path.join(apiRoot, "scripts", `${dependency}.ts`),
+          path.join(directory, "scripts", `${dependency}.ts`),
         );
       }
       await Bun.write(

@@ -463,6 +463,7 @@ start_services() {
 }
 
 
+
 validate_environment() {
   local part target="$REPO_ROOT" env_path="$REPO_ROOT/$ENV_FILE" first_line temporary
   while IFS= read -r part; do
@@ -489,6 +490,7 @@ write_environment() {
   chown "$OUTPUT_UID:$OUTPUT_GID" "$temporary"
   mv -f -- "$temporary" "$env_path"
 }
+
 
 if [[ "$MODE" == install ]]; then
   install_runtimes
