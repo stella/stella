@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import {
   mkdtempSync,
@@ -26,6 +27,7 @@ import {
 } from "../packages/scripts/src/typecheck-cache-contract";
 
 const root = path.resolve(import.meta.dirname, "..");
+const tasksByName = new Map(readTypecheckCacheTasks(root));
 
 test("every typecheck task declares cacheable program inputs and outputs", () => {
   const tasks = readTypecheckCacheTasks(root);
@@ -357,7 +359,11 @@ for (const taskName of ["typecheck", "//#typecheck:repo"] as const) {
           "turbo.json",
           JSON.stringify({
             tasks: {
-              [taskName]: { ...tasks[taskName], dependsOn: [] },
+              [taskName]: {
+                ...(tasksByName.get(taskName) ??
+                  panic(`Missing cache fixture task ${taskName}`)),
+                dependsOn: [],
+              },
             },
           }),
         );
