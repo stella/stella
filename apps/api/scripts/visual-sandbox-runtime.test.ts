@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 
 import { inspectBrowserRuntimeSafety } from "@stll/scripts/src/browser-runtime-safety";
 
-import { VISUAL_BLOCKED_GLOBALS } from "../src/handlers/visual-sandbox/browser/isolation";
+import { VISUAL_BLOCKED_GLOBALS } from "../src/handlers/visual-sandbox/blocked-globals";
 import { escapeVisualScript } from "../src/handlers/visual-sandbox/srcdoc";
 import {
   VISUAL_RUNTIME_BUILD_OPTIONS,
