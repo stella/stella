@@ -115,8 +115,20 @@ const shortPath = (value: string): string =>
 
 type LogLine = { readonly text: string; readonly scope: string };
 
+/**
+ * Every pattern sees at most this many characters of a line, so one
+ * oversized log line costs a bounded amount of work.
+ */
+export const MAX_SCAN_WIDTH = 2000;
+
+const scanned = (raw: string): string =>
+  raw.length > MAX_SCAN_WIDTH ? raw.slice(0, MAX_SCAN_WIDTH) : raw;
+
 const logLine = (raw: string): LogLine => {
-  const text = stripAnsi(raw.replace(TIMESTAMP, "")).replace(/\r$/u, "");
+  const text = stripAnsi(scanned(raw).replace(TIMESTAMP, "")).replace(
+    /\r$/u,
+    "",
+  );
   const turbo = TURBO_PREFIX.exec(text);
   return turbo
     ? { text: text.slice(turbo[0].length), scope: turbo[1] ?? "" }
@@ -126,19 +138,19 @@ const logLine = (raw: string): LogLine => {
 // ---------------------------------------------------------------------------
 // Failure extraction
 
-const LOCATION =
-  /((?:[A-Za-z]:)?[\w@.~/\\-]*[\w@.-]+\.(?:[cm]?[jt]sx?|rs|py|sh|ya?ml|json|toml|css|md|sql|go))(?::(\d+)(?::\d+)?|\((\d+),\d+\))/u;
+// Patterns stay linear: locations are matched per token and anchored, and
+// stack frames, Playwright titles and oxlint headers are split in code.
+const TOKEN_SEPARATORS = /[\s"'`<>[\]{};]+/u;
+const LOCATION_TOKEN =
+  /^((?:[A-Za-z]:)?[^\s:()]+\.(?:[cm]?[jt]sx?|rs|py|sh|ya?ml|json|toml|css|md|sql|go))(?::(\d+)|\((\d+),\d+\))/u;
+const DIGITS = /^\d+$/u;
 const TSC = /^(.+?)(?:\((\d+),\d+\)|:(\d+):\d+)(?::| -) error (TS\d+): (.*)$/u;
 const BUN_RESULT = /^\((pass|fail|skip|todo)\) (.*?)(?: \[[\d.]+m?s\])?$/u;
 const BUN_FILE_HEADER = /^(\S+\.(?:test|spec)\.[cm]?[jt]sx?):$/u;
-const STACK_FRAME = /^\s*at .*?\(?((?:[A-Za-z]:)?[^\s():]+):(\d+):\d+\)?$/u;
 const ERROR_HEADLINE =
   /^\s*(?:error:|(?:\w*Error|AssertionError)(?:\s*\[\w+\])?:|Expected|Received|expect\()/u;
-const PLAYWRIGHT_ENTRY =
-  /^\s*\d+\) \[([^\]]+)\] › (.+?):(\d+):\d+ › (.+?)\s*─*$/u;
-const PLAYWRIGHT_FAILED_LINE =
-  /^\s*[✘x]\s+\d+ \[([^\]]+)\] › (.+?):(\d+):\d+ › (.+?)(?: \([\d.]+m?s\))?$/u;
-const OXLINT_DIAGNOSTIC = /^\s*[x×]\s+(.+)$/u;
+const PLAYWRIGHT_HEAD = /^\s*(?:\d+\)|[✘x]\s+\d+) \[([^\]]+)\] › /u;
+const PLAYWRIGHT_DURATION = /^[\d.]+m?s$/u;
 const OXLINT_LOCATION = /^\s*[,╭]─?-?\[(.+?):(\d+):\d+\]/u;
 const ERRORISH = /\b(?:error|errors|failed|failure|fail)\b/iu;
 const ANCHOR =
@@ -168,22 +180,120 @@ const located = (
   return { file: repoPath, line: number };
 };
 
-const firstFrame = (
-  lines: readonly string[],
-): { path: string; line: string } | undefined => {
-  for (const text of lines) {
-    const frame = STACK_FRAME.exec(text);
-    if (
-      frame?.[1] !== undefined &&
-      frame[2] !== undefined &&
-      !frame[1].includes("node_modules") &&
-      !frame[1].startsWith("bun:") &&
-      !frame[1].startsWith("node:")
-    ) {
-      return { path: frame[1], line: frame[2] };
+type SourceLocation = { readonly path: string; readonly line: string };
+
+/** The first `path:line` (or tsc's `path(line,col)`) in a line. */
+export const findLocation = (text: string): SourceLocation | undefined => {
+  for (const token of scanned(text).split(TOKEN_SEPARATORS)) {
+    let start = 0;
+    while (token[start] === "(") {
+      start += 1;
+    }
+    const match = LOCATION_TOKEN.exec(token.slice(start));
+    const line = match?.[2] ?? match?.[3];
+    if (match?.[1] !== undefined && line !== undefined) {
+      return { path: match[1], line };
     }
   }
   return undefined;
+};
+
+/** `path:line:column`, split from the right so a drive colon survives. */
+const pathLineColumn = (value: string): SourceLocation | undefined => {
+  const parts = value.split(":");
+  const line = parts.at(-2);
+  const column = parts.at(-1);
+  const file = parts.slice(0, -2).join(":");
+  if (
+    line === undefined ||
+    column === undefined ||
+    !DIGITS.test(line) ||
+    !DIGITS.test(column) ||
+    file === "" ||
+    file.includes(" ")
+  ) {
+    return undefined;
+  }
+  return { path: file, line };
+};
+
+const isStackFrame = (text: string): boolean =>
+  text.trimStart().startsWith("at ");
+
+/** The location of a stack frame: `at fn (path:1:2)` or `at path:1:2`. */
+export const frameLocation = (text: string): SourceLocation | undefined => {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith("at ")) {
+    return undefined;
+  }
+  let inner = trimmed.slice(3);
+  if (inner.endsWith(")")) {
+    const open = inner.lastIndexOf("(");
+    if (open === -1) {
+      return undefined;
+    }
+    inner = inner.slice(open + 1, -1);
+  }
+  return pathLineColumn(inner);
+};
+
+const firstFrame = (lines: readonly string[]): SourceLocation | undefined => {
+  for (const text of lines) {
+    const frame = frameLocation(text);
+    if (
+      frame !== undefined &&
+      !frame.path.includes("node_modules") &&
+      !frame.path.startsWith("bun:") &&
+      !frame.path.startsWith("node:")
+    ) {
+      return frame;
+    }
+  }
+  return undefined;
+};
+
+type PlaywrightEntry = {
+  readonly project: string;
+  readonly path: string;
+  readonly line: string;
+  readonly title: string;
+};
+
+/** A list-reporter failure: `1) [project] › file:1:2 › title ───`. */
+export const playwrightEntry = (text: string): PlaywrightEntry | undefined => {
+  const head = PLAYWRIGHT_HEAD.exec(text);
+  if (!head) {
+    return undefined;
+  }
+  const [where = "", ...titleParts] = text.slice(head[0].length).split(" › ");
+  const location = pathLineColumn(where);
+  let title = titleParts.join(" › ").trimEnd();
+  while (title.endsWith("─")) {
+    title = title.slice(0, -1);
+  }
+  title = title.trimEnd();
+  const open = title.lastIndexOf(" (");
+  if (
+    title.endsWith(")") &&
+    open !== -1 &&
+    PLAYWRIGHT_DURATION.test(title.slice(open + 2, -1))
+  ) {
+    title = title.slice(0, open);
+  }
+  if (location === undefined || title === "") {
+    return undefined;
+  }
+  return { project: head[1] ?? "", ...location, title };
+};
+
+/** An oxlint error header: `x rule: message` or `× rule: message`. */
+const oxlintMessage = (text: string): string | undefined => {
+  const trimmed = text.trimStart();
+  if (!trimmed.startsWith("x ") && !trimmed.startsWith("× ")) {
+    return undefined;
+  }
+  const message = trimmed.slice(2).trim();
+  return message === "" ? undefined : message;
 };
 
 const cleanDetail = (lines: readonly string[]): string[] =>
@@ -221,7 +331,7 @@ export const testFailures = (rawLines: readonly string[]): TestFailure[] => {
           name: result[2] ?? "",
           ...(file === undefined ? {} : { file: shortPath(file) }),
           ...(frame === undefined ? {} : { line: Number(frame.line) }),
-          detail: block.filter((detail) => !STACK_FRAME.test(detail)),
+          detail: block.filter((detail) => !isStackFrame(detail)),
         });
       }
       pending.set(scope, []);
@@ -238,25 +348,23 @@ export const testFailures = (rawLines: readonly string[]): TestFailure[] => {
         ...(frame === undefined
           ? {}
           : { file: shortPath(frame.path), line: Number(frame.line) }),
-        detail: block.filter((detail) => !STACK_FRAME.test(detail)),
+        detail: block.filter((detail) => !isStackFrame(detail)),
       });
       continue;
     }
-    const playwright =
-      PLAYWRIGHT_ENTRY.exec(text) ?? PLAYWRIGHT_FAILED_LINE.exec(text);
+    const playwright = playwrightEntry(text);
     if (playwright) {
       const following = lines
         .slice(index + 1, index + 1 + MAX_TAIL_DETAIL * 2)
         .map((l) => l.text);
       const end = following.findIndex(
-        (next) =>
-          PLAYWRIGHT_ENTRY.test(next) || PLAYWRIGHT_FAILED_LINE.test(next),
+        (next) => playwrightEntry(next) !== undefined,
       );
       failures.push({
         scope,
-        name: `[${playwright[1] ?? ""}] ${playwright[4] ?? ""}`,
-        file: shortPath(playwright[2] ?? ""),
-        line: Number(playwright[3]),
+        name: `[${playwright.project}] ${playwright.title}`,
+        file: shortPath(playwright.path),
+        line: Number(playwright.line),
         detail: cleanDetail(end === -1 ? following : following.slice(0, end)),
       });
       continue;
@@ -329,8 +437,8 @@ const tscLines = (lines: readonly LogLine[]): FailureLine[] =>
 
 const oxlintLines = (lines: readonly LogLine[]): FailureLine[] =>
   lines.flatMap(({ text, scope }, index) => {
-    const diagnostic = OXLINT_DIAGNOSTIC.exec(text);
-    if (!diagnostic) {
+    const diagnostic = oxlintMessage(text);
+    if (diagnostic === undefined) {
       return [];
     }
     for (const next of lines.slice(index + 1, index + 4)) {
@@ -340,7 +448,7 @@ const oxlintLines = (lines: readonly LogLine[]): FailureLine[] =>
         return [
           {
             message: truncate(
-              `${prefix}${shortPath(location[1] ?? "")}:${location[2] ?? "?"} ${diagnostic[1] ?? ""}`,
+              `${prefix}${shortPath(location[1] ?? "")}:${location[2] ?? "?"} ${diagnostic}`,
             ),
             ...located(location[1], location[2]),
           },
@@ -352,20 +460,22 @@ const oxlintLines = (lines: readonly LogLine[]): FailureLine[] =>
 
 const genericLines = (lines: readonly LogLine[]): FailureLine[] =>
   lines.flatMap(({ text, scope }) => {
-    const location = LOCATION.exec(text);
     if (
-      !location ||
       !ERRORISH.test(text) ||
       BUN_RESULT.test(text) ||
       text.startsWith("##[")
     ) {
       return [];
     }
+    const location = findLocation(text);
+    if (location === undefined) {
+      return [];
+    }
     const prefix = scope === "" ? "" : `${scope}: `;
     return [
       {
         message: truncate(`${prefix}${text}`),
-        ...located(location[1], location[2] ?? location[3]),
+        ...located(location.path, location.line),
       },
     ];
   });
@@ -401,11 +511,13 @@ const closingLines = (lines: readonly LogLine[]): FailureLine[] => {
   return window
     .slice(anchor === -1 ? -MAX_LINES_PER_STEP : anchor)
     .map(({ text, scope }) => {
-      const location = LOCATION.exec(text);
+      const location = findLocation(text);
       const prefix = scope === "" ? "" : `${scope}: `;
       return {
         message: truncate(`${prefix}${text.trim()}`),
-        ...(location ? located(location[1], location[2] ?? location[3]) : {}),
+        ...(location === undefined
+          ? {}
+          : located(location.path, location.line)),
       };
     });
 };
@@ -521,7 +633,7 @@ export const splitSteps = (log: string): LogSegment[] => {
   };
   let inHeader = false;
   for (const raw of log.split("\n")) {
-    const text = stripAnsi(raw.replace(TIMESTAMP, ""));
+    const text = stripAnsi(scanned(raw).replace(TIMESTAMP, ""));
     if (text.startsWith(GROUP_RUN)) {
       segments.push(current);
       current = { startedAt: timestampOf(raw), lines: [] };
@@ -548,7 +660,7 @@ export const splitSteps = (log: string): LogSegment[] => {
     .map((segment) => ({
       ...segment,
       failed: segment.lines.some((raw) =>
-        EXIT_MARKER.test(stripAnsi(raw.replace(TIMESTAMP, ""))),
+        EXIT_MARKER.test(stripAnsi(scanned(raw).replace(TIMESTAMP, ""))),
       ),
     }));
 };
@@ -586,8 +698,20 @@ export const segmentForStep = (
         startedAt >= started - SLACK_MS &&
         startedAt <= completed + SLACK_MS,
     );
-    const chosen =
-      candidates.findLast(({ failed }) => failed) ?? candidates.at(-1);
+    // A failed segment wins; among equals, the one starting closest to the
+    // step's own start (an adjacent short step can share the window).
+    const failed = candidates.filter((segment) => segment.failed);
+    const pool = failed.length > 0 ? failed : candidates;
+    let chosen: LogSegment | undefined;
+    for (const segment of pool) {
+      const distance = Math.abs((segment.startedAt ?? 0) - started);
+      if (
+        chosen === undefined ||
+        distance < Math.abs((chosen.startedAt ?? 0) - started)
+      ) {
+        chosen = segment;
+      }
+    }
     if (chosen !== undefined) {
       return chosen;
     }
@@ -736,6 +860,12 @@ export const annotations = (
 
 const fence = (value: string): string => value.replaceAll("```", "'''");
 
+const MARKDOWN_SPECIAL = /[\\`*_[\]<>|#]/gu;
+
+/** Job and step names render literally, never as Markdown. */
+export const escapeMarkdown = (value: string): string =>
+  value.replaceAll(MARKDOWN_SPECIAL, "\\$&");
+
 export const summaryMarkdown = (records: readonly FailureRecord[]): string => {
   if (records.length === 0) {
     return "### Failure digest\n\nNo failed step in this run's jobs.\n";
@@ -743,9 +873,20 @@ export const summaryMarkdown = (records: readonly FailureRecord[]): string => {
   const sections = records.map((record) => {
     const lines = record.lines.map(({ message }) => fence(message)).join("\n");
     const link = record.url === "" ? "" : ` ([log](${record.url}))`;
-    return `**${record.job} / ${record.step}** \`${record.kind}\`${link}\n\n\`\`\`text\n${lines}\n\`\`\`\n`;
+    return `**${escapeMarkdown(record.job)} / ${escapeMarkdown(record.step)}** \`${record.kind}\`${link}\n\n\`\`\`text\n${lines}\n\`\`\`\n`;
   });
   return `### Failure digest\n\n${sections.join("\n")}`;
+};
+
+/**
+ * The runner reads a workflow command from any output line that starts with
+ * `::` after leading whitespace, so echoed log text is prefixed to stay inert.
+ */
+export const inert = (line: string): string => {
+  const trimmed = line.trimStart();
+  return trimmed.startsWith("::") || trimmed.startsWith("##[")
+    ? `| ${line}`
+    : line;
 };
 
 /** The failures of a test run, printed last so the log ends with them. */
@@ -755,23 +896,24 @@ export const renderTail = (rawLines: readonly string[]): string => {
     const lines = failureLines(rawLines).filter(({ message }) =>
       ANCHOR.test(message),
     );
-    return lines.length === 0
-      ? ""
-      : [
-          "---- failure digest ----",
-          ...lines.map(({ message }) => message),
-          "----",
-        ].join("\n");
+    if (lines.length === 0) {
+      return "";
+    }
+    return [
+      "---- failure digest ----",
+      ...lines.map(({ message }) => inert(message)),
+      "----",
+    ].join("\n");
   }
   const shown = failures.slice(0, MAX_TAIL_TESTS);
-  const blocks = shown.map((failure) => {
+  const blocks = shown.flatMap((failure) => {
     const prefix = failure.scope === "" ? "" : `${failure.scope}: `;
     return [
-      `${prefix}(fail) ${failure.name}${where(failure)}`,
+      inert(`${prefix}(fail) ${failure.name}${where(failure)}`),
       ...failure.detail
         .slice(0, MAX_TAIL_DETAIL)
-        .map((text) => `    ${truncate(text, MAX_LINE_WIDTH * 2)}`),
-    ].join("\n");
+        .map((text) => inert(`    ${truncate(text, MAX_LINE_WIDTH * 2)}`)),
+    ];
   });
   return [
     `---- failing tests (${shown.length} of ${failures.length}) ----`,

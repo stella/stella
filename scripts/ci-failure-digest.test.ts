@@ -8,12 +8,19 @@ import {
   buildDigest,
   classify,
   dedupe,
+  escapeMarkdown,
   failureLines,
+  findLocation,
+  frameLocation,
+  inert,
   MAX_ANNOTATIONS,
   MAX_LINE_WIDTH,
   MAX_LINES_PER_STEP,
+  MAX_SCAN_WIDTH,
   parseJobs,
+  playwrightEntry,
   renderTail,
+  segmentForStep,
   splitSteps,
   stripAnsi,
   summaryMarkdown,
@@ -376,6 +383,108 @@ test("the summary names each failed step with its lines", () => {
   expect(summaryMarkdown([])).toContain("No failed step");
 });
 
+test("summary names render literally", () => {
+  expect(escapeMarkdown("a_b *c* [d](e) <f> #1 `g` |")).toBe(
+    "a\\_b \\*c\\* \\[d\\](e) \\<f\\> \\#1 \\`g\\` \\|",
+  );
+  expect(
+    summaryMarkdown([{ ...record(0), job: "build_web", step: "Run **x**" }]),
+  ).toContain("**build\\_web / Run \\*\\*x\\*\\***");
+});
+
+test("an oversized log line costs bounded time", () => {
+  const huge = `${"a/".repeat(25_000)}${"b.".repeat(25_000)}`;
+  expect(huge.length).toBe(100_000);
+  const lines = [huge, `error ${huge}:`, `  at ${huge}`, `  1) [x] › ${huge}`];
+  const started = performance.now();
+  failureLines(lines);
+  renderTail(lines);
+  splitSteps(lines.join("\n"));
+  expect(findLocation(huge)).toBeUndefined();
+  expect(performance.now() - started).toBeLessThan(1000);
+  expect(MAX_SCAN_WIDTH).toBeLessThanOrEqual(2000);
+});
+
+test("locations are found per token in each supported shape", () => {
+  expect(findLocation("see (apps/a.ts:12:3) now")).toEqual({
+    path: "apps/a.ts",
+    line: "12",
+  });
+  expect(findLocation("src/b.tsx(4,2): error")).toEqual({
+    path: "src/b.tsx",
+    line: "4",
+  });
+  expect(findLocation("C:\\work\\c.rs:9 failed")).toEqual({
+    path: "C:\\work\\c.rs",
+    line: "9",
+  });
+  expect(findLocation("apps/a.ts: 2 -> 3")).toBeUndefined();
+  expect(frameLocation("  at fn (/w/r/r/apps/x.ts:3:4)")).toEqual({
+    path: "/w/r/r/apps/x.ts",
+    line: "3",
+  });
+  expect(frameLocation("  at C:\\r\\x.ts:3:4")).toEqual({
+    path: "C:\\r\\x.ts",
+    line: "3",
+  });
+  expect(frameLocation("  at native")).toBeUndefined();
+  expect(
+    playwrightEntry(
+      "  ✘  3 [webkit] › e2e/a.spec.ts:7:1 › suite › title (2.5s)",
+    ),
+  ).toEqual({
+    project: "webkit",
+    path: "e2e/a.spec.ts",
+    line: "7",
+    title: "suite › title",
+  });
+});
+
+test("echoed log text never forms a workflow command", () => {
+  const hostile = [
+    "@stll/api:test: ::error::spoofed",
+    "@stll/api:test:   ::set-output name=x::y",
+    "@stll/api:test: ##[error]spoofed too",
+    "@stll/api:test: (fail) ::warning::name",
+  ];
+  for (const tail of [
+    renderTail(hostile),
+    renderTail(["::error file=x::failed here"]),
+  ]) {
+    expect(tail).not.toBe("");
+    for (const line of tail.split("\n")) {
+      expect(line.trimStart().startsWith("::"), line).toBe(false);
+      expect(line.trimStart().startsWith("##["), line).toBe(false);
+    }
+  }
+  expect(inert("  ::error::x")).toBe("|   ::error::x");
+  expect(inert("plain")).toBe("plain");
+});
+
+test("a failed step maps to the segment starting closest to it", () => {
+  const log = [
+    ...runStep(4, "first", [
+      "boom one",
+      "##[error]Process completed with exit code 1.",
+    ]),
+    ...runStep(5, "second", [
+      "boom two",
+      "##[error]Process completed with exit code 2.",
+    ]),
+  ].join("\n");
+  const segments = splitSteps(log);
+  const step = {
+    name: "second",
+    number: 2,
+    conclusion: "failure",
+    started_at: "2026-10-12T10:00:05Z",
+    completed_at: "2026-10-12T10:00:05Z",
+  };
+  expect(segmentForStep(segments, step, segments)?.lines.join("\n")).toContain(
+    "boom two",
+  );
+});
+
 test("the digest command writes JSON, a summary and annotations", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "ci-failure-digest-"));
   try {
@@ -436,6 +545,7 @@ test("the digest command writes JSON, a summary and annotations", () => {
 type WorkflowStep = {
   name?: string;
   if?: string;
+  "timeout-minutes"?: number;
   run?: string;
   uses?: string;
   with?: Record<string, unknown>;
@@ -464,7 +574,9 @@ const ciWorkflow = (): Workflow => {
 
 test("CI logs are plain text and failures are digested by the result gate", () => {
   const workflow = ciWorkflow();
-  expect(workflow.env).toMatchObject({ NO_COLOR: "1", FORCE_COLOR: "0" });
+  expect(workflow.env?.["FORCE_COLOR"]).toBe("0");
+  // Node warns on stderr when NO_COLOR is set beside FORCE_COLOR.
+  expect(workflow.env?.["NO_COLOR"]).toBeUndefined();
 
   const steps = workflow.jobs["ci-result"]?.steps ?? [];
   const tooling = steps.find(({ with: options }) =>
@@ -475,6 +587,7 @@ test("CI logs are plain text and failures are digested by the result gate", () =
   );
   const digest = steps.find(({ name }) => name === "Digest failed steps");
   expect(digest?.if).toContain("failure()");
+  expect(digest?.["timeout-minutes"]).toBe(5);
   expect(digest?.run).toContain(
     "bun .workflow-tooling/scripts/ci-failure-digest.ts digest",
   );
@@ -492,7 +605,62 @@ test("CI logs are plain text and failures are digested by the result gate", () =
   expect(testSteps.length).toBeGreaterThan(0);
   for (const step of testSteps) {
     expect(step.run, step.name).toContain(
-      'bun scripts/ci-failure-digest.ts tail "$output"',
+      'timeout 60 bun scripts/ci-failure-digest.ts tail "$output" || true',
     );
+  }
+});
+
+/** The ci-tests wrapper block, from the test command to its closing brace. */
+const wrapperBlock = (run: string): string => {
+  const lines = run.split("\n");
+  const start = lines.findIndex((line) =>
+    line.includes('| tee "$output" || {'),
+  );
+  const end = lines.findIndex(
+    (line, index) => index > start && line.trim() === "}",
+  );
+  if (start === -1 || end === -1) {
+    throw new TypeError("ci-tests test step has no failure wrapper");
+  }
+  return lines.slice(start, end + 1).join("\n");
+};
+
+test("a failing test run keeps its exit status through tee and the tail", () => {
+  const step = (ciWorkflow().jobs["ci-tests"]?.steps ?? []).find(
+    ({ run }) => run?.includes('| tee "$output" || {') === true,
+  );
+  const block = wrapperBlock(step?.run ?? "");
+  const directory = mkdtempSync(path.join(tmpdir(), "ci-tests-wrapper-"));
+  try {
+    for (const [producerStatus, expected] of [
+      [3, 3],
+      [0, 0],
+    ] as const) {
+      // `bun` stands in for both the test run and the tail command.
+      const script = [
+        "set -eo pipefail",
+        `output="${directory}/out.log"`,
+        "bun() {",
+        `  if [[ "$1" == scripts/ci-failure-digest.ts ]]; then echo TAIL-RAN; return 0; fi`,
+        `  echo "(fail) a > b"; return ${producerStatus}`,
+        "}",
+        'timeout() { shift; "$@"; }',
+        block,
+        "echo AFTER",
+      ].join("\n");
+      const result = Bun.spawnSync(
+        ["bash", "--noprofile", "--norc", "-c", script],
+        {
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      const stdout = result.stdout.toString();
+      expect(result.exitCode).toBe(expected);
+      expect(stdout.includes("TAIL-RAN")).toBe(expected !== 0);
+      expect(stdout.includes("AFTER")).toBe(expected === 0);
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
 });

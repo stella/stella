@@ -73,8 +73,8 @@ env:
   # on EBS metrics or a wall-clock busy window.
   DB_LOAD_GATE_EBS_SIGNAL: disabled
   DB_LOAD_GATE_BUSY_WINDOWS: "[]"
-  # Plain logs: no ANSI escapes for readers that fetch them as text.
-  NO_COLOR: "1"
+  # Plain logs: no ANSI escapes for readers that fetch them as text. Only
+  # FORCE_COLOR: Node warns when NO_COLOR is set beside it.
   FORCE_COLOR: "0"
 
 jobs:
@@ -1231,6 +1231,8 @@ jobs:
         run: bash scripts/retry.sh timeout --kill-after=10s 120s bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
+          # A tolerated failure is a warning, not a failure annotation.
+          RETRY_FAILURE_LEVEL: warning
 
       - name: Select affected API test files
         id: api-test-selection
@@ -4209,7 +4211,7 @@ jobs:
           # On failure the log ends with the failing tests and their errors.
           bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output" || {
             status=$?
-            bun scripts/ci-failure-digest.ts tail "$output" || true
+            timeout 60 bun scripts/ci-failure-digest.ts tail "$output" || true
             exit "$status"
           }
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
@@ -4248,7 +4250,7 @@ jobs:
           # On failure the log ends with the failing tests and their errors.
           bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output" || {
             status=$?
-            bun scripts/ci-failure-digest.ts tail "$output" || true
+            timeout 60 bun scripts/ci-failure-digest.ts tail "$output" || true
             exit "$status"
           }
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
@@ -9072,6 +9074,7 @@ jobs:
 
       - name: Digest failed steps
         if: failure() && steps.outcome.outcome == 'failure'
+        timeout-minutes: 5
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}

@@ -141,10 +141,19 @@ retry.sh: attempt 2/3 failed (exit 23); retrying in 0s: flaky ci
 ::error::flaky ci failed after 3 attempts (exit 23)"
 teardown_case
 
+setup_case
+export FAKE_SUCCEED_ON=99
+PATH="$dir/bin:$PATH" RETRY_ATTEMPTS=2 RETRY_DELAYS_SECONDS=0 RETRY_FAILURE_LEVEL=warning \
+  bash "$SCRIPT" flaky "100%" $'a\n::error::injected' > "$dir/output" 2>&1
+assert_file "a tolerated failure is a warning with escaped command text" "$dir/output" "retry.sh: attempt 1/2 failed (exit 7); retrying in 0s: flaky 100%25 a%0A::error::injected
+::warning::flaky 100%25 a%0A::error::injected failed after 2 attempts (exit 7)"
+teardown_case
+
 run_case "rejects invalid attempts" 2 env RETRY_ATTEMPTS=0 bash "$SCRIPT" flaky ci
 run_case "rejects invalid delays" 2 env RETRY_DELAYS_SECONDS=soon bash "$SCRIPT" flaky ci
 run_case "rejects an empty delay list" 2 env RETRY_DELAYS_SECONDS=" " bash "$SCRIPT" flaky ci
 run_case "rejects a missing command" 2 env bash "$SCRIPT"
+run_case "rejects an unknown failure level" 2 env RETRY_FAILURE_LEVEL=notice bash "$SCRIPT" flaky ci
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
