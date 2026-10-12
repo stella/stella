@@ -12,6 +12,7 @@ import path from "node:path";
 import { createSha256 } from "../packages/sha256/src/bun";
 
 const MARKER = ".stella-install-complete";
+const STORE_CACHE_VERSION = "v2";
 
 class InstallStoreInvariantError extends Error {
   override name = "InstallStoreInvariantError";
@@ -38,7 +39,7 @@ export const scopedInstallStoreKey = (
     .update(existsSync(configuration) ? readFileSync(configuration) : "")
     .update(JSON.stringify(flags))
     .digest("hex");
-  return `bun-complete-store-${process.platform}-${Bun.version}-${digest}`;
+  return `bun-complete-store-${STORE_CACHE_VERSION}-${process.platform}-${Bun.version}-${digest}`;
 };
 
 const storeFingerprint = (store: string) => {

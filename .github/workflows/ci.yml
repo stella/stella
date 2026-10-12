@@ -5024,6 +5024,8 @@ jobs:
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
+    env:
+      BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/postgres-install-store
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -5095,7 +5097,7 @@ jobs:
         id: postgres-install-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/.bun/install/cache
+          path: ${{ env.BUN_INSTALL_CACHE_DIR }}
           key: ${{ steps.postgres-install-key.outputs.key }}
 
       - name: Verify complete scoped Postgres install store
@@ -5116,7 +5118,7 @@ jobs:
         if: ${{ github.ref == 'refs/heads/main' }}
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/.bun/install/cache
+          path: ${{ env.BUN_INSTALL_CACHE_DIR }}
           key: ${{ steps.postgres-install-key.outputs.key }}
 
       - name: Upload failed Bun install logs

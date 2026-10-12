@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import * as v from "valibot";
 
 import {
   scopedInstallStoreKey,
@@ -79,7 +80,7 @@ test("the scoped store key changes with the frozen lockfile and complete install
     writeFileSync(lockfile, "first lockfile");
     const key = scopedInstallStoreKey(lockfile, flags);
     expect(key).toStartWith(
-      `bun-complete-store-${process.platform}-${Bun.version}-`,
+      `bun-complete-store-v2-${process.platform}-${Bun.version}-`,
     );
     expect(scopedInstallStoreKey(lockfile, flags)).toBe(key);
     expect(
@@ -112,6 +113,19 @@ test("Postgres restores only exact complete stores and saves successful installs
     ),
   );
   const steps = workflowJobSteps(workflow, "postgres-service-suites");
+  const { jobs } = v.parse(
+    v.object({
+      jobs: v.object({
+        "postgres-service-suites": v.object({
+          env: v.object({ BUN_INSTALL_CACHE_DIR: v.string() }),
+        }),
+      }),
+    }),
+    workflow,
+  );
+  expect(jobs["postgres-service-suites"].env.BUN_INSTALL_CACHE_DIR).toBe(
+    `\${{ runner.temp }}/postgres-install-store`,
+  );
   const step = (name: string) => {
     const found = steps.find((entry) => entry["name"] === name);
     if (!found) {
@@ -144,7 +158,7 @@ test("Postgres restores only exact complete stores and saves successful installs
     "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
   );
   expect(restore["with"]).toEqual({
-    path: "~/.bun/install/cache",
+    path: `\${{ env.BUN_INSTALL_CACHE_DIR }}`,
     key: `\${{ steps.postgres-install-key.outputs.key }}`,
   });
   expect(save["with"]).toEqual(restore["with"]);
