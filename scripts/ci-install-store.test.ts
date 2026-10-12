@@ -330,7 +330,7 @@ test("the ci-install composite restores and saves only the exact sealed cache", 
     }),
     verify["env"],
   );
-  expect(verifyEnv["CACHE_HIT"]).toBe(`\${{ steps.cache.outputs.cache-hit }}`);
+  expect(verifyEnv.CACHE_HIT).toBe(`\${{ steps.cache.outputs.cache-hit }}`);
   const verifyRun = v.parse(v.string(), verify["run"]);
   expect(verifyRun).toContain('if [[ "$CACHE_HIT" == true ]]; then');
   expect(verifyRun).toContain(
@@ -353,7 +353,7 @@ test("the ci-install composite restores and saves only the exact sealed cache", 
     }),
     seal["env"],
   );
-  expect(sealEnv["INSTALL_OUTCOME"]).toBe(`\${{ steps.install.outcome }}`);
+  expect(sealEnv.INSTALL_OUTCOME).toBe(`\${{ steps.install.outcome }}`);
   const sealRun = v.parse(v.string(), seal["run"]);
   expect(sealRun).toContain('if [[ "$INSTALL_OUTCOME" == success ]]; then');
   expect(sealRun).toContain(
