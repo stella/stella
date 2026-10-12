@@ -20,6 +20,12 @@ const PURE_AUTOFIX = {
   "i18n-messages-transactional": "packages/scripts/src/i18n-typegen.ts",
   // Splices the static @stll/locales arrays between fixed markers.
   "prepaint-locales": "apps/web/scripts/sync-prepaint-locales.ts",
+  // `generate` renders the env catalog and schema defaults plus the web
+  // Dockerfile; only `doctor` reads the process environment or env files.
+  "env-examples": "env:generate",
+  // Renders the env catalog and the self-host contract, formatted by the
+  // pinned oxfmt; `check` alone reads workflows and runs the manifest script.
+  selfhost: "selfhost:generate",
 } as const;
 
 const generator = (id: string) => {
@@ -41,6 +47,41 @@ test("pure generators are autofix-eligible and write only their own outputs", ()
       entry.write.some((part) => /refresh|fetch|network|update/u.test(part)),
       id,
     ).toBe(false);
+  }
+});
+
+test("env and self-host generation never reads the process environment", () => {
+  for (const [script, file] of [
+    ["env:generate", "scripts/env-tool.ts generate"],
+    ["selfhost:generate", "scripts/selfhost-tool.ts generate"],
+  ] as const) {
+    const scripts: unknown = JSON.parse(readFileSync("package.json", "utf-8"))[
+      "scripts"
+    ];
+    expect(
+      typeof scripts === "object" && scripts !== null
+        ? Reflect.get(scripts, script)
+        : undefined,
+    ).toBe(`bun --no-env-file ${file}`);
+  }
+  const envTool = readFileSync("scripts/env-tool.ts", "utf-8");
+  const generate = envTool.slice(
+    envTool.indexOf("const generatedEnvironmentArtifacts = () => ["),
+    envTool.indexOf("const generateEnvironmentArtifacts = () => {"),
+  );
+  expect(generate.length).toBeGreaterThan(0);
+  expect(generate).not.toContain("process.env");
+  // Every file the generator reads selects it when a pull request changes it.
+  for (const [id, file] of [
+    ["env-examples", "apps/web/Dockerfile"],
+    ["env-examples", "apps/api/src/lib/rate-limit/budget-config-schema.ts"],
+    ["selfhost", "apps/api/src/db/role-names.ts"],
+    ["selfhost", "scripts/env-catalog.ts"],
+  ] as const) {
+    expect(
+      generatorsForFiles([file]).map((entry) => entry.id),
+      file,
+    ).toContain(id);
   }
 });
 
