@@ -1753,6 +1753,20 @@ export const caseLawReconciliationItems = p.pgTable(
   ],
 );
 
+// The writer fence reads this actual column group, including its physical names.
+const citationTextEvidenceColumns = {
+  /** Exact original-coordinate windows used to classify the citation. */
+  polarityEvidenceWindows: jsonb(
+    "polarity_evidence_windows",
+  ).$type<CitationEvidenceWindows>(),
+  polarityConfidence: p.doublePrecision("polarity_confidence"),
+  /** Explicit opinion part referred to by the citation. */
+  citedPart: p
+    .text("cited_part", { enum: CITED_PARTS })
+    .notNull()
+    .default(CITED_PART.NOT_STATED),
+};
+
 export const caseLawCitations = p.pgTable(
   "case_law_citations",
   {
@@ -1854,16 +1868,7 @@ export const caseLawCitations = p.pgTable(
     }),
     /** Version of the classifier that produced the evidence. */
     polarityClassifierVersion: p.text("polarity_classifier_version"),
-    /** Exact original-coordinate windows used to classify the citation. */
-    polarityEvidenceWindows: jsonb(
-      "polarity_evidence_windows",
-    ).$type<CitationEvidenceWindows>(),
-    polarityConfidence: p.doublePrecision("polarity_confidence"),
-    /** Explicit opinion part referred to by the citation. */
-    citedPart: p
-      .text("cited_part", { enum: CITED_PARTS })
-      .notNull()
-      .default(CITED_PART.NOT_STATED),
+    ...citationTextEvidenceColumns,
     polarityRuleId: safeUuid<"caseLawPolarityRule">(
       "polarity_rule_id",
     ).references(() => caseLawPolarityRules.id, {

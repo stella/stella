@@ -1,6 +1,9 @@
 // Proves a local owner boundary, not arbitrary SQL data flow: a citation
 // evidence writer must invoke the shared text-revision fence and graph transaction.
 import { eslintCompatPlugin } from "@oxlint/plugins";
+import { panic } from "better-result";
+import { readFileSync } from "node:fs";
+import ts from "typescript";
 
 import {
   filenameForContext,
@@ -21,12 +24,115 @@ const FENCES = new Set([
   "citationTextRevisionFence",
   "citationTextRevisionFingerprintFence",
 ]);
-const EVIDENCE_FIELDS = new Set([
-  "polarityWindowStart",
-  "polarityWindowEnd",
-  "polarityConfidence",
-  "citedPart",
-]);
+const EVIDENCE_GROUP = "citationTextEvidenceColumns";
+
+/** Read schema declarations without initializing the schema's runtime dependencies. */
+export const citationEvidenceFieldsFrom = (contents: string) => {
+  const source = ts.createSourceFile(
+    "case-law.ts",
+    contents,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const declarations = source.statements.flatMap((statement) =>
+    ts.isVariableStatement(statement)
+      ? [...statement.declarationList.declarations]
+      : [],
+  );
+  const group = declarations.find(
+    (declaration) =>
+      ts.isIdentifier(declaration.name) &&
+      declaration.name.text === EVIDENCE_GROUP,
+  )?.initializer;
+  const table = declarations.find(
+    (declaration) =>
+      ts.isIdentifier(declaration.name) &&
+      declaration.name.text === "caseLawCitations",
+  )?.initializer;
+  if (group === undefined || !ts.isObjectLiteralExpression(group)) {
+    return panic(
+      "citationTextEvidenceColumns must declare the citation evidence columns",
+    );
+  }
+  const columns =
+    table !== undefined && ts.isCallExpression(table)
+      ? table.arguments.at(1)
+      : undefined;
+  if (
+    columns === undefined ||
+    !ts.isObjectLiteralExpression(columns) ||
+    !columns.properties.some(
+      (property) =>
+        ts.isSpreadAssignment(property) &&
+        ts.isIdentifier(property.expression) &&
+        property.expression.text === EVIDENCE_GROUP,
+    )
+  ) {
+    return panic(
+      "citationTextEvidenceColumns is not spread into caseLawCitations",
+    );
+  }
+  const drizzle = new Set<string>();
+  const sql = new Set<string>();
+  for (const property of group.properties) {
+    if (
+      !ts.isPropertyAssignment(property) ||
+      !(ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))
+    ) {
+      return panic(
+        "Citation evidence columns must have explicit property names",
+      );
+    }
+    let builder = property.initializer;
+    while (
+      ts.isCallExpression(builder) &&
+      ts.isPropertyAccessExpression(builder.expression) &&
+      ts.isCallExpression(builder.expression.expression)
+    ) {
+      builder = builder.expression.expression;
+    }
+    const columnName = ts.isCallExpression(builder)
+      ? builder.arguments.at(0)
+      : undefined;
+    if (
+      columnName === undefined ||
+      !ts.isStringLiteral(columnName) ||
+      !/^[a-z_][a-z0-9_]*$/u.test(columnName.text)
+    ) {
+      return panic("Citation evidence columns must declare explicit SQL names");
+    }
+    drizzle.add(property.name.text);
+    sql.add(columnName.text);
+  }
+  if (drizzle.size === 0) {
+    return panic("Citation evidence columns cannot be empty");
+  }
+  if (
+    columns.properties.some(
+      (property) =>
+        ts.isPropertyAssignment(property) &&
+        (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
+        drizzle.has(property.name.text),
+    )
+  ) {
+    return panic(
+      "Citation evidence columns cannot be overridden outside their schema group",
+    );
+  }
+  return { drizzle, sql };
+};
+
+let evidenceFields: ReturnType<typeof citationEvidenceFieldsFrom> | undefined;
+const getEvidenceFields = () => {
+  evidenceFields ??= citationEvidenceFieldsFrom(
+    readFileSync(
+      new URL("../apps/api/src/db/schema/case-law.ts", import.meta.url),
+      "utf-8",
+    ),
+  );
+  return evidenceFields;
+};
 const functionAncestors = (node: unknown): AstNode[] => {
   const functions: AstNode[] = [];
   if (!isAstNode(node)) {
@@ -46,7 +152,10 @@ const functionAncestors = (node: unknown): AstNode[] => {
   return functions;
 };
 
-const isDerivedObject = (value: unknown): boolean => {
+const isDerivedObject = (
+  value: unknown,
+  fields: ReadonlySet<string>,
+): boolean => {
   const object = unwrapExpression(value);
   if (!isAstNode(object) || object.type !== "ObjectExpression") {
     return true;
@@ -61,7 +170,7 @@ const isDerivedObject = (value: unknown): boolean => {
     if (property.type === "SpreadElement") {
       return true;
     }
-    if (!EVIDENCE_FIELDS.has(getPropertyName(property.key) ?? "")) {
+    if (!fields.has(getPropertyName(property.key) ?? "")) {
       return false;
     }
     const expression = unwrapExpression(property.value);
@@ -88,6 +197,11 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
+        const fields = getEvidenceFields();
+        const evidenceAssignment = new RegExp(
+          `\\b(?:${[...fields.sql].join("|")})"?\\s*=\\s*(?!NULL\\b)\\S`,
+          "iu",
+        );
         const writers: AstNode[] = [];
         const guarded = new Set<AstNode>();
         const isCitationTable = (node: unknown) => {
@@ -186,7 +300,7 @@ export default eslintCompatPlugin({
               !Array.isArray(mutation.arguments) ||
               !isCitationTable(mutation.arguments.at(0)) ||
               !Array.isArray(node.arguments) ||
-              !isDerivedObject(node.arguments.at(0))
+              !isDerivedObject(node.arguments.at(0), fields.drizzle)
             ) {
               return;
             }
@@ -225,9 +339,7 @@ export default eslintCompatPlugin({
               /\b(?:UPDATE|INSERT\s+INTO)\s+case_law_citations\b/iu.test(
                 text,
               ) &&
-              (/\b(?:polarity_window_start|polarity_window_end|polarity_confidence|cited_part)\s*=\s*(?!NULL\b)\S/iu.test(
-                text,
-              ) ||
+              (evidenceAssignment.test(text) ||
                 /\bINSERT\s+INTO\s+case_law_citations\b/iu.test(text))
             ) {
               writers.push(node);

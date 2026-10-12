@@ -60,7 +60,7 @@ test("evidence windows preserve each bound and reject incomplete sets", async ()
   const windows = [
     { start: 0, end: 10 },
     { start: 50, end: 80 },
-  ];
+  ] as const;
   expect(parseCitationEvidenceWindows(windows)).toEqual(windows);
   expect(await acceptsInDatabase(windows)).toBe(true);
   for (const value of [

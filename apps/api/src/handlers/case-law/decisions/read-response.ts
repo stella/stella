@@ -147,7 +147,7 @@ const languageAlternateSchema = t.Object({
 
 export const readDecisionSuccessResponseSchema = t.Object({
   textIncompleteReason: t.Nullable(
-    t.UnionEnum([...DECISION_TEXT_INCOMPLETE_REASONS]),
+    t.UnionEnum(DECISION_TEXT_INCOMPLETE_REASONS),
   ),
   textWithheldReason: t.Nullable(t.Enum(DECISION_TEXT_WITHHELD_REASON)),
   documentPending: t.Boolean(),

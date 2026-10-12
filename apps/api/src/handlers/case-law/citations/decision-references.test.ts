@@ -259,9 +259,6 @@ test("a mixed cross-section verdict persists the exact windows read by its rules
     sections,
   });
   const citationPlan = planned.unwrap();
-  if (citationPlan.disposition !== "legacy-graph") {
-    panic("Expected one citation reference");
-  }
   const reference = citationPlan.references.at(0);
   if (reference === undefined) {
     panic("Expected one citation reference");
@@ -275,9 +272,11 @@ test("a mixed cross-section verdict persists the exact windows read by its rules
 
   expect(row.polarity).toBe(POLARITY.MIXED);
   expect(reference.reference.polarityWindows?.mentions).toHaveLength(2);
-  expect(storedWindows).toEqual(
-    reference.reference.polarityWindows?.evidenceWindows,
-  );
+  const polarityWindows = reference.reference.polarityWindows;
+  if (polarityWindows === null) {
+    panic("Expected polarity evidence windows");
+  }
+  expect(storedWindows).toEqual(polarityWindows.evidenceWindows);
   expect(storedWindows).toHaveLength(2);
   expect(
     storedWindows?.map(({ start, end }) => joined.slice(start, end)),

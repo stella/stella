@@ -1,28 +1,25 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
+import { citationEvidenceFieldsFrom } from "../citation-evidence-text-fence.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
 
 test("citation evidence writers require an invoked owner fence", async () => {
-  const source = readFileSync(
+  const fixture = readFileSync(
     new URL(
       "../__fixtures__/citation-evidence-text-fence.fixture.ts",
       import.meta.url,
     ),
     "utf-8",
-  ).replaceAll(/^.*oxlint-disable-next-line.*$/gmu, "");
-  const lines = source.split("\n");
-  const expected = lines.flatMap((line, index) =>
-    line.includes(
-      "tx.update(caseLawCitations).set({ polarityWindowStart: evidence.start });",
-    ) ||
-    line.includes(
-      "tx.update(caseLawCitations).set({ polarityConfidence: evidence.start });",
-    ) ||
-    line.includes("UPDATE case_law_citations")
-      ? [index + 1]
-      : [],
   );
+  const expected = fixture
+    .split("\n")
+    .flatMap((line, index) =>
+      line.includes("oxlint-disable-next-line citation-evidence-text-fence/")
+        ? [index + 2]
+        : [],
+    );
+  const source = fixture.replaceAll(/^.*oxlint-disable-next-line.*$/gmu, "");
   expect(
     await lintSingleRule("citation-evidence-text-fence", source, {
       sourcePath: "apps/api/src/handlers/case-law/polarity/example.ts",
@@ -50,14 +47,51 @@ test("citation evidence accepts fenced writes and clearing derived fields", asyn
     'import { caseLawCitations } from "@/api/db/schema";',
     'import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";',
     'import { citationTextRevisionFence } from "@/api/lib/case-law/text-revision";',
-    "export const persist = (transaction, evidence) => runCitationGraphTransaction(transaction, (tx) => tx.update(caseLawCitations).set({ polarityWindowStart: evidence.start }).where(citationTextRevisionFence(evidence.revision)));",
-    "export const clear = (tx) => tx.update(caseLawCitations).set({ polarityWindowStart: null, polarityConfidence: null, citedPart: 'not-stated' });",
+    "export const persist = (transaction, evidence) => runCitationGraphTransaction(transaction, (tx) => tx.update(caseLawCitations).set({ polarityEvidenceWindows: evidence.windows }).where(citationTextRevisionFence(evidence.revision)));",
+    "export const clear = (tx) => tx.update(caseLawCitations).set({ polarityEvidenceWindows: null, polarityConfidence: null, citedPart: 'not-stated' });",
   ].join("\n");
   expect(
     await lintSingleRule("citation-evidence-text-fence", source, {
       sourcePath: "apps/api/src/handlers/case-law/polarity/example.ts",
     }),
   ).toEqual([]);
+});
+
+test("citation evidence field discovery follows the schema-owned group", () => {
+  const source = (physicalName: string) => `
+    import { jsonb, pgTable, text } from "drizzle-orm/pg-core";
+    const citationTextEvidenceColumns = {
+      polarityEvidenceWindows: jsonb("${physicalName}"),
+      polarityConfidence: jsonb("polarity_confidence"),
+    };
+    export const caseLawCitations = pgTable("case_law_citations", {
+      citationText: text("citation_text"),
+      ...citationTextEvidenceColumns,
+    });
+  `;
+  expect(
+    citationEvidenceFieldsFrom(source("polarity_evidence_windows")),
+  ).toEqual({
+    drizzle: new Set(["polarityEvidenceWindows", "polarityConfidence"]),
+    sql: new Set(["polarity_evidence_windows", "polarity_confidence"]),
+  });
+  expect(citationEvidenceFieldsFrom(source("evidence_windows_v2"))).toEqual({
+    drizzle: new Set(["polarityEvidenceWindows", "polarityConfidence"]),
+    sql: new Set(["evidence_windows_v2", "polarity_confidence"]),
+  });
+});
+
+test("citation evidence field discovery rejects a disconnected schema group", () => {
+  const source = `
+    import { jsonb, pgTable } from "drizzle-orm/pg-core";
+    const citationTextEvidenceColumns = {
+      polarityEvidenceWindows: jsonb("polarity_evidence_windows"),
+    };
+    export const caseLawCitations = pgTable("case_law_citations", {});
+  `;
+  expect(() => citationEvidenceFieldsFrom(source)).toThrow(
+    "citationTextEvidenceColumns is not spread into caseLawCitations",
+  );
 });
 
 test("synthetic citation fixtures stay outside the production writer guard", async () => {
