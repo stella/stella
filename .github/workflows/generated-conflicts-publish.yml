@@ -49,6 +49,11 @@ jobs:
           script: |
             const { owner, repo } = context.repo;
             const run = context.payload.workflow_run;
+            // The path and event filter out unrelated runs; they are not a
+            // trust boundary. A branch controls its own copy of the resolve
+            // workflow, so its artifact is untrusted data either way, and
+            // only the branch-to-pull-request lookup and the rebuild in
+            // `apply` decide what is pushed.
             if (run.path !== '.github/workflows/generated-conflicts-resolve.yml'
               || run.event !== 'workflow_dispatch'
               || run.head_repository?.full_name !== `${owner}/${repo}`
