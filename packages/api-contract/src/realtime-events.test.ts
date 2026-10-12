@@ -32,14 +32,17 @@ const RESOURCE_DELETED_EVENT = {
   resource: ENTITY_RESOURCE,
   deletionOwnership: RESOURCE_DELETION_OWNERSHIP.ORDINARY,
 } as const satisfies WorkspaceRealtimeEvent;
-const RESOURCES_CHANGED_EVENT = resourcesChangedRealtimeEvent([
-  resourceUpdatedChange(ENTITY_RESOURCE),
-  {
-    change: RESOURCE_CHANGE_TYPE.DELETED,
-    resource: ENTITY_RESOURCE,
-    deletionOwnership: RESOURCE_DELETION_OWNERSHIP.ORDINARY,
-  },
-]);
+const RESOURCES_CHANGED_EVENT = {
+  type: REALTIME_EVENT_TYPE.RESOURCES_CHANGED,
+  changes: [
+    resourceUpdatedChange(ENTITY_RESOURCE),
+    {
+      change: RESOURCE_CHANGE_TYPE.DELETED,
+      resource: ENTITY_RESOURCE,
+      deletionOwnership: RESOURCE_DELETION_OWNERSHIP.ORDINARY,
+    },
+  ],
+} as const satisfies WorkspaceRealtimeEvent;
 const RESOURCE_SET_UPDATED_EVENT = resourceSetUpdatedRealtimeEvent(
   RESOURCE_TYPE.ENTITY,
 );
@@ -294,6 +297,14 @@ test("entity deletion builders require proven ownership while views use explicit
       : false
   >().toEqualTypeOf<false>();
 
+  expectTypeOf<
+    UnclassifiedEntityDeletion & {
+      change: typeof RESOURCE_CHANGE_TYPE.DELETED;
+    } extends Parameters<typeof resourcesChangedRealtimeEvent>[0][number]
+      ? true
+      : false
+  >().toEqualTypeOf<false>();
+
   const deletion = {
     resource: resourceRef({
       type: RESOURCE_TYPE.WORKSPACE_VIEW,
@@ -305,8 +316,13 @@ test("entity deletion builders require proven ownership while views use explicit
     type: REALTIME_EVENT_TYPE.RESOURCE_DELETED,
     ...deletion,
   });
-  expect(resourceDeletedChange(deletion)).toEqual({
+  const change = resourceDeletedChange(deletion);
+  expect(change).toEqual({
     change: RESOURCE_CHANGE_TYPE.DELETED,
     ...deletion,
+  });
+  expect(resourcesChangedRealtimeEvent([change])).toEqual({
+    type: REALTIME_EVENT_TYPE.RESOURCES_CHANGED,
+    changes: [change],
   });
 });

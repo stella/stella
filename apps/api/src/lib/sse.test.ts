@@ -5,8 +5,8 @@ import {
   resourceUpdatedRealtimeEvent,
   resourcesChangedRealtimeEvent,
   resourceUpdatedChange,
-  resourceDeletedChange,
   RESOURCE_TYPE,
+  RESOURCE_CHANGE_TYPE,
   RESOURCE_DELETION_OWNERSHIP,
   REALTIME_EVENT_TYPE,
   type WorkspaceRealtimeEvent,
@@ -475,17 +475,18 @@ describe("recipient feature delivery", () => {
           id: toSafeId<"entity">("ordinary-batch-entity"),
         }),
       );
-      const hiddenChange = resourceDeletedChange({
+      const hiddenChange = {
+        change: RESOURCE_CHANGE_TYPE.DELETED,
         resource: resourceRef({
           type: RESOURCE_TYPE.ENTITY,
           id: toSafeId<"entity">("restricted-batch-entity"),
         }),
         deletionOwnership: RESOURCE_DELETION_OWNERSHIP.FLOW_REVIEW_TASK,
-      });
-      const fullBatch = resourcesChangedRealtimeEvent([
-        ordinaryChange,
-        hiddenChange,
-      ]);
+      } as const;
+      const fullBatch = {
+        type: REALTIME_EVENT_TYPE.RESOURCES_CHANGED,
+        changes: [ordinaryChange, hiddenChange],
+      } as const satisfies WorkspaceRealtimeEvent;
       const filteredBatch = resourcesChangedRealtimeEvent([ordinaryChange]);
       startSse(
         {

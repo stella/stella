@@ -3,7 +3,7 @@ import {
   resourceSetUpdatedRealtimeEvent,
   resourceUpdatedRealtimeEvent,
   resourcesChangedRealtimeEvent,
-  type ResourceChange,
+  type ResourceChangeInput,
   type ResourceDeletion,
   type ResourceRef,
   type ResourceType,
@@ -34,7 +34,7 @@ export const broadcastWorkspaceResourceDeleted = (
 
 export const broadcastWorkspaceResourceChanges = (
   workspaceId: SafeId<"workspace">,
-  changes: readonly ResourceChange[],
+  changes: readonly ResourceChangeInput[],
 ): void => {
   broadcast(workspaceId, resourcesChangedRealtimeEvent(changes));
 };

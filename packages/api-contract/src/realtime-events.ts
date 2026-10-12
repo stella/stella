@@ -203,18 +203,18 @@ export const resourceUpdatedChange = (resource: ResourceRef) =>
     resource,
   }) as const satisfies ResourceChange;
 
-export const resourceDeletedChange = ({
-  resource,
-  deletionOwnership,
-}: ResourceDeletion) =>
+export type ResourceChangeInput =
+  | Extract<ResourceChange, { change: typeof RESOURCE_CHANGE_TYPE.UPDATED }>
+  | (ResourceDeletion & { change: typeof RESOURCE_CHANGE_TYPE.DELETED });
+
+export const resourceDeletedChange = (deletion: ResourceDeletion) =>
   ({
     change: RESOURCE_CHANGE_TYPE.DELETED,
-    resource,
-    deletionOwnership,
-  }) as const satisfies ResourceChange;
+    ...deletion,
+  }) as const satisfies ResourceChangeInput;
 
 export const resourcesChangedRealtimeEvent = (
-  changes: readonly ResourceChange[],
+  changes: readonly ResourceChangeInput[],
 ): ResourceRealtimeEvent => {
   v.parse(resourceChangeCountSchema, changes.length);
   return {

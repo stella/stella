@@ -7,7 +7,6 @@ import {
   RESOURCE_CHANGE_TYPE,
   RESOURCE_DELETION_OWNERSHIP,
   RESOURCE_TYPE,
-  resourcesChangedRealtimeEvent,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
 
@@ -131,7 +130,7 @@ export const deliverFlowRunWorkspaceEvent = async ({
               : !linkedIds.has(change.resource.id)),
         );
         if (ordinaryChanges.length !== 0) {
-          ordinaryEvent = resourcesChangedRealtimeEvent(ordinaryChanges);
+          ordinaryEvent = { ...event, changes: ordinaryChanges };
         }
       }
     }
