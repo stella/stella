@@ -6800,7 +6800,7 @@ describe("decision passage court numbers", () => {
       "11111111-1111-4111-8111-111111111111",
     );
     let responseMessage: ChatMessage | null = null;
-    let persisted: ChatMessage | null = null;
+    const finished: { message: ChatMessage | null } = { message: null };
     const processor = new StreamProcessor({
       events: {
         onStreamEnd: (message) => {
@@ -6853,7 +6853,7 @@ describe("decision passage court numbers", () => {
       initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ responseMessage: terminalMessage }) => {
-        persisted = terminalMessage;
+        finished.message = terminalMessage;
       },
       processor,
       source: persistenceVisible,
@@ -6867,7 +6867,7 @@ describe("decision passage court numbers", () => {
       ),
     );
     const stored: ChatMessage =
-      persisted ?? panic("The turn must be persisted");
+      finished.message ?? panic("The turn must be persisted");
     return { live, stored };
   };
 

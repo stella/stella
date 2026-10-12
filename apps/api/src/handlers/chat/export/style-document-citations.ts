@@ -132,13 +132,14 @@ const citedParagraphMark = (
   hyperlink: Hyperlink,
   context: CitationTransformContext,
 ): string | null => {
-  const passage =
+  const courtParagraphNumber =
     hyperlink.href === undefined
       ? null
-      : parseChatDecisionPassageHref(hyperlink.href);
-  return passage === null || passage.courtParagraphNumber === null
+      : (parseChatDecisionPassageHref(hyperlink.href)?.courtParagraphNumber ??
+        null);
+  return courtParagraphNumber === null
     ? null
-    : context.formatParagraphMark(passage.courtParagraphNumber);
+    : context.formatParagraphMark(courtParagraphNumber);
 };
 
 const paragraphMarkRun = (mark: string): Run => ({

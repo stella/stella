@@ -3217,44 +3217,95 @@ const forEachAssistantSnapshotText = (
   }
 };
 
-const stampedChunk = (
-  chunk: StreamChunk,
-  stamper: DecisionPassageStamper,
-): StreamChunk => {
+/** The assistant text one chunk carries, and the chunk with it rewritten. */
+type StampableChunk = {
+  text: string;
+  rewrite: (stamp: (text: string) => string) => StreamChunk;
+};
+
+/** Every assistant text a snapshot carries, in order. */
+const snapshotAssistantText = (messages: unknown): string => {
+  const texts: string[] = [];
+  forEachAssistantSnapshotText(structuredClone(messages), (text) => {
+    texts.push(text);
+    return text;
+  });
+  return texts.join("\n");
+};
+
+/**
+ * What of a chunk carries assistant text a stamp may rewrite, or null. Every
+ * event type is named, so a new one has to say whether it carries answer text
+ * before it can stream past the stamp unstamped.
+ */
+const stampableChunk = (chunk: StreamChunk): StampableChunk | null => {
   switch (chunk.type) {
     case EventType.TEXT_MESSAGE_CONTENT:
     case EventType.REASONING_MESSAGE_CONTENT:
-      return { ...chunk, delta: stamper.stamp(chunk.delta) };
+      return {
+        text: chunk.delta,
+        rewrite: (stamp) => ({ ...chunk, delta: stamp(chunk.delta) }),
+      };
+    // Chunk events reach this stream unbuffered, so a citation split across
+    // two of them is left as written rather than stamped in halves.
+    case EventType.TEXT_MESSAGE_CHUNK:
+    case EventType.REASONING_MESSAGE_CHUNK: {
+      const { delta } = chunk;
+      return delta === undefined
+        ? null
+        : {
+            text: delta,
+            rewrite: (stamp) => ({ ...chunk, delta: stamp(delta) }),
+          };
+    }
     // A snapshot can be what a turn is stored from, so its answers carry the
     // same stamp as the deltas that built them.
-    case EventType.MESSAGES_SNAPSHOT: {
-      const messages = structuredClone(chunk.messages);
-      forEachAssistantSnapshotText(messages, stamper.stamp);
-      return { ...chunk, messages };
-    }
+    case EventType.MESSAGES_SNAPSHOT:
+      return {
+        text: snapshotAssistantText(chunk.messages),
+        rewrite: (stamp) => {
+          const messages = structuredClone(chunk.messages);
+          forEachAssistantSnapshotText(messages, stamp);
+          return { ...chunk, messages };
+        },
+      };
+    case "ACTIVITY_DELTA" satisfies StreamChunk["type"]:
+    case "ACTIVITY_SNAPSHOT" satisfies StreamChunk["type"]:
+    case "CUSTOM" satisfies StreamChunk["type"]:
+    case "TOOL_CALL_END" satisfies StreamChunk["type"]:
+    case "TOOL_CALL_START" satisfies StreamChunk["type"]:
+    case EventType.RAW:
+    case EventType.REASONING_ENCRYPTED_VALUE:
+    case EventType.REASONING_END:
+    case EventType.REASONING_MESSAGE_END:
+    case EventType.REASONING_MESSAGE_START:
+    case EventType.REASONING_START:
+    case EventType.RUN_ERROR:
+    case EventType.RUN_FINISHED:
+    case EventType.RUN_STARTED:
+    case EventType.STATE_DELTA:
+    case EventType.STATE_SNAPSHOT:
+    case EventType.STEP_FINISHED:
+    case EventType.STEP_STARTED:
+    case EventType.SUBAGENT_ERROR:
+    case EventType.SUBAGENT_FINISHED:
+    case EventType.SUBAGENT_STARTED:
+    case EventType.TEXT_MESSAGE_END:
+    case EventType.TEXT_MESSAGE_START:
+    case EventType.TOOL_CALL_ARGS:
+    case EventType.TOOL_CALL_CHUNK:
+    case EventType.TOOL_CALL_RESULT:
+      return null;
     default:
-      return chunk;
+      chunk satisfies never;
+      return panic(`Unhandled stream chunk: ${String(chunk)}`);
   }
 };
 
-/** The assistant text a chunk carries, which its stamp may cite from. */
-const stampableText = (chunk: StreamChunk): string => {
-  switch (chunk.type) {
-    case EventType.TEXT_MESSAGE_CONTENT:
-    case EventType.REASONING_MESSAGE_CONTENT:
-      return chunk.delta;
-    case EventType.MESSAGES_SNAPSHOT: {
-      const texts: string[] = [];
-      forEachAssistantSnapshotText(structuredClone(chunk.messages), (text) => {
-        texts.push(text);
-        return text;
-      });
-      return texts.join("\n");
-    }
-    default:
-      return "";
-  }
-};
+const stampedChunk = (
+  chunk: StreamChunk,
+  stamper: DecisionPassageStamper,
+): StreamChunk => stampableChunk(chunk)?.rewrite(stamper.stamp) ?? chunk;
 
 const stampChunk = async (
   chunk: StreamChunk,
@@ -3263,8 +3314,12 @@ const stampChunk = async (
   if (stamper === undefined) {
     return chunk;
   }
-  await stamper.prepare(stampableText(chunk));
-  return stampedChunk(chunk, stamper);
+  const stampable = stampableChunk(chunk);
+  if (stampable === null) {
+    return chunk;
+  }
+  await stamper.prepare(stampable.text);
+  return stampable.rewrite(stamper.stamp);
 };
 
 export const transformOutgoingStream = async function* ({
