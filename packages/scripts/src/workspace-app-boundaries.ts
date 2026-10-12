@@ -235,6 +235,10 @@ const readDependencyNames = (packageJson: unknown): string[] => {
   return [...names];
 };
 
+const UNREADABLE_CONFIG_FILE_DIAGNOSTIC_CODE = 5083;
+const GENERATED_API_TYPECHECK_CONFIG_DIRECTORY =
+  "/.cache/typecheck-declarations/";
+
 const readTsconfig = (
   tsconfigPath: string,
 ): { aliases: PathAlias[]; diagnostics: string[]; includes: string[] } => {
@@ -254,9 +258,21 @@ const readTsconfig = (
     ...(parsed?.errors ?? []),
   ])
     .filter(({ code }) => code !== NO_TYPESCRIPT_INPUTS_DIAGNOSTIC_CODE)
-    .map((diagnostic) =>
-      ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+    .map((diagnostic) => ({
+      code: diagnostic.code,
+      message: ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+    }))
+    // Generated API typecheck configs carry only file lists, never path
+    // aliases, and do not exist before generation (the install postinstall
+    // runs this check first). The API typecheck validator owns their presence.
+    .filter(
+      ({ code, message }) =>
+        !(
+          code === UNREADABLE_CONFIG_FILE_DIAGNOSTIC_CODE &&
+          message.includes(GENERATED_API_TYPECHECK_CONFIG_DIRECTORY)
+        ),
     )
+    .map(({ message }) => message)
     .filter((message, index, messages) => messages.indexOf(message) === index);
   if (parsed === undefined || diagnostics.length > 0) {
     return {
