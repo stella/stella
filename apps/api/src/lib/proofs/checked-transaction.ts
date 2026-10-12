@@ -291,7 +291,9 @@ export const authorizeOperation = async <const Kind extends string, Input, E>({
   kind,
   input,
   check,
-}: AuthorizeOperationOptions<Kind, Input, E>) => {
+}: AuthorizeOperationOptions<Kind, Input, E>): Promise<
+  Result<OperationAuthorization<Kind, Input>, E>
+> => {
   const snapshot = snapshotOperationInput(input);
   const checked = await check(snapshot);
   if (Result.isError(checked)) {

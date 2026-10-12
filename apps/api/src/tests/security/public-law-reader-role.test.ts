@@ -808,12 +808,15 @@ describe("public-law reader role", () => {
         await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(READER_ROLE)}`));
         expect(
           await readServingCorpusIndexGenerationTx(tx, "case_law"),
-        ).toMatchObject({ family: "case_law", generation: "case_law_v6" });
+        ).toMatchObject({
+          status: "ok",
+          value: { family: "case_law", generation: "case_law_v6" },
+        });
         expect(
           await readServingCorpusIndexGenerationTx(tx, "legislation"),
         ).toMatchObject({
-          family: "legislation",
-          generation: "legislation_v2",
+          status: "ok",
+          value: { family: "legislation", generation: "legislation_v2" },
         });
         tx.rollback();
       });

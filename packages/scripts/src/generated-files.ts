@@ -12,6 +12,11 @@ export const CI_GENERATED_OUTPUTS = {
   prepaintLocale: ["apps/web/public/prepaint-init.js"],
   routeTree: ["apps/web/src/routeTree.gen.ts"],
   apiTypes: ["apps/web/src/generated/api-routes.gen.ts"],
+  apiTypecheckProjects: [
+    "apps/api/.cache/typecheck-declarations/roots.json",
+    "apps/api/.cache/typecheck-declarations/src.json",
+    "apps/api/.cache/typecheck-declarations/tests.json",
+  ],
 } as const;
 export const CI_GENERATED_FILES = Object.values(CI_GENERATED_OUTPUTS).flat();
 
@@ -26,5 +31,12 @@ export const CI_GENERATION_COMMANDS = [
     "run",
     "generate:api-types",
     "--filter=@stll/web",
+  ],
+  [
+    "bun",
+    "node_modules/turbo/bin/turbo",
+    "run",
+    "generate:typecheck-declarations",
+    "--filter=@stll/api",
   ],
 ] as const;
