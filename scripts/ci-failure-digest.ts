@@ -433,7 +433,7 @@ const testFailureLine = (failure: TestFailure): FailureLine => {
 
 const tscLines = (lines: readonly LogLine[]): FailureLine[] =>
   lines.flatMap(({ text, scope }) => {
-    const match = TSC.exec(text);
+    const match = TSC.exec(withoutErrorCommand(text));
     if (!match) {
       return [];
     }
@@ -561,16 +561,39 @@ const closingLines = (lines: readonly LogLine[]): FailureLine[] => {
     });
 };
 
+/**
+ * A line's text without a leading error command: tools often print a
+ * diagnostic plainly and again as `##[error]…` or `::error …::…`.
+ */
+export const withoutErrorCommand = (text: string): string => {
+  const trimmed = text.trim();
+  if (trimmed.startsWith("##[error]")) {
+    return trimmed.slice("##[error]".length).trim();
+  }
+  if (trimmed.startsWith("::error")) {
+    const end = trimmed.indexOf("::", 2);
+    return end === -1 ? trimmed : trimmed.slice(end + 2).trim();
+  }
+  return trimmed;
+};
+
+/**
+ * One line per distinct message, compared without error-command prefixes
+ * and surrounding whitespace. A copy with a source location wins.
+ */
 export const dedupe = (lines: readonly FailureLine[]): FailureLine[] => {
-  const seen = new Set<string>();
-  return lines.filter((line) => {
-    const key = `${line.file ?? ""}:${line.line ?? ""}:${line.message}`;
-    if (seen.has(key)) {
-      return false;
+  const kept = new Map<string, FailureLine>();
+  for (const line of lines) {
+    const message = withoutErrorCommand(line.message);
+    const known = kept.get(message);
+    if (
+      known === undefined ||
+      (known.file === undefined && line.file !== undefined)
+    ) {
+      kept.set(message, { ...line, message });
     }
-    seen.add(key);
-    return true;
-  });
+  }
+  return [...kept.values()];
 };
 
 /**

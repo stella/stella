@@ -32,6 +32,7 @@ import {
   stripAnsi,
   summaryMarkdown,
   testFailures,
+  type ApiStep,
   type FailureRecord,
 } from "./ci-failure-digest";
 
@@ -231,8 +232,12 @@ test("at most the first lines are kept, deduplicated", () => {
   const lines = failureLines(repeated);
   expect(lines).toHaveLength(3);
   expect(
-    dedupe([{ message: "a" }, { message: "a" }, { message: "a", line: 1 }]),
-  ).toHaveLength(2);
+    dedupe([
+      { message: "a" },
+      { message: " a " },
+      { message: "a", file: "scripts/a.ts", line: 1 },
+    ]),
+  ).toEqual([{ message: "a", file: "scripts/a.ts", line: 1 }]);
   const many = Array.from(
     { length: 12 },
     (_, index) => `src/a.ts(${index + 1},1): error TS2322: Bad.`,
@@ -666,16 +671,31 @@ const REAL_JOB_LOG = [
 ].join("\n");
 
 test("a real run's guard, lint and wait-step failures digest to their causes", () => {
-  const steps = [
-    ["Generated files manifest guard", "10:00:05Z", "10:00:07Z"],
-    ["Wait for independent repository checks", "10:00:08Z", "10:00:08Z"],
-  ].map(([name, started, completed], index) => ({
-    name,
-    number: index + 1,
-    conclusion: "failure",
-    started_at: `2026-10-12T${started}`,
-    completed_at: `2026-10-12T${completed}`,
-  }));
+  const windows: readonly {
+    name: string;
+    started: string;
+    completed: string;
+  }[] = [
+    {
+      name: "Generated files manifest guard",
+      started: "10:00:05Z",
+      completed: "10:00:07Z",
+    },
+    {
+      name: "Wait for independent repository checks",
+      started: "10:00:08Z",
+      completed: "10:00:08Z",
+    },
+  ];
+  const steps: ApiStep[] = windows.map(
+    ({ name, started, completed }, index) => ({
+      name,
+      number: index + 1,
+      conclusion: "failure",
+      started_at: `2026-10-12T${started}`,
+      completed_at: `2026-10-12T${completed}`,
+    }),
+  );
   const records = buildDigest({
     jobs: [{ id: 1, name: "ci-checks-rest", conclusion: "failure", steps }],
     logFor: () => REAL_JOB_LOG,
@@ -700,6 +720,29 @@ test("a real run's guard, lint and wait-step failures digest to their causes", (
       "@stll/docx-utils test:office-fixture-metadata: (fail) a > b [1ms]",
     ]).map(({ scope }) => scope),
   ).toEqual(["@stll/docx-utils"]);
+});
+
+test("a diagnostic printed plainly and as an error command is listed once", () => {
+  const diagnostic =
+    "scripts/a.test.ts(680,7): error TS2322: Type 'string' is not assignable to type 'number'.";
+  const lines = failureLines([
+    `@stll/scripts:typecheck: ${diagnostic}`,
+    diagnostic,
+    `##[error]${diagnostic}`,
+    `::error file=scripts/a.test.ts,line=680::${diagnostic}`,
+  ]);
+  expect(lines.map(({ message }) => message)).toEqual([
+    "@stll/scripts: scripts/a.test.ts:680 TS2322: Type 'string' is not assignable to type 'number'.",
+    "scripts/a.test.ts:680 TS2322: Type 'string' is not assignable to type 'number'.",
+  ]);
+  expect(lines[1]).toMatchObject({ file: "scripts/a.test.ts", line: 680 });
+  expect(
+    dedupe([
+      { message: "same" },
+      { message: "##[error]same" },
+      { message: "  ::error title=x::same  ", file: "scripts/b.ts", line: 2 },
+    ]),
+  ).toEqual([{ message: "same", file: "scripts/b.ts", line: 2 }]);
 });
 
 test("a retry summary never hides the error output above it", () => {

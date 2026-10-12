@@ -8997,7 +8997,9 @@ jobs:
               # A failure stands even when a sibling job was cancelled.
               failed=$(jq -r '[to_entries[] | select(.value.result as $r | ["success", "skipped", "cancelled"] | index($r) | not) | "\(.key) (\(.value.result))"] | join(", ")' <<< "$NEEDS")
               if [[ -n "$failed" ]]; then
-                echo "::error::CI checks failed: $failed"
+                # Plain text: the failure digest below annotates each failed
+                # step, and this step's exit is annotated by the runner.
+                echo "CI checks failed: $failed"
                 exit 1
               fi
               # Fast-required jobs must run when their scope is planned;
