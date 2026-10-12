@@ -14,6 +14,7 @@ import { installTimeoutMs } from "./ci-install";
 import {
   boundedInstallProblems,
   installWorkflowPolicy,
+  SCOPED_INSTALL_STEP_MINUTES,
 } from "./ci-install-policy";
 import {
   conditionOperands,
@@ -70,7 +71,7 @@ test("the real Windows dry-run deadline retains platform headroom regardless of 
   if (install === undefined) {
     expect.unreachable("Missing fixed-owner Windows install action");
   }
-  const minimum = 7;
+  const minimum = SCOPED_INSTALL_STEP_MINUTES.windows;
   expect(install["timeout-minutes"]).toBe(minimum);
   const check = (candidateSteps: unknown[]) =>
     boundedInstallProblems(
@@ -165,7 +166,7 @@ test("the fixed local composite owns its bounded install and failure log", () =>
       flags:
         '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts"]',
     },
-    "timeout-minutes": 7,
+    "timeout-minutes": SCOPED_INSTALL_STEP_MINUTES.windows,
   };
   const check = (steps: unknown[], runner = "windows-latest") =>
     boundedInstallProblems(
@@ -180,15 +181,28 @@ test("the fixed local composite owns its bounded install and failure log", () =>
   expect(check([{ ...action, uses: "./.github/actions/ci-install" }])).toEqual(
     [],
   );
-  expect(check([{ ...action, "timeout-minutes": 6 }])).toContain(
-    "smoke: install needs a bounded step timeout",
-  );
   expect(
-    check([{ ...action, "timeout-minutes": 2 }], "ubuntu-latest"),
+    check([
+      { ...action, "timeout-minutes": SCOPED_INSTALL_STEP_MINUTES.windows - 1 },
+    ]),
   ).toContain("smoke: install needs a bounded step timeout");
-  expect(check([{ ...action, "timeout-minutes": 3 }], "ubuntu-latest")).toEqual(
-    [],
-  );
+  expect(
+    check(
+      [
+        {
+          ...action,
+          "timeout-minutes": SCOPED_INSTALL_STEP_MINUTES.minimum - 1,
+        },
+      ],
+      "ubuntu-latest",
+    ),
+  ).toContain("smoke: install needs a bounded step timeout");
+  expect(
+    check(
+      [{ ...action, "timeout-minutes": SCOPED_INSTALL_STEP_MINUTES.minimum }],
+      "ubuntu-latest",
+    ),
+  ).toEqual([]);
   expect(
     check([
       {

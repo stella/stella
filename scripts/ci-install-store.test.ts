@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { SCOPED_INSTALL_STEP_MINUTES } from "./ci-install-policy";
 import {
   completeInstallStoreKey,
   parseInstallFlags,
@@ -547,7 +548,7 @@ test("the manual install-cache benchmark is dispatch-only and reports measured p
       "--filter",
       "!stella",
     ],
-    5,
+    SCOPED_INSTALL_STEP_MINUTES.windows,
   );
   measure(linux, ["--frozen-lockfile", "--ignore-scripts"], 3);
 });

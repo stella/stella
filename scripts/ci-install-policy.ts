@@ -67,6 +67,12 @@ type ScopedActionValidation = {
   windowsInstall: boolean;
 };
 
+export const SCOPED_INSTALL_STEP_MINUTES = {
+  windows: 5,
+  minimum: 2,
+  maximum: 10,
+} as const;
+
 const scopedActionProblems = ({
   name,
   job,
@@ -93,8 +99,12 @@ const scopedActionProblems = ({
   ) {
     problems.push(`${name}: ci-install action needs a retained failure log`);
   }
-  const minimum = windowsInstall ? 7 : 3;
-  const maximum = windowsInstall ? minimum : 10;
+  const minimum = windowsInstall
+    ? SCOPED_INSTALL_STEP_MINUTES.windows
+    : SCOPED_INSTALL_STEP_MINUTES.minimum;
+  const maximum = windowsInstall
+    ? minimum
+    : SCOPED_INSTALL_STEP_MINUTES.maximum;
   const limit = step["timeout-minutes"];
   if (
     typeof limit !== "number" ||
