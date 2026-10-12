@@ -294,7 +294,8 @@ export const GENERATORS = [
     ],
     write: ["bun", "--cwd=apps/api", "run", "mcp:surface-baseline", "--write"],
     check: ["bun", "--cwd=apps/api", "run", "mcp:surface-baseline", "--check"],
-    autofix: true,
+    // Its output is a protected baseline: autofix may never write it.
+    autofix: false,
     after: ["capability-catalog", "cli-registry"],
   },
   {

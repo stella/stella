@@ -382,7 +382,6 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
     "capability-runtime",
     "cli-registry",
     "cli-runtime",
-    "mcp-surface",
   ] satisfies readonly (typeof GENERATORS)[number]["id"][];
   expect(
     generatorsForFiles(["apps/web/src/routes/law/index.tsx"]).map(

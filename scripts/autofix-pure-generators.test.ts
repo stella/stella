@@ -4,6 +4,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  AUTOFIX_PROTECTED_PATHS,
+  isAutofixProtectedPath,
+} from "./autofix-protected-paths";
+import {
   GENERATORS,
   allowedOutputs,
   generatorsForFiles,
@@ -177,4 +181,26 @@ test("message type generation is byte-stable without any environment", () => {
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("no autofix generator writes a protected decision record", () => {
+  const witness = (glob: string) =>
+    glob.replaceAll("**", "example/generated.json").replaceAll("*", "example");
+  for (const entry of GENERATORS.filter(
+    ({ autofix, outputKind }) => autofix && outputKind === "committed",
+  )) {
+    for (const output of entry.outputs) {
+      expect(
+        isAutofixProtectedPath(witness(output)),
+        `${entry.id}: ${output}`,
+      ).toBe(false);
+      for (const pattern of AUTOFIX_PROTECTED_PATHS) {
+        expect(
+          matchesGeneratedGlob(output, witness(pattern)),
+          `${entry.id}: ${output} covers ${pattern}`,
+        ).toBe(false);
+      }
+    }
+  }
+  expect(generator("mcp-surface").autofix).toBe(false);
 });
