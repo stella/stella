@@ -16,6 +16,7 @@ import {
   resolvePreserveTokensForTrigger,
 } from "@/api/lib/chat/compaction-tokens";
 import { LIMITS } from "@/api/lib/limits";
+import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 
 import {
@@ -711,9 +712,30 @@ describe("per-model compaction budget", () => {
       chatModelOverride: "openai::gpt-5.4",
       orgAIConfig: null,
       organizationId: toSafeId<"organization">("org_test"),
+      modelTier: MANAGED_MODEL_TIER.standard,
     });
 
     expect(budget.triggerTokens).toBe(200_000);
+  });
+
+  test("sizes a managed fast-tier thread by the model that serves it, not its selection", () => {
+    const organizationId = toSafeId<"organization">("org_test");
+    const fastTier = {
+      orgAIConfig: null,
+      organizationId,
+      modelTier: MANAGED_MODEL_TIER.fast,
+    };
+    expect(
+      resolveChatCompactionBudget({
+        ...fastTier,
+        chatModelOverride: "openai::gpt-5.4",
+      }),
+    ).toEqual(
+      resolveChatCompactionBudget({
+        ...fastTier,
+        chatModelOverride: undefined,
+      }),
+    );
   });
 
   test("uses half the window, clamped to [64k, 200k]", () => {
