@@ -3,6 +3,10 @@ import type { ComponentProps } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import {
+  PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
+  PROFESSIONAL_USE_STATEMENT_VERSION,
+} from "@stll/api-contract/professional-use";
 import { sleep } from "@stll/concurrency/sleep";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/auth/error" });
@@ -116,6 +120,7 @@ const submitProof = async (ui: ReturnType<typeof render>) => {
     ui.getByRole("button", { name: messages.auth.continueWithEmail }),
   );
   await waitFor(() => expect(ui.getByText(/We sent a code/u)).toBeDefined());
+  expect(ui.getByText(messages.auth.professionalUseStatement)).toBeDefined();
   fireEvent.change(ui.getByRole("textbox"), { target: { value: "123456" } });
 };
 
@@ -163,6 +168,7 @@ test("reset confirmation resends the same code with consent only after Continue"
   ).toHaveLength(1);
   expect(ui.queryByRole("button", { name: "Connect Google" })).toBeNull();
   expect(ui.getByText(`Microsoft, ${messages.auth.password}`)).toBeDefined();
+  expect(ui.getByText(messages.auth.professionalUseStatement)).toBeDefined();
   fireEvent.click(
     ui.getByRole("button", { name: messages.auth.continueWithEmail }),
   );
@@ -174,8 +180,19 @@ test("reset confirmation resends the same code with consent only after Continue"
       .filter(({ path }) => path.endsWith("/sign-in/email-otp"))
       .map(({ body }) => body),
   ).toEqual([
-    { email: "person@example.com", otp: "123456" },
-    { email: "person@example.com", otp: "123456", confirmReset: true },
+    {
+      email: "person@example.com",
+      otp: "123456",
+      [PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]:
+        PROFESSIONAL_USE_STATEMENT_VERSION,
+    },
+    {
+      email: "person@example.com",
+      otp: "123456",
+      confirmReset: true,
+      [PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]:
+        PROFESSIONAL_USE_STATEMENT_VERSION,
+    },
   ]);
 });
 test("canceling reset sends no confirmed request", async () => {

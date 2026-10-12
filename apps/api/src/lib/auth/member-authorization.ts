@@ -1,4 +1,5 @@
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
+import type { UserProfessionalUseState } from "@/api/lib/auth/professional-use";
 import type { SafeId } from "@/api/lib/branded-types";
 
 /**
@@ -25,6 +26,11 @@ export type MemberAuthorization = {
   emailVerified: boolean;
   userDeleted: boolean;
   enrolledFeatureIds: readonly string[];
+  /**
+   * The account's professional-use state, read in the same statement: a
+   * signed-in session requires `accepted`.
+   */
+  professionalUse: UserProfessionalUseState;
 };
 
 export type ResolveCredentialMemberAuthorization = (

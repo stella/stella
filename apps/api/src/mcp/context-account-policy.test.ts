@@ -10,7 +10,7 @@ import { authenticateMcpRequest } from "@/api/mcp/auth";
 import { MCP_MODES, MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import { resolveMcpSessionContext } from "@/api/mcp/context";
 import { McpOrganizationAccessError } from "@/api/mcp/errors";
-import { NO_FEATURE_ACCESS_FACTS } from "@/api/tests/helpers/member-authorization";
+import { PLAIN_MEMBER_FACTS } from "@/api/tests/helpers/member-authorization";
 
 const credentialCases = [
   { type: "oauth_client", claims: { client_id: "client_one" } },
@@ -79,7 +79,7 @@ describe("MCP account authorization", () => {
                   email: "limited@example.test",
                   role: "owner",
                   workspace: null,
-                  ...NO_FEATURE_ACCESS_FACTS,
+                  ...PLAIN_MEMBER_FACTS,
                 };
               },
               checkAccountOperation: (email) => {
@@ -127,7 +127,7 @@ describe("MCP account authorization", () => {
           email: "standard@example.test",
           role: "owner",
           workspace: null,
-          ...NO_FEATURE_ACCESS_FACTS,
+          ...PLAIN_MEMBER_FACTS,
         }),
         checkAccountOperation: (email) => {
           accountChecks += 1;
@@ -205,7 +205,7 @@ describe("MCP account authorization", () => {
                     email: "Review@Example.Test",
                     role: "owner",
                     workspace: null,
-                    ...NO_FEATURE_ACCESS_FACTS,
+                    ...PLAIN_MEMBER_FACTS,
                   }),
                 },
               ),
@@ -260,7 +260,7 @@ describe("MCP account authorization", () => {
                   email,
                   role: "owner",
                   workspace: null,
-                  ...NO_FEATURE_ACCESS_FACTS,
+                  ...PLAIN_MEMBER_FACTS,
                 }),
               },
             ),
