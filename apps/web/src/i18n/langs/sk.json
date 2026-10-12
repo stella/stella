@@ -807,7 +807,7 @@
       "courtCount": "{count, plural, one {# súd} few {# súdy} many {# súdu} other {# súdov}}",
       "newLast24Hours": "{count} za posledných 24 h",
       "newLast7Days": "Nové za posledných 7 dní",
-      "unlistedCourts": "{count, plural, one {Súdy mimo najväčšieho súdu} few {Súdy mimo # najväčších} other {Súdy mimo # najväčších}}"
+      "otherCourts": "Ostatné súdy"
     },
     "courtTiers": {
       "constitutional": "Ústavné súdy",
@@ -823,6 +823,7 @@
       "decisionYears": "Roky rozhodnutí",
       "description": "Koľko judikatúry korpus obsahuje podľa krajín a súdov a aký aktuálny je každý zdroj.",
       "exceedsReportedTotal": "Obsahuje viac, než vydavateľ naposledy uviedol k {date}",
+      "gapStatusUnknown": "Stav medzier nie je známy",
       "generatedAt": "Údaje k {date}",
       "globeLabel": "Štáty, ktorých judikatúru korpus obsahuje, na glóbuse",
       "healthCurrent": "Aktuálne",
@@ -831,9 +832,12 @@
       "healthStalled": "Bez postupu",
       "healthUnknown": "Zatiaľ nespustené",
       "inPreparation": "Pripravuje sa",
+      "knownGaps": "Známe medzery",
       "lastSync": "Posledná synchronizácia",
+      "noGapsRecorded": "Nie sú zaznamenané žiadne medzery",
       "notCountedYet": "Zatiaľ nespočítané",
       "notMeasuredYet": "Zatiaľ nemerané",
+      "pendingTexts": "Čakajúce texty",
       "reportedByListing": "Spočítané zo zoznamu vydavateľa",
       "reportedByOperator": "Zadané ručne",
       "reportedByPublisher": "Vlastný údaj vydavateľa",

@@ -807,7 +807,7 @@
       "courtCount": "{count, plural, one {# tribunal} other {# tribunales}}",
       "newLast24Hours": "{count} en las últimas 24 h",
       "newLast7Days": "Nuevas en los últimos 7 días",
-      "unlistedCourts": "{count, plural, one {Tribunales fuera del mayor} other {Tribunales fuera de los # mayores}}"
+      "otherCourts": "Otros tribunales"
     },
     "courtTiers": {
       "constitutional": "Tribunales constitucionales",
@@ -823,6 +823,7 @@
       "decisionYears": "Años de las resoluciones",
       "description": "Cuánta jurisprudencia contiene el corpus, por país y por tribunal, y cuán actualizada está cada fuente.",
       "exceedsReportedTotal": "Contiene más que el último total indicado por el organismo el {date}",
+      "gapStatusUnknown": "Estado de lagunas desconocido",
       "generatedAt": "Datos a {date}",
       "globeLabel": "Países cuya jurisprudencia contiene el corpus, en un globo terráqueo",
       "healthCurrent": "Actualizado",
@@ -831,9 +832,12 @@
       "healthStalled": "Sin avance",
       "healthUnknown": "Nunca ejecutado",
       "inPreparation": "En preparación",
+      "knownGaps": "Lagunas conocidas",
       "lastSync": "Última sincronización",
+      "noGapsRecorded": "No hay lagunas registradas",
       "notCountedYet": "Aún sin contar",
       "notMeasuredYet": "Aún sin medir",
+      "pendingTexts": "Textos pendientes",
       "reportedByListing": "Contado a partir del listado del organismo publicador",
       "reportedByOperator": "Introducido manualmente",
       "reportedByPublisher": "Recuento del organismo publicador",

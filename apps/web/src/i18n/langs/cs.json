@@ -807,7 +807,7 @@
       "courtCount": "{count, plural, one {# soud} few {# soudy} many {# soudu} other {# soudů}}",
       "newLast24Hours": "{count} za posledních 24 h",
       "newLast7Days": "Nové za posledních 7 dní",
-      "unlistedCourts": "{count, plural, one {Soudy mimo největší soud} few {Soudy mimo # největší} other {Soudy mimo # největších}}"
+      "otherCourts": "Ostatní soudy"
     },
     "courtTiers": {
       "constitutional": "Ústavní soudy",
@@ -823,6 +823,7 @@
       "decisionYears": "Roky rozhodnutí",
       "description": "Kolik judikatury korpus obsahuje podle států a soudů a jak aktuální je každý zdroj.",
       "exceedsReportedTotal": "Obsahuje víc, než vydavatel naposledy uvedl k {date}",
+      "gapStatusUnknown": "Stav mezer není znám",
       "generatedAt": "Údaje k {date}",
       "globeLabel": "Státy, jejichž judikaturu korpus obsahuje, na glóbu",
       "healthCurrent": "Aktuální",
@@ -831,9 +832,12 @@
       "healthStalled": "Bez postupu",
       "healthUnknown": "Zatím nespuštěno",
       "inPreparation": "Připravuje se",
+      "knownGaps": "Známé mezery",
       "lastSync": "Poslední synchronizace",
+      "noGapsRecorded": "Žádné mezery nejsou zaznamenány",
       "notCountedYet": "Zatím nespočítáno",
       "notMeasuredYet": "Zatím neměřeno",
+      "pendingTexts": "Nevyřízené texty",
       "reportedByListing": "Sečteno z výpisu vydavatele",
       "reportedByOperator": "Zadáno ručně",
       "reportedByPublisher": "Vlastní údaj vydavatele",

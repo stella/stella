@@ -109,8 +109,8 @@ describe("case-law adapter manifests", () => {
  * Two readers answer "which docket grammar does this jurisdiction use": this
  * module's, keyed off the adapter manifest, and the contract package's, which
  * searches the grammar list. The API is the canonical owner — `search_case_law`
- * and `lookup_case_law` both classify an identifier through it, and a lookup
- * that classified one differently from the search it delegates to would answer
+ * and `resolve_case_law_decision` both classify an identifier through it, and a lookup
+ * that classified one differently from text search would answer
  * `not_found` for a decision the search finds — but the web reads the contract
  * one, so the pair can drift silently. Until they are collapsed into one
  * reader, this binds them: changing either alone fails here.
