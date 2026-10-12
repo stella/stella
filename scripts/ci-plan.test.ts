@@ -6584,6 +6584,68 @@ test("browser scope vetoes otherwise eligible execution", () => {
   }
 });
 
+test("Legal Atlas scope deadlines conservatively select the image after timeout or kill", () => {
+  const step = ciJobs["ci-plan"]?.steps?.find(
+    ({ id }) => id === "legal-atlas-scope",
+  );
+  const script = v.parse(v.string(), step?.run);
+  const fixture = mkdtempSync(nodePath.join(tmpdir(), "atlas-scope-deadline-"));
+  try {
+    const bin = nodePath.join(fixture, "bin");
+    mkdirSync(bin);
+    writeFileSync(
+      nodePath.join(fixture, "api-test-changed-paths"),
+      "apps/api/src/handlers/health.ts\0",
+    );
+    const timeout = nodePath.join(bin, "timeout");
+    writeFileSync(
+      timeout,
+      `#!/bin/sh
+[ "$1" = --kill-after=10s ] && [ "$2" = 120s ] || exit 64
+shift 2
+if [ "$TIMEOUT_FIXTURE" != 0 ]; then exit "$TIMEOUT_FIXTURE"; fi
+exec "$@"
+`,
+    );
+    const bun = nodePath.join(bin, "bun");
+    writeFileSync(
+      bun,
+      `#!/bin/sh
+[ "$1" = scripts/legal-atlas-image-scope.ts ] || exit 65
+printf 'false\\n'
+`,
+    );
+    chmodSync(timeout, 0o700);
+    chmodSync(bun, 0o700);
+    const output = nodePath.join(fixture, "output");
+    const run = (program: string, outcome: string) => {
+      writeFileSync(output, "");
+      const result = Bun.spawnSync(["/bin/bash", "-euc", program], {
+        cwd: fixture,
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env["PATH"] ?? ""}`,
+          RUNNER_TEMP: fixture,
+          GITHUB_OUTPUT: output,
+          TIMEOUT_FIXTURE: outcome,
+        },
+      });
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      return readFileSync(output, "utf-8");
+    };
+    for (const outcome of ["0", "124", "137"]) {
+      expect(run(script, outcome), outcome).toBe(
+        `api_source_required=${outcome !== "0"}\n`,
+      );
+    }
+    const unbounded = script.replace("timeout --kill-after=10s 120s ", "");
+    expect(unbounded).not.toBe(script);
+    expect(run(unbounded, "124")).toBe("api_source_required=false\n");
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
 test("Legal Atlas API source scope vetoes otherwise eligible execution", () => {
   const { outputs } = v.parse(
     v.object({ outputs: v.record(v.string(), v.string()) }),
