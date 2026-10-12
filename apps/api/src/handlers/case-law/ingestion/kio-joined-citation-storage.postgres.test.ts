@@ -80,7 +80,6 @@ if (!databaseUrl || !enabled) {
                   citationRowOf(citingDecisionId, {
                     reference,
                     verdict: null,
-                    windows: null,
                     citedPart: "not-stated",
                   }).unwrap(),
                 ),

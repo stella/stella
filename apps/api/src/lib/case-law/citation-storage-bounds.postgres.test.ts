@@ -72,7 +72,6 @@ if (!databaseUrl || !enabled) {
             const key = citationKeyOf(keyInput);
             const projected = citationRowOf(decisionId, {
               verdict: null,
-              windows: null,
               citedPart: "not-stated",
               reference: {
                 index: 0,

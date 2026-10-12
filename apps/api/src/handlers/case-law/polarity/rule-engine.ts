@@ -258,7 +258,8 @@ export const compileRules = (
       pattern: row.pattern,
       confidence: row.confidence,
     };
-    switch (row.kind) {
+    const kind = row.kind;
+    switch (kind) {
       case POLARITY_RULE_KIND.FORM:
         compiled.push({
           ...base,
@@ -274,7 +275,7 @@ export const compileRules = (
         });
         break;
       default: {
-        row satisfies never;
+        kind satisfies never;
         panic("Unhandled polarity rule kind");
       }
     }
