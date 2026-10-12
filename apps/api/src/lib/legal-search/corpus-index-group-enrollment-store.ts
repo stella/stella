@@ -26,6 +26,7 @@ import {
 } from "@/api/db/schema";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
+  type CorpusServingGenerationAbsentError,
   readServingCorpusIndexGenerationTx,
   requireRegisteredCorpusIndexManifest,
   type ServingCorpusIndexGeneration,
@@ -451,12 +452,18 @@ export type ServingCorpusIndexTarget = CorpusIndexReadTarget & {
   manifest: CorpusIndexManifest;
 };
 
+/** Why a read of the serving generation reaches no index. */
+export type ServingCorpusIndexTargetError =
+  | CorpusServingGenerationAbsentError
+  | CorpusIndexGroupNotReadyError;
+
 /**
  * The serving generation and what a read of it reaches
- * (`corpusIndexReadTarget`). A scoped read of a group that is not attested
- * is refused with `CorpusIndexGroupNotReadyError`, which each caller answers
- * as unavailable, rather than answering from an index nobody proved:
- * an empty or differently mapped index would read as a corpus with no
+ * (`corpusIndexReadTarget`). A family with no serving generation is refused
+ * with `CorpusServingGenerationAbsentError`. A scoped read of a group that is
+ * not attested is refused with `CorpusIndexGroupNotReadyError`, which each
+ * caller answers as unavailable, rather than answering from an index nobody
+ * proved: an empty or differently mapped index would read as a corpus with no
  * matches. A scoped read of a group under its manifest's contract reads no
  * enrollment.
  */
@@ -466,8 +473,12 @@ export const readServingCorpusIndexTargetTx = async (
     family,
     jurisdiction,
   }: { family: CorpusFamily; jurisdiction: string | undefined },
-): Promise<Result<ServingCorpusIndexTarget, CorpusIndexGroupNotReadyError>> => {
-  const serving = await readServingCorpusIndexGenerationTx(tx, family);
+): Promise<Result<ServingCorpusIndexTarget, ServingCorpusIndexTargetError>> => {
+  const servingRead = await readServingCorpusIndexGenerationTx(tx, family);
+  if (Result.isError(servingRead)) {
+    return Result.err(servingRead.error);
+  }
+  const serving = servingRead.value;
   const manifest = requireCorpusIndexManifest(family, serving.generation);
   const readsEnrollment =
     jurisdiction === undefined ||
