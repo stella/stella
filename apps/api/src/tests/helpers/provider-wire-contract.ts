@@ -24,6 +24,7 @@ import {
   createTanStackTextAdapterFactory,
   getTanStackTextModelForRole,
 } from "@/api/lib/tanstack-ai-models";
+import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
 import {
@@ -182,7 +183,11 @@ const prepareWireRequest = ({
       chatModel: scenario === "bad-request" ? wireChatModel(provider) : model,
       provider,
     }),
-    { dataClass: "public_corpus", organizationId: null },
+    {
+      dataClass: "public_corpus",
+      organizationId: null,
+      modelTier: MANAGED_MODEL_TIER.standard,
+    },
   );
   // The chat attempt's own request options, so each cassette pins the
   // request a chat turn sends (its system prompt aside: the scenarios send
