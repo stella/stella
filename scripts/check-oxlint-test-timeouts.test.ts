@@ -183,6 +183,24 @@ test("comments, strings, unrelated options and each data are not overrides", () 
   });
 });
 
+for (const source of [
+  'test(...["case", async () => {}, 60_000]);',
+  'test.only(...["case", async () => {}, 60_000]);',
+  'it(...["case", async () => {}, 60_000]);',
+  'test.each([1])(...["case", async () => {}, 60_000]);',
+  'test("case", ...[async () => {}, 60_000]);',
+  'test("case", async () => {}, ...[60_000]);',
+]) {
+  test(`test-call argument spreads cannot hide timeout overrides: ${source}`, () => {
+    withFixture((directory, file) => {
+      writeFileSync(file, `${IMPORTS}${source}`);
+      expect(customLintTestTimeoutViolations({ directory })).toEqual([
+        "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
+      ]);
+    });
+  });
+}
+
 test("an override requires a nonempty measured allow-list reason", () => {
   withFixture((directory, file) => {
     writeFileSync(file, `${IMPORTS}setDefaultTimeout(60_000);`);

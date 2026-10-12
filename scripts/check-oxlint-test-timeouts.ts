@@ -183,6 +183,7 @@ const testPolicyViolation = (file: ts.SourceFile): string | undefined => {
         const optionsArgument = optionsFirst ? secondArgument : thirdArgument;
         if (
           api === "setDefaultTimeout" ||
+          node.arguments.some(ts.isSpreadElement) ||
           (optionsArgument !== undefined &&
             !isTimeoutFreeOptions(optionsArgument))
         ) {
