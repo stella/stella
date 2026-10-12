@@ -3949,12 +3949,6 @@
   },
   {
     "file": "apps/api/src/lib/scheduler/tasks/registration-retention.ts",
-    "fingerprint": "dcfb2ccbc88aace4a0da1ab24410ade76244bdd357ecea8cf40af2558300ebc7",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/scheduler/tasks/registration-retention.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/scheduler/tasks/registration-retention.ts",
     "fingerprint": "e33328c5b4bf37b37e8fe8232c94f47a28b93ad73e9f3581867bfdc66fc03ecb",
     "count": 1,
     "reason": "for update in apps/api/src/lib/scheduler/tasks/registration-retention.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
