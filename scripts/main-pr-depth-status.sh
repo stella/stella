@@ -3,8 +3,9 @@ set -euo pipefail
 
 # Publishes the main/pr-depth commit status for one Main PR-depth run.
 # A run whose suites were cancelled writes nothing when a later scheduled run for
-# the same commit is live or green: a scheduled run always publishes, so this
-# one can never overwrite its result. Every other outcome is published as success or failure.
+# the same commit is running or completed green. A queued successor can be
+# replaced before it starts, so it cannot own publication. Every other outcome
+# is published as success or failure.
 
 : "${RESULTS:?}" "${RUN_ID:?}" "${REPOSITORY:?}" "${RUN_URL:?}"
 SHA=${SHA:-}
@@ -19,9 +20,9 @@ elif [[ -n "$SHA" ]] && jq -e \
   runs=$(bash "$gh_retry" api "repos/$REPOSITORY/actions/workflows/main-pr-depth.yml/runs?per_page=50")
   if jq -e --arg title "Main PR-depth checks $SHA" --argjson run "$RUN_ID" \
     'any(.workflow_runs[]; .id > $run and .display_title == $title and .event == "schedule"
-      and (.status != "completed" or .conclusion == "success"))' \
+      and (.status == "in_progress" or (.status == "completed" and .conclusion == "success")))' \
     <<< "$runs" > /dev/null; then
-    echo "A later run for $SHA is live or green and publishes main/pr-depth."
+    echo "A later run for $SHA is running or completed green and owns main/pr-depth."
     exit 0
   fi
 fi

@@ -446,11 +446,10 @@ test("green suites publish success and red suites publish failure", () => {
   ).toEqual({ exitCode: 1, posted: ["failure"] });
 });
 
-test("a cancelled run defers only to a later live or green run for the same commit", () => {
+test("a cancelled run defers only to a later running or completed green run for the same commit", () => {
   const cancelled = { validate: "success", suites: "cancelled" };
   for (const run of [
     laterRun({}),
-    laterRun({ status: "queued" }),
     laterRun({ status: "completed", conclusion: "success" }),
   ]) {
     // Writing nothing means a successor's terminal status can never be overwritten.
@@ -460,6 +459,10 @@ test("a cancelled run defers only to a later live or green run for the same comm
     });
   }
   for (const run of [
+    laterRun({ status: "queued" }),
+    laterRun({ status: "pending" }),
+    laterRun({ status: "waiting" }),
+    laterRun({ status: "requested" }),
     laterRun({ sha: "c".repeat(40) }),
     laterRun({ status: "completed", conclusion: "failure" }),
     laterRun({ status: "completed", conclusion: "cancelled" }),
@@ -476,6 +479,28 @@ test("a cancelled run defers only to a later live or green run for the same comm
     exitCode: 1,
     posted: ["failure"],
   });
+});
+
+test("a queued same-SHA successor replaced by a different-SHA request leaves a terminal status", () => {
+  const cancelled = { validate: "success", suites: "cancelled" };
+  const pendingSuccessor = laterRun({ status: "queued" });
+  const replacement = laterRun({
+    id: 102,
+    sha: "c".repeat(40),
+    status: "queued",
+  });
+  for (const runs of [
+    [pendingSuccessor],
+    [
+      { ...pendingSuccessor, status: "completed", conclusion: "cancelled" },
+      replacement,
+    ],
+  ]) {
+    expect(publishStatus({ results: cancelled, runs })).toEqual({
+      exitCode: 1,
+      posted: ["failure"],
+    });
+  }
 });
 
 test("a cancellation next to a failed job is never treated as superseded", () => {
