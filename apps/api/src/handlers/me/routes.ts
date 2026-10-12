@@ -1,8 +1,10 @@
 import Elysia from "elysia";
 
+import acceptProfessionalUse from "@/api/handlers/me/accept-professional-use";
 import disconnectOAuthConnection from "@/api/handlers/me/disconnect-oauth-connection";
 import listOAuthConnections from "@/api/handlers/me/list-oauth-connections";
 import deleteAccountPendingTasks from "@/api/handlers/me/pending-tasks";
+import readProfessionalUse from "@/api/handlers/me/professional-use";
 import deleteAccountSendOtp from "@/api/handlers/me/send-otp";
 import twoFactorSendManageOtp from "@/api/handlers/me/two-factor-send-manage-otp";
 import updateGuideProgress from "@/api/handlers/me/update-guide-progress";
@@ -24,6 +26,10 @@ export const meRoute = new Elysia({ prefix: "/me" })
   .get("/oauth-connections", listOAuthConnections.handler)
   .patch("/guide-progress", updateGuideProgress.handler, {
     body: updateGuideProgress.config.body,
+  })
+  .get("/professional-use", readProfessionalUse.handler)
+  .post("/professional-use", acceptProfessionalUse.handler, {
+    body: acceptProfessionalUse.config.body,
   })
   .delete("/oauth-connections/:consentId", disconnectOAuthConnection.handler, {
     params: disconnectOAuthConnection.config.params,

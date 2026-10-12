@@ -2,6 +2,118 @@
   "$comment": "Each entry is one behaviour of the chat pipeline, stated as the mutation that removes it from the current tree, the scenario that exercises it, and the oracle (apps/api/src/tests/helpers/chat-oracles.ts) that must fail when it is gone. Run: bun apps/api/scripts/chat-mutation-matrix.ts. An entry whose mutation no longer applies fails until it is replaced or retired with a reason.",
   "entries": [
     {
+      "fix": "#5256",
+      "status": "active",
+      "id": "textual-snapshot-retains-provider-metadata",
+      "behaviour": "A signed snapshot enriches streamed thinking; later unsigned snapshots retain its final signature and provider fields.",
+      "file": "src/handlers/chat/snapshot-reconciliation.ts",
+      "search": "mergeTextualSnapshotMetadata({\n          canonical,\n          incoming,\n          content: snapshotContent.slice(start, end),\n          canonicalStart: canonicalRange?.start,\n          contentStart: fragmentStart,\n        })",
+      "replace": "{ ...canonical, content: snapshotContent.slice(start, end) }",
+      "scenario": {
+        "file": "src/handlers/chat/snapshot-reconciliation.property.test.ts",
+        "test": "signed thinking snapshots enrich streamed content and survive later unsigned snapshots"
+      },
+      "oracle": "chat.live.equals-reload"
+    },
+    {
+      "fix": "#5256",
+      "status": "active",
+      "id": "snapshot-only-textual-metadata-survives-unsigned-repeat",
+      "behaviour": "Snapshot-only textual blocks retain provider metadata and signed reasoning identities through repeated unsigned snapshots.",
+      "file": "src/handlers/chat/snapshot-reconciliation.ts",
+      "search": "mergeTextualSnapshotMetadata({\n          canonical,\n          incoming,\n          content: snapshotContent.slice(start, end),\n          canonicalStart: canonicalRange?.start,\n          contentStart: fragmentStart,\n        })",
+      "replace": "(hasDeltas ? mergeTextualSnapshotMetadata({\n          canonical,\n          incoming,\n          content: snapshotContent.slice(start, end),\n          canonicalStart: canonicalRange?.start,\n          contentStart: fragmentStart,\n        }) : { ...incoming, content: snapshotContent.slice(start, end) })",
+      "scenario": {
+        "file": "src/handlers/chat/snapshot-reconciliation.property.test.ts",
+        "test": "streamed textual completions preserve newly introduced lifecycle anchors"
+      },
+      "oracle": "chat.live.equals-reload"
+    },
+    {
+      "fix": "#5256",
+      "status": "active",
+      "id": "unknown-activities-are-observed",
+      "behaviour": "Unknown activity renderers report one structural client telemetry error without displaying internal data.",
+      "file": "../web/src/components/chat/chat-thread-messages.tsx",
+      "search": "    analytics.captureError(\n      new ClientTelemetryError({\n        area: \"chat-unknown-activity\",\n        message: \"A chat activity has no registered renderer\",\n      }),\n    );",
+      "replace": "    return;",
+      "scenario": {
+        "file": "../web/src/components/chat/chat-activity-part.dom.test.tsx",
+        "test": "unknown chat activities report once per type across remounts without rendering or reporting private payloads"
+      },
+      "oracle": "chat.client.no-errors"
+    },
+    {
+      "fix": "#5256",
+      "status": "active",
+      "id": "denied-approval-has-no-failure-details",
+      "behaviour": "A snapshot denial shows one denial status and no tool failure details.",
+      "file": "../web/src/components/chat/tool-approval-card.tsx",
+      "search": "isFailed: part.state === \"error\" && !isDenied,",
+      "replace": "isFailed: part.state === \"error\",",
+      "scenario": {
+        "file": "../web/src/components/chat/tool-approval-card.dom.test.tsx",
+        "test": "a denied approval restored as an SDK error shows only its denial status"
+      },
+      "oracle": "chat.render.cards-match-stored"
+    },
+    {
+      "fix": "#5256",
+      "status": "active",
+      "id": "activity-payloads-stay-internal",
+      "behaviour": "Recognized activities show translated captions without internal payloads.",
+      "file": "../web/src/components/chat/chat-thread-messages.tsx",
+      "search": "        {t(labelKey)}\n      </figcaption>",
+      "replace": "        {t(labelKey)}\n      </figcaption>\n      <pre>{JSON.stringify(part.content)}</pre>",
+      "scenario": {
+        "file": "../web/src/components/chat/chat-thread-messages.test.tsx",
+        "test": "activity roles and embedded parts show translated labels without internal payloads"
+      },
+      "oracle": "chat.render.cards-match-stored"
+    },
+    {
+      "fix": "#5256",
+      "status": "active",
+      "id": "unknown-activities-are-omitted",
+      "behaviour": "Unknown activity types do not render a user-facing activity card.",
+      "file": "../web/src/components/chat/chat-thread-messages.tsx",
+      "search": "    default:\n      return (\n        <UnknownChatActivity\n          key={part.activityType}\n          activityType={part.activityType}\n        />\n      );\n  }\n\n  return (\n    <figure",
+      "replace": "    default:\n      labelKey = \"chat.thinking\";\n  }\n\n  return (\n    <figure",
+      "scenario": {
+        "file": "../web/src/components/chat/chat-thread-messages.test.tsx",
+        "test": "unknown activity types and malformed activity messages leave the thread readable"
+      },
+      "oracle": "chat.render.cards-match-stored"
+    },
+    {
+      "fix": "#5256",
+      "status": "active",
+      "id": "malformed-activities-preserve-thread",
+      "behaviour": "Malformed activity envelopes are omitted without failing transcript rendering.",
+      "file": "../web/src/components/chat/chat-thread-messages.tsx",
+      "search": "  if (parts.length !== 1 || part?.type !== \"activity\") {\n    return null;\n  }",
+      "replace": "  if (parts.length !== 1 || part?.type !== \"activity\") {\n    return panic(\"An activity message must contain exactly one activity part\");\n  }",
+      "scenario": {
+        "file": "../web/src/components/chat/chat-thread-messages.test.tsx",
+        "test": "unknown activity types and malformed activity messages leave the thread readable"
+      },
+      "oracle": "chat.client.no-errors"
+    },
+    {
+      "id": "subagent-snapshot-resumes-after-suspension",
+      "fix": "#5256",
+      "behaviour": "Resuming a suspended subagent updates its running status and child transcript; terminal snapshots reject active replays.",
+      "status": "active",
+      "file": "src/handlers/chat/snapshot-reconciliation.ts",
+      "search": "  suspended: 0,",
+      "replace": "  suspended: 1,",
+      "scenario": {
+        "file": "src/handlers/chat/snapshot-reconciliation.property.test.ts",
+        "test": "subagent snapshots preserve suspend resume cycles and terminal finality"
+      },
+      "oracle": "chat.live.subagent-lifecycle"
+    },
+    {
       "id": "snapshot-one-message-per-id",
       "fix": "#3858",
       "behaviour": "The interrupt snapshot carries one assistant message per id, merging the copies the engine splits at each tool result.",
@@ -61,18 +173,18 @@
       "oracle": "chat.live.equals-reload"
     },
     {
-      "id": "persistence-ignores-snapshots",
+      "id": "snapshot-preserves-reconciled-denials",
       "fix": "#2186",
-      "behaviour": "The persistence processor never consumes a messages snapshot, which would reset what it accumulated.",
+      "behaviour": "Denial restoration preserves reconciled snapshot parts, including denied tool results; the SDK migration consumes snapshots to recover resumed results.",
       "status": "active",
-      "file": "src/handlers/chat/stream-chat.ts",
-      "search": "  if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {\n    processor.processChunk(chunk);\n  }",
-      "replace": "  processor.processChunk(chunk);",
+      "file": "src/handlers/chat/stream-message-identity.ts",
+      "search": "      \"parts\" in message ||\n",
+      "replace": "",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
-        "test": "keeps a run's server call and the approval it then asks for"
+        "test": "keeps a denied call denied when the model then asks for another approval"
       },
-      "oracle": "chat.ledger.calls-present"
+      "oracle": "chat.live.equals-reload"
     },
     {
       "id": "same-run-iterations-stay-one-message",
@@ -511,7 +623,7 @@
       "fix": "#4273",
       "behaviour": "The request options a chat attempt hands the engine put nothing on the provider wire that the provider refuses, such as a request metadata value that is not a string.",
       "status": "active",
-      "file": "src/handlers/chat/chat-request.ts",
+      "file": "src/lib/chat/chat-request.ts",
       "search": "  adapter: withRunToolCallIds(model.adapter, toolCallIds),\n",
       "replace": "  adapter: withRunToolCallIds(model.adapter, toolCallIds),\n  metadata: { stellaToolCallIdLedger: toolCallIds },\n",
       "scenario": {
@@ -890,8 +1002,8 @@
       "behaviour": "The reader keeps decoding the v2 content envelope that releases before canonical tool calls stored, instead of reading it as v3.",
       "status": "active",
       "file": "src/handlers/chat/chat-message-parts.ts",
-      "search": "  if (content.version === 3) {\n    return normalizePersistedV3ChatMessageContent(content);\n  }",
-      "replace": "  if (content.version >= 2) {\n    return normalizePersistedV3ChatMessageContent(content);\n  }",
+      "search": "  if (content.version === 3) {\n    normalized = normalizePersistedV3ChatMessageContent(content);",
+      "replace": "  if (content.version >= 2) {\n    normalized = normalizePersistedV3ChatMessageContent(content);",
       "scenario": {
         "file": "src/handlers/chat/saved-state-compat.integration.test.ts",
         "test": "v0.7.22 (3952f790b2) reloads, takes a denial and a follow-up"
@@ -903,7 +1015,7 @@
       "fix": "#4007",
       "behaviour": "A request of a thread sends the system prompt the request before it sent, so an approval's continuation extends the cached prompt instead of rewriting it.",
       "status": "active",
-      "file": "src/handlers/chat/chat-request.ts",
+      "file": "src/lib/chat/chat-request.ts",
       "search": "  ...systemPromptsFor({ caching, model, system, systemLayers }),",
       "replace": "  ...systemPromptsFor({ caching, model, system: `${String(system)}\\nRequest time: ${String(performance.now())}`, systemLayers }),",
       "scenario": {
@@ -917,7 +1029,7 @@
       "fix": "#4007",
       "behaviour": "A provider's SDK writes a thread's tools in the same order on every request of the thread.",
       "status": "active",
-      "file": "src/handlers/chat/chat-request.ts",
+      "file": "src/lib/chat/chat-request.ts",
       "search": "  tools: projectChatToolSchemasForProvider({\n    modelTools,\n    provider: model.provider,\n  }),",
       "replace": "  tools: projectChatToolSchemasForProvider({\n    modelTools,\n    provider: model.provider,\n  }).toSorted(() => Math.random() - 0.5),",
       "scenario": {

@@ -158,6 +158,8 @@ const hasCaughtUpPart = ({
           );
         })
       );
+    // Activity snapshots are browser-visible atomic payloads, not text prefixes.
+    case "activity":
     case "image":
     case "audio":
     case "video":
