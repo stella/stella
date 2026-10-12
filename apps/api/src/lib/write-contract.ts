@@ -265,41 +265,68 @@ type WriteContractConfig = WriteContract & {
 };
 
 /** Factory-time validation catches invalid declarations before any transport can invoke the handler. */
-export const assertWriteContract = (config: WriteContractConfig): void => {
+export const assertWriteContract = (
+  config: WriteContractConfig,
+  handlerName = config.description ?? "anonymous handler",
+): void => {
+  const failureMessage = (rule: string) => {
+    const registration = { stack: "" };
+    Error.captureStackTrace(registration, assertWriteContract);
+    return `Invalid write contract for ${handlerName}: ${rule}\nHandler registration:\n${registration.stack}`;
+  };
   if (
     /^Replace\b/iu.test(config.description?.trimStart() ?? "") &&
     config.contract !== "replace"
   ) {
-    panic("A Replace description requires contract: replace");
+    panic(failureMessage("A Replace description requires contract: replace"));
   }
   switch (config.contract) {
     case "patch":
       return;
     case "replace": {
       const precondition = config.precondition;
+      if (!Object.hasOwn(config, "precondition")) {
+        return panic(
+          failureMessage("A replacement requires a declared precondition"),
+        );
+      }
       switch (precondition.type) {
         case "deferred":
           return;
         case "updatedAt":
           if (!requiresField(config.body, precondition.field)) {
             panic(
-              "A replacement body must require expectedUpdatedAt in every branch",
+              failureMessage(
+                "A replacement body must require expectedUpdatedAt in every branch",
+              ),
             );
           }
           return;
         case "revision":
           for (const field of precondition.fields) {
             if (!requiresField(config.body, field)) {
-              panic(`A replacement body must require ${field} in every branch`);
+              panic(
+                failureMessage(
+                  `A replacement body must require ${field} in every branch`,
+                ),
+              );
             }
           }
           return;
         default:
-          return panic(precondition satisfies never);
+          precondition satisfies never;
+          return panic(
+            failureMessage(
+              "A replacement precondition must be updatedAt, revision, or deferred",
+            ),
+          );
       }
     }
     default:
-      return panic(config satisfies never);
+      config satisfies never;
+      return panic(
+        failureMessage("Declare contract: patch or contract: replace"),
+      );
   }
 };
 
@@ -308,7 +335,11 @@ export const recordWriteContract = (
   handler: object,
   config: WriteContractConfig,
 ): void => {
-  assertWriteContract(config);
+  const handlerName =
+    typeof handler === "function" && handler.name.length > 0
+      ? handler.name
+      : (config.description ?? "anonymous handler");
+  assertWriteContract(config, handlerName);
   contracts.set(handler, config);
 };
 
