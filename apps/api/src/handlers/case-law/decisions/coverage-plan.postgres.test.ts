@@ -43,7 +43,9 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
       const { db, sql: client } = openClient({
         max: 1,
         logger: {
-          logQuery: (query, params) => captured.push({ query, params }),
+          logQuery: (query, params) => {
+            captured.push({ query, params });
+          },
         },
       });
       const schemaName = `coverage_plan_${Bun.randomUUIDv7().replaceAll("-", "")}`;
