@@ -94,6 +94,7 @@ class HandoffHostError extends TaggedError("HandoffHostError")<{
 type HostMode = "message" | "context" | "unsupported";
 type HostFailure = "none" | "reject" | "denied";
 class HandoffHost extends App {
+  events = new EventDispatcher<AppEventMap>();
   mode: HostMode = "message";
   failure: HostFailure = "none";
   messages: Parameters<App["sendMessage"]>[0][] = [];
@@ -132,6 +133,13 @@ class HandoffHost extends App {
       default:
         return this.mode satisfies never;
     }
+  }
+
+  override addEventListener<K extends keyof AppEventMap>(
+    event: K,
+    listener: (value: AppEventMap[K]) => void,
+  ) {
+    this.events.addEventListener(event, listener);
   }
 
   override async callServerTool(request: Parameters<App["callServerTool"]>[0]) {
@@ -227,6 +235,32 @@ test.each(["message", "context"] satisfies HostMode[])(
     expect(runtime.getSnapshot().target).toBeNull();
   },
 );
+
+test("the handoff message follows the host locale", async () => {
+  const host = new HandoffHost({ name: "handoff-host", version: "1.0.0" });
+  spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(null, { status: 200 }),
+  );
+  const runtime = createFileComparisonRuntime(host);
+  host.events.dispatch("hostcontextchanged", { locale: "cs-CZ" });
+  runtime.selectBase(new File(["original"], "original.docx"));
+  runtime.selectTarget(new File(["revised"], "revised.docx"));
+  await runtime.upload();
+
+  const text = appLocale("cs-CZ").t("redlineHandoff", {
+    tool: FILE_COMPARISON_TRANSPORT.compareToolName,
+    source: JSON.stringify(host.reservation.next.source),
+  });
+  expect(text).not.toBe(
+    appLocale("en").t("redlineHandoff", {
+      tool: FILE_COMPARISON_TRANSPORT.compareToolName,
+      source: JSON.stringify(host.reservation.next.source),
+    }),
+  );
+  expect(host.messages).toEqual([
+    { role: "user", content: [{ type: "text", text }] },
+  ]);
+});
 
 const fallbackHosts = [
   { mode: "unsupported", failure: "none", status: "success" },

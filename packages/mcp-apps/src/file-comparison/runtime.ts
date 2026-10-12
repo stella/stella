@@ -330,7 +330,10 @@ export const createFileComparisonRuntime = (
     const outcome = await handOffToModel({
       app,
       next,
-      text: `Both files are uploaded. Call ${FILE_COMPARISON_TRANSPORT.compareToolName} with source ${JSON.stringify(next.source)}.`,
+      text: t("redlineHandoff", {
+        tool: FILE_COMPARISON_TRANSPORT.compareToolName,
+        source: JSON.stringify(next.source),
+      }),
     });
     if (Result.isError(outcome)) {
       setStatus(
