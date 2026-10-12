@@ -57,6 +57,92 @@ const trace = {
 };
 
 describe("Explain local corpus evaluation", () => {
+  test.each([
+    { selectedParagraph: 1, firstParagraph: 1, lastParagraph: 16 },
+    { selectedParagraph: 2, firstParagraph: 1, lastParagraph: 16 },
+    { selectedParagraph: 187, firstParagraph: 179, lastParagraph: 194 },
+    { selectedParagraph: 199, firstParagraph: 185, lastParagraph: 200 },
+    { selectedParagraph: 200, firstParagraph: 185, lastParagraph: 200 },
+  ])(
+    "centers or clamps context around publisher paragraph $selectedParagraph",
+    ({ selectedParagraph, firstParagraph, lastParagraph }) => {
+      const capturedCorpus = {
+        ...corpus,
+        decisions: [
+          {
+            decisionId: "source",
+            ecli: SCHREMS_II,
+            paragraphs: Array.from({ length: 200 }, (_, index) => ({
+              paragraphId: `captured-${String(index + 1)}`,
+              publisherParagraph: index + 1,
+              text: `Captured passage ${String(index + 1)}`,
+            })),
+          },
+          ...corpus.decisions.filter(
+            ({ decisionId }) => decisionId !== "source",
+          ),
+        ],
+      } satisfies Parameters<typeof resolveExplainCase>[1];
+      const { selection, context } = resolveExplainCase(
+        {
+          ...scenario,
+          selection: {
+            ecli: SCHREMS_II,
+            publisherParagraph: selectedParagraph,
+          },
+        },
+        capturedCorpus,
+      );
+      expect(context).toHaveLength(16);
+      expect(context).toContainEqual(selection);
+      expect(context.at(0)?.publisherParagraph).toBe(firstParagraph);
+      expect(context.at(-1)?.publisherParagraph).toBe(lastParagraph);
+    },
+  );
+
+  test("every selection retains a bounded contiguous window in capture order", () => {
+    for (const length of [1, 8, 16, 17, 200]) {
+      const paragraphs = Array.from({ length }, (_, index) => ({
+        paragraphId: `captured-${String(index)}`,
+        // Deliberately reverse publisher numbering so sorting cannot replace capture order.
+        publisherParagraph: length - index,
+        text: `Captured passage ${String(index)}`,
+      }));
+      const capturedCorpus = {
+        ...corpus,
+        decisions: [
+          { decisionId: "source", ecli: SCHREMS_II, paragraphs },
+          ...corpus.decisions.filter(
+            ({ decisionId }) => decisionId !== "source",
+          ),
+        ],
+      } satisfies Parameters<typeof resolveExplainCase>[1];
+      for (const paragraph of paragraphs) {
+        const { selection, context } = resolveExplainCase(
+          {
+            ...scenario,
+            selection: {
+              ecli: SCHREMS_II,
+              publisherParagraph: paragraph.publisherParagraph,
+            },
+          },
+          capturedCorpus,
+        );
+        expect(context).toHaveLength(Math.min(length, 16));
+        expect(context).toContainEqual(selection);
+        const firstIndex = paragraphs.findIndex(
+          ({ paragraphId }) => paragraphId === context.at(0)?.paragraphId,
+        );
+        expect(firstIndex).toBeGreaterThanOrEqual(0);
+        expect(context).toEqual(
+          paragraphs
+            .slice(firstIndex, firstIndex + context.length)
+            .map((entry) => ({ decisionId: "source", ...entry })),
+        );
+      }
+    }
+  });
+
   test("ten unique cases cite paragraphs explicitly named in the recorded source decision", () => {
     expect(readerExplainCases).toHaveLength(10);
     expect(new Set(readerExplainCases.map(({ id }) => id)).size).toBe(10);

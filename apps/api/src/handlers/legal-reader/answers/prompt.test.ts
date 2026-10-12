@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import {
   buildReaderAnswerPrompt,
@@ -118,6 +119,87 @@ describe("reader answer evidence", () => {
     expect(prompt.context.length).toBeLessThan(
       READER_ANSWER_CONTEXT_CHARS + 1000,
     );
+  });
+
+  test.each([
+    { prefixLength: 0, suffixLength: 10 },
+    {
+      prefixLength: READER_ANSWER_CONTEXT_CHARS,
+      suffixLength: READER_ANSWER_CONTEXT_CHARS,
+    },
+    { prefixLength: 2 * READER_ANSWER_CONTEXT_CHARS, suffixLength: 0 },
+  ])(
+    "selection offsets address the supplied text with %j",
+    ({ prefixLength, suffixLength }) => {
+      const selectedAnchor = {
+        ...anchor,
+        startOffset: prefixLength,
+        endOffset: prefixLength + anchor.quote.length,
+      };
+      const prompt = buildReaderAnswerPrompt({
+        decision: {
+          decisionId,
+          court: "Test court",
+          decisionDate: "2026-01-01",
+          paragraphs: [
+            {
+              paragraphId: anchor.paragraphId,
+              text: `${"x".repeat(prefixLength)}${anchor.quote}${"y".repeat(suffixLength)}`,
+            },
+          ],
+        },
+        anchor: selectedAnchor,
+        locale: "cs-CZ",
+      });
+      const context = v.parse(
+        v.object({
+          selection: v.object({
+            startOffset: v.number(),
+            endOffset: v.number(),
+            quote: v.string(),
+          }),
+          paragraphs: v.array(v.object({ text: v.string() })),
+        }),
+        JSON.parse(prompt.context),
+      );
+      expect(context.paragraphs).toHaveLength(1);
+      expect(context.paragraphs.at(0)?.text.length).toBeLessThanOrEqual(
+        READER_ANSWER_CONTEXT_CHARS,
+      );
+      expect(
+        context.paragraphs
+          .at(0)
+          ?.text.slice(
+            context.selection.startOffset,
+            context.selection.endOffset,
+          ),
+      ).toBe(anchor.quote);
+      expect(context.selection.quote).toBe(anchor.quote);
+    },
+  );
+
+  test.each([
+    "Note [[ see below. Holding ",
+    "[[ first [[ second ",
+    "[[[[ unfinished ",
+  ])("unfinished openings preserve a later citation after %s", (prefix) => {
+    const citation = { decisionId, paragraphId: "p-2" };
+    const content = `${prefix}[[${decisionId}#p-2]].`;
+    const result = validateReaderAnswerCitations({
+      content,
+      allowed: [citation],
+    });
+    expect(result).toEqual({
+      content,
+      citations: [citation],
+      invalidCitationCount: 0,
+    });
+    expect(
+      validateReaderAnswerCitations({
+        content: result.content,
+        allowed: [citation],
+      }),
+    ).toEqual(result);
   });
 
   test("keeps only supplied paragraph identities and deduplicates their chips", () => {
