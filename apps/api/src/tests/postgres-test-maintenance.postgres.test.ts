@@ -5,7 +5,10 @@ import {
   POSTGRES_LOCK_SNAPSHOT_SQL,
   startLockMonitor,
 } from "../../scripts/postgres-lock-diagnostics";
-import { POSTGRES_TEST_MAINTENANCE_SQL } from "../../scripts/postgres-test-maintenance";
+import {
+  POSTGRES_TEST_MAINTENANCE_SQL,
+  POSTGRES_TEST_MAINTENANCE_TIMEOUTS,
+} from "../../scripts/postgres-test-maintenance";
 import { openBoundedDatabaseObserver } from "../db/online-index-observer";
 import { getPgErrorCode } from "../lib/pg-error";
 import { withFreshIndicatorDatabase } from "./database-load-indicator-fixture";
@@ -76,6 +79,50 @@ describe.skipIf(!enabled)(
             );
           },
         );
+      });
+    });
+
+    test("fixture configuration waits for an active conflicting maintenance lock", async () => {
+      if (!databaseUrl) {
+        panic("Postgres maintenance test requires DATABASE_URL");
+      }
+      await withFreshIndicatorDatabase(databaseUrl, async ({ client }) => {
+        await client`CREATE TABLE public.fixture (id integer)`;
+        const database = (await client`SELECT current_database() AS name`).at(
+          0,
+        )?.["name"];
+        const url = new URL(databaseUrl);
+        url.pathname = `/${database}`;
+        const maintenance = await openBoundedDatabaseObserver({
+          url: url.toString(),
+          ...POSTGRES_TEST_MAINTENANCE_TIMEOUTS,
+        });
+        let ready = () => {};
+        const acquired = new Promise<void>((resolve) => {
+          ready = resolve;
+        });
+        const holder = client.begin(async (tx) => {
+          await tx`LOCK TABLE public.fixture IN SHARE UPDATE EXCLUSIVE MODE`;
+          ready();
+          await tx`SELECT pg_sleep(1.5)`;
+        });
+        try {
+          await Promise.race([acquired, holder]);
+          const started = performance.now();
+          await maintenance.execute(POSTGRES_TEST_MAINTENANCE_SQL);
+          expect(performance.now() - started).toBeGreaterThan(1000);
+          const configured =
+            await client`SELECT reloptions FROM pg_class WHERE oid = 'public.fixture'::regclass`;
+          expect(configured.at(0)?.["reloptions"]).toContain(
+            "autovacuum_enabled=false",
+          );
+        } finally {
+          try {
+            await holder;
+          } finally {
+            await maintenance.release();
+          }
+        }
       });
     });
 

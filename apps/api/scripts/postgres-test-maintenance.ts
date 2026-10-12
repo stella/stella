@@ -2,6 +2,12 @@ import { panic } from "better-result";
 
 import { openBoundedDatabaseObserver } from "../src/db/online-index-observer";
 
+// Allow conflicting maintenance to finish beyond autovacuum's cancellation grace.
+export const POSTGRES_TEST_MAINTENANCE_TIMEOUTS = {
+  statementTimeoutMs: 30_000,
+  lockTimeoutMs: 5000,
+};
+
 // Disable automatic maintenance only on this migrated fixture's tables. Tests
 // of real autovacuum create fresh databases whose defaults remain enabled.
 export const POSTGRES_TEST_MAINTENANCE_SQL = `
@@ -27,8 +33,7 @@ if (import.meta.main) {
   }
   const client = await openBoundedDatabaseObserver({
     url: databaseUrl,
-    statementTimeoutMs: 30_000,
-    lockTimeoutMs: 1000,
+    ...POSTGRES_TEST_MAINTENANCE_TIMEOUTS,
   });
   try {
     await client.execute(POSTGRES_TEST_MAINTENANCE_SQL);
