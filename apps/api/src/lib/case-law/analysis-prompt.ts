@@ -44,6 +44,11 @@ export const ANALYSIS_GUIDELINES = `
    startAnchorId–endAnchorId ranges), not span entire sections.
 9. Annotation summaries: one sentence, stating what the court
    decided or found — not what the section "discusses".
+10. A paragraph the court numbered shows its number after the
+   anchor, as "(¶ 12)". When text you write refers to a paragraph,
+   cite the court's number in the decision's language (for example
+   "bod 12", "Rn. 12", "paragraph 12"), never an anchorId. Anchor
+   fields still take anchorIds only.
 
 ## holding
 
@@ -85,17 +90,42 @@ Every field above is user-visible, so write all of them in the decision's
 language.
 `;
 
+/** A block as the prompt renders it: its anchor, text and court number. */
+export type PromptBlock = {
+  anchorId: string;
+  plainText: string;
+  type: string;
+  /** The court's own paragraph number, when the source numbers paragraphs. */
+  number?: number | undefined;
+};
+
+/**
+ * The court's number as the prompt prints it after the anchor, or nothing.
+ * Only a positive whole number on a paragraph is a citable court number.
+ */
+const courtNumberLabel = (block: PromptBlock): string =>
+  block.type === "paragraph" &&
+  block.number !== undefined &&
+  Number.isSafeInteger(block.number) &&
+  block.number >= 1
+    ? ` (¶ ${String(block.number)})`
+    : "";
+
 /**
  * Format the decision text with anchor markers for the AI prompt.
  * Each block is prefixed with its anchorId so the model can
- * reference specific passages.
+ * reference specific passages, and a paragraph the court numbered
+ * carries that number after the anchor, so the model cites the
+ * paragraph the way a lawyer would ("bod 12"), not by its anchor.
  */
 export const formatDecisionForPrompt = (
-  blocks: { anchorId: string; plainText: string; type: string }[],
+  blocks: readonly PromptBlock[],
 ): string =>
   blocks
     .flatMap((b) =>
-      b.plainText.trim().length > 0 ? [`[${b.anchorId}] ${b.plainText}`] : [],
+      b.plainText.trim().length > 0
+        ? [`[${b.anchorId}]${courtNumberLabel(b)} ${b.plainText}`]
+        : [],
     )
     .join("\n\n");
 
@@ -119,7 +149,7 @@ export type AnalysisInput = {
 };
 
 type AnalysisInputOptions = {
-  blocks: { anchorId: string; plainText: string; type: string }[];
+  blocks: readonly PromptBlock[];
   decision: AnalysisPromptDecision;
   /** The system prompt already resolved for `decision.language`. */
   systemPrompt: string;
