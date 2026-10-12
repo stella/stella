@@ -69,7 +69,7 @@ export const ensureDockerKeeper = async ({
       return Result.ok(undefined);
     }
     const waited = await Result.tryPromise({
-      try: () => sleep(KEEPER_POLL_MS),
+      try: async () => sleep(KEEPER_POLL_MS),
       catch: (cause) =>
         new DockerKeeperError({ message: "Docker keeper wait failed.", cause }),
     });

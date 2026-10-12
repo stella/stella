@@ -66,7 +66,7 @@ describe("protected Docker runtime recovery", () => {
         label: "dev.test.docker-keeper",
         run: (command) => command.at(0) === "launchctl",
         now: () => elapsed,
-        sleep: (milliseconds) => {
+        sleep: async (milliseconds) => {
           elapsed += milliseconds;
           return Promise.resolve();
         },

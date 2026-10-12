@@ -1120,7 +1120,7 @@ const ensureHostDockerKeeper = async ({
       }).success;
     },
     now: () => Temporal.Now.instant().epochMilliseconds,
-    sleep: (milliseconds) => Bun.sleep(milliseconds),
+    sleep: async (milliseconds) => Bun.sleep(milliseconds),
   });
   if (recovered.isErr()) {
     return Result.err(recovered.error);
