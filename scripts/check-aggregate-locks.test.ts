@@ -64,3 +64,23 @@ test("a first baseline cannot enroll a newly added source file", () => {
     aggregateLockBaselineProblems({ actual: rows, baseline: rows, previous }),
   ).toContainEqual(expect.stringContaining("may only shrink"));
 });
+
+for (const primitive of [
+  "pg_advisory_xact_lock_shared",
+  "pg_try_advisory_xact_lock_shared",
+]) {
+  test(`enumerates and rejects unowned ${primitive} acquisitions`, () => {
+    const sites = aggregateLockSites(
+      "packages/new/src/worker.ts",
+      `tx.execute("SELECT ${primitive}(1, 2)");`,
+    );
+    expect(sites).toHaveLength(1);
+    expect(sites.at(0)?.primitive).toBe(`${primitive}(`);
+    expect(
+      aggregateLockBaselineProblems({
+        actual: aggregateLockBaseline(sites),
+        baseline: [],
+      }),
+    ).not.toHaveLength(0);
+  });
+}

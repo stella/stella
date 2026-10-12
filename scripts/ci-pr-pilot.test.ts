@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
-import { pilotFastJobs } from "./ci-pr-pilot-plan";
+import { PILOT_ALWAYS, pilotFastJobs } from "./ci-pr-pilot-plan";
 import { evaluate } from "./github-expression";
 
 const schema = v.object({
@@ -58,112 +58,134 @@ const fastJobs = (input: unknown) => {
   }
   return result.jobs;
 };
-const now = Date.now();
-const report = {
-  profile: "pilot-v1",
-  startedAt: new Date(now - 86_400_000).toISOString(),
-  generatedAt: new Date(now - 3_600_000).toISOString(),
-  complete: true,
-  stopped: false,
-  baselineArmToMergeP50Minutes: 10,
-  armToMergeP50Minutes: null,
-};
 type Options = {
   variable?: string;
+  certifiedUntil?: string;
+  currentTime?: string;
   event?: string;
   action?: string;
-  data?: unknown;
-  failure?: boolean;
-  provenance?: string;
 };
 const decide = async ({
   variable = "on",
+  certifiedUntil = "2026-10-10T12:00:00Z",
+  currentTime = "2026-10-09T12:00:00Z",
   event = "pull_request",
   action = "synchronize",
-  data = report,
-  failure = false,
-  provenance = ".github/workflows/ci-pr-pilot-metrics.yml",
 }: Options = {}) => {
+  const now = Date.parse(currentTime);
+  class FixedDate extends Date {
+    static override now = () => now;
+  }
   const outputs = new Map<string, string>();
-  const calls: unknown[] = [];
   const notices: string[] = [];
   await new Script(`(async () => {${policy}\n})()`).runInNewContext({
-    Buffer,
-    Date,
-    setTimeout: (callback: () => void) => callback(),
-    process: { env: { CI_PR_DEPTH_PILOT: variable, RUNNER_TEMP: "/unused" } },
-    context: {
-      eventName: event,
-      repo: { owner: "stella", repo: "stella" },
-      payload: { action, repository: { default_branch: "main" } },
-    },
-    core: {
-      setOutput: (key: string, value: string) => outputs.set(key, value),
-      info: () => {},
-      notice: (message: string) => notices.push(message),
-    },
-    require: (name: string) => {
-      if (name === "node:path") {
-        return { join: (...parts: string[]) => parts.join("/") };
-      }
-      if (name === "node:fs") {
-        return {
-          mkdtempSync: () => "/unused",
-          writeFileSync: () => {},
-          rmSync: () => {},
-        };
-      }
-      if (name === "node:child_process") {
-        return { execFileSync: () => Buffer.from(JSON.stringify(data)) };
-      }
-      throw new Error("Unexpected module");
-    },
-    github: {
-      rest: {
-        actions: {
-          listArtifactsForRepo: async (request: unknown) => {
-            calls.push(request);
-            if (failure) {
-              throw new Error("Lookup failed");
-            }
-            return {
-              data: {
-                artifacts: [
-                  {
-                    id: 10,
-                    name: "ci-pr-depth-pilot-v1",
-                    expired: false,
-                    expires_at: "2099-01-01T00:00:00Z",
-                    workflow_run: { id: 99, head_sha: "a" },
-                  },
-                ],
-              },
-            };
-          },
-          getWorkflowRun: async () => ({
-            data: {
-              path: provenance,
-              event: "schedule",
-              head_branch: "main",
-              head_sha: "a",
-              status: "completed",
-              conclusion: "success",
-            },
-          }),
-          downloadArtifact: async () => ({ data: new Uint8Array() }),
-        },
+    Date: FixedDate,
+    process: {
+      env: {
+        CI_PR_DEPTH_PILOT: variable,
+        CI_PR_DEPTH_PILOT_CERTIFIED_UNTIL: certifiedUntil,
       },
     },
+    context: { eventName: event, payload: { action } },
+    core: {
+      setOutput: (key: string, value: string) => outputs.set(key, value),
+      notice: (message: string) => notices.push(message),
+    },
   });
-  return { outputs, calls, notices };
+  return { outputs, notices };
 };
 
-test("coverage decisions emit one observable profile annotation", async () => {
-  for (const options of [{}, { variable: "off" }, { failure: true }]) {
+test("coverage profile requires a current repository certification", async () => {
+  const cases = [
+    {
+      name: "variable off",
+      options: { variable: "off" },
+      expected: "normal-v1",
+    },
+    {
+      name: "certification missing",
+      options: { certifiedUntil: "" },
+      expected: "normal-v1",
+    },
+    {
+      name: "certification malformed",
+      options: { certifiedUntil: "tomorrow" },
+      expected: "normal-v1",
+    },
+    {
+      name: "certification past",
+      options: { certifiedUntil: "2026-10-09T11:59:59Z" },
+      expected: "normal-v1",
+    },
+    {
+      name: "certification expires now",
+      options: { certifiedUntil: "2026-10-09T12:00:00Z" },
+      expected: "normal-v1",
+    },
+    {
+      name: "certification too distant",
+      options: { certifiedUntil: "2026-10-11T12:00:01Z" },
+      expected: "normal-v1",
+    },
+    {
+      name: "certification valid",
+      options: { certifiedUntil: "2026-10-11T12:00:00Z" },
+      expected: "pilot-fast-v1",
+    },
+    {
+      name: "certification with timezone offset",
+      options: {
+        certifiedUntil: "2026-10-10T14:00:00+02:00",
+        action: "opened",
+      },
+      expected: "pilot-fast-v1",
+    },
+    {
+      name: "event not pull request",
+      options: { event: "push" },
+      expected: "normal-v1",
+    },
+    {
+      name: "action not eligible",
+      options: { action: "reopened" },
+      expected: "normal-v1",
+    },
+  ] as const;
+  for (const { name, options, expected } of cases) {
     const { outputs, notices } = await decide(options);
-    const profile = outputs.get("coverage_profile");
-    expect(profile).toBeString();
-    expect(notices).toEqual([`coverage_profile=${profile ?? ""}`]);
+    expect(outputs.get("coverage_profile"), name).toBe(expected);
+    expect(notices, name).toEqual([`coverage_profile=${expected}`]);
+  }
+});
+
+test("nonexistent calendar dates cannot certify fast coverage", async () => {
+  for (const [currentTime, certifiedUntil] of [
+    ["2026-02-28T12:00:00Z", "2026-02-29T12:00:00Z"],
+    ["2026-02-28T12:00:00Z", "2026-02-30T00:00:00Z"],
+    ["2024-02-29T12:00:00Z", "2024-02-30T12:00:00Z"],
+    ["2100-02-28T12:00:00Z", "2100-02-29T12:00:00Z"],
+    ["2026-04-30T12:00:00Z", "2026-04-31T12:00:00+02:00"],
+    ["2026-06-30T12:00:00Z", "2026-06-31T12:00:00Z"],
+    ["2026-09-30T12:00:00Z", "2026-09-31T12:00:00Z"],
+    ["2026-11-30T12:00:00Z", "2026-11-31T12:00:00Z"],
+  ] as const) {
+    const expiresAt = Date.parse(certifiedUntil);
+    const now = Date.parse(currentTime);
+    expect(expiresAt).toBeGreaterThan(now);
+    expect(expiresAt).toBeLessThanOrEqual(now + 48 * 60 * 60 * 1000);
+    const { outputs, notices } = await decide({ currentTime, certifiedUntil });
+    expect(outputs.get("coverage_profile"), certifiedUntil).toBe("normal-v1");
+    expect(notices).toEqual(["coverage_profile=normal-v1"]);
+  }
+  for (const year of [2000, 2024]) {
+    expect(
+      (
+        await decide({
+          currentTime: `${year}-02-28T12:00:00Z`,
+          certifiedUntil: `${year}-02-29T12:00:00Z`,
+        })
+      ).outputs.get("coverage_profile"),
+    ).toBe("pilot-fast-v1");
   }
 });
 
@@ -210,12 +232,17 @@ const conditionContext = (profile: string, event: string, depth: string) => {
 const DECLARED_NORMAL_PLAN_CHANGES = new Set([
   "e2e-production-shard",
   "web-build",
+  "scan-engine-wasm-drift",
 ]);
 
 test("off and unset preserve today's job plan across every event and depth", async () => {
   expect(
     [...Object.keys(original.jobs), "postgres-service-suites"].toSorted(),
-  ).toEqual(Object.keys(workflow.jobs).toSorted());
+  ).toEqual(
+    Object.keys(workflow.jobs)
+      .filter((job) => job !== "query-perf")
+      .toSorted(),
+  );
   for (const variable of ["", "off"]) {
     for (const event of [
       "pull_request",
@@ -233,9 +260,8 @@ test("off and unset preserve today's job plan across every event and depth", asy
         "auto_merge_enabled",
         "enqueued",
       ]) {
-        const { outputs, calls } = await decide({ variable, event, action });
+        const { outputs } = await decide({ variable, event, action });
         expect(outputs.get("coverage_profile")).toBe("normal-v1");
-        expect(calls).toHaveLength(0);
         for (const depth of ["fast", "full"]) {
           const context = conditionContext("normal-v1", event, depth);
           for (const [name, job] of Object.entries(original.jobs)) {
@@ -262,6 +288,7 @@ test("off and unset preserve today's job plan across every event and depth", asy
   expect([...DECLARED_NORMAL_PLAN_CHANGES]).toEqual([
     "e2e-production-shard",
     "web-build",
+    "scan-engine-wasm-drift",
   ]);
 });
 
@@ -320,7 +347,7 @@ test("docs-only PRs retain Markdown checks in every pilot coverage profile", () 
       .filter(([name]) => !["ci-plan", "ci-result"].includes(name))
       .filter(([, job]) => evaluate(job.if ?? "true", context) === true)
       .map(([name]) => name);
-    expect(scheduled).toEqual(["ci-checks-docs"]);
+    expect(scheduled).toEqual(["ci-checks-docs", ...PILOT_ALWAYS]);
   }
 });
 
@@ -338,6 +365,29 @@ test("Docker checks retain every queue depth in both coverage profiles", () => {
       expect(
         evaluate(workflow.jobs["docker-checks"]?.if ?? "false", context),
       ).toBe(false);
+    }
+  }
+});
+
+test("desktop Rust tests retain merge-group selection in every coverage profile and queue depth", () => {
+  expect(fastJobs(workflow)).not.toContain("desktop-rust-tests");
+  for (const profile of ["normal-v1", "pilot-fast-v1"]) {
+    for (const event of ["pull_request", "merge_group"]) {
+      for (const queueDepth of ["thin", "full"]) {
+        for (const required of ["true", "false"]) {
+          const context = conditionContext(profile, event, "full");
+          context.values["needs.ci-plan.outputs.queue_depth"] = queueDepth;
+          context.values["needs.ci-plan.outputs.desktop_rust_checks_required"] =
+            required;
+          expect(
+            evaluate(
+              workflow.jobs["desktop-rust-tests"]?.if ?? "false",
+              context,
+            ),
+            `${profile}/${event}/${queueDepth}/${required}`,
+          ).toBe(event === "merge_group" && required === "true");
+        }
+      }
     }
   }
 });
@@ -372,7 +422,12 @@ test("pilot pushes execute only the fast allowlist and its generated-input prere
   expect(outputs.get("coverage_profile")).toBe("pilot-fast-v1");
   const allowed = fastJobs(workflow);
   const context = conditionContext("pilot-fast-v1", "pull_request", "fast");
+  const always: readonly string[] = PILOT_ALWAYS;
   for (const [name, job] of Object.entries(workflow.jobs)) {
+    if (always.includes(name)) {
+      expect(evaluate(job.if ?? "true", context), name).toBe(true);
+      continue;
+    }
     if (!allowed.includes(name)) {
       expect(evaluate(job.if ?? "true", context), name).toBe(false);
     }
@@ -398,9 +453,8 @@ test("pilot pushes execute only the fast allowlist and its generated-input prere
 
 test("ready and auto-merge arm select exactly the normal PR plan", async () => {
   for (const action of ["ready_for_review", "auto_merge_enabled"]) {
-    const { outputs, calls } = await decide({ action });
+    const { outputs } = await decide({ action });
     expect(outputs.get("coverage_profile")).toBe("normal-v1");
-    expect(calls).toHaveLength(0);
   }
   const full = conditionContext("normal-v1", "pull_request", "fast");
   const reference = conditionContext("normal-v1", "pull_request", "fast");
@@ -415,40 +469,9 @@ test("ready and auto-merge arm select exactly the normal PR plan", async () => {
 
 test("main and queue ignore the pilot switch", async () => {
   for (const event of ["merge_group", "push", "workflow_dispatch"]) {
-    const { outputs, calls } = await decide({ event });
+    const { outputs } = await decide({ event });
     expect(outputs.get("coverage_profile")).toBe("normal-v1");
-    expect(calls).toHaveLength(0);
   }
-});
-
-test("untrusted, incomplete, stale, expired or slowed pilot evidence retains normal checks", async () => {
-  for (const data of [
-    null,
-    {},
-    { ...report, complete: false },
-    { ...report, stopped: true },
-    { ...report, generatedAt: new Date(now - 37 * 3_600_000).toISOString() },
-    { ...report, startedAt: new Date(now - 7 * 86_400_000).toISOString() },
-    { ...report, armToMergeP50Minutes: 30.01 },
-    { ...report, baselineArmToMergeP50Minutes: null },
-  ]) {
-    expect((await decide({ data })).outputs.get("coverage_profile")).toBe(
-      "normal-v1",
-    );
-  }
-  for (const options of [
-    { failure: true },
-    { provenance: ".github/workflows/ci.yml" },
-  ]) {
-    expect((await decide(options)).outputs.get("coverage_profile")).toBe(
-      "normal-v1",
-    );
-  }
-  expect(
-    (
-      await decide({ data: { ...report, armToMergeP50Minutes: 30 } })
-    ).outputs.get("coverage_profile"),
-  ).toBe("pilot-fast-v1");
 });
 
 test("the prerequisite census rejects every undecided new job and every deferred dependency", () => {
@@ -548,4 +571,25 @@ test("pilot-fast aggregation requires its planned jobs and accepts deferred skip
       ).toBe(1);
     }
   }
+});
+
+test("scan engine builds offline on affected PRs in both coverage profiles", () => {
+  const condition = workflow.jobs["scan-engine-wasm-drift"]?.if;
+  if (!condition) {
+    throw new Error("Missing scan engine condition");
+  }
+  for (const profile of ["normal-v1", "pilot-fast-v1"]) {
+    for (const required of ["false", "true"]) {
+      for (const trusted of ["false", "true"]) {
+        const context = conditionContext(profile, "pull_request", "fast");
+        context.values["needs.ci-plan.outputs.scan_engine_wasm_required"] =
+          required;
+        context.values["needs.ci-plan.outputs.trusted"] = trusted;
+        expect(evaluate(condition, context)).toBe(
+          required === "true" && trusted === "true",
+        );
+      }
+    }
+  }
+  expect(fastJobs(workflow)).toContain("scan-engine-wasm-drift");
 });

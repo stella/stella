@@ -1,3 +1,5 @@
+import { normalizeUnicode } from "@stll/text-normalize";
+
 /**
  * Fold a surface form to its comparison key for the
  * excluded-canonicals filter. Mirrors Folio's
@@ -6,4 +8,4 @@
  * collide.
  */
 export const normalizeForExclusion = (value: string): string =>
-  value.normalize("NFKC").toLowerCase().replaceAll(/\s+/gu, " ").trim();
+  normalizeUnicode(value, "NFKC").toLowerCase().replaceAll(/\s+/gu, " ").trim();

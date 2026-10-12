@@ -75,6 +75,8 @@ type GatedTestClient = {
 };
 
 type OpenClientOptions = {
+  /** A separately authenticated fixture login on the same test server. */
+  readonly databaseUrl?: string;
   readonly logger?: Logger;
   /** Connections in this client's pool. */
   readonly max?: number;
@@ -82,6 +84,7 @@ type OpenClientOptions = {
   readonly idleTimeout?: number;
   /** PostgreSQL settings sent when each connection opens. */
   readonly connection?: {
+    readonly application_name?: string;
     readonly statement_timeout?: number;
     readonly lock_timeout?: number;
   };
@@ -113,12 +116,18 @@ export const withGatedTestClients = async <T>(
 ): Promise<T> => {
   const opened: SQL[] = [];
   const openClient = ({
+    databaseUrl: clientDatabaseUrl = databaseUrl,
     max = 1,
     idleTimeout,
     connection,
     logger,
   }: OpenClientOptions = {}) => {
-    const client = new SQL({ url: databaseUrl, max, idleTimeout, connection });
+    const client = new SQL({
+      url: clientDatabaseUrl,
+      max,
+      idleTimeout,
+      connection,
+    });
     opened.push(client);
     return { sql: client, db: openDatabase(client, logger) };
   };

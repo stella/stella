@@ -11,6 +11,7 @@ import {
 } from "@/api/lib/billing/vat-rates";
 
 const config = {
+  contract: "patch",
   description:
     "Create a VAT rate validity period in the active organization. validFrom is inclusive; validTo is exclusive.",
   permissions: { organizationSettings: ["update"] },

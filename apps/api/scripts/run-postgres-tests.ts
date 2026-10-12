@@ -31,6 +31,7 @@ const durations = measured?.unwrapOr({}) ?? {};
 process.exitCode = await runGatedTests({
   requiredEnv: ["DATABASE_URL"],
   script: "test:postgres",
+  preload: "./src/tests/setup-postgres.ts",
   selection: process.env["CI_POSTGRES_TEST_SELECTION"],
   exclusiveTestPaths: EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
   spawnTestProcess: spawnPostgresTestProcess,

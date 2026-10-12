@@ -9,6 +9,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { notificationParamsSchema, readUnreadCount } from "./read-model";
 
 const config = {
+  contract: "patch",
   description:
     "Mark one of the caller's notifications read. Idempotent: marking an " +
     "already-read notification succeeds and changes nothing. Answers with the " +
