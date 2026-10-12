@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The root formatter config consumes tailwindcss/theme.css. Declare its existing catalog version at the tooling owner so scoped CI installs resolve the stylesheet without relying on another workspace."
+}

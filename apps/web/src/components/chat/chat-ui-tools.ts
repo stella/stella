@@ -1,12 +1,17 @@
+import type { ChatClientState } from "@tanstack/ai-client";
 /**
  * Re-exports chat message types from the backend (single
  * source of truth) and provides frontend-only helpers.
  */
-
-import type { ChatClientState } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
+import {
+  ASK_USER_TOOL_NAME,
+  CREATE_DOCUMENT_TOOL_NAME,
+  isServerChatToolCall,
+} from "@stll/api-contract/chat";
+import { REQUEST_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 import type { FolioAgentToolName } from "@stll/folio-agents";
 
@@ -21,6 +26,7 @@ import type {
 import { MCP_CHAT_TOOL_GRANT_POLICIES } from "@/lib/api-contract";
 import type { WebApiRoutes } from "@/lib/eden-client";
 import { toAPIError } from "@/lib/errors/api";
+import { withProviderDiagnostic } from "@/lib/errors/provider-diagnostic";
 
 export type {
   ChatAnonRestoration,
@@ -161,8 +167,8 @@ const isChatToolCallState = (
 ): value is ChatToolCallPart["state"] =>
   Object.hasOwn(TOOL_CALL_STATE_IS_RUNNING, value);
 const USER_INPUT_TOOL_NAMES = {
-  "ask-user": true,
-  request_secret: true,
+  [ASK_USER_TOOL_NAME]: true,
+  [REQUEST_SECRET_TOOL_NAME]: true,
 } as const satisfies Record<string, true>;
 
 // folio-agents tools a DOCX surface auto-runs against its bridge with no
@@ -774,7 +780,17 @@ export const hasRunningToolCallInLatestAssistantMessage = ({
     return false;
   }
 
-  return message.parts.some(isRunningToolPart);
+  // Server execution belongs to an active response stream. A ready runtime
+  // with complete server input is waiting behind a gate, not still running.
+  return message.parts.some(
+    (part) =>
+      isRunningToolPart(part) &&
+      !(
+        part.type === "tool-call" &&
+        part.state === "input-complete" &&
+        isServerChatToolCall(part)
+      ),
+  );
 };
 
 type PersistedChatPart = PersistedChatMessage["parts"][number];
@@ -864,7 +880,11 @@ export const isUnresolvedFolioAgentDocToolCallPart = (
     return false;
   }
 
-  if (part.type !== "tool-call" || part.state !== "input-complete") {
+  if (
+    part.type !== "tool-call" ||
+    part.state !== "input-complete" ||
+    isServerChatToolCall(part)
+  ) {
     return false;
   }
 
@@ -913,7 +933,7 @@ const toTerminalIfRunningToolPart = (part: ChatPart): ChatPart => {
   // after hydration. Preserve it so the session effect can return its result
   // instead of turning a recoverable draft into an interrupted tool call.
   if (
-    part.name === "create-document" &&
+    part.name === CREATE_DOCUMENT_TOOL_NAME &&
     part.state === "input-complete" &&
     isJsonObject(part.input) &&
     typeof part.input["source"] === "string" &&
@@ -949,7 +969,14 @@ export const sanitizeRunningToolCalls = (
     if (message.role !== "assistant") {
       return message;
     }
-    const parts = message.parts.map(toTerminalIfRunningToolPart);
+    const parts = message.parts.map((part) =>
+      message.metadata?.turnOutcome?.type === "awaiting-user" &&
+      part.type === "tool-call" &&
+      part.state === "input-complete" &&
+      isServerChatToolCall(part)
+        ? part
+        : toTerminalIfRunningToolPart(part),
+    );
     const partsChanged = parts.some(
       (part, index) => part !== message.parts[index],
     );
@@ -1094,7 +1121,10 @@ export const getChatAssistantTurnError = (
   switch (outcome.type) {
     case "failed":
       return outcome.refusal === undefined
-        ? new Error(outcome.error)
+        ? withProviderDiagnostic(
+            new Error(outcome.error),
+            outcome.providerDiagnostic,
+          )
         : toAPIError({
             status: ACTION_ADMISSION_REFUSALS[outcome.refusal.code].status,
             value: outcome.refusal,

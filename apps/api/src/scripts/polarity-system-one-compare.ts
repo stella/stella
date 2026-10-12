@@ -11,8 +11,10 @@ import { envBase } from "@/api/env-base";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
 import { excerptOf } from "@/api/handlers/case-law/polarity/classifier";
 import { extractContexts } from "@/api/handlers/case-law/polarity/context";
-import { classifyWithLLM } from "@/api/handlers/case-law/polarity/llm-classifier";
-import { POLARITY_QUESTION } from "@/api/handlers/case-law/polarity/system-one-classifier";
+import {
+  classifyWithSystemOne,
+  POLARITY_QUESTION,
+} from "@/api/handlers/case-law/polarity/system-one-classifier";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
 import { readCorpusText } from "@/api/lib/legal-search/corpus-reads";
@@ -305,17 +307,23 @@ const readWithLlm = async (item: ComparisonItem): Promise<LlmOutcome> => {
     return { status: "not-run" };
   }
   const startedAt = performance.now();
-  const classified = await classifyWithLLM({
+  const classified = await classifyWithSystemOne({
+    client: null,
     context: item.context,
     citationText: item.citation.citationText,
     language: item.decision.language,
   });
   const latencyMs = Math.round(performance.now() - startedAt);
-  if (Result.isError(classified)) {
-    return { status: "failed", message: classified.error.message };
+  if (classified.state === "undecided") {
+    return { status: "failed", message: classified.reason };
   }
-  const { polarity, confidence, keyPhrase } = classified.value;
-  return { status: "read", polarity, confidence, keyPhrase, latencyMs };
+  return {
+    status: "read",
+    polarity: classified.answer.choice,
+    confidence: classified.confidence,
+    keyPhrase: classified.evidence ?? "",
+    latencyMs,
+  };
 };
 
 await runScriptWithErrorOutput(async () => {

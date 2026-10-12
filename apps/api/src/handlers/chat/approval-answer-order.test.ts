@@ -494,7 +494,18 @@ describe("a step whose every call was denied, followed by a step that opens with
     expect(afterDenial.stored.parts.map((part) => part.type)).toEqual([
       "tool-call",
       "tool-call",
+      "tool-result",
     ]);
+    expect(afterDenial.stored.parts.at(-1)).toMatchObject({
+      type: "tool-result",
+      toolCallId: "call-1",
+      outcome: "denied",
+      state: "error",
+      content: JSON.stringify({
+        approved: false,
+        message: "User denied this action",
+      }),
+    });
     expect(stepOfStoredCall(denied)).toBeString();
     expect(stepOfStoredCall(next)).toBeString();
     expect(stepOfStoredCall(next)).not.toBe(stepOfStoredCall(denied));

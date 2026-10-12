@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { runInNewContext } from "node:vm";
 
 import { isConnectionFailure } from "./connection-failure";
 
@@ -16,8 +17,14 @@ describe("connection failure classification", () => {
       (error: unknown) => error,
     );
     expect(cause).toBeInstanceOf(TypeError);
-    expect(cause).toMatchObject({ code: expect.any(String) });
-    expect(isConnectionFailure(cause)).toBe(true);
+    if (!(cause instanceof TypeError) || !("code" in cause)) {
+      throw new TypeError("Expected a coded transport error");
+    }
+    expect(typeof cause.code).toBe("string");
+    expect(
+      isConnectionFailure(cause),
+      JSON.stringify(cause, Object.getOwnPropertyNames(cause)),
+    ).toBe(true);
   });
 
   for (const code of [
@@ -43,6 +50,72 @@ describe("connection failure classification", () => {
       );
     });
   }
+
+  test.each(["ECONNREFUSED", "ECONNRESET", "ENOTFOUND", "ETIMEDOUT"])(
+    "recognizes %s errors from another realm",
+    (code) => {
+      const cause: unknown = runInNewContext(
+        "Object.assign(new TypeError('message omitted'), { code })",
+        { code },
+      );
+      expect(cause).not.toBeInstanceOf(Error);
+      expect(Error.isError(cause)).toBe(true);
+      expect(isConnectionFailure(cause)).toBe(true);
+      expect(isConnectionFailure(new Error("Request failed", { cause }))).toBe(
+        true,
+      );
+    },
+  );
+
+  test.each(["deleted", "undefined"])(
+    "preserves ordinary classifications when Error.isError is %s",
+    (availability) => {
+      const descriptor = Object.getOwnPropertyDescriptor(Error, "isError");
+      try {
+        if (availability === "deleted") {
+          expect(Reflect.deleteProperty(Error, "isError")).toBe(true);
+        } else {
+          Object.defineProperty(Error, "isError", {
+            configurable: true,
+            value: undefined,
+          });
+        }
+        expect(typeof Error.isError).toBe("undefined");
+        const transport = Object.assign(new TypeError("message omitted"), {
+          code: "ECONNREFUSED",
+        });
+        expect(isConnectionFailure(transport)).toBe(true);
+        expect(
+          isConnectionFailure(
+            new Error("Request failed", { cause: transport }),
+          ),
+        ).toBe(true);
+        expect(isConnectionFailure(new TypeError("Failed to fetch"))).toBe(
+          true,
+        );
+        expect(isConnectionFailure(new Error("Programming failure"))).toBe(
+          false,
+        );
+        for (const cause of [
+          undefined,
+          null,
+          false,
+          42,
+          "Failed to fetch",
+          {},
+          { code: "ECONNREFUSED", message: "Failed to fetch" },
+        ]) {
+          expect(isConnectionFailure(cause)).toBe(false);
+        }
+      } finally {
+        if (descriptor) {
+          Object.defineProperty(Error, "isError", descriptor);
+        } else {
+          Reflect.deleteProperty(Error, "isError");
+        }
+      }
+    },
+  );
 
   test("uses messages only when there is no runtime code", () => {
     expect(isConnectionFailure(new TypeError("Unable to connect"))).toBe(true);
