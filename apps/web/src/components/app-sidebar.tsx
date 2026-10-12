@@ -134,6 +134,7 @@ import {
   dropTargetForElements,
 } from "@/lib/drag-and-drop/element-registration";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useFindModalBoundary } from "@/lib/find-owner";
 import { formatHotkeyForPlatform, NAV_KEY } from "@/lib/hotkeys";
 import { inboxCountOptions } from "@/lib/inbox/queries";
 import { knowledgeSections } from "@/lib/knowledge/navigation";
@@ -211,6 +212,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const [searchState, setSearchState] = useState<SearchDialogState>(
     SEARCH_DIALOG_STATES.idle,
   );
+  useFindModalBoundary(searchState === SEARCH_DIALOG_STATES.open);
   const setSearchOpen = useCallback((open: boolean) => {
     setSearchState(
       open ? SEARCH_DIALOG_STATES.open : SEARCH_DIALOG_STATES.closed,
