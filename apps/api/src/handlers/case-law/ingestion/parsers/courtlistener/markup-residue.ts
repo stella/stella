@@ -1,21 +1,19 @@
-import { entityResidueIn } from "@/api/lib/legal-search/parsers/entity-residue";
+import { entityResidueMatchesIn } from "@/api/lib/legal-search/parsers/entity-residue";
 import type { MarkupResidueRuleId } from "@/api/lib/legal-search/parsers/markup-residue";
 import { rtfControlResidueMatchesIn } from "@/api/lib/legal-search/parsers/rtf-reader";
 
-const entityCharacterReferencePattern =
-  /&(?:#[xX][\da-fA-F]+|#\d+|[a-zA-Z][\da-zA-Z]*);/gu;
-
 /** CourtListener's publisher grammar, used only by its explicit validation policy. */
 
-type MarkupResidueRule = {
-  id: MarkupResidueRuleId;
-  /** Why a court's text never looks like this. */
-  reason: string;
-  /** Global: a rule with an `accept` gate walks every match, not the first. */
-  pattern: RegExp;
-  /** Second gate for a pattern that matches more than it reports. */
-  accept?: (match: string) => boolean;
-};
+type MarkupResidueRule =
+  | { id: "entity"; reason: string }
+  | {
+      id: Exclude<MarkupResidueRuleId, "entity">;
+      /** Why a court's text never looks like this. */
+      reason: string;
+      /** Global: a rule with an accept gate walks every match. */
+      pattern: RegExp;
+      accept?: (match: string) => boolean;
+    };
 
 /**
  * A run of digits long enough that no number a court writes reaches it.
@@ -61,11 +59,6 @@ const MARKUP_RESIDUE_RULES: readonly MarkupResidueRule[] = [
   {
     id: "entity",
     reason: "undecoded character entities",
-    pattern: new RegExp(entityCharacterReferencePattern, "gu"),
-    // The SQL pattern is intentionally a candidate superset; unknown
-    // publisher literals have the same shape but are not character refs.
-    // parser-output-unchanged: only logged elsewhere; gating parsers (pl-nsa, pl-uodo, CourtListener) bump
-    accept: (match) => entityResidueIn(match) !== undefined,
   },
   {
     id: "digit-run",
@@ -150,7 +143,22 @@ export function* markupResidueMatchesIn(
       excerpt: text.slice(index, index + MARKUP_RESIDUE_EXCERPT_CHARS).trim(),
     };
   }
+  const entities = [...entityResidueMatchesIn(text)];
   for (const rule of MARKUP_RESIDUE_RULES) {
+    if (rule.id === "entity") {
+      for (const { entity, index } of entities) {
+        yield {
+          index,
+          matched: entity,
+          rule: rule.id,
+          reason: rule.reason,
+          excerpt: text
+            .slice(index, index + MARKUP_RESIDUE_EXCERPT_CHARS)
+            .trim(),
+        };
+      }
+      continue;
+    }
     const detectsPayload = rule.id === "digit-run" || rule.id === "hex-run";
     // Iterators may be interleaved; each owns its scan cursor.
     const pattern = rule.pattern.ignoreCase
@@ -159,8 +167,22 @@ export function* markupResidueMatchesIn(
     let match = pattern.exec(text);
     const urlRanges = detectsPayload && match ? citationUrlRanges(text) : [];
     let urlIndex = 0;
+    let entityIndex = 0;
     while (match) {
       if (detectsPayload) {
+        let entity = entities.at(entityIndex);
+        while (entity && entity.index + entity.entity.length <= match.index) {
+          entityIndex += 1;
+          entity = entities.at(entityIndex);
+        }
+        if (
+          entity &&
+          entity.index <= match.index &&
+          match.index + match[0].length <= entity.index + entity.entity.length
+        ) {
+          match = pattern.exec(text);
+          continue;
+        }
         let url = urlRanges.at(urlIndex);
         while (url && url.end <= match.index) {
           urlIndex += 1;

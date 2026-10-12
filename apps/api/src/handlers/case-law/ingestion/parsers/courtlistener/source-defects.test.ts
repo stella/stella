@@ -264,16 +264,25 @@ test("courtlistener-published-entities-decode-once", () => {
   assertProperty(
     "courtlistener-published-entities-decode-once",
     fc.property(
-      fc.constantFrom(
-        "amp",
-        "commat",
-        "and",
-        "CounterClockwiseContourIntegral",
-        "NotEqualTilde",
+      fc.oneof(
+        fc
+          .constantFrom(
+            "amp",
+            "commat",
+            "and",
+            "CounterClockwiseContourIntegral",
+            "NotEqualTilde",
+          )
+          .map((name) => `&${name};`),
+        fc
+          .integer({ min: 65, max: 122 })
+          .map((codepoint) => `&#${"0".repeat(40)}${codepoint};`),
+        fc
+          .integer({ min: 65, max: 122 })
+          .map((codepoint) => `&#x${"0".repeat(40)}${codepoint.toString(16)};`),
       ),
       fc.integer({ min: 1, max: 8 }),
-      (name, count) => {
-        const literal = `&${name};`;
+      (literal, count) => {
         const wording = Array.from(
           { length: count },
           () => `The published token ${literal} stays.`,
@@ -292,6 +301,36 @@ test("courtlistener-published-entities-decode-once", () => {
       },
     ),
   );
+});
+
+test("long zero-padded numeric entities remain published literals", () => {
+  const zeros = "0".repeat(40);
+  for (const [escaped, literal] of [
+    [`&amp;#${zeros}253;`, `&#${zeros}253;`],
+    [`&amp;#x${zeros}FD;`, `&#x${zeros}FD;`],
+  ]) {
+    const wording = `The published token ${literal} stays.`;
+    const result = select(`<p>The published token ${escaped} stays.</p>`);
+    expect(result.status).toBe("parsed");
+    if (result.status !== "parsed") {
+      continue;
+    }
+    expect(
+      result.text.units
+        .flatMap(({ blocks }) => blocks.map(({ plainText }) => plainText))
+        .join(" "),
+    ).toBe(wording);
+    expect(result.sourceDefects.at(0)?.type).toBe("entity-reference");
+  }
+});
+
+test("varying binary text outside a numeric entity remains refused", () => {
+  const zeros = "0".repeat(40);
+  const binary = "abcdef0123456789".repeat(3);
+  const result = select(
+    `<p>Entity &amp;#${zeros}253; followed by payload ${binary}.</p>`,
+  );
+  expect(result.status).toBe("no-usable-text");
 });
 
 test("courtlistener-large-html-retains-only-visible-text", () => {
