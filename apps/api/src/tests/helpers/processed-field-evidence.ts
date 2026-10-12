@@ -177,7 +177,7 @@ const arrayAt = <T>(
   if (!isUnknownArray(value) || !value.every(isItem)) {
     return panic(`finaldoc ${key} is not in the publisher's shape`);
   }
-  return value;
+  return [...value];
 };
 
 const readCzRegional: EvidenceReader = async (fixture) => {
