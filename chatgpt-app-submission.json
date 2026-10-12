@@ -979,6 +979,18 @@
         "open_world_justification": "May contact an external public-data provider or a selected external capability, while keeping resulting workspace changes private.",
         "destructive_justification": "Can dispatch a catalog capability marked destructive; destructive targets require explicit confirmation."
       }
+    },
+    "mint_web_handoff": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves or computes data from the user’s authorized stella workspace or configured source without changing stored records.",
+        "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
+        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+      }
     }
   },
   "dynamic_tool_namespaces": {

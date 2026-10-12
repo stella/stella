@@ -5832,5 +5832,32 @@
       "openWorldHint": true,
       "readOnlyHint": false
     }
+  },
+  {
+    "cli": {
+      "command": ["web", "open"],
+      "excluded": true,
+      "scope": "read"
+    },
+    "name": "mint_web_handoff",
+    "description": "App-only: refresh a web link when the user opens it. Returns a plain link when sign-in handoff is unavailable.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["url"],
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "maxLength": 8192,
+          "description": "Web URL the user chose to open."
+        }
+      }
+    },
+    "annotations": {
+      "title": "Open web link",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
   }
 ]

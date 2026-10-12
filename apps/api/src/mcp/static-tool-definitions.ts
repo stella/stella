@@ -33,6 +33,7 @@ import type {
   McpToolSet,
   ToolScope,
 } from "@/api/mcp/tool-types";
+import { WEB_HANDOFF_TOOL_SET } from "@/api/mcp/web-handoff-links";
 
 export const DEFAULT_MCP_TOOL_SETS = [
   COMPAT_TOOL_SET,
@@ -49,6 +50,7 @@ export const DEFAULT_MCP_TOOL_SETS = [
   RESEARCH_ADMIN_TOOL_SET,
   FEEDBACK_TOOL_SET,
   CAPABILITY_TOOL_SET,
+  WEB_HANDOFF_TOOL_SET,
 ] as const satisfies readonly McpToolSet<readonly McpToolDefinition[]>[];
 
 // Keep this schema-sensitive projection as a literal tuple: flattening the
@@ -71,6 +73,7 @@ export const DEFAULT_MCP_TOOL_DEFINITIONS = [
   ...RESEARCH_ADMIN_TOOL_SET.definitions,
   ...FEEDBACK_TOOL_SET.definitions,
   ...CAPABILITY_TOOL_SET.definitions,
+  ...WEB_HANDOFF_TOOL_SET.definitions,
 ] as const satisfies readonly McpToolDefinition[];
 
 const PURPOSE_BUILT_MCP_TOOL_DEFINITIONS = DEFAULT_MCP_TOOL_DEFINITIONS.filter(

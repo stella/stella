@@ -1,0 +1,169 @@
+import type { CallToolResult } from "@modelcontextprotocol/server";
+import { panic, Result } from "better-result";
+
+const URL_PATTERN = /https?:\/\/[^\s<>"'`\\]+/gu;
+
+const mapProseLinks = (text: string, transform: (url: string) => string) =>
+  text.replace(URL_PATTERN, (match) => {
+    const url = match.replace(/[),.;\]}]+$/u, "");
+    return `${transform(url)}${match.slice(url.length)}`;
+  });
+
+const mapStrings = (
+  value: unknown,
+  transform: (value: string) => string,
+  key = "",
+): unknown => {
+  if (typeof value === "string") {
+    if (/(?:url|uri|href)$/iu.test(key)) {
+      return transform(value);
+    }
+    return key === "nextStep" || key === "hint"
+      ? mapProseLinks(value, transform)
+      : value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item: unknown) => mapStrings(item, transform, key));
+  }
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([nestedKey, nested]) => [
+        nestedKey,
+        mapStrings(nested, transform, nestedKey),
+      ]),
+    );
+  }
+  return value;
+};
+const mapText = (text: string, transform: (value: string) => string) => {
+  const parsed = Result.try((): unknown => JSON.parse(text));
+  if (Result.isOk(parsed)) {
+    return JSON.stringify(mapStrings(parsed.value, transform));
+  }
+  return text.replace(
+    /(\[[^\]]*\]\()([^\s)]+)(\))/gu,
+    (_, prefix: string, url: string, suffix: string) =>
+      `${prefix}${transform(url)}${suffix}`,
+  );
+};
+
+export const webHandoffPaths = (
+  value: unknown,
+  appBaseUrl: string,
+): Map<string, string> => {
+  const origin = new URL(appBaseUrl).origin;
+  const links = new Map<string, string>();
+  const collect = (url: string) => {
+    const parsed = URL.parse(url);
+    if (
+      parsed !== null &&
+      parsed.origin === origin &&
+      !parsed.username &&
+      !parsed.password
+    ) {
+      links.set(url, `${parsed.pathname}${parsed.search}`);
+    }
+    return url;
+  };
+  mapStrings(value, collect);
+  if (
+    value !== null &&
+    typeof value === "object" &&
+    "content" in value &&
+    Array.isArray(value.content)
+  ) {
+    for (const block of value.content) {
+      if (
+        block !== null &&
+        typeof block === "object" &&
+        "type" in block &&
+        block.type === "text" &&
+        "text" in block &&
+        typeof block.text === "string"
+      ) {
+        mapText(block.text, collect);
+      }
+    }
+  }
+  return links;
+};
+
+export const decorateWebHandoffLinks = (
+  value: CallToolResult,
+  links: ReadonlyMap<string, string>,
+  code: string,
+): CallToolResult => {
+  const replace = (url: string) => {
+    if (!links.has(url)) {
+      return url;
+    }
+    const parsed = new URL(url);
+    const fragment = parsed.hash
+      .slice(1)
+      .split("&")
+      .filter(
+        (part) => part.length > 0 && !new URLSearchParams(part).has("sh"),
+      );
+    fragment.push(`sh=${code}`);
+    parsed.hash = fragment.join("&");
+    return parsed.href;
+  };
+  const record = (recordValue: object) =>
+    Object.fromEntries(
+      Object.entries(recordValue).map(([key, nested]) => [
+        key,
+        mapStrings(nested, replace, key),
+      ]),
+    );
+  return {
+    ...value,
+    content: value.content.map((block) => {
+      switch (block.type) {
+        case "text":
+          return { ...block, text: mapText(block.text, replace) };
+        case "resource_link":
+          return { ...block, uri: replace(block.uri) };
+        case "resource":
+          return {
+            ...block,
+            resource: {
+              ...block.resource,
+              uri: replace(block.resource.uri),
+              ...("text" in block.resource
+                ? { text: mapText(block.resource.text, replace) }
+                : {}),
+            },
+          };
+        case "image":
+        case "audio":
+          return block;
+        default:
+          return panic("Unexpected MCP content block", { block });
+      }
+    }),
+    ...(value.structuredContent === undefined ||
+    value.structuredContent === null ||
+    typeof value.structuredContent !== "object"
+      ? {}
+      : { structuredContent: record(value.structuredContent) }),
+    ...(value._meta === undefined ? {} : { _meta: record(value._meta) }),
+  };
+};
+
+type HandoffLinkResultOptions = {
+  result: CallToolResult;
+  appBaseUrl: string;
+  mint: (paths: readonly string[]) => Promise<string | null>;
+};
+export const handoffLinkResult = async ({
+  result,
+  appBaseUrl,
+  mint,
+}: HandoffLinkResultOptions): Promise<CallToolResult> => {
+  const links = webHandoffPaths(result, appBaseUrl);
+  if (links.size === 0) {
+    return result;
+  }
+  const code = await mint([...new Set(links.values())]);
+  return code === null ? result : decorateWebHandoffLinks(result, links, code);
+};

@@ -38,6 +38,7 @@ import type {
   McpToolDefinition,
   RuntimeMcpToolOutputContract,
 } from "@/api/mcp/tool-types";
+import { isMcpToolVisibleTo } from "@/api/mcp/tool-visibility";
 import {
   defineMcpToolOutput,
   deriveUncompactedMcpOutputSchema,
@@ -146,6 +147,22 @@ describe("MCP tool-surface baseline", () => {
 
   test("every audience has exactly one baseline row", () => {
     expect(baselineAudiences(baseline)).toEqual([...MCP_MODES].toSorted());
+  });
+
+  test("model measurements exclude every app-only definition", async () => {
+    const measured = await measureMcpSurfaces("model");
+    for (const { mode, definitions } of SURFACES) {
+      const names = Object.entries(measured.tools)
+        .filter(([, audiences]) => audiences[mode] !== undefined)
+        .map(([name]) => name)
+        .toSorted();
+      expect(names).toEqual(
+        definitions
+          .filter((definition) => isMcpToolVisibleTo(definition, "model"))
+          .map(({ name }) => name)
+          .toSorted(),
+      );
+    }
   });
 
   test("every audience matches its committed baseline within tolerance", async () => {

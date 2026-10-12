@@ -103,6 +103,10 @@ import {
   serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
+import {
+  MCP_WEB_HANDOFF_TOOL,
+  withWebHandoffLinks,
+} from "@/api/mcp/web-handoff-links";
 import { mcpToolAuthorityRefusal } from "@/api/mcp/write-tool-authority";
 
 const MAX_TOOL_NAME_SUGGESTION_CHARS = 128;
@@ -1035,17 +1039,22 @@ export const createMcpHttpRequestHandler = ({
           context,
           mode,
           toolName: toolRequest.params.name,
-          run: async () =>
-            withToolAuthChallenge(
-              await handleToolsCallRequest({
-                toolRequest,
-                requestContext,
-                context,
-                mode,
-                session,
-              }),
+          run: async () => {
+            const result = await handleToolsCallRequest({
+              toolRequest,
+              requestContext,
+              context,
               mode,
-            ),
+              session,
+            });
+            return withToolAuthChallenge(
+              toolRequest.params.name === MCP_WEB_HANDOFF_TOOL ||
+                mode === "anonymized"
+                ? result
+                : await withWebHandoffLinks(result, context),
+              mode,
+            );
+          },
         }),
     );
 
