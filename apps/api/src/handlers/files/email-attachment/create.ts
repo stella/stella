@@ -36,6 +36,7 @@ import { consumeEmailAttachmentSaveRateLimit } from "../email-attachment-save-ra
 import { scanEmailAttachmentForSave } from "../email-attachment-save-scan";
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason:

@@ -12,6 +12,11 @@ const updateVariantParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/clauses/variants/update.ts",
+  },
   description:
     "Change one variant's label, body, or position within its clause; only " +
     "the fields you pass are written.",

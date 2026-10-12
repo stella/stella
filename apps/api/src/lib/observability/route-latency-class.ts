@@ -13,12 +13,14 @@ type DeclaredRouteLatencyClass = Extract<RequestClass, "search" | "batch">;
  * decision.
  */
 export const ROUTE_LATENCY_CLASSES = {
+  "GET /v1/case/:country/decisions/resolve": "search",
   "POST /v1/case/decisions/search": "search",
   "GET /v1/case/decisions/:decisionId/citations/summary": "search",
   "GET /v1/case/decisions/:decisionId/citations/leading": "search",
   "GET /v1/case/provisions/citing-decisions": "search",
   "GET /v1/case/provisions/citation-counts": "search",
   "GET /v1/law/statutes/search": "search",
+  "GET /v1/law/:country/citations/resolve": "search",
   "POST /v1/legislation/corpus/search": "search",
   "GET /v1/legislation/search": "search",
   "POST /v1/sanctions/search": "search",

@@ -38,11 +38,10 @@ pub fn focused_window_title(process_id: u32) -> Option<String> {
   // reads the cached caption rather than sending a blocking window message.
   let copied =
     unsafe { GetWindowTextW(window, buffer.as_mut_ptr(), TITLE_BUFFER_UNITS) };
-  // SAFETY: This takes no pointers; HWND is compared only as an opaque handle.
-  if copied <= 0
-    || unsafe { GetForegroundWindow() } != window
-    || process_for_window(window)? != process_id
-  {
+  // SAFETY: GetForegroundWindow takes no pointers and returns an OS-owned
+  // handle; it is only compared with `window` as an opaque value.
+  let foreground = unsafe { GetForegroundWindow() };
+  if copied <= 0 || foreground != window || process_for_window(window)? != process_id {
     return None;
   }
   // Reject possible truncation so privacy markers cannot be cut off the end.

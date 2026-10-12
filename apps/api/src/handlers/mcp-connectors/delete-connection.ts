@@ -14,6 +14,7 @@ const routeParams = t.Object({
 });
 
 const config = {
+  contract: "patch",
   permissions: { integration: ["delete"] },
   accountAccess: ACCOUNT_ACCESS.accountControl,
   realtime: mcpConnectorRealtimeUpdates,

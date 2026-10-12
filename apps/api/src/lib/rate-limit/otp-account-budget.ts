@@ -10,18 +10,17 @@ import { panic, Result } from "better-result";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
+import { ACCOUNT_ATTEMPT_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
+import {
+  recordBudgetRejection,
+  type BudgetName,
+} from "@/api/lib/rate-limit/budget-observability";
 import type { RateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimitRequestKey } from "@/api/lib/rate-limit/redis-context";
 import { isRecord } from "@/api/lib/type-guards";
 
-export const OTP_ACCOUNT_BUDGET = {
-  max: 10,
-  durationMs: 15 * 60 * 1000,
-} as const;
-export const DEMO_OTP_ACCOUNT_BUDGET = {
-  max: 5,
-  durationMs: OTP_ACCOUNT_BUDGET.durationMs,
-} as const;
+export const OTP_ACCOUNT_BUDGET = ACCOUNT_ATTEMPT_RATE_LIMITS.otp;
+export const DEMO_OTP_ACCOUNT_BUDGET = ACCOUNT_ATTEMPT_RATE_LIMITS.demoOtp;
 const OTP_VERIFICATION_TYPES = {
   "/sign-in/email-otp": "sign-in",
   "/email-otp/check-verification-otp": "body",
@@ -48,9 +47,11 @@ export const createAccountAttemptBudget = (
   {
     counterPrefix,
     budgetFor,
+    nameFor = () => "auth.account",
   }: {
     counterPrefix: string;
     budgetFor: (normalizedEmail: string) => AccountAttemptBudget;
+    nameFor?: (normalizedEmail: string) => BudgetName;
   },
 ) => ({
   reserve: async (email: string) => {
@@ -67,6 +68,11 @@ export const createAccountAttemptBudget = (
     );
     if (count > accountBudget.max) {
       await context.complete(key);
+      recordBudgetRejection({
+        name: nameFor(normalizedEmail),
+        keyKind: "account",
+        windowMs: accountBudget.durationMs,
+      });
       return Result.err(
         new APIError(
           "TOO_MANY_REQUESTS",
@@ -105,6 +111,10 @@ export const createOtpAccountBudget = (
 ) =>
   createAccountAttemptBudget(context, {
     counterPrefix: "otp-account",
+    nameFor: (normalizedEmail) =>
+      normalizedEmail === demoAccountEmail?.trim().toLowerCase()
+        ? "auth.otp.demo_account"
+        : "auth.otp.account",
     budgetFor: (normalizedEmail) =>
       normalizedEmail === demoAccountEmail?.trim().toLowerCase()
         ? DEMO_OTP_ACCOUNT_BUDGET

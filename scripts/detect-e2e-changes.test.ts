@@ -315,7 +315,7 @@ describe("detect-e2e-changes", () => {
   test("keeps a landing-only change out of app E2E", () => {
     for (const file of [
       "apps/landing/src/pages/index.astro",
-      "apps/web/e2e/marketing/landing-navigation.spec.ts",
+      "apps/landing/e2e/landing-navigation.spec.ts",
     ]) {
       expect(detects("core", [file])).toBe("false");
       expect(detects("landing", [file])).toBe("true");
@@ -323,15 +323,15 @@ describe("detect-e2e-changes", () => {
   });
 
   test("the shared marketing config exercises the landing project", () => {
-    const files = ["apps/web/e2e/playwright.marketing.config.ts"];
+    const files = ["packages/playwright-tools/src/marketing-config.ts"];
     expect(detects("core", files)).toBe("false");
     expect(detects("landing", files)).toBe("true");
   });
 
-  test("the web package manifest exercises its core and landing commands", () => {
+  test("the web package manifest exercises its core commands", () => {
     const files = ["apps/web/package.json"];
     expect(detects("core", files)).toBe("true");
-    expect(detects("landing", files)).toBe("true");
+    expect(detects("landing", files)).toBe("false");
   });
 
   test("routes every input of a product screenshot through the marketing scope", () => {
@@ -452,7 +452,7 @@ describe("detect-e2e-changes", () => {
     );
     expect(requiredExpression(collabRedis["if"])).toBe(
       githubExpression(
-        "!cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && needs.ci-plan.outputs.queue_depth != 'thin' && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))",
+        "!cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))",
       ),
     );
     expect(requiredExpression(collabRedis["run"])).toBe(
@@ -503,7 +503,15 @@ describe("detect-e2e-changes", () => {
 
     // The route network baseline has a leg of its own, and the Playwright
     // shards skip it there.
-    expect(production).toContain("shard: [1, 2, network-baseline]");
+    expect(production).toContain(
+      `shard: ${githubExpression("fromJSON(needs.ci-plan.outputs.e2e_production_matrix).shard")}`,
+    );
+    expect(workflowJob("ci-plan")).toContain(
+      "matrix=$(bun scripts/e2e-spec-shards-core.ts all)",
+    );
+    expect(workflowJob("ci-plan")).toContain(
+      'echo "selection_required=true" >> "$GITHUB_OUTPUT"',
+    );
     expect(
       requiredExpression(
         workflowStepValue(production, "Check route network baseline")["if"],
@@ -518,6 +526,18 @@ describe("detect-e2e-changes", () => {
         stepName,
       ).toContain("matrix.shard != 'network-baseline'");
     }
+  });
+
+  test("skips an eligible pull request when no e2e specs are selected", () => {
+    const plan = workflowJob("ci-plan");
+    expect(plan).toContain(`if [[ "$matrix" == '{"shard":[]}' ]]`);
+    expect(plan).toContain(
+      'echo "selection_required=false" >> "$GITHUB_OUTPUT"',
+    );
+    expect(
+      ciContract.jobs["ci-plan"]?.outputs?.["e2e_production_required"],
+    ).toBe(githubExpression("steps.e2e-pr-plan.outputs.required"));
+    expect(plan).toContain('echo "required=false" >> "$GITHUB_OUTPUT"');
   });
 
   test("starts only infrastructure exercised by pull request E2E", () => {
@@ -837,18 +857,20 @@ describe("detect-e2e-changes", () => {
                     always: () => true,
                     cancelled: () => cancelled,
                   };
-                  expect(Boolean(evaluateExpression(predicate, context))).toBe(
+                  const certified =
                     event !== "pull_request" &&
-                      planned &&
-                      (trusted || event === "workflow_dispatch") &&
-                      (!buildRequired ||
-                        webResult === "success" ||
-                        heavyResult === "success") &&
-                      (event !== "merge_group" || !cancelled),
+                    planned &&
+                    (trusted || event === "workflow_dispatch") &&
+                    (!buildRequired ||
+                      webResult === "success" ||
+                      heavyResult === "success") &&
+                    (event !== "merge_group" || !cancelled);
+                  expect(Boolean(evaluateExpression(predicate, context))).toBe(
+                    certified,
                   );
                   context.needs["ci-plan"].outputs.queue_depth = "thin";
                   expect(Boolean(evaluateExpression(predicate, context))).toBe(
-                    false,
+                    certified,
                   );
                 }
               }
@@ -1157,6 +1179,7 @@ describe("detect-e2e-changes", () => {
                       needs: {
                         "ci-plan": {
                           outputs: {
+                            coverage_profile: "normal-v1",
                             queue_depth: "full",
                             suite_depth: depth,
                             run_required: "true",
@@ -1171,7 +1194,6 @@ describe("detect-e2e-changes", () => {
                       cancelled: () => cancelled,
                     };
                     const certified =
-                      event !== "pull_request" &&
                       planned &&
                       (trusted || event === "workflow_dispatch") &&
                       (webResult === "success" || heavyResult === "success") &&
@@ -1181,18 +1203,18 @@ describe("detect-e2e-changes", () => {
                       Boolean(evaluateExpression(predicate, context)),
                       label,
                     ).toBe(certified);
-                    // A thin merge group keeps planned browser suites unless
-                    // the queue switch is off; no other event runs them thin.
+                    // Queue depth and browser configuration cannot bypass
+                    // a planned consumer's certification requirement.
                     context.needs["ci-plan"].outputs.queue_depth = "thin";
                     expect(
                       Boolean(evaluateExpression(predicate, context)),
                       `${label}/thin`,
-                    ).toBe(event === "merge_group" && certified);
+                    ).toBe(certified);
                     context.vars.QUEUE_BROWSER_SUITES = "off";
                     expect(
                       Boolean(evaluateExpression(predicate, context)),
                       `${label}/thin/off`,
-                    ).toBe(false);
+                    ).toBe(certified);
                   }
                 }
               }
@@ -1698,9 +1720,7 @@ test("browser image runner preserves argv, cwd, verdict and only browser inputs,
     path.join(root, imageFile),
     readFileSync(path.resolve(import.meta.dirname, "..", imageFile), "utf-8"),
   );
-  mkdirSync(path.join(root, "apps/web/node_modules/@playwright/test"), {
-    recursive: true,
-  });
+  mkdirSync(path.join(root, "apps/web"), { recursive: true });
   const cache = path.join(directory, ".bun/install/cache");
   mkdirSync(cache, { recursive: true });
   writeFileSync(
@@ -1757,12 +1777,27 @@ esac
     DOCKER_CREDENTIAL_FILE: credentialFile,
   };
   try {
-    for (const { offline, cached } of [
+    for (const { offline, cached, packageDirectory } of [
       { offline: false, cached: true },
       { offline: false, cached: false },
       { offline: true, cached: true },
       { offline: true, cached: false },
-    ]) {
+    ].flatMap((scenario) =>
+      ["apps/web", "apps/landing"].map((selectedDirectory) => ({
+        ...scenario,
+        packageDirectory: selectedDirectory,
+      })),
+    )) {
+      for (const workspace of ["apps/web", "apps/landing"]) {
+        rmSync(path.join(root, workspace, "node_modules"), {
+          recursive: true,
+          force: true,
+        });
+      }
+      mkdirSync(
+        path.join(root, packageDirectory, "node_modules/@playwright/test"),
+        { recursive: true },
+      );
       writeFileSync(credentialFile, "fixture");
       writeFileSync(dockerCalls, "");
       const result = Bun.spawnSync(
@@ -1779,7 +1814,13 @@ esac
         ],
         {
           cwd: path.join(root, "apps/web"),
-          env: { ...runnerEnv, DOCKER_IMAGE_CACHED: String(cached) },
+          env: {
+            ...runnerEnv,
+            DOCKER_IMAGE_CACHED: String(cached),
+            ...(packageDirectory === "apps/landing"
+              ? { PLAYWRIGHT_PACKAGE_DIR: packageDirectory }
+              : {}),
+          },
           stdout: "pipe",
           stderr: "pipe",
         },
@@ -1809,6 +1850,11 @@ esac
       expect(args).toContain("/native/bun:/usr/local/bin/bunx:ro");
       expect(args).toContain("PLAYWRIGHT_BROWSERS_PATH=/ms-playwright");
       expect(args).toContain("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1");
+      if (packageDirectory === "apps/landing") {
+        expect(args).toContain("PLAYWRIGHT_PACKAGE_DIR");
+      } else {
+        expect(args).not.toContain("PLAYWRIGHT_PACKAGE_DIR");
+      }
       expect(args).toContain("E2E_EXECUTION_PROFILE");
       expect(args).toContain("E2E_EDGE_HEADER_VALUE");
       expect(args).not.toContain("GH_TOKEN");

@@ -11,6 +11,8 @@ import {
   chatThreadOptions,
   invalidateChatThreadAcrossScopes,
 } from "@/features/chat/queries";
+import { setThreadActiveSkill } from "@/features/chat/thread-active-skill-store";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 
 type MaximizeContext = {
@@ -50,25 +52,31 @@ export const buildMaximizeTabAction = (
     return undefined;
   }
   const tabWorkspaceId = tab.workspaceId;
+  const threadRef: ChatThreadRef =
+    tabWorkspaceId === undefined
+      ? { scope: "global", threadId: tab.id }
+      : { scope: "workspace", threadId: tab.id, workspaceId: tabWorkspaceId };
   return () => {
     // The destination route shares this cache key with the inspector
     // tab — same scope, same threadId, same allowMissingThread — so
     // re-seeding here lets the destination's `useSuspenseQuery` read the
-    // picker's latest `contextMatterIds` without going through the server.
-    // Without this, an unsent chat moved to main loses its picked scope
-    // because the server hasn't persisted the thread row yet and
-    // would respond with an empty `contextMatterIds`.
+    // picker's latest `contextMatterIds` without going through the
+    // server. Without this, an unsent chat moved to main loses its picked
+    // scope because the server hasn't persisted the thread row yet and
+    // would respond with an empty `contextMatterIds`. The tab's skill is
+    // recorded for the same reason: the page restores it from the thread
+    // response once the server has the row, not before. The invalidation
+    // only marks the entries stale: the inspector tab still observes
+    // this one until it unmounts, and a refetch now would replace the
+    // seed with the server's empty set before the page reads it. The
+    // page refetches in the background after it has seeded its picker.
+    if (tab.activeSkill !== undefined) {
+      setThreadActiveSkill(threadRef, tab.activeSkill);
+    }
     const threadOptions = chatThreadOptions({
       activeOrganizationId,
       context: { allowMissingThread: true },
-      key:
-        tabWorkspaceId === undefined
-          ? { scope: "global", threadId: tab.id }
-          : {
-              scope: "workspace",
-              threadId: tab.id,
-              workspaceId: tabWorkspaceId,
-            },
+      key: threadRef,
     });
     queryClient.setQueryData(threadOptions.queryKey, (existing) =>
       existing
@@ -78,6 +86,7 @@ export const buildMaximizeTabAction = (
     detached(
       invalidateChatThreadAcrossScopes({
         queryClient,
+        refetchType: "none",
         threadId: tab.id,
       }),
       "maximize-tab.invalidate-chat-thread-across-scopes",

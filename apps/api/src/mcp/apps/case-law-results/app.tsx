@@ -194,7 +194,7 @@ const ResultTableRow = ({
                 <Input
                   readOnly
                   value={row.ecli}
-                  aria-label={`${t("copy")} ECLI`}
+                  aria-label={t("copyEcli")}
                   className="font-mono text-xs"
                   onFocus={(event) => event.currentTarget.select()}
                 />
@@ -652,7 +652,7 @@ const SearchResults = ({
   return (
     <div className="space-y-5">
       {defaults.status === "invalid" ? (
-        <p role="alert">{defaults.message}</p>
+        <p role="alert">{t("invalidFilters")}</p>
       ) : (
         <SearchControls
           bridge={bridge}

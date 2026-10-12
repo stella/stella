@@ -1,5 +1,9 @@
 name: Desktop release canary
 
+defaults:
+  run:
+    shell: bash
+
 on:
   schedule:
     - cron: "17 * * * *"

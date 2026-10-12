@@ -13,6 +13,8 @@ import type {
   ReasoningProvenance,
 } from "@stll/ai-catalog";
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
+import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
+import type { ChatTurnResumeProbe } from "@stll/chat/resume-contract";
 import type { FolioAgentToolName } from "@stll/folio-agents";
 import type {
   FolioAgentToolInputByName,
@@ -150,7 +152,17 @@ export type ChatTurnOutcome =
     }
   | { type: "completed" }
   | { type: "cancelled"; reason: ChatTurnCancellationReason }
-  | { type: "failed"; error: AIErrorKind; refusal?: ActionAdmissionRefusal }
+  | {
+      type: "failed";
+      error: AIErrorKind;
+      /**
+       * Read by the page as well, so it carries the wire shape. Every API
+       * producer builds it through the redactor (`createProviderDiagnostic`,
+       * `redactedProviderDiagnostic`).
+       */
+      providerDiagnostic?: ProviderDiagnostic;
+      refusal?: ActionAdmissionRefusal;
+    }
   | {
       type: "interrupted";
       reason: ChatTurnInterruptionReason;
@@ -173,6 +185,11 @@ export type ChatMessageMetadata = {
   refEncoding?: ChatRefEncoding | undefined;
   /** Server-owned replay context for persisted tool references. */
   refContext?: ChatRefContext | undefined;
+  /** Server-owned native interrupt identity, retained with the transcript
+   * after the delivery log expires. Incoming metadata cannot set this. */
+  resumeSnapshot?:
+    | Extract<ChatTurnResumeProbe, { type: "transcript" }>["resumeSnapshot"]
+    | undefined;
   /** Server-owned provenance. Incoming client metadata validation deliberately
    *  does not accept this field. */
   serverProvenance?:
@@ -204,6 +221,8 @@ export type ChatMessageMetadata = {
 export type ChatMessage = Omit<UIMessage, "parts"> & {
   parts: ChatPart[];
   metadata?: ChatMessageMetadata;
+  revision?: number;
+  edited?: boolean;
 };
 
 export type PersistableChatMessageCandidate = {

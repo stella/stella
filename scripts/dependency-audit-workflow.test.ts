@@ -1,4 +1,12 @@
 import { expect, test } from "bun:test";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -32,6 +40,7 @@ const workflowSchema = v.looseObject({
   jobs: v.record(
     v.string(),
     v.looseObject({
+      if: v.optional(v.string()),
       permissions: v.optional(v.record(v.string(), v.string())),
       concurrency: v.optional(
         v.object({ group: v.string(), "cancel-in-progress": v.boolean() }),
@@ -66,25 +75,101 @@ const step = (
   return found;
 };
 
+// Runs the real detection step in a scratch repository whose HEAD changes
+// only `changedPath` relative to its base commit.
+const detectsDependencyChange = (changedPath: string) => {
+  const repository = mkdtempSync(path.join(tmpdir(), "dependency-audit-"));
+  // Git hooks export GIT_DIR; a child git must use the scratch repository.
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")),
+  );
+  const git = (...args: string[]) => {
+    const result = Bun.spawnSync(["git", ...args], { cwd: repository, env });
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    return result.stdout.toString().trim();
+  };
+  try {
+    git("init", "-q");
+    for (const file of [
+      "bun.lock",
+      "package.json",
+      "apps/api/package.json",
+      "README.md",
+    ]) {
+      mkdirSync(path.dirname(path.join(repository, file)), { recursive: true });
+      writeFileSync(path.join(repository, file), "base\n");
+    }
+    git("add", ".");
+    git(
+      "-c",
+      "user.name=t",
+      "-c",
+      "user.email=t@example.test",
+      "-c",
+      "commit.gpgsign=false",
+      "commit",
+      "-qm",
+      "base",
+    );
+    const base = git("rev-parse", "HEAD");
+    writeFileSync(path.join(repository, changedPath), "changed\n");
+    git("add", ".");
+    git(
+      "-c",
+      "user.name=t",
+      "-c",
+      "user.email=t@example.test",
+      "-c",
+      "commit.gpgsign=false",
+      "commit",
+      "-qm",
+      "change",
+    );
+    const output = path.join(repository, "output");
+    const run =
+      step(auditWorkflow, "audit", "Detect lockfile changes").run ?? "";
+    const result = Bun.spawnSync(["bash", "-e", "-c", run], {
+      cwd: repository,
+      env: { ...env, BASE_SHA: base, GITHUB_OUTPUT: output },
+    });
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    return readFileSync(output, "utf-8").trim();
+  } finally {
+    rmSync(repository, { recursive: true, force: true });
+  }
+};
+
 test("pull requests avoid network work when the lockfile is unchanged", () => {
   expect(auditWorkflow.on.pull_request).toBeNull();
-  expect(step(auditWorkflow, "audit", "Detect lockfile changes").run).toContain(
-    'git diff --quiet "$BASE_SHA...HEAD" -- bun.lock package.json',
-  );
+  for (const changed of ["bun.lock", "package.json", "apps/api/package.json"]) {
+    expect(detectsDependencyChange(changed), changed).toBe("changed=true");
+  }
+  expect(detectsDependencyChange("README.md")).toBe("changed=false");
   for (const name of ["Setup Bun", "Install dependencies"]) {
     expect(step(auditWorkflow, "audit", name).if).toContain(
       "steps.lockfile.outputs.changed == 'true'",
     );
   }
-  expect(
-    step(auditWorkflow, "audit", "Audit changed dependency resolutions").run,
-  ).toContain("--check-diff");
+  const pullRequestAudit = step(
+    auditWorkflow,
+    "audit",
+    "Audit changed dependency resolutions",
+  );
+  expect(pullRequestAudit.if).toBe(
+    "github.event_name == 'pull_request' && steps.lockfile.outputs.changed == 'true'",
+  );
+  expect(pullRequestAudit.run).toBe(
+    'bun scripts/dependency-audit.ts --check-diff "$BASE_SHA"',
+  );
 });
 
 test("full audits run on main and every six hours with one stable remediation identity", () => {
   expect(auditWorkflow.on.push?.branches).toEqual(["main"]);
   expect(auditWorkflow.on.schedule).toEqual([{ cron: "0 */6 * * *" }]);
   const remediation = step(auditWorkflow, "remediate", "Open one remediation");
+  expect(auditWorkflow.jobs["remediate"]?.if).toBe(
+    "always() && github.event_name != 'pull_request' && needs.audit.outputs.advisory_failure == 'true'",
+  );
   expect(remediation.env?.["FIX_BRANCH"]).toBe(
     "automation/dependency-audit-fix",
   );

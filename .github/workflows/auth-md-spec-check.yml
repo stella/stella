@@ -1,5 +1,9 @@
 name: auth.md Spec Drift Check
 
+defaults:
+  run:
+    shell: bash
+
 # We implement the auth.md agent-registration protocol against a pinned
 # version. It is a fast-moving pre-1.0 open protocol, so this nightly job
 # diffs our pin against upstream (workos/auth.md) and fails when the spec

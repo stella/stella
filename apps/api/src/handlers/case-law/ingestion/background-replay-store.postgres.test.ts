@@ -64,6 +64,7 @@ import {
 } from "@/api/lib/legal-search/ingestion-constants";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
+  GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS,
   withGatedTestClients,
   openGatedTestDatabase,
 } from "@/api/tests/gated-test-database";
@@ -497,7 +498,7 @@ if (!databaseUrl || !enabled) {
             expect(reachedCheckpoint).toBe(true);
             expect(Result.isError(result)).toBe(true);
           },
-          { closeTimeout: 0 },
+          { closeTimeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS },
         );
         await firstLease.release();
         expect(await store.pendingBatch(source, "2026-10-01")).toEqual(
@@ -782,7 +783,7 @@ if (!databaseUrl || !enabled) {
                 rival.release();
               }
             },
-            { closeTimeout: 0 },
+            { closeTimeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS },
           );
         } finally {
           await lease.release();
@@ -956,7 +957,7 @@ if (!databaseUrl || !enabled) {
           expect(reachedCheckpoint).toBe(true);
           expect(Result.isError(result)).toBe(true);
         },
-        { closeTimeout: 0 },
+        { closeTimeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS },
       );
       const receipt = (
         await db
@@ -2582,6 +2583,22 @@ if (!databaseUrl || !enabled) {
       const rolledBack = await Result.tryPromise(
         async () =>
           await db.transaction(async (tx) => {
+            const ownerRole = `replay_retention_owner_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+            await tx.execute(
+              sql.raw(`CREATE ROLE ${ownerRole} NOLOGIN NOSUPERUSER NOBYPASSRLS;
+              GRANT ${ownerRole} TO CURRENT_USER WITH INHERIT TRUE, SET TRUE;
+              GRANT CREATE ON SCHEMA public TO ${ownerRole};
+              ALTER TABLE case_law_sources OWNER TO ${ownerRole};
+              ALTER TABLE case_law_replay_batches OWNER TO ${ownerRole};
+              SET LOCAL ROLE ${ownerRole}`),
+            );
+            const posture = await tx.execute<{
+              superuser: boolean;
+              bypass: boolean;
+            }>(
+              sql`SELECT rolsuper AS superuser, rolbypassrls AS bypass FROM pg_roles WHERE rolname = current_user`,
+            );
+            expect(posture.at(0)).toEqual({ superuser: false, bypass: false });
             await tx.execute(sql`ANALYZE case_law_replay_batches`);
             await scaleTableToProfile(tx, "case_law_replay_batches", {
               tables: {
@@ -2667,6 +2684,24 @@ if (!databaseUrl || !enabled) {
       const rolledBack = await Result.tryPromise(
         async () =>
           await db.transaction(async (tx) => {
+            const ownerRole = `replay_plan_owner_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+            await tx.execute(
+              sql.raw(`CREATE ROLE ${ownerRole} NOLOGIN NOSUPERUSER NOBYPASSRLS;
+              GRANT ${ownerRole} TO CURRENT_USER WITH INHERIT TRUE, SET TRUE;
+              GRANT CREATE ON SCHEMA public TO ${ownerRole};
+              ALTER TABLE case_law_sources OWNER TO ${ownerRole};
+              ALTER TABLE case_law_decisions OWNER TO ${ownerRole};
+              ALTER TABLE case_law_replay_batches OWNER TO ${ownerRole};
+              ALTER TABLE case_law_replay_blocked OWNER TO ${ownerRole};
+              SET LOCAL ROLE ${ownerRole}`),
+            );
+            const posture = await tx.execute<{
+              superuser: boolean;
+              bypass: boolean;
+            }>(
+              sql`SELECT rolsuper AS superuser, rolbypassrls AS bypass FROM pg_roles WHERE rolname = current_user`,
+            );
+            expect(posture.at(0)).toEqual({ superuser: false, bypass: false });
             // Enrolment will ship these corpus indexes; the dormant feature
             // creates them only inside this rolled-back planner fixture.
             await tx.execute(

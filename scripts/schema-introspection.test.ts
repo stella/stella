@@ -110,6 +110,40 @@ describe("schema-only dependency validation", () => {
     );
   });
 
+  test("distinguishes error query metadata and console dispatch from database calls", () => {
+    expect(
+      validate(
+        `${FULL_IMPORT}\nconst error = { query: "shape", params: [] }; const shape = error["query"]; console[level](shape);`,
+      ),
+    ).toEqual([]);
+    const queryAliases = [
+      "const query = connection.query; query();",
+      "const query = connection.query; (query)();",
+      "const query = connection.query; const run = query; run();",
+      "const query = ((connection.query)); const middle = (query); const run = ((middle)); run();",
+      "((connection.query))();",
+      "const query = connection.query; let run; run = query; run();",
+      "let query; query = connection.query; const run = query; run();",
+    ];
+    for (const source of queryAliases) {
+      expect(validate(`${FULL_IMPORT}\n${source}`)).toContain(
+        "apps/api/src/inventory.ts: database operation in apps/api/src/inventory.ts: query",
+      );
+    }
+    expect(
+      validate(
+        `${FULL_IMPORT}\nconst query = error.query; const run = query; function invoke(run: () => void) { run(); }`,
+      ),
+    ).toEqual([]);
+    expect(
+      validate(
+        `${FULL_IMPORT}\nconst run = (console: Record<string, () => void>, level: string) => console[level]();`,
+      ),
+    ).toContain(
+      "apps/api/src/inventory.ts: unresolved runtime call in apps/api/src/inventory.ts",
+    );
+  });
+
   test("reports method aliases and malformed runtime sources", () => {
     expect(
       validate(

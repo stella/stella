@@ -18,6 +18,7 @@ import {
   SIGNAL_KIND_ORIGIN,
   SIGNAL_SEVERITY,
 } from "@stll/api-contract/signals";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -43,6 +44,7 @@ import {
   notifications,
   savedTimeNarratives,
   savedSearches,
+  searchHistoryEntries,
   sellerProfiles,
   signals,
   timeTimers,
@@ -61,10 +63,12 @@ import readSuggestedChatPrompts from "@/api/handlers/chat/get-suggested-prompts"
 import readChatThreadRecap from "@/api/handlers/chat/get-thread-recap";
 import readChatThreadTitle from "@/api/handlers/chat/get-thread-title";
 import { encodeMessagePageCursor } from "@/api/handlers/chat/message-page";
+import getChatMessage from "@/api/handlers/chat/messages/get";
 import listChatMessages from "@/api/handlers/chat/messages/list";
 import acceptChatMessageRevision from "@/api/handlers/chat/messages/revisions/accept";
 import listChatMessageRevisions from "@/api/handlers/chat/messages/revisions/list";
 import revertChatMessageRevision from "@/api/handlers/chat/messages/revisions/revert";
+import { createProposeMessageSpanEdit } from "@/api/handlers/chat/messages/revisions/span-edit";
 import listOlderChatMessages from "@/api/handlers/chat/older-messages/list";
 import readFileChatThread from "@/api/handlers/chat/read-file-thread";
 import resolveFileChatThread from "@/api/handlers/chat/resolve-file-thread";
@@ -87,6 +91,7 @@ import renameChatThread from "@/api/handlers/chat/threads/rename";
 import updateChatThread from "@/api/handlers/chat/threads/update";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
 import cancelChatTurn from "@/api/handlers/chat/turns/cancel";
+import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import updateChatThreadModel from "@/api/handlers/chat/update-thread-model";
 import readContactById from "@/api/handlers/contacts/get";
 import readDesktopPresence from "@/api/handlers/desktop-presence/read";
@@ -114,6 +119,8 @@ import getBillingArrangement from "@/api/handlers/rates/arrangement/get";
 import readRateEntries from "@/api/handlers/rates/entries/list";
 import listSavedSearches from "@/api/handlers/saved-searches/list";
 import listSavedTimeNarratives from "@/api/handlers/saved-time-narratives/list";
+import { prepareSearchHistoryRows } from "@/api/handlers/search-history/entries";
+import listSearchHistory from "@/api/handlers/search-history/list";
 import getSellerProfile from "@/api/handlers/seller-profiles/get";
 import listSellerProfiles from "@/api/handlers/seller-profiles/list";
 import listSignals from "@/api/handlers/signals/list";
@@ -262,6 +269,9 @@ const manualInvoiceLineBody = {
 } as const;
 const savedTimeNarrativeB = toSafeId<"savedTimeNarrative">(
   "22222222-2222-4222-8222-222222222258",
+);
+const searchHistoryEntryB = toSafeId<"searchHistoryEntry">(
+  "22222222-2222-4222-8222-222222222290",
 );
 const numberSeriesB = toSafeId<"numberSeries">(
   "22222222-2222-4222-8222-222222222259",
@@ -483,6 +493,9 @@ const generateTitleFromTranscript: typeof generateTanStackTextForRole = async (
 
 const suggestChatThreadTitle = createSuggestThreadTitle({
   generateTextForRole: generateTitleFromTranscript,
+});
+const proposeChatMessageSpanEdit = createProposeMessageSpanEdit({
+  generateObject: async () => ({ replacement: "Updated" }),
 });
 
 type SendChatMessageBody = Parameters<
@@ -1197,6 +1210,21 @@ const isolationCases: IsolationCase[] = [
       expectPageContainsId(result, savedTimeNarrativeB),
   },
   {
+    // The same person in another firm: their history there never shows here.
+    name: "search history list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listSearchHistory, workspaceA, {
+        query: { limit: 100 },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listSearchHistory, sameUserWorkspaceB, {
+        query: { limit: 100 },
+      }),
+    expectDenied: (result) => expectPageExcludesId(result, searchHistoryEntryB),
+    expectPositive: (result) =>
+      expectPageContainsId(result, searchHistoryEntryB),
+  },
+  {
     name: "personal cross-matter view list",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(listEntityViews, workspaceA, {}),
@@ -1418,6 +1446,61 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result) => expect(result).toMatchObject({ items: [] }),
   },
   {
+    name: "chat message current read",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(getChatMessage, workspaceA, {
+        params: { threadId: chatThreadB, messageId: chatAssistantMessageB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(getChatMessage, sameUserWorkspaceB, {
+        params: { threadId: chatThreadB, messageId: chatAssistantMessageB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expect(result).toMatchObject({
+        id: chatAssistantMessageB,
+        revision: 0,
+        edited: false,
+      }),
+  },
+  {
+    name: "chat message span edit",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(proposeChatMessageSpanEdit, workspaceA, {
+        params: { threadId: chatThreadB, messageId: chatAssistantMessageB },
+        orgAIConfig: chatOrgAIConfig,
+        body: {
+          baseRevision: 0,
+          start: 0,
+          end: 4,
+          selectedTextHash: sha256Hex("Here"),
+          instruction: "Make it clearer",
+        },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(proposeChatMessageSpanEdit, sameUserWorkspaceB, {
+        params: { threadId: chatThreadB, messageId: chatAssistantMessageB },
+        orgAIConfig: chatOrgAIConfig,
+        body: {
+          baseRevision: 0,
+          start: 0,
+          end: 4,
+          selectedTextHash: sha256Hex("Here"),
+          instruction: "Make it clearer",
+        },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expect(result).toMatchObject({
+        replacement: "Updated",
+        content: {
+          version: 3,
+          data: [{ type: "text", content: "Updated is the summary." }],
+        },
+        edit: { type: "ai_span", keySource: "byok" },
+      }),
+  },
+  {
     name: "chat message revision accept",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(acceptChatMessageRevision, workspaceA, {
@@ -1427,6 +1510,7 @@ const isolationCases: IsolationCase[] = [
         },
         body: {
           baseRevision: 0,
+          selectedTextHash: sha256Hex("Here"),
           content: {
             version: 3,
             data: [{ type: "text", content: "**Here** is the summary." }],
@@ -1442,6 +1526,7 @@ const isolationCases: IsolationCase[] = [
         },
         body: {
           baseRevision: 0,
+          selectedTextHash: sha256Hex("Here"),
           content: {
             version: 3,
             data: [{ type: "text", content: "**Here** is the summary." }],
@@ -1730,6 +1815,48 @@ const isolationCases: IsolationCase[] = [
       expect(recordField(result, "response")).toStrictEqual({});
       expect(recordField(result, "thread")).toBeNull();
     },
+  },
+  {
+    // Runs before the cancel case, which settles the shared accepted turn.
+    name: "chat turn resume probe",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(probeChatTurn, workspaceA, {
+        params: { threadId: chatTurnThreadB, turnId: chatTurnB },
+        query: {},
+        request: new Request("http://localhost/"),
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(probeChatTurn, sameUserWorkspaceB, {
+        params: { threadId: chatTurnThreadB, turnId: chatTurnB },
+        query: {},
+        request: new Request("http://localhost/"),
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({ type: "preparing", turnId: chatTurnB }),
+  },
+  {
+    // Runs before the cancel case, which settles the shared accepted turn.
+    name: "chat turn resume join",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(joinChatTurn, workspaceA, {
+        params: { threadId: chatTurnThreadB, turnId: chatTurnB },
+        query: {},
+        request: new Request("http://localhost/"),
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(joinChatTurn, sameUserWorkspaceB, {
+        params: { threadId: chatTurnThreadB, turnId: chatTurnB },
+        query: {},
+        request: new Request("http://localhost/"),
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({ type: "preparing", turnId: chatTurnB }),
   },
   {
     name: "chat turn cancel",
@@ -2147,6 +2274,21 @@ beforeAll(async () => {
       criteria: savedSearchCriteria(ids.wsB1),
     },
   ]);
+  const [searchHistoryRowB] = await prepareSearchHistoryRows(
+    { organizationId: ids.orgB, userId: ids.userA1 },
+    [
+      {
+        entry: { kind: "search", query: "Firm B research" },
+        usedAt: new Date(),
+      },
+    ],
+  );
+  if (searchHistoryRowB === undefined) {
+    throw new Error("Search history fixture was not prepared");
+  }
+  await testDb
+    .insert(searchHistoryEntries)
+    .values({ ...searchHistoryRowB, id: searchHistoryEntryB });
   await testDb.insert(savedTimeNarratives).values({
     id: savedTimeNarrativeB,
     organizationId: ids.orgB,

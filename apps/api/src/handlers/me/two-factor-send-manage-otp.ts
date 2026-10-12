@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { errorOutputLogger } from "@stll/errors";
+
 import {
   ACCOUNT_ACCESS,
   createSafeSessionHandler,
@@ -14,6 +16,7 @@ import { getUserEmailAndTwoFactorEnabled } from "@/api/lib/two-factor";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "account_lifecycle" },
 } satisfies SessionHandlerConfig;
@@ -56,12 +59,11 @@ const twoFactorSendManageOtp = createSafeSessionHandler(
       );
       stashDevOtp(emailStr, otp);
       if (emailResult.isErr()) {
-        const message =
-          emailResult.error instanceof Error
-            ? emailResult.error.message
-            : String(emailResult.error);
-        // oxlint-disable-next-line no-console -- Local dev fallback should expose SMTP delivery failures.
-        console.warn(`[DEV] Failed to send email via SMTP: ${message}`);
+        errorOutputLogger.log(
+          "warn",
+          "[DEV] Failed to send email via SMTP:",
+          emailResult.error,
+        );
       }
     } else if (emailResult.isErr()) {
       return Result.err(

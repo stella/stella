@@ -29,6 +29,7 @@ const rateEntryParamsSchema = workspaceParams({
 
 const updateRateEntry = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Change one rate line's hourly rate or effective dates in a rate " +
       "table. Changing the dates re-checks for overlap against the other " +

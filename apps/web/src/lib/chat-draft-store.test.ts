@@ -132,6 +132,7 @@ describe("nextDraftForEditorUpdate", () => {
       {
         file: new File(["x"], "a.pdf", { type: "application/pdf" }),
         filename: "a.pdf",
+        type: "file",
         id: "att-1",
         mimeType: "application/pdf",
       },

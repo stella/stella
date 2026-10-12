@@ -4,6 +4,8 @@
 @source "./file-picker.tsx";
 @source "../decision-reader/*.tsx";
 @source "../../../../../../packages/decision-reader/src";
+/* Bundles embed this stylesheet; scanning them feeds escaped selectors back in. */
+@source not "../*/generated";
 @source "../../../../../../packages/ui/src";
 
 :root {

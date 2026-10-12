@@ -128,6 +128,11 @@
     "orSignInWithEmail": "lub zaloguj się e-mailem",
     "organizationNamePlaceholder": "Moja organizacja",
     "password": "Hasło",
+    "professionalUse": {
+      "description": "Podczas zakładania konta nie wyświetliliśmy Ci tego oświadczenia. Zaakceptuj je, aby kontynuować.",
+      "title": "Potwierdź korzystanie w celach zawodowych"
+    },
+    "professionalUseStatement": "Tworząc konto, potwierdzasz, że korzystasz ze stelli w celach zawodowych, i przyjmujesz do wiadomości, że stella jest narzędziem dla profesjonalistów z branży prawnej i nie zastępuje porady prawnej.",
     "rateLimitExceeded": "Zbyt wiele prób. Spróbuj ponownie później.",
     "resendCode": "Wyślij kod ponownie na <email>{emailAddress}</email>",
     "selectOrganization": "Wybierz organizację",
@@ -727,6 +732,13 @@
         "procedural-history": "Przebieg postępowania",
         "reasoning": "Rozumowanie"
       },
+      "errors": {
+        "answerIncomplete": "{source, select, organization {Klucz {provider} Twojej organizacji zwrócił niepełną odpowiedź.} other {Model AI zwrócił niepełną odpowiedź.}}",
+        "providerRefused": "{source, select, organization {{provider} odrzucił żądanie wysłane z kluczem Twojej organizacji. Sprawdź klucz, jego limit i rozliczenia w ustawieniach organizacji.} other {Dostawca AI odrzucił żądanie.}}",
+        "providerUnavailable": "{source, select, organization {{provider} jest teraz niedostępny dla klucza Twojej organizacji.} other {Dostawca AI jest teraz niedostępny.}}",
+        "timedOut": "{source, select, organization {{provider} nie odpowiedział na czas z kluczem Twojej organizacji.} other {Model AI nie odpowiedział na czas.}}",
+        "unavailable": "Analiza AI nie jest dostępna dla tego orzeczenia."
+      },
       "generate": "Ułóż tezy w AI",
       "holdingAnchor": "Przejdź do akapitu",
       "invitation": "Z bezpłatnym kontem AI przygotuje robocze notatki do tego orzeczenia.",
@@ -1082,6 +1094,9 @@
       "toastDescription": "Pełnoekranowy czat zostanie udostępniony wraz z zapisanymi wątkami.",
       "toastTitle": "Pełny widok niedostępny"
     },
+    "activity": {
+      "review": "Aktualizacja przeglądu"
+    },
     "aiPrompt": "Pole wiadomości AI",
     "aiThread": "Konwersacja AI",
     "analyzingSources": "Analizowanie źródeł",
@@ -1090,6 +1105,18 @@
     "anonymizedModeEnabled": "Zanonimizowany tryb AI jest włączony",
     "anonymizedSpan": {
       "tooltip": "Wysłano do modelu jako {placeholder}."
+    },
+    "answerEdit": {
+      "acceptFailed": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
+      "ask": "Poproś o zmiany",
+      "failed": "Nie udało się przygotować zmiany. Spróbuj ponownie.",
+      "instruction": "Opisz zmianę",
+      "instructionRequired": "Opisz, jak zmienić zaznaczony tekst.",
+      "invalidSelection": "Nie można edytować tego zaznaczenia. Zaznacz ciągły fragment tekstu.",
+      "proposal": "Proponowana zmiana",
+      "requesting": "Przygotowywanie zmian…",
+      "stale": "Ta odpowiedź się zmieniła. Zaznacz tekst ponownie.",
+      "submit": "Poproś o zmianę"
     },
     "applyMode": {
       "description": "Word zapisuje, kto wprowadził każdą zmianę. Zapamiętamy Twój wybór.",
@@ -1255,6 +1282,9 @@
       "noMatters": "Nie ma jeszcze spraw",
       "noRecentChats": "Brak ostatnich czatów",
       "noSkills": "Nie ma jeszcze umiejętności",
+      "openAllMatters": "Otwórz wszystkie sprawy",
+      "openChatHistory": "Otwórz historię czatów",
+      "openSkillsLibrary": "Otwórz bibliotekę umiejętności",
       "pinnedMatters": "Przypięte sprawy",
       "recentChats": "Ostatnie czaty",
       "skillEditedBy": "Edytował(a) {name} · {time}",
@@ -1314,7 +1344,9 @@
     "pastedText": {
       "expand": "Pokaż pełny tekst",
       "fromClipboard": "Wklejono {count, plural, one {# znak} few {# znaki} many {# znaków} other {# znaków}}",
-      "fromPromptFallback": "Umiejętność"
+      "fromPromptFallback": "Umiejętność",
+      "showInTextField": "Pokaż w polu tekstowym",
+      "title": "Wklejony tekst"
     },
     "placeholder": "Wpisz pytanie tutaj, / dla umiejętności, @ aby dodać kontekst",
     "promptImprovementStrategies": {
@@ -1682,6 +1714,7 @@
     "actions": "Akcje",
     "active": "Aktywny",
     "add": "Dodaj",
+    "advanced": "Zaawansowane",
     "all": "Wszystkie",
     "and": "I",
     "anonymizationLabels": {
@@ -1748,6 +1781,7 @@
     "createdAt": "Utworzono {date}",
     "currency": "Waluta",
     "currentPage": "Bieżąca strona",
+    "custom": "Niestandardowe",
     "date": "Data",
     "datePicker": {
       "label": "Wybór daty",
@@ -1902,6 +1936,7 @@
     "noResults": "Brak wyników",
     "noVersions": "Brak historii wersji",
     "none": "Brak",
+    "notStated": "Nie podano",
     "notes": "Notatki",
     "open": "Otwórz",
     "openInNewTab": "Otwórz w nowej karcie",
@@ -1936,6 +1971,7 @@
     "rename": "Zmień nazwę",
     "required": "Wymagane",
     "reset": "Resetuj",
+    "resetToDefault": "Przywróć domyślne",
     "resetZoom": "Resetuj powiększenie",
     "restore": "Przywróć",
     "retry": "Spróbuj ponownie",
@@ -1970,6 +2006,7 @@
     "sort": "Sortuj",
     "source": "Źródło",
     "stale": "Nieaktualne",
+    "start": "Rozpocznij",
     "status": "Status",
     "stepCount": "{count, plural, one {# krok} few {# kroki} many {# kroków} other {# kroku}}",
     "stepProgress": "{current} z {total}",
@@ -1989,6 +2026,7 @@
     "unexpectedError": "Wystąpił nieoczekiwany błąd. Skontaktuj się z pomocą techniczną.",
     "unknownUser": "Nieznany użytkownik",
     "unpin": "Odepnij",
+    "unsavedChanges": "Niezapisane zmiany",
     "unsavedChangesEscape": "Niezapisane zmiany. Naciśnij ponownie Esc, aby je odrzucić",
     "unsavedLeaveConfirm": "Masz niezapisane zmiany. Wyjść bez zapisywania?",
     "unverified": "Niezweryfikowane",
@@ -2036,6 +2074,7 @@
     "scopeExternalMcps": "Korzystanie z połączonych narzędzi zewnętrznych",
     "scopeFeedback": "Wysyłanie opinii o produkcie do opiekunów stelli",
     "scopeKnowledgeWrite": "Tworzenie, edytowanie i usuwanie Twoich klauzul oraz uruchamianie playbooków",
+    "scopeLawRead": "Czytać publiczne przepisy prawa i orzecznictwo",
     "scopeMattersWrite": "Tworzenie i edytowanie Twoich spraw i zadań",
     "scopeOfflineAccess": "Utrzymywanie Cię zalogowanym bez konieczności ponownej zgody",
     "scopeOnboarding": "Skonfiguruj jurysdykcje praktyki swojej organizacji",
@@ -2047,11 +2086,38 @@
     "scopeSkills": "Korzystanie z zapisanych umiejętności stella",
     "scopeTemplates": "Wyświetlanie, wypełnianie i tworzenie szablonów dokumentów",
     "scopeTemplatesAnonymized": "Wyświetlanie, wypełnianie i tworzenie zanonimizowanych wersji Twoich szablonów dokumentów",
+    "sensitiveAccess": "Obejmuje dostęp, który może usuwać dane lub zmieniać Twoją organizację",
+    "showAllPermissions": "{count, plural, one {Pokaż uprawnienie} few {Pokaż wszystkie # uprawnienia} many {Pokaż wszystkie # uprawnień} other {Pokaż wszystkie # uprawnienia}}",
     "signedInAs": "Zalogowano jako <email>{accountEmail}</email>",
+    "summaryAdminRead": "dziennik audytu",
+    "summaryAdminWrite": "członkowie i ustawienia organizacji, w tym ich usuwanie",
+    "summaryBillingWrite": "wpisy czasu, w tym ich usuwanie",
+    "summaryChat": "czaty, w tym ich usuwanie",
+    "summaryContactsWrite": "kontakty, w tym ich usuwanie",
+    "summaryDocumentsWrite": "dokumenty, w tym ich usuwanie",
+    "summaryExternalMcps": "połączone narzędzia zewnętrzne",
+    "summaryFeedback": "opinie",
+    "summaryKnowledgeWrite": "klauzule i playbooki, w tym usuwanie klauzul",
+    "summaryLawRead": "publiczne przepisy prawa i orzecznictwo",
+    "summaryLineChange": "<group>Może zmieniać:</group> {items} ({count})",
+    "summaryLineOther": "<group>Ponadto:</group> {items}",
+    "summaryLineRead": "<group>Może odczytywać:</group> {items} ({count})",
+    "summaryMattersWrite": "sprawy i zadania, w tym ich usuwanie",
+    "summaryOfflineAccess": "stałe zalogowanie",
+    "summaryOnboarding": "jurysdykcje praktyki",
+    "summaryProfile": "profil",
+    "summaryRead": "dokumenty, sprawy i kontakty",
+    "summaryReadAnonymized": "zanonimizowane dokumenty i sprawy",
+    "summarySearch": "wyszukiwanie",
+    "summarySearchAnonymized": "zanonimizowane wyszukiwanie",
+    "summarySkills": "umiejętności, w tym ich usuwanie",
+    "summaryTemplates": "szablony dokumentów, w tym ich usuwanie",
+    "summaryTemplatesAnonymized": "zanonimizowane szablony dokumentów",
     "title": "Autoryzacja dostępu",
     "unverifiedApp": "Niezweryfikowana aplikacja",
     "unverifiedExplanation": "stella nie zweryfikowała, kto publikuje tę aplikację.",
-    "useAnotherAccount": "Użyj innego konta"
+    "useAnotherAccount": "Użyj innego konta",
+    "verifiedPublisher": "Zweryfikowana aplikacja od {publisher}"
   },
   "contacts": {
     "alsoPartyIn": "Występuje również jako strona w {count, plural, one {# innej sprawie} few {# innych sprawach} many {# innych sprawach} other {# innych sprawach}}",
@@ -2755,7 +2821,6 @@
       },
       "selectFlow": "Wybierz przepływ pracy",
       "sizeConfirmTitle": "Obszerne uruchomienie przepływu",
-      "start": "Rozpocznij",
       "startFailed": "Nie udało się uruchomić przepływu pracy.",
       "started": "Uruchomiono przepływ pracy",
       "stepProgress": "Krok {current} z {total}",
@@ -2972,8 +3037,7 @@
   "guides": {
     "action": {
       "replay": "Uruchom ponownie",
-      "skip": "Pomiń",
-      "start": "Rozpocznij"
+      "skip": "Pomiń"
     },
     "checklist": {
       "progress": "Ukończono {completed} z {total}"
@@ -3653,6 +3717,10 @@
         "nameMissing": "Nie zapisano: podaj nazwę",
         "positionsNeedAttention": "Nie zapisano: {count, plural, one {# stanowisko wymaga} few {# stanowiska wymagają} many {# stanowisk wymaga} other {# stanowiska wymaga}} uwagi"
       },
+      "buildWithAi": {
+        "description": "Odpowiedz na kilka pytań na czacie, a playbook będzie zapisywany na bieżąco.",
+        "title": "Utwórz z AI"
+      },
       "check": "Użyj dokładnej reguły zamiast AI",
       "checkHint": "Do mierzalnych warunków, na przykład: termin płatności ≤ 30 dni.",
       "checkKind": {
@@ -3804,7 +3872,6 @@
         "fallback": "Alternatywne",
         "notAcceptable": "Nieakceptowalne"
       },
-      "unsavedChanges": "Niezapisane zmiany",
       "untitledPosition": "Stanowisko bez nazwy",
       "updated": "Playbook zaktualizowany",
       "updatedAt": "Zaktualizowano: {date}",
@@ -3893,7 +3960,9 @@
   },
   "lawHome": {
     "clearRecent": "Wyczyść ostatnie",
+    "clearRecentConfirmation": "Usunąć wszystkie Twoje ostatnie wyszukiwania, orzeczenia i akty prawne w tej organizacji? Tej czynności nie można cofnąć.",
     "enteringIntoForce": "Wkrótce wejdzie w życie",
+    "importFailed": "Nie udało się zaimportować lokalnej historii. Nadal jest zapisana na tym urządzeniu.",
     "inForceFrom": "Obowiązuje od {date}",
     "noRecent": "Brak ostatniej aktywności",
     "noSignals": "Brak sygnałów",
@@ -4013,7 +4082,6 @@
       "invalidBinding": "Dodaj klawisz niebędący modyfikatorem",
       "notRebindable": "Tego skrótu nie można zmienić",
       "pressKeys": "Naciśnij nowe klawisze…",
-      "resetToDefault": "Przywróć domyślne",
       "title": "Skróty klawiszowe"
     },
     "showShortcuts": "Pokaż skróty klawiszowe",
@@ -4103,37 +4171,55 @@
     "aiConfig": {
       "addProvider": "Dodaj dostawcę",
       "addProviderFirst": "Najpierw dodaj dostawcę",
+      "anthropicKeyDisabled": "Utwórz aktywny klucz API w konsoli Anthropic i zastąp nim ten klucz.",
+      "anthropicNoCredits": "Doładuj środki na API w rozliczeniach konsoli Anthropic i spróbuj ponownie.",
+      "anthropicOrganizationRestricted": "Poproś administratora organizacji Anthropic o dostęp lub użyj klucza z dozwolonej organizacji.",
+      "anthropicSubscriptionToken": "Użyj klucza API utworzonego w konsoli Anthropic zamiast tokenu subskrypcji Claude.",
+      "anthropicWorkspaceId": "Identyfikator obszaru roboczego",
+      "anthropicWorkspaceRequired": "Ten klucz Anthropic wymaga obszaru roboczego. Wprowadź jego identyfikator z konsoli Anthropic i zapisz ponownie.",
+      "anthropicWorkspaces": "Otwórz obszary robocze Anthropic",
       "apiKey": "Klucz API",
       "apiKeyConfiguredPlaceholder": "Skonfigurowano: {key}. Wpisz nowy klucz, aby go zastąpić.",
       "apiKeyPlaceholder": "Wprowadź klucz API",
       "apiKeySaved": "Zapisany klucz {key}",
       "apiKeyUpdatePlaceholder": "Wprowadź nowy klucz, aby go zaktualizować",
+      "azureModelNotEnabled": "Sprawdź, czy wdrożenie modelu istnieje w wybranym zasobie i regionie Azure oraz czy ten klucz ma do niego dostęp.",
       "baseUrl": "Bazowy URL",
+      "bedrockModelNotEnabled": "Sprawdź dostępność modelu w wybranym regionie AWS, dostęp do modelu i swoje uprawnienia IAM. Włącz model lub wybierz dostępny model i spróbuj ponownie.",
       "chooseModelsSubtitle": "Wybierz model dla każdej roli. Ceny aktualizują się po prawej.",
       "chooseModelsTitle": "Wybierz modele",
       "configure": "Skonfiguruj",
       "customModelBadge": "Niestandardowy · {provider}",
       "customModelDescription": "Tego identyfikatora modelu nie ma w katalogu stella. Zostanie przekazany do wybranego dostawcy dokładnie tak, jak wpisano.",
       "customModelHint": "Brak dopasowania w katalogu. Wpisz dowolny identyfikator modelu; niestandardowe ID są zapisywane bez zmian.",
-      "dataRegion": "Region danych",
-      "dataRegionDescription": "Kieruje żądania AI przez wybrany region dla zachowania suwerenności danych.",
-      "dataRegionUnsupported": "Routing regionalny jest dostępny tylko dla Google AI (Vertex AI).",
       "decision": {
-        "add": "Dodaj model decyzyjny",
-        "description": "Pytania o ustalonej odpowiedzi, takie jak kategorie dokumentów czy polaryzacja cytowań, trafiają do tego modelu; bez niego odpowiada na nie model generatywny.",
+        "dataRegion": "Region danych",
+        "description": "Pytania o ustalonej odpowiedzi (kategorie dokumentów, polaryzacja cytowań)",
+        "generativeFallback": "Używa modelu generatywnego do danego zadania.",
         "incomplete": "Podaj klucz API i model dla modelu decyzyjnego albo go usuń.",
         "instanceProvided": "stella udostępnia już model decyzyjny; dodaj własny tylko po to, aby użyć innego.",
-        "label": "Model decyzyjny",
-        "modelId": "Identyfikator modelu"
+        "label": "Podejmowanie decyzji",
+        "regionEu": "Unia Europejska",
+        "regionGlobal": "Globalny",
+        "reuseOpenAIKey": "Użyj mojego klucza OpenAI",
+        "separateKey": "Użyj osobnego klucza"
       },
       "defaultModel": "Domyślny: {model}",
       "defaultModelOption": "Domyślny",
+      "defaultRationale": {
+        "chat": "Do rozmów i codziennych pytań.",
+        "fast": "Do krótkich, rutynowych zadań.",
+        "pdf": "Do czytania i analizowania dokumentów PDF.",
+        "reasoning": "Do złożonych zadań wymagających starannego rozumowania."
+      },
       "deploymentNamePlaceholder": "Nazwa wdrożenia",
-      "description": "Użyj własnego klucza API lub skonfiguruj region suwerenności danych.",
       "editProviders": "Edytuj dostawców",
       "endpoint": "Punkt końcowy",
       "endpointDescription": "Użyj endpointu Azure OpenAI lub Azure Foundry /openai/v1. stella zapisze znormalizowany endpoint.",
+      "googleApiNotEnabled": "Włącz Generative Language API w projekcie Google Cloud, do którego należy ten klucz, i spróbuj ponownie.",
+      "googleKeyRestricted": "Sprawdź ograniczenia tego klucza dotyczące API, adresów IP i witryn odsyłających w Google Cloud. Zezwól na wymagane API i żądania swojego serwera, a następnie spróbuj ponownie.",
       "keepSavedKey": "Zachowaj zapisany klucz",
+      "keyFormatHint": "Ten klucz ma nietypowy format dla dostawcy {provider}. Zapisz go, aby sprawdzić go u dostawcy.",
       "modelForRole": "Model dla roli {role}",
       "modelIdPlaceholder": "Szukaj modeli",
       "modelsDescription": "Dla każdej kategorii AI wybierz dostawcę i jeden oferowany model multimodalny.",
@@ -4141,6 +4227,9 @@
       "newApiKey": "Nowy klucz API",
       "newApiKeyDescription": "Po zapisaniu zmian zastąpi zapisany klucz.",
       "noModelResults": "Brak pasujących oferowanych modeli",
+      "openaiInsufficientQuota": "Sprawdź budżet projektu OpenAI i rozliczenia API. Doładuj środki lub zwiększ odpowiedni limit i spróbuj ponownie.",
+      "openaiProjectOrganizationMismatch": "Użyj klucza API z właściwego projektu i organizacji OpenAI. Sprawdź ich ustawienia dostępu i spróbuj ponownie.",
+      "openrouterNoCredits": "Doładuj środki w rozliczeniach OpenRouter i spróbuj ponownie.",
       "overrideRoles": "Nadpisz role",
       "overrideRolesDescription": "Wybierz, które role używają tego klucza, a potem wybierz model dla każdej roli. Niezaznaczone role używają domyślnych ustawień platformy.",
       "prices": {
@@ -4160,15 +4249,14 @@
       "providerForRole": "Dostawca dla {role}",
       "providerKeyInvalid": "{provider} odrzucił klucz. Sprawdź go przed zapisaniem.",
       "providerKeyInvalidShort": "Nieprawidłowy",
+      "providerSetupConsole": "Otwórz ustawienia dostawcy",
       "providersDescription": "Dodaj dane uwierzytelniające dostawców, których stella ma używać.",
       "providersPanel": "Dostawcy",
-      "regions": {
-        "ch": "Szwajcaria (europe-west6)",
-        "eu": "UE (europe-west4)",
-        "global": "Globalny"
-      },
+      "removeLastProviderConfirm": "Usunąć {provider}? Spowoduje to również zresetowanie niestandardowego wyboru modeli AI.",
       "removeProvider": "Usuń dostawcę",
+      "removeProviderConfirm": "Usunąć {provider} i zapisane dane uwierzytelniające?",
       "replaceKey": "Zastąp klucz",
+      "roleUnavailable": "{provider} nie obsługuje tej roli.",
       "roles": {
         "chat": "Czat",
         "fast": "Szybki",
@@ -4178,7 +4266,8 @@
       "selectAtLeastOneRole": "Wybierz co najmniej jedną rolę dla tego klucza.",
       "selectModelForEachRole": "Dodaj dostawcę i wybierz model dla każdej kategorii.",
       "selectedProvider": "{provider}",
-      "title": "Konfiguracja AI"
+      "title": "Konfiguracja AI",
+      "usingDefaults": "Używane są ustawienia domyślne"
     },
     "invitations": {
       "cancelInvitation": "Anuluj zaproszenie",
@@ -4208,7 +4297,6 @@
       "patternMustContainSeq": "Wzorzec musi zawierać '{'SEQ'}'",
       "patternRequired": "Wzorzec jest wymagany",
       "presets": {
-        "custom": "Własny",
         "sequential": "Kolejny (001)",
         "yearMonthSequential": "Rok-miesiąc / kolejny (2026-02/001)",
         "yearSequential": "Rok / kolejny (2026/001)"
@@ -4240,7 +4328,6 @@
       "member": "Członek",
       "owner": "Właściciel"
     },
-    "settings": "Ustawienia organizacji",
     "settingsDescription": "Edytuj nazwę i slug organizacji",
     "switchOrganization": "Przełącz organizację"
   },
@@ -4615,7 +4702,7 @@
     "organization": {
       "activeMembers": "Aktywni członkowie",
       "ai": "Konfiguracja AI",
-      "aiDescription": "Użyj własnego klucza API lub skonfiguruj region suwerenności danych",
+      "aiDescription": "Podłącz własne klucze dostawców AI.",
       "anonymization": {
         "addPlaceholder": "Termin, który ma być zawsze maskowany (np. nazwa zespołu)",
         "deleteAction": "Usuń termin",
@@ -4780,7 +4867,17 @@
     "amendedTimes": "{count, plural, =0 {Bez nowelizacji} one {Nowelizowany raz} few {Nowelizowany # razy} many {Nowelizowany # razy} other {Nowelizowany # razy}}",
     "asOf": "Tekst obowiązujący na dzień",
     "backToList": "Wszystkie akty prawne",
+    "citingDecisionHideSnippet": "Zwiń fragment",
+    "citingDecisionMentionCount": "cytowano {count}×",
+    "citingDecisionOlderVersion": "Starsza wersja",
+    "citingDecisionShowSnippet": "Pokaż cały fragment",
+    "citingDecisionsCourtPlaceholder": "Wszystkie sądy",
     "citingDecisionsFilterPlaceholder": "Filtruj wczytane orzeczenia",
+    "citingDecisionsSnapshotCapped": "Wyświetlono {count} orzeczeń (do {limit} najczęściej wspominających o tym przepisie).",
+    "citingDecisionsSortCitations": "Wzmianki o tym przepisie",
+    "citingDecisionsSortDate": "Data orzeczenia",
+    "citingDecisionsYear": "Rok orzeczenia",
+    "citingDecisionsYearPlaceholder": "Wszystkie lata",
     "columns": {
       "act": "Akt",
       "amendments": "Nowelizacje",
@@ -4822,6 +4919,7 @@
     "inForceSince": "Obowiązuje od {date}",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecisions": "Orzeczenia wiodące",
+    "leadingDecisionsExplanation": "Pierwsza wzmianka w każdym orzeczeniu, uszeregowana według autorytetu cytowania: ważone cytowania przychodzące, z uwzględnieniem rangi sądu, wydźwięku cytowania i jego wieku.",
     "noVersionInForce": "W wybranym dniu nie obowiązywała żadna wersja tego aktu.",
     "openEnded": "nadal",
     "openProvision": "Otwórz przepis",
@@ -5459,11 +5557,7 @@
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx",
       "currentKey": "Zapisany klucz",
       "description": "Skonfiguruj klucz API DeepL, aby włączyć tłumaczenie dokumentów. Obsługiwane są klucze Free i Pro.",
-      "removed": "Klucz DeepL usunięty",
-      "removedDescription": "Tłumaczenie jest wyłączone, dopóki nie zostanie dodany nowy klucz.",
       "removing": "Usuwanie…",
-      "saved": "Klucz DeepL zapisany",
-      "savedDescription": "Tłumaczenia są teraz dostępne.",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "Tłumaczenie DeepL"
@@ -6033,12 +6127,30 @@
         "addPDF": "Dodaj PDF",
         "applyCrop": "Zastosuj przycięcie",
         "crop": "Przytnij",
-        "cropBottom": "Dół",
-        "cropDescription": "{count, plural, one {Ustaw marginesy przycięcia dla wybranej strony.} few {Ustaw marginesy przycięcia dla # wybranych stron.} many {Ustaw marginesy przycięcia dla # wybranych stron.} other {Ustaw marginesy przycięcia dla # wybranych stron.}}",
-        "cropLeft": "Lewo",
-        "cropRight": "Prawo",
+        "cropAdvanced": "Zaawansowane",
+        "cropBottom": "Dół (mm)",
+        "cropDescription": "{count, plural, one {Ustaw marginesy przycięcia dla wybranej strony w milimetrach.} few {Ustaw marginesy przycięcia dla # wybranych stron w milimetrach.} many {Ustaw marginesy przycięcia dla # wybranych stron w milimetrach.} other {Ustaw marginesy przycięcia dla # wybranych stron w milimetrach.}}",
+        "cropHandle": "Zmień rozmiar przycięcia: {position}",
+        "cropHandleBottom": "dół",
+        "cropHandleBottomLeft": "lewy dolny róg",
+        "cropHandleBottomRight": "prawy dolny róg",
+        "cropHandleLeft": "lewa strona",
+        "cropHandleRight": "prawa strona",
+        "cropHandleTop": "góra",
+        "cropHandleTopLeft": "lewy górny róg",
+        "cropHandleTopRight": "prawy górny róg",
+        "cropHint": "Przeciągnij obszar lub jego uchwyty. Strzałki zmieniają przycięcie o 1 mm, a z Shiftem o 10 mm. Te same marginesy dotyczą wszystkich wybranych stron.",
+        "cropLeft": "Lewo (mm)",
+        "cropMove": "Przesuń obszar przycięcia",
+        "cropNextPage": "Następna wybrana strona",
+        "cropPage": "Strona {page, number} z {count, number}",
+        "cropPreview": "Podgląd przycięcia, strona {page, number}",
+        "cropPreviewFailed": "Nie udało się wyświetlić podglądu strony.",
+        "cropPreviousPage": "Poprzednia wybrana strona",
+        "cropRight": "Prawo (mm)",
         "cropTitle": "Przytnij strony",
-        "cropTop": "Góra",
+        "cropTooSmall": "Ta strona jest zbyt mała, aby przyciąć ją do co najmniej 10 mm.",
+        "cropTop": "Góra (mm)",
         "delete": "Usuń",
         "deselectAll": "Odznacz wszystko",
         "discard": "Odrzuć",
@@ -6247,7 +6359,6 @@
     "views": {
       "addAdvancedFilter": "Dodaj filtr zaawansowany",
       "addFields": "Dodaj pola",
-      "advancedFilter": "Zaawansowany",
       "advancedFilterCount": "{count, plural, =0 {dowolna} one {# reguła} few {# reguły} many {# reguł} other {# reguły}}",
       "aiGenerated": "Wygenerowane przez AI",
       "calendar": {

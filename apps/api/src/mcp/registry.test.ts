@@ -1,12 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
 import { CAPABILITY_TOOL_SET } from "@/api/mcp/capability-tools";
+import { compatFetchConsumesServices } from "@/api/mcp/compat-tools";
 import {
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_DEFAULT_RESOURCE_SCOPES,
   MCP_LAW_RESOURCE_SCOPES,
 } from "@/api/mcp/constants";
 import { DOCUMENT_TOOL_SET } from "@/api/mcp/document-tools";
+import { LEGAL_RESOLVE_RESOURCE_ROUTES } from "@/api/mcp/resource-policy-contract";
 import {
   ALL_MCP_TOOL_DEFINITIONS,
   ANONYMIZED_MCP_TOOL_DEFINITIONS,
@@ -40,6 +42,22 @@ const withoutDescriptions = (value: unknown): unknown => {
 };
 
 describe("MCP tool registry", () => {
+  test("offers generic capability tools only on the advanced surface", () => {
+    const executorNames = CAPABILITY_TOOL_SET.definitions.map(
+      ({ name }) => name,
+    );
+    expect(
+      executorNames.every(
+        (name) => getStaticMcpToolDefinition(name, "default") === undefined,
+      ),
+    ).toBe(true);
+    expect(
+      executorNames.every(
+        (name) => getStaticMcpToolDefinition(name, "advanced") !== undefined,
+      ),
+    ).toBe(true);
+  });
+
   test("anonymizing tools declare at least one text field", () => {
     for (const tool of DEFAULT_MCP_TOOL_DEFINITIONS) {
       const { anonymized } = tool;
@@ -170,6 +188,31 @@ describe("MCP tool registry", () => {
     );
   });
 
+  test("public-law content tools never consume organization service budgets", () => {
+    const definitions: readonly McpToolDefinition[] = ALL_MCP_TOOL_DEFINITIONS;
+    const contentTools = definitions.filter(
+      (tool) => tool.access === "read" && tool.readClass === "public",
+    );
+    expect(contentTools.length).toBeGreaterThan(0);
+    for (const id of [
+      "decision:00000000-0000-4000-8000-000000000001",
+      "statute:/eli/cz/sb/2012/89",
+    ]) {
+      expect(compatFetchConsumesServices({ id })).toBe(false);
+    }
+    for (const tool of contentTools) {
+      expect(tool.consumesServices, tool.name).toBe(false);
+    }
+  });
+
+  test("mixed non-AI search and content fetch are uncounted", () => {
+    for (const name of ["search", "fetch"]) {
+      expect(
+        getStaticMcpToolDefinition(name, "default")?.consumesServices,
+      ).toBe(false);
+    }
+  });
+
   test("law projection is the public corpus in wire order", () => {
     expect(LAW_MCP_TOOL_DEFINITIONS.map((tool) => tool.name)).toEqual([
       // The audience's own corpus-only pair, then the named corpus tools in
@@ -207,12 +250,17 @@ describe("MCP tool registry", () => {
     }
   });
 
-  test("advertises exactly the scopes the law projection uses", () => {
-    const projectedScopes = [
-      ...new Set(LAW_MCP_TOOL_DEFINITIONS.map((tool) => tool.scope)),
+  test("advertises exactly the scopes consumed by law tools and REST routes", () => {
+    const consumedScopes = [
+      ...new Set([
+        ...LAW_MCP_TOOL_DEFINITIONS.map((tool) => tool.scope),
+        ...Object.values(LEGAL_RESOLVE_RESOURCE_ROUTES).map(
+          ({ requiredScope }) => requiredScope,
+        ),
+      ]),
     ].toSorted();
 
-    expect(projectedScopes).toEqual([...MCP_LAW_RESOURCE_SCOPES].toSorted());
+    expect(consumedScopes).toEqual([...MCP_LAW_RESOURCE_SCOPES].toSorted());
   });
 
   test("tool names are unique across the registry", () => {

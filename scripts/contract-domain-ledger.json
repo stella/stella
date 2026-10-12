@@ -1080,10 +1080,6 @@
     "reason": "Existing ALL_MATTERS_STACK_COLORS domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/components/pdf/page-organizer.tsx::LoadedPDFPageOrganizer::domain:[\"top\",\"right\",\"bottom\",\"left\"]::1",
-    "reason": "Existing LoadedPDFPageOrganizer domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/components/pdf/versions-sidebar.tsx::MENU_OWNED_KEYS::domain:[\"Escape\",\"ArrowDown\",\"ArrowUp\"]::1",
     "reason": "Existing MENU_OWNED_KEYS domain; contract ownership pending migration."
   },
@@ -1354,10 +1350,6 @@
   {
     "id": "apps/web/src/features/chat/queries.test.ts::<module>::domain:[\"http\",\"stream\"]::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/features/chat/queries.ts::CHAT_CONTEXT_CAPABILITY_KEYS::domain:[\"getActiveDecision\",\"getActiveDraft\",\"getActiveExternal\",\"getActiveFile\",\"getActiveSkill\",\"getActiveStatute\",\"getActiveTemplate\",\"getContextMatterIds\",\"getDocxEditRepresentation\",\"getEditApplyMode\",\"getSendMode\",\"getUserContext\",\"getDocxSuggestionSurface\"]::1",
-    "reason": "Existing CHAT_CONTEXT_CAPABILITY_KEYS domain; contract ownership pending migration."
   },
   {
     "id": "apps/web/src/features/guides/guide-engine.ts::PRESERVED_TARGET_ATTRIBUTES::domain:[\"aria-controls\",\"aria-expanded\",\"aria-haspopup\"]::1",

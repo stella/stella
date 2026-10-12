@@ -1,11 +1,131 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
-import { lapsedAcceptances } from "./dependency-audit-acceptance";
+import { check, type Advisory, type Baseline } from "./dependency-audit";
+import {
+  expiringAcceptances,
+  lapsedAcceptances,
+} from "./dependency-audit-acceptance";
 
 const advisory = { id: "GHSA-aaaa-bbbb-cccc", vulnerableVersions: "<=1.4.0" };
 const latest = (version: string | undefined) => () => version;
+const currentAdvisory: Advisory = {
+  ...advisory,
+  severity: "high",
+  package: "pkg",
+  title: "test advisory",
+};
+const auditBaseline = (expiresOn?: string): Baseline => ({
+  note: "test",
+  auditLevel: "high",
+  accepted: [
+    {
+      id: advisory.id,
+      severity: "high",
+      package: "pkg",
+      title: "test advisory",
+      reason: "test acceptance",
+      ...(expiresOn === undefined ? {} : { expiresOn }),
+    },
+  ],
+});
+
+const runCheck = async (
+  advisories: Advisory[],
+  accepted: Baseline,
+  today: string,
+  warningFormat: "github" | "plain" = "plain",
+) => {
+  const output: { info: string[]; warn: string[] } = { info: [], warn: [] };
+  const info = spyOn(console, "info").mockImplementation((message) => {
+    output.info.push(String(message));
+  });
+  const warn = spyOn(console, "warn").mockImplementation((message) => {
+    output.warn.push(String(message));
+  });
+  const error = spyOn(console, "error").mockImplementation(() => undefined);
+  try {
+    const status = await check(advisories, {
+      baseline: accepted,
+      now: () => new Date(`${today}T00:00:00Z`),
+      warningFormat,
+    });
+    return { ...output, status };
+  } finally {
+    info.mockRestore();
+    warn.mockRestore();
+    error.mockRestore();
+  }
+};
 
 describe("audit acceptance expiry", () => {
+  test("an accepted advisory is reported without failing", async () => {
+    const result = await runCheck(
+      [currentAdvisory],
+      auditBaseline("2026-11-01"),
+      "2026-10-02",
+    );
+    expect(result.status).toBe(0);
+    expect(
+      result.info.some((line) => line.includes("accepted until 2026-11-01")),
+    ).toBe(true);
+  });
+
+  test("a new advisory is reported and fails", async () => {
+    const newBaseline = { ...auditBaseline(), accepted: [] };
+    const newResult = await runCheck(
+      [currentAdvisory],
+      newBaseline,
+      "2026-10-02",
+    );
+    expect(newResult.status).toBe(1);
+    expect(newResult.info.some((line) => line.endsWith("NEW"))).toBe(true);
+  });
+
+  test("an acceptance expiring in three days warns", async () => {
+    const result = await runCheck(
+      [currentAdvisory],
+      auditBaseline("2026-10-05"),
+      "2026-10-02",
+    );
+    expect(result.status).toBe(0);
+    expect(result.warn).toEqual([
+      "WARNING: GHSA-aaaa-bbbb-cccc for pkg is accepted until 2026-10-05; review or remediate it before expiry.",
+    ]);
+  });
+
+  test("an expiring acceptance warns as a GitHub annotation in Actions output", async () => {
+    const result = await runCheck(
+      [currentAdvisory],
+      auditBaseline("2026-10-05"),
+      "2026-10-02",
+      "github",
+    );
+    expect(result.status).toBe(0);
+    expect(result.warn).toEqual([
+      "::warning title=Dependency audit acceptance expiring::GHSA-aaaa-bbbb-cccc for pkg is accepted until 2026-10-05; review or remediate it before expiry.",
+    ]);
+  });
+
+  test("an acceptance expiring in ten days does not warn", () => {
+    expect(
+      expiringAcceptances({
+        accepted: auditBaseline("2026-10-12").accepted,
+        current: [advisory],
+        today: "2026-10-02",
+      }),
+    ).toEqual([]);
+  });
+
+  test("an expired acceptance fails", async () => {
+    const result = await runCheck(
+      [currentAdvisory],
+      auditBaseline("2026-10-01"),
+      "2026-10-02",
+    );
+    expect(result.status).toBe(1);
+    expect(result.info.some((line) => line.endsWith("LAPSED"))).toBe(true);
+  });
+
   test("an acceptance without terms never lapses", () => {
     expect(
       lapsedAcceptances({

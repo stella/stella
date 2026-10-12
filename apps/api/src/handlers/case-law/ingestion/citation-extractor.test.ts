@@ -10,6 +10,7 @@ import type {
   DecisionIdentifiers,
 } from "@stll/legal-ast/decision-identifier";
 import { propertyConfig } from "@stll/property-testing";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   normalizeHuBhgyRow,
@@ -29,6 +30,7 @@ import {
   normalizeDecisionIdentifierValue,
   normalizeDecisionIdentifierValueIn,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
 import { storeDecisionIdentifiersInMetadata } from "@/api/lib/legal-search/decision-identifier-metadata";
 
 describe("extractCitations", () => {
@@ -111,16 +113,18 @@ describe("extractCitations", () => {
     // normalizes a decision on the way in, and a `[ÚU]S` class reads the
     // decomposed spelling as a bare "U" followed by a mark: every
     // Constitutional Court citation in that paragraph went missing.
-    const text =
-      "současně založit kolizi se zásadami vyjádřenými v hlavě páté Listiny (nález Ústavního soudu sp. zn. I. ÚS 1135/17, ze dne 1. 11. 2017).".normalize(
-        "NFD",
-      );
-    expect(text).not.toBe(text.normalize("NFC"));
+    const text = normalizeUnicode(
+      "současně založit kolizi se zásadami vyjádřenými v hlavě páté Listiny (nález Ústavního soudu sp. zn. I. ÚS 1135/17, ze dne 1. 11. 2017).",
+      "NFD",
+    );
+    expect(text).not.toBe(normalizeUnicode(text, "NFC"));
 
     const citations = extractCitations([{ index: 0, text }]);
 
     expect(citations).toHaveLength(1);
-    expect(citations[0]?.citationText).toBe("I. ÚS 1135/17".normalize("NFD"));
+    expect(citations[0]?.citationText).toBe(
+      normalizeUnicode("I. ÚS 1135/17", "NFD"),
+    );
     // Either normalization form reaches the resolver as one key, so the
     // decomposed spelling still joins the composed corpus row.
     expect(bareCitationKey(citations[0]?.citationText ?? "")).toBe(
@@ -2090,6 +2094,25 @@ describe("extractCitations", () => {
     );
   });
 
+  test("reads a KIO docket list too long for one key docket by docket", () => {
+    const dockets = Array.from(
+      { length: 12 },
+      (_, index) => `KIO ${1000 + index}/21`,
+    );
+    const citations = extractCitations([
+      { index: 0, text: `por. wyroki ${dockets.join(", ")} oraz KIO 7/22.` },
+    ]);
+    expect(citations.map((c) => c.citationText)).toEqual([
+      ...dockets,
+      "KIO 7/22",
+    ]);
+    for (const citation of citations) {
+      expect(bareCitationKey(citation.citationText).length).toBeLessThanOrEqual(
+        128,
+      );
+    }
+  });
+
   test("never reads the tail of a divided docket as a Tribunal one", () => {
     // Every whitespace run between a Roman division and a Tribunal-shaped
     // symbol, including the ones too wide for the docket to read whole.
@@ -2413,6 +2436,46 @@ describe("stored decision identifier projection", () => {
     }
     // The reporter citation would otherwise canonicalize to a docket key.
     expect(citationKeyOf("347 U.S. 483")).not.toBeNull();
+  });
+
+  test("gives a decision no key its citation_key column cannot hold", () => {
+    const caseNumber = `ABC123/${"x".repeat(140)}.pdf`;
+    expect(Array.from(bareCitationKey(caseNumber)).length).toBeGreaterThan(
+      CITATION_STORAGE_WIDTHS.key,
+    );
+    expect(citationKeyOf(caseNumber)).toBeNull();
+    expect(
+      decisionCitationKeyOf({
+        caseNumber,
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      }),
+    ).toBeNull();
+    const fits = `ABC123/${"x".repeat(100)}`;
+    expect(
+      decisionCitationKeyOf({
+        caseNumber: fits,
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      }),
+    ).toBe(citationKeyOf(fits));
+  });
+
+  test("citation and decision keys share exact Unicode storage boundaries", () => {
+    const width = CITATION_STORAGE_WIDTHS.key;
+    for (const token of ["x", "é", "𐐀"]) {
+      for (const length of [width - 1, width, width + 1]) {
+        const reference = token.repeat(length);
+        const exact = bareCitationKey(reference);
+        expect(Array.from(exact)).toHaveLength(length);
+        const expected = length <= width ? exact : null;
+        expect(citationKeyOf(reference)).toBe(expected);
+        expect(
+          decisionCitationKeyOf({
+            caseNumber: reference,
+            caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          }),
+        ).toBe(expected);
+      }
+    }
   });
 
   test("recovers publisher case-number aliases from stored metadata", () => {

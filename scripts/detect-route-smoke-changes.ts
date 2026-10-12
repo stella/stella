@@ -4,8 +4,9 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
+export const ROUTE_SMOKE_SPEC_PATH = "apps/web/e2e/specs/route-smoke.spec.ts";
 const ENTRY_POINTS = [
-  "apps/web/e2e/specs/route-smoke.spec.ts",
+  ROUTE_SMOKE_SPEC_PATH,
   "apps/web/e2e/playwright.config.ts",
   // Playwright loads this by configuration string, rather than an import.
   "apps/web/e2e/global-teardown.ts",
