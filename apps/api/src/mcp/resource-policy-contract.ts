@@ -81,31 +81,31 @@ export const MCP_RESOURCE_MODE_CONFIG = {
   advanced: {
     discoveryPath: MCP_ADVANCED_DISCOVERY_PATH,
     httpPath: MCP_ADVANCED_HTTP_PATH,
-    resourceName: "Stella MCP advanced",
+    resourceName: "stella MCP advanced",
     resourceScopes: MCP_ADVANCED_RESOURCE_SCOPES,
   },
   default: {
     discoveryPath: MCP_DISCOVERY_PATH,
     httpPath: MCP_HTTP_PATH,
-    resourceName: "Stella MCP",
+    resourceName: "stella MCP",
     resourceScopes: MCP_DEFAULT_RESOURCE_SCOPES,
   },
   documents: {
     discoveryPath: MCP_DOCUMENTS_DISCOVERY_PATH,
     httpPath: MCP_DOCUMENTS_HTTP_PATH,
-    resourceName: "Stella MCP documents",
+    resourceName: "stella MCP documents",
     resourceScopes: MCP_DOCUMENTS_RESOURCE_SCOPES,
   },
   anonymized: {
     discoveryPath: MCP_ANONYMIZED_DISCOVERY_PATH,
     httpPath: MCP_ANONYMIZED_HTTP_PATH,
-    resourceName: "Stella MCP anonymized",
+    resourceName: "stella MCP anonymized",
     resourceScopes: MCP_ANONYMIZED_RESOURCE_SCOPES,
   },
   law: {
     discoveryPath: MCP_LAW_DISCOVERY_PATH,
     httpPath: MCP_LAW_HTTP_PATH,
-    resourceName: "Stella MCP law",
+    resourceName: "stella MCP law",
     resourceScopes: MCP_LAW_RESOURCE_SCOPES,
   },
 } as const;
