@@ -27,7 +27,7 @@ const completionReadFailure = failureSink({
 });
 
 /** Completion I/O failures remove text while retaining the prepared metadata. */
-export const readDecisionTextCompletionSafely = <T>(
+export const readDecisionTextCompletionSafely = async <T>(
   readCurrent: () => Promise<T>,
 ) =>
   Result.tryPromise({
