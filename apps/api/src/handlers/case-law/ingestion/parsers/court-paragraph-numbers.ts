@@ -89,9 +89,10 @@ export const COURT_PARAGRAPH_NUMBERING_LIMITS = {
    */
   maxLeadIn: 4,
   /**
-   * Share of the body paragraphs between the first and last number that the
-   * numbering itself accounts for, nested lists aside. Below it the markers
-   * are scattered items, not the reasoning's paragraphs.
+   * Share of the body paragraphs from the first number to the end of its
+   * part that the numbering itself accounts for, nested lists aside. Below
+   * it the markers are scattered or leading items, not the reasoning's
+   * paragraphs.
    */
   minDensity: 0.4,
 } as const;
@@ -401,10 +402,18 @@ const readNumbering = (blocks: readonly Block[]): Reading => {
     return { type: "unnumbered" };
   }
 
-  // Paragraphs between the first and last number that are neither numbered
-  // nor items of a list: the reasoning's own text the numbering skips.
+  // Paragraphs from the first number to the end of its part of the decision
+  // (the next separate opinion, or the end) that are neither numbered nor
+  // items of a list: the text the numbering would leave unnumbered. A
+  // court's numbering runs to the end of its reasoning; a two-item list
+  // followed by unnumbered paragraphs is a list.
+  const partEnd =
+    [...body.opinionStarts]
+      .filter((start) => start > last.bodyIndex)
+      .toSorted((left, right) => left - right)
+      .at(0) ?? body.paragraphs.length;
   const span = body.paragraphs
-    .slice(first.bodyIndex, last.bodyIndex + 1)
+    .slice(first.bodyIndex, partEnd)
     .filter((blockIndex) => !opensWithMarker(blocks[blockIndex])).length;
   const density = best.accepted.length / (best.accepted.length + span);
   if (first.bodyIndex > limits.maxLeadIn || density < limits.minDensity) {

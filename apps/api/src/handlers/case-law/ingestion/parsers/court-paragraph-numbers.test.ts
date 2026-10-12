@@ -328,6 +328,22 @@ describe("the hard invariants of a numbering", () => {
     ).toEqual([1, 2, null, null, null, 3]);
   });
 
+  test("a short list opening an unnumbered reasoning stays text", () => {
+    const texts = [
+      "1. Žalobce podal žalobu.",
+      "2. Žalovaný se nevyjádřil.",
+      "Soud provedl dokazování listinami.",
+      "Soud zjistil tento skutkový stav.",
+      "Podle § 1 o. z. soud věc posoudil.",
+      "Žaloba je proto důvodná.",
+      "O nákladech řízení soud rozhodl podle § 142 o. s. ř.",
+    ];
+    const numbering = extractCourtParagraphNumbers(
+      texts.map((text, index) => paragraph(index, text)),
+    );
+    expect(numbering.type).toBe("unnumbered");
+  });
+
   test("a forward skip the court made is kept as printed", () => {
     expect(numbersOfMarked([1, 2, 3, 5, 6, 7])).toEqual({
       type: "numbered",
