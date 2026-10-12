@@ -25,6 +25,7 @@ import { useOpenStatuteLink } from "@/components/chat/statute-open";
 import { InlinePill } from "@/components/inline-pill";
 import { isPlainPrimaryClick } from "@/components/inspector/case-decision-view";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import type { CitedDecisionParagraph } from "@/components/references/reference.logic";
 import { env } from "@/env";
 import { detached } from "@/lib/detached";
 
@@ -205,6 +206,13 @@ const readUrlAnchor = (href: string): string | undefined => {
   );
 };
 
+// A source URL's fragment names a block, never the court's number for it:
+// only a passage link the server stamped carries that.
+const uncountedParagraph = (anchorId: string): CitedDecisionParagraph => ({
+  anchorId,
+  courtParagraphNumber: null,
+});
+
 export const LegalCitationLink = (props: LegalCitationLinkProps) => {
   const appOrigins = new Set([
     new URL(env.VITE_PUBLIC_APP_URL).origin,
@@ -227,7 +235,9 @@ export const LegalCitationLink = (props: LegalCitationLinkProps) => {
       <ChatDecisionCitation
         decisionId={props.source.caseLawDecision.decisionId}
         passage={passage}
-        anchorId={props.anchorId}
+        {...(props.anchorId === undefined
+          ? {}
+          : { paragraph: uncountedParagraph(props.anchorId) })}
         {...(citation.url === null ? {} : { originalUrl: citation.url })}
         interactive={props.interactive}
         renderPassage={props.appearance === "inline"}
@@ -250,9 +260,12 @@ export const LegalCitationLink = (props: LegalCitationLinkProps) => {
     const decisionId =
       props.source.caseLawDecision?.decisionId ??
       extractCaseLawDecisionIdFromIdRouteParam(citation.params.slug);
+    const anchorId = props.anchorId ?? readUrlAnchor(citation.url);
     const decisionProps = {
       passage,
-      anchorId: props.anchorId ?? readUrlAnchor(citation.url),
+      ...(anchorId === undefined
+        ? {}
+        : { paragraph: uncountedParagraph(anchorId) }),
       readerUrl: citation.url,
       ...(citation.source_url === undefined
         ? {}

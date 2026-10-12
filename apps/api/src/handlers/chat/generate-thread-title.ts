@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { CHAT_TITLE_SOURCE, chatThreads } from "@/api/db/schema";
 import { aiTitlingMayReplace } from "@/api/handlers/chat/thread-title";
 import {
@@ -54,6 +54,8 @@ type GenerateThreadTitleProps = {
   promptCachingEnabled: boolean;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
+  /** The organization's scope, read for the title's managed model tier. */
+  organizationStateDb: ScopedDb;
   threadId: SafeId<"chatThread">;
   threadWorkspaceId: SafeId<"workspace"> | null;
   userId: SafeId<"user">;
@@ -91,6 +93,7 @@ const generateAdmittedThreadTitle = async ({
     feature: "chat.thread_title",
     modelRole: "fast",
     orgAIConfig,
+    modelTier: modelAdmission.modelTier,
     properties: threadWorkspaceId ? { workspace_id: threadWorkspaceId } : {},
     traceId: Bun.randomUUIDv7(),
   });
@@ -236,6 +239,7 @@ export const generateThreadTitle = async (
     actionKind: "chat.generate-thread-title",
     organizationId: props.organizationId,
     userId: props.userId,
+    organizationStateDb: props.organizationStateDb,
   });
   if (Result.isError(admitted)) {
     observeFailure(admitted.error, {

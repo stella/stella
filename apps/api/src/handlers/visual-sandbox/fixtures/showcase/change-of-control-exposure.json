@@ -1,0 +1,26 @@
+{
+  "title": "Change-of-control exposure · Project Atlas",
+  "data": {
+    "formattingLocale": "en-GB",
+    "currency": "EUR",
+    "labels": {
+      "title": "Change-of-control exposure",
+      "scope": "Project Atlas data room · every agreement, contract value summed per counterparty",
+      "positions": {
+        "consent": "Consent or termination review",
+        "confirm": "Consent to confirm",
+        "notice": "Notice only"
+      },
+      "statDetail": "{counterparties} counterparties · {documents} documents · {share} of value",
+      "splitLabel": "Share of contract value by change-of-control position",
+      "columns": [
+        "Counterparty",
+        "Agreement",
+        "Documents",
+        "Contract value",
+        "Risk",
+        "Change of control"
+      ]
+    }
+  }
+}

@@ -17,23 +17,37 @@ branch, naming the PR's branch:
 gh workflow run marketing-screenshots-update.yml -f branch=<pr-branch>
 ```
 
-Dispatching on `main` is what keeps the release App key on workflow code from
-`main`: only the app and spec code checked out from `branch` is
-branch-controlled, and the token never leaves the push step.
+That run only starts **Capture marketing screenshots**
+(`marketing-screenshots-capture.yml`) on the branch's own ref. The capture
+runs the branch's app and spec code, holds no release secret, refuses to run
+on `main`, and uploads the regenerated PNGs as its `marketing-screenshots`
+artifact. When it completes, **Publish marketing screenshots**
+(`marketing-screenshots-publish.yml`) runs from `main`: it executes nothing
+from the branch, accepts only flat, regular `*.png` files with a PNG
+signature, mints the release App token, and appends one signed commit on the
+head the capture ran on, so a push that landed on the branch in the meantime
+makes it fail. The push re-runs the PR's checks against the new head.
 
 The capture body is the composite action `.github/actions/marketing-capture`
-resolved from the branch, so a branch created before that action existed
-must be rebased onto `main` first.
+resolved from the branch, and GitHub runs the capture workflow from the
+branch's own copy. A branch created before `marketing-screenshots-capture.yml`
+existed on `main` has no such copy, so the update dispatch fails for it with a
+"workflow not found" error: rebase the branch onto `main` first, then dispatch
+again.
 
-It regenerates every baseline on the CI runner and pushes them to the branch,
-which re-runs the PR's checks against the new head. Because baselines and
-comparison render on the same runner image, the pixel tolerance only has to
-cover run-to-run noise.
+You can also start the capture directly on the branch, skipping the update
+dispatch; the publish run follows the same way:
 
-Every update run also uploads the PNGs as a `marketing-screenshots-<run id>`
-artifact. Only branches of this repository can be regenerated in place, so for
-a fork PR run the update against a same-repository branch carrying the change
-and commit the artifact's PNGs to the PR.
+```sh
+gh workflow run marketing-screenshots-capture.yml --ref <pr-branch>
+```
+
+Because baselines and comparison render on the same runner image, the pixel
+tolerance only has to cover run-to-run noise.
+
+Only branches of this repository can be regenerated in place. For a fork PR,
+run the update against a same-repository branch carrying the change and
+commit the capture run's `marketing-screenshots` artifact to the PR.
 
 Running `bun --filter @stll/web test:e2e:marketing:update` locally is for
 debugging a capture; do not commit macOS-generated PNGs.
