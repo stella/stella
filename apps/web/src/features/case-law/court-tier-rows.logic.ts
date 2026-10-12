@@ -8,15 +8,15 @@ export const courtTierRowKey = (
   row:
     | { type: "court"; court: string }
     | { type: "tier"; tier: string }
-    | { type: "unlisted"; tier: string },
+    | { type: "other-courts"; tier: string },
 ): string => {
   switch (row.type) {
     case "court":
       return row.court;
     case "tier":
       return row.tier;
-    case "unlisted":
-      return `${row.tier}:unlisted`;
+    case "other-courts":
+      return `${row.tier}:other-courts`;
     default: {
       row satisfies never;
       return panic("Unhandled case-law court row type");
