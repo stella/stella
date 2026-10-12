@@ -229,6 +229,21 @@ test("manual regeneration uses the existing App only after target and output che
   expect(steps.indexOf(request)).toBeLessThan(steps.indexOf(checkout));
   expect(steps.indexOf(outputs)).toBeLessThan(steps.indexOf(current));
   expect(steps.indexOf(current)).toBeLessThan(steps.indexOf(push));
+  const submission = workflowStepByName(
+    steps,
+    "Verify regeneration submission",
+  );
+  expect(steps.indexOf(push)).toBeLessThan(steps.indexOf(submission));
+  expect(push).toHaveProperty("id", "regeneration-push");
+  expect(push).toHaveProperty("continue-on-error", true);
+  expect(submission).toHaveProperty(
+    "if",
+    `\${{ !cancelled() && steps.regeneration-push.outcome != 'skipped' }}`,
+  );
+  expect(submission).toHaveProperty("env", {
+    SUBMISSION_OUTCOME: `\${{ steps.regeneration-push.outcome }}`,
+    AUTOFIX_STARTED: `\${{ steps.regeneration-push.outputs.autofix_started }}`,
+  });
   expect(current).toHaveProperty(
     "run",
     expect.stringContaining('check "$GENERATOR_ID" "$HEAD_SHA"'),
@@ -296,5 +311,42 @@ test("manual regeneration uses the existing App only after target and output che
       : [];
   for (const generator of Object.values(PR_GENERATORS)) {
     expect(services).toEqual([...generator.services]);
+  }
+});
+
+test("regeneration submission accepts started tasks and rejects unconfirmed failures", () => {
+  const workflow: unknown = Bun.YAML.parse(
+    readFileSync(
+      new URL("../.github/workflows/autofix.yml", import.meta.url),
+      "utf-8",
+    ),
+  );
+  const submission = workflowStepByName(
+    workflowJobSteps(workflow, "regenerate-requested-files"),
+    "Verify regeneration submission",
+  );
+  const script = submission["run"];
+  if (typeof script !== "string") {
+    throw new TypeError("Missing regeneration submission script");
+  }
+  for (const [outcome, started, expected] of [
+    ["success", "false", 0],
+    ["success", "true", 0],
+    ["failure", "true", 0],
+    ["failure", "false", 1],
+    ["failure", "", 1],
+    ["cancelled", "true", 1],
+    ["unknown", "true", 1],
+  ] as const) {
+    const result = Bun.spawnSync(["bash", "-c", script], {
+      env: {
+        ...process.env,
+        SUBMISSION_OUTCOME: outcome,
+        AUTOFIX_STARTED: started,
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(result.exitCode).toBe(expected);
   }
 });

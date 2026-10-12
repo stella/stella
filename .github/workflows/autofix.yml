@@ -139,10 +139,25 @@ jobs:
           bun --no-install --no-env-file "$RUNNER_TEMP/pr-regeneration.ts" check "$GENERATOR_ID" "$HEAD_SHA"
 
       - name: Push regenerated files
+        id: regeneration-push
+        continue-on-error: true
         uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4
         with:
           commit-message: "chore: regenerate files"
           fail-fast: false
+
+      - name: Verify regeneration submission
+        if: ${{ !cancelled() && steps.regeneration-push.outcome != 'skipped' }}
+        env:
+          SUBMISSION_OUTCOME: ${{ steps.regeneration-push.outcome }}
+          AUTOFIX_STARTED: ${{ steps.regeneration-push.outputs.autofix_started }}
+        run: |
+          set -euo pipefail
+          if [[ "$SUBMISSION_OUTCOME" == success || ( "$SUBMISSION_OUTCOME" == failure && "$AUTOFIX_STARTED" == true ) ]]; then
+            exit 0
+          fi
+          echo "::error::Regeneration submission failed."
+          exit 1
 
   dependabot-bun-autofix:
     name: Autofix Dependabot dependency update
