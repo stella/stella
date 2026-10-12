@@ -34,6 +34,7 @@ export const visualRegistry = {
   "shell-pending": { label: "Shell pending", layout: "plain" },
   "workspace-table": { label: "Workspace table", layout: "workspace-table" },
   "chat-history-decision": { label: "Chat history decision", layout: "plain" },
+  "invoice-issued": { label: "Invoice issued", layout: "plain" },
 } as const satisfies Record<string, VisualEntry>;
 
 export type VisualName = keyof typeof visualRegistry;

@@ -89,7 +89,7 @@ const VAT_REASON_LABELS = {
 type PrefillEntry = InvoicePrefill["timeEntries"][number];
 type PrefillExpense = InvoicePrefill["expenses"][number];
 
-type IssuedInvoice = {
+export type IssuedInvoice = {
   id: string;
   invoiceNumber: string | null;
   issued: boolean;
@@ -602,6 +602,7 @@ const TimeEntriesTable = ({
                   key={`${entry.id}:${choice.billedMinutes}`}
                   loggedMinutes={entry.durationMinutes}
                   minutes={choice.billedMinutes}
+                  recordedMinutes={entry.billedMinutes}
                   onCommit={(billedMinutes) =>
                     onChoice(entry, { billedMinutes })
                   }
@@ -912,7 +913,7 @@ const IssueStep = ({
             {buyerName ?? "—"}
           </DetailsItem>
           <DetailsItem label={t("billing.invoiceComposer.lines")}>
-            {t("billing.invoiceComposer.lineCount", { count: lineCount })}
+            <span className="tabular-nums">{format.number(lineCount)}</span>
           </DetailsItem>
           <DetailsItem label={t("billing.invoices.dueDate")}>
             {dueDate === null
@@ -1005,6 +1006,8 @@ const ComposerFooter = ({
 
 type BilledHoursInputProps = {
   minutes: number;
+  /** What the entry bills as recorded; the logged time shows once it changes. */
+  recordedMinutes: number;
   loggedMinutes: number;
   disabled: boolean;
   onCommit: (minutes: number) => void;
@@ -1016,6 +1019,7 @@ type BilledHoursInputProps = {
  */
 const BilledHoursInput = ({
   minutes,
+  recordedMinutes,
   loggedMinutes,
   disabled,
   onCommit,
@@ -1044,7 +1048,7 @@ const BilledHoursInput = ({
         size="sm"
         value={text}
       />
-      {minutes !== loggedMinutes && (
+      {minutes !== recordedMinutes && (
         <span className="text-muted-foreground text-xs tabular-nums">
           {t("billing.invoiceComposer.loggedHours", {
             hours: format.number(loggedMinutes / 60, {
@@ -1063,7 +1067,11 @@ type IssuedStateProps = {
   buyerName: string | null;
 };
 
-const IssuedState = ({ workspaceId, invoice, buyerName }: IssuedStateProps) => {
+export const IssuedState = ({
+  workspaceId,
+  invoice,
+  buyerName,
+}: IssuedStateProps) => {
   const t = useTranslations();
   const format = useFormatter();
   const summary = [
