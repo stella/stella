@@ -110,7 +110,6 @@ const findDirectSecretComparisons = (
       [node.left, node.right].every(
         (side) =>
           side.kind !== ts.SyntaxKind.NullKeyword &&
-          !(ts.isIdentifier(side) && side.text === "undefined") &&
           !ts.isNumericLiteral(side) &&
           !(ts.isPropertyAccessExpression(side) && side.name.text === "length"),
       ) &&
@@ -152,17 +151,11 @@ describe("verify value comparison", () => {
     const flagged = (code: string) =>
       findDirectSecretComparisons("src/lib/example.ts", code).length;
     expect(flagged("const ok = presented === secret;")).toBe(1);
-    expect(flagged('const ok = secret === "undefined";')).toBe(1);
     expect(flagged("const ok = secrets.includes(presented);")).toBe(1);
     expect(flagged("const ok = secrets.indexOf(value) !== -1;")).toBe(1);
     expect(flagged("const ok = value === frontendSecret;")).toBe(1);
     expect(
       flagged("const ok = presented === null || secrets.length === 0;"),
-    ).toBe(0);
-    expect(
-      flagged(
-        "const ok = secret !== undefined && undefined === previousSecret;",
-      ),
     ).toBe(0);
   });
 });

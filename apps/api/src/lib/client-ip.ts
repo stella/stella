@@ -218,6 +218,12 @@ type OriginSecrets = {
   previous?: string | undefined;
 };
 
+const normalizeOriginSecrets = ({
+  current,
+  previous,
+}: OriginSecrets): readonly string[] =>
+  [current, previous].filter((value) => value !== undefined);
+
 type ClientAddressOptions = {
   trusted?: TrustedProxies;
   /** Header name carrying the edge's viewer address; null disables it. */
@@ -233,20 +239,16 @@ type ClientAddressOptions = {
 
 const carriesOriginSecret = (
   request: Request,
-  secrets: OriginSecrets,
+  secrets: readonly string[],
 ): boolean => {
   const presented = request.headers.get(ORIGIN_VERIFY_HEADER);
-  if (presented === null) {
+  if (presented === null || secrets.length === 0) {
     return false;
   }
   const presentedDigest = hashSha256Bytes(presented);
-  // Compare both configured values, regardless of which one matches.
-  return [secrets.current, secrets.previous]
-    .map(
-      (secret) =>
-        secret !== undefined &&
-        timingSafeEqual(presentedDigest, hashSha256Bytes(secret)),
-    )
+  // Compare every configured value, regardless of which one matches.
+  return secrets
+    .map((secret) => timingSafeEqual(presentedDigest, hashSha256Bytes(secret)))
     .includes(true);
 };
 
@@ -270,18 +272,23 @@ export const clientAddressConfigurationWarning = ({
   | "client_ip.viewer_address_unconfigured"
   | null =>
   requiresOriginProof(edgeHeader) &&
-  originVerifySecret === undefined &&
-  originVerifySecretPrevious === undefined
+  normalizeOriginSecrets({
+    current: originVerifySecret,
+    previous: originVerifySecretPrevious,
+  }).length === 0
     ? "client_ip.viewer_address_unconfigured"
     : null;
 
-let cachedOriginSecrets: OriginSecrets | null = null;
+let cachedOriginSecrets: readonly string[] | null = null;
 
-const getOriginSecrets = (): OriginSecrets => {
-  cachedOriginSecrets ??= {
+const getOriginSecrets = (options?: OriginSecrets): readonly string[] => {
+  if (options) {
+    return normalizeOriginSecrets(options);
+  }
+  cachedOriginSecrets ??= normalizeOriginSecrets({
     current: env.STELLA_ORIGIN_VERIFY_SECRET,
     previous: env.STELLA_ORIGIN_VERIFY_SECRET_PREVIOUS,
-  };
+  });
   return cachedOriginSecrets;
 };
 
@@ -290,7 +297,7 @@ type TrustedPeerInput = {
   peer: string;
   trusted: TrustedProxies;
   edgeHeader: string | null;
-  originSecrets: OriginSecrets;
+  originSecrets: readonly string[];
   edgeAddressFormat: EdgeAddressFormat;
 };
 
@@ -304,9 +311,7 @@ const addressFromTrustedPeer = ({
 }: TrustedPeerInput): ClientAddress | null => {
   if (
     edgeHeader !== null &&
-    ((originSecrets.current === undefined &&
-      originSecrets.previous === undefined &&
-      !requiresOriginProof(edgeHeader)) ||
+    ((originSecrets.length === 0 && !requiresOriginProof(edgeHeader)) ||
       carriesOriginSecret(request, originSecrets))
   ) {
     const address = parseEdgeClientAddress(
@@ -358,7 +363,7 @@ export const resolveClientAddress = (
       peer,
       trusted,
       edgeHeader,
-      originSecrets: options?.originSecrets ?? getOriginSecrets(),
+      originSecrets: getOriginSecrets(options?.originSecrets),
       edgeAddressFormat:
         options?.edgeAddressFormat ?? env.STELLA_CLIENT_ADDRESS_FORMAT,
     }) ?? {
@@ -461,7 +466,7 @@ export const resolveSignupRateLimitClientIp = (
       peer,
       trusted,
       edgeHeader,
-      originSecrets: options?.originSecrets ?? getOriginSecrets(),
+      originSecrets: getOriginSecrets(options?.originSecrets),
       edgeAddressFormat:
         options?.edgeAddressFormat ?? env.STELLA_CLIENT_ADDRESS_FORMAT,
     })?.address ?? null
