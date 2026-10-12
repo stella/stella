@@ -442,18 +442,23 @@ test("green suites publish success and red suites publish failure", () => {
   ).toEqual({ exitCode: 1, posted: ["failure"] });
 });
 
-test("a cancelled run leaves the status only to a later live or green run for the same commit", () => {
+test("a cancelled run defers only to a later live or green run for the same commit", () => {
   const cancelled = { validate: "success", suites: "cancelled" };
-  for (const run of [
-    laterRun({}),
-    laterRun({ status: "queued" }),
-    laterRun({ status: "completed", conclusion: "success" }),
-  ]) {
+  for (const run of [laterRun({}), laterRun({ status: "queued" })]) {
     expect(publishStatus({ results: cancelled, runs: [run] })).toEqual({
       exitCode: 0,
-      posted: [],
+      posted: ["pending"],
     });
   }
+  expect(
+    publishStatus({
+      results: cancelled,
+      runs: [
+        laterRun({ status: "completed", conclusion: "success" }),
+        laterRun({ id: 102 }),
+      ],
+    }),
+  ).toEqual({ exitCode: 0, posted: [] });
   for (const run of [
     laterRun({ sha: "c".repeat(40) }),
     laterRun({ status: "completed", conclusion: "failure" }),
