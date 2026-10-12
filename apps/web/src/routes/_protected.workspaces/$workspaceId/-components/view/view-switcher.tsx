@@ -64,6 +64,7 @@ import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/acces
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import type { WorkspaceView } from "@/lib/types";
 import { useQueryView } from "@/lib/use-query-view";
+import { createUuid } from "@/lib/uuid";
 import {
   useConvertView,
   useCreateView,
@@ -236,7 +237,7 @@ export const ViewSwitcher = ({
               icon: layoutIcons[layoutType],
               label: t(LAYOUT_LABEL_KEYS[layoutType]),
               onSelect: () => {
-                const viewId = crypto.randomUUID();
+                const viewId = createUuid();
                 createView.mutate(
                   {
                     id: viewId,
@@ -527,7 +528,7 @@ const useViewActionsMenu = ({
   const hasActions = canUpdateView || canCreateView || canDeleteView;
 
   const handleDuplicate = (view: WorkspaceView) => {
-    const newId = crypto.randomUUID();
+    const newId = createUuid();
     createView.mutate(
       {
         id: newId,

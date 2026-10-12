@@ -1184,13 +1184,6 @@
   },
   {
     "file": "apps/api/src/lib/document-processing-queue.ts",
-    "function": "module/recoverRetryableOcrFailures",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
-    "file": "apps/api/src/lib/document-processing-queue.ts",
     "function": "module/recoverStaleDocumentProcessingRuns",
     "kind": "constant-limit",
     "count": 1,

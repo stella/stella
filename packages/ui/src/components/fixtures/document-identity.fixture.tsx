@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { DirectionProvider } from "@base-ui/react/direction-provider";
 import { panic } from "better-result";
 
+import { InspectorRail } from "../../inspector/chrome";
 import { InspectorEntityTab } from "../../inspector/entity-tab";
 import { DocumentIdentityBadge } from "../document-identity-badge";
 import { TooltipProvider } from "../tooltip";
@@ -39,7 +40,7 @@ const Fixture = () => (
             title={TITLE}
           />
         </section>
-        <section data-testid="rail" className="w-12">
+        <InspectorRail data-testid="rail" className="flex">
           <InspectorEntityTab
             active
             label={TITLE}
@@ -88,7 +89,7 @@ const Fixture = () => (
               />
             }
           />
-        </section>
+        </InspectorRail>
       </main>
     </TooltipProvider>
   </DirectionProvider>

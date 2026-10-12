@@ -16,7 +16,9 @@ for (const locale of ["en", "ar"] as const) {
       await expect(row.getByText("172/2026", { exact: true })).toBeVisible();
       await expect(row.getByText("172/26", { exact: true })).toBeHidden();
     }
-    const tabs = page.getByTestId("rail").getByRole("button");
+    const rail = page.getByTestId("rail");
+    await expect(rail).toHaveAttribute("data-slot", "inspector-rail");
+    const tabs = rail.getByRole("button");
     await expect(tabs).toHaveCount(4);
     await expect(
       tabs.nth(0).getByText("172/26", { exact: true }),

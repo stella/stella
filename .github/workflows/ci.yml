@@ -176,6 +176,7 @@ jobs:
       docs_checks_required: ${{ steps.changed-files.outputs.docs_checks_required }}
       docs_changed_files: ${{ steps.changed-files.outputs.docs_changed_files }}
       postgres_suites_required: ${{ steps.changed-files.outputs.postgres_suites_required }}
+      query_perf_required: ${{ steps.query-perf-scope.outputs.query_perf_required }}
       corpus_suites_required: ${{ steps.changed-files.outputs.corpus_suites_required }}
       valkey_suites_required: ${{ steps.changed-files.outputs.valkey_suites_required }}
       collaboration_suite_required: ${{ steps.changed-files.outputs.collaboration_suite_required }}
@@ -1199,6 +1200,21 @@ jobs:
           if [[ "$package_checks_required" != "true" ]]; then
             echo "::notice::Only documentation changed; skipping package CI checks."
           fi
+
+      - name: Plan query performance scope
+        id: query-perf-scope
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.changed-files.outcome == 'success'
+        env:
+          CHANGED_PATHS: ${{ runner.temp }}/api-test-changed-paths
+          SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
+          HEAVY_ONLY: ${{ inputs.heavy_only }}
+        run: |
+          if [[ "$HEAVY_ONLY" == true ]]; then
+            echo "query_perf_required=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          QUERY_PERF_CHANGED_PATHS="$CHANGED_PATHS" QUERY_PERF_SCOPE_UNKNOWN="$SCOPE_UNKNOWN" \
+            bun scripts/query-perf-scope.ts >> "$GITHUB_OUTPUT"
 
       - name: Install API test planner dependencies
         id: api-test-deps
@@ -3793,6 +3809,10 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/e2e-spec-shards.test.ts
 
+      - name: Test geometry shard plan
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/e2e-geometry-shards.test.ts
+
       - name: Validate CI service image mirror inventory
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: |
@@ -4989,6 +5009,21 @@ jobs:
               ...context.repo,
               run_id: context.runId,
             });
+
+  query-perf:
+    needs: ci-plan
+    if: >-
+      inputs.pr_depth_only != true
+      && needs.ci-plan.outputs.run_required != 'false'
+      && (inputs.heavy_only == true
+      || ((github.event_name == 'pull_request' || github.event_name == 'merge_group')
+      && needs.ci-plan.outputs.query_perf_required == 'true'))
+    permissions:
+      contents: read
+    uses: ./.github/workflows/query-perf.yml
+    with:
+      sha: ${{ inputs.sha || '' }}
+      heavy_only: ${{ inputs.heavy_only == true }}
 
   postgres-service-suites:
     needs: ci-plan
@@ -6466,8 +6501,8 @@ jobs:
       )
       )
     runs-on: ubuntu-latest
-    # Longest leg: 15m setup + 9m tests + 4m uploads + 2m cancellation/post hooks.
-    timeout-minutes: 30
+    # Longest leg: 15m setup + 13m tests + 4m uploads + 2m cancellation/post hooks.
+    timeout-minutes: 34
     permissions:
       contents: read
       packages: read
@@ -6573,7 +6608,7 @@ jobs:
           set -euo pipefail
           case "$E2E_MODE" in
             full)
-              args=(--shard=${{ matrix.shard }}/2)
+              args=(--project=chromium --project=heap-growth-canary --shard=${{ matrix.shard }}/2)
               ;;
             selected)
               specs_output=$(jq -r '.[]' <<< "$E2E_SPECS")
@@ -6591,13 +6626,26 @@ jobs:
               exit 1
               ;;
           esac
+          status=0
           bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" \
-            bun --filter @stll/web test:e2e -- --grep-invert='route-smoke' "${args[@]}"
+            bun --filter @stll/web test:e2e -- --grep-invert='route-smoke' "${args[@]}" || status=$?
+          if [[ "$E2E_MODE" == full ]]; then
+            # Shard the uniform-cost geometry matrix independently; cheap tests
+            # must not displace its cases onto one shard. Keep the shared 7m cap.
+            # Preserve both blob reports, including when geometry fails.
+            shopt -s nullglob
+            trap 'mkdir -p apps/web/e2e/test-results/blob-report; for report in apps/web/e2e/test-results/geometry/blob-report/*.zip; do cp "$report" apps/web/e2e/test-results/blob-report/; done' EXIT
+            E2E_OUTPUT_DIR=test-results/geometry \
+              PLAYWRIGHT_JSON_OUTPUT_FILE="$GITHUB_WORKSPACE/.cache/playwright-timings/run-geometry-shard.json" \
+              bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" \
+              bun --filter @stll/web test:e2e -- --project=docked-chat-geometry --shard=${{ matrix.shard }}/2 || status=$?
+          fi
+          exit "$status"
 
       # API-owned browser checks (visual sandbox) need the API from this stack
       # but no web app; one shard runs them.
       - name: Run API browser checks
-        timeout-minutes: 1
+        timeout-minutes: 3
         if: >-
           !cancelled()
           && steps.e2e-stack.outputs.status == 'ready'
@@ -6607,7 +6655,7 @@ jobs:
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/api test:e2e:browser
 
       - name: Run route-smoke Playwright shard
-        timeout-minutes: 1
+        timeout-minutes: 3
         if: >-
           always()
           && !cancelled()
@@ -7824,21 +7872,10 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
 
-      - name: Select install budget from restored cache
-        id: bun-install-budget
-        run: |
-          # Prefix-key restores are warm too; inspect the restored cache contents.
-          if compgen -G "$HOME/.bun/install/cache/*" > /dev/null; then
-            echo "cache-restored=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "cache-restored=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Install dependencies
         timeout-minutes: 5
         run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/desktop-windows-dry-run.log" --frozen-lockfile --ignore-scripts
         env:
-          CI_INSTALL_CACHE_RESTORED: ${{ steps.bun-install-budget.outputs.cache-restored }}
           BUN_INSTALL_GLOBAL_STORE: "0"
           NPM_TOKEN: ""
 
@@ -7854,7 +7891,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
-          toolchain: stable
+          toolchain: 1.99.0
           targets: x86_64-pc-windows-msvc
 
       - name: Stamp dry-run metadata
@@ -7954,7 +7991,7 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install scripts workspace dependencies
-        timeout-minutes: 3
+        timeout-minutes: 5
         run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/scripts.log" --frozen-lockfile --ignore-scripts --filter @stll/scripts
         env:
           # Restored Windows global-store links can omit transitive dependency
@@ -8068,7 +8105,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
-          toolchain: 1.89.0
+          toolchain: 1.99.0
           targets: wasm32-unknown-unknown
 
       - name: Restore Rust build cache
@@ -8224,7 +8261,7 @@ jobs:
         name: Setup Rust
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
-          toolchain: stable
+          toolchain: 1.99.0
           targets: ${{ matrix.target }}
           components: clippy
 
@@ -8624,6 +8661,7 @@ jobs:
         code-quality-web-rest,
         service-suites,
         postgres-service-suites,
+        query-perf,
         release-typecheck,
         fix-tests-on-base,
         web-build,
@@ -8742,6 +8780,7 @@ jobs:
             "release-typecheck": "release_typecheck_required",
             "service-suites": "service_suites_required",
             "postgres-service-suites": "postgres_service_suites_required",
+            "query-perf": "query_perf_required",
             "stack-redaction-browsers": "stack_redaction_browsers_required",
             "web-build": "web_build_required",
             "heavy-web-build": "heavy_web_build_required",
@@ -8756,10 +8795,12 @@ jobs:
           FAST_JOB_SCOPES: >-
             {"postgres-service-suites": "postgres_service_suites_required", "service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required", "web-build": "browser_spec_selection_required"}
           FAST_REQUIRED: >-
-            ["dated-waiver-expiry", "desktop-rust-lint", "ci-browser", "ci-generated-sources", "ci-checks-docs", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-malware", "parser-version-guard", "ci-tests", "e2e-production-shard", "web-build", "scan-engine-wasm-drift"]
+            ["dated-waiver-expiry", "desktop-rust-lint", "ci-browser", "ci-generated-sources", "ci-checks-docs", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-malware", "parser-version-guard", "ci-tests", "e2e-production-shard", "web-build", "scan-engine-wasm-drift", "query-perf"]
+          # These scoped gates certify the exact queue head even at thin depth.
+          QUEUE_GATES: '["query-perf"]'
         run: |
           if [[ "$QUEUE_DEPTH" == thin ]]; then
-            THIN_JOBS=$(jq -cn --argjson thin "$THIN_JOBS" --argjson required "$QUEUE_REQUIRED_JOBS" '$thin + $required | unique') || exit 1
+            THIN_JOBS=$(jq -cn --argjson thin "$THIN_JOBS" --argjson required "$QUEUE_REQUIRED_JOBS" --argjson gates "$QUEUE_GATES" '$thin + $required + $gates | unique') || exit 1
           fi
           if [[ "$COVERAGE_PROFILE" == pilot-fast-v1 ]]; then
             FAST_REQUIRED="$PILOT_FAST_JOBS"

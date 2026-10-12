@@ -51,6 +51,7 @@ import {
   useActionCapabilities,
 } from "@/lib/organization/feature-access/capability-actions";
 import { useQueryView } from "@/lib/use-query-view";
+import { createUuid } from "@/lib/uuid";
 import { useCreateView } from "@/lib/workspaces/mutations/views";
 import type { WorkspaceViewTemplate } from "@/lib/workspaces/queries/view-templates";
 import { viewTemplatesOptions } from "@/lib/workspaces/queries/view-templates";
@@ -127,7 +128,7 @@ export const TemplatePickerDialog = ({
   const startWorkflow = useStartWorkflow(workspaceId);
 
   const handleUse = (template: WorkspaceViewTemplate) => {
-    const newId = crypto.randomUUID();
+    const newId = createUuid();
     const hasAITemplateProperty = template.templateProperties.some(
       (p) => p.createIfMissing && p.tool.type === "ai-model",
     );
@@ -154,7 +155,7 @@ export const TemplatePickerDialog = ({
   };
 
   const handleCreateAvt = () => {
-    const newId = crypto.randomUUID();
+    const newId = createUuid();
     createView.mutate(
       {
         id: newId,

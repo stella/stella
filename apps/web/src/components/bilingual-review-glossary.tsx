@@ -1,10 +1,9 @@
+import { useTranslations } from "use-intl";
 /**
  * The glossary half of the bilingual-translation review: the rendering every
  * row must use for each defined term. Editable, because a proposed rendering
  * is a suggestion and the endpoint refuses a term with no translation.
  */
-
-import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { PlusIcon, Trash2Icon } from "@stll/ui/icons";
@@ -17,6 +16,7 @@ import {
   BILINGUAL_TERM_MAX,
   type BilingualGlossaryEntry,
 } from "@/components/bilingual-translate-queries";
+import { createUuid } from "@/lib/uuid";
 
 /** One glossary entry while it is being edited: the inflected forms are one
  *  comma-separated text field rather than a list the reviewer must manage. */
@@ -148,7 +148,7 @@ export const BilingualReviewGlossary = ({
 };
 
 const newGlossaryDraft = (): GlossaryDraft => ({
-  id: crypto.randomUUID(),
+  id: createUuid(),
   source: "",
   target: "",
   sourceForms: "",
@@ -166,7 +166,7 @@ export const glossaryDraftsFrom = (
   entries: readonly BilingualGlossaryEntry[],
 ): GlossaryDraft[] =>
   entries.map((entry) => ({
-    id: crypto.randomUUID(),
+    id: createUuid(),
     source: entry.source,
     target: entry.target,
     sourceForms: entry.sourceForms.join(", "),
