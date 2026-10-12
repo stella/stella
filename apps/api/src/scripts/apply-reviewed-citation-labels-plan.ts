@@ -670,12 +670,6 @@ const incomingTextRevisionFence = citationTextRevisionFingerprintFence({
   expectedFingerprint: sql`v.text_revision_sha256`,
 });
 
-const incomingReviewCurrentSql = reviewTextEligibleSql({
-  origin: sql`v.origin`,
-  citingDecisionId: sql`v.citing_decision_id`,
-  textRevisionSha256: sql`v.text_revision_sha256`,
-});
-
 const incomingReviewEligibleSql = sql`(v.origin = ${CITATION_REVIEW_ORIGIN.HUMAN_REVIEW} OR ${incomingTextRevisionFence})`;
 
 /** Rows a label changes: any other polarity, or a rule attribution. */
@@ -686,10 +680,9 @@ const citationDiffersSql = sql`c.citing_decision_id = v.citing_decision_id
 /** Per label, in input order: the stored review and the citation rows it covers. */
 const reviewedLabelStateStatement = (
   labels: readonly ReviewedCitationLabel[],
-  mode: "plan" | "apply",
 ): SQL => sql`
   SELECT v.ord,
-         ${mode === "apply" ? incomingReviewEligibleSql : incomingReviewCurrentSql} AS text_current,
+         ${incomingReviewEligibleSql} AS text_current,
          (r.id IS NOT NULL
            AND ${reviewTuple("r")} IS NOT DISTINCT FROM ${reviewTuple("v")}) AS same_review,
          (r.id IS NULL OR ${reviewMayReplaceSql({ stored: "r", incoming: "v" })}) AS may_replace,
@@ -950,13 +943,11 @@ type DecidedLabels = {
 type DecideReviewedLabelsArgs = {
   tx: ExecutingTransaction;
   input: readonly unknown[];
-  mode: "plan" | "apply";
 };
 
 const decideReviewedLabels = async ({
   tx,
   input,
-  mode,
 }: DecideReviewedLabelsArgs): Promise<DecidedLabels> => {
   const parsed = parseEntries(input);
   const citationIds = citationIdsOf(parsed.entries);
@@ -984,9 +975,7 @@ const decideReviewedLabels = async ({
       : planReviewedLabels(
           resolved.labels,
           executedRows(
-            await tx.execute(
-              reviewedLabelStateStatement(resolved.labels, mode),
-            ),
+            await tx.execute(reviewedLabelStateStatement(resolved.labels)),
           ),
         );
   return {
@@ -1021,7 +1010,6 @@ export const planReviewedCitationLabels = async (
     const { settled, planned } = await decideReviewedLabels({
       tx,
       input,
-      mode: "plan",
     });
     const rows = inInputOrder([
       ...settled,
@@ -1047,7 +1035,6 @@ const applyReviewedLabelsTx = async (
   const { settled, planned } = await decideReviewedLabels({
     tx,
     input,
-    mode: "apply",
   });
   const toStore = planned.accepted
     .filter(({ storesReview }) => storesReview)

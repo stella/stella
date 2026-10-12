@@ -62,6 +62,7 @@ import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
+import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
   REVIEWED_LABEL_APPLY_FAILURE,
@@ -358,6 +359,50 @@ const applyLabels = async (input: readonly unknown[]) => {
 };
 
 describe("reviewed citation labels", () => {
+  test("plan and apply agree on model labels for listing-only decisions", async () => {
+    const cited = "sp. zn. 29 Cdo 4099/2015";
+    const labelled = await ingestRuleLabelled({
+      caseNumber: "30 Cdo 1099/2026",
+      cited,
+      rawHash: "listing-review-eligibility",
+    });
+    const entry = {
+      ...labelFor(labelled, POLARITY.POSITIVE),
+      ...provenanceFor(
+        CITATION_REVIEW_ORIGIN.AI_ANNOTATION,
+        "listing-review",
+        await textRevisionSha256For(labelled.citingDecisionId),
+      ),
+    };
+    expect(v.safeParse(reviewedCitationLabelEntrySchema, entry).success).toBe(
+      true,
+    );
+    await db
+      .update(caseLawDecisions)
+      .set({ metadata: metadataMarkedListingOnly(caseLawDecisions.metadata) })
+      .where(eq(caseLawDecisions.id, labelled.citingDecisionId));
+    const planned = await planLabels([entry]);
+    const applied = await applyLabels([entry]);
+    expect(planned.rows).toEqual([
+      {
+        index: 0,
+        citingDecisionId: labelled.citingDecisionId,
+        citationKey: keyOf(labelled),
+        outcome: REVIEWED_LABEL_OUTCOME.STALE,
+      },
+    ]);
+    expect(applied.rows).toEqual(planned.rows);
+    expect(applied.summary).toEqual(planned.summary);
+    expect(await readCitation(cited)).toEqual(labelled);
+    const stored = await db
+      .select({ id: caseLawCitationReviews.id })
+      .from(caseLawCitationReviews)
+      .where(
+        eq(caseLawCitationReviews.citingDecisionId, labelled.citingDecisionId),
+      );
+    expect(stored).toEqual([]);
+  });
+
   test.each(CITATION_REVIEW_ORIGINS)(
     "review origin %s stores a PostgreSQL-width key with its provenance",
     async (origin) => {
