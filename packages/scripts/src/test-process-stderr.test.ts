@@ -78,3 +78,31 @@ test("an inherited stderr pipe is cancelled after the exited leader's drain budg
   expect(cancelled).toBe(true);
   expect(writes).toEqual(["tail"]);
 });
+
+test("a never-settling underlying cancellation cannot extend the post-exit deadline", async () => {
+  let cancelled = false;
+  const stderr = new ReadableStream<Uint8Array>({
+    cancel: () => {
+      cancelled = true;
+      return new Promise<undefined>(() => {});
+    },
+  });
+  const destination = new Writable({
+    write: (_chunk, _encoding, callback) => {
+      callback();
+    },
+  });
+  const startedAt = performance.now();
+  const result = await forwardTestStderr({
+    child: { pid: 42, stderr, exited: Promise.resolve(0) },
+    destination,
+    onChunk: () => {},
+    onWarning: (message) => {
+      throw new TypeError(message);
+    },
+    postExitDrainMs: 20,
+  });
+  expect(result.isErr()).toBe(true);
+  expect(cancelled).toBe(true);
+  expect(performance.now() - startedAt).toBeLessThan(1000);
+});

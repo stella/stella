@@ -30,6 +30,7 @@ export const forwardTestStderr = async ({
   const reader = child.stderr.getReader();
   const cancellation = new AbortController();
   let timeoutError: TestStderrError | undefined;
+  let cleanupDeadline: number | undefined;
   const cancelReader = () =>
     Result.tryPromise({
       try: async () => {
@@ -62,6 +63,7 @@ export const forwardTestStderr = async ({
       }),
   });
   const exitDrained = child.exited.then(async () => {
+    cleanupDeadline = performance.now() + postExitDrainMs;
     const timer = setTimeout(() => {
       timeoutError = new TestStderrError({
         message: `Test stderr remained open ${postExitDrainMs}ms after PID ${child.pid} exited`,
@@ -81,9 +83,31 @@ export const forwardTestStderr = async ({
     return timeoutError === undefined ? outcome : Result.err(timeoutError);
   } finally {
     cancellation.abort();
-    const cancelled = await (readerCancellation ?? cancelReader());
-    if (cancelled.isErr()) {
-      onWarning(cancelled.error.message);
+    const reportedCancellation = (readerCancellation ?? cancelReader()).then(
+      (cancelled) => {
+        if (cancelled.isErr()) {
+          onWarning(cancelled.error.message);
+        }
+        return cancelled;
+      },
+    );
+    let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
+    const remainingMs = Math.max(
+      0,
+      (cleanupDeadline ?? performance.now() + postExitDrainMs) -
+        performance.now(),
+    );
+    try {
+      await Promise.race([
+        reportedCancellation,
+        new Promise<undefined>((resolve) => {
+          cleanupTimer = setTimeout(() => {
+            resolve(undefined);
+          }, remainingMs);
+        }),
+      ]);
+    } finally {
+      clearTimeout(cleanupTimer);
     }
     reader.releaseLock();
   }
