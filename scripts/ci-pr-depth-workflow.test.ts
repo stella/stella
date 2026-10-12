@@ -515,3 +515,19 @@ test("a scheduled successor publishes even when validation stops before its SHA 
   expect(sha("schedule", "d".repeat(40))).toBe("d".repeat(40));
   expect(sha("workflow_dispatch", "")).toBe("");
 });
+
+test("cancelled validation with skipped suites defers like cancelled suites; a real failure never does", () => {
+  const runs = [laterRun({})];
+  expect(
+    publishStatus({
+      results: { validate: "cancelled", suites: "skipped" },
+      runs,
+    }),
+  ).toEqual({ exitCode: 0, posted: [] });
+  expect(
+    publishStatus({
+      results: { validate: "failure", suites: "skipped" },
+      runs,
+    }),
+  ).toEqual({ exitCode: 1, posted: ["failure"] });
+});

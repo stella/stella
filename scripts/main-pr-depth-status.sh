@@ -14,7 +14,7 @@ state=failure
 if jq -e 'all(.[]; .result == "success")' <<< "$RESULTS" > /dev/null; then
   state=success
 elif [[ -n "$SHA" ]] && jq -e \
-  'any(.[]; .result == "cancelled") and all(.[]; .result == "success" or .result == "cancelled")' \
+  'any(.[]; .result == "cancelled") and all(.[]; .result == "success" or .result == "cancelled" or .result == "skipped")' \
   <<< "$RESULTS" > /dev/null; then
   runs=$(bash "$gh_retry" api "repos/$REPOSITORY/actions/workflows/main-pr-depth.yml/runs?per_page=50")
   if jq -e --arg title "Main PR-depth checks $SHA" --argjson run "$RUN_ID" \
