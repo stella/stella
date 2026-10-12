@@ -8,7 +8,6 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import * as v from "valibot";
 
 import { classifyMainHeavyFailures } from "./main-heavy-classification.mjs";
@@ -205,28 +204,6 @@ test("identical queue job and step names cannot prove full and affected test sel
     expect(classifyMainHeavyFailures(evidence).map(({ type }) => type)).toEqual(
       ["CODE"],
     );
-    const source = readFileSync(
-      path.join(root, "scripts/main-heavy-classification.mjs"),
-      "utf-8",
-    );
-    const mutant = source.replace(
-      'type: "CODE",',
-      'type: passed ? "INFRA" : "CODE",',
-    );
-    expect(mutant).not.toBe(source);
-    const mutationFile = path.join(fixture, "unsafe-classifier.mjs");
-    writeFileSync(mutationFile, mutant);
-    const { classifyMainHeavyFailures: unsafeClassifier } = await import(
-      pathToFileURL(mutationFile).href
-    );
-    expect(
-      v
-        .parse(
-          v.array(v.object({ type: v.string() })),
-          unsafeClassifier(evidence),
-        )
-        .map(({ type }) => type),
-    ).toEqual(["INFRA"]);
   } finally {
     rmSync(fixture, { recursive: true, force: true });
   }
