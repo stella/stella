@@ -25,7 +25,11 @@ for (const fixture of ["memory-allocation.ts", "memory-allocation-parent.ts"]) {
     const filename = `test-fixtures/${fixture}`;
     const child = Bun.spawn(
       [process.execPath, `${import.meta.dir}/${filename}`],
-      { stdout: "ignore", stderr: "inherit" },
+      {
+        stdout: "ignore",
+        stderr: "inherit",
+        detached: process.platform !== "win32",
+      },
     );
     const failures: string[] = [];
     const limitBytes = 128 * 1024 ** 2;
@@ -33,6 +37,7 @@ for (const fixture of ["memory-allocation.ts", "memory-allocation-parent.ts"]) {
       child,
       limitBytes,
       readBytes,
+      termination: process.platform === "win32" ? "process" : "group",
       file: () => filename,
       onFailure: (message) => failures.push(message),
       intervalMs: 100,

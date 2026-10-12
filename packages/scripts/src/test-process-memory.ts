@@ -134,6 +134,7 @@ type WatchTestProcessMemoryOptions = {
   readBytes: (pid: number) => number;
   file: () => string;
   onFailure: (message: string) => void;
+  termination?: "process" | "group";
   intervalMs?: number;
   children?: (pid: number) => readonly number[];
 };
@@ -144,6 +145,7 @@ export const watchTestProcessMemory = ({
   readBytes,
   file,
   onFailure,
+  termination = "process",
   intervalMs = SAMPLE_INTERVAL_MS,
   children = processChildren,
 }: WatchTestProcessMemoryOptions) => {
@@ -154,6 +156,25 @@ export const watchTestProcessMemory = ({
   let readFailureTimer: ReturnType<typeof setTimeout> | undefined;
   const fail = (message: string) => {
     failure = message;
+    if (termination === "group") {
+      const killed = Result.try({
+        try: () => process.kill(-child.pid, "SIGKILL"),
+        catch: (cause) =>
+          new ProcessMemoryReadError({ message: String(cause), cause }),
+      });
+      if (
+        killed.isErr() &&
+        !(
+          killed.error.cause instanceof Error &&
+          "code" in killed.error.cause &&
+          killed.error.cause.code === "ESRCH"
+        )
+      ) {
+        onFailure(
+          `Could not kill test process group ${child.pid}: ${killed.error.message}`,
+        );
+      }
+    }
     for (const pid of sampledPids.toReversed()) {
       if (pid === child.pid) {
         continue;

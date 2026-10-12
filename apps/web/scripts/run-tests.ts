@@ -60,11 +60,13 @@ for (const run of runs) {
     stdin: "inherit",
     stdout: "inherit",
     stderr: "pipe",
+    detached: process.platform !== "win32",
   });
   const watchdog = watchTestProcessMemory({
     child,
     limitBytes,
     readBytes,
+    termination: process.platform === "win32" ? "process" : "group",
     file: () => currentFile,
     onFailure: (message) => process.stderr.write(`${message}\n`),
   });
