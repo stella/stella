@@ -150,10 +150,12 @@ jobs:
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
       desktop_browser_required: ${{ steps.changed-files.outputs.desktop_browser_required }}
       # The job and result gate consume the same event/depth decision.
+      ci_browser_scope_required: ${{ steps.changed-files.outputs.ci_browser_scope_required }}
       ci_browser_required: >-
         ${{ steps.completed-depth.outputs.run_required != 'false'
         && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         && steps.changed-files.outputs.package_checks_required == 'true'
+        && steps.changed-files.outputs.ci_browser_scope_required == 'true'
         && ((github.event_name == 'pull_request' && steps.changed-files.outputs.desktop_browser_required == 'true')
         || (github.event_name != 'pull_request'
         && steps.depth.outputs.suite_depth == 'full')
@@ -161,7 +163,9 @@ jobs:
         && steps.completed-depth.outputs.normal_completion != 'complete'
         && contains(fromJSON(steps.pilot-queue-plan.outputs.queue_jobs || '[]'), 'ci-browser')))
         && 'true' || 'false' }}
-      legal_atlas_image_required: ${{ steps.changed-files.outputs.legal_atlas_image_required }}
+      legal_atlas_image_inputs_required: ${{ steps.changed-files.outputs.legal_atlas_image_required }}
+      legal_atlas_api_source_required: ${{ steps.legal-atlas-scope.outputs.api_source_required || 'true' }}
+      legal_atlas_image_required: ${{ steps.changed-files.outputs.legal_atlas_image_required == 'true' && steps.legal-atlas-scope.outputs.api_source_required != 'false' }}
       legal_atlas_image_pr_required: ${{ steps.changed-files.outputs.legal_atlas_image_pr_required }}
       dependency_malware_required: ${{ steps.changed-files.outputs.dependency_malware_required }}
       lockfile_ages_required: ${{ steps.changed-files.outputs.lockfile_ages_required }}
@@ -777,6 +781,7 @@ jobs:
               echo "collab_redis_required=true"
               echo "desktop_rust_checks_required=true"
               echo "desktop_browser_required=true"
+              echo "ci_browser_scope_required=true"
               echo "e2e_core_required=true"
               echo "e2e_production_required=$e2e_production_required"
               echo "e2e_landing_required=true"
@@ -826,6 +831,7 @@ jobs:
               echo "collab_redis_required=false"
               echo "desktop_rust_checks_required=false"
               echo "desktop_browser_required=false"
+              echo "ci_browser_scope_required=false"
               echo "e2e_core_required=false"
               echo "e2e_production_required=false"
               echo "e2e_landing_required=false"
@@ -901,6 +907,10 @@ jobs:
           fi
           if [[ "$package_checks_required" == false ]]; then
             desktop_browser_required=false
+          fi
+          ci_browser_scope_required=$(bun scripts/ci-browser-scope.ts "${changed_files[@]}") || ci_browser_scope_required=true
+          if [[ "$ci_browser_scope_required" != false ]]; then
+            ci_browser_scope_required=true
           fi
           dependency_malware_required=$(bun scripts/check-standalone-lockfiles.ts --requires-malware-scan "${changed_files[@]}")
           agent_sandbox_docker_required=false
@@ -1028,7 +1038,7 @@ jobs:
                 ;;
             esac
             case "$file" in
-              apps/legal-atlas-runner/*|apps/api/*|packages/legal-atlas/*|packages/typescript-config/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/pull-base-images.sh|scripts/ci-service-images.ts|scripts/ci-service-images.json|scripts/retry.sh|.dockerignore|.github/workflows/ci.yml)
+              apps/legal-atlas-runner/*|apps/api/*|apps/*/package.json|packages/*|patches/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/pull-base-images.sh|scripts/ci-service-images.ts|scripts/ci-service-images.json|scripts/retry.sh|scripts/legal-atlas-image-scope*|scripts/docker-source-closure*|scripts/generated-imports*|scripts/generated-files*|scripts/install-free-ci*|.dockerignore|.github/workflows/ci.yml)
                 legal_atlas_image_required=true
                 ;;
             esac
@@ -1168,6 +1178,7 @@ jobs:
             echo "collab_redis_required=$collab_redis_required"
             echo "desktop_rust_checks_required=$desktop_rust_checks_required"
             echo "desktop_browser_required=$desktop_browser_required"
+            echo "ci_browser_scope_required=$ci_browser_scope_required"
             echo "e2e_core_required=$e2e_core_required"
             echo "e2e_production_required=$e2e_production_required"
             echo "e2e_landing_required=$e2e_landing_required"
@@ -1230,6 +1241,24 @@ jobs:
         run: bash scripts/retry.sh timeout --kill-after=10s 120s bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
+
+      - name: Refine Legal Atlas API source scope
+        id: legal-atlas-scope
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.api-test-deps.outcome == 'success' && steps.changed-files.outputs.legal_atlas_image_required == 'true'
+        run: |
+          changed_files=()
+          while IFS= read -r -d '' file; do
+            changed_files+=("$file")
+          done < "$RUNNER_TEMP/api-test-changed-paths"
+          # An unknown diff is already broad; an empty list must preserve it.
+          required=true
+          if (( ${#changed_files[@]} > 0 )); then
+            required=$(timeout --kill-after=10s 120s bun scripts/legal-atlas-image-scope.ts "${changed_files[@]}") || required=true
+          fi
+          if [[ "$required" != false ]]; then
+            required=true
+          fi
+          echo "api_source_required=$required" >> "$GITHUB_OUTPUT"
 
       - name: Select affected API test files
         id: api-test-selection
@@ -4487,6 +4516,18 @@ jobs:
             .github/actions/setup-playwright \
             .github/workflows/ci.yml \
             apps/desktop \
+            apps/web \
+            packages \
+            scripts/ci-service-images.ts \
+            scripts/ci-service-images.json \
+            scripts/ci-browser-scope.ts \
+            scripts/ci-package-scope.ts \
+            scripts/install-free-ci.ts \
+            scripts/retry.sh \
+            scripts/generated-files.ts \
+            bunfig.toml \
+            .npmrc \
+            VERSION \
             apps/web/e2e/playwright.ui-playground.config.ts \
             apps/web/e2e/ui-playground \
             apps/web/package.json \
