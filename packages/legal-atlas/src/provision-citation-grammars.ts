@@ -22,6 +22,7 @@ import type {
   ProvisionReference,
   ProvisionUnit,
 } from "@stll/legal-ast/provision-reference";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { CZ_STATUTE_COLLECTION } from "./cz-provision-citation-profile";
 import { formatWorkIdentifier } from "./provision-citation-profile";
@@ -306,7 +307,7 @@ export const createProvisionCitationGrammar = <
   const gazettePattern = new RegExp(gazette.source, "giu");
 
   const resolveAbbreviation = (printed: string): StatuteAbbreviation | null => {
-    const normalized = printed.normalize("NFC");
+    const normalized = normalizeUnicode(printed, "NFC");
     const matched = matchers.filter(({ matcher }) => matcher.test(normalized));
     const only = matched.length === 1 ? matched.at(0) : undefined;
     return only === undefined

@@ -11,6 +11,7 @@ import type {
   GenericTab,
   InspectorTab,
 } from "@/components/inspector/inspector-store-types";
+import { createUuid } from "@/lib/uuid";
 
 /** Registered inspector view kind for one public case-law decision. */
 export const CASE_DECISION_VIEW = "case-law-decision";
@@ -183,7 +184,7 @@ export const createCaseDecisionViewTab = ({
       ...(anchorId === undefined ? {} : { anchorId }),
       ...(searchQuery === undefined || searchQuery === ""
         ? {}
-        : { searchQuery, findSessionId: crypto.randomUUID() }),
+        : { searchQuery, findSessionId: createUuid() }),
     },
   };
 };

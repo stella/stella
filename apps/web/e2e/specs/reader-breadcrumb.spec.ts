@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
+import type { OrganizationAIAvailability } from "@stll/api-contract/organization-ai-availability";
 import { decisionTitle } from "@stll/decision-reader/decision-title";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -11,7 +12,6 @@ import {
 } from "../../src/components/inspector/inspector-storage-keys";
 import { READER_BREADCRUMB_CLEARANCE } from "../../src/components/legal-reader/reader-breadcrumb-scroll";
 import { createStatuteViewTab } from "../../src/features/statutes/statute-inspector.logic";
-import type { WebRoutes } from "../../src/generated/api-routes.gen";
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 import { E2E_API_ORIGIN } from "../helpers/api";
 import {
@@ -221,9 +221,6 @@ const sessionSchema = v.object({
   user: v.object({ id: v.string() }),
   session: v.object({ activeOrganizationId: v.string() }),
 });
-type OrganizationAIAvailability = NonNullable<
-  WebRoutes["v1"]["organization-settings"]["ai-availability"]["get"]["response"][200]
->;
 
 for (const view of views) {
   test(`the ${view.kind} breadcrumb shares one pinned controls row in inspector and main reader`, async ({

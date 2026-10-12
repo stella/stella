@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { toSafeId } from "@/api/lib/branded-types";
 
@@ -47,7 +48,10 @@ describe("search history normalization", () => {
         fc.constantFrom(" ", "\t", "\n", "\u00a0", " \t "),
         (tokens, separator) => {
           const normal = tokens.join(" ");
-          const variant = `\t${tokens.join(separator).toUpperCase().normalize("NFD")}\n`;
+          const variant = `\t${normalizeUnicode(
+            tokens.join(separator).toUpperCase(),
+            "NFD",
+          )}\n`;
           expect(variant).not.toBe(normal);
           expect(
             canonicalSearchHistoryEntry({ kind: "search", query: variant })
@@ -182,7 +186,9 @@ describe("search history normalization", () => {
             entry: {
               kind: "search" as const,
               query:
-                index % 2 === 0 ? base.toUpperCase() : base.normalize("NFD"),
+                index % 2 === 0
+                  ? base.toUpperCase()
+                  : normalizeUnicode(base, "NFD"),
             },
             usedAt: new Date(Date.UTC(2020, 0, 1) + time),
           }));

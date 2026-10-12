@@ -10,6 +10,7 @@
     "./search-history-identity": "./src/search-history-identity.ts",
     "./search-history-title": "./src/search-history-title.ts",
     "./provider-setup": "./src/provider-setup.ts",
+    "./organization-ai-availability": "./src/organization-ai-availability.ts",
     "./currency-code": "./src/currency-code.ts",
     "./visual-preview": "./src/visual-preview.ts",
     "./ai-decision-provider": "./src/ai-decision-provider.ts",
