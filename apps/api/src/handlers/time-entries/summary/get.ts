@@ -31,6 +31,7 @@ const timeEntrySummaryQuerySchema = t.Object({
 
 const readTimeEntrySummary = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Summarize client time in the current matter for a bounded date range; team scope requires time-entry approval access.",
     permissions: { timeEntry: ["read"] },

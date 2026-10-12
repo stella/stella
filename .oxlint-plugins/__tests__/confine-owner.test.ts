@@ -770,3 +770,21 @@ describe.serial("checked operation ownership", () => {
     });
   }
 });
+
+test("RTF code-page decoding stays in the document reader", async () => {
+  const entry = OWNERSHIP.find(({ id }) => id === "rtf-reader");
+  const source = 'const control = "ansicpg";';
+  expect(
+    await lintSingleRule("confine-owner", source, {
+      ruleOptions: { entries: [entry] },
+      sourcePath:
+        "apps/api/src/handlers/case-law/ingestion/parsers/second-reader.ts",
+    }),
+  ).toEqual([1]);
+  expect(
+    await lintSingleRule("confine-owner", source, {
+      ruleOptions: { entries: [entry] },
+      sourcePath: "apps/api/src/lib/legal-search/parsers/rtf-reader.ts",
+    }),
+  ).toEqual([]);
+});

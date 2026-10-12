@@ -178,6 +178,7 @@ export const createClauseHandler = async function* ({
 };
 
 const config = {
+  contract: "patch",
   description:
     "Create a clause in the organization's clause library: a title and an " +
     "ordered body of paragraphs, plus optional category, language, " +

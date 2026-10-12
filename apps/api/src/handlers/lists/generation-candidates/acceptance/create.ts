@@ -35,6 +35,7 @@ const bodySchema = t.Object({
   sectionId: t.Optional(tSafeId("legalListSection")),
 });
 const config = {
+  contract: "patch",
   featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Accept one candidate from a generation run: create the item it proposes " +

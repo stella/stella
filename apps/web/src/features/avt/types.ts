@@ -43,7 +43,7 @@ export type FactDetails = NonNullable<ListItem["factDetails"]>;
 export type FactDetailsBody = ListsRoutes["item-fact-details"]["put"]["body"];
 export type EditableFactDetails = FactDetails &
   Pick<FactDetailsBody, "scoring">;
-export type FactConfidence = FactDetails["confidence"];
+export type FactConfidence = NonNullable<FactDetails["confidence"]>;
 export type FactDatePrecision = NonNullable<FactDetails["occurredOnPrecision"]>;
 
 export const CLAIM_OVERRIDE_STATES = [

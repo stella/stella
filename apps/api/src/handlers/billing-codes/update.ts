@@ -21,6 +21,7 @@ const updateBillingCodeBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Change one billing code's code string, label, sort order, or active " +
     "flag in a matter. Only the fields you pass are written, the code string " +

@@ -17,6 +17,11 @@ import { toSavedSearchResponse } from "./response";
 import { savedSearchParamsSchema, updateSavedSearchBodySchema } from "./schema";
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/saved-searches/update.ts",
+  },
   permissions: { savedSearch: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "search_ui" },

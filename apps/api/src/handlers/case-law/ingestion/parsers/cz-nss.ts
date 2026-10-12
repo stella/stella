@@ -1,3 +1,4 @@
+// parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
 /**
  * Czech Supreme Administrative Court (NSS) HTML parser.
  *
@@ -33,7 +34,7 @@ import {
 } from "@stll/legal-ast/czech-document-roles";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
-import { collapseSpacedLetters } from "@stll/text-normalize";
+import { normalizeUnicode, collapseSpacedLetters } from "@stll/text-normalize";
 
 import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 
@@ -43,7 +44,8 @@ import {
   ownTableRows,
   visibleHtmlText,
   stripFurniturePrefix,
-  stripInlinePrefix,
+  normalizeInlineLine,
+  stripInlineLinePrefix,
   walkInlines as walkInlinesShared,
 } from "./shared-inlines";
 
@@ -598,7 +600,7 @@ const PAGE_FURNITURE_RE =
 /** Decorative lines carrying no content once the furniture is peeled. */
 const DECORATIVE_LINE_RE = /^(?:pokračování|ČESKÁ REPUBLIKA)$/u;
 
-type ChunkContent = { plainText: string; inlines: Inline[] };
+type ChunkContent = ReturnType<typeof normalizeInlineLine>;
 
 /**
  * Peel page furniture off a chunk, or report it as wholly decorative.
@@ -609,12 +611,12 @@ type ChunkContent = { plainText: string; inlines: Inline[] };
  * behind the emblem.
  */
 const stripPageFurniture = (chunk: PChunk): ChunkContent | null => {
-  const inlines = stripFurniturePrefix(chunk.inlines, PAGE_FURNITURE_RE);
-  const plainText = inlinesToPlainText(inlines).trim();
+  const normalized = normalizeInlineLine(
+    stripFurniturePrefix(chunk.inlines, PAGE_FURNITURE_RE),
+  );
+  const { plainText } = normalized;
 
-  return plainText && !DECORATIVE_LINE_RE.test(plainText)
-    ? { plainText, inlines }
-    : null;
+  return plainText && !DECORATIVE_LINE_RE.test(plainText) ? normalized : null;
 };
 
 /**
@@ -640,8 +642,7 @@ const isDecisionTitleKey = (
 const canonicalDecisionTitle = (
   plainText: string,
 ): CanonicalDecisionTitle | null => {
-  const compact = plainText
-    .normalize("NFKC")
+  const compact = normalizeUnicode(plainText, "NFKC")
     .toLocaleUpperCase("cs-CZ")
     .replace(/\s+/gu, "");
 
@@ -1035,20 +1036,18 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     }
 
     // Numbered paragraphs: [1], [2], ...
-    const numMatch = NUMBERED_PARA_RE.exec(plainText);
+    const { match: numMatch, line: unnumbered } = stripInlineLinePrefix(
+      content,
+      NUMBERED_PARA_RE,
+    );
     if (numMatch) {
-      const strippedText = plainText.slice(numMatch[0].length).trim();
-      const strippedInlines = stripInlinePrefix(inlines, numMatch[0].length);
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
         anchorId: makeAnchorId("p", blockIndex),
         type: "paragraph",
-        inlines:
-          strippedInlines.length > 0
-            ? strippedInlines
-            : [{ type: "text", text: strippedText }],
-        plainText: strippedText,
+        inlines: unnumbered.inlines,
+        plainText: unnumbered.plainText,
       });
       continue;
     }

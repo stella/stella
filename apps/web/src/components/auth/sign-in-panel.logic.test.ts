@@ -130,6 +130,32 @@ describe("last-used sign-in method", () => {
     }
   });
 
+  test("marks nothing when the page offers a single method", () => {
+    const emailOnly = resolveSignInOptions({
+      authCapabilities,
+      socialProviderFlags: { google: false, microsoft: false },
+    });
+    expect(
+      resolveLastUsedSignInMethod({
+        stored: SIGN_IN_METHOD.emailOtp,
+        options: emailOnly,
+      }),
+    ).toBeNull();
+  });
+
+  test("counts the quiet password option as another method", () => {
+    const emailAndReviewPassword = resolveSignInOptions({
+      authCapabilities: { ...authCapabilities, reviewPasswordSignIn: true },
+      socialProviderFlags: { google: false, microsoft: false },
+    });
+    expect(
+      resolveLastUsedSignInMethod({
+        stored: SIGN_IN_METHOD.emailOtp,
+        options: emailAndReviewPassword,
+      }),
+    ).toBe(SIGN_IN_METHOD.emailOtp);
+  });
+
   test("does not mark the first-account form as the password sign-in", () => {
     const bootstrap = resolveSignInOptions({
       authCapabilities: {
