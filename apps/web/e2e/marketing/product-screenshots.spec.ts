@@ -397,6 +397,9 @@ test("capture landing product screenshots", async ({
             "The first comment card",
           );
         }
+        // More notes than those three sit in the margin, and they stack by
+        // measured height: none of them may be cut by the frame's edges.
+        await expectNoMarginNoteCut(page, captureClip);
         // Keep the breadcrumb in frame: only the nested reader scrolls.
         await page.evaluate(() => window.scrollTo({ left: 0, top: 0 }));
       }
@@ -503,6 +506,48 @@ const expectWithinClip = async (
       },
     )
     .toBe(true);
+};
+
+// Every margin note is either wholly in the shot or wholly out of it: the
+// visible band is where the reader's scroller and the clip overlap, and a
+// note crossing either edge of it would ship half drawn.
+const expectNoMarginNoteCut = async (page: Page, clip: CaptureClip) => {
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          (band) => {
+            const scroller = document
+              .querySelector('[data-slot="reader-document-column"]')
+              ?.closest(".reader-scroll");
+            if (!(scroller instanceof HTMLElement)) {
+              return ["the reader's scroller is missing"];
+            }
+            const frame = scroller.getBoundingClientRect();
+            const top = Math.max(frame.top, band.top);
+            const bottom = Math.min(frame.bottom, band.bottom);
+            const cut: string[] = [];
+            for (const note of document.querySelectorAll(
+              "[data-margin-note] > *",
+            )) {
+              const box = note.getBoundingClientRect();
+              const overlaps = box.bottom > top && box.top < bottom;
+              if (overlaps && (box.top < top || box.bottom > bottom)) {
+                const kind = note.parentElement?.dataset.marginNote ?? "?";
+                cut.push(
+                  `${kind} note "${(note.textContent ?? "").slice(0, 40)}" spans ${String(Math.round(box.top))}-${String(Math.round(box.bottom))}`,
+                );
+              }
+            }
+            return cut;
+          },
+          { top: clip.y, bottom: clip.y + clip.height },
+        ),
+      {
+        message: `No margin note may be cut by the ${String(clip.height)}px capture's visible band`,
+      },
+    )
+    .toEqual([]);
 };
 
 // Scrolls the reader's own scroller, never the page, so the target's passage

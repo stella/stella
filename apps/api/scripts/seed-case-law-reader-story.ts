@@ -11,7 +11,7 @@
  * offsets and quotes are derived from the decision's AST, never typed in.
  */
 import { panic } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { toChatDecisionPassageHref } from "@stll/api-contract";
 import type {
@@ -115,14 +115,6 @@ export const CASE_LAW_READER_STORY: ReaderStory = {
       quote: "je v extrémním rozporu s obsahem soudního spisu",
       color: "yellow",
       style: "highlight",
-    },
-    {
-      key: "fragebogen-comment",
-      kind: "comment",
-      anchor: "p-8",
-      quote:
-        "Přestože obsah dotazníku nebyl znám, obecné soudy vyložily jeho vyplnění paušálně jako snahu o získání říšského občanství",
-      body: "Our strongest point: a questionnaire nobody has read cannot carry a finding of state unreliability. Pair it with Part VI.C on the Nazi pressure on the family.",
     },
     {
       key: "non-filing",
@@ -343,8 +335,9 @@ const readStoryDecision = async (db: MaintenanceDb) => {
 };
 
 /**
- * Seeds the story for one user. Idempotent: the rows have fixed ids and are
- * replaced on every run, the thread's messages going with it by cascade.
+ * Seeds the story for one user. Idempotent: the user's marks on the decision
+ * and the fixed-id thread are replaced on every run, the thread's messages
+ * going with it by cascade.
  */
 export const seedCaseLawReaderStory = async ({
   db,
@@ -357,12 +350,18 @@ export const seedCaseLawReaderStory = async ({
   const chat = buildReaderStoryChatRows(input);
   await withAggregateTransaction(db, async (tx) => {
     // audit: skip — dev seed replaces its own fixed-id rows.
-    await tx.delete(legalReaderAnnotations).where(
-      inArray(
-        legalReaderAnnotations.id,
-        annotations.map(({ id }) => id),
-      ),
-    );
+    // Every mark this user has on the decision, not only today's ids: a mark
+    // dropped from the story must not linger in the shot after a reseed.
+    await tx
+      .delete(legalReaderAnnotations)
+      .where(
+        and(
+          eq(legalReaderAnnotations.organizationId, organizationId),
+          eq(legalReaderAnnotations.userId, userId),
+          eq(legalReaderAnnotations.targetType, "decision"),
+          eq(legalReaderAnnotations.targetId, decisionId),
+        ),
+      );
     await tx.delete(chatThreads).where(eq(chatThreads.id, chat.thread.id));
     await tx.insert(legalReaderAnnotations).values(annotations);
     await tx.insert(chatThreads).values(chat.thread);
