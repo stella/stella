@@ -340,6 +340,60 @@ describe("active statute prompt", () => {
 
 describe("active decision section", () => {
   const DECISION_ID = createSafeId<"caseLawDecision">();
+  const textBlock = (text: string) => ({
+    inlines: [{ type: "text", text }],
+    plainText: text,
+  });
+  // Anchors count every block: `p-8` is the court's paragraph 6.
+  const NUMBERED_DECISION_ROW = {
+    id: DECISION_ID,
+    astS3Key: null,
+    caseNumber: "22 Cdo 1/2026",
+    contentHash: null,
+    country: "CZE",
+    court: "Nejvyšší soud",
+    decisionDate: "2026-01-02",
+    decisionType: "rozsudek",
+    documentAst: {
+      version: 1,
+      source: { system: "", documentId: "", webUrl: "", printUrl: "" },
+      metadata: {
+        caseNumber: null,
+        ecli: null,
+        court: null,
+        decisionDate: null,
+        decisionType: null,
+        keywords: [],
+        statutes: [],
+      },
+      blocks: [
+        {
+          id: "h-1",
+          anchorId: "h-1",
+          type: "heading",
+          level: 2,
+          ...textBlock("Odůvodnění"),
+        },
+        {
+          id: "p-3",
+          anchorId: "p-3",
+          type: "paragraph",
+          ...textBlock("Úvod."),
+        },
+        {
+          id: "p-8",
+          anchorId: "p-8",
+          type: "paragraph",
+          number: 6,
+          ...textBlock("Dovolání se zamítá."),
+        },
+      ],
+    },
+    fulltext: null,
+    textS3Key: null,
+    source: { descriptor: null },
+  };
+  type NumberedDecisionRow = typeof NUMBERED_DECISION_ROW;
   const DECISION_ROW = {
     id: DECISION_ID,
     astS3Key: null,
@@ -360,7 +414,9 @@ describe("active decision section", () => {
    * decision: `PUBLIC_LAW_DATABASE_URL` points at a database the tenant
    * handle below cannot see at all.
    */
-  const caseLawReaderHoldingTheDecision = (): CaseLawPublicReadDb => {
+  const caseLawReaderHoldingTheDecision = (
+    row: typeof DECISION_ROW | NumberedDecisionRow = DECISION_ROW,
+  ): CaseLawPublicReadDb => {
     const readDb = async <T>(
       fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
     ): Promise<T> =>
@@ -386,7 +442,7 @@ describe("active decision section", () => {
           }),
           query: {
             caseLawDecisions: {
-              findFirst: async () => await Promise.resolve(DECISION_ROW),
+              findFirst: async () => await Promise.resolve(row),
             },
           },
           // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
@@ -410,7 +466,7 @@ describe("active decision section", () => {
       userId: undefined,
     });
 
-    const prompt = section.unwrap();
+    const prompt = section.unwrap().prompt;
     expect(prompt).toContain("22 Cdo 1/2026");
     expect(prompt).toContain("Nejvyšší soud");
     expect(prompt).toContain("Dovolání se zamítá.");
@@ -425,10 +481,32 @@ describe("active decision section", () => {
       userId: undefined,
     });
 
-    const prompt = section.unwrap();
+    const prompt = section.unwrap().prompt;
     expect(prompt).toContain("stored as flat text without structure");
     expect(prompt).toContain("never by an anchor");
     expect(prompt).not.toContain(CHAT_DECISION_PASSAGE_HREF_PREFIX);
+    expect(section.unwrap().passageNumbers).toEqual(
+      new Map([[DECISION_ID, new Map()]]),
+    );
+  });
+
+  test("an anchored decision hands the turn the court's number for each numbered block, never the anchor's counter", async () => {
+    const section = await buildActiveDecisionSection({
+      activeDecision: { decisionId: DECISION_ID },
+      caseLawDb: caseLawReaderHoldingTheDecision(NUMBERED_DECISION_ROW),
+      organizationId: undefined,
+      safeDb: tenantDb,
+      userId: undefined,
+    });
+
+    const { passageNumbers, prompt } = section.unwrap();
+    // The prompt offers every block's anchor, numbered or not.
+    expect(prompt).toContain("[h-1]");
+    expect(prompt).toContain("[p-3]");
+    expect(prompt).toContain("[p-8]");
+    expect(passageNumbers).toEqual(
+      new Map([[DECISION_ID, new Map([["p-8", 6]])]]),
+    );
   });
 });
 
@@ -462,7 +540,11 @@ describe("active decision prompt", () => {
 
     // The href the renderer resolves, spelled with this decision's own id.
     expect(prompt).toContain(
-      toChatDecisionPassageHref({ anchorId: "p-12", decisionId: DECISION_ID }),
+      toChatDecisionPassageHref({
+        anchorId: "p-12",
+        courtParagraphNumber: null,
+        decisionId: DECISION_ID,
+      }),
     );
     expect(prompt).toContain("Each passage carries its anchor");
     expect(prompt).toContain("never invent one");

@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import { headingPathsByAnchor } from "@stll/legal-ast";
+import { courtParagraphNumber } from "@stll/legal-ast/court-paragraph-number";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import { resolveTextWindowBounds } from "@/api/mcp/tool-utils";
@@ -47,11 +48,10 @@ export const locateDecisionBlocks = (
       continue;
     }
     offset = found + block.plainText.length;
+    const number = courtParagraphNumber(block);
     located.push({
       anchorId: block.anchorId,
-      ...(block.type === "paragraph" && block.number !== undefined
-        ? { number: block.number }
-        : {}),
+      ...(number === null ? {} : { number }),
       end: offset,
       start: found,
       text: block.plainText,
@@ -61,9 +61,9 @@ export const locateDecisionBlocks = (
         panic("Every AST anchor has a heading path")
       ).map(({ title }) => title),
       label:
-        block.type === "paragraph" && block.number !== undefined
-          ? String(block.number)
-          : printedParagraphLabel(block.plainText),
+        number === null
+          ? printedParagraphLabel(block.plainText)
+          : String(number),
     });
   }
   return located;

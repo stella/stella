@@ -79,6 +79,10 @@
       "types": "./src/fixtures/cz-262-2006-section-51.ts",
       "import": "./src/fixtures/cz-262-2006-section-51.ts"
     },
+    "./court-paragraph-number": {
+      "types": "./src/court-paragraph-number.ts",
+      "import": "./src/court-paragraph-number.ts"
+    },
     "./paragraph-range": {
       "types": "./src/paragraph-range.ts",
       "import": "./src/paragraph-range.ts"
