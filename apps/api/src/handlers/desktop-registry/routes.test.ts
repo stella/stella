@@ -189,36 +189,46 @@ test("desktop request authorization follows each operation", () => {
 });
 
 test("a role without the permission is forbidden, not disconnected", () => {
-  const decision = {
-    ok: roleForDisplay,
-    err: ({ status }: { status: number }) => status,
-  };
-  expect(
-    authorizeDesktopMember(null, DESKTOP_ACCOUNT_PERMISSION).match(decision),
-  ).toBe(401);
-  expect(
-    authorizeDesktopMember(
-      { role: "not-a-role" },
-      DESKTOP_ACCOUNT_PERMISSION,
-    ).match(decision),
-  ).toBe(401);
-  // External members may link the desktop but not search registries.
-  expect(
-    authorizeDesktopMember(
-      { role: "external" },
-      DESKTOP_ACCOUNT_PERMISSION,
-    ).match(decision),
-  ).toBe("external");
-  expect(
-    authorizeDesktopMember(
-      { role: "external" },
-      DESKTOP_REGISTRY_PERMISSION,
-    ).match(decision),
-  ).toBe(403);
-  expect(
-    authorizeDesktopMember(
-      { role: "owner" },
-      DESKTOP_REGISTRY_PERMISSION,
-    ).match(decision),
-  ).toBe("owner");
+  const cases = [
+    {
+      member: null,
+      permission: DESKTOP_ACCOUNT_PERMISSION,
+      status: "err",
+      value: 401,
+    },
+    {
+      member: { role: "not-a-role" },
+      permission: DESKTOP_ACCOUNT_PERMISSION,
+      status: "err",
+      value: 401,
+    },
+    // External members may link the desktop but not search registries.
+    {
+      member: { role: "external" },
+      permission: DESKTOP_ACCOUNT_PERMISSION,
+      status: "ok",
+      value: "external",
+    },
+    {
+      member: { role: "external" },
+      permission: DESKTOP_REGISTRY_PERMISSION,
+      status: "err",
+      value: 403,
+    },
+    {
+      member: { role: "owner" },
+      permission: DESKTOP_REGISTRY_PERMISSION,
+      status: "ok",
+      value: "owner",
+    },
+  ] as const;
+  for (const { member, permission, status, value } of cases) {
+    const result = authorizeDesktopMember(member, permission);
+    expect(result.status).toBe(status);
+    if (result.isErr()) {
+      expect(result.error.status).toBe(value);
+      continue;
+    }
+    expect(roleForDisplay(result.value)).toBe(value);
+  }
 });
