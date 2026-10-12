@@ -26,6 +26,7 @@ export const useWebReaderMessages = (): ReaderMessages => {
     "statutes.currentWording": t("statutes.currentWording"),
     "statutes.wordingVersionUnknown": t("statutes.wordingVersionUnknown"),
     "statutes.openProvision": t("statutes.openProvision"),
+    "aiDisclosure.caseLaw": t("aiDisclosure.caseLaw"),
     // Explicit ReactNode: the inferred `t.rich` result carries React 19's
     // Promise<AwaitedReactNode> member, which promise-function-async flags.
     sourceAttribution: (source, link): ReactNode =>

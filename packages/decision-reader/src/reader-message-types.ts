@@ -1,3 +1,5 @@
+import type { AiDisclosureMessageKey } from "@stll/api-contract/ai-disclosure";
+
 export type ReaderMessageKey =
   | "statutes.diffRemoved"
   | "statutes.diffInserted"
@@ -12,4 +14,7 @@ export type ReaderMessageKey =
   | "common.court"
   | "statutes.currentWording"
   | "statutes.wordingVersionUnknown"
-  | "statutes.openProvision";
+  | "statutes.openProvision"
+  // Every disclosure context, so a context added to the contract cannot ship
+  // until each host that renders the reader carries its sentence.
+  | AiDisclosureMessageKey;

@@ -12,6 +12,7 @@
     "./provider-setup": "./src/provider-setup.ts",
     "./currency-code": "./src/currency-code.ts",
     "./visual-preview": "./src/visual-preview.ts",
+    "./ai-disclosure": "./src/ai-disclosure.ts",
     "./ai-decision-provider": "./src/ai-decision-provider.ts",
     "./limits": "./src/limits.ts",
     "./mcp-capability-executors": "./src/mcp-capability-executors.ts",

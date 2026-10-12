@@ -65,6 +65,9 @@
     "runSelectedRows": "Käivita {count, plural, one {# valitud real} other {# valitud real}}",
     "selectedRun": "Käivita tehisintellekti veerud {count, plural, one {# real} other {# real}}"
   },
+  "aiDisclosure": {
+    "caseLaw": "Kohtulahendite AI-kokkuvõtted, -märkmed ja -analüüsid koostab stella; kohtud ei ole neid heaks kiitnud ja need ei kajasta kohtute endi arutluskäiku. Need on abivahendid õigusala spetsialistidele ning määravaks allikaks jääb lahendi tekst."
+  },
   "appearance": {
     "calendar": "Kalender",
     "calendarGregorian": "Gregoriuse",

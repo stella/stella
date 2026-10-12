@@ -20,6 +20,7 @@ import {
   getOutputTokenLimit,
   TANSTACK_AI_PROVIDERS,
 } from "@stll/ai-catalog";
+import { AI_DISCLOSURES } from "@stll/api-contract/ai-disclosure";
 import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
 import type { AnalysisGenerating } from "@stll/legal-ast/analysis";
 import type { DocumentAst, ParagraphBlock } from "@stll/legal-ast/document-ast";
@@ -775,6 +776,8 @@ describe("a failed analysis run", () => {
     expect(done.response).toMatchObject({
       status: "done",
       analysis: { version: 3, holding: { text: "Dovolání se zamítá." } },
+      // The finished analysis reaches the agent with what to tell the reader.
+      aiDisclosure: { context: "caseLaw", text: AI_DISCLOSURES.caseLaw.text },
     });
   });
 

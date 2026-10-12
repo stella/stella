@@ -19,6 +19,7 @@ import type { OutlineItem } from "@stll/ui/outline-rail";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
+import { AiDisclosureLabel } from "@/components/ai-disclosure-label";
 import { activeLegalFromReaderTarget } from "@/components/ai-suggestions/active-legal-document";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
@@ -759,9 +760,11 @@ const GatedAnalysisInvitation = ({
         data-slot="gated-analysis-invitation"
         role="region"
       >
-        <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
-          <SparklesIcon className="size-3.5" />
-          {t("caseLaw.notesFilter.ai")}
+        <span className="text-muted-foreground text-xs">
+          <AiDisclosureLabel
+            context="caseLaw"
+            label={t("caseLaw.notesFilter.ai")}
+          />
         </span>
       </div>
     );

@@ -5,7 +5,8 @@ import { useTranslations } from "use-intl";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import { analysisLayersOf } from "@stll/legal-ast/analysis";
 import { BidiText } from "@stll/ui/bidi-text";
-import { SparklesIcon } from "@stll/ui/icons";
+
+import { AiDisclosureLabel } from "@/components/ai-disclosure-label";
 
 type AnalysisLayersProps = {
   analysis: DecisionAnalysis;
@@ -28,9 +29,11 @@ const Layer = ({
   const t = useTranslations();
   return (
     <section className="px-2 pt-4">
-      <h3 className="text-foreground-disabled text-3xs flex items-center gap-1 pb-1 font-medium tracking-wider uppercase">
-        <SparklesIcon aria-hidden className="size-3" />
-        {t("caseLaw.analysis.aiLayer", { layer: label })}
+      <h3 className="text-foreground-disabled text-3xs pb-1 font-medium tracking-wider uppercase">
+        <AiDisclosureLabel
+          context="caseLaw"
+          label={t("caseLaw.analysis.aiLayer", { layer: label })}
+        />
       </h3>
       {children}
     </section>

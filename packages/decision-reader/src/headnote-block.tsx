@@ -4,10 +4,10 @@ import type { ReactNode } from "react";
 import { panic } from "better-result";
 
 import type { CourtTierLabel as CourtTier } from "@stll/api-contract/case-law-court-tiers";
-import { SparklesIcon } from "@stll/ui/icons";
 
 import { CourtTierBadge } from "./court-tier-badge";
 import { useReaderMessages } from "./reader-adapters";
+import { ReaderAiLabel } from "./reader-ai-label";
 
 /** The court's own chip, where the registry abbreviates it. */
 type CourtChip = { abbreviation: string; tier: CourtTier };
@@ -29,7 +29,8 @@ export type HeadnoteOrigin =
  * The mark itself. The court's chip stands beside the court's name, which the
  * reference line above the top matter already prints; where nothing
  * abbreviates the court, the mark says "court" in words rather than inventing
- * a chip for it.
+ * a chip for it. The model's mark is the shared AI label, which opens what
+ * the reader should know about text the court did not write.
  */
 const OriginMark = ({ origin }: { origin: HeadnoteOrigin }) => {
   const messages = useReaderMessages();
@@ -37,10 +38,10 @@ const OriginMark = ({ origin }: { origin: HeadnoteOrigin }) => {
   switch (origin.type) {
     case "ai":
       return (
-        <span className="inline-flex items-center gap-1 align-middle">
-          <SparklesIcon aria-hidden className="size-3" />
-          {messages["caseLaw.notesFilter.ai"]}
-        </span>
+        <ReaderAiLabel
+          context="caseLaw"
+          label={messages["caseLaw.notesFilter.ai"]}
+        />
       );
     case "court":
       return origin.chip === null ? (

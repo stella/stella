@@ -655,6 +655,11 @@ describe("a headnote the court wrote and one a model wrote", () => {
     expect(court).not.toContain(messages.caseLaw.notesFilter.ai);
     expect(model).toContain(messages.caseLaw.notesFilter.ai);
     expect(model).not.toContain('data-slot="court-badge"');
+    // The model's mark is the shared AI label, a button that opens the
+    // disclosure; the court's section has none.
+    expect(model).toContain('data-slot="ai-label"');
+    expect(model).toContain("<button");
+    expect(court).not.toContain('data-slot="ai-label"');
   });
 
   test("opens with the court's own, then what the model made of it", () => {

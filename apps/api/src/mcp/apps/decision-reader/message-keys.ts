@@ -15,6 +15,7 @@ export const READER_MESSAGE_KEYS = {
   "statutes.currentWording": "statutes.currentWording",
   "statutes.wordingVersionUnknown": "statutes.wordingVersionUnknown",
   "statutes.openProvision": "statutes.openProvision",
+  "aiDisclosure.caseLaw": "aiDisclosure.caseLaw",
 } as const satisfies Record<ReaderMessageKey, ReaderMessageKey>;
 
 export const READER_TEMPLATE_KEYS = [
