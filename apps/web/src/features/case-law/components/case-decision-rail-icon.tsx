@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { CourtTierBadge } from "@stll/decision-reader/court-tier-badge";
-import { FileTextIcon, InfoIcon } from "@stll/ui/icons";
+import { FileTextIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
@@ -39,24 +39,3 @@ export const CaseDecisionRailIcon = ({
     <CourtTierBadge abbreviation={abbreviation} tier={decision.courtTier} />
   );
 };
-
-/**
- * The same chip, badged: the facts of a decision and its text are two tabs of
- * one decision, so they share the court chip and differ only in the badge.
- * Two identical chips in the rail would be the confusing part.
- */
-export const CaseDecisionDetailsRailIcon = ({
-  active,
-  tab,
-}: InspectorRailIconProps<CaseDecisionViewPayload>) => (
-  <span className="relative inline-flex">
-    <CaseDecisionRailIcon active={active} tab={tab} />
-    <InfoIcon
-      aria-hidden="true"
-      className={cn(
-        "bg-background text-muted-foreground absolute -end-1 -bottom-1 size-2.5 rounded-full",
-        !active && "opacity-70",
-      )}
-    />
-  </span>
-);

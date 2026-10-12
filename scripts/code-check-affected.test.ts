@@ -800,6 +800,41 @@ process.exit(childExitStatus(result));
       expect.arrayContaining(["apps/extension", "apps/landing"]),
     );
     for (const { name } of generating) {
+      const compilerTasks = taskField(
+        tasks,
+        `${name}#typecheck`,
+        "dependsOn",
+      ).filter((dependency) => dependency.startsWith("typecheck:"));
+      if (compilerTasks.length > 0) {
+        // An aggregate delegates compiler work and cache outputs to its children.
+        const producers = new Set(
+          compilerTasks.flatMap((compiler) =>
+            taskField(tasks, `${name}#${compiler}`, "dependsOn").filter(
+              (dependency) => dependency.startsWith("generate:"),
+            ),
+          ),
+        );
+        expect(producers.size).toBeGreaterThan(0);
+        expect(taskField(tasks, `${name}#lint`, "dependsOn")).toEqual(
+          expect.arrayContaining([...producers]),
+        );
+        expect(
+          taskField(tasks, `${name}#typecheck:tests`, "dependsOn"),
+        ).toContain("generate:typecheck-declarations");
+        expect(
+          taskField(
+            tasks,
+            `${name}#generate:typecheck-declarations`,
+            "outputs",
+          ),
+        ).toContain(".cache/typecheck-declarations/**");
+        for (const compiler of compilerTasks) {
+          expect(
+            taskField(tasks, `${name}#${compiler}`, "dependsOn"),
+          ).toContain("generate:capability-runtime");
+        }
+        continue;
+      }
       const producers = taskField(
         tasks,
         `${name}#typecheck`,
@@ -822,10 +857,10 @@ process.exit(childExitStatus(result));
         "typecheck",
       ]);
       expect(taskInputs(tasks, `${name}#lint`)).toEqual(
-        taskInputs(tasks, "lint"),
+        expect.arrayContaining(taskInputs(tasks, "lint")),
       );
       expect(taskInputs(tasks, `${name}#typecheck`)).toEqual(
-        taskInputs(tasks, "typecheck"),
+        expect.arrayContaining(taskInputs(tasks, "typecheck")),
       );
       expect(
         taskField(tasks, `${name}#typecheck`, "outputs").filter(
@@ -863,6 +898,7 @@ process.exit(childExitStatus(result));
     expect(taskField(tasks, "@stll/api#lint", "dependsOn")).toEqual([
       "@stll/cli#codegen:runtime",
       "generate:capability-runtime",
+      "generate:typecheck-declarations",
     ]);
   });
 

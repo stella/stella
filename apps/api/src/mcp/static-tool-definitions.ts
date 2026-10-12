@@ -35,7 +35,25 @@ import type {
 } from "@/api/mcp/tool-types";
 import { WEB_HANDOFF_TOOL_SET } from "@/api/mcp/web-handoff-links";
 
-export const DEFAULT_MCP_TOOL_SETS = [
+type DefaultMcpToolSets = readonly [
+  typeof COMPAT_TOOL_SET,
+  typeof STELLA_TOOL_SET,
+  typeof DECISION_READER_TOOL_SET,
+  typeof LEGISLATION_TOOL_SET,
+  typeof LEGAL_RESOLVE_TOOL_SET,
+  typeof TEMPLATE_TOOL_SET,
+  typeof DOCUMENT_TOOL_SET,
+  typeof MATTER_TOOL_SET,
+  typeof KNOWLEDGE_TOOL_SET,
+  typeof READER_ANNOTATION_TOOL_SET,
+  typeof BILLING_TOOL_SET,
+  typeof RESEARCH_ADMIN_TOOL_SET,
+  typeof FEEDBACK_TOOL_SET,
+  typeof CAPABILITY_TOOL_SET,
+  typeof WEB_HANDOFF_TOOL_SET,
+];
+
+export const DEFAULT_MCP_TOOL_SETS: DefaultMcpToolSets = [
   COMPAT_TOOL_SET,
   STELLA_TOOL_SET,
   DECISION_READER_TOOL_SET,
@@ -51,7 +69,7 @@ export const DEFAULT_MCP_TOOL_SETS = [
   FEEDBACK_TOOL_SET,
   CAPABILITY_TOOL_SET,
   WEB_HANDOFF_TOOL_SET,
-] as const satisfies readonly McpToolSet<readonly McpToolDefinition[]>[];
+];
 
 // Keep this schema-sensitive projection as a literal tuple: flattening the
 // heterogeneous sets with Array.flatMap widens their definition types and

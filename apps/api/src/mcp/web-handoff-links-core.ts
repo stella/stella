@@ -55,12 +55,7 @@ export const webHandoffPaths = (
   const links = new Map<string, string>();
   const collect = (url: string) => {
     const parsed = URL.parse(url);
-    if (
-      parsed !== null &&
-      parsed.origin === origin &&
-      !parsed.username &&
-      !parsed.password
-    ) {
+    if (parsed?.origin === origin && !parsed.username && !parsed.password) {
       links.set(url, `${parsed.pathname}${parsed.search}`);
     }
     return url;
@@ -72,7 +67,8 @@ export const webHandoffPaths = (
     "content" in value &&
     Array.isArray(value.content)
   ) {
-    for (const block of value.content) {
+    const blocks: readonly unknown[] = value.content;
+    for (const block of blocks) {
       if (
         block !== null &&
         typeof block === "object" &&

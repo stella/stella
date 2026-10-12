@@ -32,7 +32,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { logger } from "@/api/lib/observability/logger";
 import { MCP_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
-import type { RateLimitContext } from "@/api/lib/rate-limit/rate-limit";
+import type { RateLimitContext } from "@/api/lib/rate-limit/contracts";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 import {
   brandPersistedUserId,

@@ -92,13 +92,13 @@ let redemption: ReturnType<typeof prepareHandoff> | undefined;
 // Runs at the root before any signed-in guard, including public law entry.
 export const loadMcpHandoff = async () => {
   if (typeof window === "undefined") {
-    return;
+    return undefined;
   }
   redemption ??= prepareHandoff();
   const pending = await redemption;
   redemption = undefined;
   if (!pending) {
-    return;
+    return undefined;
   }
   const { path, result } = pending;
   switch (result.status) {
@@ -125,7 +125,7 @@ export const loadMcpHandoff = async () => {
       });
     default:
       result satisfies never;
-      panic("Unhandled handoff status.");
+      return panic("Unhandled handoff status.");
   }
 };
 

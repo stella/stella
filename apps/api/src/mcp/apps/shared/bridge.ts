@@ -83,7 +83,7 @@ export const openPresentationLink = async ({
       ? fresh.value.structuredContent
       : undefined;
   const freshUrl =
-    payload && typeof payload["url"] === "string"
+    payload !== undefined && typeof payload["url"] === "string"
       ? parseLegalCitationHttpUrl(payload["url"])
       : null;
   const opened = await Result.tryPromise(async () =>

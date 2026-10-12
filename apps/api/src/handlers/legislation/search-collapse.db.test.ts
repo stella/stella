@@ -790,11 +790,12 @@ const oversizedDisplayFieldProperty = (provider: "pg-fts" | "corpus-index") =>
               languages: [],
             },
           ],
-          readServingGeneration: async () => ({
-            family: "legislation",
-            generation: GENERATION,
-            cluster: "q09",
-          }),
+          readServingGeneration: async () =>
+            Result.ok({
+              family: "legislation",
+              generation: GENERATION,
+              cluster: "q09",
+            }),
         },
       );
       if (!("items" in response)) {

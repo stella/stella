@@ -132,7 +132,7 @@ const hostField = (
   {
     databaseDefault = { kind: "none" },
     databaseNotNull = false,
-    databaseReference = undefined,
+    databaseReference,
     default: fieldDefault = { kind: "none" },
     input = "allowed",
     required = false,

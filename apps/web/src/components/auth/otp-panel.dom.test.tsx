@@ -130,7 +130,7 @@ test("OTP verification refreshes the existing session before the two-factor rout
     },
     { preconnect: () => undefined },
   );
-  await client.fetchQuery({
+  await client.query({
     ...sessionOptions,
     queryFn: async () => {
       events.push("session-read");

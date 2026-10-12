@@ -63,7 +63,7 @@ export const Route = createRootRouteWithContext<{
     const handoffRedirect = await loadMcpHandoff();
     if (handoffRedirect) {
       redirect({ ...handoffRedirect.options, throw: true });
-      return panic("TanStack Router did not throw the handoff redirect.");
+      panic("TanStack Router did not throw the handoff redirect.");
     }
     await requireFreshDocument({ queryClient: context.queryClient, location });
   },
