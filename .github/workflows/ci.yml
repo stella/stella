@@ -73,6 +73,9 @@ env:
   # on EBS metrics or a wall-clock busy window.
   DB_LOAD_GATE_EBS_SIGNAL: disabled
   DB_LOAD_GATE_BUSY_WINDOWS: "[]"
+  # Plain logs: no ANSI escapes for readers that fetch them as text. Only
+  # FORCE_COLOR: Node warns when NO_COLOR is set beside it.
+  FORCE_COLOR: "0"
 
 jobs:
   ci-plan:
@@ -150,10 +153,12 @@ jobs:
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
       desktop_browser_required: ${{ steps.changed-files.outputs.desktop_browser_required }}
       # The job and result gate consume the same event/depth decision.
+      ci_browser_scope_required: ${{ steps.changed-files.outputs.ci_browser_scope_required }}
       ci_browser_required: >-
         ${{ steps.completed-depth.outputs.run_required != 'false'
         && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         && steps.changed-files.outputs.package_checks_required == 'true'
+        && steps.changed-files.outputs.ci_browser_scope_required == 'true'
         && ((github.event_name == 'pull_request' && steps.changed-files.outputs.desktop_browser_required == 'true')
         || (github.event_name != 'pull_request'
         && steps.depth.outputs.suite_depth == 'full')
@@ -161,7 +166,9 @@ jobs:
         && steps.completed-depth.outputs.normal_completion != 'complete'
         && contains(fromJSON(steps.pilot-queue-plan.outputs.queue_jobs || '[]'), 'ci-browser')))
         && 'true' || 'false' }}
-      legal_atlas_image_required: ${{ steps.changed-files.outputs.legal_atlas_image_required }}
+      legal_atlas_image_inputs_required: ${{ steps.changed-files.outputs.legal_atlas_image_required }}
+      legal_atlas_api_source_required: ${{ steps.legal-atlas-scope.outputs.api_source_required || 'true' }}
+      legal_atlas_image_required: ${{ steps.changed-files.outputs.legal_atlas_image_required == 'true' && steps.legal-atlas-scope.outputs.api_source_required != 'false' }}
       legal_atlas_image_pr_required: ${{ steps.changed-files.outputs.legal_atlas_image_pr_required }}
       dependency_malware_required: ${{ steps.changed-files.outputs.dependency_malware_required }}
       lockfile_ages_required: ${{ steps.changed-files.outputs.lockfile_ages_required }}
@@ -777,6 +784,7 @@ jobs:
               echo "collab_redis_required=true"
               echo "desktop_rust_checks_required=true"
               echo "desktop_browser_required=true"
+              echo "ci_browser_scope_required=true"
               echo "e2e_core_required=true"
               echo "e2e_production_required=$e2e_production_required"
               echo "e2e_landing_required=true"
@@ -826,6 +834,7 @@ jobs:
               echo "collab_redis_required=false"
               echo "desktop_rust_checks_required=false"
               echo "desktop_browser_required=false"
+              echo "ci_browser_scope_required=false"
               echo "e2e_core_required=false"
               echo "e2e_production_required=false"
               echo "e2e_landing_required=false"
@@ -901,6 +910,10 @@ jobs:
           fi
           if [[ "$package_checks_required" == false ]]; then
             desktop_browser_required=false
+          fi
+          ci_browser_scope_required=$(bun scripts/ci-browser-scope.ts "${changed_files[@]}") || ci_browser_scope_required=true
+          if [[ "$ci_browser_scope_required" != false ]]; then
+            ci_browser_scope_required=true
           fi
           dependency_malware_required=$(bun scripts/check-standalone-lockfiles.ts --requires-malware-scan "${changed_files[@]}")
           agent_sandbox_docker_required=false
@@ -1028,7 +1041,7 @@ jobs:
                 ;;
             esac
             case "$file" in
-              apps/legal-atlas-runner/*|apps/api/*|packages/legal-atlas/*|packages/typescript-config/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/pull-base-images.sh|scripts/ci-service-images.ts|scripts/ci-service-images.json|scripts/retry.sh|.dockerignore|.github/workflows/ci.yml)
+              apps/legal-atlas-runner/*|apps/api/*|apps/*/package.json|packages/*|patches/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/pull-base-images.sh|scripts/ci-service-images.ts|scripts/ci-service-images.json|scripts/retry.sh|scripts/legal-atlas-image-scope*|scripts/docker-source-closure*|scripts/generated-imports*|scripts/generated-files*|scripts/install-free-ci*|.dockerignore|.github/workflows/ci.yml)
                 legal_atlas_image_required=true
                 ;;
             esac
@@ -1168,6 +1181,7 @@ jobs:
             echo "collab_redis_required=$collab_redis_required"
             echo "desktop_rust_checks_required=$desktop_rust_checks_required"
             echo "desktop_browser_required=$desktop_browser_required"
+            echo "ci_browser_scope_required=$ci_browser_scope_required"
             echo "e2e_core_required=$e2e_core_required"
             echo "e2e_production_required=$e2e_production_required"
             echo "e2e_landing_required=$e2e_landing_required"
@@ -1230,6 +1244,26 @@ jobs:
         run: bash scripts/retry.sh timeout --kill-after=10s 120s bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
+          # A tolerated failure is a warning, not a failure annotation.
+          RETRY_FAILURE_LEVEL: warning
+
+      - name: Refine Legal Atlas API source scope
+        id: legal-atlas-scope
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.api-test-deps.outcome == 'success' && steps.changed-files.outputs.legal_atlas_image_required == 'true'
+        run: |
+          changed_files=()
+          while IFS= read -r -d '' file; do
+            changed_files+=("$file")
+          done < "$RUNNER_TEMP/api-test-changed-paths"
+          # An unknown diff is already broad; an empty list must preserve it.
+          required=true
+          if (( ${#changed_files[@]} > 0 )); then
+            required=$(timeout --kill-after=10s 120s bun scripts/legal-atlas-image-scope.ts "${changed_files[@]}") || required=true
+          fi
+          if [[ "$required" != false ]]; then
+            required=true
+          fi
+          echo "api_source_required=$required" >> "$GITHUB_OUTPUT"
 
       - name: Select affected API test files
         id: api-test-selection
@@ -1819,11 +1853,12 @@ jobs:
           filter: blob:none
           persist-credentials: false
 
+      # No install follows, so the shared package cache would only cost time.
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
+          no-cache: true
 
       - name: Check parser version guard
         env:
@@ -2552,6 +2587,12 @@ jobs:
           bun apps/api/scripts/deployment-feature-guard.ts --self-test
           bun apps/api/scripts/deployment-feature-guard.ts --base "$RATCHET_BASE_REF"
 
+      - name: Processed-field backlog guard
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # The case-law processed-field backlog (debts and unrecorded claims)
+        # may only shrink against the measured base.
+        run: bun apps/api/scripts/processed-field-backlog-guard.ts --base "$RATCHET_BASE_REF"
+
       - name: GitHub API command ownership
         env:
           STELLA_VERIFY: check
@@ -2577,6 +2618,10 @@ jobs:
         run: |
           bun test scripts/check-oxlint-rule-coverage.test.ts
           bun scripts/check-oxlint-rule-coverage.ts
+
+      - name: Custom lint test timeout policy
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/check-oxlint-test-timeouts.test.ts scripts/run-custom-lint-tests.test.ts
 
       - name: Dated waiver lifecycle guards
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -2970,7 +3015,7 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: |
           bun test scripts/oxlint-plugin-test-coverage.test.ts
-          find ./.oxlint-plugins/__tests__ -maxdepth 1 -name '*.test.ts' -print0 | sort -z | xargs -0 bun test
+          bun scripts/run-custom-lint-tests.ts
 
       - name: Prepare route network manifest
         id: network_manifest_prepare
@@ -3937,6 +3982,10 @@ jobs:
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bash scripts/retry.test.sh
 
+      - name: Test CI failure digest
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/ci-failure-digest.test.ts
+
       - name: Test base image pull script
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bash scripts/pull-base-images.test.sh
@@ -3996,11 +4045,11 @@ jobs:
 
       - name: Test aggregate inventories
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun test scripts/check-aggregate-locks.test.ts scripts/check-aggregate-mutations.test.ts .oxlint-plugins/__tests__/aggregate-lock-sites.test.ts .oxlint-plugins/__tests__/confine-aggregate-lock.test.ts
+        run: bun scripts/run-custom-lint-tests.ts scripts/check-aggregate-locks.test.ts scripts/check-aggregate-mutations.test.ts .oxlint-plugins/__tests__/aggregate-lock-sites.test.ts .oxlint-plugins/__tests__/confine-aggregate-lock.test.ts
 
       - name: Test write contract inventories
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun test scripts/check-write-contracts.test.ts .oxlint-plugins/__tests__/require-write-contract.test.ts
+        run: bun scripts/run-custom-lint-tests.ts scripts/check-write-contracts.test.ts .oxlint-plugins/__tests__/require-write-contract.test.ts
 
       - name: Office fixture metadata
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -4233,7 +4282,12 @@ jobs:
           plan="$RUNNER_TEMP/test-plan-$SHARD.json"
           output="$RUNNER_TEMP/test-output-$SHARD.log"
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
-          bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output"
+          # On failure the log ends with the failing tests and their errors.
+          bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output" || {
+            status=$?
+            timeout 60 bun scripts/ci-failure-digest.ts tail "$output" || true
+            exit "$status"
+          }
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
 
       - name: Upload API test timings
@@ -4267,7 +4321,12 @@ jobs:
           plan="$RUNNER_TEMP/test-plan-$SHARD.json"
           output="$RUNNER_TEMP/test-output-$SHARD.log"
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
-          bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output"
+          # On failure the log ends with the failing tests and their errors.
+          bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output" || {
+            status=$?
+            timeout 60 bun scripts/ci-failure-digest.ts tail "$output" || true
+            exit "$status"
+          }
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
 
       - name: Upload test diagnostics
@@ -4480,6 +4539,18 @@ jobs:
             .github/actions/setup-playwright \
             .github/workflows/ci.yml \
             apps/desktop \
+            apps/web \
+            packages \
+            scripts/ci-service-images.ts \
+            scripts/ci-service-images.json \
+            scripts/ci-browser-scope.ts \
+            scripts/ci-package-scope.ts \
+            scripts/install-free-ci.ts \
+            scripts/retry.sh \
+            scripts/generated-files.ts \
+            bunfig.toml \
+            .npmrc \
+            VERSION \
             apps/web/e2e/playwright.ui-playground.config.ts \
             apps/web/e2e/ui-playground \
             apps/web/package.json \
@@ -5144,6 +5215,14 @@ jobs:
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         run: bun run src/db/migrate.ts
+
+      - name: Configure ephemeral Postgres fixture maintenance
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+        # A 1s DDL deadline races the default 1s autovacuum cancellation grace.
+        # Keep cluster defaults for the fresh-database maintenance assertions.
+        run: bun scripts/postgres-test-maintenance.ts
 
       - name: Run Postgres-gated API suites
         id: postgres-tests
@@ -8707,6 +8786,9 @@ jobs:
           sparse-checkout: |
             scripts/gh-retry.sh
             scripts/retry.sh
+            scripts/ci-failure-digest.ts
+            scripts/fetch-failed-job-logs.sh
+            /package.json
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
@@ -9009,7 +9091,9 @@ jobs:
               # A failure stands even when a sibling job was cancelled.
               failed=$(jq -r '[to_entries[] | select(.value.result as $r | ["success", "skipped", "cancelled"] | index($r) | not) | "\(.key) (\(.value.result))"] | join(", ")' <<< "$NEEDS")
               if [[ -n "$failed" ]]; then
-                echo "::error::CI checks failed: $failed"
+                # Plain text: the failure digest below annotates each failed
+                # step, and this step's exit is annotated by the runner.
+                echo "CI checks failed: $failed"
                 exit 1
               fi
               # Fast-required jobs must run when their scope is planned;
@@ -9072,6 +9156,44 @@ jobs:
               echo "Not every planned CI job succeeded in this run; recording no completion evidence."
             fi
           fi
+
+      # Failure digest: one record per failed step (job, step, kind, first
+      # error lines with file:line) as annotations on this check run, a job
+      # summary and the `ci-failures` artifact. Failed steps come from the
+      # jobs API, so output a passing step prints on purpose is never listed.
+      # Reporting only: the verdict above is unchanged.
+      - name: Setup Bun for the failure digest
+        if: failure() && steps.outcome.outcome == 'failure'
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: .workflow-tooling/package.json
+
+      - name: Digest failed steps
+        if: failure() && steps.outcome.outcome == 'failure'
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          dir="$RUNNER_TEMP/ci-failures"
+          mkdir -p "$dir/logs"
+          if ! bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/$REPO/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100" > "$dir/jobs.json"; then
+            echo "Failure digest unavailable: the jobs lookup failed."
+            exit 0
+          fi
+          bash .workflow-tooling/scripts/fetch-failed-job-logs.sh "$REPO" "$dir/jobs.json" "$dir/logs" || echo "Job log download failed; the digest names each job without a log."
+          bun .workflow-tooling/scripts/ci-failure-digest.ts digest --jobs "$dir/jobs.json" --logs "$dir/logs" --json "$dir/ci-failures.json" --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload failure digest
+        if: failure() && steps.outcome.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ci-failures
+          overwrite: true
+          path: ${{ runner.temp }}/ci-failures/ci-failures.json
+          retention-days: 7
+          if-no-files-found: ignore
 
       # Evaluate the variable when this final job starts, after the suites.
       - name: Check out the merge hold rule

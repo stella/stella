@@ -19,6 +19,7 @@ import {
   ORGANIZATION_MODEL_CREDENTIALS,
   type OrganizationActionState,
 } from "@/api/lib/usage/organization-action-budget";
+import { testOrganizationStateDb } from "@/api/tests/helpers/model-dispatch-admission";
 
 import { withActionAdmission } from "./action-admission";
 import {
@@ -303,6 +304,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           "refused-turn",
         ].entries()) {
           const phase = await startExecutionAdmission({
+            organizationStateDb: testOrganizationStateDb,
             mode: "concurrency-only",
             actionKind: "chat.send",
             enabled: true,
@@ -367,6 +369,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             },
           });
         const phase = await startExecutionAdmission({
+          organizationStateDb: testOrganizationStateDb,
           organizationId,
           userId,
           enabled: true,
@@ -385,6 +388,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             Result.isOk(await phase.value.reservePeriod(firstMessageIdentity)),
           ).toBe(true);
           const title = await startExecutionAdmission({
+            organizationStateDb: testOrganizationStateDb,
             organizationId,
             userId,
             enabled: true,
@@ -707,6 +711,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         let endMs = 0;
         let budgetKey: string | undefined;
         const result = await startExecutionAdmission({
+          organizationStateDb: testOrganizationStateDb,
           organizationId,
           userId,
           enabled: true,
