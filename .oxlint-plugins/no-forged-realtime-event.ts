@@ -1,4 +1,5 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
+import path from "node:path";
 
 import {
   type ScopeContext,
@@ -178,14 +179,11 @@ export default eslintCompatPlugin({
         };
         return {
           before() {
-            const filename = filenameForContext(context);
-            contractOwner =
-              filename.endsWith(`/${CONTRACT_OWNER}`) ||
-              filename === CONTRACT_OWNER;
-            brandOwner =
-              contractOwner ||
-              filename.endsWith(`/${CLASSIFIER_OWNER}`) ||
-              filename === CLASSIFIER_OWNER;
+            const filename = path
+              .relative(context.cwd, filenameForContext(context))
+              .replaceAll("\\", "/");
+            contractOwner = filename === CONTRACT_OWNER;
+            brandOwner = contractOwner || filename === CLASSIFIER_OWNER;
           },
           Literal: checkBrandLiteral,
           TemplateLiteral: checkBrandLiteral,

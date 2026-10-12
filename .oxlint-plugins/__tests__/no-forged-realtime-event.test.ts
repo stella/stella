@@ -57,7 +57,9 @@ test("only canonical source files grant brand ownership and only the contract bu
     "packages/api-contract/src/realtime-events.ts",
     "apps/api/src/lib/flows/visibility.ts",
   ]) {
-    expect(await lintSingleRule(rule, brand, { sourcePath })).toEqual([]);
+    expect(
+      await lintSingleRule(rule, brand, { sourcePath, cwd: "scratch" }),
+    ).toEqual([]);
   }
   expect(
     await lintSingleRule(rule, brand, {
@@ -68,14 +70,17 @@ test("only canonical source files grant brand ownership and only the contract bu
     await lintSingleRule(
       rule,
       'const event = { type: "resource.deleted", resource };',
-      { sourcePath: "packages/api-contract/src/realtime-events.ts" },
+      {
+        sourcePath: "packages/api-contract/src/realtime-events.ts",
+        cwd: "scratch",
+      },
     ),
   ).toEqual([]);
   expect(
     await lintSingleRule(
       rule,
       'const event = { type: "resource.deleted", resource };',
-      { sourcePath: "apps/api/src/lib/flows/visibility.ts" },
+      { sourcePath: "apps/api/src/lib/flows/visibility.ts", cwd: "scratch" },
     ),
   ).toEqual([1]);
 });
@@ -117,4 +122,20 @@ test("named deleted-change constants remain guarded when resource arrives in a s
       ].join("\n"),
     ),
   ).toEqual([2]);
+});
+
+test("nested lookalike owner paths cannot mint brands or deletion events", async () => {
+  const source = [
+    'const ownership = v.brand("ClassifiedEntityDeletionOwnership");',
+    "const value = raw as BuiltRealtimeEvent;",
+    'const event = { type: "resource.deleted", resource };',
+  ].join("\n");
+  for (const sourcePath of [
+    "foo/packages/api-contract/src/realtime-events.ts",
+    "foo/apps/api/src/lib/flows/visibility.ts",
+  ]) {
+    expect(
+      await lintSingleRule(rule, source, { sourcePath, cwd: "scratch" }),
+    ).toEqual([1, 2, 3]);
+  }
 });
