@@ -96,7 +96,7 @@ export const seedQueryPlanData = async (
   await db.execute(sql`
     INSERT INTO ${caseLawDecisions}
       (id, source_id, case_number, court, country, language, ecli,
-       language_group_key, decision_date, metadata, updated_at)
+       language_group_key, decision_date, metadata, created_at, updated_at)
     SELECT
       (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad(n::text, 12, '0'))::uuid,
       ${caseLawSourceId}::uuid,
@@ -111,6 +111,7 @@ export const seedQueryPlanData = async (
       CASE WHEN n % 20 = 0 THEN NULL
         ELSE DATE '2010-01-01' + (n % 5800) END,
       '{}'::jsonb,
+      TIMESTAMPTZ '2024-01-01 00:00:00+00' + n * INTERVAL '1 minute',
       TIMESTAMPTZ '2024-01-01 00:00:00+00' + n * INTERVAL '1 minute'
     FROM generate_series(1, ${QUERY_PLAN_ROW_COUNT}) AS generated(n)
   `);

@@ -510,7 +510,7 @@ const readSchemaTableNames = (): ReadonlySet<string> => {
   for (const file of files.filter((name) => name.endsWith(".ts"))) {
     const source = readFileSync(`${directory}${file}`, "utf-8");
     for (const match of source.matchAll(SCHEMA_TABLE_NAME_RE)) {
-      const name = match.groups?.name;
+      const { name } = match.groups ?? {};
       if (name !== undefined) {
         names.add(name);
       }
@@ -522,6 +522,14 @@ const readSchemaTableNames = (): ReadonlySet<string> => {
 const PUBLIC_LAW_RELATION_SET_SOURCE: readonly string[] = Object.values(
   PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT,
 );
+
+const isDecisionSurfaceOptions = (
+  options: unknown,
+): options is { scope: "decision-surface" } =>
+  typeof options === "object" &&
+  options !== null &&
+  "scope" in options &&
+  options.scope === "decision-surface";
 
 const SCHEMA_TABLE_NAMES = readSchemaTableNames();
 
@@ -1590,11 +1598,7 @@ export default eslintCompatPlugin({
         return {
           before() {
             const configuredOptions = context.options.at(0);
-            decisionSurfaceOnly =
-              typeof configuredOptions === "object" &&
-              configuredOptions !== null &&
-              "scope" in configuredOptions &&
-              configuredOptions.scope === "decision-surface";
+            decisionSurfaceOnly = isDecisionSurfaceOptions(configuredOptions);
             importerRepoPath = repoRelativeFilename(context);
             inBoundary = false;
             readsPublicLaw = false;

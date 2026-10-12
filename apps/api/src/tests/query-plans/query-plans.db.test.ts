@@ -183,6 +183,17 @@ test("every guarded table has the physical seed before statistics injection", as
   }
 });
 
+test("decision creation timestamps have the physical seed cardinality", async () => {
+  const row = executedRows(
+    await db.execute(sql`
+      SELECT count(DISTINCT created_at)::integer AS count
+      FROM ${caseLawDecisions}
+      WHERE source_id = ${QUERY_PLAN_SAMPLE.caseLaw.sourceId}
+    `),
+  ).at(0);
+  expect(row).toMatchObject({ count: QUERY_PLAN_ROW_COUNT });
+});
+
 test("outstanding-document fixture keeps the exact pending set selective", async () => {
   const row = executedRows(
     await db.execute(sql`
