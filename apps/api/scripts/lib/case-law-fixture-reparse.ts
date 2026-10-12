@@ -53,7 +53,7 @@ export type ReparseFixtureRow = {
 };
 
 /** What a re-parse of stored raw yields, already sanitized for storage. */
-export type ReparsedDocument = {
+type ReparsedDocument = {
   documentAst: unknown;
   sections: unknown;
   fulltext: string | null;
@@ -85,7 +85,11 @@ const canonical = (value: unknown): string => {
       .map(([key, item]) => `${JSON.stringify(key)}:${canonical(item)}`)
       .join(",")}}`;
   }
-  return JSON.stringify(value) ?? "null";
+  // JSON.stringify drops an undefined array item to null; say so explicitly.
+  if (value === undefined) {
+    return "null";
+  }
+  return JSON.stringify(value);
 };
 
 /** Equal as stored JSON, whatever the key order. */

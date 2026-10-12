@@ -72,8 +72,13 @@ export const PRUNABLE_BASELINE_WRITERS = [
   },
 ] as const satisfies readonly BaselineWriter[];
 
-export const PRUNABLE_BASELINES: readonly PrunableBaseline[] =
-  PRUNABLE_BASELINE_WRITERS.flatMap(({ baselines }) => baselines);
+type RegisteredBaseline =
+  (typeof PRUNABLE_BASELINE_WRITERS)[number]["baselines"][number];
+
+export const PRUNABLE_BASELINES: readonly RegisteredBaseline[] =
+  PRUNABLE_BASELINE_WRITERS.flatMap(
+    ({ baselines }): readonly RegisteredBaseline[] => baselines,
+  );
 
 const prunable = (path: string) =>
   PRUNABLE_BASELINES.find((baseline) => baseline.path === path);
@@ -97,8 +102,8 @@ const readText = (path: string) =>
 const prune = () => {
   let pruned = 0;
   for (const writer of PRUNABLE_BASELINE_WRITERS) {
-    const before = new Map(
-      writer.baselines.map(({ path }) => [path, readText(path)] as const),
+    const before = new Map<string, string | null>(
+      writer.baselines.map(({ path }) => [path, readText(path)]),
     );
     const restore = (path: string) => {
       const original = before.get(path);

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
+import { MAIN_ONLY_BUN_CACHE_SAVE } from "./workflow-cache-policy";
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const read = (name: string) =>
@@ -171,7 +172,7 @@ describe("resolve", () => {
     for (const step of job?.steps ?? []) {
       expect(step.uses?.startsWith("actions/cache") ?? false).toBe(false);
       if (step.uses?.includes("setup-bun-cached")) {
-        expect(step.with?.["save"]).toBe(false);
+        expect(step.with?.["save"]).toBe(MAIN_ONLY_BUN_CACHE_SAVE);
       }
     }
     const upload = job?.steps.find(
@@ -260,26 +261,35 @@ describe("publish", () => {
   const refused: { name: string; change: (input: Scenario) => void }[] = [
     {
       name: "another workflow's run",
-      change: (input) => (input.run["path"] = ".github/workflows/other.yml"),
+      change: (input) => {
+        input.run["path"] = ".github/workflows/other.yml";
+      },
     },
     {
       name: "a non-dispatch run",
-      change: (input) => (input.run["event"] = "push"),
+      change: (input) => {
+        input.run["event"] = "push";
+      },
     },
     {
       name: "a run on main",
-      change: (input) => (input.run["head_branch"] = "main"),
+      change: (input) => {
+        input.run["head_branch"] = "main";
+      },
     },
     {
       name: "a fork",
-      change: (input) =>
-        (input.run["head_repository"] = { full_name: "someone/stella" }),
+      change: (input) => {
+        input.run["head_repository"] = { full_name: "someone/stella" };
+      },
     },
     {
       // A run on another pull request's branch cannot reach this one: the
       // pull request is looked up from the run's own branch.
       name: "a branch with no open pull request",
-      change: (input) => (input.pulls = []),
+      change: (input) => {
+        input.pulls = [];
+      },
     },
     {
       name: "a branch that moved since the run started",
@@ -297,16 +307,21 @@ describe("publish", () => {
     {
       // A plan left to people uploads nothing.
       name: "a run that uploaded no resolution",
-      change: (input) => (input.artifacts = []),
+      change: (input) => {
+        input.artifacts = [];
+      },
     },
     {
       name: "an expired resolution",
-      change: (input) =>
-        (input.artifacts = [{ name: "generated-conflicts", expired: true }]),
+      change: (input) => {
+        input.artifacts = [{ name: "generated-conflicts", expired: true }];
+      },
     },
     {
       name: "two pull requests from one branch",
-      change: (input) => input.pulls.push({ ...input.pulls[0], number: 2 }),
+      change: (input) => {
+        input.pulls.push({ ...input.pulls[0], number: 2 });
+      },
     },
   ];
   for (const { name, change } of refused) {

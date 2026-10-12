@@ -23,6 +23,10 @@ import { GENERATORS } from "./generated-files";
 
 const MESSAGES = "apps/web/src/i18n/langs/messages.gen.ts";
 
+// Every file this test reads is a temporary fixture or request, never
+// Markdown in the repository.
+export const CI_MARKDOWN_READER_INPUTS = [] as const;
+
 const field = (value: unknown, ...keys: string[]): unknown => {
   let current = value;
   for (const key of keys) {
@@ -224,7 +228,9 @@ describe("resolution across runs", () => {
     write(
       origin,
       NOTES,
-      lines((rows) => (rows[1] = "branch")),
+      lines((rows) => {
+        rows[1] = "branch";
+      }),
     );
     branchEdits?.(origin);
     git(origin, "add", "-A");
@@ -235,7 +241,9 @@ describe("resolution across runs", () => {
     write(
       origin,
       NOTES,
-      lines((rows) => (rows[18] = "main")),
+      lines((rows) => {
+        rows[18] = "main";
+      }),
     );
     mainEdits?.(origin);
     git(origin, "add", "-A");
@@ -393,13 +401,13 @@ describe("resolution across runs", () => {
     const { out } = resolve(origin, head, main);
     // The output glob docs/module-ownership/*.md is an owning generator's.
     write(path.join(out, "files"), "docs/module-ownership/x.md", "owned\n");
-    editManifest(out, (manifest) =>
+    editManifest(out, (manifest) => {
       manifest.files.push({
         path: "docs/module-ownership/x.md",
         deleted: false,
         mode: "100644",
-      }),
-    );
+      });
+    });
     const published = publish(origin, head, out);
     expect(published.exitCode).not.toBe(0);
     expect(published.stderr).toContain(
@@ -417,20 +425,26 @@ describe("resolution across runs", () => {
     expect(tampered.stderr).toContain("differs from the collected tree");
     writeFileSync(path.join(out, "files", MESSAGES), regenerated);
 
-    editManifest(out, (manifest) =>
-      manifest.files.push({ path: NOTES, deleted: false, mode: "100644" }),
-    );
+    editManifest(out, (manifest) => {
+      manifest.files.push({ path: NOTES, deleted: false, mode: "100644" });
+    });
     write(path.join(out, "files"), NOTES, "smuggled\n");
     const smuggled = publish(origin, head, out);
     expect(smuggled.exitCode).not.toBe(0);
     expect(smuggled.stderr).toContain("outside the owning generators' outputs");
-    editManifest(out, (manifest) => manifest.files.pop());
+    editManifest(out, (manifest) => {
+      manifest.files.pop();
+    });
 
     // A resolution built for another branch head or another main.
     const other = "f".repeat(40);
-    editManifest(out, (manifest) => (manifest.main = other));
+    editManifest(out, (manifest) => {
+      manifest.main = other;
+    });
     expect(publish(origin, head, out).stderr).toContain("not on main");
-    editManifest(out, (manifest) => (manifest.main = main));
+    editManifest(out, (manifest) => {
+      manifest.main = main;
+    });
     expect(publish(origin, other, out).exitCode).not.toBe(0);
 
     // A symlink inside the collected data itself.

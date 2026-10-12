@@ -66,7 +66,8 @@ jobs:
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
-          save: false
+          # Always false here: this job never runs on main.
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
 
       - name: Plan the merge
