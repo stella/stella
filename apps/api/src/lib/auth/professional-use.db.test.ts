@@ -250,6 +250,63 @@ describe("professional-use acceptance", () => {
     );
   };
 
+  test("acceptance reads and writes the authenticated account without changing another account", async () => {
+    const other = await signInHuman(
+      `professional-use-other-${Bun.randomUUIDv7()}@stella.dev`,
+    );
+    const otherOrganization = await createOrganizationFor(other);
+    const otherOrganizationId = brandPersistedOrganizationId(
+      otherOrganization.id,
+    );
+    await testDb
+      .update(userProfessionalUseAcceptances)
+      .set({
+        statementVersion: "previous-statement",
+        termsVersion: "previous-terms",
+      })
+      .where(eq(userProfessionalUseAcceptances.userId, other.userId));
+    // A retained organization can still be awaiting its owner's receipt.
+    await testDb
+      .delete(organizationProfessionalUseAcceptances)
+      .where(
+        eq(
+          organizationProfessionalUseAcceptances.organizationId,
+          otherOrganizationId,
+        ),
+      );
+    const otherAcceptances = await userAcceptances([other.userId]);
+    const otherAudits = await acceptanceAuditEvents(otherOrganizationId);
+
+    const person = await signInHuman(
+      `professional-use-own-${Bun.randomUUIDv7()}@stella.dev`,
+      { displayedStatementVersion: null },
+    );
+    const organization = await createOrganizationFor(person);
+    const organizationId = brandPersistedOrganizationId(organization.id);
+    await person.setActiveOrganization(organizationId);
+    expect(await (await readOwnState(person)).json()).toEqual({
+      status: "required",
+    });
+
+    const accepted = await accept(person, PROFESSIONAL_USE_STATEMENT_VERSION);
+    expect(accepted.status).toBe(200);
+    expect(await accepted.json()).toMatchObject({
+      status: "accepted",
+      ...CURRENT_VERSIONS,
+    });
+    expect(await userAcceptances([person.userId])).toMatchObject([
+      CURRENT_VERSIONS,
+    ]);
+    expect(await organizationAcceptances([organizationId])).toMatchObject([
+      { acceptedByUserId: person.userId, ...CURRENT_VERSIONS },
+    ]);
+    expect(await userAcceptances([other.userId])).toEqual(otherAcceptances);
+    expect(await organizationAcceptances([otherOrganizationId])).toEqual([]);
+    expect(await acceptanceAuditEvents(otherOrganizationId)).toEqual(
+      otherAudits,
+    );
+  });
+
   test("an agent-provisioned account records no acceptance, is refused the product until it accepts on its first interactive sign-in, and keeps its MCP access throughout", async () => {
     const email = `professional-use-agent-${Bun.randomUUIDv7()}@stella.dev`;
     const created = await getAuth().api.createAgentUser({
