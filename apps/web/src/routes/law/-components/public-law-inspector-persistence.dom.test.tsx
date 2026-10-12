@@ -37,6 +37,7 @@ const { releaseUserStorage, userStorageKey } =
 const { rootKeys } = await import("@/lib/auth-queries");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
+const { toChatThreadId } = await import("@/lib/chat-thread-ref");
 const { toSafeId } = await import("@/lib/safe-id");
 const { PublicLawInspector } =
   await import("@/routes/law/-components/public-law-inspector");
@@ -57,7 +58,7 @@ const MEMBER = {
 const DECISION_ID = toSafeId<"caseLawDecision">(
   "0b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d",
 );
-const SAVED_THREAD_ID = "0b1c2d3e-4f50-4a6b-8c7d-000000000001";
+const SAVED_THREAD_ID = toChatThreadId("0b1c2d3e-4f50-4a6b-8c7d-000000000001");
 const DETAILS_TAB = createCaseDecisionDetailsTab({
   caseNumber: "27 Cdo 59/2022",
   country: "CZE",
