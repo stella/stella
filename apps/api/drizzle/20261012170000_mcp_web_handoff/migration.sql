@@ -35,6 +35,7 @@ CREATE INDEX "mcp_web_handoff_userId_idx" ON "mcp_web_handoff" ("user_id");--> s
 CREATE INDEX "mcp_web_handoff_oauthClientId_idx" ON "mcp_web_handoff" ("oauth_client_id");--> statement-breakpoint
 CREATE INDEX "mcp_web_handoff_expiresAt_id_idx" ON "mcp_web_handoff" ("expires_at", "id");--> statement-breakpoint
 
-ALTER TABLE "session" ADD COLUMN "origin_consent_id" text REFERENCES "oauth_consent"("id") ON DELETE CASCADE;--> statement-breakpoint
+ALTER TABLE "session" ADD COLUMN "origin_consent_id" text;--> statement-breakpoint
 ALTER TABLE "session" ADD COLUMN "handoff_absolute_expires_at" timestamptz;--> statement-breakpoint
-CREATE INDEX "session_originConsentId_idx" ON "session" ("origin_consent_id");
+ALTER TABLE "session" ADD CONSTRAINT "session_origin_consent_id_oauth_consent_id_fk"
+  FOREIGN KEY ("origin_consent_id") REFERENCES "oauth_consent"("id") ON DELETE CASCADE NOT VALID;
