@@ -807,7 +807,7 @@
       "courtCount": "{count, plural, one {# sąd} few {# sądy} many {# sądów} other {# sądu}}",
       "newLast24Hours": "{count} z ostatnich 24 h",
       "newLast7Days": "Nowe z ostatnich 7 dni",
-      "unlistedCourts": "{count, plural, one {Sądy poza największym} few {Sądy poza # największymi} many {Sądy poza # największymi} other {Sądy poza # największymi}}"
+      "otherCourts": "Inne sądy"
     },
     "courtTiers": {
       "constitutional": "Trybunały konstytucyjne",
@@ -823,6 +823,7 @@
       "decisionYears": "Lata orzeczeń",
       "description": "Ile orzecznictwa zawiera korpus w podziale na kraje i sądy oraz jak aktualne jest każde źródło.",
       "exceedsReportedTotal": "Zawiera więcej, niż wydawca podał ostatnio na {date}",
+      "gapStatusUnknown": "Stan luk nieznany",
       "generatedAt": "Dane na {date}",
       "globeLabel": "Państwa, których orzecznictwo zawiera korpus, na globusie",
       "healthCurrent": "Aktualne",
@@ -831,9 +832,12 @@
       "healthStalled": "Bez postępu",
       "healthUnknown": "Jeszcze nieuruchomione",
       "inPreparation": "W przygotowaniu",
+      "knownGaps": "Znane luki",
       "lastSync": "Ostatnia synchronizacja",
+      "noGapsRecorded": "Brak zarejestrowanych luk",
       "notCountedYet": "Jeszcze niepoliczone",
       "notMeasuredYet": "Jeszcze niezmierzone",
+      "pendingTexts": "Oczekujące teksty",
       "reportedByListing": "Policzone z wykazu wydawcy",
       "reportedByOperator": "Wpisane ręcznie",
       "reportedByPublisher": "Własne dane wydawcy",

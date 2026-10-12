@@ -807,7 +807,7 @@
       "courtCount": "{count, plural, one {# juridiction} other {# juridictions}}",
       "newLast24Hours": "{count} depuis 24 h",
       "newLast7Days": "Nouvelles depuis 7 jours",
-      "unlistedCourts": "{count, plural, one {Juridictions au-delà de la plus grande} other {Juridictions au-delà des # plus grandes}}"
+      "otherCourts": "Autres juridictions"
     },
     "courtTiers": {
       "constitutional": "Juridictions constitutionnelles",
@@ -823,6 +823,7 @@
       "decisionYears": "Années des décisions",
       "description": "Le volume de jurisprudence contenu dans le corpus, par pays et par juridiction, et la fraîcheur de chaque source.",
       "exceedsReportedTotal": "Contient plus que le dernier total annoncé par le diffuseur le {date}",
+      "gapStatusUnknown": "État des lacunes inconnu",
       "generatedAt": "Chiffres au {date}",
       "globeLabel": "Pays dont la jurisprudence figure dans le corpus, sur un globe",
       "healthCurrent": "À jour",
@@ -831,9 +832,12 @@
       "healthStalled": "À l’arrêt",
       "healthUnknown": "Jamais exécuté",
       "inPreparation": "En préparation",
+      "knownGaps": "Lacunes connues",
       "lastSync": "Dernière synchronisation",
+      "noGapsRecorded": "Aucune lacune enregistrée",
       "notCountedYet": "Pas encore décompté",
       "notMeasuredYet": "Pas encore mesuré",
+      "pendingTexts": "Textes en attente",
       "reportedByListing": "Compté à partir de la liste du diffuseur",
       "reportedByOperator": "Saisi manuellement",
       "reportedByPublisher": "Décompte du diffuseur",
