@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract/mcp";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import {
   member,
@@ -19,6 +20,7 @@ import {
   createWebHandoffService,
   WEB_HANDOFF_TTL_MS,
 } from "@/api/lib/mcp-web-handoff";
+import { MCP_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -240,6 +242,38 @@ describe("MCP web handoff lifecycle", () => {
       textEnabled: () => true,
     });
     expect(await limited.mint(fixture, ["/law/example"], "text")).toBeNull();
+  });
+  test("address-budget refusals leave the shared redemption count unchanged", async () => {
+    const budget = new InMemoryRateLimitContext();
+    const limited = createWebHandoffService({
+      db,
+      budget,
+      enabled: () => true,
+      textEnabled: () => true,
+    });
+    const blockedAddress = "192.0.2.1";
+    const addressKey = `mcp-web-handoff:${sha256Hex(`redeem:address:${blockedAddress}`)}`;
+    const globalKey = `mcp-web-handoff:${sha256Hex("redeem:global")}`;
+    try {
+      for (
+        let index = 0;
+        index < MCP_RATE_LIMITS.handoffRedeemAddress.max;
+        index += 1
+      ) {
+        budget.increment(
+          addressKey,
+          MCP_RATE_LIMITS.handoffRedeemAddress.windowMs,
+        );
+      }
+      expect(await limited.admitRedeem("192.0.2.2")).toBe(true);
+      expect(budget.read(globalKey)?.count).toBe(1);
+      for (let index = 0; index < 3; index += 1) {
+        expect(await limited.admitRedeem(blockedAddress)).toBe(false);
+        expect(budget.read(globalKey)?.count).toBe(1);
+      }
+    } finally {
+      budget.kill();
+    }
   });
   test("an absolute session deadline remains authoritative after refresh", async () => {
     const token = "handoff-session-token";

@@ -396,13 +396,10 @@ const createHandoffRedemption = ({
     });
   const admitRedeem = async (address: string) =>
     (await consumeBudget(
-      "redeem:global",
-      MCP_RATE_LIMITS.handoffRedeemGlobal,
-    )) &&
-    (await consumeBudget(
       `redeem:address:${address}`,
       MCP_RATE_LIMITS.handoffRedeemAddress,
-    ));
+    )) &&
+    (await consumeBudget("redeem:global", MCP_RATE_LIMITS.handoffRedeemGlobal));
   const admitUser = async (userId: SafeId<"user">) =>
     await consumeBudget(
       `redeem:user:${userId}`,

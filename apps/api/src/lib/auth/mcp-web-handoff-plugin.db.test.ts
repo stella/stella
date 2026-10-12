@@ -12,6 +12,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import * as v from "valibot";
 
 import { mcpHandoffRedeemResultSchema } from "@stll/api-contract/mcp-web-handoff";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import {
   authSchema,
@@ -29,7 +30,9 @@ import { AUDIT_ACTION } from "@/api/lib/audit-log.constants";
 import { requiresHandoffStepUpForAuthPath } from "@/api/lib/auth/handoff-step-up-policy";
 import { createMcpWebHandoffPlugin } from "@/api/lib/auth/mcp-web-handoff-plugin";
 import { SESSION_LIFETIME_FIELDS } from "@/api/lib/auth/session-lifetime";
+import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { createWebHandoffService } from "@/api/lib/mcp-web-handoff";
+import { MCP_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -51,7 +54,7 @@ const fixture = {
   userId: "00000000-0000-4000-8000-000000000011",
   organizationId: "00000000-0000-4000-8000-000000000012",
 };
-const makeAuth = () =>
+const makeAuth = (handoffService = service) =>
   betterAuth({
     baseURL,
     secret: "handoff-test-secret-long-enough-for-better-auth",
@@ -69,7 +72,7 @@ const makeAuth = () =>
     plugins: [
       organizationPlugin(),
       createMcpWebHandoffPlugin({
-        service: () => service,
+        service: () => handoffService,
         textSessionMaxSeconds: () => 43_200,
       }),
     ],
@@ -208,6 +211,62 @@ const cookieOf = (response: Response) =>
     ).values(),
   ].join("; ");
 describe("MCP link sign-in", () => {
+  test("another address redeems after an exhausted address repeats requests", async () => {
+    const budget = new InMemoryRateLimitContext();
+    const limited = createWebHandoffService({
+      db,
+      budget,
+      enabled: () => true,
+      textEnabled: () => true,
+    });
+    const limitedAuth = makeAuth(limited);
+    const blockedAddress = "192.0.2.1";
+    const addressKey = `mcp-web-handoff:${sha256Hex(`redeem:address:${blockedAddress}`)}`;
+    try {
+      for (
+        let index = 0;
+        index < MCP_RATE_LIMITS.handoffRedeemAddress.max;
+        index += 1
+      ) {
+        budget.increment(
+          addressKey,
+          MCP_RATE_LIMITS.handoffRedeemAddress.windowMs,
+        );
+      }
+      for (
+        let index = 0;
+        index < MCP_RATE_LIMITS.handoffRedeemGlobal.max;
+        index += 1
+      ) {
+        expect(await limited.admitRedeem(blockedAddress)).toBe(false);
+      }
+      const code = await limited.mint(fixture, ["/law/example"], "click");
+      expect(code).not.toBeNull();
+      const response = await limitedAuth.handler(
+        new Request(`${baseURL}/api/auth/mcp-handoff/redeem`, {
+          method: "POST",
+          headers: {
+            origin: baseURL,
+            "content-type": "application/json",
+            [AUTH_CLIENT_ADDRESS_HEADER]: "192.0.2.2",
+          },
+          body: JSON.stringify({ code, path: "/law/example" }),
+        }),
+      );
+      expect(response.status).toBe(200);
+      expect(
+        v.parse(mcpHandoffRedeemResultSchema, await response.json()),
+      ).toEqual({ status: "redeemed" });
+      const signedIn = await limitedAuth.api.getSession({
+        headers: { cookie: cookieOf(response) },
+      });
+      expect(signedIn?.session.activeOrganizationId).toBe(
+        fixture.organizationId,
+      );
+    } finally {
+      budget.kill();
+    }
+  });
   test("the server switch keeps links plain and refuses outstanding handoffs", async () => {
     const code = await mint("click");
     handoffEnabled = false;
