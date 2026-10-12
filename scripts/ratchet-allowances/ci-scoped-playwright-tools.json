@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 3,
+  "reason": "Scoped browser and report installs require @playwright/test in landing and the shared Playwright tooling workspace, plus bun-types for that workspace. All three declarations reuse existing locked versions; no external package is added."
+}
