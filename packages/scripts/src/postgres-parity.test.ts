@@ -250,8 +250,9 @@ test.each([
   "unix:///tmp/socket\0\n",
   "unix://./socket\n",
   "unix:///tmp/first\nunix:///tmp/second\n",
+  "unix:///tmp/.colima/default/docker.sock\n",
 ])(
-  "Postgres helper refuses ambiguous raw Docker endpoint %j before mutations",
+  "Postgres helper refuses unsafe Docker endpoint %j before mutations",
   async (endpoint) => {
     const fixture = await mkdtemp(path.join(tmpdir(), "postgres-endpoint-"));
     try {
@@ -279,7 +280,7 @@ exit 99
         ],
         {
           env: {
-            PATH: `${fixture}:${process.env["PATH"] ?? ""}`,
+            PATH: `${fixture}:/usr/bin:/bin`,
             PARITY_FIXTURE: fixture,
           },
           stdout: "pipe",

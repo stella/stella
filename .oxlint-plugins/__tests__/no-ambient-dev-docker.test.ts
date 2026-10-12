@@ -2,6 +2,32 @@ import { expect, test } from "bun:test";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
 
+test("the registered fixture exercises its failing and clean cases", async () => {
+  const fixture = await Bun.file(
+    new URL(
+      "../__fixtures__/no-ambient-dev-docker.fixture.ts",
+      import.meta.url,
+    ),
+  ).text();
+  const expected =
+    fixture
+      .split("\n")
+      .findIndex((line) => line.includes("export const ambientExecutable")) + 1;
+  expect(
+    await lintSingleRule(
+      "no-ambient-dev-docker",
+      fixture.replace(
+        "oxlint-disable-next-line",
+        "fixture-expected-diagnostic",
+      ),
+      {
+        sourcePath:
+          ".oxlint-plugins/__fixtures__/no-ambient-dev-docker.fixture.ts",
+      },
+    ),
+  ).toEqual([expected]);
+});
+
 test("every development Docker executable reference requires the pinned owner", async () => {
   const source = [
     'Bun.spawnSync(["docker", "ps"]);',

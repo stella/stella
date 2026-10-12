@@ -132,11 +132,14 @@ export const resolveDevDockerKeeper = ({
   configuredLabel,
   run,
 }: ResolveDevDockerKeeperOptions) => {
-  if (!resolver && configuredLabel) {
+  const colimaSocket =
+    target.host.startsWith("unix:///") &&
+    new URL(target.host).pathname.split("/").includes(".colima");
+  if (!resolver && (configuredLabel || colimaSocket)) {
     return Result.err(
       new DockerEndpointError({
         message:
-          "A keeper resolver is required to validate a configured development keeper.",
+          "A keeper resolver is required to validate a Colima endpoint or configured development keeper.",
       }),
     );
   }

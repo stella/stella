@@ -221,7 +221,7 @@ test.skipIf(process.platform === "win32" || !Bun.which("docker"))(
       }
     } finally {
       for (const { server } of servers) {
-        server.stop(true);
+        await server.stop(true);
       }
       rmSync(root, { recursive: true, force: true });
     }
@@ -307,4 +307,41 @@ test("a configured keeper is refused without its policy resolver", () => {
   expect(result).toMatchObject({
     error: { message: expect.stringContaining("resolver is required") },
   });
+});
+
+test.each([
+  "unix:///tmp/.colima/default/docker.sock",
+  "unix:///tmp/.colima/dev/docker.sock",
+])(
+  "a Colima endpoint %s requires policy validation even without a keeper label",
+  (host) => {
+    const target = resolveDockerTarget({
+      env: {},
+      inspect: () => Result.ok(host),
+    }).unwrap();
+    const result = resolveDevDockerKeeper({
+      target,
+      resolver: null,
+      configuredLabel: undefined,
+      run: () => panic("No command may run without the policy resolver"),
+    });
+    expect(result).toMatchObject({
+      error: { message: expect.stringContaining("resolver is required") },
+    });
+  },
+);
+
+test("unmanaged non-Colima Docker remains available without a keeper resolver", () => {
+  const target = resolveDockerTarget({
+    env: {},
+    inspect: () => Result.ok("unix:///var/run/docker.sock"),
+  }).unwrap();
+  expect(
+    resolveDevDockerKeeper({
+      target,
+      resolver: null,
+      configuredLabel: undefined,
+      run: () => panic("No keeper command is needed for an unmanaged endpoint"),
+    }),
+  ).toMatchObject({ status: "ok", value: undefined });
 });

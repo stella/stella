@@ -19,11 +19,14 @@ export default eslintCompatPlugin({
           before() {
             const filename = filenameForContext(context);
             scoped =
-              /\/packages\/scripts\/src\/(?:dev-[^/]+|agent-session)\.ts$/u.test(
+              filename.endsWith(
+                "/.oxlint-plugins/__fixtures__/no-ambient-dev-docker.fixture.ts",
+              ) ||
+              (/\/packages\/scripts\/src\/(?:dev-[^/]+|agent-session)\.ts$/u.test(
                 filename,
               ) &&
-              !filename.endsWith(".test.ts") &&
-              !filename.endsWith("/dev-docker.ts");
+                !filename.endsWith(".test.ts") &&
+                !filename.endsWith("/dev-docker.ts"));
           },
           TemplateLiteral(node) {
             const value = staticStringValue(node);
