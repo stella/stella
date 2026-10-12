@@ -54,7 +54,10 @@ const referencedImageDestinations = (readme: string): string[] => {
 
 // GitHub reads `#gh-dark-mode-only` style fragments and query strings off an
 // image URL; the file on disk is the path before them.
-const imageFilePath = (reference: string) => reference.replace(/[?#].*$/u, "");
+const imageFilePath = (reference: string) => {
+  const suffix = reference.search(/[?#]/u);
+  return suffix === -1 ? reference : reference.slice(0, suffix);
+};
 
 // Every image a README line can name: `src`, each `srcset` candidate (without
 // its width or density descriptor) and Markdown `![alt](path "title")`.
