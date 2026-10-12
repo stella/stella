@@ -34,7 +34,6 @@ export type {
 type ServerLike = {
   requestIP: (request: Request) => { address: string } | null;
 };
-type AuditMetadata = Record<string, unknown>;
 type OrganizationAuditRecorderBindings = {
   account?: never;
   organizationId: SafeId<"organization">;
@@ -50,10 +49,7 @@ const nullableHeader = (headers: Headers, name: string): string | null => {
   return value && value.length > 0 ? value : null;
 };
 
-const baseRequestMetadata = (
-  request: Request,
-  server: ServerLike | null,
-): AuditMetadata => ({
+const baseRequestMetadata = (request: Request, server: ServerLike | null) => ({
   ipAddress: resolveClientIp(request, server),
   // The raw forwarded-for chain stays in metadata for forensic
   // inspection, even though `ipAddress` only trusts it when the
