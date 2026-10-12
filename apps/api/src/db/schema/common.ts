@@ -195,6 +195,11 @@ export type VerdictRationaleJustificationBlock = {
 type DecisionPassageJustificationBlock = {
   kind: "decision-passage";
   anchorId: string;
+  /**
+   * The number the court printed on the cited block, read from the
+   * decision's AST when the answer was written; null when it printed none.
+   */
+  courtParagraphNumber: number | null;
   excerpt: string;
 };
 

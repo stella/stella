@@ -1,8 +1,6 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
-
-setDefaultTimeout(30_000);
 
 const lint = async (source: string, sourcePath = "scripts/example.ts") =>
   await lintSingleRule("no-raw-child-exit-status", source, { sourcePath });

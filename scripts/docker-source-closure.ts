@@ -162,12 +162,15 @@ export const copySource = (
   }
 };
 
-const importCache = new Map<string, { source: string; imports: string[] }>();
+const importCache = new Map<
+  string,
+  { source: string; imports: string[]; unresolved: string[] }
+>();
 
-const runtimeImports = (file: string, source: string): string[] => {
+const readRuntimeImports = (file: string, source: string) => {
   const cached = importCache.get(file);
   if (cached?.source === source) {
-    return cached.imports;
+    return cached;
   }
   const parsed = ts.createSourceFile(
     file,
@@ -176,6 +179,7 @@ const runtimeImports = (file: string, source: string): string[] => {
     false,
   );
   const imports: string[] = [];
+  const unresolved: string[] = [];
   const visit = (node: ts.Node) => {
     if (
       ts.isImportDeclaration(node) &&
@@ -221,15 +225,28 @@ const runtimeImports = (file: string, source: string): string[] => {
           ts.isNoSubstitutionTemplateLiteral(argument))
       ) {
         imports.push(argument.text);
+      } else {
+        const line =
+          parsed.getLineAndCharacterOfPosition(node.getStart(parsed)).line + 1;
+        unresolved.push(`${file}:${line}: nonliteral runtime import`);
       }
     }
     ts.forEachChild(node, visit);
   };
   visit(parsed);
   // Literal edges depend on file content; their resolution still uses each stage.
-  importCache.set(file, { source, imports });
-  return imports;
+  const result = { source, imports, unresolved };
+  importCache.set(file, result);
+  return result;
 };
+
+const runtimeImports = (file: string, source: string): string[] =>
+  readRuntimeImports(file, source).imports;
+
+export const unresolvedRuntimeImports = (
+  file: string,
+  source: string,
+): readonly string[] => readRuntimeImports(file, source).unresolved;
 
 const configurationOptions = (
   root: string,

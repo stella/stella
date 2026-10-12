@@ -13,14 +13,14 @@ type GeneratorCheck =
 
 export type Generator = {
   id: string;
-  outputKind: "committed" | "derived";
   outputs: readonly string[];
   blocks?: readonly { path: string; begin: string; end: string }[];
   inputs: readonly string[];
   write: readonly string[];
   autofix: boolean;
   after: readonly string[];
-} & GeneratorCheck;
+} & GeneratorCheck &
+  ({ outputKind: "committed" } | { outputKind: "derived" });
 
 const MODEL_CATALOG_INPUTS = [
   ".github/workflows/ci.yml",
@@ -37,7 +37,7 @@ const MODEL_CATALOG_INPUTS = [
   "packages/scripts/src/model-catalog-rates-gen.ts",
 ] as const;
 
-export const GENERATORS = [
+const GENERATOR_DECLARATIONS = [
   {
     id: "status-tables",
     outputKind: "committed",
@@ -194,6 +194,37 @@ export const GENERATORS = [
     checkedBy: "CLI sharded registry and derived runtime guard",
     autofix: true,
     after: ["cli-registry"],
+  },
+  {
+    id: "api-typecheck-projects",
+    outputKind: "committed",
+    outputs: [
+      "apps/api/tsconfig.declarations.json",
+      "apps/api/tsconfig.src.json",
+      "apps/api/tsconfig.tests.json",
+      "turbo.json",
+    ],
+    inputs: [
+      "apps/api/**",
+      "apps/*/tsconfig*.json",
+      "packages/**/*.ts",
+      "packages/**/*.tsx",
+      "packages/**/tsconfig*.json",
+      "{apps,packages}/*/package.json",
+      "scripts/**/*.ts",
+      "tsconfig*.json",
+      "types/**",
+      "package.json",
+      "bunfig.toml",
+      ".npmrc",
+      "bun.lock",
+      "patches/**",
+    ],
+    write: ["bun", "packages/scripts/src/api-typecheck-regenerate.ts"],
+    check: ["bun", "scripts/typecheck-coverage.ts"],
+    checkedBy: "Typecheck coverage",
+    autofix: true,
+    after: ["cli-runtime", "capability-runtime"],
   },
   {
     id: "mcp-app-bundles",
@@ -834,6 +865,10 @@ export const GENERATORS = [
   },
 ] as const satisfies readonly Generator[];
 
+export const GENERATORS: readonly (Generator & {
+  id: (typeof GENERATOR_DECLARATIONS)[number]["id"];
+})[] = GENERATOR_DECLARATIONS;
+
 export const GUARD_A_EXCLUSIONS = [
   {
     glob: "provenance/**/THIRD-PARTY-NOTICES*.txt",
@@ -891,7 +926,7 @@ const outputFeedsInput = (output: string, input: string) =>
   matchesGeneratedGlob(output, globWitness(input));
 
 export const generatorsForFiles = (files: readonly string[]) => {
-  const selected = new Set(
+  const selected = new Set<string>(
     GENERATORS.filter(
       (generator) =>
         generator.autofix &&
