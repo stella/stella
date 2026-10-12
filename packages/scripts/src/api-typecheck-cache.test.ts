@@ -129,6 +129,23 @@ test("declaration consumers run after emission and invalidate with API source ch
       }
     }
   }
+  const producer = fixtureTasks[EMITTER];
+  if (!isRecord(producer) || !Array.isArray(producer["inputs"])) {
+    panic("Missing producer inputs");
+  }
+  const inputs = producer["inputs"];
+  const sharedSelector = inputs.find(
+    (input) =>
+      typeof input === "string" &&
+      /^\$TURBO_ROOT\$\/packages\/[^/]+\/\*\*$/u.test(input),
+  );
+  if (typeof sharedSelector !== "string") {
+    panic("Missing shared workspace producer input");
+  }
+  const shared = path.posix.join(
+    sharedSelector.replace("$TURBO_ROOT$/", "").slice(0, -3),
+    "src/cache-contract-fixture.ts",
+  );
   const directory = mkdtempSync(path.join(tmpdir(), "api-typecheck-cache-"));
   const write = (filename: string, content: string) => {
     const target = path.join(directory, filename);
@@ -251,7 +268,7 @@ test("declaration consumers run after emission and invalidate with API source ch
         "if (process.argv[2] === '@stll/api#generate:typecheck-declarations') {",
         "mkdirSync(path.dirname(output), { recursive: true });",
         "writeFileSync(output, readFileSync(path.join(root, 'apps/api/src/mcp/apps/manifest.ts'), 'utf8').split('\\n')[0]);",
-        "const shared = path.join(root, 'packages/chat/src/resume-contract.ts');",
+        `const shared = path.join(root, ${JSON.stringify(shared)});`,
         "if (existsSync(shared)) writeFileSync(output, readFileSync(shared, 'utf8'));",
         "for (const name of configs) writeFileSync(path.join(prepared, name), JSON.stringify({ files: [], prepared: true }));",
         "} else if (!existsSync(output) || configs.some(name => !existsSync(path.join(prepared, name)))) process.exit(1);",
@@ -396,11 +413,6 @@ test("declaration consumers run after emission and invalidate with API source ch
     run(command);
     expect(executions()).toHaveLength(beforePatch + consumers.size + 1);
 
-    const producer = fixtureTasks[EMITTER];
-    if (!isRecord(producer) || !Array.isArray(producer["inputs"])) {
-      panic("Missing producer inputs");
-    }
-    const inputs = producer["inputs"];
     producer["inputs"] = inputs.filter(
       (input) => input !== "$TURBO_ROOT$/patches/**",
     );
@@ -423,7 +435,6 @@ test("declaration consumers run after emission and invalidate with API source ch
     write("patches/dependency.patch", "dependency types v4\n");
     run(command);
     expect(executions()).toHaveLength(beforeRestoredPatch + consumers.size + 1);
-    const shared = "packages/chat/src/resume-contract.ts";
     write(shared, "export type Shared = string;\n");
     run(command);
     const beforeShared = executions().length;
@@ -433,9 +444,7 @@ test("declaration consumers run after emission and invalidate with API source ch
     expect(readFileSync(output, "utf-8")).toBe(
       "export type Shared = number;\n",
     );
-    producer["inputs"] = inputs.filter(
-      (input) => input !== "$TURBO_ROOT$/packages/chat/**",
-    );
+    producer["inputs"] = inputs.filter((input) => input !== sharedSelector);
     writeTasks();
     run(command);
     const beforeMissingWorkspace = executions().length;
