@@ -22,7 +22,12 @@ test("committed profile budgets accept their recording and reject buffer regress
         },
         metrics,
       ),
-    ).toEqual(["shared buffer budget exceeded"]);
+    ).toEqual([
+      {
+        kind: "shared-buffer-budget",
+        message: `shared buffer budget exceeded: measured ${Math.floor(metrics.sharedBlocks * 1.25) + 1} > budget ${metrics.sharedBlocks * 1.25} (baseline ${metrics.sharedBlocks} × 1.25)`,
+      },
+    ]);
   }
 });
 
@@ -64,23 +69,60 @@ test("shared buffers count the root once, including cache misses", () => {
   ).toEqual({ sharedBlocks: 23, executionTimeMs: 2 });
 });
 
-test("budgets enforce buffer headroom independently and require both time thresholds", () => {
-  const base = { sharedBlocks: 100, executionTimeMs: 2 };
+test("buffer budgets reject extra work even when execution time improves", () => {
+  const baseline = { sharedBlocks: 356, executionTimeMs: 7.578 };
   expect(
-    budgetViolations({ sharedBlocks: 125, executionTimeMs: 10 }, base),
+    budgetViolations({ sharedBlocks: 445, executionTimeMs: 1 }, baseline),
   ).toEqual([]);
   expect(
-    budgetViolations({ sharedBlocks: 126, executionTimeMs: 1 }, base),
-  ).toEqual(["shared buffer budget exceeded"]);
-  expect(
-    budgetViolations({ sharedBlocks: 100, executionTimeMs: 10.001 }, base),
-  ).toEqual(["execution time budget exceeded"]);
+    budgetViolations({ sharedBlocks: 450, executionTimeMs: 1 }, baseline),
+  ).toEqual([
+    {
+      kind: "shared-buffer-budget",
+      message:
+        "shared buffer budget exceeded: measured 450 > budget 445 (baseline 356 × 1.25)",
+    },
+  ]);
+});
+
+test("execution time noise above the former budget passes below the hang guard", () => {
+  const baseline = { sharedBlocks: 356, executionTimeMs: 7.578 };
+  for (const executionTimeMs of [15.2, 50, 500, 1000]) {
+    expect(
+      budgetViolations({ sharedBlocks: 356, executionTimeMs }, baseline),
+    ).toEqual([]);
+  }
+});
+
+test("execution time hang guard uses a floor and reports measured versus guard", () => {
   expect(
     budgetViolations(
-      { sharedBlocks: 100, executionTimeMs: 20 },
-      { sharedBlocks: 100, executionTimeMs: 10 },
+      { sharedBlocks: 356, executionTimeMs: 1203.4 },
+      { sharedBlocks: 356, executionTimeMs: 7.578 },
     ),
+  ).toEqual([
+    {
+      kind: "execution-time-hang-guard",
+      message:
+        "execution time hang guard exceeded: median 1203.4 ms > guard 1000 ms (baseline 7.578 ms × 25, floor 1000 ms)",
+    },
+  ]);
+});
+
+test("execution time hang guard scales with slower recorded queries", () => {
+  const baseline = { sharedBlocks: 100, executionTimeMs: 80 };
+  expect(
+    budgetViolations({ sharedBlocks: 100, executionTimeMs: 2000 }, baseline),
   ).toEqual([]);
+  expect(
+    budgetViolations({ sharedBlocks: 100, executionTimeMs: 2000.1 }, baseline),
+  ).toEqual([
+    {
+      kind: "execution-time-hang-guard",
+      message:
+        "execution time hang guard exceeded: median 2000.1 ms > guard 2000 ms (baseline 80 ms × 25, floor 1000 ms)",
+    },
+  ]);
 });
 
 test("median supports odd and even samples and rejects malformed measurements", () => {

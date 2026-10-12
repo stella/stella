@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -510,6 +511,7 @@ const defineFlagTests = (flag: boolean) => {
           data: [
             {
               type: "tool-call",
+              metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
               id: generatedDraft.toolCallId,
               name: "create-document",
               arguments: "{}",

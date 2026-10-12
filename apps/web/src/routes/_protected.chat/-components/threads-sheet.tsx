@@ -157,14 +157,22 @@ export const ThreadsSheet = ({
   return (
     <Sheet onOpenChange={setIsOpen} open={isOpen}>
       {triggerVariant === "section" ? (
-        <SheetTrigger
+        <Tooltip
+          content={t("chat.landing.openChatHistory")}
           render={
-            <button className={LANDING_SECTION_HEADING_CLASS} type="button" />
+            <SheetTrigger
+              render={
+                <button
+                  className={LANDING_SECTION_HEADING_CLASS}
+                  type="button"
+                />
+              }
+            />
           }
         >
           {icon ?? <HistoryIcon className="size-4" />}
           {triggerLabel}
-        </SheetTrigger>
+        </Tooltip>
       ) : (
         <SheetTrigger
           render={
