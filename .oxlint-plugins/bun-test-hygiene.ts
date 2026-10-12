@@ -66,6 +66,35 @@ import type { AstNode, ScopeContext } from "./utils.ts";
 const BUN_TEST_MODULE = "bun:test";
 const EXPECT_EXPORT = "expect";
 
+const FORCED_DATABASE_DROP =
+  /(?:^|;)\s*DROP\s+DATABASE\b[^;]*\bWITH\s*\(\s*FORCE\b/iu;
+const SQL_COMMENTS = /\/\*[\s\S]*?\*\/|--[^\r\n]*/gu;
+const SQL_QUOTED_VALUES = /"(?:[^"]|"")*"|'(?:[^']|'')*'/gu;
+
+const databaseDropText = (node: unknown) => {
+  if (isStringLiteral(node)) {
+    return node.value;
+  }
+  if (
+    !isAstNode(node) ||
+    node.type !== "TemplateLiteral" ||
+    !Array.isArray(node.quasis)
+  ) {
+    return null;
+  }
+  return node.quasis
+    .map((quasi: unknown) => {
+      const value = isAstNode(quasi) ? quasi.value : null;
+      return typeof value === "object" &&
+        value !== null &&
+        "cooked" in value &&
+        typeof value.cooked === "string"
+        ? value.cooked
+        : "";
+    })
+    .join(" __identifier__ ");
+};
+
 const TEST_KIND = { describe: "describe", test: "test" } as const;
 type TestKind = (typeof TEST_KIND)[keyof typeof TEST_KIND];
 
@@ -405,6 +434,39 @@ const constructedClient = (
 export default eslintCompatPlugin({
   meta: { name: "bun-test-hygiene" },
   rules: {
+    "no-forced-database-drop": {
+      meta: {
+        type: "problem",
+        messages: {
+          forcedDrop:
+            "Close fixture-owned database clients before a normal DROP DATABASE. FORCE requires backend-termination privileges and can terminate another fixture's sessions.",
+        },
+      },
+      createOnce(context) {
+        const report = (
+          node: NonNullable<Parameters<typeof context.report>[0]["node"]>,
+        ) => {
+          const text = databaseDropText(node);
+          if (
+            text !== null &&
+            FORCED_DATABASE_DROP.test(
+              text
+                .replace(SQL_QUOTED_VALUES, " __value__ ")
+                .replace(SQL_COMMENTS, " "),
+            )
+          ) {
+            context.report({ node, messageId: "forcedDrop" });
+          }
+        };
+        return {
+          before() {
+            return /\bFORCE\b|\\[ux]/iu.test(context.sourceCode.text);
+          },
+          Literal: report,
+          TemplateLiteral: report,
+        };
+      },
+    },
     "no-focused-tests": {
       meta: {
         type: "problem",
