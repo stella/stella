@@ -11,6 +11,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 const config = {
+  contract: "patch",
   permissions: { legalReaderAnnotation: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   description: "Ask a follow-up in your reader answer thread.",
