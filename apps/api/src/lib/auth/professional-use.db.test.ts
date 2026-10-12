@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import Elysia from "elysia";
@@ -290,13 +290,16 @@ describe("professional-use acceptance", () => {
 
     const accepted = await accept(person, PROFESSIONAL_USE_STATEMENT_VERSION);
     expect(accepted.status).toBe(200);
-    expect(await accepted.json()).toMatchObject({
+    const ownAcceptance =
+      (await userAcceptances([person.userId])).at(0) ??
+      panic("Missing authenticated account acceptance");
+    expect(await accepted.json()).toEqual({
       status: "accepted",
-      ...CURRENT_VERSIONS,
+      statementVersion: ownAcceptance.statementVersion,
+      termsVersion: ownAcceptance.termsVersion,
+      acceptedAt: ownAcceptance.acceptedAt.toISOString(),
     });
-    expect(await userAcceptances([person.userId])).toMatchObject([
-      CURRENT_VERSIONS,
-    ]);
+    expect(ownAcceptance).toMatchObject(CURRENT_VERSIONS);
     expect(await organizationAcceptances([organizationId])).toMatchObject([
       { acceptedByUserId: person.userId, ...CURRENT_VERSIONS },
     ]);
