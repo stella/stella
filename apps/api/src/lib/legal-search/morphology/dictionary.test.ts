@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import { FOLDED_TOKENIZER } from "@/api/lib/legal-search/corpus-index-config";
 import {
   type ExpansionDictionaryIdentity,
@@ -119,8 +121,8 @@ test("the fold is lowercase, form-independent, and ASCII", () => {
   // The same word decomposed (routine from extracted PDFs and macOS
   // filesystems) must reach the same key, or half the corpus is unreachable
   // from half the keyboards.
-  expect(foldExpansionKey("ŠKODY".normalize("NFD"))).toBe("skody");
-  expect(foldExpansionKey("žalobě".normalize("NFD"))).toBe(
+  expect(foldExpansionKey(normalizeUnicode("ŠKODY", "NFD"))).toBe("skody");
+  expect(foldExpansionKey(normalizeUnicode("žalobě", "NFD"))).toBe(
     foldExpansionKey("žalobě"),
   );
   // `ł` has no canonical decomposition, so a mark strip leaves it standing
@@ -152,7 +154,7 @@ test("the fold lowercases before it folds, the order the index applies", () => {
 // canonicalisation would reject decomposed spellings of words it accepts
 // precomposed.
 test("a decomposed word is still a surface form", () => {
-  expect(isSurfaceForm("žalobě".normalize("NFD"))).toBe(true);
+  expect(isSurfaceForm(normalizeUnicode("žalobě", "NFD"))).toBe(true);
   expect(isSurfaceForm("žalobě")).toBe(true);
   expect(isSurfaceForm("21cdo")).toBe(false);
 });

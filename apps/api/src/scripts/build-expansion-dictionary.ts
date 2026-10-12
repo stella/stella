@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
@@ -429,7 +430,7 @@ const runExpansionDictionaryBuild = async (): Promise<void> => {
         if (typeof word !== "string" || !Number.isFinite(ndoc)) {
           continue;
         }
-        const canonical = word.normalize("NFC");
+        const canonical = normalizeUnicode(word, "NFC");
         if (isSurfaceForm(canonical)) {
           tokens.set(canonical, ndoc);
         }
