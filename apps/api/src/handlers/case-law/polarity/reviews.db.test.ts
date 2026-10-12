@@ -169,6 +169,8 @@ const ingest = async ({
   expect(result.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
 };
 
+const REVIEW_POLARITY_SOURCE = "review";
+
 const readCitation = async (citationText: string) => {
   const [row] = await db
     .select({
@@ -177,6 +179,7 @@ const readCitation = async (citationText: string) => {
       citationKey: caseLawCitations.citationKey,
       polarity: caseLawCitations.polarity,
       polarityRuleId: caseLawCitations.polarityRuleId,
+      polaritySource: caseLawCitations.polaritySource,
     })
     .from(caseLawCitations)
     .where(eq(caseLawCitations.citationText, citationText))
@@ -498,10 +501,13 @@ describe("reviewed citation labels", () => {
     // The same document on a moved page: the reviewed row is the one the
     // document and its review describe, so the refresh leaves it untouched.
     expect(await readCitation(cited)).toEqual({
-      ...labelled,
+      id: labelled.id,
+      citingDecisionId: labelled.citingDecisionId,
+      citationKey: labelled.citationKey,
       polarity: POLARITY.POSITIVE,
       polarityRuleId: null,
-    });
+      polaritySource: REVIEW_POLARITY_SOURCE,
+    } satisfies LabelledRow);
     expect(await tupleHeader(labelled.id)).toEqual(header);
     // The rule reads the mention and neither labels the row nor counts it.
     expect(await readRule(ruleId)).toEqual(before);
@@ -1167,7 +1173,7 @@ describe("reviewed citation labels", () => {
       expect(await readCitation(cited)).toMatchObject({
         polarity: POLARITY.NEUTRAL,
         polarityRuleId: null,
-        polaritySource: "review",
+        polaritySource: REVIEW_POLARITY_SOURCE,
       });
     },
   );
@@ -1233,7 +1239,7 @@ describe("reviewed citation labels", () => {
     expect(await readCitation(cited)).toMatchObject({
       polarity: POLARITY.POSITIVE,
       polarityRuleId: null,
-      polaritySource: "review",
+      polaritySource: REVIEW_POLARITY_SOURCE,
     });
   });
 

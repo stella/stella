@@ -10,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { installTimeoutMs } from "./ci-install";
 import {
   boundedInstallProblems,
   installWorkflowPolicy,
@@ -58,97 +59,52 @@ test("Windows installs and every explicit CI cold install retain bounded logs", 
   }
 });
 
-test("the real Windows dry-run budget requires shared cache restoration and warm/cold evidence before installation", () => {
+test("the real Windows dry-run deadline retains platform headroom regardless of cache restoration", () => {
   const workflow: unknown = Bun.YAML.parse(
     readFileSync(path.join(REPO_ROOT, CI_WORKFLOW), "utf-8"),
   );
-  if (
-    typeof workflow !== "object" ||
-    workflow === null ||
-    !("jobs" in workflow) ||
-    typeof workflow.jobs !== "object" ||
-    workflow.jobs === null ||
-    !("desktop-windows-dry-run" in workflow.jobs)
-  ) {
-    expect.unreachable("Missing real Windows dry-run job");
-  }
-  const job = workflow.jobs["desktop-windows-dry-run"];
-  if (typeof job !== "object" || job === null) {
-    expect.unreachable("Invalid real Windows dry-run job");
-  }
   const steps = workflowJobSteps(workflow, "desktop-windows-dry-run");
-  const check = (candidateSteps: unknown[]) =>
-    boundedInstallProblems(
-      { jobs: { fixture: { ...job, steps: candidateSteps } } },
-      "windows",
-    );
-  const restore = steps.find(
-    (step) =>
-      typeof step["uses"] === "string" &&
-      step["uses"].startsWith("stella/.github/actions/setup-bun-cached@"),
-  );
   const install = steps.find(
     (step) =>
       typeof step["run"] === "string" &&
       step["run"].includes("scripts/ci-install.ts"),
   );
-  const probe = steps.find(
-    (step) =>
-      typeof step["run"] === "string" && step["run"].includes("compgen -G"),
-  );
-  if (
-    restore === undefined ||
-    install === undefined ||
-    probe === undefined ||
-    typeof probe["run"] !== "string"
-  ) {
-    expect.unreachable("Missing real cache-aware install");
+  if (install === undefined) {
+    expect.unreachable("Missing bounded Windows install");
   }
-  expect(install["timeout-minutes"]).toBe(5);
-  expect(check(steps)).toEqual([]);
-  const withoutRestore = steps.filter((step) => step !== restore);
-  const replaceProbe = (run: string) =>
-    steps.map((step) => (step === probe ? { ...step, run } : step));
-
-  for (const invalid of [
-    withoutRestore,
-    steps.filter((step) => step !== probe),
-    [...steps.filter((step) => step !== probe), probe],
-    steps.map((step) =>
-      step === install
-        ? { ...step, env: { CI_INSTALL_CACHE_RESTORED: "true" } }
-        : step,
-    ),
-    steps.map((step) => (step === probe ? { ...step, if: "false" } : step)),
-    steps.map((step) => (step === restore ? { ...step, if: "false" } : step)),
-    [...withoutRestore, restore],
-    steps.map((step) =>
-      step === restore
-        ? { ...step, with: { "install-cache": "runner" } }
-        : step,
-    ),
-    replaceProbe(probe["run"].replace("compgen -G", "echo")),
-    replaceProbe(
-      probe["run"].replace("cache-restored=true", "cache-restored=false"),
-    ),
-    replaceProbe(
-      probe["run"].replace(
-        'echo "cache-restored=false" >> "$GITHUB_OUTPUT"',
-        "",
-      ),
-    ),
-    replaceProbe(
-      probe["run"].replace("$HOME/.bun/install/cache/*", "$HOME/.bun/bin/*"),
-    ),
-    ...[3, 6].map((limit) =>
-      steps.map((step) =>
-        step === install ? { ...step, "timeout-minutes": limit } : step,
-      ),
-    ),
-  ]) {
-    expect(check(invalid)).toContain(
-      "fixture: install needs a bounded step timeout",
+  const minimum = Math.ceil(installTimeoutMs("win32") / 60_000) + 1;
+  expect(install["timeout-minutes"]).toBe(minimum);
+  const check = (candidateSteps: unknown[]) =>
+    boundedInstallProblems(
+      {
+        jobs: {
+          fixture: {
+            "runs-on": "windows-latest",
+            "timeout-minutes": 10,
+            steps: candidateSteps,
+          },
+        },
+      },
+      "windows",
     );
+  expect(check(steps)).toEqual([]);
+  expect(
+    check(
+      steps.filter(
+        (step) =>
+          typeof step["uses"] !== "string" ||
+          !step["uses"].startsWith("stella/.github/actions/setup-bun-cached@"),
+      ),
+    ),
+  ).toEqual([]);
+  for (const limit of [minimum - 1, minimum + 1]) {
+    expect(
+      check(
+        steps.map((step) =>
+          step === install ? { ...step, "timeout-minutes": limit } : step,
+        ),
+      ),
+    ).toContain("fixture: install needs a bounded step timeout");
   }
 });
 
@@ -160,7 +116,7 @@ test("the install guard rejects bypasses, unbounded steps and lost logs", () => 
   };
   const install = {
     run: 'bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/scripts.log" --ignore-scripts',
-    "timeout-minutes": 3,
+    "timeout-minutes": 5,
   };
   const workflow = (steps: unknown[]) => ({
     jobs: {

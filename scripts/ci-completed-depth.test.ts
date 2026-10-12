@@ -12,7 +12,7 @@ import { createSha256 } from "@stll/sha256/node";
 
 import { PILOT_ALWAYS, pilotQueueJobs } from "./ci-pr-pilot-plan";
 import { contextWithPlanOutputs, evaluate } from "./github-expression";
-import { prDepthJobs, thinJobs } from "./main-heavy-plan";
+import { prDepthJobs, queueGateJobs, thinJobs } from "./main-heavy-plan";
 
 // Wall-clock checks: no reused or queued plan can certify them, so they run.
 const ALWAYS_RUN: readonly string[] = PILOT_ALWAYS;
@@ -1102,6 +1102,7 @@ test("thin groups run and require every deferred normal PR check unless normal c
       .map((scopeName) => [scopeName, "true"]),
   );
   const thin = thinJobs(workflow);
+  const gates = queueGateJobs(workflow);
   for (const options of [
     { artifacts: [artifact("fast", "pilot-fast-v1")] },
     { artifacts: [] },
@@ -1170,6 +1171,7 @@ test("thin groups run and require every deferred normal PR check unless normal c
           result:
             thin.includes(name) ||
             queueJobs.includes(name) ||
+            gates.includes(name) ||
             name === "desktop-rust-tests"
               ? "success"
               : "skipped",
@@ -1177,7 +1179,7 @@ test("thin groups run and require every deferred normal PR check unless normal c
       ]),
     );
     dependencies["ci-plan"] = { result: "success" };
-    const runAggregation = (needs: typeof dependencies) =>
+    const runAggregation = (needs: typeof dependencies, plan = allScopes) =>
       Bun.spawnSync(["bash", "-e", "-c", aggregation.run ?? ""], {
         env: {
           ...process.env,
@@ -1195,11 +1197,32 @@ test("thin groups run and require every deferred normal PR check unless normal c
           TRUSTED: "true",
           THIN_JOBS: JSON.stringify(thin),
           QUEUE_REQUIRED_JOBS: JSON.stringify(queueJobs),
-          PLAN: JSON.stringify(allScopes),
+          PLAN: JSON.stringify(plan),
           NEEDS: JSON.stringify(needs),
         },
       });
     expect(runAggregation(dependencies).exitCode).toBe(0);
+    for (const job of gates) {
+      expect(evaluate(jobs[job]?.if ?? "true", context), job).toBe(true);
+      const scopeName = scopes[job];
+      if (!scopeName) {
+        throw new Error(`Missing queue gate scope: ${job}`);
+      }
+      for (const outcome of ["skipped", "failure"]) {
+        expect(
+          runAggregation({ ...dependencies, [job]: { result: outcome } })
+            .exitCode,
+          `${job}/${completion}/${outcome}`,
+        ).toBe(1);
+      }
+      expect(
+        runAggregation(
+          { ...dependencies, [job]: { result: "skipped" } },
+          { ...allScopes, [scopeName]: "false" },
+        ).exitCode,
+        `${job}/${completion}/unplanned`,
+      ).toBe(0);
+    }
     expect(evaluate(jobs["desktop-rust-tests"]?.if ?? "false", context)).toBe(
       true,
     );
