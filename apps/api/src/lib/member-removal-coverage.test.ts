@@ -128,6 +128,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "legal_list_generation_candidate_sources.locator",
   "legal_list_item_sources.locator",
   "legal_list_verification_runs.evidence",
+  "legal_reader_answer_messages.citations",
+  "legal_reader_answer_messages.usage",
   "legislation_documents.sections",
   "legislation_documents.document_ast",
   "legislation_documents.metadata",
@@ -215,6 +217,10 @@ const RETAINED_MEMBER_COLUMNS = {
     "Account-scoped record; organization removal does not erase the user account.",
   "action_cost_records.user_id":
     "Retained accounting, telemetry or contribution history; no membership grant.",
+  "organization_professional_use_acceptances.accepted_by_user_id":
+    "Acceptance record of who created the organization; grants no membership.",
+  "user_professional_use_acceptances.user_id":
+    "Account-scoped acceptance record; organization removal does not erase the user account.",
   "agent_skill_comments.author_id":
     "Retained attribution or request history; this column grants no matter membership.",
   "agent_skill_comments.resolved_by":
@@ -334,6 +340,8 @@ const RETAINED_MEMBER_COLUMNS = {
   "legal_lists.created_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_reader_annotations.user_id":
+    "User-owned matter content or preferences; current organization/matter membership gates access.",
+  "legal_reader_answers.user_id":
     "User-owned matter content or preferences; current organization/matter membership gates access.",
   "matter_inbound_addresses.created_by":
     "Retained attribution or request history; this column grants no matter membership.",

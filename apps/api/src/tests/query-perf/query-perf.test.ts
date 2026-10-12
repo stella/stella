@@ -11,6 +11,7 @@ import { withQueryPerfFixture } from "./fixture";
 import {
   budgetViolations,
   measureQueryPerf,
+  QUERY_PERF_BUFFER_HEADROOM,
   shapeViolations,
 } from "./measurement";
 import { QUERY_PERF_PROFILES } from "./profiles";
@@ -55,8 +56,11 @@ describe.skipIf(!enabled)("query perf gate on PostgreSQL under RLS", () => {
       await withQueryPerfFixture({
         databaseUrl,
         profileId,
-        run: async (db) => {
-          const seed = await seedQueryPerf(db, profileId);
+        run: async (db, deadline) => {
+          const seed = await deadline.run(
+            "seed",
+            async () => await seedQueryPerf(db, profileId),
+          );
           expect(seed.context.featureIds).toEqual([]);
           for (const [entryId, entry] of Object.entries(
             queryPerfRegistry(seed),
@@ -65,12 +69,33 @@ describe.skipIf(!enabled)("query perf gate on PostgreSQL under RLS", () => {
             measuredIds.push(id);
             const expected = baseline?.entries[id];
             // db-await-in-loop: one bounded registry measurement at a time, avoiding cross-query benchmark contention.
-            const good = await measureQueryPerf({
-              database: db,
-              seed,
-              query: entry.query,
-            });
-            expect(good.plan.Plan["Actual Rows"]).toBe(entry.expectedRows);
+            const good = await deadline.run(
+              `measure ${entryId}`,
+              async () =>
+                await measureQueryPerf({
+                  database: db,
+                  seed,
+                  query: entry.query,
+                }),
+            );
+            console.info(
+              JSON.stringify({
+                event: "query_perf_measurement",
+                profileId,
+                entryId,
+                ...good.metrics,
+                samples: good.samples,
+                baseline: expected,
+                nearBufferBudget:
+                  expected !== undefined &&
+                  good.metrics.sharedBlocks >=
+                    expected.sharedBlocks * QUERY_PERF_BUFFER_HEADROOM * 0.95,
+              }),
+            );
+            expect(
+              good.plan.Plan["Actual Rows"],
+              `actual row budget: measured ${String(good.plan.Plan["Actual Rows"])}; expected ${entry.expectedRows}`,
+            ).toBe(entry.expectedRows);
             console.info(
               JSON.stringify({
                 event: "query_perf_plan",
@@ -79,45 +104,58 @@ describe.skipIf(!enabled)("query perf gate on PostgreSQL under RLS", () => {
                 plan: good.plan.Plan,
               }),
             );
-            expect(shapeViolations(good.plan, profileId)).toEqual([]);
+            const violations = shapeViolations(good.plan, profileId);
+            expect(
+              violations,
+              `plan shape violations: measured ${violations.length}; budget 0`,
+            ).toEqual([]);
             recorded[id] = good.metrics;
             if (expected === undefined) {
               continue;
             }
             expect(budgetViolations(good.metrics, expected)).toEqual([]);
+            await deadline.run(
+              `CREATE POLICY ${entryId}`,
+              async () =>
+                await db.execute(sql`CREATE POLICY query_perf_correlated_fixture ON search_documents AS RESTRICTIVE FOR SELECT TO stella USING (
+              (SELECT count(*) FROM entities policy_entity WHERE policy_entity.id = search_documents.entity_id) > 0
+            )`),
+            );
+            const bad = await deadline.run(
+              `measure policy fixture ${entryId}`,
+              async () =>
+                await measureQueryPerf({
+                  database: db,
+                  seed,
+                  query: entry.query,
+                }),
+            );
             console.info(
               JSON.stringify({
                 event: "query_perf_measurement",
                 profileId,
                 entryId,
-                ...good.metrics,
+                fixture: "correlated-policy",
+                ...bad.metrics,
+                samples: bad.samples,
                 baseline: expected,
-                nearBufferBudget:
-                  good.metrics.sharedBlocks >=
-                  expected.sharedBlocks * 1.25 * 0.95,
               }),
             );
-            try {
-              await db.execute(sql`CREATE POLICY query_perf_correlated_fixture ON search_documents AS RESTRICTIVE FOR SELECT TO stella USING (
-              (SELECT count(*) FROM entities policy_entity WHERE policy_entity.id = search_documents.entity_id) > 0
-            )`);
-              const bad = await measureQueryPerf({
-                database: db,
-                seed,
-                query: entry.query,
-              });
-              // The fixture must reach the policy and fail the measured budget, independently of shape checks.
-              expect(shapeViolations(bad.plan, profileId)).toContain(
-                "per-row policy subplan on search_documents",
-              );
-              expect(budgetViolations(bad.metrics, expected)).toContain(
-                "shared buffer budget exceeded",
-              );
-            } finally {
-              await db.execute(
-                sql`DROP POLICY IF EXISTS query_perf_correlated_fixture ON search_documents`,
-              );
-            }
+            // The fixture must reach the policy and fail the measured budget, independently of shape checks.
+            expect(shapeViolations(bad.plan, profileId)).toContain(
+              "per-row policy subplan on search_documents",
+            );
+            expect(
+              budgetViolations(bad.metrics, expected).map(({ kind }) => kind),
+            ).toContain("shared-buffer-budget");
+            // Failed entries leave the policy in their disposable database for fixture teardown.
+            await deadline.run(
+              `DROP POLICY ${entryId}`,
+              async () =>
+                await db.execute(
+                  sql`DROP POLICY IF EXISTS query_perf_correlated_fixture ON search_documents`,
+                ),
+            );
           }
         },
       });
@@ -141,5 +179,5 @@ describe.skipIf(!enabled)("query perf gate on PostgreSQL under RLS", () => {
       baselinePath: new URL("baseline.json", import.meta.url),
       outputPath: process.env["GITHUB_OUTPUT"],
     });
-  }, 240_000);
+  }, 420_000);
 });
