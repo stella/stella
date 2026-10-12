@@ -776,6 +776,7 @@
       "none": "Nie odnotowano jeszcze żadnych cytowań.",
       "openAtCitation": "Otwórz w miejscu cytowania",
       "openDecision": "Otwórz orzeczenie",
+      "paragraphLabel": "Punkt {paragraph, number}",
       "paragraphMark": "¶ {paragraph, number}",
       "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, punkt {paragraph, number}",
       "partialSummary": "Sumy cytowań i oś czasu są niepełne.",

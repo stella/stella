@@ -776,6 +776,7 @@
       "none": "لم تُسجَّل أي استشهادات بعد.",
       "openAtCitation": "فتح عند موضع الاستشهاد",
       "openDecision": "فتح الحكم",
+      "paragraphLabel": "الفقرة {paragraph, number}",
       "paragraphMark": "¶ {paragraph, number}",
       "paragraphReferenceLabel": "{court}، {caseNumber}، {date}، الفقرة {paragraph, number}",
       "partialSummary": "إجماليات الاستشهادات والخط الزمني غير مكتملة.",

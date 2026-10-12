@@ -776,6 +776,7 @@
       "none": "Noch keine Zitierungen erfasst.",
       "openAtCitation": "An der Zitatstelle öffnen",
       "openDecision": "Entscheidung öffnen",
+      "paragraphLabel": "Randnummer {paragraph, number}",
       "paragraphMark": "¶ {paragraph, number}",
       "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, Randnummer {paragraph, number}",
       "partialSummary": "Zitationszahlen und Zeitachse sind unvollständig.",

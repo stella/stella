@@ -776,6 +776,7 @@
       "none": "Aucune citation enregistrée pour l'instant.",
       "openAtCitation": "Ouvrir à la citation",
       "openDecision": "Ouvrir la décision",
+      "paragraphLabel": "Point {paragraph, number}",
       "paragraphMark": "¶ {paragraph, number}",
       "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, point {paragraph, number}",
       "partialSummary": "Les totaux des citations et la chronologie sont partiels.",

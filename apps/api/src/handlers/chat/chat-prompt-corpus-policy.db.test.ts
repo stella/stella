@@ -233,7 +233,7 @@ test.each(fixtures)(
       fixture.expected === "available" ? EMPTY_AST : null,
     );
     const expected = fixture.expected;
-    for (const prompt of [decision.unwrap(), statute.unwrap()]) {
+    for (const prompt of [decision.unwrap().prompt, statute.unwrap()]) {
       switch (expected) {
         case "available":
           expect(prompt).toContain(WORDING);
@@ -267,7 +267,7 @@ test("client-provided active decision ids cannot disclose unpublished or missing
       safeDb: tenantDb,
       userId: undefined,
     });
-    expect(prompt.unwrap()).toBe("");
+    expect(prompt.unwrap().prompt).toBe("");
   }
 });
 

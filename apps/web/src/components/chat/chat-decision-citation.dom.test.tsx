@@ -10,7 +10,6 @@ import {
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
 import { toSafeId } from "@stll/api-contract/safe-id";
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
 import { publicCaseLawCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
@@ -301,7 +300,7 @@ test("an anchored decision chip carries its paragraph in the link native navigat
     <ChatDecisionCitation
       decisionId={first.id}
       passage={paragraph}
-      anchorId="p-12"
+      paragraph={{ anchorId: "p-12", courtParagraphNumber: null }}
       interactive
     />,
   );
@@ -318,83 +317,76 @@ test("an anchored decision chip carries its paragraph in the link native navigat
   expect(target.pathname).not.toContain("#");
 });
 
-test("a passage chip names the court's number on the cited block only when the read carries one", async () => {
-  const client = clientWithDecisions();
-  const numbered = {
-    ...second,
-    documentAst: {
-      version: 1,
-      source: { system: "", documentId: "", webUrl: "", printUrl: "" },
-      metadata: {
-        caseNumber: null,
-        ecli: null,
-        court: null,
-        decisionDate: null,
-        decisionType: null,
-        keywords: [],
-        statutes: [],
+test("the court's number the link carries shows at first paint, from a read or a carried source, never by fetching", async () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  clients.push(client);
+  // The decision itself is never read here: neither the cache nor a fetch
+  // holds its document, so the number can only come from the link.
+  client.setQueryData(decisionOptions(second.id).queryKey, second);
+  const readerUrl = new URL(
+    createCaseLawDecisionPath(
+      createCaseLawDecisionRouteParams({ ...first, decisionId: first.id }),
+    ),
+    window.location.origin,
+  ).href;
+  useExternalSourceStore.getState().registerSources([
+    {
+      url: first.sourceUrl,
+      appUrl: readerUrl,
+      sourceUrl: first.sourceUrl,
+      title: first.caseNumber,
+      caseLawDecision: {
+        decisionId: first.id,
+        caseNumber: first.caseNumber,
+        citation: {
+          court: first.court,
+          courtShortCode: "NS",
+          decisionDate: first.decisionDate,
+        },
       },
-      blocks: [
-        {
-          id: "h-1",
-          anchorId: "h-1",
-          type: "heading",
-          level: 2,
-          inlines: [{ type: "text", text: "Reasons" }],
-          plainText: "Reasons",
-        },
-        {
-          id: "p-12",
-          anchorId: "p-12",
-          type: "paragraph",
-          number: 8,
-          inlines: [{ type: "text", text: paragraph }],
-          plainText: paragraph,
-        },
-      ],
-    } satisfies DocumentAst,
-  } satisfies PublicCaseLawDecision;
-  client.setQueryData(decisionOptions(second.id).queryKey, numbered);
+    },
+  ]);
   const view = mount(
     client,
-    <>
-      <p>
-        <ChatDecisionCitation
-          decisionId={second.id}
-          passage={paragraph}
-          anchorId="p-12"
-          interactive
-        />
-      </p>
-      <p>
-        <ChatDecisionCitation
-          decisionId={second.id}
-          passage={paragraph}
-          anchorId="h-1"
-          interactive
-        />
-      </p>
+    <ChatAnswerDecisionProvider
+      message={answer(`[First](${first.sourceUrl})`)}
+      isAwaitingUser={false}
+    >
       <p>
         <ChatDecisionCitation
           decisionId={first.id}
           passage={paragraph}
-          anchorId="p-12"
+          paragraph={{ anchorId: "p-12", courtParagraphNumber: 8 }}
           interactive
         />
       </p>
-    </>,
+      <p>
+        <ChatDecisionCitation
+          decisionId={second.id}
+          passage={paragraph}
+          paragraph={{ anchorId: "p-14", courtParagraphNumber: 9 }}
+          interactive
+        />
+      </p>
+      <p>
+        <ChatDecisionCitation
+          decisionId={second.id}
+          passage={paragraph}
+          paragraph={{ anchorId: "h-1", courtParagraphNumber: null }}
+          interactive
+        />
+      </p>
+    </ChatAnswerDecisionProvider>,
   );
-  await waitFor(() =>
-    expect(
-      view.container.querySelectorAll("[data-decision-citation]"),
-    ).toHaveLength(3),
-  );
-  const [cited, heading, unnumbered] = view.container.querySelectorAll(
-    "[data-decision-citation]",
-  );
-  expect(cited?.textContent).toBe("NS¶ 8");
-  expect(cited?.getAttribute("aria-label")).toEndWith(", paragraph 8");
-  expect(heading?.textContent).toBe("NS");
+  const chips = view.container.querySelectorAll("[data-decision-citation]");
+  expect(chips).toHaveLength(3);
+  const [carried, read, unnumbered] = chips;
+  expect(carried?.textContent).toBe("NS¶ 8");
+  expect(carried?.getAttribute("aria-label")).toEndWith(", paragraph 8");
+  expect(read?.textContent).toBe("NS¶ 9");
   expect(unnumbered?.textContent).toBe("NS");
   expect(unnumbered?.getAttribute("aria-label")).not.toContain("paragraph");
+  expect(client.isFetching()).toBe(0);
 });

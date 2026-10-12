@@ -3,6 +3,7 @@ import JSZip from "jszip";
 
 import type { BlockContent, ParagraphContent } from "@stll/docx-core/model";
 
+import { formatChatExportParagraphMark } from "@/api/handlers/chat/export/citation-footnotes";
 import { createChatExportDocx } from "@/api/handlers/chat/export/create-chat-export-docx";
 import {
   styleDocumentCitations,
@@ -95,6 +96,8 @@ const markdown = [
 
 const options = {
   folioSourceTitle: "Agreement.docx",
+  formatParagraphMark: (courtParagraphNumber: number) =>
+    formatChatExportParagraphMark("en", courtParagraphNumber),
   internalCitationFallback: "Citation",
   internalReferenceMode: "references",
   unverifiedCitationLabel: "Unverified citation",
@@ -110,9 +113,11 @@ const trustedSearchSummaryOptions = {
 } as const;
 
 describe("styleDocumentCitations", () => {
-  test("inline preserves every hyperlink and returns the same document", () => {
+  test("inline preserves every hyperlink and the document as it was", () => {
     const document = markdownToStellaDocument(markdown);
-    expect(styleDocumentCitations(document, "inline", options)).toBe(document);
+    expect(styleDocumentCitations(document, "inline", options)).toEqual(
+      document,
+    );
   });
 
   test("none unwraps only citations and preserves application references", () => {
@@ -194,6 +199,48 @@ describe("styleDocumentCitations", () => {
         collectText(content),
       ),
     ).toEqual(["Unverified citation: the appeal is dismissed"]);
+  });
+
+  test("a passage citation names the court's paragraph number in every style that keeps citations", () => {
+    const decision = "33333333-3333-4333-8333-333333333333";
+    const numbered = `[the appeal is dismissed](#stella-decision-passage=${decision}:p-12:8)`;
+    const unnumbered = `[the appeal is dismissed](#stella-decision-passage=${decision}:p-12)`;
+    const footnotesOf = (passage: string) =>
+      styleDocumentCitationsWithCounts(
+        markdownToStellaDocument(passage),
+        "footnotes",
+        options,
+      ).document.package.footnotes?.map(({ content }) => collectText(content));
+    const inline = (passage: string) =>
+      styleDocumentCitations(
+        markdownToStellaDocument(passage),
+        "inline",
+        options,
+      ).package.document.content;
+    const none = styleDocumentCitations(
+      markdownToStellaDocument(numbered),
+      "none",
+      options,
+    ).package.document.content;
+
+    expect(footnotesOf(numbered)).toEqual([
+      "Unverified citation: the appeal is dismissed (\u00b6\u00a08)",
+    ]);
+    expect(footnotesOf(unnumbered)).toEqual([
+      "Unverified citation: the appeal is dismissed",
+    ]);
+    expect(collectHyperlinkTargets(inline(numbered))).toEqual([
+      `#stella-decision-passage=${decision}:p-12:8`,
+    ]);
+    expect(collectText(inline(numbered))).toBe(" (\u00b6\u00a08)");
+    expect(collectText(inline(unnumbered))).toBe("");
+    // No citations at all: the passage reads as the answer's prose.
+    expect(collectText(none)).toBe("the appeal is dismissed");
+  });
+
+  test("the paragraph mark follows the export's locale", () => {
+    expect(formatChatExportParagraphMark("de", 1234)).toBe("\u00b6\u00a01.234");
+    expect(formatChatExportParagraphMark("cs", 8)).toBe("\u00b6\u00a08");
   });
 
   test("malformed decision passage hrefs export as plain text", () => {

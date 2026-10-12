@@ -776,6 +776,7 @@
       "none": "Citējumi vēl nav reģistrēti.",
       "openAtCitation": "Atvērt citāta vietā",
       "openDecision": "Atvērt nolēmumu",
+      "paragraphLabel": "{paragraph, number}. punkts",
       "paragraphMark": "¶ {paragraph, number}",
       "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, {paragraph, number}. punkts",
       "partialSummary": "Citējumu kopsummas un laika skala ir nepilnīgas.",

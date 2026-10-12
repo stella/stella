@@ -776,6 +776,7 @@
       "none": "Zatiaľ nie sú zaznamenané žiadne citácie.",
       "openAtCitation": "Otvoriť na mieste citácie",
       "openDecision": "Otvoriť rozhodnutie",
+      "paragraphLabel": "Bod {paragraph, number}",
       "paragraphMark": "¶ {paragraph, number}",
       "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, bod {paragraph, number}",
       "partialSummary": "Súčty citácií a časová os sú neúplné.",

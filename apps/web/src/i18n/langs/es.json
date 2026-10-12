@@ -776,6 +776,7 @@
       "none": "Aún no hay citas registradas.",
       "openAtCitation": "Abrir en la cita",
       "openDecision": "Abrir la resolución",
+      "paragraphLabel": "Apartado {paragraph, number}",
       "paragraphMark": "¶ {paragraph, number}",
       "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, apartado {paragraph, number}",
       "partialSummary": "Los totales de citas y la cronología son parciales.",

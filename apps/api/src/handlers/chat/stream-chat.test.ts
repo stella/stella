@@ -27,6 +27,7 @@ import {
   CHAT_SEND_MODE,
   CHAT_TRANSPORT_ERROR_CODE,
 } from "@stll/anonymize-chat";
+import { CHAT_DECISION_PASSAGE_HREF_PREFIX } from "@stll/api-contract";
 import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
@@ -60,6 +61,10 @@ import {
   COMPACTION_SUMMARY_MESSAGE_ID,
   createCompactionSummaryMessage,
 } from "@/api/handlers/chat/compaction";
+import {
+  NO_DECISION_PASSAGE_NUMBERS,
+  stampDecisionPassageNumbers,
+} from "@/api/handlers/chat/decision-passage-numbers";
 import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { createAutoApplySuggestChangesTools } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
@@ -6759,4 +6764,116 @@ test("provider diagnostic matches the wire and persisted terminal outcome", asyn
     }),
   );
   expect(reloaded.metadata.turnOutcome).toEqual(response.metadata.turnOutcome);
+});
+
+describe("decision passage court numbers", () => {
+  const DECISION_ID = toSafeId<"caseLawDecision">(
+    "019a0000-0000-7000-8000-000000000301",
+  );
+  const passage = (components: string) =>
+    `${CHAT_DECISION_PASSAGE_HREF_PREFIX}${DECISION_ID}:${components}`;
+  // The model's answer arrives cut mid-href, as provider deltas often are:
+  // the marker itself, the anchor and the closing paren each land in
+  // different chunks. `p-8:3` is a number the model copied, not one it may set.
+  const DELTAS = [
+    "The appeal fails [as held](#st",
+    "ella-decision-passage=",
+    `${DECISION_ID}:p-`,
+    "8:3) and [again](",
+    `${passage("p-9")}) end.`,
+  ];
+  const STAMPED = `The appeal fails [as held](${passage("p-8:6")}) and [again](${passage("p-9")}) end.`;
+
+  for (const boundary of [
+    { type: "raw" } as const,
+    createBoundary([["[PERSON_1]", "Jan Novak"]]),
+  ]) {
+    test(`a ${boundary.type} turn stores, streams and reloads the court's number the AST names`, async () => {
+      const messageId = toSafeId<"chatMessage">(
+        "11111111-1111-4111-8111-111111111111",
+      );
+      let responseMessage: ChatMessage | null = null;
+      let persisted: ChatMessage | null = null;
+      const processor = new StreamProcessor({
+        events: {
+          onStreamEnd: (message) => {
+            responseMessage = toChatMessage(message);
+          },
+        },
+      });
+      const persistenceVisible = transformPersistenceVisibleStream({
+        boundary,
+        initialRestorationPlaceholders: new Set(),
+        restorationPairs: [],
+        stampAssistantText: stampDecisionPassageNumbers(
+          new Map([[DECISION_ID, new Map([["p-8", 6]])]]),
+        ),
+        source: streamChunks([
+          { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+          {
+            type: EventType.TEXT_MESSAGE_START,
+            messageId: "provider-message",
+            role: "assistant",
+          },
+          ...DELTAS.map(
+            (delta) =>
+              ({
+                type: EventType.TEXT_MESSAGE_CONTENT,
+                delta,
+                messageId: "provider-message",
+              }) as const,
+          ),
+          { type: EventType.TEXT_MESSAGE_END, messageId: "provider-message" },
+          ...normalizeStreamChunk({
+            type: EventType.RUN_FINISHED,
+            finishReason: "stop",
+            runId: "run-1",
+            threadId: "thread-1",
+          }),
+        ]),
+      });
+      const processed = processServerChatStream({
+        abortSignal: new AbortController().signal,
+        deadlineSignal: new AbortController().signal,
+        flushPendingSource: persistenceVisible.flushPending,
+        getResponseMessage: () => responseMessage,
+        initialMessages: [],
+        mapMessageId: createChatMessageIdMapper(() => messageId),
+        onFinish: ({ responseMessage: terminalMessage }) => {
+          persisted = terminalMessage;
+        },
+        processor,
+        source: persistenceVisible,
+      });
+      const live = collectText(
+        await collectChunks(
+          transformClientVisibleStream({
+            source: processed,
+            storedHistory: NOTHING_REWRITTEN,
+          }),
+        ),
+      );
+      const stored: ChatMessage =
+        persisted ?? panic("The turn must be persisted");
+      const reloaded = normalizePersistedChatMessageContent(
+        toPersistedChatMessageContentV3({ data: stored.parts, metadata: {} }),
+      );
+      const textOf = (parts: readonly ChatMessage["parts"][number][]) =>
+        parts
+          .map((part) => (part.type === "text" ? part.content : ""))
+          .join("");
+
+      expect(live).toBe(STAMPED);
+      expect(textOf(stored.parts)).toBe(STAMPED);
+      expect(textOf(reloaded.parts)).toBe(STAMPED);
+    });
+  }
+
+  test("a turn that read no decision stamps nothing and drops a number the model wrote", () => {
+    expect(
+      stampDecisionPassageNumbers(NO_DECISION_PASSAGE_NUMBERS)(
+        `[as held](${passage("p-8:6")})`,
+      ),
+    ).toBe(`[as held](${passage("p-8")})`);
+  });
 });

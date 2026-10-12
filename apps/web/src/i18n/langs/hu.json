@@ -776,6 +776,7 @@
       "none": "Még nincs rögzített hivatkozás.",
       "openAtCitation": "Megnyitás a hivatkozásnál",
       "openDecision": "Határozat megnyitása",
+      "paragraphLabel": "{paragraph, number}. pont",
       "paragraphMark": "¶ {paragraph, number}",
       "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, {paragraph, number}. pont",
       "partialSummary": "Az idézettségi összesítések és az idővonal hiányosak.",

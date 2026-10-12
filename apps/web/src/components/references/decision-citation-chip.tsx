@@ -176,6 +176,13 @@ export const DecisionCitationChip = ({
           <BidiText as="span" className="text-sm">
             {decision.caseNumber}
           </BidiText>
+          {paragraphNumber !== null && (
+            <span className="text-sm">
+              {t("caseLaw.citation.paragraphLabel", {
+                paragraph: paragraphNumber,
+              })}
+            </span>
+          )}
           <span className="text-muted-foreground text-xs">{date}</span>
         </div>
         {passage !== undefined && (

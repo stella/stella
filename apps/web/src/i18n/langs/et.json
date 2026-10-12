@@ -776,6 +776,7 @@
       "none": "Viiteid pole veel salvestatud.",
       "openAtCitation": "Ava viite kohal",
       "openDecision": "Ava lahend",
+      "paragraphLabel": "Punkt {paragraph, number}",
       "paragraphMark": "¶ {paragraph, number}",
       "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, punkt {paragraph, number}",
       "partialSummary": "Viidete koguarvud ja ajajoon on osalised.",

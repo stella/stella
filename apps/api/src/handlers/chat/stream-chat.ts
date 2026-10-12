@@ -89,6 +89,11 @@ import type { CutShortOutcome } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import { compactModelMessagesForModel } from "@/api/handlers/chat/compaction";
 import {
+  NO_DECISION_PASSAGE_NUMBERS,
+  stampDecisionPassageNumbers,
+} from "@/api/handlers/chat/decision-passage-numbers";
+import type { DecisionPassageNumbers } from "@/api/handlers/chat/decision-passage-numbers";
+import {
   createLoopRecoverySystemPrompt,
   detectModelLoop,
   getLoopRecoveryKey,
@@ -319,6 +324,13 @@ type StreamChatProps = {
   sandboxRun: StellaSandboxRunInput | undefined;
   /** Budget lane the pre-flight resolved for this turn. */
   usageLane: UsageEventLane;
+  /**
+   * The court paragraph numbers of the decision text the prompt carried.
+   * Stamped onto the answer's passage citations before the turn is stored or
+   * shown, so the stored text, the live stream and every reload name the same
+   * paragraph.
+   */
+  decisionPassageNumbers?: DecisionPassageNumbers | undefined;
   resolveAssistantTextRefs?: ((text: string) => string) | undefined;
   resolveAssistantToolInputRefs?: AssistantToolInputRefResolver | undefined;
   resolveAssistantToolOutputRefs?: AssistantToolOutputRefResolver | undefined;
@@ -466,6 +478,7 @@ export const streamChat = async ({
   runMode,
   sandboxRun,
   usageLane,
+  decisionPassageNumbers = NO_DECISION_PASSAGE_NUMBERS,
   resolveAssistantTextRefs,
   resolveAssistantToolInputRefs,
   resolveAssistantToolOutputRefs,
@@ -781,6 +794,7 @@ export const streamChat = async ({
         : new Set<string>(),
     restorationPairs,
     source: projectVisualPreviewStream(stream),
+    stampAssistantText: stampDecisionPassageNumbers(decisionPassageNumbers),
   });
   const processedStream = processTurnForPersistence({
     visualOrigin,
@@ -3158,6 +3172,8 @@ type TransformOutgoingStreamProps = {
   registerPendingFlush?: (flushPending: () => StreamChunk[]) => void;
   restorationPairs: ChatAnonRestoration[];
   source: AsyncIterable<PublicStreamChunk>;
+  /** Server-owned facts written into the assistant's own text. */
+  stampAssistantText?: ((text: string) => string) | undefined;
 };
 
 export const transformOutgoingStream = async function* ({
@@ -3170,6 +3186,7 @@ export const transformOutgoingStream = async function* ({
   registerPendingFlush,
   restorationPairs,
   source,
+  stampAssistantText,
 }: TransformOutgoingStreamProps): AsyncIterable<StreamChunk> {
   const transform = createOutgoingChunkTransformer({
     boundary,
@@ -3179,6 +3196,7 @@ export const transformOutgoingStream = async function* ({
     resolveAssistantToolOutputRefs,
     resolveAssistantValueRefs,
     restorationPairs,
+    stampAssistantText,
   });
   registerPendingFlush?.(transform.flush);
 
@@ -3195,19 +3213,29 @@ export const transformOutgoingStream = async function* ({
 
 type TransformPersistenceVisibleStreamProps = Pick<
   TransformOutgoingStreamProps,
-  "boundary" | "initialRestorationPlaceholders" | "restorationPairs" | "source"
+  | "boundary"
+  | "initialRestorationPlaceholders"
+  | "restorationPairs"
+  | "source"
+  | "stampAssistantText"
 >;
 
 type PersistenceVisibleStream = AsyncIterable<StreamChunk> & {
   flushPending: () => StreamChunk[];
 };
 
-/** Deanonymize the processor's copy while preserving model-facing chat refs. */
+/**
+ * Deanonymize the processor's copy while preserving model-facing chat refs,
+ * and stamp the server's facts into the assistant's text. The processor's
+ * copy is what is stored and what the client stream is derived from, so a
+ * stamp here reaches the stored answer, the live answer and every reload.
+ */
 export const transformPersistenceVisibleStream = ({
   boundary,
   initialRestorationPlaceholders,
   restorationPairs,
   source,
+  stampAssistantText,
 }: TransformPersistenceVisibleStreamProps): PersistenceVisibleStream => {
   let flushPending = (): StreamChunk[] => [];
   const transformed = transformOutgoingStream({
@@ -3218,6 +3246,7 @@ export const transformPersistenceVisibleStream = ({
     },
     restorationPairs,
     source,
+    stampAssistantText,
   });
   return {
     flushPending: () => flushPending(),
@@ -3277,6 +3306,7 @@ type OutgoingChunkTransformerOptions = {
   resolveAssistantToolOutputRefs?: AssistantToolOutputRefResolver | undefined;
   resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
   restorationPairs: ChatAnonRestoration[];
+  stampAssistantText?: ((text: string) => string) | undefined;
 };
 
 const createOutgoingChunkTransformer = ({
@@ -3287,6 +3317,7 @@ const createOutgoingChunkTransformer = ({
   resolveAssistantToolOutputRefs,
   resolveAssistantValueRefs,
   restorationPairs,
+  stampAssistantText,
 }: OutgoingChunkTransformerOptions) => {
   const buffers = new Map<string, string>();
   const emittedPlaceholders = new Set(initialRestorationPlaceholders);
@@ -3342,9 +3373,10 @@ const createOutgoingChunkTransformer = ({
   };
 
   const transformText = (text: string): string => {
+    const stamped = stampAssistantText ? stampAssistantText(text) : text;
     const resolved = resolveAssistantTextRefs
-      ? resolveAssistantTextRefs(text)
-      : text;
+      ? resolveAssistantTextRefs(stamped)
+      : stamped;
     if (boundary.type !== "anonymized") {
       return resolved;
     }
@@ -3422,6 +3454,18 @@ const createOutgoingChunkTransformer = ({
     ];
   };
 
+  // The longest prefix every text rewrite can see whole: a placeholder for
+  // the anonymizer, and a `#stella-` href for the ref resolver and the stamp.
+  const completeTextPrefixLength = (buffer: string): number => {
+    if (boundary.type !== "anonymized") {
+      return getResolvedTextPrefixLength(buffer);
+    }
+    const deanonymisable = getDeanonymisablePrefixLength(buffer);
+    return stampAssistantText === undefined
+      ? deanonymisable
+      : Math.min(deanonymisable, getResolvedTextPrefixLength(buffer));
+  };
+
   const transform = (chunk: PublicStreamChunk): StreamChunk[] => {
     if (chunk.type === EventType.TOOL_CALL_START) {
       const toolName = toolCallNameOf(chunk);
@@ -3478,10 +3522,7 @@ const createOutgoingChunkTransformer = ({
     if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
       const key = `text:${chunk.messageId}`;
       const buffer = `${buffers.get(key) ?? ""}${chunk.delta}`;
-      const prefixLength =
-        boundary.type === "anonymized"
-          ? getDeanonymisablePrefixLength(buffer)
-          : getResolvedTextPrefixLength(buffer);
+      const prefixLength = completeTextPrefixLength(buffer);
       buffers.set(key, buffer.slice(prefixLength));
       return flushText({
         messageId: chunk.messageId,
@@ -3502,10 +3543,7 @@ const createOutgoingChunkTransformer = ({
     if (chunk.type === EventType.REASONING_MESSAGE_CONTENT) {
       const key = `reasoning:${chunk.messageId}`;
       const buffer = `${buffers.get(key) ?? ""}${chunk.delta}`;
-      const prefixLength =
-        boundary.type === "anonymized"
-          ? getDeanonymisablePrefixLength(buffer)
-          : getResolvedTextPrefixLength(buffer);
+      const prefixLength = completeTextPrefixLength(buffer);
       buffers.set(key, buffer.slice(prefixLength));
       return flushReasoning({
         messageId: chunk.messageId,
@@ -3670,14 +3708,30 @@ const createOutgoingChunkTransformer = ({
 
 const STELLA_REF_MARKER = "#stella-";
 
+/** Where a tail that may still grow into `#stella-` begins (`#st`, `#stella`). */
+const partialMarkerTailStart = (text: string): number => {
+  for (
+    let length = Math.min(STELLA_REF_MARKER.length - 1, text.length);
+    length > 0;
+    length -= 1
+  ) {
+    if (STELLA_REF_MARKER.startsWith(text.slice(-length))) {
+      return text.length - length;
+    }
+  }
+  return text.length;
+};
+
 const getResolvedTextPrefixLength = (text: string): number => {
   const markerIndex = text.lastIndexOf(STELLA_REF_MARKER);
   if (markerIndex === -1) {
-    return text.length;
+    return partialMarkerTailStart(text);
   }
 
   const markerSuffix = text.slice(markerIndex);
-  return /[\s)]/u.test(markerSuffix) ? text.length : markerIndex;
+  return /[\s)]/u.test(markerSuffix)
+    ? partialMarkerTailStart(text)
+    : markerIndex;
 };
 
 const PARTIAL_PLACEHOLDER_TAIL = /\[[A-Z][A-Z0-9_]*$|\[$/u;

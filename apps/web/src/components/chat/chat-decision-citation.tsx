@@ -26,20 +26,18 @@ import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { collectSourceChipEntries } from "@/components/chat/source-chips.logic";
 import { DecisionCitationChip } from "@/components/references/decision-citation-chip";
-import { citedCourtParagraphNumber } from "@/components/references/decision-citation-paragraph.logic";
 import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
 import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
+import type { CitedDecisionParagraph } from "@/components/references/reference.logic";
 import { env } from "@/env";
 import { publicCaseLawCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
-import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import {
   decisionBySlugOptions,
   decisionOptions,
 } from "@/features/case-law/queries/decisions";
 import { detached } from "@/lib/detached";
 import { queryView } from "@/lib/query-view.logic";
-import type { QueryView } from "@/lib/query-view.logic";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { useQueryView } from "@/lib/use-query-view";
 
@@ -58,7 +56,8 @@ type AnswerDecisionContextValue = {
 };
 type CommonCitationProps = {
   passage?: ReactNode;
-  anchorId?: string | undefined;
+  /** The block the citation points into, as the answer's link names it. */
+  paragraph?: CitedDecisionParagraph | undefined;
   readerUrl?: string | undefined;
   originalUrl?: string | null | undefined;
   interactive: boolean;
@@ -84,31 +83,18 @@ const withAnchor = (href: string, anchorId: string | undefined): string => {
   return `${base}#${encodeURIComponent(anchorId)}`;
 };
 
-// The number rides on the decision read the chip already holds. A carried
-// source keeps that read disabled, so there it shows only when the decision is
-// already cached, never by fetching a whole decision for one numeral.
-const cachedParagraphNumber = (
-  view: QueryView<PublicCaseLawDecision, unknown>,
-  anchorId: string | undefined,
-): number | null =>
-  view.type === "items"
-    ? citedCourtParagraphNumber({ decision: view.items, anchorId })
-    : null;
-
 const CitationView = ({
   read,
   passage,
   readerUrl,
   originalUrl,
-  anchorId,
+  paragraph,
   renderPassage = true,
   presentationById,
-  paragraphNumber,
   onOpen,
 }: CommonCitationProps & {
   read: DecisionCitationRead;
   presentationById: AnswerDecisionContextValue["presentations"] | undefined;
-  paragraphNumber: number | null;
   onOpen: () => void;
 }) => {
   const metadata = readyCitationMetadata(read);
@@ -122,7 +108,7 @@ const CitationView = ({
   }
   const decision = {
     ...metadata,
-    readerUrl: withAnchor(readerUrl ?? metadata.readerUrl, anchorId),
+    readerUrl: withAnchor(readerUrl ?? metadata.readerUrl, paragraph?.anchorId),
     originalUrl: originalUrl === undefined ? metadata.originalUrl : originalUrl,
   };
   return (
@@ -133,7 +119,7 @@ const CitationView = ({
           decision={decision}
           passage={passage}
           presentation={presentationById?.get(metadata.decisionId) ?? "compact"}
-          paragraphNumber={paragraphNumber}
+          paragraphNumber={paragraph?.courtParagraphNumber ?? null}
           onOpen={onOpen}
         />
       </span>
@@ -162,15 +148,14 @@ const ActiveChatDecisionCitation = ({
         scopedRead?.type === "source" ? scopedRead : { type: "query", view }
       }
       presentationById={answer?.presentations}
-      paragraphNumber={cachedParagraphNumber(view, props.anchorId)}
       onOpen={() =>
         detached(
           view.type === "items"
             ? openReadCaseLawDecision(view.items, open, {
-                anchorId: props.anchorId,
+                anchorId: props.paragraph?.anchorId,
               })
             : openCaseLawDecision({ type: "ref", ref: decisionId }, open, {
-                anchorId: props.anchorId,
+                anchorId: props.paragraph?.anchorId,
               }),
           "chat-decision-citation.open",
         )
@@ -199,15 +184,14 @@ const ActiveChatRouteDecisionCitation = ({
         scopedRead?.type === "source" ? scopedRead : { type: "query", view }
       }
       presentationById={answer?.presentations}
-      paragraphNumber={cachedParagraphNumber(view, props.anchorId)}
       onOpen={() =>
         detached(
           view.type === "items"
             ? openReadCaseLawDecision(view.items, open, {
-                anchorId: props.anchorId,
+                anchorId: props.paragraph?.anchorId,
               })
             : openCaseLawDecision({ type: "route", params }, open, {
-                anchorId: props.anchorId,
+                anchorId: props.paragraph?.anchorId,
               }),
           "chat-decision-citation.open-route",
         )

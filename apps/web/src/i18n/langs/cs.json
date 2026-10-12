@@ -776,6 +776,7 @@
       "none": "Zatím nejsou zaznamenány žádné citace.",
       "openAtCitation": "Otevřít na místě citace",
       "openDecision": "Otevřít rozhodnutí",
+      "paragraphLabel": "Bod {paragraph, number}",
       "paragraphMark": "¶ {paragraph, number}",
       "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, bod {paragraph, number}",
       "partialSummary": "Součty citací a časová osa jsou neúplné.",

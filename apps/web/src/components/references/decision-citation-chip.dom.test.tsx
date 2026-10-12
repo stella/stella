@@ -95,6 +95,21 @@ for (const presentation of Object.values(DECISION_CITATION_PRESENTATION)) {
   });
 }
 
+test("the popover names the cited paragraph beside the case, and names none when the court printed none", async () => {
+  const numbered = mount(DECISION_CITATION_PRESENTATION.compact, null, 8);
+  fireEvent.focus(
+    numbered.getByRole("button", { name: `${reference}, paragraph 8` }),
+  );
+  expect(await screen.findByText("Paragraph 8")).toBeTruthy();
+  expect(screen.getByText(decision.caseNumber)).toBeTruthy();
+  numbered.unmount();
+
+  const unnumbered = mount(DECISION_CITATION_PRESENTATION.compact, null);
+  fireEvent.focus(unnumbered.getByRole("button", { name: reference }));
+  expect(await screen.findByText(decision.caseNumber)).toBeTruthy();
+  expect(screen.queryByText(/^Paragraph/u)).toBeNull();
+});
+
 test("the paragraph number follows the reader's locale", () => {
   const view = render(
     <IntlProvider locale="de" messages={germanMessages} timeZone="UTC">

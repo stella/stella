@@ -26,6 +26,7 @@ import {
 } from "@/api/handlers/chat/chat-scope";
 import {
   buildCitationSection,
+  formatChatExportParagraphMark,
   getChatExportCitationLabels,
   sourceDocumentsToCitations,
   trustedSourceDocumentsForExport,
@@ -217,6 +218,11 @@ const createMessageExport = createSafeRootHandler(
             citationStyle,
             {
               folioSourceTitle: onlySourceDocumentTitle(trustedSourceDocuments),
+              formatParagraphMark: (courtParagraphNumber) =>
+                formatChatExportParagraphMark(
+                  citationLabels.locale,
+                  courtParagraphNumber,
+                ),
               internalCitationFallback: citationLabels.citation,
               internalReferenceMode: internalReferenceModeFor(
                 persistedSearchSources,

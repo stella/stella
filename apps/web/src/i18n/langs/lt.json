@@ -776,6 +776,7 @@
       "none": "Citavimų dar neužfiksuota.",
       "openAtCitation": "Atverti citatos vietoje",
       "openDecision": "Atverti sprendimą",
+      "paragraphLabel": "{paragraph, number} punktas",
       "paragraphMark": "¶ {paragraph, number}",
       "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, {paragraph, number} punktas",
       "partialSummary": "Citavimų sumos ir laiko juosta yra nepilnos.",

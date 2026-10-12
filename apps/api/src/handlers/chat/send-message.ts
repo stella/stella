@@ -120,6 +120,7 @@ import {
   extractIncomingMessageWorkspaceIds,
   extractThreadDataWorkspaceIds,
 } from "@/api/handlers/chat/data-scope";
+import type { DecisionPassageNumbers } from "@/api/handlers/chat/decision-passage-numbers";
 import { ChatError } from "@/api/handlers/chat/errors";
 import { generateThreadTitle } from "@/api/handlers/chat/generate-thread-title";
 import {
@@ -3221,6 +3222,7 @@ export const createSendMessage = (
                   runMode: body.runMode,
                   sandboxRun,
                   usageLane: turnLane.lane,
+                  decisionPassageNumbers: chatContext.decisionPassageNumbers,
                   resolveAssistantTextRefs:
                     refRegistry.resolveAssistantTextRefs,
                   resolveAssistantToolInputRefs: ({ input, toolName }) =>
@@ -3409,6 +3411,8 @@ type PrepareChatContextResult = Result<
     systemUntrusted: ChatUntrustedPromptSuffix;
     skillMetadata: readonly SkillMetadata[];
     activeSkillContext: ActiveChatSkillContext | null;
+    /** Court numbers the turn stamps onto the answer's passage citations. */
+    decisionPassageNumbers: DecisionPassageNumbers;
   },
   HandlerError<403 | 404 | 422 | 500> | SafeDbError
 >;
@@ -3525,6 +3529,7 @@ const prepareChatContext = async ({
       systemUntrusted: systemPrompt.untrustedSuffix,
       skillMetadata: systemPrompt.skillMetadata,
       activeSkillContext: systemPrompt.activeSkillContext,
+      decisionPassageNumbers: systemPrompt.decisionPassageNumbers,
       hydratedMessages: messagesWithMentionKinds,
     });
   });

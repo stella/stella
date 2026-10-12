@@ -779,6 +779,7 @@ type Messages = {
       "none": "No citations recorded yet.";
       "openAtCitation": "Open at the citation";
       "openDecision": "Open decision";
+      "paragraphLabel": "Paragraph {paragraph, number}";
       "paragraphMark": "¶ {paragraph, number}";
       "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, paragraph {paragraph, number}";
       "partialSummary": "Citation totals and timeline are partial.";
