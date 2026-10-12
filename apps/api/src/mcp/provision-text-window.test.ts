@@ -9,21 +9,53 @@ import { windowProvisionText } from "@/api/mcp/provision-text-window";
 const readAll = (text: string, limit: number, subject = "eli|anchor") => {
   const chunks: string[] = [];
   let cursor: string | undefined;
-  do {
+  for (let step = 0; step <= text.length; step += 1) {
     const result = windowProvisionText({ cursor, limit, subject, text });
     expect(result.type).toBe("window");
     if (result.type !== "window") {
       return "";
     }
+    if (result.nextTextCursor === null) {
+      chunks.push(result.text);
+      return chunks.join("");
+    }
+    expect(result.text.length).toBeGreaterThan(0);
+    expect(result.nextTextCursor).not.toBe(cursor);
     chunks.push(result.text);
-    cursor = result.nextTextCursor ?? undefined;
-  } while (cursor !== undefined);
+    cursor = result.nextTextCursor;
+  }
+  expect(cursor).toBeUndefined();
   return chunks.join("");
 };
 
 describe("provision text windows", () => {
   test.each(["", "abcd"])("reconstructs bounded text %p", (text) => {
     expect(readAll(text, 4)).toBe(text);
+  });
+
+  test.each(["📚", "a📚b𐍈c", "\uD800x"])(
+    "a one-unit budget reconstructs %p without repeating a cursor",
+    (text) => {
+      expect(readAll(text, 1)).toBe(text);
+    },
+  );
+
+  test("positive budgets reconstruct bounded Unicode text with forward progress", () => {
+    const point = fc.oneof(
+      fc.integer({ min: 0, max: 0xd7_ff }),
+      fc.integer({ min: 0x1_00_00, max: 0x10_ff_ff }),
+    );
+    assertProperty(
+      "provision-text-windows-forward-progress",
+      fc.property(
+        fc.array(point, { maxLength: 12 }),
+        fc.integer({ min: 1, max: 8 }),
+        (points, limit) => {
+          const text = String.fromCodePoint(...points);
+          expect(readAll(text, limit)).toBe(text);
+        },
+      ),
+    );
   });
 
   test("reconstructs every window exactly", () => {

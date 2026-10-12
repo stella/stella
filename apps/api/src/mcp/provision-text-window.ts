@@ -50,6 +50,10 @@ const decodePayload = (cursor: string): TextCursorPayload | null => {
   };
 };
 
+const splitsSurrogatePair = (text: string, offset: number) =>
+  /[\uD800-\uDBFF]/u.test(text.charAt(offset - 1)) &&
+  /[\uDC00-\uDFFF]/u.test(text.charAt(offset));
+
 export type ProvisionTextWindow =
   | { type: "invalid-cursor" }
   | {
@@ -59,7 +63,7 @@ export type ProvisionTextWindow =
       nextTextCursor: string | null;
     };
 
-/** Returns a bounded window without splitting a UTF-16 surrogate pair. */
+/** Retains whole code points; a one-unit budget may return a surrogate pair. */
 export const windowProvisionText = ({
   cursor,
   limit,
@@ -77,21 +81,16 @@ export const windowProvisionText = ({
     (decoded === null ||
       decoded.binding !== textBinding(subject, text) ||
       decoded.offset > text.length ||
-      (decoded.offset > 0 &&
-        /[\uD800-\uDBFF]/u.test(text.charAt(decoded.offset - 1)) &&
-        /[\uDC00-\uDFFF]/u.test(text.charAt(decoded.offset))))
+      splitsSurrogatePair(text, decoded.offset))
   ) {
     return { type: "invalid-cursor" };
   }
 
   const offset = decoded?.offset ?? 0;
   let end = Math.min(offset + limit, text.length);
-  if (
-    end < text.length &&
-    end > offset &&
-    /[\uD800-\uDBFF]/u.test(text.charAt(end - 1))
-  ) {
-    end -= 1;
+  if (end < text.length && end > offset && splitsSurrogatePair(text, end)) {
+    // Include the first code point rather than emitting an empty continuation.
+    end = end === offset + 1 ? end + 1 : end - 1;
   }
   const nextTextCursor =
     end < text.length
