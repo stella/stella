@@ -17,6 +17,7 @@ const getSkillProposalParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Read one change proposal for an agent skill, with its proposed body and " +
     "the body of the revision it branched from, so the two can be diffed.",

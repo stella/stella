@@ -57,6 +57,7 @@ const fixtureRuleOverride = (file: string, rules: readonly string[]) => ({
 const enforcedOwnershipEntries = OWNERSHIP.filter(
   (entry) =>
     entry.enforcement.kind !== "none" &&
+    entry.enforcement.kind !== "custom-rule" &&
     entry.enforcement.kind !== "status-set",
 );
 
@@ -513,6 +514,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-safe-route-handlers.fixture.ts", [
     "require-safe-route-handlers/no-direct-handler-config",
     "require-safe-route-handlers/require-safe-route-handlers",
+  ]),
+  fixtureRuleOverride("require-write-contract.fixture.ts", [
+    "require-write-contract/require-write-contract",
   ]),
   fixtureRuleOverride("require-workspace-handler-config.fixture.ts", [
     "require-workspace-handler-config/require-workspace-handler-config",
@@ -1393,6 +1397,9 @@ const config = defineConfig({
     "apps/web/public/**",
     // Declaration files carry no runtime code; skip product-code rules.
     "**/*.d.ts",
+    // wasm-bindgen glue is committed verbatim and checked by rebuilding it;
+    // product-code rewrites would be replaced by the next generation.
+    "packages/scan-engine/generated/scan_engine.js",
     // Snowball stemmers: generated output plus the upstream JS runtime,
     // transcribed verbatim. Product-code rules would rewrite the algorithm
     // (prefer-code-point changes UTF-16 semantics; no-bitwise has no
@@ -1492,6 +1499,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-beforeload-redirect.ts",
     "./.oxlint-plugins/require-safe-route-handlers.ts",
     "./.oxlint-plugins/require-workspace-handler-config.ts",
+    "./.oxlint-plugins/require-write-contract.ts",
     "./.oxlint-plugins/no-inline-endpoint-in-routes.ts",
     "./.oxlint-plugins/security-guards.ts",
     "./.oxlint-plugins/no-unbranded-ownership-id-param.ts",
@@ -1611,6 +1619,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-stream-reader-disposal.ts",
     "./.oxlint-plugins/no-auth-token-in-web-storage.ts",
     "./.oxlint-plugins/no-path-prefix-containment.ts",
+    "./.oxlint-plugins/no-direct-unicode-normalize.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
     "./.oxlint-plugins/no-network-await-in-loop.ts",
     "./.oxlint-plugins/require-cached-collator.ts",
@@ -2424,6 +2433,20 @@ const config = defineConfig({
       rules: {
         "no-object-url-leak/no-object-url-leak": "error",
         "no-auth-token-in-web-storage/no-auth-token-in-web-storage": "error",
+      },
+    },
+    {
+      // String normalization belongs to @stll/text-normalize. The owner is
+      // excluded because its implementation must call the native primitive.
+      files: [
+        "apps/**/*.{ts,tsx}",
+        "packages/**/*.{ts,tsx}",
+        "scripts/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-direct-unicode-normalize.fixture.ts",
+      ],
+      excludeFiles: ["packages/text-normalize/**/*.{ts,tsx}"],
+      rules: {
+        "no-direct-unicode-normalize/no-direct-unicode-normalize": "error",
       },
     },
     {
@@ -3436,6 +3459,16 @@ const config = defineConfig({
         "require-matter-affordance/require-matter-affordance": "error",
         "security-guards/no-unsanitized-href": "error",
         "stella-toast/stella-toast": "error",
+      },
+    },
+    {
+      files: ["apps/api/src/mcp/apps/**/*.tsx"],
+      excludeFiles: ["**/*.test.tsx"],
+      rules: {
+        "no-untranslated-jsx-literal/no-untranslated-jsx-literal": [
+          "error",
+          { allowedText: ["stella"] },
+        ],
       },
     },
     {
@@ -4682,6 +4715,19 @@ const config = defineConfig({
       },
     },
     {
+      files: ["apps/web/**/*.{ts,tsx}"],
+      excludeFiles: [
+        // E2E runs in Node and uses UUIDv4 prefixes as parallel-worker suffixes;
+        // UUIDv7 timestamp prefixes would collide across concurrent tests.
+        "apps/web/e2e/**",
+        // This is the browser UUID owner and therefore the sole direct uuid v7 importer.
+        "apps/web/src/lib/uuid.ts",
+      ],
+      rules: {
+        "no-crypto-random-uuid/no-crypto-random-uuid": "error",
+      },
+    },
+    {
       files: ["apps/api/**/*.ts"],
       excludeFiles: [
         // These are the only low-level documents-bucket writers: they own
@@ -5179,6 +5225,10 @@ const config = defineConfig({
         "require-file-transport-disposition/require-file-transport-disposition":
           "error",
       },
+    },
+    {
+      files: ["apps/api/src/**/*.ts"],
+      rules: { "require-write-contract/require-write-contract": "error" },
     },
     {
       // A workspace-scoped config must name the type that requires its params

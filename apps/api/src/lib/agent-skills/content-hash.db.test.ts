@@ -164,7 +164,7 @@ const skillEditTools = (skillId: SafeId<"agentSkill">) =>
       id: skillId,
       origin: "authored",
       requiredTools: [],
-      resources: [{ kind: "reference", path: "references/checklist.md" }],
+      resources: [{ path: "references/checklist.md" }],
       source: "installed",
       toolName: "fixture",
       version: null,
@@ -334,7 +334,7 @@ const MUTATION_PATHS = {
       await uploadSkillResource.handler(
         context(uploadSkillResource.handler, {
           body: {
-            path: "knowledge/uploaded.md",
+            path: "references/uploaded.md",
             file: new File(["Uploaded knowledge."], "uploaded.md", {
               type: "text/markdown",
             }),
@@ -371,7 +371,7 @@ const MUTATION_PATHS = {
     await runSkillEditTool({
       skillId,
       toolName: "create-current-skill-resource",
-      input: { path: "knowledge/from-chat.md", content: "Created from chat." },
+      input: { path: "references/from-chat.md", content: "Created from chat." },
     });
     return skillId;
   },

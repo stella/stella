@@ -20,6 +20,7 @@ const bodySchema = t.Object({
   description: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
 });
 const config = {
+  contract: "patch",
   featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Change one list item's section, its ordering position within the list, " +

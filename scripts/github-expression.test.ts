@@ -192,3 +192,19 @@ test("a projected output with a literal default supplies computed inputs", () =>
   });
   expect(evaluate("needs.ci-plan.outputs.computed", context)).toBe("true");
 });
+
+test("direct planner projections resolve from producer evidence and preserve literal defaults", () => {
+  for (const source of ["[]", '["ci-checks-rest"]', ""]) {
+    const context = contextWithPlanOutputs({
+      context: { values: { "steps.heavy-plan.outputs.queue_jobs": source } },
+      outputs: {
+        queue_required_jobs: wrappedExpression(
+          "steps.heavy-plan.outputs.queue_jobs || '[]'",
+        ),
+      },
+    });
+    expect(evaluate("needs.ci-plan.outputs.queue_required_jobs", context)).toBe(
+      source || "[]",
+    );
+  }
+});

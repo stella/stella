@@ -7,6 +7,7 @@ import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { timeEntries, timeTimers } from "@/api/db/schema";
+import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { ACCOUNT_DELETION_ERROR_CODE } from "@/api/lib/account-deletion-steps";
 import { getAuth } from "@/api/lib/auth";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
@@ -98,20 +99,24 @@ const fixture = async (db: GatedTestDb, ownerCount: number) => {
         }) satisfies typeof timeEntries.$inferInsert,
     ),
   );
-  await db.insert(timeTimers).values(
-    owners.map(
-      ({ userId, entryId, timerId }) =>
-        ({
-          id: timerId,
-          userId,
-          organizationId,
-          legacyTimeEntryId: entryId,
-          state: "running",
-          startedAt,
-          lastResumedAt: startedAt,
-        }) satisfies typeof timeTimers.$inferInsert,
-    ),
-  );
+  for (const { userId, entryId, timerId } of owners) {
+    await createScopedDb(
+      markRlsDatabase(db),
+      [],
+      organizationId,
+      userId,
+    )(async (tx) => {
+      await tx.insert(timeTimers).values({
+        id: timerId,
+        userId,
+        organizationId,
+        legacyTimeEntryId: entryId,
+        state: "running",
+        startedAt,
+        lastResumedAt: startedAt,
+      });
+    });
+  }
   return {
     organizationId,
     owners,
@@ -289,10 +294,18 @@ if (!databaseUrl || !runPostgresTests) {
                 .select()
                 .from(timeEntries)
                 .where(eq(timeEntries.id, secondTarget.entryId));
-              const [timer] = await setup.db
-                .select()
-                .from(timeTimers)
-                .where(eq(timeTimers.id, secondTarget.timerId));
+              const [timer] = await createScopedDb(
+                markRlsDatabase(setup.db),
+                [],
+                data.organizationId,
+                secondTarget.userId,
+              )(
+                async (tx) =>
+                  await tx
+                    .select()
+                    .from(timeTimers)
+                    .where(eq(timeTimers.id, secondTarget.timerId)),
+              );
               expect(entry?.timerStartedAt).toBeInstanceOf(Date);
               expect(entry?.timerStoppedAt).toBeNull();
               expect(entry?.durationMinutes).toBe(0);
@@ -483,10 +496,18 @@ if (!databaseUrl || !runPostgresTests) {
               .select()
               .from(timeEntries)
               .where(eq(timeEntries.id, secondTarget.entryId));
-            const [timer] = await setup.db
-              .select()
-              .from(timeTimers)
-              .where(eq(timeTimers.id, secondTarget.timerId));
+            const [timer] = await createScopedDb(
+              markRlsDatabase(setup.db),
+              [],
+              data.organizationId,
+              secondTarget.userId,
+            )(
+              async (tx) =>
+                await tx
+                  .select()
+                  .from(timeTimers)
+                  .where(eq(timeTimers.id, secondTarget.timerId)),
+            );
             expect(entry?.timerStartedAt).toBeInstanceOf(Date);
             expect(entry?.timerStoppedAt).toBeNull();
             expect(entry?.durationMinutes).toBe(0);
