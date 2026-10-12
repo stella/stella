@@ -1432,6 +1432,8 @@
     "sendPrompt": "Enviar mensaje",
     "sendQueuedMessageNow": "Enviar ahora",
     "sendWithoutAnonymization": "Enviar sin anonimización",
+    "signInToChat": "Inicia sesión para chatear sobre este documento",
+    "signInToChatAbout": "Inicia sesión para chatear sobre",
     "skills": {
       "scope": {
         "private": "Tus habilidades",

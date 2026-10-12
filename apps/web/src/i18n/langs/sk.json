@@ -1432,6 +1432,8 @@
     "sendPrompt": "Odoslať správu",
     "sendQueuedMessageNow": "Odoslať hneď",
     "sendWithoutAnonymization": "Odoslať bez anonymizácie",
+    "signInToChat": "Prihláste sa a chatujte o tomto dokumente",
+    "signInToChatAbout": "Prihláste sa a chatujte o",
     "skills": {
       "scope": {
         "private": "Vaše AI zručnosti",

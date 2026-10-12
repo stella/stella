@@ -1432,6 +1432,8 @@
     "sendPrompt": "Siųsti pranešimą",
     "sendQueuedMessageNow": "Siųsti dabar",
     "sendWithoutAnonymization": "Siųsti be anonimizavimo",
+    "signInToChat": "Prisijunkite, kad galėtumėte kalbėtis apie šį dokumentą",
+    "signInToChatAbout": "Prisijunkite, kad galėtumėte kalbėtis apie",
     "skills": {
       "scope": {
         "private": "Jūsų įgūdžiai",

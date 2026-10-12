@@ -1432,6 +1432,8 @@
     "sendPrompt": "Saada sõnum",
     "sendQueuedMessageNow": "Saada kohe",
     "sendWithoutAnonymization": "Saada anonüümimiseta",
+    "signInToChat": "Logi sisse, et sellest dokumendist vestelda",
+    "signInToChatAbout": "Logi sisse, et vestelda:",
     "skills": {
       "scope": {
         "private": "Sinu AI oskused",

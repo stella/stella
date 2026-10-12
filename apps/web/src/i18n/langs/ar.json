@@ -1432,6 +1432,8 @@
     "sendPrompt": "إرسال الرسالة",
     "sendQueuedMessageNow": "إرسال الآن",
     "sendWithoutAnonymization": "إرسال دون تجهيل",
+    "signInToChat": "سجّل الدخول للدردشة حول هذا المستند",
+    "signInToChatAbout": "سجّل الدخول للدردشة حول",
     "skills": {
       "scope": {
         "private": "مهاراتك",

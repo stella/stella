@@ -119,8 +119,11 @@ export const TopBarCitationsFor = ({
             />
           }
         >
+          {/* The counts carry the trigger at phone width; the strip would
+              take the room the case number needs. */}
           <CitationYearStrip
             byYear={summary.incomingByYear}
+            className="max-sm:hidden"
             fromYear={fromYear}
             toYear={currentYear}
           />

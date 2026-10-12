@@ -1435,6 +1435,8 @@ type Messages = {
     "sendPrompt": "Send message";
     "sendQueuedMessageNow": "Send now";
     "sendWithoutAnonymization": "Send without anonymization";
+    "signInToChat": "Sign in to chat about this document";
+    "signInToChatAbout": "Sign in to chat about";
     "skills": {
       "scope": {
         "private": "Your skills";

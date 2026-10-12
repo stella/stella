@@ -1432,6 +1432,8 @@
     "sendPrompt": "Odeslat zprávu",
     "sendQueuedMessageNow": "Odeslat hned",
     "sendWithoutAnonymization": "Odeslat bez anonymizace",
+    "signInToChat": "Přihlaste se a chatujte o tomto dokumentu",
+    "signInToChatAbout": "Přihlaste se a chatujte o",
     "skills": {
       "scope": {
         "private": "Vaše dovednosti",
