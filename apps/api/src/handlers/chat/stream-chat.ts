@@ -861,6 +861,26 @@ export const streamChat = async ({
       }
       yield chunk;
     }
+    const terminalEvent = settlement.event;
+    if (
+      terminalEvent !== undefined &&
+      CUT_SHORT_OUTCOME[terminalEvent.outcome.type]
+    ) {
+      // Interruption is stored as turn data, not a provider error. Close the
+      // durable protocol too: EOF alone makes attached readers reconnect.
+      yield {
+        type: EventType.TEXT_MESSAGE_END,
+        messageId: terminalEvent.responseMessage.id,
+        metadata: { turnOutcome: terminalEvent.outcome },
+      };
+      finalChunks.splice(0, finalChunks.length, {
+        type: EventType.RUN_FINISHED,
+        runId,
+        threadId,
+        outcome: { type: "cancelled" },
+        timestamp: Temporal.Now.instant().epochMilliseconds,
+      });
+    }
     // The visual transform can flush buffered refs after the source terminal.
     // Deliver that content before terminalizing, and identify the last terminal
     // so every earlier iteration remains appendable under the execution fence.

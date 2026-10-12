@@ -131,9 +131,9 @@ describe("chat run admission follows owned settlement", () => {
     }
     expect(sourcePulls).toBe(0);
     expect(persisted).toBe(1);
-    expect(chunks.some((chunk) => chunk.type === EventType.RUN_ERROR)).toBe(
-      true,
-    );
+    expect(
+      chunks.filter((chunk) => chunk.type === EventType.RUN_ERROR),
+    ).toEqual([]);
   });
 
   for (const cut of [
@@ -269,7 +269,12 @@ describe("chat run admission follows owned settlement", () => {
           { label: "blocked source run settlement", timeoutMs: 1000 },
         );
         expect(end).toBe("stored");
-        expect(body).toContain('"type":"RUN_ERROR"');
+        if (cut === "admission-then-deadline") {
+          expect(body).toContain('"type":"RUN_ERROR"');
+        } else {
+          expect(body).not.toContain('"type":"RUN_ERROR"');
+        }
+        expect(body).toContain("Partial answer");
         expect(body).not.toContain("Late answer after settlement");
         expect(persisted).toBe(1);
         expect(sourceFinished).toBe(false);

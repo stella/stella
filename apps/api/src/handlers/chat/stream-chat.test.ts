@@ -3251,11 +3251,6 @@ describe("outgoing chat stream message ids", () => {
         delta: "Partial answer",
         messageId,
       },
-      {
-        type: EventType.RUN_ERROR,
-        message: "unknown",
-        code: "unknown",
-      },
     ]);
     expect(finishEvents).toEqual([
       { outcome: "interrupted", text: "Partial answer" },

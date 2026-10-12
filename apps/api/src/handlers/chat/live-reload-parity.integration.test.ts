@@ -2488,22 +2488,28 @@ describe("a conversation's live view", () => {
         const reloadedAssistant = (await harness.reloadView(threadId)).findLast(
           ({ role }) => role === "assistant",
         );
-        expect(liveAssistant?.metadata?.turnTiming).toMatchObject({
+        expect(liveAssistant?.metadata?.["turnTiming"]).toMatchObject({
           status: "finished",
         });
-        expect(liveAssistant?.metadata?.turnTiming).toEqual(
-          reloadedAssistant?.metadata?.turnTiming,
+        expect(liveAssistant?.metadata?.["turnTiming"]).toEqual(
+          reloadedAssistant?.metadata?.["turnTiming"],
         );
-        expect(reloadedAssistant?.metadata?.turnOutcome).toEqual({
+        expect(reloadedAssistant?.metadata?.["turnOutcome"]).toEqual({
           type: "cancelled",
           reason: "user-stop",
         });
         const stoppedAssistant = real.client
           .messages()
           .findLast(({ role }) => role === "assistant");
-        expect(stoppedAssistant?.metadata?.turnOutcome).toEqual(
-          reloadedAssistant?.metadata?.turnOutcome,
+        expect(stoppedAssistant?.metadata?.["turnOutcome"]).toEqual(
+          reloadedAssistant?.metadata?.["turnOutcome"],
         );
+        expect(liveAssistant?.metadata?.["turnOutcome"]).toEqual(
+          reloadedAssistant?.metadata?.["turnOutcome"],
+        );
+        expect(
+          chunks.filter(({ type }) => type === EventType.RUN_FINISHED),
+        ).toMatchObject([{ runId, threadId, outcome: { type: "cancelled" } }]);
       } finally {
         await closeConversation(conversation);
       }
