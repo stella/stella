@@ -87,7 +87,7 @@ const loadProcessMemoryReader = async () => {
 };
 
 let memoryReader: ReturnType<typeof loadProcessMemoryReader> | undefined;
-export const createProcessMemoryReader = () =>
+export const createProcessMemoryReader = async () =>
   (memoryReader ??= loadProcessMemoryReader());
 
 const processChildren = (pid: number): number[] => {
