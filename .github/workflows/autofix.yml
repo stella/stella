@@ -214,11 +214,12 @@ jobs:
             /package.json
           sparse-checkout-cone-mode: false
 
+      # No install follows, so the shared package cache would only cost time.
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
+          no-cache: true
 
       - name: Check planner availability
         id: planner
@@ -351,7 +352,7 @@ jobs:
             fi
             protected_path=false
             for pattern in "${protected[@]}"; do
-              if [[ "$path" == $pattern ]]; then
+              if [[ "$path" == @($pattern) ]]; then
                 protected_path=true
                 break
               fi
