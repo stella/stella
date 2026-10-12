@@ -824,6 +824,29 @@ export const GENERATORS = [
     after: [],
   },
   {
+    // Re-parses the seeded case-law archives through the current parsers
+    // (rows with recorded raw) or applies the read-time AST repairs (rows
+    // without). It fails instead of re-stamping a stored analysis whose
+    // input would change; see apps/api/scripts/reparse-case-law-fixtures.ts.
+    id: "case-law-fixture-reparse",
+    outputKind: "committed",
+    outputs: ["apps/api/scripts/__fixtures__/case-law/*.json.gz"],
+    inputs: [
+      "apps/api/scripts/reparse-case-law-fixtures.ts",
+      "apps/api/scripts/lib/case-law-fixture-reparse.ts",
+      "apps/api/scripts/lib/case-law-fixture-analyses.ts",
+      "apps/api/src/handlers/case-law/ingestion/adapters/*.ts",
+      "apps/api/src/handlers/case-law/ingestion/parsers/**",
+      "apps/api/src/lib/legal-search/ingestion-constants.ts",
+      "apps/api/src/lib/legal-search/ingestion-normalization.ts",
+      "packages/legal-ast/src/**",
+    ],
+    write: ["bun", "apps/api/scripts/reparse-case-law-fixtures.ts", "--write"],
+    check: ["bun", "apps/api/scripts/reparse-case-law-fixtures.ts", "--check"],
+    autofix: true,
+    after: [],
+  },
+  {
     id: "ai-instructions",
     outputKind: "committed",
     outputs: [

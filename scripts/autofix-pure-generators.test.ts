@@ -26,6 +26,9 @@ const PURE_AUTOFIX = {
   // Renders the env catalog and the self-host contract, formatted by the
   // pinned oxfmt; `check` alone reads workflows and runs the manifest script.
   selfhost: "selfhost:generate",
+  // Parsers and AST repairs are pure (no clock, network or database on the
+  // re-parse path); it fails rather than re-stamping an analysis.
+  "case-law-fixture-reparse": "apps/api/scripts/reparse-case-law-fixtures.ts",
 } as const;
 
 const generator = (id: string) => {
