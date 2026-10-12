@@ -8,6 +8,36 @@ const detail = `Request rejected.\n${"The complete provider response must remain
   12,
 )}`;
 
+for (const direction of ["ltr", "rtl"] as const) {
+  test(`desktop toast offset clears the safe area in ${direction}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 844, height: 390 });
+    await page.goto(fixturePath);
+    await page.evaluate((dir) => {
+      document.documentElement.dir = dir;
+      document.documentElement.style.setProperty(
+        "--safe-area-inline-end",
+        "24px",
+      );
+      document.documentElement.style.setProperty(
+        "--stella-toast-right-offset",
+        "32px",
+      );
+    }, direction);
+    await page.getByRole("button", { name: "success", exact: true }).click();
+    const viewport = page.locator('[data-slot="toast-viewport"]');
+    await expect(viewport).toHaveCSS("inset-inline-end", "88px");
+    const clearance = await viewport.evaluate((element) => {
+      const { left, right } = element.getBoundingClientRect();
+      return document.documentElement.dir === "rtl"
+        ? left
+        : window.innerWidth - right;
+    });
+    expect(clearance).toBe(88);
+  });
+}
+
 for (const entry of ["error", "add", "update", "promise"]) {
   test(`error toast via ${entry} keeps full wrapping text until dismissed`, async ({
     page,
