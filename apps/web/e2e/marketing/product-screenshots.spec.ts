@@ -579,8 +579,10 @@ const expectWithinClip = async (
 // than at a fixed offset (a fixed offset larger than the gap would cut the
 // block above, and lowering that one would cut the next). The first
 // candidate that also holds an AI note clear of the margin's sticky header,
-// the target, a whole comment card when the shot has one, and no note cut
-// by either edge wins; the scroller moves once, by that candidate's offset.
+// the target, a whole comment card when the shot has one, and no note
+// half hidden under that header wins; the scroller moves once, by that
+// candidate's offset. A note running off the bottom edge is fine: it reads
+// as the page continuing.
 // Notes are laid out against the scrolling content, so shifting a measured
 // box by the offset is where it lands. Throws, naming each candidate's
 // failure, when none fits.
@@ -686,11 +688,8 @@ const frameReader = async (
           )
             ? null
             : "no whole comment card",
-          notes.some(
-            ({ box }) =>
-              crosses(box, delta, notesTop) || crosses(box, delta, bottom),
-          )
-            ? "a note is cut by an edge"
+          notes.some(({ box }) => crosses(box, delta, notesTop))
+            ? "a note is cut by the header"
             : null,
         ].filter((problem) => problem !== null);
         if (problems.length === 0) {
@@ -760,9 +759,9 @@ const expectCleanTopEdge = async (page: Page) => {
     .toBeNull();
 };
 
-// Every margin note is either wholly in the shot or wholly out of it: the
-// visible band is where the reader's scroller and the clip overlap, and a
-// note crossing either edge of it would ship half drawn.
+// No margin note is half hidden at the top of the margin, under the sticky
+// section header or the frame's top edge. One running off the bottom edge
+// is fine: it reads as the page continuing.
 const expectNoMarginNoteCut = async (page: Page, clip: CaptureClip) => {
   await expect
     .poll(
@@ -798,14 +797,12 @@ const expectNoMarginNoteCut = async (page: Page, clip: CaptureClip) => {
                   )
               : [];
             const top = Math.max(frame.top, band.top, ...stuckBottoms);
-            const bottom = Math.min(frame.bottom, band.bottom);
             const cut: string[] = [];
             for (const note of document.querySelectorAll(
               "[data-margin-note] > *",
             )) {
               const box = note.getBoundingClientRect();
-              const overlaps = box.bottom > top && box.top < bottom;
-              if (overlaps && (box.top < top || box.bottom > bottom)) {
+              if (box.top < top && box.bottom > top) {
                 const kind = note.parentElement?.dataset.marginNote ?? "?";
                 cut.push(
                   `${kind} note "${(note.textContent ?? "").slice(0, 40)}" spans ${String(Math.round(box.top))}-${String(Math.round(box.bottom))}`,
@@ -814,10 +811,10 @@ const expectNoMarginNoteCut = async (page: Page, clip: CaptureClip) => {
             }
             return cut;
           },
-          { top: clip.y, bottom: clip.y + clip.height },
+          { top: clip.y },
         ),
       {
-        message: `No margin note may be cut by the ${String(clip.height)}px capture's visible band`,
+        message: "No margin note may be half hidden at the top of the margin",
       },
     )
     .toEqual([]);
