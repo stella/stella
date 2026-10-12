@@ -35,6 +35,7 @@ import { chatKeys, getChatRuntimeContextKind } from "./chat-query-contract";
 import type {
   ChatThreadKey,
   ChatThreadOptionsContext,
+  DecisionChatThreadKey,
   ChatThreadOptionsInput,
   ChatThreadTitleKey,
   FileChatThreadKey,
@@ -755,6 +756,28 @@ export const templateChatThreadOptions = ({
     gcTime: STALE_TIME.FIVETEEN.MINUTES,
     queryKey: chatKeys.templateThread(activeOrganizationId, key),
     queryFn: async () => await fetchTemplateChatThread(key),
+  });
+
+/**
+ * The reader's own conversation about a decision, found on the server by
+ * the decision it is about; null until the reader has sent a first message.
+ */
+export const decisionChatThreadOptions = ({
+  activeOrganizationId,
+  key,
+}: {
+  activeOrganizationId: string;
+  key: DecisionChatThreadKey;
+}) =>
+  queryOptions({
+    queryKey: chatKeys.decisionThread(activeOrganizationId, key),
+    queryFn: async ({ signal }) => {
+      const response = await api.chat["decision-threads"]({
+        decisionId: key.decisionId,
+      }).get({ fetch: { signal } });
+      const { threadId } = unwrapEden(response);
+      return { threadId: threadId === null ? null : toChatThreadId(threadId) };
+    },
   });
 
 export type ChatThreadOptionsArgs = ChatThreadOptionsInput & {

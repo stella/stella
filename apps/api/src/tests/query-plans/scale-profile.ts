@@ -34,6 +34,14 @@ export type ScaleProfile = {
 /** Round synthetic sizes; no catalog observations or corpus values belong here. */
 export const SYNTHETIC_SCALE_PROFILE = {
   tables: {
+    case_law_decision_citation_stats: {
+      reltuples: 100_000_000,
+      allVisibleFraction: 0.5,
+    },
+    case_law_decision_citation_stats_state: {
+      reltuples: 100_000_000,
+      allVisibleFraction: 0.5,
+    },
     case_law_citations: { reltuples: 100_000_000, allVisibleFraction: 0.2 },
     case_law_decision_identifiers: {
       reltuples: 100_000_000,

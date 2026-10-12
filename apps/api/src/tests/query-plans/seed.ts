@@ -6,6 +6,8 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import {
   caseLawCitations,
+  caseLawDecisionCitationStats,
+  caseLawDecisionCitationStatsState,
   caseLawDecisionIdentifiers,
   caseLawDecisions,
   caseLawIndexJobs,
@@ -214,6 +216,27 @@ export const seedQueryPlanData = async (
     FROM generate_series(1, ${QUERY_PLAN_ROW_COUNT}) AS generated(n)
   `);
   await db.execute(sql`ANALYZE ${caseLawCitations}`);
+
+  await db.execute(
+    sql`TRUNCATE ${caseLawDecisionCitationStats}, ${caseLawDecisionCitationStatsState}`,
+  );
+  await db.execute(sql`
+    INSERT INTO ${caseLawDecisionCitationStats}
+      (decision_id, direction, related_year, related_country, related_source_id, polarity, count)
+    SELECT
+      (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad(n::text, 12, '0'))::uuid,
+      'incoming', 2024, 'CZE', ${caseLawSourceId}::uuid, 'positive', 1
+    FROM generate_series(1, ${QUERY_PLAN_ROW_COUNT}) AS generated(n)
+  `);
+  await db.execute(sql`
+    INSERT INTO ${caseLawDecisionCitationStatsState} (decision_id, status)
+    SELECT
+      (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad(n::text, 12, '0'))::uuid,
+      'exact'
+    FROM generate_series(1, ${QUERY_PLAN_ROW_COUNT}) AS generated(n)
+  `);
+  await db.execute(sql`VACUUM (ANALYZE) ${caseLawDecisionCitationStats}`);
+  await db.execute(sql`VACUUM (ANALYZE) ${caseLawDecisionCitationStatsState}`);
 
   await db.insert(corpusIndexGenerations).values({
     family: "case_law",

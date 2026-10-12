@@ -8,25 +8,25 @@ import {
 } from "@stll/api-contract/professional-use";
 
 import { setFixedBrowserTime } from "../helpers/clock";
+import {
+  getMarketingAgentThreadId,
+  MARKETING_AGENT_FIRST_QUESTION,
+  MARKETING_AGENT_THREAD_TITLE,
+  settleMarketingAgentThread,
+} from "./agent-thread";
+import {
+  assertNoActiveEditBadge,
+  releaseSupplierAgreementEditLock,
+  SUPPLIER_AGREEMENT_EDITOR_PATH,
+  SUPPLIER_AGREEMENT_ENTITY_ID,
+} from "./edit-locks";
 
 const AKVIZICE_WORKSPACE_ID = "6cbf3f81-bcc9-55da-8a4e-840221d4cabe";
 const EXPORT_REVIEW_WORKSPACE_ID = "bb8641dc-0667-574c-8e30-152a1fd4b3f5";
-// Seeded Supplier Agreement redline in the "Meridian supply agreement"
-// matter; keep in sync with record-product-story.ts (seed-dev.ts
-// `ws-akvizice-energo-doc-7`).
-const SUPPLIER_AGREEMENT_ENTITY_ID = "84824638-eb81-58c5-8a81-5d7e961fb7d5";
-const SUPPLIER_AGREEMENT_FIELD_ID = "3f985a8b-26be-5a07-89d3-2a05acb94354";
 // Seeded `Redacted_Due_Diligence_Extract.docx` in the same matter, opened by
 // the anonymization capture.
 const ANONYMIZED_EXTRACT_ENTITY_ID = "c3dc74a6-7855-5157-84db-ddf14f886df4";
 const ANONYMIZED_EXTRACT_FIELD_ID = "e98a6746-dae9-5509-888b-d58bfbca9a33";
-// Seeded "Change-of-control" thread in the Export Review matter (seed-dev.ts
-// `marketing-agent-thread`), already containing the cited Q&A; keep in sync
-// with record-product-story.ts's MARKETING_AGENT_THREAD_TITLE. Resolved by
-// title via the chat threads API rather than a fixed thread id, mirroring
-// the video recorder's resolveMarketingViewRoutes, so the agent screenshot
-// never lands on the empty /chat/new composer.
-const MARKETING_AGENT_THREAD_TITLE = "Project Atlas · Change-of-control review";
 // The org that owns every seeded marketing workspace (AKVIZICE/EXPORT_REVIEW/
 // Meridian). Fixed id from seed-utils' DEFAULT_ORG_ID ("Harbrook & Partners",
 // apps/api/scripts/seed-test-user.ts), seeded by
@@ -44,6 +44,10 @@ const INSPECTOR_STORAGE_PREFIXES = [
   "stella:inspector-state:v1:",
 ] as const;
 const requestedCapture = process.env["MARKETING_CAPTURE"];
+const MARKETING_URLS = {
+  apiUrl: process.env["E2E_API_URL"] ?? "http://localhost:3001",
+  webUrl: process.env["E2E_WEB_URL"] ?? "http://localhost:3000",
+};
 
 // Route chunks are compiled on demand by the dev server, so the first visit to
 // each route pays a cold build that the config's 15s expect timeout cannot
@@ -58,6 +62,10 @@ const COLD_COMPILE_TIMEOUT = 60_000;
 // `formatRelativeTime`'s minute bucket (one minute to one hour), far from
 // either boundary, and reads as a natural "just edited" label.
 const VERSION_CAPTION_OFFSET_MS = 5 * 60_000;
+
+// The product-shot frame for captures without their own clip: the app's main
+// column, below the sidebar.
+const DEFAULT_CLIP = { x: 255, y: 0, width: 1137, height: 710 } as const;
 
 const captures = [
   {
@@ -102,11 +110,7 @@ const captures = [
   },
   {
     name: "editor",
-    path:
-      `/workspaces/${AKVIZICE_WORKSPACE_ID}/all/document` +
-      "?editing=true" +
-      `&entity=${SUPPLIER_AGREEMENT_ENTITY_ID}` +
-      `&field=${SUPPLIER_AGREEMENT_FIELD_ID}`,
+    path: SUPPLIER_AGREEMENT_EDITOR_PATH,
     readyText: "Supplier_Agreement.docx",
     readySelector: '[aria-label="Document content"][contenteditable="true"]',
     // `?editing=true` is a request, not a state: without this the shot can
@@ -118,12 +122,15 @@ const captures = [
     },
   },
   {
+    // The seeded change-of-control thread in the Export Review matter
+    // (apps/api/scripts/seed-marketing-agent-thread.ts), resolved by title so
+    // the shot never lands on the empty /chat/new composer.
     name: "agent",
     prepare: "open-agent-thread",
-    // The question from the seeded thread; the answer and its source chips
-    // are asserted separately in the "open-agent-thread" prepare block below
-    // so the shot never ships mid-render.
-    readyText: "Compare the change-of-control clauses across this matter.",
+    // The thread's first question; the answers, citations, generated view
+    // and recap are awaited in the "open-agent-thread" prepare block below so
+    // the shot never ships mid-render.
+    readyText: MARKETING_AGENT_FIRST_QUESTION,
   },
   {
     name: "public-data",
@@ -174,6 +181,10 @@ test("capture landing product screenshots", async ({
   await expect(page.getByText("Legal database").first()).toBeVisible({
     timeout: COLD_COMPILE_TIMEOUT,
   });
+
+  // Start from no edit lock: a lock left by an earlier run would badge the
+  // Supplier Agreement row in the workspace shot.
+  await releaseSupplierAgreementEditLock(page.request, MARKETING_URLS);
 
   // Resolved once (not per capture/theme): only needed when the "agent"
   // capture is actually part of this run.
@@ -336,22 +347,26 @@ test("capture landing product screenshots", async ({
         await expect(
           page.getByText("Internal_SAFE_Agreement.docx").first(),
         ).toBeVisible();
+        // Both themes must show the same rows: no document carries an edit
+        // lock badge (the editor capture releases its lock below).
+        await expect(
+          page.getByText("Supplier_Agreement.docx").first(),
+        ).toBeVisible();
+        await assertNoActiveEditBadge(page, capture.name);
       }
       if ("prepare" in capture && capture.prepare === "open-table") {
         await page.getByRole("tab", { name: "Table" }).click();
         await expect(page.getByRole("grid")).toBeVisible();
       }
       if ("prepare" in capture && capture.prepare === "open-agent-thread") {
-        // The seeded thread already contains the full cited answer; wait for
-        // it and one of its source chips so the shot never lands on a
-        // pre-render/loading state (the empty /chat/new composer this
-        // replaces had neither).
-        await expect(
-          page.getByText(/assignment or a material service change/u).first(),
-        ).toBeVisible();
-        await expect(
-          page.getByText(/Aurora_Retail_Shareholder_Register_2018/u).first(),
-        ).toBeVisible();
+        // Waits for every answer, citation chip, the generated view's guest
+        // page (content, fonts, final height, host theme) and the recap, then
+        // frames the final turn. The guest page has no animations or
+        // transitions of its own, so the animation freeze below, which the
+        // style tag applies to this document only, misses nothing.
+        await settleMarketingAgentThread(page, {
+          frameBottom: DEFAULT_CLIP.y + DEFAULT_CLIP.height,
+        });
       }
       await page.locator("body").waitFor({ state: "visible" });
       await page.evaluate(async () => document.fonts.ready);
@@ -377,10 +392,7 @@ test("capture landing product screenshots", async ({
         .toHaveScreenshot(`${capture.name}${themeSuffix}.png`, {
           animations: "disabled",
           caret: "hide",
-          clip:
-            "clip" in capture
-              ? capture.clip
-              : { x: 255, y: 0, width: 1137, height: 710 },
+          clip: "clip" in capture ? capture.clip : DEFAULT_CLIP,
           // Baselines are produced on the CI runner by the "Update marketing
           // screenshots" workflow (.github/workflows/
           // marketing-screenshots-update.yml) and compared on that same runner
@@ -390,6 +402,13 @@ test("capture landing product screenshots", async ({
           maxDiffPixelRatio: 0.005,
           scale: "css",
         });
+      // `?editing=true` opened an edit session, i.e. a lease-backed lock on the
+      // Supplier Agreement. A full navigation never unmounts the editor, so
+      // the session would outlive this capture and badge the document in the
+      // next theme pass's workspace shot. Release it explicitly.
+      if (capture.name === "editor") {
+        await releaseSupplierAgreementEditLock(page.request, MARKETING_URLS);
+      }
     }
   }
 });
@@ -410,9 +429,9 @@ const clearPersistedInspectorState = async (page: Page) => {
 };
 
 // Resolves the seeded agent thread's route by title via the chat threads
-// API (same lookup as record-product-story.ts's
-// resolveMarketingViewRoutes/getMarketingAgentThreadId), instead of a fixed
-// thread id that would need updating whenever the dev seed reruns.
+// API (the same lookup record-product-story.ts's resolveMarketingViewRoutes
+// uses), instead of a fixed thread id that would need updating whenever the
+// dev seed reruns.
 const resolveAgentThreadPath = async (request: APIRequestContext) => {
   const apiBaseURL = process.env["E2E_API_URL"] ?? "http://localhost:3001";
   const response = await request.get(`${apiBaseURL}/v1/chat/threads?limit=50`);
@@ -486,42 +505,6 @@ const getCurrentVersionCreatedAt = (payload: unknown): string | undefined => {
 // `Array.isArray` narrows `unknown` to `any[]`; this keeps elements `unknown`.
 const isUnknownArray = (value: unknown): value is unknown[] =>
   Array.isArray(value);
-
-const getMarketingAgentThreadId = (payload: unknown): string | undefined => {
-  if (
-    typeof payload !== "object" ||
-    payload === null ||
-    !("workspaces" in payload) ||
-    !isUnknownArray(payload.workspaces)
-  ) {
-    return undefined;
-  }
-
-  for (const workspace of payload.workspaces) {
-    if (
-      typeof workspace !== "object" ||
-      workspace === null ||
-      !("threads" in workspace) ||
-      !isUnknownArray(workspace.threads)
-    ) {
-      continue;
-    }
-    for (const thread of workspace.threads) {
-      if (
-        typeof thread === "object" &&
-        thread !== null &&
-        "id" in thread &&
-        typeof thread.id === "string" &&
-        "title" in thread &&
-        thread.title === MARKETING_AGENT_THREAD_TITLE
-      ) {
-        return thread.id;
-      }
-    }
-  }
-
-  return undefined;
-};
 
 const authenticateMarketingSession = async (request: APIRequestContext) => {
   const apiBaseURL = process.env["E2E_API_URL"] ?? "http://localhost:3001";

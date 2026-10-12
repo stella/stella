@@ -106,6 +106,7 @@ const axes = [
   ["steps.pilot.outputs.coverage_profile", ["normal-v1", "pilot-fast-v1"]],
   ["steps.changed-files.outputs.package_checks_required", ["false", "true"]],
   ["steps.changed-files.outputs.api_scope_unknown", ["false", "true"]],
+  ["steps.changed-files.outputs.legal_atlas_image_required", ["true"]],
 ] as const satisfies readonly (readonly [
   string,
   readonly (string | boolean)[],

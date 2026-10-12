@@ -10,8 +10,8 @@ import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
 
 import { testProcessBudgets } from "../apps/api/scripts/test-process-supervisor";
-import { CUSTOM_LINT_TEST_ARGS } from "./check-oxlint-rule-coverage.ts";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
+import { customLintTestCommand } from "./run-custom-lint-tests";
 import { jobCachePolicy } from "./workflow-cache-policy.ts";
 import { flattenWorkflowSteps, isWorkflowBarrier } from "./workflow-steps";
 
@@ -565,6 +565,24 @@ const withoutLocalVerification = (step: Step): Step => {
   return original;
 };
 
+// Project topology changes need parity too; the executable selection tests
+// guard this widening while the partition census still checks every other byte.
+const withoutApiProjectParityTrigger = (step: Step): Step => {
+  if (
+    step.name !== "Select typecheck parity coverage" ||
+    typeof step["run"] !== "string"
+  ) {
+    return step;
+  }
+  return {
+    ...step,
+    run: step["run"].replace(
+      ' || git("diff", "--name-only", base, "HEAD", "--", "apps/api/tsconfig*.json", "scripts/typecheck-parity.ts") !== ""',
+      "",
+    ),
+  };
+};
+
 const ownedSteps = (steps: readonly Step[]) =>
   steps
     .filter(({ name }) => !prerequisites.has(name))
@@ -573,6 +591,7 @@ const ownedSteps = (steps: readonly Step[]) =>
     .map(withoutContinuation)
     .map(withoutPreparedGeneration)
     .map(withoutTestTimeout)
+    .map(withoutApiProjectParityTrigger)
     .map(withoutStepId)
     .map((step) => {
       const { background, ...check } = step;
@@ -695,7 +714,9 @@ const legSteps = (
     );
   });
 const actualSteps = legSteps(partitions, partitionIds);
-const lintFixtureCommand = ["bun", ...CUSTOM_LINT_TEST_ARGS].join(" ");
+const lintFixtureCommand = ["bun", ...customLintTestCommand().slice(1)].join(
+  " ",
+);
 const stepFieldsSchema = v.looseObject({
   env: v.optional(v.unknown()),
   if: v.optional(v.string()),
@@ -705,6 +726,32 @@ const stepFields = (step: Step | undefined) =>
   v.parse(stepFieldsSchema, step ?? {});
 const baseSteps = legSteps(baseline, baselineIds).map((step) => {
   const fields = stepFields(step);
+  const runnerMigrations = {
+    "Test oxlint plugins": {
+      before:
+        "bun test scripts/oxlint-plugin-test-coverage.test.ts\nfind ./.oxlint-plugins/__tests__ -maxdepth 1 -name '*.test.ts' -print0 | sort -z | xargs -0 bun test\n",
+      after:
+        "bun test scripts/oxlint-plugin-test-coverage.test.ts\nbun scripts/run-custom-lint-tests.ts\n",
+    },
+    "Test aggregate inventories": {
+      before:
+        "bun test scripts/check-aggregate-locks.test.ts scripts/check-aggregate-mutations.test.ts .oxlint-plugins/__tests__/aggregate-lock-sites.test.ts .oxlint-plugins/__tests__/confine-aggregate-lock.test.ts",
+      after:
+        "bun scripts/run-custom-lint-tests.ts scripts/check-aggregate-locks.test.ts scripts/check-aggregate-mutations.test.ts .oxlint-plugins/__tests__/aggregate-lock-sites.test.ts .oxlint-plugins/__tests__/confine-aggregate-lock.test.ts",
+    },
+    "Test write contract inventories": {
+      before:
+        "bun test scripts/check-write-contracts.test.ts .oxlint-plugins/__tests__/require-write-contract.test.ts",
+      after:
+        "bun scripts/run-custom-lint-tests.ts scripts/check-write-contracts.test.ts .oxlint-plugins/__tests__/require-write-contract.test.ts",
+    },
+  };
+  const migration = Object.entries(runnerMigrations).find(
+    ([name]) => name === step.name,
+  )?.[1];
+  if (migration !== undefined && fields.run === migration.before) {
+    return Object.assign(step, { run: migration.after });
+  }
   if (
     step.name !== "Documentation source policy rule" ||
     fields.run !== `${lintFixtureCommand}\nbun run check:docs-sources\n`
