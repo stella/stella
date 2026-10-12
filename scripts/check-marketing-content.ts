@@ -21,8 +21,30 @@ const POLICY_EVIDENCE_PATH = "docs/policies/evidence.json";
 const CLI_REGISTRY_SNAPSHOT_PATH =
   "packages/cli/src/generated/registry-snapshot.json";
 
+const ROOT_README_PATH = "README.md";
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
+
+// The root README's tour embeds the captured product screenshots by
+// repository-relative path; a renamed capture must fail here, not render as
+// a broken image on GitHub.
+export const findMissingReadmeImages = (
+  readme: string,
+  exists: (relativePath: string) => boolean,
+): string[] => {
+  const missing: string[] = [];
+  for (const match of readme.matchAll(/\b(?:src|srcset)="([^"]+)"/gu)) {
+    const reference = match[1];
+    if (reference === undefined || /^[a-z][a-z\d+.-]*:/iu.test(reference)) {
+      continue;
+    }
+    if (!exists(reference) && !missing.includes(reference)) {
+      missing.push(reference);
+    }
+  }
+  return missing;
+};
 
 const getCapabilityIds = (rootDir: string): Set<string> => {
   const catalogPath = nodePath.join(rootDir, CAPABILITY_CATALOG_PATH);
@@ -176,6 +198,16 @@ export const checkMarketingContent = (rootDir: string): string[] => {
     if (!existsSync(heroPath)) {
       errors.push(`${product.slug}: missing captured hero ${product.hero.src}`);
     }
+  }
+
+  const readme = readFileSync(
+    nodePath.join(rootDir, ROOT_README_PATH),
+    "utf-8",
+  );
+  for (const reference of findMissingReadmeImages(readme, (relativePath) =>
+    existsSync(nodePath.join(rootDir, relativePath)),
+  )) {
+    errors.push(`${ROOT_README_PATH}: missing image ${reference}`);
   }
 
   const policyManifest: unknown = JSON.parse(
