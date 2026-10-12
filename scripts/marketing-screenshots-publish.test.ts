@@ -42,7 +42,72 @@ const reusableJobs = v.parse(
 const stepsOf = (workflow: unknown, job: string) =>
   workflowJobSteps(workflow, job).map((step) => v.parse(stepSchema, step));
 
+// Commands the publish job's shell steps may run: shell builtins and
+// coreutils that read or copy files, nothing that executes a file.
+const PUBLISH_SHELL_COMMANDS = new Set([
+  "[[",
+  "cd",
+  "cp",
+  "do",
+  "done",
+  "echo",
+  "else",
+  "exit",
+  "fi",
+  "find",
+  "for",
+  "head",
+  "if",
+  "od",
+  "pwd",
+  "read",
+  "set",
+  "then",
+  "tr",
+  "wc",
+  "while",
+]);
+
+/** The command word of every simple command in a shell script. */
+const commandsOf = (script: string): string[] =>
+  script
+    .split("\n")
+    .map((line) => line.replace(/#.*$/u, "").trim())
+    .filter(Boolean)
+    .flatMap((line) =>
+      line
+        .split(/\|\||&&|;|\||\$\(|<\(|\bthen\b|\bdo\b|^!|\bif\b|\bwhile\b/u)
+        .map((part) => part.trim())
+        .filter(Boolean),
+    )
+    .map((part) => part.split(/\s+/u)[0] ?? "")
+    .filter(
+      (word) =>
+        word !== "" &&
+        !/^[A-Za-z_][A-Za-z0-9_]*=/u.test(word) &&
+        !/^[\])"'<>(]/u.test(word) &&
+        !/^(?:!|\]\]|\)\)?|\(\(|\\|count|done<|fi\)?)$/u.test(word),
+    );
+
 describe("screenshot update trust boundary", () => {
+  test("the shell allowlist sees commands that would run branch files", () => {
+    for (const script of [
+      "bash scripts/x.sh",
+      "./tool --flag",
+      "if true; then python tool.py; fi",
+      "x=$(node -e 1)",
+      "echo ok && sh run.sh",
+      "find . | xargs rm",
+    ]) {
+      expect(
+        commandsOf(script).every((command) =>
+          PUBLISH_SHELL_COMMANDS.has(command),
+        ),
+        script,
+      ).toBe(false);
+    }
+  });
+
   test("the push key is never handed to the reusable workflow", () => {
     for (const name of [
       "marketing-screenshots.yml",
@@ -89,10 +154,37 @@ describe("screenshot update trust boundary", () => {
     ).toEqual([["publish", "release-app"]]);
 
     const publish = stepsOf(reusable, "publish");
+    // An allowlist, not a denylist: the job holds the push key, so every
+    // step is pinned by name and action, and shell steps may only call the
+    // commands below. Anything new fails here until reviewed.
+    expect(publish.map((step) => [step.name, step.uses ?? "run"])).toEqual([
+      ["Validate inputs", "run"],
+      [
+        "Checkout the regenerated head",
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+      ],
+      [
+        "Download regenerated baselines",
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+      ],
+      ["Stage validated baselines", "run"],
+      [
+        "Mint App token",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1",
+      ],
+      [
+        "Push regenerated baselines",
+        "stella/.github/.github/actions/signed-commit@167fb396c6c0f4e07296ad2cd72e6ef15367c776",
+      ],
+    ]);
     for (const step of publish) {
-      // A local action would resolve from the checked-out branch.
-      expect(step.uses?.startsWith("./") ?? false).toBe(false);
-      expect(step.run ?? "").not.toMatch(/\bbun\b|\bnpm\b|\bnode\b|\bmake\b/u);
+      if (step.run !== undefined) {
+        expect(commandsOf(step.run), step.name).toEqual(
+          commandsOf(step.run).filter((command) =>
+            PUBLISH_SHELL_COMMANDS.has(command),
+          ),
+        );
+      }
     }
     const checkout = publish.find((step) =>
       step.uses?.startsWith("actions/checkout@"),
