@@ -273,7 +273,15 @@ const Sidebar = ({
 
   return (
     <div
-      className="group peer text-sidebar-foreground hidden md:block"
+      className={cn(
+        "group peer text-sidebar-foreground hidden [--sidebar-inline-size:calc(var(--sidebar-width)+var(--sidebar-safe-area-inline))] md:block",
+        side === "left"
+          ? "[--sidebar-safe-area-inline:var(--safe-area-inline-start)]"
+          : "[--sidebar-safe-area-inline:var(--safe-area-inline-end)]",
+        variant === "floating" || variant === "inset"
+          ? "data-[collapsible=icon]:[--sidebar-inline-size:calc(var(--sidebar-width-icon)+--spacing(4)+var(--sidebar-safe-area-inline))]"
+          : "data-[collapsible=icon]:[--sidebar-inline-size:calc(var(--sidebar-width-icon)+var(--sidebar-safe-area-inline))]",
+      )}
       data-collapsible={state === "collapsed" ? collapsible : ""}
       data-side={side}
       data-slot="sidebar"
@@ -283,33 +291,31 @@ const Sidebar = ({
       {/* This is what handles the sidebar gap on desktop */}
       <div
         className={cn(
-          "relative w-(--sidebar-width) bg-transparent transition-[width] duration-200 ease-in-out",
+          "relative w-(--sidebar-inline-size) bg-transparent transition-[width] duration-200 ease-in-out",
           "group-data-[collapsible=offcanvas]:w-0",
           "group-data-[side=right]:rotate-180",
-          variant === "floating" || variant === "inset"
-            ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]"
-            : "group-data-[collapsible=icon]:w-(--sidebar-width-icon)",
         )}
         data-slot="sidebar-gap"
       />
       <div
         className={cn(
-          "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[inset-inline-start,inset-inline-end,width] duration-200 ease-in-out md:flex",
+          "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-inline-size) transition-[inset-inline-start,inset-inline-end,width] duration-200 ease-in-out md:flex",
           // Fixed to the viewport, so it clears the notch and the home
-          // indicator itself; its width includes that padding.
+          // indicator itself. The shared inline size also reserves this
+          // padding in the layout gap without shrinking the usable width.
           "pt-(--safe-area-top) pb-(--safe-area-bottom)",
           side === "left"
-            ? "start-0 ps-(--safe-area-inline-start) group-data-[collapsible=offcanvas]:start-[calc(var(--sidebar-width)*-1)]"
-            : "end-0 pe-(--safe-area-inline-end) group-data-[collapsible=offcanvas]:end-[calc(var(--sidebar-width)*-1)]",
+            ? "start-0 ps-(--safe-area-inline-start) group-data-[collapsible=offcanvas]:start-[calc(var(--sidebar-inline-size)*-1)]"
+            : "end-0 pe-(--safe-area-inline-end) group-data-[collapsible=offcanvas]:end-[calc(var(--sidebar-inline-size)*-1)]",
           // Adjust the padding for floating and inset variants.
           variant === "floating" || variant === "inset"
             ? [
-                "p-2 pt-[calc(var(--safe-area-top)+--spacing(2))] pb-[calc(var(--safe-area-bottom)+--spacing(2))] group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]",
+                "p-2 pt-[calc(var(--safe-area-top)+--spacing(2))] pb-[calc(var(--safe-area-bottom)+--spacing(2))] group-data-[collapsible=icon]:w-[calc(var(--sidebar-inline-size)+2px)]",
                 side === "left"
                   ? "ps-[calc(var(--safe-area-inline-start)+--spacing(2))]"
                   : "pe-[calc(var(--safe-area-inline-end)+--spacing(2))]",
               ]
-            : "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-e group-data-[side=right]:border-s",
+            : "group-data-[side=left]:border-e group-data-[side=right]:border-s",
           className,
         )}
         data-slot="sidebar-container"
