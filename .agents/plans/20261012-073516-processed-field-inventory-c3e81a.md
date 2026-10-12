@@ -59,7 +59,10 @@ scalars slice.
   precedent; the reader renders `number` as gutter chrome and
   `paragraph-range.ts` resolves it). One shared extractor,
   `parsers/court-paragraph-numbers.ts`, runs as the last step of the CZ NS,
-  NSS, ÚS, regional, SK ÚS and SK courts parsers. It accepts `[N]`, `N.`,
+  NSS, ÚS, regional and SK ÚS parsers (the SK general courts' PDF parser
+  lives in the library layer, which does not import the ingestion handlers;
+  it follows once the inline helpers move to a shared owner). It accepts
+  `[N]`, `N.`,
   `N)` only when the decision's body paragraphs read as one numbering
   (counting from 1, nested lists restarting beside it, density and lead-in
   bounds, small forward skips kept as printed). Two invariants hold with no
@@ -100,7 +103,7 @@ pairs.
   `courtParagraphNumbersByAnchor(ast.blocks)` for each source's recording, so
   a write path that forgets it fails.
 - **Rollout:** additive migration (nullable column, no default, lock/statement
-  timeouts set); the replay re-parse of the six bumped sources fills it; a
+  timeouts set); the replay re-parse of the five bumped sources fills it; a
   projection-only bounded backfill (read AST from object storage, write the
   column, cursor-paginated in the maintenance lane, load-gated) fills current
   rows of the other numbered sources (eu-ecj, hu-bhgy, pl-tk).
@@ -136,8 +139,8 @@ second tool; it is shaped to be picked up by that generator:
   under `parsers/__fixtures__` with provenance (source URL, capture time):
   each recording was parsed with the current parser and each number attached
   to the stored block whose text matches (letters and digits, first 60),
-  leaving the seed's text and anchors as they were. The cz-ns, sk-us and
-  sk-courts seeds were refreshed by the extractor over their stored blocks,
+  leaving the seed's text and anchors as they were. The cz-ns and sk-us
+  seeds were refreshed by the extractor over their stored blocks,
   which also normalises the numbered blocks' inlines (leading/trailing
   whitespace and line-break nodes trimmed).
 
@@ -184,7 +187,7 @@ Paragraph numbers (implemented; evidence = recordings the suite parses):
 | cz-us                                               | provided (shared extractor) | three `cz-us-*.html.gz` recordings, `cz-us-page.json.gz` (1993, unnumbered)                          |
 | cz-regional                                         | provided (shared extractor) | `cz-regional-finaldoc-{district,appellate}.json.gz`, two `cz-regional-*.finaldoc.json.gz` recordings |
 | sk-us                                               | provided (shared extractor) | `sk-us-iii-us-265-2026.content.json.gz`                                                              |
-| sk-courts                                           | skipped: unassessed         | unrecorded: no recorded general-court PDF with numbered reasoning yet                                |
+| sk-courts                                           | skipped: not-extracted      | unrecorded: no recorded general-court PDF with numbered reasoning yet                                |
 | eu-ecj                                              | provided (point ids)        | `eu-ecj/62022CJ0128.en.html.gz`                                                                      |
 | hu-bhgy                                             | provided (`[N]`)            | `hu-bhgy-decision.docx`                                                                              |
 | pl-tk                                               | provided (`wyrok_akapitNr`) | `pl-tk-case-sk-14-11.html.gz`                                                                        |
@@ -232,8 +235,8 @@ or is fixed in that slice.
 
 1. **This branch (done):** registry, constructors, baseline, evidence
    readers, conformance suite; `court-paragraph-numbers` for every source;
-   shared extractor in six CZ/SK parsers; parser versions bumped (cz-regional
-   13, cz-ns 18, cz-nss 20, cz-us 25, sk-courts 17, sk-us 11); seed
+   shared extractor in five CZ/SK parsers; parser versions bumped (cz-regional
+   13, cz-ns 18, cz-nss 20, cz-us 25, sk-us 11); seed
    snapshots refreshed.
 2. **Paragraph-number projection, one PR:** column + migration, every write
    path, conformance assertion, projection-only backfill job; then a small PR
@@ -273,8 +276,8 @@ Bun tests: `court-paragraph-numbers.test.ts` (recordings per court),
 Re-parse is the existing stored-raw replay (`replay-tick`, enrolment in
 `replay-enrolment.ts`, all sources `off` today; `dry-run` then `enrolled`
 with a daily budget ≤ 10 000, load-gated by `REPLAY_HEALTH_CONFIG`). The
-parser-version bump makes every row of the six sources eligible; no publisher
-contact and no sitemap/shard scans. Text may change for any of the six:
+parser-version bump makes every row of the five sources eligible; no publisher
+contact and no sitemap/shard scans. Text may change for any of the five:
 where a decision's markers are now moved into `number` they leave the text,
 and where the numbering is rejected or reads as unnumbered the markers now
 stay in it (the older cz-nss, cz-us and cz-regional parsers removed them

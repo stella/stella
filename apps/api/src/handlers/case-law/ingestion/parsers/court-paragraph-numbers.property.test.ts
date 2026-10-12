@@ -109,9 +109,7 @@ const invariantViolations = (
     return [];
   }
   const source = before[first.index];
-  const style = (
-    Object.keys(STYLE_MARKER) as (keyof typeof STYLE_MARKER)[]
-  ).find(
+  const style = (["bracket", "dot", "paren"] as const).find(
     (candidate) =>
       source?.type === "paragraph" &&
       STYLE_MARKER[candidate].test(source.plainText),

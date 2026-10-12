@@ -37,9 +37,10 @@ import {
   PROCESSED_FIELD_EVIDENCE_READERS,
 } from "@/api/tests/helpers/processed-field-evidence";
 
-const SOURCES = Object.keys(
-  PROCESSED_FIELD_INVENTORY,
-) as ProcessedFieldSourceKey[];
+const isSourceKey = (key: string): key is ProcessedFieldSourceKey =>
+  Object.hasOwn(PROCESSED_FIELD_INVENTORY, key);
+
+const SOURCES = Object.keys(PROCESSED_FIELD_INVENTORY).filter(isSourceKey);
 
 const declarations = SOURCES.flatMap((source) =>
   PROCESSED_FIELDS.map((field) => ({

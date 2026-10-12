@@ -81,7 +81,7 @@ const paragraphNumbers = (sources: readonly string[]) =>
  */
 export const BOOTSTRAP_BACKLOG = {
   skipped: {
-    "not-extracted": paragraphNumbers(["pl-courts", "pl-nsa"]),
+    "not-extracted": paragraphNumbers(["pl-courts", "pl-nsa", "sk-courts"]),
     unassessed: paragraphNumbers([
       ...AT_RIS,
       "pl-kio",
@@ -90,7 +90,6 @@ export const BOOTSTRAP_BACKLOG = {
       "pl-sn",
       "pl-uodo",
       "pl-uokik",
-      "sk-courts",
       "us-courtlistener",
     ]),
   },

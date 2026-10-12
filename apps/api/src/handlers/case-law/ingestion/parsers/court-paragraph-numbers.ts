@@ -28,14 +28,9 @@ import { logger } from "@/api/lib/observability/logger";
 import { normalizeInlineLine, stripInlineLinePrefix } from "./shared-inlines";
 
 /** The three ways Czech and Slovak courts print a paragraph number. */
-export const COURT_PARAGRAPH_MARKER_STYLES = [
-  "bracket",
-  "dot",
-  "paren",
-] as const;
+const COURT_PARAGRAPH_MARKER_STYLES = ["bracket", "dot", "paren"] as const;
 
-export type CourtParagraphMarkerStyle =
-  (typeof COURT_PARAGRAPH_MARKER_STYLES)[number];
+type CourtParagraphMarkerStyle = (typeof COURT_PARAGRAPH_MARKER_STYLES)[number];
 
 /**
  * A marker is the number, its punctuation, then horizontal space. The space
@@ -119,7 +114,7 @@ export const COURT_PARAGRAPH_NUMBERING_DEFECTS = {
   IRREGULAR_SEQUENCE: "irregular-sequence",
 } as const;
 
-export type CourtParagraphNumberingDefect =
+type CourtParagraphNumberingDefect =
   (typeof COURT_PARAGRAPH_NUMBERING_DEFECTS)[keyof typeof COURT_PARAGRAPH_NUMBERING_DEFECTS];
 
 export type CourtParagraphNumbering =
@@ -538,7 +533,7 @@ export const extractCourtParagraphNumbers = (
  * stay in it, but `#par=` links and the reader's gutter have no numbers for
  * this decision.
  */
-export const PARAGRAPH_NUMBERING_REJECTED =
+const PARAGRAPH_NUMBERING_REJECTED =
   "case_law.ingestion.paragraph_numbering_rejected";
 
 /**

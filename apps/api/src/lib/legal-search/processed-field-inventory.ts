@@ -125,16 +125,16 @@ export type ProcessedFieldDisposition =
   | SkippedProcessedField;
 
 /** Recorded publisher bytes the conformance suite parses for the claim. */
-export const recordedEvidence = (
+const recordedEvidence = (
   ...fixtures: readonly [string, ...string[]]
 ): ProcessedFieldEvidence => ({ kind: "recording", fixtures });
 
 /** No recording yet; the pair must be on the backlog baseline. */
-export const unrecordedEvidence = <const TText extends string>(
+const unrecordedEvidence = <const TText extends string>(
   reason: Stated<TText>,
 ): ProcessedFieldEvidence => ({ kind: "unrecorded", reason });
 
-export const providedField = <const THow extends string>(
+const providedField = <const THow extends string>(
   how: Stated<THow>,
   evidence: ProcessedFieldEvidence,
 ): ProvidedProcessedField => ({
@@ -144,7 +144,7 @@ export const providedField = <const THow extends string>(
   [STATED]: true,
 });
 
-export const skippedField = <const TText extends string>(
+const skippedField = <const TText extends string>(
   reason: ProcessedFieldSkipReason,
   justification: Stated<TText>,
   evidence: ProcessedFieldEvidence,
@@ -219,8 +219,8 @@ export const PROCESSED_FIELD_INVENTORY = {
   },
   [ADAPTER_KEYS.SK_COURTS]: {
     "court-paragraph-numbers": skippedField(
-      PROCESSED_FIELD_SKIP_REASONS.UNASSESSED,
-      "the PDF parser runs the shared extractor, but no recording shows it on a general-court decision with numbered reasoning, so whether the field is provided is unverified",
+      PROCESSED_FIELD_SKIP_REASONS.NOT_EXTRACTED,
+      "general-court decisions can number their reasoning ('1. Okresný súd …' in a seeded decision) and the PDF parser keeps the number as text; the shared extractor sits in the ingestion handlers, which the PDF parser's library layer does not import",
       unrecordedEvidence(
         "the two general-court PDFs checked on 2026-10-12 (a district and a regional decision) had unnumbered reasoning; the seeded decision's document was unavailable",
       ),

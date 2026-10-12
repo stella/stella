@@ -19,7 +19,10 @@ import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-n
 import { parseFindokDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-findok";
 import { parseNsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
 import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
-import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
+import {
+  parseRegionalDecision,
+  type ParseRegionalInput,
+} from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
 import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
 import { parseEcjDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
 import { parseHuBhgyDecision } from "@/api/handlers/case-law/ingestion/parsers/hu-bhgy";
@@ -140,11 +143,41 @@ const readCzUs: EvidenceReader = async (fixture) => {
   });
 };
 
-const arrayAt = (record: Record<string, unknown>, key: string) => {
-  const value = record[key];
-  // The recorded payload is the publisher's own JSON; its shape is what the
-  // adapter hands the parser unchanged.
-  return (isUnknownArray(value) ? value : []) as never;
+type FinaldocParagraph = ParseRegionalInput["header"][number];
+type FinaldocStyle = ParseRegionalInput["styles"][number];
+
+const isFinaldocParagraph = (value: unknown): value is FinaldocParagraph =>
+  isRecord(value) &&
+  typeof value["styleLocalId"] === "number" &&
+  "tableCellInfo" in value &&
+  isUnknownArray(value["texts"]) &&
+  value["texts"].every(
+    (span) =>
+      isRecord(span) &&
+      typeof span["text"] === "string" &&
+      typeof span["anonStyle"] === "string",
+  );
+
+const isFinaldocStyle = (value: unknown): value is FinaldocStyle =>
+  isRecord(value) &&
+  typeof value["localId"] === "number" &&
+  typeof value["alignment"] === "string" &&
+  typeof value["hasSpaceBefore"] === "boolean" &&
+  typeof value["hasSpaceAfter"] === "boolean" &&
+  typeof value["bold"] === "boolean" &&
+  typeof value["italic"] === "boolean";
+
+/** A recorded list of the publisher's shape; anything else fails loudly. */
+const arrayAt = <T>(
+  record: Record<string, unknown>,
+  key: string,
+  isItem: (value: unknown) => value is T,
+): T[] => {
+  const value = record[key] ?? [];
+  if (!isUnknownArray(value) || !value.every(isItem)) {
+    return panic(`finaldoc ${key} is not in the publisher's shape`);
+  }
+  return value;
 };
 
 const readCzRegional: EvidenceReader = async (fixture) => {
@@ -164,11 +197,11 @@ const readCzRegional: EvidenceReader = async (fixture) => {
         decisionDate: undefined,
         decisionType: "rozsudek",
         sourceUrl: undefined,
-        header: arrayAt(doc, "header"),
-        verdict: arrayAt(doc, "verdict"),
-        justification: arrayAt(doc, "justification"),
-        information: arrayAt(doc, "information"),
-        styles: arrayAt(doc, "styles"),
+        header: arrayAt(doc, "header", isFinaldocParagraph),
+        verdict: arrayAt(doc, "verdict", isFinaldocParagraph),
+        justification: arrayAt(doc, "justification", isFinaldocParagraph),
+        information: arrayAt(doc, "information", isFinaldocParagraph),
+        styles: arrayAt(doc, "styles", isFinaldocStyle),
         verdictText: textAt("verdictText"),
         justificationText: textAt("justificationText"),
       }).documentAst,
@@ -278,7 +311,7 @@ const readPlNsa: EvidenceReader = async (fixture) => {
         position: { shard, row },
         snapshot: PL_NSA_SNAPSHOT,
       });
-      const ast = built.decision?.documentAst;
+      const ast = built.decision.documentAst;
       return isDocumentAst(ast)
         ? [{ id: `${fixture}#${String(entry["case"])}`, ast }]
         : [];

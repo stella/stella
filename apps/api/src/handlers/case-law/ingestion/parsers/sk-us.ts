@@ -447,8 +447,7 @@ const SENTENCE_END = /[.!?][“”"»)]*(?:\s{2,}\d{1,4})?\s*$/u;
 
 /** Whether the text has opened a „quotation“ it has not closed. */
 const insideQuotation = (text: string): boolean =>
-  [...text].filter((character) => character === "„").length >
-  [...text].filter((character) => character === "“").length;
+  text.split("„").length > text.split("“").length;
 
 export type ParseSkUsDocumentOptions = {
   /** The XHTML the content endpoint served, base64-decoded. */
