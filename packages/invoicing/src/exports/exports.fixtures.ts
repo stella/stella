@@ -69,7 +69,7 @@ export const exportRecord = (seed: RecordSeed): InvoiceExportRecord => {
       vatRateBps: entry.vatRateBps,
       vatTreatment: entry.vatTreatment,
     })),
-  }).unwrap();
+  }).unwrap("fixture lines have valid totals");
   return {
     id: "0192d6a4-7c1e-7b55-9a3e-2f1b6c8d4e01",
     documentType,

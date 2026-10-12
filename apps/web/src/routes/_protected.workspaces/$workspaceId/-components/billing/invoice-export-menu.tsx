@@ -113,7 +113,7 @@ export const InvoiceExportMenu = ({
     },
     onError: (error) => {
       analytics.captureError(error);
-      notifyUserError(error, t("billing.invoices.export.failed"));
+      notifyUserError(error, t("workspaces.views.exportFailed"));
     },
   });
 
@@ -134,7 +134,7 @@ export const InvoiceExportMenu = ({
         ) : (
           <DownloadIcon className="size-3.5" />
         )}
-        {t("billing.invoices.export.menu")}
+        {t("clauses.export")}
       </MenuTrigger>
       <MenuPopup className="min-w-64">
         {FORMAT_GROUPS.map((group, index) => (

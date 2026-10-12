@@ -540,9 +540,7 @@
         "eBilling": "E-fakturowanie",
         "eso9": "Arkusz importu ESO9 (XLSX)",
         "exporting": "Przygotowywanie eksportu…",
-        "failed": "Eksport nie powiódł się",
         "isdoc": "E-faktura ISDOC (ABRA Gen i inne)",
-        "menu": "Eksportuj",
         "spreadsheets": "Arkusze",
         "xlsx": "Faktury (XLSX)",
         "xlsxLines": "Pozycje faktur (XLSX)"

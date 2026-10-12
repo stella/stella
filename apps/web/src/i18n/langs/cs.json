@@ -540,9 +540,7 @@
         "eBilling": "Elektronická fakturace",
         "eso9": "Importní tabulka ESO9 (XLSX)",
         "exporting": "Připravuji export…",
-        "failed": "Export se nezdařil",
         "isdoc": "E-faktura ISDOC (ABRA Gen a další)",
-        "menu": "Exportovat",
         "spreadsheets": "Tabulky",
         "xlsx": "Faktury (XLSX)",
         "xlsxLines": "Položky faktur (XLSX)"

@@ -540,9 +540,7 @@
         "eBilling": "E-számlázás",
         "eso9": "ESO9 importtábla (XLSX)",
         "exporting": "Export előkészítése…",
-        "failed": "Az exportálás nem sikerült",
         "isdoc": "ISDOC e-számla (ABRA Gen és mások)",
-        "menu": "Exportálás",
         "spreadsheets": "Táblázatok",
         "xlsx": "Számlák (XLSX)",
         "xlsxLines": "Számlatételek (XLSX)"

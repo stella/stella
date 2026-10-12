@@ -540,9 +540,7 @@
         "eBilling": "Faturamento eletrônico",
         "eso9": "Planilha de importação ESO9 (XLSX)",
         "exporting": "Preparando exportação…",
-        "failed": "Falha na exportação",
         "isdoc": "Fatura eletrônica ISDOC (ABRA Gen e outros)",
-        "menu": "Exportar",
         "spreadsheets": "Planilhas",
         "xlsx": "Faturas (XLSX)",
         "xlsxLines": "Itens de fatura (XLSX)"
