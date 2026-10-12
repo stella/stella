@@ -152,8 +152,14 @@ describe("inline citation chips draw the cited file's type", () => {
     },
   );
 
-  test("file glyphs stay decorative", () => {
-    const view = renderChip(toChatSourceCitationHref(TARGETS["pdf-bates"]));
+  test.each([
+    ...Object.values(TARGETS).map((target) => [
+      target.type,
+      toChatSourceCitationHref(target),
+    ]),
+    ["folio", "#folio:seq-0064"],
+  ])("the %s citation's file glyph stays decorative", (_kind, href) => {
+    const view = renderChip(href);
     expect(
       view.container.querySelector("svg")?.getAttribute("aria-hidden"),
     ).toBe("true");

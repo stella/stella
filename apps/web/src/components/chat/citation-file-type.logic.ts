@@ -30,5 +30,12 @@ export const FOLIO_CITATION_MIME_TYPE = DOCX_MIME;
  * Office citation block ids carry their format as a prefix
  * (`xlsx-…` or `pptx-…`, enforced by the href parser).
  */
-export const officeCitationMimeType = (blockId: string): string =>
-  blockId.startsWith("xlsx-") ? XLSX_MIME : PPTX_MIME;
+export const officeCitationMimeType = (blockId: string): string => {
+  if (blockId.startsWith("xlsx-")) {
+    return XLSX_MIME;
+  }
+  if (blockId.startsWith("pptx-")) {
+    return PPTX_MIME;
+  }
+  return panic(`Unhandled office citation block id: ${blockId}`);
+};
