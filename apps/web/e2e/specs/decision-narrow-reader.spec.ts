@@ -38,13 +38,12 @@ const topmostAtCentreIsInside = async (
     return false;
   }
   const handle = await container.elementHandle();
-  return target.page().evaluate(
-    ({ x, y, element }) => {
-      const hit = document.elementFromPoint(x, y);
-      return hit !== null && element !== null && element.contains(hit);
-    },
-    { x: box.x + box.width / 2, y: box.y + box.height / 2, element: handle },
-  );
+  return target
+    .page()
+    .evaluate(
+      ({ x, y, element }) => element.contains(document.elementFromPoint(x, y)),
+      { x: box.x + box.width / 2, y: box.y + box.height / 2, element: handle },
+    );
 };
 
 const readerTextScale = async (page: Page) =>

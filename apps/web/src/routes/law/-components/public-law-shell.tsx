@@ -231,8 +231,10 @@ function PublicLawTopBar() {
             <>
               <BreadcrumbSeparator className="shrink-0" />
               <BreadcrumbItem className="min-w-0">
-                <BreadcrumbPage className="min-w-0 truncate">
-                  {t("caseLaw.coverage.title")}
+                <BreadcrumbPage className="min-w-0">
+                  <span className="block truncate">
+                    {t("caseLaw.coverage.title")}
+                  </span>
                 </BreadcrumbPage>
               </BreadcrumbItem>
             </>
