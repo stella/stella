@@ -11,6 +11,7 @@ import {
   readSync,
   writeSync,
 } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
@@ -31,6 +32,7 @@ type LoggedInstallOptions = {
   logFile: string;
   timeoutMs?: number;
   report?: (message: string) => void;
+  timeoutDiagnostics?: (pid: number) => string;
 };
 
 export const runLoggedInstall = async ({
@@ -39,6 +41,23 @@ export const runLoggedInstall = async ({
   timeoutMs = installTimeoutMs(process.platform),
   report = (message) => {
     process.stdout.write(message);
+  },
+  timeoutDiagnostics = (pid) => {
+    if (process.platform !== "linux") {
+      return `Install timeout diagnostics unavailable on ${process.platform}\n`;
+    }
+    const result = Bun.spawnSync(
+      [
+        "bash",
+        path.join(import.meta.dir, "ci-install-timeout-diagnostics.sh"),
+        String(pid),
+        process.env["BUN_INSTALL_CACHE_DIR"] ??
+          path.join(homedir(), ".bun/install/cache"),
+        tmpdir(),
+      ],
+      { stdout: "pipe", stderr: "pipe", timeout: 5000 },
+    );
+    return `${result.stdout.toString()}${result.stderr.toString()}\nDiagnostic command exit ${childExitStatus(result)}\n`;
   },
 }: LoggedInstallOptions) => {
   mkdirSync(path.dirname(logFile), { recursive: true });
@@ -60,17 +79,37 @@ export const runLoggedInstall = async ({
       stdin: "ignore",
       stdout: "pipe",
       stderr: "pipe",
-      timeout: timeoutMs,
-      killSignal: "SIGKILL",
     });
+    let captured = false;
+    const deadline = setTimeout(() => {
+      captured = true;
+      try {
+        summary(
+          `Install deadline reached; capturing state before SIGKILL\n${timeoutDiagnostics(child.pid)}`,
+        );
+      } catch (error) {
+        summary(`Install diagnostic capture failed: ${String(error)}\n`);
+      } finally {
+        if (child.exitCode === null) {
+          child.kill("SIGKILL");
+        }
+      }
+    }, timeoutMs);
     // Verbose extraction can emit hundreds of thousands of lines. Keep the
     // artifact complete without coupling install throughput to the CI console.
-    await Promise.all([
-      child.stdout.pipeTo(new WritableStream({ write: record })),
-      child.stderr.pipeTo(new WritableStream({ write: record })),
-      child.exited,
-    ]);
-    const exitCode = childExitStatus(child);
+    try {
+      await Promise.all([
+        child.stdout.pipeTo(new WritableStream({ write: record })),
+        child.stderr.pipeTo(new WritableStream({ write: record })),
+        child.exited,
+      ]);
+    } finally {
+      clearTimeout(deadline);
+    }
+    if (child.signalCode === "SIGKILL" && !captured) {
+      summary(timeoutDiagnostics(child.pid));
+    }
+    const exitCode = captured ? 1 : childExitStatus(child);
     if (exitCode !== 0) {
       const size = fstatSync(descriptor).size;
       const length = Math.min(size, CONSOLE_TAIL_BYTES);

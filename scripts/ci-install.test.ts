@@ -1,5 +1,12 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -24,6 +31,57 @@ afterEach(() => {
     rmSync(root, { force: true, recursive: true });
   }
 });
+
+test.skipIf(process.platform === "win32")(
+  "Linux timeout diagnostics select the installer descendants and capture store capacity",
+  () => {
+    const root = mkdtempSync(path.join(tmpdir(), "install-diagnostic-"));
+    roots.push(root);
+    const bin = path.join(root, "bin");
+    const store = path.join(root, "store");
+    mkdirSync(bin);
+    mkdirSync(store);
+    const commands = {
+      ps: "printf '%s\\n' '1000 1 S futex_wait bun' '1001 1000 S wait worker' '2000 1 S wait unrelated'",
+      cat: 'printf "proc read: %s\\n" "$*"',
+      df: 'printf "filesystem snapshot: %s\\n" "$*"',
+      find: 'printf "123 fixture.tmp-unfinished\\n"',
+    };
+    for (const [name, body] of Object.entries(commands)) {
+      const filename = path.join(bin, name);
+      writeFileSync(filename, `#!/bin/sh\n${body}\n`);
+      chmodSync(filename, 0o755);
+    }
+    const result = Bun.spawnSync(
+      [
+        "bash",
+        path.join(import.meta.dir, "ci-install-timeout-diagnostics.sh"),
+        "1000",
+        store,
+        root,
+      ],
+      {
+        env: {
+          ...process.env,
+          PATH: `${bin}${path.delimiter}${process.env["PATH"] ?? ""}`,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    const output = result.stdout.toString();
+    expect(output).toContain("1000 1 S futex_wait bun");
+    expect(output).toContain("1001 1000 S wait worker");
+    expect(output).not.toContain("unrelated");
+    expect(output).toContain("/proc/1000/status /proc/1000/wchan");
+    expect(output).toContain("/proc/1001/status /proc/1001/wchan");
+    expect(output).toContain("Process 1000 open fd count: 0");
+    expect(output).toContain(`filesystem snapshot: -h ${store} ${root}`);
+    expect(output).toContain(`filesystem snapshot: -i ${store} ${root}`);
+    expect(output).toContain("fixture.tmp-unfinished");
+  },
+);
 
 test("failed and hung installers preserve output and never retry", async () => {
   const root = mkdtempSync(path.join(tmpdir(), "ci-install-"));
@@ -52,11 +110,17 @@ test("failed and hung installers preserve output and never retry", async () => {
       ],
       logFile,
       timeoutMs: 500,
+      timeoutDiagnostics: (pid) => {
+        process.kill(pid, 0);
+        return "Live installer state captured\n";
+      },
     }),
   ).not.toBe(0);
   const hung = readFileSync(logFile, "utf-8");
   expect(hung).toContain("partial output before hang");
   expect(hung).toContain("Install finished;");
+  expect(hung).toContain("Live installer state captured");
+  expect(hung).toContain("signal SIGKILL");
   expect(hung.match(/Install started/gu)).toHaveLength(1);
 });
 
