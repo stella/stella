@@ -16,6 +16,7 @@ import { getRemainingUsageUnits } from "@/api/lib/usage/usage-ledger";
 /** Read the caller organisation's usage entitlement and current state. */
 
 const config = {
+  contract: "patch",
   description:
     "Read the organization's current usage entitlement: plan, seats, " +
     "billing period, and how many usage units (AI credits) remain this " +

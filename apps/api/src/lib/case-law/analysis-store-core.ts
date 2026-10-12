@@ -21,6 +21,7 @@ import type { Transaction } from "@/api/db/root";
 import { caseLawAnalysisFailures, caseLawDecisions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { redactedProviderDiagnostic } from "@/api/lib/errors/redacted-provider-diagnostic";
 
 import {
   ANALYSIS_FAILURE_HOLD_MS,
@@ -206,16 +207,18 @@ const releaseRun = async (
       RETURNING "id"
     )
     INSERT INTO "case_law_analysis_failures"
-      ("decision_id", "key_tag", "input_fingerprint", "code", "key_source", "provider", "recorded_at")
+      ("decision_id", "key_tag", "input_fingerprint", "code", "key_source", "provider", "recorded_at", "provider_diagnostic")
     SELECT "id", ${keyTag}, ${record.inputFingerprint}, ${record.code},
-      ${record.keySource}, ${record.provider}, ${recordedAt}::timestamptz
+      ${record.keySource}, ${record.provider}, ${recordedAt}::timestamptz,
+      ${record.providerDiagnostic === undefined ? null : JSON.stringify(record.providerDiagnostic)}::text::jsonb
     FROM released
     ON CONFLICT ("decision_id", "key_tag") DO UPDATE SET
       "input_fingerprint" = EXCLUDED."input_fingerprint",
       "code" = EXCLUDED."code",
       "key_source" = EXCLUDED."key_source",
       "provider" = EXCLUDED."provider",
-      "recorded_at" = EXCLUDED."recorded_at"
+      "recorded_at" = EXCLUDED."recorded_at",
+      "provider_diagnostic" = EXCLUDED."provider_diagnostic"
   `);
   const expiredBefore = new Date(
     record.recordedAt.getTime() - ANALYSIS_FAILURE_HOLD_MS,
@@ -375,6 +378,7 @@ export const createDbAnalysisStore = (
         keySource: caseLawAnalysisFailures.keySource,
         provider: caseLawAnalysisFailures.provider,
         recordedAt: caseLawAnalysisFailures.recordedAt,
+        providerDiagnostic: caseLawAnalysisFailures.providerDiagnostic,
       })
       .from(caseLawAnalysisFailures)
       .where(
@@ -384,7 +388,18 @@ export const createDbAnalysisStore = (
         ),
       )
       .limit(1);
-    return row ?? null;
+    if (row === undefined) {
+      return null;
+    }
+    const { providerDiagnostic, ...failure } = row;
+    return {
+      ...failure,
+      ...(providerDiagnostic === null
+        ? {}
+        : {
+            providerDiagnostic: redactedProviderDiagnostic(providerDiagnostic),
+          }),
+    };
   },
   peek: () => null,
 });

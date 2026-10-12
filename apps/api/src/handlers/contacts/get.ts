@@ -15,6 +15,7 @@ const readContactByIdParamsSchema = t.Object({
 
 const readContactById = createSafeRootHandler(
   {
+    contract: "patch",
     description: "Read a contact by ID.",
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,

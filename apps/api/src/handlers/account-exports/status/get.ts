@@ -14,6 +14,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 const personalDataExportStatus = createSafeSessionHandler(
   {
     accountAccess: ACCOUNT_ACCESS.accountControl,
+    contract: "patch",
     access: "read",
     mcp: { type: "internal", reason: "auth_plumbing" },
     params: accountExportParams,

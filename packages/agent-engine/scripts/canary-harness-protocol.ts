@@ -216,8 +216,8 @@ export const consumeCanaryHarnessChunk = (
     case EventType.TEXT_MESSAGE_START:
     case EventType.TOOL_CALL_ARGS:
     case "TOOL_CALL_END":
-    case EventType.ACTIVITY_DELTA:
-    case EventType.ACTIVITY_SNAPSHOT:
+    case "ACTIVITY_DELTA":
+    case "ACTIVITY_SNAPSHOT":
     case EventType.RAW:
     case EventType.REASONING_MESSAGE_CHUNK:
     case EventType.SUBAGENT_ERROR:

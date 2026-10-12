@@ -16,6 +16,7 @@ import {
 } from "./schema";
 
 const config = {
+  contract: "patch",
   description:
     "Update a personal saved time narrative in the active organization.",
   permissions: { timeEntry: ["update"] },

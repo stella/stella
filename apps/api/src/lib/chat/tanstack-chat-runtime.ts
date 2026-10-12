@@ -10,7 +10,7 @@
 // through a reader here. A consumer that spells `chunk.finishReason` no longer
 // compiles.
 
-import { chat } from "@tanstack/ai";
+import { chat, EventType } from "@tanstack/ai";
 import type {
   ChatMiddleware,
   RunFinishedEvent,
@@ -20,6 +20,12 @@ import type {
 } from "@tanstack/ai";
 import { panic } from "better-result";
 
+import {
+  CHAT_TOOL_EXECUTOR_METADATA_KEY,
+  chatToolExecutor,
+} from "@stll/api-contract/chat";
+
+import { arrayOrEmpty } from "@/api/lib/array";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -201,15 +207,150 @@ type ChatOptions = Omit<Parameters<typeof chat>[0], "middleware"> & {
   middleware?: ChatMiddleware[];
 };
 
-/** The streaming text form. `stream` and `outputSchema` belong to the owner. */
+/** The streaming text form. Output shape and tool ordering belong to the owner. */
 export type StreamChatChunksOptions = Omit<
   ChatOptions,
-  "outputSchema" | "stream"
+  "outputSchema" | "stream" | "toolExecution"
 >;
 
-export const streamChatChunks = (
+const providerToolMetadata = (metadata: unknown) => {
+  if (!isRecord(metadata)) {
+    return metadata;
+  }
+  const { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: _executor, ...provider } =
+    metadata;
+  return Object.keys(provider).length === 0 ? undefined : provider;
+};
+
+type ToolCallExecutorOptions = { id: string; name: string };
+
+export const streamChatChunks = async function* (
   options: StreamChatChunksOptions,
-): AsyncIterable<PublicStreamChunk> => chat(options);
+): AsyncIterable<PublicStreamChunk> {
+  const executors = new Map<string, "server" | "client">();
+  const storedExecutors = new Map<string, "server" | "client">();
+  // The SDK owns error results for unknown model-emitted tool names too.
+  const executorForCall = ({ id, name }: ToolCallExecutorOptions) =>
+    storedExecutors.get(id) ?? executors.get(name) ?? "server";
+  // Input-complete server calls can wait behind an approval. Their executor
+  // must survive snapshots so the browser does not offer a client resolution.
+  const messages = arrayOrEmpty(options.messages).map((message) => {
+    if ("parts" in message) {
+      return {
+        ...message,
+        parts: message.parts.map((part) => {
+          if (part.type !== "tool-call") {
+            return part;
+          }
+          const { metadata, ...call } = part;
+          const executor = chatToolExecutor(part);
+          if (executor !== null) {
+            storedExecutors.set(part.id, executor);
+          }
+          const provider = providerToolMetadata(metadata);
+          return {
+            ...call,
+            ...(provider === undefined ? {} : { metadata: provider }),
+          };
+        }),
+      };
+    }
+    if (message.toolCalls === undefined) {
+      return message;
+    }
+    return {
+      ...message,
+      toolCalls: message.toolCalls.map(({ metadata, ...call }) => {
+        const executor = chatToolExecutor({ type: "tool-call", metadata });
+        if (executor !== null) {
+          storedExecutors.set(call.id, executor);
+        }
+        const provider = providerToolMetadata(metadata);
+        return {
+          ...call,
+          ...(provider === undefined ? {} : { metadata: provider }),
+        };
+      }),
+    };
+  });
+  const middleware = [...arrayOrEmpty(options.middleware)];
+  middleware.push({
+    name: "stella-tool-executors",
+    onConfig: (_context, config) => {
+      // The final SDK configuration includes MCP and discovered lazy tools.
+      for (const tool of config.tools) {
+        executors.set(tool.name, tool.execute ? "server" : "client");
+      }
+    },
+  });
+  for await (const chunk of chat({
+    ...options,
+    messages,
+    toolExecution: "sequential",
+    middleware,
+  })) {
+    if (chunk.type === "TOOL_CALL_START") {
+      const executor = executorForCall({
+        id: chunk.toolCallId,
+        name: chunk.toolCallName,
+      });
+      yield {
+        ...chunk,
+        metadata: {
+          ...chunk.metadata,
+          [CHAT_TOOL_EXECUTOR_METADATA_KEY]: executor,
+        },
+      };
+      continue;
+    }
+    if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
+      yield {
+        ...chunk,
+        messages: chunk.messages.map((message) => {
+          if (message.role !== "assistant" || message.toolCalls === undefined) {
+            return message;
+          }
+          const tanstack = isRecord(message.metadata?.["tanstack"])
+            ? message.metadata["tanstack"]
+            : {};
+          const previousMetadata = isRecord(tanstack["toolCallMetadata"])
+            ? tanstack["toolCallMetadata"]
+            : {};
+          return {
+            ...message,
+            metadata: {
+              ...message.metadata,
+              tanstack: {
+                ...tanstack,
+                toolCallMetadata: Object.fromEntries(
+                  message.toolCalls.map((call) => {
+                    const executor = executorForCall({
+                      id: call.id,
+                      name: call.function.name,
+                    });
+                    const previous = previousMetadata[call.id];
+                    const metadata = isRecord(previous)
+                      ? previous
+                      : call.metadata;
+                    return [
+                      call.id,
+                      {
+                        ...metadata,
+                        [CHAT_TOOL_EXECUTOR_METADATA_KEY]: executor,
+                      },
+                    ];
+                  }),
+                ),
+              },
+            },
+          };
+        }),
+      };
+      continue;
+    }
+    yield chunk;
+  }
+};
 
 export type ChatObjectOptions = StreamChatChunksOptions & {
   outputSchema: SchemaInput;

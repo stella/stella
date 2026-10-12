@@ -21,6 +21,7 @@ const ACCOUNT_EXPORT_ENQUEUE_FAILED = failureSink({
 const requestPersonalDataExport = createSafeSessionHandler(
   {
     accountAccess: ACCOUNT_ACCESS.accountControl,
+    contract: "patch",
     access: "write",
     mcp: { type: "internal", reason: "auth_plumbing" },
   },

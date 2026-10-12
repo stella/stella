@@ -14,7 +14,10 @@ import {
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
 
-import { getProviderValues } from "@/components/ai-config-role-models.logic";
+import {
+  getProviderValues,
+  hasUsableOpenAIKey,
+} from "@/components/ai-config-role-models.logic";
 import { CopyActionButton } from "@/components/copy-action-button";
 import { env } from "@/env";
 import { detached } from "@/lib/detached";
@@ -127,7 +130,7 @@ type SettingsErrorProps = {
 };
 
 const SettingsError = ({ error }: SettingsErrorProps) => {
-  const translate = useTranslations();
+  const translate = useTranslations("organization.aiConfig");
   const setupGuidance =
     error.code === undefined ? undefined : providerSetupGuidance(error.code);
   return (
@@ -271,6 +274,7 @@ export const AIConfigForm = ({
           <AIConfigAdvanced
             disabled={form.saving}
             providers={providerValues}
+            hasOpenAIKey={hasUsableOpenAIKey(form.providers)}
             roleModels={form.roleModels}
             onRoleChange={form.changeRole}
             onRoleReset={form.resetRole}

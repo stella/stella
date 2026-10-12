@@ -15,6 +15,7 @@ const linkTemplateClauseParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Link a clause from the library into a template, optionally pinning one " +
     "of its variants and naming the clause slot it fills. The link records " +

@@ -17,6 +17,7 @@ const getSkillRevisionParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Read one recorded revision of an agent skill in full, including the " +
     "instruction body as it stood at that point.",

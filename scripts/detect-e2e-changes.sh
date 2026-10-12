@@ -24,13 +24,13 @@ for file in "$@"; do
   esac
 
   case "$scope:$file" in
-    core:apps/web/e2e/marketing/*|core:apps/web/e2e/playwright.marketing.config.ts)
+    core:apps/web/e2e/marketing/*|core:apps/web/e2e/playwright.marketing.config.ts|core:packages/playwright-tools/*)
       ;;
     core:.github/actions/prepare-network-baseline/*|core:scripts/network-baseline-*|core:apps/api/*|core:apps/web/*|core:packages/*|core:docker-compose.yml)
       echo true
       exit 0
       ;;
-    landing:apps/landing/*|landing:apps/web/package.json|landing:apps/web/e2e/marketing/landing-*.spec.ts|landing:apps/web/e2e/playwright.marketing.config.ts|landing:packages/ui/*|landing:packages/anonymize-*|landing:packages/locales/*)
+    landing:apps/landing/*|landing:packages/playwright-tools/*|landing:packages/ui/*|landing:packages/anonymize-*|landing:packages/locales/*)
       echo true
       exit 0
       ;;
@@ -38,7 +38,7 @@ for file in "$@"; do
     # and static assets it serves itself, the API that serves their data, the
     # shared UI and copy, the seed that builds the scenes, the capture suite
     # itself, and the committed PNGs.
-    marketing:apps/web/src/*|marketing:apps/web/public/*|marketing:apps/web/e2e/marketing/*|marketing:apps/web/e2e/playwright.marketing.config.ts|marketing:apps/web/package.json|marketing:apps/api/src/*|marketing:apps/api/scripts/seed-*|marketing:packages/ui/*|marketing:packages/locales/*|marketing:apps/landing/public/media/products/*.png)
+    marketing:packages/playwright-tools/*|marketing:apps/web/src/*|marketing:apps/web/public/*|marketing:apps/web/e2e/marketing/*|marketing:apps/web/e2e/playwright.marketing.config.ts|marketing:apps/web/package.json|marketing:apps/api/src/*|marketing:apps/api/scripts/seed-*|marketing:packages/ui/*|marketing:packages/locales/*|marketing:apps/landing/public/media/products/*.png)
       echo true
       exit 0
       ;;

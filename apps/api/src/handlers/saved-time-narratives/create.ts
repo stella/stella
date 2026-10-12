@@ -13,6 +13,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { toSavedTimeNarrativeItem } from "./schema";
 
 const config = {
+  contract: "patch",
   description:
     "Save a personal named time narrative for reuse across matters in the active organization.",
   permissions: { timeEntry: ["create"] },

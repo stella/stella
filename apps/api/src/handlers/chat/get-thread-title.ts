@@ -10,6 +10,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contract: "patch",
   // `chat` has no dedicated read verb yet (see packages/permissions); the
   // sibling read endpoints (get-messages, get-threads) gate on `create`, so
   // this by-id title read follows the same convention.

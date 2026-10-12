@@ -37,6 +37,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
   action_cost_calls: "Usage ledger: action cost history.",
   action_cost_records: "Usage ledger: action cost history.",
   hosted_checkout_claims: "Billing state, never reviewer content.",
+  organization_professional_use_acceptances:
+    "The organization's professional-use acceptance; written once, never reviewer content.",
   legal_list_verification_budgets: "Usage ledger: verification budget.",
   organization_file_objects:
     "Storage accounting, settled by the cleanup workers as objects are erased.",
@@ -51,6 +53,7 @@ export const REVIEW_RESET_KEPT_TABLES = {
   mcp_oauth_clients: "OAuth data: never touched by the reset.",
   mcp_oauth_state: "OAuth data: never touched by the reset.",
   mcp_user_connections: "OAuth data: never touched by the reset.",
+  service_oauth_clients: "OAuth data: never touched by the reset.",
   mcp_connectors: "Integration credentials: never touched by the reset.",
   mcp_connector_authorization_reviews:
     "Integration authorization history: never touched by the reset.",
@@ -126,6 +129,7 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "invoice_lines",
   "invoices",
   "legal_reader_annotations",
+  "legal_reader_answers",
   "matter_counters",
   "matter_inbound_addresses",
   "notifications",

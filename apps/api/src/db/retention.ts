@@ -15,6 +15,10 @@ export const TABLE_RETENTION = {
     boundedBy:
       "One receipt per thread tool call, cascade-deleted with its thread; encrypted payloads expire through chat.purgeSecrets.",
   },
+  service_oauth_clients: {
+    boundedBy:
+      "Operator-managed clients, cascade-deleted with their OAuth client or organization.",
+  },
   desktop_presence: {
     boundedBy:
       "One observation per account, organization and installation, overwritten by heartbeats and cascade-deleted with the account or organization.",
@@ -115,6 +119,14 @@ export const TABLE_RETENTION = {
   hosted_checkout_claims: {
     boundedBy:
       "At most one claim per organization, taken over in place once expired and deleted with its owner.",
+  },
+  organization_professional_use_acceptances: {
+    boundedBy:
+      "One acceptance per organization, written once and deleted with its owner.",
+  },
+  user_professional_use_acceptances: {
+    boundedBy:
+      "One acceptance per account, written once and deleted with the account.",
   },
   usage_allocations: {
     boundedBy: "Organization-owned usage accounting and deletion.",
