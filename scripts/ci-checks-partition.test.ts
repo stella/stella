@@ -648,6 +648,12 @@ const baseSteps = legSteps(baseline, baselineIds).map((step) => {
       after:
         "bun scripts/run-custom-lint-tests.ts scripts/check-aggregate-locks.test.ts scripts/check-aggregate-mutations.test.ts .oxlint-plugins/__tests__/aggregate-lock-sites.test.ts .oxlint-plugins/__tests__/confine-aggregate-lock.test.ts",
     },
+    "Test write contract inventories": {
+      before:
+        "bun test scripts/check-write-contracts.test.ts .oxlint-plugins/__tests__/require-write-contract.test.ts",
+      after:
+        "bun scripts/run-custom-lint-tests.ts scripts/check-write-contracts.test.ts .oxlint-plugins/__tests__/require-write-contract.test.ts",
+    },
   };
   const migration = Object.entries(runnerMigrations).find(
     ([name]) => name === step.name,
