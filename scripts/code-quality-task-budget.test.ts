@@ -1,6 +1,13 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
-import { mkdtemp, mkdir, writeFile, rm, symlink } from "node:fs/promises";
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  writeFile,
+  rm,
+  symlink,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -67,7 +74,14 @@ test("budgets cover measured cold p95 and twice the uncached measurement", () =>
   const { default: defaultSamples, ...taskSamples } =
     configuredBudgets.coldSamplesSeconds;
   expect(Object.keys(taskSamples).toSorted()).toEqual(
-    Object.keys(DEFAULT_TASK_BUDGETS.overrides).toSorted(),
+    Object.keys(DEFAULT_TASK_BUDGETS.overrides)
+      .filter(
+        (taskId) =>
+          !configuredBudgets.retainedApiTaskDefaults.some(
+            (retained) => retained === taskId,
+          ),
+      )
+      .toSorted(),
   );
   for (const [taskId, samples] of Object.entries({
     default: defaultSamples,
@@ -125,6 +139,97 @@ test("the declaration producer has a measured budget instead of the default buck
       },
     }).violations,
   ).toMatchObject([{ taskId }]);
+});
+
+test("API budget fixtures bind completed cold observations to their task entries", () => {
+  for (const [taskId, observations] of Object.entries(
+    configuredBudgets.apiTaskSamples,
+  )) {
+    expect(observations.length, taskId).toBeGreaterThanOrEqual(3);
+    expect(
+      new Set(observations.map(({ runId, jobId }) => `${runId}/${jobId}`)).size,
+      taskId,
+    ).toBe(observations.length);
+    for (const observation of observations) {
+      expect(observation.cache).toBe("MISS");
+      expect(observation.outcome).toBe("completed");
+      expect(configuredBudgets.sourceJobs).toContain(
+        `https://github.com/stella/stella/actions/runs/${observation.runId}/job/${observation.jobId}`,
+      );
+    }
+    const registered = Object.entries(
+      configuredBudgets.coldSamplesSeconds,
+    ).find(([id]) => id === taskId);
+    expect(registered?.[1], taskId).toEqual(
+      observations.map(({ seconds }) => seconds),
+    );
+    const largest = Math.max(...observations.map(({ seconds }) => seconds));
+    expect(DEFAULT_TASK_BUDGETS.overrides[taskId], taskId).toBe(
+      Math.ceil(Math.max(largest * 1.5, largest * 2) + 30),
+    );
+  }
+});
+
+const missingApiTaskBudgets = (
+  tasks: readonly string[],
+  budgets: Readonly<Record<string, number>>,
+) =>
+  tasks.filter(
+    (taskId) =>
+      taskId.startsWith("@stll/api#") && !Object.hasOwn(budgets, taskId),
+  );
+
+test("every declared API Turbo task has an explicit budget entry", async () => {
+  const configuration: unknown = Bun.JSONC.parse(
+    await readFile(new URL("../turbo.json", import.meta.url), "utf-8"),
+  );
+  if (
+    typeof configuration !== "object" ||
+    configuration === null ||
+    !("tasks" in configuration) ||
+    typeof configuration.tasks !== "object" ||
+    configuration.tasks === null
+  ) {
+    throw new Error("Missing Turbo task registry");
+  }
+  const tasks = Object.keys(configuration.tasks);
+  const declaredApiTasks = tasks.filter((taskId) =>
+    taskId.startsWith("@stll/api#"),
+  );
+  expect(declaredApiTasks.length).toBeGreaterThan(0);
+  expect(missingApiTaskBudgets(tasks, DEFAULT_TASK_BUDGETS.overrides)).toEqual(
+    [],
+  );
+  for (const taskId of declaredApiTasks) {
+    const withoutEntry = Object.fromEntries(
+      Object.entries(DEFAULT_TASK_BUDGETS.overrides).filter(
+        ([id]) => id !== taskId,
+      ),
+    );
+    expect(missingApiTaskBudgets(tasks, withoutEntry)).toEqual([taskId]);
+  }
+  for (const taskId of [
+    "@stll/api#typecheck:new-project",
+    "@stll/api#generate:new-inputs",
+    "@stll/api#new-task",
+  ]) {
+    expect(
+      missingApiTaskBudgets([...tasks, taskId], DEFAULT_TASK_BUDGETS.overrides),
+    ).toEqual([taskId]);
+  }
+});
+
+test("unmeasured existing API tasks preserve their previous default budget", () => {
+  const retained = configuredBudgets.retainedApiTaskDefaults;
+  expect(new Set(retained).size).toBe(retained.length);
+  for (const taskId of retained) {
+    expect(DEFAULT_TASK_BUDGETS.overrides[taskId]).toBe(
+      DEFAULT_TASK_BUDGETS.defaultSeconds,
+    );
+    expect(Object.hasOwn(configuredBudgets.coldSamplesSeconds, taskId)).toBe(
+      false,
+    );
+  }
 });
 
 test("cached replay and unexecuted dependencies never consume task execution budgets", () => {

@@ -4,16 +4,33 @@
     "@stll/api#lint": 846,
     "@stll/api#typecheck": 330,
     "@stll/web#lint": 240,
-    "@stll/api#generate:typecheck-declarations": 225
+    "@stll/api#generate:typecheck-declarations": 225,
+    "@stll/api#typecheck:mcp-apps": 33,
+    "@stll/api#typecheck:visual-sandbox": 32,
+    "@stll/api#typecheck:contracts": 154,
+    "@stll/api#typecheck:tests": 47,
+    "@stll/api#typecheck:scripts": 181,
+    "@stll/api#typecheck:src": 356,
+    "@stll/api#generate:capability-runtime": 90,
+    "@stll/api#build": 90,
+    "@stll/api#lint:fix": 90,
+    "@stll/api#test:property": 90,
+    "@stll/api#test": 90
   },
   "coldSamplesSeconds": {
     "default": [32.95, 32.797],
     "@stll/api#lint": [135.859, 178.6, 407.816],
     "@stll/api#typecheck": [148.42668],
     "@stll/web#lint": [83.3, 88.0],
-    "@stll/api#generate:typecheck-declarations": [97.393, 27.481, 24.207]
+    "@stll/api#generate:typecheck-declarations": [97.393, 27.481, 24.207],
+    "@stll/api#typecheck:mcp-apps": [1.17977, 1.07585, 1.09745, 0.73496],
+    "@stll/api#typecheck:visual-sandbox": [0.96001, 0.68076, 0.82633, 0.58027],
+    "@stll/api#typecheck:contracts": [61.54, 41.91, 39.88, 44.57],
+    "@stll/api#typecheck:tests": [8.02, 5.87, 6.07, 6.44],
+    "@stll/api#typecheck:scripts": [75.25, 42.06, 52.07, 66.98],
+    "@stll/api#typecheck:src": [64.4, 114.453, 162.67, 94.95]
   },
-  "measurementNotes": "Only cache misses. Historical samples are reported tool-phase totals (lower bounds on composite tasks); API lint 135.859 and 407.816 are complete task durations. The 407.816 sample is from run 38204066394, job 114667162912; Oxlint completed 6516 files in 406.4 seconds. Root 32.797 bounds a complete task. Budgets include at least 30 seconds above max(1.5 x empirical p95, 2 x largest cold sample), rounded up, except the unchanged default bucket. Sparse-sample p95 is not a population estimate. Cached replay is excluded. Declaration producer: run 38312922554 job 115024830651 reports exact completed cache-miss execution 97.393 s. Runs 38285899521 job 114934635714 and 38285897370 job 114934624094 report completed cold producer-phase upper bounds 27.481 s and 24.207 s respectively (the producer is MISS; grouped logs include prerequisite overhead). The 225 s producer budget uses the existing formula over these three observations; phase bounds are conservative, not exact task timings. Latest #5636/#5639 marker-reuse runs skipped generation and are excluded.",
+  "measurementNotes": "Only cache misses. Historical samples are reported tool-phase totals (lower bounds on composite tasks); API lint 135.859 and 407.816 are complete task durations. The 407.816 sample is from run 38204066394, job 114667162912; Oxlint completed 6516 files in 406.4 seconds. Root 32.797 bounds a complete task. Budgets include at least 30 seconds above max(1.5 x empirical p95, 2 x largest cold sample), rounded up, except the unchanged default bucket. Sparse-sample p95 is not a population estimate. Cached replay is excluded. Declaration producer: run 38312922554 job 115024830651 reports exact completed cache-miss execution 97.393 s. Runs 38285899521 job 114934635714 and 38285897370 job 114934624094 report completed cold producer-phase upper bounds 27.481 s and 24.207 s respectively (the producer is MISS; grouped logs include prerequisite overhead). The 225 s producer budget uses the existing formula over these three observations; phase bounds are conservative, not exact task timings. Latest #5636/#5639 marker-reuse runs skipped generation and are excluded. Split API typecheck observations come from completed cache misses in runs 38312922554, 38317607361, 38285899521 and 38285897370. Native-check observations report compiler-phase duration (excluding wrapper startup); task-execution observations report exact Turbo task execution. The existing 30 s margin remains. Duplicate result excerpts are counted once per task/run/job; cached replay is excluded. apiTaskSamples records the provenance and binds the numeric fixture. Existing API build, lint:fix, test, test:property and capability-runtime tasks have no completed cold observations in these quality logs; their prior 90 s default is recorded explicitly without a budget increase. retainedApiTaskDefaults identifies these unchanged limits separately from measured entries. Every API task declared in turbo.json must have an explicit registry entry.",
   "planningPhaseUpperBoundsSeconds": [
     4.215, 0.796, 0.635, 0.417, 0.181, 0.178, 0.167
   ],
@@ -34,6 +51,248 @@
     "https://github.com/stella/stella/actions/runs/38166117550/job/114551251772",
     "https://github.com/stella/stella/actions/runs/38312922554/job/115024830651",
     "https://github.com/stella/stella/actions/runs/38285899521/job/114934635714",
-    "https://github.com/stella/stella/actions/runs/38285897370/job/114934624094"
+    "https://github.com/stella/stella/actions/runs/38285897370/job/114934624094",
+    "https://github.com/stella/stella/actions/runs/38317607361/job/115040850551",
+    "https://github.com/stella/stella/actions/runs/38285899521/job/114940863405",
+    "https://github.com/stella/stella/actions/runs/38285897370/job/114935697551"
+  ],
+  "apiTaskSamples": {
+    "@stll/api#typecheck:mcp-apps": [
+      {
+        "runId": 38312922554,
+        "jobId": 115024830651,
+        "seconds": 1.17977,
+        "measurement": "native-check",
+        "cache": "MISS",
+        "outcome": "completed"
+      },
+      {
+        "runId": 38317607361,
+        "jobId": 115040850551,
+        "seconds": 1.07585,
+        "measurement": "native-check",
+        "cache": "MISS",
+        "outcome": "completed"
+      },
+      {
+        "runId": 38285899521,
+        "jobId": 114940863405,
+        "seconds": 1.09745,
+        "measurement": "native-check",
+        "cache": "MISS",
+        "outcome": "completed"
+      },
+      {
+        "runId": 38285897370,
+        "jobId": 114935697551,
+        "seconds": 0.73496,
+        "measurement": "native-check",
+        "cache": "MISS",
+        "outcome": "completed"
+      }
+    ],
+    "@stll/api#typecheck:visual-sandbox": [
+      {
+        "runId": 38312922554,
+        "jobId": 115024830651,
+        "seconds": 0.96001,
+        "measurement": "native-check",
+        "cache": "MISS",
+        "outcome": "completed"
+      },
+      {
+        "runId": 38317607361,
+        "jobId": 115040850551,
+        "seconds": 0.68076,
+        "measurement": "native-check",
+        "cache": "MISS",
+        "outcome": "completed"
+      },
+      {
+        "runId": 38285899521,
+        "jobId": 114940863405,
+        "seconds": 0.82633,
+        "measurement": "native-check",
+        "cache": "MISS",
+        "outcome": "completed"
+      },
+      {
+        "runId": 38285897370,
+        "jobId": 114935697551,
+        "seconds": 0.58027,
+        "measurement": "native-check",
+        "cache": "MISS",
+        "outcome": "completed"
+      }
+    ],
+    "@stll/api#typecheck:contracts": [
+      {
+        "runId": 38312922554,
+        "jobId": 115024830651,
+        "seconds": 61.54,
+        "measurement": "native-check",
+        "cache": "MISS",
+        "outcome": "completed"
+      },
+      {
+        "runId": 38317607361,
+        "jobId": 115040850551,
+        "seconds": 41.91,
+        "measurement": "native-check",
+        "cache": "MISS",
+        "outcome": "completed"
+      },
+      {
+        "runId": 38285899521,
+        "jobId": 114940863405,
+        "seconds": 39.88,
+        "measurement": "native-check",
+        "cache": "MISS",
+        "outcome": "completed"
+      },
+      {
+        "runId": 38285897370,
+        "jobId": 114935697551,
+        "seconds": 44.57,
+        "measurement": "native-check",
+        "cache": "MISS",
+        "outcome": "completed"
+      }
+    ],
+    "@stll/api#typecheck:tests": [
+      {
+        "runId": 38312922554,
+        "jobId": 115024830651,
+        "seconds": 8.02,
+        "measurement": "native-check",
+        "cache": "MISS",
+        "outcome": "completed"
+      },
+      {
+        "runId": 38317607361,
+        "jobId": 115040850551,
+        "seconds": 5.87,
+        "measurement": "native-check",
+        "cache": "MISS",
+        "outcome": "completed"
+      },
+      {
+        "runId": 38285899521,
+        "jobId": 114940863405,
+        "seconds": 6.07,
+        "measurement": "native-check",
+        "cache": "MISS",
+        "outcome": "completed"
+      },
+      {
+        "runId": 38285897370,
+        "jobId": 114935697551,
+        "seconds": 6.44,
+        "measurement": "native-check",
+        "cache": "MISS",
+        "outcome": "completed"
+      }
+    ],
+    "@stll/api#typecheck:scripts": [
+      {
+        "runId": 38312922554,
+        "jobId": 115024830651,
+        "seconds": 75.25,
+        "measurement": "native-check",
+        "cache": "MISS",
+        "outcome": "completed"
+      },
+      {
+        "runId": 38317607361,
+        "jobId": 115040850551,
+        "seconds": 42.06,
+        "measurement": "native-check",
+        "cache": "MISS",
+        "outcome": "completed"
+      },
+      {
+        "runId": 38285899521,
+        "jobId": 114940863405,
+        "seconds": 52.07,
+        "measurement": "native-check",
+        "cache": "MISS",
+        "outcome": "completed"
+      },
+      {
+        "runId": 38285897370,
+        "jobId": 114935697551,
+        "seconds": 66.98,
+        "measurement": "native-check",
+        "cache": "MISS",
+        "outcome": "completed"
+      }
+    ],
+    "@stll/api#typecheck:src": [
+      {
+        "runId": 38312922554,
+        "jobId": 115024830651,
+        "seconds": 64.4,
+        "measurement": "native-check",
+        "cache": "MISS",
+        "outcome": "completed"
+      },
+      {
+        "runId": 38317607361,
+        "jobId": 115040850551,
+        "seconds": 114.453,
+        "measurement": "task-execution",
+        "cache": "MISS",
+        "outcome": "completed"
+      },
+      {
+        "runId": 38285899521,
+        "jobId": 114940863405,
+        "seconds": 162.67,
+        "measurement": "native-check",
+        "cache": "MISS",
+        "outcome": "completed"
+      },
+      {
+        "runId": 38285897370,
+        "jobId": 114935697551,
+        "seconds": 94.95,
+        "measurement": "native-check",
+        "cache": "MISS",
+        "outcome": "completed"
+      }
+    ],
+    "@stll/api#generate:typecheck-declarations": [
+      {
+        "runId": 38312922554,
+        "jobId": 115024830651,
+        "seconds": 97.393,
+        "measurement": "task-execution",
+        "cache": "MISS",
+        "outcome": "completed"
+      },
+      {
+        "runId": 38285899521,
+        "jobId": 114934635714,
+        "seconds": 27.481,
+        "measurement": "producer-phase-upper-bound",
+        "cache": "MISS",
+        "outcome": "completed"
+      },
+      {
+        "runId": 38285897370,
+        "jobId": 114934624094,
+        "seconds": 24.207,
+        "measurement": "producer-phase-upper-bound",
+        "cache": "MISS",
+        "outcome": "completed"
+      }
+    ]
+  },
+  "retainedApiTaskDefaults": [
+    "@stll/api#generate:capability-runtime",
+    "@stll/api#build",
+    "@stll/api#lint:fix",
+    "@stll/api#test:property",
+    "@stll/api#test"
   ]
 }
