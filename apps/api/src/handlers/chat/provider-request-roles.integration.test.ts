@@ -50,7 +50,10 @@ import {
   NO_DB,
   createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
-import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import {
+  testModelAdmission,
+  testOrganizationStateDb,
+} from "@/api/tests/helpers/model-dispatch-admission";
 import {
   CACHING_SETTINGS,
   endpointKey,
@@ -274,6 +277,7 @@ const ROLE_REQUESTS = {
         promptCachingEnabled: run.caching,
         recordAuditEvent: noAudit,
         safeDb: safeDbOf(),
+        organizationStateDb: testOrganizationStateDb,
         threadId,
         threadWorkspaceId: null,
         userId: ids.userA1,

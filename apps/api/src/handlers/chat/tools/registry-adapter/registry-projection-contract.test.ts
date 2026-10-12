@@ -1851,6 +1851,7 @@ const CONTRACT_CORPUS = {
             id: toSafeId<"legislationDocument">(uid(72)),
             astS3Key: null,
             documentAst: null,
+            eli: "/eli/cz/sb/2012/89",
             versionValidFrom: "2014-01-01",
             versionValidTo: null,
             expressionKind: "consolidation" as const,

@@ -1820,11 +1820,12 @@ jobs:
           filter: blob:none
           persist-credentials: false
 
+      # No install follows, so the shared package cache would only cost time.
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
+          no-cache: true
 
       - name: Check parser version guard
         env:
@@ -2552,6 +2553,12 @@ jobs:
         run: |
           bun apps/api/scripts/deployment-feature-guard.ts --self-test
           bun apps/api/scripts/deployment-feature-guard.ts --base "$RATCHET_BASE_REF"
+
+      - name: Processed-field backlog guard
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # The case-law processed-field backlog (debts and unrecorded claims)
+        # may only shrink against the measured base.
+        run: bun apps/api/scripts/processed-field-backlog-guard.ts --base "$RATCHET_BASE_REF"
 
       - name: GitHub API command ownership
         env:

@@ -442,3 +442,45 @@ test("landing diagnostics follow the browser configuration output directory", ()
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+const workflowFile = (file: string): unknown =>
+  Bun.YAML.parse(readFileSync(path.join(root, file), "utf-8"));
+
+test("the dependency audit installs only the root workspace", () => {
+  const install = workflowJobSteps(
+    workflowFile(".github/workflows/dependency-audit.yml"),
+    "audit",
+  ).find((step) => step["name"] === "Install dependencies");
+  const command = v.parse(v.string(), install?.["run"]);
+  expect(installFilters(command)).toEqual(["stella"]);
+  expect(closure(["stella"]).has("@stll/api")).toBe(false);
+});
+
+const installFreeJobs = [
+  [".github/workflows/ci.yml", "parser-version-guard"],
+  [".github/workflows/db-migrations.yml", "scope"],
+  [".github/workflows/autofix.yml", "regenerate-scope"],
+] as const;
+const setupSchema = v.looseObject({
+  uses: v.string(),
+  with: v.looseObject({ "no-cache": v.literal(true) }),
+});
+const installCommand = /\bbun (?:ci|i|install)\b/u;
+
+for (const [file, job] of installFreeJobs) {
+  test(`${job} sets up Bun without restoring the package cache`, () => {
+    const steps = workflowJobSteps(workflowFile(file), job);
+    const setups = steps.filter(
+      (step) =>
+        typeof step["uses"] === "string" && step["uses"].includes("setup-bun"),
+    );
+    expect(setups).toHaveLength(1);
+    const setup = v.parse(setupSchema, setups.at(0));
+    expect(setup.uses).toStartWith("oven-sh/setup-bun@");
+    const installs = steps.filter(
+      (step) =>
+        typeof step["run"] === "string" && installCommand.test(step["run"]),
+    );
+    expect(installs).toEqual([]);
+  });
+}
