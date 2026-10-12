@@ -55,6 +55,7 @@ export const createDesktopTimeEntryEndpoint = (
 ) =>
   createSafeBoundedPublicHandler(
     {
+      contract: "patch",
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "auth_plumbing" },
       cache: { kind: "none" },

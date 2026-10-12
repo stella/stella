@@ -1392,8 +1392,8 @@ impl ActivityManager {
     }
     for assignment in &ranges {
       self.require_draftable_range(date, &assignment.start, &assignment.end)?;
-      if let Some(matter) = &assignment.matter {
-        if matter.id != assignment.matter_id
+      if let Some(matter) = &assignment.matter
+        && (matter.id != assignment.matter_id
           || matter.name.is_empty()
           || [
             &matter.name,
@@ -1404,10 +1404,9 @@ impl ActivityManager {
           .any(|value| {
             value.len() > MAX_DETAIL_BYTES || value.chars().any(char::is_control)
           })
-          || matter.color.as_ref().is_some_and(|color| color.len() > 64)
-        {
-          return Err("invalid activity matter".to_string());
-        }
+          || matter.color.as_ref().is_some_and(|color| color.len() > 64))
+      {
+        return Err("invalid activity matter".to_string());
       }
       if assignment.matter_id.is_empty()
         || assignment.matter_id.len() > 128

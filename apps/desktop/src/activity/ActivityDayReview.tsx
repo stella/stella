@@ -251,9 +251,11 @@ export const ActivityDayReview = ({
     invoke<DesktopTimeEntryBatchResponse & { markerSaved: boolean }>(
       "time_entry_submit_batch_confirmed",
       {
-        date: snapshot.date,
-        idempotencyKey: pending.idempotencyKey,
-        items: pending.items,
+        request: {
+          date: snapshot.date,
+          idempotencyKey: pending.idempotencyKey,
+          items: pending.items,
+        },
       },
     )
       .then(({ entries, markerSaved }) => {

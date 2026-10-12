@@ -1,7 +1,7 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
 use std::{
-  collections::{BTreeSet, HashMap, VecDeque},
+  collections::{BTreeSet, HashMap, VecDeque, hash_map::Entry},
   io::Cursor,
   sync::{Mutex, OnceLock},
 };
@@ -136,17 +136,21 @@ struct NativeAppVisualCache {
 
 impl NativeAppVisualCache {
   fn insert(&mut self, key: String, visual: Option<ClipboardSourceAppVisual>) {
-    if self.entries.contains_key(&key) {
-      self.entries.insert(key, visual);
-      return;
+    match self.entries.entry(key) {
+      Entry::Occupied(mut entry) => {
+        entry.insert(visual);
+      }
+      Entry::Vacant(entry) => {
+        let key = entry.into_key();
+        if self.entries.len() >= MAX_SOURCE_APP_VISUALS
+          && let Some(oldest) = self.order.pop_front()
+        {
+          self.entries.remove(&oldest);
+        }
+        self.order.push_back(key.clone());
+        self.entries.insert(key, visual);
+      }
     }
-    if self.entries.len() >= MAX_SOURCE_APP_VISUALS
-      && let Some(oldest) = self.order.pop_front()
-    {
-      self.entries.remove(&oldest);
-    }
-    self.order.push_back(key.clone());
-    self.entries.insert(key, visual);
   }
 }
 

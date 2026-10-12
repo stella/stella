@@ -532,7 +532,9 @@ mod tests {
         client_name: None,
       }),
     };
-    store.save_assignments(day, &[assignment.clone()]).unwrap();
+    store
+      .save_assignments(day, std::slice::from_ref(&assignment))
+      .unwrap();
     store.save_pending(day, Some(&pending)).unwrap();
     store.save_day(day, &[segment("word")]).unwrap();
     assert_eq!(store.load_pending(day).unwrap(), Some(pending));
@@ -551,7 +553,9 @@ mod tests {
       end: range.end,
       entry_id: "entry".into(),
     };
-    store.finish_batch(day, &[marker.clone()]).unwrap();
+    store
+      .finish_batch(day, std::slice::from_ref(&marker))
+      .unwrap();
     assert!(store.load_pending(day).unwrap().is_none());
     assert_eq!(store.load_drafted(day).unwrap(), vec![marker]);
     assert_eq!(store.load_assignments(day).unwrap(), vec![assignment]);

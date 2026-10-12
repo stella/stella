@@ -26,6 +26,14 @@ pub struct ConfirmedBatchItem {
   ranges: Vec<ActivityRange>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConfirmedBatchRequest {
+  date: String,
+  idempotency_key: String,
+  items: Vec<ConfirmedBatchItem>,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubmitResult {
@@ -107,10 +115,13 @@ pub async fn time_entry_submit_batch_confirmed(
   gates: State<'_, FeatureGates>,
   accounts: State<'_, AccountState>,
   state: State<'_, ActivityAppState>,
-  date: String,
-  idempotency_key: String,
-  items: Vec<ConfirmedBatchItem>,
+  request: ConfirmedBatchRequest,
 ) -> Result<SubmitResult, SubmitError> {
+  let ConfirmedBatchRequest {
+    date,
+    idempotency_key,
+    items,
+  } = request;
   let _confirmation = BATCH_CONFIRMATION.lock().await;
   let day = activity::parse_date(&date)?;
   let account = linked_account(&caller, &gates, &accounts).await?;

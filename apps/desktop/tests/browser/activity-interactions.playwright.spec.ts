@@ -473,23 +473,25 @@ test("only explicit batch creation sends the edited billing fields and prevents 
   expect(calls).toContainEqual({
     command: "time_entry_submit_batch_confirmed",
     args: {
-      date: "2026-10-07",
-      idempotencyKey: expect.any(String),
-      items: [
-        {
-          entry: {
-            matterId: "matter-1",
-            dateWorked: "2026-10-07",
-            timezoneId,
-            durationMinutes: 30,
-            narrative: "Draft-only confidential narrative 71f3",
-            billable: true,
+      request: {
+        date: "2026-10-07",
+        idempotencyKey: expect.any(String),
+        items: [
+          {
+            entry: {
+              matterId: "matter-1",
+              dateWorked: "2026-10-07",
+              timezoneId,
+              durationMinutes: 30,
+              narrative: "Draft-only confidential narrative 71f3",
+              billable: true,
+            },
+            ranges: [
+              { start: "2026-10-07T09:00:00Z", end: "2026-10-07T09:30:00Z" },
+            ],
           },
-          ranges: [
-            { start: "2026-10-07T09:00:00Z", end: "2026-10-07T09:30:00Z" },
-          ],
-        },
-      ],
+        ],
+      },
     },
   });
   // The local native boundary receives receipts, without app identities or raw segments.

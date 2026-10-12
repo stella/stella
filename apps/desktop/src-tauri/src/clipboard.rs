@@ -1,5 +1,4 @@
 use ammonia::Builder as HtmlSanitizer;
-use base64::{Engine as _, engine::general_purpose::STANDARD};
 use chrono::{DateTime, Duration, Utc};
 use clipboard_rs::common::RustImage;
 use clipboard_rs::{
