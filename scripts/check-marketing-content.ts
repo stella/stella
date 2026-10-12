@@ -24,7 +24,7 @@ const CLI_REGISTRY_SNAPSHOT_PATH =
 const ROOT_README_PATH = "README.md";
 
 // Computed filesystem reads retain these repository Markdown inputs.
-export const CI_MARKDOWN_READER_INPUTS = [ROOT_README_PATH];
+export const CI_MARKDOWN_READER_INPUTS = ["README.md"];
 export const CI_MARKDOWN_READER_COMMAND =
   "bun scripts/check-marketing-content.ts";
 
@@ -33,6 +33,28 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const isRemoteReference = (reference: string) =>
   reference.startsWith("//") || /^[a-z][a-z\d+.-]*:/iu.test(reference);
+
+// Reference-style images, `![alt][label]` or `![label]`, resolve through a
+// `[label]: path` definition; labels match case-insensitively.
+const referencedImageDestinations = (readme: string): string[] => {
+  const definitions = new Map(
+    [...readme.matchAll(/^ {0,3}\[([^\]]+)\]:\s*<?([^\s>]+)/gmu)].map(
+      (match) => [(match[1] ?? "").toLowerCase(), match[2] ?? ""] as const,
+    ),
+  );
+  return [...readme.matchAll(/!\[([^\]]*)\](?:\[([^\]]*)\])?(?!\()/gu)].flatMap(
+    (match) => {
+      const label =
+        (match[2] === undefined || match[2] === "" ? match[1] : match[2]) ?? "";
+      const destination = definitions.get(label.toLowerCase());
+      return destination === undefined ? [] : [destination];
+    },
+  );
+};
+
+// GitHub reads `#gh-dark-mode-only` style fragments and query strings off an
+// image URL; the file on disk is the path before them.
+const imageFilePath = (reference: string) => reference.replace(/[?#].*$/u, "");
 
 // Every image a README line can name: `src`, each `srcset` candidate (without
 // its width or density descriptor) and Markdown `![alt](path "title")`.
@@ -46,6 +68,7 @@ const readmeImageReferences = (readme: string): string[] => [
   ...[...readme.matchAll(/!\[[^\]]*\]\(\s*<?([^\s)>]+)/gu)].map(
     (match) => match[1] ?? "",
   ),
+  ...referencedImageDestinations(readme),
 ];
 
 // The root README's tour embeds the captured product screenshots by
@@ -60,7 +83,7 @@ export const findMissingReadmeImages = (
     if (reference === "" || isRemoteReference(reference)) {
       continue;
     }
-    if (!exists(reference) && !missing.includes(reference)) {
+    if (!exists(imageFilePath(reference)) && !missing.includes(reference)) {
       missing.push(reference);
     }
   }

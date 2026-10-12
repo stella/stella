@@ -73,3 +73,31 @@ test("checks Markdown images", () => {
     ),
   ).toEqual(["docs/missing.png"]);
 });
+
+test("resolves reference-style images through their definitions", () => {
+  expect(
+    findMissingReadmeImages(
+      [
+        "![Tour][capture] ![Agent] ![Gone][missing]",
+        "",
+        "[capture]: apps/landing/public/media/products/agent.png",
+        '[agent]: <apps/landing/public/media/products/agent-dark.png> "Dark"',
+        "[Missing]: docs/missing.png",
+      ].join("\n"),
+      exists,
+    ),
+  ).toEqual(["docs/missing.png"]);
+});
+
+test("checks the file behind theme fragments and query strings", () => {
+  expect(
+    findMissingReadmeImages(
+      [
+        "![agent](apps/landing/public/media/products/agent-dark.png#gh-dark-mode-only)",
+        '<img src="apps/landing/public/media/products/agent.png?raw=true" />',
+        "![gone](docs/missing.png#gh-light-mode-only)",
+      ].join("\n"),
+      exists,
+    ),
+  ).toEqual(["docs/missing.png#gh-light-mode-only"]);
+});
