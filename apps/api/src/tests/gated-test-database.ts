@@ -143,7 +143,7 @@ export const withGatedTestClients = async <T>(
             await forceClosePool(client);
             return;
           default:
-            return panic(
+            panic(
               "Unexpected test client close mode",
               closeMode satisfies never,
             );
