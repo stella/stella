@@ -44,6 +44,7 @@ import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
+import type { PublicLawReadOptions } from "@/api/lib/public-law-read-db";
 import {
   CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
@@ -147,15 +148,19 @@ beforeAll(
     await grantEvidenceColumns();
     const readDb = async <T>(
       fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
+      options?: PublicLawReadOptions,
     ) =>
-      await withPublicLawReaderRole(
-        db,
-        async (tx) =>
-          // SAFETY: the role transaction has the same Drizzle read surface as
-          // the public-law handle; writes remain on the owner database above.
-          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- PGlite test transaction stands in for the public read handle
-          await fn(tx as unknown as CaseLawPublicReadTransaction),
-      );
+      await withPublicLawReaderRole(db, async (tx) => {
+        if (options?.isolation === "repeatable-read") {
+          await tx.execute(
+            sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY`,
+          );
+        }
+        // SAFETY: the role transaction has the same Drizzle read surface as
+        // the public-law handle; writes remain on the owner database above.
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- PGlite test transaction stands in for the public read handle
+        return await fn(tx as unknown as CaseLawPublicReadTransaction);
+      });
     // SAFETY: brand-only wrapper; the reads never inspect the marker.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the branded handle carries no behaviour
     caseLawDb = readDb as unknown as CaseLawPublicReadDb;
@@ -915,12 +920,31 @@ test("citation evidence reads the persisted classifier window only after AST eli
     polarityWindowEnd: windowStart + excerpt.length,
     citedPart: "dissent",
   });
-  const read = await readGatedDecisionCitations({
+  const preparedRead = await withRedistributableSubject(
     caseLawDb,
-    cursor: undefined,
-    decisionId: citingId,
-    direction: "cites",
-    limit: 10,
+    { kind: "id", id: citingId },
+    async (subject) => {
+      const [snapshot] = await subject.tx
+        .select({
+          isolation: sql<string>`current_setting('transaction_isolation')`,
+        })
+        .from(sql`(SELECT 1) AS transaction_snapshot`);
+      return {
+        isolation: snapshot?.isolation,
+        prepared: await prepareDecisionCitations({
+          subject,
+          cursor: undefined,
+          direction: "cites",
+          limit: 10,
+        }),
+      };
+    },
+  );
+  expect(preparedRead?.isolation).toBe("repeatable read");
+  const read = await completeDecisionCitations({
+    caseLawDb,
+    prepared:
+      preparedRead?.prepared ?? panic("Expected prepared citation page"),
   });
   expect(read).toMatchObject({
     type: "page",
@@ -937,6 +961,35 @@ test("citation evidence reads the persisted classifier window only after AST eli
             classifierVersion: "synthetic-v1",
             excerpt,
           },
+          passage: null,
+        },
+      ],
+    },
+  });
+  const prepared = preparedRead?.prepared;
+  if (prepared?.type !== "page" || prepared.evidence.type !== "ready") {
+    panic("Expected prepared citation page with readable evidence");
+  }
+  const missingEvidencePrepared = {
+    ...prepared,
+    evidence: { type: "ready", rows: [] },
+  } satisfies typeof prepared;
+  expect(
+    await completeDecisionCitations({
+      caseLawDb,
+      prepared: missingEvidencePrepared,
+    }),
+  ).toMatchObject({
+    type: "page",
+    page: {
+      items: [
+        {
+          id: referenceId,
+          citationText: null,
+          textIncompleteReason: null,
+          evidenceIncompleteReason: "missing_evidence",
+          citedPart: null,
+          polarityEvidence: null,
           passage: null,
         },
       ],

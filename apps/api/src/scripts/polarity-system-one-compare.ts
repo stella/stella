@@ -10,8 +10,8 @@ import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
 import { excerptOf } from "@/api/handlers/case-law/polarity/classifier";
-import { POLARITY_READINGS } from "@/api/handlers/case-law/polarity/model-readings";
 import { extractContexts } from "@/api/handlers/case-law/polarity/context";
+import { POLARITY_READINGS } from "@/api/handlers/case-law/polarity/model-readings";
 import {
   classifyWithSystemOne,
   POLARITY_QUESTION,

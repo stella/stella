@@ -35,11 +35,13 @@ export type CitationTextIncompleteReason =
 // parser-output-unchanged: citation evidence availability is read-time metadata.
 export const CITATION_EVIDENCE_INCOMPLETE_REASONS = [
   "missing_privileges",
+  "missing_evidence",
 ] as const;
 export type CitationEvidenceIncompleteReason =
   (typeof CITATION_EVIDENCE_INCOMPLETE_REASONS)[number];
 export const CITATION_EVIDENCE_INCOMPLETE_REASON = {
   MISSING_PRIVILEGES: "missing_privileges",
+  MISSING_EVIDENCE: "missing_evidence",
 } as const satisfies Record<
   Uppercase<CitationEvidenceIncompleteReason>,
   CitationEvidenceIncompleteReason
