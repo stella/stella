@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   composeTotals,
+  hasBillableItems,
   dueDateFor,
   entryAdjustments,
   lastIncludedWorkDate,
@@ -139,5 +140,58 @@ describe("invoice composer request", () => {
   test("the due date adds the term to the issue date", () => {
     expect(dueDateFor("2026-10-12", 14)).toBe("2026-10-26");
     expect(dueDateFor("2026-12-20", 30)).toBe("2027-01-19");
+  });
+});
+
+describe("flat-fee invoices", () => {
+  test("bill the agreed fee as the only line, with or without entries", () => {
+    expect(
+      composeTotals({
+        entries: [],
+        choices: new Map(),
+        expenses: [],
+        includedExpenseIds: new Set(),
+        vat,
+        flatFeeAmount: 1_000_000,
+      }),
+    ).toMatchObject({
+      netAmountMinor: 1_000_000,
+      vatAmountMinor: 210_000,
+      grossAmountMinor: 1_210_000,
+    });
+    expect(
+      composeTotals({
+        entries,
+        choices: new Map(),
+        expenses,
+        includedExpenseIds: new Set(["x"]),
+        vat,
+        flatFeeAmount: 1_000_000,
+      }),
+    ).toMatchObject({ netAmountMinor: 1_000_000 });
+  });
+
+  test("a fee-only invoice can be issued; an hourly one needs an item", () => {
+    expect(
+      hasBillableItems({
+        flatFeeAmount: 1_000_000,
+        includedEntryCount: 0,
+        includedExpenseCount: 0,
+      }),
+    ).toBe(true);
+    expect(
+      hasBillableItems({
+        flatFeeAmount: null,
+        includedEntryCount: 0,
+        includedExpenseCount: 0,
+      }),
+    ).toBe(false);
+    expect(
+      hasBillableItems({
+        flatFeeAmount: null,
+        includedEntryCount: 0,
+        includedExpenseCount: 1,
+      }),
+    ).toBe(true);
   });
 });

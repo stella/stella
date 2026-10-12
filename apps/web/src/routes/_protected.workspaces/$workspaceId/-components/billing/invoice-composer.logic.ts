@@ -109,6 +109,22 @@ export const composeTotals = ({
   return calculated.isOk() ? calculated.value.totals : null;
 };
 
+/**
+ * Whether the invoice has anything to bill: a flat-fee matter always bills
+ * its agreed fee, with or without entries; otherwise at least one included
+ * entry or expense.
+ */
+export const hasBillableItems = ({
+  flatFeeAmount,
+  includedEntryCount,
+  includedExpenseCount,
+}: {
+  flatFeeAmount: number | null;
+  includedEntryCount: number;
+  includedExpenseCount: number;
+}) =>
+  flatFeeAmount !== null || includedEntryCount > 0 || includedExpenseCount > 0;
+
 /** Billed minutes of the included entries. */
 export const includedMinutes = (
   entries: readonly ComposerEntry[],

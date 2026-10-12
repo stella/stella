@@ -541,6 +541,7 @@ type Messages = {
       "dueIn": "Due in";
       "dueOn": "due {date}";
       "flatFee": "This matter has a flat fee: the invoice bills the agreed {amount}, and the time below is covered by it.";
+      "flatFeeLine": "Agreed flat fee";
       "include": "Include on this invoice";
       "issueFailed": "The draft was saved but could not be issued.";
       "issueInvoice": "Issue invoice";
@@ -582,6 +583,7 @@ type Messages = {
       "vat": "VAT treatment";
       "vatRate": "{rate} % VAT";
       "vatReasons": {
+        "clientCountryUnconfirmed": "Couldn't confirm the client's country: its VAT ID and address don't name the same country, so the standard rate applies";
         "domesticRate": "Your highest VAT rate in force on the supply date";
         "noSellerProfile": "No seller profile, so no VAT is charged until you set it on the invoice";
         "noVatRate": "No VAT rate is set up in billing settings";

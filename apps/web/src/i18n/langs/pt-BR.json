@@ -538,6 +538,7 @@
       "dueIn": "Vence em",
       "dueOn": "vence em {date}",
       "flatFee": "Este caso tem honorários fixos: a fatura cobra os {amount} acordados e o tempo abaixo já está coberto por eles.",
+      "flatFeeLine": "Honorários fixos acordados",
       "include": "Incluir nesta fatura",
       "issueFailed": "O rascunho foi salvo, mas não foi possível emitir a fatura.",
       "issueInvoice": "Emitir fatura",
@@ -579,6 +580,7 @@
       "vat": "Tratamento do IVA",
       "vatRate": "IVA de {rate} %",
       "vatReasons": {
+        "clientCountryUnconfirmed": "Não foi possível confirmar o país do cliente: o número de IVA e o endereço não indicam o mesmo país, então se aplica a alíquota padrão",
         "domesticRate": "Sua alíquota de IVA mais alta em vigor na data do fato gerador",
         "noSellerProfile": "Sem perfil de vendedor, nenhum IVA é cobrado até você defini-lo na fatura",
         "noVatRate": "Nenhuma alíquota de IVA configurada no faturamento",

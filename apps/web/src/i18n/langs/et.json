@@ -538,6 +538,7 @@
       "dueIn": "Tähtaeg",
       "dueOn": "tähtaeg {date}",
       "flatFee": "Selles toimikus kehtib kindeltasu: arve sisaldab kokkulepitud {amount} ja allolev aeg on sellega kaetud.",
+      "flatFeeLine": "Kokkulepitud kindeltasu",
       "include": "Lisa sellele arvele",
       "issueFailed": "Mustand salvestati, kuid arvet ei õnnestunud väljastada.",
       "issueInvoice": "Väljasta arve",
@@ -579,6 +580,7 @@
       "vat": "Käibemaksu käsitlus",
       "vatRate": "Käibemaks {rate} %",
       "vatReasons": {
+        "clientCountryUnconfirmed": "Kliendi riiki ei õnnestunud kinnitada: käibemaksukohustuslase number ja aadress ei viita samale riigile, seega kehtib tavamäär",
         "domesticRate": "Teie kõrgeim teenuse osutamise päeval kehtiv käibemaksumäär",
         "noSellerProfile": "Müüja profiil puudub, seega käibemaksu ei arvestata enne, kui selle arvele määrate",
         "noVatRate": "Arvelduse seadetes pole käibemaksumäära seadistatud",

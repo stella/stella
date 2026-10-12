@@ -538,6 +538,7 @@
       "dueIn": "Fizetési határidő",
       "dueOn": "esedékes: {date}",
       "flatFee": "Ez az ügy átalánydíjas: a számla a megállapodott {amount} összeget számlázza, az alábbi időt ez fedezi.",
+      "flatFeeLine": "Megállapodott átalánydíj",
       "include": "Felvétel erre a számlára",
       "issueFailed": "A piszkozat elmentve, de a számlát nem sikerült kiállítani.",
       "issueInvoice": "Számla kiállítása",
@@ -579,6 +580,7 @@
       "vat": "ÁFA-kezelés",
       "vatRate": "{rate} % ÁFA",
       "vatReasons": {
+        "clientCountryUnconfirmed": "Az ügyfél országát nem sikerült megerősíteni: az áfaazonosító és a cím nem ugyanazt az országot jelöli, ezért az általános kulcs érvényes",
         "domesticRate": "A teljesítés napján hatályos legmagasabb áfakulcsa",
         "noSellerProfile": "Nincs eladói profil, így nincs ÁFA, amíg a számlán be nem állítja",
         "noVatRate": "A számlázási beállításokban nincs áfakulcs megadva",

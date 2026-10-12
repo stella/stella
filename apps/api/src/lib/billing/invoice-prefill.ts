@@ -129,6 +129,7 @@ export const resolveInvoicePrefill = async (
     vat: decideInvoiceVat({
       seller: seller ?? null,
       buyerVatId: buyer.buyerVatId,
+      buyerCountry: buyer.buyerCountry,
       standardRateBps: standardRate?.rateBps ?? null,
     }),
     dueDays: due.days,

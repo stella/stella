@@ -538,6 +538,7 @@
       "dueIn": "Splatnost",
       "dueOn": "splatná {date}",
       "flatFee": "Tento spis má paušální odměnu: faktura účtuje sjednaných {amount} a níže uvedený čas je v ní zahrnut.",
+      "flatFeeLine": "Sjednaná paušální odměna",
       "include": "Zahrnout do této faktury",
       "issueFailed": "Koncept byl uložen, ale fakturu se nepodařilo vystavit.",
       "issueInvoice": "Vystavit fakturu",
@@ -579,6 +580,7 @@
       "vat": "Režim DPH",
       "vatRate": "DPH {rate} %",
       "vatReasons": {
+        "clientCountryUnconfirmed": "Zemi klienta se nepodařilo ověřit: DIČ a adresa neuvádějí stejnou zemi, proto se použije základní sazba",
         "domesticRate": "Vaše nejvyšší sazba DPH platná ke dni plnění",
         "noSellerProfile": "Chybí profil dodavatele, DPH se proto neúčtuje, dokud ji na faktuře nenastavíte",
         "noVatRate": "V nastavení fakturace není nastavena žádná sazba DPH",

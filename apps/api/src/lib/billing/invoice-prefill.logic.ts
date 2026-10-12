@@ -1,3 +1,4 @@
+import { normalizeCountry } from "@stll/agent-input";
 import { DEFAULT_INVOICE_DUE_DAYS } from "@stll/api-contract";
 import type { VatTreatment } from "@stll/invoicing";
 
@@ -61,6 +62,31 @@ export const vatIdCountry = (vatId: string | null): string | null => {
   return /^[A-Z]{2}[0-9A-Z]{2,}$/u.test(compact) ? compact.slice(0, 2) : null;
 };
 
+/**
+ * The ISO 3166-1 alpha-2 country a VAT ID prefix stands for. VAT prefixes are
+ * ISO codes except Greece, which writes EL, and Northern Ireland, which writes
+ * XI under the United Kingdom.
+ */
+const VAT_PREFIX_COUNTRY: ReadonlyMap<string, string> = new Map([
+  ["EL", "GR"],
+  ["XI", "GB"],
+]);
+const countryOfVatPrefix = (prefix: string) =>
+  VAT_PREFIX_COUNTRY.get(prefix) ?? prefix;
+
+/**
+ * The country an address names, read through the shared country reader
+ * ("CZ", "Czechia", "Česká republika"); null when it names none or more than
+ * one, so a free-text country is never guessed.
+ */
+export const addressCountry = (country: string | null): string | null => {
+  if (country === null || country.trim() === "") {
+    return null;
+  }
+  const read = normalizeCountry(country, { spelling: "alpha-2" });
+  return read.ok ? read.value.alpha2 : null;
+};
+
 /** Why the invoice carries the VAT treatment it was given. */
 export const INVOICE_VAT_REASONS = [
   "no_seller_profile",
@@ -68,6 +94,7 @@ export const INVOICE_VAT_REASONS = [
   "reverse_charge",
   "domestic_rate",
   "no_vat_rate",
+  "client_country_unconfirmed",
 ] as const;
 export type InvoiceVatReason = (typeof INVOICE_VAT_REASONS)[number];
 
@@ -81,22 +108,37 @@ type DecideInvoiceVatOptions = {
   /** Null when the invoice has no seller profile. */
   seller: { vatId: string | null } | null;
   buyerVatId: string | null;
+  /** The country of the client's address, as written on the contact. */
+  buyerCountry: string | null;
   /** The organization's highest VAT rate valid on the supply date. */
   standardRateBps: number | null;
 };
 
+const domesticVat = (
+  standardRateBps: number | null,
+  reason: InvoiceVatReason = "domestic_rate",
+): InvoiceVatDecision =>
+  standardRateBps === null
+    ? { vatTreatment: "domestic_vat", vatRateBps: 0, reason: "no_vat_rate" }
+    : { vatTreatment: "domestic_vat", vatRateBps: standardRateBps, reason };
+
 /**
  * The VAT an invoice's lines get from who sells and who buys. A seller
  * profile without a VAT ID is not a VAT payer and charges none. A VAT payer
- * registered in a member state, selling to a business whose VAT ID names
- * another country, reverse charges: legal services to a business are taxed
- * where the client is. Otherwise the seller charges its standard rate, read
- * as the organization's highest rate valid on the supply date. Without a
- * seller profile nothing is known, so lines keep 0 % until someone sets it.
+ * registered in a member state reverse charges a business client abroad
+ * (legal services to a business are taxed where the client is), but only
+ * when the client's address names a country, that country differs from the
+ * seller's, and the client's VAT ID is written for that same country: a
+ * free-text tax ID alone ("HRB123456") never removes VAT. When the client's
+ * VAT ID names another country the address does not confirm, the seller
+ * charges its standard rate and says the country is unconfirmed. Otherwise
+ * the standard rate is the organization's highest rate valid on the supply
+ * date. Without a seller profile nothing is known, so lines keep 0 %.
  */
 export const decideInvoiceVat = ({
   seller,
   buyerVatId,
+  buyerCountry,
   standardRateBps,
 }: DecideInvoiceVatOptions): InvoiceVatDecision => {
   if (seller === null) {
@@ -114,29 +156,22 @@ export const decideInvoiceVat = ({
     };
   }
   const sellerState = euVatPrefix(seller.vatId);
-  const buyerCountry = vatIdCountry(buyerVatId);
-  if (
-    sellerState !== null &&
-    buyerCountry !== null &&
-    buyerCountry !== sellerState
-  ) {
-    return {
-      vatTreatment: "reverse_charge",
-      vatRateBps: 0,
-      reason: "reverse_charge",
-    };
+  const buyerPrefix = vatIdCountry(buyerVatId);
+  if (sellerState === null || buyerPrefix === null) {
+    return domesticVat(standardRateBps);
   }
-  if (standardRateBps === null) {
-    return {
-      vatTreatment: "domestic_vat",
-      vatRateBps: 0,
-      reason: "no_vat_rate",
-    };
+  const sellerCountry = countryOfVatPrefix(sellerState);
+  const vatCountry = countryOfVatPrefix(buyerPrefix);
+  if (vatCountry === sellerCountry) {
+    return domesticVat(standardRateBps);
+  }
+  if (addressCountry(buyerCountry) !== vatCountry) {
+    return domesticVat(standardRateBps, "client_country_unconfirmed");
   }
   return {
-    vatTreatment: "domestic_vat",
-    vatRateBps: standardRateBps,
-    reason: "domestic_rate",
+    vatTreatment: "reverse_charge",
+    vatRateBps: 0,
+    reason: "reverse_charge",
   };
 };
 

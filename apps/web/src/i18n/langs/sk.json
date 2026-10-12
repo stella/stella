@@ -538,6 +538,7 @@
       "dueIn": "Splatnosť",
       "dueOn": "splatná {date}",
       "flatFee": "Tento spis má paušálnu odmenu: faktúra účtuje dohodnutých {amount} a čas uvedený nižšie je v nej zahrnutý.",
+      "flatFeeLine": "Dohodnutá paušálna odmena",
       "include": "Zahrnúť do tejto faktúry",
       "issueFailed": "Koncept sa uložil, ale faktúru sa nepodarilo vystaviť.",
       "issueInvoice": "Vystaviť faktúru",
@@ -579,6 +580,7 @@
       "vat": "Režim DPH",
       "vatRate": "DPH {rate} %",
       "vatReasons": {
+        "clientCountryUnconfirmed": "Krajinu klienta sa nepodarilo overiť: IČ DPH a adresa neuvádzajú rovnakú krajinu, preto sa použije základná sadzba",
         "domesticRate": "Vaša najvyššia sadzba DPH platná ku dňu dodania",
         "noSellerProfile": "Chýba profil dodávateľa, DPH sa preto neúčtuje, kým ju na faktúre nenastavíte",
         "noVatRate": "V nastaveniach fakturácie nie je nastavená žiadna sadzba DPH",

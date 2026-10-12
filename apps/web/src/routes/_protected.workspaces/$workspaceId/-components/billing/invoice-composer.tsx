@@ -63,6 +63,7 @@ import {
   entryAmount,
   entryChoice,
   expenseAmount,
+  hasBillableItems,
   includedMinutes,
   lastIncludedWorkDate,
   parseHoursInput,
@@ -84,6 +85,8 @@ const VAT_REASON_LABELS = {
   reverse_charge: "billing.invoiceComposer.vatReasons.reverseCharge",
   domestic_rate: "billing.invoiceComposer.vatReasons.domesticRate",
   no_vat_rate: "billing.invoiceComposer.vatReasons.noVatRate",
+  client_country_unconfirmed:
+    "billing.invoiceComposer.vatReasons.clientCountryUnconfirmed",
 } as const satisfies Record<InvoicePrefill["vat"]["reason"], TranslationKey>;
 
 type PrefillEntry = InvoicePrefill["timeEntries"][number];
@@ -194,7 +197,11 @@ export const InvoiceComposer = ({
   const includedEntryIds = entries
     .filter((entry) => entryChoice(choices, entry).included)
     .map((entry) => entry.id);
-  const hasItems = includedEntryIds.length > 0 || includedExpenseIds.size > 0;
+  const hasItems = hasBillableItems({
+    flatFeeAmount: prefill.flatFeeAmount,
+    includedEntryCount: includedEntryIds.length,
+    includedExpenseCount: includedExpenseIds.size,
+  });
 
   const submit = useComposerSubmit({
     workspaceId,
@@ -211,7 +218,12 @@ export const InvoiceComposer = ({
     );
   }
 
-  if (currency === null || (entries.length === 0 && expenses.length === 0)) {
+  if (
+    currency === null ||
+    (prefill.flatFeeAmount === null &&
+      entries.length === 0 &&
+      expenses.length === 0)
+  ) {
     return (
       <div className="text-muted-foreground flex flex-col items-start gap-2 p-6 text-sm">
         <p>{t("billing.invoiceComposer.nothingToBill")}</p>
@@ -453,11 +465,22 @@ const ItemsStep = ({
   return (
     <div className="flex flex-col gap-4">
       {flatFee && prefill.flatFeeAmount !== null && (
-        <Callout>
-          {t("billing.invoiceComposer.flatFee", {
-            amount: formatCurrencyAmount(prefill.flatFeeAmount, currency),
-          })}
-        </Callout>
+        <Frame>
+          <FrameHeader>
+            <FrameTitle>{t("billing.invoiceComposer.flatFeeLine")}</FrameTitle>
+            <FrameDescription>
+              {t("billing.invoiceComposer.flatFee", {
+                amount: formatCurrencyAmount(prefill.flatFeeAmount, currency),
+              })}
+            </FrameDescription>
+          </FrameHeader>
+          <FramePanel className="flex items-center justify-between gap-4">
+            <span>{t("billing.invoiceComposer.flatFeeLine")}</span>
+            <span className="font-medium tabular-nums">
+              {formatCurrencyAmount(prefill.flatFeeAmount, currency)}
+            </span>
+          </FramePanel>
+        </Frame>
       )}
       {otherCurrencyCount > 0 && (
         <Callout>

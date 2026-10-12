@@ -220,7 +220,7 @@ const seedVatRates = async () => {
   }
 };
 
-const setClient = async (taxId: string) => {
+const setClient = async (taxId: string, country = "CZ") => {
   await db
     .update(contacts)
     .set({
@@ -230,7 +230,7 @@ const setClient = async (taxId: string) => {
         line1: "Na Příkopě 1",
         city: "Praha",
         postalCode: "110 00",
-        country: "CZ",
+        country,
       },
       paymentTermDays: 30,
     })
@@ -320,7 +320,7 @@ describe("invoice prefill", () => {
   test("a business client registered in another member state is reverse charged", async () => {
     await seedSeller("CZ12345678");
     await seedVatRates();
-    await setClient("DE298765432");
+    await setClient("DE298765432", "DE");
     const entry = await seedEntry("2026-09-15");
 
     const prefill = await prefillInvoice.handler(
@@ -349,6 +349,32 @@ describe("invoice prefill", () => {
       vatRateBps: 0,
     });
     expect(invoice.vatAmount).toBe(0);
+  });
+
+  test("a free-text tax ID of a Czech client keeps the standard rate", async () => {
+    await seedSeller("CZ12345678");
+    await seedVatRates();
+    await setClient("HRB123456");
+    const entry = await seedEntry("2026-09-15");
+
+    const prefill = await prefillInvoice.handler(
+      context<Parameters<typeof prefillInvoice.handler>[0]>({}),
+    );
+    expect(prefill).toMatchObject({
+      vat: {
+        vatTreatment: "domestic_vat",
+        vatRateBps: 2100,
+        reason: "client_country_unconfirmed",
+      },
+    });
+    const invoice = await readInvoice(
+      createdId(await create({ timeEntryIds: [entry] })),
+    );
+    expect(invoice.lines.at(0)).toMatchObject({
+      vatTreatment: "domestic_vat",
+      vatRateBps: 2100,
+    });
+    expect(invoice.vatAmount).toBe(78_750);
   });
 
   test("without a seller profile lines keep 0 % VAT and explicit dates win", async () => {

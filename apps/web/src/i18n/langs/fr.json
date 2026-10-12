@@ -538,6 +538,7 @@
       "dueIn": "Échéance",
       "dueOn": "échéance le {date}",
       "flatFee": "Ce dossier est au forfait : la facture porte sur les {amount} convenus et le temps ci-dessous est couvert par le forfait.",
+      "flatFeeLine": "Forfait convenu",
       "include": "Inclure dans cette facture",
       "issueFailed": "Le brouillon a été enregistré, mais la facture n’a pas pu être émise.",
       "issueInvoice": "Émettre la facture",
@@ -579,6 +580,7 @@
       "vat": "Régime de TVA",
       "vatRate": "TVA {rate} %",
       "vatReasons": {
+        "clientCountryUnconfirmed": "Impossible de confirmer le pays du client : son numéro de TVA et son adresse n’indiquent pas le même pays, le taux normal s’applique donc",
         "domesticRate": "Votre taux de TVA le plus élevé en vigueur à la date de la prestation",
         "noSellerProfile": "Aucun profil vendeur : pas de TVA tant que vous ne la fixez pas sur la facture",
         "noVatRate": "Aucun taux de TVA n’est configuré dans la facturation",

@@ -538,6 +538,7 @@
       "dueIn": "Mokėjimo terminas",
       "dueOn": "apmokėti iki {date}",
       "flatFee": "Šiai bylai taikomas fiksuotas honoraras: sąskaitoje nurodomi sutarti {amount}, o žemiau nurodytas laikas juo padengtas.",
+      "flatFeeLine": "Sutartas fiksuotas honoraras",
       "include": "Įtraukti į šią sąskaitą",
       "issueFailed": "Juodraštis išsaugotas, bet sąskaitos išrašyti nepavyko.",
       "issueInvoice": "Išrašyti sąskaitą",
@@ -579,6 +580,7 @@
       "vat": "PVM režimas",
       "vatRate": "PVM {rate} %",
       "vatReasons": {
+        "clientCountryUnconfirmed": "Kliento šalies patvirtinti nepavyko: PVM mokėtojo kodas ir adresas nurodo skirtingas šalis, todėl taikomas standartinis tarifas",
         "domesticRate": "Jūsų didžiausias paslaugų suteikimo dieną galiojantis PVM tarifas",
         "noSellerProfile": "Nėra pardavėjo profilio, todėl PVM netaikomas, kol jo nenustatysite sąskaitoje",
         "noVatRate": "Atsiskaitymo nustatymuose nenustatytas joks PVM tarifas",

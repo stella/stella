@@ -538,6 +538,7 @@
       "dueIn": "Apmaksas termiņš",
       "dueOn": "apmaksāt līdz {date}",
       "flatFee": "Šai lietai ir fiksēta atlīdzība: rēķinā tiek iekļauti nolīgtie {amount}, un tālāk norādītais laiks ir ar to segts.",
+      "flatFeeLine": "Nolīgtā fiksētā atlīdzība",
       "include": "Iekļaut šajā rēķinā",
       "issueFailed": "Melnraksts tika saglabāts, bet rēķinu neizdevās izrakstīt.",
       "issueInvoice": "Izrakstīt rēķinu",
@@ -579,6 +580,7 @@
       "vat": "PVN režīms",
       "vatRate": "PVN {rate} %",
       "vatReasons": {
+        "clientCountryUnconfirmed": "Klienta valsti neizdevās apstiprināt: PVN numurs un adrese nenorāda vienu un to pašu valsti, tāpēc piemēro pamatlikmi",
         "domesticRate": "Jūsu augstākā PVN likme, kas ir spēkā piegādes datumā",
         "noSellerProfile": "Nav pārdevēja profila, tāpēc PVN netiek piemērots, kamēr to neiestatāt rēķinā",
         "noVatRate": "Norēķinu iestatījumos nav iestatīta neviena PVN likme",
