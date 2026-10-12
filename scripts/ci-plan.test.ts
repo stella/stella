@@ -6588,12 +6588,29 @@ test("Legal Atlas scope deadlines conservatively select the image after timeout 
   const { steps } = v.parse(
     v.object({
       steps: v.array(
-        v.object({ id: v.optional(v.string()), run: v.optional(v.string()) }),
+        v.object({
+          id: v.optional(v.string()),
+          run: v.optional(v.string()),
+          if: v.optional(v.string()),
+        }),
       ),
     }),
     ciJobs["ci-plan"],
   );
   const step = steps.find(({ id }) => id === "legal-atlas-scope");
+  const condition = v.parse(v.string(), step?.if);
+  for (const runRequired of ["true", "false"]) {
+    expect(
+      evaluate(condition, {
+        values: {
+          "steps.completed-depth.outputs.run_required": runRequired,
+          "steps.api-test-deps.outcome": "success",
+          "steps.changed-files.outputs.legal_atlas_image_required": "true",
+        },
+      }),
+      runRequired,
+    ).toBe(runRequired === "true");
+  }
   const script = v.parse(v.string(), step?.run);
   const fixture = mkdtempSync(nodePath.join(tmpdir(), "atlas-scope-deadline-"));
   try {

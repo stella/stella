@@ -1242,7 +1242,7 @@ jobs:
 
       - name: Refine Legal Atlas API source scope
         id: legal-atlas-scope
-        if: steps.api-test-deps.outcome == 'success' && steps.changed-files.outputs.legal_atlas_image_required == 'true'
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.api-test-deps.outcome == 'success' && steps.changed-files.outputs.legal_atlas_image_required == 'true'
         run: |
           changed_files=()
           while IFS= read -r -d '' file; do
