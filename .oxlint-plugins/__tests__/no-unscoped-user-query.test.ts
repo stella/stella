@@ -120,3 +120,25 @@ describe.serial("no-unscoped-user-query hoisted projections", () => {
     ).not.toEqual([]);
   });
 });
+
+describe.serial("no-unscoped-user-query schema metadata", () => {
+  test("allows foreign-key callbacks while retaining row-query checks", async () => {
+    const source = `import { user } from "@/api/db/auth-schema";
+export const table = pgTable("receipt", { userId: text("user_id").references(() => user.id) });`;
+    const options = {
+      plugin: "security-guards",
+      sourcePath: "apps/api/src/db/schema/receipt.ts",
+      cwd: "scratch" as const,
+    };
+    expect(
+      await lintSingleRule("no-unscoped-user-query", source, options),
+    ).toEqual([]);
+    expect(
+      await lintSingleRule(
+        "no-unscoped-user-query",
+        `${source}\nexport const rows = db.select().from(user);`,
+        options,
+      ),
+    ).toEqual([3]);
+  });
+});

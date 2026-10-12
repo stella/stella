@@ -845,6 +845,22 @@ export default eslintCompatPlugin({
           ) {
             return;
           }
+          // Foreign-key callbacks declare schema metadata; they do not read rows.
+          if (
+            repoRelativeFilename(context).startsWith("apps/api/src/db/schema/")
+          ) {
+            let ancestor = node.parent;
+            while (isAstNode(ancestor)) {
+              if (
+                ancestor.type === "CallExpression" &&
+                isAstNode(ancestor.callee) &&
+                memberPropertyName(ancestor.callee) === "references"
+              ) {
+                return;
+              }
+              ancestor = ancestor.parent;
+            }
+          }
           const chain = queryChainRoot(node);
           if (isInsertTarget(node) && !readsInsertedRows(chain)) {
             return;
