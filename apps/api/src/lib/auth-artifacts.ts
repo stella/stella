@@ -17,6 +17,7 @@ import {
   desktopEditSessions,
   folioCollabRoomTokens,
   mcpOAuthState,
+  mcpWebHandoff,
   mcpUserConnections,
   pdfSigningSessions,
   sharepointConnections,
@@ -97,6 +98,20 @@ const API_KEY_ORGANIZATION_SCOPE = {
  * because re-inviting the same person restores exactly that membership.
  */
 const MEMBER_CREDENTIAL_REVOCATION = {
+  mcpWebHandoff: async (
+    tx,
+    { organizationId, userId }: MemberCredentialScope,
+  ) => {
+    // audit: skip - removeOrganizationMemberInTransaction records the parent membership event in this transaction.
+    await tx
+      .delete(mcpWebHandoff)
+      .where(
+        and(
+          eq(mcpWebHandoff.userId, userId),
+          eq(mcpWebHandoff.organizationId, organizationId),
+        ),
+      );
+  },
   oauthAccessToken: async (
     tx,
     { organizationId, userId }: MemberCredentialScope,

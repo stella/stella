@@ -30,6 +30,7 @@ import { AUDIT_ACTION } from "@/api/lib/audit-log.constants";
 import { requiresHandoffStepUpForAuthPath } from "@/api/lib/auth/handoff-step-up-policy";
 import { createMcpWebHandoffPlugin } from "@/api/lib/auth/mcp-web-handoff-plugin";
 import { SESSION_LIFETIME_FIELDS } from "@/api/lib/auth/session-lifetime";
+import { toSafeId } from "@/api/lib/branded-types";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { createWebHandoffService } from "@/api/lib/mcp-web-handoff";
 import { MCP_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
@@ -52,7 +53,9 @@ const fixture = {
   clientId: "handoff-client",
   consentId: "handoff-consent",
   userId: "00000000-0000-4000-8000-000000000011",
-  organizationId: "00000000-0000-4000-8000-000000000012",
+  organizationId: toSafeId<"organization">(
+    "00000000-0000-4000-8000-000000000012",
+  ),
 };
 const makeAuth = (handoffService = service) =>
   betterAuth({
@@ -203,8 +206,10 @@ const cookieOf = (response: Response) =>
   [
     ...new Map(
       response.headers.getSetCookie().map((cookie) => {
-        // SAFETY: String.split always returns at least one segment.
-        const value = cookie.split(";")[0];
+        const value = cookie.slice(
+          0,
+          !cookie.includes(";") ? cookie.length : cookie.indexOf(";"),
+        );
         // Browsers retain the last Set-Cookie value for a given name.
         return [value.slice(0, value.indexOf("=")), value];
       }),

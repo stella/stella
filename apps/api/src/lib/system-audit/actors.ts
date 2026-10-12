@@ -43,6 +43,7 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
     "queuedSweeps",
   ],
   "system:registration-retention": [
+    "handoffs",
     "verifications",
     "assertions",
     "replays",

@@ -388,6 +388,8 @@ describe("policy coverage", () => {
     "agent_delegation",
     // Operator-managed OAuth bindings use the auth deny policy asserted below.
     "service_oauth_clients",
+    // Root-owned OAuth state denies all app-role access.
+    "mcp_web_handoff",
     // Filed feedback reports: organization_id/user_id record who filed a
     // report for the maintainers' private view and are never a tenant scope.
     // The table has no read surface at all: RLS is enabled with no policy and
@@ -1326,6 +1328,7 @@ describe("policy coverage", () => {
       "oauth_access_token",
       "oauth_client",
       "service_oauth_clients",
+      "mcp_web_handoff",
       "oauth_consent",
       "oauth_refresh_token",
       "session",

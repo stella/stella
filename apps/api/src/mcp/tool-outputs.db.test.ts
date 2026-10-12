@@ -144,6 +144,9 @@ const TOOL_COVERAGE = {
   get_usage: RUN,
   list_audit_log: RUN,
   manage_organization: RUN,
+  mint_web_handoff: excluded(
+    "requires an OAuth consent context; covered by the handoff service tests",
+  ),
   prepare_feedback: RUN,
   submit_feedback: excluded("delivers the report to an external tracker"),
   list_capabilities: RUN,

@@ -146,9 +146,9 @@ describe("handoff sessions enforce recent authentication at real entry points", 
       "scim",
       "email-otp",
     ]);
-    const endpoints = (getAuth().options.plugins ?? []).flatMap((plugin) =>
-      sensitivePluginIds.has(plugin.id)
-        ? Object.entries(plugin.endpoints ?? {}).map(([name, endpoint]) => ({
+    const endpoints = getAuth().options.plugins.flatMap((plugin) =>
+      sensitivePluginIds.has(plugin.id) && "endpoints" in plugin
+        ? Object.entries(plugin.endpoints).map(([name, endpoint]) => ({
             name,
             plugin: plugin.id,
             path: endpoint.path,

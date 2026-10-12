@@ -152,14 +152,6 @@
     "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
   },
   {
-    "id": "apps/api/src/lib/account-deletion-steps.ts::revokeOAuthTokensAndGrants",
-    "writes": {
-      "delete:oauthClient": 1,
-      "delete:oauthConsent": 1
-    },
-    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
-  },
-  {
     "id": "apps/api/src/lib/agent-auth-idjag.ts::bindCeremonyToIssuer",
     "writes": {
       "update:agentRegistration": 1
@@ -624,13 +616,6 @@
     "id": "apps/api/src/lib/document-processing-automatic-request.ts::requestAutomaticDocumentOcr",
     "writes": {
       "insert:documentProcessingRuns": 1,
-      "update:documentProcessingRuns": 1
-    },
-    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
-  },
-  {
-    "id": "apps/api/src/lib/document-processing-manual-ocr-restore.ts::restoreManualOcrRunAfterProjectionLoss",
-    "writes": {
       "update:documentProcessingRuns": 1
     },
     "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
