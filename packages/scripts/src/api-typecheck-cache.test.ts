@@ -251,6 +251,8 @@ test("declaration consumers run after emission and invalidate with API source ch
         "if (process.argv[2] === '@stll/api#generate:typecheck-declarations') {",
         "mkdirSync(path.dirname(output), { recursive: true });",
         "writeFileSync(output, readFileSync(path.join(root, 'apps/api/src/mcp/apps/manifest.ts'), 'utf8').split('\\n')[0]);",
+        "const shared = path.join(root, 'packages/chat/src/resume-contract.ts');",
+        "if (existsSync(shared)) writeFileSync(output, readFileSync(shared, 'utf8'));",
         "for (const name of configs) writeFileSync(path.join(prepared, name), JSON.stringify({ files: [], prepared: true }));",
         "} else if (!existsSync(output) || configs.some(name => !existsSync(path.join(prepared, name)))) process.exit(1);",
         "appendFileSync(path.join(root, 'runs.log'), JSON.stringify({ task: process.argv[2], hash: process.env.TURBO_HASH }) + '\\n');",
@@ -421,6 +423,37 @@ test("declaration consumers run after emission and invalidate with API source ch
     write("patches/dependency.patch", "dependency types v4\n");
     run(command);
     expect(executions()).toHaveLength(beforeRestoredPatch + consumers.size + 1);
+    const shared = "packages/chat/src/resume-contract.ts";
+    write(shared, "export type Shared = string;\n");
+    run(command);
+    const beforeShared = executions().length;
+    write(shared, "export type Shared = number;\n");
+    run(command);
+    expect(executions()).toHaveLength(beforeShared + consumers.size + 1);
+    expect(readFileSync(output, "utf-8")).toBe(
+      "export type Shared = number;\n",
+    );
+    producer["inputs"] = inputs.filter(
+      (input) => input !== "$TURBO_ROOT$/packages/chat/**",
+    );
+    writeTasks();
+    run(command);
+    const beforeMissingWorkspace = executions().length;
+    const cachedWithoutShared = readFileSync(output, "utf-8");
+    write(shared, "export type Shared = boolean;\n");
+    run(command);
+    expect(
+      executions()
+        .slice(beforeMissingWorkspace)
+        .some((row) => JSON.parse(row).task === EMITTER),
+    ).toBe(false);
+    expect(readFileSync(output, "utf-8")).toBe(cachedWithoutShared);
+    producer["inputs"] = inputs;
+    writeTasks();
+    run(command);
+    expect(readFileSync(output, "utf-8")).toBe(
+      "export type Shared = boolean;\n",
+    );
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
