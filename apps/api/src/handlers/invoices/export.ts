@@ -9,6 +9,7 @@ import {
 } from "@/api/handlers/invoices/export-file";
 import {
   loadInvoiceExport,
+  MAX_EXPORT_INVOICES,
   toExportRecords,
 } from "@/api/handlers/invoices/export-records";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -23,7 +24,6 @@ import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 
 const EXPORT_URL_TTL_SECONDS = 300;
-const MAX_SELECTED_INVOICES = 500;
 
 const exportInvoicesBody = t.Object({
   format: t.UnionEnum(INVOICE_EXPORT_FORMATS, {
@@ -33,7 +33,7 @@ const exportInvoicesBody = t.Object({
   invoiceIds: t.Optional(
     t.Array(tSafeId("invoice"), {
       minItems: 1,
-      maxItems: MAX_SELECTED_INVOICES,
+      maxItems: MAX_EXPORT_INVOICES,
       description:
         "Issued invoices to export; omit to export every issued invoice in the matter",
     }),
@@ -48,7 +48,7 @@ export const createInvoicesExport = (writeObject = writeS3ObjectWithRetry) =>
       contract: "patch",
       contentDelivery: { type: "audited" },
       description:
-        "Export a matter's issued invoices, advance invoices and credit notes (drafts and void invoices excluded) as a spreadsheet, an accounting import file (POHODA, Money S3, ABRA Flexi, ESO9), ISDOC or UBL (EN 16931) e-invoices, or a LEDES 1998B e-billing file. Pass invoiceIds to export a selection. Refused when a format cannot hold the data, e.g. Money S3 or ISDOC for an invoice outside the seller's home currency. Returns a short-lived downloadUrl, fileName and expiresAt; hand the URL to the user without reading the file bytes.",
+        "Export a matter's issued invoices, advance invoices and credit notes (drafts and void invoices excluded) as a spreadsheet, an accounting import file (POHODA, Money S3, ABRA Flexi, ESO9), ISDOC or UBL (EN 16931) e-invoices, or a LEDES 1998B e-billing file. Pass invoiceIds to export a selection; one export holds at most 500 invoices. Refused when a format cannot hold the data, e.g. Money S3 or ISDOC for an invoice outside the seller's home currency. Returns a short-lived downloadUrl, fileName and expiresAt; hand the URL to the user without reading the file bytes.",
       permissions: { workspace: ["read"] },
       accountAccess: ACCOUNT_ACCESS.sandbox,
       featureAccess: { featureId: "time-billing", type: "required" },
@@ -102,7 +102,11 @@ export const createInvoicesExport = (writeObject = writeS3ObjectWithRetry) =>
         ),
       );
 
-      const single = records.length === 1 ? records[0] : undefined;
+      // A matter-wide export stays one even when it holds a single invoice.
+      const single =
+        body.invoiceIds?.length === 1 && records.length === 1
+          ? records[0]
+          : undefined;
       const stem = single
         ? `invoice-${single.number}`
         : `invoices-${records[0]?.matter.reference ?? workspaceId}`;

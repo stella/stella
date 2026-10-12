@@ -6,6 +6,7 @@ import {
   amountText,
   countryCodeOf,
   czechVatBandOf,
+  effectiveVatRateBps,
   invoiceDescriptionOf,
   quantityText,
   streetOf,
@@ -44,14 +45,17 @@ const buyerKey = (record: InvoiceExportRecord): string => {
   return `${EXT}:company:${id.replace(/[^\w.-]/gu, "_")}`;
 };
 
+/** The country as a code reference ("code:CZ"), when it is a code already. */
+const countryRefOf = (country: string | undefined): string | null => {
+  const code = countryCodeOf(country);
+  return code === null ? null : `code:${code}`;
+};
+
 const partyFields = (party: InvoiceParty) => [
   text("ulice", streetOf(party)),
   text("mesto", party.city),
   text("psc", party.postalCode),
-  text(
-    "stat",
-    countryCodeOf(party.country) && `code:${countryCodeOf(party.country)}`,
-  ),
+  text("stat", countryRefOf(party.country)),
   text("ic", party.registrationNumber),
   text("dic", party.vatId),
 ];
@@ -101,8 +105,11 @@ const invoice = (record: InvoiceExportRecord): string => {
           text("id", `${EXT}:invoice:${record.id}:line:${index + 1}`),
           text("nazev", line.description),
           text("mnozMj", quantityText(line.quantity)),
-          text("szbDph", vatPercentText(line.vatRateBps)),
-          text("typSzbDphK", VAT_BAND[czechVatBandOf(line.vatRateBps)]),
+          text("szbDph", vatPercentText(effectiveVatRateBps(line))),
+          text(
+            "typSzbDphK",
+            VAT_BAND[czechVatBandOf(effectiveVatRateBps(line))],
+          ),
           text("cenaMj", amount(line.unitPriceMinor ?? line.netAmountMinor)),
           text("typCenyDphK", "typCeny.bezDph"),
           ...(home

@@ -1,6 +1,7 @@
 import {
-  czechVatBandOf,
   countryCodeOf,
+  czechVatBandOf,
+  effectiveVatRateBps,
   quantityText,
   variableSymbolOf,
   type InvoiceExportRecord,
@@ -205,7 +206,7 @@ export const buildInvoiceLinesTable = (
         numberCell(Number(quantityText(line.quantity))),
         textCell(line.unit),
         amountCell(line.unitPriceMinor ?? line.netAmountMinor, record.currency),
-        numberCell(line.vatRateBps / 100),
+        numberCell(effectiveVatRateBps(line) / 100),
         amountCell(line.netAmountMinor, record.currency),
         amountCell(line.vatAmountMinor, record.currency),
         amountCell(line.grossAmountMinor, record.currency),
@@ -251,7 +252,7 @@ const eso9Date = (date: string | null): string => {
   if (date === null) {
     return "";
   }
-  const [year, month, day] = date.split("-");
+  const [year = "", month = "", day = ""] = date.split("-");
   return `${day}.${month}.${year}`;
 };
 
@@ -299,18 +300,17 @@ export const buildEso9Table = (
       buyerCountry !== null &&
       buyerCountry !== countryCodeOf(record.seller.country);
     for (const line of record.lines) {
-      if (
-        line.vatTreatment === "reverse_charge" ||
-        (foreignBuyer && line.vatRateBps === 0)
-      ) {
-        if (buyerCountry !== null && EU_COUNTRIES.has(buyerCountry)) {
+      // A supply abroad at no Czech VAT is an export. The sheet has no column
+      // for a domestic one (reverse charge, exempt); it counts in Celkem only.
+      if (foreignBuyer && effectiveVatRateBps(line) === 0) {
+        if (EU_COUNTRIES.has(buyerCountry)) {
           exportEu += line.netAmountMinor;
         } else {
           exportOther += line.netAmountMinor;
         }
         continue;
       }
-      const band = czechVatBandOf(line.vatRateBps);
+      const band = czechVatBandOf(effectiveVatRateBps(line));
       if (band !== "zero") {
         bands[band].base += line.netAmountMinor;
         bands[band].vat += line.vatAmountMinor;

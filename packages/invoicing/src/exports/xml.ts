@@ -12,7 +12,7 @@ const stripInvalidXmlChars = (value: string): string =>
     .filter((char) => isXmlChar(char.codePointAt(0) ?? 0))
     .join("");
 
-export const escapeXml = (value: string): string =>
+const escapeXml = (value: string): string =>
   stripInvalidXmlChars(value)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
@@ -21,7 +21,7 @@ export const escapeXml = (value: string): string =>
     .replaceAll("'", "&apos;");
 
 /** An element's children: nested nodes, or nothing for an omitted element. */
-export type XmlNode = string | null | undefined | false | XmlNode[];
+export type XmlContent = string | null | undefined | false | XmlContent[];
 
 type XmlAttributes = Record<string, string | null | undefined>;
 
@@ -34,7 +34,7 @@ const attributesText = (attributes: XmlAttributes | undefined): string =>
     .map(([name, value]) => ` ${name}="${escapeXml(value)}"`)
     .join("");
 
-const flatten = (node: XmlNode): string => {
+const flatten = (node: XmlContent): string => {
   if (Array.isArray(node)) {
     return node.map(flatten).join("");
   }
@@ -44,7 +44,7 @@ const flatten = (node: XmlNode): string => {
 /** An element wrapping other elements; omitted when it has no content. */
 export const el = (
   name: string,
-  children: XmlNode,
+  children: XmlContent,
   attributes?: XmlAttributes,
 ): string => {
   const inner = flatten(children);
@@ -69,7 +69,7 @@ export const text = (
 };
 
 /** A text element the schema requires, emitted even when empty. */
-export const requiredText = (
+export const mandatoryText = (
   name: string,
   value: string | number | null | undefined,
   attributes?: XmlAttributes,

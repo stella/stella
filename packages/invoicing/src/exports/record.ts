@@ -83,11 +83,25 @@ export const quantityText = (quantity: string | null): string => {
   if (quantity === null) {
     return "1";
   }
-  const trimmed = quantity.includes(".")
-    ? quantity.replace(/0+$/u, "").replace(/\.$/u, "")
-    : quantity;
+  let trimmed = quantity;
+  if (trimmed.includes(".")) {
+    while (trimmed.endsWith("0")) {
+      trimmed = trimmed.slice(0, -1);
+    }
+    if (trimmed.endsWith(".")) {
+      trimmed = trimmed.slice(0, -1);
+    }
+  }
   return trimmed === "" || trimmed === "-0" ? "0" : trimmed;
 };
+
+/**
+ * The rate VAT is charged at on a line: only domestic VAT charges any, so an
+ * exempt, reverse-charge or non-payer line reads 0 whatever rate it stores.
+ */
+export const effectiveVatRateBps = (
+  line: Pick<InvoiceExportLine, "vatRateBps" | "vatTreatment">,
+): number => (line.vatTreatment === "domestic_vat" ? line.vatRateBps : 0);
 
 /** The VAT rate as a whole or decimal percent: 2100 bps reads "21". */
 export const vatPercentText = (vatRateBps: number): string =>

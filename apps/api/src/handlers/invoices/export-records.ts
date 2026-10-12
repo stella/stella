@@ -15,11 +15,16 @@ import type { Transaction } from "@/api/db/root";
 import { INVOICE_STATUS } from "@/api/db/schema";
 import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
 import { readInvoiceDocumentLines } from "@/api/handlers/invoices/invoice-lines";
-import { selectTimekeeperNames } from "@/api/handlers/time-entries/timekeeper-names";
+import { selectTimekeeperNames } from "@/api/lib/billing/timekeeper-names";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { LIMITS } from "@/api/lib/limits";
 import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
+
+/**
+ * The most invoices one export holds. Every line is built in memory before
+ * the file is written, so a larger matter exports a selection at a time.
+ */
+export const MAX_EXPORT_INVOICES = 500;
 
 /** Issued documents only: a draft has no number, a void one is not booked. */
 const EXPORTABLE_STATUSES = [
@@ -28,8 +33,9 @@ const EXPORTABLE_STATUSES = [
   INVOICE_STATUS.PAID,
 ] as const;
 type ExportableStatus = (typeof EXPORTABLE_STATUSES)[number];
+const EXPORTABLE_STATUS_SET: ReadonlySet<string> = new Set(EXPORTABLE_STATUSES);
 const isExportable = (status: string): status is ExportableStatus =>
-  (EXPORTABLE_STATUSES as readonly string[]).includes(status);
+  EXPORTABLE_STATUS_SET.has(status);
 
 /** UTBMS expense codes for stella's expense categories. */
 const UTBMS_EXPENSE_CODE = new Map<string, string>([
@@ -102,7 +108,8 @@ export const loadInvoiceExport = async (
       ...(invoiceIds ? { id: { in: [...invoiceIds] } } : {}),
     },
     orderBy: { invoiceDate: "asc", invoiceNumber: "asc" },
-    limit: LIMITS.exportRowLimit,
+    // One more than the cap, so an oversized matter is refused, not cut off.
+    limit: MAX_EXPORT_INVOICES + 1,
     with: EXPORT_RELATIONS,
   });
   const sellerIds = [
@@ -162,8 +169,21 @@ type DocumentAmounts = {
     quantity: string | null;
     unit: string | null;
     unitPrice: CentsAmount | null;
+    timeEntryId: SafeId<"timeEntry"> | null;
+    expenseId: SafeId<"expense"> | null;
   })[];
   totals: InvoiceTotals;
+};
+
+/** Where a line the read added for an attached entry came from. */
+const sourceOf = (
+  entry: object | undefined,
+  expense: object | undefined,
+): InvoiceExportLine["source"] => {
+  if (entry !== undefined) {
+    return "time_entry";
+  }
+  return expense === undefined ? "manual" : "expense";
 };
 
 const exportLines = (
@@ -178,14 +198,13 @@ const exportLines = (
     invoice.expenses.map((expense) => [expense.id, expense]),
   );
   return amounts.lines.map((line, index): InvoiceExportLine => {
-    // Stored lines come first, in the order the document prints them.
+    // Stored lines come first; an invoice from before lines adds one per
+    // attached entry after them, which only the line's own ids identify.
     const stored = invoice.lines.at(index);
-    const entry = stored?.timeEntryId
-      ? timeEntries.get(stored.timeEntryId)
+    const entry = line.timeEntryId
+      ? timeEntries.get(line.timeEntryId)
       : undefined;
-    const expense = stored?.expenseId
-      ? expenses.get(stored.expenseId)
-      : undefined;
+    const expense = line.expenseId ? expenses.get(line.expenseId) : undefined;
     return {
       position: index + 1,
       description: line.description,
@@ -197,7 +216,7 @@ const exportLines = (
       grossAmountMinor: line.grossAmountMinor,
       vatRateBps: line.vatRateBps,
       vatTreatment: line.vatTreatment,
-      source: stored?.source ?? "manual",
+      source: stored?.source ?? sourceOf(entry, expense),
       date: entry?.dateWorked ?? expense?.dateIncurred ?? null,
       timekeeper: entry?.userId
         ? { id: entry.userId, name: timekeepers.get(entry.userId) ?? "" }
@@ -255,6 +274,15 @@ export const toExportRecords = (
       }),
     );
   }
+  if (loaded.invoices.length > MAX_EXPORT_INVOICES) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: `The matter has more than ${MAX_EXPORT_INVOICES} issued invoices to export at once`,
+        hint: "Pass invoiceIds to export a selection of invoices at a time.",
+      }),
+    );
+  }
   if (loaded.invoices.length === 0) {
     return Result.err(
       new HandlerError({
@@ -269,17 +297,23 @@ export const toExportRecords = (
       invoice.sellerProfileId === null
         ? undefined
         : loaded.sellers.get(invoice.sellerProfileId);
-    if (!seller || invoice.invoiceNumber === null) {
+    // The query reads issued invoices only; this narrows the status type.
+    if (!isExportable(invoice.status) || invoice.invoiceNumber === null) {
       return Result.err(
         new HandlerError({
           status: 409,
-          message: `Invoice ${invoice.invoiceNumber ?? invoice.id} has no seller profile`,
-          hint: "Select a seller profile on the invoice; accounting files need the issuing company.",
+          message: `Invoice ${invoice.id} is not issued`,
         }),
       );
     }
-    if (!isExportable(invoice.status)) {
-      continue;
+    if (!seller) {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: `Invoice ${invoice.invoiceNumber} has no seller profile`,
+          hint: "Select a seller profile on the invoice; accounting files need the issuing company.",
+        }),
+      );
     }
     const amounts = readInvoiceDocumentLines(invoice);
     if (amounts.isErr()) {

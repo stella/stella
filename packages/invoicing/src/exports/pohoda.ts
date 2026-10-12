@@ -7,6 +7,7 @@ import {
   clip,
   countryCodeOf,
   czechVatBandOf,
+  effectiveVatRateBps,
   invoiceDescriptionOf,
   quantityText,
   splitCzechAccountNumber,
@@ -36,8 +37,8 @@ const INVOICE_TYPE: Record<InvoiceDocumentType, string> = {
 const RATE: Record<ReturnType<typeof czechVatBandOf>, string> = {
   zero: "none",
   reduced: "low",
-  // Before 2024 POHODA kept the 10 % rate in its reduced slot by date.
-  secondReduced: "low",
+  // The second reduced rate (10 %, 2015–2023) is POHODA's third rate.
+  secondReduced: "third",
   basic: "high",
 };
 
@@ -76,7 +77,7 @@ const item = (
     text("inv:quantity", quantityText(line.quantity)),
     text("inv:unit", line.unit && clip(line.unit, 10)),
     text("inv:payVAT", "false"),
-    text("inv:rateVAT", RATE[czechVatBandOf(line.vatRateBps)]),
+    text("inv:rateVAT", RATE[czechVatBandOf(effectiveVatRateBps(line))]),
     el(home ? "inv:homeCurrency" : "inv:foreignCurrency", [
       text(
         "typ:unitPrice",

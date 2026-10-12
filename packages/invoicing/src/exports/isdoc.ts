@@ -5,6 +5,7 @@ import type { InvoiceDocumentType, InvoiceParty } from "../types";
 import {
   amountText,
   countryCodeOf,
+  effectiveVatRateBps,
   invoiceDescriptionOf,
   quantityText,
   splitCzechAccountNumber,
@@ -13,7 +14,7 @@ import {
   vatPercentText,
   type InvoiceExportRecord,
 } from "./record";
-import { el, requiredText, text, XML_DECLARATION } from "./xml";
+import { el, mandatoryText, text, XML_DECLARATION } from "./xml";
 
 // ISDOC 6.0.2, the Czech e-invoice standard (http://isdoc.cz/namespace/2013).
 // One document per file; accounting programs such as ABRA Gen, POHODA and
@@ -33,22 +34,22 @@ const UUID_PATTERN =
 
 const party = (subject: InvoiceParty): string =>
   el("Party", [
-    el("PartyIdentification", requiredText("ID", subject.registrationNumber)),
-    el("PartyName", requiredText("Name", subject.name)),
+    el("PartyIdentification", mandatoryText("ID", subject.registrationNumber)),
+    el("PartyName", mandatoryText("Name", subject.name)),
     el("PostalAddress", [
-      requiredText("StreetName", streetOf(subject)),
-      requiredText("BuildingNumber", ""),
-      requiredText("CityName", subject.city),
-      requiredText("PostalZone", subject.postalCode),
+      mandatoryText("StreetName", streetOf(subject)),
+      mandatoryText("BuildingNumber", ""),
+      mandatoryText("CityName", subject.city),
+      mandatoryText("PostalZone", subject.postalCode),
       el("Country", [
-        requiredText("IdentificationCode", countryCodeOf(subject.country)),
-        requiredText("Name", subject.country),
+        mandatoryText("IdentificationCode", countryCodeOf(subject.country)),
+        mandatoryText("Name", subject.country),
       ]),
     ]),
     subject.vatId
       ? el("PartyTaxScheme", [
-          requiredText("CompanyID", subject.vatId),
-          requiredText("TaxScheme", "VAT"),
+          mandatoryText("CompanyID", subject.vatId),
+          mandatoryText("TaxScheme", "VAT"),
         ])
       : "",
   ]);
@@ -65,53 +66,55 @@ const document = (record: InvoiceExportRecord): string => {
   const account = splitCzechAccountNumber(record.seller.accountNumber);
   const lines = record.lines.map((line, index) => {
     const unitNet = line.unitPriceMinor ?? line.netAmountMinor;
-    const unitGross = Math.round(unitNet * (1 + line.vatRateBps / 10_000));
+    const unitGross = Math.round(
+      unitNet * (1 + effectiveVatRateBps(line) / 10_000),
+    );
     return el("InvoiceLine", [
-      requiredText("ID", String(index + 1)),
+      mandatoryText("ID", String(index + 1)),
       original
-        ? el("OriginalDocumentReference", requiredText("LineID", ""), {
+        ? el("OriginalDocumentReference", mandatoryText("LineID", ""), {
             ref: "original",
           })
         : "",
-      requiredText("InvoicedQuantity", quantityText(line.quantity), {
+      mandatoryText("InvoicedQuantity", quantityText(line.quantity), {
         unitCode: line.unit ?? "",
       }),
-      requiredText("LineExtensionAmount", amount(line.netAmountMinor)),
-      requiredText(
+      mandatoryText("LineExtensionAmount", amount(line.netAmountMinor)),
+      mandatoryText(
         "LineExtensionAmountTaxInclusive",
         amount(line.grossAmountMinor),
       ),
-      requiredText("LineExtensionTaxAmount", amount(line.vatAmountMinor)),
-      requiredText("UnitPrice", amount(unitNet)),
-      requiredText("UnitPriceTaxInclusive", amount(unitGross)),
+      mandatoryText("LineExtensionTaxAmount", amount(line.vatAmountMinor)),
+      mandatoryText("UnitPrice", amount(unitNet)),
+      mandatoryText("UnitPriceTaxInclusive", amount(unitGross)),
       el("ClassifiedTaxCategory", [
-        requiredText("Percent", vatPercentText(line.vatRateBps)),
-        requiredText("VATCalculationMethod", "0"),
-        requiredText(
+        mandatoryText("Percent", vatPercentText(effectiveVatRateBps(line))),
+        mandatoryText("VATCalculationMethod", "0"),
+        mandatoryText(
           "VATApplicable",
           String(vatPayer && line.vatTreatment !== "not_vat_payer"),
         ),
       ]),
-      el("Item", requiredText("Description", line.description)),
+      el("Item", mandatoryText("Description", line.description)),
     ]);
   });
   const subtotals = record.totals.vatBreakdown.map((band) =>
     el("TaxSubTotal", [
-      requiredText("TaxableAmount", amount(band.netAmountMinor)),
-      requiredText("TaxAmount", amount(band.vatAmountMinor)),
-      requiredText("TaxInclusiveAmount", amount(band.grossAmountMinor)),
-      requiredText("AlreadyClaimedTaxableAmount", zero),
-      requiredText("AlreadyClaimedTaxAmount", zero),
-      requiredText("AlreadyClaimedTaxInclusiveAmount", zero),
-      requiredText("DifferenceTaxableAmount", amount(band.netAmountMinor)),
-      requiredText("DifferenceTaxAmount", amount(band.vatAmountMinor)),
-      requiredText(
+      mandatoryText("TaxableAmount", amount(band.netAmountMinor)),
+      mandatoryText("TaxAmount", amount(band.vatAmountMinor)),
+      mandatoryText("TaxInclusiveAmount", amount(band.grossAmountMinor)),
+      mandatoryText("AlreadyClaimedTaxableAmount", zero),
+      mandatoryText("AlreadyClaimedTaxAmount", zero),
+      mandatoryText("AlreadyClaimedTaxInclusiveAmount", zero),
+      mandatoryText("DifferenceTaxableAmount", amount(band.netAmountMinor)),
+      mandatoryText("DifferenceTaxAmount", amount(band.vatAmountMinor)),
+      mandatoryText(
         "DifferenceTaxInclusiveAmount",
         amount(band.grossAmountMinor),
       ),
       el(
         "TaxCategory",
-        requiredText("Percent", vatPercentText(band.vatRateBps)),
+        mandatoryText("Percent", vatPercentText(band.vatRateBps)),
       ),
     ]),
   );
@@ -122,40 +125,40 @@ const document = (record: InvoiceExportRecord): string => {
       : el(
           "PaymentMeans",
           el("Payment", [
-            requiredText("PaidAmount", amount(totals.grossAmountMinor)),
-            requiredText("PaymentMeansCode", "42"),
+            mandatoryText("PaidAmount", amount(totals.grossAmountMinor)),
+            mandatoryText("PaymentMeansCode", "42"),
             el("Details", [
-              requiredText("PaymentDueDate", record.dueDate),
-              requiredText("ID", account?.account),
-              requiredText("BankCode", account?.bankCode),
-              requiredText("Name", ""),
-              requiredText("IBAN", record.seller.iban),
-              requiredText("BIC", record.seller.bic),
+              mandatoryText("PaymentDueDate", record.dueDate),
+              mandatoryText("ID", account?.account),
+              mandatoryText("BankCode", account?.bankCode),
+              mandatoryText("Name", ""),
+              mandatoryText("IBAN", record.seller.iban),
+              mandatoryText("BIC", record.seller.bic),
               text("VariableSymbol", variableSymbolOf(record)),
             ]),
           ]),
         );
   const body = [
-    requiredText("DocumentType", DOCUMENT_TYPE[record.documentType]),
-    requiredText("ID", record.number),
-    requiredText("UUID", record.id),
-    requiredText("IssuingSystem", "Stella"),
-    requiredText("IssueDate", record.issueDate),
+    mandatoryText("DocumentType", DOCUMENT_TYPE[record.documentType]),
+    mandatoryText("ID", record.number),
+    mandatoryText("UUID", record.id),
+    mandatoryText("IssuingSystem", "Stella"),
+    mandatoryText("IssueDate", record.issueDate),
     record.documentType === "advance"
       ? ""
       : text("TaxPointDate", record.taxableSupplyDate),
-    requiredText("VATApplicable", String(vatPayer)),
-    requiredText("ElectronicPossibilityAgreementReference", ""),
+    mandatoryText("VATApplicable", String(vatPayer)),
+    mandatoryText("ElectronicPossibilityAgreementReference", ""),
     text("Note", invoiceDescriptionOf(record)),
-    requiredText("LocalCurrencyCode", currency),
-    requiredText("CurrRate", "1"),
-    requiredText("RefCurrRate", "1"),
+    mandatoryText("LocalCurrencyCode", currency),
+    mandatoryText("CurrRate", "1"),
+    mandatoryText("RefCurrRate", "1"),
     el("AccountingSupplierParty", party(record.seller)),
     el("AccountingCustomerParty", party(record.buyer)),
     original
       ? el(
           "OriginalDocumentReferences",
-          el("OriginalDocumentReference", requiredText("ID", original), {
+          el("OriginalDocumentReference", mandatoryText("ID", original), {
             id: "original",
           }),
         )
@@ -163,23 +166,23 @@ const document = (record: InvoiceExportRecord): string => {
     el("InvoiceLines", lines),
     el("TaxTotal", [
       ...subtotals,
-      requiredText("TaxAmount", amount(totals.vatAmountMinor)),
+      mandatoryText("TaxAmount", amount(totals.vatAmountMinor)),
     ]),
     el("LegalMonetaryTotal", [
-      requiredText("TaxExclusiveAmount", amount(totals.netAmountMinor)),
-      requiredText("TaxInclusiveAmount", amount(totals.grossAmountMinor)),
-      requiredText("AlreadyClaimedTaxExclusiveAmount", zero),
-      requiredText("AlreadyClaimedTaxInclusiveAmount", zero),
-      requiredText(
+      mandatoryText("TaxExclusiveAmount", amount(totals.netAmountMinor)),
+      mandatoryText("TaxInclusiveAmount", amount(totals.grossAmountMinor)),
+      mandatoryText("AlreadyClaimedTaxExclusiveAmount", zero),
+      mandatoryText("AlreadyClaimedTaxInclusiveAmount", zero),
+      mandatoryText(
         "DifferenceTaxExclusiveAmount",
         amount(totals.netAmountMinor),
       ),
-      requiredText(
+      mandatoryText(
         "DifferenceTaxInclusiveAmount",
         amount(totals.grossAmountMinor),
       ),
-      requiredText("PaidDepositsAmount", zero),
-      requiredText("PayableAmount", amount(totals.grossAmountMinor)),
+      mandatoryText("PaidDepositsAmount", zero),
+      mandatoryText("PayableAmount", amount(totals.grossAmountMinor)),
     ]),
     payable,
   ];

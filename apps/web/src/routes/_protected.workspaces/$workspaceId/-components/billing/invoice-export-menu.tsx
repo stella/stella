@@ -1,7 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "use-intl";
 
-import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
 import { DownloadIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
@@ -21,20 +20,11 @@ import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
-import { downloadFile } from "@/lib/utils";
 
-const EXPORT_TIMEOUT_MS = 120_000;
-
-type InvoiceExportFormat =
-  | "xlsx"
-  | "xlsx_lines"
-  | "eso9"
-  | "pohoda"
-  | "money_s3"
-  | "flexibee"
-  | "isdoc"
-  | "ubl"
-  | "ledes_1998b";
+/** The formats the export endpoint accepts. */
+type InvoiceExportFormat = Parameters<
+  ReturnType<typeof api.invoices>["export"]["post"]
+>[0]["format"];
 
 // Product and standard names read the same in every language.
 const PRODUCT_NAMES = {
@@ -77,6 +67,14 @@ const FORMAT_GROUPS = [
   formats: readonly (readonly [InvoiceExportFormat, FormatLabel])[];
 }[];
 
+// Every format the endpoint accepts has an entry in the menu.
+true satisfies Exclude<
+  InvoiceExportFormat,
+  (typeof FORMAT_GROUPS)[number]["formats"][number][0]
+> extends never
+  ? true
+  : never;
+
 type InvoiceExportMenuProps = {
   workspaceId: string;
   /** Export just this invoice; omit to export every issued invoice. */
@@ -102,25 +100,16 @@ export const InvoiceExportMenu = ({
               ? {}
               : { invoiceIds: [toSafeId<"invoice">(invoiceId)] }),
           },
-          {
-            headers: { "Accept-Language": locale },
-            fetch: { signal: AbortSignal.timeout(EXPORT_TIMEOUT_MS) },
-          },
+          { headers: { "Accept-Language": locale } },
         );
-      const { downloadUrl, fileName } = unwrapEden(response);
-      const file = await fetchWithTimeout(downloadUrl, {
-        timeoutMs: EXPORT_TIMEOUT_MS,
-      });
-      if (!file.ok) {
-        unwrapEden({
-          data: null,
-          error: {
-            status: file.status,
-            value: "Invoice export download failed",
-          },
-        });
-      }
-      downloadFile(await file.blob(), fileName);
+      // The presigned URL answers as an attachment under its file name.
+      const { downloadUrl } = unwrapEden(response);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.rel = "noopener";
+      document.body.append(link);
+      link.click();
+      link.remove();
     },
     onError: (error) => {
       analytics.captureError(error);

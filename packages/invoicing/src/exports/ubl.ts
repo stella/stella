@@ -1,10 +1,11 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { invalidInput, type InvoicingResult } from "../errors";
 import type { InvoiceParty, VatTreatment } from "../types";
 import {
   amountText,
   countryCodeOf,
+  effectiveVatRateBps,
   invoiceDescriptionOf,
   quantityText,
   variableSymbolOf,
@@ -42,6 +43,10 @@ const vatCategoryOf = (
       return "AE";
     case "not_vat_payer":
       return "O";
+    default: {
+      vatTreatment satisfies never;
+      return panic("Unknown VAT treatment");
+    }
   }
 };
 
@@ -115,7 +120,7 @@ const line = (
   const unitPrice = Math.abs(item.unitPriceMinor ?? item.netAmountMinor);
   const quantity = quantityText(item.quantity).replace(/^-/u, "");
   const signedQuantity = net < 0 ? `-${quantity}` : quantity;
-  const category = vatCategoryOf(item.vatTreatment, item.vatRateBps);
+  const category = vatCategoryOf(item.vatTreatment, effectiveVatRateBps(item));
   const lineName =
     mode === "creditNote" ? "cac:CreditNoteLine" : "cac:InvoiceLine";
   const quantityName =
@@ -135,7 +140,7 @@ const line = (
       taxCategory(
         "cac:ClassifiedTaxCategory",
         category,
-        item.vatRateBps,
+        effectiveVatRateBps(item),
         false,
       ),
     ]),
@@ -161,11 +166,14 @@ const document = (record: InvoiceExportRecord): string => {
     { category: string; vatRateBps: number; base: number; vat: number }
   >();
   for (const item of record.lines) {
-    const category = vatCategoryOf(item.vatTreatment, item.vatRateBps);
-    const key = `${category}:${item.vatRateBps}`;
+    const category = vatCategoryOf(
+      item.vatTreatment,
+      effectiveVatRateBps(item),
+    );
+    const key = `${category}:${effectiveVatRateBps(item)}`;
     const current = subtotals.get(key) ?? {
       category,
-      vatRateBps: item.vatRateBps,
+      vatRateBps: effectiveVatRateBps(item),
       base: 0,
       vat: 0,
     };
@@ -264,6 +272,19 @@ export const buildUblFiles = (
 ): InvoicingResult<{ fileName: string; content: string }[]> => {
   if (records.length === 0) {
     return invalidInput("There are no issued invoices to export");
+  }
+  // EN 16931 requires both parties' country codes (BR-09, BR-11).
+  for (const record of records) {
+    for (const [role, subject] of [
+      ["seller", record.seller],
+      ["buyer", record.buyer],
+    ] as const) {
+      if (countryCodeOf(subject.country) === null) {
+        return invalidInput(
+          `Invoice ${record.number} has no two-letter country code for the ${role}; EN 16931 requires one`,
+        );
+      }
+    }
   }
   return Result.ok(
     records.map((record) => ({

@@ -8,7 +8,7 @@ import type {
   InvoiceExportSeller,
 } from "./record";
 
-export const SELLER: InvoiceExportSeller = {
+const SELLER: InvoiceExportSeller = {
   name: "Advokátní kancelář Novák & Partneři s.r.o.",
   registrationNumber: "12345678",
   vatId: "CZ12345678",

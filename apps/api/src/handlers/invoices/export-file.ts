@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import JSZip from "jszip";
 
 import {
@@ -20,7 +20,7 @@ import type {
   InvoicingInputError,
 } from "@stll/invoicing";
 
-import { exportAmountText } from "@/api/handlers/time-entries/export-amount";
+import { exportAmountText } from "@/api/lib/billing/export-amount";
 import { buildXlsxExport } from "@/api/lib/views/table-export";
 import type { ExportTableInput } from "@/api/lib/views/table-export";
 import { XLSX_MIME_TYPE } from "@/api/mime-types";
@@ -37,7 +37,7 @@ export const INVOICE_EXPORT_FORMATS = [
   "ledes_1998b",
 ] as const;
 
-export type InvoiceExportFormat = (typeof INVOICE_EXPORT_FORMATS)[number];
+type InvoiceExportFormat = (typeof INVOICE_EXPORT_FORMATS)[number];
 
 export type InvoiceExportFile = {
   body: Uint8Array;
@@ -154,7 +154,28 @@ export const buildInvoiceExportFile = async ({
         ? Result.err(files.error)
         : Result.ok(await documentsFile(files.value, "xml"));
     }
+    default: {
+      format satisfies never;
+      return panic("Unknown invoice export format");
+    }
   }
+};
+
+/**
+ * The entry name for a file, numbered when an earlier entry took it: two
+ * invoice numbers can sanitize to the same name, and a zip keeps only the
+ * last file under one name.
+ */
+const uniqueEntryName = (fileName: string, taken: Set<string>): string => {
+  const dot = fileName.lastIndexOf(".");
+  const stem = dot > 0 ? fileName.slice(0, dot) : fileName;
+  const extension = dot > 0 ? fileName.slice(dot) : "";
+  let name = fileName;
+  for (let copy = 2; taken.has(name); copy += 1) {
+    name = `${stem}-${copy}${extension}`;
+  }
+  taken.add(name);
+  return name;
 };
 
 /** One e-invoice as itself; several as a zip of one file each. */
@@ -167,8 +188,9 @@ const documentsFile = async (
     return textFile(only.content, XML_MIME_TYPE, extension);
   }
   const zip = new JSZip();
+  const taken = new Set<string>();
   for (const file of files) {
-    zip.file(file.fileName, file.content);
+    zip.file(uniqueEntryName(file.fileName, taken), file.content);
   }
   return {
     body: await zip.generateAsync({

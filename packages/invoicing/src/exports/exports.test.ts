@@ -24,6 +24,7 @@ import {
   buildEso9Table,
   buildInvoiceLinesTable,
   buildInvoiceSummaryTable,
+  type InvoiceTableCell,
 } from "./tables";
 import { buildUblFiles } from "./ubl";
 
@@ -82,7 +83,7 @@ describe("POHODA XML", () => {
 
   test("maps Czech VAT rates onto POHODA's rate slots", () => {
     const xml = buildPohodaXml([MIXED_RATES_INVOICE], "export-1").unwrap();
-    expect(between(xml, "inv:rateVAT")).toEqual(["high", "low", "low"]);
+    expect(between(xml, "inv:rateVAT")).toEqual(["high", "third", "low"]);
   });
 
   test("states a foreign-currency invoice in its currency", () => {
@@ -191,6 +192,13 @@ describe("UBL 2.1 (EN 16931)", () => {
     );
   });
 
+  test("refuses a party without a two-letter country code", () => {
+    const result = buildUblFiles([
+      { ...MIXED_RATES_INVOICE, buyer: { name: "Bez adresy" } },
+    ]);
+    expect(result.isErr()).toBe(true);
+  });
+
   test("classifies VAT and bills hours in hours", () => {
     const [invoice] = buildUblFiles([DOMESTIC_INVOICE])
       .unwrap()
@@ -283,13 +291,29 @@ describe("spreadsheets", () => {
     const table = buildEso9Table([MIXED_RATES_INVOICE, EURO_INVOICE]);
     expect(table.headers).toHaveLength(20);
     const [mixed, euro] = table.rows;
-    const amount = (cell: unknown) =>
-      (cell as { amountMinor?: number }).amountMinor;
+    const amount = (cell: InvoiceTableCell | undefined) =>
+      cell?.type === "amount" ? cell.amountMinor : undefined;
     expect(amount(mixed?.[5])).toBe(80_000);
     expect(amount(mixed?.[7])).toBe(100_000);
     expect(amount(mixed?.[9])).toBe(50_000);
     // A foreign-currency invoice leaves the home columns to ESO9's rate list.
     expect(euro?.[11]).toEqual({ type: "text", value: "" });
     expect(amount(euro?.[15])).toBe(120_000);
+  });
+
+  test("keeps a domestic reverse charge out of the export columns", () => {
+    const domestic = {
+      ...MIXED_RATES_INVOICE,
+      lines: MIXED_RATES_INVOICE.lines.map((line) => ({
+        ...line,
+        vatTreatment: "reverse_charge" as const,
+        vatAmountMinor: cents(0),
+      })),
+    };
+    const [row] = buildEso9Table([domestic]).rows;
+    const amount = (cell: InvoiceTableCell | undefined) =>
+      cell?.type === "amount" ? cell.amountMinor : undefined;
+    expect(amount(row?.[11])).toBe(0);
+    expect(amount(row?.[12])).toBe(0);
   });
 });

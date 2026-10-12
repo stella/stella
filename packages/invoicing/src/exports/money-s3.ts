@@ -7,6 +7,7 @@ import {
   clip,
   countryCodeOf,
   czechVatBandOf,
+  effectiveVatRateBps,
   invoiceDescriptionOf,
   quantityText,
   streetOf,
@@ -34,10 +35,10 @@ const bandsOf = (record: InvoiceExportRecord) => {
     basic: emptyBand(),
   };
   for (const line of record.lines) {
-    const band = bands[czechVatBandOf(line.vatRateBps)];
+    const band = bands[czechVatBandOf(effectiveVatRateBps(line))];
     band.base += line.netAmountMinor;
     band.vat += line.vatAmountMinor;
-    band.rateBps ??= line.vatRateBps;
+    band.rateBps ??= effectiveVatRateBps(line);
   }
   return bands;
 };
@@ -127,7 +128,7 @@ const invoice = (record: InvoiceExportRecord): string => {
             Array.from(line.description).length > 50 ? line.description : null,
           ),
           text("PocetMJ", quantityText(line.quantity)),
-          text("SazbaDPH", vatPercentText(line.vatRateBps)),
+          text("SazbaDPH", vatPercentText(effectiveVatRateBps(line))),
           text("Cena", amount(unitPrice)),
           el("SouhrnDPH", [
             text("Zaklad_MJ", amount(unitPrice)),
