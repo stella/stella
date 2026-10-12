@@ -44,6 +44,7 @@ import type { CitationTextRevision } from "@/api/handlers/case-law/polarity/text
 import { citationTextRevisionFence } from "@/api/handlers/case-law/polarity/text-revision";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { CitationEvidenceWindows } from "@/api/lib/case-law/citation-evidence";
 import type {
   CitedPart,
   CitationPolaritySource,
@@ -71,11 +72,29 @@ const MAX_PROMOTION_PHRASE_LENGTH = 100;
  * its own, which only the rule tier does, so it is a verdict that tier
  * reaches (`selectCitationPolarity`) and the model tiers do not.
  */
-export const excerptOf = (contexts: CitationContexts): string => {
-  if (contexts.length <= EXCERPT_WINDOWS) {
-    return contexts.join("\n[…]\n");
+const excerptItems = <T>(items: readonly [T, ...T[]]): readonly [T, ...T[]] => {
+  const selected =
+    items.length <= EXCERPT_WINDOWS
+      ? [...items]
+      : [...items.slice(0, 2), ...items.slice(-3)];
+  const [first, ...rest] = selected;
+  if (first === undefined) {
+    return panic("A citation excerpt must contain a context window");
   }
-  return [...contexts.slice(0, 2), ...contexts.slice(-3)].join("\n[…]\n");
+  return [first, ...rest];
+};
+
+export const excerptOf = (contexts: CitationContexts): string =>
+  excerptItems(contexts).join("\n[…]\n");
+
+const selectExcerptOf = (
+  windows: CitationWindows,
+): { text: string; evidenceWindows: CitationEvidenceWindows } => {
+  const contexts = excerptItems(windows.contexts);
+  return {
+    text: contexts.join("\n[…]\n"),
+    evidenceWindows: excerptItems(windows.contextEvidenceWindows),
+  };
 };
 
 type ClassifyResult = {
@@ -85,8 +104,7 @@ type ClassifyResult = {
   /** Confidence of the deciding tier; null when no tier read the text. */
   confidence: number | null;
   classifierVersion: string;
-  windowStart: number;
-  windowEnd: number;
+  evidenceWindows: CitationEvidenceWindows;
   citedPart: CitedPart;
 };
 
@@ -127,8 +145,6 @@ export const classifyCitation = async ({
 }: ClassifyCitationArgs): Promise<ClassifyResult> => {
   const evidence = {
     classifierVersion: POLARITY_CLASSIFIER_VERSION,
-    windowStart: windows.evidenceSpan.start,
-    windowEnd: windows.evidenceSpan.end,
     citedPart: classifyCitedPart({
       contexts: windows.contexts,
       citationText,
@@ -161,11 +177,13 @@ export const classifyCitation = async ({
       ruleId: ruleMatch.ruleId,
       source: "regex",
       confidence: ruleMatch.confidence,
+      evidenceWindows: windows.evidenceWindows,
     };
   }
 
   // The decision owner asks both model tiers over the same excerpt.
-  const context = excerptOf(windows.contexts);
+  const excerpt = selectExcerptOf(windows);
+  const context = excerpt.text;
   const reading = await classifyWithSystemOne({
     client: options?.decisionModel,
     context,
@@ -181,6 +199,7 @@ export const classifyCitation = async ({
       ruleId: null,
       source: "fallback",
       confidence: null,
+      evidenceWindows: excerpt.evidenceWindows,
     };
   }
   const treatment = POLARITY_READINGS[reading.answer.choice];
@@ -216,6 +235,7 @@ export const classifyCitation = async ({
     ruleId: null,
     source: reading.source === "decision-model" ? "system-one" : "llm",
     confidence,
+    evidenceWindows: excerpt.evidenceWindows,
   };
 };
 
@@ -367,10 +387,8 @@ export const persistPolarity = async ({
         polaritySource: persistedPolaritySource(result.source),
         polarityClassifierVersion:
           result.source === "fallback" ? null : result.classifierVersion,
-        polarityWindowStart:
-          result.source === "fallback" ? null : result.windowStart,
-        polarityWindowEnd:
-          result.source === "fallback" ? null : result.windowEnd,
+        polarityEvidenceWindows:
+          result.source === "fallback" ? null : result.evidenceWindows,
         polarityConfidence: result.confidence,
         citedPart: result.citedPart,
       })

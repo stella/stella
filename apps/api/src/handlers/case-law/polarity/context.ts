@@ -1,3 +1,5 @@
+import type { CitationEvidenceWindows } from "@/api/lib/case-law/citation-evidence";
+
 /**
  * Extract citation context from decision sections.
  *
@@ -50,10 +52,11 @@ export type CitationWindows = {
    * mention would spend its budget repeating itself.
    */
   contexts: CitationContexts;
-  /** Bounding offsets into the original section texts joined with a newline. */
-  evidenceSpan: { start: number; end: number };
+  /** Exact offsets for each mention in the original joined section text. */
+  evidenceWindows: CitationEvidenceWindows;
+  /** Exact offsets for each merged model context in the original text. */
+  contextEvidenceWindows: CitationEvidenceWindows;
 };
-
 type Span = { start: number; end: number };
 
 export const extractContexts = (
@@ -105,9 +108,22 @@ export const extractContexts = (
   return {
     mentions: [window(first), ...rest.map(window)],
     contexts: [window(mergedFirst), ...mergedRest.map(window)],
-    evidenceSpan: {
-      start: sectionOffset + first.start,
-      end: sectionOffset + (rest.at(-1) ?? first).end,
-    },
+    evidenceWindows: [
+      { start: sectionOffset + first.start, end: sectionOffset + first.end },
+      ...rest.map(({ start, end }) => ({
+        start: sectionOffset + start,
+        end: sectionOffset + end,
+      })),
+    ],
+    contextEvidenceWindows: [
+      {
+        start: sectionOffset + mergedFirst.start,
+        end: sectionOffset + mergedFirst.end,
+      },
+      ...mergedRest.map(({ start, end }) => ({
+        start: sectionOffset + start,
+        end: sectionOffset + end,
+      })),
+    ],
   };
 };

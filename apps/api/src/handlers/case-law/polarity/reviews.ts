@@ -116,8 +116,7 @@ export const applyCitationReviews = async (
           polarityRuleId: null,
           polaritySource: "review",
           polarityClassifierVersion: null,
-          polarityWindowStart: null,
-          polarityWindowEnd: null,
+          polarityEvidenceWindows: null,
           polarityConfidence: null,
         };
   });

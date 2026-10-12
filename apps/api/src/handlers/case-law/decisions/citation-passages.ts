@@ -41,6 +41,7 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import type { CitationEvidenceWindows } from "@/api/lib/case-law/citation-evidence";
 import type {
   CitationReadDirection,
   CitationPolaritySource,
@@ -581,8 +582,7 @@ export const prepareDecisionCitations = async ({
               source: caseLawCitations.polaritySource,
               ruleId: caseLawCitations.polarityRuleId,
               classifierVersion: caseLawCitations.polarityClassifierVersion,
-              windowStart: caseLawCitations.polarityWindowStart,
-              windowEnd: caseLawCitations.polarityWindowEnd,
+              evidenceWindows: caseLawCitations.polarityEvidenceWindows,
               citedPart: caseLawCitations.citedPart,
             })
             .from(caseLawCitations)
@@ -645,8 +645,7 @@ export const completeDecisionCitations = async ({
       textWithheldReason,
       citationText: item.citationText,
       sectionIndex: item.sectionIndex,
-      windowStart: evidence?.windowStart ?? null,
-      windowEnd: evidence?.windowEnd ?? null,
+      evidenceWindows: evidence?.evidenceWindows ?? null,
     });
     const evidenceFields: CitationEvidenceFields =
       evidence === null
@@ -690,39 +689,53 @@ export const completeDecisionCitations = async ({
   };
 };
 
-/** Null offsets mean no window was recorded; never substitute a nearby mention. */
+/** Null windows mean no evidence was recorded; never substitute a nearby mention. */
 type PolarityExcerptOptions = {
   sections: DecisionSection[] | null;
-  windowStart: number | null;
-  windowEnd: number | null;
+  evidenceWindows: CitationEvidenceWindows | null;
 };
 
 export const polarityExcerptIn = ({
   sections,
-  windowStart,
-  windowEnd,
+  evidenceWindows,
 }: PolarityExcerptOptions): string | null => {
-  if (sections === null || windowStart === null || windowEnd === null) {
+  if (sections === null || evidenceWindows === null) {
     return null;
   }
   const text = sections.map((section) => section.text).join("\n");
-  if (windowStart < 0 || windowEnd < windowStart || windowEnd > text.length) {
+  if (
+    evidenceWindows.some(
+      ({ start, end }) => start < 0 || end <= start || end > text.length,
+    )
+  ) {
     logger.warn("case_law.citation_polarity.evidence_window_out_of_bounds");
     return null;
   }
-  const windowLength = windowEnd - windowStart;
-  if (windowLength <= PASSAGE_MAX_CHARS) {
-    return text.slice(windowStart, windowEnd);
-  }
-  // Multiple mentions can span the decision; mark the omitted middle explicitly.
   const omission = "\n[…]\n";
-  const prefixLength = Math.floor((PASSAGE_MAX_CHARS - omission.length) / 2);
-  const suffixLength = PASSAGE_MAX_CHARS - omission.length - prefixLength;
-  return (
-    text.slice(windowStart, windowStart + prefixLength) +
-    omission +
-    text.slice(windowEnd - suffixLength, windowEnd)
+  const windowBudget = Math.floor(
+    (PASSAGE_MAX_CHARS - omission.length * (evidenceWindows.length - 1)) /
+      evidenceWindows.length,
   );
+  if (windowBudget <= omission.length) {
+    logger.warn(
+      "case_law.citation_polarity.evidence_windows_exceed_excerpt_budget",
+    );
+    return null;
+  }
+  return evidenceWindows
+    .map(({ start, end }) => {
+      if (end - start <= windowBudget) {
+        return text.slice(start, end);
+      }
+      const prefixLength = Math.floor((windowBudget - omission.length) / 2);
+      const suffixLength = windowBudget - omission.length - prefixLength;
+      return (
+        text.slice(start, start + prefixLength) +
+        omission +
+        text.slice(end - suffixLength, end)
+      );
+    })
+    .join(omission);
 };
 
 export const readGatedDecisionCitations = async ({
@@ -752,8 +765,7 @@ type CitationTextFieldsOptions = {
   textWithheldReason: DecisionTextWithheldReason | null;
   citationText: string;
   sectionIndex: number | null;
-  windowStart: number | null;
-  windowEnd: number | null;
+  evidenceWindows: CitationEvidenceWindows | null;
 };
 
 /** All citation text outputs share one eligibility branch, including the reference itself. */
@@ -762,8 +774,7 @@ export const citationTextFields = ({
   textWithheldReason,
   citationText,
   sectionIndex,
-  windowStart,
-  windowEnd,
+  evidenceWindows,
 }: CitationTextFieldsOptions) => {
   if (textWithheldReason !== null) {
     return {
@@ -792,8 +803,7 @@ export const citationTextFields = ({
         }),
         evidenceExcerpt: polarityExcerptIn({
           sections: text.sections,
-          windowStart,
-          windowEnd,
+          evidenceWindows,
         }),
         textIncompleteReason: null,
       };

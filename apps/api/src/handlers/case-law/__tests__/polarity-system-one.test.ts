@@ -215,7 +215,8 @@ describe("classifyCitation with the System One tier", () => {
       windows: {
         mentions: [context],
         contexts: [context],
-        evidenceSpan: { start: 0, end: context.length },
+        evidenceWindows: [{ start: 0, end: context.length }],
+        contextEvidenceWindows: [{ start: 0, end: context.length }],
       },
       citationText: "sp. zn. 21 Cdo 1234/2020",
       language: "cs",
@@ -233,8 +234,7 @@ describe("classifyCitation with the System One tier", () => {
       source: "system-one",
       confidence: 0.92,
       classifierVersion: "citation-polarity-v2",
-      windowStart: 0,
-      windowEnd: context.length,
+      evidenceWindows: [{ start: 0, end: context.length }],
       citedPart: "not-stated",
     });
   });
@@ -255,7 +255,8 @@ describe("classifyCitation with the System One tier", () => {
         windows: {
           mentions: [excerpt],
           contexts: [excerpt],
-          evidenceSpan: { start: 0, end: excerpt.length },
+          evidenceWindows: [{ start: 0, end: excerpt.length }],
+          contextEvidenceWindows: [{ start: 0, end: excerpt.length }],
         },
         citationText: "sp. zn. 21 Cdo 1234/2020",
         language: "cs",
@@ -307,7 +308,8 @@ test.each(Object.entries(POLARITY_READINGS))(
       windows: {
         mentions: [context],
         contexts: [context],
-        evidenceSpan: { start: 0, end: context.length },
+        evidenceWindows: [{ start: 0, end: context.length }],
+        contextEvidenceWindows: [{ start: 0, end: context.length }],
       },
       citationText: "sp. zn. 21 Cdo 1234/2020",
       language: "cs",

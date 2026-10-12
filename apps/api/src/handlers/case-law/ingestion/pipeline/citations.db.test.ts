@@ -21,6 +21,7 @@ import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-gr
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
 import {
   citationContent,
+  planDecisionCitations,
   writeDecisionCitations,
 } from "@/api/handlers/case-law/ingestion/pipeline/citations";
 import type { CitationPlan } from "@/api/handlers/case-law/ingestion/pipeline/citations";
@@ -36,6 +37,7 @@ import {
 } from "@/api/handlers/case-law/polarity/form-repair";
 import { compileRules } from "@/api/handlers/case-law/polarity/rule-engine";
 import { createSafeId } from "@/api/lib/branded-types";
+import { parseCitationEvidenceWindows } from "@/api/lib/case-law/citation-evidence";
 import { CITED_PART } from "@/api/lib/case-law/citation-vocabulary";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
@@ -44,6 +46,7 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
+let fixtureScopedDb: ScopedDb;
 const decisionId = createSafeId<"caseLawDecision">();
 const ruleId = createSafeId<"caseLawPolarityRule">();
 const confidence = 0.923456789;
@@ -51,6 +54,8 @@ const confidence = 0.923456789;
 beforeAll(async () => {
   client = await createTestPglite();
   db = drizzle({ client });
+  fixtureScopedDb = async (callback) =>
+    await db.transaction(async (tx) => await callback(asTestRaw(tx)));
   const sourceId = createSafeId<"caseLawSource">();
   await db.insert(caseLawSources).values({
     id: sourceId,
@@ -115,10 +120,9 @@ test("refreshing the same confidence keeps the citation row without a write", as
             decisionDate: null,
           },
           sectionIndex: 0,
-          polarityMentions: null,
+          polarityWindows: null,
         },
         verdict: { polarity: POLARITY.POSITIVE, ruleId, confidence },
-        windows: null,
         citedPart: CITED_PART.NOT_STATED,
       },
     ],
@@ -148,22 +152,31 @@ test("refreshing the same confidence keeps the citation row without a write", as
   expect(await headers()).toEqual(first);
 });
 
-test("citation comparison keys are stable across numeric write-read round trips", async () => {
+test("citation comparison keys are stable across evidence-window write-read round trips", async () => {
   await assertProperty(
-    "citation comparison keys are stable across numeric write-read round trips",
+    "citation comparison keys are stable across evidence-window write-read round trips",
     fc.asyncProperty(
       fc.double({ min: 0, max: 1, noNaN: true, noDefaultInfinity: true }),
       fc.integer({ min: 0, max: 1000 }),
-      fc.integer({ min: 0, max: 1_000_000 }),
-      fc.integer({ min: 1, max: 1000 }),
-      async (polarityConfidence, sectionIndex, start, width) => {
+      fc.array(
+        fc.record({
+          start: fc.integer({ min: 0, max: 1_000_000 }),
+          width: fc.integer({ min: 1, max: 1000 }),
+        }),
+        { minLength: 1, maxLength: 4 },
+      ),
+      async (polarityConfidence, sectionIndex, evidenceWindows) => {
         const incoming = {
           id: createSafeId<"caseLawCitation">(),
           citingDecisionId: decisionId,
           citationText: "Synthetic numeric authority",
           sectionIndex,
-          polarityWindowStart: start,
-          polarityWindowEnd: start + width,
+          polarityEvidenceWindows: parseCitationEvidenceWindows(
+            evidenceWindows.map(({ start, width }) => ({
+              start,
+              end: start + width,
+            })),
+          ),
           polarityConfidence,
         };
         const [stored] = await db
@@ -182,20 +195,137 @@ test("citation comparison keys are stable across numeric write-read round trips"
   );
 });
 
-test("empty polarity windows violate the persisted window constraint", async () => {
+test("empty polarity evidence windows violate the persisted window constraint", async () => {
   expect(
     await rejectionOf(
       client.query(
         `INSERT INTO case_law_citations
-          (id, citing_decision_id, citation_text, polarity_window_start, polarity_window_end)
-         VALUES ($1, $2, $3, $4, $4)`,
-        [createSafeId<"caseLawCitation">(), decisionId, "Empty evidence", 10],
+          (id, citing_decision_id, citation_text, polarity_evidence_windows)
+         VALUES ($1, $2, $3, '[]'::jsonb)`,
+        [createSafeId<"caseLawCitation">(), decisionId, "Empty evidence"],
       ),
     ),
   ).toMatchObject({
     code: "23514",
     constraint: "citations_polarity_window_bounds",
   });
+});
+
+test("mixed cross-section treatment stores both exact classifier windows", async () => {
+  const citingDecisionId = createSafeId<"caseLawDecision">();
+  const sourceId = createSafeId<"caseLawSource">();
+  const positiveRuleId = createSafeId<"caseLawPolarityRule">();
+  const negativeRuleId = createSafeId<"caseLawPolarityRule">();
+  const citationText = "23 Cdo 555/2024";
+  const gapMarker = "INTERVENING TEXT OMITTED FROM EACH WINDOW";
+  const padding = "unrelated reasons. ".repeat(30);
+  const gap = `${padding}${gapMarker}${padding}`;
+  expect(padding.length).toBeGreaterThan(400);
+  expect(gap.length).toBeGreaterThan(400);
+  const sections = [
+    {
+      index: 0,
+      text: `The court relies on windowdbsupports authority ${citationText}.`,
+    },
+    {
+      index: 1,
+      text: `${gap}The court rejects with windowdbrejects ${citationText}.`,
+    },
+  ];
+  await db.insert(caseLawSources).values({
+    id: sourceId,
+    adapterKey: `evidence-windows-${citingDecisionId}`,
+    name: "Evidence window fixture",
+  });
+  await db.insert(caseLawDecisions).values({
+    id: citingDecisionId,
+    sourceId,
+    caseNumber: `evidence-${citingDecisionId}`,
+    country: "CZE",
+    court: "Synthetic court",
+    language: "en",
+  });
+  await db.insert(caseLawPolarityRules).values([
+    {
+      id: positiveRuleId,
+      pattern: "windowdbsupports",
+      language: "en",
+      kind: POLARITY_RULE_KIND.STANCE,
+      polarity: POLARITY.POSITIVE,
+      source: RULE_SOURCE.MANUAL,
+      confidence: 0.9,
+    },
+    {
+      id: negativeRuleId,
+      pattern: "windowdbrejects",
+      language: "en",
+      kind: POLARITY_RULE_KIND.STANCE,
+      polarity: POLARITY.NEGATIVE,
+      source: RULE_SOURCE.MANUAL,
+      confidence: 0.9,
+    },
+  ]);
+
+  const planned = await planDecisionCitations({
+    citations: [
+      {
+        citationText,
+        sectionIndex: null,
+        citedDecisionTypeHint: null,
+        identifierType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        identifierValue: citationText,
+        citedCourtHint: null,
+        citedSheetNumber: null,
+        citedDecisionDate: null,
+      },
+    ],
+    citingDecisionId,
+    language: "en",
+    polarityRules: undefined,
+    proceduralKeys: new Set(),
+    scopedDb: fixtureScopedDb,
+    sections,
+  });
+  const citationPlan = planned.unwrap();
+  if (citationPlan.disposition !== "legacy-graph") {
+    panic("Expected a citation reference");
+  }
+  const [reference] = citationPlan.references;
+  if (reference === undefined) {
+    panic("Expected one citation reference");
+  }
+
+  await runCitationGraphTransaction(
+    db.transaction.bind(db),
+    async (tx) =>
+      await writeDecisionCitations(asTestRaw(tx), {
+        decisionId: citingDecisionId,
+        citations: citationPlan,
+        observedAt: new Date("2026-10-01T00:00:00Z"),
+        stored: false,
+      }),
+  );
+  const row = await db
+    .select({
+      polarity: caseLawCitations.polarity,
+      windows: caseLawCitations.polarityEvidenceWindows,
+    })
+    .from(caseLawCitations)
+    .where(eq(caseLawCitations.citingDecisionId, citingDecisionId))
+    .then((rows) => rows.at(0));
+  if (row === undefined) {
+    panic("Expected the written citation");
+  }
+  const joined = sections.map(({ text }) => text).join("\n");
+  const excerpts = (row.windows ?? []).map(({ start, end }) =>
+    joined.slice(start, end),
+  );
+
+  expect(row.polarity).toBe(POLARITY.MIXED);
+  expect(excerpts).toHaveLength(2);
+  expect(excerpts[0]).toContain("windowdbsupports");
+  expect(excerpts[1]).toContain("windowdbrejects");
+  expect(excerpts.every((excerpt) => !excerpt.includes(gapMarker))).toBe(true);
 });
 
 test("refreshing a repaired citation preserves its confidence and row identity", async () => {
@@ -286,14 +416,13 @@ test("refreshing a repaired citation preserves its confidence and row identity",
             decisionDate: null,
           },
           sectionIndex: 0,
-          polarityMentions: null,
+          polarityWindows: planned.windows,
         },
         verdict: {
           polarity: POLARITY.NEUTRAL,
           ruleId: formRuleId,
           confidence: planned.confidence,
         },
-        windows: planned.windows,
         citedPart: CITED_PART.NOT_STATED,
       },
     ],

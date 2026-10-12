@@ -916,8 +916,9 @@ test("citation evidence reads the persisted classifier window only after AST eli
     polarity: POLARITY.NEGATIVE,
     polaritySource: "review",
     polarityClassifierVersion: "synthetic-v1",
-    polarityWindowStart: windowStart,
-    polarityWindowEnd: windowStart + excerpt.length,
+    polarityEvidenceWindows: [
+      { start: windowStart, end: windowStart + excerpt.length },
+    ],
     citedPart: "dissent",
   });
   const preparedRead = await withRedistributableSubject(
@@ -1074,8 +1075,7 @@ test.each(["text revision", "publication eligibility"] as const)(
       citationText: "authority",
       kind: CITATION_KIND.PRECEDENT,
       polaritySource: "rule",
-      polarityWindowStart: 0,
-      polarityWindowEnd: paragraph.length,
+      polarityEvidenceWindows: [{ start: 0, end: paragraph.length }],
     });
     const prepared = await withRedistributableSubject(
       caseLawDb,
@@ -1262,8 +1262,7 @@ test.each([
       citationText: "authority",
       kind: CITATION_KIND.PRECEDENT,
       polaritySource: "rule",
-      polarityWindowStart: 0,
-      polarityWindowEnd: paragraph.length,
+      polarityEvidenceWindows: [{ start: 0, end: paragraph.length }],
     });
     const prepared = await withRedistributableSubject(
       caseLawDb,
@@ -1372,8 +1371,7 @@ test("outgoing citations through a retired UUID retain canonical passages and ev
     polarity: POLARITY.POSITIVE,
     polaritySource: "review",
     polarityClassifierVersion: "canonical-v1",
-    polarityWindowStart: 0,
-    polarityWindowEnd: paragraph.length,
+    polarityEvidenceWindows: [{ start: 0, end: paragraph.length }],
     citedPart: "majority",
   });
   expect(retiredId).not.toBe(canonicalId);

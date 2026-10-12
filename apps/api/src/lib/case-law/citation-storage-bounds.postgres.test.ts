@@ -92,7 +92,7 @@ if (!databaseUrl || !enabled) {
                   decisionDate: null,
                 },
                 sectionIndex: null,
-                polarityMentions: null,
+                polarityWindows: null,
               },
             });
             const fits =

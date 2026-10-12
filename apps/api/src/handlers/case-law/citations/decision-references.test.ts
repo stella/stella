@@ -133,8 +133,7 @@ test.each(vectors.map((vector) => [vector.name, vector] as const))(
       ({
         polaritySource,
         polarityClassifierVersion,
-        polarityWindowStart,
-        polarityWindowEnd,
+        polarityEvidenceWindows,
         polarityConfidence,
         citedPart,
         ...row
@@ -144,19 +143,21 @@ test.each(vectors.map((vector) => [vector.name, vector] as const))(
           expect([
             polaritySource,
             polarityClassifierVersion,
-            polarityWindowStart,
-            polarityWindowEnd,
+            polarityEvidenceWindows,
             polarityConfidence,
-          ]).toEqual([null, null, null, null, null]);
+          ]).toEqual([null, null, null, null]);
           return row;
         }
         expect(polaritySource).toBe("rule");
         expect(polarityClassifierVersion).toBe(POLARITY_CLASSIFIER_VERSION);
         expect(polarityConfidence).toBeGreaterThan(0);
-        expect(polarityWindowStart).toBeGreaterThanOrEqual(0);
-        expect(polarityWindowEnd).toBeLessThanOrEqual(
-          vector.sections.map(({ text }) => text).join("\n").length,
-        );
+        expect(polarityEvidenceWindows).not.toBeNull();
+        for (const { start, end } of polarityEvidenceWindows ?? []) {
+          expect(start).toBeGreaterThanOrEqual(0);
+          expect(end).toBeLessThanOrEqual(
+            vector.sections.map(({ text }) => text).join("\n").length,
+          );
+        }
         return row;
       },
     );
@@ -203,4 +204,87 @@ test("the vectors cover what the projection decides", () => {
   ] as const) {
     expect(rows.some((row) => row[hint] !== null)).toBe(true);
   }
+});
+
+test("a mixed cross-section verdict persists the exact windows read by its rules", async () => {
+  const citationText = "23 Cdo 5068/2014";
+  const filler = "Background without a mention. ".repeat(30);
+  const sections = [
+    { index: 0, text: `The court supports authority ${citationText}.` },
+    {
+      index: 1,
+      text: `${filler}The court rejects authority ${citationText}.`,
+    },
+  ];
+  const rules = compileRules([
+    {
+      id: toSafeId<"caseLawPolarityRule">(
+        "00000000-0000-4000-8000-000000000001",
+      ),
+      pattern: "supports",
+      kind: POLARITY_RULE_KIND.STANCE,
+      polarity: POLARITY.POSITIVE,
+      confidence: 0.9,
+    },
+    {
+      id: toSafeId<"caseLawPolarityRule">(
+        "00000000-0000-4000-8000-000000000002",
+      ),
+      pattern: "rejects",
+      kind: POLARITY_RULE_KIND.STANCE,
+      polarity: POLARITY.NEGATIVE,
+      confidence: 0.9,
+    },
+  ]);
+  const planned = await planDecisionCitations({
+    citations: [
+      {
+        citationText,
+        sectionIndex: null,
+        citedDecisionTypeHint: null,
+        identifierType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        identifierValue: citationText,
+        citedCourtHint: null,
+        citedSheetNumber: null,
+        citedDecisionDate: null,
+      },
+    ],
+    citingDecisionId: toSafeId<"caseLawDecision">(
+      "00000000-0000-4000-8000-000000000003",
+    ),
+    language: "en",
+    polarityRules: new Map([["en", rules]]),
+    proceduralKeys: new Set(),
+    scopedDb: noDatabase,
+    sections,
+  });
+  const citationPlan = planned.unwrap();
+  if (citationPlan.disposition !== "legacy-graph") {
+    panic("Expected one citation reference");
+  }
+  const reference = citationPlan.references.at(0);
+  if (reference === undefined) {
+    panic("Expected one citation reference");
+  }
+  const row = citationRowsOf(citationPlan).unwrap().at(0);
+  if (row === undefined) {
+    panic("Expected one citation row");
+  }
+  const storedWindows = row.polarityEvidenceWindows;
+  const joined = sections.map(({ text }) => text).join("\n");
+
+  expect(row.polarity).toBe(POLARITY.MIXED);
+  expect(reference.reference.polarityWindows?.mentions).toHaveLength(2);
+  expect(storedWindows).toEqual(
+    reference.reference.polarityWindows?.evidenceWindows,
+  );
+  expect(storedWindows).toHaveLength(2);
+  expect(
+    storedWindows?.map(({ start, end }) => joined.slice(start, end)),
+  ).toEqual(
+    expect.arrayContaining([
+      expect.stringContaining("supports"),
+      expect.stringContaining("rejects"),
+    ]),
+  );
 });

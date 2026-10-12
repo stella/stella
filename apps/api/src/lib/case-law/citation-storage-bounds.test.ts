@@ -148,7 +148,7 @@ test("citation row projection either fits every column or refuses before SQL", (
               decisionDate: null,
             },
             sectionIndex: null,
-            polarityMentions: null,
+            polarityWindows: null,
           },
         });
         const fits =
@@ -206,7 +206,7 @@ const project = ({
         decisionDate: null,
       },
       sectionIndex: null,
-      polarityMentions: null,
+      polarityWindows: null,
     },
   });
 
