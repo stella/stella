@@ -57,6 +57,7 @@
     "prepack": "bun run build"
   },
   "dependencies": {
+    "@stll/text-normalize": "workspace:*",
     "better-result": "catalog:",
     "temporal-polyfill": "catalog:"
   },
