@@ -1538,12 +1538,16 @@ export const TOOLING_ENV_KEYS = new Set([
   "RELEASE_REF",
   "REPO",
   "REPOSITORY",
+  // Main PR-depth status publisher inputs.
+  "RESULTS",
   "RETRY_ATTEMPTS",
   "RETRY_DELAYS_SECONDS",
   // Credential used only by the restricted account canary.
   "REVIEW_ACCOUNT_PASSWORD",
+  "RUN_ID",
   // Nightly issue reporter: workflow run linked from the failure issue.
   "RUN_URL",
+  "SHA",
   "SMOKE_AI_JOURNEY",
   "SMOKE_AI_OPENAI_API_KEY",
   "SMOKE_API_URL",
@@ -1629,6 +1633,8 @@ export const AMBIENT_ENV_KEYS = new Set([
   "GITHUB_TOKEN",
   "GH_REPO",
   "GH_TOKEN",
+  // Test seam: the GitHub retry wrapper a status script calls.
+  "GH_RETRY",
   "HOSTNAME",
   "NODE_ENV",
   // Read by the provider SDK; managed request tests verify it cannot enable logging.

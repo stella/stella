@@ -13,14 +13,14 @@ type GeneratorCheck =
 
 export type Generator = {
   id: string;
-  outputKind: "committed" | "derived";
   outputs: readonly string[];
   blocks?: readonly { path: string; begin: string; end: string }[];
   inputs: readonly string[];
   write: readonly string[];
   autofix: boolean;
   after: readonly string[];
-} & GeneratorCheck;
+} & GeneratorCheck &
+  ({ outputKind: "committed" } | { outputKind: "derived" });
 
 const MODEL_CATALOG_INPUTS = [
   ".github/workflows/ci.yml",
@@ -37,7 +37,7 @@ const MODEL_CATALOG_INPUTS = [
   "packages/scripts/src/model-catalog-rates-gen.ts",
 ] as const;
 
-export const GENERATORS = [
+const GENERATOR_DECLARATIONS = [
   {
     id: "status-tables",
     outputKind: "committed",
@@ -863,6 +863,10 @@ export const GENERATORS = [
   },
 ] as const satisfies readonly Generator[];
 
+export const GENERATORS: readonly (Generator & {
+  id: (typeof GENERATOR_DECLARATIONS)[number]["id"];
+})[] = GENERATOR_DECLARATIONS;
+
 export const GUARD_A_EXCLUSIONS = [
   {
     glob: "provenance/**/THIRD-PARTY-NOTICES*.txt",
@@ -920,7 +924,7 @@ const outputFeedsInput = (output: string, input: string) =>
   matchesGeneratedGlob(output, globWitness(input));
 
 export const generatorsForFiles = (files: readonly string[]) => {
-  const selected = new Set(
+  const selected = new Set<string>(
     GENERATORS.filter(
       (generator) =>
         generator.autofix &&
