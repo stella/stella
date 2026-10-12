@@ -1070,6 +1070,9 @@
   .w-\(--popup-width\,auto\) {
     width: var(--popup-width,auto);
   }
+  .w-\(--sidebar-inline-size\) {
+    width: var(--sidebar-inline-size);
+  }
   .w-\(--sidebar-width\) {
     width: var(--sidebar-width);
   }
@@ -1485,6 +1488,9 @@
   }
   .flex-row {
     flex-direction: row;
+  }
+  .flex-row-reverse {
+    flex-direction: row-reverse;
   }
   .flex-nowrap {
     flex-wrap: nowrap;
@@ -3138,6 +3144,15 @@
   .\[--kanban-sticky-top\:0px\] {
     --kanban-sticky-top: 0px;
   }
+  .\[--sidebar-inline-size\:calc\(var\(--sidebar-width\)\+var\(--sidebar-safe-area-inline\)\)\] {
+    --sidebar-inline-size: calc(var(--sidebar-width) + var(--sidebar-safe-area-inline));
+  }
+  .\[--sidebar-safe-area-inline\:var\(--safe-area-inline-end\)\] {
+    --sidebar-safe-area-inline: var(--safe-area-inline-end);
+  }
+  .\[--sidebar-safe-area-inline\:var\(--safe-area-inline-start\)\] {
+    --sidebar-safe-area-inline: var(--safe-area-inline-start);
+  }
   .\[--skeleton-highlight\:--alpha\(var\(--color-white\)\/64\%\)\] {
     --skeleton-highlight: color-mix(in srgb, #fff 64%, transparent);
     @supports (color: color-mix(in lab, red, red)) {
@@ -3341,14 +3356,8 @@
     width: calc(var(--spacing) * 11) !important;
     height: calc(var(--spacing) * 11) !important;
   }
-  .group-data-\[collapsible\=icon\]\:w-\(--sidebar-width-icon\):is(:where(.group)[data-collapsible="icon"] *) {
-    width: var(--sidebar-width-icon);
-  }
-  .group-data-\[collapsible\=icon\]\:w-\[calc\(var\(--sidebar-width-icon\)\+\(--spacing\(4\)\)\)\]:is(:where(.group)[data-collapsible="icon"] *) {
-    width: calc(var(--sidebar-width-icon) + (calc(var(--spacing) * 4)));
-  }
-  .group-data-\[collapsible\=icon\]\:w-\[calc\(var\(--sidebar-width-icon\)\+\(--spacing\(4\)\)\+2px\)\]:is(:where(.group)[data-collapsible="icon"] *) {
-    width: calc(var(--sidebar-width-icon) + (calc(var(--spacing) * 4)) + 2px);
+  .group-data-\[collapsible\=icon\]\:w-\[calc\(var\(--sidebar-inline-size\)\+2px\)\]:is(:where(.group)[data-collapsible="icon"] *) {
+    width: calc(var(--sidebar-inline-size) + 2px);
   }
   .group-data-\[collapsible\=icon\]\:\[scrollbar-width\:none\]:is(:where(.group)[data-collapsible="icon"] *) {
     scrollbar-width: none;
@@ -3365,11 +3374,11 @@
   .group-data-\[collapsible\=icon\]\:opacity-0:is(:where(.group)[data-collapsible="icon"] *) {
     opacity: 0%;
   }
-  .group-data-\[collapsible\=offcanvas\]\:start-\[calc\(var\(--sidebar-width\)\*-1\)\]:is(:where(.group)[data-collapsible="offcanvas"] *) {
-    inset-inline-start: calc(var(--sidebar-width) * -1);
+  .group-data-\[collapsible\=offcanvas\]\:start-\[calc\(var\(--sidebar-inline-size\)\*-1\)\]:is(:where(.group)[data-collapsible="offcanvas"] *) {
+    inset-inline-start: calc(var(--sidebar-inline-size) * -1);
   }
-  .group-data-\[collapsible\=offcanvas\]\:end-\[calc\(var\(--sidebar-width\)\*-1\)\]:is(:where(.group)[data-collapsible="offcanvas"] *) {
-    inset-inline-end: calc(var(--sidebar-width) * -1);
+  .group-data-\[collapsible\=offcanvas\]\:end-\[calc\(var\(--sidebar-inline-size\)\*-1\)\]:is(:where(.group)[data-collapsible="offcanvas"] *) {
+    inset-inline-end: calc(var(--sidebar-inline-size) * -1);
   }
   .group-data-\[collapsible\=offcanvas\]\:w-0:is(:where(.group)[data-collapsible="offcanvas"] *) {
     width: 0px;
@@ -4568,6 +4577,12 @@
     @supports (color: color-mix(in lab, red, red)) {
       --tw-ring-color: color-mix(in oklab, var(--destructive) 20%, transparent);
     }
+  }
+  .data-\[collapsible\=icon\]\:\[--sidebar-inline-size\:calc\(var\(--sidebar-width-icon\)\+--spacing\(4\)\+var\(--sidebar-safe-area-inline\)\)\][data-collapsible="icon"] {
+    --sidebar-inline-size: calc(var(--sidebar-width-icon) + calc(var(--spacing) * 4) + var(--sidebar-safe-area-inline));
+  }
+  .data-\[collapsible\=icon\]\:\[--sidebar-inline-size\:calc\(var\(--sidebar-width-icon\)\+var\(--sidebar-safe-area-inline\)\)\][data-collapsible="icon"] {
+    --sidebar-inline-size: calc(var(--sidebar-width-icon) + var(--sidebar-safe-area-inline));
   }
   .data-\[orientation\=horizontal\]\:h-0\.5[data-orientation="horizontal"] {
     height: calc(var(--spacing) * 0.5);
