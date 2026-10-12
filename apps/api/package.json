@@ -74,6 +74,7 @@
     "document-processing-worker": "bun src/scripts/document-processing-worker.ts",
     "dev:errors": "tail -F .dev-logs/errors.jsonl",
     "generate:capability-runtime": "bun scripts/generate-capability-runtime.ts",
+    "generate:case-law-decision-view-grants": "bun scripts/generate-case-law-decision-view-grants.ts",
     "test:perf": "bun scripts/run-perf-tests.ts"
   },
   "dependencies": {

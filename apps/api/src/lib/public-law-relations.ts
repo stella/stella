@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 /**
  * Exact PostgreSQL columns required or permitted for the public-law reader role.
  *
@@ -158,6 +160,54 @@ const CASE_LAW_DECISION_VIEW_COLUMN_GRANTS = {
   updated_at: "required",
 } as const;
 
+export const CASE_LAW_DECISION_VIEWS = [
+  PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT.publishedCaseLawDecisions,
+  PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT.unredactedCaseLawDecisions,
+] as const;
+
+/** Subject resolution and publication reads require the paired decision views. */
+export const CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_ROLE = {
+  stella_public_law_reader: {
+    kind: "columns",
+    columns: CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
+  },
+  stella_caselaw_reader: { kind: "table" },
+  stella: { kind: "table" },
+  stella_ingestion: { kind: "table" },
+} as const;
+
+type DecisionViewGrant =
+  (typeof CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_ROLE)[keyof typeof CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_ROLE];
+const decisionViewSelection = (grant: DecisionViewGrant): string => {
+  switch (grant.kind) {
+    case "columns":
+      return `SELECT (${Object.keys(grant.columns)
+        .map((column) => `"${column}"`)
+        .join(", ")})`;
+    case "table":
+      return "SELECT";
+    default:
+      grant satisfies never;
+      return panic("Unhandled decision view grant kind");
+  }
+};
+
+const renderDecisionViewGrant = (role: string, grant: DecisionViewGrant) =>
+  `GRANT ${decisionViewSelection(grant)} ON TABLE ${CASE_LAW_DECISION_VIEWS.map((relation) => `"${relation}"`).join(", ")} TO "${role}"`;
+
+export const caseLawDecisionViewGrantStatement = (
+  role: keyof typeof CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_ROLE,
+) =>
+  renderDecisionViewGrant(
+    role,
+    CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_ROLE[role],
+  );
+
+export const caseLawDecisionViewGrantStatements = () =>
+  Object.entries(CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_ROLE).map(
+    ([role, grant]) => renderDecisionViewGrant(role, grant),
+  );
+
 export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
   case_law_citations: {
     id: "required",
@@ -212,8 +262,8 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     role: "required",
     position: "required",
   },
-  case_law_published_decisions: CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
-  case_law_unredacted_decisions: CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
+  [CASE_LAW_DECISION_VIEWS[0]]: CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
+  [CASE_LAW_DECISION_VIEWS[1]]: CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
   // The text-search configuration a language's query is parsed with. It is
   // read from the database whose search documents it has to match.
   case_law_fts_configs: {
@@ -474,8 +524,7 @@ export const publicLawColumnPairs = (
 /** The corpus relations retained for the legacy reader's bounded rollout. */
 export const ROLLOUT_CASE_LAW_WHOLE_RELATIONS = [
   "case_law_citations",
-  "case_law_published_decisions",
-  "case_law_unredacted_decisions",
+  ...CASE_LAW_DECISION_VIEWS,
   "case_law_provision_citations",
 ] as const;
 export const ROLLOUT_CASE_LAW_SOURCE_RELATION = "case_law_sources";

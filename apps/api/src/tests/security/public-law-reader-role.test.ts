@@ -17,6 +17,8 @@ import {
   caseLawDecisions,
   caseLawSources,
   corpusIndexGenerations,
+  publishedCaseLawDecisions,
+  unredactedCaseLawDecisions,
 } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import { readCaseLawCoverageSourcesQuery } from "@/api/handlers/case-law/decisions/coverage";
@@ -71,7 +73,10 @@ import {
   type PublicLawDatabaseRolePermissions,
 } from "@/api/lib/public-law-read-db";
 import {
+  CASE_LAW_DECISION_VIEWS,
+  CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_ROLE,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
+  caseLawDecisionViewGrantStatements,
   publicLawColumnPairs,
   ROLLOUT_CASE_LAW_RELATIONS,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
@@ -229,6 +234,14 @@ const caseLawReaderDb = (): CaseLawPublicReadDb => {
   return readDb as unknown as CaseLawPublicReadDb;
 };
 
+const caseLawApplicationDb = asTestRaw<CaseLawPublicReadDb>(
+  async <T>(fn: (tx: CaseLawPublicReadTransaction) => Promise<T>): Promise<T> =>
+    await testDb.transaction(async (tx) => {
+      await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(stella.name)}`));
+      return await fn(asTestRaw<CaseLawPublicReadTransaction>(tx));
+    }),
+);
+
 /**
  * The configuration search headlines are cut with. Migrations create it; the
  * PGlite schema push does not, so the census adds it once.
@@ -304,6 +317,63 @@ afterAll(async () => {
 });
 
 describe("public-law reader role", () => {
+  test("request subject reads both decision views with committed application grants", async () => {
+    const decisionId = createSafeId<"caseLawDecision">();
+    const sourceId = createSafeId<"caseLawSource">();
+
+    try {
+      await testDb.insert(caseLawSources).values({
+        id: sourceId,
+        adapterKey: `decision-view-role-${sourceId}`,
+        name: "Decision view role test",
+        descriptor: {
+          allowsDerivedAi: true,
+          allowsRedistribution: true,
+          attribution: null,
+          license: "permitted-redistribution",
+        },
+      });
+      await testDb.insert(caseLawDecisions).values({
+        id: decisionId,
+        sourceId,
+        caseNumber: `DECISION-${decisionId}`,
+        court: "Test Court",
+        country: "CZE",
+        language: "cs",
+      });
+      const reads = await withRedistributableSubject(
+        caseLawApplicationDb,
+        { kind: "id", id: decisionId },
+        async ({ tx }) => {
+          const published = await tx
+            .select({ id: publishedCaseLawDecisions.id })
+            .from(publishedCaseLawDecisions)
+            .where(eq(publishedCaseLawDecisions.id, decisionId));
+          const unredacted = await tx
+            .select({ id: unredactedCaseLawDecisions.id })
+            .from(unredactedCaseLawDecisions)
+            .where(eq(unredactedCaseLawDecisions.id, decisionId));
+          return {
+            published: published.map(({ id }) => id),
+            unredacted: unredacted.map(({ id }) => id),
+          };
+        },
+      );
+
+      expect(reads).toEqual({
+        published: [decisionId],
+        unredacted: [decisionId],
+      });
+    } finally {
+      await testDb
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, decisionId));
+      await testDb
+        .delete(caseLawSources)
+        .where(eq(caseLawSources.id, sourceId));
+    }
+  });
+
   test("readable columns contain every required column and only declared columns", async () => {
     const readable = (await readableColumnPairs()).map(
       ({ relation, column }) => `${relation}.${column}`,
@@ -1297,6 +1367,43 @@ const sortedColumns = (grants: EffectiveSelectGrants) =>
   );
 
 describe("public-law reader migrations", () => {
+  test("committed decision-view grants match the canonical role registry", () => {
+    const migrations = readdirSync(DRIZZLE_DIR, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) =>
+        nodePath.resolve(DRIZZLE_DIR, entry.name, "migration.sql"),
+      )
+      .filter((path) => existsSync(path))
+      .map((path) => readFileSync(path, "utf-8"))
+      .filter((source) =>
+        source.includes("-- generated case-law decision view grants: start"),
+      );
+    expect(migrations).toHaveLength(1);
+    const migration = migrations.at(0) ?? panic("Grant migration not found");
+    const startMarker = "-- generated case-law decision view grants: start";
+    const endMarker = "-- generated case-law decision view grants: end";
+    const start = migration.indexOf(startMarker) + startMarker.length;
+    const end = migration.indexOf(endMarker);
+    expect(end).toBeGreaterThan(start);
+    const statements = migration
+      .slice(start, end)
+      .replaceAll("--> statement-breakpoint", "")
+      .split(";")
+      .map((statement) => statement.trim())
+      .filter(Boolean);
+    const expected = caseLawDecisionViewGrantStatements();
+
+    expect(statements).toEqual(expected);
+    expect(expected).toHaveLength(
+      Object.keys(CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_ROLE).length,
+    );
+    for (const statement of statements) {
+      for (const view of CASE_LAW_DECISION_VIEWS) {
+        expect(statement).toContain(`"${view}"`);
+      }
+    }
+  });
+
   // The attestation's bounds, held against what the migrations grant: every
   // required column, nothing beyond required plus permitted, and no table-wide
   // grant. A permitted column may be granted or not; one whose read has gone

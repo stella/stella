@@ -4,11 +4,14 @@ import { sql, TransactionRollbackError } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { stellaPublicLawReader } from "@/api/db/rls";
+import { stella, stellaPublicLawReader } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import { readCitationGraphFacts } from "@/api/handlers/case-law/analysis/significance";
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
-import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import type {
+  CaseLawPublicReadDb,
+  CaseLawPublicReadTransaction,
+} from "@/api/lib/case-law-public-read-db";
 import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import {
@@ -213,6 +216,30 @@ if (!databaseUrl || !runPostgresTests) {
       expect(errorAndCauseMessages(baseRelationFailure)).toContain(
         "permission denied",
       );
+    });
+
+    test("the request role resolves a published decision through its subject view", async () => {
+      await withSearchCensus(databaseUrl, async ({ decisionId }) => {
+        await withClient(databaseUrl, async (database) => {
+          const requestDb = asTestRaw<CaseLawPublicReadDb>(
+            async <T>(
+              fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
+            ): Promise<T> =>
+              await database.transaction(async (tx) => {
+                await tx.execute(
+                  sql`SET LOCAL ROLE ${sql.identifier(stella.name)}`,
+                );
+                return await fn(tx);
+              }),
+          );
+          const resolvedId = await withRedistributableSubject(
+            requestDb,
+            { kind: "id", id: decisionId },
+            async ({ id }) => id,
+          );
+          expect(resolvedId).toBe(decisionId);
+        });
+      });
     });
 
     test("the search and configuration reads return the seeded rows", async () => {
