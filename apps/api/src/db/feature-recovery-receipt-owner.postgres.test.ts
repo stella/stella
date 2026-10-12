@@ -16,7 +16,7 @@ describe.skipIf(!enabled)("feature recovery receipt row security", () => {
       throw new TypeError("DATABASE_URL required");
     }
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-      const client = openClient().sql;
+      const client = await openClient().sql.reserve();
       const suffix = Bun.randomUUIDv7().replaceAll("-", "");
       const schema = `recovery_receipts_${suffix}`;
       const owner = `recovery_owner_${suffix}`;
@@ -26,8 +26,8 @@ describe.skipIf(!enabled)("feature recovery receipt row security", () => {
           import.meta.url,
         ),
       ).text();
-      await client.unsafe("BEGIN");
       try {
+        await client.unsafe("BEGIN");
         await client.unsafe(`CREATE SCHEMA ${schema}`);
         await client.unsafe(
           `CREATE ROLE ${owner} NOLOGIN NOSUPERUSER NOBYPASSRLS`,
@@ -103,7 +103,7 @@ describe.skipIf(!enabled)("feature recovery receipt row security", () => {
           ).toEqual([{ id: 1 }]);
         }
       } finally {
-        await client.unsafe("ROLLBACK");
+        await client.unsafe("ROLLBACK").finally(() => client.release());
       }
     });
   });
