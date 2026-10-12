@@ -32,6 +32,7 @@ export const professionalUseResponse = (state: UserProfessionalUseState) => {
 // Session-only: an account that has not accepted yet reads its state here,
 // before any organization-scoped route admits it.
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
 } satisfies SessionHandlerConfig;

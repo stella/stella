@@ -25,6 +25,7 @@ type RunGatedTestsOptions = {
   // them instead of skipping every suite.
   requiredEnv: readonly string[];
   script: GatedTestScript;
+  preload?: string | undefined;
   selection?: string | undefined;
   exclusiveTestPaths?: ReadonlySet<string> | undefined;
   shardTestFiles?:
@@ -43,6 +44,7 @@ type RunTestBatchesOptions = {
   cwd: string;
   gate: string;
   gateValue: string;
+  preload?: string | undefined;
   spawn?: (options: {
     cmd: string[];
     cwd: string;
@@ -63,6 +65,7 @@ export const runTestBatches = async ({
   cwd,
   gate,
   gateValue,
+  preload,
   spawn = (options) => Bun.spawn(options),
 }: RunTestBatchesOptions): Promise<number> => {
   const hasReporterOutfile = bunArguments.some(
@@ -93,6 +96,7 @@ export const runTestBatches = async ({
             "--max-concurrency=1",
             "--preload",
             "./src/tests/setup-env.ts",
+            ...(preload ? ["--preload", preload] : []),
             ...(reporterPlan.argumentsByBatch.at(index) ?? []),
           ],
           testFiles: testBatch,
@@ -167,6 +171,7 @@ export const discoverGatedTestFiles = async ({
 export const runGatedTests = async ({
   requiredEnv,
   script,
+  preload,
   selection,
   exclusiveTestPaths = new Set(),
   validateTestPlan,
@@ -253,5 +258,6 @@ export const runGatedTests = async ({
     cwd: apiRoot,
     gate: runner.gate,
     gateValue: runner.gateValue,
+    preload,
   });
 };

@@ -24,6 +24,7 @@ const requestBody = t.Object(
 // Session-only and open to restricted accounts: an operator-created account
 // accepts here on its first interactive sign-in.
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
   body: requestBody,

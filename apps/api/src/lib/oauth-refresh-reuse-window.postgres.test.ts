@@ -15,13 +15,11 @@ import {
   oauthAccessToken,
   oauthClient,
   oauthRefreshToken,
-  oauthResource,
   organization,
   user,
 } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import { getAuth } from "@/api/lib/auth";
-import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import {
   grantOAuthClient,
@@ -71,18 +69,9 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
       await remove();
     }
   });
-  beforeAll(async () => {
+  beforeAll(() => {
     expect(provider.version).toBe("1.7.6");
     expect(provider.options.refreshTokenReuseInterval).toBe(30);
-    await rootDb
-      .insert(oauthResource)
-      .values(
-        getBetterAuthOAuthResources().map((resource) => ({
-          id: Bun.randomUUIDv7(),
-          ...resource,
-        })),
-      )
-      .onConflictDoNothing();
   });
   afterEach(() => {
     context.adapter.incrementOne = originalIncrement;
