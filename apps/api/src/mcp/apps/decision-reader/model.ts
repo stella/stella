@@ -6,6 +6,7 @@ import type { DecisionParagraphRange } from "@stll/api-contract/decision-paragra
 import { blockSchema } from "@stll/legal-ast/document-ast";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import { resolveDecisionParagraphRange } from "@stll/legal-ast/paragraph-range";
+import { stableStringify } from "@stll/stable-stringify";
 
 import {
   APP_OPEN_DECISION_SCHEMA,
@@ -150,14 +151,15 @@ export const appendReaderPage = ({
   if (state.complete || cursor !== state.nextCursor) {
     return invalidPage("Unexpected reader page cursor");
   }
-  const metadataEntries = new Map(Object.entries(page.metadata));
   const stripFragment = (url: string | null) => url?.split("#", 1).at(0);
-  if (
-    Object.entries(state.metadata).some(
-      ([key, value]) => key !== "appUrl" && metadataEntries.get(key) !== value,
-    ) ||
-    stripFragment(state.metadata.appUrl) !== stripFragment(page.metadata.appUrl)
-  ) {
+  const comparableMetadata = (metadata: ReaderPage["metadata"]) =>
+    stableStringify({
+      ...metadata,
+      appUrl: stripFragment(metadata.appUrl),
+    });
+  const sameMetadata =
+    comparableMetadata(state.metadata) === comparableMetadata(page.metadata);
+  if (!sameMetadata) {
     return invalidPage("Decision metadata changed between pages");
   }
   const content = page.content;

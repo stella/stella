@@ -40,8 +40,9 @@ const page = (
   content: Partial<
     Extract<ReaderPage["content"], { status: "available" }>
   > = {},
+  pageMetadata: ReaderPage["metadata"] = metadata,
 ): ReaderPage => ({
-  metadata,
+  metadata: pageMetadata,
   content: {
     status: "available",
     phase: "blocks",
@@ -54,6 +55,13 @@ const page = (
     ...content,
   },
 });
+const parsedPage = (pageMetadata: ReaderPage["metadata"]) => {
+  const parsed = parseReaderPage(page({}, pageMetadata));
+  if (parsed === undefined) {
+    throw new TypeError("Reader page fixture failed schema validation");
+  }
+  return parsed;
+};
 const accept = (state: ReaderPager, next: ReaderPage) => {
   const result = appendReaderPage({
     state,
@@ -152,6 +160,49 @@ describe("MCP decision reader paging", () => {
       page({ items: [paragraph(48)] }),
     );
     expect(state.metadata.appUrl).toBe(rangedMetadata.appUrl);
+  });
+  test("metadata warnings compare by value after page parsing", () => {
+    const emptyPage = parsedPage({ ...metadata, extractionWarnings: [] });
+    expect(
+      appendReaderPage({
+        state: createReaderPager(metadata),
+        page: emptyPage,
+        cursor: null,
+      }).status,
+    ).toBe("accepted");
+
+    const warning = {
+      rule: "html-tag",
+      count: 1,
+      firstOffsets: [12],
+    } satisfies ReaderPage["metadata"]["extractionWarnings"][number];
+    const warnedMetadata = { ...metadata, extractionWarnings: [warning] };
+    const parsedWarningPage = parsedPage({
+      ...warnedMetadata,
+      extractionWarnings: [
+        { ...warning, firstOffsets: [...warning.firstOffsets] },
+      ],
+    });
+    const initial = createReaderPager(warnedMetadata);
+    expect(
+      appendReaderPage({
+        state: initial,
+        page: parsedWarningPage,
+        cursor: null,
+      }).status,
+    ).toBe("accepted");
+
+    const changedWarningPage = parsedPage({
+      ...warnedMetadata,
+      extractionWarnings: [{ ...warning, count: 2 }],
+    });
+    expect(
+      appendReaderPage({
+        state: initial,
+        page: changedWarningPage,
+        cursor: null,
+      }).status,
+    ).toBe("invalid");
   });
   test("target ranges resolve only after their court paragraphs have arrived", () => {
     const initial = accept(
