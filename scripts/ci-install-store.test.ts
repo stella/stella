@@ -213,6 +213,58 @@ test("legitimate package directories ending in .tmp can be sealed", () => {
   }
 });
 
+for (const globalStoreMode of ["enabled", "disabled"] as const) {
+  test(`only empty root scratch is accepted with the global store ${globalStoreMode}`, () => {
+    const store = mkdtempSync(path.join(tmpdir(), "bun-empty-scratch-"));
+    const options = { store, key: "empty-scratch-key", globalStoreMode };
+    const scratch = path.join(store, ".tmp");
+    const rejectsScratch = () => {
+      expect(() => sealInstallStore(options)).toThrow(
+        "Incomplete Bun install store",
+      );
+      expect(() => verifyInstallStore(options)).toThrow(
+        "Incomplete Bun install store",
+      );
+    };
+    try {
+      mkdirSync(scratch);
+      expect(() => sealInstallStore(options)).toThrow(
+        "Empty Bun install store",
+      );
+      mkdirSync(path.join(store, "package/empty"), { recursive: true });
+      writeFileSync(
+        path.join(store, "package/value.js"),
+        "export const value = 1;\n",
+      );
+      mkdirSync(path.join(store, "links"));
+      symlinkSync("../package", path.join(store, "links/package"));
+      sealInstallStore(options);
+      verifyInstallStore(options);
+
+      mkdirSync(path.join(scratch, "unfinished"));
+      rejectsScratch();
+      rmSync(scratch, { recursive: true });
+      writeFileSync(scratch, "unfinished extraction");
+      rejectsScratch();
+      rmSync(scratch);
+      symlinkSync("package/empty", scratch, "dir");
+      rejectsScratch();
+      rmSync(scratch);
+      mkdirSync(scratch);
+      writeFileSync(path.join(scratch, "partial"), "unfinished extraction");
+      rejectsScratch();
+      rmSync(scratch, { recursive: true });
+      mkdirSync(scratch);
+      verifyInstallStore(options);
+
+      mkdirSync(path.join(store, "links/.tmp"));
+      rejectsScratch();
+    } finally {
+      rmSync(store, { recursive: true, force: true });
+    }
+  });
+}
+
 test("sealing requires populated links for global stores and rejects partial stores", () => {
   const store = mkdtempSync(path.join(tmpdir(), "bun-global-store-"));
   const options = {

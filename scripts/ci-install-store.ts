@@ -135,6 +135,18 @@ const storeFingerprint = (store: string, globalStoreMode: GlobalStoreMode) => {
       if (directory === "" && entry === MARKER) {
         continue;
       }
+      const relative = path.join(directory, entry);
+      const filename = path.join(store, relative);
+      const stat = lstatSync(filename);
+      // Bun leaves its empty extraction scratch directory on Windows.
+      if (
+        directory === "" &&
+        entry === ".tmp" &&
+        stat.isDirectory() &&
+        readdirSync(filename).length === 0
+      ) {
+        continue;
+      }
       if (
         (directory === "" || directory === "links") &&
         /\.tmp(?:-|$)/u.test(entry)
@@ -143,9 +155,6 @@ const storeFingerprint = (store: string, globalStoreMode: GlobalStoreMode) => {
           `Incomplete Bun install store: ${path.join(directory, entry)}`,
         );
       }
-      const relative = path.join(directory, entry);
-      const filename = path.join(store, relative);
-      const stat = lstatSync(filename);
       let kind = "file";
       if (stat.isDirectory()) {
         kind = "directory";
