@@ -90,7 +90,8 @@ for (const viewport of NARROW_VIEWPORTS) {
         .locator("header")
         .getByRole("button", { name: "Toggle sidebar" })
         .click();
-      const sheet = page.locator('[data-slot="sheet-popup"]');
+      // The mobile sidebar is a sheet that names its own slot.
+      const sheet = page.locator('[data-slot="sidebar"][data-mobile="true"]');
       await expect(sheet).toBeVisible();
 
       const signIn = sheet.getByRole("button", { name: "Sign in" });
@@ -123,9 +124,13 @@ for (const viewport of NARROW_VIEWPORTS) {
     test("header crumbs never paint over each other", async ({ page }) => {
       await openDecision(page);
       const header = page.locator("header").first();
-      const crumbs = header.locator(
-        '[data-slot="breadcrumb-item"], [data-slot="breadcrumb-separator"]',
-      );
+      // The trail above the document gives way at this width; only the
+      // crumbs still drawn can collide.
+      const crumbs = header
+        .locator(
+          '[data-slot="breadcrumb-item"], [data-slot="breadcrumb-separator"]',
+        )
+        .filter({ visible: true });
       await expect(crumbs.first()).toBeVisible();
 
       const boxes = await crumbs.evaluateAll((elements) =>
