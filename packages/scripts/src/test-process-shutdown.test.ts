@@ -75,7 +75,8 @@ for (const signal of ["SIGINT", "SIGTERM", "SIGHUP", "exit"] as const) {
           Number.isSafeInteger(childPid) &&
           childPid > 1
         ) {
-          Result.try(() => process.kill(-childPid, "SIGKILL"));
+          const ownedGroupPid = childPid;
+          Result.try(() => process.kill(-ownedGroupPid, "SIGKILL"));
         }
         rmSync(directory, { recursive: true, force: true });
       }
