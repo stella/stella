@@ -564,12 +564,13 @@ test("a form repair skips a citation when the selected rule confidence changes a
   const sourceId = createSafeId<"caseLawSource">();
   const formRuleId = createSafeId<"caseLawPolarityRule">();
   const citationId = createSafeId<"caseLawCitation">();
+  const pattern = "formconfidencecue";
   const sections = [
     {
       index: 0,
       type: "argumentation",
       title: null,
-      text: "consider A 88/2020",
+      text: `${pattern} A 88/2020`,
     },
   ] satisfies DecisionSection[];
   await db.insert(caseLawSources).values({
@@ -588,7 +589,7 @@ test("a form repair skips a citation when the selected rule confidence changes a
   });
   await db.insert(caseLawPolarityRules).values({
     id: formRuleId,
-    pattern: "consider",
+    pattern,
     language: "en",
     kind: POLARITY_RULE_KIND.FORM,
     polarity: POLARITY.NEUTRAL,
@@ -606,7 +607,7 @@ test("a form repair skips a citation when the selected rule confidence changes a
   const rules = compileRules([
     {
       id: formRuleId,
-      pattern: "consider",
+      pattern,
       kind: POLARITY_RULE_KIND.FORM,
       polarity: POLARITY.NEUTRAL,
       confidence,
