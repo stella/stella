@@ -13,7 +13,7 @@ export type PersistedJsonValue =
   | PersistedJsonValue[]
   | string;
 
-export type PersistedJsonObject = {
+type PersistedJsonObject = {
   readonly [key: string]: PersistedJsonValue;
 };
 
@@ -40,14 +40,14 @@ export const provePersistedToolCallMetadata = (
   return value;
 };
 
-export declare const parsedToolInputProof: unique symbol;
+declare const parsedToolInputProof: unique symbol;
 export type ParsedToolInput = {
   readonly [parsedToolInputProof]: true;
   status: "parsed";
   value: PersistedJsonValue;
 };
 
-export declare const parsedToolOutputProof: unique symbol;
+declare const parsedToolOutputProof: unique symbol;
 export type ParsedToolOutput = {
   readonly [parsedToolOutputProof]: true;
   value: PersistedJsonValue;
@@ -85,11 +85,6 @@ export type PersistedToolResultPart = {
   toolCallId: string;
   type: "tool-result";
 };
-
-export type PersistedChatPart<TOtherPart> =
-  | PersistedToolCallPart
-  | PersistedToolResultPart
-  | TOtherPart;
 
 type PersistedChatMessageContentCandidate<TPart, TMetadata> = {
   data: TPart[];
@@ -163,13 +158,6 @@ const isPersistedJsonValueAt = (
 export const isPersistedJsonValue = (
   value: unknown,
 ): value is PersistedJsonValue => isPersistedJsonValueAt(value, new WeakSet());
-
-export const provePersistedJsonValue = (value: unknown): PersistedJsonValue => {
-  if (!isPersistedJsonValue(value)) {
-    panic("Cannot persist a non-JSON chat value");
-  }
-  return value;
-};
 
 const isParsedToolInput = (input: {
   status: "parsed";
