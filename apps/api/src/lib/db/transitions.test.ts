@@ -13,6 +13,7 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import { timestamptz } from "@/api/db/columns";
+import { READER_ANSWER_TRANSITION_IDENTITIES } from "@/api/lib/db/reader-answer-transition-identities";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import {
   defineFixedLifecycle,
@@ -82,6 +83,7 @@ test("state-column ownership covers every scoped runtime transition", () => {
     [
       ...Object.values(SANCTIONS_MONITORING_TRANSITION_IDENTITIES),
       desktopBatchReceipt,
+      ...Object.values(READER_ANSWER_TRANSITION_IDENTITIES),
     ].toSorted(order),
   );
 });

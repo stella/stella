@@ -56,6 +56,8 @@ export const AGGREGATE_LOCKS = {
   // A chat interaction's fences: the thread, then the turn awaiting input,
   // then the receipt it produced.
   chatThread: { rank: 120, kind: "row" },
+  readerAnswer: { rank: 120, kind: "row" },
+  readerAnswerMessage: { rank: 130, kind: "row" },
   chatTurn: { rank: 130, kind: "row" },
   chatSecret: { rank: 140, kind: "row" },
   run: { rank: 200, kind: "row" },
@@ -134,6 +136,7 @@ export const AGGREGATE_CHAINS = {
   personalCatalog: ["personalCatalog"],
   searchHistory: ["desktopMembership", "searchHistory"],
   chatRevision: ["chatThread", "chatMessage"],
+  readerAnswer: ["readerAnswer", "readerAnswerMessage"],
   signingSession: ["workspace", "signingSession"],
 } as const satisfies Record<string, readonly AggregateName[]>;
 
@@ -218,6 +221,15 @@ type AggregateIdentities = {
     id: SafeId<"chatThread">;
     organizationId: SafeId<"organization">;
     userId: SafeId<"user">;
+  };
+  readerAnswer: {
+    id: SafeId<"legalReaderAnswer">;
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
+  readerAnswerMessage: {
+    id: SafeId<"legalReaderAnswerMessage">;
+    answerId: SafeId<"legalReaderAnswer">;
   };
   chatTurn: {
     threadId: SafeId<"chatThread">;
@@ -617,26 +629,32 @@ type RowResource = {
   scopeColumns: readonly string[];
   scopeValues: readonly (string | number)[];
 };
+// Most row aggregates are one row found by id inside a single owning scope.
+const byIdWithin = (
+  table: string,
+  id: string,
+  scopeColumn: string,
+  scopeValue: string,
+): RowResource => ({
+  table,
+  columns: ["id"],
+  values: [id],
+  scopeColumns: [scopeColumn],
+  scopeValues: [scopeValue],
+});
 const memberCleanupRowResource = (
   id: AggregateIdentities["memberCleanup"],
 ): RowResource => {
   switch (id.type) {
     case "organization-member":
-      return {
-        table: "member",
-        columns: ["id"],
-        values: [id.id],
-        scopeColumns: ["organization_id"],
-        scopeValues: [id.organizationId],
-      };
+      return byIdWithin("member", id.id, "organization_id", id.organizationId);
     case "workspace-member":
-      return {
-        table: "workspace_members",
-        columns: ["id"],
-        values: [id.id],
-        scopeColumns: ["workspace_id"],
-        scopeValues: [id.workspaceId],
-      };
+      return byIdWithin(
+        "workspace_members",
+        id.id,
+        "workspace_id",
+        id.workspaceId,
+      );
     default:
       id satisfies never;
       return panic("Unknown member cleanup resource");
@@ -669,45 +687,40 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         scopeValues: [],
       };
     case "desktopCredential":
-      return {
-        table: "apikey",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["reference_id"],
-        scopeValues: [options.id.userId],
-      };
+      return byIdWithin(
+        "apikey",
+        options.id.id,
+        "reference_id",
+        options.id.userId,
+      );
     case "chatMessage":
-      return {
-        table: "chat_messages",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["thread_id"],
-        scopeValues: [options.id.threadId],
-      };
+      return byIdWithin(
+        "chat_messages",
+        options.id.id,
+        "thread_id",
+        options.id.threadId,
+      );
     case "workspace":
-      return {
-        table: "workspaces",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["organization_id"],
-        scopeValues: [options.id.organizationId],
-      };
+      return byIdWithin(
+        "workspaces",
+        options.id.id,
+        "organization_id",
+        options.id.organizationId,
+      );
     case "run":
-      return {
-        table: "flow_runs",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["workspace_id"],
-        scopeValues: [options.id.workspaceId],
-      };
+      return byIdWithin(
+        "flow_runs",
+        options.id.id,
+        "workspace_id",
+        options.id.workspaceId,
+      );
     case "currentStep":
-      return {
-        table: "flow_run_steps",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["workspace_id"],
-        scopeValues: [options.id.workspaceId],
-      };
+      return byIdWithin(
+        "flow_run_steps",
+        options.id.id,
+        "workspace_id",
+        options.id.workspaceId,
+      );
     case "obligation":
       return {
         table: "work_obligations",
@@ -717,13 +730,12 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         scopeValues: [options.id.workspaceId],
       };
     case "entity":
-      return {
-        table: "entities",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["workspace_id"],
-        scopeValues: [options.id.workspaceId],
-      };
+      return byIdWithin(
+        "entities",
+        options.id.id,
+        "workspace_id",
+        options.id.workspaceId,
+      );
     case "entityVersion":
       return {
         table: "entity_versions",
@@ -741,13 +753,12 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         scopeValues: [options.id.workspaceId],
       };
     case "signal":
-      return {
-        table: "signals",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["organization_id"],
-        scopeValues: [options.id.organizationId],
-      };
+      return byIdWithin(
+        "signals",
+        options.id.id,
+        "organization_id",
+        options.id.organizationId,
+      );
     case "schedulerClaim":
       return {
         table: "scheduler_jobs",
@@ -757,29 +768,26 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         scopeValues: [],
       };
     case "definition":
-      return {
-        table: "flow_definitions",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["organization_id"],
-        scopeValues: [options.id.organizationId],
-      };
+      return byIdWithin(
+        "flow_definitions",
+        options.id.id,
+        "organization_id",
+        options.id.organizationId,
+      );
     case "processingClaim":
-      return {
-        table: "document_processing_runs",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["workspace_id"],
-        scopeValues: [options.id.workspaceId],
-      };
+      return byIdWithin(
+        "document_processing_runs",
+        options.id.id,
+        "workspace_id",
+        options.id.workspaceId,
+      );
     case "scoutCensus":
-      return {
-        table: "scout_runs",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["organization_id"],
-        scopeValues: [options.id.organizationId],
-      };
+      return byIdWithin(
+        "scout_runs",
+        options.id.id,
+        "organization_id",
+        options.id.organizationId,
+      );
     case "chatThread":
       return {
         table: "chat_threads",
@@ -788,6 +796,21 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         scopeColumns: ["organization_id", "user_id"],
         scopeValues: [options.id.organizationId, options.id.userId],
       };
+    case "readerAnswer":
+      return {
+        table: "legal_reader_answers",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["organization_id", "user_id"],
+        scopeValues: [options.id.organizationId, options.id.userId],
+      };
+    case "readerAnswerMessage":
+      return byIdWithin(
+        "legal_reader_answer_messages",
+        options.id.id,
+        "answer_id",
+        options.id.answerId,
+      );
     case "chatTurn":
       return {
         table: "chat_turns",
@@ -809,13 +832,12 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         ],
       };
     case "signingSession":
-      return {
-        table: "pdf_signing_sessions",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["workspace_id"],
-        scopeValues: [options.id.workspaceId],
-      };
+      return byIdWithin(
+        "pdf_signing_sessions",
+        options.id.id,
+        "workspace_id",
+        options.id.workspaceId,
+      );
     case "memberCleanup":
       return memberCleanupRowResource(options.id);
     default:

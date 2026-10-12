@@ -130,6 +130,7 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "invoice_lines",
   "invoices",
   "legal_reader_annotations",
+  "legal_reader_answers",
   "matter_counters",
   "matter_inbound_addresses",
   "notifications",
