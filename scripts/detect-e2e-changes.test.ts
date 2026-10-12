@@ -582,7 +582,7 @@ describe("detect-e2e-changes", () => {
                 `matrix=${usesSelection ? matrix : fullMatrix}`,
                 `mode=${usesSelection ? "selected" : "full"}`,
                 `specs=${usesSelection ? selectedSpecs : "[]"}`,
-                `selection_required=${!emptySelection}`,
+                `selection_required=${String(!emptySelection)}`,
                 `required=${emptySelection ? "false" : required}`,
               ]);
             }

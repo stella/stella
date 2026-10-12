@@ -3387,21 +3387,14 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/workflow-cache-policy.test.ts scripts/workflow-run-trust.test.ts scripts/workflow-concurrency.test.ts
 
-      - name: Install actionlint
-        id: actionlint-install
+      - name: Workflow lint
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
           ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
           ACTIONLINT_VERSION: 1.7.12
         run: |
           bash scripts/install-actionlint.sh "$ACTIONLINT_VERSION" "$ACTIONLINT_SHA256" "$RUNNER_TEMP"
-          echo "binary=$RUNNER_TEMP/actionlint" >> "$GITHUB_OUTPUT"
-
-      - name: Workflow lint
-        if: ${{ !cancelled() && steps.actionlint-install.outcome == 'success' }}
-        env:
-          ACTIONLINT_BIN: ${{ steps.actionlint-install.outputs.binary }}
-        run: bun scripts/check-actionlint-baseline.ts
+          ACTIONLINT_BIN="$RUNNER_TEMP/actionlint" bun scripts/check-actionlint-baseline.ts
 
       - name: Workflow YAML
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
