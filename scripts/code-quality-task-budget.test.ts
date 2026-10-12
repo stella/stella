@@ -10,9 +10,12 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import * as v from "valibot";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { ownsCodeCheckPath } from "../packages/scripts/src/code-quality-partition";
+import { planCheck, scopedCommands } from "./code-check-affected";
 import {
   createTaskExecutionTracker,
   DEFAULT_TASK_BUDGETS,
@@ -170,37 +173,149 @@ test("API budget fixtures bind completed cold observations to their task entries
   }
 });
 
+const turboTaskSchema = v.looseObject({
+  dependsOn: v.optional(v.array(v.string()), []),
+});
+type ApiQualityGraphOptions = {
+  tasks: Readonly<Record<string, v.InferOutput<typeof turboTaskSchema>>>;
+  entryPoints: readonly string[];
+  packages: ReadonlyMap<
+    string,
+    {
+      scripts: Readonly<Record<string, string>>;
+      dependencies: readonly string[];
+    }
+  >;
+};
+const apiQualityTasks = ({
+  tasks,
+  entryPoints,
+  packages,
+}: ApiQualityGraphOptions) => {
+  const pending = [...entryPoints];
+  const visited = new Set<string>();
+  const apiTasks = new Set<string>();
+  for (const taskId of pending) {
+    if (visited.has(taskId)) {
+      continue;
+    }
+    visited.add(taskId);
+    const separator = taskId.indexOf("#");
+    const owner = taskId.slice(0, separator);
+    const name = taskId.slice(separator + 1);
+    if (
+      owner === "@stll/api" &&
+      Object.hasOwn(packages.get(owner)?.scripts ?? {}, name)
+    ) {
+      apiTasks.add(taskId);
+    }
+    const definition = tasks[taskId] ?? tasks[name];
+    for (const dependency of definition?.dependsOn ?? []) {
+      if (dependency.startsWith("^")) {
+        for (const upstream of packages.get(owner)?.dependencies ?? []) {
+          pending.push(`${upstream}#${dependency.slice(1)}`);
+        }
+        continue;
+      }
+      pending.push(
+        dependency.includes("#") ? dependency : `${owner}#${dependency}`,
+      );
+    }
+  }
+  return [...apiTasks].toSorted();
+};
 const missingApiTaskBudgets = (
   tasks: readonly string[],
   budgets: Readonly<Record<string, number>>,
-) =>
-  tasks.filter(
-    (taskId) =>
-      taskId.startsWith("@stll/api#") && !Object.hasOwn(budgets, taskId),
-  );
+) => tasks.filter((taskId) => !Object.hasOwn(budgets, taskId));
 
-test("every declared API Turbo task has an explicit budget entry", async () => {
-  const configuration: unknown = Bun.JSONC.parse(
-    await readFile(new URL("../turbo.json", import.meta.url), "utf-8"),
+test("every API code-quality graph task has an explicit budget entry", async () => {
+  const configuration = v.parse(
+    v.object({ tasks: v.record(v.string(), turboTaskSchema) }),
+    Bun.JSONC.parse(
+      await readFile(new URL("../turbo.json", import.meta.url), "utf-8"),
+    ),
   );
-  if (
-    typeof configuration !== "object" ||
-    configuration === null ||
-    !("tasks" in configuration) ||
-    typeof configuration.tasks !== "object" ||
-    configuration.tasks === null
-  ) {
-    throw new Error("Missing Turbo task registry");
+  const root = path.resolve(import.meta.dirname, "..");
+  const manifestSchema = v.object({
+    name: v.string(),
+    scripts: v.optional(v.record(v.string(), v.string()), {}),
+    dependencies: v.optional(v.record(v.string(), v.string()), {}),
+    devDependencies: v.optional(v.record(v.string(), v.string()), {}),
+    optionalDependencies: v.optional(v.record(v.string(), v.string()), {}),
+  });
+  const manifests = await Promise.all(
+    [...new Bun.Glob("{apps,packages}/*/package.json").scanSync(root)].map(
+      async (file) => ({
+        directory: path.dirname(file),
+        ...v.parse(
+          manifestSchema,
+          JSON.parse(await readFile(path.join(root, file), "utf-8")),
+        ),
+      }),
+    ),
+  );
+  const names = new Set(manifests.map(({ name }) => name));
+  const packages = new Map(
+    manifests.map(
+      ({
+        name,
+        scripts,
+        dependencies,
+        devDependencies,
+        optionalDependencies,
+      }) =>
+        [
+          name,
+          {
+            scripts,
+            dependencies: Object.keys({
+              ...dependencies,
+              ...devDependencies,
+              ...optionalDependencies,
+            }).filter((dependency) => names.has(dependency)),
+          },
+        ] as const,
+    ),
+  );
+  const workspaces = new Set(manifests.map(({ directory }) => directory));
+  const changedPaths = ["package.json"];
+  const plan = planCheck({
+    changedPaths,
+    presentChangedPaths: changedPaths,
+    affectedWorkspacePaths: [...workspaces],
+    workspacePaths: workspaces,
+  });
+  if (plan.type !== "scoped") {
+    throw new Error("Expected API code-quality entry-point plan");
   }
-  const tasks = Object.keys(configuration.tasks);
-  const declaredApiTasks = tasks.filter((taskId) =>
-    taskId.startsWith("@stll/api#"),
+  const owners = manifests.filter(({ directory }) =>
+    ownsCodeCheckPath(`${directory}/package.json`, "api"),
   );
-  expect(declaredApiTasks.length).toBeGreaterThan(0);
+  const entryPoints = scopedCommands(plan, { leg: "api", workspaces }).flatMap(
+    (command) => {
+      if (command[2] !== "turbo" || command[3] !== "run") {
+        return [];
+      }
+      const option = command.findIndex(
+        (value, index) => index >= 4 && value.startsWith("--"),
+      );
+      return command
+        .slice(4, option === -1 ? undefined : option)
+        .flatMap((entryPoint) =>
+          entryPoint.includes("#")
+            ? [entryPoint]
+            : owners.map(({ name }) => `${name}#${entryPoint}`),
+        );
+    },
+  );
+  const graph = { tasks: configuration.tasks, entryPoints, packages };
+  const tasks = apiQualityTasks(graph);
+  expect(tasks.length).toBeGreaterThan(0);
   expect(missingApiTaskBudgets(tasks, DEFAULT_TASK_BUDGETS.overrides)).toEqual(
     [],
   );
-  for (const taskId of declaredApiTasks) {
+  for (const taskId of tasks) {
     const withoutEntry = Object.fromEntries(
       Object.entries(DEFAULT_TASK_BUDGETS.overrides).filter(
         ([id]) => id !== taskId,
@@ -208,15 +323,54 @@ test("every declared API Turbo task has an explicit budget entry", async () => {
     );
     expect(missingApiTaskBudgets(tasks, withoutEntry)).toEqual([taskId]);
   }
-  for (const taskId of [
-    "@stll/api#typecheck:new-project",
-    "@stll/api#generate:new-inputs",
-    "@stll/api#new-task",
+  for (const name of [
+    "typecheck:new-project",
+    "generate:new-inputs",
+    "new-task",
   ]) {
+    const taskId = `@stll/api#${name}`;
+    const mutation = {
+      ...graph,
+      packages: new Map([
+        ...packages,
+        [
+          "@stll/api",
+          {
+            scripts: {
+              ...packages.get("@stll/api")?.scripts,
+              [name]: "echo new-check",
+            },
+            dependencies: packages.get("@stll/api")?.dependencies ?? [],
+          },
+        ],
+      ]),
+      tasks: {
+        ...configuration.tasks,
+        [taskId]: { dependsOn: [] },
+        "@stll/api#typecheck": {
+          dependsOn: [
+            ...(configuration.tasks["@stll/api#typecheck"]?.dependsOn ?? []),
+            name,
+          ],
+        },
+      },
+    };
     expect(
-      missingApiTaskBudgets([...tasks, taskId], DEFAULT_TASK_BUDGETS.overrides),
+      missingApiTaskBudgets(
+        apiQualityTasks(mutation),
+        DEFAULT_TASK_BUDGETS.overrides,
+      ),
     ).toEqual([taskId]);
   }
+  expect(
+    apiQualityTasks({
+      ...graph,
+      tasks: {
+        ...configuration.tasks,
+        "@stll/api#build": { dependsOn: ["new-task"] },
+      },
+    }),
+  ).toEqual(tasks);
 });
 
 test("unmeasured existing API tasks preserve their previous default budget", () => {
