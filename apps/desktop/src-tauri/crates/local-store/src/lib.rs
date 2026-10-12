@@ -5,6 +5,15 @@
 //! JSON envelopes written atomically with owner-only permissions, and a key
 //! that is never re-minted while encrypted data still depends on it.
 
+pub mod foreground_app;
+pub mod marker_file;
+
+// Development builds must never claim production's persisted data.
+#[cfg(debug_assertions)]
+pub const APP_DATA_DIR_NAME: &str = "legal.stella.desktop.development";
+#[cfg(not(debug_assertions))]
+pub const APP_DATA_DIR_NAME: &str = "legal.stella.desktop";
+
 use aes_gcm::{
   Aes256Gcm, Nonce,
   aead::{Aead, Generate, KeyInit, Payload},
@@ -361,5 +370,4 @@ mod tests {
     );
     remove_store(&path);
   }
-
 }

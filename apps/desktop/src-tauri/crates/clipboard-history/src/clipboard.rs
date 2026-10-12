@@ -1,3 +1,6 @@
+#[path = "clipboard_wire.rs"]
+pub(crate) mod wire;
+
 use ammonia::Builder as HtmlSanitizer;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use chrono::{DateTime, Duration, Utc};
@@ -10,7 +13,6 @@ use image::{
   ExtendedColorType, ImageEncoder, ImageReader, Limits as ImageLimits,
   codecs::png::PngEncoder,
 };
-use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -21,9 +23,12 @@ use std::{
   sync::{Arc, Mutex},
   time::Instant,
 };
-use tauri::{AppHandle, Emitter};
+use url::Url;
 
 use crate::{
+  boundary::{
+    HistoryErrorCode, HistoryObserver, HistorySpan, LocalWindowProof, WebviewPayload,
+  },
   clipboard_screen_capture::{
     ClipboardScreenCapture, ClipboardScreenCapturePreference,
   },
@@ -32,30 +37,17 @@ use crate::{
     ClipboardImageValidationError, ClipboardStore,
   },
   clipboard_welcome::{ClipboardWelcome, ClipboardWelcomeStatus},
-  config::APP_DATA_DIR_NAME,
-  desktop_telemetry::{
-    DesktopErrorReport, DesktopTelemetry, DesktopTelemetryErrorCode,
-    DesktopTelemetryOperation, DesktopTelemetrySpan, DesktopTelemetryWindow,
-    DesktopTimingReport,
-  },
+};
+use stella_desktop_local_store::{
+  StoreKey,
   foreground_app::{AppExclusion, normalize_exclusions, normalized_identifier},
-  keychain,
-  local_store::StoreKey,
-  local_window::ClipboardCaller,
 };
 
-#[cfg(target_os = "macos")]
-use icns::{IconFamily, PixelFormat};
 #[cfg(target_os = "windows")]
 use image::{DynamicImage, ImageDecoder, codecs::bmp::BmpDecoder};
 #[cfg(target_os = "macos")]
-use std::{
-  fs::File,
-  io::BufReader,
-  path::{Component, PathBuf},
-};
+use std::path::PathBuf;
 
-const HISTORY_EVENT: &str = "clipboard-history-changed";
 const HISTORY_LOADING_ERROR: &str = "clipboard history is still loading";
 const INTERNAL_CLIPBOARD_FORMAT: &str = "legal.stella.desktop.clipboard";
 #[cfg(target_os = "windows")]
@@ -88,9 +80,7 @@ const RETENTION_SWEEP_INTERVAL: std::time::Duration =
 const MAX_GROUPS: usize = 24;
 const MAX_GROUP_NAME_CHARACTERS: usize = 64;
 const MAX_CAPTURE_EXCLUSIONS: usize = 128;
-const MAX_SOURCE_APP_ICON_DATA_URL_BYTES: usize = 48 * 1024;
 const MAX_SOURCE_APP_VISUALS: usize = 128;
-const SOURCE_APP_ICON_SIZE: u32 = 48;
 const MAX_SOURCE_PAGE_URL_BYTES: usize = 2048;
 /// Chromium browsers put the copying page's URL on the macOS pasteboard under
 /// this type (`ui::kUTTypeChromiumSourceUrl`).
@@ -111,7 +101,6 @@ const MAX_CLIPBOARD_FILE_URL_BYTES: usize = 16 * 1024;
 const CLIPBOARD_IMAGE_FORMATS: &[&str] = &[MACOS_PNG_FORMAT, "public.tiff"];
 #[cfg(target_os = "windows")]
 const CLIPBOARD_IMAGE_FORMATS: &[&str] = &["PNG"];
-const DEBUG_PERSISTENCE_ENV: &str = "STELLA_ENABLE_DEBUG_CLIPBOARD_PERSISTENCE";
 
 const IGNORED_FORMATS: &[&str] = &[
   "org.nspasteboard.transienttype",
@@ -168,7 +157,7 @@ define_clipboard_retention! {
   Year => 365,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClipboardSourceApp {
   pub identifier: Option<String>,
@@ -198,7 +187,7 @@ impl ClipboardSourceApp {
   }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClipboardSourcePage {
   /// Display name; `origin` also identifies page icons stored by older installs.
@@ -207,7 +196,7 @@ pub struct ClipboardSourcePage {
   pub url: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClipboardSourceAppVisual {
   pub color: Option<String>,
@@ -215,13 +204,58 @@ pub struct ClipboardSourceAppVisual {
   pub key: String,
 }
 
-pub type ClipboardSourceAppExclusion = AppExclusion;
-
-fn exclusion_from_source(source: &ClipboardSourceApp) -> Option<AppExclusion> {
-  AppExclusion::new(source.identifier.as_deref()?, &source.name)
+#[derive(Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClipboardSourceAppExclusion {
+  pub identifier: String,
+  pub name: String,
 }
 
-fn exclusion_matches(exclusion: &AppExclusion, source: &ClipboardSourceApp) -> bool {
+impl ClipboardSourceAppExclusion {
+  fn new(identifier: &str, name: &str) -> Option<Self> {
+    AppExclusion::new(identifier, name).map(|exclusion| Self {
+      identifier: exclusion.identifier,
+      name: exclusion.name,
+    })
+  }
+
+  fn matches_identifier(&self, identifier: &str) -> bool {
+    self.identifier == identifier.trim().to_lowercase()
+  }
+}
+
+fn normalize_source_app_exclusions(
+  exclusions: &mut Vec<ClipboardSourceAppExclusion>,
+  max: usize,
+) -> bool {
+  let mut shared = exclusions
+    .iter()
+    .map(|exclusion| AppExclusion {
+      identifier: exclusion.identifier.clone(),
+      name: exclusion.name.clone(),
+    })
+    .collect();
+  let changed = normalize_exclusions(&mut shared, max);
+  *exclusions = shared
+    .into_iter()
+    .map(|exclusion| ClipboardSourceAppExclusion {
+      identifier: exclusion.identifier,
+      name: exclusion.name,
+    })
+    .collect();
+  changed
+}
+
+fn exclusion_from_source(
+  source: &ClipboardSourceApp,
+) -> Option<ClipboardSourceAppExclusion> {
+  ClipboardSourceAppExclusion::new(source.identifier.as_deref()?, &source.name)
+}
+
+fn exclusion_matches(
+  exclusion: &ClipboardSourceAppExclusion,
+  source: &ClipboardSourceApp,
+) -> bool {
   source
     .identifier
     .as_deref()
@@ -242,9 +276,9 @@ impl ClipboardItemRetentionClass {
   }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
-pub enum ClipboardItem {
+pub(crate) enum ClipboardItem {
   Text {
     #[serde(rename = "copiedAt", alias = "copied_at")]
     copied_at: DateTime<Utc>,
@@ -404,7 +438,7 @@ impl ClipboardItem {
   }
 
   /// The item as the webview sees it: the paste-back payload stays native-side.
-  pub fn for_webview(&self) -> Self {
+  fn for_webview(&self) -> Self {
     match self {
       Self::Text {
         copied_at,
@@ -839,9 +873,9 @@ impl<'de> Deserialize<'de> for ClipboardGroupColor {
   }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ClipboardGroup {
+pub(crate) struct ClipboardGroup {
   #[serde(default)]
   pub color: ClipboardGroupColor,
   pub id: String,
@@ -874,9 +908,8 @@ pub enum ClipboardImageCleanupStatus {
   PendingRetry,
 }
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ClipboardSnapshot {
+#[derive(Clone)]
+pub(crate) struct ClipboardSnapshot {
   pub capture_status: ClipboardCaptureStatus,
   pub group_limit: usize,
   pub groups: Vec<ClipboardGroup>,
@@ -890,6 +923,7 @@ pub struct ClipboardSnapshot {
   pub welcome_status: ClipboardWelcomeStatus,
 }
 
+#[cfg(test)]
 impl ClipboardSnapshot {
   /// Content bytes crossing IPC for the items, before JSON framing.
   pub fn history_bytes(&self) -> usize {
@@ -897,9 +931,9 @@ impl ClipboardSnapshot {
   }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PersistedClipboardState {
+pub(crate) struct PersistedClipboardState {
   pub capture_status: ClipboardCaptureStatus,
   #[serde(default)]
   pub groups: Vec<ClipboardGroup>,
@@ -916,7 +950,84 @@ pub struct PersistedClipboardState {
   pub source_app_visuals: Vec<ClipboardSourceAppVisual>,
 }
 
+impl std::fmt::Debug for ClipboardSourcePage {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    formatter
+      .debug_struct("ClipboardSourcePage")
+      .finish_non_exhaustive()
+  }
+}
+
+impl std::fmt::Debug for ClipboardSourceApp {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    formatter
+      .debug_struct("ClipboardSourceApp")
+      .finish_non_exhaustive()
+  }
+}
+
+impl std::fmt::Debug for ClipboardSourceAppVisual {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    formatter
+      .debug_struct("ClipboardSourceAppVisual")
+      .finish_non_exhaustive()
+  }
+}
+
+impl std::fmt::Debug for ClipboardSourceAppExclusion {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    formatter
+      .debug_struct("ClipboardSourceAppExclusion")
+      .finish_non_exhaustive()
+  }
+}
+
+impl std::fmt::Debug for ClipboardItem {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::Text { id, .. } => formatter
+        .debug_struct("ClipboardItem::Text")
+        .field("id", id)
+        .finish_non_exhaustive(),
+      Self::FormattedText { id, .. } => formatter
+        .debug_struct("ClipboardItem::FormattedText")
+        .field("id", id)
+        .finish_non_exhaustive(),
+      Self::Image { id, .. } => formatter
+        .debug_struct("ClipboardItem::Image")
+        .field("id", id)
+        .finish_non_exhaustive(),
+    }
+  }
+}
+
+impl std::fmt::Debug for ClipboardGroup {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    formatter
+      .debug_struct("ClipboardGroup")
+      .field("id", &self.id)
+      .finish_non_exhaustive()
+  }
+}
+
+impl std::fmt::Debug for ClipboardSnapshot {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    formatter
+      .debug_struct("ClipboardSnapshot")
+      .finish_non_exhaustive()
+  }
+}
+
+impl std::fmt::Debug for PersistedClipboardState {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    formatter
+      .debug_struct("PersistedClipboardState")
+      .finish_non_exhaustive()
+  }
+}
+
 pub struct ClipboardManager {
+  observer: Arc<dyn HistoryObserver>,
   capture_status: ClipboardCaptureStatus,
   #[cfg(target_os = "macos")]
   image_exports: crate::clipboard_image_export::ClipboardImageExports,
@@ -940,6 +1051,36 @@ enum ClipboardPersistence {
   Encrypted(ClipboardStore),
   MemoryOnly,
   DeletionOnly(std::path::PathBuf),
+}
+
+pub struct PreparedWebviewImagePreview(ClipboardImageRead);
+impl PreparedWebviewImagePreview {
+  pub fn load(self) -> Result<WebviewPayload, String> {
+    let preview = self.0.load()?;
+    WebviewPayload::from_serializable(&format!(
+      "data:image/png;base64,{}",
+      STANDARD.encode(preview)
+    ))
+  }
+}
+
+pub struct PreparedClipboardCopy {
+  item: ClipboardItem,
+  image: Option<ClipboardImageRead>,
+}
+
+pub struct LoadedClipboardCopy {
+  item: ClipboardItem,
+  image: Option<Vec<u8>>,
+}
+
+impl PreparedClipboardCopy {
+  pub fn load(self) -> Result<LoadedClipboardCopy, String> {
+    Ok(LoadedClipboardCopy {
+      item: self.item,
+      image: self.image.map(ClipboardImageRead::load).transpose()?,
+    })
+  }
 }
 
 pub(crate) enum ClipboardImageRead {
@@ -1006,7 +1147,21 @@ pub struct ClipboardInitTimings {
 }
 
 /// Persistence resolved without holding the manager mutex.
-pub enum ClipboardLoad {
+pub struct ClipboardLoad(LoadedHistory);
+
+impl ClipboardLoad {
+  pub fn memory_only() -> Self {
+    Self(LoadedHistory::MemoryOnly)
+  }
+}
+
+impl From<LoadedHistory> for ClipboardLoad {
+  fn from(load: LoadedHistory) -> Self {
+    Self(load)
+  }
+}
+
+enum LoadedHistory {
   MemoryOnly,
   DeletionOnly(std::path::PathBuf),
   Encrypted {
@@ -1018,33 +1173,27 @@ pub enum ClipboardLoad {
 
 /// Blocking keychain and encrypted-file work. Runs on the watcher thread
 /// before the manager is locked, so snapshot reads never queue behind it.
-pub fn load_persisted() -> (ClipboardLoad, ClipboardInitTimings) {
-  let mut timings = ClipboardInitTimings::default();
-  if crate::local_store::debug_build_is_memory_only(DEBUG_PERSISTENCE_ENV) {
-    return (ClipboardLoad::MemoryOnly, timings);
-  }
+pub fn load_persisted(
+  key: StoreKey,
+  store_path: std::path::PathBuf,
+  observer: &dyn HistoryObserver,
+) -> (ClipboardLoad, ClipboardInitTimings) {
+  let (load, timings) = load_persisted_inner(key, store_path, observer);
+  (ClipboardLoad(load), timings)
+}
 
-  let Some(data_dir) = dirs::data_dir() else {
-    tracing::warn!(
-      "clipboard history is memory-only because no data directory is available"
-    );
-    return (ClipboardLoad::MemoryOnly, timings);
-  };
-  let store_path = data_dir
-    .join(APP_DATA_DIR_NAME)
-    .join("clipboard-history.json.enc");
-  let keychain_started = Instant::now();
-  let key = crate::local_store::resolve_key(
-    keychain::LocalDataKey::ClipboardHistory,
-    store_path.is_file(),
-  );
-  timings.keychain_read = Some(keychain_started.elapsed());
+fn load_persisted_inner(
+  key: StoreKey,
+  store_path: std::path::PathBuf,
+  observer: &dyn HistoryObserver,
+) -> (LoadedHistory, ClipboardInitTimings) {
+  let mut timings = ClipboardInitTimings::default();
   let key = match key {
     StoreKey::Key(key) => key,
     StoreKey::DeletionOnly => {
-      return (ClipboardLoad::DeletionOnly(store_path), timings);
+      return (LoadedHistory::DeletionOnly(store_path), timings);
     }
-    StoreKey::MemoryOnly => return (ClipboardLoad::MemoryOnly, timings),
+    StoreKey::MemoryOnly => return (LoadedHistory::MemoryOnly, timings),
   };
   let store = ClipboardStore::new(key, store_path.clone());
   let load_started = Instant::now();
@@ -1060,9 +1209,12 @@ pub fn load_persisted() -> (ClipboardLoad, ClipboardInitTimings) {
         .retain(|blob_id| uuid::Uuid::parse_str(blob_id).is_ok());
       let changed = prune_items(&mut state.items, state.retention, Utc::now());
       let images_changed = prune_image_history(&mut state.items);
-      let invalid_images_changed = retain_valid_images(&mut state.items, &store);
-      let exclusions_changed =
-        normalize_exclusions(&mut state.source_app_exclusions, MAX_CAPTURE_EXCLUSIONS);
+      let invalid_images_changed =
+        retain_valid_images(&mut state.items, &store, observer);
+      let exclusions_changed = normalize_source_app_exclusions(
+        &mut state.source_app_exclusions,
+        MAX_CAPTURE_EXCLUSIONS,
+      );
       let live_blob_ids = image_blob_ids(&state.items);
       state
         .pending_image_blob_ids
@@ -1073,13 +1225,13 @@ pub fn load_persisted() -> (ClipboardLoad, ClipboardInitTimings) {
           .filter(|blob_id| uuid::Uuid::parse_str(blob_id).is_ok())
           .cloned(),
       );
-      let image_discovery_status = if let Err(error) =
+      let image_discovery_status = if let Err(_error) =
         queue_discovered_orphaned_image_blobs(
           &mut state.pending_image_blob_ids,
           &store,
           &live_blob_ids,
         ) {
-        tracing::warn!(error = %error, "clipboard image orphans could not be discovered");
+        observer.error(HistoryErrorCode::PersistenceFailed);
         ClipboardImageCleanupStatus::PendingRetry
       } else {
         ClipboardImageCleanupStatus::Idle
@@ -1091,11 +1243,11 @@ pub fn load_persisted() -> (ClipboardLoad, ClipboardInitTimings) {
         || invalid_images_changed
         || exclusions_changed
         || pending_changed)
-        && let Err(error) = store.persist(&state)
+        && let Err(_error) = store.persist(&state)
       {
-        tracing::warn!(error = %error, "recovered clipboard history could not be persisted");
+        observer.error(HistoryErrorCode::PersistenceFailed);
         return (
-          ClipboardLoad::Encrypted {
+          LoadedHistory::Encrypted {
             image_discovery_status,
             store,
             state: Some(state),
@@ -1106,20 +1258,17 @@ pub fn load_persisted() -> (ClipboardLoad, ClipboardInitTimings) {
       if !state.pending_image_blob_ids.is_empty() {
         let pending_image_blob_ids = state.pending_image_blob_ids.clone();
         let remaining =
-          remove_pending_image_blobs(&store, &state.pending_image_blob_ids);
+          remove_pending_image_blobs(&store, &state.pending_image_blob_ids, observer);
         state.pending_image_blob_ids = remaining;
         if state.pending_image_blob_ids != pending_image_blob_ids
-          && let Err(error) = store.persist(&state)
+          && let Err(_error) = store.persist(&state)
         {
           state.pending_image_blob_ids = pending_image_blob_ids;
-          tracing::warn!(
-            error = %error,
-            "completed clipboard image cleanup could not be checkpointed"
-          );
+          observer.error(HistoryErrorCode::PersistenceFailed);
         }
       }
       (
-        ClipboardLoad::Encrypted {
+        LoadedHistory::Encrypted {
           image_discovery_status,
           store,
           state: Some(state),
@@ -1129,20 +1278,20 @@ pub fn load_persisted() -> (ClipboardLoad, ClipboardInitTimings) {
     }
     Ok(None) => {
       let mut pending_image_blob_ids = BTreeSet::new();
-      let image_discovery_status = if let Err(error) =
+      let image_discovery_status = if let Err(_error) =
         queue_discovered_orphaned_image_blobs(
           &mut pending_image_blob_ids,
           &store,
           &HashSet::new(),
         ) {
-        tracing::warn!(error = %error, "clipboard image orphans could not be discovered");
+        observer.error(HistoryErrorCode::PersistenceFailed);
         ClipboardImageCleanupStatus::PendingRetry
       } else {
         ClipboardImageCleanupStatus::Idle
       };
       if pending_image_blob_ids.is_empty() {
         return (
-          ClipboardLoad::Encrypted {
+          LoadedHistory::Encrypted {
             image_discovery_status,
             store,
             state: None,
@@ -1159,10 +1308,10 @@ pub fn load_persisted() -> (ClipboardLoad, ClipboardInitTimings) {
         source_app_exclusions: Vec::new(),
         source_app_visuals: Vec::new(),
       };
-      if let Err(error) = store.persist(&state) {
-        tracing::warn!(error = %error, "orphaned clipboard images could not be journaled");
+      if let Err(_error) = store.persist(&state) {
+        observer.error(HistoryErrorCode::PersistenceFailed);
         return (
-          ClipboardLoad::Encrypted {
+          LoadedHistory::Encrypted {
             image_discovery_status,
             store,
             state: Some(state),
@@ -1173,20 +1322,17 @@ pub fn load_persisted() -> (ClipboardLoad, ClipboardInitTimings) {
       if !state.pending_image_blob_ids.is_empty() {
         let pending_image_blob_ids = state.pending_image_blob_ids.clone();
         let remaining =
-          remove_pending_image_blobs(&store, &state.pending_image_blob_ids);
+          remove_pending_image_blobs(&store, &state.pending_image_blob_ids, observer);
         state.pending_image_blob_ids = remaining;
         if state.pending_image_blob_ids != pending_image_blob_ids
-          && let Err(error) = store.persist(&state)
+          && let Err(_error) = store.persist(&state)
         {
           state.pending_image_blob_ids = pending_image_blob_ids;
-          tracing::warn!(
-            error = %error,
-            "completed clipboard image cleanup could not be checkpointed"
-          );
+          observer.error(HistoryErrorCode::PersistenceFailed);
         }
       }
       (
-        ClipboardLoad::Encrypted {
+        LoadedHistory::Encrypted {
           image_discovery_status,
           store,
           state: Some(state),
@@ -1194,9 +1340,9 @@ pub fn load_persisted() -> (ClipboardLoad, ClipboardInitTimings) {
         timings,
       )
     }
-    Err(error) => {
-      tracing::warn!(error = %error, "encrypted clipboard history is unavailable");
-      (ClipboardLoad::DeletionOnly(store_path), timings)
+    Err(_error) => {
+      observer.error(HistoryErrorCode::PersistenceFailed);
+      (LoadedHistory::DeletionOnly(store_path), timings)
     }
   }
 }
@@ -1264,11 +1410,14 @@ fn text_clipboard_contents(
 }
 
 impl ClipboardManager {
-  pub fn new() -> Self {
+  pub fn new(observer: Arc<dyn HistoryObserver>) -> Self {
     Self {
+      observer: Arc::clone(&observer),
       capture_status: ClipboardCaptureStatus::Active,
       #[cfg(target_os = "macos")]
-      image_exports: crate::clipboard_image_export::ClipboardImageExports::new(),
+      image_exports: crate::clipboard_image_export::ClipboardImageExports::new(
+        Arc::clone(&observer),
+      ),
       groups: Vec::new(),
       image_discovery_status: ClipboardImageCleanupStatus::Idle,
       items: Vec::new(),
@@ -1285,19 +1434,19 @@ impl ClipboardManager {
 
   /// Applies a load resolved off the mutex. Mutations are rejected while the
   /// manager is `Initializing`, so nothing in memory can be overwritten here.
-  pub fn install(&mut self, load: ClipboardLoad) {
-    self.persistence = match load {
-      ClipboardLoad::MemoryOnly => {
+  pub fn install(&mut self, load: impl Into<ClipboardLoad>) {
+    self.persistence = match load.into().0 {
+      LoadedHistory::MemoryOnly => {
         self.image_discovery_status = ClipboardImageCleanupStatus::Idle;
         self.pending_image_blob_ids.clear();
         ClipboardPersistence::MemoryOnly
       }
-      ClipboardLoad::DeletionOnly(path) => {
+      LoadedHistory::DeletionOnly(path) => {
         self.image_discovery_status = ClipboardImageCleanupStatus::Idle;
         self.pending_image_blob_ids.clear();
         ClipboardPersistence::DeletionOnly(path)
       }
-      ClipboardLoad::Encrypted {
+      LoadedHistory::Encrypted {
         image_discovery_status,
         store,
         state,
@@ -1332,7 +1481,62 @@ impl ClipboardManager {
     };
   }
 
-  pub fn snapshot(&self, _caller: &ClipboardCaller) -> ClipboardSnapshot {
+  pub fn webview_snapshot(
+    &self,
+    caller: &LocalWindowProof,
+  ) -> Result<WebviewPayload, String> {
+    WebviewPayload::from_serializable(&wire::WireClipboardSnapshot::from(
+      &self.snapshot(caller),
+    ))
+  }
+
+  pub fn snapshot_counts(&self) -> (usize, usize) {
+    (
+      self.items.len(),
+      self
+        .items
+        .iter()
+        .map(|item| self.webview_item(item).byte_len())
+        .sum(),
+    )
+  }
+
+  pub fn webview_item_context(
+    &self,
+    id: &str,
+    caller: &LocalWindowProof,
+  ) -> Result<WebviewPayload, String> {
+    let item = self
+      .item_for_webview(id, caller)
+      .ok_or_else(|| "clipboard item no longer exists".to_string())?;
+    WebviewPayload::from_serializable(&wire::WireEditorContext {
+      group_limit: Self::group_limit(),
+      groups: self.groups.iter().map(Into::into).collect(),
+      source_app_visual: self.source_app_visual(&item).as_ref().map(Into::into),
+      item: (&item).into(),
+    })
+  }
+
+  pub fn prepare_webview_image_preview(
+    &self,
+    id: &str,
+    caller: &LocalWindowProof,
+  ) -> Result<PreparedWebviewImagePreview, String> {
+    self
+      .image_preview(id, caller)
+      .map(PreparedWebviewImagePreview)
+  }
+
+  #[cfg(test)]
+  fn webview_image_preview(
+    &self,
+    id: &str,
+    caller: &LocalWindowProof,
+  ) -> Result<WebviewPayload, String> {
+    self.prepare_webview_image_preview(id, caller)?.load()
+  }
+
+  pub(crate) fn snapshot(&self, _caller: &LocalWindowProof) -> ClipboardSnapshot {
     let mut source_app_visuals = self
       .source_app_visuals
       .values()
@@ -1717,14 +1921,18 @@ impl ClipboardManager {
     Ok(true)
   }
 
-  pub fn item(&self, id: &str) -> Option<ClipboardItem> {
+  pub fn contains_item(&self, id: &str) -> bool {
+    self.items.iter().any(|item| item.id() == id)
+  }
+
+  fn item(&self, id: &str) -> Option<ClipboardItem> {
     self.items.iter().find(|item| item.id() == id).cloned()
   }
 
-  pub fn item_for_webview(
+  pub(crate) fn item_for_webview(
     &self,
     id: &str,
-    _caller: &ClipboardCaller,
+    _caller: &LocalWindowProof,
   ) -> Option<ClipboardItem> {
     self
       .items
@@ -1747,16 +1955,12 @@ impl ClipboardManager {
     webview
   }
 
-  pub fn groups(&self) -> &[ClipboardGroup] {
-    &self.groups
-  }
-
   /// How many groups may exist, the same ceiling `create_group` enforces.
   pub const fn group_limit() -> usize {
     MAX_GROUPS
   }
 
-  pub fn source_app_visual(
+  fn source_app_visual(
     &self,
     item: &ClipboardItem,
   ) -> Option<ClipboardSourceAppVisual> {
@@ -1806,7 +2010,7 @@ impl ClipboardManager {
   pub(crate) fn image_preview(
     &self,
     id: &str,
-    _caller: &ClipboardCaller,
+    _caller: &LocalWindowProof,
   ) -> Result<ClipboardImageRead, String> {
     let item = self
       .items
@@ -1831,7 +2035,7 @@ impl ClipboardManager {
     })
   }
 
-  pub fn suppress_next(&mut self, item: &ClipboardItem, format: ClipboardCopyFormat) {
+  fn suppress_next(&mut self, item: &ClipboardItem, format: ClipboardCopyFormat) {
     self.suppressed_content = match item {
       ClipboardItem::Text { plain_text, .. }
       | ClipboardItem::FormattedText { plain_text, .. } => {
@@ -2223,7 +2427,7 @@ impl ClipboardManager {
         &created_blob_ids,
         &mut self.pending_image_blob_ids,
       );
-      tracing::warn!(error = %error, "clipboard history persistence failed");
+      self.observer.error(HistoryErrorCode::PersistenceFailed);
       if !cleanup_errors.is_empty() {
         return Err(format!("{error}; {}", cleanup_errors.join("; ")));
       }
@@ -2231,18 +2435,19 @@ impl ClipboardManager {
     }
     if !self.pending_image_blob_ids.is_empty() {
       let pending_image_blob_ids = self.pending_image_blob_ids.clone();
-      let remaining = remove_pending_image_blobs(store, &self.pending_image_blob_ids);
+      let remaining = remove_pending_image_blobs(
+        store,
+        &self.pending_image_blob_ids,
+        self.observer.as_ref(),
+      );
       self.pending_image_blob_ids = remaining;
       let mut completed_state = state.clone();
       completed_state.pending_image_blob_ids = self.pending_image_blob_ids.clone();
       if self.pending_image_blob_ids != pending_image_blob_ids
-        && let Err(error) = store.persist(&completed_state)
+        && let Err(_error) = store.persist(&completed_state)
       {
         self.pending_image_blob_ids = pending_image_blob_ids;
-        tracing::warn!(
-          error = %error,
-          "completed clipboard image cleanup could not be checkpointed"
-        );
+        self.observer.error(HistoryErrorCode::PersistenceFailed);
       }
     }
     for item in &mut self.items {
@@ -2286,16 +2491,13 @@ fn remove_created_image_blobs(
 fn remove_pending_image_blobs(
   store: &ClipboardStore,
   pending_blob_ids: &BTreeSet<String>,
+  observer: &dyn HistoryObserver,
 ) -> BTreeSet<String> {
   let mut remaining = BTreeSet::new();
   for blob_id in pending_blob_ids {
-    if let Err(error) = store.remove_image(blob_id) {
+    if let Err(_error) = store.remove_image(blob_id) {
       remaining.insert(blob_id.clone());
-      tracing::warn!(
-        error = %error,
-        blob_id,
-        "pending clipboard image cleanup will be retried"
-      );
+      observer.error(HistoryErrorCode::PersistenceFailed);
     }
   }
   remaining
@@ -2346,7 +2548,11 @@ fn image_blob_validation(
   )))
 }
 
-fn retain_valid_images(items: &mut Vec<ClipboardItem>, store: &ClipboardStore) -> bool {
+fn retain_valid_images(
+  items: &mut Vec<ClipboardItem>,
+  store: &ClipboardStore,
+  observer: &dyn HistoryObserver,
+) -> bool {
   #[derive(Clone, Copy)]
   enum ValidationDisposition {
     Invalid,
@@ -2360,8 +2566,8 @@ fn retain_valid_images(items: &mut Vec<ClipboardItem>, store: &ClipboardStore) -
     let (blob_id, validation) = match image_blob_validation(item) {
       Ok(Some(validation)) => validation,
       Ok(None) => return true,
-      Err(error) => {
-        tracing::warn!(error = %error, "invalid clipboard image metadata was removed");
+      Err(_error) => {
+        observer.error(HistoryErrorCode::PersistenceFailed);
         return false;
       }
     };
@@ -2369,15 +2575,12 @@ fn retain_valid_images(items: &mut Vec<ClipboardItem>, store: &ClipboardStore) -
     match *validations.entry(cache_key).or_insert_with(|| {
       match store.validate_image(blob_id, &validation, MAX_ITEM_IMAGE_PREVIEW_BYTES) {
         Ok(()) => ValidationDisposition::Valid,
-        Err(ClipboardImageValidationError::Invalid(error)) => {
-          tracing::warn!(error = %error, "invalid clipboard image payload was removed");
+        Err(ClipboardImageValidationError::Invalid(_error)) => {
+          observer.error(HistoryErrorCode::PersistenceFailed);
           ValidationDisposition::Invalid
         }
-        Err(ClipboardImageValidationError::Unavailable(error)) => {
-          tracing::warn!(
-            error = %error,
-            "clipboard image validation is temporarily unavailable"
-          );
+        Err(ClipboardImageValidationError::Unavailable(_error)) => {
+          observer.error(HistoryErrorCode::PersistenceFailed);
           ValidationDisposition::Unavailable
         }
       }
@@ -2860,147 +3063,13 @@ fn windows_clipboard_history_allows_capture(
     .is_ok_and(|value| windows_history_control_allows_capture(&value))
 }
 
-fn dominant_icon_color(icon: &image::RgbaImage) -> Option<String> {
-  let mut buckets = HashMap::<(u8, u8, u8), (u64, u64, u64, u64)>::new();
-  for pixel in icon.pixels() {
-    let [red, green, blue, alpha] = pixel.0;
-    if alpha < 48 {
-      continue;
-    }
-    let maximum = red.max(green).max(blue);
-    let minimum = red.min(green).min(blue);
-    let chroma = maximum - minimum;
-    let weight = u64::from(alpha) * u64::from(chroma.saturating_add(24));
-    let bucket = (red / 32, green / 32, blue / 32);
-    let entry = buckets.entry(bucket).or_default();
-    entry.0 += weight;
-    entry.1 += u64::from(red) * weight;
-    entry.2 += u64::from(green) * weight;
-    entry.3 += u64::from(blue) * weight;
-  }
-  let (_, (weight, red, green, blue)) =
-    buckets.into_iter().max_by_key(|(_, values)| values.0)?;
-  if weight == 0 {
-    return None;
-  }
-  Some(format!(
-    "#{:02x}{:02x}{:02x}",
-    red / weight,
-    green / weight,
-    blue / weight
-  ))
+pub struct ClipboardSourceCapture {
+  pub app: ClipboardSourceApp,
+  pub visual: Option<ClipboardSourceAppVisual>,
 }
 
-fn source_app_visual(icon: image::RgbaImage) -> (Option<String>, Option<String>) {
-  let icon = image::DynamicImage::ImageRgba8(icon)
-    .thumbnail(SOURCE_APP_ICON_SIZE, SOURCE_APP_ICON_SIZE)
-    .to_rgba8();
-  let color = dominant_icon_color(&icon);
-  let mut png = Cursor::new(Vec::new());
-  let icon_data_url = image::DynamicImage::ImageRgba8(icon)
-    .write_to(&mut png, image::ImageFormat::Png)
-    .ok()
-    .and_then(|()| {
-      let value = format!(
-        "data:image/png;base64,{}",
-        STANDARD.encode(png.into_inner())
-      );
-      (value.len() <= MAX_SOURCE_APP_ICON_DATA_URL_BYTES).then_some(value)
-    });
-  (icon_data_url, color)
-}
-
-struct ClipboardSourceCapture {
-  app: ClipboardSourceApp,
-  visual: Option<ClipboardSourceAppVisual>,
-}
-
-fn source_app_visual_metadata(
-  key: String,
-  (icon_data_url, color): (Option<String>, Option<String>),
-) -> Option<ClipboardSourceAppVisual> {
-  if icon_data_url.is_none() && color.is_none() {
-    return None;
-  }
-  Some(ClipboardSourceAppVisual {
-    color,
-    icon_data_url,
-    key,
-  })
-}
-
-#[cfg(target_os = "macos")]
-fn macos_bundle_icon_path(bundle_path: &Path) -> Option<PathBuf> {
-  let info = plist::Value::from_file(bundle_path.join("Contents/Info.plist")).ok()?;
-  let icon_name = info.as_dictionary()?.get("CFBundleIconFile")?.as_string()?;
-  let mut components = Path::new(icon_name).components();
-  let Component::Normal(file_name) = components.next()? else {
-    return None;
-  };
-  if components.next().is_some() {
-    return None;
-  }
-  let mut icon_path = bundle_path.join("Contents/Resources").join(file_name);
-  if icon_path.extension().is_none() {
-    icon_path.set_extension("icns");
-  }
-  icon_path.is_file().then_some(icon_path)
-}
-
-#[cfg(target_os = "macos")]
-fn macos_source_app_icon(bundle_path: &Path) -> Option<image::RgbaImage> {
-  let icon_path = macos_bundle_icon_path(bundle_path)?;
-  let family = IconFamily::read(BufReader::new(File::open(icon_path).ok()?)).ok()?;
-  let mut icon_types = family.available_icons();
-  icon_types.sort_by_key(|icon_type| {
-    let width = icon_type.pixel_width();
-    (
-      width < SOURCE_APP_ICON_SIZE,
-      width.abs_diff(SOURCE_APP_ICON_SIZE),
-    )
-  });
-  icon_types.into_iter().find_map(|icon_type| {
-    let icon = family.get_icon_with_type(icon_type).ok()?;
-    let icon = icon.convert_to(PixelFormat::RGBA);
-    image::RgbaImage::from_raw(icon.width(), icon.height(), icon.into_data().into_vec())
-  })
-}
-
-/// The foreground app as a clipboard source, with its icon and accent.
-fn frontmost_source_app(app: &AppHandle) -> Option<ClipboardSourceCapture> {
-  let foreground = crate::foreground_app::current(app)?;
-  let key = foreground
-    .identifier
-    .clone()
-    .unwrap_or_else(|| foreground.name.clone());
-  #[cfg(target_os = "macos")]
-  let visual = foreground
-    .bundle_path
-    .as_deref()
-    .and_then(|bundle_path| macos_source_app_icon(Path::new(bundle_path)))
-    .map(source_app_visual)
-    .and_then(|visual| source_app_visual_metadata(key, visual));
-  #[cfg(target_os = "windows")]
-  let visual = source_app_visual_metadata(
-    key,
-    windows_icons::get_icon_by_process_id(foreground.process_id)
-      .ok()
-      .map_or((None, None), source_app_visual),
-  );
-  #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-  let visual = {
-    let _ = key;
-    None
-  };
-  Some(ClipboardSourceCapture {
-    app: ClipboardSourceApp {
-      identifier: foreground.identifier,
-      name: foreground.name,
-      page: None,
-      visual_key: None,
-    },
-    visual,
-  })
+pub trait MainThreadRunner: Send + Sync {
+  fn current_source_app(&self) -> Option<ClipboardSourceCapture>;
 }
 
 /// Normalises a browser-advertised page URL into the stored source page. Only
@@ -3077,15 +3146,15 @@ fn clipboard_source_page(
 }
 
 struct HistoryClipboardHandler {
-  app: AppHandle,
+  source: Arc<dyn MainThreadRunner>,
   clipboard: ClipboardContext,
   manager: ClipboardAppState,
-  telemetry: DesktopTelemetry,
+  observer: Arc<dyn HistoryObserver>,
 }
 
 enum ClipboardImageCaptureAttempt {
   Capture(Box<ClipboardImageCapture>),
-  ContinueWithText { error: String },
+  ContinueWithText,
 }
 
 fn resolve_clipboard_image_capture(
@@ -3093,7 +3162,7 @@ fn resolve_clipboard_image_capture(
 ) -> ClipboardImageCaptureAttempt {
   match attempt {
     Ok(capture) => ClipboardImageCaptureAttempt::Capture(Box::new(capture)),
-    Err(error) => ClipboardImageCaptureAttempt::ContinueWithText { error },
+    Err(_) => ClipboardImageCaptureAttempt::ContinueWithText,
   }
 }
 
@@ -3102,33 +3171,19 @@ impl ClipboardHandler for HistoryClipboardHandler {
     // Re-read formats while holding the publication lock: a stale watcher
     // observation must never remove an export just published by a copy.
     let Ok(mut manager) = self.manager.lock() else {
-      self.telemetry.capture(DesktopErrorReport {
-        window: DesktopTelemetryWindow::Clipboard,
-        operation: DesktopTelemetryOperation::ClipboardWatcherRead,
-        code: DesktopTelemetryErrorCode::LockPoisoned,
-      });
+      self.observer.error(HistoryErrorCode::LockPoisoned);
       return;
     };
     let formats = match self.clipboard.available_formats() {
       Ok(formats) => formats,
-      Err(error) => {
-        tracing::warn!(error = %error, "clipboard formats could not be read");
-        self.telemetry.capture(DesktopErrorReport {
-          window: DesktopTelemetryWindow::Clipboard,
-          operation: DesktopTelemetryOperation::ClipboardWatcherRead,
-          code: DesktopTelemetryErrorCode::FormatReadFailed,
-        });
+      Err(_error) => {
+        self.observer.error(HistoryErrorCode::FormatReadFailed);
         return;
       }
     };
     #[cfg(target_os = "macos")]
-    if let Err(error) = manager.reconcile_image_exports() {
-      tracing::warn!(error = %error, "replaced clipboard image export cleanup will be retried");
-      self.telemetry.capture(DesktopErrorReport {
-        window: DesktopTelemetryWindow::Clipboard,
-        operation: DesktopTelemetryOperation::ClipboardWatcherRead,
-        code: DesktopTelemetryErrorCode::PersistenceFailed,
-      });
+    if let Err(_error) = manager.reconcile_image_exports() {
+      self.observer.error(HistoryErrorCode::PersistenceFailed);
     }
     if formats
       .iter()
@@ -3145,14 +3200,10 @@ impl ClipboardHandler for HistoryClipboardHandler {
     if !windows_clipboard_history_allows_capture(&self.clipboard, &formats) {
       return;
     }
-    let source_capture = frontmost_source_app(&self.app);
+    let source_capture = self.source.current_source_app();
     if let Some(source) = &source_capture {
       let Ok(manager) = self.manager.lock() else {
-        self.telemetry.capture(DesktopErrorReport {
-          window: DesktopTelemetryWindow::Clipboard,
-          operation: DesktopTelemetryOperation::ClipboardWatcherRead,
-          code: DesktopTelemetryErrorCode::LockPoisoned,
-        });
+        self.observer.error(HistoryErrorCode::LockPoisoned);
         return;
       };
       if manager.is_source_app_excluded(Some(&source.app)) {
@@ -3185,20 +3236,20 @@ impl ClipboardHandler for HistoryClipboardHandler {
               return;
             }
             ClipboardCaptureOutcome::Rejected => {
-              tracing::warn!("clipboard image was not recorded; falling back to text");
+              self.observer.error(HistoryErrorCode::FormatReadFailed);
             }
           }
         }
-        ClipboardImageCaptureAttempt::ContinueWithText { error } => {
-          tracing::warn!(error = %error, "clipboard image could not be captured");
+        ClipboardImageCaptureAttempt::ContinueWithText => {
+          self.observer.error(HistoryErrorCode::FormatReadFailed);
         }
       }
     }
     let plain_text = match self.clipboard.get_text() {
       Ok(text) if !text.trim().is_empty() && text.len() <= MAX_ITEM_TEXT_BYTES => text,
       Ok(_) => return,
-      Err(error) => {
-        tracing::debug!(error = %error, "clipboard change did not contain readable text");
+      Err(_error) => {
+        self.observer.error(HistoryErrorCode::FormatReadFailed);
         return;
       }
     };
@@ -3243,16 +3294,13 @@ impl HistoryClipboardHandler {
   ) {
     let paths = match self.clipboard.get_files() {
       Ok(paths) => paths,
-      Err(error) => {
-        tracing::debug!(error = %error, "clipboard file list could not be read");
+      Err(_error) => {
+        self.observer.error(HistoryErrorCode::FormatReadFailed);
         return;
       }
     };
     let Some(path) = single_clipboard_image_file(&paths) else {
-      tracing::debug!(
-        count = paths.len(),
-        "clipboard files are not a single image file"
-      );
+      self.observer.error(HistoryErrorCode::FormatReadFailed);
       return;
     };
     let capture = read_bounded_image_file(path)
@@ -3267,8 +3315,8 @@ impl HistoryClipboardHandler {
           ..capture
         }));
       }
-      Err(error) => {
-        tracing::warn!(error = %error, "copied image file could not be captured");
+      Err(_error) => {
+        self.observer.error(HistoryErrorCode::FormatReadFailed);
       }
     }
   }
@@ -3277,28 +3325,18 @@ impl HistoryClipboardHandler {
     let outcome = match self.manager.lock() {
       Ok(mut manager) => match manager.capture(capture) {
         Ok(outcome) => outcome,
-        Err(error) => {
-          tracing::error!(error = %error, "clipboard capture could not be persisted");
-          self.telemetry.capture(DesktopErrorReport {
-            window: DesktopTelemetryWindow::Clipboard,
-            operation: DesktopTelemetryOperation::ClipboardWatcherRead,
-            code: DesktopTelemetryErrorCode::PersistenceFailed,
-          });
+        Err(_error) => {
+          self.observer.error(HistoryErrorCode::PersistenceFailed);
           return ClipboardCaptureOutcome::Rejected;
         }
       },
       Err(_) => {
-        tracing::error!("clipboard manager lock is poisoned");
-        self.telemetry.capture(DesktopErrorReport {
-          window: DesktopTelemetryWindow::Clipboard,
-          operation: DesktopTelemetryOperation::ClipboardWatcherRead,
-          code: DesktopTelemetryErrorCode::LockPoisoned,
-        });
+        self.observer.error(HistoryErrorCode::LockPoisoned);
         return ClipboardCaptureOutcome::Ignored;
       }
     };
     if outcome == ClipboardCaptureOutcome::Captured {
-      let _ = self.app.emit(HISTORY_EVENT, ());
+      self.observer.changed();
     }
     outcome
   }
@@ -3635,122 +3673,90 @@ fn encode_png_bounded(image: &RustImageData, limit: usize) -> Result<Vec<u8>, St
 }
 
 fn report_init_timings(
-  telemetry: &DesktopTelemetry,
+  observer: &dyn HistoryObserver,
   initialize: std::time::Duration,
   timings: ClipboardInitTimings,
 ) {
-  let spans = [
-    (DesktopTelemetrySpan::ClipboardInitialize, Some(initialize)),
-    (
-      DesktopTelemetrySpan::ClipboardKeychainRead,
-      timings.keychain_read,
-    ),
-    (DesktopTelemetrySpan::ClipboardStoreLoad, timings.store_load),
-  ];
-  for (span, duration) in spans {
-    let Some(duration) = duration else {
-      continue;
-    };
-    telemetry.capture_timing(DesktopTimingReport {
-      window: DesktopTelemetryWindow::Clipboard,
-      span,
-      duration,
-      open_kind: None,
-      item_count: timings.loaded_items,
-      payload_bytes: None,
-    });
+  for (span, duration) in [
+    (HistorySpan::Initialize, Some(initialize)),
+    (HistorySpan::KeychainRead, timings.keychain_read),
+    (HistorySpan::StoreLoad, timings.store_load),
+  ] {
+    if let Some(duration) = duration {
+      observer.timing(span, duration, timings.loaded_items);
+    }
   }
 }
 
 pub fn initialize_and_watch(
   manager: ClipboardAppState,
-  app: AppHandle,
-  telemetry: DesktopTelemetry,
+  source: Arc<dyn MainThreadRunner>,
+  observer: Arc<dyn HistoryObserver>,
+  loaded: (ClipboardLoad, ClipboardInitTimings),
+  started: Instant,
 ) {
-  let started = Instant::now();
-  let (load, timings) = load_persisted();
+  let (load, timings) = loaded;
   if let Ok(mut manager) = manager.lock() {
     manager.install(load);
     drop(manager);
-    report_init_timings(&telemetry, started.elapsed(), timings);
+    report_init_timings(observer.as_ref(), started.elapsed(), timings);
   } else {
-    tracing::error!("clipboard manager lock is poisoned during initialization");
-    telemetry.capture(DesktopErrorReport {
-      window: DesktopTelemetryWindow::Clipboard,
-      operation: DesktopTelemetryOperation::ClipboardWatcherStart,
-      code: DesktopTelemetryErrorCode::LockPoisoned,
-    });
+    observer.error(HistoryErrorCode::InitializationLockPoisoned);
     return;
   }
-  let _ = app.emit(HISTORY_EVENT, ());
+  observer.changed();
 
   let retention_manager = Arc::clone(&manager);
-  let retention_app = app.clone();
-  let retention_telemetry = telemetry.clone();
-  tauri::async_runtime::spawn(async move {
-    let mut interval = tokio::time::interval(RETENTION_SWEEP_INTERVAL);
-    interval.tick().await;
-    loop {
-      interval.tick().await;
-      let changed = match retention_manager.lock() {
-        Ok(mut manager) => match manager.prune_expired(Utc::now()) {
-          Ok(changed) => changed,
-          Err(error) => {
-            tracing::error!(error = %error, "expired clipboard history could not be removed");
-            retention_telemetry.capture(DesktopErrorReport {
-              window: DesktopTelemetryWindow::Clipboard,
-              operation: DesktopTelemetryOperation::ClipboardWatcherRead,
-              code: DesktopTelemetryErrorCode::PersistenceFailed,
-            });
+  let retention_observer = Arc::clone(&observer);
+  let retention_error_observer = Arc::clone(&observer);
+  if std::thread::Builder::new()
+    .name("stella-clipboard-retention".into())
+    .spawn(move || {
+      loop {
+        std::thread::sleep(RETENTION_SWEEP_INTERVAL);
+        let changed = match retention_manager.lock() {
+          Ok(mut manager) => match manager.prune_expired(Utc::now()) {
+            Ok(changed) => changed,
+            Err(_error) => {
+              retention_observer.error(HistoryErrorCode::PersistenceFailed);
+              false
+            }
+          },
+          Err(_) => {
+            retention_observer.error(HistoryErrorCode::LockPoisoned);
             false
           }
-        },
-        Err(_) => {
-          tracing::error!("clipboard manager lock is poisoned during retention sweep");
-          retention_telemetry.capture(DesktopErrorReport {
-            window: DesktopTelemetryWindow::Clipboard,
-            operation: DesktopTelemetryOperation::ClipboardWatcherRead,
-            code: DesktopTelemetryErrorCode::LockPoisoned,
-          });
-          false
+        };
+        if changed {
+          retention_observer.changed();
         }
-      };
-      if changed {
-        let _ = retention_app.emit(HISTORY_EVENT, ());
       }
-    }
-  });
+    })
+    .is_err()
+  {
+    retention_error_observer.error(HistoryErrorCode::WatcherUnavailable);
+  }
 
   let clipboard = match ClipboardContext::new() {
     Ok(clipboard) => clipboard,
-    Err(error) => {
-      tracing::error!(error = %error, "clipboard reader could not start");
-      telemetry.capture(DesktopErrorReport {
-        window: DesktopTelemetryWindow::Clipboard,
-        operation: DesktopTelemetryOperation::ClipboardWatcherStart,
-        code: DesktopTelemetryErrorCode::ClipboardUnavailable,
-      });
+    Err(_error) => {
+      observer.error(HistoryErrorCode::ClipboardUnavailable);
       return;
     }
   };
   let mut handler = HistoryClipboardHandler {
-    app,
+    source,
     clipboard,
     manager,
-    telemetry: telemetry.clone(),
+    observer: Arc::clone(&observer),
   };
   // Reconcile once before polling so a copy made while the desktop process was
   // starting or rebuilding is not lost behind the watcher's initial baseline.
   handler.on_clipboard_change();
   let mut watcher = match ClipboardWatcherContext::new() {
     Ok(watcher) => watcher,
-    Err(error) => {
-      tracing::error!(error = %error, "clipboard watcher could not start");
-      telemetry.capture(DesktopErrorReport {
-        window: DesktopTelemetryWindow::Clipboard,
-        operation: DesktopTelemetryOperation::ClipboardWatcherStart,
-        code: DesktopTelemetryErrorCode::WatcherUnavailable,
-      });
+    Err(_error) => {
+      observer.error(HistoryErrorCode::WatcherUnavailable);
       return;
     }
   };
@@ -3759,7 +3765,29 @@ pub fn initialize_and_watch(
 }
 
 impl ClipboardManager {
-  pub fn write_item(
+  pub fn prepare_copy(&self, id: &str) -> Result<PreparedClipboardCopy, String> {
+    let item = self
+      .item(id)
+      .ok_or_else(|| "clipboard item no longer exists".to_string())?;
+    let image = matches!(&item, ClipboardItem::Image { .. })
+      .then(|| self.image(id))
+      .transpose()?;
+    Ok(PreparedClipboardCopy { item, image })
+  }
+
+  pub fn publish_copy(
+    &mut self,
+    copy: LoadedClipboardCopy,
+    format: ClipboardCopyFormat,
+  ) -> Result<(), String> {
+    let result = self.write_item(&copy.item, copy.image.as_deref(), format);
+    if result.is_err() {
+      self.clear_suppression();
+    }
+    result
+  }
+
+  fn write_item(
     &mut self,
     item: &ClipboardItem,
     image_bytes: Option<&[u8]>,
@@ -3807,8 +3835,8 @@ impl ClipboardManager {
     };
     set_clipboard_contents(&clipboard, contents, ClipboardWriteOrigin::History)?;
     #[cfg(target_os = "macos")]
-    if let Err(error) = self.reconcile_image_exports() {
-      tracing::warn!(error = %error, "clipboard image export cleanup will be retried");
+    if let Err(_error) = self.reconcile_image_exports() {
+      self.observer.error(HistoryErrorCode::PersistenceFailed);
     }
     Ok(())
   }
@@ -3861,7 +3889,7 @@ enum ClipboardWriteOrigin {
 
 /// Publishes one pasteboard item holding both representations, so rich targets
 /// keep the emphasis while plain-text targets receive the unmarked string.
-pub(crate) fn write_plain_text(plain_text: String) -> Result<(), String> {
+pub fn write_plain_text(plain_text: String) -> Result<(), String> {
   let clipboard = ClipboardContext::new()
     .map_err(|error| format!("clipboard is unavailable: {error}"))?;
   set_clipboard_contents(
@@ -3871,10 +3899,7 @@ pub(crate) fn write_plain_text(plain_text: String) -> Result<(), String> {
   )
 }
 
-pub(crate) fn write_text_and_html(
-  plain_text: String,
-  html: String,
-) -> Result<(), String> {
+pub fn write_text_and_html(plain_text: String, html: String) -> Result<(), String> {
   let clipboard = ClipboardContext::new()
     .map_err(|error| format!("clipboard is unavailable: {error}"))?;
   set_clipboard_contents(
@@ -3906,11 +3931,23 @@ fn set_clipboard_contents(
 #[cfg(test)]
 mod tests {
   use super::*;
+  struct TestHistoryObserver;
+  impl HistoryObserver for TestHistoryObserver {
+    fn changed(&self) {}
+    fn error(&self, _code: HistoryErrorCode) {}
+    fn timing(
+      &self,
+      _span: HistorySpan,
+      _duration: std::time::Duration,
+      _item_count: Option<usize>,
+    ) {
+    }
+  }
 
   /// A manager past initialization; a fresh `new()` rejects mutations.
   fn ready_manager() -> ClipboardManager {
-    let mut manager = ClipboardManager::new();
-    manager.install(ClipboardLoad::MemoryOnly);
+    let mut manager = ClipboardManager::new(Arc::new(TestHistoryObserver));
+    manager.install(LoadedHistory::MemoryOnly);
     manager
   }
 
@@ -4375,7 +4412,7 @@ mod tests {
     assert!(!manager.exclude_source_app(&item_id).unwrap());
     assert_eq!(
       manager
-        .snapshot(&ClipboardCaller::for_test())
+        .snapshot(&LocalWindowProof::verified_local_window())
         .source_app_exclusions
         .len(),
       1
@@ -4404,7 +4441,7 @@ mod tests {
     manager.clear().unwrap();
     assert_eq!(
       manager
-        .snapshot(&ClipboardCaller::for_test())
+        .snapshot(&LocalWindowProof::verified_local_window())
         .source_app_exclusions
         .len(),
       1
@@ -4492,22 +4529,6 @@ mod tests {
   }
 
   #[test]
-  fn source_app_visual_uses_the_icon_color_and_a_bounded_png() {
-    let icon = image::RgbaImage::from_pixel(
-      SOURCE_APP_ICON_SIZE,
-      SOURCE_APP_ICON_SIZE,
-      image::Rgba([30, 120, 220, 255]),
-    );
-
-    let (icon_data_url, color) = source_app_visual(icon);
-
-    assert_eq!(color.as_deref(), Some("#1e78dc"));
-    let icon_data_url = icon_data_url.unwrap();
-    assert!(icon_data_url.starts_with("data:image/png;base64,"));
-    assert!(icon_data_url.len() <= MAX_SOURCE_APP_ICON_DATA_URL_BYTES);
-  }
-
-  #[test]
   fn source_page_keeps_web_origins_without_credentials_or_fragments() {
     let page = source_page_from_url(
       " https://user:secret@www.example.org:8443/path?q=1#section \n",
@@ -4577,7 +4598,7 @@ mod tests {
       manager.source_app_visual(&item).unwrap().key,
       "com.google.Chrome"
     );
-    let snapshot = manager.snapshot(&ClipboardCaller::for_test());
+    let snapshot = manager.snapshot(&LocalWindowProof::verified_local_window());
     assert_eq!(snapshot.source_app_visuals.len(), 1);
     assert_eq!(
       snapshot.items[0]
@@ -4599,7 +4620,7 @@ mod tests {
       icon_data_url: Some("data:image/png;base64,REVG".to_string()),
       key: "https://example.org".to_string(),
     }));
-    let snapshot = manager.snapshot(&ClipboardCaller::for_test());
+    let snapshot = manager.snapshot(&LocalWindowProof::verified_local_window());
     assert_eq!(
       snapshot.items[0]
         .source_app()
@@ -4809,7 +4830,7 @@ mod tests {
   fn failed_image_capture_explicitly_continues_with_text() {
     assert!(matches!(
       resolve_clipboard_image_capture(Err("malformed image".to_string())),
-      ClipboardImageCaptureAttempt::ContinueWithText { .. }
+      ClipboardImageCaptureAttempt::ContinueWithText
     ));
   }
 
@@ -4840,7 +4861,7 @@ mod tests {
     let read = {
       let manager = state.lock().unwrap();
       manager
-        .image_preview("image", &ClipboardCaller::for_test())
+        .image_preview("image", &LocalWindowProof::verified_local_window())
         .unwrap()
     };
 
@@ -4929,7 +4950,11 @@ mod tests {
       malformed,
     ];
 
-    assert!(retain_valid_images(&mut items, &store));
+    assert!(retain_valid_images(
+      &mut items,
+      &store,
+      &TestHistoryObserver
+    ));
     assert_eq!(
       items.iter().map(ClipboardItem::id).collect::<Vec<_>>(),
       ["text", "formatted", "valid", "valid-duplicate"]
@@ -4981,7 +5006,11 @@ mod tests {
       image.len(),
     )];
 
-    assert!(!retain_valid_images(&mut items, &store));
+    assert!(!retain_valid_images(
+      &mut items,
+      &store,
+      &TestHistoryObserver
+    ));
     assert_eq!(
       items.iter().map(ClipboardItem::id).collect::<Vec<_>>(),
       ["image"]
@@ -5002,7 +5031,11 @@ mod tests {
       image.len(),
     )];
 
-    assert!(retain_valid_images(&mut items, &store));
+    assert!(retain_valid_images(
+      &mut items,
+      &store,
+      &TestHistoryObserver
+    ));
     assert!(items.is_empty());
     ClipboardStore::remove(&store_path).unwrap();
   }
@@ -5045,15 +5078,17 @@ mod tests {
       BTreeSet::from([blob_id.clone()])
     );
     assert_eq!(
-      manager.snapshot(&ClipboardCaller::for_test()).persistence,
+      manager
+        .snapshot(&LocalWindowProof::verified_local_window())
+        .persistence,
       ClipboardPersistenceStatus::Encrypted {
         image_cleanup: ClipboardImageCleanupStatus::PendingRetry,
       }
     );
 
     std::fs::remove_dir(&image_path).unwrap();
-    let mut restarted = ClipboardManager::new();
-    restarted.install(ClipboardLoad::Encrypted {
+    let mut restarted = ClipboardManager::new(Arc::new(TestHistoryObserver));
+    restarted.install(LoadedHistory::Encrypted {
       image_discovery_status: ClipboardImageCleanupStatus::Idle,
       store: store.clone(),
       state: Some(pending_state),
@@ -5071,7 +5106,9 @@ mod tests {
         .is_empty()
     );
     assert_eq!(
-      restarted.snapshot(&ClipboardCaller::for_test()).persistence,
+      restarted
+        .snapshot(&LocalWindowProof::verified_local_window())
+        .persistence,
       ClipboardPersistenceStatus::Encrypted {
         image_cleanup: ClipboardImageCleanupStatus::Idle,
       }
@@ -5276,7 +5313,9 @@ mod tests {
         .is_err()
     );
     assert_eq!(
-      manager.snapshot(&ClipboardCaller::for_test()).persistence,
+      manager
+        .snapshot(&LocalWindowProof::verified_local_window())
+        .persistence,
       ClipboardPersistenceStatus::Encrypted {
         image_cleanup: ClipboardImageCleanupStatus::PendingRetry,
       }
@@ -5296,7 +5335,9 @@ mod tests {
 
     assert!(manager.prune_expired(Utc::now()).unwrap());
     assert_eq!(
-      manager.snapshot(&ClipboardCaller::for_test()).persistence,
+      manager
+        .snapshot(&LocalWindowProof::verified_local_window())
+        .persistence,
       ClipboardPersistenceStatus::Encrypted {
         image_cleanup: ClipboardImageCleanupStatus::Idle,
       }
@@ -5841,8 +5882,8 @@ mod tests {
   #[test]
   fn source_app_visuals_survive_a_restart() {
     let store_path = unique_store_path();
-    let mut manager = ClipboardManager::new();
-    manager.install(ClipboardLoad::Encrypted {
+    let mut manager = ClipboardManager::new(Arc::new(TestHistoryObserver));
+    manager.install(LoadedHistory::Encrypted {
       image_discovery_status: ClipboardImageCleanupStatus::Idle,
       store: ClipboardStore::new([9; 32], store_path.clone()),
       state: None,
@@ -5854,14 +5895,14 @@ mod tests {
 
     let store = ClipboardStore::new([9; 32], store_path.clone());
     let state = store.load().unwrap().unwrap();
-    let mut restarted = ClipboardManager::new();
-    restarted.install(ClipboardLoad::Encrypted {
+    let mut restarted = ClipboardManager::new(Arc::new(TestHistoryObserver));
+    restarted.install(LoadedHistory::Encrypted {
       image_discovery_status: ClipboardImageCleanupStatus::Idle,
       store,
       state: Some(state),
     });
 
-    let snapshot = restarted.snapshot(&ClipboardCaller::for_test());
+    let snapshot = restarted.snapshot(&LocalWindowProof::verified_local_window());
     assert_eq!(snapshot.source_app_visuals.len(), 1);
     assert_eq!(snapshot.source_app_visuals[0].key, "com.example.editor");
     assert_eq!(
@@ -5875,8 +5916,8 @@ mod tests {
   #[test]
   fn unreferenced_source_app_visuals_are_not_persisted() {
     let store_path = unique_store_path();
-    let mut manager = ClipboardManager::new();
-    manager.install(ClipboardLoad::Encrypted {
+    let mut manager = ClipboardManager::new(Arc::new(TestHistoryObserver));
+    manager.install(LoadedHistory::Encrypted {
       image_discovery_status: ClipboardImageCleanupStatus::Idle,
       store: ClipboardStore::new([9; 32], store_path.clone()),
       state: None,
@@ -5902,8 +5943,8 @@ mod tests {
 
   #[test]
   fn install_drops_source_app_visuals_without_a_backing_item() {
-    let mut manager = ClipboardManager::new();
-    manager.install(ClipboardLoad::Encrypted {
+    let mut manager = ClipboardManager::new(Arc::new(TestHistoryObserver));
+    manager.install(LoadedHistory::Encrypted {
       image_discovery_status: ClipboardImageCleanupStatus::Idle,
       store: ClipboardStore::new([9; 32], unique_store_path()),
       state: Some(PersistedClipboardState {
@@ -5957,7 +5998,7 @@ mod tests {
 
   #[test]
   fn frontend_retention_contract_matches_native_values() {
-    let source = include_str!("../../src/clipboard/clipboard-types.ts");
+    let source = include_str!("../../../../src/clipboard/clipboard-types.ts");
     let list_prefix = "export const CLIPBOARD_RETENTIONS = ";
     let list_start = source
       .find(list_prefix)
@@ -6013,7 +6054,7 @@ mod tests {
       }),
     };
 
-    let value = serde_json::to_value(item).unwrap();
+    let value = serde_json::to_value(wire::WireClipboardItem::from(&item)).unwrap();
 
     assert_eq!(value["type"], "formattedText");
     assert!(value.get("rtf").is_none());
@@ -6032,7 +6073,7 @@ mod tests {
   fn image_json_contains_metadata_but_never_payload_bytes() {
     let item = image_item("image-item", "blob-item", "checksum-item", 4);
 
-    let value = serde_json::to_value(&item).unwrap();
+    let value = serde_json::to_value(wire::WireClipboardItem::from(&item)).unwrap();
 
     assert_eq!(value["type"], "image");
     assert_eq!(value["blobId"], "blob-item");
@@ -6043,7 +6084,8 @@ mod tests {
     assert!(value.get("image").is_none());
     assert!(value.get("preview").is_none());
 
-    let webview = serde_json::to_value(item.for_webview()).unwrap();
+    let webview =
+      serde_json::to_value(wire::WireClipboardItem::from(&item.for_webview())).unwrap();
     assert_eq!(webview["type"], "image");
     assert_eq!(webview["byteSize"], 4);
     assert_eq!(webview["width"], 3);
@@ -6313,12 +6355,15 @@ mod tests {
     assert!(manager.set_item_group(&grouped_id, None).unwrap());
     assert!(!manager.prune_expired(Utc::now()).unwrap());
 
-    let persisted = serde_json::to_value(&manager.items[0]).unwrap();
+    let persisted =
+      serde_json::to_value(wire::WireClipboardItem::from(&manager.items[0])).unwrap();
     assert_eq!(persisted["retentionClass"], "kept");
     let restored: ClipboardItem = serde_json::from_value(persisted).unwrap();
     assert!(restored.is_organised());
 
-    let webview = serde_json::to_value(restored.for_webview()).unwrap();
+    let webview =
+      serde_json::to_value(wire::WireClipboardItem::from(&restored.for_webview()))
+        .unwrap();
     assert!(webview.get("retentionClass").is_none());
   }
 
@@ -6436,9 +6481,10 @@ mod tests {
         .is_err()
     );
 
-    let snapshot = manager.snapshot(&ClipboardCaller::for_test());
+    let snapshot = manager.snapshot(&LocalWindowProof::verified_local_window());
     assert_eq!(snapshot.group_limit, MAX_GROUPS);
-    let snapshot_json = serde_json::to_value(snapshot).unwrap();
+    let snapshot_json =
+      serde_json::to_value(wire::WireClipboardSnapshot::from(&snapshot)).unwrap();
     assert_eq!(snapshot_json["groupLimit"], MAX_GROUPS);
 
     let persisted = PersistedClipboardState {
@@ -6450,7 +6496,9 @@ mod tests {
       source_app_exclusions: manager.source_app_exclusions.clone(),
       source_app_visuals: Vec::new(),
     };
-    let persisted_json = serde_json::to_value(persisted).unwrap();
+    let persisted_json =
+      serde_json::to_value(wire::WirePersistedClipboardState::from(&persisted))
+        .unwrap();
     assert!(persisted_json.get("groupLimit").is_none());
 
     let mut manager = ready_manager();
@@ -6499,7 +6547,10 @@ mod tests {
     .unwrap();
 
     assert_eq!(group.color, ClipboardGroupColor::default());
-    assert_eq!(serde_json::to_value(group).unwrap()["color"], "#a3a3a3");
+    assert_eq!(
+      serde_json::to_value(wire::WireClipboardGroup::from(&group)).unwrap()["color"],
+      "#a3a3a3"
+    );
   }
 
   #[test]
@@ -6520,7 +6571,8 @@ mod tests {
       id: "group-1".to_string(),
       name: "Research".to_string(),
     };
-    let persisted = serde_json::to_value(&group).unwrap();
+    let persisted =
+      serde_json::to_value(wire::WireClipboardGroup::from(&group)).unwrap();
 
     assert_eq!(persisted["color"], "#a78bfa");
     assert_eq!(
@@ -6642,10 +6694,14 @@ mod tests {
     assert!(capture_with_rtf(&mut manager, Some("<b>Clause</b>")));
 
     assert_eq!(manager.items[0].rtf(), Some(WORD_RTF));
-    let persisted = serde_json::to_value(&manager.items[0]).unwrap();
+    let persisted =
+      serde_json::to_value(wire::WireClipboardItem::from(&manager.items[0])).unwrap();
     assert_eq!(persisted["rtf"], WORD_RTF);
     assert_eq!(
-      manager.snapshot(&ClipboardCaller::for_test()).items[0].rtf(),
+      manager
+        .snapshot(&LocalWindowProof::verified_local_window())
+        .items[0]
+        .rtf(),
       None
     );
     let item_id = manager.items[0].id().to_string();
@@ -6695,5 +6751,264 @@ mod tests {
     assert!(capture_with_rtf(&mut manager, Some("<b>Clause</b>")));
     assert_eq!(manager.items.len(), 1);
     assert_eq!(manager.items[0].rtf(), Some(WORD_RTF));
+  }
+
+  macro_rules! assert_not_impl_any {
+    ($type:ty: $($trait:path),+ $(,)?) => {
+      const _: fn() = || {
+        trait AmbiguousIfImplemented<A> { fn marker() {} }
+        impl<T: ?Sized> AmbiguousIfImplemented<()> for T {}
+        $(
+          {
+            struct Implemented;
+            impl<T: ?Sized + $trait> AmbiguousIfImplemented<Implemented> for T {}
+            let _ = <$type as AmbiguousIfImplemented<_>>::marker;
+          }
+        )+
+      };
+    };
+  }
+
+  assert_not_impl_any!(ClipboardItem: serde::Serialize, std::fmt::Display);
+  assert_not_impl_any!(ClipboardSourceApp: serde::Serialize, std::fmt::Display);
+  assert_not_impl_any!(ClipboardSourcePage: serde::Serialize, std::fmt::Display);
+  assert_not_impl_any!(ClipboardSourceAppVisual: serde::Serialize, std::fmt::Display);
+  assert_not_impl_any!(ClipboardSourceAppExclusion: serde::Serialize, std::fmt::Display);
+  assert_not_impl_any!(ClipboardGroup: serde::Serialize, std::fmt::Display);
+  assert_not_impl_any!(ClipboardSnapshot: serde::Serialize, std::fmt::Display);
+  assert_not_impl_any!(PersistedClipboardState: serde::Serialize, std::fmt::Display);
+
+  #[test]
+  fn content_debug_redacts_every_variant_and_content_field() {
+    let copied_at = DateTime::parse_from_rfc3339("2037-03-04T05:06:07Z")
+      .unwrap()
+      .with_timezone(&Utc);
+    let grouped_at = Some(copied_at + Duration::seconds(1));
+    let page = ClipboardSourcePage {
+      host: "secret:page-host".to_string(),
+      origin: "secret:page-origin".to_string(),
+      url: "secret:page-url".to_string(),
+    };
+    let source = ClipboardSourceApp {
+      identifier: Some("secret:app-identifier".to_string()),
+      name: "secret:app-name".to_string(),
+      page: Some(page.clone()),
+      visual_key: Some("secret:visual-key".to_string()),
+    };
+    let visual = ClipboardSourceAppVisual {
+      color: Some("secret:visual-color".to_string()),
+      icon_data_url: Some("secret:icon-data-url".to_string()),
+      key: "secret:visual-map-key".to_string(),
+    };
+    let exclusion = ClipboardSourceAppExclusion {
+      identifier: "secret:exclusion-identifier".to_string(),
+      name: "secret:exclusion-name".to_string(),
+    };
+    let group = ClipboardGroup {
+      color: ClipboardGroupColor::parse("#a1b2c3").unwrap(),
+      id: "group-id".to_string(),
+      name: "secret:group-name".to_string(),
+    };
+    let image: Arc<[u8]> = b"secret:full-image".to_vec().into();
+    let preview: Arc<[u8]> = b"secret:image-preview".to_vec().into();
+    let items = vec![
+      ClipboardItem::Text {
+        copied_at,
+        group_id: Some("secret:text-group".to_string()),
+        grouped_at,
+        id: "text-id".to_string(),
+        name: Some("secret:text-name".to_string()),
+        plain_text: "secret:plain-text".to_string(),
+        retention_class: ClipboardItemRetentionClass::Kept,
+        source_app: Some(source.clone()),
+      },
+      ClipboardItem::FormattedText {
+        copied_at,
+        group_id: Some("secret:formatted-group".to_string()),
+        grouped_at,
+        html: "secret:html".to_string(),
+        id: "formatted-id".to_string(),
+        name: Some("secret:formatted-name".to_string()),
+        plain_text: "secret:formatted-plain-text".to_string(),
+        retention_class: ClipboardItemRetentionClass::Kept,
+        rtf: Some("secret:rtf".to_string()),
+        source_app: Some(source.clone()),
+      },
+      ClipboardItem::Image {
+        blob_id: "secret:blob-id".to_string(),
+        byte_size: 234567,
+        checksum: "secret:checksum".to_string(),
+        copied_at,
+        group_id: Some("secret:image-group".to_string()),
+        grouped_at,
+        height: 345678,
+        id: "image-id".to_string(),
+        image: Some(Arc::clone(&image)),
+        name: Some("secret:image-name".to_string()),
+        preview: Some(Arc::clone(&preview)),
+        retention_class: ClipboardItemRetentionClass::Kept,
+        source_app: Some(source.clone()),
+        width: 456789,
+      },
+    ];
+    let state = PersistedClipboardState {
+      capture_status: ClipboardCaptureStatus::Active,
+      groups: vec![group.clone()],
+      items: items.clone(),
+      pending_image_blob_ids: BTreeSet::from(["secret:pending-blob".to_string()]),
+      retention: ClipboardRetention::Month,
+      source_app_exclusions: vec![exclusion.clone()],
+      source_app_visuals: vec![visual.clone()],
+    };
+    let snapshot = ClipboardSnapshot {
+      capture_status: ClipboardCaptureStatus::Active,
+      group_limit: MAX_GROUPS,
+      groups: vec![group.clone()],
+      items: items.clone(),
+      persistence: ClipboardPersistenceStatus::MemoryOnly,
+      retention: ClipboardRetention::Month,
+      screen_capture: ClipboardScreenCapture::Hidden,
+      source_app_exclusion_limit: MAX_CAPTURE_EXCLUSIONS,
+      source_app_exclusions: vec![exclusion.clone()],
+      source_app_visuals: vec![visual.clone()],
+      welcome_status: ClipboardWelcomeStatus::Pending,
+    };
+    let outputs = [
+      format!("{:?}", items[0]),
+      format!("{:?}", items[1]),
+      format!("{:?}", items[2]),
+      format!("{source:?}"),
+      format!("{page:?}"),
+      format!("{visual:?}"),
+      format!("{exclusion:?}"),
+      format!("{group:?}"),
+      format!("{state:?}"),
+      format!("{snapshot:?}"),
+    ];
+    for output in &outputs {
+      for marker in [
+        "secret:",
+        "2037-03-04",
+        "234567",
+        "345678",
+        "456789",
+        "#a1b2c3",
+      ] {
+        assert!(!output.contains(marker), "content escaped Debug: {output}");
+      }
+      assert!(!output.contains(&format!("{image:?}")));
+      assert!(!output.contains(&format!("{preview:?}")));
+    }
+    assert_eq!(outputs[0], "ClipboardItem::Text { id: \"text-id\", .. }");
+    assert_eq!(
+      outputs[1],
+      "ClipboardItem::FormattedText { id: \"formatted-id\", .. }"
+    );
+    assert_eq!(outputs[2], "ClipboardItem::Image { id: \"image-id\", .. }");
+  }
+
+  #[test]
+  fn verified_webview_payloads_preserve_snapshot_editor_and_preview_contracts() {
+    let mut manager = ready_manager();
+    let copied_at = DateTime::parse_from_rfc3339("2037-03-04T05:06:07Z")
+      .unwrap()
+      .with_timezone(&Utc);
+    let source = ClipboardSourceApp {
+      identifier: Some("com.example.editor".to_string()),
+      name: "Editor".to_string(),
+      page: None,
+      visual_key: None,
+    };
+    manager.items.push(ClipboardItem::FormattedText {
+      copied_at,
+      group_id: None,
+      grouped_at: None,
+      html: "<b>draft</b>".to_string(),
+      id: "formatted".to_string(),
+      name: Some("Draft".to_string()),
+      plain_text: "draft".to_string(),
+      retention_class: ClipboardItemRetentionClass::Kept,
+      rtf: Some("private-rtf".to_string()),
+      source_app: Some(source),
+    });
+    manager.groups.push(ClipboardGroup {
+      color: ClipboardGroupColor::default(),
+      id: "group".to_string(),
+      name: "Drafts".to_string(),
+    });
+    manager.remember_source_app_visual(Some(ClipboardSourceAppVisual {
+      color: Some("#123456".to_string()),
+      icon_data_url: Some("data:image/png;base64,AA==".to_string()),
+      key: "com.example.editor".to_string(),
+    }));
+    let mut image = image_item("image", "private-blob-id", "private-checksum", 4);
+    let ClipboardItem::Image { preview, .. } = &mut image else {
+      panic!("image fixture");
+    };
+    *preview = Some(b"preview".to_vec().into());
+    manager.items.push(image);
+    let proof = LocalWindowProof::verified_local_window();
+    let snapshot = manager.snapshot(&proof);
+    let expected =
+      serde_json::to_value(wire::WireClipboardSnapshot::from(&snapshot)).unwrap();
+    let actual: serde_json::Value = serde_json::from_slice(
+      &manager.webview_snapshot(&proof).unwrap().into_ipc_body(),
+    )
+    .unwrap();
+    assert_eq!(actual, expected);
+    assert_eq!(manager.snapshot_counts(), (2, snapshot.history_bytes()));
+    assert!(actual["items"][0].get("rtf").is_none());
+    assert!(actual["items"][0].get("retentionClass").is_none());
+    assert_eq!(
+      actual["items"][0]["sourceApp"]["visualKey"],
+      "com.example.editor"
+    );
+    assert!(actual["items"][1].get("blobId").is_none());
+    assert!(actual["items"][1].get("checksum").is_none());
+    let editor: serde_json::Value = serde_json::from_slice(
+      &manager
+        .webview_item_context("formatted", &proof)
+        .unwrap()
+        .into_ipc_body(),
+    )
+    .unwrap();
+    assert_eq!(
+      editor,
+      serde_json::json!({
+        "groupLimit": MAX_GROUPS,
+        "groups": actual["groups"],
+        "item": actual["items"][0],
+        "sourceAppVisual": actual["sourceAppVisuals"][0],
+      })
+    );
+    let preview: String = serde_json::from_slice(
+      &manager
+        .webview_image_preview("image", &proof)
+        .unwrap()
+        .into_ipc_body(),
+    )
+    .unwrap();
+    assert_eq!(preview, "data:image/png;base64,cHJldmlldw==");
+    assert!(
+      matches!(manager.webview_item_context("missing", &proof), Err(error) if error == "clipboard item no longer exists")
+    );
+    assert!(
+      matches!(manager.webview_image_preview("formatted", &proof), Err(error) if error == "clipboard item is not an image")
+    );
+  }
+
+  #[test]
+  fn staged_copy_keeps_content_inside_opaque_handles() {
+    let mut manager = ready_manager();
+    manager
+      .items
+      .push(image_item("image", "blob", "checksum", 4));
+    let prepared = manager.prepare_copy("image").unwrap();
+    let loaded = prepared.load().unwrap();
+    assert_eq!(loaded.item.id(), "image");
+    assert_eq!(loaded.image.as_deref(), Some(&[0x89, 0x50, 0x4e, 0x47][..]));
+    assert!(
+      matches!(manager.prepare_copy("missing"), Err(error) if error == "clipboard item no longer exists")
+    );
   }
 }

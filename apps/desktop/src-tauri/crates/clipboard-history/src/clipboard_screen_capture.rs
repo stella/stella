@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::marker_file::MarkerFile;
+use stella_desktop_local_store::marker_file::MarkerFile;
 
 const SCREEN_CAPTURE_MARKER_FILE_NAME: &str = "clipboard-screen-capture-visible-v1";
 

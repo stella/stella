@@ -4760,15 +4760,11 @@ checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 name = "stella-desktop"
 version = "0.0.1"
 dependencies = [
- "aes-gcm",
- "ammonia",
  "apple-native-keyring-store",
  "axum",
  "base64 0.23.1",
  "chrono",
- "clipboard-rs",
  "clipboard-win",
- "csscolorparser",
  "dirs 7.0.0",
  "futures-util",
  "hex",
@@ -4787,6 +4783,8 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.11.0",
+ "stella-desktop-clipboard-history",
+ "stella-desktop-local-store",
  "stella-desktop-macos",
  "stella-desktop-macos-signing",
  "stella-desktop-signing-core",
@@ -4815,6 +4813,43 @@ dependencies = [
  "zbus-secret-service-keyring-store",
  "zeroize",
  "zip 8.6.0",
+]
+
+[[package]]
+name = "stella-desktop-clipboard-history"
+version = "0.0.1"
+dependencies = [
+ "aes-gcm",
+ "ammonia",
+ "base64 0.23.1",
+ "chrono",
+ "clipboard-rs",
+ "clipboard-win",
+ "csscolorparser",
+ "dirs 7.0.0",
+ "hex",
+ "image",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "stella-desktop-local-store",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "stella-desktop-local-store"
+version = "0.0.1"
+dependencies = [
+ "aes-gcm",
+ "dirs 7.0.0",
+ "hex",
+ "serde",
+ "serde_json",
+ "uuid",
 ]
 
 [[package]]

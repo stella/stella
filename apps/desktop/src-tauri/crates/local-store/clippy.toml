@@ -1,0 +1,20 @@
+disallowed-types = [
+  { path = "std::net::TcpStream", reason = "local history has no network or process path" },
+  { path = "std::net::TcpListener", reason = "local history has no network or process path" },
+  { path = "std::net::UdpSocket", reason = "local history has no network or process path" },
+  { path = "std::net::ToSocketAddrs", reason = "local history has no network or process path" },
+  { path = "std::net::SocketAddr", reason = "local history has no network or process path" },
+  { path = "std::net::SocketAddrV4", reason = "local history has no network or process path" },
+  { path = "std::net::SocketAddrV6", reason = "local history has no network or process path" },
+  { path = "std::net::IpAddr", reason = "local history has no network or process path" },
+  { path = "std::net::Ipv4Addr", reason = "local history has no network or process path" },
+  { path = "std::net::Ipv6Addr", reason = "local history has no network or process path" },
+  { path = "std::net::Incoming", reason = "local history has no network or process path" },
+  { path = "std::net::Shutdown", reason = "local history has no network or process path" },
+  { path = "std::net::AddrParseError", reason = "local history has no network or process path" },
+  { path = "std::process::Command", reason = "local history has no network or process path" },
+]
+disallowed-methods = [
+  { path = "opener::open", reason = "local history has no external opener path" },
+  { path = "opener::reveal", reason = "local history has no external opener path" },
+]

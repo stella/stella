@@ -6,6 +6,7 @@ import {
   LOCAL_ONLY_FEATURES,
   LOCAL_ONLY_GATE_MODULES,
   LOCAL_ONLY_SHARED_MODULES,
+  LOCAL_ONLY_SHARED_DIRECTORIES,
   isFeatureModule,
 } from "./local-only-features";
 
@@ -18,6 +19,22 @@ const readNative = async (file: string) =>
 
 const nativeFiles = async () =>
   (await readdir(NATIVE_SOURCE)).filter((file) => file.endsWith(".rs"));
+
+const directoryFiles = async (directory: string): Promise<string[]> => {
+  const entries = await readdir(path.join(NATIVE_SOURCE, directory), {
+    withFileTypes: true,
+  });
+  const nested = await Promise.all(
+    entries.map(async (entry) => {
+      const file = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        return directoryFiles(file);
+      }
+      return entry.name.endsWith(".rs") ? [file] : [];
+    }),
+  );
+  return nested.flat();
+};
 
 const expectNoNetwork = (file: string, source: string) => {
   // URL parsing is local; the rest of reqwest is outside this boundary.
@@ -69,6 +86,9 @@ describe("local-only network boundary", () => {
           isFeatureModule(feature, file),
         ),
         ...feature.nativeModules.map(({ file }) => file),
+        ...(
+          await Promise.all(feature.nativeDirectories.map(directoryFiles))
+        ).flat(),
       ];
       expect(files.length).toBeGreaterThan(0);
       for (const file of files) {
@@ -82,10 +102,44 @@ describe("local-only network boundary", () => {
   );
 
   test("the shared local-only machinery has no network code", async () => {
-    const files = await nativeFiles();
-    for (const file of LOCAL_ONLY_SHARED_MODULES) {
-      expect(files).toContain(file);
+    const files = [
+      ...LOCAL_ONLY_SHARED_MODULES,
+      ...(
+        await Promise.all(LOCAL_ONLY_SHARED_DIRECTORIES.map(directoryFiles))
+      ).flat(),
+    ];
+    for (const file of files) {
       expectNoNetwork(file, await readNative(file));
+    }
+  });
+
+  test("local history crates deny network primitives and keep IPC consumption in its owner", async () => {
+    for (const crate of ["clipboard-history", "local-store"]) {
+      const clippy = await readNative(`../crates/${crate}/clippy.toml`);
+      for (const primitive of [
+        "std::net::TcpStream",
+        "std::net::TcpListener",
+        "std::net::UdpSocket",
+        "std::process::Command",
+        "opener::open",
+      ]) {
+        expect(clippy, crate).toContain(`path = "${primitive}"`);
+      }
+      const manifest = await readNative(`../crates/${crate}/Cargo.toml`);
+      expect(manifest, crate).toContain('disallowed_methods = "deny"');
+      expect(manifest, crate).toContain('disallowed_types = "deny"');
+    }
+    const clippy = await readNative("../clippy.toml");
+    expect(clippy).toContain("LocalWindowProof::verified_local_window");
+    expect(clippy).toContain("WebviewPayload::into_ipc_body");
+    for (const file of await nativeFiles()) {
+      const source = await readNative(file);
+      if (file !== "local_window.rs") {
+        expect(source, file).not.toContain("verified_local_window(");
+      }
+      if (file !== "clipboard_commands.rs") {
+        expect(source, file).not.toContain("into_ipc_body(");
+      }
     }
   });
 
@@ -113,6 +167,9 @@ describe("local-only network boundary", () => {
           isFeatureModule(feature, name),
         ),
         ...feature.nativeModules.map(({ file }) => file),
+        ...(
+          await Promise.all(feature.nativeDirectories.map(directoryFiles))
+        ).flat(),
       ];
       expect(featureFiles.length).toBeGreaterThan(0);
       for (const file of featureFiles) {

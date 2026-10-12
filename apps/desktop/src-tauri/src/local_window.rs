@@ -7,6 +7,7 @@
 //! capability grants it the command.
 
 use std::marker::PhantomData;
+use stella_desktop_clipboard_history::boundary::LocalWindowProof;
 use tauri::{
   AppHandle, Manager, Runtime,
   ipc::{CommandArg, CommandItem, InvokeError},
@@ -97,6 +98,16 @@ impl LocalWindowFeature for ClipboardWindows {
     crate::clipboard_window::CLIPBOARD_EDITOR_WINDOW_LABEL,
   ];
   const REFUSAL: &'static str = "clipboard history is not available here";
+}
+
+impl LocalCaller<ClipboardWindows> {
+  #[allow(
+    clippy::disallowed_methods,
+    reason = "only the verified clipboard caller mints the history webview proof"
+  )]
+  pub(crate) fn history_proof(&self) -> LocalWindowProof {
+    LocalWindowProof::verified_local_window()
+  }
 }
 
 pub type ClipboardCaller = LocalCaller<ClipboardWindows>;

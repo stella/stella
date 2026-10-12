@@ -8,18 +8,9 @@ mod app_lifecycle;
 mod app_window;
 mod autostart;
 mod bridge;
-#[path = "../crates/clipboard-history/src/clipboard.rs"]
 mod clipboard;
 mod clipboard_commands;
-#[cfg(target_os = "macos")]
-#[path = "../crates/clipboard-history/src/clipboard_image_export.rs"]
-mod clipboard_image_export;
-#[path = "../crates/clipboard-history/src/clipboard_screen_capture.rs"]
 mod clipboard_screen_capture;
-#[path = "../crates/clipboard-history/src/clipboard_store.rs"]
-mod clipboard_store;
-#[path = "../crates/clipboard-history/src/clipboard_welcome.rs"]
-mod clipboard_welcome;
 mod clipboard_window;
 mod commands;
 mod config;
@@ -87,7 +78,6 @@ pub fn run() {
 
   let manager = Arc::new(Mutex::new(SessionManager::new()));
   let account = Arc::new(Mutex::new(account::AccountStore::default()));
-  let clipboard_manager = Arc::new(std::sync::Mutex::new(ClipboardManager::new()));
   let activity_manager: activity::ActivityAppState =
     Arc::new(std::sync::Mutex::new(activity::ActivityManager::new()));
   let launch_args = std::env::args().collect::<Vec<_>>();
@@ -135,7 +125,6 @@ pub fn run() {
     .plugin(tauri_plugin_updater::Builder::new().build())
     .manage::<AppState>(Arc::clone(&manager))
     .manage::<account::AccountState>(Arc::clone(&account))
-    .manage::<ClipboardAppState>(Arc::clone(&clipboard_manager))
     .manage::<ClipboardEditorState>(Arc::new(std::sync::Mutex::new(None)))
     .manage(clipboard_window::ClipboardStartupTrace::default())
     .manage(feature_gate::FeatureGates::default())
@@ -144,6 +133,10 @@ pub fn run() {
     .manage(desktop_telemetry.clone())
     .setup(move |app| {
       let handle = app.handle().clone();
+      let clipboard_manager = Arc::new(std::sync::Mutex::new(ClipboardManager::new(
+        clipboard::history_observer(handle.clone(), desktop_telemetry.clone()),
+      )));
+      app.manage::<ClipboardAppState>(Arc::clone(&clipboard_manager));
       #[cfg(target_os = "macos")]
       if let Ok(mut clipboard) = clipboard_manager.lock()
         && let Err(error) = clipboard.reconcile_image_exports()

@@ -10,10 +10,7 @@ pub const PRODUCTION_WEB_ORIGIN: &str = "https://my.stll.app";
 // Development builds must never claim production's persisted data or Keychain
 // ACLs. A locally signed binary otherwise makes the next release build look
 // like a new accessor and macOS presents an alarming credential prompt.
-#[cfg(debug_assertions)]
-pub const APP_DATA_DIR_NAME: &str = "legal.stella.desktop.development";
-#[cfg(not(debug_assertions))]
-pub const APP_DATA_DIR_NAME: &str = "legal.stella.desktop";
+pub use stella_desktop_local_store::APP_DATA_DIR_NAME;
 
 #[cfg(debug_assertions)]
 pub const KEYCHAIN_SERVICE_NAME: &str = "stella-desktop-development";

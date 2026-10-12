@@ -1,0 +1,61 @@
+[package]
+name = "stella-desktop-clipboard-history"
+version = "0.0.1"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+disallowed_methods = "deny"
+disallowed_types = "deny"
+
+[dependencies]
+aes-gcm = "0.11"
+ammonia = "4"
+base64 = "0.23"
+chrono = { version = "0.4", features = ["serde"] }
+clipboard-rs = { version = "0.3.5", default-features = false, features = [
+  "image",
+] }
+csscolorparser = "=0.9.0"
+dirs = "7"
+hex = "0.4"
+image = { version = "0.25", default-features = false, features = [
+  "bmp",
+  "gif",
+  "ico",
+  "jpeg",
+  "png",
+  "tiff",
+  "webp",
+] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.11"
+uuid = { version = "1", features = ["v4"] }
+stella-desktop-local-store = { path = "../local-store", version = "0.0.1" }
+url = "2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+  "NSApplication",
+  "NSEvent",
+  "NSPasteboard",
+  "NSRunningApplication",
+  "NSScreen",
+  "NSWorkspace",
+  "libc",
+] }
+objc2-foundation = { version = "0.3", default-features = false, features = [
+  "NSData",
+  "NSGeometry",
+  "NSString",
+  "NSURL",
+] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+clipboard-win = "5.4.1"

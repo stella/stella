@@ -48,6 +48,7 @@ unsafe_code = "forbid"
 [workspace]
 members = [
   "crates/local-store",
+  "crates/clipboard-history",
   "crates/macos-park",
   "crates/macos-signing",
   "crates/signing-core",
@@ -70,6 +71,7 @@ incremental = false
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+stella-desktop-clipboard-history = { path = "crates/clipboard-history", version = "0.0.1" }
 stella-desktop-local-store = { path = "crates/local-store", version = "0.0.1" }
 tauri = { version = "2", features = [
   "macos-private-api",
@@ -86,14 +88,12 @@ tauri-plugin-process = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 tauri-plugin-updater = "2"
 axum = "0.8"
-aes-gcm = "0.11"
-ammonia = "4"
+
+
 base64 = "0.23"
 chrono = { version = "0.4", features = ["serde"] }
-clipboard-rs = { version = "0.3.5", default-features = false, features = [
-  "image",
-] }
-csscolorparser = "=0.9.0"
+
+
 dirs = "7"
 futures-util = "0.3"
 hex = "0.4"

@@ -5,9 +5,11 @@ use std::{
   path::{Path, PathBuf},
 };
 
-use reqwest::Url;
+use crate::boundary::{HistoryErrorCode, HistoryObserver};
+use std::sync::Arc;
+use url::Url;
 
-use crate::config::APP_DATA_DIR_NAME;
+use stella_desktop_local_store::APP_DATA_DIR_NAME;
 
 const EXPORT_SLOTS: [&str; 2] = ["0", "1"];
 const EXPORT_FILENAME: &str = "image.png";
@@ -16,13 +18,15 @@ const EXPORT_FILENAME: &str = "image.png";
 /// replacement preserve the current clipboard file without growing a cache.
 /// This state is never included in encrypted history or its checkpoints.
 pub(crate) struct ClipboardImageExports {
+  observer: Arc<dyn HistoryObserver>,
   directory: Option<PathBuf>,
   active: Option<usize>,
 }
 
 impl ClipboardImageExports {
-  pub(crate) fn new() -> Self {
+  pub(crate) fn new(observer: Arc<dyn HistoryObserver>) -> Self {
     Self {
+      observer,
       directory: dirs::cache_dir()
         .map(|root| root.join(APP_DATA_DIR_NAME).join("clipboard-export")),
       active: None,
@@ -61,8 +65,8 @@ impl ClipboardImageExports {
       publish(&url)
     })();
     if let Err(error) = write {
-      if let Err(cleanup) = remove_export_file(&path) {
-        tracing::warn!(error = %cleanup, "failed clipboard export cleanup will be retried");
+      if let Err(_cleanup) = remove_export_file(&path) {
+        self.observer.error(HistoryErrorCode::PersistenceFailed);
       }
       return Err(error);
     }
@@ -76,8 +80,8 @@ impl ClipboardImageExports {
       }
       Ok(())
     });
-    if let Err(error) = cleanup {
-      tracing::warn!(error = %error, "previous clipboard export cleanup will be retried");
+    if let Err(_error) = cleanup {
+      self.observer.error(HistoryErrorCode::PersistenceFailed);
     }
     Ok(())
   }
@@ -162,6 +166,7 @@ fn remove_export_file(path: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::boundary::TestHistoryObserver;
   use std::{os::unix::fs::symlink, process::Command};
 
   const CONSTRUCTOR_CHILD_ENV: &str = "STELLA_CLIPBOARD_EXPORT_CONSTRUCTOR_CHILD";
@@ -211,6 +216,7 @@ mod tests {
 
   fn exports_at(root: &Path) -> ClipboardImageExports {
     ClipboardImageExports {
+      observer: Arc::new(TestHistoryObserver),
       directory: Some(root.to_path_buf()),
       active: None,
     }
@@ -238,7 +244,7 @@ mod tests {
         .join(APP_DATA_DIR_NAME)
         .join("clipboard-export");
 
-      let exports = ClipboardImageExports::new();
+      let exports = ClipboardImageExports::new(Arc::new(TestHistoryObserver));
 
       assert_eq!(exports.directory.as_deref(), Some(expected.as_path()));
       assert!(!expected.exists());
@@ -522,6 +528,7 @@ mod tests {
     let active_path = export_path(&root, 1);
     create_private_file(&active_path, b"active");
     let mut exports = ClipboardImageExports {
+      observer: Arc::new(TestHistoryObserver),
       directory: Some(root),
       active: Some(1),
     };

@@ -9,8 +9,10 @@ use std::{
   path::{Path, PathBuf},
 };
 
-use crate::clipboard::PersistedClipboardState;
-use crate::local_store::{EncryptedJsonFile, create_private_dir, write_private_atomic};
+use crate::clipboard::{PersistedClipboardState, wire::WirePersistedClipboardState};
+use stella_desktop_local_store::{
+  EncryptedJsonFile, create_private_dir, write_private_atomic,
+};
 
 const IMAGE_BLOB_VERSION: u8 = 1;
 const IMAGE_BLOB_NONCE_BYTES: usize = 12;
@@ -68,7 +70,10 @@ impl ClipboardStore {
   }
 
   pub fn load(&self) -> Result<Option<PersistedClipboardState>, String> {
-    self.history_file().load()
+    self
+      .history_file()
+      .load::<WirePersistedClipboardState>()
+      .map(|state| state.map(Into::into))
   }
 
   fn image_directory(&self) -> PathBuf {
@@ -397,7 +402,9 @@ impl ClipboardStore {
   }
 
   pub fn persist(&self, state: &PersistedClipboardState) -> Result<(), String> {
-    self.history_file().persist(state)
+    self
+      .history_file()
+      .persist(&WirePersistedClipboardState::from(state))
   }
 }
 

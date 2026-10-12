@@ -5,9 +5,7 @@
 //! JSON envelopes written atomically with owner-only permissions, and a key
 //! that is never re-minted while encrypted data still depends on it.
 
-pub use stella_desktop_local_store::{
-  EncryptedJsonFile, StoreKey, create_private_dir, write_private_atomic,
-};
+pub use stella_desktop_local_store::{EncryptedJsonFile, StoreKey, create_private_dir};
 
 use crate::keychain::{self, LocalDataKey, LocalDataKeyLookup};
 

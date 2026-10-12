@@ -18,6 +18,7 @@ export const LOCAL_ONLY_FEATURES = [
      * never touch telemetry.
      */
     telemetry: "classifications",
+    nativeDirectories: ["../crates/clipboard-history/src"],
     nativeModules: [],
     /** Capability file → the modules `main.tsx` renders in that window. */
     windowModules: {
@@ -41,6 +42,7 @@ export const LOCAL_ONLY_FEATURES = [
     commandPrefix: "activity_",
     id: "activity",
     telemetry: "fixedCodes",
+    nativeDirectories: [],
     nativeModules: [
       { file: "tray.rs", logging: "fixedMessages" },
       { file: "../crates/macos-park/src/focused_window.rs", logging: "none" },
@@ -75,3 +77,7 @@ export const isFeatureModule = (
 ) =>
   file === `${feature.id}.rs` ||
   (file.startsWith(`${feature.id}_`) && file.endsWith(".rs"));
+
+export const LOCAL_ONLY_SHARED_DIRECTORIES = [
+  "../crates/local-store/src",
+] as const;

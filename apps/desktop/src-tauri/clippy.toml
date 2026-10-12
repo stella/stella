@@ -5,6 +5,8 @@
 # are banned everywhere else so a second "which screen" rule cannot appear;
 # the owner carries the only `allow`.
 disallowed-methods = [
+  { path = "stella_desktop_clipboard_history::boundary::LocalWindowProof::verified_local_window", reason = "only local_window verified clipboard callers mint history webview proofs" },
+  { path = "stella_desktop_clipboard_history::boundary::WebviewPayload::into_ipc_body", reason = "only clipboard_commands consumes history content into IPC responses" },
   { path = "tauri::webview::WebviewWindowBuilder::new", reason = "use app_window::builder so every window stays on the app origin" },
   { path = "tauri::webview::WebviewWindowBuilder::from_config", reason = "use app_window::builder so every window stays on the app origin" },
   { path = "tauri::webview::WebviewBuilder::new", reason = "use app_window::builder so every window stays on the app origin" },

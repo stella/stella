@@ -11,7 +11,7 @@ local-only feature follows every rule below and adds one entry to
 
 - **Own encryption key.** Each store has its own keychain account
   (`keychain::LocalDataKey`). Data is written as AES-256-GCM envelopes through
-  `local_store::EncryptedJsonFile`, atomically and readable by the owner only.
+  `stella-desktop-local-store::EncryptedJsonFile`, atomically and readable by the owner only.
   Bind each file to its purpose with associated data when a store has more
   than one file.
 - **Deletion-only on a missing key.** `local_store::resolve_key` never mints a
@@ -124,3 +124,24 @@ and detected private windows suppress that label. Pause and Resume update the
 same account-owned recording state. A local icon dot appears only while
 recording; activity events and a thirty-second refresh keep the menu current.
 Tray source is covered by the local-only network and fixed-code guards.
+
+## Clipboard crate boundary
+
+`stella-desktop-clipboard-history` owns history content, encrypted persistence,
+retention, and native clipboard publication. Both it and
+`stella-desktop-local-store` have a resolved dependency-closure test covering
+normal and build dependencies on every platform, with fixtures checking the
+walker. Their Clippy configuration denies network primitives, process launch,
+and external openers.
+
+History content has redacted Debug output and no Serialize or Display
+implementation. Private wire mirrors encode persistence and IPC. A verified
+clipboard LocalCaller mints LocalWindowProof in local_window; only proof-gated
+history accessors produce opaque WebviewPayload values. Clipboard commands alone
+consume those values into JSON IPC responses. App Clippy bans both operations
+outside their owners.
+
+The app resolves keychain keys, supplies foreground metadata through a scoped
+main-thread runner, and implements content-free change, error-code, and timing
+callbacks. Clipboard availability does not depend on a server decision or
+account binding.

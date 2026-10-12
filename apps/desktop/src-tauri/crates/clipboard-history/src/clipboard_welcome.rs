@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::marker_file::MarkerFile;
+use stella_desktop_local_store::marker_file::MarkerFile;
 
 const WELCOME_MARKER_FILE_NAME: &str = "clipboard-welcome-v1";
 
