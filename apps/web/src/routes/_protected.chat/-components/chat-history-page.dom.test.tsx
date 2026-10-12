@@ -2,12 +2,10 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import {
   afterAll,
   afterEach,
-  beforeEach,
   setDefaultTimeout,
   describe,
   expect,
   jest,
-  setSystemTime,
   test,
 } from "bun:test";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -238,13 +236,7 @@ const serve = (
   );
 };
 
-// Pins "now" for the day grouping and relative times.
-beforeEach(() => {
-  setSystemTime(NOW);
-});
-
 afterEach(() => {
-  setSystemTime();
   testing.cleanup();
   for (const client of clients) {
     client.clear();
@@ -347,7 +339,14 @@ const openHistory = async (initial: ChatHistorySearch = {}) => {
     <AnalyticsContext value={noopAnalytics}>
       <RenderLoopGuard>
         <query.QueryClientProvider client={createClient()}>
-          <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          {/* Pin calendar grouping without freezing Date.now(), which the
+              debounce uses to decide whether its trailing timer can fire. */}
+          <IntlProvider
+            locale="en"
+            messages={messages}
+            now={NOW}
+            timeZone="UTC"
+          >
             <FormattingProvider locale="en" timeZone="UTC">
               <AuthenticatedUserProvider user={user}>
                 <router.RouterProvider router={appRouter} />
@@ -425,6 +424,10 @@ describe("chat history page", () => {
       );
     });
 
+    expect(searchChanges).toEqual([]);
+    expect(listRequests.map((url) => url.searchParams.get("search"))).toEqual([
+      null,
+    ]);
     await testing.waitFor(() =>
       expect(
         listRequests.map((url) => url.searchParams.get("search")),

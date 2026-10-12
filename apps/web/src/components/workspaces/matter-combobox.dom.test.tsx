@@ -46,6 +46,7 @@ const MATTER_PICKER_SETTLE_COMMITS = 10;
 const ORGANIZATION_ID = "00000000-0000-7000-8000-00000000ffff";
 const USER_ID = "00000000-0000-7000-8000-00000000fffe";
 const NOW = new Date("2026-10-11T12:00:00.000Z");
+const LATEST_CHAT_ACTIVITY = new Date("2026-10-11T13:00:00.000Z");
 
 const matter = (
   id: string,
@@ -256,7 +257,12 @@ describe("matter combobox rendering", () => {
       }
     };
     const { input } = openCombobox(null, {
-      chat: [{ workspaceId: many(6).id, updatedAt: NOW.toISOString() }],
+      chat: [
+        {
+          workspaceId: many(6).id,
+          updatedAt: LATEST_CHAT_ACTIVITY.toISOString(),
+        },
+      ],
       onCommit: countCommit,
       pinned: [many(5).id],
       workspaces: MANY,
@@ -272,10 +278,33 @@ describe("matter combobox rendering", () => {
 });
 
 describe("matter combobox groups", () => {
+  test("browsing has recent matters without pins or chat history", async () => {
+    const { input } = openCombobox(null, { workspaces: MANY });
+    await openList(input);
+
+    await testing.waitFor(() =>
+      expect(groupedOptions()).toEqual([
+        [messages.navigation.recents, MANY.slice(0, 5).map(({ name }) => name)],
+        [
+          messages.inspector.matterPicker.allMatters,
+          MANY.slice(5).map(({ name }) => name),
+        ],
+      ]),
+    );
+  });
+
   test("browsing leads with recent matters: pinned, then by activity, then all others", async () => {
+    expect(LATEST_CHAT_ACTIVITY.getTime()).toBeGreaterThan(
+      many(0).lastActivityAt.getTime(),
+    );
     const { input } = openCombobox(null, {
       // A recent chat lifts the least active matter into the group.
-      chat: [{ workspaceId: many(6).id, updatedAt: NOW.toISOString() }],
+      chat: [
+        {
+          workspaceId: many(6).id,
+          updatedAt: LATEST_CHAT_ACTIVITY.toISOString(),
+        },
+      ],
       pinned: [many(5).id],
       workspaces: MANY,
     });
