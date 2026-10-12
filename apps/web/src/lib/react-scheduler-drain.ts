@@ -10,6 +10,15 @@ type ReactScheduler = {
   ) => unknown;
 };
 
+// Every scheduled task carries an id from one counter, in scheduling order.
+const taskId = (task: unknown): number =>
+  typeof task === "object" &&
+  task !== null &&
+  "id" in task &&
+  typeof task.id === "number"
+    ? task.id
+    : panic("React's scheduler returned a task without a numeric id");
+
 const isReactScheduler = (value: unknown): value is ReactScheduler =>
   typeof value === "object" &&
   value !== null &&
@@ -32,17 +41,40 @@ export const loadReactScheduler = (): ReactScheduler => {
     : panic("react-dom's scheduler does not expose scheduleCallback");
 };
 
+// A runaway loop that keeps scheduling work would otherwise hang teardown.
+const MAX_DRAIN_ROUNDS = 1000;
+
 /**
- * Resolve once React's scheduler has run every task queued so far. An
- * idle-priority task expires after every task queued before it and after any
- * higher-priority task those enqueue, so it runs once the queue has drained.
- * The scheduler exposes no queue inspection, so a barrier task is the drain.
+ * Resolve once React's scheduler has run every task queued so far and every
+ * task that work enqueues. An idle-priority barrier runs after every task
+ * queued before it, but not after an idle task enqueued later (that one
+ * expires after the barrier). The scheduler exposes no queue inspection, so
+ * the drain repeats barriers until one follows the previous with no task
+ * scheduled in between: then nothing is left behind the last barrier.
  */
 export const drainReactScheduler = async (): Promise<void> => {
   const scheduler = loadReactScheduler();
-  await new Promise<void>((resolve) => {
-    scheduler.unstable_scheduleCallback(scheduler.unstable_IdlePriority, () => {
-      resolve();
-    });
-  });
+  const barrier = () => {
+    const { promise, resolve } = Promise.withResolvers<undefined>();
+    const task = scheduler.unstable_scheduleCallback(
+      scheduler.unstable_IdlePriority,
+      () => {
+        resolve(undefined);
+      },
+    );
+    return { id: taskId(task), ran: promise };
+  };
+  let previous = barrier();
+  for (let round = 0; round < MAX_DRAIN_ROUNDS; round++) {
+    await previous.ran;
+    const next = barrier();
+    if (next.id === previous.id + 1) {
+      await next.ran;
+      return;
+    }
+    previous = next;
+  }
+  panic(
+    `React's scheduler kept enqueueing work through ${MAX_DRAIN_ROUNDS} drain rounds`,
+  );
 };
