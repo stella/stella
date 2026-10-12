@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -92,7 +93,7 @@ const consume = async (code: string, path = "/matters/example") =>
     path,
     request,
     ipAddress: null,
-    sessionId: null,
+    complete: async () => Result.ok(null),
     previousOrganizationId: null,
   });
 const mint = async (kind: "text" | "click" = "text") => {

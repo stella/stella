@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import { and, eq, exists, isNull, sql } from "drizzle-orm";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { randomBytes } from "node:crypto";
@@ -30,6 +30,7 @@ import {
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { logger } from "@/api/lib/observability/logger";
 import { MCP_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 import type { RateLimitContext } from "@/api/lib/rate-limit/contracts";
@@ -287,6 +288,25 @@ type HandoffRedemptionOptions = {
     limit: { max: number; windowMs: number },
   ) => Promise<boolean>;
 };
+type HandoffCompletionContext = {
+  handoff: typeof mcpWebHandoff.$inferSelect;
+  userId: SafeId<"user">;
+  organizationId: SafeId<"organization">;
+  consentId: string;
+  transaction: Parameters<Parameters<HandoffDatabase["transaction"]>[0]>[0];
+};
+
+type HandoffConsumptionOptions = {
+  code: string;
+  path: string;
+  request: Request;
+  ipAddress: string | null;
+  previousOrganizationId: string | null;
+  complete: (
+    context: HandoffCompletionContext,
+  ) => Promise<Result<string | null, Error>>;
+};
+
 const createHandoffRedemption = ({
   db,
   now,
@@ -324,16 +344,9 @@ const createHandoffRedemption = ({
     path,
     request,
     ipAddress,
-    sessionId,
     previousOrganizationId,
-  }: {
-    code: string;
-    path: string;
-    request: Request;
-    ipAddress: string | null;
-    sessionId: string | null;
-    previousOrganizationId: string | null;
-  }) =>
+    complete,
+  }: HandoffConsumptionOptions) =>
     await withAggregateTransaction(db, async (tx) => {
       if (!enabled()) {
         return null;
@@ -359,7 +372,6 @@ const createHandoffRedemption = ({
           .set({
             consumedAt: now(),
             consumedIpHash: ipAddress ? sha256Hex(ipAddress) : null,
-            consumedSessionId: sessionId,
           })
           .where(
             and(
@@ -375,7 +387,28 @@ const createHandoffRedemption = ({
       if (!consumed) {
         return null;
       }
-      const audit = createAuditRecorder(auditBindings(consumed, request));
+      const completion = await complete({
+        handoff: consumed,
+        userId: brandPersistedUserId(consumed.userId),
+        organizationId: brandPersistedOrganizationId(consumed.organizationId),
+        consentId: consumed.consentId,
+        transaction: tx,
+      });
+      if (Result.isError(completion)) {
+        return abortTransaction(completion.error);
+      }
+      const sessionId = completion.value;
+      const completed = (
+        await tx
+          .update(mcpWebHandoff)
+          .set({ consumedSessionId: sessionId })
+          .where(eq(mcpWebHandoff.id, consumed.id))
+          .returning()
+      ).at(0);
+      if (!completed) {
+        panic("Handoff completion lost its locked receipt.");
+      }
+      const audit = createAuditRecorder(auditBindings(completed, request));
       await audit(tx, {
         action: AUDIT_ACTION.MCP_WEB_HANDOFF_REDEEMED,
         resourceType: AUDIT_RESOURCE_TYPE.MCP_WEB_HANDOFF,
@@ -385,13 +418,14 @@ const createHandoffRedemption = ({
           clientId: consumed.oauthClientId,
           previousOrganizationId,
           newOrganizationId: consumed.organizationId,
+          sessionId,
         },
       });
       return {
-        handoff: consumed,
-        userId: consumed.userId,
-        organizationId: consumed.organizationId,
-        consentId: consumed.consentId,
+        handoff: completed,
+        userId: completed.userId,
+        organizationId: completed.organizationId,
+        consentId: completed.consentId,
       };
     });
   const admitRedeem = async (address: string) =>
@@ -405,35 +439,6 @@ const createHandoffRedemption = ({
       `redeem:user:${userId}`,
       MCP_RATE_LIMITS.handoffRedeemUser,
     );
-  const recordSession = async ({
-    handoffId,
-    sessionId,
-    request,
-  }: {
-    handoffId: string;
-    sessionId: string;
-    request: Request;
-  }) => {
-    await withAggregateTransaction(db, async (tx) => {
-      const completed = (
-        await tx
-          .update(mcpWebHandoff)
-          .set({ consumedSessionId: sessionId })
-          .where(eq(mcpWebHandoff.id, handoffId))
-          .returning()
-      ).at(0);
-      if (!completed) {
-        return;
-      }
-      const audit = createAuditRecorder(auditBindings(completed, request));
-      await audit(tx, {
-        action: AUDIT_ACTION.UPDATE,
-        resourceType: AUDIT_RESOURCE_TYPE.MCP_WEB_HANDOFF,
-        resourceId: completed.id,
-        metadata: { sessionId },
-      });
-    });
-  };
   const listSessionClients = async (userId: SafeId<"user">) =>
     await db
       .select({
@@ -456,7 +461,6 @@ const createHandoffRedemption = ({
     auditRefusal,
     admitRedeem,
     admitUser,
-    recordSession,
     listSessionClients,
   };
 };
