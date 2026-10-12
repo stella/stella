@@ -140,6 +140,20 @@ export const createMcpWebHandoffPlugin = ({
               return await refuse("unavailable");
             }
             if (sameUser) {
+              const updated = await ctx.context.internalAdapter.updateSession(
+                existing.session.token,
+                { activeOrganizationId: consumed.organizationId },
+              );
+              if (!updated) {
+                return await refuse("unavailable");
+              }
+              const newSession = ctx.context.newSession;
+              await setSessionCookie(ctx, {
+                session: updated,
+                user: existing.user,
+              });
+              // Refreshing an existing session's cookie is not a new-device sign-in.
+              ctx.context.setNewSession(newSession);
               return ctx.json({ status: "redeemed" as const });
             }
             const account = await ctx.context.internalAdapter.findUserById(

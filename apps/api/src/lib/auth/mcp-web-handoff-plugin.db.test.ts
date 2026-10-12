@@ -5,6 +5,7 @@ import {
   createAuthMiddleware,
   getAuthoritativeSessionFromCtx,
 } from "better-auth/api";
+import { organization as organizationPlugin } from "better-auth/plugins";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -32,6 +33,7 @@ import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const baseURL = "https://example.test";
+const browserOrganizationId = "00000000-0000-4000-8000-000000000014";
 const makeDb = (client: Awaited<ReturnType<typeof createTestPglite>>) =>
   drizzle({ client, relations: databaseRelations });
 let client: Awaited<ReturnType<typeof createTestPglite>>;
@@ -56,12 +58,14 @@ const makeAuth = () =>
     emailAndPassword: { enabled: true },
     session: {
       freshAge: 0,
+      cookieCache: { enabled: true },
       additionalFields: {
         ...SESSION_LIFETIME_FIELDS,
         activeOrganizationId: { type: "string", required: false },
       },
     },
     plugins: [
+      organizationPlugin(),
       createMcpWebHandoffPlugin({
         service: () => service,
         textSessionMaxSeconds: () => 43_200,
@@ -101,6 +105,33 @@ beforeAll(async () => {
     id: "plugin-member",
     userId: fixture.userId,
     organizationId: fixture.organizationId,
+    role: "owner",
+    createdAt: new Date(),
+  });
+  const otherOwnerId = "00000000-0000-4000-8000-000000000015";
+  await db.insert(user).values({
+    id: otherOwnerId,
+    name: "Other owner",
+    email: "other-owner@example.test",
+    emailVerified: true,
+  });
+  await db.insert(member).values({
+    id: "plugin-other-owner",
+    userId: otherOwnerId,
+    organizationId: fixture.organizationId,
+    role: "owner",
+    createdAt: new Date(),
+  });
+  await db.insert(organization).values({
+    id: browserOrganizationId,
+    name: "Browser organization",
+    slug: "handoff-browser",
+    createdAt: new Date(),
+  });
+  await db.insert(member).values({
+    id: "browser-member",
+    userId: fixture.userId,
+    organizationId: browserOrganizationId,
     role: "owner",
     createdAt: new Date(),
   });
@@ -164,10 +195,16 @@ const redeem = async (
     }),
   );
 const cookieOf = (response: Response) =>
-  response.headers
-    .getSetCookie()
-    .map((cookie) => cookie.split(";").at(0))
-    .join("; ");
+  [
+    ...new Map(
+      response.headers.getSetCookie().map((cookie) => {
+        // SAFETY: String.split always returns at least one segment.
+        const value = cookie.split(";")[0];
+        // Browsers retain the last Set-Cookie value for a given name.
+        return [value.slice(0, value.indexOf("=")), value];
+      }),
+    ).values(),
+  ].join("; ");
 describe("MCP link sign-in", () => {
   test("the server switch keeps links plain and refuses outstanding handoffs", async () => {
     const code = await mint("click");
@@ -276,7 +313,7 @@ describe("MCP link sign-in", () => {
       })
       .where(eq(account.id, "handoff-credential"));
   });
-  test("a same-account browser keeps its existing session while consuming the link", async () => {
+  test("a same-account browser switches to the link organization while keeping its session", async () => {
     const signedIn = await auth.api.signInEmail({
       body: {
         email: "handoff@example.test",
@@ -284,11 +321,17 @@ describe("MCP link sign-in", () => {
       },
       asResponse: true,
     });
-    const existingCookie = cookieOf(signedIn);
+    const switched = await auth.api.setActiveOrganization({
+      body: { organizationId: browserOrganizationId },
+      headers: { cookie: cookieOf(signedIn) },
+      asResponse: true,
+    });
+    const existingCookie = cookieOf(switched);
     const current = await auth.api.getSession({
       headers: { cookie: existingCookie },
     });
     expect(current).not.toBeNull();
+    expect(current?.session.activeOrganizationId).toBe(browserOrganizationId);
     const code = await mint("click");
     const before = await db
       .select({ id: session.id })
@@ -296,6 +339,18 @@ describe("MCP link sign-in", () => {
       .where(eq(session.userId, fixture.userId));
     const response = await redeem(code, undefined, existingCookie);
     expect(response.status).toBe(200);
+    expect(cookieOf(response)).toContain("session_token=");
+    const retained = await auth.api.getSession({
+      headers: { cookie: cookieOf(response) },
+    });
+    expect(retained?.session.activeOrganizationId).toBe(fixture.organizationId);
+    expect(retained?.session.id).toBe(current?.session.id);
+    expect(retained?.session.token).toBe(current?.session.token);
+    expect(retained?.session.createdAt).toEqual(current?.session.createdAt);
+    expect(retained?.session.expiresAt).toEqual(current?.session.expiresAt);
+    expect(retained?.session.originConsentId).toBe(
+      current?.session.originConsentId,
+    );
     expect((await service.inspect(code))?.handoff.consumedSessionId).toBe(
       current?.session.id,
     );
@@ -309,6 +364,51 @@ describe("MCP link sign-in", () => {
         .from(session)
         .where(eq(session.userId, fixture.userId)),
     ).toEqual(before);
+  });
+  test("a removed link-organization membership leaves the browser organization unchanged", async () => {
+    const signedIn = await auth.api.signInEmail({
+      body: {
+        email: "handoff@example.test",
+        password: "test-fixture-password",
+      },
+      asResponse: true,
+    });
+    const switched = await auth.api.setActiveOrganization({
+      body: { organizationId: browserOrganizationId },
+      headers: { cookie: cookieOf(signedIn) },
+      asResponse: true,
+    });
+    const existingCookie = cookieOf(switched);
+    const current = await auth.api.getSession({
+      headers: { cookie: existingCookie },
+    });
+    expect(current?.session.activeOrganizationId).toBe(browserOrganizationId);
+    const code = await mint("click");
+    await db.delete(member).where(eq(member.id, "plugin-member"));
+    try {
+      const response = await redeem(code, undefined, existingCookie);
+      expect(response.status).toBe(403);
+      expect(
+        v.parse(mcpHandoffRedeemResultSchema, await response.json()),
+      ).toEqual({
+        status: "refused",
+      });
+      const retained = await auth.api.getSession({
+        headers: { cookie: existingCookie },
+      });
+      expect(retained?.session.activeOrganizationId).toBe(
+        browserOrganizationId,
+      );
+      expect(retained?.session.id).toBe(current?.session.id);
+    } finally {
+      await db.insert(member).values({
+        id: "plugin-member",
+        userId: fixture.userId,
+        organizationId: fixture.organizationId,
+        role: "owner",
+        createdAt: new Date(),
+      });
+    }
   });
   test("a different account is confirmed before its browser session changes", async () => {
     const otherUserId = "00000000-0000-4000-8000-000000000013";
