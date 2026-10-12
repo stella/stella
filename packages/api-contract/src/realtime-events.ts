@@ -91,13 +91,6 @@ const resourcesChangedEventSchema = v.object({
   ),
 });
 
-const resourceChangeCountSchema = v.pipe(
-  v.number(),
-  v.integer(),
-  v.minValue(1),
-  v.maxValue(MAX_RESOURCE_CHANGES_PER_EVENT),
-);
-
 const resourceSetUpdatedEventSchema = v.object({
   type: v.literal(REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED),
   resourceType: v.custom<ResourceType>(isResourceType),
@@ -170,6 +163,23 @@ export type ResourceRealtimeEvent = v.InferOutput<
 export type WorkspaceRealtimeEvent = v.InferOutput<
   typeof workspaceRealtimeEventSchema
 >;
+/** A producer capability; copies and wire parsing cannot reconstruct its private field. */
+class BuiltRealtimeEvent<
+  TEvent extends WorkspaceRealtimeEvent = WorkspaceRealtimeEvent,
+> {
+  readonly #event: TEvent;
+
+  constructor(event: TEvent) {
+    this.#event = structuredClone(event);
+    Object.freeze(this);
+  }
+
+  /** Project a detached wire payload so receivers cannot mutate the producer capability. */
+  readonly toJSON = () => structuredClone(this.#event);
+}
+
+export type { BuiltRealtimeEvent };
+
 export type OrganizationRealtimeEvent = v.InferOutput<
   typeof organizationRealtimeEventSchema
 >;
@@ -182,20 +192,24 @@ export const newNotificationRealtimeEvent = () =>
   }) as const satisfies UserRealtimeEvent;
 
 export const resourceUpdatedRealtimeEvent = (resource: ResourceRef) =>
-  ({
-    type: REALTIME_EVENT_TYPE.RESOURCE_UPDATED,
-    resource,
-  }) as const satisfies ResourceRealtimeEvent;
+  new BuiltRealtimeEvent(
+    v.parse(resourceUpdatedEventSchema, {
+      type: REALTIME_EVENT_TYPE.RESOURCE_UPDATED,
+      resource,
+    }),
+  );
 
 export const resourceDeletedRealtimeEvent = ({
   resource,
   deletionOwnership,
 }: ResourceDeletion) =>
-  ({
-    type: REALTIME_EVENT_TYPE.RESOURCE_DELETED,
-    resource,
-    deletionOwnership,
-  }) as const satisfies ResourceRealtimeEvent;
+  new BuiltRealtimeEvent(
+    v.parse(resourceDeletedEventSchema, {
+      type: REALTIME_EVENT_TYPE.RESOURCE_DELETED,
+      resource,
+      deletionOwnership,
+    }),
+  );
 
 export const resourceUpdatedChange = (resource: ResourceRef) =>
   ({
@@ -215,19 +229,41 @@ export const resourceDeletedChange = (deletion: ResourceDeletion) =>
 
 export const resourcesChangedRealtimeEvent = (
   changes: readonly ResourceChangeInput[],
-): ResourceRealtimeEvent => {
-  v.parse(resourceChangeCountSchema, changes.length);
-  return {
-    type: REALTIME_EVENT_TYPE.RESOURCES_CHANGED,
-    changes: [...changes],
-  };
-};
+) =>
+  new BuiltRealtimeEvent(
+    v.parse(resourcesChangedEventSchema, {
+      type: REALTIME_EVENT_TYPE.RESOURCES_CHANGED,
+      changes: [...changes],
+    }),
+  );
 
 export const resourceSetUpdatedRealtimeEvent = (resourceType: ResourceType) =>
-  ({
-    type: REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED,
-    resourceType,
-  }) as const satisfies ResourceRealtimeEvent;
+  new BuiltRealtimeEvent(
+    v.parse(resourceSetUpdatedEventSchema, {
+      type: REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED,
+      resourceType,
+    }),
+  );
+
+export const flowRunUpdateRealtimeEvent = (
+  data: v.InferInput<typeof flowRunUpdateEventSchema>["data"],
+) =>
+  new BuiltRealtimeEvent(
+    v.parse(flowRunUpdateEventSchema, {
+      type: REALTIME_EVENT_TYPE.FLOW_RUN_UPDATE,
+      data,
+    }),
+  );
+
+export const workflowExtractionPreviewRealtimeEvent = (
+  data: v.InferInput<typeof workflowExtractionPreviewEventSchema>["data"],
+) =>
+  new BuiltRealtimeEvent(
+    v.parse(workflowExtractionPreviewEventSchema, {
+      type: REALTIME_EVENT_TYPE.WORKFLOW_EXTRACTION_PREVIEW,
+      data,
+    }),
+  );
 
 const takeoverRequestedEventSchema = v.object({
   type: v.literal(REALTIME_EVENT_TYPE.TAKEOVER_REQUESTED),

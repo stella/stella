@@ -4,6 +4,7 @@ import { alias } from "drizzle-orm/pg-core";
 
 import {
   REALTIME_EVENT_TYPE,
+  flowRunUpdateRealtimeEvent,
   RESOURCE_CHANGE_TYPE,
   RESOURCE_DELETION_OWNERSHIP,
   RESOURCE_TYPE,
@@ -187,8 +188,5 @@ export const broadcastFlowRunUpdate = (
   workspaceId: SafeId<"workspace">,
   payload: FlowRunUpdatePayload,
 ): void => {
-  broadcast(workspaceId, {
-    type: FLOW_RUN_UPDATE_EVENT_TYPE,
-    data: payload,
-  });
+  broadcast(workspaceId, flowRunUpdateRealtimeEvent(payload));
 };

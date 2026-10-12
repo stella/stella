@@ -5,6 +5,7 @@ import type {
   OrganizationRealtimeEvent,
   UserRealtimeEvent,
   WorkspaceRealtimeEvent,
+  BuiltRealtimeEvent,
 } from "@stll/api-contract";
 import { SSE_HEARTBEAT_FRAME } from "@stll/api-contract/sse-heartbeat";
 
@@ -888,13 +889,14 @@ export const broadcastToUser = (
  */
 export const broadcast = (
   workspaceId: SafeId<"workspace">,
-  event: WorkspaceRealtimeEvent,
+  builtEvent: BuiltRealtimeEvent,
   {
     publishWorkspace: publishWorkspaceOverride,
   }: {
     publishWorkspace?: typeof publishWorkspaceEvent | undefined;
   } = {},
 ): void => {
+  const event = builtEvent.toJSON();
   // When this instance has no attached subscriber it never receives its
   // own published message back through the Redis loopback, so deliver
   // locally inline. This must not depend on the publisher's health: the
@@ -918,7 +920,7 @@ export const broadcast = (
     publishWorkspaceOverride ??
     activeLifecycle?.publishWorkspace ??
     publishWorkspaceEvent;
-  publishWorkspace(workspaceId, event, {
+  publishWorkspace(workspaceId, builtEvent, {
     originInstanceId: INSTANCE_ID,
     deliveredInline: deliveredLocally,
   }).catch((error: unknown) => {

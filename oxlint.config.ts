@@ -1424,6 +1424,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-contract-domains.ts",
     ...SHADCN_LINT_JS_PLUGINS,
     stellaLowercasePluginSpecifier,
+    "./.oxlint-plugins/no-forged-realtime-event.ts",
     "./.oxlint-plugins/no-raw-cache-control.ts",
     "./.oxlint-plugins/raw-hash-from-source-fingerprint.ts",
     "./.oxlint-plugins/no-raw-sha256.ts",
@@ -4859,6 +4860,10 @@ const config = defineConfig({
       rules: {
         "no-unanchored-footnotes/no-unanchored-footnotes": "error",
       },
+    },
+    {
+      files: ["**/*.{ts,tsx}"],
+      rules: { "no-forged-realtime-event/no-forged-realtime-event": "error" },
     },
     {
       files: [

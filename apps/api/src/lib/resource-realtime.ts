@@ -54,6 +54,6 @@ export const broadcastOrganizationResourceSetUpdated = (
 ): void => {
   broadcastToOrganization(
     organizationId,
-    resourceSetUpdatedRealtimeEvent(resourceType),
+    resourceSetUpdatedRealtimeEvent(resourceType).toJSON(),
   );
 };

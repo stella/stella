@@ -12,6 +12,7 @@ import {
   resourceDeletedChange,
   resourcesChangedRealtimeEvent,
   type WorkspaceRealtimeEvent,
+  type BuiltRealtimeEvent,
 } from "@stll/api-contract";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
@@ -107,9 +108,10 @@ testState.beforeAll(async () => {
 afterAll(releaseTestDb);
 
 const observeDeliveryEvents = async (
-  event: WorkspaceRealtimeEvent,
+  input: WorkspaceRealtimeEvent | BuiltRealtimeEvent,
   candidateUserIds = userIds,
 ) => {
+  const event = "toJSON" in input ? input.toJSON() : input;
   const delivered = new Map<SafeId<"user">, WorkspaceRealtimeEvent[]>();
   await deliverFlowRunWorkspaceEvent({
     database,
@@ -131,8 +133,9 @@ const observeDeliveryEvents = async (
   return delivered;
 };
 
-const observeDelivery = async (event: WorkspaceRealtimeEvent) =>
-  new Set((await observeDeliveryEvents(event)).keys());
+const observeDelivery = async (
+  event: WorkspaceRealtimeEvent | BuiltRealtimeEvent,
+) => new Set((await observeDeliveryEvents(event)).keys());
 
 describe("flow progress recipient admission", () => {
   test("live flag, grant and matter access govern delivery after revoke and re-grant", async () => {
@@ -336,28 +339,28 @@ test("committed task deletions preserve recipient-specific single and mixed chan
     const delivered = await observeDeliveryEvents(fullBatch, recipients);
     expect(delivered).toEqual(
       new Map([
-        [enrolledUserId, [fullBatch]],
-        [ungrantedUserId, [filteredBatch]],
+        [enrolledUserId, [fullBatch.toJSON()]],
+        [ungrantedUserId, [filteredBatch.toJSON()]],
       ]),
     );
     const ordinarySingle = resourceDeletedRealtimeEvent(ordinaryDeletion);
     expect(await observeDeliveryEvents(ordinarySingle, recipients)).toEqual(
-      new Map(recipients.map((id) => [id, [ordinarySingle]])),
+      new Map(recipients.map((id) => [id, [ordinarySingle.toJSON()]])),
     );
     const single = resourceDeletedRealtimeEvent(linkedDeletion);
     expect(await observeDeliveryEvents(single, recipients)).toEqual(
-      new Map([[enrolledUserId, [single]]]),
+      new Map([[enrolledUserId, [single.toJSON()]]]),
     );
     testState.setConfig("FEATURE_FLOWS", false);
     expect(await observeDeliveryEvents(fullBatch, recipients)).toEqual(
       new Map([
-        [enrolledUserId, [filteredBatch]],
-        [ungrantedUserId, [filteredBatch]],
+        [enrolledUserId, [filteredBatch.toJSON()]],
+        [ungrantedUserId, [filteredBatch.toJSON()]],
       ]),
     );
     expect(await observeDeliveryEvents(single, recipients)).toEqual(new Map());
     expect(await observeDeliveryEvents(ordinarySingle, recipients)).toEqual(
-      new Map(recipients.map((id) => [id, [ordinarySingle]])),
+      new Map(recipients.map((id) => [id, [ordinarySingle.toJSON()]])),
     );
   } finally {
     await db.delete(flowRuns).where(eq(flowRuns.id, runId));

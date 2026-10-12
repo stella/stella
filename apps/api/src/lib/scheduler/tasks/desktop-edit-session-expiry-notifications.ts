@@ -1,6 +1,6 @@
 import type {
   DesktopEditSessionRealtimeEvent,
-  WorkspaceRealtimeEvent,
+  BuiltRealtimeEvent,
 } from "@stll/api-contract";
 import {
   RESOURCE_TYPE,
@@ -25,7 +25,7 @@ export type DesktopEditSessionExpiryNotificationPublisher = {
   ) => Promise<void>;
   publishWorkspaceEvent: (
     workspaceId: SafeId<"workspace">,
-    event: WorkspaceRealtimeEvent,
+    event: BuiltRealtimeEvent,
   ) => Promise<void>;
 };
 

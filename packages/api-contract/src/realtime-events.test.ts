@@ -8,10 +8,11 @@ import {
   parseUserRealtimeEvent,
   parseWorkspaceRealtimeEvent,
   REALTIME_EVENT_TYPE,
-  RESOURCE_CHANGE_TYPE,
+  type RESOURCE_CHANGE_TYPE,
   RESOURCE_DELETION_OWNERSHIP,
   resourceDeletedRealtimeEvent,
   resourceDeletedChange,
+  flowRunUpdateRealtimeEvent,
   resourceSetUpdatedRealtimeEvent,
   resourceUpdatedChange,
   resourceUpdatedRealtimeEvent,
@@ -26,26 +27,25 @@ const ENTITY_RESOURCE = resourceRef({
   id: toSafeId<"entity">("entity-1"),
 });
 
-const RESOURCE_UPDATED_EVENT = resourceUpdatedRealtimeEvent(ENTITY_RESOURCE);
-const RESOURCE_DELETED_EVENT = {
-  type: REALTIME_EVENT_TYPE.RESOURCE_DELETED,
-  resource: ENTITY_RESOURCE,
+const VIEW_RESOURCE = resourceRef({
+  type: RESOURCE_TYPE.WORKSPACE_VIEW,
+  id: toSafeId<"workspaceView">("view-1"),
+});
+const VIEW_DELETION = {
+  resource: VIEW_RESOURCE,
   deletionOwnership: RESOURCE_DELETION_OWNERSHIP.ORDINARY,
-} as const satisfies WorkspaceRealtimeEvent;
-const RESOURCES_CHANGED_EVENT = {
-  type: REALTIME_EVENT_TYPE.RESOURCES_CHANGED,
-  changes: [
-    resourceUpdatedChange(ENTITY_RESOURCE),
-    {
-      change: RESOURCE_CHANGE_TYPE.DELETED,
-      resource: ENTITY_RESOURCE,
-      deletionOwnership: RESOURCE_DELETION_OWNERSHIP.ORDINARY,
-    },
-  ],
-} as const satisfies WorkspaceRealtimeEvent;
+} as const;
+const RESOURCE_UPDATED_EVENT =
+  resourceUpdatedRealtimeEvent(ENTITY_RESOURCE).toJSON();
+const RESOURCE_DELETED_EVENT =
+  resourceDeletedRealtimeEvent(VIEW_DELETION).toJSON();
+const RESOURCES_CHANGED_EVENT = resourcesChangedRealtimeEvent([
+  resourceUpdatedChange(ENTITY_RESOURCE),
+  resourceDeletedChange(VIEW_DELETION),
+]).toJSON();
 const RESOURCE_SET_UPDATED_EVENT = resourceSetUpdatedRealtimeEvent(
   RESOURCE_TYPE.ENTITY,
-);
+).toJSON();
 
 const WORKFLOW_EXTRACTION_PREVIEW_EVENT = {
   type: REALTIME_EVENT_TYPE.WORKFLOW_EXTRACTION_PREVIEW,
@@ -116,10 +116,11 @@ describe("realtime event contracts", () => {
       }),
     ).toBeNull();
     expect(
-      parseWorkspaceRealtimeEvent({
-        type: REALTIME_EVENT_TYPE.RESOURCE_DELETED,
-        resource: { type: "unknown", id: "entity-1" },
-      }),
+      parseWorkspaceRealtimeEvent(
+        JSON.parse(
+          '{"type":"resource.deleted","resource":{"type":"unknown","id":"entity-1"}}',
+        ),
+      ),
     ).toBeNull();
     expect(
       parseWorkspaceRealtimeEvent({
@@ -130,67 +131,25 @@ describe("realtime event contracts", () => {
   });
 
   test("requires a named ownership classification for every entity deletion", () => {
-    for (const deletionOwnership of Object.values(
-      RESOURCE_DELETION_OWNERSHIP,
-    )) {
-      expect(
-        parseWorkspaceRealtimeEvent({
-          type: REALTIME_EVENT_TYPE.RESOURCE_DELETED,
-          resource: ENTITY_RESOURCE,
-          deletionOwnership,
-        }),
-      ).toEqual({
-        type: REALTIME_EVENT_TYPE.RESOURCE_DELETED,
-        resource: ENTITY_RESOURCE,
-        deletionOwnership,
-      });
-      expect(
-        parseWorkspaceRealtimeEvent({
-          type: REALTIME_EVENT_TYPE.RESOURCES_CHANGED,
-          changes: [
-            {
-              change: RESOURCE_CHANGE_TYPE.DELETED,
-              resource: ENTITY_RESOURCE,
-              deletionOwnership,
-            },
-          ],
-        }),
-      ).not.toBeNull();
+    const validMessages = [
+      '{"type":"resource.deleted","resource":{"type":"entity","id":"entity-1"},"deletionOwnership":"ordinary"}',
+      '{"type":"resource.deleted","resource":{"type":"entity","id":"entity-1"},"deletionOwnership":"flow-review-task"}',
+      '{"type":"resources.changed","changes":[{"change":"deleted","resource":{"type":"entity","id":"entity-1"},"deletionOwnership":"ordinary"}]}',
+      '{"type":"resources.changed","changes":[{"change":"deleted","resource":{"type":"entity","id":"entity-1"},"deletionOwnership":"flow-review-task"}]}',
+    ];
+    for (const message of validMessages) {
+      const wire = JSON.parse(message);
+      expect(parseWorkspaceRealtimeEvent(wire)).toEqual(wire);
     }
-
-    expect(
-      parseWorkspaceRealtimeEvent({
-        type: REALTIME_EVENT_TYPE.RESOURCE_DELETED,
-        resource: ENTITY_RESOURCE,
-      }),
-    ).toBeNull();
-    expect(
-      parseWorkspaceRealtimeEvent({
-        type: REALTIME_EVENT_TYPE.RESOURCE_DELETED,
-        resource: ENTITY_RESOURCE,
-        deletionOwnership: "unknown",
-      }),
-    ).toBeNull();
-    expect(
-      parseWorkspaceRealtimeEvent({
-        type: REALTIME_EVENT_TYPE.RESOURCES_CHANGED,
-        changes: [
-          { change: RESOURCE_CHANGE_TYPE.DELETED, resource: ENTITY_RESOURCE },
-        ],
-      }),
-    ).toBeNull();
-    expect(
-      parseWorkspaceRealtimeEvent({
-        type: REALTIME_EVENT_TYPE.RESOURCES_CHANGED,
-        changes: [
-          {
-            change: RESOURCE_CHANGE_TYPE.DELETED,
-            resource: ENTITY_RESOURCE,
-            deletionOwnership: "unknown",
-          },
-        ],
-      }),
-    ).toBeNull();
+    const invalidMessages = [
+      '{"type":"resource.deleted","resource":{"type":"entity","id":"entity-1"}}',
+      '{"type":"resource.deleted","resource":{"type":"entity","id":"entity-1"},"deletionOwnership":"unknown"}',
+      '{"type":"resources.changed","changes":[{"change":"deleted","resource":{"type":"entity","id":"entity-1"}}]}',
+      '{"type":"resources.changed","changes":[{"change":"deleted","resource":{"type":"entity","id":"entity-1"},"deletionOwnership":"unknown"}]}',
+    ];
+    for (const message of invalidMessages) {
+      expect(parseWorkspaceRealtimeEvent(JSON.parse(message))).toBeNull();
+    }
   });
 
   test("limits organization events to organization-safe kinds", () => {
@@ -312,17 +271,37 @@ test("entity deletion builders require proven ownership while views use explicit
     }),
     deletionOwnership: RESOURCE_DELETION_OWNERSHIP.ORDINARY,
   } as const;
-  expect(resourceDeletedRealtimeEvent(deletion)).toEqual({
-    type: REALTIME_EVENT_TYPE.RESOURCE_DELETED,
-    ...deletion,
-  });
+  expect(resourceDeletedRealtimeEvent(deletion).toJSON()).toEqual(
+    RESOURCE_DELETED_EVENT,
+  );
   const change = resourceDeletedChange(deletion);
-  expect(change).toEqual({
-    change: RESOURCE_CHANGE_TYPE.DELETED,
-    ...deletion,
-  });
-  expect(resourcesChangedRealtimeEvent([change])).toEqual({
+  expect(change).toMatchObject(deletion);
+  expect(resourcesChangedRealtimeEvent([change]).toJSON()).toEqual({
     type: REALTIME_EVENT_TYPE.RESOURCES_CHANGED,
     changes: [change],
   });
+});
+
+test("producer capabilities snapshot inputs and return detached wire projections", () => {
+  const data = flowRunUpdateRealtimeEvent({
+    runId: "run-1",
+    status: "running",
+    currentStepIndex: 0,
+    steps: [],
+  }).toJSON().data;
+  const built = flowRunUpdateRealtimeEvent(data);
+  data.runId = "modified-input";
+  expect(built.toJSON().data.runId).toBe("run-1");
+  const first = built.toJSON();
+  first.data.runId = "modified";
+  expect(built.toJSON().data.runId).toBe("run-1");
+  const message = JSON.stringify(built);
+  expect(parseWorkspaceRealtimeEvent(JSON.parse(message))).toEqual(
+    built.toJSON(),
+  );
+  const replacement = flowRunUpdateRealtimeEvent({ ...data, runId: "forged" });
+  expect(() => Object.assign(built, { toJSON: replacement.toJSON })).toThrow(
+    TypeError,
+  );
+  expect(built.toJSON().data.runId).toBe("run-1");
 });

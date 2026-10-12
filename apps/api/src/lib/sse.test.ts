@@ -1,14 +1,16 @@
-import { describe, expect, mock, spyOn, test } from "bun:test";
+import { describe, expect, expectTypeOf, mock, spyOn, test } from "bun:test";
 
 import {
   resourceRef,
   resourceUpdatedRealtimeEvent,
   resourcesChangedRealtimeEvent,
   resourceUpdatedChange,
-  RESOURCE_TYPE,
-  RESOURCE_CHANGE_TYPE,
+  resourceDeletedChange,
   RESOURCE_DELETION_OWNERSHIP,
+  RESOURCE_TYPE,
   REALTIME_EVENT_TYPE,
+  flowRunUpdateRealtimeEvent,
+  type BuiltRealtimeEvent,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
 
@@ -155,7 +157,7 @@ const organizationId = toSafeId<"organization">("org_1");
 const userId = toSafeId<"user">("user_1");
 const publishWorkspaceEventMock = async (
   targetWorkspaceId: SafeId<"workspace">,
-  event: WorkspaceRealtimeEvent,
+  event: BuiltRealtimeEvent,
   options: {
     deliveredInline?: boolean | undefined;
     originInstanceId?: string | undefined;
@@ -212,7 +214,7 @@ const subscribeToWorkspace = (
     userId: subscribingUserId,
     workspaceId,
   });
-const testEvent = (marker: string): WorkspaceRealtimeEvent =>
+const testEvent = (marker: string) =>
   resourceUpdatedRealtimeEvent(
     resourceRef({
       type: RESOURCE_TYPE.ENTITY,
@@ -221,7 +223,7 @@ const testEvent = (marker: string): WorkspaceRealtimeEvent =>
   );
 const broadcastTestEvent = (
   targetWorkspaceId: SafeId<"workspace">,
-  event: WorkspaceRealtimeEvent,
+  event: BuiltRealtimeEvent,
 ): void => {
   broadcast(targetWorkspaceId, event, {
     publishWorkspace: publishWorkspaceEventMock,
@@ -475,18 +477,17 @@ describe("recipient feature delivery", () => {
           id: toSafeId<"entity">("ordinary-batch-entity"),
         }),
       );
-      const hiddenChange = {
-        change: RESOURCE_CHANGE_TYPE.DELETED,
+      const hiddenChange = resourceDeletedChange({
         resource: resourceRef({
-          type: RESOURCE_TYPE.ENTITY,
-          id: toSafeId<"entity">("restricted-batch-entity"),
+          type: RESOURCE_TYPE.WORKSPACE_VIEW,
+          id: toSafeId<"workspaceView">("restricted-batch-entity"),
         }),
-        deletionOwnership: RESOURCE_DELETION_OWNERSHIP.FLOW_REVIEW_TASK,
-      } as const;
-      const fullBatch = {
-        type: REALTIME_EVENT_TYPE.RESOURCES_CHANGED,
-        changes: [ordinaryChange, hiddenChange],
-      } as const satisfies WorkspaceRealtimeEvent;
+        deletionOwnership: RESOURCE_DELETION_OWNERSHIP.ORDINARY,
+      });
+      const fullBatch = resourcesChangedRealtimeEvent([
+        ordinaryChange,
+        hiddenChange,
+      ]);
       const filteredBatch = resourcesChangedRealtimeEvent([ordinaryChange]);
       startSse(
         {
@@ -495,11 +496,11 @@ describe("recipient feature delivery", () => {
           workspaceEvent: async ({ userIds, deliver }) => {
             deliver(
               new Set(userIds.filter((candidate) => candidate === userId)),
-              fullBatch,
+              fullBatch.toJSON(),
             );
             deliver(
               new Set(userIds.filter((candidate) => candidate === otherUserId)),
-              filteredBatch,
+              filteredBatch.toJSON(),
             );
           },
         },
@@ -571,15 +572,12 @@ describe("recipient feature delivery", () => {
         deniedController.signal,
         toSafeId<"user">("flow-denied-user"),
       ).getReader();
-      const flowEvent = {
-        type: REALTIME_EVENT_TYPE.FLOW_RUN_UPDATE,
-        data: {
-          runId: "flow-progress",
-          status: "running",
-          currentStepIndex: 0,
-          steps: [],
-        },
-      } as const satisfies WorkspaceRealtimeEvent;
+      const flowEvent = flowRunUpdateRealtimeEvent({
+        runId: "flow-progress",
+        status: "running",
+        currentStepIndex: 0,
+        steps: [],
+      });
       broadcastTestEvent(workspaceId, flowEvent);
       broadcastTestEvent(workspaceId, testEvent("ordinary-after-flow"));
       expect(new TextDecoder().decode((await reader.read()).value)).toContain(
@@ -1124,4 +1122,21 @@ describe("startSse: subscriber attach retry", () => {
     stopSse();
     await settlePendingWork();
   });
+});
+
+test("workspace broadcast rejects wire events and spread producer projections", () => {
+  type ForgedDeletion = Extract<
+    WorkspaceRealtimeEvent,
+    {
+      type: typeof REALTIME_EVENT_TYPE.RESOURCE_DELETED;
+    }
+  >;
+  expectTypeOf<
+    ForgedDeletion extends Parameters<typeof broadcast>[1] ? true : false
+  >().toEqualTypeOf<false>();
+  const event = testEvent("built-proof");
+  const spread = { ...event };
+  expectTypeOf<
+    typeof spread extends Parameters<typeof broadcast>[1] ? true : false
+  >().toEqualTypeOf<false>();
 });
