@@ -1441,7 +1441,7 @@ const aggregateTableNames = (ast: ts.SourceFile | undefined) => {
   };
   const tableParameterIndexes = (body: ts.Node) => {
     const helper = body.parent;
-    if (helper === undefined || !ts.isFunctionLike(helper)) {
+    if (!ts.isFunctionLike(helper)) {
       return [];
     }
     const tableNames = new Set<string>();
