@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
 import { cents, currencyMinorUnitDigits, type CentsAmount } from "@stll/money";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { invalidInput, type InvoicingResult } from "./errors";
 import { parseIban } from "./iban";
@@ -137,7 +138,9 @@ const formatDate = (date: string): InvoicingResult<string> => {
 };
 
 const sanitizeFieldValue = (value: string): string => {
-  const normalized = value.normalize("NFKC").replaceAll(/\s+/gu, " ").trim();
+  const normalized = normalizeUnicode(value, "NFKC")
+    .replaceAll(/\s+/gu, " ")
+    .trim();
   const encoded: string[] = [];
   let length = 0;
   for (const character of normalized) {

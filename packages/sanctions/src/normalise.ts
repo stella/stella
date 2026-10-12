@@ -1,3 +1,5 @@
+import { stripUnicodeMarks } from "@stll/text-normalize";
+
 import type { EntityType } from "./entry";
 
 // Scholarly-neutral Cyrillic romanisation covering Russian, Ukrainian,
@@ -180,12 +182,12 @@ const LEGAL_FORMS: readonly (readonly string[])[] = [
 ].toSorted((left, right) => right.length - left.length);
 
 const toLatin = (text: string): string =>
-  text
-    .toLowerCase()
-    .replaceAll(/\p{Script=Cyrillic}/gu, (char) => CYRILLIC[char] ?? char)
-    .normalize("NFD")
-    .replaceAll(/\p{M}/gu, "")
-    .replaceAll(/[æðđħıłøœßþ]/gu, (char) => LATIN_SPECIAL[char] ?? char);
+  stripUnicodeMarks(
+    text
+      .toLowerCase()
+      .replaceAll(/\p{Script=Cyrillic}/gu, (char) => CYRILLIC[char] ?? char),
+    { form: "NFD", markClass: "combining" },
+  ).replaceAll(/[æðđħıłøœßþ]/gu, (char) => LATIN_SPECIAL[char] ?? char);
 
 const startsWithRun = (
   tokens: readonly string[],
