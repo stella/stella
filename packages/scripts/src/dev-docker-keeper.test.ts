@@ -68,7 +68,6 @@ describe("protected Docker runtime recovery", () => {
         now: () => elapsed,
         sleep: async (milliseconds) => {
           elapsed += milliseconds;
-          return Promise.resolve();
         },
       }),
     ).toMatchObject({
