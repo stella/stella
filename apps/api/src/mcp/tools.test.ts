@@ -166,8 +166,9 @@ const wireSchemaValidator = createWireSchemaValidator();
  * tool's executable output source. The schema a client is shown is a
  * projection of that source, so each successful result of a tool with an
  * output contract must carry structured content, and that content is read
- * against the advertised output schema by an independent validator. A relayed
- * third-party tool resolves no contract and is exempt.
+ * against the advertised output schema by an independent validator and must
+ * exclude request receipts. A relayed third-party tool resolves no contract
+ * and is exempt.
  */
 const handleMcpToolCall = async (
   call: Parameters<typeof dispatchMcpToolCall>[0],
@@ -178,6 +179,10 @@ const handleMcpToolCall = async (
     call.mode,
   )?.outputSchema;
   if (result.isError !== true && outputSchema !== undefined) {
+    expect(
+      JSON.stringify(result.structuredContent),
+      `${call.toolName} success result includes a request receipt`,
+    ).not.toContain('"requestId"');
     expect(
       result.structuredContent,
       `${call.toolName} succeeded without structured content`,

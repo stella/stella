@@ -261,7 +261,6 @@ describe("search_index_unavailable", () => {
     const refusal = searchIndexUnavailableError(new Error("refused"));
     const response = mapHandlerResult({
       id: "legislation.search",
-      access: "read",
       result: new ElysiaCustomStatusResponse(503, {
         code: refusal.code,
         message: refusal.message,
