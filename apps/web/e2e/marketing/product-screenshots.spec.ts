@@ -22,6 +22,9 @@ const EXPORT_REVIEW_WORKSPACE_ID = "bb8641dc-0667-574c-8e30-152a1fd4b3f5";
 // `ws-akvizice-energo-doc-7`).
 const SUPPLIER_AGREEMENT_ENTITY_ID = "84824638-eb81-58c5-8a81-5d7e961fb7d5";
 const SUPPLIER_AGREEMENT_FIELD_ID = "3f985a8b-26be-5a07-89d3-2a05acb94354";
+// The matter's file property (seed-dev.ts `ws-akvizice-energo-prop-file`): the
+// edit lock the editor capture takes is keyed by entity and this property.
+const SUPPLIER_AGREEMENT_PROPERTY_ID = "fa85736e-0b89-5386-8332-c2bb53f18c46";
 // Seeded `Redacted_Due_Diligence_Extract.docx` in the same matter, opened by
 // the anonymization capture.
 const ANONYMIZED_EXTRACT_ENTITY_ID = "c3dc74a6-7855-5157-84db-ddf14f886df4";
@@ -180,6 +183,10 @@ test("capture landing product screenshots", async ({
   await expect(page.getByText("Legal database").first()).toBeVisible({
     timeout: COLD_COMPILE_TIMEOUT,
   });
+
+  // Start from no edit lock: a lock left by an earlier run would badge the
+  // Supplier Agreement row in the workspace shot.
+  await releaseSupplierAgreementEditLock(page.request);
 
   // Resolved once (not per capture/theme): only needed when the "agent"
   // capture is actually part of this run.
@@ -342,6 +349,14 @@ test("capture landing product screenshots", async ({
         await expect(
           page.getByText("Internal_SAFE_Agreement.docx").first(),
         ).toBeVisible();
+        // Both themes must show the same rows: no document carries an edit
+        // lock badge (the editor capture releases its lock below).
+        await expect(
+          page.getByText("Supplier_Agreement.docx").first(),
+        ).toBeVisible();
+        await expect(
+          page.locator('[data-slot="active-edit-badge"]'),
+        ).toHaveCount(0);
       }
       if ("prepare" in capture && capture.prepare === "open-table") {
         await page.getByRole("tab", { name: "Table" }).click();
@@ -391,9 +406,37 @@ test("capture landing product screenshots", async ({
           maxDiffPixelRatio: 0.005,
           scale: "css",
         });
+      // `?editing=true` opened an edit session, i.e. a lease-backed lock on the
+      // Supplier Agreement. A full navigation never unmounts the editor, so
+      // the session would outlive this capture and badge the document in the
+      // next theme pass's workspace shot. Release it explicitly.
+      if (capture.name === "editor") {
+        await releaseSupplierAgreementEditLock(page.request);
+      }
     }
   }
 });
+
+// Cancels this user's live edit session on the Supplier Agreement, if any
+// (apps/api/src/handlers/entities/release-desktop-edit-lock.ts); a no-op when
+// none is open.
+const releaseSupplierAgreementEditLock = async (request: APIRequestContext) => {
+  const apiBaseURL = process.env["E2E_API_URL"] ?? "http://localhost:3001";
+  const webOrigin = new URL(
+    process.env["E2E_WEB_URL"] ?? "http://localhost:3000",
+  ).origin;
+  const response = await request.post(
+    `${apiBaseURL}/v1/entities/${AKVIZICE_WORKSPACE_ID}/desktop-edit-sessions/release`,
+    {
+      data: {
+        entityId: SUPPLIER_AGREEMENT_ENTITY_ID,
+        propertyId: SUPPLIER_AGREEMENT_PROPERTY_ID,
+      },
+      headers: { origin: webOrigin },
+    },
+  );
+  expect(response.ok(), await response.text()).toBe(true);
+};
 
 // Each product capture owns its Inspector state. Full navigation creates a
 // fresh store, while removing the persisted Inspector state prevents an editor
