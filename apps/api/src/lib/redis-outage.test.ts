@@ -18,7 +18,7 @@ import { describe, expect, test } from "bun:test";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
-import type { RateLimitOptions } from "@/api/lib/rate-limit/rate-limit";
+import type { RateLimitOptions } from "@/api/lib/rate-limit/contracts";
 
 // Port 1 is privileged and unbound in every environment this runs in, so a
 // connect attempt fails immediately rather than hanging on a routing black

@@ -3,6 +3,8 @@ import * as v from "valibot";
 import { DAY_IN_MS } from "@stll/time";
 
 import { getAuth, resolveCredentialMemberAuthorization } from "@/api/lib/auth";
+import type { VerifyApiKey } from "@/api/lib/auth/api-key-endpoints";
+import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
 import {
   API_KEY_KIND,
   API_KEY_POLICY,
@@ -77,10 +79,8 @@ type MachineApiKeyCredential = { session: McpSession; expiresAt: Date | null };
 const KEY_SELF_INSPECTION = "self_inspection";
 
 type MachineApiKeyDependencies = {
-  verifyApiKey?: (
-    ...args: Parameters<ReturnType<typeof getAuth>["api"]["verifyApiKey"]>
-  ) => ReturnType<ReturnType<typeof getAuth>["api"]["verifyApiKey"]>;
-  resolveAuthorization?: typeof resolveCredentialMemberAuthorization;
+  verifyApiKey?: VerifyApiKey;
+  resolveAuthorization?: ResolveCredentialMemberAuthorization;
   resolvePersonalPolicy?: typeof readPersonalApiKeyPolicy;
 };
 

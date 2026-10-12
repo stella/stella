@@ -14,19 +14,13 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import {
-  CogIcon,
-  NewChatIcon,
-  PanelRightIcon,
-  PinIcon,
-  PinOffIcon,
-} from "@stll/ui/icons";
+import { CogIcon, PanelRightIcon, PinIcon, PinOffIcon } from "@stll/ui/icons";
 import {
   InspectorDock,
   resolveInspectorDockWidth,
   SIDE_RAIL_ICON_BUTTON_SIZE,
 } from "@stll/ui/inspector";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Separator } from "@stll/ui/separator";
 import { Sheet, SheetHeader, SheetPopup, SheetTitle } from "@stll/ui/sheet";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -88,7 +82,6 @@ import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { matterChromeStyle, resolveMatterColor } from "@/lib/matter-colors";
 import type { MatterChromeStyle } from "@/lib/matter-colors";
-import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
@@ -97,6 +90,7 @@ import {
   workspacesNavigationOptions,
 } from "@/lib/workspaces/queries";
 import { shouldForceSidebarCollapsed } from "@/routes/-inspector-pane-width";
+import { ChatMenuContent } from "@/routes/-protected-app/-components/chat-menu-content";
 import { PaymentRetryBanner } from "@/routes/-protected-app/-components/payment-retry-banner";
 import {
   createSessionActivity,
@@ -110,6 +104,12 @@ const LazyInspectorPanel = lazy(
       default: m.InspectorPanel,
     })),
 );
+
+const LazyNewChatMenuItem = lazy(async () => {
+  const module =
+    await import("@/routes/-protected-app/-components/new-chat-menu-item");
+  return { default: module.NewChatMenuItem };
+});
 
 // Visual shell for the inspector rail while the panel chunk is
 // loading. Mirrors the real rail's chrome (top toggle, bottom
@@ -524,17 +524,12 @@ function ProtectedContent() {
           />
           {/* oxlint-disable-next-line react/refs -- reads the imperatively-captured trigger anchor to position the menu; the menu-open state that gates this render is set in the same handler that captures the anchor */}
           <MenuPopup anchor={chatMenuAnchorRef.current ?? undefined}>
-            <CapabilityAction action={{ capability: "ai" }} surface="menu">
-              {(capabilityProps) => (
-                <MenuItem
-                  onClick={handleOpenNewChatFromMenu}
-                  {...capabilityProps}
-                >
-                  <NewChatIcon />
-                  {t("chat.newChat")}
-                </MenuItem>
-              )}
-            </CapabilityAction>
+            <ChatMenuContent label={t("chat.newChat")}>
+              <LazyNewChatMenuItem
+                label={t("chat.newChat")}
+                onClick={handleOpenNewChatFromMenu}
+              />
+            </ChatMenuContent>
           </MenuPopup>
         </Menu>
       </header>
