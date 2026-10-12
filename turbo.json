@@ -733,27 +733,6 @@
         "$TURBO_ROOT$/packages/ui/**"
       ]
     },
-    "@stll/legal-atlas-runner#typecheck": {
-      "cache": true,
-      "dependsOn": ["transit", "@stll/api#generate:typecheck-declarations"],
-      "inputs": [
-        "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/.npmrc",
-        "$TURBO_ROOT$/bunfig.toml",
-        "$TURBO_ROOT$/package.json",
-        "$TURBO_ROOT$/packages/typescript-config/**",
-        "$TURBO_ROOT$/patches/**",
-        "$TURBO_ROOT$/types/**"
-      ],
-      "outputs": []
-    },
-    "@stll/legal-atlas-runner#lint": {
-      "dependsOn": [
-        "transit",
-        "^generate:capability-runtime",
-        "@stll/api#generate:typecheck-declarations"
-      ]
-    },
     "@stll/api#typecheck": {
       "cache": true,
       "dependsOn": [
@@ -924,15 +903,7 @@
         "!.turbo/**",
         "!.cache/typecheck-declarations/**",
         "package.json",
-        "tsconfig*.json",
-        "$TURBO_ROOT$/packages/agent-engine/**",
-        "$TURBO_ROOT$/packages/analytics-config/**",
-        "$TURBO_ROOT$/packages/chat/**",
-        "$TURBO_ROOT$/packages/invoicing/**",
-        "$TURBO_ROOT$/packages/property-testing/**",
-        "$TURBO_ROOT$/packages/scripts/**",
-        "$TURBO_ROOT$/packages/start-runtime/**",
-        "$TURBO_ROOT$/packages/user-agent/**"
+        "tsconfig*.json"
       ],
       "outputs": [".cache/typecheck-declarations/**"]
     },
@@ -998,20 +969,7 @@
         "!.cache/**",
         "!.turbo/**",
         "package.json",
-        "tsconfig*.json",
-        "$TURBO_ROOT$/packages/agent-engine/**",
-        "$TURBO_ROOT$/packages/analytics-config/**",
-        "$TURBO_ROOT$/packages/boe/**",
-        "$TURBO_ROOT$/packages/catalogue/**",
-        "$TURBO_ROOT$/packages/chat-limits/**",
-        "$TURBO_ROOT$/packages/chat/**",
-        "$TURBO_ROOT$/packages/cli/**",
-        "$TURBO_ROOT$/packages/fetch/**",
-        "$TURBO_ROOT$/packages/invoicing/**",
-        "$TURBO_ROOT$/packages/scripts/**",
-        "$TURBO_ROOT$/packages/skills/**",
-        "$TURBO_ROOT$/packages/start-runtime/**",
-        "$TURBO_ROOT$/packages/user-agent/**"
+        "tsconfig*.json"
       ],
       "outputs": []
     },
@@ -1020,8 +978,7 @@
       "dependsOn": [
         "transit",
         "@stll/cli#codegen:runtime",
-        "generate:capability-runtime",
-        "generate:typecheck-declarations"
+        "generate:capability-runtime"
       ],
       "inputs": [
         "$TURBO_ROOT$/.oxlint-plugins/**",
@@ -1102,8 +1059,7 @@
       "dependsOn": [
         "transit",
         "@stll/cli#codegen:runtime",
-        "generate:capability-runtime",
-        "generate:typecheck-declarations"
+        "generate:capability-runtime"
       ],
       "inputs": [
         "$TURBO_ROOT$/packages/agent-input/**",

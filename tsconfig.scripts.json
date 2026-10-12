@@ -1,11 +1,6 @@
 {
   "extends": "@stll/typescript-config/base.json",
   "compilerOptions": {
-    // This program emits no JavaScript; declaration references have a different
-    // output layout, so preserve explicit TypeScript import extensions.
-    "allowImportingTsExtensions": true,
-    "rewriteRelativeImportExtensions": false,
-    "disableSourceOfProjectReferenceRedirect": true,
     "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.scripts.json",
     "paths": {
       "@/api/*": ["./apps/api/src/*"],
@@ -25,6 +20,5 @@
   // "types" is the shared ambient-module root (asset imports like *.docx and
   // *.wasm) that the same schema-import graph also reaches.
   "include": ["scripts/**/*.ts", "types"],
-  "exclude": ["scripts/browser"],
-  "references": [{ "path": "./apps/api/tsconfig.declarations.json" }]
+  "exclude": ["scripts/browser"]
 }

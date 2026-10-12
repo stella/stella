@@ -1,10 +1,8 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "disableSourceOfProjectReferenceRedirect": true,
     "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.contracts.json"
   },
   "include": ["contracts", "../../types"],
-  "exclude": [],
-  "references": [{ "path": "./tsconfig.declarations.json" }]
+  "exclude": []
 }

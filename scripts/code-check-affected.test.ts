@@ -839,9 +839,7 @@ process.exit(childExitStatus(result));
         tasks,
         `${name}#typecheck`,
         "dependsOn",
-      ).filter((dependency) =>
-        dependency.split("#").at(-1)?.startsWith("generate:"),
-      );
+      ).filter((dependency) => dependency.startsWith("generate:"));
       if (producers.length > 0) {
         // A dedicated cached producer owns the artifact; both compiler tasks
         // await it instead of making lint await the entire typecheck.
@@ -850,11 +848,7 @@ process.exit(childExitStatus(result));
         );
         for (const producer of producers) {
           expect(
-            taskField(
-              tasks,
-              producer.includes("#") ? producer : `${name}#${producer}`,
-              "outputs",
-            ).length,
+            taskField(tasks, `${name}#${producer}`, "outputs").length,
           ).toBeGreaterThan(0);
         }
         continue;
