@@ -120,7 +120,7 @@ export const typecheckCacheStructuralProblems = (
           (pattern) =>
             !pattern.startsWith("!") && new Bun.Glob(pattern).match(input),
         ) ||
-        task.inputs?.some(
+        task.inputs.some(
           (pattern) =>
             pattern.startsWith("!") &&
             new Bun.Glob(pattern.slice(1)).match(input),
