@@ -314,7 +314,7 @@ describe("invoice prefill", () => {
       vatTreatment: "not_vat_payer",
       vatRateBps: 0,
     });
-    expect(invoice.totalAmount).toBe(375_000);
+    expect(invoice.totalAmount).toBe(cents(375_000));
   });
 
   test("a business client registered in another member state is reverse charged", async () => {
@@ -348,7 +348,7 @@ describe("invoice prefill", () => {
       vatTreatment: "reverse_charge",
       vatRateBps: 0,
     });
-    expect(invoice.vatAmount).toBe(0);
+    expect(invoice.vatAmount).toBe(cents(0));
   });
 
   test("a free-text tax ID of a Czech client keeps the standard rate", async () => {
@@ -374,7 +374,7 @@ describe("invoice prefill", () => {
       vatTreatment: "domestic_vat",
       vatRateBps: 2100,
     });
-    expect(invoice.vatAmount).toBe(78_750);
+    expect(invoice.vatAmount).toBe(cents(78_750));
   });
 
   test("without a seller profile lines keep 0 % VAT and explicit dates win", async () => {
