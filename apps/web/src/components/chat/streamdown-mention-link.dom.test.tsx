@@ -70,7 +70,7 @@ const TARGETS = {
 
 const CHIP_LABEL = "Cited passage";
 
-const renderChip = (href: string) =>
+const renderChip = (href: string, workspaceId?: string) =>
   render(
     <QueryClientProvider
       client={
@@ -82,7 +82,7 @@ const renderChip = (href: string) =>
           <StreamdownMentionLink
             href={href}
             interactive
-            workspaceId={undefined}
+            workspaceId={workspaceId}
           >
             {CHIP_LABEL}
           </StreamdownMentionLink>
@@ -146,6 +146,7 @@ describe("inline citation chips draw the cited file's type", () => {
     (blockId, mime) => {
       const view = renderChip(
         `#office:${identity.entityId}:${identity.fieldId}:${blockId}`,
+        identity.workspaceId,
       );
       expect(chipGlyph(view.container)).toBe(sharedGlyph(mime));
     },
