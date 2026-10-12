@@ -1,11 +1,6 @@
-/**
- * Some publisher rows put a complete HTML body in `plain_text`. Require a
- * structural root enclosing another structural element before reading it as
- * HTML: prose quoting tags, escaped tags and OCR angle brackets stay literal.
- */
-const STRUCTURAL_ROOT =
-  /^<(div|article|section|main|body|html|pre|p)(?=[\s>])/iu;
-const TAG = /<\/?([a-z][a-z0-9]*)(?=[\s/>])[^<>]*>/giu;
+import * as cheerio from "cheerio";
+import { isTag, isText } from "domhandler";
+
 const STRUCTURAL_TAGS = new Set([
   "div",
   "article",
@@ -27,25 +22,24 @@ const STRUCTURAL_TAGS = new Set([
   "table",
 ]);
 
+/** Prose outside structural roots keeps the plain column's literal markup. */
 export const plainTextStructureOf = (text: string): "plain" | "html" => {
-  const body = text.trim();
-  const root = STRUCTURAL_ROOT.exec(body)?.at(1)?.toLowerCase();
-  if (root === undefined || !body.toLowerCase().endsWith(`</${root}>`)) {
-    return "plain";
-  }
-  let structuralElements = 0;
-  for (const match of body.matchAll(TAG)) {
-    const name = match.at(1)?.toLowerCase();
-    if (
-      !match[0].startsWith("</") &&
-      name !== undefined &&
-      STRUCTURAL_TAGS.has(name)
-    ) {
-      structuralElements += 1;
-      if (structuralElements > 1) {
-        return "html";
+  const $ = cheerio.load(text, {}, false);
+  let hasStructuralRoot = false;
+  for (const node of $.root().contents().toArray()) {
+    if (isText(node)) {
+      if (node.data.trim() !== "") {
+        return "plain";
       }
+      continue;
     }
+    if (!isTag(node)) {
+      continue;
+    }
+    if (!STRUCTURAL_TAGS.has(node.name.toLowerCase())) {
+      return "plain";
+    }
+    hasStructuralRoot = true;
   }
-  return "plain";
+  return hasStructuralRoot ? "html" : "plain";
 };

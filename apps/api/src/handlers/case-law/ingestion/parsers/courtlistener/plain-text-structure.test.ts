@@ -43,7 +43,7 @@ test("literal and escaped markup in plain text keeps its source characters", () 
   for (const source of [
     "The formula uses <n> terms and <k> factors.",
     "The exhibit prints <div><p>literal example</p></div> in prose.",
-    "<div>one quoted tag</div>",
+    "<div>quoted opener</div> The formula uses <p>terms</p> <div>quoted closer</div>",
     "&lt;div&gt;&lt;p&gt;escaped example&lt;/p&gt;&lt;/div&gt;",
     "<RXQJ\u0003Y\u0003 text > OCR words",
   ]) {
@@ -83,6 +83,18 @@ test("structural HTML in plain columns conserves generated text", () => {
             blocks.map(({ plainText }) => plainText),
           ),
         ).toEqual(paragraphs);
+        const mixed = `${source} The formula uses terms. ${source}`;
+        expect(plainTextStructureOf(mixed)).toBe("plain");
+        const literal = select(mixed);
+        expect(literal.status).toBe("parsed");
+        if (literal.status === "parsed") {
+          expect(literal.structure).toBe("plain");
+          expect(
+            literal.text.units.flatMap(({ blocks }) =>
+              blocks.map(({ plainText }) => plainText),
+            ),
+          ).toEqual([mixed]);
+        }
         expect(plainTextStructureOf(Bun.escapeHTML(source))).toBe("plain");
         expect(plainTextStructureOf(`The exhibit prints ${source}.`)).toBe(
           "plain",
@@ -90,4 +102,18 @@ test("structural HTML in plain columns conserves generated text", () => {
       },
     ),
   );
+});
+
+test.each([
+  "<div><p>The court affirms the judgment.</p></div>",
+  "<html><body><p>The court affirms the judgment.</p></body></html>",
+  "<p>The court affirms.</p> \n\t <div>The judgment stands.</div>",
+  "<div>The court affirms the judgment.</div>",
+])("structural roots separated only by whitespace are HTML: %s", (source) => {
+  expect(plainTextStructureOf(source)).toBe("html");
+  const parsed = select(source);
+  expect(parsed.status).toBe("parsed");
+  if (parsed.status === "parsed") {
+    expect(parsed.structure).toBe("html");
+  }
 });
