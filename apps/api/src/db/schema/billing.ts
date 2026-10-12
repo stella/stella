@@ -1317,5 +1317,6 @@ export const desktopTimeEntryBatches = p.pgTable(
       sql`(${table.status} = 'committed' AND ${table.requestFingerprint} IS NOT NULL AND ${table.result} IS NOT NULL) OR (${table.status} = 'cancelled' AND ${table.requestFingerprint} IS NULL AND ${table.result} IS NULL)`,
     ),
     ...userOrganizationPolicies(),
+    ...reviewResetOwnerPolicies("desktop_time_entry_batches"),
   ],
 );

@@ -22,4 +22,12 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "desktop_time_entry_batches" TO st
 CREATE POLICY "user_select" ON "desktop_time_entry_batches" FOR SELECT TO stella USING (organization_id = (SELECT current_setting('app.organization_id', true)) AND user_id = (SELECT current_setting('app.user_id', true)));--> statement-breakpoint
 CREATE POLICY "user_insert" ON "desktop_time_entry_batches" FOR INSERT TO stella WITH CHECK (organization_id = (SELECT current_setting('app.organization_id', true)) AND user_id = (SELECT current_setting('app.user_id', true)));--> statement-breakpoint
 CREATE POLICY "user_update" ON "desktop_time_entry_batches" FOR UPDATE TO stella USING (organization_id = (SELECT current_setting('app.organization_id', true)) AND user_id = (SELECT current_setting('app.user_id', true))) WITH CHECK (organization_id = (SELECT current_setting('app.organization_id', true)) AND user_id = (SELECT current_setting('app.user_id', true)));--> statement-breakpoint
-CREATE POLICY "user_delete" ON "desktop_time_entry_batches" FOR DELETE TO stella USING (organization_id = (SELECT current_setting('app.organization_id', true)) AND user_id = (SELECT current_setting('app.user_id', true)));
+CREATE POLICY "user_delete" ON "desktop_time_entry_batches" FOR DELETE TO stella USING (organization_id = (SELECT current_setting('app.organization_id', true)) AND user_id = (SELECT current_setting('app.user_id', true)));--> statement-breakpoint
+CREATE POLICY "review_reset_owner_select" ON "desktop_time_entry_batches" FOR SELECT TO PUBLIC USING (
+  current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.desktop_time_entry_batches'::regclass)
+  AND organization_id = nullif(current_setting('app.correspondence_review_reset_organization_id', true), '')
+);--> statement-breakpoint
+CREATE POLICY "review_reset_owner_delete" ON "desktop_time_entry_batches" FOR DELETE TO PUBLIC USING (
+  current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.desktop_time_entry_batches'::regclass)
+  AND organization_id = nullif(current_setting('app.correspondence_review_reset_organization_id', true), '')
+);
