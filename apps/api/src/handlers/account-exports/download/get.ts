@@ -17,6 +17,7 @@ import { getMcpBaseUrl } from "@/api/mcp/constants";
 const personalDataExportDownloadLink = createSafeSessionHandler(
   {
     accountAccess: ACCOUNT_ACCESS.accountControl,
+    contract: "patch",
     access: "read",
     mcp: {
       type: "capability",

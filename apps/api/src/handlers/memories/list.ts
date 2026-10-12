@@ -17,6 +17,7 @@ import { brandPersistedAiMemoryId } from "@/api/lib/safe-id-boundaries";
 const DEFAULT_LIMIT = 50;
 
 const config = {
+  contract: "patch",
   // Memory is an AI-assistant capability; gate reads on chat access.
   // Row visibility (firm / own / accessible matters) is enforced by RLS,
   // so firm memory still reads org-wide for any chat-capable member.

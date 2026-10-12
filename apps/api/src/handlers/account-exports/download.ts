@@ -18,6 +18,7 @@ import {
 const downloadPersonalDataExport = createSafeSessionHandler(
   {
     accountAccess: ACCOUNT_ACCESS.accountControl,
+    contract: "patch",
     mcp: { type: "internal", reason: "auth_plumbing" },
     params: accountExportParams,
     contentDelivery: { type: "audited" },

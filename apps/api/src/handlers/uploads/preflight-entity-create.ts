@@ -16,6 +16,7 @@ const bodySchema = t.Object({
 // Answers whether the upload that follows would fit, so it asks for the grant
 // that upload spends rather than the baseline every role holds.
 const config = {
+  contract: "patch",
   permissions: { entity: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "upload_mechanics" },

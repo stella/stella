@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import {
   CITATION_KIND,
   CITATION_KIND_EVIDENCE,
@@ -204,7 +206,7 @@ describe("the registry decides when context does not", () => {
   test("a constitutional-court citation is precedent when its mark is decomposed", () => {
     // "Ú" as U+0055 U+0301, the form this publisher serves. A combining mark
     // is not a letter, so the registry read as a bare "U" and fell through.
-    const decomposed = "I. ÚS 1135/17".normalize("NFD");
+    const decomposed = normalizeUnicode("I. ÚS 1135/17", "NFD");
     expect(decomposed).not.toBe("I. ÚS 1135/17");
     expect(classifyCitation({ citationText: decomposed, context: null })).toBe(
       CITATION_KIND.PRECEDENT,

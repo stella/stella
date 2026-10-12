@@ -32,6 +32,7 @@ const MAX_REVISION_PAGE_SIZE = 50;
 const DEFAULT_REVISION_PAGE_SIZE = 20;
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason: "Returns answer snapshots rather than stored-file grants.",

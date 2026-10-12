@@ -128,6 +128,11 @@
     "orSignInWithEmail": "vai pierakstieties ar e-pastu",
     "organizationNamePlaceholder": "Mana organizācija",
     "password": "Parole",
+    "professionalUse": {
+      "description": "Veidojot jūsu kontu, šis paziņojums jums netika parādīts. Lai turpinātu, pieņemiet to.",
+      "title": "Apstipriniet profesionālu lietošanu"
+    },
+    "professionalUseStatement": "Izveidojot kontu, jūs apliecināt, ka izmantojat stella profesionāliem mērķiem, un saprotat, ka stella ir rīks juridiskajiem speciālistiem un neaizstāj juridisku konsultāciju.",
     "rateLimitExceeded": "Pārāk daudz mēģinājumu. Lūdzu, mēģiniet vēlāk.",
     "resendCode": "Nosūtīt kodu vēlreiz uz <email>{emailAddress}</email>",
     "selectOrganization": "Izvēlieties organizāciju",
@@ -799,7 +804,7 @@
       "courtCount": "{count, plural, zero {# tiesu} one {# tiesa} other {# tiesas}}",
       "newLast24Hours": "{count} pēdējās 24 h",
       "newLast7Days": "Jaunie pēdējās 7 dienās",
-      "unlistedCourts": "{count, plural, zero {Tiesas ārpus # lielākajām} one {Tiesas ārpus lielākās} other {Tiesas ārpus # lielākajām}}"
+      "otherCourts": "Citas tiesas"
     },
     "courtTiers": {
       "constitutional": "Konstitucionālās tiesas",
@@ -815,6 +820,7 @@
       "decisionYears": "Nolēmumu gadi",
       "description": "Cik daudz tiesu prakses ir korpusā pa valstīm un tiesām un cik aktuāls ir katrs avots.",
       "exceedsReportedTotal": "Satur vairāk nekā publicētāja pēdējais norādītais kopskaits {date}",
+      "gapStatusUnknown": "Iztrūkumu statuss nav zināms",
       "generatedAt": "Dati uz {date}",
       "globeLabel": "Valstis, kuru judikatūru satur korpuss, uz globusa",
       "healthCurrent": "Aktuāls",
@@ -823,9 +829,12 @@
       "healthStalled": "Apstājies",
       "healthUnknown": "Nekad nav palaists",
       "inPreparation": "Sagatavošanā",
+      "knownGaps": "Zināmie iztrūkumi",
       "lastSync": "Pēdējā sinhronizācija",
+      "noGapsRecorded": "Iztrūkumi nav reģistrēti",
       "notCountedYet": "Vēl nav saskaitīts",
       "notMeasuredYet": "Vēl nav izmērīts",
+      "pendingTexts": "Neiegūtie teksti",
       "reportedByListing": "Saskaitīts pēc publicētāja saraksta",
       "reportedByOperator": "Ievadīts manuāli",
       "reportedByPublisher": "Paša publicētāja skaits",
@@ -1089,6 +1098,9 @@
       "toastDescription": "Pilnas lapas tērzēšana ar saglabātām sarunām drīz būs pieejama.",
       "toastTitle": "Pilnais skats vēl nav pieejams"
     },
+    "activity": {
+      "review": "Pārskatīšanas atjauninājums"
+    },
     "aiPrompt": "AI ziņojuma lauks",
     "aiThread": "AI saruna",
     "analyzingSources": "Avotu analīze",
@@ -1274,6 +1286,9 @@
       "noMatters": "Lietu vēl nav",
       "noRecentChats": "Nav nesenu tērzēšanu",
       "noSkills": "Prasmju vēl nav",
+      "openAllMatters": "Atvērt visas lietas",
+      "openChatHistory": "Atvērt tērzēšanas vēsturi",
+      "openSkillsLibrary": "Atvērt prasmju bibliotēku",
       "pinnedMatters": "Piespraustās lietas",
       "recentChats": "Nesenās tērzēšanas",
       "skillEditedBy": "Rediģēja {name} · {time}",
@@ -1924,6 +1939,7 @@
     "noResults": "Nav rezultātu",
     "noVersions": "Nav versiju vēstures",
     "none": "Nav",
+    "notStated": "Nav norādīts",
     "notes": "Piezīmes",
     "open": "Atvērt",
     "openInNewTab": "Atvērt jaunā cilnē",
@@ -1993,6 +2009,7 @@
     "sort": "Kārtot",
     "source": "Avots",
     "stale": "Novecojis",
+    "start": "Sākt",
     "status": "Statuss",
     "stepCount": "{count, plural, zero {# soļu} one {# solis} other {# soļi}}",
     "stepProgress": "{current} no {total}",
@@ -2809,7 +2826,6 @@
       },
       "selectFlow": "Izvēlieties darbplūsmu",
       "sizeConfirmTitle": "Apjomīga plūsmas izpilde",
-      "start": "Sākt",
       "startFailed": "Neizdevās palaist darbplūsmu.",
       "started": "Darbplūsma palaista",
       "stepProgress": "{current}. solis no {total}",
@@ -3026,8 +3042,7 @@
   "guides": {
     "action": {
       "replay": "Sākt no jauna",
-      "skip": "Izlaist",
-      "start": "Sākt"
+      "skip": "Izlaist"
     },
     "checklist": {
       "progress": "Pabeigti {completed} no {total}"
@@ -3707,6 +3722,10 @@
         "nameMissing": "Nav saglabāts: pievienojiet nosaukumu",
         "positionsNeedAttention": "Nav saglabāts: {count, plural, zero {# pozīcijām} one {# pozīcijai} other {# pozīcijām}} jāpievērš uzmanība"
       },
+      "buildWithAi": {
+        "description": "Atbildiet uz dažiem jautājumiem tērzēšanā, un pārbaudes ceļvedis tiks saglabāts sarunas gaitā.",
+        "title": "Izveidot ar AI"
+      },
       "check": "Izmantot precīzu noteikumu AI vietā",
       "checkHint": "Izmērāmiem nosacījumiem, piemēram: maksājuma termiņš ≤ 30 dienas.",
       "checkKind": {
@@ -4157,6 +4176,10 @@
     "aiConfig": {
       "addProvider": "Pievienot pakalpojumu sniedzēju",
       "addProviderFirst": "Vispirms pievienojiet pakalpojumu sniedzēju",
+      "anthropicKeyDisabled": "Izveidojiet aktīvu API atslēgu Anthropic konsolē un aizstājiet šo atslēgu.",
+      "anthropicNoCredits": "Papildiniet API kredītu atlikumu Anthropic konsoles norēķinu sadaļā un mēģiniet vēlreiz.",
+      "anthropicOrganizationRestricted": "Lūdziet Anthropic organizācijas administratoram piešķirt piekļuvi vai izmantojiet atļautas organizācijas atslēgu.",
+      "anthropicSubscriptionToken": "Izmantojiet Anthropic konsolē izveidotu API atslēgu, nevis Claude abonementa piekļuves pilnvaru.",
       "anthropicWorkspaceId": "Darbvietas ID",
       "anthropicWorkspaceRequired": "Šai Anthropic atslēgai nepieciešama darbvieta. Ievadiet tās ID no Anthropic konsoles un saglabājiet vēlreiz.",
       "anthropicWorkspaces": "Atvērt Anthropic darbvietas",
@@ -4165,7 +4188,9 @@
       "apiKeyPlaceholder": "Ievadiet savu API atslēgu",
       "apiKeySaved": "Saglabātā atslēga {key}",
       "apiKeyUpdatePlaceholder": "Ievadiet jaunu atslēgu, lai atjauninātu",
+      "azureModelNotEnabled": "Pārbaudiet, vai modeļa izvietojums pastāv atlasītajā Azure resursā un reģionā un vai šai atslēgai ir piekļuve tam.",
       "baseUrl": "Bāzes URL",
+      "bedrockModelNotEnabled": "Pārbaudiet modeļa pieejamību atlasītajā AWS reģionā, piekļuvi modelim un savas IAM atļaujas. Iespējojiet modeli vai izvēlieties pieejamu modeli un mēģiniet vēlreiz.",
       "chooseModelsSubtitle": "Katrai lomai izvēlieties modeli. Cenas atjaunojas labajā pusē.",
       "chooseModelsTitle": "Izvēlieties modeļus",
       "configure": "Konfigurēt",
@@ -4173,11 +4198,16 @@
       "customModelDescription": "Šis modeļa ID nav stella katalogā. Tas tiks nosūtīts izvēlētajam pakalpojumu sniedzējam tieši tā, kā ievadīts.",
       "customModelHint": "Katalogā nav atbilstības. Ievadiet jebkuru modeļa ID; pielāgotie ID tiek saglabāti tieši tā, kā ievadīti.",
       "decision": {
+        "dataRegion": "Datu reģions",
         "description": "Jautājumi ar noteiktām atbildēm (dokumentu kategorijas, citātu polaritāte)",
         "generativeFallback": "Uzdevumam izmanto ģeneratīvo modeli.",
         "incomplete": "Ievadiet lēmumu modeļa API atslēgu un modeli vai noņemiet to.",
         "instanceProvided": "stella jau nodrošina lēmumu modeli; pievienojiet savu tikai tad, ja vēlaties izmantot citu.",
-        "label": "Lēmumu pieņemšana"
+        "label": "Lēmumu pieņemšana",
+        "regionEu": "Eiropas Savienība",
+        "regionGlobal": "Globāls",
+        "reuseOpenAIKey": "Izmantot manu OpenAI atslēgu",
+        "separateKey": "Izmantot atsevišķu atslēgu"
       },
       "defaultModel": "Noklusējums: {model}",
       "defaultModelOption": "Noklusējums",
@@ -4191,6 +4221,8 @@
       "editProviders": "Rediģēt pakalpojumu sniedzējus",
       "endpoint": "Galamērķis",
       "endpointDescription": "Izmantojiet Azure OpenAI vai Azure Foundry /openai/v1 galamērķi. stella saglabā normalizēto galamērķi.",
+      "googleApiNotEnabled": "Iespējojiet Generative Language API Google Cloud projektā, kuram pieder šī atslēga, un mēģiniet vēlreiz.",
+      "googleKeyRestricted": "Pārbaudiet šīs atslēgas API, IP adrešu un novirzošo vietņu ierobežojumus Google Cloud. Atļaujiet nepieciešamo API un sava servera pieprasījumus, pēc tam mēģiniet vēlreiz.",
       "keepSavedKey": "Paturēt saglabāto atslēgu",
       "keyFormatHint": "Šai atslēgai ir neparasts formāts pakalpojuma sniedzējam {provider}. Saglabājiet to, lai sniedzējs to pārbaudītu.",
       "modelForRole": "{role} modelis",
@@ -4200,6 +4232,9 @@
       "newApiKey": "Jauna API atslēga",
       "newApiKeyDescription": "Saglabājot izmaiņas, tā aizstās saglabāto atslēgu.",
       "noModelResults": "Nav atbilstošu piedāvāto modeļu",
+      "openaiInsufficientQuota": "Pārbaudiet OpenAI projekta budžetu un API norēķinu iestatījumus. Papildiniet kredītu atlikumu vai palieliniet attiecīgo limitu un mēģiniet vēlreiz.",
+      "openaiProjectOrganizationMismatch": "Izmantojiet vajadzīgā OpenAI projekta un organizācijas API atslēgu. Pārbaudiet to piekļuves iestatījumus un mēģiniet vēlreiz.",
+      "openrouterNoCredits": "Papildiniet kredītu atlikumu OpenRouter norēķinu sadaļā un mēģiniet vēlreiz.",
       "overrideRoles": "Pārrakstīt lomas",
       "overrideRolesDescription": "Izvēlieties, kuras lomas izmanto šo atslēgu, un pēc tam izvēlieties modeli katrai lomai. Neatlasītās lomas izmanto platformas noklusējumu.",
       "prices": {
@@ -4219,6 +4254,7 @@
       "providerForRole": "{role} pakalpojumu sniedzējs",
       "providerKeyInvalid": "{provider} atteica atslēgu. Pārbaudiet to pirms saglabāšanas.",
       "providerKeyInvalidShort": "Nederīgs",
+      "providerSetupConsole": "Atvērt pakalpojuma sniedzēja iestatījumus",
       "providersDescription": "Pievienojiet to pakalpojumu sniedzēju akreditācijas datus, kurus stella izmantos.",
       "providersPanel": "Pakalpojumu sniedzēji",
       "removeLastProviderConfirm": "Noņemt {provider}? Tiks atiestatīta arī pielāgotā AI modeļu izvēle.",
@@ -6105,12 +6141,30 @@
         "addPDF": "Pievienot PDF",
         "applyCrop": "Lietot apgriešanu",
         "crop": "Apgriezt",
-        "cropBottom": "Apakšā",
-        "cropDescription": "{count, plural, zero {Iestatiet apgriešanas malas atlasītajām lapām.} one {Iestatiet apgriešanas malas atlasītajai lapai.} other {Iestatiet apgriešanas malas # atlasītajām lapām.}}",
-        "cropLeft": "Pa kreisi",
-        "cropRight": "Pa labi",
+        "cropAdvanced": "Papildu iestatījumi",
+        "cropBottom": "Apakšā (mm)",
+        "cropDescription": "{count, plural, zero {Iestatiet apgriešanas malas atlasītajām lapām milimetros.} one {Iestatiet apgriešanas malas atlasītajai lapai milimetros.} other {Iestatiet apgriešanas malas # atlasītajām lapām milimetros.}}",
+        "cropHandle": "Mainīt apgriešanas apgabala izmēru: {position}",
+        "cropHandleBottom": "apakšā",
+        "cropHandleBottomLeft": "apakšā pa kreisi",
+        "cropHandleBottomRight": "apakšā pa labi",
+        "cropHandleLeft": "pa kreisi",
+        "cropHandleRight": "pa labi",
+        "cropHandleTop": "augšā",
+        "cropHandleTopLeft": "augšā pa kreisi",
+        "cropHandleTopRight": "augšā pa labi",
+        "cropHint": "Velciet apgabalu vai tā rokturus. Bulttaustiņi maina apgriešanu par 1 mm, kopā ar Shift — par 10 mm. Visām atlasītajām lapām tiek piemērotas vienādas malas.",
+        "cropLeft": "Pa kreisi (mm)",
+        "cropMove": "Pārvietot apgriešanas apgabalu",
+        "cropNextPage": "Nākamā atlasītā lapa",
+        "cropPage": "{page, number}. lapa no {count, number}",
+        "cropPreview": "Apgriešanas priekšskatījums, {page, number}. lapa",
+        "cropPreviewFailed": "Neizdevās attēlot lapas priekšskatījumu.",
+        "cropPreviousPage": "Iepriekšējā atlasītā lapa",
+        "cropRight": "Pa labi (mm)",
         "cropTitle": "Apgriezt lappuses",
-        "cropTop": "Augšā",
+        "cropTooSmall": "Šī lapa ir pārāk maza, lai to apgrieztu līdz vismaz 10 mm izmēram.",
+        "cropTop": "Augšā (mm)",
         "delete": "Dzēst",
         "deselectAll": "Noņemt visu atlasi",
         "discard": "Atmest",

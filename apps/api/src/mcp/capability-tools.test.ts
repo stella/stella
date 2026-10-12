@@ -41,6 +41,10 @@ import {
 } from "@/api/lib/feature-access/registry";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import { encodePaginationCursor } from "@/api/lib/pagination";
+import {
+  ACTION_KINDS,
+  ACTION_SERVICE_CREDENTIALS,
+} from "@/api/lib/rate-limit/action-kinds";
 import { isRecord } from "@/api/lib/type-guards";
 import type { AdvertisedSchemas } from "@/api/mcp/advertised-schema";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
@@ -2519,6 +2523,54 @@ describe("capability executor validate_only permission preflight", () => {
 
 // --- fix-3: gateway rate limit ----------------------------------------------
 
+describe("public-law capability service classification", () => {
+  test("public content capabilities never consume organization service budgets", () => {
+    const contentCapabilities = capabilityCatalog.filter(
+      (entry) =>
+        entry.access === "read" &&
+        entry.readClass === "public" &&
+        // Operator ingestion health is not a corpus content read.
+        entry.id !== "case-law.ingestion.get",
+    );
+    expect(contentCapabilities.map(({ id }) => id)).toContain(
+      "legislation.get",
+    );
+    for (const entry of contentCapabilities) {
+      expect(entry.consumesServices, entry.id).toBe(false);
+    }
+  });
+
+  test("model actions and public-law AI capabilities retain service classification", () => {
+    const modelActions = Object.entries(ACTION_KINDS).filter(
+      ([, definition]) =>
+        definition.serviceCredentials ===
+        ACTION_SERVICE_CREDENTIALS.organizationModel,
+    );
+    expect(modelActions.map(([kind]) => kind)).toEqual(
+      expect.arrayContaining([
+        "case-law.analysis",
+        "case-law.search-refine",
+        "case-law.search-expand",
+        "case-law.research-answers",
+      ]),
+    );
+    for (const [kind, definition] of modelActions) {
+      expect(definition.consumesServices, kind).toBe(true);
+    }
+    const aiCapabilities = capabilityCatalog.filter(
+      (entry) =>
+        entry.feature === "FEATURE_PUBLIC_LAW" &&
+        modelActions.some(([kind]) => entry.id.startsWith(`${kind}.`)),
+    );
+    expect(aiCapabilities.map(({ id }) => id)).toContain(
+      "case-law.analysis.generate",
+    );
+    for (const entry of aiCapabilities) {
+      expect(entry.consumesServices, entry.id).toBe(true);
+    }
+  });
+});
+
 describe("capability executor rate limit (fix-3)", () => {
   test("an exhausted budget -> rate_limited with a retry hint", async () => {
     consumeRateLimitMock.mockResolvedValueOnce({
@@ -2537,6 +2589,26 @@ describe("capability executor rate limit (fix-3)", () => {
     expect(error.hint).toContain("60 seconds");
     // Refused before the handler ran: the org-settings loader was not consulted.
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+  });
+
+  test("public-law content still exhausts the MCP gateway rate limit", async () => {
+    consumeRateLimitMock.mockResolvedValueOnce({
+      ok: false,
+      retryAfterSeconds: 60,
+    });
+    const result = await handleCapabilityCall({
+      args: {
+        capability: "legislation.get",
+        input: {
+          params: { documentId: "00000000-0000-4000-8000-000000000001" },
+        },
+      },
+      context: createContext(),
+    });
+    expect(errorEnvelope(result)).toMatchObject({ code: "rate_limited" });
+    expect(consumeRateLimitMock).toHaveBeenCalledWith(
+      expect.objectContaining({ capabilityId: "legislation.get" }),
+    );
   });
 
   test("the limiter is consulted per (organization, capability)", async () => {

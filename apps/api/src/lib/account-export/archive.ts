@@ -14,12 +14,15 @@ import {
   exportAccountFiles,
   exportAccountRows,
 } from "@/api/lib/account-export/pages";
-import type { AccountExportDataDb } from "@/api/lib/account-export/pages";
+import type {
+  AccountExportDataDb,
+  AccountExportFile,
+} from "@/api/lib/account-export/pages";
 import type { AccountExportProjections } from "@/api/lib/account-export/projections";
 import { EXPORTED_ACCOUNT_TABLE_NAMES } from "@/api/lib/account-export/registry";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  openS3ObjectStreamWithSignal,
+  openS3ObjectStreamIfPresent,
   putTemporaryS3ObjectWithSignal,
 } from "@/api/lib/s3";
 
@@ -48,22 +51,73 @@ type BuildAccountExportArchiveOptions = {
 export type AccountExportArchiveDeps = {
   rows: typeof exportAccountRows;
   files: typeof exportAccountFiles;
-  openObject: typeof openS3ObjectStreamWithSignal;
+  openObject: typeof openS3ObjectStreamIfPresent;
   publish: typeof putTemporaryS3ObjectWithSignal;
 };
 
 const archiveDeps = {
   rows: exportAccountRows,
   files: exportAccountFiles,
-  openObject: openS3ObjectStreamWithSignal,
+  openObject: openS3ObjectStreamIfPresent,
   publish: putTemporaryS3ObjectWithSignal,
 } satisfies AccountExportArchiveDeps;
+
+/**
+ * Why an inventoried file carries no bytes in the archive. `object_missing`:
+ * the object was gone when its body was read, typically because the file was
+ * deleted after the inventory was taken.
+ */
+type AccountExportFileUnavailableReason = "object_missing";
 
 // A projection may yield a value JSON cannot represent, such as undefined.
 const serializeRecord = (row: unknown): string | undefined =>
   JSON.stringify(row);
 
-/** Stream table arrays and object bodies into one bounded, private spool. */
+const serializeBoundedRecord = (row: unknown): string => {
+  const serialized = serializeRecord(row);
+  if (serialized === undefined) {
+    panic("Account export projection must produce JSON");
+  }
+  if (
+    Buffer.byteLength(serialized, "utf-8") >
+    ACCOUNT_EXPORT_ARCHIVE_LIMITS.recordBytes
+  ) {
+    throw new AccountExportArchiveError({
+      message: "Account export record exceeds its size limit",
+    });
+  }
+  return serialized;
+};
+
+/**
+ * The user_files.json record for one inventoried file. An unavailable file
+ * keeps its metadata, but its archivePath is null and the record names why:
+ * an archivePath always resolves to an entry in the same archive.
+ */
+const userFileRecord = (
+  file: AccountExportFile,
+  unavailable: AccountExportFileUnavailableReason | undefined,
+) => ({
+  organizationId: file.organizationId,
+  data:
+    unavailable === undefined
+      ? file.data
+      : {
+          ...file.data,
+          archivePath: null,
+          unavailable: { reason: unavailable },
+        },
+});
+
+/**
+ * Stream table arrays and object bodies into one bounded, private spool.
+ *
+ * Files are read once, as an inventory: user_files.json and the file entries
+ * both come from it, so the archive never holds bytes without metadata or
+ * metadata whose archivePath has no bytes. Bodies are written before
+ * user_files.json, which then records any inventoried object that was gone
+ * by the time its body was read.
+ */
 export const buildAccountExportArchive = async ({
   projections,
   db,
@@ -76,8 +130,35 @@ export const buildAccountExportArchive = async ({
   const encoder = new TextEncoder();
   const tables: { table: string; count: number }[] = [];
 
+  const readFileInventory = async () => {
+    const inventory: AccountExportFile[] = [];
+    for await (const file of deps.files({ projections, db, userId, signal })) {
+      signal.throwIfAborted();
+      // client-zip retains one central-directory record per entry.
+      if (inventory.length >= ACCOUNT_EXPORT_ARCHIVE_LIMITS.files) {
+        throw new AccountExportArchiveError({
+          message: "Account export exceeds its file-count limit",
+        });
+      }
+      if (file.sizeBytes > ACCOUNT_EXPORT_ARCHIVE_LIMITS.archiveBytes) {
+        throw new AccountExportArchiveError({
+          message: "Account export file exceeds its size limit",
+        });
+      }
+      inventory.push(file);
+    }
+    return inventory;
+  };
+
   const entries = async function* () {
+    // One inventory read: user_files.json and the file entries both come from it.
+    const inventory = await readFileInventory();
+    const userFilesSummary = { table: "user_files", count: 0 };
     for (const table of EXPORTED_ACCOUNT_TABLE_NAMES) {
+      if (table === "user_files") {
+        tables.push(userFilesSummary);
+        continue;
+      }
       const summary = { table, count: 0 };
       tables.push(summary);
       const tableJson = async function* () {
@@ -90,19 +171,7 @@ export const buildAccountExportArchive = async ({
           signal,
         })) {
           signal.throwIfAborted();
-          const serialized = serializeRecord(row);
-          if (serialized === undefined) {
-            panic("Account export projection must produce JSON");
-          }
-          if (
-            Buffer.byteLength(serialized, "utf-8") >
-            ACCOUNT_EXPORT_ARCHIVE_LIMITS.recordBytes
-          ) {
-            throw new AccountExportArchiveError({
-              message: "Account export record exceeds its size limit",
-            });
-          }
-          const bytes = encoder.encode(serialized);
+          const bytes = encoder.encode(serializeBoundedRecord(row));
           if (summary.count > 0) {
             yield encoder.encode(",");
           }
@@ -113,22 +182,17 @@ export const buildAccountExportArchive = async ({
       };
       yield { name: `${table}.json`, input: tableJson() };
     }
-    let fileCount = 0;
-    for await (const file of deps.files({ projections, db, userId, signal })) {
+    const unavailable = new Map<
+      AccountExportFile,
+      AccountExportFileUnavailableReason
+    >();
+    for (const file of inventory) {
       signal.throwIfAborted();
-      fileCount += 1;
-      // client-zip retains one central-directory record per entry.
-      if (fileCount > ACCOUNT_EXPORT_ARCHIVE_LIMITS.files) {
-        throw new AccountExportArchiveError({
-          message: "Account export exceeds its file-count limit",
-        });
-      }
-      if (file.sizeBytes > ACCOUNT_EXPORT_ARCHIVE_LIMITS.archiveBytes) {
-        throw new AccountExportArchiveError({
-          message: "Account export file exceeds its size limit",
-        });
-      }
       const source = await deps.openObject(file.key, signal);
+      if (source === null) {
+        unavailable.set(file, "object_missing");
+        continue;
+      }
       if (
         source.contentLength !== undefined &&
         source.contentLength !== file.sizeBytes
@@ -138,8 +202,21 @@ export const buildAccountExportArchive = async ({
           message: "Account export file size differs from its stored metadata",
         });
       }
-      yield { name: file.path, input: source.body, size: file.sizeBytes };
+      yield {
+        name: file.data.archivePath,
+        input: source.body,
+        size: file.sizeBytes,
+      };
     }
+    // The inventory is already held in memory, so its records are too.
+    const userFileRecords = inventory.map((file) =>
+      serializeBoundedRecord(userFileRecord(file, unavailable.get(file))),
+    );
+    userFilesSummary.count = userFileRecords.length;
+    yield {
+      name: "user_files.json",
+      input: encoder.encode(`[${userFileRecords.join(",")}]`),
+    };
     // client-zip consumes each entry before requesting the next: these
     // counts describe rows written, rather than a separate drifting census.
     yield {

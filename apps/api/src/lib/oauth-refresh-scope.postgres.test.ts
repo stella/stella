@@ -23,7 +23,6 @@ import { rootDb } from "@/api/db/root";
 import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
 import { describeAuthRefusal } from "@/api/lib/auth/auth-refusal-log";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
-import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
 
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const tokenSchema = v.object({
@@ -52,18 +51,9 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
       await remove();
     }
   });
-  beforeAll(async () => {
+  beforeAll(() => {
     expect(provider.version).toBe("1.7.6");
     expect(provider.options.refreshTokenReuseInterval).toBe(30);
-    await rootDb
-      .insert(oauthResource)
-      .values(
-        getBetterAuthOAuthResources().map((resource) => ({
-          id: Bun.randomUUIDv7(),
-          ...resource,
-        })),
-      )
-      .onConflictDoNothing();
   });
 
   const fixture = async () => {

@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import type * as v from "valibot";
+import * as v from "valibot";
 
 import type { visualRenderMessageSchema } from "@stll/api-contract/generated-visual";
+import {
+  VISUAL_SHELL_NONCE_PARAMETER,
+  visualShellReadySchema,
+} from "@stll/api-contract/visual-sandbox";
 
 import { createVisualShellSession } from "./visual-shell-session";
 
@@ -17,6 +21,34 @@ const render = {
 const url = "https://api.example.test/visual-sandbox";
 
 describe("visual shell document handshake", () => {
+  test("default nonces satisfy the shell contract and release one render per load", () => {
+    const deliveries: unknown[] = [];
+    const frameWindow = {
+      postMessage: (message: unknown) => deliveries.push(message),
+    };
+    const session = createVisualShellSession({ url });
+    const nonces = new Set<string>();
+    for (let load = 0; load < 100; load += 1) {
+      const target = new URL(session.beginLoad());
+      const nonce = new URLSearchParams(target.hash.slice(1)).get(
+        VISUAL_SHELL_NONCE_PARAMETER,
+      );
+      const data = v.parse(visualShellReadySchema, {
+        kind: "shell-ready",
+        nonce,
+      });
+      nonces.add(data.nonce);
+      const event = { source: frameWindow, origin: "null", data };
+      expect(
+        session.deliverRender({ event, frameWindow, message: render }),
+      ).toBe(true);
+      expect(
+        session.deliverRender({ event, frameWindow, message: render }),
+      ).toBe(false);
+    }
+    expect(nonces.size).toBe(100);
+    expect(deliveries).toHaveLength(100);
+  });
   test("releases a payload only once after the exact shell handshake", () => {
     const deliveries: unknown[] = [];
     const frameWindow = {

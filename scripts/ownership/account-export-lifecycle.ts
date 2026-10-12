@@ -7,9 +7,9 @@ export default {
   owner: ["apps/api/src/lib/account-export/store.ts"],
   summary:
     "Account export work belongs to the authenticated account independently " +
-    "of organization membership. The store binds application-role reads and " +
-    "requests to that user; background workers use the owning connection for " +
-    "bounded durable recovery, lease transitions and artifact reclamation. " +
+    "of organization membership. The store binds request-time reads and " +
+    "requests to that user; background workers perform bounded durable " +
+    "recovery, lease transitions and artifact reclamation. " +
     "Account row locks serialize creation and publication with account erasure.",
   enforcement: {
     kind: "import",

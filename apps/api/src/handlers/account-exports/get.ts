@@ -12,6 +12,7 @@ import {
 const latestPersonalDataExport = createSafeSessionHandler(
   {
     accountAccess: ACCOUNT_ACCESS.accountControl,
+    contract: "patch",
     access: "read",
     mcp: {
       type: "capability",

@@ -11,6 +11,7 @@ const discoverSkillUrlBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason: "Returns skill discovery metadata from an external source.",

@@ -180,7 +180,7 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       '`state: "decided"` with `decided_by` and the `value` its block would ' +
       "be gated on (`probability` is present only when `decided_by` is " +
       '`decision_model`), or `state: "undecided"` with a `reason` ' +
-      "(`no_decision_model`, `below_floor`, `failed`). Only the decision " +
+      "(`no_decision_model`, `below_floor`, `failed`, `refusal`). Only the decision " +
       "model runs, so it costs a fraction of a fill. Skip this step for a " +
       "template whose `conditions[]` carries no `ai` entry. Disagree with an " +
       "answer, or want one settled rather than guessed? Put the boolean in " +

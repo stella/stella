@@ -31,6 +31,7 @@ import {
 } from "@/api/lib/db/account-row";
 import { readOwnFeedbackReportPage } from "@/api/lib/db/feedback-report-store";
 import { LIMITS } from "@/api/lib/limits";
+import { iterateCursorPages } from "@/api/lib/pagination";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 
 export type AccountExportDataDb = Pick<typeof rootDb, "select">;
@@ -43,6 +44,25 @@ const resolveScopedDatabase = async () => {
 
 const after = (column: AnyPgColumn, cursor: string | null) =>
   cursor === null ? undefined : sql`${column} > ${cursor}`;
+
+/**
+ * Walk one id-keyed reader in bounded pages: each page starts after the last
+ * id of the page before it, and an empty page ends the walk.
+ *
+ * @yields Each page's rows, in reader order.
+ */
+const idPages = <Cursor extends string, Row extends { id: Cursor }>(
+  readPage: (after: Cursor | null) => Promise<Row[]>,
+  signal: AbortSignal,
+) => {
+  let last: Cursor | null = null;
+  return iterateCursorPages(async () => {
+    signal.throwIfAborted();
+    const items = await readPage(last);
+    last = items.at(-1)?.id ?? null;
+    return { items, nextCursor: last, limit: ACCOUNT_EXPORT_PAGE_SIZE };
+  });
+};
 const stillMember = (
   organizationId: SafeId<"organization">,
   userId: SafeId<"user">,
@@ -67,7 +87,7 @@ type ExportOrganizationPageOptions = {
   userId: SafeId<"user">;
   table: Exclude<
     ExportedAccountTableName,
-    "user" | "member" | "feedback_reports"
+    "user" | "member" | "feedback_reports" | "user_files"
   >;
   cursor: string | null;
 };
@@ -447,35 +467,6 @@ const readWorkspaceViewTemplatesPage = async ({
     return projectRows(rows, projections.workspace_view_templates);
   });
 
-const readUserFilesPage = async ({
-  projections,
-  scopedDb,
-  organizationId,
-  userId,
-  cursor,
-}: OrganizationPageQueryOptions) =>
-  await scopedDb(async (tx) => {
-    const rows = await tx
-      .select({ row: userFiles })
-      .from(userFiles)
-      .innerJoin(chatThreads, eq(chatThreads.id, userFiles.threadId))
-      .where(
-        and(
-          eq(chatThreads.organizationId, organizationId),
-          eq(userFiles.userId, userId),
-          personalThread(userId),
-          stillMember(organizationId, userId),
-          after(userFiles.id, cursor),
-        ),
-      )
-      .orderBy(asc(userFiles.id))
-      .limit(ACCOUNT_EXPORT_PAGE_SIZE);
-    return projectRows(
-      rows.map(({ row }) => row),
-      projections.user_files,
-    );
-  });
-
 // Every page runs under the requesting user's RLS scope with an empty matter
 // set. Table-specific readers preserve the matching owner and membership filters.
 const readOrganizationPage = async ({
@@ -507,8 +498,6 @@ const readOrganizationPage = async ({
       return await readTemplateDefaultsPage(options);
     case "workspace_view_templates":
       return await readWorkspaceViewTemplatesPage(options);
-    case "user_files":
-      return await readUserFilesPage(options);
     default: {
       table satisfies never;
       return panic("Unhandled account export table");
@@ -520,7 +509,8 @@ type AccountExportRowsOptions = {
   projections: AccountExportProjections;
   db: AccountExportDataDb;
   userId: SafeId<"user">;
-  table: ExportedAccountTableName;
+  // File metadata and bytes come from one inventory: exportAccountFiles.
+  table: Exclude<ExportedAccountTableName, "user_files">;
   scopedDatabase?: typeof rlsDb;
   signal: AbortSignal;
 };
@@ -534,23 +524,17 @@ async function* accountMemberships({
   userId,
   signal,
 }: AccountMembershipOptions) {
-  let cursor: string | null = null;
-  while (true) {
-    signal.throwIfAborted();
-    const rows = await listAccountMembershipPage({
-      database: db,
-      userId,
-      ...(cursor === null ? {} : { after: cursor }),
-    });
-    const next = rows.at(-1)?.id;
-    if (next === undefined) {
-      return;
-    }
+  const pages = idPages(
+    async (cursor) =>
+      await listAccountMembershipPage({
+        database: db,
+        userId,
+        ...(cursor === null ? {} : { after: cursor }),
+      }),
+    signal,
+  );
+  for await (const rows of pages) {
     yield* rows;
-    if (next === cursor) {
-      panic("Account membership cursor did not advance");
-    }
-    cursor = next;
   }
 }
 
@@ -571,26 +555,21 @@ export async function* exportAccountRows({
     return;
   }
   if (table === "feedback_reports") {
-    let cursor: FeedbackReportPageRow["id"] | null = null;
-    while (true) {
-      signal.throwIfAborted();
-      const rows: FeedbackReportPageRow[] = await readOwnFeedbackReportPage({
-        database: db,
-        userId,
-        ...(cursor === null ? {} : { after: cursor }),
-      });
-      const next = rows.at(-1)?.id;
-      if (next === undefined) {
-        return;
-      }
+    const pages = idPages(
+      async (cursor: FeedbackReportPageRow["id"] | null) =>
+        await readOwnFeedbackReportPage({
+          database: db,
+          userId,
+          ...(cursor === null ? {} : { after: cursor }),
+        }),
+      signal,
+    );
+    for await (const rows of pages) {
       for (const row of rows) {
         yield projections.feedback_reports(row);
       }
-      if (next === cursor) {
-        panic("Feedback cursor did not advance");
-      }
-      cursor = next;
     }
+    return;
   }
   const database = scopedDatabase ?? (await resolveScopedDatabase());
   for await (const membership of accountMemberships({ db, userId, signal })) {
@@ -603,30 +582,24 @@ export async function* exportAccountRows({
       membership.organizationId,
     );
     const scopedDb = createScopedDb(database, [], organizationId, userId);
-    let cursor: string | null = null;
-    while (true) {
-      signal.throwIfAborted();
-      const rows = await readOrganizationPage({
-        projections,
-        scopedDb,
-        organizationId,
-        userId,
-        table,
-        cursor,
-      });
-      if (rows.length === 0) {
-        break;
-      }
+    const pages = idPages(
+      async (cursor) =>
+        await readOrganizationPage({
+          projections,
+          scopedDb,
+          organizationId,
+          userId,
+          table,
+          cursor,
+        }),
+      signal,
+    );
+    for await (const rows of pages) {
       for (const { value } of rows) {
         if (value !== null && value !== undefined) {
           yield { organizationId, data: value };
         }
       }
-      const next = rows.at(-1)?.id;
-      if (next === undefined || next === cursor) {
-        panic("Account export cursor did not advance");
-      }
-      cursor = next;
     }
   }
 }
@@ -661,43 +634,51 @@ const readUserFileObjectsPage = async ({
   });
 
 type AccountExportFilesOptions = Omit<AccountExportRowsOptions, "table">;
+export type AccountExportFile = {
+  organizationId: SafeId<"organization">;
+  data: ReturnType<AccountExportProjections["user_files"]>;
+  key: string;
+  sizeBytes: number;
+};
+/**
+ * The account's file inventory: each row's exported metadata together with
+ * the object that holds its bytes. The archive reads it once and derives both
+ * user_files.json and the file entries from that single read.
+ *
+ * @yields One inventoried file per user_files row, in id order per organization.
+ */
 export async function* exportAccountFiles({
   projections,
   db,
   userId,
   signal,
   scopedDatabase,
-}: AccountExportFilesOptions) {
+}: AccountExportFilesOptions): AsyncGenerator<AccountExportFile> {
   const database = scopedDatabase ?? (await resolveScopedDatabase());
   for await (const membership of accountMemberships({ db, userId, signal })) {
     const organizationId = brandPersistedOrganizationId(
       membership.organizationId,
     );
     const scopedDb = createScopedDb(database, [], organizationId, userId);
-    let cursor: string | null = null;
-    while (true) {
-      signal.throwIfAborted();
-      const rows = await readUserFileObjectsPage({
-        scopedDb,
-        organizationId,
-        userId,
-        cursor,
-      });
-      if (rows.length === 0) {
-        break;
-      }
+    const pages = idPages(
+      async (cursor) =>
+        await readUserFileObjectsPage({
+          scopedDb,
+          organizationId,
+          userId,
+          cursor,
+        }),
+      signal,
+    );
+    for await (const rows of pages) {
       for (const row of rows) {
         yield {
-          path: projections.user_files(row).archivePath,
+          organizationId,
+          data: projections.user_files(row),
           key: row.s3Key,
           sizeBytes: row.sizeBytes,
         };
       }
-      const next = rows.at(-1)?.id;
-      if (next === undefined || next === cursor) {
-        panic("Account file cursor did not advance");
-      }
-      cursor = next;
     }
   }
 }
