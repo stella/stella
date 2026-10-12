@@ -698,24 +698,21 @@ const checkScopePartition = ({
   return problems;
 };
 
-type ExternalContractCheckOptions = {
+type DependencyCatalogOptions = {
   registry?: Readonly<Record<ExternalSystemId, ExternalContractEntry>>;
-  dependencies?: readonly string[];
+  dependencies: readonly string[];
   inProcess?: Readonly<Record<string, string>>;
   census?: readonly OutboundTransportCensusEntry[];
   sdks?: readonly string[];
 };
 
-export const checkExternalContracts = (
-  root: string,
-  {
-    registry = EXTERNAL_CONTRACTS,
-    dependencies = readDirectDependencies(root),
-    inProcess = IN_PROCESS_DEPENDENCIES,
-    census = OUTBOUND_TRANSPORT_CENSUS,
-    sdks = dependencies.filter((name) => !Object.hasOwn(inProcess, name)),
-  }: ExternalContractCheckOptions = {},
-): string[] => {
+export const findDependencyCatalogProblems = ({
+  registry = EXTERNAL_CONTRACTS,
+  dependencies,
+  inProcess = IN_PROCESS_DEPENDENCIES,
+  census = OUTBOUND_TRANSPORT_CENSUS,
+  sdks = dependencies.filter((name) => !Object.hasOwn(inProcess, name)),
+}: DependencyCatalogOptions): string[] => {
   const catalogProblems = findDependencyProblems({
     registry,
     packages: dependencies,
@@ -734,6 +731,34 @@ export const checkExternalContracts = (
     sdks,
   });
   problems.push(...catalogProblems);
+  return problems;
+};
+
+type ExternalContractCheckOptions = {
+  registry?: Readonly<Record<ExternalSystemId, ExternalContractEntry>>;
+  dependencies?: readonly string[];
+  inProcess?: Readonly<Record<string, string>>;
+  census?: readonly OutboundTransportCensusEntry[];
+  sdks?: readonly string[];
+};
+
+export const checkExternalContracts = (
+  root: string,
+  {
+    registry = EXTERNAL_CONTRACTS,
+    dependencies = readDirectDependencies(root),
+    inProcess = IN_PROCESS_DEPENDENCIES,
+    census = OUTBOUND_TRANSPORT_CENSUS,
+    sdks = dependencies.filter((name) => !Object.hasOwn(inProcess, name)),
+  }: ExternalContractCheckOptions = {},
+): string[] => {
+  const problems = findDependencyCatalogProblems({
+    registry,
+    dependencies,
+    inProcess,
+    census,
+    sdks,
+  });
   for (const [system, entry] of Object.entries(registry)) {
     for (const owner of entry.owners) {
       if (!existsSync(path.join(root, owner.path))) {

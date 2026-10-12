@@ -19,6 +19,7 @@ import { EXTERNAL_CONTRACTS } from "../packages/external-contracts/src/registry"
 import type { ExternalContractEntry } from "../packages/external-contracts/src/types";
 import {
   checkExternalContracts,
+  findDependencyCatalogProblems,
   findShrinkOnlyGrowth,
   inProcessFromSource,
   uncharacterisedScopeFromSource,
@@ -34,6 +35,7 @@ import {
 } from "./outbound-transport-census";
 
 const ROOT = path.resolve(import.meta.dir, "..");
+const directDependencies = readDirectDependencies(ROOT);
 const plantedOwner = {
   path: "apps/api/src/lib/example-unregistered-client.ts",
   class: "third-party",
@@ -75,8 +77,8 @@ test("the closed dependency census includes clients without SDK-shaped names", (
   expect(readExternalSdks(ROOT)).toContain("@hocuspocus/provider");
   expect(readExternalSdks(ROOT)).toContain("@hocuspocus/extension-redis");
   expect(
-    checkExternalContracts(ROOT, {
-      dependencies: [...readDirectDependencies(ROOT), "new-vendor-client"],
+    findDependencyCatalogProblems({
+      dependencies: [...directDependencies, "new-vendor-client"],
     }).join("\n"),
   ).toContain("Dependency new-vendor-client: classify it");
 });
@@ -465,9 +467,9 @@ test("pin readers observe edits to manifests, images, API constants, locks and p
 });
 
 test("new in-process dependencies require reasons and stay in the closed dependency census", () => {
-  const dependencies = [...readDirectDependencies(ROOT), "@stll/new-local"];
+  const dependencies = [...directDependencies, "@stll/new-local"];
   for (const reason of ["Local workspace implementation.", "", "  "]) {
-    const problems = checkExternalContracts(ROOT, {
+    const problems = findDependencyCatalogProblems({
       dependencies,
       inProcess: { ...IN_PROCESS_DEPENDENCIES, "@stll/new-local": reason },
     });
@@ -479,7 +481,7 @@ test("new in-process dependencies require reasons and stay in the closed depende
         : [],
     );
   }
-  const unclassified = checkExternalContracts(ROOT, { dependencies });
+  const unclassified = findDependencyCatalogProblems({ dependencies });
   expect(unclassified.join("\n")).toContain(
     "Dependency @stll/new-local: classify it",
   );
