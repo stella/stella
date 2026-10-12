@@ -3,6 +3,7 @@ import {
   FILE_COMPARISON_TRANSPORT,
 } from "@stll/api-contract";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+import { MCP_WEB_HANDOFF_TOOL_NAME } from "@stll/api-contract/mcp-web-handoff";
 
 import {
   CASE_LAW_RESULTS_RESOURCE_URI,
@@ -34,6 +35,7 @@ export const MCP_APPS = [
     linkedTools: ["search_case_law", "resolve_case_law_decision"],
     type: "presentation",
     callableTools: [
+      MCP_WEB_HANDOFF_TOOL_NAME,
       "search_case_law",
       "resolve_case_law_decision",
       "open_case_law_decision",
@@ -47,6 +49,7 @@ export const MCP_APPS = [
     linkedTools: ["open_case_law_decision"],
     type: "presentation",
     callableTools: [
+      MCP_WEB_HANDOFF_TOOL_NAME,
       "open_case_law_decision",
       "read_case_law_decision_blocks",
       "preview_cited_provision",

@@ -11,6 +11,7 @@ import type {
 import { Result } from "better-result";
 
 import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
+import { MCP_WEB_HANDOFF_TOOL_NAME } from "@stll/api-contract/mcp-web-handoff";
 import { createDetached } from "@stll/errors";
 
 import type { PresentationApp } from "../manifest";
@@ -52,11 +53,11 @@ const applyHostPresentation = (context: McpUiHostContext) => {
 };
 
 type OpenPresentationLinkOptions = {
-  app: Pick<App, "openLink">;
+  app: Pick<App, "openLink" | "callServerTool">;
   url: string;
   fail: (message: string | null) => void;
 };
-const openPresentationLink = async ({
+export const openPresentationLink = async ({
   app,
   url,
   fail,
@@ -66,8 +67,27 @@ const openPresentationLink = async ({
     fail(null);
     return;
   }
+  parsed.hash = parsed.hash
+    .slice(1)
+    .split("&")
+    .filter((part) => !new URLSearchParams(part).has("sh"))
+    .join("&");
+  const fresh = await Result.tryPromise(async () =>
+    app.callServerTool({
+      name: MCP_WEB_HANDOFF_TOOL_NAME,
+      arguments: { url: parsed.href },
+    }),
+  );
+  const payload =
+    Result.isOk(fresh) && fresh.value.isError !== true
+      ? fresh.value.structuredContent
+      : undefined;
+  const freshUrl =
+    payload && typeof payload["url"] === "string"
+      ? parseLegalCitationHttpUrl(payload["url"])
+      : null;
   const opened = await Result.tryPromise(async () =>
-    app.openLink({ url: parsed.href }),
+    app.openLink({ url: freshUrl?.href ?? parsed.href }),
   );
   if (Result.isError(opened)) {
     fail(opened.error.message);
