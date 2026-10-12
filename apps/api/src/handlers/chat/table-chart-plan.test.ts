@@ -151,7 +151,9 @@ describe("table chart decisions", () => {
       decisionOptions: { orgAIConfig: null, abortSignal: controller.signal },
       decide: async () => {
         controller.abort();
-        return await Promise.reject(controller.signal.reason);
+        return await Promise.reject(
+          new Error("Synthetic planning cancellation"),
+        );
       },
     });
     expect(result).toEqual({ status: "unavailable" });

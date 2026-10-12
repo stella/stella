@@ -242,6 +242,7 @@ export const requestAutomaticDocumentOcr = async ({
     const retried = await tx
       .update(documentProcessingRuns)
       .set({
+        attemptCount: 0,
         claimedAt: null,
         claimedBy: null,
         errorAt: null,

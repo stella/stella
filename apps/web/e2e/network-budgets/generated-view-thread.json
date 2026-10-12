@@ -1,6 +1,6 @@
 {
   "route": "/chat/$threadId",
-  "reason": "Load one bounded private generated-view attachment after chat messages are available",
+  "reason": "Load one bounded private generated-view attachment after chat messages are available; load professional-use acceptance before protected route data.",
   "budget": {
     "depth": 8,
     "requests": [
@@ -13,6 +13,7 @@
       "GET /v1/chat/threads/:id/messages",
       "GET /v1/chat/threads/:id/title",
       "GET /v1/mcp/connectors",
+      "GET /v1/me/professional-use",
       "GET /v1/notifications",
       "GET /v1/notifications/events",
       "GET /v1/organization-settings/ai-availability",
@@ -40,8 +41,9 @@
       "GET /v1/skills": 1,
       "GET /v1/time-timers": 1,
       "GET /v1/usage/entitlement": 1,
+      "GET /v1/user-files/:id/visual": 1,
       "GET /v1/workspaces/navigation": 1,
-      "GET /v1/user-files/:id/visual": 1
+      "GET /v1/me/professional-use": 1
     },
     "dbQueries": {
       "GET /api/auth/get-session": 4,
@@ -60,8 +62,9 @@
       "GET /v1/skills": 6,
       "GET /v1/time-timers": 4,
       "GET /v1/usage/entitlement": 6,
+      "GET /v1/user-files/:id/visual": 8,
       "GET /v1/workspaces/navigation": 6,
-      "GET /v1/user-files/:id/visual": 8
+      "GET /v1/me/professional-use": 1
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -79,8 +82,9 @@
       "GET /v1/skills": 4096,
       "GET /v1/time-timers": 1024,
       "GET /v1/usage/entitlement": 1024,
+      "GET /v1/user-files/:id/visual": 4194304,
       "GET /v1/workspaces/navigation": 20480,
-      "GET /v1/user-files/:id/visual": 4194304
+      "GET /v1/me/professional-use": 1024
     }
   }
 }

@@ -40,6 +40,7 @@ import {
   invoices,
   legalLists,
   legalReaderAnnotations,
+  legalReaderAnswers,
   numberSeries,
   notifications,
   savedTimeNarratives,
@@ -84,6 +85,8 @@ import {
 import listUnavailableChatSkills from "@/api/handlers/chat/skill-availability/list";
 import submitChatSecret from "@/api/handlers/chat/submit-secret";
 import { createSuggestThreadTitle } from "@/api/handlers/chat/suggest-thread-title";
+import { createTableChart } from "@/api/handlers/chat/table-chart";
+import type { TableChartDecisionCaller } from "@/api/handlers/chat/table-chart-plan";
 import { RECAP_PROMPT_VERSION } from "@/api/handlers/chat/thread-recap";
 import deleteChatThread from "@/api/handlers/chat/threads/delete";
 import listChatThreads from "@/api/handlers/chat/threads/list";
@@ -110,6 +113,8 @@ import readInvoiceById from "@/api/handlers/invoices/get";
 import createInvoiceLine from "@/api/handlers/invoices/lines/create";
 import updateInvoiceLine from "@/api/handlers/invoices/lines/update";
 import listReaderAnnotations from "@/api/handlers/legal-reader/annotations/list";
+import listReaderAnswers from "@/api/handlers/legal-reader/answers/list";
+import updateReaderAnswer from "@/api/handlers/legal-reader/answers/update";
 import listLegalLists from "@/api/handlers/lists/list";
 import listMemories from "@/api/handlers/memories/list";
 import listNotifications from "@/api/handlers/notifications/list";
@@ -318,6 +323,12 @@ const notificationB = toSafeId<"notification">(
 );
 const readerAnnotationB = toSafeId<"legalReaderAnnotation">(
   "22222222-2222-4222-8222-222222222254",
+);
+const privateReaderAnswerB = toSafeId<"legalReaderAnswer">(
+  "22222222-2222-4222-8222-222222222301",
+);
+const sharedReaderAnswerB = toSafeId<"legalReaderAnswer">(
+  "22222222-2222-4222-8222-222222222302",
 );
 const compareTargetVersionB = toSafeId<"entityVersion">(
   "22222222-2222-4222-8222-222222222253",
@@ -578,6 +589,7 @@ const savedSearchCriteria = (
 
 const isolationCases: IsolationCase[] = [
   ...desktopPresenceIsolationCases(),
+  ...readerAnswerIsolationCases(),
   {
     name: "user file content",
     runAAgainstB: async ({ ids: testIds, workspaceA }) =>
@@ -2353,6 +2365,32 @@ beforeAll(async () => {
     endOffset: 9,
     quote: "important",
   });
+  await testDb.insert(legalReaderAnswers).values([
+    {
+      id: privateReaderAnswerB,
+      organizationId: ids.orgB,
+      userId: ids.userB1,
+      decisionId: ids.caseLawDecisionB,
+      kind: "explain",
+      visibility: "private",
+      paragraphId: "p-1",
+      startOffset: 0,
+      endOffset: 9,
+      quote: "important",
+    },
+    {
+      id: sharedReaderAnswerB,
+      organizationId: ids.orgB,
+      userId: ids.userB1,
+      decisionId: ids.caseLawDecisionB,
+      kind: "ask",
+      visibility: "shared",
+      paragraphId: "p-1",
+      startOffset: 0,
+      endOffset: 9,
+      quote: "important",
+    },
+  ]);
   await testDb.insert(signals).values([
     {
       id: visibleSignalB,
@@ -2584,6 +2622,75 @@ describe("cross-tenant handler isolation", () => {
   }
 });
 
+describe("table chart tenant isolation", () => {
+  test.each(["A", "B"] as const)(
+    "planning in organization %s uses its own AI configuration and scoped usage database",
+    async (tenant) => {
+      const contexts = createIsolationContext();
+      const context =
+        tenant === "A" ? contexts.workspaceA : contexts.sameUserWorkspaceB;
+      const orgAIConfig = {
+        ...chatOrgAIConfig,
+        providers: [
+          { provider: "openai", apiKey: `table-chart-organization-${tenant}` },
+        ],
+      } satisfies OrgAIConfig;
+      const calls: Parameters<TableChartDecisionCaller>[0][] = [];
+      const visibleThreads: { id: SafeId<"chatThread"> }[][] = [];
+      const decide: TableChartDecisionCaller = async (options) => {
+        calls.push(options);
+        if (options.usageMetering) {
+          const rows = (
+            await options.usageMetering.safeDb(
+              async (tx) =>
+                await tx
+                  .select({ id: chatThreads.id })
+                  .from(chatThreads)
+                  .where(eq(chatThreads.id, chatThreadB)),
+            )
+          ).unwrap();
+          visibleThreads.push(rows);
+        }
+        return { decisions: {}, model: null };
+      };
+      const result = await runHandler(createTableChart({ decide }), context, {
+        orgAIConfig,
+        body: {
+          headers: ["Category", "Amount"],
+          rows: [
+            ["One", "12"],
+            ["Two", "18"],
+          ],
+        },
+      });
+      expect(result).toEqual({ status: "unavailable" });
+      expect(calls).toHaveLength(1);
+      const options = calls.at(0);
+      expect(options?.orgAIConfig).toEqual(orgAIConfig);
+      expect(options?.usageMetering).toMatchObject({
+        organizationId: context.session.activeOrganizationId,
+        userId: ids.userA1,
+        workspaceId: null,
+        actionType: "chat",
+        serviceTier: "standard",
+      });
+      expect(options?.id).toBe("chat.table-chart");
+      expect(options?.state).toEqual({
+        headers: ["Category", "Amount"],
+        rows: [
+          ["One", "12"],
+          ["Two", "18"],
+        ],
+      });
+      // B's thread belongs to the same user in a different firm. Exercise the
+      // real database capability forwarded to decision logging and metering.
+      expect(visibleThreads).toEqual([
+        tenant === "A" ? [] : [{ id: chatThreadB }],
+      ]);
+    },
+  );
+});
+
 const createIsolationContext = (): IsolationContext => ({
   ids,
   sameUserWorkspaceB: createWorkspaceContext({
@@ -2702,6 +2809,49 @@ function desktopPresenceIsolationCases(): IsolationCase[] {
       expectPositive: (result) =>
         expect(result).toMatchObject({
           desktop: { version: "0.9.48", protocol: 1 },
+        }),
+    },
+  ];
+}
+
+function readerAnswerIsolationCases(): IsolationCase[] {
+  const list = async (
+    context: TestHandlerContext,
+    decisionId: SafeId<"caseLawDecision">,
+  ) =>
+    await runHandler(listReaderAnswers, context, {
+      query: { decisionId, limit: 50 },
+    });
+  const update = async (context: TestHandlerContext) =>
+    await runHandler(updateReaderAnswer, context, {
+      params: { answerId: sharedReaderAnswerB },
+      body: { visibility: "shared" },
+    });
+  return [
+    {
+      name: "reader answers across organizations",
+      runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+        await list(workspaceA, testIds.caseLawDecisionB),
+      runBPositive: async ({ ids: testIds, workspaceB }) =>
+        await list(workspaceB, testIds.caseLawDecisionB),
+      expectDenied: (result) => {
+        expectPageExcludesId(result, privateReaderAnswerB);
+        expectPageExcludesId(result, sharedReaderAnswerB);
+      },
+      expectPositive: (result) => {
+        expectPageContainsId(result, privateReaderAnswerB);
+        expectPageContainsId(result, sharedReaderAnswerB);
+      },
+    },
+    {
+      name: "reader answer mutation across organizations",
+      runAAgainstB: async ({ workspaceA }) => await update(workspaceA),
+      runBPositive: async ({ workspaceB }) => await update(workspaceB),
+      expectDenied: expectStatus(404),
+      expectPositive: (result) =>
+        expect(result).toMatchObject({
+          id: sharedReaderAnswerB,
+          visibility: "shared",
         }),
     },
   ];

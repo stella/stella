@@ -131,6 +131,11 @@ type Messages = {
     "orSignInWithEmail": "or sign in with email";
     "organizationNamePlaceholder": "My organization";
     "password": "Password";
+    "professionalUse": {
+      "description": "Your account was set up without showing you this statement. Accept it to continue.";
+      "title": "Confirm professional use";
+    };
+    "professionalUseStatement": "By creating an account, you confirm that you use stella for professional purposes and understand that stella is a tool for legal professionals and not a substitute for legal advice.";
     "rateLimitExceeded": "Too many attempts. Please try again later.";
     "resendCode": "Send code again to <email>{emailAddress}</email>";
     "selectOrganization": "Select an organization";
@@ -802,7 +807,7 @@ type Messages = {
       "courtCount": "{count, plural, one {# court} other {# courts}}";
       "newLast24Hours": "{count} in the last 24 h";
       "newLast7Days": "New in the last 7 days";
-      "unlistedCourts": "{count, plural, one {Courts beyond the largest one} other {Courts beyond the # largest}}";
+      "otherCourts": "Other courts";
     };
     "courtTiers": {
       "constitutional": "Constitutional courts";
@@ -818,6 +823,7 @@ type Messages = {
       "decisionYears": "Decision years";
       "description": "How much case law the corpus holds, per country and per court, and how fresh each source is.";
       "exceedsReportedTotal": "Holds more than the publisher's last stated total of {date}";
+      "gapStatusUnknown": "Gap status unknown";
       "generatedAt": "Figures from {date}";
       "globeLabel": "Countries whose case law the corpus holds, on a globe";
       "healthCurrent": "Up to date";
@@ -826,9 +832,12 @@ type Messages = {
       "healthStalled": "Stalled";
       "healthUnknown": "Never run";
       "inPreparation": "In preparation";
+      "knownGaps": "Known gaps";
       "lastSync": "Last sync";
+      "noGapsRecorded": "No gaps recorded";
       "notCountedYet": "Not counted yet";
       "notMeasuredYet": "Not measured yet";
+      "pendingTexts": "Pending texts";
       "reportedByListing": "Counted from the publisher's listing";
       "reportedByOperator": "Recorded by hand";
       "reportedByPublisher": "Publisher's own count";
@@ -1092,6 +1101,9 @@ type Messages = {
       "toastDescription": "Full-page chat lands with persisted threads.";
       "toastTitle": "Full view not yet available";
     };
+    "activity": {
+      "review": "Review update";
+    };
     "aiPrompt": "AI message composer";
     "aiThread": "AI conversation";
     "analyzingSources": "Analyzing sources";
@@ -1277,6 +1289,9 @@ type Messages = {
       "noMatters": "No matters yet";
       "noRecentChats": "No recent chats";
       "noSkills": "No skills yet";
+      "openAllMatters": "Open all matters";
+      "openChatHistory": "Open chat history";
+      "openSkillsLibrary": "Open the skills library";
       "pinnedMatters": "Pinned matters";
       "recentChats": "Recent chats";
       "skillEditedBy": "Edited by {name} · {time}";
@@ -1939,6 +1954,7 @@ type Messages = {
     "noResults": "No results";
     "noVersions": "No version history";
     "none": "None";
+    "notStated": "Not stated";
     "notes": "Notes";
     "open": "Open";
     "openInNewTab": "Open in new tab";
@@ -4173,6 +4189,10 @@ type Messages = {
     "aiConfig": {
       "addProvider": "Add provider";
       "addProviderFirst": "Add a provider first";
+      "anthropicKeyDisabled": "Create an active API key in Anthropic Console and replace this key.";
+      "anthropicNoCredits": "Add API credits in Anthropic Console billing, then retry.";
+      "anthropicOrganizationRestricted": "Ask your Anthropic organization administrator to grant access, or use a key from an allowed organization.";
+      "anthropicSubscriptionToken": "Use an API key created in Anthropic Console instead of a Claude subscription token.";
       "anthropicWorkspaceId": "Workspace ID";
       "anthropicWorkspaceRequired": "This Anthropic key needs a workspace. Enter its Workspace ID from Anthropic Console, then save again.";
       "anthropicWorkspaces": "Open Anthropic Workspaces";
@@ -4181,7 +4201,9 @@ type Messages = {
       "apiKeyPlaceholder": "Enter your API key";
       "apiKeySaved": "Saved key {key}";
       "apiKeyUpdatePlaceholder": "Enter new key to update";
+      "azureModelNotEnabled": "Check that the model deployment exists in the selected Azure resource and region, and that this key can access it.";
       "baseUrl": "Base URL";
+      "bedrockModelNotEnabled": "Check model availability in the selected AWS region, model access and your IAM permissions. Enable or choose an accessible model, then retry.";
       "chooseModelsSubtitle": "Pick a model for each role. Prices update on the right.";
       "chooseModelsTitle": "Choose models";
       "configure": "Configure";
@@ -4212,6 +4234,8 @@ type Messages = {
       "editProviders": "Edit providers";
       "endpoint": "Endpoint";
       "endpointDescription": "Use the Azure OpenAI or Azure Foundry /openai/v1 endpoint. stella stores the normalized endpoint.";
+      "googleApiNotEnabled": "Enable the Generative Language API in the Google Cloud project that owns this key, then retry.";
+      "googleKeyRestricted": "Check this key’s API, IP address and referrer restrictions in Google Cloud. Allow the required API and your server’s requests, then retry.";
       "keepSavedKey": "Keep saved key";
       "keyFormatHint": "This key has an unusual format for {provider}. Save to check it with the provider.";
       "modelForRole": "{role} model";
@@ -4221,6 +4245,9 @@ type Messages = {
       "newApiKey": "New API key";
       "newApiKeyDescription": "This will replace the saved key when you save changes.";
       "noModelResults": "No matching offered models";
+      "openaiInsufficientQuota": "Check your OpenAI project budget and API billing. Add credits or raise the applicable limit, then retry.";
+      "openaiProjectOrganizationMismatch": "Use an API key from the intended OpenAI project and organization. Check their access settings, then retry.";
+      "openrouterNoCredits": "Add credits in OpenRouter billing, then retry.";
       "overrideRoles": "Override roles";
       "overrideRolesDescription": "Choose which roles use this key, then choose a model for each role. Unselected roles use the platform default.";
       "prices": {
@@ -4240,6 +4267,7 @@ type Messages = {
       "providerForRole": "{role} provider";
       "providerKeyInvalid": "{provider} rejected the key. Double-check it before saving.";
       "providerKeyInvalidShort": "Invalid";
+      "providerSetupConsole": "Open provider settings";
       "providersDescription": "Add the provider credentials you want stella to use.";
       "providersPanel": "Providers";
       "removeLastProviderConfirm": "Remove {provider}? This also resets the custom AI model choices.";

@@ -55,6 +55,11 @@ import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-ans
 import { storedAnalysisState } from "@/api/lib/case-law/stored-analysis";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
+import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
+import {
+  redactedProviderDiagnostic,
+  type RedactedProviderDiagnostic,
+} from "@/api/lib/errors/redacted-provider-diagnostic";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   createDetachedModelActionStarter,
@@ -159,6 +164,7 @@ export type GenerateAnalysisResponse =
       code: AnalysisFailureCode;
       error: string;
       key: AnalysisFailureKeyView;
+      providerDiagnostic?: RedactedProviderDiagnostic | undefined;
     };
 
 const failureResponse = (
@@ -177,6 +183,14 @@ const failureResponse = (
         ? `${base} using your organization's ${view.provider} key`
         : base,
     key: view,
+    ...(view.source === "organization" &&
+    failure.providerDiagnostic !== undefined
+      ? {
+          providerDiagnostic: redactedProviderDiagnostic(
+            failure.providerDiagnostic,
+          ),
+        }
+      : {}),
   };
 };
 
@@ -387,6 +401,11 @@ const handleGenerationFailure = async ({
     fingerprint: sentinel.inputFingerprint,
     now: new Date(),
     reader,
+    ...(reader.source === "organization" &&
+    error instanceof ProviderCallError &&
+    error.providerDiagnostic !== undefined
+      ? { providerDiagnostic: error.providerDiagnostic }
+      : {}),
   });
   await recordFailedRun({
     decisionId,

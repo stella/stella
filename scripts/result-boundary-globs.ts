@@ -27,6 +27,7 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
 // oxlint.config.ts spreads this list rather than restating it, so the lint
 // scope and the enrolment guard cannot drift apart.
 export const RESULT_CONVENTION_ENABLED_GLOBS = [
+  "packages/playwright-tools/src/**/*.ts",
   "apps/web/src/features/law-search-history/**/*.ts",
   "apps/desktop/src/activity/**/*.ts",
   "apps/desktop/src/activity/**/*.tsx",
@@ -500,15 +501,25 @@ export const RESULT_CONVENTION_OPT_OUTS = [
   { reason: "unreviewed", unit: "packages/user-agent/src" },
 ] as const satisfies readonly ResultBoundaryOptOut[];
 
-const resultConventionExcludeGlobs = RESULT_CONVENTION_EXCLUDE_GLOBS.map(
-  (glob) => new Bun.Glob(glob),
-);
-const resultConventionSourceGlobs = RESULT_CONVENTION_SOURCE_GLOBS.map(
-  (glob) => new Bun.Glob(glob),
-);
+let resultConventionExcludeGlobs: Bun.Glob[] | undefined;
+let resultConventionSourceGlobs: Bun.Glob[] | undefined;
+
+const getResultConventionExcludeGlobs = () => {
+  resultConventionExcludeGlobs ??= RESULT_CONVENTION_EXCLUDE_GLOBS.map(
+    (glob) => new Bun.Glob(glob),
+  );
+  return resultConventionExcludeGlobs;
+};
+
+const getResultConventionSourceGlobs = () => {
+  resultConventionSourceGlobs ??= RESULT_CONVENTION_SOURCE_GLOBS.map(
+    (glob) => new Bun.Glob(glob),
+  );
+  return resultConventionSourceGlobs;
+};
 
 export const isResultConventionSourceFile = (file: string): boolean =>
-  resultConventionSourceGlobs.some((glob) => glob.match(file));
+  getResultConventionSourceGlobs().some((glob) => glob.match(file));
 
 export const isResultConventionExcludedFile = (file: string): boolean =>
-  resultConventionExcludeGlobs.some((glob) => glob.match(file));
+  getResultConventionExcludeGlobs().some((glob) => glob.match(file));

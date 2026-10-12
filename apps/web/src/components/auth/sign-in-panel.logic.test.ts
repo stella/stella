@@ -82,6 +82,43 @@ describe("sign-in panel options", () => {
       hasAboveEmailOptions: true,
     });
   });
+
+  test.each([
+    [
+      { emailOtp: true, localPassword: false, bootstrap: false },
+      false,
+      "offered",
+    ],
+    [
+      { emailOtp: false, localPassword: false, bootstrap: true },
+      false,
+      "offered",
+    ],
+    [
+      { emailOtp: false, localPassword: true, bootstrap: false },
+      true,
+      "offered",
+    ],
+    [
+      { emailOtp: false, localPassword: true, bootstrap: false },
+      false,
+      "not_offered",
+    ],
+  ] as const)(
+    "account creation for %o with a social provider %p is %s",
+    (capabilities, google, expected) => {
+      expect(
+        resolveSignInOptions({
+          authCapabilities: {
+            ...capabilities,
+            reviewPasswordSignIn: false,
+            social: { google, microsoft: false },
+          },
+          socialProviderFlags: { google: true, microsoft: false },
+        }).accountCreation,
+      ).toBe(expected);
+    },
+  );
 });
 
 const everyOption = resolveSignInOptions({
@@ -128,6 +165,32 @@ describe("last-used sign-in method", () => {
         resolveLastUsedSignInMethod({ stored: method, options: emailOnly }),
       ).toBeNull();
     }
+  });
+
+  test("marks nothing when the page offers a single method", () => {
+    const emailOnly = resolveSignInOptions({
+      authCapabilities,
+      socialProviderFlags: { google: false, microsoft: false },
+    });
+    expect(
+      resolveLastUsedSignInMethod({
+        stored: SIGN_IN_METHOD.emailOtp,
+        options: emailOnly,
+      }),
+    ).toBeNull();
+  });
+
+  test("counts the quiet password option as another method", () => {
+    const emailAndReviewPassword = resolveSignInOptions({
+      authCapabilities: { ...authCapabilities, reviewPasswordSignIn: true },
+      socialProviderFlags: { google: false, microsoft: false },
+    });
+    expect(
+      resolveLastUsedSignInMethod({
+        stored: SIGN_IN_METHOD.emailOtp,
+        options: emailAndReviewPassword,
+      }),
+    ).toBe(SIGN_IN_METHOD.emailOtp);
   });
 
   test("does not mark the first-account form as the password sign-in", () => {

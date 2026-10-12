@@ -146,7 +146,7 @@
     "ci.yml/windows-scripts": "queue",
     "ci.yml/desktop-windows-dry-run": "queue",
     "ci.yml/desktop-rust-tests": "queue",
-    "ci.yml/scan-engine-wasm-drift": "queue",
+    "ci.yml/scan-engine-wasm-drift": "pr-fast",
     "ci.yml/desktop-rust-lint": "pr-fast",
     "ci.yml/dependency-malware": "pr-fast",
     "ci.yml/dated-waiver-expiry": "pr-fast",
@@ -160,6 +160,8 @@
     "main-pr-depth.yml/validate": "main",
     "main-pr-depth.yml/suites": "main",
     "main-pr-depth.yml/status": "main",
+    "ci.yml/query-perf": "pr-fast",
+    "query-perf.yml/query-perf": "pr-fast",
     "manual-checks.yml/check": "main",
     "bundle-size-nightly.yml/report": "main"
   },

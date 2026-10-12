@@ -647,6 +647,7 @@ const SourcesTable = ({
               >
                 <bdi>{source.name}</bdi>
               </a>
+              <SourceCoverageDetails source={source} />
             </TableHead>
             <TableCell>
               <HealthSignal health={source.health} />
@@ -666,6 +667,42 @@ const SourcesTable = ({
         ))}
       </TableBody>
     </Table>
+  );
+};
+
+const SourceCoverageDetails = ({
+  source,
+}: {
+  source: CaseLawCoverageSource;
+}) => {
+  const t = useTranslations();
+  const formatter = useFormatter();
+  const years =
+    source.decisionYearFrom === null || source.decisionYearTo === null
+      ? NO_VALUE
+      : `${formatter.number(source.decisionYearFrom, YEAR_FORMAT)}–${formatter.number(source.decisionYearTo, YEAR_FORMAT)}`;
+  let gaps: string;
+  switch (source.knownGaps.type) {
+    case "unknown":
+      gaps = t("caseLaw.coverage.gapStatusUnknown");
+      break;
+    case "none-recorded":
+      gaps = t("caseLaw.coverage.noGapsRecorded");
+      break;
+    case "known":
+      gaps = `${t("caseLaw.coverage.knownGaps")}: ${formatter.number(source.knownGaps.gaps.length)}`;
+      break;
+    default:
+      source.knownGaps satisfies never;
+      return panic("Unhandled case-law source gap state");
+  }
+
+  return (
+    <span className="text-muted-foreground mt-1 block text-xs">
+      {t("caseLaw.coverage.decisionYears")}: {years} ·{" "}
+      {t("caseLaw.coverage.pendingTexts")}:{" "}
+      {formatter.number(source.pendingTextCount)} · {gaps}
+    </span>
   );
 };
 
@@ -883,7 +920,7 @@ const CourtRowCells = ({
   const relativeTime = useRelativeTime();
   // The row for the courts beyond the listed ones carries no activity: none
   // was read for courts the facets do not name.
-  const activity = row.type === "unlisted" ? null : row;
+  const activity = row.type === "other-courts" ? null : row;
 
   return (
     <TableRow>

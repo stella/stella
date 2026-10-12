@@ -1,3 +1,5 @@
+import { normalizeUnicode } from "@stll/text-normalize";
+
 /**
  * Canonical normalizer for deciding whether an AI citation's quoted
  * text corresponds to real source content.
@@ -72,8 +74,7 @@ export const normalizeForCitationMatch = (
   text: string,
   { caseFold = true }: CitationNormalizeOptions = {},
 ): string => {
-  const folded = text
-    .normalize("NFC")
+  const folded = normalizeUnicode(text, "NFC")
     .replace(ZERO_WIDTH, "")
     .replace(DASHES, "-")
     .replace(SINGLE_QUOTES, "'")

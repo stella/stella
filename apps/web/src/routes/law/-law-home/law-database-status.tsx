@@ -171,7 +171,7 @@ const CourtRowCells = ({ row }: { row: CourtRow }) => {
 
   // The row for the courts beyond the listed ones carries no activity: none
   // was read for courts the facets do not name.
-  const activity = row.type === "unlisted" ? null : row;
+  const activity = row.type === "other-courts" ? null : row;
 
   return (
     <tr>

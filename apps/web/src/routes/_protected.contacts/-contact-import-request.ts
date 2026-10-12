@@ -10,6 +10,7 @@ import {
 } from "@/lib/account/user-scoped-storage";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
+import { createUuid } from "@/lib/uuid";
 import type { ImportCommitPayload } from "@/routes/_protected.contacts/-import-candidate";
 
 const CONTACT_IMPORT_REQUEST_STORAGE_PREFIX = "contact-import-request:v1:";
@@ -91,8 +92,7 @@ export const resolveContactImportRequest = async ({
     });
   }
   const storedId = stored.value;
-  const id =
-    storedId && UUID_PATTERN.test(storedId) ? storedId : crypto.randomUUID();
+  const id = storedId && UUID_PATTERN.test(storedId) ? storedId : createUuid();
 
   if (id !== storedId) {
     const persisted = Result.try(() => storage.setItem(storageKey, id));

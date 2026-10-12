@@ -6,6 +6,7 @@ import { Streamdown } from "streamdown";
 import type { TableChartResponse } from "@stll/api-contract/table-chart";
 
 import { ChatTableChart } from "@/components/chat/chat-table-chart";
+import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { createAppQueryClient } from "@/lib/react-query";
 
 const fixture = {
@@ -22,6 +23,7 @@ const fixture = {
 } satisfies TableChartResponse;
 const requestPlan = async () => await Promise.resolve(fixture);
 const components = {
+  a: StreamdownMentionLink,
   table: (
     props: Omit<React.ComponentProps<typeof ChatTableChart>, "cacheScope">,
   ) => (

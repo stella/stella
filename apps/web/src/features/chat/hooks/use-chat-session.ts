@@ -11,7 +11,6 @@ import type { ComponentProps } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
-import { v7 as uuidv7 } from "uuid";
 import * as v from "valibot";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
@@ -22,6 +21,7 @@ import { sha256Hex } from "@stll/sha256/browser";
 import { stellaToast } from "@stll/ui/toast";
 import { useIsMobile } from "@stll/ui/use-mobile";
 
+import { createDocumentDraftReviewId } from "@/components/ai-suggestions/file-review-session";
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import type {
@@ -67,7 +67,6 @@ import {
   buildCreateDocumentDraftPayload,
   buildCreateDocumentDownloadFileName,
   CREATE_DOCUMENT_DRAFT_VIEW,
-  createDocumentDraftReviewId,
   createDocumentDraftTabId,
   type CreateDocumentDraft,
   findReadyCreateDocumentDraftMessageId,
@@ -82,11 +81,10 @@ import {
   terminalizeUnsettledCreateDocumentDraft,
 } from "@/components/chat/create-document-draft.logic";
 import { openEntityInInspector } from "@/components/chat/entity-open";
-import "@/components/chat/create-document-draft-inspector";
-import { LazyChatTableChart } from "@/components/chat/lazy-chat-table-chart";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
+import "@/components/chat/create-document-draft-inspector";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { entityReferenceHref } from "@/components/references/reference.logic";
 import { mountBrowserExtensionBridge } from "@/features/chat/browser-control/browser-extension-bridge";
@@ -97,6 +95,7 @@ import {
   type ChatSendMessageOptions,
   type ChatUserMessageInput,
 } from "@/features/chat/chat-runtime";
+import { LazyChatTableChart } from "@/features/chat/components/lazy-chat-table-chart";
 import {
   invalidateCreatedDocumentQueries,
   promoteCreateDocumentDraftInspectorTab,
@@ -170,6 +169,7 @@ import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
+import { createUuid } from "@/lib/uuid";
 import {
   workspacesKeys,
   workspacesNavigationOptions,
@@ -790,7 +790,7 @@ export const useChatSession = ({
   const enqueueMessage = useCallback(
     (message: ChatUserMessageInput, options?: ChatSendMessageOptions) => {
       const entry: QueuedChatEntry = {
-        id: uuidv7(),
+        id: createUuid(),
         message,
         ...describeQueuedMessage(message),
         ...(options === undefined ? {} : { options }),
@@ -1785,6 +1785,7 @@ export const useChatSession = ({
   ]);
 
   return {
+    activitySession: chat,
     clientStatus: status,
     reconnecting,
     refreshAnswers,

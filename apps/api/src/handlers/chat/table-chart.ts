@@ -4,9 +4,11 @@ import * as v from "valibot";
 
 import { tableChartRequestSchema } from "@stll/api-contract/table-chart";
 
+import type { TableChartDecisionCaller } from "@/api/handlers/chat/table-chart-plan";
 import { planTableChart } from "@/api/handlers/chat/table-chart-plan";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { decideMany } from "@/api/lib/workflow/decisions/decide";
 
@@ -21,48 +23,57 @@ const config = {
   body: t.Unknown(),
 } satisfies HandlerConfig;
 
-const tableChart = createSafeRootHandler(
-  config,
-  // oxlint-disable-next-line require-yield -- planning returns one Result with no intermediate operation.
-  async function* ({
-    actionSignal,
-    body,
-    orgAIConfig,
-    request,
-    safeDb,
-    session,
-    user,
-  }) {
-    const table = v.safeParse(tableChartRequestSchema, body);
-    if (!table.success) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message:
-            "Table cannot be charted: provide a bounded rectangular table",
+type CreateTableChartOptions = { decide: TableChartDecisionCaller };
+
+export const createTableChart = ({ decide }: CreateTableChartOptions) =>
+  createSafeRootHandler(
+    config,
+    async function* ({
+      actionSignal,
+      body,
+      orgAIConfig,
+      request,
+      safeDb,
+      session,
+      user,
+    }) {
+      const table = v.safeParse(tableChartRequestSchema, body);
+      if (!table.success) {
+        return yield* Result.err(
+          new HandlerError({
+            status: 400,
+            message:
+              "Table cannot be charted: provide a bounded rectangular table",
+          }),
+        );
+      }
+      return Result.ok(
+        await planTableChart({
+          table: table.output,
+          decide,
+          decisionOptions: {
+            orgAIConfig,
+            abortSignal: actionSignal ?? request.signal,
+            usageMetering: {
+              actionType: "chat",
+              organizationId: session.activeOrganizationId,
+              safeDb,
+              userId: user.id,
+              workspaceId: null,
+              serviceTier: "standard",
+              callId: Bun.randomUUIDv7(),
+            },
+          },
         }),
       );
-    }
-    return Result.ok(
-      await planTableChart({
-        table: table.output,
-        decide: decideMany,
-        decisionOptions: {
-          orgAIConfig,
-          abortSignal: actionSignal ?? request.signal,
-          usageMetering: {
-            actionType: "chat",
-            organizationId: session.activeOrganizationId,
-            safeDb,
-            userId: user.id,
-            workspaceId: null,
-            serviceTier: "standard",
-            callId: Bun.randomUUIDv7(),
-          },
-        },
-      }),
-    );
-  },
-);
+    },
+  );
+
+const tableChart = createTableChart({ decide: decideMany });
+declareAggregateMutation(tableChart.handler, {
+  type: "independent",
+  reason:
+    "Plans a client-supplied table; decision logging and usage metering are owned by their append-only services, with no chat aggregate mutation.",
+});
 
 export default tableChart;

@@ -6,6 +6,7 @@ import {
   INCOMPLETE_STREAM_CODE,
   TRUNCATED_AT_OUTPUT_CEILING_CODE,
 } from "@/api/lib/chat/provider-stream-contract";
+import type { RedactedProviderDiagnostic } from "@/api/lib/errors/redacted-provider-diagnostic";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
@@ -52,7 +53,13 @@ type ProviderCallErrorOptions = {
   kind: AIErrorKind;
   facts?: { status: number; isRetryable?: boolean } | undefined;
   requestId?: string | undefined;
+  providerDiagnostic?: RedactedProviderDiagnostic | undefined;
 };
+
+const diagnostics = new WeakMap<
+  ProviderCallError,
+  RedactedProviderDiagnostic
+>();
 
 export class ProviderCallError extends HandlerError {
   declare code?: ProviderCallErrorCode | undefined;
@@ -62,6 +69,10 @@ export class ProviderCallError extends HandlerError {
   readonly requestId: string | undefined;
   readonly kind: AIErrorKind;
 
+  get providerDiagnostic(): RedactedProviderDiagnostic | undefined {
+    return diagnostics.get(this);
+  }
+
   constructor({
     model,
     status,
@@ -69,6 +80,7 @@ export class ProviderCallError extends HandlerError {
     kind,
     facts,
     requestId,
+    providerDiagnostic,
   }: ProviderCallErrorOptions) {
     super({
       message: PROVIDER_CALL_ERROR_MESSAGE,
@@ -85,6 +97,9 @@ export class ProviderCallError extends HandlerError {
             },
           }),
     });
+    if (providerDiagnostic !== undefined) {
+      diagnostics.set(this, providerDiagnostic);
+    }
     this.name = "ProviderCallError";
     this.provider = model.provider;
     this.keySource = model.keySource;
