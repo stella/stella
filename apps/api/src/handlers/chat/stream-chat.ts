@@ -85,6 +85,11 @@ import type { CutShortOutcome } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import { compactModelMessagesForModel } from "@/api/handlers/chat/compaction";
 import {
+  knownDecisionPassageStamper,
+  NO_DECISION_PASSAGE_NUMBERS,
+} from "@/api/handlers/chat/decision-passage-numbers";
+import type { DecisionPassageStamper } from "@/api/handlers/chat/decision-passage-numbers";
+import {
   createLoopRecoverySystemPrompt,
   detectModelLoop,
   getLoopRecoveryKey,
@@ -319,6 +324,13 @@ type StreamChatProps = {
   sandboxRun: StellaSandboxRunInput | undefined;
   /** Budget lane the pre-flight resolved for this turn. */
   usageLane: UsageEventLane;
+  /**
+   * Stamps the court's paragraph number onto the answer's passage citations
+   * before the turn is stored or shown, so the stored text, the live stream
+   * and every reload name the same paragraph. Without one, a number the model
+   * wrote is still dropped.
+   */
+  decisionPassageStamper?: DecisionPassageStamper | undefined;
   resolveAssistantTextRefs?: ((text: string) => string) | undefined;
   resolveAssistantToolInputRefs?: AssistantToolInputRefResolver | undefined;
   resolveAssistantToolOutputRefs?: AssistantToolOutputRefResolver | undefined;
@@ -466,6 +478,9 @@ export const streamChat = async ({
   runMode,
   sandboxRun,
   usageLane,
+  decisionPassageStamper = knownDecisionPassageStamper(
+    NO_DECISION_PASSAGE_NUMBERS,
+  ),
   resolveAssistantTextRefs,
   resolveAssistantToolInputRefs,
   resolveAssistantToolOutputRefs,
@@ -781,6 +796,7 @@ export const streamChat = async ({
         : new Set<string>(),
     restorationPairs,
     source: projectVisualPreviewStream(stream),
+    stamper: decisionPassageStamper,
   });
   const processedStream = processTurnForPersistence({
     visualOrigin,
@@ -3158,6 +3174,152 @@ type TransformOutgoingStreamProps = {
   registerPendingFlush?: (flushPending: () => StreamChunk[]) => void;
   restorationPairs: ChatAnonRestoration[];
   source: AsyncIterable<PublicStreamChunk>;
+  /** Server-owned facts written into the assistant's own text. */
+  stamper?: DecisionPassageStamper | undefined;
+};
+
+/**
+ * The chunk with its text stamped. The transformer releases text only once
+ * every `#stella-` href in it is whole, so a delta never splits a citation.
+ */
+/**
+ * Rewrite every assistant text a snapshot carries, in place: the AG-UI
+ * `content` string and the UI `parts` the server's snapshots extend it with.
+ */
+const forEachAssistantSnapshotText = (
+  messages: unknown,
+  visit: (text: string) => string,
+): void => {
+  if (!Array.isArray(messages)) {
+    return;
+  }
+  for (const message of messages) {
+    if (!isRecord(message) || message["role"] !== "assistant") {
+      continue;
+    }
+    const content = message["content"];
+    if (typeof content === "string") {
+      message["content"] = visit(content);
+    }
+    const parts = message["parts"];
+    if (!Array.isArray(parts)) {
+      continue;
+    }
+    for (const part of parts) {
+      if (
+        isRecord(part) &&
+        part["type"] === "text" &&
+        typeof part["content"] === "string"
+      ) {
+        part["content"] = visit(part["content"]);
+      }
+    }
+  }
+};
+
+/** The assistant text one chunk carries, and the chunk with it rewritten. */
+type StampableChunk = {
+  text: string;
+  rewrite: (stamp: (text: string) => string) => StreamChunk;
+};
+
+/** Every assistant text a snapshot carries, in order. */
+const snapshotAssistantText = (messages: unknown): string => {
+  const texts: string[] = [];
+  forEachAssistantSnapshotText(structuredClone(messages), (text) => {
+    texts.push(text);
+    return text;
+  });
+  return texts.join("\n");
+};
+
+/**
+ * What of a chunk carries assistant text a stamp may rewrite, or null. Every
+ * event type is named, so a new one has to say whether it carries answer text
+ * before it can stream past the stamp unstamped.
+ */
+const stampableChunk = (chunk: StreamChunk): StampableChunk | null => {
+  switch (chunk.type) {
+    case EventType.TEXT_MESSAGE_CONTENT:
+    case EventType.REASONING_MESSAGE_CONTENT:
+      return {
+        text: chunk.delta,
+        rewrite: (stamp) => ({ ...chunk, delta: stamp(chunk.delta) }),
+      };
+    // Chunk events are held per message like content events, so a citation
+    // split across two of them reaches the stamp whole.
+    case EventType.TEXT_MESSAGE_CHUNK:
+    case EventType.REASONING_MESSAGE_CHUNK: {
+      const { delta } = chunk;
+      return delta === undefined
+        ? null
+        : {
+            text: delta,
+            rewrite: (stamp) => ({ ...chunk, delta: stamp(delta) }),
+          };
+    }
+    // A snapshot can be what a turn is stored from, so its answers carry the
+    // same stamp as the deltas that built them.
+    case EventType.MESSAGES_SNAPSHOT:
+      return {
+        text: snapshotAssistantText(chunk.messages),
+        rewrite: (stamp) => {
+          const messages = structuredClone(chunk.messages);
+          forEachAssistantSnapshotText(messages, stamp);
+          return { ...chunk, messages };
+        },
+      };
+    case "ACTIVITY_DELTA" satisfies StreamChunk["type"]:
+    case "ACTIVITY_SNAPSHOT" satisfies StreamChunk["type"]:
+    case "CUSTOM" satisfies StreamChunk["type"]:
+    case "TOOL_CALL_END" satisfies StreamChunk["type"]:
+    case "TOOL_CALL_START" satisfies StreamChunk["type"]:
+    case EventType.RAW:
+    case EventType.REASONING_ENCRYPTED_VALUE:
+    case EventType.REASONING_END:
+    case EventType.REASONING_MESSAGE_END:
+    case EventType.REASONING_MESSAGE_START:
+    case EventType.REASONING_START:
+    case EventType.RUN_ERROR:
+    case EventType.RUN_FINISHED:
+    case EventType.RUN_STARTED:
+    case EventType.STATE_DELTA:
+    case EventType.STATE_SNAPSHOT:
+    case EventType.STEP_FINISHED:
+    case EventType.STEP_STARTED:
+    case EventType.SUBAGENT_ERROR:
+    case EventType.SUBAGENT_FINISHED:
+    case EventType.SUBAGENT_STARTED:
+    case EventType.TEXT_MESSAGE_END:
+    case EventType.TEXT_MESSAGE_START:
+    case EventType.TOOL_CALL_ARGS:
+    case EventType.TOOL_CALL_CHUNK:
+    case EventType.TOOL_CALL_RESULT:
+      return null;
+    default:
+      chunk satisfies never;
+      return panic(`Unhandled stream chunk: ${String(chunk)}`);
+  }
+};
+
+const stampedChunk = (
+  chunk: StreamChunk,
+  stamper: DecisionPassageStamper,
+): StreamChunk => stampableChunk(chunk)?.rewrite(stamper.stamp) ?? chunk;
+
+const stampChunk = async (
+  chunk: StreamChunk,
+  stamper: DecisionPassageStamper | undefined,
+): Promise<StreamChunk> => {
+  if (stamper === undefined) {
+    return chunk;
+  }
+  const stampable = stampableChunk(chunk);
+  if (stampable === null) {
+    return chunk;
+  }
+  await stamper.prepare(stampable.text);
+  return stampable.rewrite(stamper.stamp);
 };
 
 export const transformOutgoingStream = async function* ({
@@ -3170,9 +3332,11 @@ export const transformOutgoingStream = async function* ({
   registerPendingFlush,
   restorationPairs,
   source,
+  stamper,
 }: TransformOutgoingStreamProps): AsyncIterable<StreamChunk> {
   const transform = createOutgoingChunkTransformer({
     boundary,
+    holdStellaHrefs: stamper !== undefined,
     initialRestorationPlaceholders,
     resolveAssistantTextRefs,
     resolveAssistantToolInputRefs,
@@ -3180,34 +3344,50 @@ export const transformOutgoingStream = async function* ({
     resolveAssistantValueRefs,
     restorationPairs,
   });
-  registerPendingFlush?.(transform.flush);
+  // A cut-short turn flushes synchronously: its tail is stamped from what the
+  // turn already resolved, and a decision it had not loses only its number.
+  registerPendingFlush?.(() =>
+    stamper === undefined
+      ? transform.flush()
+      : transform.flush().map((chunk) => stampedChunk(chunk, stamper)),
+  );
 
   for await (const chunk of source) {
     for (const transformed of transform(chunk)) {
-      yield transformed;
+      yield await stampChunk(transformed, stamper);
     }
   }
 
   for (const flushed of transform.flush()) {
-    yield flushed;
+    yield await stampChunk(flushed, stamper);
   }
 };
 
 type TransformPersistenceVisibleStreamProps = Pick<
   TransformOutgoingStreamProps,
-  "boundary" | "initialRestorationPlaceholders" | "restorationPairs" | "source"
+  | "boundary"
+  | "initialRestorationPlaceholders"
+  | "restorationPairs"
+  | "source"
+  | "stamper"
 >;
 
 type PersistenceVisibleStream = AsyncIterable<StreamChunk> & {
   flushPending: () => StreamChunk[];
 };
 
-/** Deanonymize the processor's copy while preserving model-facing chat refs. */
+/**
+ * Deanonymize the processor's copy while preserving model-facing chat refs,
+ * and stamp the server's facts into the assistant's text. The processor's
+ * copy is what is stored and what the client stream is derived from, so a
+ * stamp here reaches the stored answer, the live answer and every reload.
+ */
 export const transformPersistenceVisibleStream = ({
   boundary,
   initialRestorationPlaceholders,
   restorationPairs,
   source,
+  stamper,
 }: TransformPersistenceVisibleStreamProps): PersistenceVisibleStream => {
   let flushPending = (): StreamChunk[] => [];
   const transformed = transformOutgoingStream({
@@ -3218,6 +3398,7 @@ export const transformPersistenceVisibleStream = ({
     },
     restorationPairs,
     source,
+    stamper,
   });
   return {
     flushPending: () => flushPending(),
@@ -3277,7 +3458,15 @@ type OutgoingChunkTransformerOptions = {
   resolveAssistantToolOutputRefs?: AssistantToolOutputRefResolver | undefined;
   resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
   restorationPairs: ChatAnonRestoration[];
+  /** Release text only once every `#stella-` href in it is whole. */
+  holdStellaHrefs?: boolean | undefined;
 };
+
+/** An event whose text arrives in message chunks without an END of its own. */
+type TextLikeChunk = Extract<
+  StreamChunk,
+  { type: EventType.TEXT_MESSAGE_CHUNK | EventType.REASONING_MESSAGE_CHUNK }
+>;
 
 const createOutgoingChunkTransformer = ({
   boundary,
@@ -3287,6 +3476,7 @@ const createOutgoingChunkTransformer = ({
   resolveAssistantToolOutputRefs,
   resolveAssistantValueRefs,
   restorationPairs,
+  holdStellaHrefs = false,
 }: OutgoingChunkTransformerOptions) => {
   const buffers = new Map<string, string>();
   const emittedPlaceholders = new Set(initialRestorationPlaceholders);
@@ -3422,7 +3612,54 @@ const createOutgoingChunkTransformer = ({
     ];
   };
 
-  const transform = (chunk: PublicStreamChunk): StreamChunk[] => {
+  // The longest prefix every text rewrite can see whole: a placeholder for
+  // the anonymizer, and a `#stella-` href for the ref resolver and the stamp.
+  const completeTextPrefixLength = (buffer: string): number => {
+    if (boundary.type !== "anonymized") {
+      return getResolvedTextPrefixLength(buffer);
+    }
+    const deanonymisable = getDeanonymisablePrefixLength(buffer);
+    return !holdStellaHrefs
+      ? deanonymisable
+      : Math.min(deanonymisable, getResolvedTextPrefixLength(buffer));
+  };
+
+  // Chunk events carry no END of their own: a message's chunks run until a
+  // different message or another event begins. Their text is held like the
+  // content events' so the stamp never sees half a `#stella-` href, and the
+  // held tail is released when the message ends.
+  let openChunkMessage: { first: TextLikeChunk; text: string } | null = null;
+
+  const closeChunkMessage = (): StreamChunk[] => {
+    if (openChunkMessage === null) {
+      return [];
+    }
+    const { first, text } = openChunkMessage;
+    openChunkMessage = null;
+    return text.length === 0 ? [] : [{ ...first, delta: text }];
+  };
+
+  const holdChunkText = (chunk: TextLikeChunk): StreamChunk[] => {
+    const continues =
+      openChunkMessage !== null &&
+      openChunkMessage.first.type === chunk.type &&
+      (chunk.messageId === undefined ||
+        chunk.messageId === openChunkMessage.first.messageId);
+    const closed = continues ? [] : closeChunkMessage();
+    const first = openChunkMessage?.first ?? chunk;
+    if (chunk.delta === undefined) {
+      openChunkMessage = { first, text: openChunkMessage?.text ?? "" };
+      return [...closed, chunk];
+    }
+    const buffer = `${openChunkMessage?.text ?? ""}${chunk.delta}`;
+    const prefixLength = getResolvedTextPrefixLength(buffer);
+    openChunkMessage = { first, text: buffer.slice(prefixLength) };
+    return prefixLength === 0
+      ? closed
+      : [...closed, { ...first, delta: buffer.slice(0, prefixLength) }];
+  };
+
+  const transformChunk = (chunk: PublicStreamChunk): StreamChunk[] => {
     if (chunk.type === EventType.TOOL_CALL_START) {
       const toolName = toolCallNameOf(chunk);
       if (toolName !== undefined) {
@@ -3478,10 +3715,7 @@ const createOutgoingChunkTransformer = ({
     if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
       const key = `text:${chunk.messageId}`;
       const buffer = `${buffers.get(key) ?? ""}${chunk.delta}`;
-      const prefixLength =
-        boundary.type === "anonymized"
-          ? getDeanonymisablePrefixLength(buffer)
-          : getResolvedTextPrefixLength(buffer);
+      const prefixLength = completeTextPrefixLength(buffer);
       buffers.set(key, buffer.slice(prefixLength));
       return flushText({
         messageId: chunk.messageId,
@@ -3502,10 +3736,7 @@ const createOutgoingChunkTransformer = ({
     if (chunk.type === EventType.REASONING_MESSAGE_CONTENT) {
       const key = `reasoning:${chunk.messageId}`;
       const buffer = `${buffers.get(key) ?? ""}${chunk.delta}`;
-      const prefixLength =
-        boundary.type === "anonymized"
-          ? getDeanonymisablePrefixLength(buffer)
-          : getResolvedTextPrefixLength(buffer);
+      const prefixLength = completeTextPrefixLength(buffer);
       buffers.set(key, buffer.slice(prefixLength));
       return flushReasoning({
         messageId: chunk.messageId,
@@ -3633,8 +3864,15 @@ const createOutgoingChunkTransformer = ({
     return [chunk];
   };
 
+  const transform = (chunk: PublicStreamChunk): StreamChunk[] =>
+    holdStellaHrefs &&
+    (chunk.type === EventType.TEXT_MESSAGE_CHUNK ||
+      chunk.type === EventType.REASONING_MESSAGE_CHUNK)
+      ? holdChunkText(chunk)
+      : [...closeChunkMessage(), ...transformChunk(chunk)];
+
   transform.flush = (): StreamChunk[] => {
-    const chunks: StreamChunk[] = [];
+    const chunks: StreamChunk[] = [...closeChunkMessage()];
     for (const [key, value] of buffers) {
       if (key.startsWith("text:")) {
         chunks.push(
@@ -3670,14 +3908,30 @@ const createOutgoingChunkTransformer = ({
 
 const STELLA_REF_MARKER = "#stella-";
 
+/** Where a tail that may still grow into `#stella-` begins (`#st`, `#stella`). */
+const partialMarkerTailStart = (text: string): number => {
+  for (
+    let length = Math.min(STELLA_REF_MARKER.length - 1, text.length);
+    length > 0;
+    length -= 1
+  ) {
+    if (STELLA_REF_MARKER.startsWith(text.slice(-length))) {
+      return text.length - length;
+    }
+  }
+  return text.length;
+};
+
 const getResolvedTextPrefixLength = (text: string): number => {
   const markerIndex = text.lastIndexOf(STELLA_REF_MARKER);
   if (markerIndex === -1) {
-    return text.length;
+    return partialMarkerTailStart(text);
   }
 
   const markerSuffix = text.slice(markerIndex);
-  return /[\s)]/u.test(markerSuffix) ? text.length : markerIndex;
+  return /[\s)]/u.test(markerSuffix)
+    ? partialMarkerTailStart(text)
+    : markerIndex;
 };
 
 const PARTIAL_PLACEHOLDER_TAIL = /\[[A-Z][A-Z0-9_]*$|\[$/u;
