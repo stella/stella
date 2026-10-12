@@ -308,7 +308,9 @@ const buildExposureVisual = ({
     },
     html: exposureHtml,
   });
-  const prepared = prepareGeneratedVisual(visualInput).unwrap();
+  const prepared = prepareGeneratedVisual(visualInput).unwrap(
+    "The seeded exposure view must pass the generated-view sanitizer",
+  );
   const { title, html, data, links } = prepared;
   return {
     visualInput,
