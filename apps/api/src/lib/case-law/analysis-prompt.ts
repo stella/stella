@@ -12,6 +12,7 @@ import {
   ANALYSIS_MAX_TOPICS,
   ANALYSIS_TOPIC_MAX_LENGTH,
 } from "@stll/legal-ast/analysis";
+import { courtParagraphNumber } from "@stll/legal-ast/court-paragraph-number";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { createSha256 } from "@stll/sha256/bun";
 
@@ -47,8 +48,10 @@ export const ANALYSIS_GUIDELINES = `
 10. A paragraph the court numbered shows its number after the
    anchor, as "(¶ 12)". When text you write refers to a paragraph,
    cite the court's number in the decision's language (for example
-   "bod 12", "Rn. 12", "paragraph 12"), never an anchorId. Anchor
-   fields still take anchorIds only.
+   "bod 12", "Rn. 12", "paragraph 12"), never an anchorId. A
+   paragraph without "(¶ N)" has no court number: refer to it by what
+   it says, never by a number, and never turn an anchorId into a
+   paragraph number. Anchor fields still take anchorIds only.
 
 ## holding
 
@@ -101,15 +104,12 @@ export type PromptBlock = {
 
 /**
  * The court's number as the prompt prints it after the anchor, or nothing.
- * Only a positive whole number on a paragraph is a citable court number.
+ * The reader's own rule decides what counts as a citable court number.
  */
-const courtNumberLabel = (block: PromptBlock): string =>
-  block.type === "paragraph" &&
-  block.number !== undefined &&
-  Number.isSafeInteger(block.number) &&
-  block.number >= 1
-    ? ` (¶ ${String(block.number)})`
-    : "";
+const courtNumberLabel = (block: PromptBlock): string => {
+  const number = courtParagraphNumber(block);
+  return number === null ? "" : ` (¶ ${String(number)})`;
+};
 
 /**
  * Format the decision text with anchor markers for the AI prompt.

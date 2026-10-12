@@ -4,6 +4,7 @@ import fc from "fast-check";
 import { propertyConfig } from "@stll/property-testing";
 
 import {
+  ANALYSIS_GUIDELINES,
   analysisInputOf,
   type AnalysisPromptDecision,
   formatDecisionForPrompt,
@@ -181,6 +182,17 @@ describe("analysisInputOf", () => {
       propertyConfig(),
     );
   });
+});
+
+// An unnumbered decision shows the model only anchor counters, which count
+// headings too; a citation built from one points at the wrong paragraph.
+test("the guidelines forbid citing a paragraph the court did not number", () => {
+  expect(ANALYSIS_GUIDELINES).toContain(
+    'A\n   paragraph without "(¶ N)" has no court number',
+  );
+  expect(ANALYSIS_GUIDELINES).toContain(
+    "never turn an anchorId into a\n   paragraph number",
+  );
 });
 
 describe("formatDecisionForPrompt", () => {
