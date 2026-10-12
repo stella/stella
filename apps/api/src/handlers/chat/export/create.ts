@@ -26,7 +26,6 @@ import {
 } from "@/api/handlers/chat/chat-scope";
 import {
   buildCitationSection,
-  formatChatExportParagraphMark,
   getChatExportCitationLabels,
   sourceDocumentsToCitations,
   trustedSourceDocumentsForExport,
@@ -45,6 +44,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
+import { formatCourtParagraphMark } from "@/api/lib/court-paragraph-mark";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { markdownToStellaDocument } from "@/api/lib/docx-authoring/from-markdown";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -219,7 +219,7 @@ const createMessageExport = createSafeRootHandler(
             {
               folioSourceTitle: onlySourceDocumentTitle(trustedSourceDocuments),
               formatParagraphMark: (courtParagraphNumber) =>
-                formatChatExportParagraphMark(
+                formatCourtParagraphMark(
                   citationLabels.locale,
                   courtParagraphNumber,
                 ),

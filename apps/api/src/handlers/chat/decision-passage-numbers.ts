@@ -7,6 +7,7 @@ import { courtParagraphNumbersByAnchor } from "@stll/legal-ast/court-paragraph-n
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import { captureError } from "@/api/lib/analytics/capture";
+import { COURT_PARAGRAPH_NUMBER_DECISIONS_MAX } from "@/api/lib/case-law/court-paragraph-numbers";
 import type { CourtParagraphNumbersByDecision } from "@/api/lib/case-law/court-paragraph-numbers";
 
 /**
@@ -45,16 +46,59 @@ type DecisionPassageStamperOptions = {
   load: (
     decisionIds: readonly SafeId<"caseLawDecision">[],
   ) => Promise<DecisionPassageNumbers>;
+  /** Longest a lookup may hold the visible stream; then it counts as failed. */
+  timeoutMs?: number | undefined;
 };
 
+/**
+ * How many decisions one turn may resolve, beside the loader's per-lookup
+ * bound. An answer cites a handful; the bounds keep a text stuffed with links
+ * from turning a turn into a corpus scan. A decision past them keeps its bare
+ * passage.
+ */
+export const DECISION_PASSAGE_TURN_DECISIONS_MAX = 32;
+
+/**
+ * The stream waits on a lookup before it shows the text that needs it, so a
+ * slow corpus may cost a citation its number but never stall the answer.
+ */
+export const DECISION_PASSAGE_LOOKUP_TIMEOUT_MS = 1500;
+
 const NOTHING_NUMBERED: ReadonlyMap<string, number> = new Map();
+
+class DecisionPassageLookupTimeoutError extends Error {
+  override name = "DecisionPassageLookupTimeoutError";
+}
+
+const withinTimeout = async <T>(
+  pending: Promise<T>,
+  timeoutMs: number,
+): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(
+        new DecisionPassageLookupTimeoutError(
+          `Court paragraph lookup exceeded ${String(timeoutMs)} ms`,
+        ),
+      );
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([pending, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+};
 
 /** One per turn: its cache lives as long as the answer it stamps. */
 export const createDecisionPassageStamper = ({
   known,
   load,
+  timeoutMs = DECISION_PASSAGE_LOOKUP_TIMEOUT_MS,
 }: DecisionPassageStamperOptions): DecisionPassageStamper => {
   const resolved = new Map(known);
+  let lookupsLeft = DECISION_PASSAGE_TURN_DECISIONS_MAX;
   return {
     prepare: async (text) => {
       const pending = [
@@ -64,17 +108,36 @@ export const createDecisionPassageStamper = ({
             .filter((decisionId) => !resolved.has(decisionId)),
         ),
       ];
-      if (pending.length === 0) {
-        return;
+      // Batches of the loader's bound, in parallel, until the turn's budget is
+      // spent. Only the decisions actually sent are marked resolved: one the
+      // budget leaves out stays unresolved rather than cached as unnumbered.
+      const batches: SafeId<"caseLawDecision">[][] = [];
+      while (pending.length > 0 && lookupsLeft > 0) {
+        const batch = pending.splice(
+          0,
+          Math.min(COURT_PARAGRAPH_NUMBER_DECISIONS_MAX, lookupsLeft),
+        );
+        lookupsLeft -= batch.length;
+        batches.push(batch);
       }
-      // A failed lookup costs the citation its number, never the answer.
-      const loaded = await load(pending).catch((error: unknown) => {
-        captureError(error, { source: "chat-decision-passage-numbers" });
-        return NO_DECISION_PASSAGE_NUMBERS;
-      });
-      for (const decisionId of pending) {
-        resolved.set(decisionId, loaded.get(decisionId) ?? NOTHING_NUMBERED);
-      }
+      await Promise.all(
+        batches.map(async (sent) => {
+          // A failed or slow lookup costs the citation its number, never the
+          // answer, and is not retried within the turn.
+          const loaded = await withinTimeout(load(sent), timeoutMs).catch(
+            (error: unknown) => {
+              captureError(error, { source: "chat-decision-passage-numbers" });
+              return NO_DECISION_PASSAGE_NUMBERS;
+            },
+          );
+          for (const decisionId of sent) {
+            resolved.set(
+              decisionId,
+              loaded.get(decisionId) ?? NOTHING_NUMBERED,
+            );
+          }
+        }),
+      );
     },
     stamp: (text) =>
       stampChatDecisionPassageHrefs(

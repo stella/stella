@@ -4,6 +4,7 @@ import { isReviewFlag } from "@stll/api-contract";
 import type { ReviewFlag } from "@stll/api-contract";
 
 import type { JustificationContent } from "@/api/db/schema";
+import { formatCourtParagraphMark } from "@/api/lib/court-paragraph-mark";
 import { escapeCSV } from "@/api/lib/csv";
 import type { QueryEntityResult } from "@/api/lib/entities/query-entities";
 import { LIMITS } from "@/api/lib/limits";
@@ -236,6 +237,7 @@ const mergeVerdictValue = (askValue: string, tier: string): string => {
 
 const justificationToComment = (
   content: JustificationContent | undefined,
+  locale: string,
 ): string => {
   if (!content) {
     return "";
@@ -257,7 +259,7 @@ const justificationToComment = (
         parts.push(
           block.courtParagraphNumber === null
             ? block.excerpt
-            : `${block.excerpt} (\u00b6\u00a0${block.courtParagraphNumber})`,
+            : `${block.excerpt} (${formatCourtParagraphMark(locale, block.courtParagraphNumber)})`,
         );
       }
       continue;
@@ -298,7 +300,10 @@ const buildPropertyCell = ({
     ? fieldByPropertyId.get(column.commentPropertyId)
     : undefined;
   const comment = commentField
-    ? justificationToComment(justificationByFieldId.get(commentField.id))
+    ? justificationToComment(
+        justificationByFieldId.get(commentField.id),
+        locale,
+      )
     : "";
   const commentOption = comment.length > 0 ? comment : undefined;
 

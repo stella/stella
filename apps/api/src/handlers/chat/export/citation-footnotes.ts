@@ -135,17 +135,6 @@ export const getChatExportCitationLabels = (
 
 const DEFAULT_CITATION_LABELS = getChatExportCitationLabels("en");
 
-/**
- * A court paragraph number as an exported citation prints it: the pilcrow the
- * reader and the chat chip use, with the number in the export's locale and a
- * no-break space so the two never wrap apart.
- */
-export const formatChatExportParagraphMark = (
-  locale: UiLocale,
-  courtParagraphNumber: number,
-): string =>
-  `\u00b6\u00a0${new Intl.NumberFormat(locale).format(courtParagraphNumber)}`;
-
 /** A citation resolved for export: either a grounded source (which becomes a
  *  numbered/inline source entry) or an ungrounded marker that carries NO
  *  source text. */

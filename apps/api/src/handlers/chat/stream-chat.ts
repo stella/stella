@@ -3182,6 +3182,41 @@ type TransformOutgoingStreamProps = {
  * The chunk with its text stamped. The transformer releases text only once
  * every `#stella-` href in it is whole, so a delta never splits a citation.
  */
+/**
+ * Rewrite every assistant text a snapshot carries, in place: the AG-UI
+ * `content` string and the UI `parts` the server's snapshots extend it with.
+ */
+const forEachAssistantSnapshotText = (
+  messages: unknown,
+  visit: (text: string) => string,
+): void => {
+  if (!Array.isArray(messages)) {
+    return;
+  }
+  for (const message of messages) {
+    if (!isRecord(message) || message["role"] !== "assistant") {
+      continue;
+    }
+    const content = message["content"];
+    if (typeof content === "string") {
+      message["content"] = visit(content);
+    }
+    const parts = message["parts"];
+    if (!Array.isArray(parts)) {
+      continue;
+    }
+    for (const part of parts) {
+      if (
+        isRecord(part) &&
+        part["type"] === "text" &&
+        typeof part["content"] === "string"
+      ) {
+        part["content"] = visit(part["content"]);
+      }
+    }
+  }
+};
+
 const stampedChunk = (
   chunk: StreamChunk,
   stamper: DecisionPassageStamper,
@@ -3192,15 +3227,11 @@ const stampedChunk = (
       return { ...chunk, delta: stamper.stamp(chunk.delta) };
     // A snapshot can be what a turn is stored from, so its answers carry the
     // same stamp as the deltas that built them.
-    case EventType.MESSAGES_SNAPSHOT:
-      return {
-        ...chunk,
-        messages: chunk.messages.map((message) =>
-          message.role === "assistant" && typeof message.content === "string"
-            ? { ...message, content: stamper.stamp(message.content) }
-            : message,
-        ),
-      };
+    case EventType.MESSAGES_SNAPSHOT: {
+      const messages = structuredClone(chunk.messages);
+      forEachAssistantSnapshotText(messages, stamper.stamp);
+      return { ...chunk, messages };
+    }
     default:
       return chunk;
   }
@@ -3212,14 +3243,14 @@ const stampableText = (chunk: StreamChunk): string => {
     case EventType.TEXT_MESSAGE_CONTENT:
     case EventType.REASONING_MESSAGE_CONTENT:
       return chunk.delta;
-    case EventType.MESSAGES_SNAPSHOT:
-      return chunk.messages
-        .map((message) =>
-          message.role === "assistant" && typeof message.content === "string"
-            ? message.content
-            : "",
-        )
-        .join("\n");
+    case EventType.MESSAGES_SNAPSHOT: {
+      const texts: string[] = [];
+      forEachAssistantSnapshotText(structuredClone(chunk.messages), (text) => {
+        texts.push(text);
+        return text;
+      });
+      return texts.join("\n");
+    }
     default:
       return "";
   }

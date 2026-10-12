@@ -3,12 +3,12 @@ import JSZip from "jszip";
 
 import type { BlockContent, ParagraphContent } from "@stll/docx-core/model";
 
-import { formatChatExportParagraphMark } from "@/api/handlers/chat/export/citation-footnotes";
 import { createChatExportDocx } from "@/api/handlers/chat/export/create-chat-export-docx";
 import {
   styleDocumentCitations,
   styleDocumentCitationsWithCounts,
 } from "@/api/handlers/chat/export/style-document-citations";
+import { formatCourtParagraphMark } from "@/api/lib/court-paragraph-mark";
 import { markdownToStellaDocument } from "@/api/lib/docx-authoring/from-markdown";
 
 const collectParagraphContent = (
@@ -97,7 +97,7 @@ const markdown = [
 const options = {
   folioSourceTitle: "Agreement.docx",
   formatParagraphMark: (courtParagraphNumber: number) =>
-    formatChatExportParagraphMark("en", courtParagraphNumber),
+    formatCourtParagraphMark("en", courtParagraphNumber),
   internalCitationFallback: "Citation",
   internalReferenceMode: "references",
   unverifiedCitationLabel: "Unverified citation",
@@ -239,33 +239,41 @@ describe("styleDocumentCitations", () => {
   });
 
   test("the paragraph mark follows the export's locale", () => {
-    expect(formatChatExportParagraphMark("de", 1234)).toBe("\u00b6\u00a01.234");
-    expect(formatChatExportParagraphMark("cs", 8)).toBe("\u00b6\u00a08");
+    expect(formatCourtParagraphMark("de", 1234)).toBe("\u00b6\u00a01.234");
+    expect(formatCourtParagraphMark("cs", 8)).toBe("\u00b6\u00a08");
   });
 
   test("malformed decision passage hrefs export as plain text", () => {
     // A hallucinated anchor or a non-uuid decision must not survive the export
-    // as a dead internal hyperlink.
-    for (const href of [
-      "#stella-decision-passage=not-a-uuid:p-12",
-      // Percent-encoded: outside the anchor grammar the parsers ever mint.
-      "#stella-decision-passage=33333333-3333-4333-8333-333333333333:p%2D12",
-      "#stella-decision-passage=33333333-3333-4333-8333-333333333333",
-    ]) {
-      const result = styleDocumentCitationsWithCounts(
-        markdownToStellaDocument(`[claim](${href})`),
-        "footnotes",
-        options,
-      );
+    // as a dead internal hyperlink, whichever style keeps citations: inline
+    // export now walks the document too, so it unwraps them the same way.
+    for (const style of ["footnotes", "inline"] as const) {
+      for (const href of [
+        "#stella-decision-passage=not-a-uuid:p-12",
+        // Percent-encoded: outside the anchor grammar the parsers ever mint.
+        "#stella-decision-passage=33333333-3333-4333-8333-333333333333:p%2D12",
+        "#stella-decision-passage=33333333-3333-4333-8333-333333333333",
+        // A court number that is not one positive whole number.
+        "#stella-decision-passage=33333333-3333-4333-8333-333333333333:p-12:0",
+      ]) {
+        const document = markdownToStellaDocument(`[claim](${href})`);
+        const result = styleDocumentCitationsWithCounts(
+          document,
+          style,
+          options,
+        );
 
-      expect(collectText(result.document.package.document.content)).toBe(
-        "claim",
-      );
-      expect(
-        collectHyperlinkTargets(result.document.package.document.content),
-      ).toEqual([]);
-      expect(result.document.package.footnotes).toEqual([]);
-      expect(result.citationCounts).toEqual({ unverified: 0, verified: 0 });
+        expect(collectText(result.document.package.document.content)).toBe(
+          "claim",
+        );
+        expect(
+          collectHyperlinkTargets(result.document.package.document.content),
+        ).toEqual([]);
+        expect(result.document.package.footnotes).toEqual(
+          style === "inline" ? document.package.footnotes : [],
+        );
+        expect(result.citationCounts).toEqual({ unverified: 0, verified: 0 });
+      }
     }
   });
 

@@ -63,6 +63,7 @@ import {
 } from "@/api/handlers/chat/compaction";
 import {
   createDecisionPassageStamper,
+  DECISION_PASSAGE_TURN_DECISIONS_MAX,
   knownDecisionPassageStamper,
 } from "@/api/handlers/chat/decision-passage-numbers";
 import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
@@ -84,6 +85,7 @@ import type {
 } from "@/api/handlers/chat/types";
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import { COURT_PARAGRAPH_NUMBER_DECISIONS_MAX } from "@/api/lib/case-law/court-paragraph-numbers";
 import type { ChatTool } from "@/api/lib/chat/chat-tool-types";
 import {
   guardModelMessages,
@@ -6792,6 +6794,7 @@ describe("decision passage court numbers", () => {
   const runTurn = async (
     boundary: ChatThirdPartyBoundary,
     loads: (readonly string[])[],
+    deltas: readonly string[] = DELTAS,
   ) => {
     const messageId = toSafeId<"chatMessage">(
       "11111111-1111-4111-8111-111111111111",
@@ -6825,7 +6828,7 @@ describe("decision passage court numbers", () => {
           messageId: "provider-message",
           role: "assistant",
         },
-        ...DELTAS.map(
+        ...deltas.map(
           (delta) =>
             ({
               type: EventType.TEXT_MESSAGE_CONTENT,
@@ -6890,6 +6893,129 @@ describe("decision passage court numbers", () => {
       expect(loads).toEqual([[EARLIER_ID]]);
     });
   }
+
+  test("an anonymized placeholder beside a split href is restored and the href stamped", async () => {
+    const { live, stored } = await runTurn(
+      createBoundary([["[PERSON_1]", "Jan Novak"]]),
+      [],
+      [
+        "[as held](#stella-decision-pass",
+        `age=${OPEN_ID}:p-8)[PER`,
+        "SON_1] agreed.",
+      ],
+    );
+    const expected = `[as held](${passage(OPEN_ID, "p-8:6")})Jan Novak agreed.`;
+    expect(textOf(stored.parts)).toBe(expected);
+    expect(live).toBe(expected);
+  });
+
+  test("a snapshot's answers are stamped, in AG-UI content and UI parts alike, and nothing else is", async () => {
+    const cited = `[as held](${passage(EARLIER_ID, "p-4:9")})`;
+    const stamped = `[as held](${passage(EARLIER_ID, "p-4:2")})`;
+    const loads: (readonly string[])[] = [];
+    const snapshot = unsafeFixture(
+      "A server snapshot carrying both message shapes",
+      {
+        type: EventType.MESSAGES_SNAPSHOT,
+        messages: [
+          { id: "user-1", role: "user", content: cited },
+          { id: "assistant-1", role: "assistant", content: cited },
+          {
+            id: "assistant-2",
+            role: "assistant",
+            parts: [{ type: "text", content: cited }],
+          },
+        ],
+      } satisfies StreamChunk,
+    );
+    const chunks = await collectChunks(
+      transformPersistenceVisibleStream({
+        boundary: { type: "raw" },
+        initialRestorationPlaceholders: new Set(),
+        restorationPairs: [],
+        stamper: createDecisionPassageStamper({
+          known: new Map(),
+          load: async (decisionIds) => {
+            loads.push(decisionIds);
+            return await Promise.resolve(
+              new Map([[EARLIER_ID, new Map([["p-4", 2]])]]),
+            );
+          },
+        }),
+        source: streamChunks([snapshot]),
+      }),
+    );
+    const emitted = chunks.find(
+      (chunk) => chunk.type === EventType.MESSAGES_SNAPSHOT,
+    );
+    expect(emitted).toMatchObject({
+      messages: [
+        { id: "user-1", content: cited },
+        { id: "assistant-1", content: stamped },
+        { id: "assistant-2", parts: [{ type: "text", content: stamped }] },
+      ],
+    });
+    expect(loads).toEqual([[EARLIER_ID]]);
+  });
+
+  test("a turn citing more decisions than its budget resolves the budget in bounded batches and leaves the rest bare", async () => {
+    const ids = Array.from({ length: 40 }, (_, index) =>
+      toSafeId<"caseLawDecision">(
+        `019a0000-0000-7000-8000-${String(index + 1).padStart(12, "0")}`,
+      ),
+    );
+    const loads: (readonly string[])[] = [];
+    const stamper = createDecisionPassageStamper({
+      known: new Map(),
+      load: async (decisionIds) => {
+        loads.push(decisionIds);
+        return await Promise.resolve(
+          new Map(decisionIds.map((id) => [id, new Map([["p-1", 5]])])),
+        );
+      },
+    });
+    const text = ids.map((id) => `[a](${passage(id, "p-1")})`).join(" ");
+    await stamper.prepare(text);
+    await stamper.prepare(text);
+
+    expect(loads.map((batch) => batch.length)).toEqual([
+      COURT_PARAGRAPH_NUMBER_DECISIONS_MAX,
+      DECISION_PASSAGE_TURN_DECISIONS_MAX -
+        COURT_PARAGRAPH_NUMBER_DECISIONS_MAX,
+    ]);
+    const stampedIds = new Set(loads.flat());
+    expect(stampedIds.size).toBe(DECISION_PASSAGE_TURN_DECISIONS_MAX);
+    const out = stamper.stamp(text);
+    for (const id of ids) {
+      expect(out).toContain(
+        `(${passage(id, stampedIds.has(id) ? "p-1:5" : "p-1")})`,
+      );
+    }
+  });
+
+  test("a lookup that never answers times out without holding the answer", async () => {
+    let calls = 0;
+    const stamper = createDecisionPassageStamper({
+      known: new Map(),
+      load: async () => {
+        calls += 1;
+        // The executor never settles: the lookup hangs until the stamper
+        // gives up on it.
+        return await new Promise<never>(() => {
+          // Intentionally left pending.
+        });
+      },
+      timeoutMs: 10,
+    });
+    const text = `[as held](${passage(EARLIER_ID, "p-4:2")})`;
+    await stamper.prepare(text);
+    await stamper.prepare(text);
+    expect(stamper.stamp(text)).toBe(
+      `[as held](${passage(EARLIER_ID, "p-4")})`,
+    );
+    // A failed lookup is not retried within the turn.
+    expect(calls).toBe(1);
+  });
 
   test("a stamper that resolves nothing drops a number the model wrote", async () => {
     const stamper = knownDecisionPassageStamper(new Map());
