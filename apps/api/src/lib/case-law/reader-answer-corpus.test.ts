@@ -63,6 +63,7 @@ const source = ({ decisionId, texts }: FixtureOptions) =>
     } satisfies DocumentAst,
     citationAnchors: [],
     provisionAnchors: [],
+    provisionStatus: null,
     referenceNextCursor: null,
   }) as const satisfies NonNullable<
     Awaited<ReturnType<typeof readDecisionReaderSource>>
