@@ -10,6 +10,7 @@ import type { ClipboardSnapshot } from "../../src/clipboard/clipboard-types";
 import arMessages from "../../src/i18n/langs/ar.json" with { type: "json" };
 import enMessages from "../../src/i18n/langs/en.json" with { type: "json" };
 import type { AppSnapshot, DesktopAccountSnapshot } from "../../src/shared/rpc";
+import { BRIDGE_VERSION } from "../bridge-version";
 
 const REGISTRIES = [
   {
@@ -118,7 +119,7 @@ type BoundaryOptions = {
 };
 const SETTINGS_SNAPSHOT = {
   bridgePort: 45_901,
-  bridgeVersion: 19,
+  bridgeVersion: BRIDGE_VERSION,
   capabilities: ["office-edit.v1", "self-host.connect", "account-link.v5"],
   notificationPreferences: {
     documentReady: true,

@@ -5,6 +5,40 @@ import path from "node:path";
 
 import { runTestBatches } from "./run-gated-tests";
 
+test.each([undefined, "./src/tests/setup-postgres.ts"])(
+  "each process batch loads the optional %s setup after its environment",
+  async (preload) => {
+    const commands: string[][] = [];
+    expect(
+      await runTestBatches({
+        batches: [["ordinary.test.ts"], ["isolated.test.ts"]],
+        bunArguments: [],
+        cwd: process.cwd(),
+        gate: "STELLA_RUN_POSTGRES_TESTS",
+        gateValue: "true",
+        preload,
+        spawn: ({ cmd, env }) => {
+          commands.push(cmd);
+          expect(env["STELLA_RUN_POSTGRES_TESTS"]).toBe("true");
+          return { exited: Promise.resolve(0), exitCode: 0, signalCode: null };
+        },
+      }),
+    ).toBe(0);
+    expect(commands).toHaveLength(2);
+    for (const command of commands) {
+      const environmentIndex = command.indexOf("./src/tests/setup-env.ts");
+      expect(environmentIndex).toBeGreaterThan(0);
+      if (preload === undefined) {
+        expect(command).not.toContain("./src/tests/setup-postgres.ts");
+        continue;
+      }
+      expect(command.slice(environmentIndex + 1, environmentIndex + 3)).toEqual(
+        ["--preload", preload],
+      );
+    }
+  },
+);
+
 test("a failed ordinary batch still produces one report with later isolated suites", async () => {
   const directory = await mkdtemp(
     path.join(os.tmpdir(), "stella-gated-runner-"),

@@ -62,6 +62,7 @@ const createWorkspaceBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   featureAccess: AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
   description:
     "Create a new matter (name required; pass clientId to attach a client " +

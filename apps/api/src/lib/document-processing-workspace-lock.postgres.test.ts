@@ -19,14 +19,23 @@ import {
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { requestAutomaticDocumentOcr } from "@/api/lib/document-processing-automatic-request";
-import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
-import { restoreManualOcrRunAfterProjectionLoss } from "@/api/lib/document-processing-manual-ocr-restore";
 import {
+  DOCUMENT_PROCESSING_MAX_ATTEMPTS,
+  DOCUMENT_OCR_PROCESSOR_VERSION,
+} from "@/api/lib/document-processing-contract";
+import {
+  createDocumentProcessingReconciliationPhases,
   processDocumentProcessingRun,
+  markRunFailed,
   persistMissingNativeExtractionRuns,
   persistOcrProjection,
 } from "@/api/lib/document-processing-queue";
+import {
+  DocumentProcessingJobError,
+  SEARCH_INDEX_FAILURE_CODE,
+} from "@/api/lib/document-processing-queue-policy";
 import { persistManualOcrRun } from "@/api/lib/document-processing-request";
+import { restoreManualOcrRunAfterProjectionLoss } from "@/api/lib/search/document-processing-manual-ocr-restore";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -184,8 +193,122 @@ const withSourceBarrier = (tx: Transaction, options: SourceBarrierOptions) => {
   return wrap(tx);
 };
 
+// Replay commits with triggers enabled before the manual transaction acquires
+// parent locks. Supply its earlier identity snapshot only to the unlocked read;
+// the real claim lock must read the updated budget from Postgres.
+const withRunReadSnapshot = (
+  tx: Transaction,
+  snapshot: (typeof documentProcessingRuns.$inferSelect)[],
+) => {
+  let supplied = false;
+  const wrap = <T extends object>(target: T, readsRun = false): T =>
+    new Proxy(target, {
+      get: (object, key) => {
+        const member: unknown = Reflect.get(object, key);
+        if (typeof member !== "function") {
+          return member;
+        }
+        return (...args: unknown[]) => {
+          const result: unknown = Reflect.apply(member, object, args);
+          const isRun =
+            readsRun ||
+            (key === "from" && args.at(0) === documentProcessingRuns);
+          if (key === "limit" && isRun && !supplied) {
+            supplied = true;
+            return (async () => {
+              await result;
+              return snapshot;
+            })();
+          }
+          if (
+            ["select", "from", "where"].includes(String(key)) &&
+            typeof result === "object" &&
+            result !== null
+          ) {
+            return wrap(result, isRun);
+          }
+          return result;
+        };
+      },
+    });
+  return wrap(tx);
+};
+
+const searchReplayPhase = (
+  db: GatedTestDb,
+  indexEntity: Parameters<
+    typeof createDocumentProcessingReconciliationPhases
+  >[0]["indexEntity"],
+) =>
+  createDocumentProcessingReconciliationPhases({
+    database: asTestRaw<typeof rootDb>(db),
+    broadcastWorkspaceResourceUpdated: () => undefined,
+    enqueueDocumentDeadlineScout: async () => undefined,
+    enqueueDocumentProcessingRun: async () => undefined,
+    indexEntity,
+    now: () => Date.now(),
+    readRepairScanCursor: async () => null,
+    readyRepairCursor: async () => undefined,
+    repairPassMemo: {
+      completedAt: () => null,
+      recordCompleted: () => undefined,
+    },
+    writeRepairScanCursor: async () => true,
+  }).find(({ name }) => name === "reindex") ??
+  panic("Search replay phase missing");
+
+const seedFailedSearchReplay = async (
+  db: GatedTestDb,
+  fixture: Awaited<ReturnType<typeof seedOcrFixture>>,
+  attemptCount: number,
+) => {
+  const { organizationId, workspaceId, userId, source } = fixture;
+  const id = createSafeId<"documentProcessingRun">();
+  await db.insert(documentProcessingRuns).values({
+    id,
+    organizationId,
+    workspaceId,
+    ...source,
+    kind: "ocr",
+    processorVersion: DOCUMENT_OCR_PROCESSOR_VERSION,
+    requestSource: "manual",
+    requestedBy: userId,
+    status: "failed",
+    errorCode: "search_index_failed",
+    attemptCount,
+    nextAttemptAt: null,
+  });
+  await db.insert(extractedContent).values({
+    entityId: source.entityId,
+    organizationId,
+    workspaceId,
+    ciphertext: Buffer.from("text"),
+    iv: Buffer.alloc(12),
+    charCount: 4,
+  });
+  return id;
+};
+
 const queuePaths = ["projection", "dispatch", "native-repair"] as const;
 type QueuePath = (typeof queuePaths)[number];
+const capWriterPaths = [
+  "request",
+  "restore",
+  "automatic",
+  ...queuePaths,
+] as const;
+const capRunStatuses = {
+  request: "queued",
+  restore: "failed",
+  automatic: "queued",
+  projection: "running",
+  dispatch: "queued",
+  "native-repair": "queued",
+} as const satisfies Record<
+  (typeof capWriterPaths)[number],
+  (typeof documentProcessingRuns.$inferSelect)["status"]
+>;
+
 type OcrFixture = Awaited<ReturnType<typeof seedOcrFixture>>;
 
 type RunQueueWriterOptions = {
@@ -264,6 +387,445 @@ if (!databaseUrl || !runPostgresTests) {
     });
   });
 } else {
+  test("pre-schedule search failures recover and exhaust the bounded replay budget", async () => {
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db } = openClient();
+      const fixture = await seedOcrFixture(db);
+      let calls = 0;
+      const phase = searchReplayPhase(db, async (entityId) => {
+        if (entityId === fixture.source.entityId) {
+          calls += 1;
+        }
+        throw new Error("index unavailable");
+      });
+      try {
+        const id = await seedFailedSearchReplay(db, fixture, 0);
+        for (
+          let count = 1;
+          count <= DOCUMENT_PROCESSING_MAX_ATTEMPTS;
+          count += 1
+        ) {
+          await phase.run();
+          const row = (
+            await db
+              .select()
+              .from(documentProcessingRuns)
+              .where(eq(documentProcessingRuns.id, id))
+          ).at(0);
+          expect(row?.attemptCount).toBe(count);
+          expect(row?.status).toBe("failed");
+          expect(calls).toBe(count);
+          if (count === DOCUMENT_PROCESSING_MAX_ATTEMPTS) {
+            expect(row?.nextAttemptAt).toBeNull();
+          } else {
+            expect(row?.nextAttemptAt).not.toBeNull();
+            await db
+              .update(documentProcessingRuns)
+              .set({ nextAttemptAt: new Date(Date.now() - 1000) })
+              .where(eq(documentProcessingRuns.id, id));
+          }
+        }
+        await phase.run();
+        expect(calls).toBe(DOCUMENT_PROCESSING_MAX_ATTEMPTS);
+      } finally {
+        await fixture.cleanup();
+      }
+    });
+  }, 15_000);
+
+  test.each(
+    (["request", "restore"] as const).flatMap((path) =>
+      [1, DOCUMENT_PROCESSING_MAX_ATTEMPTS - 1].map((attemptCount) => ({
+        path,
+        attemptCount,
+      })),
+    ),
+  )(
+    "$path observes the locked replay budget starting at $attemptCount",
+    async ({ path, attemptCount }) => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const manual = openClient({ connection: { statement_timeout: 5000 } });
+        const replay = openClient({
+          max: 1,
+          connection: { statement_timeout: 5000 },
+        });
+        const fixture = await seedOcrFixture(replay.db);
+        const { organizationId, workspaceId, userId, source } = fixture;
+        try {
+          const id = await seedFailedSearchReplay(
+            replay.db,
+            fixture,
+            attemptCount,
+          );
+          // Use a scheduled row here so the stale-read guard also reaches the
+          // old replay predicate independently of the null-schedule regression.
+          await replay.db
+            .update(documentProcessingRuns)
+            .set({ nextAttemptAt: new Date(Date.now() - 1000) })
+            .where(eq(documentProcessingRuns.id, id));
+          const snapshot = await replay.db
+            .select()
+            .from(documentProcessingRuns)
+            .where(eq(documentProcessingRuns.id, id));
+          expect(snapshot.at(0)?.attemptCount).toBe(attemptCount);
+          await searchReplayPhase(replay.db, async () => {
+            throw new Error("index unavailable");
+          }).run();
+          const before = (
+            await replay.db
+              .select()
+              .from(documentProcessingRuns)
+              .where(eq(documentProcessingRuns.id, id))
+          ).at(0);
+          expect(before?.attemptCount).toBe(attemptCount + 1);
+          expect(before?.status).toBe("failed");
+          const db = {
+            transaction: async <T>(run: (tx: Transaction) => Promise<T>) =>
+              await manual.db.transaction(
+                async (tx) => await run(withRunReadSnapshot(tx, snapshot)),
+              ),
+          };
+          await (path === "request"
+            ? persistManualOcrRun({
+                db,
+                organizationId,
+                workspaceId,
+                userId,
+                source,
+                recordAuditEvent: async () => undefined,
+              })
+            : restoreManualOcrRunAfterProjectionLoss({
+                db,
+                organizationId,
+                workspaceId,
+                ...source,
+              }));
+          const after = (
+            await replay.db
+              .select()
+              .from(documentProcessingRuns)
+              .where(eq(documentProcessingRuns.id, id))
+          ).at(0);
+          expect(after?.attemptCount).toBe(
+            path === "request" ? 0 : attemptCount + 1,
+          );
+          expect(after?.status).toBe(
+            path === "restore" &&
+              attemptCount + 1 === DOCUMENT_PROCESSING_MAX_ATTEMPTS
+              ? "failed"
+              : "queued",
+          );
+        } finally {
+          await fixture.cleanup();
+        }
+      });
+    },
+    15_000,
+  );
+
+  test.each(capWriterPaths)(
+    "%s completes after the cap writer updates workspace then entity",
+    async (path) => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const setup = openClient();
+        const writer = openClient({ connection: { statement_timeout: 5000 } });
+        const cap = openClient({ connection: { statement_timeout: 5000 } });
+        const observer = openClient();
+        const fixture = await seedOcrFixture(setup.db);
+        const { organizationId, workspaceId, userId, source } = fixture;
+        const ready = Promise.withResolvers<undefined>();
+        const continueCap = Promise.withResolvers<undefined>();
+        const pending: Promise<unknown>[] = [];
+        const claimToken = Bun.randomUUIDv7();
+        try {
+          await setup.db.insert(organizationSettings).values({
+            organizationId,
+            documentProcessingMode: "searchable-text",
+          });
+          const run =
+            (
+              await setup.db
+                .insert(documentProcessingRuns)
+                .values({
+                  id: createSafeId<"documentProcessingRun">(),
+                  organizationId,
+                  workspaceId,
+                  ...source,
+                  kind: "ocr",
+                  processorVersion: DOCUMENT_OCR_PROCESSOR_VERSION,
+                  requestSource: "manual",
+                  requestedBy: userId,
+                  status: capRunStatuses[path],
+                  claimedBy: path === "projection" ? claimToken : null,
+                  errorCode: path === "restore" ? "search_index_failed" : null,
+                })
+                .returning()
+            ).at(0) ?? panic("Cap serialization fixture missing");
+          if (
+            path === "request" ||
+            path === "automatic" ||
+            path === "native-repair"
+          ) {
+            await setup.db
+              .delete(documentProcessingRuns)
+              .where(eq(documentProcessingRuns.id, run.id));
+          }
+          const writerPid =
+            (
+              await writer.sql<
+                { pid: number }[]
+              >`SELECT pg_backend_pid() AS pid`
+            ).at(0)?.pid ?? panic("Writer session missing");
+          const capPid =
+            (
+              await cap.sql<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`
+            ).at(0)?.pid ?? panic("Cap session missing");
+          pending.push(
+            cap.db.transaction(async (tx) => {
+              if (path === "automatic" || path === "native-repair") {
+                // These chains retain the parent KEY SHARE fence.
+                await tx
+                  .select({ id: workspaces.id })
+                  .from(workspaces)
+                  .where(eq(workspaces.id, workspaceId))
+                  .for("update");
+              } else {
+                // A non-key UPDATE is compatible with the old parent KEY SHARE,
+                // so the old source-first acquisition reaches the opposing wait.
+                await tx
+                  .update(workspaces)
+                  .set({ name: "Cap matter writer" })
+                  .where(eq(workspaces.id, workspaceId));
+              }
+              ready.resolve(undefined);
+              await continueCap.promise;
+              await tx
+                .update(entities)
+                .set({ name: "Cap writer completed" })
+                .where(eq(entities.id, source.entityId));
+            }),
+          );
+          await withTimeout(async () => await ready.promise, {
+            label: "Cap workspace barrier",
+            timeoutMs: 3000,
+          });
+          const database = asTestRaw<typeof rootDb>({
+            transaction: async <T>(
+              operation: (tx: Transaction) => Promise<T>,
+            ) =>
+              await writer.db.transaction(async (tx) => {
+                const result = await operation(tx);
+                // Dispatch claim writes are the tested transaction; stop before I/O.
+                return path === "dispatch" ? null : result;
+              }),
+          });
+          const runWriter = async () => {
+            switch (path) {
+              case "request":
+                expect(
+                  (
+                    await persistManualOcrRun({
+                      db: database,
+                      organizationId,
+                      workspaceId,
+                      userId,
+                      source,
+                      recordAuditEvent: async () => undefined,
+                    })
+                  )?.status,
+                ).toBe("queued");
+                return;
+              case "restore":
+                await restoreManualOcrRunAfterProjectionLoss({
+                  db: database,
+                  organizationId,
+                  workspaceId,
+                  ...source,
+                });
+                return;
+              case "automatic":
+                await requestAutomaticDocumentOcr({
+                  db: database,
+                  organizationId,
+                  workspaceId,
+                  ...source,
+                  requestSource: "upload",
+                });
+                return;
+              case "projection":
+              case "dispatch":
+              case "native-repair":
+                await runQueueWriter({
+                  path,
+                  first: "ocr",
+                  database,
+                  fixture,
+                  run,
+                  claimToken,
+                });
+                return;
+              default:
+                path satisfies never;
+            }
+          };
+          pending.push(runWriter());
+          await waitForBlockedPid(observer.sql, {
+            waitingPid: writerPid,
+            holdingPid: capPid,
+          });
+          continueCap.resolve(undefined);
+          await Promise.all(pending);
+          expect(
+            (
+              await setup.db
+                .select({ name: entities.name })
+                .from(entities)
+                .where(eq(entities.id, source.entityId))
+            ).at(0)?.name,
+          ).toBe("Cap writer completed");
+          if (path === "projection") {
+            expect(
+              (
+                await setup.db
+                  .select({ ocrRunId: extractedContent.ocrRunId })
+                  .from(extractedContent)
+                  .where(eq(extractedContent.entityId, source.entityId))
+              ).at(0)?.ocrRunId,
+            ).toBe(run.id);
+          }
+          expect(
+            (
+              await setup.db
+                .select({ status: documentProcessingRuns.status })
+                .from(documentProcessingRuns)
+                .where(eq(documentProcessingRuns.entityId, source.entityId))
+            ).at(0)?.status,
+          ).toBe(
+            path === "projection" || path === "dispatch" ? "running" : "queued",
+          );
+        } finally {
+          continueCap.resolve(undefined);
+          await Promise.allSettled(pending);
+          await fixture.cleanup();
+        }
+      });
+    },
+    15_000,
+  );
+
+  test.each([
+    { errorCode: SEARCH_INDEX_FAILURE_CODE, retryScheduled: true },
+    { errorCode: "processing_failed", retryScheduled: false },
+  ] as const)(
+    "failure settlement observes the locked claim for $errorCode",
+    async ({ errorCode, retryScheduled }) => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const setup = openClient();
+        const holder = openClient({ connection: { statement_timeout: 5000 } });
+        const settler = openClient({ connection: { statement_timeout: 5000 } });
+        const observer = openClient();
+        const fixture = await seedOcrFixture(setup.db);
+        const ready = Promise.withResolvers<undefined>();
+        const release = Promise.withResolvers<undefined>();
+        const pending: Promise<unknown>[] = [];
+        const claimToken = Bun.randomUUIDv7();
+        try {
+          const run =
+            (
+              await setup.db
+                .insert(documentProcessingRuns)
+                .values({
+                  id: createSafeId<"documentProcessingRun">(),
+                  organizationId: fixture.organizationId,
+                  workspaceId: fixture.workspaceId,
+                  ...fixture.source,
+                  kind: "ocr",
+                  processorVersion: DOCUMENT_OCR_PROCESSOR_VERSION,
+                  requestSource: "upload",
+                  requestedBy: fixture.userId,
+                  status: "running",
+                  claimedBy: claimToken,
+                  attemptCount: 1,
+                })
+                .returning()
+            ).at(0) ?? panic("Claim fixture missing");
+          const holderPid =
+            (
+              await holder.sql<
+                { pid: number }[]
+              >`SELECT pg_backend_pid() AS pid`
+            ).at(0)?.pid ?? panic("Claim holder missing");
+          const settlerPid =
+            (
+              await settler.sql<
+                { pid: number }[]
+              >`SELECT pg_backend_pid() AS pid`
+            ).at(0)?.pid ?? panic("Claim settler missing");
+          pending.push(
+            holder.db.transaction(async (tx) => {
+              await tx
+                .select({ id: documentProcessingRuns.id })
+                .from(documentProcessingRuns)
+                .where(eq(documentProcessingRuns.id, run.id))
+                .for("update");
+              ready.resolve(undefined);
+              await release.promise;
+              await tx
+                .update(documentProcessingRuns)
+                .set({ attemptCount: 2, requestSource: "manual" })
+                .where(eq(documentProcessingRuns.id, run.id));
+            }),
+          );
+          await withTimeout(async () => await ready.promise, {
+            label: "Claim holder barrier",
+            timeoutMs: 3000,
+          });
+          pending.push(
+            markRunFailed({
+              database: asTestRaw<typeof rootDb>(settler.db),
+              run,
+              claimToken,
+              error: new DocumentProcessingJobError({
+                code: errorCode,
+                message: "Search index unavailable",
+              }),
+            }).then((outcome) => expect(outcome).toBe("settled")),
+          );
+          await waitForBlockedPid(observer.sql, {
+            waitingPid: settlerPid,
+            holdingPid: holderPid,
+          });
+          release.resolve(undefined);
+          await Promise.all(pending);
+          const settled = (
+            await setup.db
+              .select({
+                status: documentProcessingRuns.status,
+                attemptCount: documentProcessingRuns.attemptCount,
+                claimedBy: documentProcessingRuns.claimedBy,
+                errorCode: documentProcessingRuns.errorCode,
+                nextAttemptAt: documentProcessingRuns.nextAttemptAt,
+              })
+              .from(documentProcessingRuns)
+              .where(eq(documentProcessingRuns.id, run.id))
+          ).at(0);
+          expect(settled).toEqual({
+            status: "failed",
+            attemptCount: 2,
+            claimedBy: null,
+            errorCode,
+            nextAttemptAt: retryScheduled ? expect.any(Date) : null,
+          });
+        } finally {
+          release.resolve(undefined);
+          await Promise.allSettled(pending);
+          await fixture.cleanup();
+        }
+      });
+    },
+    15_000,
+  );
+
   test.each(schedules)(
     "$path remains compatible with repair when $first starts first",
     async ({ path, first }) => {
@@ -303,19 +865,17 @@ if (!databaseUrl || !runPostgresTests) {
             repairPidRows.at(0)?.pid ?? panic("Repair session missing");
           const ocrDatabase = {
             transaction: async <T>(run: (tx: Transaction) => Promise<T>) =>
-              await ocr.db.transaction(async (tx) => {
-                // Pause at the same entity lock the real OCR path acquires.
-                await tx
-                  .select({ id: entities.id })
-                  .from(entities)
-                  .where(eq(entities.id, source.entityId))
-                  .for("update");
-                if (first === "ocr") {
-                  firstReady.resolve(undefined);
-                  await releaseFirst.promise;
-                }
-                return await run(tx);
-              }),
+              await ocr.db.transaction(
+                async (tx) =>
+                  await run(
+                    first === "ocr"
+                      ? withSourceBarrier(tx, {
+                          ready: () => firstReady.resolve(undefined),
+                          release: releaseFirst.promise,
+                        })
+                      : tx,
+                  ),
+              ),
           };
           const repairDatabase = {
             query: repair.db.query,

@@ -7,7 +7,7 @@
 // The ban covers both audit tables and aliases imported from their schema
 // modules: other Drizzle inserts are unrelated, and
 // an arbitrary local identifier is not assumed to name the audit table.
-// `apps/api/src/lib/audit-log.ts` is the sole owner of the physical insert.
+// `apps/api/src/lib/db/audit-recording.ts` is the sole owner of the physical insert.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
@@ -55,7 +55,7 @@ export default eslintCompatPlugin({
                 filename.endsWith(
                   ".oxlint-plugins/__fixtures__/no-direct-audit-log-insert.fixture.ts",
                 )) &&
-              !filename.endsWith("apps/api/src/lib/audit-log.ts")
+              !filename.endsWith("apps/api/src/lib/db/audit-recording.ts")
             );
           },
           ImportDeclaration(node) {

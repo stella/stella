@@ -147,6 +147,7 @@ const getBatchPolicyViolation = ({
 
 const batchUpdate = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Apply one action to up to 200 time entries in a matter at once: " +
       "approve, revert_to_draft, mark_billable, or mark_non_billable. " +

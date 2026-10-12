@@ -14,6 +14,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 
 const config = {
+  contract: "patch",
   permissions: { integration: ["create"] },
   accountAccess: ACCOUNT_ACCESS.accountControl,
   realtime: sharepointRealtimeUpdates,

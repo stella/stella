@@ -3,6 +3,7 @@ import { describe, expect, setSystemTime, spyOn, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import {
   REQUEST_SECRET_TOOL_NAME,
   requestSecretOutputSchema,
@@ -158,6 +159,7 @@ const answerPendingRequest = async (
         data: [
           {
             type: "tool-call",
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             id: toolCallId,
             name: REQUEST_SECRET_TOOL_NAME,
             arguments: JSON.stringify(input),
@@ -252,6 +254,7 @@ if (!databaseUrl || !runPostgres) {
           };
           const part = {
             type: "tool-call",
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
             id: toolCallId,
             name: REQUEST_SECRET_TOOL_NAME,
             arguments: JSON.stringify(input),

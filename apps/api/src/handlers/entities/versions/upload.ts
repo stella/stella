@@ -28,6 +28,11 @@ import {
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/entities/versions/upload.ts",
+  },
   contentDelivery: {
     type: "none",
     reason:

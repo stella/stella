@@ -12,8 +12,10 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
   const { getAuth } = await import("@/api/lib/auth");
   const { env } = await import("@/api/env");
   const { rootDb } = await import("@/api/db/root");
-  const { user, organization, verification } =
+  const { user, organization, verification, oauthResource } =
     await import("@/api/db/auth-schema");
+  const { getBetterAuthOAuthResources } =
+    await import("@/api/lib/oauth-resource-policy");
   const { getAuthEndpointUrl } = await import("@/api/lib/auth/auth-paths");
   const { REVIEW_ACCOUNT_REFUSAL_MESSAGE } =
     await import("@/api/lib/auth/review-account-policy");
@@ -29,6 +31,31 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
     organizationId: env.APP_REVIEW_ORGANIZATION_ID,
   };
   expect(config).toEqual({ email, organizationId });
+  // Assert every audience before creating auth data, including audiences that
+  // this account's OAuth grant does not request.
+  const configuredResources = getBetterAuthOAuthResources();
+  const storedResources = await rootDb
+    .select({
+      identifier: oauthResource.identifier,
+      name: oauthResource.name,
+      allowedScopes: oauthResource.allowedScopes,
+      disabled: oauthResource.disabled,
+    })
+    .from(oauthResource);
+  const normalizedResources = storedResources.map((stored) => {
+    if (stored.allowedScopes === null) {
+      return panic("Configured OAuth resource has no allowed scopes");
+    }
+    return { ...stored, allowedScopes: stored.allowedScopes.toSorted() };
+  });
+  expect(storedResources).toHaveLength(configuredResources.length);
+  for (const resource of configuredResources) {
+    expect(normalizedResources).toContainEqual({
+      ...resource,
+      allowedScopes: resource.allowedScopes.toSorted(),
+      disabled: false,
+    });
+  }
   const runCommand = async (
     command: "provision" | "set-password",
     secret = "",

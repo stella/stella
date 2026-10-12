@@ -25,6 +25,7 @@ import { AIConfigDecisionModel } from "./ai-config-decision-model";
 
 type AIConfigAdvancedProps = {
   disabled: boolean;
+  hasOpenAIKey: boolean;
   providers: readonly ProviderValue[];
   roleModels: RoleModelOverrides;
   onRoleChange: (role: RoleValue, selection: ModelSelection | null) => void;
@@ -38,6 +39,7 @@ type AIConfigAdvancedProps = {
 
 export const AIConfigAdvanced = ({
   disabled,
+  hasOpenAIKey,
   providers,
   roleModels,
   onRoleChange,
@@ -76,6 +78,7 @@ export const AIConfigAdvanced = ({
             >
               <AIConfigDecisionModel
                 disabled={disabled}
+                hasOpenAIKey={hasOpenAIKey}
                 instanceProvisioned={decisionInstanceProvisioned}
                 onStateChange={onDecisionChange}
                 state={decisionState}
@@ -85,6 +88,7 @@ export const AIConfigAdvanced = ({
             {!hasUsableDecisionModel({
               state: decisionState,
               stored: storedDecision,
+              hasOpenAIKey,
             }) && (
               <p className="text-destructive text-xs">
                 {t("aiConfig.decision.incomplete")}

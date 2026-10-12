@@ -1,4 +1,10 @@
+import type { Block } from "@stll/legal-ast/document-ast";
+
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
+import type {
+  BodyDocumentLine,
+  DocumentLine,
+} from "@/api/lib/legal-search/parsers/document-footnotes";
 
 /**
  * Patterns for detecting structural section boundaries in
@@ -109,33 +115,60 @@ const SECTION_PATTERNS: {
  * Text before the first recognized heading becomes the
  * "header" section.
  */
-export const segmentDecision = (fulltext: string): DecisionSection[] => {
+export const segmentDecision = (fulltext: string): DecisionSection[] =>
+  segmentLines(fulltext.split("\n").map((value) => ({ kind: "body", value })));
+
+/** Notes retain their text and position but never open a section. */
+export const segmentDecisionBlocks = (
+  blocks: readonly Block[],
+): DecisionSection[] =>
+  segmentLines(
+    blocks.flatMap((block): DocumentLine<string>[] => [
+      (block.type === "paragraph" || block.type === "table") &&
+      block.note !== undefined
+        ? {
+            kind: "note",
+            note: {
+              value: block.plainText,
+              label: block.note.label,
+              noteId: block.note.noteId,
+            },
+          }
+        : { kind: "body", value: block.plainText },
+      { kind: "body", value: "" },
+    ]),
+  );
+
+const boundaryIn = (line: BodyDocumentLine<string>) =>
+  SECTION_PATTERNS.find(({ pattern }) => pattern.test(line.value.trim()));
+
+const segmentLines = (
+  source: readonly DocumentLine<string>[],
+): DecisionSection[] => {
+  const lines = source.map((line) =>
+    line.kind === "body" ? line.value : line.note.value,
+  );
+  const fulltext = lines.join("\n");
   if (!fulltext.trim()) {
     return [];
   }
-
-  const lines = fulltext.split("\n");
   const boundaries: {
     lineIndex: number;
     type: DecisionSection["type"];
     title: string;
   }[] = [];
 
-  for (let i = 0; i < lines.length; i++) {
-    const rawLine = lines[i];
-    if (rawLine === undefined) {
+  for (const [i, line] of source.entries()) {
+    if (line.kind !== "body" || !line.value.trim()) {
       continue;
     }
-    const line = rawLine.trim();
-    if (!line) {
-      continue;
-    }
-
-    for (const { type, pattern } of SECTION_PATTERNS) {
-      if (pattern.test(line)) {
-        boundaries.push({ lineIndex: i, type, title: line });
-        break;
-      }
+    const boundary = boundaryIn(line);
+    if (boundary !== undefined) {
+      boundaries.push({
+        lineIndex: i,
+        type: boundary.type,
+        title: line.value.trim(),
+      });
     }
   }
 

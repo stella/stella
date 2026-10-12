@@ -9,6 +9,7 @@ import {
 } from "@stll/api-contract";
 import type { CaseLawResearchColumnTool } from "@stll/api-contract";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
+import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
   APPLIED_VERSION_BASES,
   STATED_DATE_RELATIONS,
@@ -63,6 +64,7 @@ import {
   DECISION_COURT_ID_MAX_LENGTH,
   decisionCourtIdByCountrySql,
 } from "@/api/lib/case-law/decision-court-id-sql";
+import { publishedUnredactedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
 import type {
   CaseLawResearchAnswerRun,
@@ -844,6 +846,12 @@ export const caseLawDecisions = p.pgTable(
       .index("case_law_decisions_source_arrivals_idx")
       .on(t.sourceId, t.createdAt)
       .where(storedObservationHasDetail(t.metadata)),
+    // Exact coverage bounds per source: two endpoint probes, independent of
+    // the display-sized year facet.
+    p
+      .index("case_law_decisions_source_decision_date_coverage_idx")
+      .on(t.sourceId, t.decisionDate, t.id)
+      .where(publishedUnredactedCaseLawDecisionFor(t)),
     // The sitemap shard refresh: the public countries' published decisions,
     // counted per month and bucket with their newest `updated_at`.
     // Partial on the publication gate so the gate costs nothing per row, and
@@ -3082,6 +3090,10 @@ export const caseLawAnalysisFailures = p.pgTable.withRLS(
       .text("key_source", { enum: CASE_LAW_ANALYSIS_KEY_SOURCES })
       .notNull(),
     provider: p.text(),
+    /** Redacted provider reason, visible only to the organization whose run failed. */
+    providerDiagnostic: p
+      .jsonb("provider_diagnostic")
+      .$type<ProviderDiagnostic>(),
     recordedAt: timestamptz("recorded_at").notNull(),
   },
   (t) => [

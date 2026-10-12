@@ -114,7 +114,6 @@ describe("agent skill RLS", () => {
             organizationId: ids.orgA,
             skillId: foreignSkillId,
             path: "references/foreign.md",
-            kind: "reference",
             content: "foreign",
             sizeBytes: 7,
           });
@@ -222,10 +221,6 @@ const CHECK_VIOLATION = "23514";
 const DOMAIN_CHECKS = [
   { table: "agent_skills", constraint: "agent_skills_scope_check" },
   { table: "agent_skills", constraint: "agent_skills_origin_check" },
-  {
-    table: "agent_skill_resources",
-    constraint: "agent_skill_resources_kind_check",
-  },
 ] as const;
 
 const readDomainChecks = async () =>
@@ -245,19 +240,13 @@ const readDomainChecks = async () =>
 describe("agent skill domain values", () => {
   // The scope decides who may read and write a skill, so the database refuses
   // a value the application does not know rather than trusting every writer.
-  test("an unknown scope, origin, or resource kind is refused", async () => {
+  test("an unknown scope or origin is refused", async () => {
     const skillId = await insertSkill({
       organizationId: ids.orgA,
       scope: "team",
       slug: `domain-${Bun.randomUUIDv7()}`,
       userId: ids.userAdmin,
     });
-    const resourceId = await insertResource({
-      organizationId: ids.orgA,
-      path: "references/kind.md",
-      skillId,
-    });
-
     const errors = [
       await tryCatch(async () => {
         await testDb.execute(
@@ -269,15 +258,9 @@ describe("agent skill domain values", () => {
           sql`UPDATE agent_skills SET origin = 'mirror' WHERE id = ${skillId}`,
         );
       }),
-      await tryCatch(async () => {
-        await testDb.execute(
-          sql`UPDATE agent_skill_resources SET kind = 'binary' WHERE id = ${resourceId}`,
-        );
-      }),
     ];
 
     expect(errors.map((error) => isPgError(error, CHECK_VIOLATION))).toEqual([
-      true,
       true,
       true,
     ]);
@@ -290,8 +273,13 @@ describe("agent skill domain values", () => {
         sql.raw(`ALTER TABLE "${table}" DROP CONSTRAINT "${constraint}"`),
       );
     }
+    // Replay the historical column shape, then the cutover that removes it.
+    await testDb.execute(
+      sql`ALTER TABLE agent_skill_resources ADD COLUMN kind text NOT NULL DEFAULT 'reference'`,
+    );
     await applyMigration("20260925230200_agent_skill_domain_checks");
     await applyMigration("20261003123500_agent_skill_default_origin");
+    await applyMigration("20261010005100_standard_skill_resource_folders");
     const migrated = await readDomainChecks();
 
     expect(fromSchema.rows).toHaveLength(DOMAIN_CHECKS.length);
@@ -456,7 +444,6 @@ describe("agent skill write RLS", () => {
               organizationId: ids.orgA,
               skillId,
               path: "references/added.md",
-              kind: "reference",
               content: "added",
               sizeBytes: 5,
             });
@@ -608,7 +595,6 @@ const insertResource = async ({
     organizationId,
     skillId,
     path,
-    kind: "reference",
     content: "resource",
     sizeBytes: 8,
   });

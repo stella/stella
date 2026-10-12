@@ -77,6 +77,7 @@ test("generic handlers return the same missing response before resource details"
   let lookups = 0;
   const endpoint = createSafeRootHandler(
     {
+      contract: "patch",
       accountAccess: ACCOUNT_ACCESS.sandbox,
       permissions: { workspace: ["read"] },
       mcp: { type: "internal", reason: "ui_navigation_state" },

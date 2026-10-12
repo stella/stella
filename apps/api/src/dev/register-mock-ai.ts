@@ -19,6 +19,13 @@ import { Temporal } from "@stll/time";
 
 import { isMockAI } from "@/api/consts";
 import {
+  MOCK_AI_CANCELLATION_MARKER,
+  MOCK_AI_CONTINUOUS_MARKER,
+  mockAiCancellationChunks,
+  mockAiCancellationSignal,
+  mockAiContinuousChunks,
+} from "@/api/dev/mock-ai-cancellation";
+import {
   mockAiStreamKindChunks,
   mockAiStreamKindOf,
 } from "@/api/dev/mock-ai-stream-kinds";
@@ -59,12 +66,6 @@ const MOCK_REPLY =
   "Based on the documents in this workspace, the notice periods, governing " +
   "law, and liability caps are the provisions that differ most. Ask a " +
   "follow-up to open any of them at the cited passage.";
-
-// A user message containing this marker makes the mock adapter stream its
-// reply as many small delayed chunks instead of one instant chunk, giving an
-// e2e spec a real streaming window to hold open (e.g. to type into the
-// composer while a response is still arriving).
-const E2E_SLOW_STREAM_MARKER = "Stream slowly please";
 
 // A user message containing this marker makes the mock adapter finish the run
 // with zero output — the shape of a real provider empty completion — so specs
@@ -139,21 +140,6 @@ const E2E_STREAMED_CREATE_DOCUMENT_SOURCE =
       "[[Receiving Party]] keeps the Confidential Information of " +
       "[[Disclosing Party]] secret and uses it only for the Purpose.\n",
   ).join("")}@signatures\nparty: [[Party A]]\nparty: [[Party B]]\n`;
-
-const SLOW_STREAM_REPLY =
-  "This mock reply streams back in many small pieces instead of arriving all " +
-  "at once, so an end to end test has a real window while the assistant is " +
-  "still responding. Each small piece lands only after a short delay, giving " +
-  "the interface time to re-render before the whole message finally finishes " +
-  "and the run completes for the test to inspect.";
-
-// Word-ish deltas (each chunk keeps its trailing whitespace so the deltas
-// concatenate back into SLOW_STREAM_REPLY exactly).
-const SLOW_STREAM_CHUNKS = SLOW_STREAM_REPLY.match(/\S+\s*/gu) ?? [
-  SLOW_STREAM_REPLY,
-];
-
-const SLOW_STREAM_CHUNK_DELAY_MS = 100;
 
 const mockUsage: TokenUsage = {
   promptTokens: 1,
@@ -436,7 +422,7 @@ async function* createDocumentCallChunks({
   };
 }
 
-const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
+export const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
   kind: "text",
   name: "mock",
   model: modelId,
@@ -448,14 +434,14 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
     toolCallMetadata: {},
     systemPromptMetadata: undefined,
   },
-  async *chatStream({ model, runId, threadId, messages }) {
+  async *chatStream(options) {
+    const { model, runId, threadId, messages } = options;
     logger.debug("mock_ai.turn_answered", { "ai.model": model });
     const resolvedRunId = runId ?? "mock-run";
     const resolvedThreadId = threadId ?? "mock-thread";
     const messageId = "mock-message";
     const timestamp = Temporal.Now.instant().epochMilliseconds;
     const latestUserText = getLatestUserText(messages);
-    const slowStream = latestUserText.includes(E2E_SLOW_STREAM_MARKER);
     // The continuation after the client posted the draft result ends with a
     // tool message; only the first turn of the marker prompt calls the tool.
     const createDocumentPhase = resolveCreateDocumentPhase({
@@ -587,8 +573,10 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
       timestamp,
     } satisfies AdapterYieldChunk;
 
-    if (slowStream) {
-      for (const delta of SLOW_STREAM_CHUNKS) {
+    if (latestUserText.includes(MOCK_AI_CANCELLATION_MARKER)) {
+      for await (const delta of mockAiCancellationChunks(
+        mockAiCancellationSignal(options),
+      )) {
         yield {
           type: EventType.TEXT_MESSAGE_CONTENT,
           messageId,
@@ -596,7 +584,18 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
           model,
           timestamp,
         } satisfies AdapterYieldChunk;
-        await Bun.sleep(SLOW_STREAM_CHUNK_DELAY_MS);
+      }
+    } else if (latestUserText.includes(MOCK_AI_CONTINUOUS_MARKER)) {
+      for await (const delta of mockAiContinuousChunks(
+        mockAiCancellationSignal(options),
+      )) {
+        yield {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId,
+          delta,
+          model,
+          timestamp,
+        } satisfies AdapterYieldChunk;
       }
     } else {
       yield {
@@ -1034,7 +1033,7 @@ const synthesizeJsonSchemaArray = (node: JsonSchemaNode): unknown[] => {
   );
 };
 
-if (isMockAI()) {
+export const registerMockAI = () => {
   registerBatchGenerator(generateBatchMock);
   registerTanStackMockTextAdapterFactory(createMockTextAdapter);
   logger.warn("mock_ai.enabled", {
@@ -1044,4 +1043,8 @@ if (isMockAI()) {
         ? "every AI request gets a canned reply, organization keys included"
         : "AI requests get canned replies unless the organization configured its own key",
   });
+};
+
+if (isMockAI()) {
+  registerMockAI();
 }
