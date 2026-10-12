@@ -64,7 +64,7 @@ scout_runs.started_at       timestamptz         default,not null  signals.ts:310
 scout_runs.finished_at      timestamptz         null              signals.ts:311
 ```
 
-## pending_scout_emissions · `pendingScoutEmissions` · signals.ts:336
+## pending_scout_emissions · `pendingScoutEmissions` · signals.ts:336 · rls
 
 A source commits its deferred emission before its own terminal transition.
 

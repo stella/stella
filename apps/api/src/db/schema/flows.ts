@@ -163,6 +163,13 @@ export const flowUploadTriggerIntents = p.pgTable(
       table,
       new Map([[table.entityId, { target: "entities", kind: "context" }]]),
     ),
+    // The root scheduler repairs receipts without borrowing a tenant's role.
+    p.pgPolicy("flow_upload_trigger_intents_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.flow_upload_trigger_intents'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.flow_upload_trigger_intents'::regclass)`,
+    }),
     ...organizationOptionalWorkspacePolicies("flow_upload_trigger_intents"),
   ],
 );

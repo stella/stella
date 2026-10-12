@@ -2,6 +2,13 @@ import { panic, Result } from "better-result";
 import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 
+import {
+  SETTING_ORGANIZATION_ID,
+  SETTING_USER_ID,
+  SETTING_WORKSPACE_IDS,
+  SETTING_WORKSPACE_ACCESS_MODE,
+  WORKSPACE_ACCESS_MODE,
+} from "@/api/db/rls";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -53,6 +60,11 @@ const MIGRATIONS = [
   },
   {
     name: "20261010006000_validate_feature_recovery_constraints",
+    index: undefined,
+    table: undefined,
+  },
+  {
+    name: "20261012030000_feature_recovery_receipt_owner_access",
     index: undefined,
     table: undefined,
   },
@@ -109,12 +121,14 @@ const committedCutpoints = async (name: string) => {
 
 type ApplyMigrationOptions = {
   session: MigrationSession;
+  schema: string;
   name: string;
   interrupt: "none" | "transaction-end" | number;
 };
 
 const applyMigration = async ({
   session,
+  schema,
   name,
   interrupt,
 }: ApplyMigrationOptions) => {
@@ -123,7 +137,17 @@ const applyMigration = async ({
     await migrationStatements(name)
   ).entries()) {
     // db-await-in-loop: shipped migration statements require sequential execution.
-    await session.unsafe(statement);
+    await session.unsafe(
+      statement
+        .replaceAll(
+          "public.pending_scout_emissions",
+          () => `${schema}.pending_scout_emissions`,
+        )
+        .replaceAll(
+          "public.flow_upload_trigger_intents",
+          () => `${schema}.flow_upload_trigger_intents`,
+        ),
+    );
     if (interrupt === index) {
       return;
     }
@@ -170,12 +194,20 @@ const seedRecoverySources = async (session: MigrationSession) => {
     // db-await-in-loop: seed the matching run before testing its replay index.
     await session`INSERT INTO flow_runs (id, workspace_id, definition_id, definition_snapshot, trigger_source)
       VALUES (${Bun.randomUUIDv7()}, ${workspaceId}, ${definitionId}, '{"name":"Replay flow","steps":[]}', '{"type":"schedule"}')`;
-    // db-await-in-loop: seed the receipt after its foreign-key source exists.
-    await session`INSERT INTO flow_upload_trigger_intents (definition_id, entity_id, organization_id, workspace_id)
-      VALUES (${definitionId}, ${entityId}, ${organizationId}, ${workspaceId})`;
-    // db-await-in-loop: seed the second receipt domain for its own index failure.
-    await session`INSERT INTO pending_scout_emissions (organization_id, workspace_id, source_kind, source_id)
-      VALUES (${organizationId}, ${workspaceId}, 'document-review', ${entityId})`;
+    // Historical FORCE RLS tables have no owner policy. Seed receipts through
+    // their authorized tenant writer, not through the later repair policy.
+    // db-await-in-loop: each receipt pair commits with its explicit fixture scope.
+    await session.begin(async (tx) => {
+      await tx`SELECT set_config('role', 'stella', true),
+        set_config(${SETTING_ORGANIZATION_ID}, ${organizationId}, true),
+        set_config(${SETTING_USER_ID}, '', true),
+        set_config(${SETTING_WORKSPACE_IDS}, ${`{${workspaceId}}`}, true),
+        set_config(${SETTING_WORKSPACE_ACCESS_MODE}, ${WORKSPACE_ACCESS_MODE.explicit}, true)`;
+      await tx`INSERT INTO flow_upload_trigger_intents (definition_id, entity_id, organization_id, workspace_id)
+        VALUES (${definitionId}, ${entityId}, ${organizationId}, ${workspaceId})`;
+      await tx`INSERT INTO pending_scout_emissions (organization_id, workspace_id, source_kind, source_id)
+        VALUES (${organizationId}, ${workspaceId}, 'document-review', ${entityId})`;
+    });
   }
 };
 
@@ -242,8 +274,14 @@ const migrationScenario = async ({
         break;
       }
       // db-await-in-loop: migration identity order defines the prerequisite schema.
-      await applyMigration({ session, name: previous.name, interrupt: "none" });
+      await applyMigration({
+        session,
+        schema,
+        name: previous.name,
+        interrupt: "none",
+      });
     }
+    await session.unsafe(`GRANT USAGE ON SCHEMA ${schema} TO stella`);
     if (migration.name !== MIGRATIONS[0].name) {
       await seedRecoverySources(session);
     }
@@ -251,6 +289,7 @@ const migrationScenario = async ({
       const beforePrefix = await catalogSnapshot(session, schema);
       await applyMigration({
         session,
+        schema,
         name: migration.name,
         interrupt:
           scenario === "invalid-index"
@@ -285,11 +324,17 @@ const migrationScenario = async ({
       >`SELECT indisvalid AS valid FROM pg_index WHERE indexrelid = ${`${schema}.${migration.index}`}::regclass`;
       expect(invalid).toEqual([{ valid: false }]);
     }
-    await applyMigration({ session, name: migration.name, interrupt: "none" });
+    await applyMigration({
+      session,
+      schema,
+      name: migration.name,
+      interrupt: "none",
+    });
     const snapshot = await catalogSnapshot(session, schema);
     if (migration.index !== undefined) {
       await applyMigration({
         session,
+        schema,
         name: migration.name,
         interrupt: "none",
       });

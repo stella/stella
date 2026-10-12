@@ -386,6 +386,13 @@ export const pendingScoutEmissions = p.pgTable(
         sql`, `,
       )})`,
     ),
+    // The root scheduler repairs receipts without borrowing a tenant's role.
+    p.pgPolicy("pending_scout_emissions_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.pending_scout_emissions'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.pending_scout_emissions'::regclass)`,
+    }),
     ...organizationOptionalWorkspacePolicies("pending_scout_emissions"),
   ],
 );

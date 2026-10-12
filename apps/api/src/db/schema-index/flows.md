@@ -21,7 +21,7 @@ flow_definitions.created_at          timestamptz         default,not null  flows
 flow_definitions.updated_at          timestamptz         default,not null  flows.ts:75
 ```
 
-## flow_upload_trigger_intents · `flowUploadTriggerIntents` · flows.ts:91
+## flow_upload_trigger_intents · `flowUploadTriggerIntents` · flows.ts:91 · rls
 
 ```text
 flow_upload_trigger_intents.definition_id    safeUuid            not null          flows.ts:94
@@ -35,42 +35,42 @@ flow_upload_trigger_intents.retry_at         timestamptz         default,not nul
 flow_upload_trigger_intents.created_at       timestamptz         default,not null  flows.ts:107
 ```
 
-## flow_runs · `flowRuns` · flows.ts:176
+## flow_runs · `flowRuns` · flows.ts:183
 
 Workspace-scoped execution record for one flow run.
 
 ```text
-flow_runs.id                   pUuid            pk,not null             flows.ts:179
-flow_runs.workspace_id         safeWorkspaceId  fk,not null             flows.ts:180
-flow_runs.definition_id        safeUuid         fk,null                 flows.ts:186  Nullable + ON DELETE SET NULL: a run must outlive its definition.
-flow_runs.definition_snapshot  jsonb            not null                flows.ts:190
-flow_runs.status               text             default,not null        flows.ts:193
-flow_runs.recovery_state       text             null                    flows.ts:194
-flow_runs.current_step_index   integer          default,not null        flows.ts:195
-flow_runs.trigger_source       jsonb            not null                flows.ts:196
-flow_runs.input_entity_ids     safeUuid         array,default,not null  flows.ts:197
-flow_runs.error                text             null                    flows.ts:201
-flow_runs.started_at           timestamptz      null                    flows.ts:202
-flow_runs.finished_at          timestamptz      null                    flows.ts:203
-flow_runs.created_at           timestamptz      default,not null        flows.ts:204
+flow_runs.id                   pUuid            pk,not null             flows.ts:186
+flow_runs.workspace_id         safeWorkspaceId  fk,not null             flows.ts:187
+flow_runs.definition_id        safeUuid         fk,null                 flows.ts:193  Nullable + ON DELETE SET NULL: a run must outlive its definition.
+flow_runs.definition_snapshot  jsonb            not null                flows.ts:197
+flow_runs.status               text             default,not null        flows.ts:200
+flow_runs.recovery_state       text             null                    flows.ts:201
+flow_runs.current_step_index   integer          default,not null        flows.ts:202
+flow_runs.trigger_source       jsonb            not null                flows.ts:203
+flow_runs.input_entity_ids     safeUuid         array,default,not null  flows.ts:204
+flow_runs.error                text             null                    flows.ts:208
+flow_runs.started_at           timestamptz      null                    flows.ts:209
+flow_runs.finished_at          timestamptz      null                    flows.ts:210
+flow_runs.created_at           timestamptz      default,not null        flows.ts:211
 ```
 
-## flow_run_steps · `flowRunSteps` · flows.ts:258
+## flow_run_steps · `flowRunSteps` · flows.ts:265
 
 One step in a run.
 
 ```text
-flow_run_steps.{...entityFeatureGateColumns()}           spread                             flows.ts:261
-flow_run_steps.{...entityFeatureWorkspaceGateColumns()}  spread                             flows.ts:262
-flow_run_steps.id                                        pUuid            pk,not null       flows.ts:263
-flow_run_steps.workspace_id                              safeWorkspaceId  not null          flows.ts:264
-flow_run_steps.run_id                                    safeUuid         not null          flows.ts:265
-flow_run_steps.index                                     integer          not null          flows.ts:266
-flow_run_steps.kind                                      text             not null          flows.ts:267
-flow_run_steps.status                                    text             default,not null  flows.ts:268
-flow_run_steps.output                                    jsonb            null              flows.ts:272
-flow_run_steps.error                                     text             null              flows.ts:273
-flow_run_steps.review_task_entity_id                     safeUuid         fk,null           flows.ts:283  The task a review gate raises for its reviewer while the run waits.
-flow_run_steps.started_at                                timestamptz      null              flows.ts:287
-flow_run_steps.finished_at                               timestamptz      null              flows.ts:288
+flow_run_steps.{...entityFeatureGateColumns()}           spread                             flows.ts:268
+flow_run_steps.{...entityFeatureWorkspaceGateColumns()}  spread                             flows.ts:269
+flow_run_steps.id                                        pUuid            pk,not null       flows.ts:270
+flow_run_steps.workspace_id                              safeWorkspaceId  not null          flows.ts:271
+flow_run_steps.run_id                                    safeUuid         not null          flows.ts:272
+flow_run_steps.index                                     integer          not null          flows.ts:273
+flow_run_steps.kind                                      text             not null          flows.ts:274
+flow_run_steps.status                                    text             default,not null  flows.ts:275
+flow_run_steps.output                                    jsonb            null              flows.ts:279
+flow_run_steps.error                                     text             null              flows.ts:280
+flow_run_steps.review_task_entity_id                     safeUuid         fk,null           flows.ts:290  The task a review gate raises for its reviewer while the run waits.
+flow_run_steps.started_at                                timestamptz      null              flows.ts:294
+flow_run_steps.finished_at                               timestamptz      null              flows.ts:295
 ```
