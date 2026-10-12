@@ -79,11 +79,16 @@ const assertHandoff = (source: Workflow) => {
     ({ name }) => name === "Upload generated sources",
   );
   expect(upload?.uses).toMatch(/^actions\/upload-artifact@[0-9a-f]{40}$/u);
+  expect(
+    upload?.with?.["include-hidden-files"],
+    "generated compiler configs must be uploaded",
+  ).toBe(true);
   expect(upload?.with).toEqual({
     name: `generated-sources-\${{ steps.generate.outputs.input_hash }}`,
     path: `\${{ runner.temp }}/generated-sources/`,
     "retention-days": 1,
     "if-no-files-found": "error",
+    "include-hidden-files": true,
   });
   const gate = source.jobs["ci-result"];
   expect(gate?.needs).toContain("ci-generated-sources");
@@ -284,6 +289,26 @@ test("missing or late verification and retained manifest reuse break the regener
 test("every generated-source consumer restores the same-run artifact before checks", () => {
   expect(consumerIds(workflow).length).toBeGreaterThan(0);
   assertHandoff(workflow);
+});
+
+test("generated-source uploads include ignored compiler configs", () => {
+  for (const value of [undefined, false]) {
+    const mutated = structuredClone(workflow);
+    const upload = mutated.jobs["ci-generated-sources"]?.steps.find(
+      ({ name }) => name === "Upload generated sources",
+    );
+    if (!upload?.with) {
+      panic("Missing generated source upload fixture");
+    }
+    if (value === undefined) {
+      delete upload.with["include-hidden-files"];
+    } else {
+      upload.with["include-hidden-files"] = value;
+    }
+    expect(() => assertHandoff(mutated)).toThrow(
+      "generated compiler configs must be uploaded",
+    );
+  }
 });
 
 test("the documentation job consumes Markdown without generated-source hydration", () => {
@@ -608,7 +633,6 @@ test("API boot entry points prepare capability runtime sources before starting",
     "dev",
     "test",
     "test:property",
-    "typecheck",
     "lint",
     "lint:fix",
   ]) {
@@ -634,6 +658,24 @@ test("API boot entry points prepare capability runtime sources before starting",
     Bun.JSONC.parse(
       readFileSync(new URL("../turbo.json", import.meta.url), "utf-8"),
     ),
+  );
+  expect(api.scripts["typecheck"]).toBe(
+    "bun ../../packages/scripts/src/api-typecheck.ts",
+  );
+  for (const command of ["lint", "lint:fix"]) {
+    const script =
+      api.scripts[command] ?? panic(`Missing API ${command} script`);
+    const emission = script.indexOf(
+      "turbo run generate:typecheck-declarations --filter=@stll/api",
+    );
+    expect(emission).toBeGreaterThanOrEqual(0);
+    expect(script.indexOf("bun --bun oxlint")).toBeGreaterThan(emission);
+  }
+  expect(turbo.tasks["@stll/api#typecheck"]?.dependsOn).toContain(
+    "typecheck:src",
+  );
+  expect(turbo.tasks["@stll/api#typecheck:src"]?.dependsOn).toContain(
+    "generate:capability-runtime",
   );
   expect(turbo.tasks["@stll/web#generate:api-types"]?.dependsOn).toContain(
     "@stll/api#generate:capability-runtime",
