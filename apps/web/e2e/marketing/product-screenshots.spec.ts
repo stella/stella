@@ -49,12 +49,10 @@ const READER_SCROLL_OFFSET_PX = 48;
 const READER_TOP_INSET_PX = 12;
 // How many blocks, from the target's own upward, the frame may open on.
 const READER_FRAME_CANDIDATES = 6;
-// Duplicated from packages/api-contract/src/browser-storage.ts
-// (`ownerStorageKey`) and apps/web/src/components/inspector/
-// inspector-storage-keys.ts, for the same reason as the theme key below.
+// Duplicated from apps/web/src/components/inspector/inspector-storage-keys.ts,
+// for the same reason as the theme key below.
 const INSPECTOR_STATE_STORAGE_PREFIX = "stella:inspector-state:v1:";
 const INSPECTOR_MINIMIZED_STORAGE_PREFIX = "stella:inspector-minimized:v1:";
-const USER_STORAGE_SEGMENT = ":u:";
 // Duplicated from apps/web/src/consts.ts, exactly as
 // apps/web/public/prepaint-init.js duplicates it: the e2e project has no
 // `@/` path alias. Writing any other key silently leaves the app on its
@@ -305,11 +303,12 @@ test("capture landing product screenshots", async ({
         // clean state as every other capture rather than inheriting whatever
         // the results page persisted.
         await clearPersistedInspectorState(page);
-        // A decision's chat tab restored from storage is that decision's
-        // conversation; without one the reader mints an empty thread.
+        // The reader opens the decision's conversation itself, found on the
+        // server by the decision it is about; its id is what the pane must
+        // show.
         const readerStoryThreadId =
           "readerStory" in capture
-            ? await restoreReaderStoryChatTab(page, capture.decisionText)
+            ? await findReaderStoryThreadId(page, capture.decisionText)
             : undefined;
         await page.goto(decisionPath, { waitUntil: "commit" });
         await expect(page).toHaveURL(/\/law\/[a-z-]+\/cases\//u);
@@ -352,7 +351,7 @@ test("capture landing product screenshots", async ({
           // tab was never restored, not that the answer is slow to render.
           await expect(
             inspectorChat,
-            `The decision's chat pane should show the seeded thread ${readerStoryThreadId}, restored from the saved inspector tab, not a newly minted one`,
+            `The decision's chat pane should show the seeded thread ${readerStoryThreadId}, found on the server by its decision, not a newly minted one`,
           ).toHaveAttribute("data-chat-thread-id", readerStoryThreadId);
           // The restored thread's cited answer, down to a citation chip, so
           // the shot never lands on the empty chat or a loading transcript.
@@ -382,6 +381,10 @@ test("capture landing product screenshots", async ({
             ? readerMark
             : page.locator(AI_MARGIN_NOTE_SELECTOR).first(),
         );
+        // Keep the breadcrumb in frame: only the nested reader scrolls. Done
+        // before anything is measured against the clip, which is a region of
+        // the page as it is shot.
+        await page.evaluate(() => window.scrollTo({ left: 0, top: 0 }));
         const captureClip = "clip" in capture ? capture.clip : DEFAULT_CLIP;
         // Notes are placed beside their passages once the reader measured
         // them, so this also waits out that layout.
@@ -425,8 +428,6 @@ test("capture landing product screenshots", async ({
           );
         }
         await expectNoMarginNoteCut(page, captureClip);
-        // Keep the breadcrumb in frame: only the nested reader scrolls.
-        await page.evaluate(() => window.scrollTo({ left: 0, top: 0 }));
       }
       if ("prepare" in capture && capture.prepare === "open-files") {
         await page.getByRole("tab", { name: "Files" }).click();
@@ -791,20 +792,11 @@ const scrollReaderTo = async (target: Locator) => {
   }, READER_SCROLL_OFFSET_PX);
 };
 
-// Persists the inspector state a returning reader would have: the decision's
-// chat tab, bound to the seeded thread. The inspector restores it as the
-// decision's conversation, so the reader adopts the seeded thread instead of
-// minting an empty one.
-const restoreReaderStoryChatTab = async (page: Page, caseNumber: string) => {
+// The seeded conversation about the filmed decision, as the chat history
+// lists it. The reader finds the same thread on its own (by the decision it
+// is about); the capture only needs its id to check the pane shows it.
+const findReaderStoryThreadId = async (page: Page, caseNumber: string) => {
   const apiBaseURL = process.env["E2E_API_URL"] ?? "http://localhost:3001";
-  const sessionResponse = await page.request.get(
-    `${apiBaseURL}/api/auth/get-session`,
-  );
-  expect(sessionResponse.ok(), await sessionResponse.text()).toBe(true);
-  const userId = getSessionUserId(await sessionResponse.json());
-  if (userId === undefined) {
-    throw new Error("The marketing session has no signed-in user");
-  }
   const threadsResponse = await page.request.get(
     `${apiBaseURL}/v1/chat/threads?limit=50&search=${encodeURIComponent(
       READER_STORY_THREAD_TITLE,
@@ -818,53 +810,7 @@ const restoreReaderStoryChatTab = async (page: Page, caseNumber: string) => {
         `${caseNumber}; run the dev seed (seed-case-law-reader-story.ts)`,
     );
   }
-  const ownerSuffix = `${MARKETING_ORGANIZATION_ID}:${USER_STORAGE_SEGMENT}${userId}`;
-  await page.evaluate(
-    ({ minimizedKey, storageKey, state }) => {
-      localStorage.setItem(storageKey, JSON.stringify(state));
-      // The pane folded, as a reader who left it that way would find it:
-      // a restored inspector keeps its stored pane state, and the capture
-      // opens the pane itself.
-      localStorage.setItem(minimizedKey, "1");
-    },
-    {
-      minimizedKey: `${INSPECTOR_MINIMIZED_STORAGE_PREFIX}${ownerSuffix}`,
-      storageKey: `${INSPECTOR_STATE_STORAGE_PREFIX}${ownerSuffix}`,
-      // The shape readPersistedInspectorState (inspector-broadcast.ts)
-      // accepts; a chat tab with an `activeLegalKey` is that document's chat.
-      state: {
-        tabs: [
-          {
-            type: "chat",
-            id: thread.threadId,
-            label: READER_STORY_THREAD_TITLE,
-            contextMatterIds: [],
-            activeLegalKey: `decision:${thread.decisionId}`,
-          },
-        ],
-        groups: [],
-        groupAssignments: {},
-        activeId: thread.threadId,
-        collapsedGroupIds: [],
-      },
-    },
-  );
   return thread.threadId;
-};
-
-const getSessionUserId = (payload: unknown): string | undefined => {
-  if (
-    typeof payload !== "object" ||
-    payload === null ||
-    !("user" in payload) ||
-    typeof payload.user !== "object" ||
-    payload.user === null ||
-    !("id" in payload.user) ||
-    typeof payload.user.id !== "string"
-  ) {
-    return undefined;
-  }
-  return payload.user.id;
 };
 
 // The global thread with the story's title whose decision badge names the

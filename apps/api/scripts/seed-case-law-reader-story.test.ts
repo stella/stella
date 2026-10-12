@@ -13,7 +13,9 @@ import {
 } from "@/api/handlers/chat/chat-message-parts";
 import { toSafeId } from "@/api/lib/branded-types";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import { PARSER_VERSIONS } from "@/api/lib/legal-search/ingestion-constants";
 
+import { readCaseLawFixtureAnalyses } from "./lib/case-law-fixture-analyses";
 import {
   CASE_LAW_READER_STORY,
   buildReaderStoryAnnotationRows,
@@ -31,6 +33,8 @@ type FixtureDecision = {
   language: string;
   document_ast: unknown;
   analysis: PersistedDecisionAnalysis | null;
+  fulltext: string | null;
+  parser_version: number | null;
 };
 
 // The story is seeded on the recorded decision, so it is tested on it too.
@@ -54,7 +58,12 @@ const storyDecision = async () => {
   if (decision === undefined || !isDocumentAst(decision.document_ast)) {
     throw new Error(`${caseNumber} is missing from the ${adapterKey} fixture`);
   }
-  return { analysis: decision.analysis, blocks: decision.document_ast.blocks };
+  return {
+    analysis: decision.analysis,
+    blocks: decision.document_ast.blocks,
+    fulltext: decision.fulltext,
+    parserVersion: decision.parser_version,
+  };
 };
 
 const scope = {
@@ -251,5 +260,35 @@ describe("the seeded case-law reader story", () => {
     expect(messages[1]?.createdAt.getTime()).toBeGreaterThan(
       messages[0]?.createdAt.getTime() ?? Infinity,
     );
+  });
+});
+
+// The filmed decision's row was recorded from the public reader, not the
+// database (see the fixtures README). A row the pipeline took for stale, or
+// an analysis over other text, would be reparsed or dropped and take the
+// shot's margin with it.
+describe("the filmed decision's recorded row", () => {
+  test("is current for its parser and carries its text", async () => {
+    const { fulltext, parserVersion } = await storyDecision();
+    const current = Object.entries(PARSER_VERSIONS).find(
+      ([key]) => key === adapterKey,
+    )?.[1];
+
+    expect(current).toBeDefined();
+    expect(parserVersion).toBe(current ?? null);
+    expect(fulltext?.length ?? 0).toBeGreaterThan(0);
+  });
+
+  test("has an analysis computed over its own text and the current prompt", async () => {
+    const entry = (await readCaseLawFixtureAnalyses())
+      .flatMap((file) => file.entries)
+      .find(
+        (candidate) =>
+          candidate.fixtureName === `${adapterKey}.json.gz` &&
+          candidate.caseNumber === caseNumber,
+      );
+
+    expect(entry?.storedFingerprint).toBe(entry?.currentFingerprint ?? "");
+    expect(entry?.matches).toBe(true);
   });
 });

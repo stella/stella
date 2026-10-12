@@ -6442,13 +6442,21 @@ export async function seed(organizationId?: string, userId?: string) {
     });
   }
   // The reader story marks and chats on a seeded decision, so it follows the
-  // corpus; once the corpus is there, a failure here is a defect, not drift.
+  // corpus. Like the corpus it is non-fatal for the rest of the seed; its own
+  // unit tests catch a story that no longer fits its decision.
   if (caseLawSeeded) {
-    await seedCaseLawReaderStory({
-      db,
-      organizationId: ORG_ID,
-      userId: USER_ID,
-    });
+    try {
+      await seedCaseLawReaderStory({
+        db,
+        organizationId: ORG_ID,
+        userId: USER_ID,
+      });
+    } catch (error) {
+      logErrorOutput({
+        level: "warn",
+        values: ["  Case-law reader story skipped (non-fatal):", error],
+      });
+    }
   }
 
   console.log("\nDone. Dev data seeded successfully.");
