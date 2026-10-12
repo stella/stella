@@ -30,10 +30,7 @@ import {
   callGatewayExternalMcpTool,
   gatewayLoadErrorResult,
 } from "@/api/mcp/gateway/external-tools";
-import {
-  GATEWAY_TOOL_KIND,
-  modeAllowsGatewayTools,
-} from "@/api/mcp/gateway/mode-policy";
+import { modeAllowsGatewayTools } from "@/api/mcp/gateway/mode-policy";
 import {
   readSkillTool,
   resolveSkillTool,
@@ -145,7 +142,7 @@ export const dispatchGatewayToolCall = async ({
   dependencies?: GatewayDispatchDependencies;
 }): Promise<GatewayDispatchResult | null> => {
   if (isExternalMcpToolName(toolName)) {
-    if (!modeAllowsGatewayTools(mode, GATEWAY_TOOL_KIND.externalMcp)) {
+    if (!modeAllowsGatewayTools(mode)) {
       return null;
     }
     return {
@@ -161,7 +158,7 @@ export const dispatchGatewayToolCall = async ({
   if (!isSkillToolName(toolName)) {
     return null;
   }
-  if (!modeAllowsGatewayTools(mode, GATEWAY_TOOL_KIND.skill)) {
+  if (!modeAllowsGatewayTools(mode)) {
     return null;
   }
 

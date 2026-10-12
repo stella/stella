@@ -14,6 +14,7 @@ import {
 } from "@/api/mcp/gateway/list-tools";
 import { DOCUMENTS_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
+import { handleMcpToolCall } from "@/api/mcp/tools";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
@@ -189,6 +190,76 @@ describe("external gateway mode boundary", () => {
         expected,
       );
       expect(exact?.name === externalToolName).toBe(expected);
+    });
+  }
+});
+
+describe("skill gateway mode boundary", () => {
+  test("a direct default-surface skill call returns unknown_tool", async () => {
+    const result = await handleMcpToolCall({
+      args: {},
+      context: contextWith(undefined),
+      mode: "default",
+      toolName: "skill__alpha",
+    });
+    expect(result.isError).toBe(true);
+    const text = result.content.at(0);
+    expect(text?.type).toBe("text");
+    if (text?.type !== "text") {
+      throw new TypeError("Expected the unknown-tool text envelope");
+    }
+    expect(JSON.parse(text.text)).toMatchObject({
+      error: { code: "unknown_tool" },
+    });
+  });
+
+  for (const mode of ["default", "advanced"] as const) {
+    test(`${mode} skill discovery agrees with exact-name resolution`, async () => {
+      const builder = {
+        from: () => builder,
+        where: () => builder,
+        orderBy: () => builder,
+        limit: async () => [
+          {
+            id: toSafeId<"agentSkill">("skill_alpha"),
+            scope: "private",
+            userId: "user_test",
+            slug: "alpha",
+            name: "Alpha",
+            description: "Fixture skill",
+            version: "1.0.0",
+            license: null,
+            compatibility: null,
+            metadata: {},
+            body: "Fixture body",
+            origin: "authored",
+          },
+        ],
+      };
+      const safeDb: McpRequestContext["safeDb"] = async (callback) =>
+        Result.ok(
+          await callback(asTestRaw<Transaction>({ select: () => builder })),
+        );
+      const context = asTestRaw<McpRequestContext>({
+        ...contextWith(undefined),
+        userId: "user_test",
+        grantedScopes: ["stella:skills"],
+        safeDb,
+      });
+      const definitions = await listGatewayMcpToolDefinitions({
+        context,
+        mode,
+        scopes: ["stella:skills"],
+      });
+      const exact = await getGatewayMcpToolDefinition({
+        context,
+        mode,
+        toolName: "skill__alpha",
+      });
+      expect(definitions.some(({ name }) => name === "skill__alpha")).toBe(
+        mode === "advanced",
+      );
+      expect(exact?.name === "skill__alpha").toBe(mode === "advanced");
     });
   }
 });

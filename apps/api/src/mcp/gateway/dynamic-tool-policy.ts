@@ -141,6 +141,8 @@ type DynamicToolFamilyPolicy =
  */
 export const DYNAMIC_TOOL_FAMILY_POLICIES = {
   external_mcp: { owner: "upstream" },
+  // MCP/CLI parity exception: the CLI keeps skills on /mcp/advanced.
+  // The default MCP surface carries only reviewed, purpose-built tools.
   skill: {
     owner: "stella",
     annotations: SKILL_TOOL_ANNOTATIONS,

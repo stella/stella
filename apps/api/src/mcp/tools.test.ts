@@ -1524,12 +1524,18 @@ describe("OpenAI-compatible MCP tools", () => {
       "stella:documents_write",
       "stella:templates",
     ]);
-    expect(getMcpToolRequiredScopesHint("mcp__registry__lookup")).toEqual([
-      "stella:external_mcps",
-    ]);
-    expect(getMcpToolRequiredScopesHint("skill__research")).toEqual([
-      "stella:skills",
-    ]);
+    expect(
+      getMcpToolRequiredScopesHint("mcp__registry__lookup", "advanced"),
+    ).toEqual(["stella:external_mcps"]);
+    expect(getMcpToolRequiredScopesHint("skill__research", "advanced")).toEqual(
+      ["stella:skills"],
+    );
+    expect(
+      getMcpToolRequiredScopesHint("skill__research", "default"),
+    ).toBeUndefined();
+    expect(
+      getMcpToolRequiredScopesHint("mcp__registry__lookup", "default"),
+    ).toBeUndefined();
     expect(
       getMcpToolRequiredScopesHint("mcp__registry__lookup", "anonymized"),
     ).toBe(undefined);

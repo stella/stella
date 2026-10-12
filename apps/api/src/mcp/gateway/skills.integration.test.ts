@@ -125,7 +125,7 @@ describe("MCP skill tools against the database", () => {
     const listing = createRecordingContext(ids.userA1);
     const tools = await loadVisibleSkillTools({
       context: listing.context,
-      mode: "default",
+      mode: "advanced",
     });
     expect(tools.map((tool) => tool.exposedName)).toContain(
       namespaceSkillToolName(calledSlug),
@@ -136,7 +136,7 @@ describe("MCP skill tools against the database", () => {
     const dispatched = await dispatchGatewayToolCall({
       args: {},
       context: calling.context,
-      mode: "default",
+      mode: "advanced",
       toolName: namespaceSkillToolName(calledSlug),
     });
     expect(dispatched?.type).toBe("internal");
@@ -161,7 +161,12 @@ describe("MCP skill tools against the database", () => {
     const { context } = createRecordingContext(ids.userA1);
     const toolName = namespaceSkillToolName(slug);
 
-    const skillRead = await handleMcpToolCall({ args: {}, context, toolName });
+    const skillRead = await handleMcpToolCall({
+      args: {},
+      context,
+      toolName,
+      mode: "advanced",
+    });
     expect(skillRead.isError).toBeUndefined();
     expect(skillRead.structuredContent).toMatchObject({
       type: "skill",
@@ -172,6 +177,7 @@ describe("MCP skill tools against the database", () => {
     });
 
     const resourceRead = await handleMcpToolCall({
+      mode: "advanced",
       args: { resource: "references/checklist.md" },
       context,
       toolName,
@@ -186,6 +192,7 @@ describe("MCP skill tools against the database", () => {
     });
 
     const missingRead = await handleMcpToolCall({
+      mode: "advanced",
       args: { resource: "references/absent.md" },
       context,
       toolName,
@@ -207,8 +214,9 @@ describe("MCP skill tools against the database", () => {
     const { context } = createRecordingContext(ids.userA1);
     const toolName = namespaceSkillToolName(slug);
 
-    await handleMcpToolCall({ args: {}, context, toolName });
+    await handleMcpToolCall({ args: {}, context, toolName, mode: "advanced" });
     await handleMcpToolCall({
+      mode: "advanced",
       args: { resource: "references/absent.md" },
       context,
       toolName,
@@ -284,7 +292,7 @@ describe("MCP skill tools against the database", () => {
     const { context } = createRecordingContext(ids.userA1);
     const resolved = await resolveSkillTool({
       context,
-      mode: "default",
+      mode: "advanced",
       toolName: namespaceSkillToolName(slug),
     });
     if (resolved?.source !== "installed" || resolved.id !== privateSkillId) {
