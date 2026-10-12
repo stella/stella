@@ -24,6 +24,13 @@ export const SESSION_PRIOR_TOKEN_GRACE_MS = 60 * 1000;
 const cookieCacheVersion = "session-lifetime-v2";
 
 export const SESSION_LIFETIME_FIELDS = {
+  originConsentId: { type: "string", required: false, input: false },
+  handoffAbsoluteExpiresAt: {
+    type: "date",
+    required: false,
+    input: false,
+    returned: false,
+  },
   refreshMode: {
     type: "string",
     required: false,

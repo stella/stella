@@ -35,6 +35,7 @@ import type { InferSelectModel } from "drizzle-orm";
 import type { Context } from "elysia";
 import Elysia, { t } from "elysia";
 
+import { MCP_HANDOFF_STEP_UP_REQUIRED } from "@stll/api-contract/mcp-web-handoff";
 import {
   PROFESSIONAL_USE_REQUIRED_CODE,
   PROFESSIONAL_USE_STATUS,
@@ -109,6 +110,14 @@ import {
   requireEmailOtpResetConfirmation,
 } from "@/api/lib/auth/email-otp-reset-confirmation";
 import { buildFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
+import {
+  requiresHandoffStepUpForAuthPath,
+  requiresHandoffStepUpForRequest,
+} from "@/api/lib/auth/handoff-step-up-policy";
+import {
+  createMcpWebHandoffPlugin,
+  MCP_HANDOFF_REDEEM_PATH,
+} from "@/api/lib/auth/mcp-web-handoff-plugin";
 import {
   createOAuthConsentInfoPlugin,
   getVerifiedOAuthOrigins,
@@ -470,6 +479,7 @@ const isStellaTwoFactorSignInGatePath = (path: string | undefined): boolean =>
  * instead of silently skipping it.
  */
 export const isSessionCreatingAuthPath = (path: string | undefined): boolean =>
+  path === MCP_HANDOFF_REDEEM_PATH ||
   path === VERIFY_EMAIL_PATH ||
   path === SIGN_IN_EMAIL_PATH ||
   isStellaTwoFactorSignInGatePath(path);
@@ -1745,7 +1755,11 @@ export const createAuth = (
       // Member and matter authorization remain live per request.
       cookieCache: {
         enabled: true,
-        version: sessionLifetime.cookieCacheVersion,
+        // Handoff sessions resolve storage on every read; ordinary snapshots retain their cache.
+        version: (session) =>
+          typeof session["originConsentId"] === "string"
+            ? `handoff:${Bun.randomUUIDv7()}`
+            : sessionLifetime.cookieCacheVersion,
         maxAge: SESSION_COOKIE_CACHE_MAX_AGE_SECONDS,
       },
       // Disable Better Auth's session-freshness gate. It defaults to 1 day
@@ -1889,6 +1903,7 @@ export const createAuth = (
     plugins: [
       REGISTRATION_RETENTION_SCHEMA_PLUGIN,
       sessionLifetime.plugin,
+      createMcpWebHandoffPlugin(),
       createAgentUserPlugin(),
       createReviewAccountUserPlugin(reviewConfig),
       createSessionBearer(),
@@ -2228,6 +2243,15 @@ export const createAuth = (
             }
           }
         }
+        if (requiresHandoffStepUpForAuthPath(ctx.path)) {
+          const current = await getAuthoritativeSessionFromCtx(ctx);
+          if (typeof current?.session["originConsentId"] === "string") {
+            throw new APIError("FORBIDDEN", {
+              code: MCP_HANDOFF_STEP_UP_REQUIRED,
+              message: "Sign in again to continue.",
+            });
+          }
+        }
         await assertSelfhostEmailOtpAllowed(ctx.path);
         const resetConfirmation = await requireEmailOtpResetConfirmation({
           path: ctx.path,
@@ -2513,6 +2537,13 @@ export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
       const user = sessionResult.value?.user;
       if (!session || !user) {
         return status(401, AUTH_REJECTION_BODY[401]);
+      }
+
+      if (session.originConsentId && requiresHandoffStepUpForRequest(request)) {
+        return status(403, {
+          code: MCP_HANDOFF_STEP_UP_REQUIRED,
+          message: "Sign in again to continue.",
+        });
       }
 
       const userId = toSafeId<"user">(user.id);
@@ -3139,6 +3170,7 @@ const resolveValidateAuth = async ({
       },
       session: {
         activeOrganizationId,
+        originConsentId: session.originConsentId ?? null,
       },
       getActiveWorkspaceIds,
       getAccessibleWorkspaces,
@@ -3256,6 +3288,15 @@ export const createAuthMacro = ({
           );
         }
 
+        if (
+          result.value.session.originConsentId &&
+          requiresHandoffStepUpForRequest(request)
+        ) {
+          return status(403, {
+            code: MCP_HANDOFF_STEP_UP_REQUIRED,
+            message: "Sign in again to continue.",
+          });
+        }
         return result.value;
       },
     },
