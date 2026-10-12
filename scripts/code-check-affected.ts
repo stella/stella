@@ -45,6 +45,14 @@ export const CODE_CHECK_EXECUTION_BUDGET_MS =
     configuredBudgets.defaultSeconds * 2 +
     60) *
   1000;
+// Completed planning-phase bounds include Git and module startup as well as Turbo.
+const PLANNING_COMMAND_BUDGET_MS =
+  Math.ceil(
+    Math.max(...configuredBudgets.planningPhaseUpperBoundsSeconds) * 2 + 30,
+  ) * 1000;
+export const planningCommandTimeout = (
+  remainingMs = PLANNING_COMMAND_BUDGET_MS,
+) => Math.max(1, Math.min(PLANNING_COMMAND_BUDGET_MS, remainingMs));
 const WORKSPACE_PARENTS = ["apps", "packages"] as const;
 export const DEPENDENCY_CACHE_INPUTS = [
   "$TURBO_ROOT$/.npmrc",
@@ -418,22 +426,26 @@ const capture = (
   command: readonly string[],
   env?: Record<string, string | undefined>,
 ): Result<string, CommandFailedError> => {
+  const timeoutMs = planningCommandTimeout();
+  const startedAt = Date.now();
   const result = Bun.spawnSync([...command], {
     cwd: REPO_ROOT,
     ...(env === undefined ? {} : { env }),
     stdout: "pipe",
     stderr: "pipe",
-    timeout: 30_000,
+    timeout: timeoutMs,
     killSignal: "SIGKILL",
   });
   const stdout = result.stdout.toString();
   const exitCode = childExitStatus(result);
+  const diagnostic = `code-check: planner ${command.join(" ")} elapsed=${Date.now() - startedAt}ms budget=${timeoutMs}ms exit=${exitCode} signal=${String(result.signalCode ?? "none")}\n`;
+  process.stdout.write(diagnostic);
   if (exitCode !== 0) {
     return Result.err(
       commandFailed({
         command,
         exitCode,
-        output: `${stdout}\n${result.stderr.toString()}`,
+        output: `${diagnostic}${stdout}\n${result.stderr.toString()}`,
       }),
     );
   }
@@ -749,14 +761,72 @@ type TurboOutput = {
   };
 };
 
-const affectedWorkspacePaths = (
-  mergeBase: string,
-): Result<string[], CommandFailedError> =>
-  capture(["bun", "--bun", "turbo", "ls", "--affected", "--output=json"], {
-    ...process.env,
-    TURBO_SCM_BASE: mergeBase,
-    TURBO_SCM_HEAD: "HEAD",
-  }).map(parseAffectedWorkspacePaths);
+type AffectedWorkspaceDiscovery =
+  | { type: "scoped"; paths: string[] }
+  | { type: "fallback"; reason: string };
+type DiscoverAffectedWorkspacesOptions = {
+  mergeBase: string;
+  command?: readonly string[];
+  cwd?: string;
+  timeoutMs?: number;
+  report?: (diagnostic: string) => void;
+};
+
+export const discoverAffectedWorkspaces = async ({
+  mergeBase,
+  command = ["bun", "--bun", "turbo", "ls", "--affected", "--output=json"],
+  cwd = REPO_ROOT,
+  timeoutMs = planningCommandTimeout(),
+  report = (diagnostic) => {
+    process.stdout.write(diagnostic);
+  },
+}: DiscoverAffectedWorkspacesOptions): Promise<
+  Result<AffectedWorkspaceDiscovery, CommandFailedError>
+> => {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  const startedAt = Date.now();
+  const result = await runBudgetedCheck({
+    command,
+    cwd,
+    timeoutMs,
+    summary: "none",
+    env: { TURBO_SCM_BASE: mergeBase, TURBO_SCM_HEAD: "HEAD" },
+    writeStdout: (text) => {
+      stdout.push(text);
+    },
+    writeStderr: (text) => {
+      stderr.push(text);
+    },
+    writeSummary: (markdown) => {
+      stderr.push(markdown);
+    },
+  });
+  const diagnostic = `code-check: planner ${command.join(" ")} elapsed=${Date.now() - startedAt}ms budget=${timeoutMs}ms exit=${result.exitCode} outcome=${result.outcome}\n`;
+  report(diagnostic);
+  if (result.outcome === "deadline") {
+    report(
+      `${stderr.join("")}code-check: affected planner timed out; using full check scope\n`,
+    );
+    return Result.ok({
+      type: "fallback",
+      reason: "affected workspace planner timeout",
+    });
+  }
+  if (result.exitCode !== 0) {
+    return Result.err(
+      commandFailed({
+        command,
+        exitCode: result.exitCode,
+        output: diagnostic + result.output,
+      }),
+    );
+  }
+  return Result.ok({
+    type: "scoped",
+    paths: parseAffectedWorkspacePaths(stdout.join("")),
+  });
+};
 
 const parseAffectedWorkspacePaths = (output: string): string[] => {
   const jsonStart = output.indexOf("{");
@@ -1032,9 +1102,9 @@ type ScopeCheck = {
   mergeBase: string | null;
 };
 
-const planScope = (
+const planScope = async (
   scope: CheckScope,
-): Result<ScopeCheck, CommandFailedError> => {
+): Promise<Result<ScopeCheck, CommandFailedError>> => {
   switch (scope.type) {
     case "all": {
       return repositoryPaths().map((paths) => {
@@ -1050,21 +1120,29 @@ const planScope = (
       });
     }
     case "affected": {
-      return changedPaths(scope.base).andThen((changed) =>
-        affectedWorkspacePaths(changed.mergeBase).map((affected) => {
-          const presentChangedPaths = presentPaths(changed.paths);
-          return {
-            plan: planCheck({
-              changedPaths: changed.paths,
-              presentChangedPaths,
-              affectedWorkspacePaths: affected,
-              workspacePaths: workspacePaths(),
-            }),
-            presentChangedPaths,
-            mergeBase: changed.mergeBase,
-          };
-        }),
-      );
+      const changed = changedPaths(scope.base);
+      if (changed.isErr()) {
+        return changed;
+      }
+      const affected = await discoverAffectedWorkspaces({
+        mergeBase: changed.value.mergeBase,
+      });
+      return affected.map((discovery) => {
+        const presentChangedPaths = presentPaths(changed.value.paths);
+        return {
+          plan:
+            discovery.type === "fallback"
+              ? { type: "fallback", changedPath: discovery.reason }
+              : planCheck({
+                  changedPaths: changed.value.paths,
+                  presentChangedPaths,
+                  affectedWorkspacePaths: discovery.paths,
+                  workspacePaths: workspacePaths(),
+                }),
+          presentChangedPaths,
+          mergeBase: changed.value.mergeBase,
+        };
+      });
     }
     default: {
       scope satisfies never;
@@ -1087,7 +1165,7 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
   if (toolchain.isErr()) {
     return toolchain;
   }
-  const scoped = planScope(options.scope);
+  const scoped = await planScope(options.scope);
   if (scoped.isErr()) {
     return scoped;
   }
@@ -1105,7 +1183,7 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
           cwd: REPO_ROOT,
           stdout: "pipe",
           stderr: "pipe",
-          timeout: Math.max(1, Math.min(30_000, deadlineMs - Date.now())),
+          timeout: planningCommandTimeout(deadlineMs - Date.now()),
           killSignal: "SIGKILL",
         });
       // Only a missing comparison ref means "no base"; any other Git failure

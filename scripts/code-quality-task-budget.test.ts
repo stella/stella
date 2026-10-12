@@ -11,6 +11,7 @@ import {
   DEFAULT_TASK_BUDGETS,
   evaluateTaskBudgets,
   ownedProcessGroupMembers,
+  ownedProcessTreeRows,
   parseTaskBudgets,
   parseTurboRunSummary,
   runBudgetedCheck,
@@ -489,6 +490,20 @@ test("leader exit audits and terminates an inherited-pipe descendant without wai
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }
+});
+
+test("termination diagnostics retain tree ancestry, group members and process states without unrelated processes", () => {
+  expect(
+    ownedProcessTreeRows(
+      "100 1 100 S leader\n101 100 100 R turbo\n102 101 102 S worker\n103 1 100 Z exited\n104 999 999 S unrelated\n",
+      100,
+    ),
+  ).toEqual([
+    "100 1 100 S leader",
+    "101 100 100 R turbo",
+    "102 101 102 S worker",
+    "103 1 100 Z exited",
+  ]);
 });
 
 test("owned process audits retain live descendants and ignore unrelated groups or exited zombies", () => {

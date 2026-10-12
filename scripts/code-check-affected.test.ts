@@ -21,6 +21,7 @@ import {
   WORKSPACE_TYPECHECK_CACHE_INPUTS,
   CommandFailedError,
   codeCheckConcurrency,
+  discoverAffectedWorkspaces,
   prioritizeWebLint,
   DEPENDENCY_CACHE_INPUTS,
   failureExitCode,
@@ -28,6 +29,7 @@ import {
   LINT_ONLY_CACHE_INPUTS,
   executeCheckCommands,
   planCheck,
+  planningCommandTimeout,
   planFullCheck,
   planResultBoundaryLint,
   PLUGIN_FIXTURE_INPUTS,
@@ -1266,6 +1268,86 @@ describe("check failure reporting", () => {
     ["bun", "turbo", "typecheck"],
     ["bun", "turbo", "typecheck:repo"],
   ];
+  test("planner deadlines retain measured headroom beyond the old fixed cap and respect the remaining leg budget", () => {
+    const longest =
+      Math.max(...configuredBudgets.planningPhaseUpperBoundsSeconds) * 1000;
+    const cap = planningCommandTimeout();
+    expect(cap).toBeGreaterThanOrEqual(longest * 2 + 30_000);
+    expect(planningCommandTimeout(31_000)).toBe(31_000);
+    expect(planningCommandTimeout(cap + 1000)).toBe(cap);
+    expect(planningCommandTimeout(500)).toBe(500);
+    expect(cap).toBeLessThan(CODE_CHECK_EXECUTION_BUDGET_MS);
+  });
+
+  test("affected workspace discovery falls back to full scope after a bounded planner hang", async () => {
+    const directory = mkdtempSync(
+      path.join(tmpdir(), "code-check-planner-hang-"),
+    );
+    const diagnostics: string[] = [];
+    try {
+      const result = await discoverAffectedWorkspaces({
+        mergeBase: "fixture-base",
+        cwd: directory,
+        timeoutMs: 1000,
+        command: [
+          process.execPath,
+          "-e",
+          "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000);",
+        ],
+        report: (diagnostic) => diagnostics.push(diagnostic),
+      });
+      expect(result.unwrap()).toEqual({
+        type: "fallback",
+        reason: "affected workspace planner timeout",
+      });
+      const output = diagnostics.join("");
+      expect(output).toContain("using full check scope");
+      expect(output).toContain("budget=1000ms");
+      expect(output).toContain("elapsed=");
+      expect(output).toContain("Command process tree at SIGTERM");
+      expect(output).toContain("Command process tree at SIGKILL");
+      expect(output).toContain("PID PPID PGID STATE COMMAND");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("affected workspace discovery preserves a fast planner scope and genuine failures", async () => {
+    const directory = mkdtempSync(
+      path.join(tmpdir(), "code-check-planner-fast-"),
+    );
+    const diagnostics: string[] = [];
+    try {
+      const result = await discoverAffectedWorkspaces({
+        mergeBase: "fixture-base",
+        cwd: directory,
+        timeoutMs: 1000,
+        command: [
+          process.execPath,
+          "-e",
+          "console.log(JSON.stringify({packages:{items:[{path:'apps/web'}]}}))",
+        ],
+        report: (diagnostic) => diagnostics.push(diagnostic),
+      });
+      expect(result.unwrap()).toEqual({ type: "scoped", paths: ["apps/web"] });
+      expect(diagnostics.join("")).toContain("outcome=completed");
+      expect(diagnostics.join("")).not.toContain("using full check scope");
+      const failed = await discoverAffectedWorkspaces({
+        mergeBase: "fixture-base",
+        cwd: directory,
+        timeoutMs: 1000,
+        command: [process.execPath, "-e", "process.exit(7)"],
+        report: () => {},
+      });
+      expect(failed.isErr()).toBe(true);
+      if (failed.isErr()) {
+        expect(failed.error.exitCode).toBe(7);
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   test("planning and sequential commands share one execution deadline", async () => {
     let clock = 1000;
     const budgets: number[] = [];

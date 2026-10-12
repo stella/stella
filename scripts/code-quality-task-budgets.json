@@ -12,6 +12,17 @@
     "@stll/web#lint": [83.3, 88.0]
   },
   "measurementNotes": "Only cache misses. Historical samples are reported tool-phase totals (lower bounds on composite tasks); API lint 135.859 is a complete summary duration and root 32.797 bounds a complete task. Budgets include at least 30 seconds above max(1.5 x empirical p95, 2 x largest cold sample), except the unchanged default bucket. Sparse-sample p95 is not a population estimate. Cached replay is excluded.",
+  "planningPhaseUpperBoundsSeconds": [
+    4.215, 0.796, 0.635, 0.417, 0.181, 0.178, 0.167
+  ],
+  "planningMeasurementNotes": "Completed intervals from generator/toolchain completion to the first code-check label include module startup, Git, affected-workspace discovery and optional lint planning. They are upper bounds on a planner command, not direct Turbo timings. The planner cap uses twice the largest completed bound plus the existing 30-second measurement margin, rounded up. Interrupted intervals are excluded.",
+  "planningSourceJobs": [
+    "https://github.com/stella/stella/actions/runs/38188895418/job/114618973414",
+    "https://github.com/stella/stella/actions/runs/38160179511/job/114532014949",
+    "https://github.com/stella/stella/actions/runs/38166117550/job/114551251772",
+    "https://github.com/stella/stella/actions/runs/38187934369/job/114619080581",
+    "https://github.com/stella/stella/actions/runs/38187934369/job/114619080676"
+  ],
   "sourceJobs": [
     "https://github.com/stella/stella/actions/runs/38160179511/job/114532014924",
     "https://github.com/stella/stella/actions/runs/38166117550/job/114551251727",

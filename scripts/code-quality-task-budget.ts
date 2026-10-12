@@ -1,5 +1,5 @@
 import { Result, TaggedError } from "better-result";
-import { execFile, spawn } from "node:child_process";
+import { execFile, execFileSync, spawn } from "node:child_process";
 import { readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import { stripVTControlCharacters } from "node:util";
@@ -271,9 +271,50 @@ type RunBudgetedCheckOptions = {
   writeStderr: (chunk: string) => void;
   writeSummary: (markdown: string) => void | Promise<void>;
   graceMs?: number;
+  env?: NodeJS.ProcessEnv;
+  summary?: "tasks" | "none";
 };
 
 const PROCESS_GROUP_ENV = "CODE_QUALITY_PROCESS_GROUP";
+const EXECUTION_DEADLINE = "Code-quality execution deadline exceeded";
+
+export const ownedProcessTreeRows = (snapshot: string, group: number) => {
+  const rows = snapshot.split(/\r?\n/u).flatMap((line) => {
+    const match = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+\S+\s/u.exec(line);
+    if (!match) {
+      return [];
+    }
+    return [
+      {
+        pid: Number(match[1]),
+        parent: Number(match[2]),
+        group: Number(match[3]),
+        text: line.trim(),
+      },
+    ];
+  });
+  const children = new Map<number, number[]>();
+  const queue = [group];
+  for (const row of rows) {
+    const siblings = children.get(row.parent) ?? [];
+    siblings.push(row.pid);
+    children.set(row.parent, siblings);
+    if (row.group === group) {
+      queue.push(row.pid);
+    }
+  }
+  const owned = new Set<number>();
+  for (const pid of queue) {
+    if (owned.has(pid)) {
+      continue;
+    }
+    owned.add(pid);
+    for (const child of children.get(pid) ?? []) {
+      queue.push(child);
+    }
+  }
+  return rows.filter((row) => owned.has(row.pid)).map((row) => row.text);
+};
 
 export const ownedProcessGroupMembers = (snapshot: string, group: number) =>
   snapshot.split(/\r?\n/u).flatMap((line) => {
@@ -306,6 +347,31 @@ const failureMessage = (cause: unknown): string => {
     return cause["message"];
   }
   return String(cause);
+};
+
+type ProcessTreeAtSignalOptions = {
+  group: number;
+  signal: NodeJS.Signals;
+  startedAt: number;
+};
+const processTreeAtSignal = ({
+  group,
+  signal,
+  startedAt,
+}: ProcessTreeAtSignalOptions) => {
+  const snapshot = Result.try({
+    try: () =>
+      execFileSync("ps", ["-axo", "pid=,ppid=,pgid=,stat=,command="], {
+        timeout: 1000,
+        maxBuffer: 2 * 1024 * 1024,
+        encoding: "utf-8",
+      }),
+    catch: (cause) => cause,
+  });
+  const rows = snapshot.isOk()
+    ? ownedProcessTreeRows(snapshot.value, group).join("\n")
+    : failureMessage(snapshot.error);
+  return `Command process tree at ${signal}: elapsed=${Date.now() - startedAt}ms pgid=${group}\nPID PPID PGID STATE COMMAND\n${rows || "No remaining group members"}\n`;
 };
 
 type AuditExitedGroupOptions = {
@@ -382,6 +448,8 @@ export const runBudgetedCheck = async ({
   writeStderr,
   writeSummary,
   graceMs = 1000,
+  env,
+  summary = "tasks",
 }: RunBudgetedCheckOptions) => {
   const executable = command.at(0);
   if (
@@ -391,7 +459,9 @@ export const runBudgetedCheck = async ({
   ) {
     return invalid("A command and nonnegative execution deadline are required");
   }
-  const turbo = command.some((argument) => path.basename(argument) === "turbo");
+  const turbo =
+    summary === "tasks" &&
+    command.some((argument) => path.basename(argument) === "turbo");
   const runDirectory = path.join(cwd, ".turbo", "runs");
   const snapshot = await Result.tryPromise({
     try: async () => await readdir(runDirectory),
@@ -408,6 +478,10 @@ export const runBudgetedCheck = async ({
   const previous = new Set(snapshot.isOk() ? snapshot.value : []);
   const tracker = createTaskExecutionTracker();
   let output = "";
+  const reportDiagnostic = (diagnostic: string) => {
+    output += diagnostic;
+    writeStderr(diagnostic);
+  };
   let termination: string | undefined;
   let killTimer: ReturnType<typeof setTimeout> | undefined;
   const startedAt = Date.now();
@@ -417,10 +491,26 @@ export const runBudgetedCheck = async ({
   const child = spawn(executable, command.slice(1), {
     cwd,
     detached: ownsGroup && process.platform !== "win32",
-    env: { ...process.env, [PROCESS_GROUP_ENV]: "inherited" },
+    env: { ...process.env, ...env, [PROCESS_GROUP_ENV]: "inherited" },
     stdio: ["ignore", "pipe", "pipe"],
   });
+  const inspectedSignals = new Set<NodeJS.Signals>();
   const killGroup = (signal: NodeJS.Signals) => {
+    if (
+      termination !== undefined &&
+      ownsGroup &&
+      process.platform !== "win32" &&
+      child.pid !== undefined &&
+      !inspectedSignals.has(signal)
+    ) {
+      inspectedSignals.add(signal);
+      const diagnostic = processTreeAtSignal({
+        group: child.pid,
+        signal,
+        startedAt,
+      });
+      reportDiagnostic(diagnostic);
+    }
     const attempt = Result.try({
       try: () => {
         if (
@@ -440,8 +530,7 @@ export const runBudgetedCheck = async ({
       !(record(attempt.error) && attempt.error["code"] === "ESRCH")
     ) {
       const diagnostic = `Cannot terminate command group: ${failureMessage(attempt.error)}\n`;
-      output += diagnostic;
-      writeStderr(diagnostic);
+      reportDiagnostic(diagnostic);
     }
   };
   const terminate = (reason: string) => {
@@ -449,9 +538,7 @@ export const runBudgetedCheck = async ({
       return;
     }
     termination = reason;
-    const diagnostic = `${reason}\n`;
-    output += diagnostic;
-    writeStderr(diagnostic);
+    reportDiagnostic(`${reason}\n`);
     killGroup("SIGTERM");
     killTimer = setTimeout(() => killGroup("SIGKILL"), graceMs);
   };
@@ -459,10 +546,7 @@ export const runBudgetedCheck = async ({
   const onInt = () => terminate("Code-quality command interrupted by SIGINT");
   process.on("SIGTERM", onTerm);
   process.on("SIGINT", onInt);
-  const timer = setTimeout(
-    () => terminate("Code-quality execution deadline exceeded"),
-    timeoutMs,
-  );
+  const timer = setTimeout(() => terminate(EXECUTION_DEADLINE), timeoutMs);
   const tee = (chunk: Buffer, channel: "stdout" | "stderr") => {
     const text = chunk.toString();
     output += text;
@@ -490,9 +574,7 @@ export const runBudgetedCheck = async ({
   });
   const exitCode = await new Promise<number>((resolve) => {
     child.on("error", (error) => {
-      const diagnostic = `${String(error)}\n`;
-      output += diagnostic;
-      writeStderr(diagnostic);
+      reportDiagnostic(`${String(error)}\n`);
       resolve(127);
     });
     child.on("exit", (code, signal) => {
@@ -503,10 +585,7 @@ export const runBudgetedCheck = async ({
   if (ownsGroup && child.pid !== undefined && process.platform !== "win32") {
     cleanupFailed = await auditExitedProcessGroup({
       group: child.pid,
-      report: (diagnostic) => {
-        output += diagnostic;
-        writeStderr(diagnostic);
-      },
+      report: reportDiagnostic,
       terminate: terminateLeftovers,
     });
   }
@@ -521,8 +600,7 @@ export const runBudgetedCheck = async ({
         cleanupFailed = true;
         const diagnostic =
           "Command pipes remained open after leader exit; terminating owned group and closing pipes\n";
-        output += diagnostic;
-        writeStderr(diagnostic);
+        reportDiagnostic(diagnostic);
         killGroup("SIGKILL");
         child.stdout.destroy();
         child.stderr.destroy();
@@ -574,6 +652,11 @@ type FinishBudgetedCheckOptions = {
   startedAt: number;
   endedAt: number;
 };
+type BudgetedCheckResult = {
+  exitCode: number;
+  output: string;
+  outcome: "completed" | "deadline" | "interrupted";
+};
 const finishBudgetedCheck = async ({
   turbo,
   runDirectory,
@@ -586,7 +669,7 @@ const finishBudgetedCheck = async ({
   writeSummary,
   startedAt,
   endedAt,
-}: FinishBudgetedCheckOptions) => {
+}: FinishBudgetedCheckOptions): Promise<BudgetedCheckResult> => {
   let output = initialOutput;
   const completedReport = async () => {
     const announced = stripVTControlCharacters(initialOutput)
@@ -673,10 +756,14 @@ const finishBudgetedCheck = async ({
     const diagnostic = `${tracker.diagnostics(termination)}\n`;
     output += diagnostic;
     writeStderr(diagnostic);
-    return { exitCode: 124, output };
+    return {
+      exitCode: 124,
+      output,
+      outcome: termination === EXECUTION_DEADLINE ? "deadline" : "interrupted",
+    };
   }
   if (!turbo) {
-    return { exitCode, output };
+    return { exitCode, output, outcome: "completed" };
   }
   const checked = await Result.tryPromise(async () => {
     const report = await completedReport();
@@ -695,7 +782,11 @@ const finishBudgetedCheck = async ({
     const diagnostic = `${tracker.diagnostics(`Turbo task budget report unavailable or failed: ${failureMessage(checked.error)}`)}\n`;
     output += diagnostic;
     writeStderr(diagnostic);
-    return { exitCode: exitCode === 0 ? 1 : exitCode, output };
+    return {
+      exitCode: exitCode === 0 ? 1 : exitCode,
+      output,
+      outcome: "completed",
+    };
   }
-  return { exitCode, output };
+  return { exitCode, output, outcome: "completed" };
 };
