@@ -542,7 +542,6 @@
       "issueFailed": "A piszkozat elmentve, de a számlát nem sikerült kiállítani.",
       "issueInvoice": "Számla kiállítása",
       "issuedTitle": "A(z) {number} számla kiállítva",
-      "lineCount": "{count, plural, one {# tétel} other {# tétel}}",
       "lines": "Számlatételek",
       "loggedHours": "{hours} óra rögzítve",
       "noCharge": "Díjmentes",
@@ -583,7 +582,7 @@
         "domesticRate": "A teljesítés napján hatályos legmagasabb áfakulcsa",
         "noSellerProfile": "Nincs eladói profil, így nincs ÁFA, amíg a számlán be nem állítja",
         "noVatRate": "A számlázási beállításokban nincs áfakulcs megadva",
-        "reverseCharge": "Az ügyfél egy másik EU-tagállamban áfaregisztrált",
+        "reverseCharge": "Az ügyfél áfaazonosítója másik országban van nyilvántartva",
         "sellerNotVatPayer": "Az eladói profiljában nincs áfaazonosító"
       }
     },

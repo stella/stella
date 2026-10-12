@@ -542,7 +542,6 @@
       "issueFailed": "Der Entwurf wurde gespeichert, konnte aber nicht ausgestellt werden.",
       "issueInvoice": "Rechnung ausstellen",
       "issuedTitle": "Rechnung {number} ausgestellt",
-      "lineCount": "{count, plural, one {# Position} other {# Positionen}}",
       "lines": "Rechnungspositionen",
       "loggedHours": "{hours} Std. erfasst",
       "noCharge": "Ohne Berechnung",
@@ -583,7 +582,7 @@
         "domesticRate": "Ihr höchster am Leistungsdatum geltender Umsatzsteuersatz",
         "noSellerProfile": "Kein Verkäuferprofil, daher keine Umsatzsteuer, bis Sie sie in der Rechnung festlegen",
         "noVatRate": "In den Abrechnungseinstellungen ist kein Umsatzsteuersatz eingerichtet",
-        "reverseCharge": "Der Mandant ist in einem anderen EU-Mitgliedstaat umsatzsteuerlich registriert",
+        "reverseCharge": "Die Umsatzsteuer-ID des Mandanten ist in einem anderen Land registriert",
         "sellerNotVatPayer": "Ihr Verkäuferprofil hat keine Umsatzsteuer-ID"
       }
     },

@@ -542,7 +542,6 @@
       "issueFailed": "Melnraksts tika saglabāts, bet rēķinu neizdevās izrakstīt.",
       "issueInvoice": "Izrakstīt rēķinu",
       "issuedTitle": "Rēķins {number} izrakstīts",
-      "lineCount": "{count, plural, zero {# rindu} one {# rinda} other {# rindas}}",
       "lines": "Rēķina rindas",
       "loggedHours": "reģistrētas {hours} h",
       "noCharge": "Bez maksas",
@@ -583,7 +582,7 @@
         "domesticRate": "Jūsu augstākā PVN likme, kas ir spēkā piegādes datumā",
         "noSellerProfile": "Nav pārdevēja profila, tāpēc PVN netiek piemērots, kamēr to neiestatāt rēķinā",
         "noVatRate": "Norēķinu iestatījumos nav iestatīta neviena PVN likme",
-        "reverseCharge": "Klients ir reģistrēts PVN vajadzībām citā ES dalībvalstī",
+        "reverseCharge": "Klienta PVN numurs ir reģistrēts citā valstī",
         "sellerNotVatPayer": "Jūsu pārdevēja profilam nav PVN numura"
       }
     },

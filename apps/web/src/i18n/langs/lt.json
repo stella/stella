@@ -542,7 +542,6 @@
       "issueFailed": "Juodraštis išsaugotas, bet sąskaitos išrašyti nepavyko.",
       "issueInvoice": "Išrašyti sąskaitą",
       "issuedTitle": "Sąskaita {number} išrašyta",
-      "lineCount": "{count, plural, one {# eilutė} few {# eilutės} many {# eilutės} other {# eilučių}}",
       "lines": "Sąskaitos eilutės",
       "loggedHours": "užregistruota {hours} val.",
       "noCharge": "Be mokesčio",
@@ -583,7 +582,7 @@
         "domesticRate": "Jūsų didžiausias paslaugų suteikimo dieną galiojantis PVM tarifas",
         "noSellerProfile": "Nėra pardavėjo profilio, todėl PVM netaikomas, kol jo nenustatysite sąskaitoje",
         "noVatRate": "Atsiskaitymo nustatymuose nenustatytas joks PVM tarifas",
-        "reverseCharge": "Klientas įregistruotas PVM mokėtoju kitoje ES valstybėje narėje",
+        "reverseCharge": "Kliento PVM mokėtojo kodas įregistruotas kitoje šalyje",
         "sellerNotVatPayer": "Jūsų pardavėjo profilis neturi PVM mokėtojo kodo"
       }
     },

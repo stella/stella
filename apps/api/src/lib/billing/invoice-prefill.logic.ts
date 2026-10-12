@@ -41,11 +41,24 @@ const EU_VAT_PREFIXES = new Set([
   "XI",
 ]);
 
+const compactVatId = (vatId: string | null) =>
+  vatId?.replaceAll(/[\s.-]/gu, "").toUpperCase() ?? "";
+
 /** The member state a VAT ID names, or null when it names none. */
 export const euVatPrefix = (vatId: string | null): string | null => {
-  const compact = vatId?.replaceAll(/[\s.-]/gu, "").toUpperCase() ?? "";
+  const compact = compactVatId(vatId);
   const prefix = compact.slice(0, 2);
   return compact.length > 2 && EU_VAT_PREFIXES.has(prefix) ? prefix : null;
+};
+
+/**
+ * The country a business VAT or tax ID is written for, when it carries the
+ * usual two-letter prefix ("DE298765432", "GB123456789"); null for a bare
+ * number, which names no country.
+ */
+export const vatIdCountry = (vatId: string | null): string | null => {
+  const compact = compactVatId(vatId);
+  return /^[A-Z]{2}[0-9A-Z]{2,}$/u.test(compact) ? compact.slice(0, 2) : null;
 };
 
 /** Why the invoice carries the VAT treatment it was given. */
@@ -75,10 +88,11 @@ type DecideInvoiceVatOptions = {
 /**
  * The VAT an invoice's lines get from who sells and who buys. A seller
  * profile without a VAT ID is not a VAT payer and charges none. A VAT payer
- * selling to a business registered for VAT in another member state reverse
- * charges. Otherwise the seller charges its standard rate, read as the
- * organization's highest rate valid on the supply date. Without a seller
- * profile nothing is known, so lines keep 0 % until someone sets the rate.
+ * registered in a member state, selling to a business whose VAT ID names
+ * another country, reverse charges: legal services to a business are taxed
+ * where the client is. Otherwise the seller charges its standard rate, read
+ * as the organization's highest rate valid on the supply date. Without a
+ * seller profile nothing is known, so lines keep 0 % until someone sets it.
  */
 export const decideInvoiceVat = ({
   seller,
@@ -100,11 +114,11 @@ export const decideInvoiceVat = ({
     };
   }
   const sellerState = euVatPrefix(seller.vatId);
-  const buyerState = euVatPrefix(buyerVatId);
+  const buyerCountry = vatIdCountry(buyerVatId);
   if (
     sellerState !== null &&
-    buyerState !== null &&
-    sellerState !== buyerState
+    buyerCountry !== null &&
+    buyerCountry !== sellerState
   ) {
     return {
       vatTreatment: "reverse_charge",

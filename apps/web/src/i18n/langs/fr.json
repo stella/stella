@@ -542,7 +542,6 @@
       "issueFailed": "Le brouillon a été enregistré, mais la facture n’a pas pu être émise.",
       "issueInvoice": "Émettre la facture",
       "issuedTitle": "Facture {number} émise",
-      "lineCount": "{count, plural, one {# ligne} other {# lignes}}",
       "lines": "Lignes de facture",
       "loggedHours": "{hours} h saisies",
       "noCharge": "Non facturé",
@@ -583,7 +582,7 @@
         "domesticRate": "Votre taux de TVA le plus élevé en vigueur à la date de la prestation",
         "noSellerProfile": "Aucun profil vendeur : pas de TVA tant que vous ne la fixez pas sur la facture",
         "noVatRate": "Aucun taux de TVA n’est configuré dans la facturation",
-        "reverseCharge": "Le client est immatriculé à la TVA dans un autre État membre de l’UE",
+        "reverseCharge": "Le numéro de TVA du client est enregistré dans un autre pays",
         "sellerNotVatPayer": "Votre profil vendeur n’a pas de numéro de TVA"
       }
     },

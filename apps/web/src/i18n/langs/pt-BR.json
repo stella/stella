@@ -542,7 +542,6 @@
       "issueFailed": "O rascunho foi salvo, mas não foi possível emitir a fatura.",
       "issueInvoice": "Emitir fatura",
       "issuedTitle": "Fatura {number} emitida",
-      "lineCount": "{count, plural, one {# linha} other {# linhas}}",
       "lines": "Linhas da fatura",
       "loggedHours": "{hours} h lançadas",
       "noCharge": "Sem cobrança",
@@ -583,7 +582,7 @@
         "domesticRate": "Sua alíquota de IVA mais alta em vigor na data do fato gerador",
         "noSellerProfile": "Sem perfil de vendedor, nenhum IVA é cobrado até você defini-lo na fatura",
         "noVatRate": "Nenhuma alíquota de IVA configurada no faturamento",
-        "reverseCharge": "O cliente está registrado para IVA em outro Estado-membro da UE",
+        "reverseCharge": "O número de IVA do cliente está registrado em outro país",
         "sellerNotVatPayer": "Seu perfil de vendedor não tem número de IVA"
       }
     },

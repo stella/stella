@@ -41,9 +41,15 @@ describe("invoice VAT decision", () => {
       expected: ["domestic_vat", 2100, "domestic_rate"],
     },
     {
-      name: "a buyer outside the EU VAT area is not reverse charged here",
+      name: "a business client abroad outside the EU is reverse charged too",
       seller: { vatId: "CZ12345678" },
       buyerVatId: "GB123456789",
+      expected: ["reverse_charge", 0, "reverse_charge"],
+    },
+    {
+      name: "a bare registration number names no country",
+      seller: { vatId: "CZ12345678" },
+      buyerVatId: "27145689",
       expected: ["domestic_vat", 2100, "domestic_rate"],
     },
     {
@@ -79,7 +85,7 @@ describe("invoice VAT decision", () => {
     });
   });
 
-  test("only EU member state prefixes name a state", () => {
+  test("only EU member state prefixes name a member state", () => {
     expect(euVatPrefix("EL123456789")).toBe("EL");
     expect(euVatPrefix("GR123456789")).toBeNull();
     expect(euVatPrefix("CZ")).toBeNull();

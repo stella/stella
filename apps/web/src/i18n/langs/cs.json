@@ -542,7 +542,6 @@
       "issueFailed": "Koncept byl uložen, ale fakturu se nepodařilo vystavit.",
       "issueInvoice": "Vystavit fakturu",
       "issuedTitle": "Faktura {number} vystavena",
-      "lineCount": "{count, plural, one {# řádek} few {# řádky} many {# řádku} other {# řádků}}",
       "lines": "Řádky faktury",
       "loggedHours": "zapsáno {hours} h",
       "noCharge": "Bez úhrady",
@@ -583,7 +582,7 @@
         "domesticRate": "Vaše nejvyšší sazba DPH platná ke dni plnění",
         "noSellerProfile": "Chybí profil dodavatele, DPH se proto neúčtuje, dokud ji na faktuře nenastavíte",
         "noVatRate": "V nastavení fakturace není nastavena žádná sazba DPH",
-        "reverseCharge": "Klient je registrován k DPH v jiném členském státě EU",
+        "reverseCharge": "DIČ klienta je registrováno v jiné zemi",
         "sellerNotVatPayer": "Váš profil dodavatele nemá DIČ"
       }
     },

@@ -542,7 +542,6 @@
       "issueFailed": "Mustand salvestati, kuid arvet ei õnnestunud väljastada.",
       "issueInvoice": "Väljasta arve",
       "issuedTitle": "Arve {number} väljastatud",
-      "lineCount": "{count, plural, one {# rida} other {# rida}}",
       "lines": "Arve read",
       "loggedHours": "{hours} h kirjendatud",
       "noCharge": "Tasuta",
@@ -583,7 +582,7 @@
         "domesticRate": "Teie kõrgeim teenuse osutamise päeval kehtiv käibemaksumäär",
         "noSellerProfile": "Müüja profiil puudub, seega käibemaksu ei arvestata enne, kui selle arvele määrate",
         "noVatRate": "Arvelduse seadetes pole käibemaksumäära seadistatud",
-        "reverseCharge": "Klient on käibemaksukohustuslasena registreeritud teises EL-i liikmesriigis",
+        "reverseCharge": "Kliendi käibemaksukohustuslase number on registreeritud teises riigis",
         "sellerNotVatPayer": "Teie müüja profiilil pole käibemaksukohustuslase numbrit"
       }
     },

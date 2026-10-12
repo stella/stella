@@ -545,7 +545,6 @@ type Messages = {
       "issueFailed": "The draft was saved but could not be issued.";
       "issueInvoice": "Issue invoice";
       "issuedTitle": "Invoice {number} issued";
-      "lineCount": "{count, plural, one {# line} other {# lines}}";
       "lines": "Invoice lines";
       "loggedHours": "{hours} h logged";
       "noCharge": "No charge";
@@ -586,7 +585,7 @@ type Messages = {
         "domesticRate": "Your highest VAT rate in force on the supply date";
         "noSellerProfile": "No seller profile, so no VAT is charged until you set it on the invoice";
         "noVatRate": "No VAT rate is set up in billing settings";
-        "reverseCharge": "The client is VAT-registered in another EU member state";
+        "reverseCharge": "The client's VAT ID is registered in another country";
         "sellerNotVatPayer": "Your seller profile has no VAT ID";
       };
     };

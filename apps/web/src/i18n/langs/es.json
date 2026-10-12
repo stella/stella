@@ -542,7 +542,6 @@
       "issueFailed": "El borrador se guardó, pero no se pudo emitir la factura.",
       "issueInvoice": "Emitir factura",
       "issuedTitle": "Factura {number} emitida",
-      "lineCount": "{count, plural, one {# línea} other {# líneas}}",
       "lines": "Líneas de la factura",
       "loggedHours": "{hours} h registradas",
       "noCharge": "Sin cargo",
@@ -583,7 +582,7 @@
         "domesticRate": "Su tipo de IVA más alto vigente en la fecha de devengo",
         "noSellerProfile": "No hay perfil de vendedor, así que no se cobra IVA hasta que lo indique en la factura",
         "noVatRate": "No hay ningún tipo de IVA configurado en la facturación",
-        "reverseCharge": "El cliente está registrado a efectos del IVA en otro Estado miembro de la UE",
+        "reverseCharge": "El número de IVA del cliente está registrado en otro país",
         "sellerNotVatPayer": "Su perfil de vendedor no tiene número de IVA"
       }
     },
