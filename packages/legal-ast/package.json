@@ -79,9 +79,21 @@
       "types": "./src/fixtures/cz-262-2006-section-51.ts",
       "import": "./src/fixtures/cz-262-2006-section-51.ts"
     },
+    "./court-paragraph-number": {
+      "types": "./src/court-paragraph-number.ts",
+      "import": "./src/court-paragraph-number.ts"
+    },
     "./paragraph-range": {
       "types": "./src/paragraph-range.ts",
       "import": "./src/paragraph-range.ts"
+    },
+    "./court-paragraph-numbers": {
+      "types": "./src/court-paragraph-numbers.ts",
+      "import": "./src/court-paragraph-numbers.ts"
+    },
+    "./inline-line": {
+      "types": "./src/inline-line.ts",
+      "import": "./src/inline-line.ts"
     },
     "./inline": {
       "types": "./src/inline.ts",

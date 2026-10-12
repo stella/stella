@@ -94,6 +94,7 @@ const prepareTemplate = createSafeRootHandler(
       feature: "templates.prepare",
       modelRole: "fast",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: organizationId },
       traceId: Bun.randomUUIDv7(),
     });

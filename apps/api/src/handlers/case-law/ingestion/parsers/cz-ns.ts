@@ -27,6 +27,7 @@ import type {
   TableCell,
 } from "@stll/legal-ast/document-ast";
 
+import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
@@ -76,7 +77,14 @@ export const parseNsDecisionHtml = (
 
   const { canonical, source, relatedProceedingsTable } = extractNsMetadata($);
   const rawChunks = extractRawChunks($);
-  const blocks = classifyBlocks(rawChunks, relatedProceedingsTable);
+  const blocks = courtParagraphNumbers(
+    classifyBlocks(rawChunks, relatedProceedingsTable),
+    {
+      parser: "cz-ns",
+      caseNumber: canonical.caseNumber ?? input.documentId,
+      url: input.webUrl,
+    },
+  );
   const fulltext = blocksToPlainText(blocks);
 
   validateAndLog(

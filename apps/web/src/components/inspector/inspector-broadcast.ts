@@ -313,6 +313,7 @@ const isInspectorChatTab = (value: Record<string, unknown>, label: unknown) =>
   isOptionalString(value["workspaceId"]) &&
   isStringArray(value["contextMatterIds"]) &&
   isOptionalLegalDocumentChatKey(value["activeLegalKey"]) &&
+  (value["started"] === undefined || value["started"] === true) &&
   isOptionalString(value["activeDecisionId"]) &&
   (value["activeSkill"] === undefined ||
     isActiveSkillContext(value["activeSkill"]));
@@ -461,6 +462,15 @@ type PersistedInspectorState = {
 };
 
 const toPersistedInspectorTab = (tab: InspectorTab): InspectorTab | null => {
+  // A document's chat that never got a message is not worth a reload: the
+  // document finds its conversation on the server when it opens.
+  if (
+    tab.type === "chat" &&
+    tab.activeLegalKey !== undefined &&
+    tab.started !== true
+  ) {
+    return null;
+  }
   if (tab.type === "skill-resource") {
     return null;
   }
