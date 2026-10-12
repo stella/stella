@@ -20,6 +20,7 @@ const workflow: unknown = Bun.YAML.parse(
 );
 const targets = {
   "e2e-report": ["@stll/playwright-tools", "!stella"],
+  "desktop-windows-dry-run": ["@stll/desktop...", "!stella"],
   "docker-checks": ["@stll/agent-engine...", "stella"],
   "landing-build": ["@stll/landing...", "@stll/cli...", "stella"],
   "e2e-landing": ["@stll/landing...", "@stll/cli...", "stella"],
@@ -29,7 +30,11 @@ const installFilters = (command: string) => {
   const invocations = [...lexShell(command)]
     .filter((event) => event.type === "command")
     .map(({ words }) => words.slice(words.indexOf("bun")))
-    .filter((words) => words.at(0) === "bun" && words.at(1) === "ci");
+    .filter(
+      (words) =>
+        words.at(0) === "bun" &&
+        (words.at(1) === "ci" || words.at(1) === "scripts/ci-install.ts"),
+    );
   expect(invocations).toHaveLength(1);
   const words = invocations.at(0) ?? [];
   expect(words).toContain("--frozen-lockfile");
@@ -138,6 +143,30 @@ test("the scoped closures exclude the API and ONNX runtime", () => {
         ),
       ).toEqual(["@stll/playwright-tools", "@stll/typescript-config"]);
     }
+  }
+});
+
+test("the Windows desktop install excludes unrelated application graphs", () => {
+  const installed = closure(["@stll/desktop"]);
+  for (const name of [
+    "@stll/mobile",
+    "@stll/web",
+    "@stll/api",
+    "expo",
+    "expo-router",
+    "react-native",
+  ]) {
+    expect(installed.has(name), name).toBe(false);
+  }
+  for (const name of [
+    "@stll/ui",
+    "@tauri-apps/cli",
+    "@tailwindcss/vite",
+    "@vitejs/plugin-react",
+    "vite",
+    "react",
+  ]) {
+    expect(installed.has(name), name).toBe(true);
   }
 });
 
