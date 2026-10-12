@@ -510,33 +510,61 @@ if (!databaseUrl || !runPostgres) {
             afterText: "**Original** answer: café\n\nNext paragraph.",
             content: original,
           });
-          const historicalAuthorId = mintAuthProviderId<"user">();
-          const historicalAuthorOrganizationId =
-            mintAuthProviderId<"organization">();
+          expect(older?.nextCursor).toBeNull();
+        } finally {
+          await fixture.cleanUp();
+        }
+      });
+    });
+
+    test("revision actor names require current membership in the chat organization, not matter membership", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const db = openClient().db;
+        const fixture = await seedFixture(db);
+        const historicalAuthorId = mintAuthProviderId<"user">();
+        const otherOrganizationId = mintAuthProviderId<"organization">();
+        try {
           await db.insert(user).values({
             id: historicalAuthorId,
-            name: "Former revision author",
+            name: "Historical revision author",
             email: `${historicalAuthorId}@example.test`,
           });
-          try {
-            await db.insert(organization).values({
-              id: historicalAuthorOrganizationId,
-              name: "Historical author organization",
-              slug: historicalAuthorOrganizationId,
-              createdAt: new Date(),
+          await db.insert(organization).values({
+            id: otherOrganizationId,
+            name: "Other author organization",
+            slug: otherOrganizationId,
+            createdAt: new Date(),
+          });
+          await db.insert(member).values({
+            id: mintAuthProviderIdValue(),
+            organizationId: fixture.organizationId,
+            userId: historicalAuthorId,
+            role: "member",
+            createdAt: new Date(),
+          });
+          // Snapshots are immutable under forced RLS, even for the database
+          // owner. Seed historical attribution at insertion, never by UPDATE.
+          await fixture.scoped(db)(async (tx) => {
+            await tx
+              .update(chatMessages)
+              .set({ content: edited, revision: 1 })
+              .where(eq(chatMessages.id, fixture.messageId));
+            await tx.insert(chatMessageRevisions).values({
+              id: createSafeId<"chatMessageRevision">(),
+              messageId: fixture.messageId,
+              threadId: fixture.threadId,
+              workspaceId: fixture.workspaceId,
+              revision: 0,
+              content: original,
+              edit: acceptedChange.edit,
+              createdBy: historicalAuthorId,
             });
-            await db.insert(member).values({
-              id: mintAuthProviderIdValue(),
-              organizationId: historicalAuthorOrganizationId,
-              userId: historicalAuthorId,
-              role: "member",
-              createdAt: new Date(),
-            });
-            await db
-              .update(chatMessageRevisions)
-              .set({ createdBy: historicalAuthorId })
-              .where(eq(chatMessageRevisions.messageId, fixture.messageId));
-            const historicalPage = await fixture.scoped(db)(
+          });
+          expect((await fixture.observe()).revisions.at(0)?.createdBy).toBe(
+            historicalAuthorId,
+          );
+          const readHistory = async () =>
+            await fixture.scoped(db)(
               async (tx) =>
                 await readChatMessageRevisionsOnTx({
                   tx,
@@ -548,19 +576,53 @@ if (!databaseUrl || !runPostgres) {
                   limit: 1,
                 }),
             );
-            expect(historicalPage?.items.at(0)?.actorName).toBeNull();
-            expect(JSON.stringify(historicalPage)).not.toContain(
-              "Former revision author",
+          // This author has no matter assignment, but is in the organization.
+          expect((await readHistory())?.items.at(0)).toMatchObject({
+            createdBy: historicalAuthorId,
+            actorName: "Historical revision author",
+          });
+          await db
+            .delete(member)
+            .where(
+              and(
+                eq(member.userId, historicalAuthorId),
+                eq(member.organizationId, fixture.organizationId),
+              ),
             );
-          } finally {
-            await db
-              .delete(organization)
-              .where(eq(organization.id, historicalAuthorOrganizationId));
-            await db.delete(user).where(eq(user.id, historicalAuthorId));
-          }
-          expect(older?.nextCursor).toBeNull();
+          const removedMemberPage = await readHistory();
+          expect(removedMemberPage?.items.at(0)).toMatchObject({
+            createdBy: historicalAuthorId,
+            actorName: null,
+          });
+          expect(JSON.stringify(removedMemberPage)).not.toContain(
+            "Historical revision author",
+          );
+          await db.insert(member).values({
+            id: mintAuthProviderIdValue(),
+            organizationId: otherOrganizationId,
+            userId: historicalAuthorId,
+            role: "member",
+            createdAt: new Date(),
+          });
+          const otherOrganizationPage = await readHistory();
+          expect(otherOrganizationPage?.items.at(0)).toMatchObject({
+            createdBy: historicalAuthorId,
+            actorName: null,
+          });
+          expect(JSON.stringify(otherOrganizationPage)).not.toContain(
+            "Historical revision author",
+          );
+          await db.delete(user).where(eq(user.id, historicalAuthorId));
+          expect((await readHistory())?.items.at(0)).toMatchObject({
+            createdBy: null,
+            actorName: null,
+          });
         } finally {
           await fixture.cleanUp();
+          await db
+            .delete(organization)
+            .where(eq(organization.id, otherOrganizationId));
+          await db.delete(user).where(eq(user.id, historicalAuthorId));
         }
       });
     });
