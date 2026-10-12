@@ -73,6 +73,9 @@ env:
   # on EBS metrics or a wall-clock busy window.
   DB_LOAD_GATE_EBS_SIGNAL: disabled
   DB_LOAD_GATE_BUSY_WINDOWS: "[]"
+  # Plain logs: no ANSI escapes for readers that fetch them as text.
+  NO_COLOR: "1"
+  FORCE_COLOR: "0"
 
 jobs:
   ci-plan:
@@ -3903,6 +3906,10 @@ jobs:
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bash scripts/retry.test.sh
 
+      - name: Test CI failure digest
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/ci-failure-digest.test.ts
+
       - name: Test base image pull script
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bash scripts/pull-base-images.test.sh
@@ -4199,7 +4206,12 @@ jobs:
           plan="$RUNNER_TEMP/test-plan-$SHARD.json"
           output="$RUNNER_TEMP/test-output-$SHARD.log"
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
-          bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output"
+          # On failure the log ends with the failing tests and their errors.
+          bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output" || {
+            status=$?
+            bun scripts/ci-failure-digest.ts tail "$output" || true
+            exit "$status"
+          }
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
 
       - name: Upload API test timings
@@ -4233,7 +4245,12 @@ jobs:
           plan="$RUNNER_TEMP/test-plan-$SHARD.json"
           output="$RUNNER_TEMP/test-output-$SHARD.log"
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
-          bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output"
+          # On failure the log ends with the failing tests and their errors.
+          bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output" || {
+            status=$?
+            bun scripts/ci-failure-digest.ts tail "$output" || true
+            exit "$status"
+          }
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
 
       - name: Upload test diagnostics
@@ -8673,6 +8690,8 @@ jobs:
           sparse-checkout: |
             scripts/gh-retry.sh
             scripts/retry.sh
+            scripts/ci-failure-digest.ts
+            /package.json
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
@@ -9038,6 +9057,48 @@ jobs:
               echo "Not every planned CI job succeeded in this run; recording no completion evidence."
             fi
           fi
+
+      # Failure digest: one record per failed step (job, step, kind, first
+      # error lines with file:line) as annotations on this check run, a job
+      # summary and the `ci-failures` artifact. Failed steps come from the
+      # jobs API, so output a passing step prints on purpose is never listed.
+      # Reporting only: the verdict above is unchanged.
+      - name: Setup Bun for the failure digest
+        if: failure() && steps.outcome.outcome == 'failure'
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: false
+          bun-version-file: .workflow-tooling/package.json
+
+      - name: Digest failed steps
+        if: failure() && steps.outcome.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          dir="$RUNNER_TEMP/ci-failures"
+          mkdir -p "$dir/logs"
+          if ! bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/$REPO/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100" > "$dir/jobs.json"; then
+            echo "Failure digest unavailable: the jobs lookup failed."
+            exit 0
+          fi
+          # Logs of the first 20 failed jobs; a missing log is reported as such.
+          jq -r '[.[].jobs[] | select(.conclusion == "failure") | .id] | .[:20][]' "$dir/jobs.json" |
+            while read -r id; do
+              [[ "$id" =~ ^[0-9]+$ ]] || continue
+              bash "$GH_RETRY_SCRIPT" api "repos/$REPO/actions/jobs/$id/logs" > "$dir/logs/$id.log" || rm -f "$dir/logs/$id.log"
+            done
+          bun .workflow-tooling/scripts/ci-failure-digest.ts digest --jobs "$dir/jobs.json" --logs "$dir/logs" --json "$dir/ci-failures.json" --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload failure digest
+        if: failure() && steps.outcome.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ci-failures
+          overwrite: true
+          path: ${{ runner.temp }}/ci-failures/ci-failures.json
+          retention-days: 7
+          if-no-files-found: ignore
 
       # Evaluate the variable when this final job starts, after the suites.
       - name: Check out the merge hold rule

@@ -100,25 +100,32 @@ assert_file() {
 
 echo "Running retry.sh tests..."
 
+# The script's own output is captured: a passing test must not emit workflow
+# commands (annotations) into the CI log it runs in.
 setup_case
-PATH="$dir/bin:$PATH" bash "$SCRIPT" flaky ci --ignore-scripts
+PATH="$dir/bin:$PATH" bash "$SCRIPT" flaky ci --ignore-scripts > "$dir/output" 2>&1
 assert_file "passes arguments through to the command" "$FAKE_ARGS_FILE" "ci --ignore-scripts"
 assert_file "does not sleep after first-attempt success" "$FAKE_SLEEP_ARGS_FILE" ""
+assert_file "prints nothing after first-attempt success" "$dir/output" ""
 teardown_case
 
 setup_case
 export FAKE_SUCCEED_ON=4
-PATH="$dir/bin:$PATH" RETRY_ATTEMPTS=4 bash "$SCRIPT" flaky ci
+PATH="$dir/bin:$PATH" RETRY_ATTEMPTS=4 bash "$SCRIPT" flaky ci > "$dir/output" 2>&1
 assert_file "retries until the command succeeds" "$FAKE_COUNT_FILE" "4"
 assert_file "repeats the last delay once the list runs out" "$FAKE_SLEEP_ARGS_FILE" "15
 45
 45"
+assert_file "reports a recovered command once" "$dir/output" "retry.sh: attempt 1/4 failed (exit 7); retrying in 15s: flaky ci
+retry.sh: attempt 2/4 failed (exit 7); retrying in 45s: flaky ci
+retry.sh: attempt 3/4 failed (exit 7); retrying in 45s: flaky ci
+::warning::flaky ci succeeded on attempt 4/4"
 teardown_case
 
 setup_case
 export FAKE_SUCCEED_ON=99
 export FAKE_FAILURE_STATUS=23
-PATH="$dir/bin:$PATH" RETRY_DELAYS_SECONDS=0 bash "$SCRIPT" flaky ci \
+PATH="$dir/bin:$PATH" RETRY_DELAYS_SECONDS=0 bash "$SCRIPT" flaky ci > "$dir/output" 2>&1 \
   && actual=0 || actual=$?
 if [[ "$actual" == "23" ]]; then
   PASS=$((PASS + 1))
@@ -129,6 +136,9 @@ else
   printf '  FAIL  preserves the final command status (got %s)\n' "$actual"
 fi
 assert_file "stops after configured attempts" "$FAKE_COUNT_FILE" "3"
+assert_file "reports an exhausted command once" "$dir/output" "retry.sh: attempt 1/3 failed (exit 23); retrying in 0s: flaky ci
+retry.sh: attempt 2/3 failed (exit 23); retrying in 0s: flaky ci
+::error::flaky ci failed after 3 attempts (exit 23)"
 teardown_case
 
 run_case "rejects invalid attempts" 2 env RETRY_ATTEMPTS=0 bash "$SCRIPT" flaky ci
