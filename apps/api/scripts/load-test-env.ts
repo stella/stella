@@ -8,8 +8,6 @@ class InvalidTestEnvironmentError extends TaggedError(
   message: string;
 }> {}
 
-const TEST_ENV_KEYS = ["NODE_ENV", "DATABASE_URL", "REDIS_URL"] as const;
-
 /** The generated test configuration takes precedence over Bun's automatic .env. */
 export const loadTestEnv = (filePath: string) => {
   if (!existsSync(filePath)) {
@@ -17,16 +15,20 @@ export const loadTestEnv = (filePath: string) => {
   }
   const source = readFileSync(filePath, "utf-8");
   const values = parseEnv(source);
-  if (
-    values["NODE_ENV"] !== "test" ||
-    TEST_ENV_KEYS.some((key) => !values[key])
-  ) {
+  const nodeEnv = values["NODE_ENV"];
+  const databaseUrl = values["DATABASE_URL"];
+  const redisUrl = values["REDIS_URL"];
+  if (nodeEnv !== "test" || !databaseUrl || !redisUrl) {
     throw new InvalidTestEnvironmentError({
       message:
         ".env.test must define NODE_ENV=test and nonempty DATABASE_URL and REDIS_URL.",
     });
   }
-  for (const key of TEST_ENV_KEYS) {
-    process.env[key] = values[key];
+  for (const [key, value] of Object.entries({
+    NODE_ENV: nodeEnv,
+    DATABASE_URL: databaseUrl,
+    REDIS_URL: redisUrl,
+  })) {
+    process.env[key] = value;
   }
 };

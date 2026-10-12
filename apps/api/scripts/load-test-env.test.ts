@@ -129,7 +129,7 @@ for (const runner of ["run-postgres-tests.ts", "run-valkey-tests.ts"]) {
   });
 }
 
-test("migration picks up test configuration while retaining the explicit EBS guard", async () => {
+test("migration preserves the deployment environment despite a local test file", async () => {
   await withFixture(async (directory) => {
     const entrypoint = path.join(directory, "src/db/migrate.ts");
     await copyFile(path.join(apiRoot, "src/db/migrate.ts"), entrypoint);
@@ -147,7 +147,7 @@ test("migration picks up test configuration while retaining the explicit EBS gua
     const result = await runEntrypoint({
       directory,
       entrypoint,
-      expected: generatedEnvironment,
+      expected: inheritedEnvironment,
     });
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("EbsConfigurationMissingError");
@@ -156,12 +156,15 @@ test("migration picks up test configuration while retaining the explicit EBS gua
     const source = await Bun.file(entrypoint).text();
     await Bun.write(
       entrypoint,
-      source.replace(/^loadTestEnv\([^\n]+\);$/mu, ""),
+      `import { loadTestEnv } from "../../scripts/load-test-env";\n${source.replace(
+        "const ebs =",
+        'loadTestEnv(new URL("../../.env.test", import.meta.url).pathname);\nconst ebs =',
+      )}`,
     );
     const mutation = await runEntrypoint({
       directory,
       entrypoint,
-      expected: generatedEnvironment,
+      expected: inheritedEnvironment,
     });
     expect(mutation.stdout).not.toContain("test environment verified");
     expect(mutation.stderr).toContain("AssertionError");

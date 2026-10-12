@@ -57,8 +57,8 @@ setDefaultTimeout(60_000);
 
 const runMigrateEntrypoint = async (environment: Record<string, string>) => {
   await Bun.write(EMPTY_ENV_FILE, "");
-  // Keep the generated .env.test in a developer checkout out of this scrubbed
-  // environment, including its database URL.
+  // An adjacent disposable test configuration must not override the explicit
+  // deployment database or satisfy its required load-gate setting.
   const directory = await mkdtemp(
     nodePath.join(nodeOs.tmpdir(), "migrate-env-"),
   );
@@ -66,9 +66,9 @@ const runMigrateEntrypoint = async (environment: Record<string, string>) => {
   await mkdir(nodePath.join(directory, "scripts"));
   const entrypoint = nodePath.join(directory, "src/db/migrate.ts");
   await copyFile(nodePath.join(API_ROOT, "src/db/migrate.ts"), entrypoint);
-  await copyFile(
-    nodePath.join(API_ROOT, "scripts/load-test-env.ts"),
-    nodePath.join(directory, "scripts/load-test-env.ts"),
+  await Bun.write(
+    nodePath.join(directory, ".env.test"),
+    "NODE_ENV=test\nDATABASE_URL=postgres://wrong-test-database.invalid/cloud_test\nREDIS_URL=redis://127.0.0.1:16379\nDB_LOAD_GATE_EBS_SIGNAL=disabled\n",
   );
   for (const dependency of ["db-url.ts", "env-db-load-gate.ts", "lib"]) {
     await symlink(
