@@ -511,7 +511,11 @@ test("only the final job can publish the main/heavy status", () => {
     .filter(([, job]) => job.permissions?.["statuses"] === "write")
     .map(([name]) => name);
   expect(jobsWithStatusPermission).toEqual(["status"]);
-  expect(mainWorkflow.jobs.status.permissions).toEqual({ statuses: "write" });
+  expect(mainWorkflow.jobs.status.permissions).toEqual({
+    contents: "read",
+    actions: "read",
+    statuses: "write",
+  });
   expect(mainWorkflow.jobs.status.needs).toEqual(["validate", "suites"]);
   const publication = mainWorkflow.jobs.status.steps?.find(
     ({ name }) => name === "Publish heavy conclusion",

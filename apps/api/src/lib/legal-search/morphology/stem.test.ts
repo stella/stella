@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import { readConformanceVocabulary } from "@/api/lib/legal-search/morphology/snowball/__fixtures__/vocabulary";
 import { CzechStemmer } from "@/api/lib/legal-search/morphology/snowball/czech.gen";
 import { PolishStemmer } from "@/api/lib/legal-search/morphology/snowball/polish.gen";
@@ -216,13 +218,13 @@ describe("stemLegalTerm", () => {
     ])[];
 
     for (const [word, language, expected] of vectors) {
-      const decomposed = word.normalize("NFD");
+      const decomposed = normalizeUnicode(word, "NFD");
 
       // The fixture must actually be decomposed, or this asserts nothing.
-      expect<boolean>(decomposed === word.normalize("NFC")).toBe(false);
-      expect<string>(stemLegalTerm(word.normalize("NFC"), language)).toBe(
-        expected,
-      );
+      expect<boolean>(decomposed === normalizeUnicode(word, "NFC")).toBe(false);
+      expect<string>(
+        stemLegalTerm(normalizeUnicode(word, "NFC"), language),
+      ).toBe(expected);
       expect<string>(stemLegalTerm(decomposed, language)).toBe(expected);
     }
   });
@@ -235,8 +237,10 @@ describe("stemLegalTerm", () => {
     const input = "\u{1D1BB}";
 
     expect<number>(input.length).toBe(2);
-    expect<number>(input.normalize("NFC").length).toBe(4);
-    expect<string>(stemLegalTerm(input, "cs")).toBe(input.normalize("NFC"));
+    expect<number>(normalizeUnicode(input, "NFC").length).toBe(4);
+    expect<string>(stemLegalTerm(input, "cs")).toBe(
+      normalizeUnicode(input, "NFC"),
+    );
   });
 
   test("the German sharp s expands to ss, so a stem can outgrow its term", () => {
@@ -266,8 +270,8 @@ describe("stemLegalTerm", () => {
       const divergent = pairs
         .filter(
           ({ word }) =>
-            stemLegalTerm(word.normalize("NFD"), language) !==
-            stemLegalTerm(word.normalize("NFC"), language),
+            stemLegalTerm(normalizeUnicode(word, "NFD"), language) !==
+            stemLegalTerm(normalizeUnicode(word, "NFC"), language),
         )
         .slice(0, 10)
         .map(({ word }) => word);
@@ -325,7 +329,7 @@ describe("remembered stems", () => {
       for (const pass of [1, 2]) {
         const divergent = pairs
           .filter(({ word }) => {
-            const normalized = word.normalize("NFC").toLowerCase();
+            const normalized = normalizeUnicode(word, "NFC").toLowerCase();
             const expected = stemmer.stem(normalized);
             return (
               stemLegalTerm(word, language) !==
@@ -347,7 +351,7 @@ describe("remembered stems", () => {
     const stemmer = new CzechStemmer();
     for (const length of [8, 66, 67, 5000]) {
       const term = `${"rozhodnut".repeat(length)}ími`.slice(0, length);
-      const normalized = term.normalize("NFC").toLowerCase();
+      const normalized = normalizeUnicode(term, "NFC").toLowerCase();
       const expected = stemmer.stem(normalized);
 
       expect<[number, string]>([length, stemLegalTerm(term, "cs")]).toEqual([

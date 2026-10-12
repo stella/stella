@@ -4,6 +4,7 @@ import type { AIProvider, TanStackAIProvider } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
 import type { VerificationRunErrorCode } from "@/api/lib/lists/verification/contract";
+import type { RootPoolReport } from "@/api/lib/observability/root-pool-window";
 import type { BudgetName } from "@/api/lib/rate-limit/budget-observability";
 import type { PublicCorpusClass } from "@/api/public-corpus-policy";
 /**
@@ -150,9 +151,11 @@ const EVENT_LOOP_DELAY_METRIC = {
 export const emitEventLoopDelayMetric = ({
   maxMs,
   p99Ms,
+  rootPool,
 }: {
   maxMs: number;
   p99Ms: number;
+  rootPool?: RootPoolReport;
 }): void => {
   writeMetricLine({
     _aws: {
@@ -168,6 +171,8 @@ export const emitEventLoopDelayMetric = ({
         },
       ],
     },
+    // Plain log properties; deliberately absent from CloudWatchMetrics.
+    ...(rootPool === undefined ? {} : { rootPool }),
     [EVENT_LOOP_DELAY_METRIC.max]: maxMs,
     [EVENT_LOOP_DELAY_METRIC.p99]: p99Ms,
   });

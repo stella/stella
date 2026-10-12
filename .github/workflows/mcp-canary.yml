@@ -129,7 +129,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
-          toolchain: stable
+          toolchain: 1.99.0
           targets: aarch64-apple-darwin
 
       - name: Smoke native desktop transport against hosted API

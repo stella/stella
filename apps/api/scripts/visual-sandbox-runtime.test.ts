@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 
 import { inspectBrowserRuntimeSafety } from "@stll/scripts/src/browser-runtime-safety";
 
+import { VISUAL_BLOCKED_GLOBALS } from "../src/handlers/visual-sandbox/browser/isolation";
 import { escapeVisualScript } from "../src/handlers/visual-sandbox/srcdoc";
 import {
   VISUAL_RUNTIME_BUILD_OPTIONS,
@@ -15,6 +16,14 @@ const runtimePath = new URL(
 );
 
 describe("visual sandbox runtime asset", () => {
+  test("embeds every blocked global from the source inventory", () => {
+    const runtime = readFileSync(runtimePath, "utf-8");
+    const missing = VISUAL_BLOCKED_GLOBALS.filter(
+      (name) => !runtime.includes(JSON.stringify(name)),
+    );
+    expect(missing).toEqual([]);
+  });
+
   test("stays within the guest runtime byte budget", () => {
     const bytes = readFileSync(runtimePath).byteLength;
     expect(bytes).toBeLessThanOrEqual(VISUAL_RUNTIME_BYTE_BUDGET);
