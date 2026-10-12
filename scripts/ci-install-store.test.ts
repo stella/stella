@@ -367,7 +367,6 @@ test("the ci-install composite restores and saves only the exact sealed cache", 
   );
   expect(save["if"]).toBe(`\${{ github.ref == 'refs/heads/main' }}`);
   expect(stepsByOrder).toEqual(stepsByOrder.toSorted((a, b) => a - b));
-  expect(restore["timeout-minutes"]).toBe(2);
 
   const upload = steps.find(
     (entry) =>
@@ -382,7 +381,10 @@ test("the ci-install composite restores and saves only the exact sealed cache", 
   );
   expect(uploadInputs.path).toBe(`\${{ runner.temp }}/bun-install/*.log`);
   expect(uploadInputs["retention-days"]).toBe(7);
-  expect(install["timeout-minutes"]).toBe(5);
+  for (const entry of steps) {
+    // Composite metadata supports caller timeouts, not nested step timeouts.
+    expect(entry).not.toHaveProperty("timeout-minutes");
+  }
 });
 
 test("the manual install-cache benchmark is dispatch-only and reports measured phases", () => {
