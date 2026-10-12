@@ -6909,6 +6909,76 @@ describe("decision passage court numbers", () => {
     expect(live).toBe(expected);
   });
 
+  test("a href split across chunk events reaches the stamp whole", async () => {
+    const chunks = await collectChunks(
+      transformPersistenceVisibleStream({
+        boundary: { type: "raw" },
+        initialRestorationPlaceholders: new Set(),
+        restorationPairs: [],
+        stamper: knownDecisionPassageStamper(
+          new Map([[OPEN_ID, new Map([["p-12", 7]])]]),
+        ),
+        source: streamChunks([
+          {
+            type: EventType.TEXT_MESSAGE_CHUNK,
+            messageId: "provider-message",
+            role: "assistant",
+            delta: `As [held](${passage(OPEN_ID, "p-12")}`,
+          },
+          { type: EventType.TEXT_MESSAGE_CHUNK, delta: ":3) and [it](#ste" },
+          {
+            type: EventType.TEXT_MESSAGE_CHUNK,
+            messageId: "provider-message",
+            delta: `lla-decision-passage=${OPEN_ID}:p-1`,
+          },
+          { type: EventType.TEXT_MESSAGE_CHUNK, delta: "2:9) ends." },
+          {
+            type: EventType.REASONING_MESSAGE_CHUNK,
+            messageId: "provider-reasoning",
+            delta: `[see](${passage(OPEN_ID, "p-12")}`,
+          },
+          {
+            type: EventType.REASONING_MESSAGE_CHUNK,
+            messageId: "provider-reasoning",
+            delta: ")",
+          },
+          ...normalizeStreamChunk({
+            type: EventType.RUN_FINISHED,
+            finishReason: "stop",
+            runId: "run-1",
+            threadId: "thread-1",
+          }),
+        ]),
+      }),
+    );
+    const text = chunks.flatMap((chunk) =>
+      chunk.type === EventType.TEXT_MESSAGE_CHUNK ? [chunk] : [],
+    );
+    const reasoning = chunks.flatMap((chunk) =>
+      chunk.type === EventType.REASONING_MESSAGE_CHUNK ? [chunk] : [],
+    );
+
+    expect(text.map((chunk) => chunk.delta).join("")).toBe(
+      `As [held](${passage(OPEN_ID, "p-12:7")}) and [it](${passage(OPEN_ID, "p-12:7")}) ends.`,
+    );
+    expect(text.every((chunk) => chunk.messageId === "provider-message")).toBe(
+      true,
+    );
+    // A message's held tail is released before the next message begins.
+    expect(reasoning.map((chunk) => chunk.delta).join("")).toBe(
+      `[see](${passage(OPEN_ID, "p-12:7")})`,
+    );
+    expect(
+      chunks.findIndex(
+        (chunk) => chunk.type === EventType.REASONING_MESSAGE_CHUNK,
+      ),
+    ).toBeGreaterThan(
+      chunks.findLastIndex(
+        (chunk) => chunk.type === EventType.TEXT_MESSAGE_CHUNK,
+      ),
+    );
+  });
+
   test("a snapshot's answers are stamped, in AG-UI content and UI parts alike, and nothing else is", async () => {
     const cited = `[as held](${passage(EARLIER_ID, "p-4:9")})`;
     const stamped = `[as held](${passage(EARLIER_ID, "p-4:2")})`;

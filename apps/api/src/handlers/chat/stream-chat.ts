@@ -3246,8 +3246,8 @@ const stampableChunk = (chunk: StreamChunk): StampableChunk | null => {
         text: chunk.delta,
         rewrite: (stamp) => ({ ...chunk, delta: stamp(chunk.delta) }),
       };
-    // Chunk events reach this stream unbuffered, so a citation split across
-    // two of them is left as written rather than stamped in halves.
+    // Chunk events are held per message like content events, so a citation
+    // split across two of them reaches the stamp whole.
     case EventType.TEXT_MESSAGE_CHUNK:
     case EventType.REASONING_MESSAGE_CHUNK: {
       const { delta } = chunk;
@@ -3462,6 +3462,12 @@ type OutgoingChunkTransformerOptions = {
   holdStellaHrefs?: boolean | undefined;
 };
 
+/** An event whose text arrives in message chunks without an END of its own. */
+type TextLikeChunk = Extract<
+  StreamChunk,
+  { type: EventType.TEXT_MESSAGE_CHUNK | EventType.REASONING_MESSAGE_CHUNK }
+>;
+
 const createOutgoingChunkTransformer = ({
   boundary,
   initialRestorationPlaceholders,
@@ -3618,7 +3624,42 @@ const createOutgoingChunkTransformer = ({
       : Math.min(deanonymisable, getResolvedTextPrefixLength(buffer));
   };
 
-  const transform = (chunk: PublicStreamChunk): StreamChunk[] => {
+  // Chunk events carry no END of their own: a message's chunks run until a
+  // different message or another event begins. Their text is held like the
+  // content events' so the stamp never sees half a `#stella-` href, and the
+  // held tail is released when the message ends.
+  let openChunkMessage: { first: TextLikeChunk; text: string } | null = null;
+
+  const closeChunkMessage = (): StreamChunk[] => {
+    if (openChunkMessage === null) {
+      return [];
+    }
+    const { first, text } = openChunkMessage;
+    openChunkMessage = null;
+    return text.length === 0 ? [] : [{ ...first, delta: text }];
+  };
+
+  const holdChunkText = (chunk: TextLikeChunk): StreamChunk[] => {
+    const continues =
+      openChunkMessage !== null &&
+      openChunkMessage.first.type === chunk.type &&
+      (chunk.messageId === undefined ||
+        chunk.messageId === openChunkMessage.first.messageId);
+    const closed = continues ? [] : closeChunkMessage();
+    const first = openChunkMessage?.first ?? chunk;
+    if (chunk.delta === undefined) {
+      openChunkMessage = { first, text: openChunkMessage?.text ?? "" };
+      return [...closed, chunk];
+    }
+    const buffer = `${openChunkMessage?.text ?? ""}${chunk.delta}`;
+    const prefixLength = getResolvedTextPrefixLength(buffer);
+    openChunkMessage = { first, text: buffer.slice(prefixLength) };
+    return prefixLength === 0
+      ? closed
+      : [...closed, { ...first, delta: buffer.slice(0, prefixLength) }];
+  };
+
+  const transformChunk = (chunk: PublicStreamChunk): StreamChunk[] => {
     if (chunk.type === EventType.TOOL_CALL_START) {
       const toolName = toolCallNameOf(chunk);
       if (toolName !== undefined) {
@@ -3823,8 +3864,15 @@ const createOutgoingChunkTransformer = ({
     return [chunk];
   };
 
+  const transform = (chunk: PublicStreamChunk): StreamChunk[] =>
+    holdStellaHrefs &&
+    (chunk.type === EventType.TEXT_MESSAGE_CHUNK ||
+      chunk.type === EventType.REASONING_MESSAGE_CHUNK)
+      ? holdChunkText(chunk)
+      : [...closeChunkMessage(), ...transformChunk(chunk)];
+
   transform.flush = (): StreamChunk[] => {
-    const chunks: StreamChunk[] = [];
+    const chunks: StreamChunk[] = [...closeChunkMessage()];
     for (const [key, value] of buffers) {
       if (key.startsWith("text:")) {
         chunks.push(
