@@ -622,15 +622,25 @@ const frameReader = async (
       // The margin's current-section header sticks to the top of the
       // scroller; a note under it reads as cut.
       const aside = column.parentElement?.querySelector("aside");
-      const stuck = aside
+      // The header's own box has no height (it sits out of the flow), so
+      // what it covers is the bottom of everything drawn inside it.
+      const stuckBottoms = aside
         ? [...aside.querySelectorAll<HTMLElement>("*")]
             .filter(
-              (element) => getComputedStyle(element).position === "sticky",
+              (element) =>
+                getComputedStyle(element).position === "sticky" &&
+                element.getBoundingClientRect().top <= top + 1,
             )
-            .map((element) => element.getBoundingClientRect())
-            .filter((box) => box.height > 0 && box.top <= top + 1)
+            .map((element) =>
+              Math.max(
+                element.getBoundingClientRect().bottom,
+                ...[...element.querySelectorAll("*")].map(
+                  (child) => child.getBoundingClientRect().bottom,
+                ),
+              ),
+            )
         : [];
-      const notesTop = Math.max(top, ...stuck.map((box) => box.bottom));
+      const notesTop = Math.max(top, ...stuckBottoms);
       const targetBox = targetElement.getBoundingClientRect();
       const targetBlock = blocks.findLastIndex(
         (box) => box.top <= targetBox.top + 1,
@@ -747,7 +757,28 @@ const expectNoMarginNoteCut = async (page: Page, clip: CaptureClip) => {
               return ["the reader's scroller is missing"];
             }
             const frame = scroller.getBoundingClientRect();
-            const top = Math.max(frame.top, band.top);
+            // A note under the margin's sticky section header is as cut as
+            // one under the frame's edge: the header's contents bound it.
+            const aside = scroller
+              .querySelector('[data-slot="reader-document-column"]')
+              ?.parentElement?.querySelector("aside");
+            const stuckBottoms = aside
+              ? [...aside.querySelectorAll<HTMLElement>("*")]
+                  .filter(
+                    (element) =>
+                      getComputedStyle(element).position === "sticky" &&
+                      element.getBoundingClientRect().top <= frame.top + 1,
+                  )
+                  .map((element) =>
+                    Math.max(
+                      element.getBoundingClientRect().bottom,
+                      ...[...element.querySelectorAll("*")].map(
+                        (child) => child.getBoundingClientRect().bottom,
+                      ),
+                    ),
+                  )
+              : [];
+            const top = Math.max(frame.top, band.top, ...stuckBottoms);
             const bottom = Math.min(frame.bottom, band.bottom);
             const cut: string[] = [];
             for (const note of document.querySelectorAll(
