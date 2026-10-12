@@ -388,6 +388,47 @@ describe("workspace hygiene", () => {
     expect(validateWorkspaceRoot(rootDir, LOCAL)).toEqual([]);
   });
 
+  test("accepts the API compiler aggregate while rejecting arbitrary wrappers", () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: { devDependencies: { turbo: "2.10.3" } },
+      webPackageJson: { name: "@stll/web" },
+    });
+    mkdirSync(path.join(rootDir, "apps/api/src"), { recursive: true });
+    writeFileSync(
+      path.join(rootDir, "apps/api/src/value.ts"),
+      "export type Value = string;\n",
+    );
+    writeFileSync(
+      path.join(rootDir, "apps/api/tsconfig.src.json"),
+      JSON.stringify({ include: ["src/**/*.ts"] }),
+    );
+    const filename = path.join(rootDir, "apps/api/package.json");
+    const writeManifest = (typecheck: string) =>
+      writeFileSync(
+        filename,
+        JSON.stringify({
+          name: "@stll/api",
+          scripts: {
+            typecheck,
+            "typecheck:src":
+              "bun check --no-pretty --all --project=tsconfig.src.json",
+          },
+        }),
+      );
+    writeManifest("bun ../../packages/scripts/src/api-typecheck.ts");
+    expect(
+      validateWorkspaceRoot(rootDir, LOCAL).some((issue) =>
+        issue.message.startsWith("scripts.typecheck must use"),
+      ),
+    ).toBe(false);
+    writeManifest("bun scripts/unchecked-wrapper.ts");
+    expect(validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
+      path: "apps/api/package.json",
+      message:
+        "scripts.typecheck must use bun check --no-pretty --all --project=<tsconfig>; found bun scripts/unchecked-wrapper.ts",
+    });
+  });
+
   test("rejects workspace scripts that shadow Bun's checker", () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: { devDependencies: { turbo: "2.10.3" } },

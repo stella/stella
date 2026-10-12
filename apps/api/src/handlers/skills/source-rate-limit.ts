@@ -11,7 +11,7 @@ import type {
   RateLimitContext,
   RateLimitGenerator,
   RateLimitOptions,
-} from "@/api/lib/rate-limit/rate-limit";
+} from "@/api/lib/rate-limit/contracts";
 import {
   createRedisRateLimit,
   createRedisRateLimitRequestKey,
