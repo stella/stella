@@ -42,7 +42,7 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
           url: v.nullable(publicUrl()),
           source_url: v.optional(publicUrl()),
           caseNumber: v.string(),
-          caseNumberType: caseNumberTypeProjection,
+          caseNumberType: v.optional(caseNumberTypeProjection),
           citationAuthority: v.number(),
           court: v.string(),
           decisionDate: v.nullable(v.string()),
