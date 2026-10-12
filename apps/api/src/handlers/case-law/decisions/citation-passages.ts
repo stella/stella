@@ -639,8 +639,7 @@ export const completeDecisionCitations = async ({
     const evidence =
       gated.evidence.type === "not-granted"
         ? null
-        : (evidenceByCitation.get(String(item.id)) ??
-          panic("Missing polarity evidence for a gated citation"));
+        : (evidenceByCitation.get(String(item.id)) ?? null);
     const textFields = citationTextFields({
       text,
       textWithheldReason,
@@ -653,7 +652,9 @@ export const completeDecisionCitations = async ({
       evidence === null
         ? {
             evidenceIncompleteReason:
-              CITATION_EVIDENCE_INCOMPLETE_REASON.MISSING_PRIVILEGES,
+              gated.evidence.type === "not-granted"
+                ? CITATION_EVIDENCE_INCOMPLETE_REASON.MISSING_PRIVILEGES
+                : CITATION_EVIDENCE_INCOMPLETE_REASON.MISSING_EVIDENCE,
             citedPart: null,
             polarityEvidence: null,
           }
@@ -670,10 +671,16 @@ export const completeDecisionCitations = async ({
     return {
       ...item,
       ...evidenceFields,
-      citationText: textFields.citationText,
+      citationText:
+        gated.evidence.type === "ready" && evidence === null
+          ? null
+          : textFields.citationText,
       textIncompleteReason: textFields.textIncompleteReason,
       textWithheldReason,
-      passage: textFields.passage,
+      passage:
+        gated.evidence.type === "ready" && evidence === null
+          ? null
+          : textFields.passage,
     };
   });
 
