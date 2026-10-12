@@ -13,6 +13,7 @@ import {
   findLocation,
   frameLocation,
   inert,
+  isFailedJob,
   MAX_ANNOTATIONS,
   MAX_LINE_WIDTH,
   MAX_LINES_PER_STEP,
@@ -480,9 +481,103 @@ test("a failed step maps to the segment starting closest to it", () => {
     started_at: "2026-10-12T10:00:05Z",
     completed_at: "2026-10-12T10:00:05Z",
   };
-  expect(segmentForStep(segments, step, segments)?.lines.join("\n")).toContain(
+  expect(segmentForStep(step, segments)?.lines.join("\n")).toContain(
     "boom two",
   );
+});
+
+const GATED_JOBS = [
+  {
+    jobs: [
+      { id: 1, name: "timed out", conclusion: "timed_out", steps: [] },
+      {
+        id: 2,
+        name: "cancelled after a failure",
+        conclusion: "cancelled",
+        steps: [{ name: "Check", number: 3, conclusion: "failure" }],
+      },
+      {
+        id: 3,
+        name: "superseded",
+        conclusion: "cancelled",
+        steps: [{ name: "Check", number: 3, conclusion: "cancelled" }],
+      },
+      { id: 4, name: "passed", conclusion: "success", steps: [] },
+    ],
+  },
+];
+
+test("timed-out jobs and cancelled jobs with a failed step are digested", () => {
+  const jobs = parseJobs(GATED_JOBS);
+  expect(jobs.filter(isFailedJob).map(({ id }) => id)).toEqual([1, 2]);
+  const records = buildDigest({ jobs, logFor: () => undefined });
+  expect(records.map(({ job, step }) => [job, step])).toEqual([
+    ["timed out", "(job)"],
+    ["cancelled after a failure", "Check"],
+  ]);
+});
+
+test("the workflow downloads logs for exactly the digested jobs", () => {
+  const run =
+    ciWorkflow().jobs["ci-result"]?.steps?.find(
+      ({ name }) => name === "Digest failed steps",
+    )?.run ?? "";
+  const program = /jq -r '([^']+)'/u.exec(run)?.[1];
+  expect(program).toBeDefined();
+  const result = Bun.spawnSync(["jq", "-r", program ?? ""], {
+    stdin: new TextEncoder().encode(JSON.stringify(GATED_JOBS)),
+    stdout: "pipe",
+  });
+  expect(result.exitCode).toBe(0);
+  expect(result.stdout.toString().trim().split("\n")).toEqual(["1", "2"]);
+});
+
+test("a retry summary never hides the error output above it", () => {
+  expect(
+    failureLines([
+      "Resolving dependencies",
+      "error: failed to download package left-pad@1.0.0",
+      "retry.sh: attempt 1/2 failed (exit 1); retrying in 15s: bun ci",
+      "error: failed to download package left-pad@1.0.0",
+      "##[error]bun ci failed after 2 attempts (exit 1)",
+      "##[error]Process completed with exit code 1.",
+    ]).map(({ message }) => message),
+  ).toEqual([
+    "error: failed to download package left-pad@1.0.0",
+    "bun ci failed after 2 attempts (exit 1)",
+  ]);
+});
+
+test("each log segment explains at most one failed step", () => {
+  const log = [
+    ...runStep(4, "first", [
+      "boom one",
+      "##[error]Process completed with exit code 1.",
+    ]),
+    ...runStep(4, "second", [
+      "boom two",
+      "##[error]Process completed with exit code 2.",
+    ]),
+  ].join("\n");
+  const job = {
+    id: 9,
+    name: "job",
+    conclusion: "failure",
+    steps: ["first", "second"].map((name, index) => ({
+      name,
+      number: index + 1,
+      conclusion: "failure",
+      started_at: "2026-10-12T10:00:04Z",
+      completed_at: "2026-10-12T10:00:04Z",
+    })),
+  };
+  const records = buildDigest({ jobs: [job], logFor: () => log });
+  const messages = records.map(({ lines }) =>
+    lines.map(({ message }) => message).join(","),
+  );
+  expect(new Set(messages).size).toBe(2);
+  expect(messages.join(",")).toContain("boom one");
+  expect(messages.join(",")).toContain("boom two");
 });
 
 test("the digest command writes JSON, a summary and annotations", () => {

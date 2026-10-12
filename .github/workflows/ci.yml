@@ -9085,8 +9085,9 @@ jobs:
             echo "Failure digest unavailable: the jobs lookup failed."
             exit 0
           fi
-          # Logs of the first 20 failed jobs; a missing log is reported as such.
-          jq -r '[.[].jobs[] | select(.conclusion == "failure") | .id] | .[:20][]' "$dir/jobs.json" |
+          # Logs of the first 20 jobs the result gate fails on (as in the digest);
+          # a missing log is reported as such.
+          jq -r '[.[].jobs[] | select(.conclusion == "failure" or .conclusion == "timed_out" or (.conclusion == "cancelled" and any(.steps[]?; .conclusion == "failure"))) | .id] | .[:20][]' "$dir/jobs.json" |
             while read -r id; do
               [[ "$id" =~ ^[0-9]+$ ]] || continue
               bash "$GH_RETRY_SCRIPT" api "repos/$REPO/actions/jobs/$id/logs" > "$dir/logs/$id.log" || rm -f "$dir/logs/$id.log"

@@ -482,8 +482,19 @@ const genericLines = (lines: readonly LogLine[]): FailureLine[] =>
 
 const ERROR_COMMAND = "##[error]";
 
+// scripts/retry.sh: per-attempt lines and the final summary command. The
+// summary restates the wrapped command; the cause is the output above it.
+const RETRY_ATTEMPT_PREFIX = "retry.sh: attempt ";
+const RETRY_SUMMARY = /^ failed after \d+ attempts \(exit \d+\)$/u;
+
+const isRetrySummary = (text: string): boolean => {
+  const marker = text.lastIndexOf(" failed after ");
+  return marker !== -1 && RETRY_SUMMARY.test(text.slice(marker));
+};
+
 const isNoise = (text: string): boolean =>
   text.trim() === "" ||
+  text.startsWith(RETRY_ATTEMPT_PREFIX) ||
   (text.startsWith("##[") && !text.startsWith(ERROR_COMMAND)) ||
   BUN_RESULT.test(text) ||
   /^[-=─_*#\s]+$/u.test(text);
@@ -498,11 +509,13 @@ const closingLines = (lines: readonly LogLine[]): FailureLine[] => {
   const window = lines
     .filter(({ text }) => !isNoise(text))
     .slice(-TAIL_WINDOW)
-    .map(({ text, scope }) =>
-      text.startsWith(ERROR_COMMAND)
-        ? { text: text.slice(ERROR_COMMAND.length), scope, command: true }
-        : { text, scope, command: false },
-    );
+    .map(({ text, scope }) => {
+      if (!text.startsWith(ERROR_COMMAND)) {
+        return { text, scope, command: false };
+      }
+      const message = text.slice(ERROR_COMMAND.length);
+      return { text: message, scope, command: !isRetrySummary(message) };
+    });
   const command = window.findIndex((line) => line.command);
   const anchor =
     command === -1
@@ -685,14 +698,14 @@ const SLACK_MS = 1000;
 
 /** The log segment of one failed step: by time, then by failure order. */
 export const segmentForStep = (
-  segments: readonly LogSegment[],
   step: ApiStep,
   unused: readonly LogSegment[],
 ): LogSegment | undefined => {
   const started = Date.parse(step.started_at ?? "");
   const completed = Date.parse(step.completed_at ?? "");
   if (!Number.isNaN(started) && !Number.isNaN(completed)) {
-    const candidates = segments.filter(
+    // Only unused segments: one log segment explains one failed step.
+    const candidates = unused.filter(
       ({ startedAt }) =>
         startedAt !== undefined &&
         startedAt >= started - SLACK_MS &&
@@ -779,44 +792,52 @@ type DigestOptions = {
   readonly logFor: (job: ApiJob) => string | undefined;
 };
 
+/**
+ * Jobs the result gate fails on: failed or timed-out jobs, and cancelled
+ * jobs that contain a failed step (a cancellation can mask a failure).
+ */
+export const isFailedJob = (job: ApiJob): boolean =>
+  job.conclusion === "failure" ||
+  job.conclusion === "timed_out" ||
+  (job.conclusion === "cancelled" &&
+    (job.steps ?? []).some(({ conclusion }) => conclusion === "failure"));
+
 export const buildDigest = ({ jobs, logFor }: DigestOptions): FailureRecord[] =>
-  jobs
-    .filter(({ conclusion }) => conclusion === "failure")
-    .flatMap((job) => {
-      const log = logFor(job);
-      const segments = log === undefined ? [] : splitSteps(log);
-      const unused = [...segments];
-      const failedSteps = (job.steps ?? []).filter(
-        ({ conclusion }) => conclusion === "failure",
-      );
-      const steps =
-        failedSteps.length > 0
-          ? failedSteps
-          : [{ name: "(job)", number: 0, conclusion: "failure" }];
-      return steps.map((step): FailureRecord => {
-        const segment =
-          step.name === "(job)"
-            ? (segments.findLast(({ failed }) => failed) ?? segments.at(-1))
-            : segmentForStep(segments, step, unused);
-        const position = segment === undefined ? -1 : unused.indexOf(segment);
-        if (position !== -1) {
-          unused.splice(position, 1);
-        }
-        const found = segment === undefined ? [] : failureLines(segment.lines);
-        const missing =
-          log === undefined
-            ? "Job log unavailable."
-            : "No log output found for this step.";
-        const lines = found.length > 0 ? found : [{ message: missing }];
-        return {
-          job: job.name,
-          step: step.name,
-          kind: classify(step.name, lines),
-          url: job.html_url ?? "",
-          lines,
-        };
-      });
+  jobs.filter(isFailedJob).flatMap((job) => {
+    const log = logFor(job);
+    const segments = log === undefined ? [] : splitSteps(log);
+    const unused = [...segments];
+    const failedSteps = (job.steps ?? []).filter(
+      ({ conclusion }) => conclusion === "failure",
+    );
+    const steps =
+      failedSteps.length > 0
+        ? failedSteps
+        : [{ name: "(job)", number: 0, conclusion: "failure" }];
+    return steps.map((step): FailureRecord => {
+      const segment =
+        step.name === "(job)"
+          ? (segments.findLast(({ failed }) => failed) ?? segments.at(-1))
+          : segmentForStep(step, unused);
+      const position = segment === undefined ? -1 : unused.indexOf(segment);
+      if (position !== -1) {
+        unused.splice(position, 1);
+      }
+      const found = segment === undefined ? [] : failureLines(segment.lines);
+      const missing =
+        log === undefined
+          ? "Job log unavailable."
+          : "No log output found for this step.";
+      const lines = found.length > 0 ? found : [{ message: missing }];
+      return {
+        job: job.name,
+        step: step.name,
+        kind: classify(step.name, lines),
+        url: job.html_url ?? "",
+        lines,
+      };
     });
+  });
 
 // ---------------------------------------------------------------------------
 // Output
