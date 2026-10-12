@@ -4816,6 +4816,7 @@ jobs:
           cp .env.example .env
 
       - name: Code quality
+        timeout-minutes: 19
         env:
           STELLA_VERIFY: check
           CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
@@ -4952,6 +4953,7 @@ jobs:
           cp .env.example .env
 
       - name: Code quality (web)
+        timeout-minutes: 19
         env:
           STELLA_VERIFY: check
           CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
@@ -4993,6 +4995,7 @@ jobs:
           bun scripts/typecheck-coverage.ts
 
       - name: Code quality (rest)
+        timeout-minutes: 19
         env:
           STELLA_VERIFY: check
           CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
