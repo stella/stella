@@ -55,7 +55,7 @@ test("deleting a committed entry is applied and adding one is refused", () => {
       JSON.stringify(
         collection.length === 0 || !isRecord(document)
           ? next
-          : { ...document, [collection[0] ?? ""]: next },
+          : { ...document, [collection.join(".")]: next },
         null,
         2,
       );

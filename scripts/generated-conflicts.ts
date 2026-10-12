@@ -52,7 +52,8 @@ class GeneratedConflictsError extends Error {
   readonly _tag = "GeneratedConflictsError";
 }
 
-const fail = (message: string): never => {
+// Annotated on the binding so control flow treats every call as an exit.
+const fail: (message: string) => never = (message) => {
   throw new GeneratedConflictsError(message);
 };
 
@@ -476,7 +477,7 @@ const collect = ({
 }) => {
   const planned = readPlan(planFile);
   if (!planned.eligible || planned.baseline === null) {
-    return fail("collect needs an eligible plan");
+    fail("collect needs an eligible plan");
   }
   const gitDir = path.join(repo, ".git");
   const run = (args: readonly string[]) => {
@@ -584,26 +585,26 @@ export const apply = ({
     readFileSync(path.join(collected, "manifest.json"), "utf-8"),
   );
   if (!isManifest(parsed)) {
-    return fail("The collected manifest is malformed");
+    fail("The collected manifest is malformed");
   }
   if (parsed.head !== head) {
-    return fail("The collected resolution is for a different head");
+    fail("The collected resolution is for a different head");
   }
   if (
     git(gitDir, ["merge-base", "--is-ancestor", parsed.main, mainTip], {
       allowFailure: true,
     }).exitCode !== 0
   ) {
-    return fail("The collected resolution merges a commit that is not on main");
+    fail("The collected resolution merges a commit that is not on main");
   }
   const planned = plan(gitDir, head, parsed.main);
   if (!planned.eligible || planned.baseline === null) {
-    return fail(
+    fail(
       `The merge is not generated-only:\n${planned.eligible ? "" : planned.reasons.join("\n")}`,
     );
   }
   if (planned.baseline !== parsed.baseline) {
-    return fail("The collected resolution started from a different merge");
+    fail("The collected resolution started from a different merge");
   }
   const headTree = git(gitDir, ["rev-parse", `${head}^{tree}`]).stdout.trim();
   const shapes = [
@@ -614,20 +615,20 @@ export const apply = ({
   const seen = new Set<string>();
   for (const file of parsed.files) {
     if (seen.has(file.path)) {
-      return fail(`${file.path} is listed twice`);
+      fail(`${file.path} is listed twice`);
     }
     seen.add(file.path);
     if (!isAllowedResolution(file.path, planned)) {
-      return fail(`${file.path} is outside the owning generators' outputs`);
+      fail(`${file.path} is outside the owning generators' outputs`);
     }
     const problem = pathShapeProblem(file.path, ...shapes);
     if (problem !== null) {
-      return fail(problem);
+      fail(problem);
     }
     uncovered.delete(file.path);
   }
   if (uncovered.size > 0) {
-    return fail(
+    fail(
       `The collected resolution omits conflicted paths: ${[...uncovered].join(", ")}`,
     );
   }
@@ -664,7 +665,7 @@ export const apply = ({
     }
   });
   if (tree !== parsed.tree) {
-    return fail(
+    fail(
       `The rebuilt tree ${tree} differs from the collected tree ${parsed.tree}`,
     );
   }
@@ -697,14 +698,14 @@ export const apply = ({
       meta,
     );
     if (!match?.[1] || !match[2] || !match[3]) {
-      return fail(`Unexpected diff-tree record: ${meta}`);
+      fail(`Unexpected diff-tree record: ${meta}`);
     }
     if (match[3] === "D") {
       entries.push({ path: file, mode: "100644", type: "blob", sha: null });
       continue;
     }
     if (match[1] === "120000") {
-      return fail(`${file}: symlinks cannot travel through the API`);
+      fail(`${file}: symlinks cannot travel through the API`);
     }
     const isSubmodule = match[1] === "160000";
     entries.push({
@@ -725,7 +726,7 @@ export const apply = ({
       { stdout: "pipe", stderr: "pipe" },
     );
     if (content.exitCode !== 0) {
-      return fail(`Cannot read blob ${sha}`);
+      fail(`Cannot read blob ${sha}`);
     }
     writeFileSync(
       path.join(out, "blobs", `${sha}.json`),
@@ -895,7 +896,7 @@ const required = (args: readonly string[], name: string) =>
   option(args, name) ?? fail(`${name} is required`);
 
 if (import.meta.main) {
-  const [mode, ...args] = process.argv.slice(2);
+  const [mode = "", ...args] = process.argv.slice(2);
   switch (mode) {
     case "plan":
       console.log(

@@ -341,18 +341,28 @@ describe("resolution across runs", () => {
       readFileSync(path.join(published.requests, "commit.json"), "utf-8"),
     );
     expect(commit.parents).toEqual([head, main]);
-    const tree = JSON.parse(
+    const tree: {
+      tree: { path: string; mode: string; type: string; sha: string }[];
+    } = JSON.parse(
       readFileSync(path.join(published.requests, "tree.json"), "utf-8"),
     );
-    const entry = (file: string) =>
-      tree.tree.find((item: { path: string }) => item.path === file);
+    const entry = (file: string) => {
+      const found = tree.tree.find((item) => item.path === file);
+      if (found === undefined) {
+        throw new TypeError(`${file} is not in the tree request`);
+      }
+      return found;
+    };
+    const byteOrder = (a: string, b: string) => Number(a > b) - Number(a < b);
     expect(entry(MESSAGES)).toMatchObject({ mode: "100644", type: "blob" });
     // Every blob neither parent has is uploaded, including the one the
     // clean part of the merge synthesized for the ordinary file.
     const uploads = readdirSync(path.join(published.requests, "blobs"))
       .map((file) => file.replace(/\.json$/u, ""))
-      .toSorted();
-    expect(uploads).toEqual([entry(MESSAGES).sha, entry(NOTES).sha].toSorted());
+      .toSorted(byteOrder);
+    expect(uploads).toEqual(
+      [entry(MESSAGES).sha, entry(NOTES).sha].toSorted(byteOrder),
+    );
     const blob = JSON.parse(
       readFileSync(
         path.join(published.requests, "blobs", `${entry(MESSAGES).sha}.json`),
@@ -500,7 +510,9 @@ describe("branch update", () => {
     const calls: { route: string; body: unknown }[] = [];
     const fetch = async (url: string, init: RequestInit) => {
       const route = url.replace("https://api.example", "");
-      const body: unknown = JSON.parse(String(init.body));
+      const body: unknown = JSON.parse(
+        typeof init.body === "string" ? init.body : "null",
+      );
       calls.push({ route, body });
       const json = (value: unknown) =>
         new Response(JSON.stringify(value), { status: 200 });
