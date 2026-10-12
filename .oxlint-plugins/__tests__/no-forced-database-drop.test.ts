@@ -32,6 +32,34 @@ describe.serial(
       ).toEqual([1]);
     });
 
+    test("a quote inside a SQL comment cannot hide a forced drop", async () => {
+      expect(
+        await lint(
+          'export const query = \'/* " */ DROP DATABASE "fixture" WITH (FORCE)\';',
+          "export const apostrophe = \"/* don't */ DROP DATABASE fixture WITH (FORCE); SELECT 'ok'\";",
+          "export const nested = '/* outer /* \" */ still comment */ DROP DATABASE fixture WITH (FORCE)';",
+          'export const line = "-- \' comment\\nDROP DATABASE fixture WITH (FORCE)";',
+        ),
+      ).toEqual([1, 2, 3, 4]);
+    });
+
+    test("forced drops also require rejection when WITH is omitted", async () => {
+      expect(
+        await lint('export const query = "DROP DATABASE fixture (FORCE)";'),
+      ).toEqual([1]);
+    });
+
+    test("dollar quoting and escaped strings keep SQL-looking data out of executable code", async () => {
+      expect(
+        await lint(
+          'export const dollar = "SELECT $$ value; DROP DATABASE fixture (FORCE) $$";',
+          'export const tagged = "SELECT $tag$ value; DROP DATABASE fixture (FORCE) $tag$";',
+          "export const escaped = \"SELECT E'value\\\\'; DROP DATABASE fixture (FORCE)'\";",
+          "export const ordinary = \"SELECT 'value; DROP DATABASE fixture (FORCE)'\";",
+        ),
+      ).toEqual([]);
+    });
+
     test("accepts normal drops and unrelated FORCE text", async () => {
       expect(
         await lint(

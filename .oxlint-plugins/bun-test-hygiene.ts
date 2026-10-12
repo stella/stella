@@ -50,6 +50,7 @@
 //   opens; the lint config exempts that module.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
+import { panic } from "better-result";
 
 import {
   getPropertyName,
@@ -67,9 +68,124 @@ const BUN_TEST_MODULE = "bun:test";
 const EXPECT_EXPORT = "expect";
 
 const FORCED_DATABASE_DROP =
-  /(?:^|;)\s*DROP\s+DATABASE\b[^;]*\bWITH\s*\(\s*FORCE\b/iu;
-const SQL_COMMENTS = /\/\*[\s\S]*?\*\/|--[^\r\n]*/gu;
-const SQL_QUOTED_VALUES = /"(?:[^"]|"")*"|'(?:[^']|'')*'/gu;
+  /(?:^|;)\s*DROP\s+DATABASE\b[^;]*(?:\bWITH\s*)?\(\s*FORCE\b/iu;
+const SQL_IDENTIFIER_CHARACTER = /[A-Za-z0-9_$\u0080-\u{10ffff}]/u;
+const SQL_DOLLAR_QUOTE =
+  /\$(?:[A-Za-z_\u0080-\u{10ffff}][A-Za-z0-9_\u0080-\u{10ffff}]*)?\$/uy;
+
+type SqlMaskState =
+  | { type: "code" }
+  | { type: "line-comment" }
+  | { type: "block-comment"; depth: number }
+  | { type: "quoted-identifier" }
+  | { type: "quoted-string"; syntax: "standard" | "escaped" }
+  | { type: "dollar-quoted"; delimiter: string };
+
+// A quote inside a comment belongs to that comment, and vice versa.
+const maskSqlValuesAndComments = (text: string) => {
+  const masked: string[] = [];
+  let state: SqlMaskState = { type: "code" };
+  for (let index = 0; index < text.length; index++) {
+    const character = text.charAt(index);
+    const next = text.charAt(index + 1);
+    switch (state.type) {
+      case "line-comment":
+        if (character === "\n" || character === "\r") {
+          masked.push(character);
+          state = { type: "code" };
+        }
+        continue;
+      case "block-comment":
+        if (character === "/" && next === "*") {
+          state.depth++;
+          index++;
+        } else if (character === "*" && next === "/") {
+          state.depth--;
+          index++;
+          if (state.depth === 0) {
+            state = { type: "code" };
+          }
+        }
+        continue;
+      case "quoted-identifier":
+        if (character === '"') {
+          if (next === '"') {
+            index++;
+          } else {
+            state = { type: "code" };
+          }
+        }
+        continue;
+      case "quoted-string":
+        if (state.syntax === "escaped" && character === "\\") {
+          index++;
+        } else if (character === "'") {
+          if (next === "'") {
+            index++;
+          } else {
+            state = { type: "code" };
+          }
+        }
+        continue;
+      case "dollar-quoted":
+        if (text.startsWith(state.delimiter, index)) {
+          index += state.delimiter.length - 1;
+          state = { type: "code" };
+        }
+        continue;
+      case "code":
+        if (character === "-" && next === "-") {
+          masked.push(" ");
+          state = { type: "line-comment" };
+          index++;
+          continue;
+        }
+        if (character === "/" && next === "*") {
+          masked.push(" ");
+          state = { type: "block-comment", depth: 1 };
+          index++;
+          continue;
+        }
+        if (character === '"') {
+          masked.push(" __value__ ");
+          state = { type: "quoted-identifier" };
+          continue;
+        }
+        if (character === "'") {
+          masked.push(" __value__ ");
+          state = {
+            type: "quoted-string",
+            syntax:
+              /[eE]/u.test(text.charAt(index - 1)) &&
+              !SQL_IDENTIFIER_CHARACTER.test(text.charAt(index - 2))
+                ? "escaped"
+                : "standard",
+          };
+          continue;
+        }
+        if (
+          character === "$" &&
+          !SQL_IDENTIFIER_CHARACTER.test(text.charAt(index - 1))
+        ) {
+          SQL_DOLLAR_QUOTE.lastIndex = index;
+          const delimiter = SQL_DOLLAR_QUOTE.exec(text)?.at(0);
+          if (delimiter !== undefined) {
+            masked.push(" __value__ ");
+            state = { type: "dollar-quoted", delimiter };
+            index += delimiter.length - 1;
+            continue;
+          }
+        }
+        masked.push(character);
+        continue;
+      default: {
+        state satisfies never;
+        panic("Unhandled SQL masking state");
+      }
+    }
+  }
+  return masked.join("");
+};
 
 const databaseDropText = (node: unknown) => {
   if (isStringLiteral(node)) {
@@ -449,11 +565,7 @@ export default eslintCompatPlugin({
           const text = databaseDropText(node);
           if (
             text !== null &&
-            FORCED_DATABASE_DROP.test(
-              text
-                .replace(SQL_QUOTED_VALUES, " __value__ ")
-                .replace(SQL_COMMENTS, " "),
-            )
+            FORCED_DATABASE_DROP.test(maskSqlValuesAndComments(text))
           ) {
             context.report({ node, messageId: "forcedDrop" });
           }
