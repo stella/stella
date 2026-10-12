@@ -48,6 +48,7 @@ const READER_SCROLL_OFFSET_PX = 112;
 // (`ownerStorageKey`) and apps/web/src/components/inspector/
 // inspector-storage-keys.ts, for the same reason as the theme key below.
 const INSPECTOR_STATE_STORAGE_PREFIX = "stella:inspector-state:v1:";
+const INSPECTOR_MINIMIZED_STORAGE_PREFIX = "stella:inspector-minimized:v1:";
 const USER_STORAGE_SEGMENT = ":u:";
 // Duplicated from apps/web/src/consts.ts, exactly as
 // apps/web/public/prepaint-init.js duplicates it: the e2e project has no
@@ -55,8 +56,8 @@ const USER_STORAGE_SEGMENT = ":u:";
 // system colour-scheme preference.
 const THEME_STORAGE_KEY = "stella-ui-theme";
 const INSPECTOR_STORAGE_PREFIXES = [
-  "stella:inspector-minimized:v1:",
-  "stella:inspector-state:v1:",
+  INSPECTOR_MINIMIZED_STORAGE_PREFIX,
+  INSPECTOR_STATE_STORAGE_PREFIX,
 ] as const;
 const requestedCapture = process.env["MARKETING_CAPTURE"];
 
@@ -295,11 +296,12 @@ test("capture landing product screenshots", async ({
         // clean state as every other capture rather than inheriting whatever
         // the results page persisted.
         await clearPersistedInspectorState(page);
-        if ("readerStory" in capture) {
-          // A decision's chat tab restored from storage is that decision's
-          // conversation; without one the reader mints an empty thread.
-          await restoreReaderStoryChatTab(page, capture.decisionText);
-        }
+        // A decision's chat tab restored from storage is that decision's
+        // conversation; without one the reader mints an empty thread.
+        const readerStoryThreadId =
+          "readerStory" in capture
+            ? await restoreReaderStoryChatTab(page, capture.decisionText)
+            : undefined;
         await page.goto(decisionPath, { waitUntil: "commit" });
         await expect(page).toHaveURL(/\/law\/[a-z-]+\/cases\//u);
         // The case detail is its own code-split chunk, so this is the first
@@ -336,7 +338,13 @@ test("capture landing product screenshots", async ({
         await expect(inspectorChat).toHaveCount(1, {
           timeout: COLD_COMPILE_TIMEOUT,
         });
-        if ("readerStory" in capture) {
+        if (readerStoryThreadId !== undefined) {
+          // Name the failure precisely: a fresh thread here means the saved
+          // tab was never restored, not that the answer is slow to render.
+          await expect(
+            inspectorChat,
+            `The decision's chat pane should show the seeded thread ${readerStoryThreadId}, restored from the saved inspector tab, not a newly minted one`,
+          ).toHaveAttribute("data-chat-thread-id", readerStoryThreadId);
           // The restored thread's cited answer, down to a citation chip, so
           // the shot never lands on the empty chat or a loading transcript.
           await expect(
@@ -507,12 +515,18 @@ const restoreReaderStoryChatTab = async (page: Page, caseNumber: string) => {
         `${caseNumber}; run the dev seed (seed-case-law-reader-story.ts)`,
     );
   }
+  const ownerSuffix = `${MARKETING_ORGANIZATION_ID}:${USER_STORAGE_SEGMENT}${userId}`;
   await page.evaluate(
-    ({ storageKey, state }) => {
+    ({ minimizedKey, storageKey, state }) => {
       localStorage.setItem(storageKey, JSON.stringify(state));
+      // The pane folded, as a reader who left it that way would find it:
+      // a restored inspector keeps its stored pane state, and the capture
+      // opens the pane itself.
+      localStorage.setItem(minimizedKey, "1");
     },
     {
-      storageKey: `${INSPECTOR_STATE_STORAGE_PREFIX}${MARKETING_ORGANIZATION_ID}:${USER_STORAGE_SEGMENT}${userId}`,
+      minimizedKey: `${INSPECTOR_MINIMIZED_STORAGE_PREFIX}${ownerSuffix}`,
+      storageKey: `${INSPECTOR_STATE_STORAGE_PREFIX}${ownerSuffix}`,
       // The shape readPersistedInspectorState (inspector-broadcast.ts)
       // accepts; a chat tab with an `activeLegalKey` is that document's chat.
       state: {
@@ -532,6 +546,7 @@ const restoreReaderStoryChatTab = async (page: Page, caseNumber: string) => {
       },
     },
   );
+  return thread.threadId;
 };
 
 const getSessionUserId = (payload: unknown): string | undefined => {
