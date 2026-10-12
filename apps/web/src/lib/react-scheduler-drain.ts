@@ -41,9 +41,6 @@ export const loadReactScheduler = (): ReactScheduler => {
     : panic("react-dom's scheduler does not expose scheduleCallback");
 };
 
-// A runaway loop that keeps scheduling work would otherwise hang teardown.
-const MAX_DRAIN_ROUNDS = 1000;
-
 /**
  * Resolve once React's scheduler has run every task queued so far and every
  * task that work enqueues. An idle-priority barrier runs after every task
@@ -51,6 +48,8 @@ const MAX_DRAIN_ROUNDS = 1000;
  * expires after the barrier). The scheduler exposes no queue inspection, so
  * the drain repeats barriers until one follows the previous with no task
  * scheduled in between: then nothing is left behind the last barrier.
+ * Work that never stops enqueueing more never drains; the test runner's hook
+ * timeout reports that, exactly as it would for the work itself.
  */
 export const drainReactScheduler = async (): Promise<void> => {
   const scheduler = loadReactScheduler();
@@ -65,7 +64,7 @@ export const drainReactScheduler = async (): Promise<void> => {
     return { id: taskId(task), ran: promise };
   };
   let previous = barrier();
-  for (let round = 0; round < MAX_DRAIN_ROUNDS; round++) {
+  for (;;) {
     await previous.ran;
     const next = barrier();
     if (next.id === previous.id + 1) {
@@ -74,7 +73,4 @@ export const drainReactScheduler = async (): Promise<void> => {
     }
     previous = next;
   }
-  panic(
-    `React's scheduler kept enqueueing work through ${MAX_DRAIN_ROUNDS} drain rounds`,
-  );
 };
