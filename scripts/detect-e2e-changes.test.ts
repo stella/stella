@@ -509,9 +509,6 @@ describe("detect-e2e-changes", () => {
     expect(workflowJob("ci-plan")).toContain(
       "matrix=$(bun scripts/e2e-spec-shards-core.ts all)",
     );
-    expect(workflowJob("ci-plan")).toContain(
-      'echo "selection_required=true" >> "$GITHUB_OUTPUT"',
-    );
     expect(
       requiredExpression(
         workflowStepValue(production, "Check route network baseline")["if"],
@@ -528,16 +525,76 @@ describe("detect-e2e-changes", () => {
     }
   });
 
-  test("skips an eligible pull request when no e2e specs are selected", () => {
-    const plan = workflowJob("ci-plan");
-    expect(plan).toContain(`if [[ "$matrix" == '{"shard":[]}' ]]`);
-    expect(plan).toContain(
-      'echo "selection_required=false" >> "$GITHUB_OUTPUT"',
+  test("plans e2e outputs from selection and fallback semantics", () => {
+    const plan = workflowStepRun(
+      workflowJob("ci-plan"),
+      "Plan changed PR e2e shards",
     );
+    const fullMatrix = '{"shard":["full"]}';
+    const selectedMatrix = '{"shard":["selected"]}';
+    const selectedSpecs = '["e2e/specs/selected.spec.ts"]';
+    const root = mkdtempSync(path.join(tmpdir(), "e2e-plan-outputs-"));
+    const output = path.join(root, "outputs");
+    try {
+      for (const event of [
+        "pull_request",
+        "merge_group",
+        "workflow_dispatch",
+      ]) {
+        for (const outcome of ["success", "failure", "skipped"]) {
+          for (const matrix of ["", '{"shard":[]}', selectedMatrix]) {
+            for (const required of ["true", "false"]) {
+              writeFileSync(output, "fixture=preserved\n");
+              const result = Bun.spawnSync(
+                [
+                  "/bin/bash",
+                  "-c",
+                  [
+                    'bun() { [[ "$*" == "scripts/e2e-spec-shards-core.ts all" ]] || return 91; printf "%s\\n" "$FULL_MATRIX"; }',
+                    plan,
+                  ].join("\n"),
+                ],
+                {
+                  cwd: root,
+                  env: {
+                    PATH: "/usr/bin:/bin",
+                    GITHUB_OUTPUT: output,
+                    EVENT_NAME: event,
+                    SELECTOR_OUTCOME: outcome,
+                    SELECTED_MATRIX: matrix,
+                    SELECTED_MODE: "selected",
+                    SELECTED_SPECS: selectedSpecs,
+                    E2E_PRODUCTION_REQUIRED: required,
+                    FULL_MATRIX: fullMatrix,
+                  },
+                  stdout: "pipe",
+                  stderr: "pipe",
+                },
+              );
+              expect(result.exitCode, result.stderr.toString()).toBe(0);
+              const usesSelection =
+                event === "pull_request" &&
+                outcome === "success" &&
+                matrix !== "";
+              const emptySelection = usesSelection && matrix === '{"shard":[]}';
+              expect(readFileSync(output, "utf-8").trim().split("\n")).toEqual([
+                "fixture=preserved",
+                `matrix=${usesSelection ? matrix : fullMatrix}`,
+                `mode=${usesSelection ? "selected" : "full"}`,
+                `specs=${usesSelection ? selectedSpecs : "[]"}`,
+                `selection_required=${String(!emptySelection)}`,
+                `required=${emptySelection ? "false" : required}`,
+              ]);
+            }
+          }
+        }
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
     expect(
       ciContract.jobs["ci-plan"]?.outputs?.["e2e_production_required"],
     ).toBe(githubExpression("steps.e2e-pr-plan.outputs.required"));
-    expect(plan).toContain('echo "required=false" >> "$GITHUB_OUTPUT"');
   });
 
   test("starts only infrastructure exercised by pull request E2E", () => {

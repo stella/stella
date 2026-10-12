@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
@@ -362,6 +364,7 @@ test("pending feature-bound write approvals use current caller access for valida
     type: "tool-call",
     id: "feature-write-call",
     name: toolName,
+    metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
     input: canonicalInput,
     arguments: JSON.stringify(canonicalInput),
     state: "approval-requested",
