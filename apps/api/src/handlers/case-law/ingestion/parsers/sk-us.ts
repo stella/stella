@@ -35,6 +35,7 @@ import type {
   HeadingBlock,
   Inline,
 } from "@stll/legal-ast/document-ast";
+import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
 import {
   isSkDecisionTitle,
   isSkHoldingMarker,
@@ -203,8 +204,13 @@ const readMarkupLines = ($: cheerio.CheerioAPI): MarkupLine[] => {
   visit($("body"));
   close();
 
+  // A line's inlines are trimmed with its text, so a paragraph joined from
+  // lines reads the same through either: the reader's text, and the text
+  // left once a court number is cut off the inlines.
   for (const line of lines) {
-    line.text = line.text.trim();
+    const normalized = normalizeInlineLine(line.inlines);
+    line.inlines = normalized.inlines;
+    line.text = normalized.plainText;
   }
   return lines;
 };
@@ -392,9 +398,9 @@ const classifyLines = (lines: readonly MarkupLine[]): Block[] => {
     // comes next, or a forward skip the numbering itself allows, and stands
     // before a capital (a wrapped "1. februára" is not one); the open
     // paragraph has finished a sentence and is not inside a quotation („…“:
-    // a quoted petit numbers its own points); and no later line opens with
-    // the same number (then this one is a list item and the later one the
-    // court's paragraph).
+    // a quoted petit numbers its own points); and the court does not print
+    // the same number again right after this one's list (then this one is a
+    // list item and the later one the court's paragraph).
     const opening =
       state.section === "reasoning" ? openings[lineIndex] : undefined;
     const step =
@@ -410,7 +416,7 @@ const classifyLines = (lines: readonly MarkupLine[]): Block[] => {
         open !== null &&
         SENTENCE_END.test(open) &&
         !insideQuotation(open) &&
-        !openings.slice(lineIndex + 1).includes(opening)
+        !courtRepeatsAfterList(lines, openings, lineIndex, opening)
       ) {
         flushParagraph();
       }
@@ -423,6 +429,59 @@ const classifyLines = (lines: readonly MarkupLine[]): Block[] => {
   flushParagraph();
 
   return blocks;
+};
+
+/** Whether a line ends the reasoning or opens a part of it. */
+const endsReasoningPart = (text: string): boolean =>
+  isSkHoldingMarker(text) ||
+  isSkReasoningMarker(text) ||
+  isSkInstructionMarker(text) ||
+  skSectionHeading(text, "reasoning") !== null;
+
+/**
+ * Whether the line at `from`, opening with `number`, is an item of a list
+ * that the court's own paragraph `number` follows.
+ *
+ * Read the way the list would run: its items count on from `number`
+ * (`number + 1`, `number + 2`, …) up to the court's paragraph with the same
+ * number, which opens where a paragraph can open — after a finished
+ * sentence, outside a „quotation“. The look stops at the first number that
+ * continues neither, and at the end of the part of the reasoning: past
+ * either, a repeat of `number` is a quotation or a list elsewhere in the
+ * decision, and says nothing about this line.
+ */
+const courtRepeatsAfterList = (
+  lines: readonly MarkupLine[],
+  openings: readonly (number | undefined)[],
+  from: number,
+  number: number,
+): boolean => {
+  let listNext = number + 1;
+  let previous = lines[from]?.text ?? "";
+  let quoted = quotationDepth(previous);
+  for (let index = from + 1; index < lines.length; index += 1) {
+    const text = lines[index]?.text ?? "";
+    if (text.length === 0 || PAGE_NUMBER_PATTERN.test(text)) {
+      continue;
+    }
+    if (endsReasoningPart(text)) {
+      return false;
+    }
+    const later = openings[index];
+    if (later === number) {
+      if (quoted <= 0 && SENTENCE_END.test(previous)) {
+        return true;
+      }
+    } else if (later !== undefined) {
+      if (later !== listNext) {
+        return false;
+      }
+      listNext += 1;
+    }
+    quoted += quotationDepth(text);
+    previous = text;
+  }
+  return false;
 };
 
 /** A line opening with a court paragraph number and a capitalised word. */
@@ -443,9 +502,12 @@ const openingNumberOf = (text: string): number | undefined => {
  */
 const SENTENCE_END = /[.!?][“”"»)]*(?:\s{2,}\d{1,4})?\s*$/u;
 
+/** Quotations the text opens („) less those it closes (“). */
+const quotationDepth = (text: string): number =>
+  text.split("„").length - text.split("“").length;
+
 /** Whether the text has opened a „quotation“ it has not closed. */
-const insideQuotation = (text: string): boolean =>
-  text.split("„").length > text.split("“").length;
+const insideQuotation = (text: string): boolean => quotationDepth(text) > 0;
 
 export type ParseSkUsDocumentOptions = {
   /** The XHTML the content endpoint served, base64-decoded. */

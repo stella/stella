@@ -19,10 +19,19 @@ import { extractCourtParagraphNumbers } from "./court-paragraph-numbers.js";
 import type { Block, ParagraphBlock } from "./document-ast.js";
 
 const MARKERS = {
-  bracket: (number: number) => `[${String(number)}] `,
-  dot: (number: number) => `${String(number)}.\t`,
-  paren: (number: number) => `${String(number)}) `,
+  bracket: (number: number, gap = " ") => `[${String(number)}]${gap}`,
+  dot: (number: number, gap = "\t") => `${String(number)}.${gap}`,
+  paren: (number: number, gap = " ") => `${String(number)})${gap}`,
 } as const;
+
+/**
+ * The horizontal space a publisher leaves after a marker: one space, a tab,
+ * a no-break space, or a run of them. A run must be judged as a whole — a
+ * date or a lowercase point after two spaces is still not a paragraph.
+ */
+const gap = fc
+  .array(fc.constantFrom(" ", "\t", "\u00a0"), { minLength: 1, maxLength: 3 })
+  .map((parts) => parts.join(""));
 
 const words = fc
   .array(
@@ -45,6 +54,7 @@ type Draft = {
   readonly role: ParagraphBlock["role"];
   readonly marker: keyof typeof MARKERS | null;
   readonly number: number;
+  readonly gap: string;
   readonly text: string;
 };
 
@@ -52,6 +62,7 @@ const draft: fc.Arbitrary<Draft> = fc.record({
   role: fc.constantFrom(undefined, undefined, "holding", "dissent", "closing"),
   marker: fc.constantFrom(null, "bracket", "dot", "dot", "paren"),
   number: fc.integer({ min: 1, max: 40 }),
+  gap,
   text: words,
 });
 
@@ -65,7 +76,7 @@ const decision = fc
       const plainText =
         item.marker === null
           ? item.text
-          : `${MARKERS[item.marker](number)}${item.text}`;
+          : `${MARKERS[item.marker](number, item.gap)}${item.text}`;
       return {
         id: `b${String(index)}`,
         anchorId: `p-${String(index)}`,
@@ -77,13 +88,29 @@ const decision = fc
     });
   });
 
-const MARKER_PREFIX = /^(?:\[(\d+)\][ \t]*|(\d+)\.[ \t]+|(\d+)\)[ \t]+)/u;
+const MARKER_PREFIX =
+  /^(?:\[(\d+)\][ \t\u00a0]*|(\d+)\.[ \t\u00a0]+|(\d+)\)[ \t\u00a0]+)/u;
 
+/**
+ * A court's marker, judged by what follows the whole run of space: never a
+ * digit (a date) or a lowercase letter (a point of a list).
+ */
 const STYLE_MARKER = {
-  bracket: /^\[(?<n>\d+)\][ \t]*(?![\d\p{Ll}])/u,
-  dot: /^(?<n>\d+)\.[ \t]+(?![\d\p{Ll}])/u,
-  paren: /^(?<n>\d+)\)[ \t]+(?![\d\p{Ll}])/u,
+  bracket: /^\[(?<n>\d+)\][ \t\u00a0]*/u,
+  dot: /^(?<n>\d+)\.[ \t\u00a0]+/u,
+  paren: /^(?<n>\d+)\)[ \t\u00a0]+/u,
 } as const;
+
+const opensCourtMarker = (
+  style: keyof typeof STYLE_MARKER,
+  text: string,
+): RegExpExecArray | null => {
+  const match = STYLE_MARKER[style].exec(text);
+  if (match === null) {
+    return null;
+  }
+  return /^[\d\p{Ll}]/u.test(text.slice(match[0].length)) ? null : match;
+};
 
 const isBody = (block: Block): block is ParagraphBlock =>
   block.type === "paragraph" &&
@@ -112,7 +139,7 @@ const invariantViolations = (
   const style = (["bracket", "dot", "paren"] as const).find(
     (candidate) =>
       source?.type === "paragraph" &&
-      STYLE_MARKER[candidate].test(source.plainText),
+      opensCourtMarker(candidate, source.plainText) !== null,
   );
   if (style === undefined) {
     return ["a numbered paragraph had no marker"];
@@ -135,7 +162,7 @@ const invariantViolations = (
       listLength = 0;
       continue;
     }
-    const raw = STYLE_MARKER[style].exec(block.plainText)?.groups?.["n"];
+    const raw = opensCourtMarker(style, block.plainText)?.groups?.["n"];
     if (raw === undefined || !seenNumbered) {
       continue;
     }
@@ -182,6 +209,11 @@ test("court paragraph numbers are faithful, structure-preserving and idempotent"
         expect(before.role === "holding" || before.role === "closing").toBe(
           false,
         );
+        expect(
+          (["bracket", "dot", "paren"] as const).some(
+            (style) => opensCourtMarker(style, before.plainText) !== null,
+          ),
+        ).toBe(true);
       }
 
       expect(extractCourtParagraphNumbers(numbering.blocks).blocks).toEqual(

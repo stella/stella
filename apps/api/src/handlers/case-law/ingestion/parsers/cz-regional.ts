@@ -17,6 +17,7 @@
  * styles[]: { localId, alignment, bold, italic, ... }
  */
 
+import { opensWithCourtParagraphMarker } from "@stll/legal-ast/court-paragraph-numbers";
 import {
   CZ_CLOSING_RE as CLOSING_RE,
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
@@ -326,7 +327,18 @@ const classifyJustificationParagraph = (
 ): Block => {
   // A numbered paragraph ("1. …") stays whole here: whether its marker is the
   // court's numbering is decided over the whole decision, by
-  // `courtParagraphNumbers` once every block is built.
+  // `courtParagraphNumbers` once every block is built. It is body text, never
+  // a closing or a signature: "3. Věc projednala samosoudkyně …" names the
+  // judge but is the court's paragraph 3.
+  if (opensWithCourtParagraphMarker(plainText)) {
+    return {
+      id: makeBlockId(),
+      anchorId: `p-${blockIndex}`,
+      type: "paragraph",
+      inlines,
+      plainText,
+    };
+  }
 
   // Closing: "V [City] dne [date]"
   if (CLOSING_RE.test(plainText)) {

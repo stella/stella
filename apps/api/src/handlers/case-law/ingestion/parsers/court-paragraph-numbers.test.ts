@@ -444,6 +444,51 @@ describe("implausible numbering", () => {
     ].map((text, index) => paragraph(index, text));
     expect(extractCourtParagraphNumbers(blocks).type).toBe("unnumbered");
   });
+
+  test("a run of spaces after the marker does not let a date or a point through", () => {
+    for (const gap of ["  ", "\t ", " ", "   "]) {
+      const dates = [
+        `12.${gap}3. 2020 podal žalobce odvolání.`,
+        `13.${gap}3. 2020 soud rozhodl.`,
+      ].map((text, index) => paragraph(index, text));
+      expect({ gap, type: extractCourtParagraphNumbers(dates).type }).toEqual({
+        gap,
+        type: "unnumbered",
+      });
+
+      const texts = [
+        `1.${gap}Soud uvážil.`,
+        `2.${gap}Soud cituje zákon:`,
+        `"1.${gap}Německá říše a osoby veřejného práva;`,
+        `2.${gap}osoby fysické národnosti německé;`,
+        `[1]${gap}osoby fysické, které vyvíjely činnost."`,
+        `3.${gap}Soud dále uvážil.`,
+      ];
+      const numbering = extractCourtParagraphNumbers(
+        texts.map((text, index) => paragraph(index, text)),
+      );
+      expect({
+        gap,
+        numbers: numbering.blocks.map((block) =>
+          block.type === "paragraph" ? (block.number ?? null) : null,
+        ),
+        texts: numbering.blocks.map((block) =>
+          block.type === "paragraph" ? block.plainText : null,
+        ),
+      }).toEqual({
+        gap,
+        numbers: [1, 2, null, null, null, 3],
+        texts: [
+          "Soud uvážil.",
+          "Soud cituje zákon:",
+          texts[2] ?? null,
+          texts[3] ?? null,
+          texts[4] ?? null,
+          "Soud dále uvážil.",
+        ],
+      });
+    }
+  });
 });
 
 describe("#par= links on Czech decisions", () => {
