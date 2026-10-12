@@ -1,4 +1,5 @@
 import type { DesktopTimeEntryMatterCandidate } from "@stll/api-contract/desktop-time-entries";
+import { normalizeUnicode } from "@stll/text-normalize";
 import { Temporal } from "@stll/time";
 
 import {
@@ -42,8 +43,7 @@ type MatchDayOptions = {
 };
 
 const tokens = (text: string) =>
-  text
-    .normalize("NFKC")
+  normalizeUnicode(text, "NFKC")
     .toLowerCase()
     .match(/[\p{L}\p{N}]+/gu) ?? [];
 const hasPhrase = (haystack: readonly string[], phrase: readonly string[]) =>

@@ -11,7 +11,7 @@ import createPdfSigningHandoff from "@/api/handlers/entities/pdf-signing-handoff
 import {
   authorizeDesktopAccount,
   authorizeDesktopRegistry,
-  desktopMemberDenial,
+  authorizeDesktopMember,
 } from "@/api/lib/business-registries/desktop/auth";
 import {
   DESKTOP_ACCOUNT_PERMISSION,
@@ -30,6 +30,7 @@ import {
 import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-write-access";
 import {
   hasMemberPermission,
+  roleForDisplay,
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
 
@@ -188,22 +189,36 @@ test("desktop request authorization follows each operation", () => {
 });
 
 test("a role without the permission is forbidden, not disconnected", () => {
-  expect(desktopMemberDenial(null, DESKTOP_ACCOUNT_PERMISSION)?.status).toBe(
-    401,
-  );
+  const decision = {
+    ok: roleForDisplay,
+    err: ({ status }: { status: number }) => status,
+  };
   expect(
-    desktopMemberDenial({ role: "not-a-role" }, DESKTOP_ACCOUNT_PERMISSION)
-      ?.status,
+    authorizeDesktopMember(null, DESKTOP_ACCOUNT_PERMISSION).match(decision),
+  ).toBe(401);
+  expect(
+    authorizeDesktopMember(
+      { role: "not-a-role" },
+      DESKTOP_ACCOUNT_PERMISSION,
+    ).match(decision),
   ).toBe(401);
   // External members may link the desktop but not search registries.
   expect(
-    desktopMemberDenial({ role: "external" }, DESKTOP_ACCOUNT_PERMISSION),
-  ).toBeNull();
+    authorizeDesktopMember(
+      { role: "external" },
+      DESKTOP_ACCOUNT_PERMISSION,
+    ).match(decision),
+  ).toBe("external");
   expect(
-    desktopMemberDenial({ role: "external" }, DESKTOP_REGISTRY_PERMISSION)
-      ?.status,
+    authorizeDesktopMember(
+      { role: "external" },
+      DESKTOP_REGISTRY_PERMISSION,
+    ).match(decision),
   ).toBe(403);
   expect(
-    desktopMemberDenial({ role: "owner" }, DESKTOP_REGISTRY_PERMISSION),
-  ).toBeNull();
+    authorizeDesktopMember(
+      { role: "owner" },
+      DESKTOP_REGISTRY_PERMISSION,
+    ).match(decision),
+  ).toBe("owner");
 });
