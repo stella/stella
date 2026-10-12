@@ -1,4 +1,4 @@
-import { escapeRegExp } from "@stll/text-normalize";
+import { escapeRegExp, normalizeUnicode } from "@stll/text-normalize";
 
 import {
   CITED_PART,
@@ -79,7 +79,7 @@ export const classifyCitedPart = ({
   if (rules === undefined || citationText.length === 0) {
     return CITED_PART.NOT_STATED;
   }
-  const target = escapeRegExp(citationText.normalize("NFC")).replaceAll(
+  const target = escapeRegExp(normalizeUnicode(citationText, "NFC")).replaceAll(
     /\s+/gu,
     "\\s+",
   );
@@ -100,7 +100,9 @@ export const classifyCitedPart = ({
       );
     }
     const bound = new RegExp(bindings.join("|"), "iu");
-    if (!contexts.some((context) => bound.test(context.normalize("NFC")))) {
+    if (
+      !contexts.some((context) => bound.test(normalizeUnicode(context, "NFC")))
+    ) {
       continue;
     }
     parts.add(part);
