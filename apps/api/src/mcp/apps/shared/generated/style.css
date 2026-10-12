@@ -4798,6 +4798,15 @@
     }
   }
   @media (prefers-reduced-motion: no-preference) {
+    .motion-safe\:transition-transform {
+      transition-property: transform, translate, scale, rotate;
+      transition-timing-function: var(--tw-ease, var(--ease-out));
+      transition-duration: var(--tw-duration, var(--default-transition-duration));
+    }
+    .motion-safe\:duration-150 {
+      --tw-duration: 150ms;
+      transition-duration: 150ms;
+    }
     .motion-safe\:active\:scale-\[0\.98\]:active {
       scale: 0.98;
     }
