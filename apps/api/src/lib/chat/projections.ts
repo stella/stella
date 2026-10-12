@@ -85,10 +85,7 @@ import {
   unenumeratedJson,
 } from "./projection-schema";
 
-export {
-  SEARCH_CASE_LAW_PROJECTION,
-  LOOKUP_CASE_LAW_PROJECTION,
-} from "./case-law-result-projections";
+export { SEARCH_CASE_LAW_PROJECTION } from "./case-law-result-projections";
 
 /**
  * Per-tool chat projection schemas, one artifact per projected registry tool.
@@ -1425,6 +1422,35 @@ export const CASE_LAW_COVERAGE_PROJECTION = projectionBranch(
         decisions: v.number(),
         decisionYearFrom: v.nullable(v.number()),
         decisionYearTo: v.nullable(v.number()),
+        sources: v.array(
+          v.strictObject({
+            adapterKey: v.string(),
+            name: v.string(),
+            lastSyncAt: v.nullable(v.string()),
+            decisionYearFrom: v.nullable(v.number()),
+            decisionYearTo: v.nullable(v.number()),
+            pendingTextCount: v.number(),
+            knownGaps: v.variant("type", [
+              projectionBranch(v.strictObject({ type: v.literal("unknown") })),
+              projectionBranch(
+                v.strictObject({ type: v.literal("none-recorded") }),
+              ),
+              projectionBranch(
+                v.strictObject({
+                  type: v.literal("known"),
+                  gaps: v.array(
+                    v.strictObject({
+                      from: v.string(),
+                      to: v.string(),
+                      reason: v.string(),
+                      evidenceRef: v.string(),
+                    }),
+                  ),
+                }),
+              ),
+            ]),
+          }),
+        ),
         courts: v.nullable(
           v.array(
             v.variant("type", [
@@ -1445,7 +1471,8 @@ export const CASE_LAW_COVERAGE_PROJECTION = projectionBranch(
               ),
               projectionBranch(
                 v.strictObject({
-                  type: v.literal("unlisted"),
+                  type: v.literal("other-courts"),
+                  courts: v.nullable(v.number()),
                   decisions: v.number(),
                 }),
               ),

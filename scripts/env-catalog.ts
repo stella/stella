@@ -1348,11 +1348,19 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // Workflow lint resolves the checksum-verified actionlint executable.
+  "ACTIONLINT_BIN",
+  "QUERY_PERF_BASELINE_MODE",
+  "QUERY_PERF_BASE_REF",
+  "QUERY_PERF_CHANGED_PATHS",
+  "QUERY_PERF_SCOPE_UNKNOWN",
   // CI image resolution and smoke tooling; product defaults remain upstream.
   "CI_IMAGE_MIRROR_ENABLED",
   "CI_PLAYWRIGHT_IMAGE",
   "POSTGRES_IMAGE",
   "REDIS_IMAGE",
+  // The scan engine drift check builds into a scratch directory and compares it.
+  "SCAN_ENGINE_WASM_OUT_DIR",
   // The manual checks workflow passes its inputs and result files to its scripts.
   "CHECK_CHECK",
   "CHECK_EXIT_FILE",
@@ -1374,6 +1382,10 @@ export const TOOLING_ENV_KEYS = new Set([
   "FOLDED_SUITES",
   // CI steps export the GitHub API retry helper's path after installing it.
   "GH_RETRY_SCRIPT",
+  // Dated-waiver healing: the private repository its fix tasks go to, and
+  // the merge hold that keeps it from arming removals.
+  "DATED_WAIVER_FIX_REPO",
+  "MERGE_HOLD",
   // Preserve Bun global-store links inside browser containers.
   "BUN_INSTALL_CACHE_DIR",
   // Browser commands use only executables baked into the pinned image.
@@ -1556,6 +1568,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_QUERY_PLAN_SCALE_PROFILE",
   "STELLA_RUN_CORPUS_ENGINE_TESTS",
   "STELLA_RUN_POSTGRES_TESTS",
+  "STELLA_RUN_QUERY_PERF_TESTS",
   "STELLA_RUN_VALKEY_TESTS",
   "STELLA_SEED_ID_NAMESPACE",
   "STELLA_SEED_ORG_ID",
@@ -1570,6 +1583,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "TEST_API_ERROR",
   "TEST_LATER",
   "CI_GENERATED_SOURCES_MANIFEST",
+  // CI installer budget selected from restored package-cache contents.
+  "CI_INSTALL_CACHE_RESTORED",
   "CI_POSTGRES_TEST_SELECTION",
   "CI_POSTGRES_TEST_SHARD",
   "POSTGRES_TEST_DURATIONS_FILE",

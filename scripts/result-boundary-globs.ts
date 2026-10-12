@@ -27,6 +27,7 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
 // oxlint.config.ts spreads this list rather than restating it, so the lint
 // scope and the enrolment guard cannot drift apart.
 export const RESULT_CONVENTION_ENABLED_GLOBS = [
+  "packages/playwright-tools/src/**/*.ts",
   "apps/web/src/features/law-search-history/**/*.ts",
   "apps/desktop/src/activity/**/*.ts",
   "apps/desktop/src/activity/**/*.tsx",
@@ -158,6 +159,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/routes/dev/**/*.{ts,tsx}",
   "apps/web/src/routes/sitemaps/**/*.{ts,tsx}",
   "apps/web/src/stores/**/*.{ts,tsx}",
+  "apps/web/src/testing/**/*.{ts,tsx}",
   "packages/agent-input/src/**/*.ts",
   "packages/mcp-kit/src/**/*.ts",
   "packages/ai-catalog/src/**/*.ts",
@@ -182,6 +184,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/permissions/src/**/*.ts",
   "packages/redis-config/src/**/*.ts",
   "packages/runtime-mode/src/**/*.ts",
+  "packages/scan-engine/src/**/*.ts",
   "packages/sanctions/src/**/*.ts",
   "packages/sha256/src/**/*.ts",
   "packages/start-runtime/src/**/*.ts",
@@ -283,6 +286,10 @@ export const RESULT_BOUNDARY_GLOBS = [
   "packages/start-runtime/src/runtime.ts",
   "packages/ssr-testkit/src/assert-document.ts",
   "packages/property-testing/src/index.ts",
+  // wasm-bindgen reports initialization failures and traps through rejection;
+  // this adapter converts that runtime contract to a typed Result.
+  "packages/scan-engine/src/scan-engine.ts",
+  "packages/scan-engine/src/scan-engine.worker.ts",
 ] as const;
 
 // Declaration files carry no runtime code. The lint ignores them outright, so
@@ -494,15 +501,25 @@ export const RESULT_CONVENTION_OPT_OUTS = [
   { reason: "unreviewed", unit: "packages/user-agent/src" },
 ] as const satisfies readonly ResultBoundaryOptOut[];
 
-const resultConventionExcludeGlobs = RESULT_CONVENTION_EXCLUDE_GLOBS.map(
-  (glob) => new Bun.Glob(glob),
-);
-const resultConventionSourceGlobs = RESULT_CONVENTION_SOURCE_GLOBS.map(
-  (glob) => new Bun.Glob(glob),
-);
+let resultConventionExcludeGlobs: Bun.Glob[] | undefined;
+let resultConventionSourceGlobs: Bun.Glob[] | undefined;
+
+const getResultConventionExcludeGlobs = () => {
+  resultConventionExcludeGlobs ??= RESULT_CONVENTION_EXCLUDE_GLOBS.map(
+    (glob) => new Bun.Glob(glob),
+  );
+  return resultConventionExcludeGlobs;
+};
+
+const getResultConventionSourceGlobs = () => {
+  resultConventionSourceGlobs ??= RESULT_CONVENTION_SOURCE_GLOBS.map(
+    (glob) => new Bun.Glob(glob),
+  );
+  return resultConventionSourceGlobs;
+};
 
 export const isResultConventionSourceFile = (file: string): boolean =>
-  resultConventionSourceGlobs.some((glob) => glob.match(file));
+  getResultConventionSourceGlobs().some((glob) => glob.match(file));
 
 export const isResultConventionExcludedFile = (file: string): boolean =>
-  resultConventionExcludeGlobs.some((glob) => glob.match(file));
+  getResultConventionExcludeGlobs().some((glob) => glob.match(file));

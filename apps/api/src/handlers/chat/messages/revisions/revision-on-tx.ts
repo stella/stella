@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import { deepEquals } from "bun";
 import { and, eq, inArray } from "drizzle-orm";
 
@@ -75,9 +74,6 @@ export const writeChatMessageRevisionOnTx = async ({
         })
         .from(chatThreads),
   });
-  if (threadLock.status === "busy") {
-    return panic("Blocking thread lock returned busy");
-  }
   const thread = threadLock.rows.at(0);
   if (
     !thread ||
@@ -95,9 +91,6 @@ export const writeChatMessageRevisionOnTx = async ({
     mode: "update",
     select: (handle) => handle.select().from(chatMessages),
   });
-  if (messageLock.status === "busy") {
-    return panic("Blocking message lock returned busy");
-  }
   const message = messageLock.rows.at(0);
   if (!message) {
     return { type: "not-found" } as const;

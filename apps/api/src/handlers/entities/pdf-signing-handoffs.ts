@@ -115,6 +115,7 @@ const baseVersionChanged = () =>
   });
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason: "Prepares a signing handoff without returning stored-file bytes.",

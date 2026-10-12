@@ -4,7 +4,8 @@ import * as v from "valibot";
 
 import MCP_APP_MESSAGES from "@stll/api-contract/mcp-app-messages";
 import {
-  APP_LOOKUP_FIXTURE,
+  APP_RESOLVE_FIXTURE,
+  APP_RESOLVE_STATUS_FIXTURES,
   APP_SEARCH_FIXTURE,
   APP_UNAVAILABLE_FIXTURE,
 } from "@stll/api-contract/mcp-app.fixtures";
@@ -14,10 +15,10 @@ import { MCP_APP_CONSUMED_FIELDS } from "./app-consumed-fields";
 import { MCP_APP_OUTPUT_SCHEMAS } from "./app-contracts";
 import { inspectAppManifest, inspectAppSchemas } from "./app-guards";
 import { isMcpAppAvailable } from "./app-policy";
-import { inspectAppSources } from "./app-source-guard";
+import { inspectAppHtmlSources, inspectAppSources } from "./app-source-guard";
 import {
   filterDefaults,
-  lookupView,
+  resolveView,
   searchFilterInput,
   searchView,
   sortResultRows,
@@ -28,7 +29,7 @@ import {
   CITATION_GRAPH_APP,
   MCP_APPS,
 } from "./apps/manifest";
-import type { LookupResults, SearchResults } from "./apps/shared/contracts";
+import type { ResolveResults, SearchResults } from "./apps/shared/contracts";
 import type { McpMode } from "./constants";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
@@ -37,8 +38,9 @@ import {
 import { serializeToolResult, untypedToolDataResult } from "./tool-utils";
 
 APP_SEARCH_FIXTURE satisfies SearchResults;
-APP_LOOKUP_FIXTURE satisfies LookupResults;
-APP_UNAVAILABLE_FIXTURE satisfies SearchResults & LookupResults;
+APP_RESOLVE_FIXTURE satisfies ResolveResults;
+APP_UNAVAILABLE_FIXTURE satisfies SearchResults;
+APP_RESOLVE_STATUS_FIXTURES satisfies ResolveResults[];
 
 const appRoot = path.resolve(import.meta.dirname, "apps");
 const directories = [...new Bun.Glob("*/app.html").scanSync(appRoot)].map(
@@ -264,21 +266,64 @@ describe("MCP app registry and contracts", () => {
       [...UI_LOCALES].toSorted(),
     );
     expect(actual).toEqual(expected);
+    for (const locale of ["cs", "en", "sk"] as const) {
+      expect(Object.keys(expected[locale]).toSorted()).toEqual(
+        Object.keys(expected.en).toSorted(),
+      );
+      expect(
+        Object.values(expected[locale]).every((value) => value.trim() !== ""),
+      ).toBe(true);
+    }
+  });
+  test("static app copy comes from the shared catalog", async () => {
+    const files = [...new Bun.Glob("**/*.html").scanSync(appRoot)];
+    const sources = Object.fromEntries(
+      await Promise.all(
+        files.map(async (file) => [
+          file,
+          await Bun.file(path.join(appRoot, file)).text(),
+        ]),
+      ),
+    );
+    expect(inspectAppHtmlSources(sources)).toEqual([]);
+  });
+  test("static copy guard rejects text nodes and accessible labels", () => {
+    expect(
+      inspectAppHtmlSources({
+        "file-comparison/app.html":
+          '<title>Compare two files</title><h1>Compare two files</h1><input aria-label="Original" placeholder="Choose file"><img alt="Preview"><button title="Upload">Upload for redline</button>',
+      }),
+    ).toEqual([
+      "App HTML copy requires the shared catalog: file-comparison/app.html: Compare two files",
+      "App HTML copy requires the shared catalog: file-comparison/app.html: Compare two files",
+      "App HTML copy requires the shared catalog: file-comparison/app.html: Original",
+      "App HTML copy requires the shared catalog: file-comparison/app.html: Choose file",
+      "App HTML copy requires the shared catalog: file-comparison/app.html: Preview",
+      "App HTML copy requires the shared catalog: file-comparison/app.html: Upload for redline",
+      "App HTML copy requires the shared catalog: file-comparison/app.html: Upload",
+    ]);
+    expect(
+      inspectAppHtmlSources({
+        "shared/app.html":
+          '<title>stella</title><style>body { color: red; }</style><script>const title = "Compare two files";</script><!-- Original --><div>…</div><button aria-label=""></button>',
+      }),
+    ).toEqual([]);
   });
   test("app consumed-field snapshots match the fields the view actually reads", () => {
     const search = new Set([
       ...observedFields(APP_SEARCH_FIXTURE, searchView),
       ...observedFields(APP_UNAVAILABLE_FIXTURE, searchView),
     ]);
-    const lookup = new Set([
-      ...observedFields(APP_LOOKUP_FIXTURE, lookupView),
-      ...observedFields(APP_UNAVAILABLE_FIXTURE, lookupView),
+    const resolution = new Set([
+      ...APP_RESOLVE_STATUS_FIXTURES.flatMap((fixture) => [
+        ...observedFields(fixture, resolveView),
+      ]),
     ]);
     expect([...search].toSorted()).toEqual(
       [...MCP_APP_CONSUMED_FIELDS.search_case_law].toSorted(),
     );
-    expect([...lookup].toSorted()).toEqual(
-      [...MCP_APP_CONSUMED_FIELDS.lookup_case_law].toSorted(),
+    expect([...resolution].toSorted()).toEqual(
+      [...MCP_APP_CONSUMED_FIELDS.resolve_case_law_decision].toSorted(),
     );
     const view = searchView(APP_SEARCH_FIXTURE);
     expect(view).not.toHaveProperty("total");
@@ -287,7 +332,7 @@ describe("MCP app registry and contracts", () => {
     }
     expect(view.results.at(0)).not.toHaveProperty("citationAuthority");
     expect(view.results.at(0)).not.toHaveProperty("url");
-    expect(lookupView(APP_LOOKUP_FIXTURE)).not.toHaveProperty("resourceName");
+    expect(resolveView(APP_RESOLVE_FIXTURE)).not.toHaveProperty("resourceName");
   });
   test("publisher headnotes survive the MCP projection and absence is explicit", () => {
     const first = APP_SEARCH_FIXTURE.results.at(0);
@@ -325,13 +370,13 @@ describe("MCP app registry and contracts", () => {
       throw new Error("Expected search view");
     }
     expect(absent.results.at(0)?.keywords).toBeNull();
-    const lookup = lookupView(APP_LOOKUP_FIXTURE);
-    if (lookup.type !== "lookup") {
-      throw new Error("Expected lookup view");
+    const resolution = resolveView(APP_RESOLVE_FIXTURE);
+    if (resolution.status !== "resolved") {
+      throw new Error("Expected resolve view");
     }
-    expect(lookup.rows).not.toHaveLength(0);
-    for (const row of lookup.rows) {
-      expect(row).toMatchObject({ type: "lookup", snippet: null });
+    expect(resolution.rows).not.toHaveLength(0);
+    for (const row of resolution.rows) {
+      expect(row).toMatchObject({ type: "resolve", snippet: null });
     }
   });
   test.each([
@@ -507,30 +552,21 @@ describe("MCP app registry and contracts", () => {
     ).toEqual(["c", "a", "b"]);
     expect(rows.map(({ decisionId }) => decisionId)).toEqual(["b", "a", "c"]);
   });
-  test("lookup text and structured content include the canonical court field", () => {
-    const found = APP_LOOKUP_FIXTURE.items.find(
-      (item) => item.status === "found",
-    );
-    if (found === undefined) {
-      throw new Error("Missing found lookup fixture");
-    }
+  test("resolve text and structured content preserve the shared envelope", () => {
     const result = serializeToolResult(
-      untypedToolDataResult({ items: [found] }),
-      getStaticMcpToolOutputContract("lookup_case_law"),
-      "lookup_case_law",
+      untypedToolDataResult(APP_RESOLVE_FIXTURE),
+      getStaticMcpToolOutputContract("resolve_case_law_decision"),
+      "resolve_case_law_decision",
     );
-    expect(result.structuredContent).toEqual({ items: [found] });
+    expect(result.structuredContent).toEqual(APP_RESOLVE_FIXTURE);
     expect(result.content).toEqual([
-      {
-        type: "text",
-        text: '{"items":[{"identifier":"I. ÚS 123/24","appUrl":"https://stll.app/case-law/fixture-decision","url":"https://stll.app/case-law/fixture-decision","caseNumber":"I. ÚS 123/24","court":"Ústavní soud","courtAbbreviation":"ÚS","decisionDate":"2024-04-15","decisionId":"fixture-decision","ecli":"ECLI:CZ:US:2024:1.US.123.24.1","resourceName":"case-law/fixture-decision","status":"found"}]}',
-      },
+      { type: "text", text: JSON.stringify(APP_RESOLVE_FIXTURE) },
     ]);
   });
   test("linking an app leaves text and structured content byte-identical", () => {
     for (const [name, fixtures] of [
       ["search_case_law", [APP_SEARCH_FIXTURE, APP_UNAVAILABLE_FIXTURE]],
-      ["lookup_case_law", [APP_LOOKUP_FIXTURE, APP_UNAVAILABLE_FIXTURE]],
+      ["resolve_case_law_decision", APP_RESOLVE_STATUS_FIXTURES],
     ] as const) {
       for (const fixture of fixtures) {
         const result = serializeToolResult(
@@ -582,7 +618,7 @@ describe("MCP app registry and contracts", () => {
     `);
     expect(CASE_LAW_RESULTS_APP.linkedTools).toEqual([
       "search_case_law",
-      "lookup_case_law",
+      "resolve_case_law_decision",
     ]);
   });
 });

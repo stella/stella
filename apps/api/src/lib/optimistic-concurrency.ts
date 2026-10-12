@@ -4,7 +4,7 @@ import { t } from "elysia";
 import { API_VERSION_CONFLICT_ERROR_CODE } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { HandlerError } from "./errors/tagged-errors";
 
 /**
  * Machine-readable code on the 409 a stale editor round-trip earns. Clients

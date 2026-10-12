@@ -29,6 +29,7 @@ const clipBodySchema = t.Object({
 
 export default createSafeHandler(
   {
+    contract: "patch",
     description:
       "Save an external source as a link entity in the current matter: a " +
       "title and url, plus optional snippet, citation, jurisdiction, and " +

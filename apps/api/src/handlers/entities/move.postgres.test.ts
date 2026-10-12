@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { asc, eq, sql } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
@@ -21,6 +21,7 @@ import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
 import { moveEntityHandler } from "./move";
 import type { MoveEntityHandlerProps } from "./move";
+import { unlockedWorkspaceParentRead } from "./move-statement-barrier.fixture";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -113,6 +114,7 @@ const runMove = async ({
   });
 
 type StatementBarrier = {
+  workspaceId: MoveEntityHandlerProps["workspaceId"];
   before: (statement: string) => void;
   after: (statement: string) => Promise<void>;
   lockMode: "take" | "omit";
@@ -136,8 +138,14 @@ const withStatementBarrier = (tx: Transaction, barrier: StatementBarrier) =>
         // lock, with every entity read/write and ancestry check unchanged.
         const omitted =
           barrier.lockMode === "omit" && isWorkspaceLock(compiled);
-        const text = omitted ? "SELECT 1" : compiled;
-        const raw = target.execute(omitted ? sql`SELECT 1` : query);
+        const instrumentedQuery = omitted
+          ? unlockedWorkspaceParentRead(barrier.workspaceId)
+          : query;
+        const text =
+          typeof instrumentedQuery === "string"
+            ? instrumentedQuery
+            : new PgDialect().sqlToQuery(instrumentedQuery.getSQL()).sql;
+        const raw = target.execute(instrumentedQuery);
         const execute = raw.execute.bind(raw);
         raw.execute = async (values) => {
           barrier.before(text);
@@ -226,6 +234,7 @@ if (!databaseUrl || !runPostgresTests) {
             body: firstBody,
             instrument: (tx) =>
               withStatementBarrier(tx, {
+                workspaceId: hierarchy.workspaceId,
                 lockMode,
                 before: () => undefined,
                 after: async (statement) => {
@@ -253,6 +262,7 @@ if (!databaseUrl || !runPostgresTests) {
               body: secondBody,
               instrument: (tx) =>
                 withStatementBarrier(tx, {
+                  workspaceId: hierarchy.workspaceId,
                   lockMode,
                   before: (statement) => {
                     if (isWorkspaceLock(statement)) {

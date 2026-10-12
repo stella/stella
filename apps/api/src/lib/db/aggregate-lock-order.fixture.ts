@@ -19,6 +19,7 @@ export const aggregateFences = () => {
   const definitionId = createSafeId<"flowDefinition">();
   const threadId = createSafeId<"chatThread">();
   const userId = mintAuthProviderId<"user">();
+  const answerId = createSafeId<"legalReaderAnswer">();
   return {
     signingSession: {
       aggregate: "signingSession",
@@ -33,6 +34,10 @@ export const aggregateFences = () => {
       aggregate: "organization",
       id: organizationId,
       mode: "update",
+    },
+    professionalUseAcceptance: {
+      aggregate: "professionalUseAcceptance",
+      id: { userId: mintAuthProviderId<"user">() },
     },
     orgFeatureAdmission: {
       aggregate: "orgFeatureAdmission",
@@ -79,6 +84,16 @@ export const aggregateFences = () => {
       id: { id: threadId, organizationId, userId },
       mode: "update",
     },
+    readerAnswer: {
+      aggregate: "readerAnswer",
+      id: { id: answerId, organizationId, userId },
+      mode: "update",
+    },
+    readerAnswerMessage: {
+      aggregate: "readerAnswerMessage",
+      id: { id: createSafeId<"legalReaderAnswerMessage">(), answerId },
+      mode: "update",
+    },
     chatTurn: {
       aggregate: "chatTurn",
       id: { threadId, organizationId, userId, toolCallId: "test-call" },
@@ -107,6 +122,16 @@ export const aggregateFences = () => {
     entity: {
       aggregate: "entity",
       id: { id: createSafeId<"entity">(), workspaceId },
+      mode: "update",
+    },
+    entityVersion: {
+      aggregate: "entityVersion",
+      id: { id: createSafeId<"entityVersion">(), workspaceId },
+      mode: "update",
+    },
+    field: {
+      aggregate: "field",
+      id: { id: createSafeId<"field">(), workspaceId },
       mode: "update",
     },
     signal: {
@@ -156,7 +181,7 @@ const hashFixture = (value: unknown) => {
 /** Stable physical keys distinguish namespaces and principals; this is not a PostgreSQL hash oracle. */
 export const aggregateExecutionRows = (statement: SQL, found = true) => {
   const query = new PgDialect().sqlToQuery(statement);
-  if (!query.sql.includes("advisory_xact_lock")) {
+  if (!query.sql.includes("AS key1")) {
     return found ? [{ id: "locked" }] : [];
   }
   const first = query.params.at(0);

@@ -4,8 +4,10 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import type { Fetcher } from "@stll/fetch";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import type { SafeDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { FieldMeta } from "@/api/lib/docx/types";
+import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import {
   createSystemOneClient,
@@ -104,6 +106,9 @@ const decide = async (client: DecisionModel | null) =>
     fields,
     values,
     orgAIConfig: null,
+    generator: async () => {
+      throw new Error("Generation unavailable in this test");
+    },
     client,
   });
 
@@ -174,6 +179,9 @@ describe("decideTemplateConditions request", () => {
       fields: [{ path: "is_signed", inputType: "boolean" }],
       values,
       orgAIConfig: null,
+      generator: async () => {
+        throw new Error("Generation unavailable in this test");
+      },
       client: answering({}),
     });
 
@@ -217,13 +225,55 @@ describe("decideTemplateConditions answers", () => {
     ]);
   });
 
-  test("an answer under the confidence floor stays undecided", async () => {
+  test("a single generative call settles all open preview conditions", async () => {
+    let calls = 0;
+    const preview = await decideTemplateConditions({
+      fields,
+      values,
+      orgAIConfig: null,
+      client: null,
+      generator: async ({ questions, state }) => {
+        calls += 1;
+        expect(Object.keys(questions)).toEqual([
+          "is_consumer",
+          "has_arbitration",
+        ]);
+        expect(state).toEqual({
+          details: JSON.stringify({ party_name: "Acme s.r.o." }),
+        });
+        return {
+          model: "test-generative",
+          output: {
+            answers: [
+              {
+                id: "is_consumer",
+                answer: { type: "noul", noul: 1 },
+                evidence: null,
+              },
+              {
+                id: "has_arbitration",
+                answer: { type: "noul", noul: 0 },
+                evidence: null,
+              },
+            ],
+          },
+        };
+      },
+    });
+    expect(calls).toBe(1);
+    expect(preview.conditions.map(({ decision }) => decision)).toEqual([
+      { state: "decided", decidedBy: "generative_model", value: true },
+      { state: "decided", decidedBy: "generative_model", value: false },
+    ]);
+  });
+
+  test("a generative failure after an answer under the floor stays undecided", async () => {
     const decided = await decide(
       answering({ is_consumer: 0.55, has_arbitration: 0.95 }),
     );
 
     expect(decided.conditions.map(({ decision }) => decision)).toEqual([
-      { state: "undecided", reason: "below-floor" },
+      { state: "undecided", reason: "failed" },
       {
         state: "decided",
         decidedBy: "decision_model",
@@ -234,13 +284,13 @@ describe("decideTemplateConditions answers", () => {
     ]);
   });
 
-  test("with no decision model every condition is no-backend", async () => {
+  test("a generative failure without a decision model leaves every condition undecided", async () => {
     const decided = await decide(null);
 
     expect(decided.model).toBeNull();
     expect(decided.conditions.map(({ decision }) => decision)).toEqual([
-      { state: "undecided", reason: "no-backend" },
-      { state: "undecided", reason: "no-backend" },
+      { state: "undecided", reason: "failed" },
+      { state: "undecided", reason: "failed" },
     ]);
   });
 
@@ -259,6 +309,9 @@ describe("decideTemplateConditions answers", () => {
       fields,
       values: { ...values, is_consumer: false },
       orgAIConfig: null,
+      generator: async () => {
+        throw new Error("Generation unavailable in this test");
+      },
       client: answering({ has_arbitration: 0.9 }),
     });
 
@@ -301,6 +354,9 @@ describe("decideTemplateConditions answers", () => {
       ],
       values: { client: { is_consumer: true } },
       orgAIConfig: null,
+      generator: async () => {
+        throw new Error("Generation unavailable in this test");
+      },
       client: answering({}),
     });
 
@@ -327,6 +383,9 @@ describe("decideTemplateConditions answers", () => {
         has_arbitration: "no",
       },
       orgAIConfig: null,
+      generator: async () => {
+        throw new Error("Generation unavailable in this test");
+      },
       client: answering({}),
     });
 
@@ -349,6 +408,72 @@ describe("decideTemplateConditions answers", () => {
   });
 });
 
+describe("condition preview enters model gates only for open questions", () => {
+  test.each(["empty", "supplied"] as const)(
+    "%s conditions require no AI gates",
+    async (mode) => {
+      const { scopedDb } = createScopedDbMock({
+        query: {
+          templates: {
+            findFirst: async () => ({
+              manifest: {
+                fields: mode === "empty" ? [] : fields,
+                clauseSlots: [],
+              },
+            }),
+          },
+        },
+      });
+      let gates = 0;
+      const result = await templateDecideConditionsLogic({
+        scopedDb,
+        organizationId: toSafeId<"organization">("org_preview"),
+        templateId: toSafeId<"template">("tmpl_preview_conditional"),
+        body: { values: { is_consumer: false, has_arbitration: true } },
+        abortSignal: new AbortController().signal,
+        runDecisions: async () => {
+          gates += 1;
+          return Result.err(
+            new HandlerError({ status: 429, message: "Model work refused" }),
+          );
+        },
+      });
+      expect(Result.isOk(result)).toBe(true);
+      expect(gates).toBe(0);
+    },
+  );
+
+  test.each([429, 503] as const)(
+    "an open condition preserves the gate refusal status %s",
+    async (status) => {
+      const { scopedDb } = createScopedDbMock({
+        query: {
+          templates: {
+            findFirst: async () => ({ manifest: { fields, clauseSlots: [] } }),
+          },
+        },
+      });
+      const result = await templateDecideConditionsLogic({
+        scopedDb,
+        organizationId: toSafeId<"organization">("org_preview"),
+        templateId: toSafeId<"template">("tmpl_preview_conditional"),
+        body: { values: {} },
+        abortSignal: new AbortController().signal,
+        runDecisions: async ({ fields: planned }) => {
+          expect(planned).toEqual(fields);
+          return Result.err(
+            new HandlerError({ status, message: "Model work refused" }),
+          );
+        },
+      });
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.status).toBe(status);
+      }
+    },
+  );
+});
+
 describe("templateDecideConditionsLogic access", () => {
   test("reads the template only within the caller's organization", async () => {
     const queried: unknown[] = [];
@@ -367,11 +492,13 @@ describe("templateDecideConditionsLogic access", () => {
     const templateId = toSafeId<"template">("tmpl_other_org");
 
     const result = await templateDecideConditionsLogic({
+      runDecisions: async () => {
+        throw new Error("Deterministic preview must not enter AI gates");
+      },
       scopedDb,
       organizationId,
       templateId,
       body: { values: {} },
-      orgAIConfig: null,
       abortSignal: new AbortController().signal,
     });
 
@@ -399,6 +526,7 @@ describe("templateDecideConditionsLogic access", () => {
     let modelSignal: AbortSignal | undefined;
     const modelStarted = Promise.withResolvers<undefined>();
     const client: DecisionModel = {
+      provider: "typesafe",
       keySource: "byok",
       model: "jev-test",
       ask: async ({ abortSignal }) => {
@@ -424,13 +552,28 @@ describe("templateDecideConditionsLogic access", () => {
     const controller = new AbortController();
 
     const result = templateDecideConditionsLogic({
+      runDecisions: async ({
+        fields: plannedFields,
+        values: plannedValues,
+        abortSignal,
+      }) =>
+        Result.ok(
+          await decideTemplateConditions({
+            fields: plannedFields,
+            values: plannedValues,
+            abortSignal,
+            orgAIConfig: null,
+            client,
+            generator: async () => {
+              throw new Error("Generation unavailable in this test");
+            },
+          }),
+        ),
       scopedDb,
       organizationId: toSafeId<"organization">("org_caller"),
       templateId: toSafeId<"template">("tmpl_conditioned"),
       body: { values },
-      orgAIConfig: null,
       abortSignal: controller.signal,
-      client,
     });
 
     await modelStarted.promise;
@@ -472,12 +615,13 @@ test("linked clauses without markers reuse the cached condition manifest", async
     },
   });
   const result = await templateDecideConditionsLogic({
+    runDecisions: async () => {
+      throw new Error("Deterministic preview must not enter AI gates");
+    },
     scopedDb,
     organizationId: toSafeId<"organization">("org_caller"),
     templateId: toSafeId<"template">("tmpl_cached"),
     body: { values: { is_consumer: true, has_arbitration: false } },
-    orgAIConfig: null,
-    client: null,
     abortSignal: new AbortController().signal,
   });
   expect(result.unwrap().conditions.map(({ decision }) => decision)).toEqual([
@@ -554,12 +698,13 @@ for (const resolution of [
       }),
     });
     const result = await templateDecideConditionsLogic({
+      runDecisions: async () => {
+        throw new Error("Deterministic preview must not enter AI gates");
+      },
       scopedDb,
       templateId: toSafeId<"template">("tmpl_preview"),
       organizationId: toSafeId<"organization">("org_preview"),
       body: { values: { applicable: true } },
-      orgAIConfig: null,
-      client: null,
       abortSignal: new AbortController().signal,
     });
     if (resolution === "text-limit") {
@@ -599,17 +744,130 @@ test("condition preview reports an incomplete state before reading an excessive 
     },
   });
   const result = await templateDecideConditionsLogic({
+    runDecisions: async () => {
+      throw new Error("Deterministic preview must not enter AI gates");
+    },
     scopedDb,
     templateId: toSafeId<"template">("tmpl_preview"),
     organizationId: toSafeId<"organization">("org_preview"),
     body: { values: {} },
-    orgAIConfig: null,
-    client: null,
     abortSignal: new AbortController().signal,
   });
   expect(result.unwrap()).toEqual({
     conditions: [],
     model: null,
     preview: { state: "incomplete", reason: "clause-limit" },
+  });
+});
+
+test("mixed preview conditions reserve tools only for the referenced methodology", async () => {
+  const result = await decideTemplateConditions({
+    fields: [
+      {
+        path: "ordinary",
+        inputType: "boolean",
+        aiPrompt: "Is the principal a company?",
+      },
+      {
+        path: "methodology",
+        inputType: "boolean",
+        aiPrompt:
+          "Apply [Methodology](#stella-skill-ref=condition-methodology).",
+      },
+    ],
+    values: { party_name: "Acme s.r.o." },
+    orgAIConfig: null,
+    client: answering({ ordinary: 0.94 }),
+    generator: async ({ questions }) => {
+      expect(Object.keys(questions)).toEqual(["methodology"]);
+      expect(questions["methodology"]).toMatchObject({
+        requiredCapability: "tools",
+      });
+      return {
+        model: "test-generative",
+        output: {
+          answers: [
+            {
+              id: "methodology",
+              answer: { type: "noul", noul: 1 },
+              evidence: null,
+            },
+          ],
+        },
+      };
+    },
+  });
+  expect(sent).toEqual([
+    expect.objectContaining({ questions: { ordinary: expect.anything() } }),
+  ]);
+  expect(result.conditions.map(({ decision }) => decision)).toEqual([
+    expect.objectContaining({ state: "decided", decidedBy: "decision_model" }),
+    { state: "decided", decidedBy: "generative_model", value: true },
+  ]);
+});
+
+test("preview catalog failure preserves supplied decisions without starting a model", async () => {
+  let catalogReads = 0;
+  const safeDb: SafeDb = async () => {
+    catalogReads += 1;
+    return Result.err(
+      new DatabaseError({ message: "Fixture catalog unavailable" }),
+    );
+  };
+  let generationCalls = 0;
+  const result = await decideTemplateConditions({
+    fields: [
+      {
+        path: "supplied",
+        inputType: "boolean",
+        aiPrompt: "Is this a company?",
+      },
+      {
+        path: "skill",
+        inputType: "boolean",
+        aiPrompt:
+          "Apply [Methodology](#stella-skill-ref=condition-methodology).",
+      },
+      {
+        path: "ordinary",
+        inputType: "boolean",
+        aiPrompt: "Is this a consumer?",
+      },
+    ],
+    values: { supplied: false },
+    orgAIConfig: null,
+    client: answering({ ordinary: 0.94 }),
+    skillContext: {
+      organizationId: toSafeId<"organization">("org_preview"),
+      userId: toSafeId<"user">("user_preview"),
+      safeDb,
+    },
+    generator: async () => {
+      generationCalls += 1;
+      return { model: "test-generative", output: { answers: [] } };
+    },
+  });
+  expect(catalogReads).toBe(1);
+  expect(sent).toEqual([]);
+  expect(generationCalls).toBe(0);
+  expect(result).toEqual({
+    conditions: [
+      {
+        path: "supplied",
+        label: "supplied",
+        decision: { state: "decided", decidedBy: "user", value: false },
+      },
+      {
+        path: "skill",
+        label: "skill",
+        decision: { state: "undecided", reason: "failed" },
+      },
+      {
+        path: "ordinary",
+        label: "ordinary",
+        decision: { state: "undecided", reason: "failed" },
+      },
+    ],
+    model: null,
   });
 });

@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { stripUnicodeMarks } from "@stll/text-normalize";
+
 import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import {
   hasOptionalString,
@@ -346,7 +348,10 @@ export type SearchOptions = RegistryClientOptions & {
 };
 
 const foldForMatch = (value: string): string =>
-  value.normalize("NFD").replaceAll(/\p{M}/gu, "").toLocaleLowerCase("sk");
+  stripUnicodeMarks(value, {
+    form: "NFD",
+    markClass: "combining",
+  }).toLocaleLowerCase("sk");
 
 const nameRank = (name: string, query: string): number => {
   if (name === query) {

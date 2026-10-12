@@ -14,6 +14,7 @@ import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/a
 import { reportDesktopPresence } from "./service";
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
   cache: { kind: "none" },

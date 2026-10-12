@@ -7,7 +7,7 @@ export {
 } from "../packages/scripts/src/generated-files";
 
 type GeneratorCheck =
-  | { check: readonly string[]; checkedBy?: never; unchecked?: never }
+  | { check: readonly string[]; checkedBy?: string; unchecked?: never }
   | { check: null; checkedBy: string; unchecked?: never }
   | { check: null; checkedBy?: never; unchecked: string };
 
@@ -229,6 +229,34 @@ export const GENERATORS = [
     check: null,
     checkedBy: "MCP App bundle and shared assets guard",
     autofix: true,
+    after: [],
+  },
+  {
+    id: "scan-engine-fixtures",
+    outputKind: "committed",
+    outputs: ["packages/scan-engine/fixtures/*.pgm"],
+    inputs: ["packages/scan-engine/scripts/generate-fixtures.ts"],
+    write: ["bun", "--cwd=packages/scan-engine", "run", "generate:fixtures"],
+    check: ["bun", "--cwd=packages/scan-engine", "run", "check:fixtures"],
+    autofix: true,
+    after: [],
+  },
+  {
+    id: "scan-engine-wasm",
+    outputKind: "committed",
+    outputs: ["packages/scan-engine/generated/*"],
+    inputs: [
+      "packages/scan-engine/Cargo.lock",
+      "packages/scan-engine/Cargo.toml",
+      "packages/scan-engine/rust-toolchain.toml",
+      "packages/scan-engine/scripts/build-wasm.sh",
+      "packages/scan-engine/scripts/wasm-toolchain.sh",
+      "packages/scan-engine/src/*.rs",
+    ],
+    write: ["bun", "--cwd=packages/scan-engine", "run", "build:wasm"],
+    check: ["bash", "packages/scan-engine/scripts/test-wasm-offline.sh"],
+    checkedBy: "Check generated WebAssembly from a fresh Cargo cache",
+    autofix: false,
     after: [],
   },
   {
@@ -507,6 +535,8 @@ export const GENERATORS = [
     inputs: [
       "apps/web/src/i18n/glossary.json",
       "packages/scripts/src/glossary-gen.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+      ".oxfmtrc.json",
     ],
     write: ["bun", "packages/scripts/src/glossary-gen.ts", "apps/web/src/i18n"],
     check: [
