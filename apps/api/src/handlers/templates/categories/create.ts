@@ -10,6 +10,7 @@ import {
 } from "../categories";
 
 const config = {
+  contract: "patch",
   description:
     "Create a category in the organization's template category tree, " +
     "optionally under a parent category.",

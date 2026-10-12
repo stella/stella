@@ -67,6 +67,8 @@ const answered = (
   overrides: Partial<AnsweredOutcome> = {},
 ): AnswerOutcome => ({
   state: "answered",
+  source: "decision-model",
+  model: "jev-1.13",
   answer,
   probability: 0.9,
   confidence: 0.9,
@@ -169,20 +171,33 @@ describe("resolveSystemOneOutcomes", () => {
     expect(settled.outcome.run.justification.blocks).toEqual([]);
   });
 
-  test("an undecided question is left to the generative model", () => {
+  test("an unresolved question is terminal after shared generation", () => {
     const resolved = resolveSystemOneOutcomes({
       questions: askedFor(columns.type),
       outcomes: new Map<string, AnswerOutcome>([
-        ["col-type", { state: "undecided", reason: "below-floor" }],
+        [
+          "col-type",
+          {
+            state: "undecided",
+            reason: "failed",
+            source: "generative",
+            model: null,
+          },
+        ],
       ]),
       excerptByAnchor,
       run,
     });
-    expect(resolved.settled).toEqual([]);
-    expect(resolved.fallbackColumnIds).toEqual(["col-type"]);
+    expect(resolved.settled).toEqual([
+      {
+        columnId: "col-type",
+        outcome: { state: "failed", failureReason: "model_error" },
+      },
+    ]);
+    expect(resolved.fallbackColumnIds).toEqual([]);
   });
 
-  test("with no decision model every column is the generative model's", async () => {
+  test("a generative refusal with no decision model is a terminal cell failure", async () => {
     const asked = splitSystemOneQuestions([columns.type]).asked;
     const plan = planSystemOneAnswers({
       document: { caseNumber: "21 Cdo 1/2020" },
@@ -196,29 +211,49 @@ describe("resolveSystemOneOutcomes", () => {
       orgAIConfig: null,
       state: plan.state,
       questions: plan.questions,
+      generator: async ({ questions }) => ({
+        model: "test-generative",
+        output: {
+          answers: Object.keys(questions).map((id) => ({
+            id,
+            answer: { type: "refusal" },
+            evidence: null,
+          })),
+        },
+      }),
       client: null,
     });
 
-    expect(model).toBeNull();
+    expect(model).toBe("test-generative");
     const resolved = resolveSystemOneOutcomes({
       questions: asked,
       outcomes: decodeSystemOneAnswers({ plan, questions: asked, decisions }),
       excerptByAnchor,
       run,
     });
-    expect(resolved.settled).toEqual([]);
-    expect(resolved.fallbackColumnIds).toEqual(["col-type"]);
+    expect(resolved.settled).toEqual([
+      {
+        columnId: "col-type",
+        outcome: { state: "failed", failureReason: "model_error" },
+      },
+    ]);
+    expect(resolved.fallbackColumnIds).toEqual([]);
   });
 
-  test("a value outside the column's options is left to the generative model", () => {
+  test("a value outside the column's options is a terminal type failure", () => {
     const resolved = resolveSystemOneOutcomes({
       questions: askedFor(columns.type),
       outcomes: new Map([["col-type", answered("Franchise")]]),
       excerptByAnchor,
       run,
     });
-    expect(resolved.settled).toEqual([]);
-    expect(resolved.fallbackColumnIds).toEqual(["col-type"]);
+    expect(resolved.settled).toEqual([
+      {
+        columnId: "col-type",
+        outcome: { state: "failed", failureReason: "wrong_type" },
+      },
+    ]);
+    expect(resolved.fallbackColumnIds).toEqual([]);
   });
 
   test("a question the kit could not plan falls back rather than failing", () => {
@@ -245,6 +280,8 @@ describe("resolveSystemOneOutcomes", () => {
     >;
     const notStated: AnswerOutcome = {
       state: "not_stated",
+      source: "decision-model",
+      model: "jev-1.13",
       confidence: 0.8,
       rationale: "Jev found no answer in the text (80% confidence).",
     };

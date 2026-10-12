@@ -6,6 +6,7 @@ import {
 } from "@/api/lib/billing/time-timers";
 
 const config = {
+  contract: "patch",
   description:
     "Resume your paused timer and automatically pause your other running timer. Resuming an already running timer leaves its elapsed time unchanged.",
   permissions: { timeEntry: ["update"] },

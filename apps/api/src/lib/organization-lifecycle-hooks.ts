@@ -28,6 +28,7 @@ export type NewMembership = {
 type OrganizationLifecycleHooksOptions = {
   analytics: ServerAnalytics;
   recordAccessState: (organizationId: SafeId<"organization">) => Promise<void>;
+  recordProfessionalUse: (creation: NewMembership) => Promise<void>;
   seedDefaultDocumentTypes: (
     organizationId: SafeId<"organization">,
   ) => Promise<void>;
@@ -53,6 +54,7 @@ const identifyOrganizationName = (
 export const createOrganizationLifecycleHooks = ({
   analytics,
   recordAccessState,
+  recordProfessionalUse,
   seedDefaultDocumentTypes,
   seedMemberDefaults,
 }: OrganizationLifecycleHooksOptions) => {
@@ -75,13 +77,21 @@ export const createOrganizationLifecycleHooks = ({
     afterAcceptInvitation: seedNewMember,
     afterCreateOrganization: async ({
       organization: org,
+      user,
     }: {
       organization: PersistedOrganization;
+      user: { id: string };
     }): Promise<void> => {
       const organizationId = brandPersistedOrganizationId(org.id);
       // Creation is the only path that records an organization's access
       // state, so no later request can grant one implicitly.
       await recordAccessState(organizationId);
+      // Every organization is a business: it is created under the creator's
+      // professional-use acceptance, or recorded once an owner accepts.
+      await recordProfessionalUse({
+        organizationId,
+        userId: brandPersistedUserId(user.id),
+      });
       // Seed the org's starter document-type taxonomy at creation so listing
       // it stays a pure read: a read-only credential must not be able to mint
       // document types by listing them.

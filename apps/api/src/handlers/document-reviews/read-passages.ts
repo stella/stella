@@ -22,6 +22,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { readReferencePassageTexts } from "@/api/lib/document-review/reference-passages";
 
 const config = {
+  contract: "patch",
   description:
     "Read the text of reference passages by id. Answers only the passages whose matter the caller can open; every other review surface carries passage ids and reads their words here.",
   permissions: { workspace: ["read"] },

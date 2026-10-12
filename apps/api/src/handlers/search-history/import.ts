@@ -27,6 +27,7 @@ import {
 } from "./scope-precondition";
 
 const config = {
+  contract: "patch",
   query: searchHistoryScopeQuery,
   permissions: { searchHistory: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,

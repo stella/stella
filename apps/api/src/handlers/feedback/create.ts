@@ -27,6 +27,7 @@ const optionalCapped = (maxLength: number) =>
   t.Optional(t.String({ maxLength }));
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.standard,
   description:
     "File a feedback report from the signed-in web app. The content is " +

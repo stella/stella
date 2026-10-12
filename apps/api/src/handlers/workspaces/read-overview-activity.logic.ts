@@ -150,6 +150,8 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   statute_annotation: "court",
   // Organization-scoped, so never part of one matter's activity.
   case_law_research_column: null,
+  // Reader answers follow personal sharing scope, never a matter's membership.
+  case_law_reader_answer: null,
   correspondence: "correspondence",
   bilingual_translation_run: "translationRun",
   document_translation_run: "translationRun",
@@ -164,6 +166,8 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   ai_memory: null,
   announcement: null,
   audit_log: null,
+  legal_resolve: null,
+  service_oauth_client: null,
   billing_code: null,
   chat_file: null,
   chat_message: null,

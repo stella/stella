@@ -22,6 +22,7 @@ import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
  * disclosure and is not an answer, and a tool result belongs to its call.
  */
 const PART_VISIBILITY = {
+  activity: "none",
   audio: "content",
   document: "content",
   image: "content",

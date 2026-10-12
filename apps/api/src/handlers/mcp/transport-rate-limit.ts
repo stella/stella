@@ -8,7 +8,7 @@ import { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability
 import type {
   RateLimitGenerator,
   RateLimitOptions,
-} from "@/api/lib/rate-limit/rate-limit";
+} from "@/api/lib/rate-limit/contracts";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 import {
   MCP_ADVANCED_HTTP_PATH,
@@ -147,7 +147,10 @@ type McpAuthenticationRunOptions = {
 };
 
 export const createMcpAuthenticationFailureLimiter = (
-  options: RateLimitOptions = createMcpTransportAddressRateLimitOptions(),
+  // A fixed ceiling: the address reservation runs before any request is read.
+  options: RateLimitOptions & {
+    max: number;
+  } = createMcpTransportAddressRateLimitOptions(),
   recordRejection: typeof recordBudgetRejection = recordBudgetRejection,
 ) => {
   options.context.init({ duration: options.duration });

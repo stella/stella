@@ -388,6 +388,64 @@ describe("workspace hygiene", () => {
     expect(validateWorkspaceRoot(rootDir, LOCAL)).toEqual([]);
   });
 
+  test("accepts the API compiler aggregate while rejecting arbitrary wrappers", () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: { devDependencies: { turbo: "2.10.3" } },
+      webPackageJson: { name: "@stll/web" },
+    });
+    mkdirSync(path.join(rootDir, "apps/api/src"), { recursive: true });
+    writeFileSync(
+      path.join(rootDir, "apps/api/src/value.ts"),
+      "export type Value = string;\n",
+    );
+    writeFileSync(
+      path.join(rootDir, "apps/api/tsconfig.src.json"),
+      JSON.stringify({ include: ["src/**/*.ts"] }),
+    );
+    const filename = path.join(rootDir, "apps/api/package.json");
+    const writeManifest = (typecheck: string) =>
+      writeFileSync(
+        filename,
+        JSON.stringify({
+          name: "@stll/api",
+          scripts: {
+            typecheck,
+            "typecheck:src":
+              "bun check --no-pretty --all --project=tsconfig.src.json",
+          },
+        }),
+      );
+    writeManifest("bun ../../packages/scripts/src/api-typecheck.ts");
+    expect(
+      validateWorkspaceRoot(rootDir, LOCAL).some((issue) =>
+        issue.message.startsWith("scripts.typecheck must use"),
+      ),
+    ).toBe(false);
+    writeManifest("bun scripts/unchecked-wrapper.ts");
+    expect(validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
+      path: "apps/api/package.json",
+      message:
+        "scripts.typecheck must use bun check --no-pretty --all --project=<tsconfig>; found bun scripts/unchecked-wrapper.ts",
+    });
+  });
+
+  test("rejects workspace scripts that shadow Bun's checker", () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: { devDependencies: { turbo: "2.10.3" } },
+      webPackageJson: {
+        name: "@stll/web",
+        scripts: {
+          check: "echo success",
+          typecheck: "bun check --no-pretty --all --project=tsconfig.json",
+        },
+      },
+    });
+    expect(validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
+      message: "scripts.check shadows Bun's native checker; rename the script",
+      path: "apps/web/package.json",
+    });
+  });
+
   test("rejects a stale centralized lint configuration", () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
@@ -404,12 +462,13 @@ describe("workspace hygiene", () => {
     });
 
     expect(validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
-      message: "devDependencies.@stll/oxlint-config must be 0.7.0; found 0.6.0",
+      message:
+        "devDependencies.@stll/oxlint-config must be 0.12.0; found 0.6.0",
       path: "package.json",
     });
   });
 
-  test("rejects deprecated Oxc and non-native TypeScript toolchains", () => {
+  test("rejects deprecated Oxc and non-Bun typecheck scripts", () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
         devDependencies: {
@@ -434,7 +493,7 @@ describe("workspace hygiene", () => {
         },
         {
           message:
-            "scripts.typecheck must use the TypeScript 7 native wrapper; found tsc --noEmit",
+            "scripts.typecheck must use bun check --no-pretty --all --project=<tsconfig>; found tsc --noEmit",
           path: "apps/web/package.json",
         },
         {
@@ -477,7 +536,7 @@ const createWorkspaceRoot = ({
       typescript: "6.0.3",
     },
     devDependencies: {
-      "@stll/oxlint-config": "0.7.0",
+      "@stll/oxlint-config": "0.12.0",
       "@typescript/native": "npm:typescript@7.0.2",
       "oxlint-tsgolint": "7.0.2003",
       typescript: "catalog:",
@@ -513,7 +572,7 @@ const createWorkspaceRoot = ({
       devDependencies: { typescript: "catalog:" },
       name: "@stll/scripts",
       scripts: {
-        typecheck: "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
+        typecheck: "bun check --no-pretty --all --project=tsconfig.json",
       },
     }),
   );

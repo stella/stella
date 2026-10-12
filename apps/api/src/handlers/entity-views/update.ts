@@ -16,6 +16,11 @@ import {
 } from "./shared";
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/entity-views/update.ts",
+  },
   description:
     "Change the name or layout of one personal cross-matter view. Other users' views cannot be changed.",
   permissions: { view: ["update"] },

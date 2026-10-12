@@ -8,6 +8,8 @@ import type { StreamChunk } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+
 import { chatMessages, chatTurns } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
@@ -707,6 +709,7 @@ describe("chat run admission follows owned settlement", () => {
       parts: [
         {
           type: "tool-call",
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
           id: "approval-1",
           name: "web_search",
           arguments: "{}",
@@ -721,6 +724,7 @@ describe("chat run admission follows owned settlement", () => {
       parts: [
         {
           type: "tool-call",
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
           id: "approval-1",
           name: "web_search",
           arguments: "{}",
@@ -797,6 +801,7 @@ describe("chat run admission follows owned settlement", () => {
         parts: [
           {
             type: "tool-call",
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
             id: "approval-1",
             name: "web_search",
             arguments: "{}",
@@ -811,6 +816,7 @@ describe("chat run admission follows owned settlement", () => {
         parts: [
           {
             type: "tool-call",
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
             id: "approval-1",
             name: "web_search",
             arguments: "{}",

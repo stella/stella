@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/node";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   resolveUsCourt,
@@ -55,7 +56,7 @@ describe("the United States court directory", () => {
     for (const registeredCourt of US_COURTS) {
       expect(registeredCourt.shortCode, registeredCourt.id).not.toBe("");
       expect(registeredCourt.shortCode, registeredCourt.id).toBe(
-        registeredCourt.shortCode.normalize("NFC").trim(),
+        normalizeUnicode(registeredCourt.shortCode, "NFC").trim(),
       );
     }
   });
@@ -118,7 +119,10 @@ describe("the United States court directory", () => {
     const folded = US_COURT_NAMES.map((name) => name.toLowerCase());
     expect(new Set(folded).size).toBe(US_COURT_NAMES.length);
     for (const name of US_COURT_NAMES) {
-      expect([name, name.normalize("NFC").trim()]).toEqual([name, name]);
+      expect([name, normalizeUnicode(name, "NFC").trim()]).toEqual([
+        name,
+        name,
+      ]);
       expect(name.length).toBeGreaterThan(0);
       expect(name.length).toBeLessThanOrEqual(512);
     }

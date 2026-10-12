@@ -15,6 +15,7 @@ import {
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { processChatTurnOwnership } from "@/api/handlers/chat/chat-turn-run";
 import { createForkThread } from "@/api/handlers/chat/fork/create";
 import type { CreateDocumentToolOutput } from "@/api/handlers/chat/tools/create-document-tool";
 import {
@@ -2415,9 +2416,14 @@ describe("a conversation's live view", () => {
     propertyTestTimeout(30_000),
   );
 
-  test.each(["after-tool-end", "before-tool-end"] as const)(
-    "a second live reader observes a stopped turn without a failure (%s)",
-    async (quietAt) => {
+  test.each([
+    ["after-tool-end", "user-stop"],
+    ["before-tool-end", "user-stop"],
+    ["after-tool-end", "owner-lost"],
+    ["before-tool-end", "owner-lost"],
+  ] as const)(
+    "a second live reader observes a cut turn without a failure (%s, %s)",
+    async (quietAt, reason) => {
       const conversation = await openConversation();
       const { real } = conversation;
       const { harness, threadId } = real;
@@ -2469,7 +2475,16 @@ describe("a conversation's live view", () => {
           runId,
           threadId,
         });
-        await real.client.stop();
+        if (reason === "user-stop") {
+          await real.client.stop();
+        } else {
+          const run =
+            processChatTurnOwnership.run(
+              turn.executionId ??
+                panic("A running turn must have an execution"),
+            ) ?? panic("The process must own the running turn");
+          expect(await run.relinquish()).toBe("stored");
+        }
         const chunks = await secondReader;
         // This reader stays attached when the stopping page disconnects.
         expect(chunks.some(({ type }) => type === EventType.RUN_STARTED)).toBe(
@@ -2495,8 +2510,8 @@ describe("a conversation's live view", () => {
           reloadedAssistant?.metadata?.["turnTiming"],
         );
         expect(reloadedAssistant?.metadata?.["turnOutcome"]).toEqual({
-          type: "cancelled",
-          reason: "user-stop",
+          type: reason === "user-stop" ? "cancelled" : "interrupted",
+          reason,
         });
         const stoppedAssistant = real.client
           .messages()
@@ -2504,6 +2519,15 @@ describe("a conversation's live view", () => {
         expect(stoppedAssistant?.metadata?.["turnOutcome"]).toEqual(
           reloadedAssistant?.metadata?.["turnOutcome"],
         );
+        expect(
+          liveAssistant?.parts.filter(({ type }) => type === "text"),
+        ).toEqual(
+          reloadedAssistant?.parts.filter(({ type }) => type === "text"),
+        );
+        expect(liveAssistant?.parts).toContainEqual({
+          type: "text",
+          content: `Checking the register${" ".repeat(27)}`,
+        });
         expect(liveAssistant?.metadata?.["turnOutcome"]).toEqual(
           reloadedAssistant?.metadata?.["turnOutcome"],
         );

@@ -16,6 +16,7 @@ import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
+import { isServerChatToolCall } from "@stll/api-contract/chat";
 import type { SkillMetadata } from "@stll/skills/frontmatter";
 
 import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
@@ -222,9 +223,10 @@ import {
 } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import type { AccessibleWorkspace } from "@/api/lib/auth";
 import { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
+import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getOrganizationRegistryDispatch } from "@/api/lib/business-registries/credentials";
@@ -235,7 +237,6 @@ import {
   hasPersistedGeneratedDocumentActiveDraftContext,
 } from "@/api/lib/chat/active-draft-context";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
-import { registeredChatTool } from "@/api/lib/chat/chat-tool-types";
 import { isReadyGeneratedDocumentDraft } from "@/api/lib/chat/created-draft";
 import { expandThreadDataScope } from "@/api/lib/chat/data-scope";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
@@ -350,6 +351,7 @@ const normalizeOptionalArray = <T>(value: T[] | undefined): T[] => {
 };
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason:
@@ -1785,6 +1787,7 @@ const prepareValidatedIncomingMessage = async ({
             ? []
             : activeDraftContext.originDataWorkspaceIds,
         initialContextMatterIds: requestedContextMatterIds,
+        initialActiveSkill: body.activeSkill,
         organizationId,
         recordAuditEvent,
         safeDb,
@@ -2060,7 +2063,7 @@ export type SendMessageDependencies = {
    * Reads the caller's membership when an approved write tool runs. Defaults
    * to the credential-boundary read; tests bind it to their own database.
    */
-  resolveCurrentMembership?: typeof resolveCredentialMemberAuthorization;
+  resolveCurrentMembership?: ResolveCredentialMemberAuthorization;
   rollbackSideEffects: typeof rollbackUnpersistedChatSideEffects;
   streamResponse: typeof streamChat;
   uploadMessageFiles: typeof uploadMessageFilesWithRollback;
@@ -2101,7 +2104,7 @@ const readOwnedTurnThreadNames = async ({
 
 const currentMembershipReader = (
   dependencies: SendMessageDependencies,
-): typeof resolveCredentialMemberAuthorization =>
+): ResolveCredentialMemberAuthorization =>
   dependencies.resolveCurrentMembership ?? resolveCredentialMemberAuthorization;
 
 export const createSendMessage = (
@@ -2350,6 +2353,7 @@ export const createSendMessage = (
             };
       const validationThreadState = yield* Result.await(
         readThreadValidationState({
+          initialActiveSkill: body.activeSkill,
           messageId: body.message.id,
           organizationId: session.activeOrganizationId,
           safeDb,
@@ -2374,7 +2378,7 @@ export const createSendMessage = (
       );
       const validationActiveSkillContext = yield* Result.await(
         resolveActiveChatSkillContext({
-          activeSkill: body.activeSkill,
+          activeSkill: validationThreadState.activeSkill,
           memberRole,
           organizationId: session.activeOrganizationId,
           safeDb,
@@ -2979,8 +2983,7 @@ export const createSendMessage = (
 
         yield* Result.await(lifecycle.checkAdmission());
 
-        const isServerTool = (toolName: string) =>
-          registeredChatTool(streamingTools, toolName)?.execute !== undefined;
+        const isServerTool = isServerChatToolCall;
 
         // A completed, non-anonymized turn marks compaction due and titles a
         // new thread; neither affects whether the turn itself settled.
@@ -3067,6 +3070,7 @@ export const createSendMessage = (
                 > => {
                   const validatedToolParts = validateToolCallParts({
                     allowPartialInput: CUT_SHORT_OUTCOME[outcome.type],
+                    allowDeferredServerInput: outcome.type === "awaiting-user",
                     message: responseMessage,
                     tools: streamingTools,
                   });
@@ -3821,8 +3825,8 @@ const readActiveFileFallbackForModel = async ({
 
 type ResolveAssistantMessageRefsProps = {
   accessibleWorkspaceIds: ReadonlySet<string>;
-  /** Whether this request's server ran `toolName`, rather than a client. */
-  isServerTool: (toolName: string) => boolean;
+  /** Whether the call records a server executor for its output. */
+  isServerTool: (part: Extract<ChatPart, { type: "tool-call" }>) => boolean;
   messages: PersistableChatMessage[];
   opaqueReadWorkspaceIds: readonly SafeId<"workspace">[];
   refRegistry: ReturnType<typeof createChatRefRegistry>;

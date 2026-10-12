@@ -12,10 +12,21 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 
 type ChatTurnDurationProps = {
-  timing: NonNullable<NonNullable<ChatMessage["metadata"]>["turnTiming"]>;
+  timing: NonNullable<ChatMessage["metadata"]>["turnTiming"];
 };
 
 export const ChatTurnDuration = ({ timing }: ChatTurnDurationProps) => {
+  if (timing === undefined) {
+    return null;
+  }
+  return <TimedChatTurnDuration timing={timing} />;
+};
+
+type TimedChatTurnDurationProps = {
+  timing: NonNullable<ChatTurnDurationProps["timing"]>;
+};
+
+const TimedChatTurnDuration = ({ timing }: TimedChatTurnDurationProps) => {
   const t = useTranslations();
   const format = useFormatter();
   const [now, setNow] = useState(() => performance.now());

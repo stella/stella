@@ -1,27 +1,14 @@
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 
 import { env } from "@/api/env";
-import type { publicCaseLawRoute } from "@/api/handlers/case-law/public-routes";
-import type { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
 import { getPublicCorpusLimits } from "@/api/lib/limits";
+import type { PublicRouteId } from "@/api/public-corpus-route-ids";
 
 export const getPublicCorpusClassPolicy = () => getPublicCorpusLimits(env);
 
 export type PublicCorpusClass = keyof ReturnType<
   typeof getPublicCorpusClassPolicy
 >["classes"];
-
-// Derive identifiers from the mounted Elysia registry, without importing any
-// handlers at runtime or traversing their payload/response types.
-type RouteIds<Tree, Path extends string = ""> = {
-  [Key in keyof Tree & string]: Tree[Key] extends { response: unknown }
-    ? `${Uppercase<Key>} ${Path}`
-    : RouteIds<Tree[Key], `${Path}/${Key}`>;
-}[keyof Tree & string];
-
-export type PublicRouteId =
-  | RouteIds<(typeof publicLegislationRoute)["~Routes"]>
-  | RouteIds<(typeof publicCaseLawRoute)["~Routes"]>;
 
 export const PUBLIC_CORPUS_ROUTE_POLICY = {
   "GET /law/statutes": "browse",

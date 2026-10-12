@@ -21,6 +21,7 @@ const bodySchema = t.Object({
   candidateId: tSafeId("legalListGenerationCandidate"),
 });
 const config = {
+  contract: "patch",
   featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Reject one pending candidate of a generation run so it is never turned " +

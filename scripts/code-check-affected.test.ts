@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import {
   existsSync,
@@ -17,7 +17,7 @@ import {
 } from "../packages/scripts/src/code-quality-partition";
 import {
   ALL_WORKSPACE_CACHE_INPUTS,
-  ALL_WORKSPACE_TYPECHECK_CACHE_INPUTS,
+  WORKSPACE_TYPECHECK_CACHE_INPUTS,
   CommandFailedError,
   DEPENDENCY_CACHE_INPUTS,
   failureExitCode,
@@ -31,7 +31,6 @@ import {
   PLUGIN_REGISTRY_INPUTS,
   ROOT_SCRIPT_LINT_INPUTS,
   SHARED_COMPILER_CACHE_INPUTS,
-  TYPECHECK_ONLY_CACHE_INPUTS,
   resultBoundaryLintCommand,
   scopedCommands,
   summarizeCheckFailure,
@@ -471,7 +470,7 @@ describe("affected code-check planning", () => {
     ]);
   });
 
-  test("the shared TypeScript runner invalidates only workspace typechecks", () => {
+  test("native emit runner changes stay scoped to their workspace checks", () => {
     const planned = plan(
       ["packages/scripts/src/tsc-native.ts"],
       ["packages/scripts"],
@@ -484,7 +483,10 @@ describe("affected code-check planning", () => {
       type: "targets",
       targets: ["packages/scripts"],
     });
-    expect(planned.typecheck).toEqual({ type: "all" });
+    expect(planned.typecheck).toEqual({
+      type: "targets",
+      targets: ["packages/scripts"],
+    });
   });
 
   test("global dependency inputs use cacheable Turbo tasks", () => {
@@ -601,15 +603,6 @@ describe("Turbo cache input contract", () => {
     }
   });
 
-  test("workspace typechecks cover every typecheck-only input", () => {
-    expect(TYPECHECK_ONLY_CACHE_INPUTS).toContain(
-      "$TURBO_ROOT$/packages/scripts/src/tsc-native.ts",
-    );
-    for (const input of TYPECHECK_ONLY_CACHE_INPUTS) {
-      expect(ALL_WORKSPACE_TYPECHECK_CACHE_INPUTS).toContain(input);
-    }
-  });
-
   test("workspace lint covers the shared tooling config", () => {
     expect(LINT_ONLY_CACHE_INPUTS).toContain(
       "$TURBO_ROOT$/tsconfig.tooling.json",
@@ -620,7 +613,7 @@ describe("Turbo cache input contract", () => {
     const tasks = turboTasks();
 
     expect(taskInputs(tasks, "typecheck").filter(isRootInput)).toEqual(
-      [...ALL_WORKSPACE_TYPECHECK_CACHE_INPUTS].toSorted(),
+      [...WORKSPACE_TYPECHECK_CACHE_INPUTS].toSorted(),
     );
     expect(taskInputs(tasks, "//#typecheck:repo").filter(isRootInput)).toEqual(
       [
@@ -798,8 +791,7 @@ process.exit(childExitStatus(result));
       return (
         typecheck
           ?.split("&&")
-          .some((command) => !command.includes(TYPESCRIPT_NATIVE_RUNNER)) ??
-        false
+          .some((command) => !command.includes(BUN_TYPECHECK_COMMAND)) ?? false
       );
     });
 
@@ -808,6 +800,41 @@ process.exit(childExitStatus(result));
       expect.arrayContaining(["apps/extension", "apps/landing"]),
     );
     for (const { name } of generating) {
+      const compilerTasks = taskField(
+        tasks,
+        `${name}#typecheck`,
+        "dependsOn",
+      ).filter((dependency) => dependency.startsWith("typecheck:"));
+      if (compilerTasks.length > 0) {
+        // An aggregate delegates compiler work and cache outputs to its children.
+        const producers = new Set(
+          compilerTasks.flatMap((compiler) =>
+            taskField(tasks, `${name}#${compiler}`, "dependsOn").filter(
+              (dependency) => dependency.startsWith("generate:"),
+            ),
+          ),
+        );
+        expect(producers.size).toBeGreaterThan(0);
+        expect(taskField(tasks, `${name}#lint`, "dependsOn")).toEqual(
+          expect.arrayContaining([...producers]),
+        );
+        expect(
+          taskField(tasks, `${name}#typecheck:tests`, "dependsOn"),
+        ).toContain("generate:typecheck-declarations");
+        expect(
+          taskField(
+            tasks,
+            `${name}#generate:typecheck-declarations`,
+            "outputs",
+          ),
+        ).toContain(".cache/typecheck-declarations/**");
+        for (const compiler of compilerTasks) {
+          expect(
+            taskField(tasks, `${name}#${compiler}`, "dependsOn"),
+          ).toContain("generate:capability-runtime");
+        }
+        continue;
+      }
       const producers = taskField(
         tasks,
         `${name}#typecheck`,
@@ -830,10 +857,10 @@ process.exit(childExitStatus(result));
         "typecheck",
       ]);
       expect(taskInputs(tasks, `${name}#lint`)).toEqual(
-        taskInputs(tasks, "lint"),
+        expect.arrayContaining(taskInputs(tasks, "lint")),
       );
       expect(taskInputs(tasks, `${name}#typecheck`)).toEqual(
-        taskInputs(tasks, "typecheck"),
+        expect.arrayContaining(taskInputs(tasks, "typecheck")),
       );
       expect(
         taskField(tasks, `${name}#typecheck`, "outputs").filter(
@@ -841,6 +868,38 @@ process.exit(childExitStatus(result));
         ),
       ).not.toEqual([]);
     }
+  });
+
+  test("API lint awaits generated sources while remaining independent of all typecheck tasks", () => {
+    const tasks = turboTasks();
+    const pending = ["@stll/api#lint"];
+    const visited = new Set<string>();
+    for (const id of pending) {
+      if (visited.has(id)) {
+        continue;
+      }
+      visited.add(id);
+      const taskName = tasks[id] ? id : (id.split("#")[1] ?? id);
+      if (tasks[taskName]?.["dependsOn"] === undefined) {
+        continue;
+      }
+      for (const dependency of taskField(tasks, taskName, "dependsOn")) {
+        const owner = id.split("#").at(0);
+        if (!owner) {
+          panic(`Missing task owner: ${id}`);
+        }
+        const qualified = dependency.includes("#")
+          ? dependency
+          : `${owner}#${dependency.replace(/^\^/u, "")}`;
+        expect(qualified).not.toMatch(/#typecheck(?:$|:)/u);
+        pending.push(qualified);
+      }
+    }
+    expect(taskField(tasks, "@stll/api#lint", "dependsOn")).toEqual([
+      "@stll/cli#codegen:runtime",
+      "generate:capability-runtime",
+      "generate:typecheck-declarations",
+    ]);
   });
 
   test("landing generates Astro types once, in its typecheck", () => {
@@ -851,7 +910,7 @@ process.exit(childExitStatus(result));
   });
 });
 
-const TYPESCRIPT_NATIVE_RUNNER = "scripts/src/tsc-native.ts";
+const BUN_TYPECHECK_COMMAND = "bun check --no-pretty --all --project=";
 
 type TurboTask = Record<string, unknown>;
 
@@ -1272,7 +1331,7 @@ describe("check failure summary", () => {
     const summary = summarizeCheckFailure(
       failure(TURBO_LINT_TYPECHECK, [
         "@stll/errors:lint: cache miss, executing c50df39634620efa",
-        "@stll/errors:typecheck: $ bun ../../packages/scripts/src/tsc-native.ts --noEmit",
+        "@stll/errors:typecheck: $ bun check --no-pretty --all --project=tsconfig.json",
         "@stll/errors:typecheck: src/zz-broken.ts(1,14): error TS2322: Type 'string' is not assignable to type 'number'.",
         '@stll/errors:typecheck: error: script "typecheck" exited with code 1',
         ...turboRunSummary("@stll/errors#typecheck"),

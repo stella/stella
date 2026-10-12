@@ -15,6 +15,59 @@ const root = path.resolve(import.meta.dir, "../../..");
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+test("one package script and Turbo task own API type generation", () => {
+  const manifests = ["package.json"];
+  for (const scope of ["apps", "packages"]) {
+    manifests.push(
+      ...new Bun.Glob(`${scope}/*/package.json`).scanSync({ cwd: root }),
+    );
+  }
+  const owners: string[] = [];
+  for (const filename of manifests) {
+    const manifest: unknown = JSON.parse(
+      readFileSync(path.join(root, filename), "utf-8"),
+    );
+    if (
+      !isRecord(manifest) ||
+      typeof manifest["name"] !== "string" ||
+      !isRecord(manifest["scripts"])
+    ) {
+      continue;
+    }
+    for (const [name, command] of Object.entries(manifest["scripts"])) {
+      if (
+        typeof command === "string" &&
+        command.includes("generate-web-api-types.ts")
+      ) {
+        owners.push(`${manifest["name"]}#${name}`);
+      }
+    }
+  }
+  expect(owners).toEqual(["@stll/web#generate:api-types"]);
+  const entrypoint = readFileSync(
+    path.join(root, "apps/api/scripts/generate-web-api-types.ts"),
+    "utf-8",
+  );
+  expect(entrypoint).toMatch(
+    /if \(import\.meta\.main\)\s*\{\s*const generated = await withGenerationLock\(\{[^}]*run: main,/u,
+  );
+  expect(entrypoint).toContain(
+    'generated.unwrap("API type generation failed");',
+  );
+  expect(entrypoint).not.toMatch(/\bmain\(\)/u);
+  const config: unknown = Bun.JSONC.parse(
+    readFileSync(path.join(root, "turbo.json"), "utf-8"),
+  );
+  if (!isRecord(config) || !isRecord(config["tasks"])) {
+    panic("Turbo configuration has no tasks");
+  }
+  expect(
+    Object.keys(config["tasks"]).filter((name) =>
+      name.endsWith("#generate:api-types"),
+    ),
+  ).toEqual(owners);
+});
+
 test("web sources generate once across compiler tasks and restore until source inputs change", () => {
   const parsed: unknown = Bun.JSONC.parse(
     readFileSync(path.join(root, "turbo.json"), "utf-8"),
@@ -23,6 +76,17 @@ test("web sources generate once across compiler tasks and restore until source i
     panic("Turbo configuration has no tasks");
   }
   const tasks = parsed["tasks"];
+  const apiManifest: unknown = JSON.parse(
+    readFileSync(path.join(root, "apps/api/package.json"), "utf-8"),
+  );
+  if (
+    !isRecord(apiManifest) ||
+    !isRecord(apiManifest["scripts"]) ||
+    typeof apiManifest["scripts"]["gen:web-api-types"] !== "string"
+  ) {
+    panic("API generation command is missing");
+  }
+  const apiGenerationCommand = apiManifest["scripts"]["gen:web-api-types"];
   const consumers = ["lint", "typecheck", "test"];
   const consumerTasks: Record<string, unknown> = {};
   for (const consumer of consumers) {
@@ -47,7 +111,10 @@ test("web sources generate once across compiler tasks and restore until source i
   // The fixture owns its cache behaviour, so settings from an enclosing Turbo
   // run (such as TURBO_FORCE) must not reach the nested invocations.
   const env = Object.fromEntries(
-    Object.entries(process.env).filter(([key]) => !key.startsWith("TURBO_")),
+    Object.entries(process.env).filter(
+      ([key]) =>
+        !key.startsWith("TURBO_") && key !== "CI_GENERATED_SOURCES_MANIFEST",
+    ),
   );
   const run = (command: string[]) => {
     const child = Bun.spawnSync(command, {
@@ -80,6 +147,7 @@ test("web sources generate once across compiler tasks and restore until source i
         scripts: {
           "generate:api-types": "bun ../api/scripts/generate-web-api-types.ts",
           "generate:route-tree": "bun scripts/generate-route-tree.ts",
+          typegen: "bun scripts/typegen.ts",
           ...Object.fromEntries(
             consumers.map((consumer) => [
               consumer,
@@ -96,6 +164,8 @@ test("web sources generate once across compiler tasks and restore until source i
         scripts: {
           "generate:capability-runtime":
             "bun scripts/generate-capability-runtime.ts",
+          "gen:web-api-types": apiGenerationCommand,
+          "generate:typecheck-declarations": "bun -e ''",
         },
       }),
     );
@@ -112,6 +182,7 @@ test("web sources generate once across compiler tasks and restore until source i
       [
         "import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';",
         "import path from 'node:path';",
+        "process.chdir(path.resolve(import.meta.dir, '..'));",
         `for (const output of ${JSON.stringify(apiTask["outputs"])}) { mkdirSync(path.dirname(output), { recursive: true }); writeFileSync(output, 'generated API bytes'); }`,
         "appendFileSync('../../runs.log', 'api-runtime\\n');",
       ].join("\n"),
@@ -135,6 +206,7 @@ test("web sources generate once across compiler tasks and restore until source i
         "writeFileSync('../../task-hash', process.env.TURBO_HASH ?? '');",
         `writeFileSync(${JSON.stringify(output)}, ${JSON.stringify("generated bytes\n")});`,
         `appendFileSync('../../runs.log', ${JSON.stringify(`${output}\n`)});`,
+        "if (process.argv.includes('--check')) appendFileSync('../../checks.log', 'checked\\n');",
       ].join("\n");
     write(
       "apps/api/scripts/generate-web-api-types.ts",
@@ -149,6 +221,10 @@ test("web sources generate once across compiler tasks and restore until source i
       JSON.stringify({
         tasks: {
           "@stll/api#generate:capability-runtime": apiTask,
+          "@stll/api#generate:typecheck-declarations": {
+            inputs: ["src/**"],
+            outputs: [],
+          },
           "@stll/web#generate:api-types": tasks["@stll/web#generate:api-types"],
           "@stll/web#generate:route-tree":
             tasks["@stll/web#generate:route-tree"],
@@ -184,6 +260,10 @@ test("web sources generate once across compiler tasks and restore until source i
     run([...command.slice(0, 2), ...consumers, ...command.slice(3)]);
     const executions = readFileSync(path.join(directory, "runs.log"), "utf-8");
     expect(executions.trim().split("\n")).toHaveLength(3);
+    run([process.execPath, "--cwd=apps/api", "run", "gen:web-api-types"]);
+    expect(readFileSync(path.join(directory, "runs.log"), "utf-8")).toBe(
+      executions,
+    );
     expect(readFileSync(path.join(directory, "task-hash"), "utf-8")).toMatch(
       /^[a-f0-9]+$/u,
     );
@@ -230,6 +310,85 @@ test("web sources generate once across compiler tasks and restore until source i
         .trim()
         .split("\n"),
     ).toHaveLength(6);
+    run([
+      process.execPath,
+      "--cwd=apps/api",
+      "run",
+      "gen:web-api-types",
+      "--check",
+    ]);
+    expect(readFileSync(path.join(directory, "checks.log"), "utf-8")).toBe(
+      "checked\n",
+    );
+    // Exercise the real prepare entrypoint with only Bun and system tools on
+    // PATH, as in direct CI and image-build invocations.
+    write(
+      "scripts/ci-generated-sources.ts",
+      readFileSync(path.join(root, "scripts/ci-generated-sources.ts"), "utf-8"),
+    );
+    const generatedModule = path.join(
+      root,
+      "packages/scripts/src/generated-files.ts",
+    );
+    write(
+      "scripts/generated-files.ts",
+      `export { CI_GENERATED_FILES, CI_GENERATION_COMMANDS } from ${JSON.stringify(generatedModule)};`,
+    );
+    mkdirSync(path.join(directory, "packages/scripts"), { recursive: true });
+    symlinkSync(
+      path.join(root, "packages/scripts/src"),
+      path.join(directory, "packages/scripts/src"),
+      "dir",
+    );
+    write(
+      "packages/cli/package.json",
+      JSON.stringify({
+        name: "@stll/cli",
+        scripts: { "codegen:runtime": "bun scripts/codegen.ts" },
+      }),
+    );
+    write(
+      "packages/cli/scripts/codegen.ts",
+      "console.log('CLI runtime generated');",
+    );
+    write("apps/web/scripts/typegen.ts", "console.log('messages generated');");
+    const bin = path.join(directory, "bin");
+    mkdirSync(bin);
+    symlinkSync(process.execPath, path.join(bin, "bun"));
+    const prepareEnv = {
+      ...env,
+      PATH: `${bin}${path.delimiter}/usr/bin${path.delimiter}/bin`,
+    };
+    const missingTurbo = Bun.spawnSync(["/bin/sh", "-c", "command -v turbo"], {
+      env: prepareEnv,
+    });
+    expect(missingTurbo.exitCode).not.toBe(0);
+    expect(missingTurbo.stdout.toString()).toBe("");
+    expect(
+      Bun.spawnSync(["/bin/sh", "-c", "command -v bun"], { env: prepareEnv })
+        .stdout.toString()
+        .trim(),
+    ).toBe(path.join(bin, "bun"));
+    const prepare = () =>
+      Bun.spawnSync(
+        [process.execPath, "scripts/ci-generated-sources.ts", "prepare"],
+        { cwd: directory, env: prepareEnv, stdout: "pipe", stderr: "pipe" },
+      );
+    const prepared = prepare();
+    expect(prepared.exitCode, prepared.stderr.toString()).toBe(0);
+    expect(readFileSync(output, "utf-8")).toBe("generated bytes\n");
+    // The old PATH lookup must fail in this same fixture.
+    write(
+      "scripts/generated-files.ts",
+      `
+      import { CI_GENERATED_FILES, CI_GENERATION_COMMANDS as commands } from ${JSON.stringify(generatedModule)};
+      export { CI_GENERATED_FILES };
+      export const CI_GENERATION_COMMANDS = commands.map(command => command.includes('generate:api-types') ? ['bun', 'exec', 'turbo', 'run', 'generate:api-types', '--filter=@stll/web'] : command);
+    `,
+    );
+    const unrooted = prepare();
+    expect(unrooted.exitCode).not.toBe(0);
+    expect(unrooted.stderr.toString()).toContain("command not found: turbo");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

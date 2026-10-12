@@ -6,6 +6,7 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
@@ -121,6 +122,7 @@ const awaitingAskUserContent = toChatMessageContent({
       name: "ask-user",
       state: "input-complete",
       type: "tool-call",
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
     },
   ] satisfies ChatPart[],
   version: 2,
@@ -366,6 +368,7 @@ describe("durable chat turn persistence", () => {
         },
         state: "complete",
         type: "tool-call",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
       },
     ] satisfies ChatPart[];
     const owningAssistantMessage = toPersistableChatMessage({
@@ -435,6 +438,7 @@ describe("durable chat turn persistence", () => {
         },
         state: "complete",
         type: "tool-call",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
       },
     ]);
     expect(
@@ -2011,6 +2015,7 @@ describe("settling a continuation reports a stored message that breaks the rules
     name: "mcp__external__delete",
     state: "approval-responded",
     type: "tool-call",
+    metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
   } satisfies ChatPart;
   const completedCall = {
     ...approvedCall,

@@ -19,6 +19,25 @@ const textMessage = ({
 });
 
 describe("chat thread recap transcript", () => {
+  test("activity updates never enter the provider transcript", () => {
+    expect(
+      buildRecapTranscript([
+        textMessage({ role: "user", text: "Review the clause." }),
+        {
+          role: "activity",
+          parts: [
+            {
+              type: "activity",
+              activityType: "Progress",
+              content: { status: "done" },
+            },
+          ],
+        },
+        textMessage({ role: "assistant", text: "Review complete." }),
+      ]),
+    ).toBe("User: Review the clause.\n\nAssistant: Review complete.");
+  });
+
   test("keeps short transcripts unchanged", () => {
     const transcript = buildRecapTranscript([
       textMessage({ role: "user", text: "Review this clause." }),

@@ -417,7 +417,7 @@
           },
           "ended": "complete",
           "response": {
-            "body": "id: 1\ndata: {\"type\":\"CUSTOM\",\"name\":\"run.accepted\",\"value\":{},\"timestamp\":1767225624000}\n\nid: 2\ndata: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-1\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225625000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"}}}\n\nid: 3\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225626000,\"metadata\":{\"turnTiming\":{\"status\":\"running\",\"elapsedMs\":0,\"startedAt\":\"2026-01-01T00:00:04.000Z\",\"durationMs\":0,\"observedAt\":\"2026-01-01T00:00:05.000Z\"}}}\n\nid: 4\ndata: {\"type\":\"TOOL_CALL_START\",\"toolCallId\":\"call-1\",\"toolCallName\":\"ask-user\",\"parentMessageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225627000,\"metadata\":{\"stellaStepId\":\"call-1\"}}\n\nid: 5\ndata: {\"type\":\"TOOL_CALL_ARGS\",\"toolCallId\":\"call-1\",\"delta\":\"{\\\"analysis\\\":\\\"The draft depends on the side the user represents.\\\",\\\"questions\\\":[{\\\"question\\\":\\\"Which side?\\\",\\\"reason\\\":\\\"It decides the draft.\\\",\\\"default\\\":null,\\\"options\\\":null}]}\",\"timestamp\":1767225628000}\n\nid: 6\ndata: {\"type\":\"TOOL_CALL_END\",\"toolCallId\":\"call-1\",\"timestamp\":1767225629000,\"metadata\":{\"tanstack\":{\"input\":{\"analysis\":\"The draft depends on the side the user represents.\",\"questions\":[{\"question\":\"Which side?\",\"reason\":\"It decides the draft.\"}]},\"toolCallName\":\"ask-user\",\"toolName\":\"ask-user\"}}}\n\nid: 7\ndata: {\"type\":\"MESSAGES_SNAPSHOT\",\"timestamp\":1767225630000,\"messages\":[{\"createdAt\":\"2026-01-01T00:00:06.000Z\",\"edited\":false,\"id\":\"00000000-0000-7000-8000-000000000001\",\"role\":\"user\",\"revision\":0,\"parts\":[{\"type\":\"text\",\"content\":\"Draft the NDA\"}],\"content\":\"\"},{\"id\":\"00000000-0000-7000-8000-000000000003\",\"metadata\":{\"tanstack\":{\"createdAt\":\"2026-01-01T00:00:07.000Z\",\"toolCallMetadata\":{\"call-1\":{\"stellaStepId\":\"call-1\"}}},\"turnTiming\":{\"status\":\"running\",\"elapsedMs\":0,\"startedAt\":\"2026-01-01T00:00:08.000Z\",\"durationMs\":0,\"observedAt\":\"2026-01-01T00:00:09.000Z\"}},\"role\":\"assistant\",\"toolCalls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"ask-user\",\"arguments\":\"{\\\"analysis\\\":\\\"The draft depends on the side the user represents.\\\",\\\"questions\\\":[{\\\"question\\\":\\\"Which side?\\\",\\\"reason\\\":\\\"It decides the draft.\\\"}]}\"}}]}]}\n\nid: 8\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225631000,\"metadata\":{\"turnTiming\":{\"status\":\"finished\",\"durationMs\":0}}}\n\nid: 9\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-1\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225632000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"outcome\":{\"type\":\"interrupt\",\"interrupts\":[{\"id\":\"client_tool_call-1\",\"reason\":\"tanstack:client_tool_execution\",\"message\":\"Client tool ask-user is ready to run\",\"toolCallId\":\"call-1\",\"responseSchema\":{\"type\":\"object\",\"properties\":{\"answers\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"question\":{\"type\":\"string\"},\"answer\":{\"type\":\"string\"}},\"required\":[\"question\",\"answer\"],\"additionalProperties\":false}}},\"required\":[\"answers\"],\"additionalProperties\":false},\"metadata\":{\"kind\":\"client_tool\",\"toolName\":\"ask-user\",\"input\":{\"analysis\":\"The draft depends on the side the user represents.\",\"questions\":[{\"question\":\"Which side?\",\"reason\":\"It decides the draft.\"}]},\"tanstack:interruptBinding\":{\"v\":1,\"kind\":\"client-tool-execution\",\"interruptId\":\"client_tool_call-1\",\"toolName\":\"ask-user\",\"toolCallId\":\"call-1\",\"outputSchemaHash\":\"sha256:c3fb68b4f783f756acb0d81953fe82af1dc624d038fb46620dd033dc445562ed\",\"responseSchemaHash\":\"sha256:c3fb68b4f783f756acb0d81953fe82af1dc624d038fb46620dd033dc445562ed\",\"interruptedRunId\":\"run-recorded-1\",\"generation\":0}}}]},\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\",\"finishReason\":\"tool_calls\"}}}\n\n",
+            "body": "id: 1\ndata: {\"type\":\"CUSTOM\",\"name\":\"run.accepted\",\"value\":{},\"timestamp\":1767225624000}\n\nid: 2\ndata: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-1\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225625000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"}}}\n\nid: 3\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225626000,\"metadata\":{\"turnTiming\":{\"status\":\"running\",\"elapsedMs\":0,\"startedAt\":\"2026-01-01T00:00:04.000Z\",\"durationMs\":0,\"observedAt\":\"2026-01-01T00:00:05.000Z\"}}}\n\nid: 4\ndata: {\"type\":\"TOOL_CALL_START\",\"toolCallId\":\"call-1\",\"toolCallName\":\"ask-user\",\"parentMessageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225627000,\"metadata\":{\"stellaStepId\":\"call-1\",\"stellaToolExecutor\":\"client\"}}\n\nid: 5\ndata: {\"type\":\"TOOL_CALL_ARGS\",\"toolCallId\":\"call-1\",\"delta\":\"{\\\"analysis\\\":\\\"The draft depends on the side the user represents.\\\",\\\"questions\\\":[{\\\"question\\\":\\\"Which side?\\\",\\\"reason\\\":\\\"It decides the draft.\\\",\\\"default\\\":null,\\\"options\\\":null}]}\",\"timestamp\":1767225628000}\n\nid: 6\ndata: {\"type\":\"TOOL_CALL_END\",\"toolCallId\":\"call-1\",\"timestamp\":1767225629000,\"metadata\":{\"tanstack\":{\"input\":{\"analysis\":\"The draft depends on the side the user represents.\",\"questions\":[{\"question\":\"Which side?\",\"reason\":\"It decides the draft.\"}]},\"toolCallName\":\"ask-user\",\"toolName\":\"ask-user\"}}}\n\nid: 7\ndata: {\"type\":\"MESSAGES_SNAPSHOT\",\"timestamp\":1767225630000,\"messages\":[{\"createdAt\":\"2026-01-01T00:00:06.000Z\",\"edited\":false,\"id\":\"00000000-0000-7000-8000-000000000001\",\"role\":\"user\",\"revision\":0,\"parts\":[{\"type\":\"text\",\"content\":\"Draft the NDA\"}],\"content\":\"\"},{\"id\":\"00000000-0000-7000-8000-000000000003\",\"metadata\":{\"tanstack\":{\"createdAt\":\"2026-01-01T00:00:07.000Z\",\"toolCallMetadata\":{\"call-1\":{\"stellaStepId\":\"call-1\",\"stellaToolExecutor\":\"client\"}}},\"turnTiming\":{\"status\":\"running\",\"elapsedMs\":0,\"startedAt\":\"2026-01-01T00:00:08.000Z\",\"durationMs\":0,\"observedAt\":\"2026-01-01T00:00:09.000Z\"}},\"role\":\"assistant\",\"toolCalls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"ask-user\",\"arguments\":\"{\\\"analysis\\\":\\\"The draft depends on the side the user represents.\\\",\\\"questions\\\":[{\\\"question\\\":\\\"Which side?\\\",\\\"reason\\\":\\\"It decides the draft.\\\"}]}\"}}],\"parts\":[{\"type\":\"tool-call\",\"id\":\"call-1\",\"name\":\"ask-user\",\"arguments\":\"{\\\"analysis\\\":\\\"The draft depends on the side the user represents.\\\",\\\"questions\\\":[{\\\"question\\\":\\\"Which side?\\\",\\\"reason\\\":\\\"It decides the draft.\\\"}]}\",\"input\":{\"analysis\":\"The draft depends on the side the user represents.\",\"questions\":[{\"question\":\"Which side?\",\"reason\":\"It decides the draft.\"}]},\"metadata\":{\"stellaStepId\":\"call-1\",\"stellaToolExecutor\":\"client\"},\"state\":\"input-complete\"}]}]}\n\nid: 8\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225631000,\"metadata\":{\"turnTiming\":{\"status\":\"finished\",\"durationMs\":0}}}\n\nid: 9\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-1\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225632000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"outcome\":{\"type\":\"interrupt\",\"interrupts\":[{\"id\":\"client_tool_call-1\",\"reason\":\"tanstack:client_tool_execution\",\"message\":\"Client tool ask-user is ready to run\",\"toolCallId\":\"call-1\",\"responseSchema\":{\"type\":\"object\",\"properties\":{\"answers\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"question\":{\"type\":\"string\"},\"answer\":{\"type\":\"string\"}},\"required\":[\"question\",\"answer\"],\"additionalProperties\":false}}},\"required\":[\"answers\"],\"additionalProperties\":false},\"metadata\":{\"kind\":\"client_tool\",\"toolName\":\"ask-user\",\"input\":{\"analysis\":\"The draft depends on the side the user represents.\",\"questions\":[{\"question\":\"Which side?\",\"reason\":\"It decides the draft.\"}]},\"tanstack:interruptBinding\":{\"v\":1,\"kind\":\"client-tool-execution\",\"interruptId\":\"client_tool_call-1\",\"toolName\":\"ask-user\",\"toolCallId\":\"call-1\",\"outputSchemaHash\":\"sha256:c3fb68b4f783f756acb0d81953fe82af1dc624d038fb46620dd033dc445562ed\",\"responseSchemaHash\":\"sha256:c3fb68b4f783f756acb0d81953fe82af1dc624d038fb46620dd033dc445562ed\",\"interruptedRunId\":\"run-recorded-1\",\"generation\":0}}}]},\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\",\"finishReason\":\"tool_calls\"}}}\n\n",
             "status": 200,
             "turnId": "00000000-0000-7000-8000-000000000004"
           },
@@ -553,7 +553,8 @@
                       ]
                     },
                     "metadata": {
-                      "stellaStepId": "call-1"
+                      "stellaStepId": "call-1",
+                      "stellaToolExecutor": "client"
                     },
                     "name": "ask-user",
                     "state": "input-complete",
@@ -613,7 +614,8 @@
                     "createdAt": "2026-01-01T00:00:14.000Z",
                     "toolCallMetadata": {
                       "call-1": {
-                        "stellaStepId": "call-1"
+                        "stellaStepId": "call-1",
+                        "stellaToolExecutor": "client"
                       }
                     }
                   },
@@ -638,7 +640,7 @@
                 "role": "tool",
                 "id": "tool-call-1",
                 "toolCallId": "call-1",
-                "content": "{\"answers\":[{\"question\":\"Which side?\",\"answer\":\"Buyer\"}]}",
+                "content": "{\"answers\":[{\"answer\":\"Buyer\",\"question\":\"Which side?\"}]}",
                 "metadata": {
                   "tanstack": {
                     "toolResult": {}
@@ -1000,14 +1002,38 @@
             "forwardedProps": {
               "message": {
                 "id": "00000000-0000-7000-8000-000000000003",
+                "metadata": {
+                  "tanstack": {
+                    "createdAt": "2026-01-01T00:00:15.000Z",
+                    "toolCallMetadata": {
+                      "call-1": {
+                        "stellaStepId": "call-1",
+                        "stellaToolExecutor": "client"
+                      }
+                    }
+                  },
+                  "turnTiming": {
+                    "status": "finished",
+                    "durationMs": 0
+                  }
+                },
                 "role": "assistant",
+                "toolCalls": [
+                  {
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {
+                      "name": "ask-user",
+                      "arguments": "{\"analysis\":\"The draft depends on the side the user represents.\",\"questions\":[{\"question\":\"Which side?\",\"reason\":\"It decides the draft.\"}]}"
+                    }
+                  }
+                ],
                 "parts": [
                   {
                     "type": "tool-call",
                     "id": "call-1",
                     "name": "ask-user",
                     "arguments": "{\"analysis\":\"The draft depends on the side the user represents.\",\"questions\":[{\"question\":\"Which side?\",\"reason\":\"It decides the draft.\"}]}",
-                    "state": "complete",
                     "input": {
                       "analysis": "The draft depends on the side the user represents.",
                       "questions": [
@@ -1018,13 +1044,15 @@
                       ]
                     },
                     "metadata": {
-                      "stellaStepId": "call-1"
+                      "stellaStepId": "call-1",
+                      "stellaToolExecutor": "client"
                     },
+                    "state": "complete",
                     "output": {
                       "answers": [
                         {
-                          "question": "Which side?",
-                          "answer": "Buyer"
+                          "answer": "Buyer",
+                          "question": "Which side?"
                         }
                       ]
                     }
@@ -1032,24 +1060,10 @@
                   {
                     "type": "tool-result",
                     "toolCallId": "call-1",
-                    "content": "{\"answers\":[{\"question\":\"Which side?\",\"answer\":\"Buyer\"}]}",
+                    "content": "{\"answers\":[{\"answer\":\"Buyer\",\"question\":\"Which side?\"}]}",
                     "state": "complete"
                   }
                 ],
-                "metadata": {
-                  "tanstack": {
-                    "createdAt": "2026-01-01T00:00:15.000Z",
-                    "toolCallMetadata": {
-                      "call-1": {
-                        "stellaStepId": "call-1"
-                      }
-                    }
-                  },
-                  "turnTiming": {
-                    "status": "finished",
-                    "durationMs": 0
-                  }
-                },
                 "createdAt": "2026-01-01T00:00:16.000Z"
               },
               "sendMode": "rawOverride",
@@ -1074,14 +1088,38 @@
             "data": {
               "message": {
                 "id": "00000000-0000-7000-8000-000000000003",
+                "metadata": {
+                  "tanstack": {
+                    "createdAt": "2026-01-01T00:00:17.000Z",
+                    "toolCallMetadata": {
+                      "call-1": {
+                        "stellaStepId": "call-1",
+                        "stellaToolExecutor": "client"
+                      }
+                    }
+                  },
+                  "turnTiming": {
+                    "status": "finished",
+                    "durationMs": 0
+                  }
+                },
                 "role": "assistant",
+                "toolCalls": [
+                  {
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {
+                      "name": "ask-user",
+                      "arguments": "{\"analysis\":\"The draft depends on the side the user represents.\",\"questions\":[{\"question\":\"Which side?\",\"reason\":\"It decides the draft.\"}]}"
+                    }
+                  }
+                ],
                 "parts": [
                   {
                     "type": "tool-call",
                     "id": "call-1",
                     "name": "ask-user",
                     "arguments": "{\"analysis\":\"The draft depends on the side the user represents.\",\"questions\":[{\"question\":\"Which side?\",\"reason\":\"It decides the draft.\"}]}",
-                    "state": "complete",
                     "input": {
                       "analysis": "The draft depends on the side the user represents.",
                       "questions": [
@@ -1092,13 +1130,15 @@
                       ]
                     },
                     "metadata": {
-                      "stellaStepId": "call-1"
+                      "stellaStepId": "call-1",
+                      "stellaToolExecutor": "client"
                     },
+                    "state": "complete",
                     "output": {
                       "answers": [
                         {
-                          "question": "Which side?",
-                          "answer": "Buyer"
+                          "answer": "Buyer",
+                          "question": "Which side?"
                         }
                       ]
                     }
@@ -1106,24 +1146,10 @@
                   {
                     "type": "tool-result",
                     "toolCallId": "call-1",
-                    "content": "{\"answers\":[{\"question\":\"Which side?\",\"answer\":\"Buyer\"}]}",
+                    "content": "{\"answers\":[{\"answer\":\"Buyer\",\"question\":\"Which side?\"}]}",
                     "state": "complete"
                   }
                 ],
-                "metadata": {
-                  "tanstack": {
-                    "createdAt": "2026-01-01T00:00:17.000Z",
-                    "toolCallMetadata": {
-                      "call-1": {
-                        "stellaStepId": "call-1"
-                      }
-                    }
-                  },
-                  "turnTiming": {
-                    "status": "finished",
-                    "durationMs": 0
-                  }
-                },
                 "createdAt": "2026-01-01T00:00:18.000Z"
               },
               "sendMode": "rawOverride",
@@ -1214,7 +1240,8 @@
                       ]
                     },
                     "metadata": {
-                      "stellaStepId": "call-1"
+                      "stellaStepId": "call-1",
+                      "stellaToolExecutor": "client"
                     },
                     "name": "ask-user",
                     "output": {

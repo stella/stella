@@ -1,9 +1,22 @@
 import { panic } from "better-result";
 
+import type {
+  ChatTurnFailureCode,
+  ChatTurnInterruptionReason,
+} from "@stll/api-contract/chat-turn-errors";
 import type { PermissionInput } from "@stll/permissions";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatTurnStatus } from "@/api/lib/chat/turn-status";
+
+export {
+  CHAT_TURN_FAILURE_CODES,
+  CHAT_TURN_INTERRUPTION_REASONS,
+} from "@stll/api-contract/chat-turn-errors";
+export type {
+  ChatTurnFailureCode,
+  ChatTurnInterruptionReason,
+} from "@stll/api-contract/chat-turn-errors";
 
 /** Whoever may start a turn in a thread may also stop it. */
 export const CHAT_TURN_PERMISSIONS = {
@@ -25,33 +38,12 @@ export const CHAT_TURN_INTERACTION_TYPES = [
 export type ChatTurnInteractionType =
   (typeof CHAT_TURN_INTERACTION_TYPES)[number];
 
-export const CHAT_TURN_FAILURE_CODES = [
-  "boundary-refusal",
-  "connector-discovery",
-  "empty-response",
-  "internal",
-  "persistence",
-  "provider-error",
-  "unsupported-input",
-] as const;
-export type ChatTurnFailureCode = (typeof CHAT_TURN_FAILURE_CODES)[number];
-
 export const CHAT_TURN_CANCELLATION_REASONS = [
   "superseded",
   "user-stop",
 ] as const;
 export type ChatTurnCancellationReason =
   (typeof CHAT_TURN_CANCELLATION_REASONS)[number];
-
-export const CHAT_TURN_INTERRUPTION_REASONS = [
-  "client-disconnected",
-  // The turn's owner stopped producing: its lease expired, or its process
-  // shut down.
-  "owner-lost",
-  "timeout",
-] as const;
-export type ChatTurnInterruptionReason =
-  (typeof CHAT_TURN_INTERRUPTION_REASONS)[number];
 
 export type ChatTurnState =
   | {

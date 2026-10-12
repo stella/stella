@@ -228,6 +228,7 @@ const sellerProfileIsAvailable = async (
 
 const updateInvoice = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Change a draft invoice's number, issue date (invoiceDate), taxable " +
       "supply date, due date, reference, notes, currency, issuing seller " +

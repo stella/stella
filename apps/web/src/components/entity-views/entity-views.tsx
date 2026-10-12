@@ -50,6 +50,7 @@ import { INBOX_VIEWS, inboxKeys } from "@/lib/inbox/queries";
 import type { InboxView } from "@/lib/inbox/queries";
 import { toSafeId } from "@/lib/safe-id";
 import type { ViewLayout, WorkspaceView } from "@/lib/types";
+import { createUuid } from "@/lib/uuid";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import {
   entityViewKeys,
@@ -335,7 +336,7 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
                     <MenuItem
                       key={view.id}
                       onClick={() =>
-                        persist({ ...view, id: `draft:${crypto.randomUUID()}` })
+                        persist({ ...view, id: `draft:${createUuid()}` })
                       }
                     >
                       {t("workspaces.views.newView", {

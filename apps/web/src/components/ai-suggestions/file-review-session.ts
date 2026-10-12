@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
-import { createDocumentDraftReviewId } from "@/components/chat/create-document-draft.logic";
+export const createDocumentDraftReviewId = (toolCallId: string): string =>
+  `draft:${toolCallId}`;
 
 /**
  * What starting a new chat thread does with the active document's review
