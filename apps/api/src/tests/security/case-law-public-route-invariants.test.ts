@@ -164,6 +164,7 @@ type PublicDecisionReadEntry =
 /** The spellings of the one predicate, plus the marker reader the projection uses. */
 const PUBLIC_DECISION_PREDICATE_TOKENS = [
   "publishedCaseLawDecision",
+  "servedCaseLawDecisionFor",
   "publicCaseLawDecisionJoin",
   "partialObservationFromMetadata",
 ] as const;
@@ -223,6 +224,7 @@ const PUBLIC_DECISION_READ_GATES = {
     gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
   },
   [STATUS_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
+  [COVERAGE_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   [CITING_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   "apps/api/src/handlers/case-law/provisions/previews-for-decision.ts": {
     gate: PUBLIC_DECISION_READ_GATE.SUBJECT,
@@ -231,6 +233,9 @@ const PUBLIC_DECISION_READ_GATES = {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason:
       "The public graph imports only readDecisionAnalysisAst, which reads a supplied AST or corpus object. The decision-row query is internal to analysis.",
+  },
+  "apps/api/src/lib/case-law/decision-citations.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
   },
   "apps/api/src/lib/case-law/citation-storage-bounds.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
@@ -912,7 +917,7 @@ describe("public case-law route boundary", () => {
 
   test("the listing-only predicate has one owner", async () => {
     const [ownerSource, markerSource] = await Promise.all([
-      readSource("apps/api/src/lib/case-law/published-decisions.ts"),
+      readSource("apps/api/src/lib/case-law/published-decisions-sql.ts"),
       readSource("apps/api/src/lib/legal-search/ingestion-normalization.ts"),
     ]);
 

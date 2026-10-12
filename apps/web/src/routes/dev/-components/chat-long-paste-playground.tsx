@@ -61,36 +61,44 @@ const openSentPreview = (element: HTMLElement | null) => {
   }
 };
 
-const SentMessage = ({ state }: { state: "collapsed" | "expanded" }) => (
-  <section
-    data-playground-section={`chat-long-paste:sent-${state}`}
-    ref={state === "expanded" ? openSentPreview : undefined}
-  >
-    <h2 className="text-muted-foreground mb-2 text-xs">Sent: {state} paste</h2>
-    <ChatApprovalContext
-      value={createPlaygroundChatApproval("visual-long-paste")}
+const SentMessage = ({ state }: { state: "collapsed" | "expanded" }) => {
+  const [activitySession] = useState(() => ({
+    reportedUnknownActivityTypes: new Set<string>(),
+  }));
+  return (
+    <section
+      data-playground-section={`chat-long-paste:sent-${state}`}
+      ref={state === "expanded" ? openSentPreview : undefined}
     >
-      <ChatThreadMessages
-        approvalPendingMessageId={null}
-        messages={[
-          {
-            id: "visual-lease-message",
-            role: "user",
-            parts: [createChatPastedTextPart(PASTED_TEXT)],
-          },
-        ]}
-        onAskUserSubmit={noop}
-        onCreateDocumentResolve={noop}
-        onOpenCreatedDocument={noop}
-        streamdownComponents={{
-          a: (props) => (
-            <StreamdownMentionLink {...props} interactive={false} />
-          ),
-        }}
-      />
-    </ChatApprovalContext>
-  </section>
-);
+      <h2 className="text-muted-foreground mb-2 text-xs">
+        Sent: {state} paste
+      </h2>
+      <ChatApprovalContext
+        value={createPlaygroundChatApproval("visual-long-paste")}
+      >
+        <ChatThreadMessages
+          activitySession={activitySession}
+          approvalPendingMessageId={null}
+          messages={[
+            {
+              id: "visual-lease-message",
+              role: "user",
+              parts: [createChatPastedTextPart(PASTED_TEXT)],
+            },
+          ]}
+          onAskUserSubmit={noop}
+          onCreateDocumentResolve={noop}
+          onOpenCreatedDocument={noop}
+          streamdownComponents={{
+            a: (props) => (
+              <StreamdownMentionLink {...props} interactive={false} />
+            ),
+          }}
+        />
+      </ChatApprovalContext>
+    </section>
+  );
+};
 
 export const ChatLongPastePlayground = () => {
   const [ready, setReady] = useState(false);

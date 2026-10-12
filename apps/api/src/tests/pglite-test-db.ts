@@ -24,6 +24,7 @@ import {
   installPgliteChatRunLogRls,
   installPgliteChatMessageRevisionsRls,
   installPgliteChatSecretRls,
+  installPgliteReaderAnswerRls,
   installPgliteChatTurnRunIdLookup,
   installPgliteAgentSkillRevisionTrigger,
   installPgliteCaseLawObservationFence,
@@ -698,6 +699,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteChatRunLogRls(db);
   await installPgliteChatMessageRevisionsRls(db);
   await installPgliteChatSecretRls(db);
+  await installPgliteReaderAnswerRls(db);
   await installPgliteSchedulerJobPauseLog(db);
   await installPgliteTreeParentGuards(db);
 
