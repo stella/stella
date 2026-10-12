@@ -2,6 +2,10 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import {
+  apiTypecheckArtifact,
+  usesGeneratedApiConfig,
+} from "./api-typecheck-config";
 import { apiTestPartitionIssues } from "./api-typecheck-partition";
 import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
 
@@ -39,12 +43,52 @@ export const typecheckOwnershipIssues = (
   });
 };
 
+const GENERATED_API_CONFIG_WRAPPERS = [
+  "tsconfig.declarations.json",
+  "tsconfig.src.json",
+  "tsconfig.tests.json",
+] as const;
+
+// The API compiler projects extend configs that the declaration generator
+// writes under .cache. A fresh install (the root postinstall runs workspace
+// hygiene) has not generated them yet, so ownership cannot be resolved there.
+export const missingPreparedApiTypecheckConfigs = (rootDir: string) => {
+  const apiDir = path.join(rootDir, "apps/api");
+  const generated = GENERATED_API_CONFIG_WRAPPERS.some((wrapper) => {
+    const file = path.join(apiDir, wrapper);
+    return existsSync(file) && usesGeneratedApiConfig(file);
+  });
+  if (!generated) {
+    return [];
+  }
+  return (["roots", "src", "tests"] as const)
+    .map((name) => apiTypecheckArtifact(apiDir, name))
+    .filter((artifact) => !existsSync(artifact))
+    .map((artifact) => path.relative(rootDir, artifact));
+};
+
 // Root membership comes from the compiler config parser, including inherited
 // includes/excludes. Imported dependencies do not become a second file owner.
-export const validateApiTypecheckProjects = (rootDir: string) => {
+// Without prepared configs the check is skipped unless `requirePrepared` is
+// set; CI sets it after generating the configs, so ownership stays enforced.
+export const validateApiTypecheckProjects = (
+  rootDir: string,
+  { requirePrepared = false }: { requirePrepared?: boolean } = {},
+) => {
   const apiDir = path.join(rootDir, "apps/api");
   if (!existsSync(path.join(apiDir, "package.json"))) {
     return [];
+  }
+  const missing = missingPreparedApiTypecheckConfigs(rootDir);
+  if (missing.length > 0) {
+    return requirePrepared
+      ? [
+          {
+            path: "apps/api/.cache/typecheck-declarations",
+            message: `prepared API typecheck configs are missing (${missing.join(", ")}); run bun --filter @stll/api generate:typecheck-declarations first`,
+          },
+        ]
+      : [];
   }
   const manifest = JSON.parse(
     readFileSync(path.join(apiDir, "package.json"), "utf-8"),
