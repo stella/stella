@@ -34,24 +34,6 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isRemoteReference = (reference: string) =>
   reference.startsWith("//") || /^[a-z][a-z\d+.-]*:/iu.test(reference);
 
-// Reference-style images, `![alt][label]` or `![label]`, resolve through a
-// `[label]: path` definition; labels match case-insensitively.
-const referencedImageDestinations = (readme: string): string[] => {
-  const definitions = new Map(
-    [...readme.matchAll(/^ {0,3}\[([^\]]+)\]:\s*<?([^\s>]+)/gmu)].map(
-      (match) => [(match[1] ?? "").toLowerCase(), match[2] ?? ""] as const,
-    ),
-  );
-  return [...readme.matchAll(/!\[([^\]]*)\](?:\[([^\]]*)\])?(?!\()/gu)].flatMap(
-    (match) => {
-      const label =
-        (match[2] === undefined || match[2] === "" ? match[1] : match[2]) ?? "";
-      const destination = definitions.get(label.toLowerCase());
-      return destination === undefined ? [] : [destination];
-    },
-  );
-};
-
 // GitHub reads `#gh-dark-mode-only` style fragments and query strings off an
 // image URL; the file on disk is the path before them.
 const imageFilePath = (reference: string) => {
@@ -59,20 +41,37 @@ const imageFilePath = (reference: string) => {
   return suffix === -1 ? reference : reference.slice(0, suffix);
 };
 
-// Every image a README line can name: `src`, each `srcset` candidate (without
-// its width or density descriptor) and Markdown `![alt](path "title")`.
-const readmeImageReferences = (readme: string): string[] => [
-  ...[...readme.matchAll(/\bsrc="([^"]+)"/gu)].map((match) => match[1] ?? ""),
-  ...[...readme.matchAll(/\bsrcset="([^"]+)"/gu)].flatMap((match) =>
-    (match[1] ?? "")
-      .split(",")
-      .map((candidate) => candidate.trim().split(/\s+/u)[0] ?? ""),
-  ),
-  ...[...readme.matchAll(/!\[[^\]]*\]\(\s*<?([^\s)>]+)/gu)].map(
-    (match) => match[1] ?? "",
-  ),
-  ...referencedImageDestinations(readme),
-];
+// One pass, in document order: `src`, each `srcset` candidate (without its
+// width or density descriptor), inline `![alt](path "title")`, and
+// reference-style `![alt][label]` / `![label]`, which resolve through a
+// `[label]: path` definition (labels match case-insensitively).
+const IMAGE_REFERENCE =
+  /\bsrc="([^"]+)"|\bsrcset="([^"]+)"|!\[([^\]]*)\](?:\(\s*<?([^\s)>]+)|\[([^\]]*)\])?/gu;
+
+const readmeImageReferences = (readme: string): string[] => {
+  const definitions = new Map(
+    [...readme.matchAll(/^ {0,3}\[([^\]]+)\]:[ \t]*<?([^\s>]+)/gmu)].map(
+      (match) => [(match[1] ?? "").toLowerCase(), match[2] ?? ""] as const,
+    ),
+  );
+  return [...readme.matchAll(IMAGE_REFERENCE)].flatMap((match) => {
+    const [, src, srcset, alt, inline, label] = match;
+    if (src !== undefined) {
+      return [src];
+    }
+    if (srcset !== undefined) {
+      return srcset
+        .split(",")
+        .map((candidate) => candidate.trim().split(/\s+/u)[0] ?? "");
+    }
+    if (inline !== undefined) {
+      return [inline];
+    }
+    const key = (label === undefined || label === "" ? alt : label) ?? "";
+    const destination = definitions.get(key.toLowerCase());
+    return destination === undefined ? [] : [destination];
+  });
+};
 
 // The root README's tour embeds the captured product screenshots by
 // repository-relative path; a renamed capture must fail here, not render as
