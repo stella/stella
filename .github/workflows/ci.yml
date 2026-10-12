@@ -5152,6 +5152,14 @@ jobs:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         run: bun run src/db/migrate.ts
 
+      - name: Configure ephemeral Postgres fixture maintenance
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+        # A 1s DDL deadline races the default 1s autovacuum cancellation grace.
+        # Keep cluster defaults for the fresh-database maintenance assertions.
+        run: bun scripts/postgres-test-maintenance.ts
+
       - name: Run Postgres-gated API suites
         id: postgres-tests
         if: needs.ci-plan.outputs.postgres_suites_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))
