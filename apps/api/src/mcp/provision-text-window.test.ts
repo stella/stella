@@ -46,7 +46,7 @@ describe("provision text windows", () => {
       fc.integer({ min: 0x1_00_00, max: 0x10_ff_ff }),
     );
     assertProperty(
-      "provision-text-windows-forward-progress",
+      "positive budgets reconstruct bounded Unicode text with forward progress",
       fc.property(
         fc.array(point, { maxLength: 12 }),
         fc.integer({ min: 1, max: 8 }),
@@ -88,7 +88,7 @@ describe("provision text windows", () => {
       .array(fc.integer({ min: 0, max: 0xd7_ff }), { maxLength: 8 })
       .map((points) => String.fromCodePoint(...points));
     assertProperty(
-      "provision-text-cursors-unicode-boundaries",
+      "rechecksummed cursors accept exactly Unicode character boundaries",
       fc.property(
         bmpText,
         fc.integer({ min: 0x1_00_00, max: 0x10_ff_ff }),
