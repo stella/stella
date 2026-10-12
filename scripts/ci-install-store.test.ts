@@ -17,6 +17,7 @@ import {
   verifyInstallStore,
 } from "./ci-install-store";
 import { lexShell } from "./install-free-ci";
+import { MAIN_ONLY_BUN_CACHE_SAVE } from "./workflow-cache-policy";
 import { workflowJobSteps } from "./workflow-steps";
 
 test("complete stores reject partial restores, temporary assembly and mismatched keys", () => {
@@ -153,7 +154,7 @@ test("Postgres restores only exact complete stores and saves successful installs
   expect(seal["if"]).toBe(
     "steps.postgres-install-cache.outputs.cache-hit != 'true'",
   );
-  expect(save["if"]).toBe(seal["if"]);
+  expect(save["if"]).toBe(MAIN_ONLY_BUN_CACHE_SAVE);
   const order = [
     key,
     restore,

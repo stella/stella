@@ -84,9 +84,9 @@ export const runLoggedInstall = async ({
       stdout: "pipe",
       stderr: "pipe",
     });
-    let captured = false;
+    const deadlineState: { status: "armed" | "elapsed" } = { status: "armed" };
     const deadline = setTimeout(() => {
-      captured = true;
+      deadlineState.status = "elapsed";
       try {
         summary(
           `Install deadline reached; capturing state before SIGKILL\n${timeoutDiagnostics(child.pid)}`,
@@ -121,10 +121,11 @@ export const runLoggedInstall = async ({
     } finally {
       clearTimeout(deadline);
     }
-    if (child.signalCode === "SIGKILL" && !captured) {
+    if (child.signalCode === "SIGKILL" && deadlineState.status === "armed") {
       summary(timeoutDiagnostics(child.pid));
     }
-    const exitCode = captured ? 1 : childExitStatus(child);
+    const exitCode =
+      deadlineState.status === "elapsed" ? 1 : childExitStatus(child);
     if (exitCode !== 0) {
       const size = fstatSync(descriptor).size;
       const length = Math.min(size, CONSOLE_TAIL_BYTES);
