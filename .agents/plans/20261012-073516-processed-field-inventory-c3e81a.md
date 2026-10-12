@@ -177,23 +177,23 @@ identity). Reasoning text itself is the document, not a field.
 
 Paragraph numbers (implemented; evidence = recordings the suite parses):
 
-| source                                              | disposition                          | evidence                                                                                                    |
-| --------------------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| cz-ns                                               | provided (shared extractor)          | `cz-ns-page.json.gz` (40 decisions: `[N]`, `N.`, `N)` styles; skip in 5 Tdo 28/2024 kept)                   |
-| cz-nss                                              | provided (shared extractor)          | three `cz-nss-*.html.gz` recordings                                                                         |
-| cz-us                                               | provided (shared extractor)          | three `cz-us-*.html.gz` recordings, `cz-us-page.json.gz` (1993, unnumbered)                                 |
-| cz-regional                                         | provided (shared extractor)          | `cz-regional-finaldoc-{district,appellate}.json.gz`, two `cz-regional-*.finaldoc.json.gz` recordings        |
-| sk-us                                               | provided (shared extractor)          | `sk-us-iii-us-265-2026.content.json.gz`                                                                     |
-| sk-courts                                           | skipped: unassessed                  | unrecorded: no recorded general-court PDF with numbered reasoning yet                                       |
-| eu-ecj                                              | provided (point ids)                 | `eu-ecj/62022CJ0128.en.html.gz`                                                                             |
-| hu-bhgy                                             | provided (`[N]`)                     | `hu-bhgy-decision.docx`                                                                                     |
-| pl-tk                                               | provided (`wyrok_akapitNr`)          | `pl-tk-case-sk-14-11.html.gz`                                                                               |
-| pl-nsa                                              | skipped: not-extracted               | `pl-nsa-rows.json` ("1. Wyrokiem …" left in text)                                                           |
-| pl-courts                                           | skipped: not-extracted               | unrecorded                                                                                                  |
-| at-findok                                           | skipped: source-lacks                | `at-findok-152649.zip`                                                                                      |
-| at-courts … at-bks (11)                             | skipped: unassessed                  | unrecorded (no recent Supreme Court full text recorded)                                                     |
-| pl-sn, pl-kio, pl-ncourt, pl-kis, pl-uodo, pl-uokik | skipped: unassessed                  | unrecorded                                                                                                  |
-| us-courtlistener                                    | skipped: unassessed                  | unrecorded                                                                                                  |
+| source                                              | disposition                 | evidence                                                                                             |
+| --------------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------- |
+| cz-ns                                               | provided (shared extractor) | `cz-ns-page.json.gz` (40 decisions: `[N]`, `N.`, `N)` styles; skip in 5 Tdo 28/2024 kept)            |
+| cz-nss                                              | provided (shared extractor) | three `cz-nss-*.html.gz` recordings                                                                  |
+| cz-us                                               | provided (shared extractor) | three `cz-us-*.html.gz` recordings, `cz-us-page.json.gz` (1993, unnumbered)                          |
+| cz-regional                                         | provided (shared extractor) | `cz-regional-finaldoc-{district,appellate}.json.gz`, two `cz-regional-*.finaldoc.json.gz` recordings |
+| sk-us                                               | provided (shared extractor) | `sk-us-iii-us-265-2026.content.json.gz`                                                              |
+| sk-courts                                           | skipped: unassessed         | unrecorded: no recorded general-court PDF with numbered reasoning yet                                |
+| eu-ecj                                              | provided (point ids)        | `eu-ecj/62022CJ0128.en.html.gz`                                                                      |
+| hu-bhgy                                             | provided (`[N]`)            | `hu-bhgy-decision.docx`                                                                              |
+| pl-tk                                               | provided (`wyrok_akapitNr`) | `pl-tk-case-sk-14-11.html.gz`                                                                        |
+| pl-nsa                                              | skipped: not-extracted      | `pl-nsa-rows.json` ("1. Wyrokiem …" left in text)                                                    |
+| pl-courts                                           | skipped: not-extracted      | unrecorded                                                                                           |
+| at-findok                                           | skipped: source-lacks       | `at-findok-152649.zip`                                                                               |
+| at-courts … at-bks (11)                             | skipped: unassessed         | unrecorded (no recent Supreme Court full text recorded)                                              |
+| pl-sn, pl-kio, pl-ncourt, pl-kis, pl-uodo, pl-uokik | skipped: unassessed         | unrecorded                                                                                           |
+| us-courtlistener                                    | skipped: unassessed         | unrecorded                                                                                           |
 
 Rest of the family, current state from code reading (P provided, – absent;
 to be turned into dispositions with evidence in later slices). Always P and
