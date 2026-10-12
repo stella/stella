@@ -43,14 +43,14 @@ test("cache-miss execution milliseconds enforce the central web and default budg
   expect(DEFAULT_TASK_BUDGETS).toEqual({
     defaultSeconds: 90,
     overrides: {
-      "@stll/api#lint": 390,
+      "@stll/api#lint": 846,
       "@stll/api#typecheck": 330,
       "@stll/web#lint": 240,
     },
   });
   for (const [taskId, budget] of [
     ["@stll/web#lint", 240],
-    ["@stll/api#lint", 390],
+    ["@stll/api#lint", 846],
     ["@stll/api#typecheck", 330],
     ["//#typecheck:repo", 90],
   ] as const) {
@@ -100,7 +100,7 @@ test("budgets cover measured cold p95 and twice the uncached measurement", () =>
   }
   const coldApi = parseTurboRunSummary(
     summary(
-      task("@stll/api#lint", 178_600),
+      task("@stll/api#lint", 407_816),
       task("@stll/api#typecheck", 148_427),
     ),
   );
