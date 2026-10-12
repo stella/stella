@@ -15,7 +15,7 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-import { findDecisionChatThread } from "./decision-thread";
+import { findDecisionChatThread } from "./get";
 
 // A decision's chat is one conversation per reader: reopening the decision
 // finds the reader's own newest global thread about it, never another
