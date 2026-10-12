@@ -3,15 +3,17 @@
   "overrides": {
     "@stll/api#lint": 846,
     "@stll/api#typecheck": 330,
-    "@stll/web#lint": 240
+    "@stll/web#lint": 240,
+    "@stll/api#generate:typecheck-declarations": 225
   },
   "coldSamplesSeconds": {
     "default": [32.95, 32.797],
     "@stll/api#lint": [135.859, 178.6, 407.816],
     "@stll/api#typecheck": [148.42668],
-    "@stll/web#lint": [83.3, 88.0]
+    "@stll/web#lint": [83.3, 88.0],
+    "@stll/api#generate:typecheck-declarations": [97.393, 27.481, 24.207]
   },
-  "measurementNotes": "Only cache misses. Historical samples are reported tool-phase totals (lower bounds on composite tasks); API lint 135.859 and 407.816 are complete task durations. The 407.816 sample is from run 38204066394, job 114667162912; Oxlint completed 6516 files in 406.4 seconds. Root 32.797 bounds a complete task. Budgets include at least 30 seconds above max(1.5 x empirical p95, 2 x largest cold sample), rounded up, except the unchanged default bucket. Sparse-sample p95 is not a population estimate. Cached replay is excluded.",
+  "measurementNotes": "Only cache misses. Historical samples are reported tool-phase totals (lower bounds on composite tasks); API lint 135.859 and 407.816 are complete task durations. The 407.816 sample is from run 38204066394, job 114667162912; Oxlint completed 6516 files in 406.4 seconds. Root 32.797 bounds a complete task. Budgets include at least 30 seconds above max(1.5 x empirical p95, 2 x largest cold sample), rounded up, except the unchanged default bucket. Sparse-sample p95 is not a population estimate. Cached replay is excluded. Declaration producer: run 38312922554 job 115024830651 reports exact completed cache-miss execution 97.393 s. Runs 38285899521 job 114934635714 and 38285897370 job 114934624094 report completed cold producer-phase upper bounds 27.481 s and 24.207 s respectively (the producer is MISS; grouped logs include prerequisite overhead). The 225 s producer budget uses the existing formula over these three observations; phase bounds are conservative, not exact task timings. Latest #5636/#5639 marker-reuse runs skipped generation and are excluded.",
   "planningPhaseUpperBoundsSeconds": [
     4.215, 0.796, 0.635, 0.417, 0.181, 0.178, 0.167
   ],
@@ -29,6 +31,9 @@
     "https://github.com/stella/stella/actions/runs/38166117550/job/114551251727",
     "https://github.com/stella/stella/actions/runs/38151726653/job/114509400478",
     "https://github.com/stella/stella/actions/runs/38160179511/job/114532014949",
-    "https://github.com/stella/stella/actions/runs/38166117550/job/114551251772"
+    "https://github.com/stella/stella/actions/runs/38166117550/job/114551251772",
+    "https://github.com/stella/stella/actions/runs/38312922554/job/115024830651",
+    "https://github.com/stella/stella/actions/runs/38285899521/job/114934635714",
+    "https://github.com/stella/stella/actions/runs/38285897370/job/114934624094"
   ]
 }

@@ -40,20 +40,11 @@ const summary = (...tasks: unknown[]) => ({
 });
 
 test("cache-miss execution milliseconds enforce the central web and default budgets", () => {
-  expect(DEFAULT_TASK_BUDGETS).toEqual({
-    defaultSeconds: 90,
-    overrides: {
-      "@stll/api#lint": 846,
-      "@stll/api#typecheck": 330,
-      "@stll/web#lint": 240,
-    },
-  });
-  for (const [taskId, budget] of [
-    ["@stll/web#lint", 240],
-    ["@stll/api#lint", 846],
-    ["@stll/api#typecheck", 330],
-    ["//#typecheck:repo", 90],
-  ] as const) {
+  const budgetCases = [
+    ...Object.entries(DEFAULT_TASK_BUDGETS.overrides),
+    ["//#typecheck:repo", DEFAULT_TASK_BUDGETS.defaultSeconds] as const,
+  ];
+  for (const [taskId, budget] of budgetCases) {
     const positive = summary(task(taskId, budget * 1000));
     const mutation = summary(task(taskId, budget * 1000 + 1));
     expect(positive).not.toEqual(mutation);
@@ -111,6 +102,29 @@ test("budgets cover measured cold p95 and twice the uncached measurement", () =>
       budgets: { defaultSeconds: 90, overrides: {} },
     }).violations,
   ).toHaveLength(2);
+});
+
+test("the declaration producer has a measured budget instead of the default bucket", () => {
+  const taskId = "@stll/api#generate:typecheck-declarations";
+  const samples = configuredBudgets.coldSamplesSeconds[taskId];
+  expect(samples.length).toBeGreaterThanOrEqual(3);
+  const measured = Math.max(...samples);
+  const expected = Math.ceil(Math.max(measured * 1.5, measured * 2) + 30);
+  expect(DEFAULT_TASK_BUDGETS.overrides[taskId]).toBe(expected);
+  expect(measured).toBeGreaterThan(DEFAULT_TASK_BUDGETS.defaultSeconds);
+  const coldProducer = parseTurboRunSummary(
+    summary(task(taskId, measured * 1000)),
+  );
+  expect(evaluateTaskBudgets({ summary: coldProducer }).violations).toEqual([]);
+  expect(
+    evaluateTaskBudgets({
+      summary: coldProducer,
+      budgets: {
+        defaultSeconds: DEFAULT_TASK_BUDGETS.defaultSeconds,
+        overrides: {},
+      },
+    }).violations,
+  ).toMatchObject([{ taskId }]);
 });
 
 test("cached replay and unexecuted dependencies never consume task execution budgets", () => {
