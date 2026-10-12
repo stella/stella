@@ -343,13 +343,26 @@ test("the client address header cannot reuse a header the API owns", () => {
 
 test("edge verify values must each be long enough not to be guessed", () => {
   const long = "a".repeat(32);
-  for (const schema of [
-    envApiServerSchema.STELLA_ORIGIN_VERIFY_SECRET,
-    envApiServerSchema.STELLA_FRONTEND_VERIFY_SECRET,
-  ]) {
+  for (const schema of [envApiServerSchema.STELLA_FRONTEND_VERIFY_SECRET]) {
     expect(v.safeParse(schema, undefined).success).toBe(true);
     expect(v.safeParse(schema, `${long},${"b".repeat(32)}`).success).toBe(true);
     for (const invalid of ["a".repeat(31), `${long},short`, `${long},`]) {
+      expect(v.safeParse(schema, invalid).success).toBe(false);
+    }
+  }
+});
+
+test("origin verify values are single values of at least 32 characters", () => {
+  const current = "a".repeat(32);
+  const previous = "b".repeat(32);
+  for (const schema of [
+    envApiServerSchema.STELLA_ORIGIN_VERIFY_SECRET,
+    envApiServerSchema.STELLA_ORIGIN_VERIFY_SECRET_PREVIOUS,
+  ]) {
+    expect(v.safeParse(schema, undefined).success).toBe(true);
+    expect(v.safeParse(schema, current).success).toBe(true);
+    expect(v.safeParse(schema, previous).success).toBe(true);
+    for (const invalid of ["a".repeat(31), `${current},${previous}`]) {
       expect(v.safeParse(schema, invalid).success).toBe(false);
     }
   }

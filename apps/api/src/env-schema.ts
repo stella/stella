@@ -103,6 +103,12 @@ const edgeVerifyValues = v.pipe(
   ),
 );
 
+const originVerifyValue = v.pipe(
+  v.string(),
+  v.minLength(32, "must be at least 32 characters"),
+  v.check((value) => !value.includes(","), "must be a single value"),
+);
+
 export const envApiServerSchema = {
   ...rateLimitBudgetEnvSchema,
   ...verificationRunCapEnvSchema,
@@ -421,11 +427,16 @@ export const envApiServerSchema = {
   ),
 
   /**
-   * Comma-separated values the edge sends in `x-stella-origin-verify` (current
-   * first, then the next one during a rotation). When set, the client address
-   * header is read only from requests carrying one of them.
+   * Current value the edge sends in `x-stella-origin-verify`. One value of at
+   * least 32 characters; the address header accepts this or the previous value.
    */
-  STELLA_ORIGIN_VERIFY_SECRET: v.optional(edgeVerifyValues),
+  STELLA_ORIGIN_VERIFY_SECRET: v.optional(originVerifyValue),
+
+  /**
+   * Optional previous origin value accepted during a rotation. One value of at
+   * least 32 characters, stored separately from STELLA_ORIGIN_VERIFY_SECRET.
+   */
+  STELLA_ORIGIN_VERIFY_SECRET_PREVIOUS: v.optional(originVerifyValue),
 
   /**
    * Comma-separated values the frontend edge sends in

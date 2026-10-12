@@ -15,6 +15,7 @@ export const AUTH_CLIENT_ADDRESS_HEADER = "x-stella-client-address";
  *
  *   header                     API env key
  *   x-stella-origin-verify     STELLA_ORIGIN_VERIFY_SECRET
+ *                             STELLA_ORIGIN_VERIFY_SECRET_PREVIOUS
  *   cloudfront-viewer-address  STELLA_CLIENT_ADDRESS_HEADER
  *   x-stella-frontend-verify   STELLA_FRONTEND_VERIFY_SECRET
  *   x-stella-viewer-address    (none; read with the line above, bare address)

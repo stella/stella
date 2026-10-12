@@ -54,8 +54,8 @@ export { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip-config";
 
 /**
  * The header the edge adds to prove a request came through it. When
- * `STELLA_ORIGIN_VERIFY_SECRET` is set, the edge address header is read only
- * from requests that carry one of its values here.
+ * `STELLA_ORIGIN_VERIFY_SECRET` or `STELLA_ORIGIN_VERIFY_SECRET_PREVIOUS` is
+ * set, the edge address header is read only from requests carrying either value.
  */
 export { ORIGIN_VERIFY_HEADER } from "@/api/lib/client-ip-config";
 
@@ -232,6 +232,11 @@ export const parseEdgeClientAddress = (
   return isIP(host) === 0 ? null : host;
 };
 
+type OriginSecrets = {
+  current?: string | undefined;
+  previous?: string | undefined;
+};
+
 type ClientAddressOptions = {
   trusted?: TrustedProxies;
   /** Header name carrying the edge's viewer address; null disables it. */
@@ -240,7 +245,7 @@ type ClientAddressOptions = {
    * Configured origin values must match. CloudFront requires values; custom
    * proxy headers may rely on the trusted peer alone.
    */
-  originSecrets?: readonly string[];
+  originSecrets?: OriginSecrets;
   /** How the edge header spells the address; defaults to the configured one. */
   edgeAddressFormat?: EdgeAddressFormat;
   /**
@@ -268,6 +273,25 @@ const carriesSecret = (
     .includes(true);
 };
 
+const carriesOriginSecret = (
+  request: Request,
+  secrets: OriginSecrets,
+): boolean => {
+  const presented = request.headers.get(ORIGIN_VERIFY_HEADER);
+  if (presented === null) {
+    return false;
+  }
+  const presentedDigest = hashSha256Bytes(presented);
+  // Compare both configured values, regardless of which one matches.
+  return [secrets.current, secrets.previous]
+    .map(
+      (secret) =>
+        secret !== undefined &&
+        timingSafeEqual(presentedDigest, hashSha256Bytes(secret)),
+    )
+    .includes(true);
+};
+
 const parseSecretList = (value: string | undefined): readonly string[] =>
   (value ?? "")
     .split(",")
@@ -282,24 +306,30 @@ const requiresOriginProof = (header: string | null | undefined): boolean =>
 type ClientAddressConfigurationOptions = {
   edgeHeader?: string | undefined;
   originVerifySecret?: string | undefined;
+  originVerifySecretPrevious?: string | undefined;
 };
 
 /** Warn when the CloudFront viewer header cannot be authenticated. */
 export const clientAddressConfigurationWarning = ({
   edgeHeader,
   originVerifySecret,
+  originVerifySecretPrevious,
 }: ClientAddressConfigurationOptions):
   | "client_ip.viewer_address_unconfigured"
   | null =>
   requiresOriginProof(edgeHeader) &&
-  parseSecretList(originVerifySecret).length === 0
+  originVerifySecret === undefined &&
+  originVerifySecretPrevious === undefined
     ? "client_ip.viewer_address_unconfigured"
     : null;
 
-let cachedOriginSecrets: readonly string[] | null = null;
+let cachedOriginSecrets: OriginSecrets | null = null;
 
-const getOriginSecrets = (): readonly string[] => {
-  cachedOriginSecrets ??= parseSecretList(env.STELLA_ORIGIN_VERIFY_SECRET);
+const getOriginSecrets = (): OriginSecrets => {
+  cachedOriginSecrets ??= {
+    current: env.STELLA_ORIGIN_VERIFY_SECRET,
+    previous: env.STELLA_ORIGIN_VERIFY_SECRET_PREVIOUS,
+  };
   return cachedOriginSecrets;
 };
 
@@ -315,7 +345,7 @@ type TrustedPeerInput = {
   peer: string;
   trusted: TrustedProxies;
   edgeHeader: string | null;
-  originSecrets: readonly string[];
+  originSecrets: OriginSecrets;
   edgeAddressFormat: EdgeAddressFormat;
   frontendSecrets: readonly string[];
 };
@@ -342,8 +372,10 @@ const addressFromTrustedPeer = ({
   }
   if (
     edgeHeader !== null &&
-    ((originSecrets.length === 0 && !requiresOriginProof(edgeHeader)) ||
-      carriesSecret(request, ORIGIN_VERIFY_HEADER, originSecrets))
+    ((originSecrets.current === undefined &&
+      originSecrets.previous === undefined &&
+      !requiresOriginProof(edgeHeader)) ||
+      carriesOriginSecret(request, originSecrets))
   ) {
     const address = parseEdgeClientAddress(
       request.headers.get(edgeHeader),

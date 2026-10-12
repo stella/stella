@@ -61,7 +61,7 @@ describe("frontend edge address precedence", () => {
   const options = {
     trusted: parseTrustedProxies("10.0.0.0/8"),
     edgeHeader: EDGE_HEADER,
-    originSecrets: [ORIGIN],
+    originSecrets: { current: ORIGIN },
     frontendSecrets: SECRETS,
   };
   // Header values are visible ASCII; Headers rejects control characters.
