@@ -21,7 +21,7 @@ export class DecisionTextCompletionReadError extends TaggedError(
 )<{ message: string; reason: "gate_failed"; cause: unknown }> {}
 
 /** Completion I/O failures remove text while retaining the prepared metadata. */
-export const readDecisionTextCompletionSafely = <T>(
+export const readDecisionTextCompletionSafely = async <T>(
   readCurrent: () => Promise<T>,
 ) =>
   Result.tryPromise({
