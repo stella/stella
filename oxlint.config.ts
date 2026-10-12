@@ -1426,6 +1426,7 @@ const config = defineConfig({
     ...SHADCN_LINT_JS_PLUGINS,
     stellaLowercasePluginSpecifier,
     "./.oxlint-plugins/no-raw-cache-control.ts",
+    "./.oxlint-plugins/confine-sql-close.ts",
     "./.oxlint-plugins/raw-hash-from-source-fingerprint.ts",
     "./.oxlint-plugins/no-raw-sha256.ts",
     "./.oxlint-plugins/no-hand-rolled-concurrency.ts",
@@ -1656,6 +1657,16 @@ const config = defineConfig({
   ],
 
   overrides: [
+    {
+      files: [
+        "apps/api/**/*.{ts,tsx,js,mjs}",
+        "packages/**/*.{ts,tsx,js,mjs}",
+        ".oxlint-plugins/__fixtures__/confine-sql-close.fixture.ts",
+      ],
+      rules: {
+        "confine-sql-close/confine-sql-close": "error",
+      },
+    },
     {
       files: [
         "apps/**/*.{ts,tsx,js,mjs}",

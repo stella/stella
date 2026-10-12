@@ -8,6 +8,7 @@ import {
   createDedicatedConnectionOwner,
   DEDICATED_CONNECTIONS_PER_PROCESS,
 } from "@/api/db/dedicated-connection-slots";
+import { terminateReserved } from "@/api/db/sql-close";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
@@ -152,7 +153,7 @@ export const withDedicatedReservedSession = async <
     reserved.release();
   } else {
     await cancelling;
-    await reserved.close();
+    await terminateReserved(reserved);
   }
   return await body;
 };
