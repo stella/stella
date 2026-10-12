@@ -29,6 +29,7 @@ export const ROUTE_CACHE_CLASSES = {
   "/auth/error": "private-no-store",
   "/auth/organization": "private-no-store",
   "/auth/otp": "private-no-store",
+  "/auth/professional-use": "private-no-store",
   "/auth/two-factor": "private-no-store",
   "/knowledge/clauses": "private-no-store",
   "/knowledge/playbooks": "private-no-store",

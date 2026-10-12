@@ -6,6 +6,10 @@ import { useNavigate } from "@tanstack/react-router";
 import { TaggedError } from "better-result";
 import { useTranslations } from "use-intl";
 
+import {
+  PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
+  PROFESSIONAL_USE_STATEMENT_VERSION,
+} from "@stll/api-contract/professional-use";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DialogFormState } from "@stll/ui/dialog";
@@ -177,6 +181,10 @@ export const OTPPanel = ({
           body: {
             email: emailArg,
             otp: otpArg,
+            // This panel shows the statement; a new account is
+            // created accepted only when it is the current one.
+            [PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]:
+              PROFESSIONAL_USE_STATEMENT_VERSION,
             ...(confirmReset ? { confirmReset } : {}),
           },
         },
@@ -247,6 +255,9 @@ export const OTPPanel = ({
         dirty={otp !== (initialOtp ?? "")}
         onDiscard={() => setOtp(initialOtp ?? "")}
       />
+      <p className="text-foreground-muted px-6 pt-6 text-xs">
+        {t("auth.professionalUseStatement")}
+      </p>
       {resetConfirmation ? (
         <div className="flex flex-col gap-4 p-6">
           <FrameDescription>

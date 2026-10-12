@@ -4,6 +4,7 @@ import { fromMarkdown } from "mdast-util-from-markdown";
 import { gfmFromMarkdown } from "mdast-util-gfm";
 import { gfm } from "micromark-extension-gfm";
 
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import { assertProperty } from "@stll/property-testing";
 import { sha256Hex } from "@stll/sha256/bun";
 
@@ -18,6 +19,7 @@ const content = toPersistedChatMessageContentV3({
   data: [
     { type: "text", content: "Hello " },
     {
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
       type: "tool-call",
       id: "call",
       name: "boe_search_legislation",

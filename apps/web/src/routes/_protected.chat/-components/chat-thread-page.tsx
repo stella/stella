@@ -240,6 +240,7 @@ export const ChatThreadPage = ({
   });
 
   const {
+    activitySession,
     error,
     messages,
     refreshAnswers,
@@ -670,6 +671,7 @@ export const ChatThreadPage = ({
                         </p>
                       )}
                       <ChatThreadMessages
+                        activitySession={activitySession}
                         onAnswerEdited={refreshAnswers}
                         answerRewriteAvailability={
                           data.usedAnonymization ? "anonymized" : "available"

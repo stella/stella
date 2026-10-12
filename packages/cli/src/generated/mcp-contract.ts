@@ -108,6 +108,7 @@ export const ACTION_ADMISSION_REFUSALS = {
 export type ActionAdmissionCode = keyof typeof ACTION_ADMISSION_REFUSALS;
 export const MCP_CLI_TOOL_SCOPES = [
   "read",
+  "law_read",
   "contacts_write",
   "matters_write",
   "chat",
@@ -120,5 +121,11 @@ export const MCP_CLI_TOOL_SCOPES = [
   "admin_read",
   "admin_write",
   "feedback",
+] as const;
+export const MCP_SCOPE_IMPLICATIONS = [
+  {
+    grant: "stella:read",
+    scope: "stella:law_read",
+  },
 ] as const;
 export type McpCliToolScope = (typeof MCP_CLI_TOOL_SCOPES)[number];

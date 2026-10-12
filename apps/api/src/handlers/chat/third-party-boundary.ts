@@ -1114,6 +1114,7 @@ const preparePartForThirdParty = ({
     case "video":
     case "ui-resource":
     case "subagent":
+    case "activity":
       return refuseUnpreparedPart(part.type);
     default:
       part satisfies never;

@@ -26,6 +26,8 @@ import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 // expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
 import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
 // expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
+import { publishedUnredactedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions-sql";
+// expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
 import { LIMITS } from "@/api/lib/limits";
 
 declare const tx: {
@@ -184,6 +186,14 @@ export const producerColumn = sql.raw(polarityWeightSql("c.polarity"));
 export const producerSubquery = sql.raw(polarityWeightSql("(select 1 from x)"));
 // oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: an argument the rule cannot read
 export const producerDynamic = sql.raw(polarityWeightSql(dynamicSql));
+// expect-clean: public-case-law-db-boundary/public-case-law-db-boundary
+export const unredactedPublicationLiteral = sql.raw(
+  publishedUnredactedCaseLawDecisionSqlFor("coverage_decisions"),
+);
+export const unredactedPublicationDynamic = sql.raw(
+  // oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: a dynamic alias cannot enter the unredacted publication SQL
+  publishedUnredactedCaseLawDecisionSqlFor(dynamicSql),
+);
 
 // Raw text is read whole: concatenation, unions and constants.
 // oxlint-disable-next-line public-case-law-db-boundary/public-case-law-db-boundary -- fixture: a keyword split across a concatenation
