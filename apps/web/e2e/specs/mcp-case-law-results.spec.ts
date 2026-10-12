@@ -74,7 +74,7 @@ const mountApp = async ({
       `<head><meta http-equiv="Content-Security-Policy" content="${MCP_APP_SANDBOX_CONTENT_DIRECTIVES.join("; ")}">`,
   );
   // setContent preserves host listeners across mounts in the same test.
-  await page.goto("about:blank");
+  await page.goto("about:blank", { waitUntil: "commit" });
   await page.setContent(
     '<iframe id="app" sandbox="allow-scripts allow-forms" style="width:100%;height:650px;border:0"></iframe>',
   );
