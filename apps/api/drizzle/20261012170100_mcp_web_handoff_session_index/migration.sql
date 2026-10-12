@@ -12,8 +12,6 @@ SET lock_timeout = 0;--> statement-breakpoint
 -- The online migration owner checks definition, readiness and validity on boot.
 CREATE INDEX CONCURRENTLY IF NOT EXISTS "session_originConsentId_idx" ON "session" ("origin_consent_id");
 --> statement-breakpoint
-REINDEX INDEX CONCURRENTLY "session_originConsentId_idx";
---> statement-breakpoint
 
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint

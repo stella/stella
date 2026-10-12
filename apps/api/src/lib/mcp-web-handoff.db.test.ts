@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import * as v from "valibot";
 
 import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract/mcp";
 import { sha256Hex } from "@stll/sha256/bun";
@@ -15,6 +16,7 @@ import {
 } from "@/api/db/auth-schema";
 import { databaseRelations } from "@/api/db/database-relations";
 import { mcpWebHandoff } from "@/api/db/schema/mcp-web-handoff";
+import { envApiServerSchema } from "@/api/env-schema";
 import { createDatabaseSessionLifetimeStore } from "@/api/lib/auth/session-lifetime-store";
 import {
   createWebHandoffService,
@@ -212,6 +214,32 @@ describe("MCP web handoff lifecycle", () => {
     for (const kind of ["text", "click"] as const) {
       expect(await disabled.mint(fixture, ["/law/example"], kind)).toBeNull();
     }
+  });
+  test("text links require independent opt-in when minting is enabled", async () => {
+    const config = v.parse(
+      v.object({
+        MCP_WEB_HANDOFF_MINT_ENABLED:
+          envApiServerSchema.MCP_WEB_HANDOFF_MINT_ENABLED,
+        MCP_WEB_HANDOFF_TEXT_ENABLED:
+          envApiServerSchema.MCP_WEB_HANDOFF_TEXT_ENABLED,
+      }),
+      { MCP_WEB_HANDOFF_MINT_ENABLED: "true" },
+    );
+    expect(config.MCP_WEB_HANDOFF_MINT_ENABLED).toBe(true);
+    expect(config.MCP_WEB_HANDOFF_TEXT_ENABLED).toBe("0");
+    const defaultService = createWebHandoffService({
+      db,
+      budget: new InMemoryRateLimitContext(),
+      now: () => instant,
+      enabled: () => config.MCP_WEB_HANDOFF_MINT_ENABLED,
+      textEnabled: () => config.MCP_WEB_HANDOFF_TEXT_ENABLED === "1",
+    });
+    expect(
+      await defaultService.mint(fixture, ["/law/example"], "text"),
+    ).toBeNull();
+    expect(
+      await defaultService.mint(fixture, ["/law/example"], "click"),
+    ).not.toBeNull();
   });
   test("text codes can be disabled without changing click links", async () => {
     const disabled = createWebHandoffService({

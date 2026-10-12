@@ -1,5 +1,5 @@
 import { redirect } from "@tanstack/react-router";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { mcpHandoffRedeemResultSchema } from "@stll/api-contract/mcp-web-handoff";
@@ -31,11 +31,17 @@ const redeem = async ({
   path: string;
   confirmation?: "confirmed";
 }) => {
-  const result = await authClient.$fetch<unknown>("/mcp-handoff/redeem", {
-    method: "POST",
-    body: { code, path, ...(confirmed ? { confirmation: confirmed } : {}) },
-  });
-  const parsed = v.safeParse(mcpHandoffRedeemResultSchema, result.data);
+  const result = await Result.tryPromise(
+    async () =>
+      await authClient.$fetch<unknown>("/mcp-handoff/redeem", {
+        method: "POST",
+        body: { code, path, ...(confirmed ? { confirmation: confirmed } : {}) },
+      }),
+  );
+  if (Result.isError(result)) {
+    return { status: "refused" as const };
+  }
+  const parsed = v.safeParse(mcpHandoffRedeemResultSchema, result.value.data);
   return parsed.success ? parsed.output : { status: "refused" as const };
 };
 

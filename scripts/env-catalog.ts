@@ -569,7 +569,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   MCP_WEB_HANDOFF_MINT_ENABLED:
     "Enable sign-in handoffs on connected-app links. Defaults off.",
   MCP_WEB_HANDOFF_TEXT_ENABLED:
-    "Include sign-in handoff codes in MCP text links. Defaults on.",
+    "Include sign-in handoff codes in MCP text links. Defaults off; opt in separately from link minting.",
   MCP_WEB_HANDOFF_TEXT_SESSION_MAX_SECONDS:
     "Absolute lifetime in seconds for sessions created from MCP text links; defaults to twelve hours and cannot exceed it.",
   SESSION_LIFETIME_CAP_ENABLED:
