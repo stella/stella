@@ -4,14 +4,11 @@ defaults:
   run:
     shell: bash
 
-# Both directions of the marketing screenshot baselines, driven by one
-# capture body (`.github/actions/marketing-capture`) so "what CI compares" and
-# "what CI regenerates" can never be produced by two drifting definitions:
-#
-#   check  — PR CI and the nightly run compare the committed PNGs against a
-#            freshly seeded app.
-#   update — marketing-screenshots-update.yml, dispatched on main against
-#            the branch whose UI legitimately changed, runs the same body.
+# The comparison direction of the marketing screenshot baselines: PR CI and
+# the nightly run compare the committed PNGs against a freshly seeded app.
+# Regeneration (marketing-screenshots-capture.yml) runs the same capture body
+# (`.github/actions/marketing-capture`), so "what CI compares" and "what CI
+# regenerates" can never be produced by two drifting definitions.
 #
 # Both render on the same runner image from a production web build (the
 # e2e shards' artifact on PRs, built in place otherwise), which is why the
@@ -22,7 +19,7 @@ on:
   workflow_call:
     inputs:
       mode:
-        description: Must be check; regeneration runs in marketing-screenshots-update.yml
+        description: Must be check; regeneration runs in marketing-screenshots-capture.yml
         required: true
         type: string
       ref:
