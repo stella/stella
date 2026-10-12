@@ -20,6 +20,15 @@ const reusable = Bun.YAML.parse(
     "utf-8",
   ),
 );
+const updateWorkflow = Bun.YAML.parse(
+  readFileSync(
+    new URL(
+      "../.github/workflows/marketing-screenshots-update.yml",
+      import.meta.url,
+    ),
+    "utf-8",
+  ),
+);
 
 const stepSchema = v.looseObject({
   name: v.optional(v.string()),
@@ -35,9 +44,9 @@ const jobSchema = v.looseObject({
   environment: v.optional(v.string()),
   steps: v.optional(v.array(stepSchema)),
 });
-const reusableJobs = v.parse(
+const updateJobs = v.parse(
   v.looseObject({ jobs: v.record(v.string(), jobSchema) }),
-  reusable,
+  updateWorkflow,
 ).jobs;
 const stepsOf = (workflow: unknown, job: string) =>
   workflowJobSteps(workflow, job).map((step) => v.parse(stepSchema, step));
@@ -108,38 +117,27 @@ describe("screenshot update trust boundary", () => {
     }
   });
 
-  test("the push key is never handed to the reusable workflow", () => {
-    for (const name of [
-      "marketing-screenshots.yml",
-      "marketing-screenshots-update.yml",
-    ]) {
-      const workflow = Bun.YAML.parse(
-        readFileSync(
-          new URL(`../.github/workflows/${name}`, import.meta.url),
-          "utf-8",
-        ),
-      );
-      const call: unknown =
-        typeof workflow === "object" && workflow !== null
-          ? Reflect.get(Reflect.get(workflow, "on") ?? {}, "workflow_call")
-          : undefined;
-      expect(JSON.stringify(call ?? {}), name).not.toContain(
-        "STELLA_RELEASE_APP_PRIVATE_KEY",
-      );
-    }
+  test("the push key never reaches a reusable workflow", () => {
+    // Environment secrets cannot cross workflow_call, and a reusable workflow
+    // would have to declare the key as an input; the jobs that need it live
+    // in the dispatched workflow itself.
+    expect(JSON.stringify(reusable)).not.toContain(
+      "STELLA_RELEASE_APP_PRIVATE_KEY",
+    );
+    const on: unknown =
+      typeof updateWorkflow === "object" && updateWorkflow !== null
+        ? Reflect.get(updateWorkflow, "on")
+        : undefined;
     expect(
-      readFileSync(
-        new URL(
-          "../.github/workflows/marketing-screenshots-update.yml",
-          import.meta.url,
-        ),
-        "utf-8",
-      ),
-    ).not.toContain("STELLA_RELEASE_APP_PRIVATE_KEY");
+      typeof on === "object" && on !== null ? Object.keys(on) : [],
+    ).toEqual(["workflow_dispatch"]);
+    for (const job of Object.values(updateJobs)) {
+      expect(JSON.stringify(job)).not.toContain("./.github/workflows/");
+    }
   });
 
   test("only the publish job can reach the push key, and it runs no branch code", () => {
-    const withKey = Object.entries(reusableJobs)
+    const withKey = Object.entries(updateJobs)
       .filter(([, job]) =>
         JSON.stringify(job.steps ?? []).includes(
           "STELLA_RELEASE_APP_PRIVATE_KEY",
@@ -148,12 +146,12 @@ describe("screenshot update trust boundary", () => {
       .map(([name]) => name);
     expect(withKey).toEqual(["publish"]);
     expect(
-      Object.entries(reusableJobs)
+      Object.entries(updateJobs)
         .filter(([, job]) => job.environment !== undefined)
         .map(([name, job]) => [name, job.environment]),
     ).toEqual([["publish", "release-app"]]);
 
-    const publish = stepsOf(reusable, "publish");
+    const publish = stepsOf(updateWorkflow, "publish");
     // An allowlist, not a denylist: the job holds the push key, so every
     // step is pinned by name and action, and shell steps may only call the
     // commands below. Anything new fails here until reviewed.
@@ -211,17 +209,17 @@ describe("screenshot update trust boundary", () => {
       "apps/landing/public/media/products/*.png",
     );
 
-    const update = stepsOf(reusable, "update");
+    const update = stepsOf(updateWorkflow, "update");
     expect(JSON.stringify(update)).not.toContain("app-token");
     const updateCheckout = update.find((step) => step.name === "Checkout");
     expect(updateCheckout?.with?.["persist-credentials"]).toBe(false);
-    expect(reusableJobs["publish"]?.needs).toBe("update");
+    expect(updateJobs["publish"]?.needs).toBe("update");
   });
 });
 
 describe("regenerated baseline validation", () => {
   const command = (() => {
-    const step = stepsOf(reusable, "publish").find(
+    const step = stepsOf(updateWorkflow, "publish").find(
       (candidate) => candidate.name === "Stage validated baselines",
     );
     if (step?.run === undefined) {
