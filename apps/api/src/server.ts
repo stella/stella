@@ -10,6 +10,7 @@ import { AUTH_SESSION_STARTUP_HEADER } from "@stll/auth-model";
 import { redisConnectionConfig } from "@stll/redis-config";
 
 import { initApiBackgroundWorkers } from "@/api/api-background-workers";
+import { readRootPoolReport } from "@/api/db/root";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import {
@@ -262,8 +263,18 @@ const startMemoryPressureHandler = () => {
 // One stall on this loop delays every request the task is serving, so it is
 // reported as soon as the loop is free, and its window's delay as a metric.
 const startEventLoopDelayReporting = () => {
+  let reporting: Promise<void> | undefined;
   startEventLoopDelayMonitor({
-    onReport: emitEventLoopDelayMetric,
+    onReport: (delay) => {
+      if (reporting !== undefined) {
+        return;
+      }
+      reporting = readRootPoolReport()
+        .then((rootPool) => emitEventLoopDelayMetric({ ...delay, rootPool }))
+        .finally(() => {
+          reporting = undefined;
+        });
+    },
     onStall: (stallMs) => {
       logger.warn("runtime.event_loop_stalled", {
         "event_loop.stall_ms": stallMs,

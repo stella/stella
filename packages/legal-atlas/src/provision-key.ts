@@ -8,6 +8,7 @@ import type {
 } from "@stll/api-contract/provision-key";
 import { provisionReferenceSchema } from "@stll/legal-ast/provision-reference";
 import type { ProvisionReference } from "@stll/legal-ast/provision-reference";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { PROVISION_CITATION_GRAMMARS } from "./provision-citation-grammars";
 
@@ -26,7 +27,7 @@ const keyPartSchema = v.pipe(
     (value) =>
       value.isWellFormed() &&
       !/[\p{Cc}\p{Cf}]/u.test(value) &&
-      value === value.normalize("NFC"),
+      value === normalizeUnicode(value, "NFC"),
     "Expected canonical provision identity",
   ),
 );

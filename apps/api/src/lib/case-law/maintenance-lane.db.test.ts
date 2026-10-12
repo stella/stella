@@ -15,7 +15,10 @@ import {
   openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
 import { PG_ERROR, getPgErrorCode } from "@/api/lib/pg-error";
-import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import {
+  GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS,
+  withGatedTestClients,
+} from "@/api/tests/gated-test-database";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -53,7 +56,7 @@ if (!databaseUrl || !runPostgresTests) {
           expect(secondHold.waitedMs).toBeGreaterThanOrEqual(250);
           await secondHold.release();
         },
-        { closeTimeout: 0 },
+        { closeTimeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS },
       );
     });
 

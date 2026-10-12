@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import { extractCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   CORPUS_QUERY_LEAF_BUDGET,
@@ -124,10 +126,12 @@ test("a term with no bucket expands to nothing", () => {
 // marks are \p{M}, so testing before the fold would reject the word.
 test("a decomposed query term reaches the same bucket as its precomposed spelling", () => {
   const entries = dictionaryOf(CS_BUCKETS);
-  expect(expandTermWith(entries, "nájemné".normalize("NFD"))).toEqual(
+  expect(expandTermWith(entries, normalizeUnicode("nájemné", "NFD"))).toEqual(
     expandTermWith(entries, "nájemné"),
   );
-  expect(expandTermWith(entries, "nájemné".normalize("NFD"))).not.toEqual([]);
+  expect(
+    expandTermWith(entries, normalizeUnicode("nájemné", "NFD")),
+  ).not.toEqual([]);
 });
 
 test("the typed term is never repeated inside its own group", () => {

@@ -8,6 +8,22 @@
       "date": "2026-10-11"
     }
   ],
+  "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/usability.property.test.ts::CourtListener readable sentences make every nonusable short body usable": [
+    {
+      "seed": 20260901,
+      "path": "0:0:0:0",
+      "note": "Regression coverage",
+      "date": "2026-10-11"
+    }
+  ],
+  "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/usability.property.test.ts::CourtListener ruling words make non-ruling bodies usable": [
+    {
+      "seed": 20260901,
+      "path": "18:1",
+      "note": "Regression coverage",
+      "date": "2026-10-11"
+    }
+  ],
   "apps/api/src/handlers/case-law/ingestion/parsers/cz-ns-retention.property.test.ts::Czech supreme body markers retain their source order": [
     {
       "seed": 20260901,
@@ -30,6 +46,91 @@
       "path": "0:0:0:0:0:0:0:0:0",
       "note": "Regression coverage",
       "date": "2026-10-03"
+    }
+  ],
+  "apps/api/src/handlers/chat/snapshot-reconciliation.property.test.ts::mixed provenance preserves exact delta placement and snapshot insertions": [
+    {
+      "seed": 20260901,
+      "path": "0:0:0:0:0:0:0:0:0:0:0:0:0:0",
+      "note": "Mixed source placement and snapshot insertions",
+      "date": "2026-10-11"
+    }
+  ],
+  "apps/api/src/handlers/chat/snapshot-reconciliation.property.test.ts::snapshot reconciliation preserves duplicate occurrences of every SDK part kind": [
+    {
+      "seed": 20260901,
+      "note": "Duplicate SDK part occurrences",
+      "date": "2026-10-11"
+    }
+  ],
+  "apps/api/src/handlers/chat/snapshot-reconciliation.property.test.ts::snapshot reconciliation preserves exact ordered parts around lifecycle anchors": [
+    {
+      "seed": 20260901,
+      "path": "0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0",
+      "note": "Snapshot placement around lifecycle anchors",
+      "date": "2026-10-11"
+    }
+  ],
+  "apps/api/src/handlers/chat/snapshot-reconciliation.property.test.ts::snapshot reconciliation preserves generated interleavings across live persistence and reload": [
+    {
+      "seed": 20260901,
+      "path": "5:0:0:0:1:1:2:1:2:4:5",
+      "note": "Interleaved snapshot and delta coverage",
+      "date": "2026-10-11"
+    },
+    {
+      "seed": 20260901,
+      "path": "0:0:1:1:2:1:1:2:3:3:2:2:3",
+      "note": "Snapshot completion after resumed deltas",
+      "date": "2026-10-11"
+    },
+    {
+      "seed": 20260901,
+      "path": "69:0:0:1:10",
+      "note": "Text continuation across snapshot resets",
+      "date": "2026-10-11"
+    },
+    {
+      "seed": 20261011,
+      "path": "34:0:0:22:11",
+      "note": "Text continuation alongside reasoning",
+      "date": "2026-10-11"
+    },
+    {
+      "seed": 20260901,
+      "path": "5:0:0:0:1:1:2:1:2:4:5:0:0:0:0",
+      "note": "Snapshot-derived textual growth",
+      "date": "2026-10-11"
+    }
+  ],
+  "apps/api/src/handlers/chat/snapshot-reconciliation.property.test.ts::streamed textual completions preserve newly introduced lifecycle anchors": [
+    {
+      "seed": 20260901,
+      "path": "0:0:0:0:0:0:0:0:1:0",
+      "note": "Streamed completion around newly introduced parts",
+      "date": "2026-10-11"
+    }
+  ],
+  "apps/api/src/handlers/chat/snapshot-reconciliation.property.test.ts::terminal calls without sibling results preserve settled payloads across later result snapshots": [
+    {
+      "seed": 20260901,
+      "path": "0:0:0:0:0:0:0:1:1",
+      "note": "Settled call payload with a later sibling result",
+      "date": "2026-10-11"
+    },
+    {
+      "seed": 20260901,
+      "path": "7:0:0:1:1:1:1:1:1",
+      "note": "Settled call across repeated later result snapshots",
+      "date": "2026-10-11"
+    }
+  ],
+  "apps/api/src/handlers/chat/snapshot-reconciliation.property.test.ts::textual snapshots preserve segmentation changes and delta content": [
+    {
+      "seed": 20260901,
+      "path": "3:0:0:0:0:0:0:0:2:2:3:3:3:3:3:9:1:1:4:4:3:3:2:2:2",
+      "note": "Snapshot segmentation and continued deltas",
+      "date": "2026-10-11"
     }
   ],
   "apps/api/src/handlers/chat/tools/subagent-tools.property.test.ts::subagent tool projection retains every eligible own entry and its input": [
@@ -94,6 +195,12 @@
       "path": "0:0:0:0:0:0",
       "note": "Regression coverage",
       "date": "2026-10-07"
+    },
+    {
+      "seed": 20260901,
+      "path": "1:0:1:0:0:0",
+      "note": "Typecheck parity guard models required producer output for both selection outcomes",
+      "date": "2026-10-11"
     }
   ]
 }

@@ -1,15 +1,19 @@
+import type { AnyTextAdapter } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { FailureGrade, FailureReason } from "@stll/errors";
 
+import type { SafeDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import {
+  answerWithSystemOne,
   ResearchPassageRetrievalError,
   retrieveResearchPassages,
   selectDecisionPassages,
 } from "@/api/lib/case-law/research-answer-runner";
+import type { ResearchRunColumn } from "@/api/lib/case-law/research-answer-runner";
 import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import type {
   CorpusIndexClient,
@@ -20,6 +24,9 @@ import { CorpusIndexGroupNotReadyError } from "@/api/lib/legal-search/corpus-ind
 import type { ServingCorpusIndexTarget } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import { resetFailureObservationsForTesting } from "@/api/lib/observability/failure-shadow";
+import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
+import { createScriptedTextAdapter } from "@/api/tests/helpers/chat-round-trip";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -332,4 +339,131 @@ describe("selectDecisionPassages", () => {
       retrievalFailed: false,
     });
   });
+});
+
+test("a mixed research run sends only planned typed questions to its generative fallback", async () => {
+  const organizationId = toSafeId<"organization">("org-mixed-research");
+  const typedQuestion = {
+    columnId: toSafeId<"caseLawResearchColumn">("col-typed"),
+    question: "TYPED_QUESTION_PURCHASE_KIND",
+    content: {
+      version: 1,
+      type: "single-select",
+      options: [{ value: "Purchase agreement", color: "gray" }],
+      fallback: null,
+    },
+  } satisfies ResearchRunColumn;
+  const textQuestion = {
+    columnId: toSafeId<"caseLawResearchColumn">("col-text"),
+    question: "TEXT_QUESTION_MUST_USE_NORMAL_GENERATION",
+    content: { version: 1, type: "text" },
+  } satisfies ResearchRunColumn;
+  const unplannedQuestion = {
+    columnId: toSafeId<"caseLawResearchColumn">("col-unplanned-date"),
+    question: "UNPLANNED_DATE_MUST_USE_NORMAL_GENERATION",
+    content: { version: 1, type: "date" },
+  } satisfies ResearchRunColumn;
+  const requests: string[] = [];
+  const output = {
+    answers: [
+      {
+        id: "col-typed:value",
+        answer: {
+          type: "choice",
+          choice: "o1",
+          probabilities: { o1: 1, __not_stated: 0 },
+          confidence: 1,
+        },
+        evidence: "The text describes a purchase agreement.",
+      },
+      {
+        id: "col-typed:where",
+        answer: {
+          type: "choice",
+          choice: "b1",
+          probabilities: { b1: 1, __none: 0 },
+          confidence: 1,
+        },
+        evidence: null,
+      },
+    ],
+  };
+  const adapter = {
+    ...createScriptedTextAdapter([]),
+    structuredOutput: async ({ chatOptions }) => {
+      requests.push(JSON.stringify(chatOptions));
+      return { data: output, rawText: JSON.stringify(output) };
+    },
+  } satisfies AnyTextAdapter;
+  const model = {
+    adapter,
+    keySource: "byok",
+    modelId: "test-model",
+    provider: "openai",
+    modelOptions: {},
+  } as const satisfies ResolvedTanStackTextModel;
+  const run = await answerWithSystemOne({
+    decision: {
+      ...decision,
+      caseNumber: "synthetic-case",
+      court: "synthetic-court",
+      language: "en",
+      decisionType: null,
+    },
+    questions: [typedQuestion, textQuestion, unplannedQuestion],
+    text: {
+      passages: [
+        {
+          anchorId: "b1",
+          excerpt:
+            "The full source describes a purchase agreement without a date.",
+        },
+      ],
+      retrieved: false,
+      retrievalFailed: false,
+    },
+    orgAIConfig: null,
+    decisionModel: null,
+    caseLawDb: asTestRaw<CaseLawPublicReadDb>(async () =>
+      panic("Short source must not trigger retrieval"),
+    ),
+    usageMetering: {
+      actionType: "case_law",
+      organizationId,
+      userId: toSafeId<"user">("user-mixed-research"),
+      workspaceId: null,
+      serviceTier: "standard",
+      safeDb: asTestRaw<SafeDb>(async () =>
+        panic("A fake BYOK generator must not access the ledger"),
+      ),
+    },
+    generation: (prompt) => ({
+      dataClass: "customer",
+      role: "fast",
+      orgAIConfig: null,
+      managedAIResidency: "eu",
+      organizationId,
+      admission: testModelAdmission(organizationId),
+      tenantWorkspaceIds: [],
+      serviceTier: "standard",
+      caching: { enabled: false, reason: "org-disabled" },
+      prompt,
+      resolveTextModel: () => model,
+    }),
+  });
+  expect(requests).toHaveLength(1);
+  const request = requests.at(0);
+  expect(request).toContain(typedQuestion.question);
+  expect(request).toContain(
+    "The full source describes a purchase agreement without a date.",
+  );
+  expect(request).not.toContain(textQuestion.question);
+  expect(request).not.toContain(unplannedQuestion.question);
+  expect(run.remaining).toEqual([textQuestion, unplannedQuestion]);
+  expect(run.outcomes).toMatchObject([
+    {
+      columnId: typedQuestion.columnId,
+      outcome: { state: "answered", run: { model: "test-model" } },
+    },
+  ]);
 });

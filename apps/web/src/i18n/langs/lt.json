@@ -1089,6 +1089,9 @@
       "toastDescription": "Pokalbis per visą puslapį su išsaugomomis gijomis netrukus pasirodys.",
       "toastTitle": "Pilnas rodinys dar negalimas"
     },
+    "activity": {
+      "review": "Peržiūros atnaujinimas"
+    },
     "aiPrompt": "DI pranešimo laukas",
     "aiThread": "DI pokalbis",
     "analyzingSources": "Analizuojami šaltiniai",
@@ -1924,6 +1927,7 @@
     "noResults": "Rezultatų nėra",
     "noVersions": "Nėra versijų istorijos",
     "none": "Nėra",
+    "notStated": "Nenurodyta",
     "notes": "Pastabos",
     "open": "Atidaryti",
     "openInNewTab": "Atidaryti naujame skirtuke",
@@ -1993,6 +1997,7 @@
     "sort": "Rūšiuoti",
     "source": "Šaltinis",
     "stale": "Pasenusi",
+    "start": "Pradėti",
     "status": "Būsena",
     "stepCount": "{count, plural, one {# žingsnis} few {# žingsniai} other {# žingsnių}}",
     "stepProgress": "{current} iš {total}",
@@ -2807,7 +2812,6 @@
       },
       "selectFlow": "Pasirinkite darbo eigą",
       "sizeConfirmTitle": "Didelės apimties eigos vykdymas",
-      "start": "Pradėti",
       "startFailed": "Nepavyko paleisti darbo eigos.",
       "started": "Darbo eiga paleista",
       "stepProgress": "{current} žingsnis iš {total}",
@@ -3024,8 +3028,7 @@
   "guides": {
     "action": {
       "replay": "Pradėti iš naujo",
-      "skip": "Praleisti",
-      "start": "Pradėti"
+      "skip": "Praleisti"
     },
     "checklist": {
       "progress": "Atlikta {completed} iš {total}"
@@ -3705,6 +3708,10 @@
         "nameMissing": "Neišsaugota: pridėkite pavadinimą",
         "positionsNeedAttention": "Neišsaugota: {count, plural, one {# pozicija reikalauja} few {# pozicijos reikalauja} other {# pozicijų reikalauja}} dėmesio"
       },
+      "buildWithAi": {
+        "description": "Atsakykite į kelis klausimus pokalbyje, o peržiūros vadovas bus išsaugomas eigoje.",
+        "title": "Kurti su DI"
+      },
       "check": "Naudoti tikslią taisyklę vietoje DI",
       "checkHint": "Išmatuojamoms sąlygoms, pavyzdžiui: mokėjimo terminas ≤ 30 dienų.",
       "checkKind": {
@@ -4155,6 +4162,10 @@
     "aiConfig": {
       "addProvider": "Pridėti teikėją",
       "addProviderFirst": "Pirmiausia pridėkite teikėją",
+      "anthropicKeyDisabled": "Sukurkite aktyvų API raktą Anthropic konsolėje ir pakeiskite šį raktą.",
+      "anthropicNoCredits": "Papildykite API kreditų likutį Anthropic konsolės atsiskaitymo skiltyje ir bandykite dar kartą.",
+      "anthropicOrganizationRestricted": "Paprašykite Anthropic organizacijos administratoriaus suteikti prieigą arba naudokite leidžiamos organizacijos raktą.",
+      "anthropicSubscriptionToken": "Naudokite Anthropic konsolėje sukurtą API raktą, o ne Claude prenumeratos prieigos raktą.",
       "anthropicWorkspaceId": "Darbo srities ID",
       "anthropicWorkspaceRequired": "Šiam Anthropic raktui reikia darbo srities. Įveskite jos ID iš Anthropic konsolės ir išsaugokite dar kartą.",
       "anthropicWorkspaces": "Atidaryti Anthropic darbo sritis",
@@ -4163,7 +4174,9 @@
       "apiKeyPlaceholder": "Įveskite savo API raktą",
       "apiKeySaved": "Išsaugotas raktas {key}",
       "apiKeyUpdatePlaceholder": "Įveskite naują raktą, kad atnaujintumėte",
+      "azureModelNotEnabled": "Patikrinkite, ar modelio diegimas yra pasirinktame Azure ištekliuje ir regione ir ar šis raktas turi prieigą prie jo.",
       "baseUrl": "Bazinis URL",
+      "bedrockModelNotEnabled": "Patikrinkite modelio prieinamumą pasirinktame AWS regione, prieigą prie modelio ir savo IAM teises. Įjunkite modelį arba pasirinkite prieinamą modelį ir bandykite dar kartą.",
       "chooseModelsSubtitle": "Kiekvienai rolei pasirinkite modelį. Kainos atnaujinamos dešinėje.",
       "chooseModelsTitle": "Pasirinkite modelius",
       "configure": "Konfigūruoti",
@@ -4194,6 +4207,8 @@
       "editProviders": "Redaguoti teikėjus",
       "endpoint": "Galinis taškas",
       "endpointDescription": "Naudokite Azure OpenAI arba Azure Foundry /openai/v1 galinį tašką. stella išsaugo normalizuotą galinį tašką.",
+      "googleApiNotEnabled": "Įjunkite Generative Language API Google Cloud projekte, kuriam priklauso šis raktas, ir bandykite dar kartą.",
+      "googleKeyRestricted": "Patikrinkite šio rakto API, IP adresų ir nukreipiančių svetainių apribojimus Google Cloud. Leiskite reikiamą API ir savo serverio užklausas, tada bandykite dar kartą.",
       "keepSavedKey": "Palikti išsaugotą raktą",
       "keyFormatHint": "Šio rakto formatas neįprastas teikėjui {provider}. Išsaugokite, kad teikėjas jį patikrintų.",
       "modelForRole": "{role} modelis",
@@ -4203,6 +4218,9 @@
       "newApiKey": "Naujas API raktas",
       "newApiKeyDescription": "Išsaugojus pakeitimus jis pakeis išsaugotą raktą.",
       "noModelResults": "Nėra atitinkančių siūlomų modelių",
+      "openaiInsufficientQuota": "Patikrinkite OpenAI projekto biudžetą ir API atsiskaitymo nustatymus. Papildykite kreditų likutį arba padidinkite atitinkamą limitą ir bandykite dar kartą.",
+      "openaiProjectOrganizationMismatch": "Naudokite reikiamo OpenAI projekto ir organizacijos API raktą. Patikrinkite jų prieigos nustatymus ir bandykite dar kartą.",
+      "openrouterNoCredits": "Papildykite kreditų likutį OpenRouter atsiskaitymo skiltyje ir bandykite dar kartą.",
       "overrideRoles": "Pakeisti vaidmenis",
       "overrideRolesDescription": "Pasirinkite, kurie vaidmenys naudoja šį raktą, tada kiekvienam vaidmeniui pasirinkite modelį. Nepasirinkti vaidmenys naudoja platformos numatytuosius nustatymus.",
       "prices": {
@@ -4222,6 +4240,7 @@
       "providerForRole": "{role} teikėjas",
       "providerKeyInvalid": "{provider} atmetė raktą. Prieš išsaugodami patikrinkite.",
       "providerKeyInvalidShort": "Negaliojantis",
+      "providerSetupConsole": "Atidaryti teikėjo nustatymus",
       "providersDescription": "Pridėkite teikėjų prisijungimo duomenis, kuriuos stella turėtų naudoti.",
       "providersPanel": "Teikėjai",
       "removeLastProviderConfirm": "Pašalinti {provider}? Taip pat bus atkurti numatytieji DI modelių pasirinkimai.",
