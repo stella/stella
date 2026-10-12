@@ -129,7 +129,7 @@ const resolveLawArgsSchema = nullAsAbsent(
 );
 
 const common = {
-  consumesServices: true,
+  consumesServices: false,
   access: "read",
   readClass: "public",
   anonymized: { exposure: "passthrough" },
