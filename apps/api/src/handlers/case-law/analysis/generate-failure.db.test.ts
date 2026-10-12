@@ -341,6 +341,7 @@ describe("a failed analysis run", () => {
     retry = false,
     deadlineMs,
     beforeClaim,
+    derivedAi = true,
   }: {
     decisionId: SafeId<"caseLawDecision">;
     model: ResolvedTanStackTextModel | Promise<ResolvedTanStackTextModel>;
@@ -349,6 +350,7 @@ describe("a failed analysis run", () => {
     retry?: boolean;
     deadlineMs?: number;
     beforeClaim?: () => Promise<void>;
+    derivedAi?: boolean;
   }) => {
     const starts = { count: 0 };
     const response = await generateAnalysis({
@@ -365,6 +367,7 @@ describe("a failed analysis run", () => {
       promptCachingEnabled: false,
       retry,
       store: createDbAnalysisStore(db),
+      derivedAi,
       resolveTextModel: async () => await model,
       ...(deadlineMs === undefined ? {} : { deadlineMs }),
       ...(beforeClaim === undefined ? {} : { beforeClaim }),
@@ -398,6 +401,33 @@ describe("a failed analysis run", () => {
       expect(poll.starts).toBe(0);
     });
   }
+
+  // A local, seeded or CI stack serves stored analyses and asks no model:
+  // with derived AI off, opening a decision without one claims nothing,
+  // starts nothing and files nothing, retry or not.
+  test("with derived AI off, a decision without an analysis starts no run", async () => {
+    const decisionId = await insertDecision();
+    const google = fakeGoogle(["valid"]);
+
+    for (const retry of [false, true]) {
+      const { response, starts } = await read({
+        decisionId,
+        model: google.model,
+        retry,
+        derivedAi: false,
+      });
+      expect(response).toMatchObject({
+        status: "error",
+        code: "analysis_unavailable",
+      });
+      expect(starts).toBe(0);
+    }
+    // The provider was never asked: its one answer is still queued.
+    expect(google.requests).toEqual([]);
+    expect(google.remaining()).toBe(1);
+    expect(await storedValue(decisionId)).toBeNull();
+    expect(await failureRows(decisionId)).toEqual([]);
+  });
 
   test("a provider refusal persists its redacted diagnostic until retry or a provider change", async () => {
     const decisionId = await insertDecision();

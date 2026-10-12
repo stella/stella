@@ -58,6 +58,12 @@ type RefreshSignificanceOptions = {
   analysis: DecisionAnalysis;
   /** The row's `contentHash`; the save is fenced on it, as every save is. */
   contentHash: string | null;
+  /**
+   * Whether this deployment may ask a model for derived layers
+   * (`writesDerivedAnalyses`). Required, so no caller can start a refresh
+   * without having made that decision.
+   */
+  derivedAi: boolean;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   orgAIConfigStatus: OrgAIConfigStatus;
@@ -73,11 +79,17 @@ export const refreshSignificance = async ({
   analysis,
   contentHash,
   decisionId,
+  derivedAi,
   orgAIConfig,
   orgAIConfigStatus,
   organizationId,
   promptCachingEnabled,
 }: RefreshSignificanceOptions): Promise<void> => {
+  // First, before the graph is read: a deployment that may not ask a model
+  // pays for nothing here.
+  if (!derivedAi) {
+    return;
+  }
   const current = asV3(analysis);
   if (current === null) {
     return;
