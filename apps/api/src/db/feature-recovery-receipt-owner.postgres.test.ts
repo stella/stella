@@ -7,11 +7,10 @@ import { pendingScoutEmissions, flowUploadTriggerIntents } from "./schema";
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
-// Exercise the same owner predicate on every retained recovery receipt.
 const tables = [pendingScoutEmissions, flowUploadTriggerIntents];
 
-describe.skipIf(!enabled)("feature recovery receipt row security", () => {
-  test("non-superuser owners repair receipts while tenantless request roles remain denied", async () => {
+describe.skipIf(!enabled)("feature recovery receipts", () => {
+  test("receipt maintenance respects the configured table policies", async () => {
     if (databaseUrl === undefined) {
       throw new TypeError("DATABASE_URL required");
     }
@@ -41,7 +40,7 @@ describe.skipIf(!enabled)("feature recovery receipt row security", () => {
         await client.unsafe(`SET LOCAL search_path TO ${schema}, public`);
         for (const table of tables) {
           const name = getTableName(table);
-          // Only the columns irrelevant to the role boundary are omitted.
+          // Minimal columns keep the fixture focused on policy behavior.
           await client.unsafe(
             `CREATE TABLE ${schema}.${name} (id integer PRIMARY KEY, status text NOT NULL); ALTER TABLE ${schema}.${name} ENABLE ROW LEVEL SECURITY; ALTER TABLE ${schema}.${name} FORCE ROW LEVEL SECURITY; ALTER TABLE ${schema}.${name} OWNER TO ${owner}; GRANT SELECT, INSERT, UPDATE, DELETE ON ${schema}.${name} TO stella`,
           );

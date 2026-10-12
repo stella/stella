@@ -2,8 +2,7 @@
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
--- The non-superuser table owner runs cross-tenant receipt repair. Request roles
--- retain the existing scoped policies; this policy admits only the actual owner.
+-- Allow the table owner to maintain feature receipts.
 CREATE POLICY "pending_scout_emissions_owner_access" ON "pending_scout_emissions" FOR ALL TO public
   USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.pending_scout_emissions'::regclass))
   WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.pending_scout_emissions'::regclass));--> statement-breakpoint

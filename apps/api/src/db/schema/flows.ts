@@ -163,7 +163,7 @@ export const flowUploadTriggerIntents = p.pgTable(
       table,
       new Map([[table.entityId, { target: "entities", kind: "context" }]]),
     ),
-    // The root scheduler repairs receipts without borrowing a tenant's role.
+    // Allow the table owner to maintain feature receipts.
     p.pgPolicy("flow_upload_trigger_intents_owner_access", {
       for: "all",
       to: "public",

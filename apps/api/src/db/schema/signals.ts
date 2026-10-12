@@ -386,7 +386,7 @@ export const pendingScoutEmissions = p.pgTable(
         sql`, `,
       )})`,
     ),
-    // The root scheduler repairs receipts without borrowing a tenant's role.
+    // Allow the table owner to maintain feature receipts.
     p.pgPolicy("pending_scout_emissions_owner_access", {
       for: "all",
       to: "public",
