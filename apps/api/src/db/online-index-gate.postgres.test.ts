@@ -7,7 +7,10 @@ import { defaultConfig, type Signal } from "@stll/db-load-gate/health";
 import type { OnlineIndexConfig } from "../env-online-index";
 import { getPgErrorCode, PG_ERROR } from "../lib/pg-error";
 import { isRecord } from "../lib/type-guards";
-import { withGatedTestClients } from "../tests/gated-test-database";
+import {
+  GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS,
+  withGatedTestClients,
+} from "../tests/gated-test-database";
 import {
   createOnlineIndexGate,
   type OnlineIndexGateOptions,
@@ -30,7 +33,7 @@ const connectionAdapter = (
   },
   release: () => connection.release(),
   terminate: async () => {
-    await connection.close({ timeout: 0 });
+    await connection.close({ timeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS });
   },
 });
 
@@ -183,7 +186,7 @@ const withFixture = async (work: (fixture: Fixture) => Promise<void>) => {
         blocker.release();
       }
     },
-    { closeTimeout: 0 },
+    { closeTimeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS },
   );
 };
 
@@ -407,7 +410,9 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         ...fixture.gate,
         wait: async () => {
           await waitForPhase(fixture.observer, fixture.pid);
-          await fixture.builder.close({ timeout: 0 });
+          await fixture.builder.close({
+            timeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS,
+          });
         },
       });
       const outcome = await Result.tryPromise(
@@ -1033,7 +1038,9 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         ...fixture.connection,
         terminate: async () => {
           terminated = true;
-          await fixture.builder.close({ timeout: 0 });
+          await fixture.builder.close({
+            timeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS,
+          });
         },
       };
       const gate = createOnlineIndexGate({

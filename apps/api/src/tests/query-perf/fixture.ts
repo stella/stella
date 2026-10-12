@@ -3,7 +3,10 @@ import { sql } from "drizzle-orm";
 
 import { withTimeout } from "@stll/concurrency/with-timeout";
 
-import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import {
+  GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS,
+  withGatedTestClients,
+} from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
 import { createQueryPerfDeadline, type QueryPerfDeadline } from "./deadline";
@@ -63,7 +66,7 @@ const dumpQueryPerfDiagnostics = async ({
         { label: `query perf ${profileId}: diagnostics`, timeoutMs: 5000 },
       );
     },
-    { closeTimeout: 0 },
+    { closeTimeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS },
   ).then(
     () => ({ status: "done" }) as const,
     (error: unknown) => ({ status: "failed", error }) as const,
@@ -151,17 +154,21 @@ export const withQueryPerfFixture = async <T>({
               throw error;
             } finally {
               // Do not wait for a stalled driver promise after the deadline rejects.
-              await client.close({ timeout: 0 });
+              await client.close({
+                timeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS,
+              });
             }
           },
-          { closeTimeout: 0 },
+          { closeTimeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS },
         );
       })().then(
         (value) => ({ status: "fulfilled", value }) as const,
         (error: unknown) => ({ status: "rejected", error }) as const,
       );
       const cleanupOutcome = await (async () => {
-        await adminClient.close({ timeout: 0 });
+        await adminClient.close({
+          timeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS,
+        });
         // Cleanup uses a fresh connection after an overdue admin statement is cancelled.
         await withGatedTestClients(
           adminUrl.toString(),
@@ -201,7 +208,7 @@ export const withQueryPerfFixture = async <T>({
               throw error;
             }
           },
-          { closeTimeout: 0 },
+          { closeTimeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS },
         );
       })().then(
         () => ({ status: "fulfilled" }) as const,
@@ -222,6 +229,6 @@ export const withQueryPerfFixture = async <T>({
       }
       return outcome.value;
     },
-    { closeTimeout: 0 },
+    { closeTimeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS },
   );
 };
