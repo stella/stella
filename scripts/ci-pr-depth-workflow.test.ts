@@ -350,3 +350,132 @@ test("the patch-id step leaves reuse off for an empty net change", () => {
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("the hourly workflow never cancels a running check", () => {
+  const concurrency = v.parse(
+    v.object({ group: v.string(), "cancel-in-progress": v.literal(false) }),
+    main["concurrency"],
+  );
+  expect(concurrency.group).toContain("github.ref");
+});
+
+const statusScript = new URL("main-pr-depth-status.sh", import.meta.url)
+  .pathname;
+const statusSha = "b".repeat(40);
+type WorkflowRun = {
+  id: number;
+  display_title: string;
+  status: string;
+  conclusion: string | null;
+};
+type StatusCase = {
+  results: Record<string, string>;
+  runs?: WorkflowRun[];
+};
+const publishStatus = ({ results, runs = [] }: StatusCase) => {
+  const directory = mkdtempSync(path.join(tmpdir(), "pr-depth-status-"));
+  try {
+    const calls = path.join(directory, "calls");
+    const runsFile = path.join(directory, "runs.json");
+    writeFileSync(runsFile, JSON.stringify({ workflow_runs: runs }));
+    writeFileSync(calls, "");
+    const stub = path.join(directory, "gh-retry.sh");
+    writeFileSync(
+      stub,
+      `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >> "${calls}"\ncase "$*" in *"/runs?"*) cat "${runsFile}";; esac\n`,
+    );
+    const result = Bun.spawnSync(["bash", statusScript], {
+      env: {
+        PATH: process.env["PATH"] ?? "",
+        GH_RETRY: stub,
+        RESULTS: JSON.stringify(
+          Object.fromEntries(
+            Object.entries(results).map(([job, outcome]) => [
+              job,
+              { result: outcome },
+            ]),
+          ),
+        ),
+        SHA: statusSha,
+        RUN_ID: "100",
+        REPOSITORY: "example/repository",
+        RUN_URL: "https://example.test/run/100",
+      },
+    });
+    const posted = readFileSync(calls, "utf-8")
+      .split("\n")
+      .filter((line) => line.includes("--method POST"))
+      .map((line) => /state=(\w+)/u.exec(line)?.[1]);
+    return { exitCode: result.exitCode, posted };
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+};
+type LaterRunOptions = {
+  id?: number;
+  sha?: string;
+  status?: string;
+  conclusion?: string | null;
+};
+const laterRun = ({
+  id = 101,
+  sha = statusSha,
+  status = "in_progress",
+  conclusion = null,
+}: LaterRunOptions): WorkflowRun => ({
+  id,
+  display_title: `Main PR-depth checks ${sha}`,
+  status,
+  conclusion,
+});
+
+test("the workflow publishes its status through the supersession-aware script", () => {
+  expect(JSON.stringify(main)).toContain("scripts/main-pr-depth-status.sh");
+});
+
+test("green suites publish success and red suites publish failure", () => {
+  expect(
+    publishStatus({ results: { validate: "success", suites: "success" } }),
+  ).toEqual({ exitCode: 0, posted: ["success"] });
+  expect(
+    publishStatus({ results: { validate: "success", suites: "failure" } }),
+  ).toEqual({ exitCode: 1, posted: ["failure"] });
+});
+
+test("a cancelled run leaves the status only to a later live or green run for the same commit", () => {
+  const cancelled = { validate: "success", suites: "cancelled" };
+  for (const run of [
+    laterRun({}),
+    laterRun({ status: "queued" }),
+    laterRun({ status: "completed", conclusion: "success" }),
+  ]) {
+    expect(publishStatus({ results: cancelled, runs: [run] })).toEqual({
+      exitCode: 0,
+      posted: [],
+    });
+  }
+  for (const run of [
+    laterRun({ sha: "c".repeat(40) }),
+    laterRun({ status: "completed", conclusion: "failure" }),
+    laterRun({ status: "completed", conclusion: "cancelled" }),
+    laterRun({ id: 99 }),
+  ]) {
+    expect(publishStatus({ results: cancelled, runs: [run] })).toEqual({
+      exitCode: 1,
+      posted: ["failure"],
+    });
+  }
+  expect(publishStatus({ results: cancelled })).toEqual({
+    exitCode: 1,
+    posted: ["failure"],
+  });
+});
+
+test("a cancellation next to a failed job is never treated as superseded", () => {
+  expect(
+    publishStatus({
+      results: { validate: "failure", suites: "cancelled" },
+      runs: [laterRun({})],
+    }),
+  ).toEqual({ exitCode: 1, posted: ["failure"] });
+});
