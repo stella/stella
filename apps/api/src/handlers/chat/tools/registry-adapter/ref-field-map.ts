@@ -1,6 +1,7 @@
 import type { GenericSchema, InferInput } from "valibot";
 
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+import { MCP_WEB_HANDOFF_TOOL_NAME } from "@stll/api-contract/mcp-web-handoff";
 
 import type {
   ChatProjectionSchema,
@@ -160,6 +161,7 @@ export type ProjectionDataByName<TMap, TNames extends keyof TMap> = {
  * exhaustive by construction: a read tool with no entry here cannot compile.
  */
 export const READ_TOOL_REF_FIELD_MAP = {
+  [MCP_WEB_HANDOFF_TOOL_NAME]: { chatProjectable: false },
   // Host reader navigation and widget data are served by MCP; chat uses its decision text read.
   open_case_law_decision: { chatProjectable: false },
   read_case_law_decision_blocks: { chatProjectable: false },
