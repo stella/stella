@@ -4,10 +4,9 @@ defaults:
   run:
     shell: bash
 
+# Optional proofs run on demand only: pull requests, pushes and the merge queue
+# run the correctness gates in ci.yml.
 on:
-  schedule:
-    # 03:17 UTC daily (off-minute to avoid :00 stampede)
-    - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
       fresh-web:
@@ -90,7 +89,7 @@ jobs:
         run: bun scripts/typecheck-baseline.ts --check
 
   fresh-web-sources:
-    if: ${{ github.event_name == 'schedule' || inputs.fresh-web }}
+    if: ${{ inputs.fresh-web }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
