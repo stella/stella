@@ -297,8 +297,15 @@ const buildExposureVisual = ({
   fileId: SafeId<"userFile">;
   toolCallId: string;
 }) => {
+  // The page and its labels are the fixture; the data room is the seed's.
   const visualInput = v.parse(generatedVisualInputSchema, {
     ...exposureView,
+    data: {
+      ...exposureView.data,
+      positions: CHANGE_OF_CONTROL_POSITIONS,
+      risks: RISK_SEVERITY,
+      counterparties: aggregateChangeOfControlExposure(),
+    },
     html: exposureHtml,
   });
   const prepared = prepareGeneratedVisual(visualInput).unwrap();

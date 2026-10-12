@@ -10,6 +10,82 @@ import { prepareGeneratedVisual } from "../../prepare";
 import { sanitizeVisualHtml } from "../../sanitize";
 import fixture from "./change-of-control-exposure.json";
 
+// The fixture carries the page chrome; the seed supplies the data room
+// (apps/api/scripts/seed-marketing-agent-thread.ts). These rows are this
+// test's own sample input, not a copy of the seed: the figures asserted below
+// follow from them alone.
+const pageData = {
+  ...fixture.data,
+  positions: ["consent", "confirm", "notice"],
+  risks: ["Critical", "High", "Medium", "Low"],
+  counterparties: [
+    {
+      name: "Aurora Retail GmbH",
+      agreement: "Shareholder Register",
+      documents: 9,
+      value: 20_250_000,
+      risk: "Low",
+      position: "notice",
+    },
+    {
+      name: "Delta Logistics Kft.",
+      agreement: "Customer Contract",
+      documents: 9,
+      value: 21_487_500,
+      risk: "Critical",
+      position: "consent",
+    },
+    {
+      name: "Granite Properties B.V.",
+      agreement: "Supplier Agreement",
+      documents: 9,
+      value: 22_725_000,
+      risk: "High",
+      position: "consent",
+    },
+    {
+      name: "BluePeak Manufacturing s.r.o.",
+      agreement: "Employment Agreement",
+      documents: 9,
+      value: 23_962_500,
+      risk: "Medium",
+      position: "confirm",
+    },
+    {
+      name: "Edison Bank plc",
+      agreement: "Permit",
+      documents: 9,
+      value: 20_250_000,
+      risk: "Low",
+      position: "notice",
+    },
+    {
+      name: "Helios Energy a.s.",
+      agreement: "Loan Agreement",
+      documents: 9,
+      value: 21_487_500,
+      risk: "Critical",
+      position: "consent",
+    },
+    {
+      name: "Cedar Cloud Ltd.",
+      agreement: "Lease",
+      documents: 9,
+      value: 22_725_000,
+      risk: "High",
+      position: "consent",
+    },
+    {
+      name: "Fjord Analytics AB",
+      agreement: "Insurance Policy",
+      documents: 9,
+      value: 23_962_500,
+      risk: "Medium",
+      position: "confirm",
+    },
+  ],
+};
+
 const html = readFileSync(
   new URL("change-of-control-exposure.html", import.meta.url),
   "utf-8",
@@ -76,7 +152,7 @@ const render = (data: unknown) => {
 
 describe("change-of-control exposure page", () => {
   test("totals each position's counterparties, documents, value and share", () => {
-    const { element, ready } = render(fixture.data);
+    const { element, ready } = render(pageData);
     const stats = element("stats").children.map((group) =>
       group.children.map((child) => child.text),
     );
@@ -106,15 +182,15 @@ describe("change-of-control exposure page", () => {
       ],
     );
     expect(element("split").attributes.get("aria-label")).toBe(
-      fixture.data.labels.splitLabel,
+      pageData.labels.splitLabel,
     );
     expect(ready()).toBe(1);
   });
 
   test("orders the matrix by position, then severity, then value, without dropping a counterparty", () => {
-    const { element } = render(fixture.data);
+    const { element } = render(pageData);
     expect(element("matrix-head").children.map(({ text }) => text)).toEqual(
-      fixture.data.labels.columns,
+      pageData.labels.columns,
     );
     const rows = element("matrix-body").children.map((row) =>
       row.children.map((cell) => cell.text),
@@ -138,13 +214,13 @@ describe("change-of-control exposure page", () => {
       "Consent or termination review",
     ]);
     expect(rows.map((cells) => cells.at(0)).toSorted()).toEqual(
-      fixture.data.counterparties.map(({ name }) => name).toSorted(),
+      pageData.counterparties.map(({ name }) => name).toSorted(),
     );
   });
 
   test("an empty data room renders zero totals and still signals ready", () => {
     const { element, ready } = render({
-      ...fixture.data,
+      ...pageData,
       counterparties: [],
     });
     expect(
@@ -161,8 +237,8 @@ describe("change-of-control exposure page", () => {
   test("renders counterparty names as text rather than executable markup", () => {
     const malicious = '<img src=x onerror="throw 1">';
     const { element } = render({
-      ...fixture.data,
-      counterparties: fixture.data.counterparties.map((row) => ({
+      ...pageData,
+      counterparties: pageData.counterparties.map((row) => ({
         ...row,
         name: malicious,
       })),
@@ -176,10 +252,10 @@ describe("change-of-control exposure page", () => {
 describe("prepared exposure page", () => {
   test("survives the API's preparation unchanged in data and keeps its script", () => {
     const prepared = prepareGeneratedVisual(
-      v.parse(generatedVisualInputSchema, { ...fixture, html }),
+      v.parse(generatedVisualInputSchema, { ...fixture, data: pageData, html }),
     ).unwrap();
     expect(prepared.title).toBe(fixture.title);
-    expect(prepared.data).toEqual(fixture.data);
+    expect(prepared.data).toEqual(pageData);
     expect(prepared.links).toEqual([]);
     const $ = load(prepared.html);
     expect($("script").text()).toContain("stella.ready()");

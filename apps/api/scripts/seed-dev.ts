@@ -80,9 +80,12 @@ import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { DEFAULT_DOCUMENT_TYPES } from "@/api/lib/document-types/defaults";
 import { parseEmail, parsedEmailToText } from "@/api/lib/files/email-to-html";
+import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { createTextPdf } from "@/api/lib/files/text-pdf";
+import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
 import { cents } from "@/api/lib/money";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { buildDefaultViewRows } from "@/api/lib/views";
 import type {
@@ -4940,6 +4943,60 @@ export async function seed(organizationId?: string, userId?: string) {
     resolvedSeedUserIds = [USER_ID, ...colleagueUserIds];
   };
 
+  /**
+   * Delete every chat file stored in threads of these workspaces: generated
+   * views and anything a developer uploaded since the last seed. Objects (and
+   * image thumbnails) go first, as the thread delete handler does, so no row
+   * removal leaves an unreachable object behind.
+   */
+  const deleteThreadUserFiles = async (
+    workspaceIds: readonly WorkspaceId[],
+  ) => {
+    const files = await withAggregateTransaction(
+      db,
+      async (tx) =>
+        await tx
+          .select({
+            id: userFiles.id,
+            s3Key: userFiles.s3Key,
+            thumbnailFileId: userFiles.thumbnailFileId,
+            userId: userFiles.userId,
+          })
+          .from(userFiles)
+          .innerJoin(chatThreads, eq(chatThreads.id, userFiles.threadId))
+          .where(inArray(chatThreads.workspaceId, [...workspaceIds])),
+    );
+    for (const page of chunkItems(files, SEED_INSERT_CHUNK_SIZE)) {
+      const deleted = await deleteS3Keys(
+        page.flatMap((file) =>
+          file.thumbnailFileId === null
+            ? [file.s3Key]
+            : [
+                file.s3Key,
+                createUserFileKey({
+                  fileId: file.thumbnailFileId,
+                  mimeType: THUMBNAIL_MIME_TYPE,
+                  userId: brandPersistedUserId(file.userId),
+                }),
+              ],
+        ),
+      );
+      if (deleted.isErr()) {
+        panic("Could not delete seeded chat files from storage", deleted.error);
+      }
+      await withAggregateTransaction(
+        db,
+        async (tx) =>
+          await tx.delete(userFiles).where(
+            inArray(
+              userFiles.id,
+              page.map(({ id }) => id),
+            ),
+          ),
+      );
+    }
+  };
+
   const clearSeedData = async () => {
     const allSeedContactIds = [
       ...orgContacts,
@@ -4962,23 +5019,9 @@ export async function seed(organizationId?: string, userId?: string) {
             .delete(chatMessages)
             .where(sql`${chatMessages.workspaceId} IN ${allSeedWorkspaceIds}`),
       );
-      // user_files.thread_id uses ON DELETE RESTRICT: a thread's stored
-      // generated views must go before the thread.
-      await withAggregateTransaction(
-        db,
-        async (tx) =>
-          await tx.delete(userFiles).where(
-            inArray(
-              userFiles.threadId,
-              tx
-                .select({ id: chatThreads.id })
-                .from(chatThreads)
-                .where(
-                  sql`${chatThreads.workspaceId} IN ${allSeedWorkspaceIds}`,
-                ),
-            ),
-          ),
-      );
+      // user_files.thread_id uses ON DELETE RESTRICT: a thread's files
+      // must go before the thread, stored objects first.
+      await deleteThreadUserFiles(allSeedWorkspaceIds);
       await db.transaction(
         async (tx) =>
           await tx
@@ -5033,23 +5076,9 @@ export async function seed(organizationId?: string, userId?: string) {
             .delete(chatMessages)
             .where(sql`${chatMessages.workspaceId} IN ${clientWorkspaceIds}`),
       );
-      // user_files.thread_id uses ON DELETE RESTRICT: a thread's stored
-      // generated views must go before the thread.
-      await withAggregateTransaction(
-        db,
-        async (tx) =>
-          await tx.delete(userFiles).where(
-            inArray(
-              userFiles.threadId,
-              tx
-                .select({ id: chatThreads.id })
-                .from(chatThreads)
-                .where(
-                  sql`${chatThreads.workspaceId} IN ${clientWorkspaceIds}`,
-                ),
-            ),
-          ),
-      );
+      // user_files.thread_id uses ON DELETE RESTRICT: a thread's files
+      // must go before the thread, stored objects first.
+      await deleteThreadUserFiles(clientWorkspaceIds);
       await db.transaction(
         async (tx) =>
           await tx

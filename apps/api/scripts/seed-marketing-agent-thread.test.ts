@@ -243,16 +243,40 @@ describe("marketing agent thread", () => {
       v.parse(generatedVisualInputSchema, stored),
     ).unwrap();
     expect(page.title).toBe(resource.resource.text);
-    expect(page.data).toEqual(exposureView.data);
+    expect(page.data).toMatchObject({
+      labels: exposureView.data.labels,
+      positions: [...CHANGE_OF_CONTROL_POSITIONS],
+      risks: [...RISK_SEVERITY],
+    });
   });
 
-  test("the generated view's figures are the seeded data room's own", () => {
-    expect(exposureView.data.positions).toEqual([
-      ...CHANGE_OF_CONTROL_POSITIONS,
-    ]);
-    expect(exposureView.data.risks).toEqual([...RISK_SEVERITY]);
-    expect(exposureView.data.counterparties).toEqual(
-      aggregateChangeOfControlExposure(),
+  test("the stored view accounts for every seeded document exactly once", () => {
+    const { visualFile } = build();
+    const { counterparties } = v.parse(
+      v.object({
+        data: v.object({
+          counterparties: v.array(
+            v.object({
+              name: v.string(),
+              documents: v.number(),
+              value: v.number(),
+            }),
+          ),
+        }),
+      }),
+      JSON.parse(new TextDecoder().decode(visualFile.bytes)),
+    ).data;
+    const rows = EXPORT_REVIEW_DOC_NAMES.map((_name, index) =>
+      buildExportReviewMetadata(index),
+    );
+    expect(counterparties.map(({ name }) => name).toSorted()).toEqual(
+      [...new Set(rows.map(({ counterparty }) => counterparty))].toSorted(),
+    );
+    expect(
+      counterparties.reduce((sum, { documents }) => sum + documents, 0),
+    ).toBe(rows.length);
+    expect(counterparties.reduce((sum, { value }) => sum + value, 0)).toBe(
+      rows.reduce((sum, { contractValue }) => sum + contractValue, 0),
     );
   });
 
