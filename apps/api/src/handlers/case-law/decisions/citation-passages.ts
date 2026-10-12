@@ -505,10 +505,29 @@ export const readDecisionTextByDecision = async ({
       textByDecision.set(String(entry.id), entry.text);
     }
   }
-  const currentCompletions = await readCurrent(
-    caseLawDb,
-    pointers.map(({ id }) => id),
-  );
+  const currentCompletions = await Result.tryPromise({
+    try: async () =>
+      await readCurrent(
+        caseLawDb,
+        pointers.map(({ id }) => id),
+      ),
+    catch: (cause) =>
+      new CitationTextGateError({
+        message: "Citation decision text completion read failed",
+        reason: "gate_failed",
+        cause,
+      }),
+  });
+  if (Result.isError(currentCompletions)) {
+    captureCitationTextGateFailure(currentCompletions.error, "completion");
+    for (const pointer of pointers) {
+      textByDecision.set(String(pointer.id), {
+        type: "gate-failed",
+        error: currentCompletions.error,
+      });
+    }
+    return textByDecision;
+  }
   for (const pointer of pointers) {
     const readText = textByDecision.get(String(pointer.id));
     if (readText === undefined) {
@@ -516,7 +535,7 @@ export const readDecisionTextByDecision = async ({
     }
     const completion = checkDecisionTextCompletion(
       pointer.textEligibilityFingerprint,
-      currentCompletions.get(String(pointer.id)),
+      currentCompletions.value.get(String(pointer.id)),
     );
     let text: CitationDecisionText;
     switch (completion.type) {
@@ -661,17 +680,19 @@ type PreparedDecisionCitations = Awaited<
 type CompleteDecisionCitationsOptions = {
   caseLawDb: CaseLawPublicReadDb;
   prepared: PreparedDecisionCitations;
+  readText?: typeof readDecisionTextByDecision;
 };
 
 /** Resolve both display passages and exact classifier windows through one text owner. */
 export const completeDecisionCitations = async ({
   caseLawDb,
   prepared: gated,
+  readText = readDecisionTextByDecision,
 }: CompleteDecisionCitationsOptions): Promise<DecisionCitationsRead> => {
   if (gated.type === "invalid_cursor") {
     return gated;
   }
-  const textByDecision = await readDecisionTextByDecision({
+  const textByDecision = await readText({
     caseLawDb,
     pointers: gated.sources,
   });

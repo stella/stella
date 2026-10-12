@@ -6,6 +6,7 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  completeDecisionCitations,
   citationPassageIn,
   citationTextFields,
   readDecisionTextByDecision,
@@ -473,6 +474,119 @@ test("a later AST batch changes the first decision before the page completion", 
   expect(completions).toEqual([
     { ids: pointers.map(({ id }) => id), astReads: pointers.length },
   ]);
+});
+
+test("a completion read failure retains citation metadata with gate_failed", async () => {
+  const decisionId = createSafeId<"caseLawDecision">();
+  const citationId = createSafeId<"caseLawCitation">();
+  const ruleId = createSafeId<"caseLawPolarityRule">();
+  const citationText = "21 Cdo 500/2019";
+  const paragraph = `Synthetic reasoning in ${citationText}.`;
+  const ast = astOf([{ anchorId: "p1", text: paragraph }]);
+  const pointer = {
+    id: decisionId,
+    astS3Key: "synthetic/ast",
+    contentHash: "synthetic-hash",
+    textEligibilityFingerprint: "eligible-revision",
+  };
+  let astReads = 0;
+  const result = await completeDecisionCitations({
+    caseLawDb: caseLawPublicReadDb,
+    prepared: {
+      type: "page",
+      direction: "cites",
+      resolvedDecisionId: decisionId,
+      sources: [pointer],
+      page: {
+        items: [
+          {
+            id: citationId,
+            citationText,
+            sectionIndex: 0,
+            treatment: "mixed",
+            decision: null,
+          },
+        ],
+        limit: 1,
+        nextCursor: "next-page",
+      },
+      evidence: {
+        type: "ready",
+        rows: [
+          {
+            id: citationId,
+            source: "rule",
+            ruleId,
+            classifierVersion: "synthetic-version",
+            evidenceWindows: [{ start: 0, end: paragraph.length }],
+            citedPart: "majority",
+          },
+        ],
+      },
+    },
+    readText: async (options) =>
+      await readDecisionTextByDecision({
+        ...options,
+        readColumns: async () =>
+          new Map([
+            [
+              String(decisionId),
+              {
+                textEligibilityFingerprint: pointer.textEligibilityFingerprint,
+                textRevisionFingerprint: "synthetic-revision",
+                textIncompleteReason: null,
+                textWithheldReason: null,
+                contentHash: pointer.contentHash,
+                documentAst: ast,
+                sections: [
+                  {
+                    index: 0,
+                    text: paragraph,
+                    type: "argumentation",
+                    title: null,
+                  },
+                ],
+              },
+            ],
+          ]),
+        readAst: async () => {
+          astReads += 1;
+          return ast;
+        },
+        readTombstones: async () => new Set(),
+        readCurrentCompletions: async () =>
+          await Promise.reject(
+            new TypeError("Synthetic completion read failure"),
+          ),
+      }),
+  });
+  expect(astReads).toBe(1);
+  expect(result).toEqual({
+    type: "page",
+    page: {
+      nextCursor: "next-page",
+      items: [
+        {
+          id: citationId,
+          citationText: null,
+          sectionIndex: 0,
+          treatment: "mixed",
+          decision: null,
+          evidenceIncompleteReason: null,
+          citedPart: "majority",
+          polarityEvidence: {
+            source: "rule",
+            ruleId,
+            classifierVersion: "synthetic-version",
+            excerpt: null,
+          },
+          textIncompleteReason: "gate_failed",
+          textWithheldReason: null,
+          passage: null,
+        },
+      ],
+    },
+  });
 });
 
 test("an absent analysis retains eligible citation text without excerpts", () => {
