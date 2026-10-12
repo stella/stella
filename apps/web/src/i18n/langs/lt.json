@@ -128,6 +128,11 @@
     "orSignInWithEmail": "arba prisijunkite el. paštu",
     "organizationNamePlaceholder": "Mano organizacija",
     "password": "Slaptažodis",
+    "professionalUse": {
+      "description": "Kuriant jūsų paskyrą šis pareiškimas jums nebuvo parodytas. Norėdami tęsti, jį priimkite.",
+      "title": "Patvirtinkite profesinį naudojimą"
+    },
+    "professionalUseStatement": "Sukurdami paskyrą patvirtinate, kad stella naudojatės profesiniais tikslais, ir suprantate, kad stella yra įrankis teisės specialistams ir nepakeičia teisinės konsultacijos.",
     "rateLimitExceeded": "Per daug bandymų. Bandykite dar kartą vėliau.",
     "resendCode": "Siųsti kodą dar kartą adresu <email>{emailAddress}</email>",
     "selectOrganization": "Pasirinkite organizaciją",
@@ -799,7 +804,7 @@
       "courtCount": "{count, plural, one {# teismas} few {# teismai} many {# teismo} other {# teismų}}",
       "newLast24Hours": "{count} per pastarąsias 24 val.",
       "newLast7Days": "Nauji per pastarąsias 7 dienas",
-      "unlistedCourts": "{count, plural, one {Teismai už didžiausio ribų} few {Teismai už # didžiausių ribų} other {Teismai už # didžiausių ribų}}"
+      "otherCourts": "Kiti teismai"
     },
     "courtTiers": {
       "constitutional": "Konstituciniai teismai",
@@ -815,6 +820,7 @@
       "decisionYears": "Sprendimų metai",
       "description": "Kiek teismų praktikos yra korpuse pagal valstybes ir teismus ir kiek atnaujintas kiekvienas šaltinis.",
       "exceedsReportedTotal": "Turi daugiau, nei paskutinis skelbėjo nurodytas skaičius {date}",
+      "gapStatusUnknown": "Spragų būsena nežinoma",
       "generatedAt": "Duomenys {date}",
       "globeLabel": "Valstybės, kurių teismų praktiką turi korpusas, gaublyje",
       "healthCurrent": "Atnaujinta",
@@ -823,9 +829,12 @@
       "healthStalled": "Sustojęs",
       "healthUnknown": "Niekada nevykdyta",
       "inPreparation": "Rengiama",
+      "knownGaps": "Žinomos spragos",
       "lastSync": "Paskutinis sinchronizavimas",
+      "noGapsRecorded": "Spragų neužregistruota",
       "notCountedYet": "Dar nesuskaičiuota",
       "notMeasuredYet": "Dar neišmatuota",
+      "pendingTexts": "Laukiantys tekstai",
       "reportedByListing": "Suskaičiuota pagal skelbėjo sąrašą",
       "reportedByOperator": "Įvesta rankiniu būdu",
       "reportedByPublisher": "Paties skelbėjo skaičius",
@@ -1277,6 +1286,9 @@
       "noMatters": "Bylų dar nėra",
       "noRecentChats": "Nėra naujausių pokalbių",
       "noSkills": "Įgūdžių dar nėra",
+      "openAllMatters": "Atidaryti visas bylas",
+      "openChatHistory": "Atidaryti pokalbių istoriją",
+      "openSkillsLibrary": "Atidaryti įgūdžių biblioteką",
       "pinnedMatters": "Prisegtos bylos",
       "recentChats": "Neseniai naudoti pokalbiai",
       "skillEditedBy": "Redagavo {name} · {time}",

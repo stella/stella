@@ -254,7 +254,7 @@ test("token rejection carries no principal into response auditing", async () => 
       { headers: { authorization: "Bearer synthetic" } },
     ),
   );
-  expect(response.status).toBe(403);
+  expect(response.status).toBe(401);
   expect(authentications).toBe(1);
   expect(audits).toHaveLength(0);
 });
