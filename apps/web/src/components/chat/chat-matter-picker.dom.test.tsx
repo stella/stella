@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { DISABLED_NAVIGATION_FEATURES } from "@/lib/workspaces/queries.test-fixtures";
+
 GlobalRegistrator.register({ url: "https://app.example.test" });
 Object.assign(import.meta.env, { VITE_API_URL: "https://api.example.test" });
 const { QueryClient, QueryClientProvider } =
@@ -62,7 +64,7 @@ const renderPicker = () => {
       organizationId: ORGANIZATION_ID,
       userId: USER.id,
     }).queryKey,
-    { workspaces, features: { timeBilling: false } },
+    { workspaces, features: DISABLED_NAVIGATION_FEATURES },
   );
   render(
     <QueryClientProvider client={client}>
