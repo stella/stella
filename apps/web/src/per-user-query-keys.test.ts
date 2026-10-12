@@ -293,6 +293,17 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     files: ["lib/knowledge/queries.ts"],
     keys: () => [chatUnavailableSkillsOptions(ORG, USER).queryKey],
   },
+  "chat/threads/decision-thread.ts": {
+    kind: "keyed",
+    calls: ['api.chat["decision-threads"]().get'],
+    files: ["features/chat/queries.ts"],
+    keys: () => [
+      chatKeys.decisionThread(ORG, { decisionId: "decision", userId: USER }),
+    ],
+    opaqueKeys: {
+      "chatKeys.decisionThread(activeOrganizationId, key)": KEY_TYPE_HAS_USER,
+    },
+  },
   "chat/threads/list.ts": {
     kind: "keyed",
     calls: ["api.chat.threads.get"],

@@ -76,11 +76,7 @@ export const PublicLawInspector = () => {
  * dock rather than the lazily loaded inspector, so the restore lands before a
  * reader below asks for its document's chat.
  */
-export const MemberInspectorPersistence = ({
-  user,
-}: {
-  user: AuthenticatedUser;
-}) => {
+const MemberInspectorPersistence = ({ user }: { user: AuthenticatedUser }) => {
   useInspectorTabPersistence({
     organizationId: user.activeOrganizationId,
     userId: user.id,

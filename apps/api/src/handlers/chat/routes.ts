@@ -23,6 +23,7 @@ import sendMessage from "@/api/handlers/chat/send-message";
 import listUnavailableChatSkills from "@/api/handlers/chat/skill-availability/list";
 import submitSecret from "@/api/handlers/chat/submit-secret";
 import suggestThreadTitle from "@/api/handlers/chat/suggest-thread-title";
+import getDecisionChatThread from "@/api/handlers/chat/threads/decision-thread";
 import deleteThread from "@/api/handlers/chat/threads/delete";
 import getThreads from "@/api/handlers/chat/threads/list";
 import renameThread from "@/api/handlers/chat/threads/rename";
@@ -80,6 +81,10 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
   .get("/threads", getThreads.handler, {
     permissions: getThreads.config.permissions,
     query: getThreads.config.query,
+  })
+  .get("/decision-threads/:decisionId", getDecisionChatThread.handler, {
+    params: getDecisionChatThread.config.params,
+    permissions: getDecisionChatThread.config.permissions,
   })
   .get("/model-options", getModelOptions.handler, {
     permissions: getModelOptions.config.permissions,

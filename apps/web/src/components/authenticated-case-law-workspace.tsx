@@ -1,18 +1,21 @@
 import type { ComponentProps } from "react";
 
+import { useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
+
 import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatMentionProviders } from "@/components/chat-mention-providers";
-import { INSPECTOR_PANE_INTENT } from "@/components/inspector/inspector-store-types";
-import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { openDecisionConversation } from "@/components/decision-chat-open.logic";
 import {
   AIAvailabilityProvider,
   useAIKeyGate,
 } from "@/components/require-ai-key";
 import { DecisionWorkspace } from "@/features/case-law/components/case-viewer/decision-workspace";
-import { decisionChatKey } from "@/features/chat/legal-document-chat-key";
+import { decisionChatThreadOptions } from "@/features/chat/queries";
 import { useMountEffect } from "@/hooks/use-effect";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
+import type { ChatThreadId } from "@/lib/chat-thread-ref";
 import type { SafeId } from "@/lib/safe-id";
 
 type AuthenticatedCaseLawWorkspaceProps = {
@@ -40,7 +43,11 @@ export const AuthenticatedCaseLawWorkspace = ({
             />
           </div>
           {/* The law shell docks the inspector; the reader only seeds its tabs. */}
-          <AutoOpenDecisionChat decisionId={decisionId} key={decisionId} />
+          <AutoOpenDecisionChat
+            decisionId={decisionId}
+            key={decisionId}
+            user={user}
+          />
         </ChatEditorProvider>
       </AIAvailabilityProvider>
     </ChatMentionProviders>
@@ -68,19 +75,51 @@ const AuthenticatedDecisionWorkspace = ({
   );
 };
 
+/**
+ * Seeds the decision's conversation once the server has said which it is. A
+ * failed lookup still gives the reader a chat: a fresh one, as before there
+ * was anything to find.
+ */
 const AutoOpenDecisionChat = ({
   decisionId,
+  user,
 }: {
   decisionId: SafeId<"caseLawDecision">;
+  user: AuthenticatedUser;
 }) => {
-  const openChat = useInspectorTabsStore((state) => state.openChat);
+  const conversation = useQuery(
+    decisionChatThreadOptions({
+      activeOrganizationId: user.activeOrganizationId,
+      key: { decisionId, userId: user.id },
+    }),
+  );
+  switch (conversation.status) {
+    case "pending":
+      return null;
+    case "error":
+      return <OpenDecisionChat decisionId={decisionId} threadId={null} />;
+    case "success":
+      return (
+        <OpenDecisionChat
+          decisionId={decisionId}
+          threadId={conversation.data.threadId}
+        />
+      );
+    default:
+      conversation satisfies never;
+      return panic("Unhandled decision conversation lookup state");
+  }
+};
+
+const OpenDecisionChat = ({
+  decisionId,
+  threadId,
+}: {
+  decisionId: SafeId<"caseLawDecision">;
+  threadId: ChatThreadId | null;
+}) => {
   useMountEffect(() => {
-    // The rail gets the decision's chat; the pane belongs to the reader, and
-    // DecisionDetailsTab already settled it for this mount.
-    openChat({
-      activeLegalKey: decisionChatKey(decisionId),
-      pane: INSPECTOR_PANE_INTENT.keep,
-    });
+    openDecisionConversation({ decisionId, threadId });
   });
   return null;
 };

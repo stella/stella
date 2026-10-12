@@ -2186,6 +2186,42 @@ describe("a legal document's chat tab and the reader's composer", () => {
     ).toEqual({ status: "thread", threadId: restored });
   });
 
+  // A document finds its conversation on the server when it opens, so a
+  // document's chat that never got a message would only pile up as empty
+  // tabs across reloads and windows.
+  test("keep a document's chat across reloads only once its conversation started", () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-started", userId: "user-started" };
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    const store = useInspectorTabsStore.getState();
+    const used = toChatThreadId("thread-used");
+    store.openChat({ activeLegalKey: decisionChatKey("decision-empty") });
+    store.openChat({
+      activeLegalKey: decisionChatKey("decision-used"),
+      id: used,
+    });
+    store.markChatStarted(used);
+    store.openChat({ id: toChatThreadId("thread-plain") });
+
+    const persisted: unknown = JSON.parse(
+      localArea().getItem(
+        userStorageKey(`stella:inspector-state:v1:${scope.organizationId}:`, {
+          kind: "user",
+          userId: scope.userId,
+        }),
+      ) ?? "null",
+    );
+    // Exactly these two: the empty document chat is left out.
+    expect(persisted).toEqual(
+      expect.objectContaining({
+        tabs: [
+          expect.objectContaining({ id: used, started: true }),
+          expect.objectContaining({ id: "thread-plain" }),
+        ],
+      }),
+    );
+  });
+
   test("leave the owner alone when a chat about nothing rotates", () => {
     const store = useInspectorTabsStore.getState();
     store.openChat({ id: toChatThreadId("thread-plain") });
