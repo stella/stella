@@ -247,7 +247,7 @@ describe("the seeded case-law reader story", () => {
     const [question, answer] = messages.map((row) =>
       chatMessageFromPersisted(row),
     );
-    expect(messages.every(({ content }) => content.version === 3)).toBe(true);
+    expect(messages.map(({ content }) => content.version)).toEqual([3, 3]);
     expect(question?.parts.map(chatPartText)).toEqual([
       CASE_LAW_READER_STORY.question,
     ]);

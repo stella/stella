@@ -29,6 +29,12 @@ const declarations: Record<string, Declaration> = {
     disposition: "copy",
     reason: "stored fixture decision fields omit citation key",
   },
+  "scripts/seed-case-law.ts:refreshFixtureDecision:orm-values-caseLawDecisions:1":
+    {
+      disposition: "copy",
+      reason:
+        "re-stores the same fixture decision fields, which omit citation key",
+    },
   "src/handlers/case-law/ingestion/decision-identifier-backfill.ts:projectCitationPage:sql:1":
     {
       disposition: "bounded",

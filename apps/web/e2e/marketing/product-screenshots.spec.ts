@@ -397,7 +397,7 @@ test("capture landing product screenshots", async ({
         // Where a block or a stacked note meets the frame's edges depends on
         // the fonts the runner renders with, so the frame is chosen from
         // the measured layout, then every promise is checked again.
-        await frameReader(page, {
+        await frameReader({
           clip: captureClip,
           target:
             "readerStory" in capture
@@ -586,14 +586,15 @@ const expectWithinClip = async (
 // Notes are laid out against the scrolling content, so shifting a measured
 // box by the offset is where it lands. Throws, naming each candidate's
 // failure, when none fits.
-const frameReader = async (
-  page: Page,
-  {
-    clip,
-    target,
-    needsComment,
-  }: { clip: CaptureClip; target: Locator; needsComment: boolean },
-) => {
+const frameReader = async ({
+  clip,
+  target,
+  needsComment,
+}: {
+  clip: CaptureClip;
+  target: Locator;
+  needsComment: boolean;
+}) => {
   await expect(target).toBeAttached({ timeout: COLD_COMPILE_TIMEOUT });
   await target.evaluate(
     (targetElement, { bandBottom, commentRequired, maxInset, candidates }) => {
@@ -619,7 +620,7 @@ const frameReader = async (
         ...document.querySelectorAll<HTMLElement>("[data-margin-note] > *"),
       ].map((note) => ({
         box: note.getBoundingClientRect(),
-        kind: note.parentElement?.dataset.marginNote ?? "",
+        kind: note.parentElement?.dataset["marginNote"] ?? "",
       }));
       // The margin's current-section header sticks to the top of the
       // scroller; a note under it reads as cut.
@@ -752,7 +753,7 @@ const expectCleanTopEdge = async (page: Page) => {
           });
           return cut === undefined
             ? null
-            : `block ${cut.dataset.anchor ?? "?"} starts above the reader's top edge`;
+            : `block ${cut.dataset["anchor"] ?? "?"} starts above the reader's top edge`;
         }),
       { message: "The reader's frame must open on the start of a block" },
     )
@@ -803,9 +804,9 @@ const expectNoMarginNoteCut = async (page: Page, clip: CaptureClip) => {
             )) {
               const box = note.getBoundingClientRect();
               if (box.top < top && box.bottom > top) {
-                const kind = note.parentElement?.dataset.marginNote ?? "?";
+                const kind = note.parentElement?.dataset["marginNote"] ?? "?";
                 cut.push(
-                  `${kind} note "${(note.textContent ?? "").slice(0, 40)}" spans ${String(Math.round(box.top))}-${String(Math.round(box.bottom))}`,
+                  `${kind} note "${note.textContent.slice(0, 40)}" spans ${String(Math.round(box.top))}-${String(Math.round(box.bottom))}`,
                 );
               }
             }
