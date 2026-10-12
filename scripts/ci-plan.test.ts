@@ -3489,31 +3489,35 @@ test("direct web compiler package scripts generate before inspecting types", () 
   expect(consumers).toBeGreaterThan(0);
 });
 
-test("folded suites are expected only from producers that run in this mode", () => {
-  const thin = new Set(thinJobs({ jobs: ciJobs }));
-  const excluded = Object.keys(foldedSuites).filter((job) => thin.has(job));
-  expect(excluded.length).toBeGreaterThan(0);
-  for (const job of excluded) {
+test("folded suites are expected only when their producer and suites are planned", () => {
+  expect(Object.keys(foldedSuites).length).toBeGreaterThan(0);
+  for (const [job, suites] of Object.entries(foldedSuites)) {
     const silent = {
       results: { [job]: "skipped" },
       suiteResults: Object.fromEntries(
-        Object.keys(foldedSuites[job] ?? {}).map((suite) => [suite, ""]),
+        Object.keys(suites).map((suite) => [suite, ""]),
       ),
     };
-    // Heavy runs leave thin producers out entirely, so their suites cannot be owed.
-    expect(
-      evaluateResult({
-        event: EVENT.workflowDispatch,
-        heavyOnly: true,
-        ...silent,
-      }),
-      `${job} heavy`,
-    ).toBe(0);
-    // A full run that planned the producer still fails when it stays silent.
-    expect(
-      evaluateResult({ event: EVENT.workflowDispatch, ...silent }),
-      `${job} full`,
-    ).toBe(1);
+    const scope = jobScopes[job];
+    const unplannedScopes = [
+      ...Object.values(suites),
+      ...(typeof scope === "string" ? [scope] : []),
+    ];
+    for (const heavyOnly of [false, true]) {
+      expect(
+        evaluateResult({
+          event: EVENT.workflowDispatch,
+          heavyOnly,
+          unplannedScopes,
+          ...silent,
+        }),
+        `${job} unplanned, heavyOnly=${heavyOnly}`,
+      ).toBe(0);
+      expect(
+        evaluateResult({ event: EVENT.workflowDispatch, heavyOnly, ...silent }),
+        `${job} planned, heavyOnly=${heavyOnly}`,
+      ).toBe(1);
+    }
   }
 });
 
