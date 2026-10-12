@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   CHAT_DECISION_PASSAGE_HREF_PREFIX,
+  chatDecisionPassagesIn,
   parseChatDecisionPassageHref,
   stampChatDecisionPassageHrefs,
   toChatDecisionPassageHref,
@@ -172,6 +173,18 @@ describe("stamping court paragraph numbers into an answer", () => {
     ]) {
       expect(stamp(text)).toBe(text);
     }
+  });
+
+  test("lists the well-formed citations a text carries, in order", () => {
+    expect(
+      chatDecisionPassagesIn(
+        `[a](${href(`${OTHER_ID}:p-1`)}) [b](${href("nope:p-2")}) [c](${href(`${DECISION_ID}:p-12:3`)})`,
+      ),
+    ).toEqual([
+      { anchorId: "p-1", courtParagraphNumber: null, decisionId: OTHER_ID },
+      { anchorId: "p-12", courtParagraphNumber: 3, decisionId: DECISION_ID },
+    ]);
+    expect(chatDecisionPassagesIn("no links")).toEqual([]);
   });
 
   test("stamping is idempotent", () => {

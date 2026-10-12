@@ -89,10 +89,10 @@ import type { CutShortOutcome } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import { compactModelMessagesForModel } from "@/api/handlers/chat/compaction";
 import {
+  knownDecisionPassageStamper,
   NO_DECISION_PASSAGE_NUMBERS,
-  stampDecisionPassageNumbers,
 } from "@/api/handlers/chat/decision-passage-numbers";
-import type { DecisionPassageNumbers } from "@/api/handlers/chat/decision-passage-numbers";
+import type { DecisionPassageStamper } from "@/api/handlers/chat/decision-passage-numbers";
 import {
   createLoopRecoverySystemPrompt,
   detectModelLoop,
@@ -325,12 +325,12 @@ type StreamChatProps = {
   /** Budget lane the pre-flight resolved for this turn. */
   usageLane: UsageEventLane;
   /**
-   * The court paragraph numbers of the decision text the prompt carried.
-   * Stamped onto the answer's passage citations before the turn is stored or
-   * shown, so the stored text, the live stream and every reload name the same
-   * paragraph.
+   * Stamps the court's paragraph number onto the answer's passage citations
+   * before the turn is stored or shown, so the stored text, the live stream
+   * and every reload name the same paragraph. Without one, a number the model
+   * wrote is still dropped.
    */
-  decisionPassageNumbers?: DecisionPassageNumbers | undefined;
+  decisionPassageStamper?: DecisionPassageStamper | undefined;
   resolveAssistantTextRefs?: ((text: string) => string) | undefined;
   resolveAssistantToolInputRefs?: AssistantToolInputRefResolver | undefined;
   resolveAssistantToolOutputRefs?: AssistantToolOutputRefResolver | undefined;
@@ -478,7 +478,9 @@ export const streamChat = async ({
   runMode,
   sandboxRun,
   usageLane,
-  decisionPassageNumbers = NO_DECISION_PASSAGE_NUMBERS,
+  decisionPassageStamper = knownDecisionPassageStamper(
+    NO_DECISION_PASSAGE_NUMBERS,
+  ),
   resolveAssistantTextRefs,
   resolveAssistantToolInputRefs,
   resolveAssistantToolOutputRefs,
@@ -794,7 +796,7 @@ export const streamChat = async ({
         : new Set<string>(),
     restorationPairs,
     source: projectVisualPreviewStream(stream),
-    stampAssistantText: stampDecisionPassageNumbers(decisionPassageNumbers),
+    stamper: decisionPassageStamper,
   });
   const processedStream = processTurnForPersistence({
     visualOrigin,
@@ -3173,7 +3175,65 @@ type TransformOutgoingStreamProps = {
   restorationPairs: ChatAnonRestoration[];
   source: AsyncIterable<PublicStreamChunk>;
   /** Server-owned facts written into the assistant's own text. */
-  stampAssistantText?: ((text: string) => string) | undefined;
+  stamper?: DecisionPassageStamper | undefined;
+};
+
+/**
+ * The chunk with its text stamped. The transformer releases text only once
+ * every `#stella-` href in it is whole, so a delta never splits a citation.
+ */
+const stampedChunk = (
+  chunk: StreamChunk,
+  stamper: DecisionPassageStamper,
+): StreamChunk => {
+  switch (chunk.type) {
+    case EventType.TEXT_MESSAGE_CONTENT:
+    case EventType.REASONING_MESSAGE_CONTENT:
+      return { ...chunk, delta: stamper.stamp(chunk.delta) };
+    // A snapshot can be what a turn is stored from, so its answers carry the
+    // same stamp as the deltas that built them.
+    case EventType.MESSAGES_SNAPSHOT:
+      return {
+        ...chunk,
+        messages: chunk.messages.map((message) =>
+          message.role === "assistant" && typeof message.content === "string"
+            ? { ...message, content: stamper.stamp(message.content) }
+            : message,
+        ),
+      };
+    default:
+      return chunk;
+  }
+};
+
+/** The assistant text a chunk carries, which its stamp may cite from. */
+const stampableText = (chunk: StreamChunk): string => {
+  switch (chunk.type) {
+    case EventType.TEXT_MESSAGE_CONTENT:
+    case EventType.REASONING_MESSAGE_CONTENT:
+      return chunk.delta;
+    case EventType.MESSAGES_SNAPSHOT:
+      return chunk.messages
+        .map((message) =>
+          message.role === "assistant" && typeof message.content === "string"
+            ? message.content
+            : "",
+        )
+        .join("\n");
+    default:
+      return "";
+  }
+};
+
+const stampChunk = async (
+  chunk: StreamChunk,
+  stamper: DecisionPassageStamper | undefined,
+): Promise<StreamChunk> => {
+  if (stamper === undefined) {
+    return chunk;
+  }
+  await stamper.prepare(stampableText(chunk));
+  return stampedChunk(chunk, stamper);
 };
 
 export const transformOutgoingStream = async function* ({
@@ -3186,28 +3246,34 @@ export const transformOutgoingStream = async function* ({
   registerPendingFlush,
   restorationPairs,
   source,
-  stampAssistantText,
+  stamper,
 }: TransformOutgoingStreamProps): AsyncIterable<StreamChunk> {
   const transform = createOutgoingChunkTransformer({
     boundary,
+    holdStellaHrefs: stamper !== undefined,
     initialRestorationPlaceholders,
     resolveAssistantTextRefs,
     resolveAssistantToolInputRefs,
     resolveAssistantToolOutputRefs,
     resolveAssistantValueRefs,
     restorationPairs,
-    stampAssistantText,
   });
-  registerPendingFlush?.(transform.flush);
+  // A cut-short turn flushes synchronously: its tail is stamped from what the
+  // turn already resolved, and a decision it had not loses only its number.
+  registerPendingFlush?.(() =>
+    stamper === undefined
+      ? transform.flush()
+      : transform.flush().map((chunk) => stampedChunk(chunk, stamper)),
+  );
 
   for await (const chunk of source) {
     for (const transformed of transform(chunk)) {
-      yield transformed;
+      yield await stampChunk(transformed, stamper);
     }
   }
 
   for (const flushed of transform.flush()) {
-    yield flushed;
+    yield await stampChunk(flushed, stamper);
   }
 };
 
@@ -3217,7 +3283,7 @@ type TransformPersistenceVisibleStreamProps = Pick<
   | "initialRestorationPlaceholders"
   | "restorationPairs"
   | "source"
-  | "stampAssistantText"
+  | "stamper"
 >;
 
 type PersistenceVisibleStream = AsyncIterable<StreamChunk> & {
@@ -3235,7 +3301,7 @@ export const transformPersistenceVisibleStream = ({
   initialRestorationPlaceholders,
   restorationPairs,
   source,
-  stampAssistantText,
+  stamper,
 }: TransformPersistenceVisibleStreamProps): PersistenceVisibleStream => {
   let flushPending = (): StreamChunk[] => [];
   const transformed = transformOutgoingStream({
@@ -3246,7 +3312,7 @@ export const transformPersistenceVisibleStream = ({
     },
     restorationPairs,
     source,
-    stampAssistantText,
+    stamper,
   });
   return {
     flushPending: () => flushPending(),
@@ -3306,7 +3372,8 @@ type OutgoingChunkTransformerOptions = {
   resolveAssistantToolOutputRefs?: AssistantToolOutputRefResolver | undefined;
   resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
   restorationPairs: ChatAnonRestoration[];
-  stampAssistantText?: ((text: string) => string) | undefined;
+  /** Release text only once every `#stella-` href in it is whole. */
+  holdStellaHrefs?: boolean | undefined;
 };
 
 const createOutgoingChunkTransformer = ({
@@ -3317,7 +3384,7 @@ const createOutgoingChunkTransformer = ({
   resolveAssistantToolOutputRefs,
   resolveAssistantValueRefs,
   restorationPairs,
-  stampAssistantText,
+  holdStellaHrefs = false,
 }: OutgoingChunkTransformerOptions) => {
   const buffers = new Map<string, string>();
   const emittedPlaceholders = new Set(initialRestorationPlaceholders);
@@ -3373,10 +3440,9 @@ const createOutgoingChunkTransformer = ({
   };
 
   const transformText = (text: string): string => {
-    const stamped = stampAssistantText ? stampAssistantText(text) : text;
     const resolved = resolveAssistantTextRefs
-      ? resolveAssistantTextRefs(stamped)
-      : stamped;
+      ? resolveAssistantTextRefs(text)
+      : text;
     if (boundary.type !== "anonymized") {
       return resolved;
     }
@@ -3461,7 +3527,7 @@ const createOutgoingChunkTransformer = ({
       return getResolvedTextPrefixLength(buffer);
     }
     const deanonymisable = getDeanonymisablePrefixLength(buffer);
-    return stampAssistantText === undefined
+    return !holdStellaHrefs
       ? deanonymisable
       : Math.min(deanonymisable, getResolvedTextPrefixLength(buffer));
   };

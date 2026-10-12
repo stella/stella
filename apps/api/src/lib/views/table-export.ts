@@ -250,10 +250,15 @@ const justificationToComment = (
       continue;
     }
     // A cited decision passage exports as the passage itself; it has no
-    // statement the model wrote around it.
+    // statement the model wrote around it. The court's paragraph number
+    // follows it, as the chip shows it.
     if (block.kind === "decision-passage") {
       if (block.excerpt.length > 0) {
-        parts.push(block.excerpt);
+        parts.push(
+          block.courtParagraphNumber === null
+            ? block.excerpt
+            : `${block.excerpt} (\u00b6\u00a0${block.courtParagraphNumber})`,
+        );
       }
       continue;
     }

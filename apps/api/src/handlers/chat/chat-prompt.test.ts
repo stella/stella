@@ -485,7 +485,9 @@ describe("active decision section", () => {
     expect(prompt).toContain("stored as flat text without structure");
     expect(prompt).toContain("never by an anchor");
     expect(prompt).not.toContain(CHAT_DECISION_PASSAGE_HREF_PREFIX);
-    expect(section.unwrap().passageNumbers.size).toBe(0);
+    expect(section.unwrap().passageNumbers).toEqual(
+      new Map([[DECISION_ID, new Map()]]),
+    );
   });
 
   test("an anchored decision hands the turn the court's number for each numbered block, never the anchor's counter", async () => {

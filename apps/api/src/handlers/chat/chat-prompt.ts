@@ -2293,9 +2293,12 @@ export const buildActiveDecisionSection = async ({
                   ACTIVE_DECISION_MAX_CHARS,
                 ),
               };
-          const passageNumbers = ast
-            ? decisionPassageNumbers(row.id, ast.blocks)
-            : NO_DECISION_PASSAGE_NUMBERS;
+          // Resolved either way: flat text numbers nothing, and the turn need
+          // not read the decision again to learn that.
+          const passageNumbers = decisionPassageNumbers(
+            row.id,
+            ast?.blocks ?? [],
+          );
           return { status: "available", row, text, passageNumbers } as const;
         },
         catch: (cause) =>

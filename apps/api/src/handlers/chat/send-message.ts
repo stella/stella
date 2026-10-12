@@ -120,6 +120,7 @@ import {
   extractIncomingMessageWorkspaceIds,
   extractThreadDataWorkspaceIds,
 } from "@/api/handlers/chat/data-scope";
+import { createDecisionPassageStamper } from "@/api/handlers/chat/decision-passage-numbers";
 import type { DecisionPassageNumbers } from "@/api/handlers/chat/decision-passage-numbers";
 import { ChatError } from "@/api/handlers/chat/errors";
 import { generateThreadTitle } from "@/api/handlers/chat/generate-thread-title";
@@ -230,6 +231,7 @@ import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getOrganizationRegistryDispatch } from "@/api/lib/business-registries/credentials";
+import { loadCourtParagraphNumbers } from "@/api/lib/case-law/court-paragraph-numbers";
 import { resolveEffectiveChatModelSelection } from "@/api/lib/chat-model-selection";
 import {
   canUseChatThreadForGeneratedDocumentDraft,
@@ -3222,7 +3224,19 @@ export const createSendMessage = (
                   runMode: body.runMode,
                   sandboxRun,
                   usageLane: turnLane.lane,
-                  decisionPassageNumbers: chatContext.decisionPassageNumbers,
+                  // Per turn: the open decision's numbers are known; any
+                  // other decision the answer cites is resolved once, in a
+                  // batch, through the public corpus gate.
+                  decisionPassageStamper: createDecisionPassageStamper({
+                    known: chatContext.decisionPassageNumbers,
+                    load: async (decisionIds) =>
+                      await loadCourtParagraphNumbers({
+                        ...(dependencies.caseLawDb === undefined
+                          ? {}
+                          : { caseLawDb: dependencies.caseLawDb }),
+                        decisionIds,
+                      }),
+                  }),
                   resolveAssistantTextRefs:
                     refRegistry.resolveAssistantTextRefs,
                   resolveAssistantToolInputRefs: ({ input, toolName }) =>

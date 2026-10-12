@@ -139,6 +139,7 @@ export {
 export type { ChatEditApplyMode, DocxEditRepresentation } from "./chat-edit";
 export {
   CHAT_DECISION_PASSAGE_HREF_PREFIX,
+  chatDecisionPassagesIn,
   parseChatDecisionPassageHref,
   stampChatDecisionPassageHrefs,
   toChatDecisionPassageHref,

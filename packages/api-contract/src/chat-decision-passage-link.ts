@@ -139,6 +139,16 @@ export const parseChatDecisionPassageHref = (
   };
 };
 
+/** Every well-formed passage citation in a text, in the order written. */
+export const chatDecisionPassagesIn = (
+  text: string,
+): ChatDecisionPassageTarget[] =>
+  text.includes(CHAT_DECISION_PASSAGE_HREF_PREFIX)
+    ? Array.from(text.matchAll(HREF_IN_TEXT_REGEX), ([candidate]) =>
+        parseChatDecisionPassageHref(candidate),
+      ).filter((target) => target !== null)
+    : [];
+
 /**
  * Every passage citation in a text, restamped with the number the server
  * resolves for its block.
