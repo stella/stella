@@ -13,7 +13,7 @@
     "build:mcp-apps": "bun scripts/build-mcp-apps.ts",
     "gen:chat-saved-state": "bun scripts/gen-chat-saved-state.ts",
     "gen:chat-transcripts": "bun scripts/gen-chat-transcripts.ts",
-    "gen:web-api-types": "bun scripts/generate-web-api-types.ts",
+    "gen:web-api-types": "bun --cwd=../.. node_modules/turbo/bin/turbo run generate:api-types --filter=@stll/web --",
     "build:analyze": "bun run generate:capability-runtime && bun build --target bun --define 'process.env.NODE_ENV=\"production\"' --outdir .cache/server-build --entry-naming=server.js --metafile-md=.cache/server-metafile.md src/server.ts",
     "test": "bun --cwd=../../packages/cli run codegen:runtime && bun run generate:capability-runtime && bun scripts/run-tests.ts",
     "action-cost:report": "bun src/scripts/action-cost-report.ts",
@@ -30,6 +30,7 @@
     "clean": "git clean -xdf .cache .turbo node_modules",
     "typecheck": "bun --cwd=../../packages/cli run codegen:runtime && bun run generate:capability-runtime && bun check --no-pretty --all --project=tsconfig.json && bun check --no-pretty --all --project=tsconfig.contracts.json && bun check --no-pretty --all --project=tsconfig.scripts.json && bun check --no-pretty --all --project=tsconfig.mcp-apps.json && bun check --no-pretty --all --project=tsconfig.visual-sandbox.json",
     "lint": "bun --cwd=../../packages/cli run codegen:runtime && bun run generate:capability-runtime && cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check apps/api",
+    "lint:profile": "bun run lint --debug timings --format=default",
     "lint:fix": "bun --cwd=../../packages/cli run codegen:runtime && bun run generate:capability-runtime && cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/api",
     "format": "bun ../../scripts/run-oxfmt.ts .",
     "ocr:fetch-models": "bun src/scripts/fetch-ocr-models.ts",
@@ -72,7 +73,8 @@
     "corpus:generation": "bun run --env-file=.env src/scripts/corpus-generation.ts",
     "document-processing-worker": "bun src/scripts/document-processing-worker.ts",
     "dev:errors": "tail -F .dev-logs/errors.jsonl",
-    "generate:capability-runtime": "bun scripts/generate-capability-runtime.ts"
+    "generate:capability-runtime": "bun scripts/generate-capability-runtime.ts",
+    "test:perf": "bun scripts/run-perf-tests.ts"
   },
   "dependencies": {
     "@aws-sdk/client-cloudwatch": "^3.1145.0",
@@ -247,6 +249,12 @@
       "gateValue": "true",
       "runner": "scripts/run-valkey-tests.ts",
       "testFileGlob": "src/**/*.test.{ts,tsx}"
+    },
+    "test:perf": {
+      "gate": "STELLA_RUN_QUERY_PERF_TESTS",
+      "gateValue": "true",
+      "runner": "scripts/run-perf-tests.ts",
+      "testFileGlob": "src/tests/query-perf/**/*.test.ts"
     }
   },
   "crawlPosture": "unserved"

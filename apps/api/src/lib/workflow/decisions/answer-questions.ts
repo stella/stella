@@ -92,7 +92,7 @@ export type AnswerQuestion = {
   content: SystemOneAnswerableContent;
 };
 
-export type AnswerOutcome =
+type DecodedAnswerOutcome =
   | {
       state: "answered";
       answer: Exclude<Answer, null>;
@@ -110,10 +110,15 @@ export type AnswerOutcome =
       rationale: string;
     }
   | {
-      /** No answer to write: no decision model, under the floor, or a failed call. */
+      /** The shared generative fallback still could not settle the answer. */
       state: "undecided";
       reason: DecisionUndecidedReason;
     };
+
+export type AnswerOutcome = DecodedAnswerOutcome & {
+  source: "decision-model" | "generative";
+  model: string | null;
+};
 
 type Candidate = {
   key: string;
@@ -126,7 +131,7 @@ type Candidate = {
 type Plan =
   | { kind: "single-select"; valueKey: string; whereKey: string | null }
   | { kind: "multi-select"; optionKeys: string[]; whereKey: string | null }
-  | { kind: "candidates"; valueKey: string | null; candidates: Candidate[] };
+  | { kind: "candidates"; valueKey: string; candidates: Candidate[] };
 
 type PlannedQuestion = {
   plan: Plan;
@@ -576,17 +581,17 @@ const sourceChosen = (
   return answer.choice;
 };
 
-const notStated = (confidence: number): AnswerOutcome => ({
+const notStated = (confidence: number): DecodedAnswerOutcome => ({
   state: "not_stated",
   confidence,
-  rationale: `Jev found no answer in the text (${percent(confidence)} confidence).`,
+  rationale: `Decision model found no answer in the text (${percent(confidence)} confidence).`,
 });
 
 const decodeSingleSelect = (
   answer: ChoiceAnswer,
   content: SelectContent,
   sourceId: string | null,
-): AnswerOutcome => {
+): DecodedAnswerOutcome => {
   const label = (key: string): string => {
     if (key === NOT_STATED) {
       return "not stated";
@@ -609,19 +614,19 @@ const decodeSingleSelect = (
     probability,
     confidence: answer.confidence,
     sourceId,
-    rationale: `Jev chose ${label(answer.choice)} at ${percent(probability)}${runnerUp(answer, label)}.`,
+    rationale: `Decision model chose ${label(answer.choice)} at ${percent(probability)}${runnerUp(answer, label)}.`,
   };
 };
 
 /**
  * Every option is its own decision, so one option under the floor leaves the
  * whole cell undecided: a list the model was unsure about anywhere is not a
- * list, and the generative model answers the column instead.
+ * list. Remaining uncertainty is terminal after the shared fallback.
  */
 const decodeMultiSelect = (
   optionAnswers: readonly (readonly [string, NoulAnswer])[],
   sourceId: string | null,
-): AnswerOutcome => {
+): Exclude<DecodedAnswerOutcome, { state: "undecided" }> => {
   const chosen = optionAnswers.filter(([, answer]) => answer.noul > NOUL_YES);
   const confidence =
     optionAnswers.length === 0
@@ -631,7 +636,11 @@ const decodeMultiSelect = (
           0,
         ) / optionAnswers.length;
   if (chosen.length === 0) {
-    return notStated(confidence);
+    return {
+      state: "not_stated",
+      confidence,
+      rationale: `None of the options is stated in the sources (${percent(confidence)} confidence).`,
+    };
   }
   const listed = chosen
     .map(([value, answer]) => `"${value}" (${percent(answer.noul)})`)
@@ -642,14 +651,14 @@ const decodeMultiSelect = (
     probability: Math.min(...chosen.map(([, answer]) => answer.noul)),
     confidence,
     sourceId,
-    rationale: `Jev marked ${listed}.`,
+    rationale: `Selected ${listed}.`,
   };
 };
 
 const decodeCandidates = (
   answer: ChoiceAnswer,
   candidates: readonly Candidate[],
-): AnswerOutcome => {
+): DecodedAnswerOutcome => {
   const byKey = new Map(
     candidates.map((candidate) => [candidate.key, candidate]),
   );
@@ -672,7 +681,7 @@ const decodeCandidates = (
     probability,
     confidence: answer.confidence,
     sourceId: candidate.sourceId,
-    rationale: `Jev chose "${candidate.verbatim}" (read as ${reading}) in ${candidate.sourceId} at ${percent(probability)}${runnerUp(answer, label)}.`,
+    rationale: `Decision model chose "${candidate.verbatim}" (read as ${reading}) in ${candidate.sourceId} at ${percent(probability)}${runnerUp(answer, label)}.`,
   };
 };
 
@@ -683,9 +692,39 @@ type DecodeSystemOneAnswersOptions = {
   decisions: PlanDecisions;
 };
 
-const undecided = (reason: DecisionUndecidedReason): AnswerOutcome => ({
+const undecided = (
+  decision: Extract<PlanDecisions[string], { state: "undecided" }>,
+): AnswerOutcome => ({
   state: "undecided",
-  reason,
+  reason: decision.reason,
+  source: decision.source,
+  model: decision.model,
+});
+
+type WithDecisionSourceOptions = {
+  outcome: DecodedAnswerOutcome;
+  decision: PlanDecisions[string];
+};
+
+const withDecisionSource = ({
+  outcome,
+  decision,
+}: WithDecisionSourceOptions): AnswerOutcome => ({
+  ...outcome,
+  ...(outcome.state === "undecided"
+    ? {}
+    : {
+        rationale:
+          decision.state === "decided" && decision.evidence !== null
+            ? decision.evidence
+            : outcome.rationale.replaceAll("Decision model", () =>
+                decision.source === "generative"
+                  ? "Generative model"
+                  : "Decision model",
+              ),
+      }),
+  source: decision.source,
+  model: decision.model,
 });
 
 /**
@@ -710,75 +749,104 @@ export const decodeSystemOneAnswers = ({
           decision === undefined ||
           question.content.type !== "single-select"
         ) {
-          break;
+          panic("Planned answer does not match its decision or column");
         }
         if (decision.state === "undecided") {
-          outcomes.set(question.id, undecided(decision.reason));
+          outcomes.set(question.id, undecided(decision));
           break;
         }
         if (decision.answer.type !== "choice") {
-          break;
+          panic("Planned select must return a choice decision");
         }
         outcomes.set(
           question.id,
-          decodeSingleSelect(
-            decision.answer,
-            question.content,
-            sourceChosen(decisions, entry.whereKey),
-          ),
+          withDecisionSource({
+            outcome: decodeSingleSelect(
+              decision.answer,
+              question.content,
+              sourceChosen(decisions, entry.whereKey),
+            ),
+            decision,
+          }),
         );
         break;
       }
       case "multi-select": {
         if (question.content.type !== "multi-select") {
-          break;
+          panic("Planned multi-select must retain its column type");
         }
         const { options } = question.content;
         const optionAnswers: (readonly [string, NoulAnswer])[] = [];
-        let unsure: DecisionUndecidedReason | null = null;
+        const evidence: string[] = [];
+        let unsure: Extract<
+          PlanDecisions[string],
+          { state: "undecided" }
+        > | null = null;
+        let answeringDecision: PlanDecisions[string] | undefined;
         for (const [index, key] of entry.optionKeys.entries()) {
           const decision = decisions[key];
           const option = options[index];
           if (decision === undefined || option === undefined) {
-            continue;
+            panic("Planned option is missing its decision or column value");
           }
           if (decision.state === "undecided") {
-            unsure ??= decision.reason;
+            unsure ??= decision;
             continue;
           }
-          if (decision.answer.type === "noul") {
-            optionAnswers.push([option.value, decision.answer]);
+          if (
+            answeringDecision === undefined ||
+            decision.source === "generative"
+          ) {
+            answeringDecision = decision;
+          }
+          if (decision.answer.type !== "noul") {
+            panic("Planned option must return a noul decision");
+          }
+          optionAnswers.push([option.value, decision.answer]);
+          if (decision.evidence !== null) {
+            evidence.push(`"${option.value}": ${decision.evidence}`);
           }
         }
-        outcomes.set(
-          question.id,
-          unsure === null
-            ? decodeMultiSelect(
-                optionAnswers,
-                sourceChosen(decisions, entry.whereKey),
-              )
-            : undecided(unsure),
-        );
+        if (unsure !== null) {
+          outcomes.set(question.id, undecided(unsure));
+          break;
+        }
+        if (answeringDecision !== undefined) {
+          const aggregate = decodeMultiSelect(
+            optionAnswers,
+            sourceChosen(decisions, entry.whereKey),
+          );
+          outcomes.set(question.id, {
+            ...aggregate,
+            rationale:
+              evidence.length === 0
+                ? aggregate.rationale
+                : `${aggregate.rationale} ${evidence.join(" ")}`,
+            source: answeringDecision.source,
+            model: answeringDecision.model,
+          });
+        }
         break;
       }
       case "candidates": {
-        if (entry.valueKey === null) {
-          break;
-        }
         const decision = decisions[entry.valueKey];
         if (decision === undefined) {
-          break;
+          panic("Planned answer does not match its decision or column");
         }
         if (decision.state === "undecided") {
-          outcomes.set(question.id, undecided(decision.reason));
+          outcomes.set(question.id, undecided(decision));
           break;
         }
-        if (decision.answer.type === "choice") {
-          outcomes.set(
-            question.id,
-            decodeCandidates(decision.answer, entry.candidates),
-          );
+        if (decision.answer.type !== "choice") {
+          panic("Planned candidate must return a choice decision");
         }
+        outcomes.set(
+          question.id,
+          withDecisionSource({
+            outcome: decodeCandidates(decision.answer, entry.candidates),
+            decision,
+          }),
+        );
         break;
       }
       default: {

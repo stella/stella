@@ -47,3 +47,23 @@ test("keeps punctuation and noncredential provider identifiers", () => {
     "Project [redacted-secret] denied",
   );
 });
+
+test("redacts masked key fragments a provider echoes and credentials in URLs", () => {
+  expect(
+    sanitizeCredentialText(
+      "Incorrect API key provided: sk-proj-****abcd. Also sk-ab…wxyz.",
+    ).text,
+  ).toBe(
+    "Incorrect API key provided: [redacted-secret]. Also [redacted-secret].",
+  );
+  expect(
+    sanitizeCredentialText(
+      "Fetching https://fixture-user:fixture-pass@provider.example.test/v1 failed",
+    ).text,
+  ).toBe("Fetching https://[redacted-secret]@provider.example.test/v1 failed");
+  expect(
+    sanitizeCredentialText(
+      "A task-force reviewed https://provider.example.test",
+    ).text,
+  ).toBe("A task-force reviewed https://provider.example.test");
+});

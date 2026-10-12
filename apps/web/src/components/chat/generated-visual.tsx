@@ -95,10 +95,9 @@ const GeneratedVisualFrame = ({
           }),
     [page.data, now],
   );
-  const newNonce = useLatestCallback(() => crypto.randomUUID());
   const shell = useMemo(
-    () => createVisualShellSession({ url: sandboxUrl.href, newNonce }),
-    [sandboxUrl.href, newNonce],
+    () => createVisualShellSession({ url: sandboxUrl.href }),
+    [sandboxUrl.href],
   );
   const attachFrame = useLatestCallback((element: HTMLIFrameElement | null) => {
     frame.current = element;
