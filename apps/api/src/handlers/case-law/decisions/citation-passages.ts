@@ -34,13 +34,17 @@ import {
 } from "@/api/db/schema";
 import type { DecisionCitationRow } from "@/api/handlers/case-law/decisions/citation-graph";
 import { listDecisionCitationsHandler } from "@/api/handlers/case-law/decisions/citation-graph";
-import type { DecisionTextCompletionSnapshot } from "@/api/handlers/case-law/decisions/text-completion";
+import type {
+  DecisionTextCompletionReadError,
+  DecisionTextCompletionSnapshot,
+} from "@/api/handlers/case-law/decisions/text-completion";
 import {
   checkDecisionTextCompletion,
   decisionTextCompletionColumns,
   decisionTextCompletionGate,
   decisionTextCompletionOf,
   readDecisionTextCompletions,
+  readDecisionTextCompletionSafely,
 } from "@/api/handlers/case-law/decisions/text-completion";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -336,7 +340,7 @@ const CITATION_TEXT_FAILURE_STAGE = {
 } as const;
 
 const captureCitationTextGateFailure = (
-  error: CitationTextGateError,
+  error: CitationTextGateError | DecisionTextCompletionReadError,
   stage: keyof typeof CITATION_TEXT_FAILURE_STAGE,
 ) => captureError(error, { step: CITATION_TEXT_FAILURE_STAGE[stage] });
 
@@ -344,7 +348,10 @@ export type CitationDecisionText =
   | { type: "eligible"; ast: DocumentAst; sections: DecisionSection[] | null }
   | { type: "withheld"; reason: DecisionTextWithheldReason }
   | { type: "absent-ast" }
-  | { type: "gate-failed"; error: CitationTextGateError };
+  | {
+      type: "gate-failed";
+      error: CitationTextGateError | DecisionTextCompletionReadError;
+    };
 
 type ReadCitationDecisionTextOptions = {
   pointer: PassageSourcePointer;
@@ -505,21 +512,14 @@ export const readDecisionTextByDecision = async ({
       textByDecision.set(String(entry.id), entry.text);
     }
   }
-  const currentCompletions = await Result.tryPromise({
-    try: async () =>
+  const currentCompletions = await readDecisionTextCompletionSafely(
+    async () =>
       await readCurrent(
         caseLawDb,
         pointers.map(({ id }) => id),
       ),
-    catch: (cause) =>
-      new CitationTextGateError({
-        message: "Citation decision text completion read failed",
-        reason: "gate_failed",
-        cause,
-      }),
-  });
+  );
   if (Result.isError(currentCompletions)) {
-    captureCitationTextGateFailure(currentCompletions.error, "completion");
     for (const pointer of pointers) {
       textByDecision.set(String(pointer.id), {
         type: "gate-failed",

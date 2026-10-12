@@ -1,3 +1,4 @@
+import { Result, TaggedError } from "better-result";
 import { eq, inArray, sql } from "drizzle-orm";
 
 import type {
@@ -6,6 +7,7 @@ import type {
 } from "@stll/api-contract/case-law-text-field";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
@@ -13,6 +15,27 @@ import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistributi
 import { citationTextRevisionFingerprintSql } from "@/api/lib/case-law/text-revision";
 import { decisionTextWithheldReason } from "@/api/lib/legal-search/corpus-source";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
+
+export class DecisionTextCompletionReadError extends TaggedError(
+  "DecisionTextCompletionReadError",
+)<{ message: string; reason: "gate_failed"; cause: unknown }> {}
+
+/** Completion I/O failures remove text while retaining the prepared metadata. */
+export const readDecisionTextCompletionSafely = <T>(
+  readCurrent: () => Promise<T>,
+) =>
+  Result.tryPromise({
+    try: readCurrent,
+    catch: (cause) => {
+      const error = new DecisionTextCompletionReadError({
+        message: "Decision text completion read failed",
+        reason: "gate_failed",
+        cause,
+      });
+      captureError(error, { step: "case_law.decision_text.completion_read" });
+      return error;
+    },
+  });
 
 type DecisionTextCompletionInput = {
   published: boolean;

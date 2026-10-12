@@ -29,6 +29,7 @@ import {
   checkDecisionTextCompletion,
   decisionTextCompletionReasons,
   readDecisionTextCompletion,
+  readDecisionTextCompletionSafely,
 } from "@/api/handlers/case-law/decisions/text-completion";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -268,13 +269,18 @@ export const hydrateDeferredDocument = async ({
     textEligibilityFingerprint: prepared.expectedFingerprint,
     textRevisionFingerprint: prepared.textRevisionFingerprint,
   });
-  const current = await caseLawDb(
-    async (tx) => await readDecisionTextCompletion(tx, prepared.read.id),
+  const current = await readDecisionTextCompletionSafely(
+    async () =>
+      await caseLawDb(
+        async (tx) => await readDecisionTextCompletion(tx, prepared.read.id),
+      ),
   );
-  const completion = checkDecisionTextCompletion(
-    prepared.expectedFingerprint,
-    current,
-  );
+  const currentSnapshot = current.isOk() ? current.value : undefined;
+  const completion = current.match({
+    ok: (snapshot) =>
+      checkDecisionTextCompletion(prepared.expectedFingerprint, snapshot),
+    err: (error) => ({ type: "incomplete", reason: error.reason }) as const,
+  });
   if (completion.type === "eligible") {
     return hydrated;
   }
@@ -300,8 +306,8 @@ export const hydrateDeferredDocument = async ({
     source: {
       ...prepared.read.source,
       allowsDerivedAi:
-        current?.textWithheldReason === null &&
-        current.textIncompleteReason === null,
+        currentSnapshot?.textWithheldReason === null &&
+        currentSnapshot.textIncompleteReason === null,
     },
     documentPending: false,
     documentUnavailable: true,
