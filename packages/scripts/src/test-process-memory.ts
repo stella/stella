@@ -98,7 +98,7 @@ export const parseWindowsProcessTree = (rootPid: number, output: string) => {
   return Result.ok(sample);
 };
 
-const sampleWindowsProcessTree = (rootPid: number, signal: AbortSignal) =>
+const sampleWindowsProcessTree = async (rootPid: number, signal: AbortSignal) =>
   Result.tryPromise({
     try: async () => {
       // Ancestry uses metadata only. Working sets are queried only for owned PIDs.
@@ -429,11 +429,11 @@ export const watchTestProcessMemory = ({
   const timer = setInterval(tick, intervalMs);
   tick();
   return {
-    stop: () => {
+    stop: async () => {
       stopped = true;
       clearInterval(timer);
       cancellation.abort();
-      return pendingSample;
+      await pendingSample;
     },
     failure: () => failure,
     peakBytes: () => peakBytes,

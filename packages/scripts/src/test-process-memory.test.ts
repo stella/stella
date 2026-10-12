@@ -35,7 +35,7 @@ test("asynchronous tree queries do not overlap, enforce readable sums, and abort
     | undefined;
   let observedSignal: AbortSignal | undefined;
   const readBytes = Object.assign(() => Result.ok(0), {
-    sampleTree: (_pid: number, signal: AbortSignal) => {
+    sampleTree: async (_pid: number, signal: AbortSignal) => {
       queries += 1;
       observedSignal = signal;
       return new Promise<ReturnType<typeof parseWindowsProcessTree>>(
@@ -82,7 +82,7 @@ test("stopping a pending tree query aborts and joins it without measuring unknow
   let cancelled = false;
   const failures: string[] = [];
   const readBytes = Object.assign(() => Result.ok(0), {
-    sampleTree: (_pid: number, signal: AbortSignal) => {
+    sampleTree: async (_pid: number, signal: AbortSignal) => {
       queries += 1;
       return new Promise<ReturnType<typeof parseWindowsProcessTree>>(
         (resolve) => {

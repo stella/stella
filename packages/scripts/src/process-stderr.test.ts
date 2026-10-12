@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { Writable } from "node:stream";
 
-import { forwardTestStderr } from "./test-process-stderr";
+import { forwardTestStderr } from "./process-stderr";
 
 test("stderr forwarding waits for a slow destination before consuming the next chunk", async () => {
   const writes: string[] = [];
@@ -82,7 +82,7 @@ test("an inherited stderr pipe is cancelled after the exited leader's drain budg
 test("a never-settling underlying cancellation cannot extend the post-exit deadline", async () => {
   let cancelled = false;
   const stderr = new ReadableStream<Uint8Array>({
-    cancel: () => {
+    cancel: async () => {
       cancelled = true;
       return new Promise<undefined>(() => {});
     },

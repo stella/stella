@@ -10,10 +10,11 @@ class TestStderrError extends TaggedError("TestStderrError")<{
 }> {}
 
 type ForwardTestStderrOptions = {
-  child: Pick<
-    Bun.Subprocess<"ignore", "ignore", "pipe">,
-    "pid" | "stderr" | "exited"
-  >;
+  child: {
+    pid: number;
+    stderr: ReadableStream<Uint8Array>;
+    exited: Promise<number>;
+  };
   destination: Writable;
   onChunk: (chunk: Uint8Array) => void;
   onWarning: (message: string) => void;
@@ -31,7 +32,7 @@ export const forwardTestStderr = async ({
   const cancellation = new AbortController();
   let timeoutError: TestStderrError | undefined;
   let cleanupDeadline: number | undefined;
-  const cancelReader = () =>
+  const cancelReader = async () =>
     Result.tryPromise({
       try: async () => {
         await reader.cancel();
