@@ -6,7 +6,10 @@ import type { SafeId } from "@stll/api-contract/safe-id";
 import { courtParagraphNumbersByAnchor } from "@stll/legal-ast/court-paragraph-number";
 import type { Block } from "@stll/legal-ast/document-ast";
 
-import { COURT_PARAGRAPH_NUMBER_DECISIONS_MAX } from "@/api/lib/case-law/court-paragraph-numbers";
+import {
+  COURT_PARAGRAPH_NUMBER_DECISIONS_MAX,
+  loadCourtParagraphNumbers,
+} from "@/api/lib/case-law/court-paragraph-numbers";
 import type { CourtParagraphNumbersByDecision } from "@/api/lib/case-law/court-paragraph-numbers";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -78,7 +81,7 @@ export const DECISION_PASSAGE_TURN_DECISIONS_MAX = 32;
  * The stream waits on a lookup before it shows the text that needs it, so a
  * slow corpus may cost a citation its number but never stall the answer.
  */
-export const DECISION_PASSAGE_LOOKUP_TIMEOUT_MS = 1500;
+const DECISION_PASSAGE_LOOKUP_TIMEOUT_MS = 1500;
 
 class DecisionPassageLookupTimeoutError extends Error {
   override name = "DecisionPassageLookupTimeoutError";
@@ -163,6 +166,24 @@ export const createDecisionPassageStamper = ({
       ),
   };
 };
+
+/**
+ * A chat turn's stamper: the open decision's numbers are known; any other
+ * decision the answer cites is resolved once, in a batch, through the public
+ * corpus gate.
+ */
+export const createTurnDecisionPassageStamper = ({
+  caseLawDb,
+  known,
+}: {
+  caseLawDb: Parameters<typeof loadCourtParagraphNumbers>[0]["caseLawDb"];
+  known: DecisionPassageNumbers;
+}): DecisionPassageStamper =>
+  createDecisionPassageStamper({
+    known,
+    load: async (decisionIds) =>
+      await loadCourtParagraphNumbers({ caseLawDb, decisionIds }),
+  });
 
 /** A stamper that resolves nothing beyond what it is given. */
 export const knownDecisionPassageStamper = (
