@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -108,6 +109,7 @@ const continuationOutcome = async ({
       role: "assistant",
       parts: [
         {
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: "tool-call",
           id: HISTORICAL_CALL_ID,
           name: historicalToolName,
@@ -123,6 +125,7 @@ const continuationOutcome = async ({
           state: "complete",
         },
         {
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: "tool-call",
           id: CALL_ID,
           name: TOOL_NAME,
@@ -139,6 +142,7 @@ const continuationOutcome = async ({
       role: "assistant",
       parts: [
         {
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: "tool-call",
           id: CALL_ID,
           name: TOOL_NAME,

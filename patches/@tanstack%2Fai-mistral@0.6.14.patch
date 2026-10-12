@@ -15,10 +15,12 @@
    of reading an unhandled one as "stop". Remove when upstream exposes the
    raw reason.
 
+
 diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
+index 0ff9bc8751c8a07900ff09b09a3f76a2aace203d..a6a9fc9bef57039f77daa911035b8570bcd9c2c2 100644
 --- a/dist/esm/adapters/text.js
 +++ b/dist/esm/adapters/text.js
-@@ -4,6 +4,7 @@
+@@ -4,6 +4,7 @@ import { createMistralClient, generateId, getMistralApiKeyFromEnv } from "../uti
  import { createToolInputNormalizer } from "../utils/tool-input-normalizer.js";
  import { isFileSource, unsupportedFileSourceError } from "@tanstack/ai";
  import { BaseTextAdapter } from "@tanstack/ai/adapters";
@@ -26,7 +28,7 @@ diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
  import { undoNullWidening } from "@tanstack/ai-utils";
  //#region src/adapters/text.ts
  /** Cast an event object to StreamChunk. Adapters construct events with string
-@@ -49,7 +50,7 @@
+@@ -49,7 +50,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
  			hasEmittedRunStarted: false
  		};
  		try {
@@ -35,7 +37,7 @@ diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
  			yield* this.processMistralStreamChunks(stream, options, aguiState);
  		} catch (error) {
  			const err = error;
-@@ -63,6 +64,7 @@
+@@ -63,6 +64,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
  					timestamp
  				});
  			}
@@ -43,7 +45,7 @@ diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
  			yield asChunk({
  				type: "RUN_ERROR",
  				runId: aguiState.runId,
-@@ -70,6 +72,7 @@
+@@ -70,6 +72,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
  				timestamp,
  				message: err.message || "Unknown error",
  				code: err.code,
@@ -51,7 +53,7 @@ diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
  				error: {
  					message: err.message || "Unknown error",
  					code: err.code
-@@ -95,7 +98,7 @@
+@@ -95,7 +98,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
  					strict
  				}
  			}
@@ -60,7 +62,7 @@ diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
  		const rawText = response.choices[0]?.message?.content;
  		const textContent = typeof rawText === "string" ? rawText : "";
  		let parsed;
-@@ -311,7 +314,8 @@
+@@ -311,7 +314,8 @@ var MistralTextAdapter = class extends BaseTextAdapter {
  							completionTokens: usage.completion_tokens || 0,
  							totalTokens: usage.total_tokens || 0
  						} : void 0,
@@ -70,7 +72,7 @@ diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
  					});
  				}
  			}
-@@ -354,14 +358,18 @@
+@@ -354,14 +358,18 @@ var MistralTextAdapter = class extends BaseTextAdapter {
  					});
  				}
  				hasEmittedRunFinished = true;
@@ -93,7 +95,7 @@ diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
  				});
  			}
  		} catch (error) {
-@@ -415,7 +423,7 @@
+@@ -415,7 +423,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
  	* parses the SSE stream manually, bypassing the SDK's Zod validation which
  	* rejects streaming tool call chunks that omit `name` in argument deltas.
  	*/
@@ -102,7 +104,7 @@ diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
  		const serverURL = (config.baseURL ?? config.serverURL ?? "https://api.mistral.ai").replace(/\/+$/, "").replace(/\/v1$/, "");
  		const url = config.resolveRequestUrl?.(true) ?? `${serverURL}/v1/chat/completions`;
  		const body = this.toWireBody(params);
-@@ -427,11 +435,19 @@
+@@ -427,11 +435,19 @@ var MistralTextAdapter = class extends BaseTextAdapter {
  		const response = await fetch(url, {
  			method: "POST",
  			headers,
@@ -124,7 +126,7 @@ diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
  		}
  		if (!response.body) throw new Error("Mistral API returned a response with no body. This may indicate a proxy or runtime that does not support streaming.");
  		const reader = response.body.getReader();
-@@ -453,10 +469,8 @@
+@@ -453,10 +469,8 @@ var MistralTextAdapter = class extends BaseTextAdapter {
  					try {
  						parsed = JSON.parse(data);
  					} catch (e) {

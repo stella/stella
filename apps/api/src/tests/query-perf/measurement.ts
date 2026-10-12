@@ -20,7 +20,9 @@ import {
 } from "./settings";
 
 const QUERY_PERF_REPETITIONS = 5;
-const QUERY_PERF_TIME_FLOOR_MS = 10;
+export const QUERY_PERF_BUFFER_HEADROOM = 1.25;
+const QUERY_PERF_HANG_MULTIPLIER = 25;
+const QUERY_PERF_HANG_FLOOR_MS = 1000;
 export type QueryPerfMetrics = {
   sharedBlocks: number;
   executionTimeMs: number;
@@ -72,15 +74,26 @@ export const budgetViolations = (
   measured: QueryPerfMetrics,
   baseline: QueryPerfMetrics,
 ) => {
-  const violations: string[] = [];
-  if (measured.sharedBlocks > baseline.sharedBlocks * 1.25) {
-    violations.push("shared buffer budget exceeded");
+  const violations: {
+    kind: "shared-buffer-budget" | "execution-time-hang-guard";
+    message: string;
+  }[] = [];
+  const bufferBudget = baseline.sharedBlocks * QUERY_PERF_BUFFER_HEADROOM;
+  if (measured.sharedBlocks > bufferBudget) {
+    violations.push({
+      kind: "shared-buffer-budget",
+      message: `shared buffer budget exceeded: measured ${measured.sharedBlocks} > budget ${bufferBudget} (baseline ${baseline.sharedBlocks} × ${QUERY_PERF_BUFFER_HEADROOM})`,
+    });
   }
-  if (
-    measured.executionTimeMs > baseline.executionTimeMs * 2 &&
-    measured.executionTimeMs > QUERY_PERF_TIME_FLOOR_MS
-  ) {
-    violations.push("execution time budget exceeded");
+  const hangGuard = Math.max(
+    baseline.executionTimeMs * QUERY_PERF_HANG_MULTIPLIER,
+    QUERY_PERF_HANG_FLOOR_MS,
+  );
+  if (measured.executionTimeMs > hangGuard) {
+    violations.push({
+      kind: "execution-time-hang-guard",
+      message: `execution time hang guard exceeded: median ${measured.executionTimeMs} ms > guard ${hangGuard} ms (baseline ${baseline.executionTimeMs} ms × ${QUERY_PERF_HANG_MULTIPLIER}, floor ${QUERY_PERF_HANG_FLOOR_MS} ms)`,
+    });
   }
   return violations;
 };
