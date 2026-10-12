@@ -128,6 +128,11 @@
     "orSignInWithEmail": "ou faça login com e-mail",
     "organizationNamePlaceholder": "Minha organização",
     "password": "Senha",
+    "professionalUse": {
+      "description": "Sua conta foi criada sem que esta declaração fosse exibida para você. Aceite-a para continuar.",
+      "title": "Confirme o uso profissional"
+    },
+    "professionalUseStatement": "Ao criar uma conta, você confirma que usa o stella para fins profissionais e reconhece que o stella é uma ferramenta para profissionais do direito e não substitui a assessoria jurídica.",
     "rateLimitExceeded": "Muitas tentativas. Por favor, tente novamente mais tarde.",
     "resendCode": "Enviar código novamente para <email>{emailAddress}</email>",
     "selectOrganization": "Selecione uma organização",
@@ -1089,6 +1094,9 @@
       "toastDescription": "O chat em página inteira virá com conversas persistidas.",
       "toastTitle": "Visualização completa ainda não disponível"
     },
+    "activity": {
+      "review": "Atualização da revisão"
+    },
     "aiPrompt": "Campo de mensagem de IA",
     "aiThread": "Conversa de IA",
     "analyzingSources": "Analisando fontes",
@@ -1274,6 +1282,9 @@
       "noMatters": "Ainda não há casos",
       "noRecentChats": "Nenhum chat recente",
       "noSkills": "Nenhuma habilidade ainda",
+      "openAllMatters": "Abrir todos os casos",
+      "openChatHistory": "Abrir o histórico de chats",
+      "openSkillsLibrary": "Abrir a biblioteca de habilidades",
       "pinnedMatters": "Casos fixados",
       "recentChats": "Chats recentes",
       "skillEditedBy": "Editado por {name} · {time}",

@@ -49,6 +49,9 @@ export const CHAT_ORACLE = {
   liveEqualsReload: "chat.live.equals-reload",
   /** (d) Every tool call and result appears exactly once, live and reloaded. */
   liveToolPartsOnce: "chat.live.tool-parts-once",
+  /** Subagent snapshots resume with updated messages, while terminal states
+   *  reject later active snapshots. */
+  liveSubagentLifecycle: "chat.live.subagent-lifecycle",
   /** The skills the composer offers in a chat are exactly the ones a send
    *  from that chat runs rather than names unavailable. */
   skillsMenuMatchesSend: "chat.skills.menu-matches-send",

@@ -233,7 +233,13 @@ test("equal lifecycle states retain atomic payloads and advanced tools retain ap
           case "tool-call":
             return { ...part, state: "complete", output: { saved: false } };
           case "structured-output":
-            return { ...part, data: { saved: false } };
+            return {
+              type: "structured-output",
+              status: "complete",
+              raw: part.raw,
+              data: { saved: false },
+            };
+          case "activity":
           case "audio":
           case "document":
           case "image":
@@ -315,4 +321,80 @@ test("native SDK final tool input catches up to equivalent canonical loader key 
   ];
   expect(keepShownRejoinMessages(shown, replayed)).toEqual(replayed);
   client.detach();
+});
+
+test("rejoin retains shown activity payloads until the full snapshot matches", () => {
+  const shown: UIMessage[] = [
+    {
+      id: "answer",
+      role: "assistant",
+      parts: [
+        {
+          type: "activity",
+          activityType: "review",
+          content: { stage: "done" },
+        },
+      ],
+    },
+  ];
+  const stale: UIMessage[] = [
+    {
+      id: "answer",
+      role: "assistant",
+      parts: [
+        {
+          type: "activity",
+          activityType: "review",
+          content: { stage: "started" },
+        },
+      ],
+    },
+  ];
+  expect(keepShownRejoinMessages(shown, stale)).toEqual(shown);
+  const equal = structuredClone(shown);
+  expect(keepShownRejoinMessages(shown, equal)).toBe(equal);
+  const differentType: UIMessage[] = [
+    {
+      id: "answer",
+      role: "assistant",
+      parts: [
+        {
+          type: "activity",
+          activityType: "search",
+          content: { stage: "done" },
+        },
+      ],
+    },
+  ];
+  expect(keepShownRejoinMessages(shown, differentType)).toEqual(shown);
+});
+
+test("standalone activity rows accept the SDK's replacement snapshot", () => {
+  const shown: UIMessage[] = [
+    {
+      id: "progress",
+      role: "activity",
+      parts: [
+        {
+          type: "activity",
+          activityType: "review",
+          content: { stage: "started" },
+        },
+      ],
+    },
+  ];
+  const replacement: UIMessage[] = [
+    {
+      id: "progress",
+      role: "activity",
+      parts: [
+        {
+          type: "activity",
+          activityType: "review",
+          content: { stage: "done" },
+        },
+      ],
+    },
+  ];
+  expect(keepShownRejoinMessages(shown, replacement)).toBe(replacement);
 });

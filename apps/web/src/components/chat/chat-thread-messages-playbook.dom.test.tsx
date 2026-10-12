@@ -60,6 +60,9 @@ test("opens the playbook an approved save wrote", async () => {
             <ChatApprovalContext value={testChatApprovalContextValue}>
               <ChatEditorProvider>
                 <ChatThreadMessages
+                  activitySession={{
+                    reportedUnknownActivityTypes: new Set<string>(),
+                  }}
                   approvalPendingMessageId={null}
                   messages={[
                     {
@@ -121,6 +124,9 @@ test("tells the user when an approved save failed", async () => {
             <ChatApprovalContext value={testChatApprovalContextValue}>
               <ChatEditorProvider>
                 <ChatThreadMessages
+                  activitySession={{
+                    reportedUnknownActivityTypes: new Set<string>(),
+                  }}
                   approvalPendingMessageId={null}
                   messages={[
                     {
