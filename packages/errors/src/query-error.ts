@@ -596,8 +596,7 @@ export const printError = (...values: unknown[]): void => {
 };
 
 /** Project query payload text at string output boundaries. */
-export const sanitizeQueryErrorText = (input: string): string => {
-  const text = input.replace(/sh1_[A-Za-z0-9_-]{43}/gu, "[redacted]");
+export const sanitizeQueryErrorText = (text: string): string => {
   if (/Failed query:/iu.test(text)) {
     return "Database query failed (values redacted)";
   }
