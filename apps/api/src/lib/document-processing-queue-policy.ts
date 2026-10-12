@@ -10,7 +10,6 @@ import { PDF_MIME_TYPE } from "@/api/mime-types";
 export const SEARCH_INDEX_FAILURE_CODE = "search_index_failed";
 export const SEARCHABLE_PDF_FAILURE_CODE = "searchable_pdf_failed";
 export const SEARCH_INDEX_ATTEMPT_TIMEOUT_MS = 30_000;
-export const AUTOMATIC_OCR_MAX_ATTEMPTS = 5;
 
 export type CurrentDocumentSource = {
   content: FieldContent;
@@ -148,19 +147,6 @@ export const isPreservableAutomaticProjection = ({
 export const shouldPreserveCurrentProjection = (
   requestSource: (typeof documentProcessingRuns.$inferSelect)["requestSource"],
 ): boolean => requestSource !== "manual";
-
-export const shouldFailStaleAutomaticOcrRun = ({
-  attemptCount,
-  errorCode,
-  requestSource,
-}: {
-  attemptCount: number;
-  errorCode: string | null;
-  requestSource: (typeof documentProcessingRuns.$inferSelect)["requestSource"];
-}): boolean =>
-  requestSource !== "manual" &&
-  errorCode !== SEARCH_INDEX_FAILURE_CODE &&
-  attemptCount >= AUTOMATIC_OCR_MAX_ATTEMPTS;
 
 export const classifyOcrProjectionSource = ({
   run,
