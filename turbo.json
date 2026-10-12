@@ -282,6 +282,9 @@
       ],
       "outputs": []
     },
+    "@stll/portable-path#typecheck": {
+      "dependsOn": ["transit", "^generate:capability-runtime"]
+    },
     "//#typecheck:repo": {
       "cache": true,
       "dependsOn": [
