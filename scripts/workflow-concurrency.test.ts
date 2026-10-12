@@ -257,9 +257,6 @@ describe("pull request workflow concurrency", () => {
     if (file === "ci.yml") {
       return ["workflow_dispatch", "push"];
     }
-    if (file === "autofix.yml") {
-      return ["workflow_dispatch"];
-    }
     return [];
   };
 

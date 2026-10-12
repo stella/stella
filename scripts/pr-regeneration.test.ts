@@ -112,6 +112,10 @@ const fixture = () => {
 };
 
 describe("generator output boundary", () => {
+  test("registers only the supported generator IDs", () => {
+    expect(Object.keys(PR_GENERATORS)).toEqual(["query-plan-contracts"]);
+  });
+
   test("required services are checked against the actual job", () => {
     expect(() => assertRequiredServices([], null)).not.toThrow();
     expect(() =>
@@ -122,9 +126,11 @@ describe("generator output boundary", () => {
     );
   });
   test("unknown IDs cannot select a command", () => {
-    expect(() => selectedGenerator("unregistered")).toThrow(
-      "Unknown regeneration generator",
-    );
+    for (const id of ["unregistered", "api-typecheck-projects"]) {
+      expect(() => selectedGenerator(id)).toThrow(
+        "Unknown regeneration generator",
+      );
+    }
   });
   for (const [id, definition] of Object.entries(PR_GENERATORS)) {
     test(`${id} admits exactly its registered output paths`, () => {
@@ -239,11 +245,27 @@ test("manual regeneration uses the existing App only after target and output che
     `\${{ steps.target.outputs.head }}`,
   );
   expect(checkout).toHaveProperty("with.persist-credentials", false);
+  const tooling = workflowStepByName(steps, "Setup regeneration tooling");
+  expect(tooling).toHaveProperty(
+    "with.save",
+    `\${{ github.ref == 'refs/heads/main' }}`,
+  );
+  const run = workflowStepByName(steps, "Run owning generator");
+  expect(run).toHaveProperty(
+    "env.JOB_SERVICES",
+    `\${{ toJSON(job.services) }}`,
+  );
+  expect(run).not.toHaveProperty("env.STELLA_LOCAL_AUTOFIX");
   expect(push).toHaveProperty(
     "uses",
     "autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a",
   );
-  expect(source).toContain("format('pr-{0}', inputs.pr)");
+  expect(source).toContain(
+    "format('dispatch-pr-{0}-run-{1}', inputs.pr, github.run_id)",
+  );
+  expect(source).toContain(
+    `cancel-in-progress: \${{ github.event_name == 'pull_request' }}`,
+  );
   expect(source).not.toContain("contents: write");
   expect(source).not.toContain("secrets.");
   const raw = workflow;
@@ -268,11 +290,11 @@ test("manual regeneration uses the existing App only after target and output che
   }
   const services =
     "services" in job &&
-    typeof job.services === "object" &&
-    job.services !== null
-      ? Object.keys(job.services)
+    typeof job["services"] === "object" &&
+    job["services"] !== null
+      ? Object.keys(job["services"])
       : [];
   for (const generator of Object.values(PR_GENERATORS)) {
-    expect(generator.services).toEqual(services);
+    expect(services).toEqual([...generator.services]);
   }
 });

@@ -21,8 +21,8 @@ on:
     types: [opened, synchronize, reopened]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number || github.ref) || github.event_name == 'workflow_dispatch' && format('pr-{0}', inputs.pr) || format('run-{0}', github.run_id) }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number || github.ref) || github.event_name == 'workflow_dispatch' && format('dispatch-pr-{0}-run-{1}', inputs.pr, github.run_id) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -38,7 +38,7 @@ jobs:
       pull-requests: read
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      JOB_SERVICES: ${{ toJSON(job.services) }}
+      STELLA_LOCAL_AUTOFIX: "true"
     steps:
       - name: Checkout regeneration controls
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -55,7 +55,7 @@ jobs:
       - name: Setup regeneration tooling
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
-          save: false
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: .regeneration-controls/package.json
 
       - name: Preserve regeneration controls
@@ -102,7 +102,7 @@ jobs:
         env:
           GENERATOR_ID: ${{ inputs.generator }}
           CONTROL_HASH: ${{ steps.controls.outputs.hash }}
-          STELLA_LOCAL_AUTOFIX: "true"
+          JOB_SERVICES: ${{ toJSON(job.services) }}
         run: |
           set -euo pipefail
           echo "$CONTROL_HASH  $RUNNER_TEMP/pr-regeneration.ts" | sha256sum --check

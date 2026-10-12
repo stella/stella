@@ -8,23 +8,9 @@ type GeneratorDefinition = {
   services: readonly string[];
   prerequisites: readonly string[];
   outputs: readonly string[];
-  owner: { type: "generator"; id: string } | { type: "test" };
 };
 
 export const PR_GENERATORS = {
-  "api-typecheck-projects": {
-    command: ["bun", "packages/scripts/src/api-typecheck-regenerate.ts"],
-    environment: {},
-    services: [],
-    prerequisites: [],
-    outputs: [
-      "apps/api/tsconfig.declarations.json",
-      "apps/api/tsconfig.src.json",
-      "apps/api/tsconfig.tests.json",
-      "turbo.json",
-    ],
-    owner: { type: "generator", id: "api-typecheck-projects" },
-  },
   "query-plan-contracts": {
     command: [
       "bun",
@@ -42,7 +28,6 @@ export const PR_GENERATORS = {
       "apps/api/src/tests/query-plans/contracts.json",
       "apps/api/src/tests/query-plans/workspace-rls-plan.fixture.json",
     ],
-    owner: { type: "test" },
   },
 } as const satisfies Record<string, GeneratorDefinition>;
 
@@ -85,44 +70,44 @@ export const regenerationTarget = ({
   }
   if (
     !isRecord(pull) ||
-    pull.number !== Number(number) ||
-    pull.state !== "open" ||
-    !isRecord(pull.head) ||
-    !isRecord(pull.head.repo) ||
-    !isRecord(pull.base) ||
-    !isRecord(pull.base.repo)
+    pull["number"] !== Number(number) ||
+    pull["state"] !== "open" ||
+    !isRecord(pull["head"]) ||
+    !isRecord(pull["head"]["repo"]) ||
+    !isRecord(pull["base"]) ||
+    !isRecord(pull["base"]["repo"])
   ) {
     throw new PrRegenerationRefusalError("Expected an open pull request");
   }
   if (
-    pull.head.repo.full_name !== repository ||
-    pull.base.repo.full_name !== repository
+    pull["head"]["repo"]["full_name"] !== repository ||
+    pull["base"]["repo"]["full_name"] !== repository
   ) {
     throw new PrRegenerationRefusalError("Fork pull requests are not eligible");
   }
   if (
-    typeof pull.base.repo.default_branch !== "string" ||
-    pull.base.repo.default_branch.length === 0 ||
-    typeof pull.head.ref !== "string" ||
-    pull.head.ref.length === 0 ||
-    /[\r\n\0]/u.test(pull.head.ref) ||
-    pull.head.ref === pull.base.repo.default_branch ||
-    ref !== `refs/heads/${pull.head.ref}`
+    typeof pull["base"]["repo"]["default_branch"] !== "string" ||
+    pull["base"]["repo"]["default_branch"].length === 0 ||
+    typeof pull["head"]["ref"] !== "string" ||
+    pull["head"]["ref"].length === 0 ||
+    /[\r\n\0]/u.test(pull["head"]["ref"]) ||
+    pull["head"]["ref"] === pull["base"]["repo"]["default_branch"] ||
+    ref !== `refs/heads/${pull["head"]["ref"]}`
   ) {
     throw new PrRegenerationRefusalError(
       "Dispatch must run on the pull request branch",
     );
   }
   if (
-    typeof pull.head.sha !== "string" ||
-    !/^[a-f0-9]{40}$/u.test(pull.head.sha) ||
-    pull.head.sha !== runSha
+    typeof pull["head"]["sha"] !== "string" ||
+    !/^[a-f0-9]{40}$/u.test(pull["head"]["sha"]) ||
+    pull["head"]["sha"] !== runSha
   ) {
     throw new PrRegenerationRefusalError(
       "Pull request head changed; dispatch the current head",
     );
   }
-  return { head: pull.head.sha, branch: pull.head.ref };
+  return { head: pull["head"]["sha"], branch: pull["head"]["ref"] };
 };
 
 export const assertOutputPaths = (
@@ -258,17 +243,17 @@ const runCommand = (
 };
 
 const sourceOwner = (owners: readonly unknown[], id: string) => {
-  const owner = owners.find((entry) => isRecord(entry) && entry.id === id);
+  const owner = owners.find((entry) => isRecord(entry) && entry["id"] === id);
   if (
     !isRecord(owner) ||
-    !isStrings(owner.write) ||
-    !isStrings(owner.outputs)
+    !isStrings(owner["write"]) ||
+    !isStrings(owner["outputs"])
   ) {
     throw new PrRegenerationRefusalError(
       `Owning generator is unavailable: ${id}`,
     );
   }
-  return { command: owner.write, outputs: owner.outputs };
+  return { command: owner["write"], outputs: owner["outputs"] };
 };
 
 const runGenerator = async (id: string) => {
@@ -276,40 +261,20 @@ const runGenerator = async (id: string) => {
   const loaded: unknown = await import(
     pathToFileURL(path.resolve("scripts/generated-files.ts")).href
   );
-  if (!isRecord(loaded) || !Array.isArray(loaded.GENERATORS)) {
+  if (!isRecord(loaded) || !Array.isArray(loaded["GENERATORS"])) {
     throw new PrRegenerationRefusalError(
       "Owning generator registry is unavailable",
     );
   }
-  switch (selected.owner.type) {
-    case "generator": {
-      const owner = sourceOwner(loaded.GENERATORS, selected.owner.id);
-      if (
-        JSON.stringify(owner.command) !== JSON.stringify(selected.command) ||
-        JSON.stringify(owner.outputs.toSorted()) !==
-          JSON.stringify([...selected.outputs].toSorted())
-      ) {
-        throw new PrRegenerationRefusalError(
-          "Owning generator declaration differs from the approved regeneration surface",
-        );
-      }
-      break;
-    }
-    case "test":
-      break;
-    default:
-      selected.owner satisfies never;
-      throw new PrRegenerationRefusalError("Unknown generator owner");
-  }
   for (const prerequisite of selected.prerequisites) {
-    runCommand(sourceOwner(loaded.GENERATORS, prerequisite).command, {});
+    runCommand(sourceOwner(loaded["GENERATORS"], prerequisite).command, {});
   }
   runCommand(selected.command, selected.environment);
 };
 
 if (import.meta.main) {
   try {
-    const [mode, id = "", argument = ""] = process.argv.slice(2);
+    const [mode = "", id = "", argument = ""] = process.argv.slice(2);
     const selected = selectedGenerator(id);
     assertRequiredServices(
       selected.services,
