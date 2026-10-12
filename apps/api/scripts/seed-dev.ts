@@ -93,6 +93,7 @@ import type {
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import { seedCaseLaw } from "./seed-case-law";
+import { seedCaseLawReaderStory } from "./seed-case-law-reader-story";
 import { writeSeedRecentFiles } from "./seed-recents";
 import { seedTemplates } from "./seed-templates";
 import {
@@ -6427,8 +6428,10 @@ export async function seed(organizationId?: string, userId?: string) {
   // fixtures and is the most schema-coupled step; a local schema drift here
   // (e.g. a worktree whose migrations lag the shared dev DB) must not abort the
   // whole seed or dump a giant error toast — warn and continue.
+  let caseLawSeeded = false;
   try {
     await seedCaseLaw();
+    caseLawSeeded = true;
   } catch (error) {
     logErrorOutput({
       level: "warn",
@@ -6436,6 +6439,15 @@ export async function seed(organizationId?: string, userId?: string) {
         "  Case-law seed skipped (non-fatal — likely local schema drift):",
         error,
       ],
+    });
+  }
+  // The reader story marks and chats on a seeded decision, so it follows the
+  // corpus; once the corpus is there, a failure here is a defect, not drift.
+  if (caseLawSeeded) {
+    await seedCaseLawReaderStory({
+      db,
+      organizationId: ORG_ID,
+      userId: USER_ID,
     });
   }
 
