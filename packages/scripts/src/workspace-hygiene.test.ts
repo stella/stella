@@ -421,8 +421,7 @@ describe("workspace hygiene", () => {
     });
 
     expect(validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
-      message:
-        "devDependencies.@stll/oxlint-config must be 0.12.0; found 0.6.0",
+      message: `devDependencies.@stll/oxlint-config must be ${repositoryPackage.devDependencies["@stll/oxlint-config"]}; found 0.6.0`,
       path: "package.json",
     });
   });
@@ -495,7 +494,8 @@ const createWorkspaceRoot = ({
       typescript: "6.0.3",
     },
     devDependencies: {
-      "@stll/oxlint-config": "0.12.0",
+      "@stll/oxlint-config":
+        repositoryPackage.devDependencies["@stll/oxlint-config"],
       "@typescript/native": "npm:typescript@7.0.2",
       "oxlint-tsgolint": "7.0.2003",
       typescript: "catalog:",
