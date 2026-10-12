@@ -1,12 +1,5 @@
 import { Result } from "better-result";
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  setDefaultTimeout,
-  test,
-} from "bun:test";
+import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import Elysia from "elysia";
 import fc from "fast-check";
@@ -28,12 +21,8 @@ import { createSafeDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { meRoute } from "@/api/handlers/me/routes";
 import { publicKnowledgeRoute } from "@/api/handlers/public-knowledge/routes";
-import {
-  acceptAccountProfessionalUse,
-  authMacro,
-  createAuth,
-  getAuth,
-} from "@/api/lib/auth";
+import { authMacro, createAuth, getAuth } from "@/api/lib/auth";
+import { acceptAccountProfessionalUse } from "@/api/lib/auth/professional-use";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import {
   brandPersistedOrganizationId,
@@ -46,13 +35,15 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+const testState = createTestState({ file: import.meta.path, config: env });
 setDefaultTimeout(120_000);
 
 let testDb: TestDatabase;
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   testDb = await initAgentAuthTestDb();
 });
 
@@ -394,48 +385,37 @@ describe("professional-use acceptance", () => {
     await person.setActiveOrganization(organization.id);
     expect((await readProduct(person)).status).toBe(403);
 
-    const previous = env.FEATURE_PUBLIC_KNOWLEDGE;
-    env.FEATURE_PUBLIC_KNOWLEDGE = true;
-    try {
-      for (const path of [
-        "/public/knowledge/template-packs",
-        "/public/knowledge/playbook-starters",
-      ]) {
-        const anonymous = await publicKnowledgeRoute.handle(
-          new Request(`http://localhost${path}`),
-        );
-        const signedIn = await publicKnowledgeRoute.handle(
-          new Request(`http://localhost${path}`, { headers: person.headers() }),
-        );
-        expect(anonymous.status).toBe(200);
-        expect(signedIn.status).toBe(200);
-        expect(await signedIn.text()).toBe(await anonymous.text());
-      }
-    } finally {
-      env.FEATURE_PUBLIC_KNOWLEDGE = previous;
+    testState.setConfig("FEATURE_PUBLIC_KNOWLEDGE", true);
+    for (const path of [
+      "/public/knowledge/template-packs",
+      "/public/knowledge/playbook-starters",
+    ]) {
+      const anonymous = await publicKnowledgeRoute.handle(
+        new Request(`http://localhost${path}`),
+      );
+      const signedIn = await publicKnowledgeRoute.handle(
+        new Request(`http://localhost${path}`, { headers: person.headers() }),
+      );
+      expect(anonymous.status).toBe(200);
+      expect(signedIn.status).toBe(200);
+      expect(await signedIn.text()).toBe(await anonymous.text());
     }
   });
 
   test("the operator-created review account records no acceptance", async () => {
     const email = `professional-use-review-${Bun.randomUUIDv7()}@stella.dev`;
-    const previous = {
-      email: env.APP_REVIEW_ACCOUNT_EMAIL,
-      organizationId: env.APP_REVIEW_ORGANIZATION_ID,
-    };
-    env.APP_REVIEW_ACCOUNT_EMAIL = email;
-    env.APP_REVIEW_ORGANIZATION_ID = `review-${Bun.randomUUIDv7()}`;
-    try {
-      const created = await createAuth().api.createReviewAccountUser({
-        body: { email },
-      });
-      expect(created.email).toBe(email);
-      expect(await userAcceptances([brandPersistedUserId(created.id)])).toEqual(
-        [],
-      );
-    } finally {
-      env.APP_REVIEW_ACCOUNT_EMAIL = previous.email;
-      env.APP_REVIEW_ORGANIZATION_ID = previous.organizationId;
-    }
+    testState.setConfig("APP_REVIEW_ACCOUNT_EMAIL", email);
+    testState.setConfig(
+      "APP_REVIEW_ORGANIZATION_ID",
+      `review-${Bun.randomUUIDv7()}`,
+    );
+    const created = await createAuth().api.createReviewAccountUser({
+      body: { email },
+    });
+    expect(created.email).toBe(email);
+    expect(await userAcceptances([brandPersistedUserId(created.id)])).toEqual(
+      [],
+    );
   });
 
   test("an organization created before its creator accepts is recorded when the creator accepts", async () => {
@@ -452,7 +432,8 @@ describe("professional-use acceptance", () => {
     expect(await organizationAcceptances([organizationId])).toEqual([]);
     expect(await acceptanceAuditEvents(organizationId)).toEqual([]);
 
-    await acceptAccountProfessionalUse(userId);
+    const accepted = await acceptAccountProfessionalUse(userId);
+    expect(Result.isOk(accepted)).toBe(true);
 
     expect(await organizationAcceptances([organizationId])).toMatchObject([
       { acceptedByUserId: userId, ...CURRENT_VERSIONS },

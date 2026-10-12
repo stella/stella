@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
 
 import {
@@ -9,6 +9,7 @@ import {
 } from "@stll/api-contract/professional-use";
 
 import { member } from "@/api/db/auth-schema";
+import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import {
   organizationProfessionalUseAcceptances,
@@ -22,7 +23,11 @@ import {
 import { AGENT_IDENTITY_CREATE_USER_PATH } from "@/api/lib/auth/agent-auth-user";
 import { REVIEW_ACCOUNT_CREATE_USER_PATH } from "@/api/lib/auth/review-account-plugin";
 import type { SafeId } from "@/api/lib/branded-types";
-import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import {
+  withAggregateLock,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
@@ -431,6 +436,37 @@ export const acceptProfessionalUse = async ({
   userId,
 }: AcceptProfessionalUseOptions): Promise<void> => {
   await lockAccount(tx, userId);
+  await recordProfessionalUseAcceptance({ tx, userId });
+};
+
+/** The account acceptance operation owns its transaction and aggregate lock. */
+export const acceptAccountProfessionalUse = async (
+  userId: SafeId<"user">,
+): Promise<Result<UserProfessionalUseState, HandlerError>> =>
+  await Result.tryPromise({
+    try: async () => {
+      await withAggregateTransaction(rootDb, async (tx) => {
+        await withAggregateLock({
+          tx,
+          aggregate: "professionalUseAcceptance",
+          id: { userId },
+        });
+        await recordProfessionalUseAcceptance({ tx, userId });
+      });
+      return await readUserProfessionalUse(rootDb, userId);
+    },
+    catch: (cause) =>
+      new HandlerError({
+        status: 500,
+        message: "Internal server error",
+        cause,
+      }),
+  });
+
+const recordProfessionalUseAcceptance = async ({
+  tx,
+  userId,
+}: AcceptProfessionalUseOptions): Promise<void> => {
   await insertUserAcceptance(tx, {
     userId,
     statementVersion: PROFESSIONAL_USE_STATEMENT_VERSION,

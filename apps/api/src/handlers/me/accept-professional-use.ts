@@ -9,7 +9,8 @@ import {
   createSafeSessionHandler,
 } from "@/api/lib/api-handlers";
 import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
-import { acceptAccountProfessionalUse } from "@/api/lib/auth";
+import { acceptAccountProfessionalUse } from "@/api/lib/auth/professional-use";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const STATEMENT_VERSION_MAX_LENGTH = 32;
@@ -43,19 +44,14 @@ const acceptProfessionalUse = createSafeSessionHandler(
         }),
       );
     }
-    const state = yield* Result.await(
-      Result.tryPromise({
-        try: async () => await acceptAccountProfessionalUse(user.id),
-        catch: (cause) =>
-          new HandlerError({
-            status: 500,
-            message: "Internal server error",
-            cause,
-          }),
-      }),
-    );
+    const state = yield* Result.await(acceptAccountProfessionalUse(user.id));
     return Result.ok(professionalUseResponse(state));
   },
 );
+
+declareAggregateMutation(acceptProfessionalUse.handler, {
+  type: "aggregate",
+  aggregates: ["professionalUseAcceptance"],
+});
 
 export default acceptProfessionalUse;

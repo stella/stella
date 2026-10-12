@@ -120,7 +120,6 @@ import {
 } from "@/api/lib/auth/oauth-registration-policy";
 import { resolveEmailAndPasswordOptions } from "@/api/lib/auth/password-sign-in-options";
 import {
-  acceptProfessionalUse,
   professionalUseColumns,
   professionalUseStateOf,
   readCreationAcceptance,
@@ -2760,16 +2759,6 @@ export const readAccountProfessionalUse = async (
   userId: SafeId<"user">,
 ): Promise<UserProfessionalUseState> =>
   await readUserProfessionalUse(rootDb, userId);
-
-/** The signed-in account accepts the professional-use statement. */
-export const acceptAccountProfessionalUse = async (
-  userId: SafeId<"user">,
-): Promise<UserProfessionalUseState> => {
-  await withAggregateTransaction(rootDb, async (tx) => {
-    await acceptProfessionalUse({ tx, userId });
-  });
-  return await readUserProfessionalUse(rootDb, userId);
-};
 
 /**
  * Whether the caller still belongs to the organization their session is
