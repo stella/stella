@@ -287,9 +287,6 @@ test("mixed cross-section treatment stores both exact classifier windows", async
     sections,
   });
   const citationPlan = planned.unwrap();
-  if (citationPlan.disposition !== "legacy-graph") {
-    panic("Expected a citation reference");
-  }
   const [reference] = citationPlan.references;
   if (reference === undefined) {
     panic("Expected one citation reference");

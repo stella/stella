@@ -56,7 +56,7 @@ const raw = async (tx: FixtureTx, windows: Windows) => {
   const mutation = sql`UPDATE case_law_citations SET polarity_evidence_windows = ${JSON.stringify(windows)}`;
   await tx.execute(mutation);
 };
-const guardedRaw = async (tx: FixtureTx, evidence: Evidence) =>
+const guardedRaw = (tx: FixtureTx, evidence: Evidence) =>
   runCitationGraphTransaction(
     (run) => run(tx),
     async (graphTx) => {
