@@ -37,8 +37,16 @@ const MenuPopup = ({
   side = "bottom",
   anchor,
   collisionAvoidance,
+  header,
+  viewportClassName,
   ...props
 }: MenuPrimitive.Popup.Props & {
+  /** Content pinned above the scrolling list, such as a search field. It sits
+   *  outside the list, so a row scrolled into view can never hide under it. */
+  header?: React.ReactNode;
+  /** Classes for the scrolling list inside the popup, e.g. a lower height
+   *  cap for a long searchable list. */
+  viewportClassName?: string;
   align?: MenuPrimitive.Positioner.Props["align"];
   sideOffset?: MenuPrimitive.Positioner.Props["sideOffset"];
   alignOffset?: MenuPrimitive.Positioner.Props["alignOffset"];
@@ -59,13 +67,19 @@ const MenuPopup = ({
     >
       <MenuPrimitive.Popup
         className={cn(
-          "bg-popover relative flex origin-(--transform-origin) rounded-lg border shadow-lg/5 outline-none not-dark:bg-clip-padding not-[class*='w-']:min-w-32 before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] focus:outline-none dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
+          "bg-popover relative flex max-h-(--available-height) origin-(--transform-origin) flex-col rounded-lg border shadow-lg/5 outline-none not-dark:bg-clip-padding not-[class*='w-']:min-w-32 before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] focus:outline-none dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
           className,
         )}
         data-slot="menu-popup"
         {...props}
       >
-        <div className="max-h-(--available-height) w-full overflow-y-auto p-1">
+        {header}
+        <div
+          className={cn(
+            "min-h-0 w-full flex-1 overflow-y-auto p-1",
+            viewportClassName,
+          )}
+        >
           {children}
         </div>
       </MenuPrimitive.Popup>
@@ -278,6 +292,8 @@ const MenuSubPopup = ({
   align = "start",
   ...props
 }: MenuPrimitive.Popup.Props & {
+  header?: React.ReactNode;
+  viewportClassName?: string;
   align?: MenuPrimitive.Positioner.Props["align"];
   sideOffset?: MenuPrimitive.Positioner.Props["sideOffset"];
   alignOffset?: MenuPrimitive.Positioner.Props["alignOffset"];

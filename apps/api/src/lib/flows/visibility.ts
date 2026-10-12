@@ -1,5 +1,6 @@
 import { and, eq, inArray, notInArray, or, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
+import * as v from "valibot";
 
 import {
   RESOURCE_DELETION_OWNERSHIP,
@@ -25,6 +26,11 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { backgroundFeatureActorExists } from "@/api/lib/feature-access/background";
+
+const classifiedEntityDeletionOwnershipSchema = v.pipe(
+  v.picklist(Object.values(RESOURCE_DELETION_OWNERSHIP)),
+  v.brand("ClassifiedEntityDeletionOwnership"),
+);
 
 type ClassifyEntityResourceDeletionsOptions = {
   workspaceId: SafeId<"workspace">;
@@ -59,9 +65,12 @@ export const classifyEntityResourceDeletions = async (
     (id) =>
       ({
         resource: resourceRef({ type: RESOURCE_TYPE.ENTITY, id }),
-        deletionOwnership: linkedIds.has(id)
-          ? RESOURCE_DELETION_OWNERSHIP.FLOW_REVIEW_TASK
-          : RESOURCE_DELETION_OWNERSHIP.ORDINARY,
+        deletionOwnership: v.parse(
+          classifiedEntityDeletionOwnershipSchema,
+          linkedIds.has(id)
+            ? RESOURCE_DELETION_OWNERSHIP.FLOW_REVIEW_TASK
+            : RESOURCE_DELETION_OWNERSHIP.ORDINARY,
+        ),
       }) as const satisfies ResourceDeletion,
   );
   return { deletions, linkedOrganizationId: linked.at(0)?.organizationId };

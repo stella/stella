@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, expectTypeOf, test } from "bun:test";
 
 import {
   MAX_RESOURCE_CHANGES_PER_EVENT,
@@ -8,6 +8,7 @@ import {
   parseUserRealtimeEvent,
   parseWorkspaceRealtimeEvent,
   REALTIME_EVENT_TYPE,
+  RESOURCE_CHANGE_TYPE,
   RESOURCE_DELETION_OWNERSHIP,
   resourceDeletedRealtimeEvent,
   resourceDeletedChange,
@@ -26,16 +27,18 @@ const ENTITY_RESOURCE = resourceRef({
 });
 
 const RESOURCE_UPDATED_EVENT = resourceUpdatedRealtimeEvent(ENTITY_RESOURCE);
-const RESOURCE_DELETED_EVENT = resourceDeletedRealtimeEvent({
+const RESOURCE_DELETED_EVENT = {
+  type: REALTIME_EVENT_TYPE.RESOURCE_DELETED,
   resource: ENTITY_RESOURCE,
   deletionOwnership: RESOURCE_DELETION_OWNERSHIP.ORDINARY,
-});
+} as const satisfies WorkspaceRealtimeEvent;
 const RESOURCES_CHANGED_EVENT = resourcesChangedRealtimeEvent([
   resourceUpdatedChange(ENTITY_RESOURCE),
-  resourceDeletedChange({
+  {
+    change: RESOURCE_CHANGE_TYPE.DELETED,
     resource: ENTITY_RESOURCE,
     deletionOwnership: RESOURCE_DELETION_OWNERSHIP.ORDINARY,
-  }),
+  },
 ]);
 const RESOURCE_SET_UPDATED_EVENT = resourceSetUpdatedRealtimeEvent(
   RESOURCE_TYPE.ENTITY,
@@ -143,7 +146,7 @@ describe("realtime event contracts", () => {
           type: REALTIME_EVENT_TYPE.RESOURCES_CHANGED,
           changes: [
             {
-              change: "deleted",
+              change: RESOURCE_CHANGE_TYPE.DELETED,
               resource: ENTITY_RESOURCE,
               deletionOwnership,
             },
@@ -168,7 +171,9 @@ describe("realtime event contracts", () => {
     expect(
       parseWorkspaceRealtimeEvent({
         type: REALTIME_EVENT_TYPE.RESOURCES_CHANGED,
-        changes: [{ change: "deleted", resource: ENTITY_RESOURCE }],
+        changes: [
+          { change: RESOURCE_CHANGE_TYPE.DELETED, resource: ENTITY_RESOURCE },
+        ],
       }),
     ).toBeNull();
     expect(
@@ -176,7 +181,7 @@ describe("realtime event contracts", () => {
         type: REALTIME_EVENT_TYPE.RESOURCES_CHANGED,
         changes: [
           {
-            change: "deleted",
+            change: RESOURCE_CHANGE_TYPE.DELETED,
             resource: ENTITY_RESOURCE,
             deletionOwnership: "unknown",
           },
@@ -266,5 +271,42 @@ describe("user realtime events", () => {
     expect(
       parseWorkspaceRealtimeEvent(newNotificationRealtimeEvent()),
     ).toBeNull();
+  });
+});
+
+test("entity deletion builders require proven ownership while views use explicit labels", () => {
+  type UnclassifiedEntityDeletion = {
+    resource: typeof ENTITY_RESOURCE;
+    deletionOwnership: typeof RESOURCE_DELETION_OWNERSHIP.ORDINARY;
+  };
+  expectTypeOf<
+    UnclassifiedEntityDeletion extends Parameters<
+      typeof resourceDeletedRealtimeEvent
+    >[0]
+      ? true
+      : false
+  >().toEqualTypeOf<false>();
+  expectTypeOf<
+    UnclassifiedEntityDeletion extends Parameters<
+      typeof resourceDeletedChange
+    >[0]
+      ? true
+      : false
+  >().toEqualTypeOf<false>();
+
+  const deletion = {
+    resource: resourceRef({
+      type: RESOURCE_TYPE.WORKSPACE_VIEW,
+      id: toSafeId<"workspaceView">("view-1"),
+    }),
+    deletionOwnership: RESOURCE_DELETION_OWNERSHIP.ORDINARY,
+  } as const;
+  expect(resourceDeletedRealtimeEvent(deletion)).toEqual({
+    type: REALTIME_EVENT_TYPE.RESOURCE_DELETED,
+    ...deletion,
+  });
+  expect(resourceDeletedChange(deletion)).toEqual({
+    change: RESOURCE_CHANGE_TYPE.DELETED,
+    ...deletion,
   });
 });

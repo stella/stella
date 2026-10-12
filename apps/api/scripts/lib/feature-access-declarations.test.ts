@@ -319,7 +319,7 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
   });
   test("registered feature-id constants that collide with table names remain metadata", () => {
     const file = "apps/api/src/routes/ordinary.ts";
-    const registryFile = "apps/api/src/feature/registry.ts";
+    const registryFile = "apps/api/src/lib/feature-access/registry.ts";
     const collisionRegistry = {
       signals: {
         enrolment: "invitation",
@@ -357,7 +357,7 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
       ],
       [
         file,
-        'import { FEATURE_REGISTRY } from "../feature/registry"; export const read = () => FEATURE_REGISTRY;',
+        'import { FEATURE_REGISTRY } from "../lib/feature-access/registry"; export const read = () => FEATURE_REGISTRY;',
       ],
     ]);
     const validate = () =>
@@ -367,11 +367,26 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
         sources,
       });
     expect(validate()).toEqual([]);
-    sources.set(
-      registryFile,
-      'const defineFeatureRegistry = <T>(entries: T) => entries; export const FEATURE_REGISTRY = defineFeatureRegistry({ "signals": { ownership: { conditionalTableSchemas: { "apps/api/src/db/schema/signals.ts": ["signals"] } } } });',
-    );
+    const registryMetadataSource =
+      'const defineFeatureRegistry = <T>(entries: T) => entries; export const FEATURE_REGISTRY = defineFeatureRegistry({ "signals": { ownership: { conditionalTableSchemas: { "apps/api/src/db/schema/signals.ts": ["signals"] } } } });';
+    sources.set(registryFile, registryMetadataSource);
     expect(validate()).toEqual([]);
+
+    const standInFile = "apps/api/src/feature/registry.ts";
+    sources.set(standInFile, registryMetadataSource);
+    sources.set(
+      file,
+      'import { FEATURE_REGISTRY } from "../feature/registry"; export const read = () => FEATURE_REGISTRY;',
+    );
+    expect(validate()).toContainEqual({
+      file,
+      message: "source ownership requires featureAccess signals",
+    });
+    sources.delete(standInFile);
+    sources.set(
+      file,
+      'import { FEATURE_REGISTRY } from "../lib/feature-access/registry"; export const read = () => FEATURE_REGISTRY;',
+    );
 
     sources.set(
       registryFile,
@@ -412,7 +427,7 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
     );
     sources.set(
       file,
-      'import { FEATURE_REGISTRY } from "../feature/registry"; export const read = () => FEATURE_REGISTRY;',
+      'import { FEATURE_REGISTRY } from "../lib/feature-access/registry"; export const read = () => FEATURE_REGISTRY;',
     );
     expect(validate()).toContainEqual({
       file,
@@ -436,7 +451,7 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
     );
     sources.set(
       file,
-      'import { FEATURE_REGISTRY } from "../feature/registry"; export const read = () => [FEATURE_REGISTRY, sql`select * from signals`];',
+      'import { FEATURE_REGISTRY } from "../lib/feature-access/registry"; export const read = () => [FEATURE_REGISTRY, sql`select * from signals`];',
     );
     expect(validate()).toContainEqual({
       file,

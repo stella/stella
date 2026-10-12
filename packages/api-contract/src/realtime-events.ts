@@ -4,6 +4,7 @@ import { FLOW_RUN_STATUSES, FLOW_RUN_STEP_STATUSES } from "./flow-status";
 import {
   isResourceRef,
   isResourceType,
+  type RESOURCE_TYPE,
   type ResourceRef,
   type ResourceType,
 } from "./resource-ref";
@@ -36,10 +37,21 @@ const resourceDeletionOwnershipSchema = v.picklist(
   Object.values(RESOURCE_DELETION_OWNERSHIP),
 );
 
-export type ResourceDeletion = Omit<
-  Extract<ResourceChange, { change: typeof RESOURCE_CHANGE_TYPE.DELETED }>,
-  "change"
->;
+/** Entity ownership is produced by the transactional classifier, never a caller label. */
+type ClassifiedEntityDeletionOwnership = v.InferOutput<
+  typeof resourceDeletionOwnershipSchema
+> &
+  v.Brand<"ClassifiedEntityDeletionOwnership">;
+
+export type ResourceDeletion =
+  | {
+      resource: Extract<ResourceRef, { type: typeof RESOURCE_TYPE.ENTITY }>;
+      deletionOwnership: ClassifiedEntityDeletionOwnership;
+    }
+  | {
+      resource: Exclude<ResourceRef, { type: typeof RESOURCE_TYPE.ENTITY }>;
+      deletionOwnership: v.InferOutput<typeof resourceDeletionOwnershipSchema>;
+    };
 
 export const MAX_RESOURCE_CHANGES_PER_EVENT = 100;
 

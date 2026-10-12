@@ -1186,6 +1186,9 @@ const isCapabilityFeatureBindingMetadata = (
 };
 
 const canonicalFeatureRegistryEntries = (ast: ts.SourceFile) => {
+  if (ast.fileName !== "apps/api/src/lib/feature-access/registry.ts") {
+    return undefined;
+  }
   for (const statement of ast.statements) {
     if (!ts.isVariableStatement(statement) || !exported(statement)) {
       continue;
