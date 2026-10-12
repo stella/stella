@@ -54,8 +54,12 @@ function InvoicesPage() {
     from: "/_protected/workspaces/$workspaceId/invoices/$invoiceId",
     shouldThrow: false,
   });
+  const newInvoiceMatch = useMatch({
+    from: "/_protected/workspaces/$workspaceId/invoices/new",
+    shouldThrow: false,
+  });
 
-  if (invoiceDetailMatch) {
+  if (invoiceDetailMatch || newInvoiceMatch) {
     return <Outlet />;
   }
 
@@ -66,8 +70,7 @@ function InvoicesPage() {
         {canCreateInvoice && (
           <Link
             params={{ workspaceId }}
-            search={{}}
-            to="/workspaces/$workspaceId/invoices"
+            to="/workspaces/$workspaceId/invoices/new"
           >
             <Button size="sm" variant="outline">
               <PlusIcon className="size-4" />

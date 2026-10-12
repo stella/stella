@@ -1,0 +1,143 @@
+import { describe, expect, test } from "bun:test";
+
+import {
+  composeTotals,
+  dueDateFor,
+  entryAdjustments,
+  lastIncludedWorkDate,
+  parseHoursInput,
+} from "./invoice-composer.logic";
+import type {
+  ComposerEntry,
+  ComposerExpense,
+  EntryChoice,
+} from "./invoice-composer.logic";
+
+const entries: ComposerEntry[] = [
+  {
+    id: "a",
+    dateWorked: "2026-09-02",
+    billedMinutes: 90,
+    rateAtEntry: 250_000,
+    noCharge: false,
+    currency: "CZK",
+  },
+  {
+    id: "b",
+    dateWorked: "2026-09-30",
+    billedMinutes: 30,
+    rateAtEntry: 180_000,
+    noCharge: false,
+    currency: "CZK",
+  },
+];
+const expenses: ComposerExpense[] = [
+  {
+    id: "x",
+    dateIncurred: "2026-09-11",
+    amount: 60_000,
+    markup: 0,
+    currency: "CZK",
+  },
+];
+const vat = { vatTreatment: "domestic_vat", vatRateBps: 2100 } as const;
+
+describe("invoice composer totals", () => {
+  test("price every included entry and expense with per-line VAT", () => {
+    const totals = composeTotals({
+      entries,
+      choices: new Map(),
+      expenses,
+      includedExpenseIds: new Set(["x"]),
+      vat,
+    });
+    // 375,000 + 90,000 + 60,000 net; VAT 78,750 + 18,900 + 12,600.
+    expect(totals).toMatchObject({
+      netAmountMinor: 525_000,
+      vatAmountMinor: 110_250,
+      grossAmountMinor: 635_250,
+    });
+  });
+
+  test("excluded, written-down and no-charge entries change the total", () => {
+    const choices = new Map<string, EntryChoice>([
+      ["a", { included: true, billedMinutes: 60, noCharge: false }],
+      ["b", { included: false, billedMinutes: 30, noCharge: false }],
+    ]);
+    expect(
+      composeTotals({
+        entries,
+        choices,
+        expenses,
+        includedExpenseIds: new Set(),
+        vat: { vatTreatment: "not_vat_payer", vatRateBps: 0 },
+      }),
+    ).toMatchObject({ netAmountMinor: 250_000, vatAmountMinor: 0 });
+    choices.set("a", { included: true, billedMinutes: 60, noCharge: true });
+    expect(
+      composeTotals({
+        entries,
+        choices,
+        expenses,
+        includedExpenseIds: new Set(),
+        vat,
+      }),
+    ).toMatchObject({ grossAmountMinor: 0 });
+  });
+
+  test("the supply date follows the included work", () => {
+    const choices = new Map<string, EntryChoice>([
+      ["b", { included: false, billedMinutes: 30, noCharge: false }],
+    ]);
+    expect(
+      lastIncludedWorkDate({
+        entries,
+        choices,
+        expenses,
+        includedExpenseIds: new Set(["x"]),
+      }),
+    ).toBe("2026-09-11");
+    expect(
+      lastIncludedWorkDate({
+        entries: [],
+        choices,
+        expenses,
+        includedExpenseIds: new Set(),
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("invoice composer request", () => {
+  test("sends only entries whose billing changed", () => {
+    const choices = new Map<string, EntryChoice>([
+      ["a", { included: true, billedMinutes: 90, noCharge: false }],
+      ["b", { included: true, billedMinutes: 15, noCharge: false }],
+    ]);
+    expect(entryAdjustments(entries, choices)).toEqual([
+      { timeEntryId: "b", billedMinutes: 15, noCharge: false },
+    ]);
+  });
+
+  test.each([
+    ["1.5", 90],
+    ["1,25", 75],
+    ["2", 120],
+    [" 0.1 ", 6],
+    ["0", 0],
+  ])("reads %p hours as %p minutes", (text, minutes) => {
+    expect(parseHoursInput(text)).toBe(minutes);
+  });
+
+  test.each(["", "-1", "1.5h", "abc", "1.23456"])(
+    "refuses %p as hours",
+    (text) => {
+      expect(parseHoursInput(text)).toBeNull();
+    },
+  );
+
+  test("the due date adds the term to the issue date", () => {
+    expect(dueDateFor("2026-10-12", 14)).toBe("2026-10-26");
+    expect(dueDateFor("2026-12-20", 30)).toBe("2027-01-19");
+  });
+});
