@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { isRevisionEditSpanValid } from "@/api/handlers/chat/messages/revisions/revision-span";
 
@@ -7,6 +9,7 @@ const original = toPersistedChatMessageContentV3({
   data: [
     { type: "text", content: "Hello" },
     {
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
       type: "tool-call",
       id: "call",
       name: "mcp__external__search",

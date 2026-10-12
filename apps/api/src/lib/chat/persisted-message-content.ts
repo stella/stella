@@ -1,5 +1,8 @@
+import type { ToolResultOutcome } from "@tanstack/ai";
 import type { ToolCallState, ToolResultState } from "@tanstack/ai-client";
 import { panic } from "better-result";
+
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 
 /** JSON values are the only values that can survive the chat JSONB boundary. */
 export type PersistedJsonValue =
@@ -10,18 +13,41 @@ export type PersistedJsonValue =
   | PersistedJsonValue[]
   | string;
 
-export type PersistedJsonObject = {
+type PersistedJsonObject = {
   readonly [key: string]: PersistedJsonValue;
 };
 
-export declare const parsedToolInputProof: unique symbol;
+type PersistedToolCallMetadata = PersistedJsonObject & {
+  [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" | "server";
+};
+
+const isPersistedToolCallMetadata = (
+  value: unknown,
+): value is PersistedToolCallMetadata =>
+  isPersistedJsonValue(value) &&
+  typeof value === "object" &&
+  value !== null &&
+  !Array.isArray(value) &&
+  (value[CHAT_TOOL_EXECUTOR_METADATA_KEY] === "server" ||
+    value[CHAT_TOOL_EXECUTOR_METADATA_KEY] === "client");
+
+export const provePersistedToolCallMetadata = (
+  value: unknown,
+): PersistedToolCallMetadata => {
+  if (!isPersistedToolCallMetadata(value)) {
+    panic("Tool call metadata must record executor ownership");
+  }
+  return value;
+};
+
+declare const parsedToolInputProof: unique symbol;
 export type ParsedToolInput = {
   readonly [parsedToolInputProof]: true;
   status: "parsed";
   value: PersistedJsonValue;
 };
 
-export declare const parsedToolOutputProof: unique symbol;
+declare const parsedToolOutputProof: unique symbol;
 export type ParsedToolOutput = {
   readonly [parsedToolOutputProof]: true;
   value: PersistedJsonValue;
@@ -39,7 +65,7 @@ export type PersistedToolCallPart = {
   };
   id: string;
   input: PersistedToolInput;
-  metadata?: PersistedJsonValue | undefined;
+  metadata: PersistedToolCallMetadata;
   name: string;
   output?: ParsedToolOutput | undefined;
   state: ToolCallState;
@@ -52,17 +78,13 @@ export type PersistedToolResultContent =
   | { type: "text"; value: string };
 
 export type PersistedToolResultPart = {
+  outcome?: ToolResultOutcome | undefined;
   content?: PersistedToolResultContent | undefined;
   error?: string | undefined;
   state: ToolResultState;
   toolCallId: string;
   type: "tool-result";
 };
-
-export type PersistedChatPart<TOtherPart> =
-  | PersistedToolCallPart
-  | PersistedToolResultPart
-  | TOtherPart;
 
 type PersistedChatMessageContentCandidate<TPart, TMetadata> = {
   data: TPart[];
@@ -136,13 +158,6 @@ const isPersistedJsonValueAt = (
 export const isPersistedJsonValue = (
   value: unknown,
 ): value is PersistedJsonValue => isPersistedJsonValueAt(value, new WeakSet());
-
-export const provePersistedJsonValue = (value: unknown): PersistedJsonValue => {
-  if (!isPersistedJsonValue(value)) {
-    panic("Cannot persist a non-JSON chat value");
-  }
-  return value;
-};
 
 const isParsedToolInput = (input: {
   status: "parsed";

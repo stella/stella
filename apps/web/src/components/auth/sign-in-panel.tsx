@@ -7,6 +7,10 @@ import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import {
+  PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
+  PROFESSIONAL_USE_STATEMENT_VERSION,
+} from "@stll/api-contract/professional-use";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
@@ -104,6 +108,7 @@ const SignInOptionsPanel = ({
     },
   });
   const {
+    accountCreation,
     showEmailOtp,
     showLocalPassword,
     showBootstrap,
@@ -142,6 +147,12 @@ const SignInOptionsPanel = ({
       provider,
       callbackURL: callbackURL.toString(),
       errorCallbackURL: errorCallbackURL.toString(),
+      // The OAuth state carries the statement version this page showed to
+      // the callback that creates a new account.
+      additionalData: {
+        [PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]:
+          PROFESSIONAL_USE_STATEMENT_VERSION,
+      },
     });
 
     if (!error) {
@@ -325,6 +336,11 @@ const SignInOptionsPanel = ({
           terms: renderTermsLink,
         })}
       </p>
+      {accountCreation === "offered" && (
+        <p className="text-foreground-muted text-xs">
+          {t("auth.professionalUseStatement")}
+        </p>
+      )}
     </div>
   );
 };
@@ -353,6 +369,8 @@ const BootstrapSignUpForm = ({
           name: getFallbackName(email),
           bootstrapToken,
           callbackURL: getOrganizationCallbackUrl(redirectTo),
+          [PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]:
+            PROFESSIONAL_USE_STATEMENT_VERSION,
         });
 
         if (error) {
@@ -455,6 +473,7 @@ type SelfhostBootstrapSignUpInput = {
   name: string;
   bootstrapToken: string;
   callbackURL: string;
+  [PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]: string;
 };
 
 const signUpWithSelfhostBootstrap = async (

@@ -32,7 +32,8 @@ const failed = ({ conclusion }) =>
     "stale",
   ].includes(conclusion);
 
-// A matching job name alone cannot prove that a scoped step ran in the queue.
+// The jobs API has no task/file selection receipts. Even matching successful
+// steps on the same Git tree cannot prove full versus affected test scope.
 /** @param {{ jobs: Job[], queueJobs: Job[] }} options Main and queue execution evidence. */
 export const classifyMainHeavyFailures = ({ jobs, queueJobs }) =>
   jobs.filter(failed).map((job) => {
@@ -54,9 +55,9 @@ export const classifyMainHeavyFailures = ({ jobs, queueJobs }) =>
     );
     return {
       name: job.name,
-      type: passed ? "INFRA" : "CODE",
+      type: "CODE",
       reason: passed
-        ? "The same job and executed steps passed on the identical merge-group tree."
+        ? "The same job and executed steps passed on the identical merge-group tree, but test-scope equivalence is unproven."
         : "No matching merge-group pass proves the same tree and scope.",
     };
   });

@@ -14,6 +14,11 @@ import { promisify } from "node:util";
 import { repoRelativePath } from "@stll/portable-path";
 
 import {
+  PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
+  PROFESSIONAL_USE_STATEMENT_VERSION,
+} from "@stll/api-contract/professional-use";
+
+import {
   CAPTURE_DPR,
   CAPTURE_THEMES,
   captureDefinitions,
@@ -1728,7 +1733,12 @@ const authenticate = async () => {
   }
   const signInResponse = await fetch(`${API_URL}/api/auth/sign-in/email-otp`, {
     method: "POST",
-    body: JSON.stringify({ email: EMAIL, otp: otpPayload.otp }),
+    body: JSON.stringify({
+      email: EMAIL,
+      otp: otpPayload.otp,
+      [PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]:
+        PROFESSIONAL_USE_STATEMENT_VERSION,
+    }),
     headers: jsonHeaders,
     signal: AbortSignal.timeout(15_000),
   });
