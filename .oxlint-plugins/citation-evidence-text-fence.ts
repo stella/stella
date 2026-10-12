@@ -272,7 +272,8 @@ export default eslintCompatPlugin({
               imported?.moduleId === FENCE_MODULE &&
               FENCES.has(imported.imported)
             ) {
-              for (const owner of functionAncestors(node)) {
+              const owner = functionAncestors(node).at(0);
+              if (owner !== undefined) {
                 guarded.add(owner);
               }
               return;

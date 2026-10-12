@@ -57,6 +57,31 @@ test("citation evidence accepts fenced writes and clearing derived fields", asyn
   ).toEqual([]);
 });
 
+test("nested fence declarations do not certify graph writes", async () => {
+  const declarations = [
+    "const unused = () => citationTextRevisionFence(evidence.revision);",
+    "const unused = function () { return citationTextRevisionFence(evidence.revision); };",
+    "function unused() { return citationTextRevisionFence(evidence.revision); }",
+  ];
+  for (const declaration of declarations) {
+    const source = [
+      'import { caseLawCitations } from "@/api/db/schema";',
+      'import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";',
+      'import { citationTextRevisionFence } from "@/api/lib/case-law/text-revision";',
+      "export const persist = (transaction, evidence) => runCitationGraphTransaction(transaction, (tx) => {",
+      declaration,
+      "return tx.update(caseLawCitations).set({ polarityEvidenceWindows: evidence.windows });",
+      "});",
+      "export const guarded = (transaction, evidence) => runCitationGraphTransaction(transaction, (tx) => tx.update(caseLawCitations).set({ polarityEvidenceWindows: evidence.windows }).where(citationTextRevisionFence(evidence.revision)));",
+    ].join("\n");
+    expect(
+      await lintSingleRule("citation-evidence-text-fence", source, {
+        sourcePath: "apps/api/src/handlers/case-law/polarity/example.ts",
+      }),
+    ).toEqual([6]);
+  }
+});
+
 test("citation evidence field discovery follows the schema-owned group", () => {
   const source = (physicalName: string) => `
     import { jsonb, pgTable, text } from "drizzle-orm/pg-core";
