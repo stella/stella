@@ -653,9 +653,6 @@
   .ms-1\.5 {
     margin-inline-start: calc(var(--spacing) * 1.5);
   }
-  .ms-2 {
-    margin-inline-start: calc(var(--spacing) * 2);
-  }
   .ms-4 {
     margin-inline-start: calc(var(--spacing) * 4);
   }
@@ -2340,6 +2337,9 @@
   }
   .pe-12 {
     padding-inline-end: calc(var(--spacing) * 12);
+  }
+  .pe-20 {
+    padding-inline-end: calc(var(--spacing) * 20);
   }
   .pe-\[calc\(--spacing\(3\)-1px\)\] {
     padding-inline-end: calc(calc(var(--spacing) * 3) - 1px);
