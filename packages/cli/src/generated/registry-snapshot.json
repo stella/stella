@@ -5305,99 +5305,120 @@
   },
   {
     "cli": {
-      "command": ["organization"],
-      "scope": "admin_write",
-      "discriminator": {
-        "prop": "action",
-        "subcommands": {
-          "add_member": {
-            "command": "add-member",
-            "include": ["matter_id", "user_id"],
-            "required": ["matter_id", "user_id"],
-            "destructive": false
-          },
-          "remove_member": {
-            "command": "remove-member",
-            "include": ["matter_id", "user_id", "reassign_to"],
-            "required": ["matter_id", "user_id"],
-            "destructive": true
-          },
-          "update_org_settings": {
-            "command": "update-settings",
-            "include": [
-              "matter_number_pattern",
-              "matter_number_padding",
-              "prompt_caching_enabled",
-              "document_processing_mode",
-              "time_minimum_unit_minutes",
-              "time_edit_window_days",
-              "time_locked_through_month",
-              "time_narrative_required",
-              "time_zone"
-            ],
-            "destructive": false
-          }
-        }
-      }
+      "command": ["matter", "add-member"],
+      "scope": "admin_write"
     },
-    "name": "manage_organization",
-    "description": "Manage organization members and non-secret settings. Member actions require matter_id and user_id; the other fields apply to update_org_settings. Manage provider secrets in the dashboard.",
+    "name": "add_matter_member",
+    "description": "Grant one existing organization member access to a matter. Requires matter_id and user_id. Refuses an existing membership or a matter at its member limit. Does not add a member to the organization.",
     "inputSchema": {
       "type": "object",
-      "required": ["action"],
+      "required": ["matter_id", "user_id"],
       "additionalProperties": false,
       "properties": {
-        "action": {
-          "enum": ["add_member", "remove_member", "update_org_settings"],
-          "type": "string",
-          "description": "Administrative action to perform"
-        },
         "matter_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Matter ID for add_member and remove_member."
+          "description": "Matter ID whose membership to change"
         },
         "user_id": {
           "type": "string",
           "minLength": 1,
-          "description": "User id to add or remove for the member actions"
+          "description": "Organization member's user ID to grant matter access"
+        }
+      }
+    },
+    "annotations": {
+      "title": "Add matter member",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "cli": {
+      "command": ["matter", "remove-member"],
+      "scope": "admin_write"
+    },
+    "name": "remove_matter_member",
+    "description": "Revoke one member's access to a matter and cancel their open desktop editing sessions. Reassign active work obligations to reassign_to or leave them unassigned. Refuses the last member, running timers, or too many obligations to unassign in one call. Does not remove organization membership. Requires human confirmation with confirm: true.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["matter_id", "user_id"],
+      "additionalProperties": false,
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Matter ID whose membership to change"
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Matter member's user ID whose access to revoke"
         },
         "reassign_to": {
           "type": "string",
           "minLength": 1,
-          "description": "Replacement matter member for remove_member; omit to leave tasks unassigned"
+          "description": "Replacement matter member for work obligations; omit to leave them unassigned"
         },
+        "confirm": {
+          "type": "boolean",
+          "description": "Set true only after a human approves revoking the member's matter access"
+        }
+      }
+    },
+    "annotations": {
+      "title": "Remove matter member",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "cli": {
+      "command": ["organization", "update-settings"],
+      "scope": "admin_write"
+    },
+    "name": "update_organization_settings",
+    "description": "Update the active organization's non-secret settings: matter numbering, prompt caching, document processing, time-entry policy, and time zone. Only supplied fields change; send matter_number_pattern and matter_number_padding together. Manage provider secrets in the dashboard and practice jurisdictions with set_practice_jurisdictions.",
+    "inputSchema": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {
         "matter_number_pattern": {
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "Matter-number pattern (update_org_settings); send with matter_number_padding"
+          "description": "Matter-number pattern; send with matter_number_padding"
         },
         "matter_number_padding": {
           "type": "integer",
           "minimum": 1,
           "maximum": 6,
-          "description": "Matter-number zero-padding width (update_org_settings); send with matter_number_pattern"
+          "description": "Matter-number zero-padding width; send with matter_number_pattern"
         },
         "prompt_caching_enabled": {
           "type": "boolean",
-          "description": "Toggle AI prompt caching (update_org_settings)"
+          "description": "Toggle AI prompt caching"
         },
         "document_processing_mode": {
           "enum": ["off", "searchable-text"],
           "type": "string",
-          "description": "Set automatic PDF searchable-text extraction (update_org_settings)"
+          "description": "Set automatic PDF searchable-text extraction"
         },
         "time_minimum_unit_minutes": {
           "type": "integer",
           "minimum": 1,
           "maximum": 60,
-          "description": "Minimum time increment in minutes; must divide 60 (update_org_settings)"
+          "description": "Minimum time increment in minutes; must divide 60"
         },
         "time_edit_window_days": {
           "type": "integer",
           "minimum": 0,
-          "description": "Days a timekeeper may edit an entry (update_org_settings)"
+          "description": "Days a timekeeper may edit an entry"
         },
         "time_locked_through_month": {
           "anyOf": [
@@ -5409,11 +5430,11 @@
               "type": "null"
             }
           ],
-          "description": "Last day of the latest locked month, or null to unlock (update_org_settings)"
+          "description": "Last day of the latest locked month, or null to unlock"
         },
         "time_narrative_required": {
           "type": "boolean",
-          "description": "Require a narrative on time entries (update_org_settings)"
+          "description": "Require a narrative on time entries"
         },
         "time_zone": {
           "anyOf": [
@@ -5427,19 +5448,15 @@
             }
           ],
           "description": "IANA time zone, e.g. Europe/Prague; null follows the primary practice jurisdiction"
-        },
-        "confirm": {
-          "type": "boolean",
-          "description": "Required for the remove_member action: must be true to remove a member (an irreversible action). Set it only after a human user has approved the removal; ignored by the other actions."
         }
       }
     },
     "annotations": {
-      "title": "Manage organization",
+      "title": "Update organization settings",
+      "readOnlyHint": false,
       "destructiveHint": true,
-      "idempotentHint": false,
-      "openWorldHint": false,
-      "readOnlyHint": false
+      "idempotentHint": true,
+      "openWorldHint": false
     }
   },
   {

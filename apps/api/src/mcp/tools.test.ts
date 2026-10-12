@@ -10254,49 +10254,45 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
-  test("mixed destructive tools reach their handler without blanket confirmation", async () => {
+  test("organization settings reach validation without confirmation", async () => {
     const result = await handleMcpToolCall({
-      args: { action: "update_org_settings" },
+      args: {},
       context: createContext(),
-      toolName: "manage_organization",
+      toolName: "update_organization_settings",
     });
 
     const error = validationEnvelope(result);
     expect(error["code"]).toBe("validation_error");
-    expect(error["message"]).toBe(
-      "Provide at least one setting to change for update_org_settings",
-    );
+    expect(error["message"]).toBe("Provide at least one setting to change");
   });
 
-  test("mixed destructive tools require confirmation for the destructive action", async () => {
+  test("member removal requires human confirmation", async () => {
     const result = await handleMcpToolCall({
       args: {
-        action: "remove_member",
         matter_id: "00000000-0000-4000-8000-0000000e0001",
         user_id: "user_2",
       },
       context: createContext(),
-      toolName: "manage_organization",
+      toolName: "remove_matter_member",
     });
 
     expectErrorEnvelope(result, {
       code: "confirmation_required",
       message:
-        "manage_organization is an irreversible operation and was called without confirmation",
+        "remove_matter_member is an irreversible operation and was called without confirmation",
       hint: "This operation is irreversible. Confirm with the human user, then retry with confirm: true.",
     });
   });
 
-  test("mixed destructive tools clear the selected-action gate with confirmation", async () => {
+  test("confirmed member removal reaches the handler", async () => {
     const result = await handleMcpToolCall({
       args: {
-        action: "remove_member",
         matter_id: "00000000-0000-4000-8000-0000000e0404",
         user_id: "user_2",
         confirm: true,
       },
       context: createContext(),
-      toolName: "manage_organization",
+      toolName: "remove_matter_member",
     });
 
     expectErrorEnvelope(result, {

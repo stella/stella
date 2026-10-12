@@ -72,7 +72,7 @@ const buildContext = ({
 describe("runRegistryWriteTool (orchestration)", () => {
   test("checks account eligibility before dispatching restricted operations", async () => {
     for (const toolName of [
-      "manage_organization",
+      "update_organization_settings",
       "set_practice_jurisdictions",
     ] as const) {
       for (const email of ["limited@example.test", "standard@example.test"]) {
@@ -352,14 +352,12 @@ describe("runRegistryWriteTool (orchestration)", () => {
     expect(
       applyChatApprovalConfirmation({
         args: {
-          action: "remove_member",
           matter_id: WS_UUID,
           user_id: "user_2",
         },
-        toolName: "manage_organization",
+        toolName: "remove_matter_member",
       }),
     ).toEqual({
-      action: "remove_member",
       matter_id: WS_UUID,
       user_id: "user_2",
       confirm: true,
@@ -422,7 +420,7 @@ describe("write ref mediation (via the WRITE_TOOL_REF_FIELD_MAP)", () => {
   });
 
   test("the UUID invariant drops a raw uuid in a declared plain field", () => {
-    // manage_organization's settings echo declares `matterNumberPattern` as an
+    // update_organization_settings's settings echo declares `matterNumberPattern` as an
     // ordinary string, which no annotation licenses to carry a UUID: the leaf
     // is dropped rather than leaked, with only the path (never the value)
     // reaching telemetry.
@@ -435,9 +433,9 @@ describe("write ref mediation (via the WRITE_TOOL_REF_FIELD_MAP)", () => {
       },
       payload: { matterNumberPattern: OTHER_WS_UUID },
       refRegistry: createChatRefRegistry(),
-      schema: WRITE_TOOL_REF_FIELD_MAP.manage_organization.projection,
+      schema: WRITE_TOOL_REF_FIELD_MAP.update_organization_settings.projection,
       source: "run-registry-write-tool",
-      toolName: "manage_organization",
+      toolName: "update_organization_settings",
     });
 
     expect(result.unwrap()).toEqual({});
@@ -449,7 +447,7 @@ describe("write ref mediation (via the WRITE_TOOL_REF_FIELD_MAP)", () => {
         "error.class": "ToolOutputContractDegradedError",
         paths: "matterNumberPattern",
         source: "run-registry-write-tool",
-        toolName: "manage_organization",
+        toolName: "update_organization_settings",
       },
     ]);
     expect(JSON.stringify(analytics.exceptions())).not.toContain(OTHER_WS_UUID);

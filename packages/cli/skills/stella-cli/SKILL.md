@@ -133,14 +133,14 @@ requires (request it at `stella auth login --scopes`).
 | legislation | `stella legislation read` | read | paginated; windowed text |
 | legislation | `stella legislation resolve` | law_read |  |
 | legislation | `stella legislation search` | search | paginated |
+| matter | `stella matter add-member` | admin_write |  |
 | matter | `stella matter delete` | matters_write | destructive (needs `--yes` off a TTY) |
 | matter | `stella matter link-contact` | matters_write | destructive (needs `--yes` off a TTY) |
 | matter | `stella matter list` | read | paginated |
+| matter | `stella matter remove-member` | admin_write | destructive (needs `--yes` off a TTY) |
 | matter | `stella matter save` | matters_write | destructive (needs `--yes` off a TTY) |
-| organization | `stella organization add-member` | admin_write |  |
-| organization | `stella organization remove-member` | admin_write | destructive (needs `--yes` off a TTY) |
 | organization | `stella organization set-jurisdictions` | onboarding | destructive (needs `--yes` off a TTY) |
-| organization | `stella organization update-settings` | admin_write |  |
+| organization | `stella organization update-settings` | admin_write | destructive (needs `--yes` off a TTY) |
 | playbook | `stella playbook list` | read | paginated |
 | playbook | `stella playbook run` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | playbook | `stella playbook save` | knowledge_write | destructive (needs `--yes` off a TTY) |
@@ -313,6 +313,9 @@ are omitted here. Input union keys are required unless marked `?`.
   - `--query` — Search query (string)
   - `--country` — Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
   - optional: --document-type, --status, --language, --date-from, --date-to
+- `stella matter add-member`
+  - `--matter-id` — Matter ID whose membership to change (string)
+  - `--user-id` — Organization member's user ID to grant matter access (string)
 - `stella matter delete`
   - `--matter-id` — Matter ID to delete (string)
 - `stella matter link-contact`
@@ -320,15 +323,12 @@ are omitted here. Input union keys are required unless marked `?`.
   - optional: --contact-id, --role (opposing_party|opposing_counsel|co_counsel|witness|expert_witness|third_party|judge|mediator|other), --matter-contact-id
 - `stella matter list`
   - optional: --matter-id, --status (active|all)
+- `stella matter remove-member`
+  - `--matter-id` — Matter ID whose membership to change (string)
+  - `--user-id` — Matter member's user ID whose access to revoke (string)
+  - optional: --reassign-to
 - `stella matter save`
   - optional: --matter-id, --name, --client-id, --reference, --billing-reference, --status (active|archived)
-- `stella organization add-member`
-  - `--matter-id` — Matter ID for add_member and remove_member. (string)
-  - `--user-id` — User id to add or remove for the member actions (string)
-- `stella organization remove-member`
-  - `--matter-id` — Matter ID for add_member and remove_member. (string)
-  - `--user-id` — User id to add or remove for the member actions (string)
-  - optional: --reassign-to
 - `stella organization set-jurisdictions` — no flags; pass `--input` with jurisdictions
 - `stella organization update-settings`
   - optional: --matter-number-pattern, --matter-number-padding, --prompt-caching-enabled, --document-processing-mode (off|searchable-text), --time-minimum-unit-minutes, --time-edit-window-days, --time-locked-through-month, --time-narrative-required, --time-zone

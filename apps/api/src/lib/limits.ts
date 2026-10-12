@@ -50,6 +50,13 @@ export {
 const VERSIONS_PAGE_SIZE_DEFAULT = 50;
 
 export const LIMITS = {
+  matterNumberPatternMinLength: 1,
+  matterNumberPatternMaxLength: 128,
+  matterNumberPaddingMin: 1,
+  matterNumberPaddingMax: 6,
+  timeMinimumUnitMinutesMin: 1,
+  timeMinimumUnitMinutesMax: 60,
+  timeEditWindowDaysMin: 0,
   legalListsPageSizeDefault: 50,
   legalListsPageSizeMax: 100,
   legalListsPerWorkspace: 200,

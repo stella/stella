@@ -32,6 +32,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import type { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 import { validatePattern } from "@/api/lib/matter-reference";
 import {
   effectiveOrganizationTimeZone,
@@ -69,13 +70,30 @@ true satisfies UnexpectedManagedAIResidencySchemaValue extends never
 
 const updateOrganizationSettingsBodySchema = t.Object({
   documentProcessingMode: t.Optional(documentProcessingModeSchema),
-  matterNumberPattern: t.Optional(t.String({ minLength: 1, maxLength: 128 })),
-  matterNumberPadding: t.Optional(t.Integer({ minimum: 1, maximum: 6 })),
+  matterNumberPattern: t.Optional(
+    t.String({
+      minLength: LIMITS.matterNumberPatternMinLength,
+      maxLength: LIMITS.matterNumberPatternMaxLength,
+    }),
+  ),
+  matterNumberPadding: t.Optional(
+    t.Integer({
+      minimum: LIMITS.matterNumberPaddingMin,
+      maximum: LIMITS.matterNumberPaddingMax,
+    }),
+  ),
   promptCachingEnabled: t.Optional(t.Boolean()),
   managedAIResidency: t.Optional(managedAIResidencySchema),
   memoryExtractionEnabled: t.Optional(t.Boolean()),
-  timeMinimumUnitMinutes: t.Optional(t.Integer({ minimum: 1, maximum: 60 })),
-  timeEditWindowDays: t.Optional(t.Integer({ minimum: 0 })),
+  timeMinimumUnitMinutes: t.Optional(
+    t.Integer({
+      minimum: LIMITS.timeMinimumUnitMinutesMin,
+      maximum: LIMITS.timeMinimumUnitMinutesMax,
+    }),
+  ),
+  timeEditWindowDays: t.Optional(
+    t.Integer({ minimum: LIMITS.timeEditWindowDaysMin }),
+  ),
   timeLockedThroughMonth: t.Optional(t.Nullable(t.String({ format: "date" }))),
   timeNarrativeRequired: t.Optional(t.Boolean()),
   timeZone: t.Optional(
@@ -104,7 +122,7 @@ const config = {
     "organization-settings.practice-jurisdictions.update.",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.accountControl,
-  mcp: { type: "covered", by: "manage_organization" },
+  mcp: { type: "tool", name: "update_organization_settings" },
   body: updateOrganizationSettingsBodySchema,
 } satisfies HandlerConfig;
 
@@ -333,7 +351,7 @@ const isClosedMonth = ({
   Temporal.PlainDate.compare(lockedThrough, todayFor(zone, now)) < 0;
 
 // Shared org-settings update logic reused by the HTTP handler and the
-// `manage_organization` MCP tool, so both emit the identical audit event and
+// `update_organization_settings` MCP tool, so both emit the identical audit event and
 // enforce the matter-pattern/padding pairing and pattern validation. Only the
 // non-secret settings live here; provider-secret writes are separate,
 // dashboard-only endpoints (mcp: internal).
