@@ -89,7 +89,7 @@ export const startLockMonitor = ({
   const sample = async () => {
     const result = await Result.tryPromise(capture);
     if (result.isErr()) {
-      failure = String(result.error).slice(0, 512);
+      failure = result.error.message.slice(0, 512);
       return;
     }
     for (const { snapshot } of result.value) {
@@ -159,7 +159,7 @@ export const observePostgresTestProcess = async ({
     capture,
     ...(intervalMs === undefined ? {} : { intervalMs }),
   });
-  let lockTimeoutObserved = false;
+  const diagnostics = { lockTimeoutObserved: false };
   const forward = async (
     stream: ReadableStream<Uint8Array>,
     write: (chunk: Uint8Array) => void,
@@ -167,7 +167,7 @@ export const observePostgresTestProcess = async ({
     let suffix = "";
     for await (const chunk of stream) {
       const text = suffix + new TextDecoder().decode(chunk);
-      lockTimeoutObserved ||= text.includes("55P03");
+      diagnostics.lockTimeoutObserved ||= text.includes("55P03");
       suffix = text.slice(-4);
       write(chunk);
     }
@@ -180,7 +180,7 @@ export const observePostgresTestProcess = async ({
         forward(child.stderr, writeStderr),
       ]);
       const report = await monitor.stop();
-      if (status !== 0 && lockTimeoutObserved) {
+      if (status !== 0 && diagnostics.lockTimeoutObserved) {
         reportFailure(`Postgres lock timeout diagnostics: ${report}`);
       }
       return status;
@@ -206,7 +206,7 @@ export const spawnPostgresTestProcess = (
       }),
   );
   const child = Bun.spawn({ ...options, stdout: "pipe", stderr: "pipe" });
-  const exited = observePostgresTestProcess({
+  const observed = observePostgresTestProcess({
     child,
     capture: async () => {
       const connection = (await observer).unwrap();
@@ -232,12 +232,17 @@ export const spawnPostgresTestProcess = (
     reportFailure: (report) => {
       console.error(report);
     },
-  }).finally(async () => {
-    const connection = await observer;
-    if (connection.isOk()) {
-      await connection.value.release();
-    }
   });
+  const exited = (async () => {
+    try {
+      return await observed;
+    } finally {
+      const connection = await observer;
+      if (connection.isOk()) {
+        await connection.value.release();
+      }
+    }
+  })();
   return {
     exited,
     get exitCode() {

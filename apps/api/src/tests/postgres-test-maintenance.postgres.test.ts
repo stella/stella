@@ -91,6 +91,9 @@ describe.skipIf(!enabled)(
         const database = (await client`SELECT current_database() AS name`).at(
           0,
         )?.["name"];
+        if (typeof database !== "string") {
+          panic("Expected the current PostgreSQL database name");
+        }
         const url = new URL(databaseUrl);
         url.pathname = `/${database}`;
         const maintenance = await openBoundedDatabaseObserver({
@@ -135,6 +138,9 @@ describe.skipIf(!enabled)(
         const database = (await client`SELECT current_database() AS name`).at(
           0,
         )?.["name"];
+        if (typeof database !== "string") {
+          panic("Expected the current PostgreSQL database name");
+        }
         const url = new URL(databaseUrl);
         url.pathname = `/${database}`;
         await withGatedTestClients(url.toString(), async ({ openClient }) => {
