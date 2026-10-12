@@ -253,7 +253,7 @@ describe("the client reads an unavailable index from the request", () => {
 
 const SCAN_TRANSPORTS: readonly CorpusIndexScanTransport[] = [
   NATIVE_SCAN_TRANSPORT,
-  { type: "scored", fields: ["document_id"] },
+  { type: "scored" },
 ];
 
 describe("a scan answers an unavailable index with the typed refusal", () => {
