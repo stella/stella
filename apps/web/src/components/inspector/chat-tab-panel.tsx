@@ -840,6 +840,9 @@ const ChatTabPanelChrome = ({
   return (
     <div
       className="relative flex min-w-0 flex-1 flex-col"
+      // Which conversation the pane shows, for tests that need to tell a
+      // restored thread from a freshly minted one.
+      data-chat-thread-id={tab.id}
       data-slot="inspector-chat-panel"
     >
       <InspectorTabHeader
