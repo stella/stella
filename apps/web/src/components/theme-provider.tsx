@@ -10,8 +10,9 @@ import { PALETTE_STORAGE_KEY, THEME_STORAGE_KEY } from "@/consts";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { deviceStorage } from "@/lib/account/browser-storage";
-import { syncThemeColorMeta } from "@/lib/theme-color";
 import { forceReflow } from "@/lib/utils";
+
+import { syncThemeColorMeta } from "./theme-color";
 
 const THEMES = ["light", "dark", "system"] as const;
 type Theme = (typeof THEMES)[number];

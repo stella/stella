@@ -303,7 +303,12 @@ const Sidebar = ({
             : "end-0 pe-(--safe-area-inline-end) group-data-[collapsible=offcanvas]:end-[calc(var(--sidebar-width)*-1)]",
           // Adjust the padding for floating and inset variants.
           variant === "floating" || variant === "inset"
-            ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
+            ? [
+                "p-2 pt-[calc(var(--safe-area-top)+--spacing(2))] pb-[calc(var(--safe-area-bottom)+--spacing(2))] group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]",
+                side === "left"
+                  ? "ps-[calc(var(--safe-area-inline-start)+--spacing(2))]"
+                  : "pe-[calc(var(--safe-area-inline-end)+--spacing(2))]",
+              ]
             : "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-e group-data-[side=right]:border-s",
           className,
         )}

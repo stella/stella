@@ -77,7 +77,8 @@ const LARGE_VIEWPORT_HEIGHT = /\dvh(?![a-z])/u;
 
 // Above this, a UI transition makes people wait for the interface.
 const MAX_UI_DURATION_MS = 300;
-const DURATION_UTILITY = /^duration-(?:(\d+)|\[(\d*\.?\d+)(ms|s)\])$/u;
+const DURATION_UTILITY =
+  /^duration-(?:(\d+)|\[(\d+(?:\.\d+)?|\.\d+)(ms|s)\])$/u;
 
 const durationMs = (utility: string): number | undefined => {
   const match = DURATION_UTILITY.exec(utility);

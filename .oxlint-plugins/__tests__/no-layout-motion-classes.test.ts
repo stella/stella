@@ -115,6 +115,19 @@ describe.serial(RULE_NAME, () => {
     expect(await lint(source)).toEqual([1, 2, 3, 4, 5, 6, 7]);
   });
 
+  test("recognises integer, decimal and fractional duration units", async () => {
+    const source = [
+      `export const _a = () => <div className="duration-[301ms]" />;`,
+      `export const _aa = () => <div className="duration-[301.5ms]" />;`,
+      `export const _ab = () => <div className="duration-[.301s]" />;`,
+      `export const _ac = () => <div className="duration-[1s]" />;`,
+      `export const _b = () => <div className="duration-[300ms] duration-[300.0ms] duration-[.3s] duration-[0.3s]" />;`,
+      `export const _c = () => <div className="duration-[1.s] duration-[1..5s] duration-[ms]" />;`,
+    ].join("\n");
+
+    expect(await lint(source)).toEqual([1, 2, 3, 4]);
+  });
+
   test("exempts a listed long duration but not a different one in the same file", async () => {
     const source = [
       `export const _a = () => <canvas className="transition-opacity duration-700" />;`,

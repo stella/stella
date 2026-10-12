@@ -122,6 +122,7 @@ export const WorkspaceShell = ({
           // Below md the rails are hidden, so the content meets both edges of
           // a landscape phone; at md and up the rails own those edges.
           "max-md:ps-(--safe-area-inline-start) max-md:pe-(--safe-area-inline-end)",
+          endDock === undefined && "md:pe-(--safe-area-inline-end)",
           "md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ms-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ms-2",
         )}
         data-slot="workspace-shell-main"
@@ -220,7 +221,7 @@ export const WorkspaceEndRail = ({
   overlay,
   topAction,
 }: WorkspaceEndRailProps) => (
-  <InspectorRail aria-label={label} className={cn("h-dvh", className)}>
+  <InspectorRail aria-label={label} className={cn("h-full", className)}>
     <InspectorRailCell>{topAction}</InspectorRailCell>
     <InspectorRailContent>{children}</InspectorRailContent>
     {overlay}

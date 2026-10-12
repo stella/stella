@@ -44,3 +44,12 @@ describe("full toast error text", () => {
     ).toHaveLength(1);
   });
 });
+
+describe("toast viewport positioning", () => {
+  test("keeps the desktop inline-end offset clear of the safe area", async () => {
+    const source = await Bun.file(new URL("toast.tsx", import.meta.url)).text();
+    expect(source).toContain(
+      "md:data-[position*=right]:end-[calc(var(--toast-inset)+var(--safe-area-inline-end)+min(",
+    );
+  });
+});

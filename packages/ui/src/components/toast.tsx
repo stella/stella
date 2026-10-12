@@ -190,7 +190,7 @@ const Toasts = ({ position }: { position: ToastPosition }) => {
           // Horizontal positioning, clear of a landscape notch
           "data-[position*=left]:start-[calc(var(--toast-inset)+var(--safe-area-inline-start))]",
           "data-[position*=right]:end-[calc(var(--toast-inset)+var(--safe-area-inline-end))]",
-          "md:data-[position*=right]:end-[calc(var(--toast-inset)+min(var(--stella-toast-right-offset,0px),calc(100vw-var(--toast-inset)*2-10rem)))]",
+          "md:data-[position*=right]:end-[calc(var(--toast-inset)+var(--safe-area-inline-end)+min(var(--stella-toast-right-offset,0px),calc(100vw-var(--toast-inset)*2-10rem)))]",
           "data-[position*=center]:left-1/2 data-[position*=center]:-translate-x-1/2",
         )}
         data-position={position}

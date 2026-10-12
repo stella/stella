@@ -1,4 +1,4 @@
-import { THEME_COLOR_META } from "@/lib/theme-color";
+import { THEME_COLOR_META } from "../components/theme-color";
 
 export const PUBLIC_KNOWLEDGE_META = {
   name: "public-knowledge",
