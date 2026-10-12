@@ -119,7 +119,7 @@ var caseLawCourtYearSchema = v2.nullable(
   }),
 );
 
-// ../../../../../.bun/install/cache/links/better-result@3.0.1-f6128d381d17d19f/node_modules/better-result/dist/index.mjs
+// ../../../.bun/install/cache/links/better-result@3.0.1-f6128d381d17d19f/node_modules/better-result/dist/index.mjs
 function e(e, t) {
   return e === 2
     ? (...e) => (e.length >= 2 ? t(e[0], e[1]) : (n) => t(n, e[0]))
