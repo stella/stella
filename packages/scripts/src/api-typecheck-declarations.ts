@@ -7,6 +7,7 @@ import * as v from "valibot";
 
 import {
   apiResolvedTypecheckInputs,
+  uncoveredApiTypecheckFiles,
   nativeTypecheckProgramFiles,
   requireApiTypecheckGeneratedSources,
 } from "./api-typecheck-inputs";
@@ -140,36 +141,7 @@ export const missingDeclarationCacheInputs = (
   const config = readTurboTypecheckInputs(turbo);
   const inputs =
     config.tasks["@stll/api#generate:typecheck-declarations"]?.inputs ?? [];
-  const exact = new Set(
-    inputs
-      .filter((input) => !/[!*?{]/u.test(input))
-      .map((input) =>
-        path.resolve(
-          input.startsWith("$TURBO_ROOT$/") ? root : api,
-          input.replace("$TURBO_ROOT$/", ""),
-        ),
-      ),
-  );
-  const patterns = inputs
-    .filter((input) => /[!*?{]/u.test(input))
-    .map((input) => {
-      const pattern = input.startsWith("!") ? input.slice(1) : input;
-      return {
-        excluded: input.startsWith("!"),
-        root: pattern.startsWith("$TURBO_ROOT$/") ? root : api,
-        glob: new Bun.Glob(pattern.replace("$TURBO_ROOT$/", "")),
-      };
-    });
-  return files.filter((filename) => {
-    const source = ts.sys.realpath?.(filename) ?? filename;
-    const matches = patterns.filter((pattern) =>
-      pattern.glob.match(path.relative(pattern.root, source)),
-    );
-    return (
-      matches.some((pattern) => pattern.excluded) ||
-      (!exact.has(source) && !matches.some((pattern) => !pattern.excluded))
-    );
-  });
+  return uncoveredApiTypecheckFiles({ files, inputs, project });
 };
 
 // Route and server contracts belong to the source checker, never to the

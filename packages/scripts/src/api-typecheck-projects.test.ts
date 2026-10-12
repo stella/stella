@@ -15,6 +15,7 @@ import {
   typecheckOwnershipIssues,
   validateApiTypecheckProjects,
 } from "./api-typecheck-projects";
+import { CI_GENERATED_OUTPUTS } from "./generated-files";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
 
@@ -113,11 +114,12 @@ test("the API declaration command emits its public surface", () => {
   );
   const [, wrapper, ...args] =
     api.scripts["generate:typecheck-declarations"].split(" ");
-  const directory = mkdtempSync(
-    path.join(tmpdir(), "api-native-declarations-"),
+  const root = realpathSync(
+    mkdtempSync(path.join(tmpdir(), "api-native-declarations-")),
   );
+  const directory = path.join(root, "apps/api");
   try {
-    mkdirSync(path.join(directory, "src"));
+    mkdirSync(path.join(directory, "src"), { recursive: true });
     writeFileSync(
       path.join(directory, "src/value.ts"),
       "export type Value = string;\n",
@@ -134,8 +136,17 @@ test("the API declaration command emits its public surface", () => {
           types: [],
         },
         files: ["src/value.ts"],
+        include: [],
       }),
     );
+    for (const file of [
+      ...CI_GENERATED_OUTPUTS.capabilityRuntime,
+      ...CI_GENERATED_OUTPUTS.cliRuntime,
+    ]) {
+      const output = path.join(root, file);
+      mkdirSync(path.dirname(output), { recursive: true });
+      writeFileSync(output, "export {};\n");
+    }
     const result = spawnSync(
       process.execPath,
       [path.resolve(REPO_ROOT, "apps/api", wrapper), ...args],
@@ -150,6 +161,6 @@ test("the API declaration command emits its public surface", () => {
       ),
     ).toContain("export type Value = string;");
   } finally {
-    rmSync(directory, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
   }
 });

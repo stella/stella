@@ -1,7 +1,6 @@
 import { panic } from "better-result";
 import path from "node:path";
 import ts from "typescript";
-import * as v from "valibot";
 
 import { childExitStatus } from "./child-exit-status";
 import { CI_GENERATED_OUTPUTS } from "./generated-files";
@@ -63,12 +62,35 @@ export const nativeTypecheckProgramFiles = (project: string) => {
     .map((file) => ts.sys.realpath?.(file) ?? file);
 };
 
-// Discovery globs also hash roots added after the last successful compiler run.
-export const apiResolvedTypecheckInputs = (project: string) => {
+// Cover whole workspace roots so adding or moving a file does not rewrite Turbo.
+export const apiProgramTypecheckInputs = (
+  project: string,
+  nativeFiles: readonly string[],
+) => {
   const config = path.resolve(project);
-  const projectDirectory = path.dirname(config);
-  const api = ts.sys.realpath?.(projectDirectory) ?? projectDirectory;
+  const directory = path.dirname(config);
+  const api = ts.sys.realpath?.(directory) ?? directory;
   const root = path.resolve(api, "../..");
+  const roots = new Set(["**"]);
+  for (const file of nativeFiles) {
+    const relative = path.relative(root, file).replaceAll(path.sep, "/");
+    if (
+      relative.startsWith("../") ||
+      /(?:^|\/)(?:node_modules|\.cache|\.turbo)(?:\/|$)/u.test(relative)
+    ) {
+      continue;
+    }
+    const workspace = /^(?:apps|packages)\/[^/]+(?=\/)/u.exec(relative)?.[0];
+    if (workspace === "apps/api") {
+      continue;
+    }
+    const covering = workspace ?? relative.split("/").at(0);
+    if (covering) {
+      roots.add(
+        `$TURBO_ROOT$/${covering}${relative.includes("/") ? "/**" : ""}`,
+      );
+    }
+  }
   const read = ts.readConfigFile(config, (file) => ts.sys.readFile(file));
   const parsed = ts.parseJsonConfigFileContent(
     read.config,
@@ -80,82 +102,80 @@ export const apiResolvedTypecheckInputs = (project: string) => {
   const outputs = [
     parsed.options.outDir,
     parsed.options.declarationDir,
-  ].flatMap((directory) => (directory ? [path.resolve(directory)] : []));
-  const nativeFiles = nativeTypecheckProgramFiles(config);
-  const resolved = nativeFiles.filter(
-    (file) =>
-      path.isAbsolute(file) &&
-      file.startsWith(`${root}${path.sep}`) &&
-      !outputs.some((directory) =>
-        file.startsWith(`${directory}${path.sep}`),
-      ) &&
-      !/(?:^|[/\\])(?:node_modules|\.cache|\.turbo)(?:[/\\]|$)/u.test(file),
+  ].flatMap((output) =>
+    output
+      ? [
+          `!${path.relative(api, path.resolve(output)).replaceAll(path.sep, "/")}/**`,
+        ]
+      : [],
   );
-  const files = new Set(
-    resolved.map((file) =>
-      file.startsWith(`${api}${path.sep}`)
-        ? path.relative(api, file)
-        : `$TURBO_ROOT$/${path.relative(root, file)}`,
-    ),
-  );
-  const discovery = v.parse(
-    v.object({
-      include: v.optional(v.array(v.string())),
-      exclude: v.optional(v.array(v.string())),
-      files: v.optional(v.array(v.string())),
-    }),
-    parsed.raw,
-  );
-  // TypeScript treats a bare directory spec as an implicit recursive glob.
-  const discoveryPattern = (spec: string) => {
-    const pattern = /[.*?]/u.test(path.basename(spec)) ? spec : `${spec}/**/*`;
-    const absolute = path.resolve(api, pattern);
-    return absolute.startsWith(`${api}${path.sep}`)
-      ? path.relative(api, absolute)
-      : `$TURBO_ROOT$/${path.relative(root, absolute)}`;
-  };
-  const includes = discovery.include ?? (discovery.files ? [] : ["**/*"]);
-  for (const include of includes) {
-    files.add(discoveryPattern(include));
-  }
-  const excludes = discovery.exclude ?? [
-    "node_modules",
-    "bower_components",
-    "jspm_packages",
-    ...outputs,
-  ];
-  const resolvedFiles = new Set(resolved);
-  for (const exclude of includes.length === 0 ? [] : excludes) {
-    const pattern = discoveryPattern(exclude);
-    const absolute = pattern.startsWith("$TURBO_ROOT$/")
-      ? path.resolve(root, pattern.slice("$TURBO_ROOT$/".length))
-      : path.resolve(api, pattern);
-    // A root exclusion cannot cancel a concrete imported compiler input.
-    const glob = new Bun.Glob(absolute);
-    const imported = /[*?]/u.test(absolute)
-      ? resolved.some((file) => glob.match(file))
-      : resolvedFiles.has(absolute);
-    if (!imported) {
-      files.add(`!${pattern}`);
-    }
-  }
   return [
-    ...[...files].toSorted(),
-    "$TURBO_ROOT$/.npmrc",
-    "$TURBO_ROOT$/bunfig.toml",
-    "$TURBO_ROOT$/package.json",
-    ...(nativeProgramSpansWorkspaces(nativeFiles, root)
-      ? ["$TURBO_ROOT$/bun.lock"]
-      : []),
-    "$TURBO_ROOT$/patches/**",
-    "$TURBO_ROOT$/types/**",
-    "$TURBO_ROOT$/packages/typescript-config/**",
-    "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
-    "$TURBO_ROOT$/packages/scripts/src/{api-typecheck-*,tsc-native,tsgo-compiler-options,child-exit-status,turbo-typecheck-inputs}.ts",
-    "$TURBO_ROOT$/{apps,packages}/**/package.json",
-    "!$TURBO_ROOT$/packages/**/.cache/**",
-    "!$TURBO_ROOT$/packages/**/.turbo/**",
-    "package.json",
-    "tsconfig*.json",
+    ...new Set([
+      ...[...roots].toSorted(),
+      "$TURBO_ROOT$/.npmrc",
+      "$TURBO_ROOT$/bunfig.toml",
+      "$TURBO_ROOT$/package.json",
+      ...(nativeProgramSpansWorkspaces(nativeFiles, root)
+        ? ["$TURBO_ROOT$/bun.lock"]
+        : []),
+      "$TURBO_ROOT$/patches/**",
+      "$TURBO_ROOT$/types/**",
+      "$TURBO_ROOT$/packages/typescript-config/**",
+      "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
+      "$TURBO_ROOT$/packages/scripts/src/{api-typecheck-*,tsc-native,tsgo-compiler-options,child-exit-status,turbo-typecheck-inputs}.ts",
+      "$TURBO_ROOT$/{apps,packages}/**/package.json",
+      "!$TURBO_ROOT$/{apps,packages}/**/node_modules/**",
+      "!$TURBO_ROOT$/{apps,packages}/**/.cache/**",
+      "!$TURBO_ROOT$/{apps,packages}/**/.turbo/**",
+      "!node_modules/**",
+      "!.cache/**",
+      "!.turbo/**",
+      ...outputs,
+      "package.json",
+      "tsconfig*.json",
+    ]),
   ];
+};
+
+export const apiResolvedTypecheckInputs = (project: string) =>
+  apiProgramTypecheckInputs(project, nativeTypecheckProgramFiles(project));
+
+type ApiTypecheckCoverageOptions = {
+  files: readonly string[];
+  inputs: readonly string[];
+  project: string;
+};
+
+export const uncoveredApiTypecheckFiles = ({
+  files,
+  inputs,
+  project,
+}: ApiTypecheckCoverageOptions) => {
+  const directory = path.dirname(path.resolve(project));
+  const api = ts.sys.realpath?.(directory) ?? directory;
+  const root = path.resolve(api, "../..");
+  const patterns = inputs.map((input) => {
+    const excluded = input.startsWith("!");
+    const pattern = excluded ? input.slice(1) : input;
+    return {
+      excluded,
+      directory: pattern.startsWith("$TURBO_ROOT$/") ? root : api,
+      glob: new Bun.Glob(pattern.replace("$TURBO_ROOT$/", "")),
+    };
+  });
+  return files.filter((file) => {
+    const matches = patterns.filter(
+      (pattern) =>
+        !path
+          .relative(pattern.directory, ts.sys.realpath?.(file) ?? file)
+          .startsWith(`..${path.sep}`) &&
+        pattern.glob.match(
+          path.relative(pattern.directory, ts.sys.realpath?.(file) ?? file),
+        ),
+    );
+    return (
+      !matches.some((pattern) => !pattern.excluded) ||
+      matches.some((pattern) => pattern.excluded)
+    );
+  });
 };

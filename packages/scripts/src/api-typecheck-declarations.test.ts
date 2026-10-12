@@ -184,8 +184,8 @@ test("declaration cache inputs cover roots and transitive emitted dependencies w
       }),
     );
     const inputs = apiDeclarationCacheInputs(project);
-    expect(inputs).toContain("src/mcp/apps/manifest.ts");
-    expect(inputs).toContain("src/mcp/apps/build/leaf.ts");
+    expect(inputs).toContain("**");
+    expect(inputs).not.toContain("!src/mcp/apps/**");
     const writeInputs = (values: string[]) =>
       writeFileSync(
         path.join(root, "turbo.json"),
@@ -201,9 +201,7 @@ test("declaration cache inputs cover roots and transitive emitted dependencies w
     expect(result.files.toSorted()).toEqual([manifest, leaf].toSorted());
     expect(missingDeclarationCacheInputs(result.files, project)).toEqual([]);
     for (const removed of [manifest, leaf]) {
-      writeInputs(
-        inputs.filter((input) => input !== path.relative(api, removed)),
-      );
+      writeInputs([...inputs, `!${path.relative(api, removed)}`]);
       expect(missingDeclarationCacheInputs(result.files, project)).toEqual([
         removed,
       ]);
@@ -341,8 +339,12 @@ test("workspace symlink imports hash their source files and satisfy emitted-inpu
       }),
     );
     const inputs = apiDeclarationCacheInputs(project);
-    expect(inputs).toContain("$TURBO_ROOT$/packages/shared/src/contract.ts");
-    expect(inputs.some((file) => file.includes("node_modules"))).toBe(false);
+    expect(inputs).toContain("$TURBO_ROOT$/packages/shared/**");
+    expect(
+      inputs.some(
+        (file) => !file.startsWith("!") && file.includes("node_modules"),
+      ),
+    ).toBe(false);
     writeFileSync(
       path.join(root, "turbo.json"),
       JSON.stringify({
@@ -490,7 +492,7 @@ test("declaration aliases resolve transitive API contracts without checking thei
     );
     const producer = "@stll/api#generate:typecheck-declarations";
     const generated = readTurboTypecheckInputs(turbo);
-    expect(generated.tasks[producer]?.inputs).toContain("src/extra.ts");
+    expect(generated.tasks[producer]?.inputs).toContain("**");
     writeFileSync(
       turbo,
       JSON.stringify({ tasks: { [producer]: { inputs: [] } } }),

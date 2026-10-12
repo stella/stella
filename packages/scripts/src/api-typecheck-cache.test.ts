@@ -39,8 +39,12 @@ test("declaration consumers run after emission and invalidate with API source ch
       panic(`Missing task inputs: ${id}`);
     }
     expect(task["inputs"], id).toContain("$TURBO_ROOT$/patches/**");
-    expect(task["inputs"], id).toContain("!$TURBO_ROOT$/packages/**/.cache/**");
-    expect(task["inputs"], id).toContain("!$TURBO_ROOT$/packages/**/.turbo/**");
+    expect(task["inputs"], id).toContain(
+      "!$TURBO_ROOT$/{apps,packages}/**/.cache/**",
+    );
+    expect(task["inputs"], id).toContain(
+      "!$TURBO_ROOT$/{apps,packages}/**/.turbo/**",
+    );
   }
   const consumers = new Set(["@stll/api#typecheck:tests"]);
   for (const [id, task] of Object.entries(tasks)) {
@@ -335,9 +339,10 @@ test("declaration consumers run after emission and invalidate with API source ch
       panic("Missing declaration cache inputs");
     }
     const originalInputs = declarationTask["inputs"];
-    declarationTask["inputs"] = originalInputs.filter(
-      (input) => input !== "src/mcp/apps/manifest.ts",
-    );
+    declarationTask["inputs"] = [
+      ...originalInputs,
+      "!src/mcp/apps/manifest.ts",
+    ];
     writeTasks();
     run(command);
     const beforeExcludedRoot = executions();
@@ -349,11 +354,7 @@ test("declaration consumers run after emission and invalidate with API source ch
     const affectedTasks = (records: string[]) =>
       records.filter((execution) => {
         const entry: unknown = JSON.parse(execution);
-        return (
-          isRecord(entry) &&
-          (entry["task"] === EMITTER ||
-            entry["task"] === "@stll/api#typecheck:tests")
-        );
+        return isRecord(entry) && entry["task"] === EMITTER;
       });
     expect(affectedTasks(executions())).toEqual(
       affectedTasks(beforeExcludedRoot),
@@ -560,13 +561,19 @@ test("each API test owner invalidates cached checking and rejects a newly introd
     expect(executions()).toEqual(cold);
     write(`apps/api/${coupled}`, invalid);
     check(1);
-    expect(executions().slice(cold.length)).toEqual(["source"]);
+    expect(executions().slice(cold.length).toSorted()).toEqual([
+      "source",
+      "tests",
+    ]);
     write(`apps/api/${coupled}`, valid);
     check(0);
     const beforeSafe = executions().length;
     write(`apps/api/${safe}`, invalid);
     check(1);
-    expect(executions().slice(beforeSafe)).toEqual(["tests"]);
+    expect(executions().slice(beforeSafe).toSorted()).toEqual([
+      "source",
+      "tests",
+    ]);
     write(`apps/api/${safe}`, valid);
     check(0);
     const regenerateInputs = () => {
@@ -607,7 +614,7 @@ test("each API test owner invalidates cached checking and rejects a newly introd
     check(0);
     // A directory excluded from root discovery can still enter via imports.
     const imported = "src/mcp/apps/manifest.ts";
-    expect(sourceTask["inputs"]).toContain(imported);
+    expect(sourceTask["inputs"]).toContain("**");
     write(`apps/api/${imported}`, valid);
     const relative = path
       .relative(path.dirname(coupled), imported)
@@ -626,12 +633,15 @@ test("each API test owner invalidates cached checking and rejects a newly introd
       }),
     );
     regenerateInputs();
-    expect(fixtureTasks["@stll/api#typecheck:src"].inputs).toContain(imported);
+    expect(fixtureTasks["@stll/api#typecheck:src"].inputs).toContain("**");
     check(0);
     const beforeImported = executions().length;
     write(`apps/api/${imported}`, "export const value: string = 'changed';\n");
     check(1);
-    expect(executions().slice(beforeImported)).toEqual(["source"]);
+    expect(executions().slice(beforeImported).toSorted()).toEqual([
+      "source",
+      "tests",
+    ]);
     write(`apps/api/${imported}`, valid);
     check(0);
     write(`apps/api/${coupled}`, valid);
@@ -661,20 +671,22 @@ test("each API test owner invalidates cached checking and rejects a newly introd
       const beforeNewRoot = executions().length;
       write(`apps/api/${file}`, invalid);
       check(1);
-      expect(executions().slice(beforeNewRoot)).toEqual([owner]);
+      expect(executions().slice(beforeNewRoot)).toContain(owner);
       rmSync(path.join(directory, "apps/api", file));
       check(0);
     }
     const withDiscovery = fixtureTasks["@stll/api#typecheck:src"].inputs;
     fixtureTasks["@stll/api#typecheck:src"].inputs = withDiscovery.filter(
-      (input) => input !== "src/new-source/**/*.ts",
+      (input) => input !== "**",
     );
     writeTasks();
     check(0);
     const withoutDiscovery = executions();
     write("apps/api/src/new-source/standalone.ts", invalid);
     check(0);
-    expect(executions()).toEqual(withoutDiscovery);
+    expect(executions().filter((owner) => owner === "source")).toEqual(
+      withoutDiscovery.filter((owner) => owner === "source"),
+    );
     const uncached = Bun.spawnSync(
       [process.execPath, "check", "--all", "--project=tsconfig.src.json"],
       { cwd: path.join(directory, "apps/api"), stdout: "pipe", stderr: "pipe" },
@@ -697,7 +709,9 @@ test("each API test owner invalidates cached checking and rejects a newly introd
     const beforeMutation = executions();
     write(`apps/api/${coupled}`, invalid);
     check(0);
-    expect(executions()).toEqual(beforeMutation);
+    expect(executions().filter((owner) => owner === "source")).toEqual(
+      beforeMutation.filter((owner) => owner === "source"),
+    );
     const direct = Bun.spawnSync(
       [
         process.execPath,

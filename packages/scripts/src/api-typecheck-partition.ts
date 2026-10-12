@@ -8,6 +8,9 @@ import * as v from "valibot";
 import { typescriptModuleReferences } from "./api-typecheck-declarations";
 import {
   apiResolvedTypecheckInputs,
+  apiProgramTypecheckInputs,
+  nativeTypecheckProgramFiles,
+  uncoveredApiTypecheckFiles,
   requireApiTypecheckGeneratedSources,
 } from "./api-typecheck-inputs";
 import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
@@ -266,17 +269,59 @@ export const apiTestPartitionIssues = (root: string) => {
 
 export const apiTypecheckInputIssues = (
   root: string,
-  programs = apiProjectInputs(path.join(root, "apps/api")),
+  programs = new Map(
+    [...apiTypecheckProjects(path.join(root, "apps/api"))].map(
+      ([task, project]) => [task, nativeTypecheckProgramFiles(project)],
+    ),
+  ),
 ) => {
+  const directory = ts.sys.realpath?.(root) ?? root;
   const issues: { path: string; message: string }[] = [];
   const turbo = readTurboTypecheckInputs(path.join(root, "turbo.json"));
-  for (const [task, expected] of programs) {
+  const projects = apiTypecheckProjects(path.join(root, "apps/api"));
+  for (const [task, files] of programs) {
+    const project = projects.get(task);
+    if (!project) {
+      panic(`Missing API compiler project: ${task}`);
+    }
+    const inputs = turbo.tasks[task]?.inputs ?? [];
+    const expected = apiProgramTypecheckInputs(project, files);
+    const required = expected.filter((input) => !input.startsWith("!"));
+    const sources = files.filter(
+      (file) =>
+        file.startsWith(`${directory}${path.sep}`) &&
+        !/(?:^|[/\\])(?:node_modules|\.cache|\.turbo)(?:[/\\]|$)/u.test(file),
+    );
+    // Stable covering roots are also discovery inputs for not-yet-existing files.
+    const missing = required.some((input) => !inputs.includes(input));
+    const excludesSource = inputs.some(
+      (input) => input.startsWith("!") && !expected.includes(input),
+    );
+    const witnesses = required
+      .filter((input) => !input.includes("{"))
+      .map((input) =>
+        path.resolve(
+          input.startsWith("$TURBO_ROOT$/")
+            ? directory
+            : path.join(directory, "apps/api"),
+          input
+            .replace("$TURBO_ROOT$/", "")
+            .replaceAll("**", "__new_root__")
+            .replaceAll("*", "example"),
+        ),
+      );
     if (
-      JSON.stringify(turbo.tasks[task]?.inputs) !== JSON.stringify(expected)
+      missing ||
+      excludesSource ||
+      uncoveredApiTypecheckFiles({
+        files: [...sources, ...witnesses],
+        inputs,
+        project,
+      }).length > 0
     ) {
       issues.push({
         path: "turbo.json",
-        message: `${task} cache inputs must match the native resolved program; regenerate API test partition`,
+        message: `${task} cache inputs must cover the native resolved program and workspace discovery; regenerate API test partition`,
       });
     }
   }
@@ -285,7 +330,12 @@ export const apiTypecheckInputIssues = (
 
 const checkResolvedApiTestPartition = (root: string) => {
   const api = path.join(root, "apps/api");
-  const programs = apiProjectInputs(api);
+  const programs = new Map(
+    [...apiTypecheckProjects(api)].map(([task, project]) => [
+      task,
+      nativeTypecheckProgramFiles(project),
+    ]),
+  );
   const inputIssues = apiTypecheckInputIssues(root, programs);
   if (inputIssues.length > 0) {
     panic(inputIssues.map(({ message }) => message).join("\n"));
@@ -313,15 +363,7 @@ const checkResolvedApiTestPartition = (root: string) => {
   }
   const programFiles = (task: string) =>
     new Set(
-      (programs.get(task) ?? [])
-        .filter((file) => !/[!*?{]/u.test(file))
-        .filter((file) => /\.[cm]?tsx?$/u.test(file))
-        .map((file) =>
-          path.resolve(
-            file.startsWith("$TURBO_ROOT$/") ? root : api,
-            file.replace("$TURBO_ROOT$/", ""),
-          ),
-        ),
+      (programs.get(task) ?? []).filter((file) => /\.[cm]?tsx?$/u.test(file)),
     );
   const files = programFiles("@stll/api#typecheck:tests");
   const { independent, coupled } = deriveApiTestPartition(root);

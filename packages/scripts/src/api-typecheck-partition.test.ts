@@ -145,7 +145,7 @@ test("API test ownership follows transitive imports and fails when its derived p
     expect(
       apiTypecheckInputIssues(root).map(({ message }) => message),
     ).toContain(
-      "@stll/api#typecheck:src cache inputs must match the native resolved program; regenerate API test partition",
+      "@stll/api#typecheck:src cache inputs must cover the native resolved program and workspace discovery; regenerate API test partition",
     );
     original.inputs = saved;
     writeTasks();
