@@ -1,3 +1,6 @@
+import { panic } from "better-result";
+
+import { getModelRate, resolveModelRate } from "@stll/ai-catalog";
 /**
  * Per-model usage conversion for the usage ledger.
  *
@@ -7,13 +10,10 @@
  * natural caller because it receives provider usage from TanStack
  * chat middleware.
  */
-
-import { panic } from "better-result";
-
-import { getModelRate, resolveModelRate } from "@stll/ai-catalog";
 import type { AIProvider, ModelRate } from "@stll/ai-catalog";
 
 import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
+import type { DecisionModelProvider } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import { TelemetryError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -21,6 +21,7 @@ import {
   computeUsageUnitCost,
   SERVICE_TIER_MULTIPLIERS,
 } from "@/api/lib/usage/action-weights";
+import { decisionPrice } from "@/api/lib/workflow/decisions/decision-policy";
 
 /**
  * Internal ledger normalization factor. Keeping the denominator
@@ -398,16 +399,17 @@ export const usageUnitsFromTokens = ({
   });
 };
 
-/** Typesafe's public input rate is $0.042/MTok; output is included. */
-const DECISION_INPUT_RATE_PER_MTOK = 4200;
-
 type DecisionUsageInput = {
+  provider: DecisionModelProvider;
+  region?: "eu" | "global" | undefined;
   inputTokens: number;
   actionType: UsageActionType;
   isByok: boolean;
 };
 
 export const decisionUsageUnitsFromTokens = ({
+  provider,
+  region,
   inputTokens,
   actionType,
   isByok,
@@ -415,11 +417,11 @@ export const decisionUsageUnitsFromTokens = ({
   unitsFromRawUsage({
     rawUsageMicroUnits: scaleTokenCost(
       sanitizeTokenCount({
-        modelId: "typesafe",
+        modelId: provider,
         field: "inputTokens",
         value: inputTokens,
       }),
-      DECISION_INPUT_RATE_PER_MTOK,
+      decisionPrice({ provider, region }).microUnitsPerMillionInputTokens,
     ),
     actionType,
     isByok,

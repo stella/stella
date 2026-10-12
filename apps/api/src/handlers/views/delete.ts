@@ -19,6 +19,7 @@ import { isRequiredViewLayout } from "@/api/lib/views";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
 
 const config = {
+  contract: "patch",
   featureAccess: AVT_LAYOUT_FEATURE_ACCESS,
   description:
     "Delete one view (a shared tab) from a matter, removing it for everyone " +

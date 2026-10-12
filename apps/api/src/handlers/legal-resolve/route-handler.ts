@@ -23,12 +23,12 @@ export type GetLegalResolveAuthorization = (
 
 export type LegalResolveRouteResponse =
   | LegalResolveResponse
-  | { error: "access_unavailable" | "missing_scope" | "not_entitled" };
+  | { error: "access_unavailable" | "missing_scope" };
 
 const legalResolveResponseSchema = {
   200: t.Any(),
   403: t.Object({
-    error: t.Union([t.Literal("missing_scope"), t.Literal("not_entitled")]),
+    error: t.Literal("missing_scope"),
   }),
   429: t.String(),
   503: t.Object({ error: t.Literal("access_unavailable") }),
@@ -39,6 +39,7 @@ const legalResolveParamsSchema = t.Object({
 });
 
 export const legalResolveBaseConfig = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   contentDelivery: {
     type: "none",

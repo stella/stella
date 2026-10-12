@@ -27,6 +27,7 @@ type DecisionRouteHandlerOptions = {
 
 const decisionConfig = {
   ...legalResolveBaseConfig,
+  contract: "patch",
   query: permissiveRouteSchema({ keys: ["identifier"] }),
 } satisfies TokenHandlerConfig;
 

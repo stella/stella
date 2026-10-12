@@ -27,6 +27,7 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
 // oxlint.config.ts spreads this list rather than restating it, so the lint
 // scope and the enrolment guard cannot drift apart.
 export const RESULT_CONVENTION_ENABLED_GLOBS = [
+  "packages/playwright-tools/src/**/*.ts",
   "apps/web/src/features/law-search-history/**/*.ts",
   "apps/desktop/src/activity/**/*.ts",
   "apps/desktop/src/activity/**/*.tsx",
@@ -158,6 +159,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/routes/dev/**/*.{ts,tsx}",
   "apps/web/src/routes/sitemaps/**/*.{ts,tsx}",
   "apps/web/src/stores/**/*.{ts,tsx}",
+  "apps/web/src/testing/**/*.{ts,tsx}",
   "packages/agent-input/src/**/*.ts",
   "packages/mcp-kit/src/**/*.ts",
   "packages/ai-catalog/src/**/*.ts",
@@ -182,6 +184,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/permissions/src/**/*.ts",
   "packages/redis-config/src/**/*.ts",
   "packages/runtime-mode/src/**/*.ts",
+  "packages/scan-engine/src/**/*.ts",
   "packages/sanctions/src/**/*.ts",
   "packages/sha256/src/**/*.ts",
   "packages/start-runtime/src/**/*.ts",
@@ -202,6 +205,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   // Better Auth invokes these hooks and consumes rejected APIError values.
   "apps/api/src/lib/auth/demo-account-hooks.ts",
   "apps/api/src/lib/auth/review-account-plugin.ts",
+  "apps/api/src/lib/auth/request-budget-hooks.ts",
   // Better Auth consumes adapter failures through Promise rejection.
   "apps/api/src/lib/auth/registration-adapter.ts",
 
@@ -282,6 +286,10 @@ export const RESULT_BOUNDARY_GLOBS = [
   "packages/start-runtime/src/runtime.ts",
   "packages/ssr-testkit/src/assert-document.ts",
   "packages/property-testing/src/index.ts",
+  // wasm-bindgen reports initialization failures and traps through rejection;
+  // this adapter converts that runtime contract to a typed Result.
+  "packages/scan-engine/src/scan-engine.ts",
+  "packages/scan-engine/src/scan-engine.worker.ts",
 ] as const;
 
 // Declaration files carry no runtime code. The lint ignores them outright, so

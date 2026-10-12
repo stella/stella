@@ -5,6 +5,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { STARTER_PLAYBOOKS } from "@/api/lib/workflow/starter-playbooks";
 
 const config = {
+  contract: "patch",
   description:
     "List the bundled starter playbooks available to instantiate: each " +
     "starter's id, name, description, target document type, and how many " +

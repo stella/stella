@@ -48,6 +48,8 @@ runtime validation, or integration tests.
 
 ### Security, identity, files, and external boundaries
 
+- [`require-write-contract`](./require-write-contract.ts) (`require-write-contract`): requires safe handler configs to declare a literal patch or replace contract and rejects Replace-prefixed descriptions declared patch; resolves owner factory imports, their registered config argument shape, local config bindings and ordered spreads. Canonical factory owners may forward typed parameters; concrete leaf configs remain checked.
+
 - [`require-caller-feature-access`](./require-caller-feature-access.ts) (`require-caller-feature-access`): requires routes importing caller-gated features to admit their loaders through the feature-access owner before feature reads, and rejects browser feature flags and preview state.
 - [`auth-lifecycle`](./auth-lifecycle.ts) (`member-removal-revokes-artifacts`, `no-direct-auth-artifact-delete`): keeps authentication-artifact deletion behind the lifecycle that revokes all member-owned credentials; tables, root database, and helper resolve by import; member removal must await the owning operation unconditionally inside the before hook’s root transaction.
 - [`mcp-security`](./mcp-security.ts) (`redact-oauth-registration-response`, `no-direct-oauth-client-join`): redacts OAuth registration secrets and confines OAuth client joins to the authorized MCP boundary.
@@ -253,7 +255,7 @@ runtime validation, or integration tests.
 - [`no-bare-chrome-query`](./no-bare-chrome-query.ts) (`no-bare-chrome-query`): requires Chrome extension messaging and query operations to use the owned adapter.
 - [`no-coerced-optional-union-enum`](./no-coerced-optional-union-enum.ts) (`no-coerced-optional-union-enum`): rejects coercion around optional union enums that widens or changes missing-value semantics.
 - [`no-condition-combinator-outside-conditions`](./no-condition-combinator-outside-conditions.ts) (`no-condition-combinator-outside-conditions`): keeps condition-tree `combinator`/`negated` reads behind `@stll/conditions`'s own fold/walk/evaluate helpers instead of call sites re-implementing tree semantics; the condition builders in `@stll/conditions` and `@stll/workspace-ui` are exempt; elsewhere only group callbacks actually passed to `foldCondition`/`foldConditions` from the owner may read these fields. Importing a fold does not exempt the module or its leaf callbacks.
-- [`no-crypto-random-uuid`](./no-crypto-random-uuid.ts) (`no-crypto-random-uuid`): requires Bun's UUIDv7 generator in backend runtime code.
+- [`no-crypto-random-uuid`](./no-crypto-random-uuid.ts) (`no-crypto-random-uuid`): requires each runtime's UUIDv7 owner instead of direct UUIDv4 generation.
 - [`no-eager-singleton`](./no-eager-singleton.ts) (`no-eager-singleton`): prevents side-effecting clients from being constructed at module evaluation time; use lazy getters.
 - [`no-facade-imports`](./no-facade-imports.ts) (`no-facade-imports`): requires imports from the owning leaf module instead of broad facades that hide boundaries and side effects; rejects the removed API document-AST facades through aliases and relative paths, directing consumers to `@stll/legal-ast/document-ast`.
 - [`no-nanoid`](./no-nanoid.ts) (`no-nanoid`): prevents the removed Nano ID dependency from returning; use UUIDv7 or Web Crypto for custom alphabets.
@@ -351,3 +353,5 @@ implies a hazard that is gone.
 ### Shared concurrency primitives
 
 - [`no-hand-rolled-concurrency`](./no-hand-rolled-concurrency.ts) rejects direct promise resolver timers and the named duplicate sleep, API `chunked`, web research `chunk`, and adapter `backoffMs` helpers. The owner is private `@stll/concurrency`, through `/sleep`, `/chunk`, and `/backoff-delay`. It deliberately does not infer retry policy from arithmetic or array partitioning from generic slice loops. Native `Bun.sleep`, retained deadline timers, string/byte slices, overlapping windows, dynamic budgets, and atomic SQL retry updates retain their contracts. Exact exceptions with reasons live in [`no-hand-rolled-concurrency-exceptions.json`](./no-hand-rolled-concurrency-exceptions.json); `bun scripts/check-concurrency-exceptions.ts` prevents additions, moves, widening, and duplicate allowances after the introducing PR.
+
+- [`no-unanchored-footnotes`](./no-unanchored-footnotes.ts): source parsers resolve footnotes at paragraph references instead of reading the package collection as trailing content.

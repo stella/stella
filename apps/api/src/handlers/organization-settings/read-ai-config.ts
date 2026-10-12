@@ -1,12 +1,9 @@
 import { Result } from "better-result";
 
-import type {
-  DataRegion,
-  DecisionModelProvider,
-  OrgAIConfig,
-} from "@/api/lib/ai-config";
+import type { DataRegion, OrgAIConfig } from "@/api/lib/ai-config";
 import { decryptAIConfig, maskApiKey } from "@/api/lib/ai-config-crypto";
 import {
+  decisionModelResponse,
   providerResponseExtras,
   providerResponseRegion,
   storedAIConfigUnreadableError,
@@ -44,15 +41,12 @@ type AIConfigResult = {
         region: DataRegion;
       }[];
       overrideModels: OrgAIConfig["overrideModels"];
-      decision: {
-        provider: DecisionModelProvider;
-        apiKeyMasked: string;
-        modelId: string;
-      } | null;
+      decision: ReturnType<typeof decisionModelResponse>;
     }
 );
 
 const config = {
+  contract: "patch",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
@@ -116,14 +110,7 @@ const readAIConfig = createSafeRootHandler(
           ...providerResponseExtras(providerConfig),
         })),
         overrideModels: aiConfig.overrideModels,
-        decision:
-          aiConfig.decision === null
-            ? null
-            : {
-                provider: aiConfig.decision.provider,
-                apiKeyMasked: maskApiKey(aiConfig.decision.apiKey),
-                modelId: aiConfig.decision.modelId,
-              },
+        decision: decisionModelResponse(aiConfig.decision),
         instanceProvisioned,
         decisionInstanceProvisioned,
       };

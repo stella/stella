@@ -129,6 +129,7 @@ export const readPublicLegislationHandler = async (
 };
 
 const config = {
+  contract: "patch",
   description:
     "Read one legislation document from the stella corpus by id: its ELI, " +
     "title, country, language, document type, status, effective and " +

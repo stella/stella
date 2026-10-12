@@ -93,6 +93,7 @@ const updateOrganizationSettingsBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Change the organization's general settings: document processing mode, " +
     "matter-number pattern and padding, prompt caching, memory " +

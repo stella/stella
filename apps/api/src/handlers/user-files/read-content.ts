@@ -11,6 +11,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const readUserFileContent = createSafeRootHandler(
   {
+    contract: "patch",
     contentDelivery: { type: "audited" },
     permissions: { chat: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,

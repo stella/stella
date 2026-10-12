@@ -195,6 +195,7 @@ export const effectiveConditionValues = (
 type ConditionChipAnswer =
   | { kind: "decided"; value: boolean; probability: number }
   | { kind: "forced"; value: boolean }
+  | { kind: "generative"; value: boolean }
   | { kind: "error" }
   | { kind: "notSettled" }
   | { kind: "onGenerate" };
@@ -205,8 +206,8 @@ export type ConditionChipDescription = {
 };
 
 /**
- * A user-set value reads as theirs, a model answer carries its probability,
- * and anything unanswered says plainly that the fill decides it.
+ * A user-set value reads as theirs; model answers carry their available
+ * confidence, and unresolved answers remain unsettled.
  */
 export const describeConditionChip = (
   state: ConditionChipState,
@@ -230,6 +231,12 @@ export const describeConditionChip = (
             return {
               tone: "highlight",
               answer: { kind: "forced", value: decision.value },
+            };
+          }
+          if (decision.decidedBy === "generative_model") {
+            return {
+              tone: decision.value ? "success" : "neutral",
+              answer: { kind: "generative", value: decision.value },
             };
           }
           return {
@@ -263,12 +270,14 @@ const UNDECIDED_TONE = {
   "below-floor": "warning",
   "no-backend": "neutral",
   failed: "neutral",
+  refusal: "neutral",
 } as const satisfies Record<UndecidedReason, ReviewStatusTone>;
 
 const UNDECIDED_ANSWER = {
   "below-floor": { kind: "notSettled" },
-  "no-backend": { kind: "onGenerate" },
-  failed: { kind: "onGenerate" },
+  "no-backend": { kind: "notSettled" },
+  failed: { kind: "notSettled" },
+  refusal: { kind: "notSettled" },
 } as const satisfies Record<UndecidedReason, ConditionChipAnswer>;
 
 /** Whole percent, so `0.962` reads as `96 %` (or `96%`, per locale). */

@@ -1,17 +1,9 @@
-/**
- * System One citation polarity tier.
- *
- * The judgment is one snap reading: how does the citing court treat the
- * decision it names? That is a Choice over the polarity vocabulary, and the
- * answer comes back as a distribution over it rather than a label, so the
- * classifier can accept what the model is sure of and hand the rest to the
- * generative tier, which also extracts the key phrase a rule is promoted
- * from. This tier extracts nothing: a System One model chooses, it does not
- * quote.
- */
-
 import { decide } from "@/api/lib/workflow/decisions/decide";
-import type { Decision } from "@/api/lib/workflow/decisions/decide";
+import type {
+  DecisionGenerator,
+  Decision,
+} from "@/api/lib/workflow/decisions/decide";
+import { decisionConfidenceFloor } from "@/api/lib/workflow/decisions/decision-policy";
 import type {
   ChoiceAnswer,
   SystemOneClient,
@@ -20,13 +12,13 @@ import { choice } from "@/api/lib/workflow/decisions/system-one";
 
 import type { ClassifiablePolarity } from "./consts";
 import { POLARITY_GUIDANCE } from "./guidance";
+import { polarityGeneration } from "./llm-classifier";
 
-/**
- * Below this confidence the reading goes to the generative tier. Set from the
- * agreement curve in `polarity-system-one-compare.ts`; re-measure when the
- * pinned model moves.
- */
-export const SYSTEM_ONE_POLARITY_ACCEPT_CONFIDENCE = 0.7;
+/** Jev's polarity floor; other models use their own calibration. */
+export const SYSTEM_ONE_POLARITY_ACCEPT_CONFIDENCE = decisionConfidenceFloor(
+  "jev-latest",
+  "polarity",
+);
 
 const REQUEST_TIMEOUT_MS = 15_000;
 
@@ -40,6 +32,7 @@ export type ClassifyWithSystemOneOptions = {
   /** ISO language code of the decision text. */
   language: string;
   abortSignal?: AbortSignal | undefined;
+  generator?: DecisionGenerator | undefined;
 };
 
 /** The one question, built once: the vocabulary and its guidance are static. */
@@ -65,6 +58,7 @@ export const classifyWithSystemOne = async ({
   citationText,
   language,
   abortSignal,
+  generator,
 }: ClassifyWithSystemOneOptions): Promise<
   Decision<ChoiceAnswer<ClassifiablePolarity>>
 > =>
@@ -74,7 +68,14 @@ export const classifyWithSystemOne = async ({
     orgAIConfig: null,
     state: { language, citation: citationText, excerpt: context },
     question: POLARITY_QUESTION,
-    floor: SYSTEM_ONE_POLARITY_ACCEPT_CONFIDENCE,
+    generation: polarityGeneration({
+      context,
+      citationText,
+      language,
+      abortSignal,
+    }),
+    ...(generator === undefined ? {} : { generator }),
+    confidencePurpose: "polarity",
     timeoutMs: REQUEST_TIMEOUT_MS,
     abortSignal,
     client: client ? { ...client, keySource: "instance" } : client,

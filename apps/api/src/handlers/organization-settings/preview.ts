@@ -66,6 +66,7 @@ const previewOrganizationSettingsHandler = async function* ({
 };
 
 const config = {
+  contract: "patch",
   description:
     "Preview the matter number a pattern would produce next: the pattern and " +
     "padding are validated, the counter for the scope that pattern falls in " +
