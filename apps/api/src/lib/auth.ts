@@ -2926,6 +2926,15 @@ type AuthSafeDb = ReturnType<
   typeof createMembershipSafeDb<TransactionOf<typeof rlsDb>>
 >;
 
+const createAuthDatabases = (
+  databaseIdentity: Parameters<
+    typeof createMembershipScopedDb<TransactionOf<typeof rlsDb>>
+  >[1],
+): { scopedDb: AuthScopedDb; safeDb: AuthSafeDb } => ({
+  scopedDb: createMembershipScopedDb(rlsDb, databaseIdentity),
+  safeDb: createMembershipSafeDb(rlsDb, databaseIdentity),
+});
+
 const resolveValidateAuth = async ({
   getSession,
   request,
@@ -3028,11 +3037,7 @@ const resolveValidateAuth = async ({
     serverValidatedWorkspaceIds,
     userId,
   };
-  const scopedDb: AuthScopedDb = createMembershipScopedDb(
-    rlsDb,
-    databaseIdentity,
-  );
-  const safeDb: AuthSafeDb = createMembershipSafeDb(rlsDb, databaseIdentity);
+  const { scopedDb, safeDb } = createAuthDatabases(databaseIdentity);
 
   let accessibleWorkspacesPromise: Promise<AccessibleWorkspace[]> | null = null;
   const getAccessibleWorkspaces = async (): Promise<AccessibleWorkspace[]> => {
