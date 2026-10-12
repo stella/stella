@@ -5,6 +5,7 @@ import type * as React from "react";
 import { Dialog as SheetPrimitive } from "@base-ui/react/dialog";
 
 import { XIcon } from "../icons";
+import { OVERLAY_LAYER_CLASS_NAMES } from "../lib/overlay-layer";
 import {
   SAFE_AREA_BOTTOM_EDGE_CLASS_NAME,
   SAFE_AREA_INLINE_CLASS_NAME,
@@ -47,7 +48,10 @@ const SheetBackdrop = ({
 }: SheetPrimitive.Backdrop.Props) => (
   <SheetPrimitive.Backdrop
     className={cn(
-      "fixed inset-0 z-50 bg-black/32 backdrop-blur-sm transition-opacity duration-200 data-ending-style:opacity-0 data-starting-style:opacity-0",
+      "fixed inset-0 bg-black/32 backdrop-blur-sm transition-opacity duration-200 data-ending-style:opacity-0 data-starting-style:opacity-0",
+      // A sheet is modal, so it covers the docked composer the way a dialog
+      // does; at z-50 the composer stayed painted over the mobile sidebar.
+      OVERLAY_LAYER_CLASS_NAMES.default,
       className,
     )}
     data-slot="sheet-backdrop"
@@ -66,7 +70,8 @@ const SheetViewport = ({
 }) => (
   <SheetPrimitive.Viewport
     className={cn(
-      "fixed inset-0 z-50",
+      "fixed inset-0",
+      OVERLAY_LAYER_CLASS_NAMES.default,
       side === "block-end" && "grid grid-rows-[1fr_auto] pt-12",
       side === "block-start" && "grid grid-rows-[auto_1fr] pb-12",
       side === "inline-start" && "flex justify-start",
