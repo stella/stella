@@ -1,10 +1,10 @@
 import * as v from "valibot";
 
 import {
-  APP_LOOKUP_SCHEMA,
+  APP_RESOLVE_SCHEMA,
   APP_SEARCH_SCHEMA,
 } from "../shared/generated/contracts";
-import { lookupView, searchView } from "./model";
+import { resolveView, searchView } from "./model";
 import type { CaseLawView } from "./model";
 
 type CourtFacets = Extract<CaseLawView, { type: "search" }>["facets"];
@@ -15,9 +15,9 @@ export const createCaseLawParser = () => {
     payload: unknown,
     input: Record<string, unknown>,
   ): CaseLawView | undefined => {
-    const lookup = v.safeParse(APP_LOOKUP_SCHEMA, payload);
-    if (lookup.success) {
-      return lookupView(lookup.output);
+    const resolution = v.safeParse(APP_RESOLVE_SCHEMA, payload);
+    if (resolution.success) {
+      return resolveView(resolution.output);
     }
     const search = v.safeParse(APP_SEARCH_SCHEMA, payload);
     if (!search.success) {

@@ -12,10 +12,10 @@ import * as v from "valibot";
 import { BYOK_DEFAULT_MODELS, BYOK_MODEL_OPTIONS } from "@stll/ai-catalog";
 import { sleep } from "@stll/concurrency/sleep";
 
-import { chatAttemptRequestOptions } from "@/api/handlers/chat/chat-request";
 import { classifyRunErrorChunk } from "@/api/handlers/chat/stream-chat";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { chatAttemptRequestOptions } from "@/api/lib/chat/chat-request";
 import { chatToolMapToArray } from "@/api/lib/chat/chat-tool-types";
 import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
 import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";

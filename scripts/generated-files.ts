@@ -211,7 +211,6 @@ export const GENERATORS = [
       "apps/api/src/mcp/decision-reader-contract.ts",
       "apps/api/src/mcp/valibot-tool-definition.ts",
       "apps/api/src/lib/chat/*projection*.ts",
-      "apps/api/src/lib/case-law/decision-lookup-vocabulary.ts",
       "apps/api/src/lib/case-law/search-warnings.ts",
       "apps/api/src/lib/search/pagination-outcome-projection.ts",
       "apps/api/src/lib/json-schema/**",

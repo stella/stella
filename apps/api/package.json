@@ -47,6 +47,7 @@
     "eval:template-authoring": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env evals/template-authoring.ts",
     "eval:playbook-authoring": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env evals/playbook-authoring.ts",
     "eval:extraction": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env evals/extraction.ts",
+    "eval:reader-explain": "bun evals/reader-explain-local.ts",
     "eval:agent-orientation": "bun --cwd=../../packages/cli run codegen:runtime && bun run generate:capability-runtime && NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env evals/agent-orientation.ts",
     "db:migrate": "bun run --env-file=.env src/db/migrate.ts",
     "db:audit-better-auth": "bun run --env-file=.env src/scripts/better-auth-migration-audit.ts",

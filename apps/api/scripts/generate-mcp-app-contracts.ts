@@ -9,7 +9,7 @@ import { jsonSchemaToType } from "../src/lib/json-schema/json-schema-to-type";
 import { toJsonSchema } from "../src/lib/json-schema/valibot-to-json-schema";
 import {
   APP_SEARCH_SCHEMA,
-  APP_LOOKUP_SCHEMA,
+  APP_RESOLVE_SCHEMA,
   APP_OPEN_DECISION_SCHEMA,
   APP_DECISION_BLOCKS_SCHEMA,
   APP_PROVISION_PREVIEW_SCHEMA,
@@ -53,14 +53,14 @@ const header =
 
 const frontendContracts = {
   APP_DECISION_BLOCKS_SCHEMA,
-  APP_LOOKUP_SCHEMA,
   APP_OPEN_DECISION_SCHEMA,
   APP_PROVISION_PREVIEW_SCHEMA,
+  APP_RESOLVE_SCHEMA,
   APP_SEARCH_SCHEMA,
 };
 const frontendContractTypeNames = {
   APP_SEARCH_SCHEMA: "SearchResults",
-  APP_LOOKUP_SCHEMA: "LookupResults",
+  APP_RESOLVE_SCHEMA: "ResolveResults",
   APP_OPEN_DECISION_SCHEMA: "OpenDecision",
   APP_DECISION_BLOCKS_SCHEMA: "ReaderPage",
   APP_PROVISION_PREVIEW_SCHEMA: "ProvisionPreview",

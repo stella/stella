@@ -1,12 +1,10 @@
 import type * as v from "valibot";
 
+import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
 import { MCP_APPS } from "@stll/mcp-apps/manifest";
 import type { PresentationApp } from "@stll/mcp-apps/manifest";
 
-import {
-  LOOKUP_CASE_LAW_PROJECTION,
-  SEARCH_CASE_LAW_PROJECTION,
-} from "../lib/chat/case-law-result-projections";
+import { SEARCH_CASE_LAW_PROJECTION } from "../lib/chat/case-law-result-projections";
 import {
   openDecisionOutput,
   blocksDecisionOutput,
@@ -37,7 +35,7 @@ export const MCP_APP_OUTPUT_SCHEMAS = {
   read_case_law_decision_blocks: blocksDecisionOutput,
   preview_cited_provision: provisionPreviewOutput,
   search_case_law: SEARCH_CASE_LAW_PROJECTION,
-  lookup_case_law: LOOKUP_CASE_LAW_PROJECTION,
+  resolve_case_law_decision: legalResolveResponseSchema,
 } as const satisfies Record<
   PresentationApp["callableTools"][number],
   v.GenericSchema

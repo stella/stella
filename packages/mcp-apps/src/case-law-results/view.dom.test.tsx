@@ -68,17 +68,17 @@ test("invalid agent filter input displays a translated hint", () => {
   expect(ui.getByRole("alert").textContent).toBe("Vyberte platný stát.");
 });
 
-test("lookup results preserve citations and use the external link when tools are unavailable", () => {
+test("resolved decisions preserve citations and open the external link", () => {
   const host = fakeBridge({
     ...baseSnapshot,
     result: {
       status: "ready",
       view: {
-        type: "lookup",
-        notices: [],
+        type: "resolve",
+        status: "resolved",
         rows: [
           {
-            type: "lookup",
+            type: "resolve",
             snippet: null,
             decisionId: "decision-1",
             court: "Nejvyšší soud",
@@ -87,6 +87,7 @@ test("lookup results preserve citations and use the external link when tools are
             caseNumber: "25 Cdo 123/2024",
             ecli: "ECLI:CZ:NS:2024:25.CDO.123.2024.1",
             appUrl: "https://stella.example/decision/1",
+            source_url: undefined,
           },
         ],
       },
@@ -126,11 +127,17 @@ test("Arabic results render localized empty-state copy in the host direction", (
     context: { locale: "ar" },
     result: {
       status: "ready",
-      view: { type: "lookup", notices: [], rows: [] },
+      view: {
+        type: "resolve",
+        status: "not_found",
+        reason: "no_exact_identity",
+      },
     },
   });
   const ui = render(<CaseLawApp bridge={host.bridge} />);
   expect(ui.getByRole("main").getAttribute("dir")).toBe("rtl");
   expect(ui.getByRole("heading", { name: "الاجتهاد القضائي" })).toBeDefined();
-  expect(ui.getByRole("status").textContent).toBe("لا توجد نتائج");
+  expect(ui.getByRole("status").textContent).toBe(
+    "لم يُعثر على حكم مطابق تمامًا. ابحث في الاجتهاد القضائي بدلًا من ذلك.",
+  );
 });

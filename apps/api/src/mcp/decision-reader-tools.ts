@@ -119,7 +119,7 @@ const tooLarge = () =>
 const missing = () =>
   notFoundResult(
     "Decision not found",
-    "Pass a decisionId returned by search_case_law or lookup_case_law.",
+    "Pass decisionId from search_case_law results or document.decisionId from resolve_case_law_decision.",
   );
 
 const common = {
