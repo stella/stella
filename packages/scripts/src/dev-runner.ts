@@ -21,6 +21,7 @@ import { Temporal } from "@stll/time";
 
 import { isSealTrusted, parseSealStatus } from "./agent-evidence";
 import { childExitStatus } from "./child-exit-status";
+import { dockerKeeperCommand, ensureDockerKeeper } from "./dev-docker-keeper";
 import { decideHostAdmission, probeHostFileUsage } from "./dev-host-admission";
 import {
   type DevProcessGroupError,
@@ -1010,6 +1011,60 @@ const waitForSharedDockerServices = async ({
   panic(
     `Timed out after ${String(DOCKER_SERVICES_READY_TIMEOUT_MS / 1000)}s waiting for shared Docker services (${SHARED_DOCKER_SERVICE_NAMES}) to become ready: ${lastFailure}.`,
   );
+};
+
+const ensureHostDockerKeeper = async ({
+  dryRun,
+  mode,
+}: {
+  dryRun: boolean;
+  mode: DevMode;
+}) => {
+  if (dryRun || !modeIncludesApi(mode)) {
+    return;
+  }
+  const resolver = Bun.which("docker-keeper");
+  let label = process.env["STELLA_DOCKER_KEEPER_LABEL"];
+  if (!label && resolver) {
+    const dockerHost =
+      process.env["DOCKER_HOST"] ||
+      runCommandText({
+        cmd: [
+          "docker",
+          "context",
+          "inspect",
+          "--format",
+          "{{.Endpoints.docker.Host}}",
+        ],
+        cwd: "/",
+      }).trim();
+    label = runCommandText({
+      cmd: [resolver, "--host", dockerHost],
+      cwd: "/",
+    }).trim();
+  }
+  if (!label) {
+    return;
+  }
+  await ensureDockerKeeper({
+    label,
+    run: (command) => {
+      const spec = dockerKeeperCommand({
+        command,
+        platform: process.platform,
+        uid: process.getuid?.(),
+      });
+      return Bun.spawnSync(spec.command, {
+        cwd: spec.cwd,
+        env: resolveEnv(),
+        stdout: "pipe",
+        stderr: "pipe",
+        timeout: 5000,
+      }).success;
+    },
+    now: () => Temporal.Now.instant().epochMilliseconds,
+    sleep: (milliseconds) => Bun.sleep(milliseconds),
+  });
 };
 
 const ensureDockerServices = async ({
@@ -2405,6 +2460,7 @@ const main = async () => {
     resolvedOffset === initialOffset.offset
       ? initialOffset.source
       : `${initialOffset.source}; adjusted for free ports`;
+  await ensureHostDockerKeeper({ dryRun: parsedArgs.dryRun, mode });
   const resolvedInfraOffset = await resolveInfraOffset({
     gitContext,
     mode,
