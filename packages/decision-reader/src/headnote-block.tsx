@@ -92,29 +92,38 @@ export const HeadnoteBlock = ({
   const [openedByReader, setOpenedByReader] = useState(defaultOpen);
 
   return (
-    <details
-      className="mt-4 first:mt-0"
-      data-reader-chrome={origin.type === "court" ? undefined : ""}
-      onToggle={(event) => {
-        // Held open by a find match, not by the reader: recording it as their
-        // choice would leave the section open once the match moves on.
-        if (forceOpen) {
-          return;
-        }
-        setOpenedByReader(event.currentTarget.open);
-      }}
-      open={openedByReader || forceOpen}
-    >
-      <summary
-        className="reader-chrome text-muted-foreground cursor-pointer text-[calc(0.75rem*var(--reader-text-scale))] font-semibold tracking-wide uppercase select-none marker:text-current"
-        data-reader-chrome=""
+    // The mark shares the summary's row without being inside it: the
+    // `<summary>` is itself the section's toggle, and a control nested in it
+    // would be interactive content inside interactive content.
+    <div className="relative mt-4 first:mt-0" data-slot="headnote-block">
+      <details
+        data-reader-chrome={origin.type === "court" ? undefined : ""}
+        onToggle={(event) => {
+          // Held open by a find match, not by the reader: recording it as
+          // their choice would leave the section open once the match moves on.
+          if (forceOpen) {
+            return;
+          }
+          setOpenedByReader(event.currentTarget.open);
+        }}
+        open={openedByReader || forceOpen}
       >
-        {label}
-        <span className="text-foreground-disabled ms-2">
-          <OriginMark origin={origin} />
-        </span>
-      </summary>
-      <div className="mt-2">{children}</div>
-    </details>
+        <summary
+          className="reader-chrome text-muted-foreground cursor-pointer pe-20 text-[calc(0.75rem*var(--reader-text-scale))] font-semibold tracking-wide uppercase select-none marker:text-current"
+          data-reader-chrome=""
+        >
+          {label}
+        </summary>
+        <div className="mt-2">{children}</div>
+      </details>
+      {/* Same type as the summary, so both sit on one line at every size. */}
+      <span
+        className="reader-chrome text-foreground-disabled absolute end-0 top-0 text-[calc(0.75rem*var(--reader-text-scale))] font-semibold tracking-wide uppercase"
+        data-reader-chrome=""
+        data-slot="headnote-origin"
+      >
+        <OriginMark origin={origin} />
+      </span>
+    </div>
   );
 };

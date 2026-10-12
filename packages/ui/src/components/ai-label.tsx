@@ -35,8 +35,10 @@ type AiLabelProps = {
  * a small popover with the disclosure, and Escape or a click outside closes
  * it. Nothing depends on hover.
  *
- * The trigger stays inline, so it can sit inside a heading or a `<summary>`,
- * and a click on it never toggles the `<details>` around it.
+ * The trigger stays inline, so it can sit inside a heading or a line of
+ * text. Never inside another control (a `<summary>`, a link, a button): it is
+ * one itself, and nested interactive content is unreachable to assistive
+ * technology.
  */
 export const AiLabel = ({ label, disclosure, className }: AiLabelProps) => (
   <Popover>
@@ -47,12 +49,6 @@ export const AiLabel = ({ label, disclosure, className }: AiLabelProps) => (
         className,
       )}
       data-slot="ai-label"
-      onClickCapture={(event) => {
-        // A mark inside a `<summary>` must not also fold its section, in any
-        // engine. Cancelled on the way down, before the `<details>` sees the
-        // click bubble; the popover's own open handler runs regardless.
-        event.preventDefault();
-      }}
       type="button"
     >
       <SparklesIcon aria-hidden className="size-3 shrink-0" />

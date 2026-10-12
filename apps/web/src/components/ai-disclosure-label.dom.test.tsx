@@ -209,7 +209,12 @@ describe("the AI mark at each place the reader marks generated text", () => {
     });
     expect(marks).toHaveLength(1);
     const [mark] = marks;
-    const details = mark?.closest("details");
+    // On the section's row, never inside its toggle: a control within a
+    // `<summary>` is nested interactive content.
+    expect(mark?.closest("summary")).toBeNull();
+    const details = mark
+      ?.closest('[data-slot="headnote-block"]')
+      ?.querySelector("details");
     expect(details?.textContent).toContain(MODEL_HOLDING);
 
     await act(async () => {

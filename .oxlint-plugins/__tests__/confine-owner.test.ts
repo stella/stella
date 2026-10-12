@@ -790,3 +790,37 @@ test("RTF code-page decoding stays in the document reader", async () => {
     }),
   ).toEqual([]);
 });
+
+test("the AI label is reached only through a typed disclosure context", async () => {
+  const entry = OWNERSHIP.find(({ id }) => id === "ai-disclosure-label");
+  expect(entry).toBeDefined();
+  const options = { ruleOptions: { entries: [entry] } };
+  for (const source of [
+    'import { AiLabel } from "@stll/ui/ai-label";',
+    'import { AiLabel } from "@stll/ui/components/ai-label";',
+  ]) {
+    for (const sourcePath of [
+      "apps/web/src/features/chat/components/answer-mark.tsx",
+      "packages/decision-reader/src/headnote-block.tsx",
+      "apps/desktop/src/renderer/ai-mark.tsx",
+    ]) {
+      expect(
+        await lintSingleRule("confine-owner", source, {
+          ...options,
+          sourcePath,
+        }),
+      ).toEqual([1]);
+    }
+    for (const sourcePath of [
+      "apps/web/src/components/ai-disclosure-label.tsx",
+      "packages/decision-reader/src/reader-ai-label.tsx",
+    ]) {
+      expect(
+        await lintSingleRule("confine-owner", source, {
+          ...options,
+          sourcePath,
+        }),
+      ).toEqual([]);
+    }
+  }
+});

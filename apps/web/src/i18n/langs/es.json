@@ -66,7 +66,7 @@
     "selectedRun": "Ejecutar columnas de IA para {count, plural, one {# fila} other {# filas}}"
   },
   "aiDisclosure": {
-    "caseLaw": "Los resúmenes, notas y análisis de resoluciones judiciales elaborados con IA los genera stella; no están avalados por los tribunales ni reflejan su propio razonamiento. Son herramientas de apoyo para profesionales del derecho, y el texto de la resolución sigue siendo la fuente autorizada."
+    "caseLaw": "Los resúmenes, notas y análisis de resoluciones judiciales elaborados con IA los genera stella; no están avalados por los tribunales ni reflejan su propio razonamiento. Son herramientas de apoyo para profesionales del derecho, y solo el texto de la resolución tiene valor fehaciente."
   },
   "appearance": {
     "calendar": "Calendario",

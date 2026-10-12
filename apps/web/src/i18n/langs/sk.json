@@ -66,7 +66,7 @@
     "selectedRun": "Spustiť AI stĺpce pre {count, plural, one {# riadok} few {# riadky} many {# riadka} other {# riadkov}}"
   },
   "aiDisclosure": {
-    "caseLaw": "AI zhrnutia, poznámky a analýzy súdnych rozhodnutí vytvára stella. Súdy ich neschvaľujú a nevyjadrujú vlastné úvahy súdov; slúžia ako pomôcka pre právnikov a rozhodujúcim zdrojom zostáva text rozhodnutia."
+    "caseLaw": "AI zhrnutia, poznámky a analýzy súdnych rozhodnutí vytvára stella. Súdy ich neschvaľujú a nejde o vlastné úvahy súdov; slúžia ako pomôcka pre právnikov a rozhodujúcim zdrojom zostáva text rozhodnutia."
   },
   "appearance": {
     "calendar": "Kalendár",
