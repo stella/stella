@@ -3,12 +3,12 @@ import { panic } from "better-result";
 
 import type { ModelRole } from "@stll/ai-catalog";
 
-import type { ChatSafePromptLayers } from "@/api/handlers/chat/chat-prompt";
 import { getTemperatureForRole } from "@/api/lib/ai-config";
 import type {
   AIRequestServiceTier,
   CachingDecision,
 } from "@/api/lib/ai-config";
+import type { ChatSafePromptLayers } from "@/api/lib/chat/chat-prompt-layers";
 import { withRunToolCallIds } from "@/api/lib/chat/provider-stream-contract";
 import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import type { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
