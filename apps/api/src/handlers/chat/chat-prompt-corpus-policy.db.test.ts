@@ -3,6 +3,8 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+
 import { databaseRelations } from "@/api/db/database-relations";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -120,7 +122,7 @@ const NUMBERED_AST = {
       plainText: WORDING,
     },
   ],
-};
+} satisfies DocumentAst;
 const tenantDb: SafeDb = () =>
   panic("Anonymous corpus prompts must not read tenant data");
 let client: Awaited<ReturnType<typeof createTestPglite>>;

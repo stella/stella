@@ -564,8 +564,7 @@ export const styleDocumentCitationsWithCounts = (
           content,
         },
         // Inline citations add no notes: the package keeps whatever it had.
-        footnotes:
-          style === "inline" ? document.package.footnotes : context.footnotes,
+        ...(style === "inline" ? {} : { footnotes: context.footnotes }),
       },
     },
   };

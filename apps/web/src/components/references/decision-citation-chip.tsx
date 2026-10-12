@@ -47,7 +47,8 @@ const DecisionCitationLabel = ({
 }: {
   decision: DecisionCitationMetadata;
   presentation: DecisionCitationPresentation;
-  paragraphNumber: number | null;
+  /** The court's number, already in the reader's formatting locale. */
+  paragraphNumber: string | null;
 }) => {
   const t = useTranslations();
   const paragraph =
@@ -99,8 +100,12 @@ export const DecisionCitationChip = ({
   const date =
     formatDecisionDate(decision.decisionDate, format) ??
     t("caseLaw.citation.dateUnavailable");
+  // Formatted once, in the formatting locale, which may differ from the UI
+  // language (an Arabic numbering system, a grouping preference).
+  const paragraph =
+    paragraphNumber === null ? null : format.number(paragraphNumber);
   const reference =
-    paragraphNumber === null
+    paragraph === null
       ? t("caseLaw.citation.referenceLabel", {
           court: decision.court,
           caseNumber: decision.caseNumber,
@@ -110,7 +115,7 @@ export const DecisionCitationChip = ({
           court: decision.court,
           caseNumber: decision.caseNumber,
           date,
-          paragraph: paragraphNumber,
+          paragraph,
         });
   const links = resolveLegalCitationLinks({
     appUrl: decision.readerUrl,
@@ -155,7 +160,7 @@ export const DecisionCitationChip = ({
         <DecisionCitationLabel
           decision={decision}
           presentation={presentation}
-          paragraphNumber={paragraphNumber}
+          paragraphNumber={paragraph}
         />
       </PopoverTrigger>
       <PopoverPanel
@@ -176,11 +181,9 @@ export const DecisionCitationChip = ({
           <BidiText as="span" className="text-sm">
             {decision.caseNumber}
           </BidiText>
-          {paragraphNumber !== null && (
+          {paragraph !== null && (
             <span className="text-sm">
-              {t("caseLaw.citation.paragraphLabel", {
-                paragraph: paragraphNumber,
-              })}
+              {t("caseLaw.citation.paragraphLabel", { paragraph })}
             </span>
           )}
           <span className="text-muted-foreground text-xs">{date}</span>

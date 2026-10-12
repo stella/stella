@@ -6913,18 +6913,22 @@ describe("decision passage court numbers", () => {
     const cited = `[as held](${passage(EARLIER_ID, "p-4:9")})`;
     const stamped = `[as held](${passage(EARLIER_ID, "p-4:2")})`;
     const loads: (readonly string[])[] = [];
+    // A stored answer as `presentStoredHistory` serves it: its UI parts, with
+    // the empty `content` AG-UI requires.
+    const served = {
+      id: "assistant-2",
+      role: "assistant",
+      content: "",
+      parts: [{ type: "text", content: cited }],
+    } satisfies UIMessage & { content: string };
     const snapshot = unsafeFixture(
-      "A server snapshot carrying both message shapes",
+      "A server snapshot carrying an engine answer and a served UI answer",
       {
         type: EventType.MESSAGES_SNAPSHOT,
         messages: [
           { id: "user-1", role: "user", content: cited },
           { id: "assistant-1", role: "assistant", content: cited },
-          {
-            id: "assistant-2",
-            role: "assistant",
-            parts: [{ type: "text", content: cited }],
-          },
+          served,
         ],
       } satisfies StreamChunk,
     );
