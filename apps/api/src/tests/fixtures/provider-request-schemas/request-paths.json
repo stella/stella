@@ -79,6 +79,7 @@
     "tools[].function.description",
     "tools[].function.name",
     "tools[].function.parameters",
+    "tools[].function.strict",
     "tools[].type"
   ],
   "openai": [
