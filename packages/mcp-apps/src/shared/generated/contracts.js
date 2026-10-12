@@ -406,7 +406,36 @@ var SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET = {
 
 // packages/legal-ast/src/decision-identifier.ts
 import * as v3 from "valibot";
-
+// packages/text-normalize/src/spaced-letters.ts
+var buildSpacedLetterRunSource = () =>
+  "(?<=\\s|^)(?:\\p{L} (?:\\p{L} ){2,}\\p{L})(?: ?[,:;.!?])?(?=\\s|$)";
+var spacedLetterRunRegex = () => new RegExp(buildSpacedLetterRunSource(), "gu");
+var MULTI_SPACE_RE = / {2,}/gu;
+var SPACE_RE = / /gu;
+var lastInput;
+var lastResult;
+var collapsePass = (text) =>
+  text
+    .replace(spacedLetterRunRegex(), (match) => match.replace(SPACE_RE, ""))
+    .replace(MULTI_SPACE_RE, " ");
+var collapseSpacedLetters = (text) => {
+  if (text === lastInput && lastResult !== undefined) {
+    return lastResult;
+  }
+  let result = text;
+  for (;;) {
+    const next = collapsePass(result);
+    if (next === result) {
+      break;
+    }
+    result = next;
+  }
+  lastInput = text;
+  lastResult = result;
+  return result;
+};
+// packages/text-normalize/src/unicode.ts
+var normalizeUnicode = (text, form) => text.normalize(form);
 // packages/legal-ast/src/text-sanitize.ts
 var DANGEROUS_CHARS = new RegExp(
   "[" +
@@ -439,8 +468,7 @@ var DECISION_PRIMARY_REFERENCE_TYPES = [
 var DECISION_IDENTIFIER_MAX_LENGTH = 256;
 var DECISION_IDENTIFIER_MAX_COUNT = 32;
 var normalizeStructuredCitation = (value) =>
-  stripDangerousChars(value)
-    .normalize("NFKC")
+  normalizeUnicode(stripDangerousChars(value), "NFKC")
     .toLocaleLowerCase("und")
     .replace(/[\p{P}\p{Z}\s]+/gu, "")
     .trim();
@@ -749,34 +777,6 @@ var READER_PROVISION_ANCHOR_MAX_CHARS = 256;
 
 // packages/legal-ast/src/document-ast.ts
 import * as v9 from "valibot";
-// packages/text-normalize/src/spaced-letters.ts
-var buildSpacedLetterRunSource = () =>
-  "(?<=\\s|^)(?:\\p{L} (?:\\p{L} ){2,}\\p{L})(?: ?[,:;.!?])?(?=\\s|$)";
-var spacedLetterRunRegex = () => new RegExp(buildSpacedLetterRunSource(), "gu");
-var MULTI_SPACE_RE = / {2,}/gu;
-var SPACE_RE = / /gu;
-var lastInput;
-var lastResult;
-var collapsePass = (text) =>
-  text
-    .replace(spacedLetterRunRegex(), (match) => match.replace(SPACE_RE, ""))
-    .replace(MULTI_SPACE_RE, " ");
-var collapseSpacedLetters = (text) => {
-  if (text === lastInput && lastResult !== undefined) {
-    return lastResult;
-  }
-  let result = text;
-  for (;;) {
-    const next = collapsePass(result);
-    if (next === result) {
-      break;
-    }
-    result = next;
-  }
-  lastInput = text;
-  lastResult = result;
-  return result;
-};
 // packages/legal-ast/src/inline.ts
 import * as v8 from "valibot";
 var CITATION_UNRESOLVED_REASONS = [
