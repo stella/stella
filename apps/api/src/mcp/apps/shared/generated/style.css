@@ -5436,10 +5436,6 @@
       content: var(--tw-content);
       position: absolute;
     }
-    .pointer-coarse\:after\:-inset-3::after {
-      content: var(--tw-content);
-      inset: calc(var(--spacing) * -3);
-    }
     .pointer-coarse\:after\:inset-x-0::after {
       content: var(--tw-content);
       inset-inline: 0px;
