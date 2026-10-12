@@ -970,22 +970,30 @@ describe("detect-e2e-changes", () => {
     );
     expect(marketingUpdateWorkflow).not.toContain("--ref");
 
-    const update = jobOf(marketingWorkflow, "update");
+    const update = jobOf(marketingUpdateWorkflow, "update");
     const validate = workflowStepRun(update, "Validate inputs");
     expect(validate).toContain('if [[ "$WORKFLOW_REF" != "main" ]]');
     expect(validate).toContain('if [[ "$BRANCH" == "main" ]]');
     expect(validate).toContain('"$BRANCH" =~ ^[A-Za-z0-9._/-]+$');
     expect(validate).toContain('"$BRANCH" == *".."*');
     expect(validate).toContain('"$BRANCH" == -*');
-    // Nothing is minted for a branch that does not exist here.
-    expect(update.indexOf("- name: Verify the branch exists")).toBeLessThan(
-      update.indexOf("- name: Mint App token"),
+    // The branch's code runs in the capture job, which never mints a token;
+    // the publish job mints it only after the capture verified the branch.
+    const publish = jobOf(marketingUpdateWorkflow, "publish");
+    expect(update).toContain("- name: Verify the branch exists");
+    expect(update).not.toContain("- name: Mint App token");
+    expect(publish).toContain("needs: update");
+    expect(workflowStepRun(publish, "Validate inputs")).toContain(
+      'if [[ "$WORKFLOW_REF" != "main" ]]',
+    );
+    expect(publish.indexOf("- name: Validate inputs")).toBeLessThan(
+      publish.indexOf("- name: Mint App token"),
     );
 
     // Updates capture the named branch; ordinary checks keep the event's
     // ref. Only the validated main-heavy caller selects an explicit SHA.
     expect(workflowStepValue(update, "Checkout")["with"]).toMatchObject({
-      ref: githubExpression("inputs.ref"),
+      ref: githubExpression("inputs.branch"),
     });
     expect(checkoutRefs.length).toBeGreaterThan(0);
     for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
@@ -1096,11 +1104,6 @@ describe("detect-e2e-changes", () => {
         }
       }
     }
-    expect(
-      evaluateExpression(marketingCheckout("update"), {
-        inputs: { ref: "named-branch" },
-      }),
-    ).toBe("named-branch");
     const validateSteps = mainHeavyContract.jobs["validate"]?.steps ?? [];
     expect(
       validateSteps.find(({ name }) => name === "Validate SHA format")?.run,
@@ -1111,13 +1114,13 @@ describe("detect-e2e-changes", () => {
     // The push is an API commit appended to the named branch: GitHub signs
     // it, so it cannot leave a person's pull request behind the
     // signed-commits rule.
-    const push = workflowStepValue(update, "Push regenerated baselines");
+    const push = workflowStepValue(publish, "Push regenerated baselines");
     expect(push["uses"]).toContain(
       "stella/.github/.github/actions/signed-commit@",
     );
     expect(push["with"]).toMatchObject({
       mode: "append",
-      branch: githubExpression("inputs.ref"),
+      branch: githubExpression("inputs.branch"),
     });
 
     // Nightly checks continue to use their triggering ref.
@@ -1126,7 +1129,7 @@ describe("detect-e2e-changes", () => {
 
   test("publishes regenerated baselines a fork pull request can commit itself", () => {
     const upload = workflowStepValue(
-      jobOf(marketingWorkflow, "update"),
+      jobOf(marketingUpdateWorkflow, "update"),
       "Upload regenerated baselines",
     );
     expect(upload["uses"]).toBe(
@@ -1140,9 +1143,9 @@ describe("detect-e2e-changes", () => {
     // Published before the push, so a run that cannot push still hands over
     // the PNGs.
     expect(
-      marketingWorkflow.indexOf("- name: Upload regenerated baselines"),
+      marketingUpdateWorkflow.indexOf("- name: Upload regenerated baselines"),
     ).toBeLessThan(
-      marketingWorkflow.indexOf("- name: Push regenerated baselines"),
+      marketingUpdateWorkflow.indexOf("- name: Push regenerated baselines"),
     );
   });
 
@@ -1168,11 +1171,11 @@ describe("detect-e2e-changes", () => {
   test("keeps one capture body behind both screenshot directions", () => {
     // The shared body is a composite action so check and update cannot drift;
     // only the checkout differs, because update captures a named branch.
-    expect(
-      marketingWorkflow.match(
-        /uses: \.\/\.github\/actions\/marketing-capture/gu,
-      ),
-    ).toHaveLength(2);
+    for (const source of [marketingWorkflow, marketingUpdateWorkflow]) {
+      expect(
+        source.match(/uses: \.\/\.github\/actions\/marketing-capture/gu),
+      ).toHaveLength(1);
+    }
     expect(marketingWorkflow).not.toContain("test:e2e:marketing");
     expect(marketingCapture).toContain("test:e2e:marketing:update");
     // Cleanup stays inside the action so a failed capture still releases the
@@ -1180,12 +1183,12 @@ describe("detect-e2e-changes", () => {
     expect(
       actionStep(marketingCapture, "Stop production web server"),
     ).toContain("if: always()");
-    // An unrecognised mode must fail loudly: the check job runs on anything
-    // that is not update, so it reaches this validation instead of leaving
-    // both jobs skipped and green.
-    expect(jobOf(marketingWorkflow, "check")).toContain(
-      "if: inputs.mode != 'update'",
-    );
+    // An unrecognised mode must fail loudly: the check job always runs and
+    // requires check mode, instead of being skipped green.
+    expect(jobOf(marketingWorkflow, "check")).not.toContain("if: inputs.mode");
+    expect(
+      workflowStepRun(jobOf(marketingWorkflow, "check"), "Require check mode"),
+    ).toContain('if [[ "$MODE" != check ]]');
     expect(actionStep(marketingCapture, "Validate mode")).toContain(
       "Unknown marketing screenshot mode",
     );
@@ -1486,20 +1489,20 @@ describe("detect-e2e-changes", () => {
     // policy is main and release tags. A job that reads it without declaring
     // the environment would be a job the policy never sees, so the census
     // below covers every workflow rather than the two edited here.
-    expect(jobOf(marketingWorkflow, "update")).toContain(
+    expect(jobOf(marketingUpdateWorkflow, "publish")).toContain(
       "environment: release-app",
+    );
+    expect(jobOf(marketingUpdateWorkflow, "update")).not.toContain(
+      "environment:",
     );
     expect(jobOf(marketingWorkflow, "check")).not.toContain("environment:");
 
     // A job that calls a reusable workflow cannot declare an environment:
-    // GitHub allows only name, uses, with, secrets, needs, if, and
-    // permissions there. A local reusable declares it on its own job (walked
+    // GitHub allows only name, uses, with, secrets, strategy, needs, if,
+    // concurrency, and permissions there. A local reusable declares it on its own job (walked
     // below); a remote one must be handed the environment name. Pinned so
     // each caller stays a listed decision.
-    const forwardingCallers = new Set([
-      "marketing-screenshots-update.yml#update",
-      "publish-npm.yml#release",
-    ]);
+    const forwardingCallers = new Set(["publish-npm.yml#release"]);
     const seenCallers = new Set<string>();
 
     const workflowsDir = path.join(import.meta.dirname, "../.github/workflows");

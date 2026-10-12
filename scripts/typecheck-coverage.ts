@@ -120,6 +120,8 @@ const OXC_PROJECT_PROXIES = [
 ] as const satisfies readonly OxcProjectProxy[];
 
 const OXC_NATIVE_ONLY_PROJECTS = [
+  "apps/api/tsconfig.src.json",
+  "apps/api/tsconfig.tests.json",
   "tsconfig.scripts.json",
   "tsconfig.tooling.json",
   "tsconfig.oxlint-plugins.json",
@@ -260,8 +262,19 @@ const typecheckProjects = (): string[] => {
 
       addProject(path.join(workspace, "tsconfig.json"), workspace);
 
-      for (const project of supplementalProjects(typecheck)) {
-        addProject(path.join(workspace, project), workspace);
+      for (const [name, command] of Object.entries(packageJson.scripts)) {
+        if (name !== "typecheck" && !name.startsWith("typecheck:")) {
+          continue;
+        }
+        if (
+          name === "generate:typecheck-declarations" ||
+          typeof command !== "string"
+        ) {
+          continue;
+        }
+        for (const project of supplementalProjects(command)) {
+          addProject(path.join(workspace, project), workspace);
+        }
       }
     }
   }
@@ -972,7 +985,7 @@ const selfTest = (): void => {
   console.log("typecheck-coverage --self-test: PASS");
 };
 
-const main = (): void => {
+const main = async (): Promise<void> => {
   if (process.argv.at(2) === "--autofix") {
     typecheckAutofixFiles(process.argv.slice(3));
     return;
@@ -981,6 +994,25 @@ const main = (): void => {
   if (options.selfTest) {
     selfTest();
     return;
+  }
+
+  run([
+    "bunx",
+    "--no-install",
+    "turbo",
+    "run",
+    "generate:typecheck-declarations",
+    "--filter=@stll/api",
+  ]);
+
+  run(["bun", "packages/scripts/src/api-typecheck-partition.ts", "--resolved"]);
+
+  // Autofix checks supplied projects without loading the repository cache audit.
+  const { typecheckCacheContractIssues } =
+    await import("../packages/scripts/src/typecheck-cache-contract");
+  const cacheIssues = typecheckCacheContractIssues(REPO_ROOT);
+  if (cacheIssues.length > 0) {
+    panic(cacheIssues.join("\n"));
   }
 
   const projects = typecheckProjects();
@@ -1045,4 +1077,4 @@ const main = (): void => {
   );
 };
 
-main();
+await main();
