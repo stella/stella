@@ -171,14 +171,32 @@ export const REHEARSAL_SEEDERS = {
            ${ZERO_DIGEST},
            ${PROJECTION_EPOCH}
     FROM generate_series(1, ${String(decisions)}) AS g(k)`,
+  // Introduced by the pending citation-stats migration. Conditional until the
+  // promoted base schema used by upgrade rehearsals carries it.
   case_law_decision_citation_stats: () => `
-    INSERT INTO case_law_decision_citation_stats
-      (decision_id, direction, related_year, related_country, related_source_id, polarity, count)
-    SELECT d.id, 'incoming', 2024, 'CZE', '${SOURCE_ID}', 'unknown', 1
-    FROM rehearsal_decisions d`,
+    DO $rehearsal$
+    BEGIN
+      IF to_regclass('case_law_decision_citation_stats') IS NOT NULL THEN
+        EXECUTE $seed$
+          INSERT INTO case_law_decision_citation_stats
+            (decision_id, direction, related_year, related_country, related_source_id, polarity, count)
+          SELECT d.id, 'incoming', 2024, 'CZE', '${SOURCE_ID}', 'unknown', 1
+          FROM rehearsal_decisions d
+        $seed$;
+      END IF;
+    END
+    $rehearsal$`,
   case_law_decision_citation_stats_state: () => `
-    INSERT INTO case_law_decision_citation_stats_state (decision_id, status)
-    SELECT d.id, 'pending' FROM rehearsal_decisions d`,
+    DO $rehearsal$
+    BEGIN
+      IF to_regclass('case_law_decision_citation_stats_state') IS NOT NULL THEN
+        EXECUTE $seed$
+          INSERT INTO case_law_decision_citation_stats_state (decision_id, status)
+          SELECT d.id, 'pending' FROM rehearsal_decisions d
+        $seed$;
+      END IF;
+    END
+    $rehearsal$`,
   case_law_decision_identifiers: () => `
     INSERT INTO case_law_decision_identifiers (decision_id, type, value, normalized_value)
     SELECT d.id, 'case-number', d.case_number, lower(d.case_number)
