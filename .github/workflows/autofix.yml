@@ -64,9 +64,11 @@ jobs:
           set -euo pipefail
           cp .regeneration-controls/scripts/pr-regeneration.ts "$RUNNER_TEMP/pr-regeneration.ts"
           cp .regeneration-controls/scripts/gh-retry.sh "$RUNNER_TEMP/gh-retry.sh"
-          echo "hash=$(sha256sum "$RUNNER_TEMP/pr-regeneration.ts" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
-          echo "retry_hash=$(sha256sum "$RUNNER_TEMP/gh-retry.sh" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
-          echo "event_hash=$(sha256sum "$GITHUB_EVENT_PATH" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          {
+            echo "hash=$(sha256sum "$RUNNER_TEMP/pr-regeneration.ts" | cut -d ' ' -f 1)"
+            echo "retry_hash=$(sha256sum "$RUNNER_TEMP/gh-retry.sh" | cut -d ' ' -f 1)"
+            echo "event_hash=$(sha256sum "$GITHUB_EVENT_PATH" | cut -d ' ' -f 1)"
+          } >> "$GITHUB_OUTPUT"
           rm -rf .regeneration-controls
 
       - name: Verify regeneration request
