@@ -3458,7 +3458,7 @@ const config = defineConfig({
       },
     },
     {
-      files: ["apps/api/src/mcp/apps/**/*.tsx"],
+      files: ["packages/mcp-apps/src/**/*.tsx"],
       excludeFiles: ["**/*.test.tsx"],
       rules: {
         "no-untranslated-jsx-literal/no-untranslated-jsx-literal": [
