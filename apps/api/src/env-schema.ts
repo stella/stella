@@ -244,6 +244,19 @@ export const envApiServerSchema = {
   SMOKE_SESSION_SECRET: v.optional(v.pipe(v.string(), v.minLength(32))),
   SESSION_TOKEN_ROTATION_ENABLED: featureFlagSchema,
   SESSION_LIFETIME_CAP_ENABLED: featureFlagSchema,
+  MCP_WEB_HANDOFF_MINT_ENABLED: featureFlagSchema,
+  MCP_WEB_HANDOFF_TEXT_ENABLED: v.optional(v.picklist(["0", "1"]), "1"),
+  MCP_WEB_HANDOFF_TEXT_SESSION_MAX_SECONDS: v.optional(
+    v.pipe(
+      v.string(),
+      v.digits(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(43_200),
+    ),
+    "43200",
+  ),
   /**
    * Deployment-owned bearer credential for collaboration snapshot transport.
    * Unset disables the service-only load/store routes.
