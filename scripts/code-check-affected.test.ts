@@ -1071,24 +1071,30 @@ describe("parallel code-quality legs", () => {
       assertDeadline(step);
       expect(() =>
         assertDeadline(
-          step.replace("timeout-minutes: 17", "timeout-minutes: 8"),
+          step.replace(/timeout-minutes: \d+/u, "timeout-minutes: 8"),
         ),
       ).toThrow("measured critical-path deadline");
     }
   });
 
-  test("the hard deadline covers the API serial critical path and cold full-leg measurement", () => {
-    expect(turboTasks()["@stll/api#lint"]?.["dependsOn"]).toContain(
+  test("the hard deadline follows the API parallel critical path and measured cold branches", () => {
+    expect(turboTasks()["@stll/api#lint"]?.["dependsOn"]).not.toContain(
       "typecheck",
     );
     const criticalPath =
-      configuredBudgets.overrides["@stll/api#typecheck"] +
-      configuredBudgets.overrides["@stll/api#lint"] +
+      Math.max(
+        configuredBudgets.overrides["@stll/api#typecheck"],
+        configuredBudgets.overrides["@stll/api#lint"],
+      ) +
       configuredBudgets.defaultSeconds * 2;
-    expect(CODE_CHECK_EXECUTION_BUDGET_MS).toBeGreaterThan(criticalPath * 1000);
-    // Completed cold API leg, including generator overhead and scheduling.
-    expect(CODE_CHECK_EXECUTION_BUDGET_MS).toBeGreaterThan(340_183 * 2);
-    expect(290_000).toBeLessThan(340_183);
+    expect(CODE_CHECK_EXECUTION_BUDGET_MS).toBe((criticalPath + 60) * 1000);
+    const coldBranch = Math.max(
+      ...configuredBudgets.coldSamplesSeconds["@stll/api#typecheck"],
+      ...configuredBudgets.coldSamplesSeconds["@stll/api#lint"],
+    );
+    expect(CODE_CHECK_EXECUTION_BUDGET_MS).toBeGreaterThan(
+      (coldBranch * 2 + configuredBudgets.defaultSeconds * 2) * 1000,
+    );
   });
 
   test("web lint starts first without duplicating it or selecting an unrelated workspace", () => {

@@ -35,11 +35,13 @@ import {
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const DEFAULT_BASE = "origin/main";
-// API lint follows typecheck; allow both measured task budgets, two generator
-// stages and a minute for planning/cleanup. The workflow adds another minute.
+// API lint and typecheck run in parallel after generation. Allow the slower
+// branch, two generator stages and a minute for planning/cleanup.
 export const CODE_CHECK_EXECUTION_BUDGET_MS =
-  (configuredBudgets.overrides["@stll/api#typecheck"] +
-    configuredBudgets.overrides["@stll/api#lint"] +
+  (Math.max(
+    configuredBudgets.overrides["@stll/api#typecheck"],
+    configuredBudgets.overrides["@stll/api#lint"],
+  ) +
     configuredBudgets.defaultSeconds * 2 +
     60) *
   1000;
