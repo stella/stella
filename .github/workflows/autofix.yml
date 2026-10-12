@@ -493,7 +493,7 @@ jobs:
             fi
             protected_path=false
             for pattern in "${protected[@]}"; do
-              if [[ "$path" == @($pattern) ]]; then
+              if [[ "$path" == $pattern ]]; then
                 protected_path=true
                 break
               fi
