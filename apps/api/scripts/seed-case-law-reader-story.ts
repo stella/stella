@@ -18,6 +18,7 @@ import type {
   ReaderAnnotationColor,
   ReaderAnnotationStyle,
 } from "@stll/api-contract/legal-reader-annotations";
+import { courtParagraphNumbersByAnchor } from "@stll/legal-ast/court-paragraph-number";
 import { isDocumentAst } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 
@@ -248,17 +249,27 @@ export const buildReaderStoryAnnotationRows = ({
   });
 };
 
-/** The answer as Markdown, each citation a decision passage link. */
+/**
+ * The answer as Markdown, each citation a decision passage link carrying the
+ * number the court printed on the cited paragraph, as a live answer's would.
+ */
 export const renderReaderStoryAnswer = (
   decisionId: SafeId<"caseLawDecision">,
-): string =>
-  CASE_LAW_READER_STORY.answer
+  blocks: readonly Block[],
+): string => {
+  const numbers = courtParagraphNumbersByAnchor(blocks);
+  return CASE_LAW_READER_STORY.answer
     .map((run) =>
       typeof run === "string"
         ? run
-        : `[${run.text}](${toChatDecisionPassageHref({ anchorId: run.cite, decisionId })})`,
+        : `[${run.text}](${toChatDecisionPassageHref({
+            anchorId: run.cite,
+            courtParagraphNumber: numbers.get(run.cite) ?? null,
+            decisionId,
+          })})`,
     )
     .join("");
+};
 
 /** The decision's chat: one thread, the question and its cited answer. */
 export const buildReaderStoryChatRows = ({
@@ -287,7 +298,7 @@ export const buildReaderStoryChatRows = ({
   const answer = toPersistableChatMessage({
     id: seedId<"chatMessage">(storySeedId(scope, "answer")),
     role: "assistant",
-    parts: [createChatTextPart(renderReaderStoryAnswer(decisionId))],
+    parts: [createChatTextPart(renderReaderStoryAnswer(decisionId, blocks))],
     metadata: { turnOutcome: { type: "completed" } },
   });
   return {

@@ -4,6 +4,7 @@ import path from "node:path";
 import { parseChatDecisionPassageHref } from "@stll/api-contract";
 import { READER_ANNOTATION_QUOTE_MAX_LENGTH } from "@stll/api-contract/legal-reader-annotations";
 import type { PersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
+import { courtParagraphNumbersByAnchor } from "@stll/legal-ast/court-paragraph-number";
 import { isDocumentAst, plainTextOf } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 
@@ -201,7 +202,9 @@ describe("the seeded case-law reader story", () => {
   test("every citation in the answer opens an existing paragraph of the decision", async () => {
     const { blocks } = await storyDecision();
     const anchors = new Set(blocks.map((block) => block.anchorId));
-    const links = passageLinks(renderReaderStoryAnswer(scope.decisionId));
+    const links = passageLinks(
+      renderReaderStoryAnswer(scope.decisionId, blocks),
+    );
     const cited = CASE_LAW_READER_STORY.answer.filter(
       (run) => typeof run !== "string",
     );
@@ -212,6 +215,11 @@ describe("the seeded case-law reader story", () => {
       const target = parseChatDecisionPassageHref(href);
       expect(target?.decisionId).toBe(scope.decisionId);
       expect(anchors.has(target?.anchorId ?? "")).toBe(true);
+      // The court's own number for that paragraph, as a live answer carries.
+      expect(target?.courtParagraphNumber).toBe(
+        courtParagraphNumbersByAnchor(blocks).get(target?.anchorId ?? "") ??
+          null,
+      );
     }
   });
 
@@ -252,7 +260,7 @@ describe("the seeded case-law reader story", () => {
       CASE_LAW_READER_STORY.question,
     ]);
     expect(answer?.parts.map(chatPartText)).toEqual([
-      renderReaderStoryAnswer(scope.decisionId),
+      renderReaderStoryAnswer(scope.decisionId, blocks),
     ]);
     expect(answer?.metadata?.turnOutcome).toEqual({ type: "completed" });
     expect(messages.every(({ threadId }) => threadId === thread.id)).toBe(true);
