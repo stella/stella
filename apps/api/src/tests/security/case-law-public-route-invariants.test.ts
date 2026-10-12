@@ -194,9 +194,6 @@ const PUBLIC_DECISION_READ_GATES = {
     reason: "Relation definitions.",
   },
   [CITATION_GRAPH_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
-  "apps/api/src/handlers/case-law/decisions/citations.ts": {
-    gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
-  },
   "apps/api/src/handlers/case-law/decisions/citation-passages.ts": {
     gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
   },
