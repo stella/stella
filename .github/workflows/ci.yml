@@ -6609,7 +6609,7 @@ jobs:
           bun-version-file: package.json
 
       - name: Install dependencies
-        timeout-minutes: 3
+        timeout-minutes: 2
         uses: $/.github/actions/ci-install
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
@@ -7957,7 +7957,7 @@ jobs:
           bun-version-file: package.json
 
       - name: Install dependencies
-        timeout-minutes: 7
+        timeout-minutes: 5
         uses: $/.github/actions/ci-install
         with:
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/desktop...","--filter","!stella"]'
@@ -8077,7 +8077,7 @@ jobs:
           bun-version-file: package.json
 
       - name: Install scripts workspace dependencies
-        timeout-minutes: 7
+        timeout-minutes: 5
         uses: $/.github/actions/ci-install
         with:
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts"]'

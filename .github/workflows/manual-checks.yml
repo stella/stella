@@ -169,7 +169,7 @@ jobs:
       - name: Measure scoped install
         id: install
         uses: $/.github/actions/ci-install
-        timeout-minutes: 7
+        timeout-minutes: 5
         with:
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/desktop...","--filter","!stella"]'
       - name: Report measured phases
@@ -189,7 +189,7 @@ jobs:
             console.log(JSON.stringify(result));
             await Bun.write(process.env.RUNNER_TEMP + "/install-measurement.json", JSON.stringify(result, null, 2) + "\n");
             const file = Bun.file(process.env.GITHUB_STEP_SUMMARY);
-            await Bun.write(file, "```json\n" + JSON.stringify(result, null, 2) + "\n```\n");
+            await Bun.write(file, JSON.stringify(result, null, 2).split("\n").map(line => "    " + line).join("\n") + "\n");
           '
       - name: Upload measurement
         if: always()
@@ -238,7 +238,7 @@ jobs:
             console.log(JSON.stringify(result));
             await Bun.write(process.env.RUNNER_TEMP + "/install-measurement.json", JSON.stringify(result, null, 2) + "\n");
             const file = Bun.file(process.env.GITHUB_STEP_SUMMARY);
-            await Bun.write(file, "```json\n" + JSON.stringify(result, null, 2) + "\n```\n");
+            await Bun.write(file, JSON.stringify(result, null, 2).split("\n").map(line => "    " + line).join("\n") + "\n");
           '
       - name: Upload measurement
         if: always()

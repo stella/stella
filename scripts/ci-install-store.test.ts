@@ -547,7 +547,7 @@ test("the manual install-cache benchmark is dispatch-only and reports measured p
       "--filter",
       "!stella",
     ],
-    7,
+    5,
   );
   measure(linux, ["--frozen-lockfile", "--ignore-scripts"], 3);
 });

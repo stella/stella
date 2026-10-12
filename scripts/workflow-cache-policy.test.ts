@@ -274,17 +274,24 @@ test("dropping save from a real Bun caller violates the repository contract", ()
       ),
     ),
   );
-  const step = Object.values(workflow.jobs)
-    .flatMap((job) => job.steps ?? [])
-    .find((candidate) =>
-      candidate.uses?.startsWith("stella/.github/actions/setup-bun-cached@"),
-    );
+  const caller = Object.entries(workflow.jobs)
+    .flatMap(([id, job]) =>
+      (job.steps ?? [])
+        .filter((candidate) =>
+          candidate.uses?.startsWith(
+            "stella/.github/actions/setup-bun-cached@",
+          ),
+        )
+        .map((step) => ({ id, step })),
+    )
+    .at(0);
+  const step = caller?.step;
   if (!step?.with) {
     expect.unreachable("Missing real Bun cache caller");
   }
   expect(workflowCacheProblems(workflow)).toEqual([]);
   delete step.with["save"];
   expect(workflowCacheProblems(workflow)).toContain(
-    "job 'ci-plan': Bun install cache saves must be main-only",
+    `job '${caller?.id}': Bun install cache saves must be main-only`,
   );
 });
