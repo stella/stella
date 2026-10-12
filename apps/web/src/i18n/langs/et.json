@@ -1089,6 +1089,9 @@
       "toastDescription": "Täisleheküljel vestlus koos salvestatud lõimedega on tulekul.",
       "toastTitle": "Täisvaade ei ole veel saadaval"
     },
+    "activity": {
+      "review": "Ülevaatuse värskendus"
+    },
     "aiPrompt": "AI sõnumiväli",
     "aiThread": "AI vestlus",
     "analyzingSources": "Allikate analüüsimine",

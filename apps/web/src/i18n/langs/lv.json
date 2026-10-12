@@ -1089,6 +1089,9 @@
       "toastDescription": "Pilnas lapas tērzēšana ar saglabātām sarunām drīz būs pieejama.",
       "toastTitle": "Pilnais skats vēl nav pieejams"
     },
+    "activity": {
+      "review": "Pārskatīšanas atjauninājums"
+    },
     "aiPrompt": "AI ziņojuma lauks",
     "aiThread": "AI saruna",
     "analyzingSources": "Avotu analīze",
