@@ -189,46 +189,33 @@ test("desktop request authorization follows each operation", () => {
 });
 
 test("a role without the permission is forbidden, not disconnected", () => {
-  const cases = [
-    {
-      member: null,
-      permission: DESKTOP_ACCOUNT_PERMISSION,
-      status: "err",
-      value: 401,
-    },
+  const deniedCases = [
+    { member: null, permission: DESKTOP_ACCOUNT_PERMISSION, status: 401 },
     {
       member: { role: "not-a-role" },
       permission: DESKTOP_ACCOUNT_PERMISSION,
-      status: "err",
-      value: 401,
-    },
-    // External members may link the desktop but not search registries.
-    {
-      member: { role: "external" },
-      permission: DESKTOP_ACCOUNT_PERMISSION,
-      status: "ok",
-      value: "external",
+      status: 401,
     },
     {
       member: { role: "external" },
       permission: DESKTOP_REGISTRY_PERMISSION,
-      status: "err",
-      value: 403,
-    },
-    {
-      member: { role: "owner" },
-      permission: DESKTOP_REGISTRY_PERMISSION,
-      status: "ok",
-      value: "owner",
+      status: 403,
     },
   ] as const;
-  for (const { member, permission, status, value } of cases) {
+  for (const { member, permission, status } of deniedCases) {
     const result = authorizeDesktopMember(member, permission);
-    expect(result.status).toBe(status);
+    expect(result.isErr()).toBe(true);
     if (result.isErr()) {
-      expect(result.error.status).toBe(value);
-      continue;
+      expect(result.error.status).toBe(status);
     }
-    expect(roleForDisplay(result.value)).toBe(value);
+  }
+  // External members may link the desktop but not search registries.
+  const allowedCases = [
+    { member: { role: "external" }, permission: DESKTOP_ACCOUNT_PERMISSION },
+    { member: { role: "owner" }, permission: DESKTOP_REGISTRY_PERMISSION },
+  ] as const;
+  for (const { member, permission } of allowedCases) {
+    const result = authorizeDesktopMember(member, permission);
+    expect(roleForDisplay(result.unwrap())).toBe(member.role);
   }
 });
