@@ -18,6 +18,12 @@ export type Generator = {
   blocks?: readonly { path: string; begin: string; end: string }[];
   inputs: readonly string[];
   write: readonly string[];
+  /**
+   * Whether the autofix workflow may run `write` and push its outputs. Only a
+   * pure function of committed source qualifies: no network, secrets, clock,
+   * randomness, or untracked machine state. `autofix-pure-generators.test.ts`
+   * records what was checked for the ones enabled after the first pass.
+   */
   autofix: boolean;
   after: readonly string[];
 } & GeneratorCheck;
@@ -464,7 +470,7 @@ export const GENERATORS = [
       "apps/web/src/i18n/langs",
       "--check",
     ],
-    autofix: false,
+    autofix: true,
     after: [],
   },
   {
@@ -486,7 +492,7 @@ export const GENERATORS = [
       "apps/landing/src/i18n/messages",
       "--check",
     ],
-    autofix: false,
+    autofix: true,
     after: [],
   },
   {
@@ -508,7 +514,7 @@ export const GENERATORS = [
       "packages/transactional/i18n/langs",
       "--check",
     ],
-    autofix: false,
+    autofix: true,
     after: [],
   },
   {
@@ -563,7 +569,7 @@ export const GENERATORS = [
     ],
     write: ["bun", "apps/web/scripts/sync-prepaint-locales.ts"],
     check: ["bun", "apps/web/scripts/sync-prepaint-locales.ts", "--check"],
-    autofix: false,
+    autofix: true,
     after: [],
   },
   {
