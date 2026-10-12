@@ -15,6 +15,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "public",
     reason: "Returns public judicial portraits.",

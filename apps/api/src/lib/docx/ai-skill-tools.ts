@@ -1,3 +1,4 @@
+import { maxIterations } from "@tanstack/ai";
 /**
  * Wires stella `load-skill` / `read-skill-resource` tools into the one-shot
  * template field generators when (and only when) a field's AI instruction
@@ -13,7 +14,6 @@
  * Reusable beyond the docx generators: the extraction (properties) generators
  * can adopt the same `maybeSkillTools` seam later without changing this module.
  */
-
 import { Result } from "better-result";
 
 import { SKILL_REF_HREF_PREFIX } from "@stll/api-contract";
@@ -24,7 +24,11 @@ import { extractSkillRefSlugs } from "@/api/lib/agent-skills/skill-refs";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import { listAvailableChatSkillMetadata } from "@/api/lib/agent-skills/skills";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
+import {
+  chatToolMapToArray,
+  type ChatToolMap,
+} from "@/api/lib/chat/chat-tool-types";
+import { failureSink } from "@/api/lib/observability/failure";
 
 /** Server-validated identity the skill tools resolve skills against. */
 export type SkillToolsContext = {
@@ -86,3 +90,39 @@ export const SKILL_REF_GENERATOR_GUIDANCE =
   `[label](${SKILL_REF_HREF_PREFIX}slug), call load-skill with that slug first, ` +
   "then apply the skill's methodology to draft this field. Do not narrate " +
   "loading the skill; return only the field value.";
+
+const CONDITION_SKILL_MAX_STEPS = 4;
+
+export const conditionSkillCapability = (prompt: string) =>
+  extractSkillRefSlugs(prompt).length > 0
+    ? { requiredCapability: "tools" as const }
+    : {};
+
+/** Fill and preview must expose the same skill reads and capability requirement. */
+export const prepareConditionSkills = async (
+  prompt: string,
+  context: SkillToolsContext | undefined,
+) => {
+  const tools = await maybeSkillTools(prompt, context);
+  if (Result.isError(tools)) {
+    return Result.err(tools.error);
+  }
+  return Result.ok({
+    question: conditionSkillCapability(prompt),
+    generation:
+      tools.value === undefined
+        ? {}
+        : {
+            system: SKILL_REF_GENERATOR_GUIDANCE,
+            tools: chatToolMapToArray(tools.value),
+            agentLoopStrategy: maxIterations(CONDITION_SKILL_MAX_STEPS),
+          },
+  });
+};
+
+// Loading the caller's skill catalog failed before any model call, so it is a
+// database failure of this adapter rather than a generation outcome.
+export const SKILL_CATALOG_LOAD_SINK = failureSink({
+  event: "ai_field.skill_catalog_load_failed",
+  expected: [],
+});

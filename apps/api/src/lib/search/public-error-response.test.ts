@@ -80,6 +80,7 @@ test("public error projection bounds serialized Unicode and issue collections", 
 });
 
 const publicConfig = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "health_infra" },
   cache: { kind: "none" },

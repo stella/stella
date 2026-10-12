@@ -12,6 +12,7 @@ import { toNumberPatternScopeKey } from "@/api/lib/billing/number-pattern";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contract: "patch",
   description:
     "Preview the next number for a date without reserving it. A concurrent issue can change the result.",
   permissions: { organizationSettings: ["update"] },

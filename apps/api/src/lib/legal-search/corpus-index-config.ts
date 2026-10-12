@@ -129,13 +129,42 @@ const CORPUS_INDEX_MERGE_POLICY = {
 } as const satisfies CorpusIndexMergePolicy;
 
 /** Final-index merge window and asynchronous-delete settlement bound. */
-export const CORPUS_FINAL_INDEX_MERGE_POLICY = {
+const CORPUS_FINAL_INDEX_MERGE_POLICY = {
   ...CORPUS_INDEX_MERGE_POLICY,
   maturation_period: "4hours",
 } as const satisfies CorpusIndexMergePolicy;
 
-/** Engine commit window pinned by final-generation manifests and clients. */
-export const CORPUS_INDEX_COMMIT_TIMEOUT_SECS = 60;
+/**
+ * Commit window and merge policy; per generation, like the docstore, because
+ * both are part of the manifest a generation is identified by.
+ */
+export type CorpusIndexIndexingSettings = {
+  commitTimeoutSecs: number;
+  mergePolicy: CorpusIndexMergePolicy;
+};
+
+/** What the generations through case_law_v7 and legislation_v2 use. */
+export const CORPUS_FINAL_INDEX_INDEXING_DEFAULT = {
+  commitTimeoutSecs: 60,
+  mergePolicy: CORPUS_FINAL_INDEX_MERGE_POLICY,
+} as const satisfies CorpusIndexIndexingSettings;
+
+/**
+ * Settings case_law_v8 and legislation_v3 are created with. A trickle of
+ * appends stages one split per commit, and a split that matures before nine
+ * siblings join it is never merged again, so a longer commit window stages
+ * fewer splits and a longer maturation keeps merging them. Deletes apply to
+ * mature splits only, so a superseded revision stays in the index for up to
+ * the maturation period: every passage read filters on the revision Postgres
+ * records as applied.
+ */
+export const CORPUS_FINAL_INDEX_INDEXING_V8 = {
+  commitTimeoutSecs: 600,
+  mergePolicy: {
+    ...CORPUS_FINAL_INDEX_MERGE_POLICY,
+    maturation_period: "7days",
+  },
+} as const satisfies CorpusIndexIndexingSettings;
 
 type CorpusIndexDocMappingMode = "lenient" | "strict" | "dynamic";
 
