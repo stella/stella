@@ -128,6 +128,11 @@
     "orSignInWithEmail": "أو سجّل الدخول بالبريد الإلكتروني",
     "organizationNamePlaceholder": "مؤسستي",
     "password": "كلمة المرور",
+    "professionalUse": {
+      "description": "لم يُعرض عليك هذا البيان عند إنشاء حسابك. اقبله للمتابعة.",
+      "title": "تأكيد الاستخدام المهني"
+    },
+    "professionalUseStatement": "بإنشاء حساب، تؤكد أنك تستخدم stella لأغراض مهنية، وتقرّ بأن stella أداة مخصّصة للمهنيين القانونيين ولا تُغني عن الاستشارة القانونية.",
     "rateLimitExceeded": "محاولات كثيرة جدًا. يُرجى المحاولة مرة أخرى لاحقًا.",
     "resendCode": "إرسال الرمز مرة أخرى إلى <email>{emailAddress}</email>",
     "selectOrganization": "اختر مؤسسة",
