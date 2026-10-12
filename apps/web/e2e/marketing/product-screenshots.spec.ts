@@ -44,6 +44,9 @@ const READER_STORY_ANSWER_TEXT = /No demand is needed/u;
 // Where the framed paragraph lands below the reader's top edge: room for its
 // section heading, and for the comment cards beside it to fit the clip.
 const READER_SCROLL_OFFSET_PX = 48;
+// Where a block cut by the reader's top edge is lowered to, so the frame opens
+// on its first line with a little air above it.
+const READER_TOP_INSET_PX = 16;
 // Duplicated from packages/api-contract/src/browser-storage.ts
 // (`ownerStorageKey`) and apps/web/src/components/inspector/
 // inspector-storage-keys.ts, for the same reason as the theme key below.
@@ -386,10 +389,11 @@ test("capture landing product screenshots", async ({
           captureClip,
           "an AI margin note",
         );
-        // Notes stack by measured height, so where the last one in view
-        // ends depends on the fonts the runner renders with: lower the text
-        // until no note crosses the frame's bottom edge, then hold the line.
+        // Where a block or a stacked note meets the frame's edges depends on
+        // the fonts the runner renders with: settle on clean edges, then
+        // hold the line.
         await settleReaderFrame(page, captureClip);
+        await expectCleanTopEdge(page);
         // Whole notes, inside the shot's own clip: a card cut at the frame's
         // edge reads as a glitch.
         await expectSomeWithinClip(
@@ -558,17 +562,15 @@ const expectWithinClip = async (
     .toBe(true);
 };
 
-// Every margin note is either wholly in the shot or wholly out of it: the
-// visible band is where the reader's scroller and the clip overlap, and a
-// note crossing either edge of it would ship half drawn.
-// Scrolls the reader up (content down) until no margin note crosses the
-// bottom of the visible band, a few steps at most: each step pushes the
-// crossing note wholly below the frame, which may bring the next one to the
-// edge. The text above the first mark has room to spare, so the marks stay
-// in view; `expectNoMarginNoteCut` then checks both edges.
+// Settles the reader's frame on clean edges, scrolling up (content down) a
+// few steps at most. At the top, a text block the frame's edge cuts through
+// is lowered until it starts just below the edge, so the frame opens on the
+// start of a paragraph, never on the tail of one. At the bottom, a margin
+// note crossing the edge is pushed wholly below it. Each step only moves the
+// content down, so the two never undo each other and the loop ends.
 const settleReaderFrame = async (page: Page, clip: CaptureClip) => {
   await page.evaluate(
-    ({ bottomEdge, steps }) => {
+    ({ bottomEdge, inset, steps }) => {
       const scroller = document
         .querySelector('[data-slot="reader-document-column"]')
         ?.closest(".reader-scroll");
@@ -576,10 +578,21 @@ const settleReaderFrame = async (page: Page, clip: CaptureClip) => {
         throw new Error("The reader's scroller is missing");
       }
       for (let step = 0; step < steps; step += 1) {
-        const bottom = Math.min(
-          scroller.getBoundingClientRect().bottom,
-          bottomEdge,
-        );
+        const frame = scroller.getBoundingClientRect();
+        const cutAtTop = [
+          ...document.querySelectorAll(
+            '[data-slot="reader-document-column"] [data-anchor]',
+          ),
+        ].find((block) => {
+          const box = block.getBoundingClientRect();
+          return box.top < frame.top && box.bottom > frame.top;
+        });
+        if (cutAtTop !== undefined) {
+          scroller.scrollTop -=
+            frame.top + inset - cutAtTop.getBoundingClientRect().top;
+          continue;
+        }
+        const bottom = Math.min(frame.bottom, bottomEdge);
         const crossing = [
           ...document.querySelectorAll("[data-margin-note] > *"),
         ].find((note) => {
@@ -592,10 +605,48 @@ const settleReaderFrame = async (page: Page, clip: CaptureClip) => {
         scroller.scrollTop -= bottom - crossing.getBoundingClientRect().top + 8;
       }
     },
-    { bottomEdge: clip.y + clip.height, steps: 4 },
+    {
+      bottomEdge: clip.y + clip.height,
+      inset: READER_TOP_INSET_PX,
+      steps: 6,
+    },
   );
 };
 
+// No text block straddles the reader's top edge: the first one in view
+// starts at or below it.
+const expectCleanTopEdge = async (page: Page) => {
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(() => {
+          const scroller = document
+            .querySelector('[data-slot="reader-document-column"]')
+            ?.closest(".reader-scroll");
+          if (!(scroller instanceof HTMLElement)) {
+            return "the reader's scroller is missing";
+          }
+          const top = scroller.getBoundingClientRect().top;
+          const cut = [
+            ...document.querySelectorAll<HTMLElement>(
+              '[data-slot="reader-document-column"] [data-anchor]',
+            ),
+          ].find((block) => {
+            const box = block.getBoundingClientRect();
+            return box.top < top && box.bottom > top;
+          });
+          return cut === undefined
+            ? null
+            : `block ${cut.dataset.anchor ?? "?"} starts above the reader's top edge`;
+        }),
+      { message: "The reader's frame must open on the start of a block" },
+    )
+    .toBeNull();
+};
+
+// Every margin note is either wholly in the shot or wholly out of it: the
+// visible band is where the reader's scroller and the clip overlap, and a
+// note crossing either edge of it would ship half drawn.
 const expectNoMarginNoteCut = async (page: Page, clip: CaptureClip) => {
   await expect
     .poll(
