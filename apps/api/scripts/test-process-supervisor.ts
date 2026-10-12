@@ -8,7 +8,7 @@ import {
   createProcessMemoryReader,
   testInvocationMemoryLimit,
   watchTestProcessMemory,
-} from "@stll/scripts/src/test-process-memory";
+} from "@stll/scripts/src/process-memory";
 
 // A measured CI solo batch (254 chat turn tests) took 250.9s. Ten minutes
 // gives it more than twice that headroom, while bounding imports, snapshot

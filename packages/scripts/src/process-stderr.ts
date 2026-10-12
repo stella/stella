@@ -89,7 +89,7 @@ export const forwardTestStderr = async ({
         if (cancelled.isErr()) {
           onWarning(cancelled.error.message);
         }
-        return cancelled;
+        return undefined;
       },
     );
     let cleanupTimer: ReturnType<typeof setTimeout> | undefined;

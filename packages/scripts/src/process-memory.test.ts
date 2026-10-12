@@ -7,7 +7,7 @@ import {
   testInvocationMemoryLimit,
   TEST_INVOCATION_MEMORY_GIB_ENV,
   watchTestProcessMemory,
-} from "./test-process-memory";
+} from "./process-memory";
 
 test("Windows snapshots retain only owned PID readings and preserve unknown lower bounds", () => {
   const parsed = parseWindowsProcessTree(

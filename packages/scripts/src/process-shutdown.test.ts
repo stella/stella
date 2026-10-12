@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { attachTestProcessShutdown } from "./test-process-shutdown";
+import { attachTestProcessShutdown } from "./process-shutdown";
 
 const posixTest = process.platform === "win32" ? test.skip : test;
 const SIGNAL_EXIT_CODES = { SIGINT: 130, SIGTERM: 143, SIGHUP: 129 } as const;

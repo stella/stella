@@ -3,13 +3,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
-import { forwardTestStderr } from "@stll/scripts/src/process-stderr";
 import {
   createProcessMemoryReader,
   testInvocationMemoryLimit,
   watchTestProcessMemory,
-} from "@stll/scripts/src/test-process-memory";
-import { attachTestProcessShutdown } from "@stll/scripts/src/test-process-shutdown";
+} from "@stll/scripts/src/process-memory";
+import { attachTestProcessShutdown } from "@stll/scripts/src/process-shutdown";
+import { forwardTestStderr } from "@stll/scripts/src/process-stderr";
 
 import { planTestRuns } from "./test-run-plan";
 import type { PathKind } from "./test-run-plan";

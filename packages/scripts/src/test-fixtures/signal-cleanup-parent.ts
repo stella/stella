@@ -1,4 +1,4 @@
-import { attachTestProcessShutdown } from "../test-process-shutdown";
+import { attachTestProcessShutdown } from "../process-shutdown";
 
 const child = Bun.spawn(
   [
