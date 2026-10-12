@@ -1,0 +1,158 @@
+name: Publish generated-only conflict resolutions
+
+defaults:
+  run:
+    shell: bash
+
+# Runs from main when a resolve run (generated-conflicts-resolve.yml)
+# completes. Nothing from the branch executes here, and no branch file is
+# checked out: the branch and main are fetched as git objects into a bare
+# repository, the merge is rebuilt there by main's rules, and the resolve
+# run's artifact is read as data. Only then is the push token minted. The
+# branch moves with a compare-and-swap on the head the resolution was built
+# on.
+
+on:
+  workflow_run:
+    workflows: [Resolve generated-only conflicts (branch)]
+    types: [completed]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  publish:
+    if: >-
+      github.repository == 'stella/stella'
+      && github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.event == 'workflow_dispatch'
+      && github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      # Reading the resolve run's artifact and fetching the branch.
+      actions: read
+      contents: read
+      pull-requests: read
+    # The push key lives in this environment (main and v* tags only).
+    environment: release-app
+    steps:
+      # API calls only. The pull request is found from the run's own branch,
+      # so a run can only ever publish to the branch it ran on.
+      - name: Select the pull request
+        id: select
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const run = context.payload.workflow_run;
+            if (run.path !== '.github/workflows/generated-conflicts-resolve.yml'
+              || run.event !== 'workflow_dispatch'
+              || run.head_repository?.full_name !== `${owner}/${repo}`
+              || !/^[A-Za-z0-9._/-]+$/u.test(run.head_branch ?? '')
+              || run.head_branch.includes('..') || run.head_branch.startsWith('-')
+              || run.head_branch === 'main'
+              || !/^[0-9a-f]{40}$/u.test(run.head_sha ?? '')) return;
+            const pulls = await github.paginate(github.rest.pulls.list, {
+              owner, repo, state: 'open', head: `${owner}:${run.head_branch}`, per_page: 100,
+            });
+            const candidates = pulls.filter(pull => pull.head.ref === run.head_branch
+              && pull.head.repo?.full_name === `${owner}/${repo}`
+              && pull.base.ref === 'main');
+            if (candidates.length !== 1) return;
+            const [pull] = candidates;
+            // The branch must still be where the resolve run started.
+            if (pull.head.sha !== run.head_sha) return;
+            core.setOutput('branch', run.head_branch);
+            core.setOutput('head', run.head_sha);
+            core.setOutput('run', String(run.id));
+
+      - name: Checkout main's conflict rules
+        if: steps.select.outputs.branch != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .trusted
+          persist-credentials: false
+          sparse-checkout: |
+            /scripts/
+            /packages/scripts/src/generated-files.ts
+            /package.json
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Bun
+        if: steps.select.outputs.branch != ''
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: false
+          bun-version-file: .trusted/package.json
+
+      # Objects only: a bare repository has no work tree a branch file could
+      # be written to or followed through.
+      - name: Fetch the branch and main as objects
+        if: steps.select.outputs.branch != ''
+        id: fetch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ steps.select.outputs.head }}
+          SERVER_URL: ${{ github.server_url }}
+        run: |
+          set -euo pipefail
+          git init -q --bare "$RUNNER_TEMP/repo.git"
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+          echo "::add-mask::$auth"
+          git -C "$RUNNER_TEMP/repo.git" -c "http.extraheader=AUTHORIZATION: basic $auth" \
+            fetch --no-tags -q "$SERVER_URL/$GITHUB_REPOSITORY.git" \
+            "+$HEAD_SHA:refs/resolve/head" "+refs/heads/main:refs/resolve/main"
+          echo "main=$(git -C "$RUNNER_TEMP/repo.git" rev-parse refs/resolve/main)" >> "$GITHUB_OUTPUT"
+
+      # Exactly this run's artifact, under the one fixed name a resolve run
+      # uploads; no other run's artifacts are visible here.
+      - name: Download the resolution
+        if: steps.select.outputs.branch != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: generated-conflicts
+          run-id: ${{ steps.select.outputs.run }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/resolution
+
+      # Main's rules from main's checkout (its bunfig, no env files, no
+      # install). Output goes to a fresh directory only.
+      - name: Rebuild and verify the merge
+        if: steps.select.outputs.branch != ''
+        working-directory: .trusted
+        env:
+          HEAD_SHA: ${{ steps.select.outputs.head }}
+          MAIN_TIP: ${{ steps.fetch.outputs.main }}
+        run: |
+          bun --no-install --no-env-file scripts/generated-conflicts.ts apply \
+            --git-dir "$RUNNER_TEMP/repo.git" --head "$HEAD_SHA" --main-tip "$MAIN_TIP" \
+            --collected "$RUNNER_TEMP/resolution" --out "$RUNNER_TEMP/requests"
+
+      - name: Mint App token
+        if: steps.select.outputs.branch != ''
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+
+      # Created through the API without an author, so GitHub signs the merge
+      # commit as the App; updateRefs applies only while the branch still
+      # points at the resolved head.
+      - name: Push the merge commit
+        if: steps.select.outputs.branch != ''
+        working-directory: .trusted
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          BRANCH: ${{ steps.select.outputs.branch }}
+        run: |
+          bun --no-install --no-env-file scripts/generated-conflicts.ts push \
+            --requests "$RUNNER_TEMP/requests" --repository "$GITHUB_REPOSITORY" --branch "$BRANCH"

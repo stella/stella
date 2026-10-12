@@ -1,0 +1,125 @@
+name: Resolve generated-only conflicts (branch)
+run-name: "Resolve generated-only conflicts on ${{ github.ref_name }}"
+
+defaults:
+  run:
+    shell: bash
+
+# Dispatched by autofix-generated-conflicts.yml on a pull request's own
+# branch. This run executes that branch's generators, so it is untrusted: it
+# holds no secret, saves no cache, and its only output is the
+# `generated-conflicts` artifact, which generated-conflicts-publish.yml
+# validates as data before anything is pushed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      head:
+        description: The branch head the resolution is built on
+        required: true
+        type: string
+      main:
+        description: The main commit to merge
+        required: true
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  resolve:
+    # Never on main: this job's caches and artifacts must stay branch-scoped.
+    if: >-
+      github.repository == 'stella/stella'
+      && startsWith(github.ref, 'refs/heads/')
+      && github.ref != 'refs/heads/main'
+      && github.sha == inputs.head
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      RUSTUP_TOOLCHAIN: 1.99.0
+    steps:
+      - name: Validate inputs
+        env:
+          HEAD_SHA: ${{ inputs.head }}
+          MAIN_SHA: ${{ inputs.main }}
+        run: |
+          if [[ ! "$HEAD_SHA" =~ ^[0-9a-f]{40}$ || ! "$MAIN_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::head and main must be full commit SHAs"
+            exit 1
+          fi
+
+      - name: Checkout the branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ inputs.head }}
+          submodules: true
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: false
+          bun-version-file: package.json
+
+      - name: Plan the merge
+        id: plan
+        env:
+          HEAD_SHA: ${{ inputs.head }}
+          MAIN_SHA: ${{ inputs.main }}
+        run: |
+          set -euo pipefail
+          bun --no-install --no-env-file scripts/generated-conflicts.ts plan \
+            --git-dir .git --head "$HEAD_SHA" --main "$MAIN_SHA" > "$RUNNER_TEMP/plan.json"
+          cat "$RUNNER_TEMP/plan.json"
+          eligible=$(jq -r '.eligible' "$RUNNER_TEMP/plan.json")
+          echo "eligible=$eligible" >> "$GITHUB_OUTPUT"
+          if [[ "$eligible" == true ]]; then
+            echo "ids=$(jq -r '.ids | join(",")' "$RUNNER_TEMP/plan.json")" >> "$GITHUB_OUTPUT"
+            git read-tree -m -u HEAD "$(jq -r '.baseline' "$RUNNER_TEMP/plan.json")"
+          else
+            jq -r '.reasons[]' "$RUNNER_TEMP/plan.json" | sed 's/^/::notice::Left to people: /'
+          fi
+
+      - name: Install dependencies
+        if: steps.plan.outputs.eligible == 'true'
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          # .npmrc references NPM_TOKEN; this job gets none.
+          NPM_TOKEN: ""
+
+      - name: Regenerate conflicted outputs
+        if: steps.plan.outputs.eligible == 'true'
+        env:
+          STELLA_LOCAL_AUTOFIX: "true"
+          GENERATOR_IDS: ${{ steps.plan.outputs.ids }}
+        run: |
+          set -euo pipefail
+          for app in apps/api apps/web; do
+            [[ -f "$app/.env" ]] || cp "$app/.env.example" "$app/.env"
+          done
+          # Main's side is only a starting point: each owning generator
+          # checks it against the merged inputs and rewrites it when stale.
+          bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
+
+      - name: Collect the resolution
+        if: steps.plan.outputs.eligible == 'true'
+        run: |
+          bun --no-install --no-env-file scripts/generated-conflicts.ts collect \
+            --repo . --plan "$RUNNER_TEMP/plan.json" --out "$RUNNER_TEMP/resolution"
+
+      - name: Upload the resolution
+        if: steps.plan.outputs.eligible == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: generated-conflicts
+          path: ${{ runner.temp }}/resolution
+          if-no-files-found: error
+          retention-days: 1
