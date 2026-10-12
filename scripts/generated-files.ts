@@ -832,15 +832,15 @@ export const GENERATORS = [
     id: "case-law-fixture-reparse",
     outputKind: "committed",
     outputs: ["apps/api/scripts/__fixtures__/case-law/*.json.gz"],
+    // The re-parse imports the adapters, which reach most of the API source
+    // and several packages; any of it can shape the output. A test walks the
+    // import graph and fails when a reachable module is not covered here.
     inputs: [
       "apps/api/scripts/reparse-case-law-fixtures.ts",
       "apps/api/scripts/lib/case-law-fixture-reparse.ts",
       "apps/api/scripts/lib/case-law-fixture-analyses.ts",
-      "apps/api/src/handlers/case-law/ingestion/adapters/*.ts",
-      "apps/api/src/handlers/case-law/ingestion/parsers/**",
-      "apps/api/src/lib/legal-search/ingestion-constants.ts",
-      "apps/api/src/lib/legal-search/ingestion-normalization.ts",
-      "packages/legal-ast/src/**",
+      "apps/api/src/**",
+      "packages/**",
     ],
     write: ["bun", "apps/api/scripts/reparse-case-law-fixtures.ts", "--write"],
     check: ["bun", "apps/api/scripts/reparse-case-law-fixtures.ts", "--check"],

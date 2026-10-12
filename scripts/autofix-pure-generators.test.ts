@@ -1,8 +1,15 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { buildImportGraph } from "./api-test-impact";
 import {
   AUTOFIX_PROTECTED_PATHS,
   isAutofixProtectedPath,
@@ -90,6 +97,29 @@ test("env and self-host generation never reads the process environment", () => {
       file,
     ).toContain(id);
   }
+});
+
+test("every module the case-law re-parse imports selects it", () => {
+  // Inputs decide when autofix reruns a generator; a module that shapes the
+  // output but is missing here would leave stale fixtures behind.
+  const entry = "apps/api/scripts/reparse-case-law-fixtures.ts";
+  const root = realpathSync(path.join(import.meta.dirname, ".."));
+  const graph = buildImportGraph(root, [entry]);
+  const closure = graph.closure(entry);
+  // An unresolved or computed import would hide part of the graph.
+  expect([...graph.failed].filter((file) => closure.has(file))).toEqual([]);
+  expect(
+    [...graph.computedImports].filter((file) => closure.has(file)),
+  ).toEqual([]);
+  expect(closure).toContain(
+    "apps/api/src/handlers/case-law/ingestion/segmenter.ts",
+  );
+  const { inputs } = generator("case-law-fixture-reparse");
+  expect(
+    [...closure].filter(
+      (file) => !inputs.some((input) => matchesGeneratedGlob(input, file)),
+    ),
+  ).toEqual([]);
 });
 
 test("translation content never becomes an autofix output", () => {
