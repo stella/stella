@@ -31,9 +31,8 @@ database access, from the public reader API
   parser change that should reach it (for example court paragraph numbers on
   the blocks) has to work from the stored AST.
 
-Its `analysis` was written offline in a Claude Code session against the
-production Czech analysis prompt, with no model API call, and checked the way
+Its `analysis` was written with claude-opus-5-5 against the production Czech
+analysis prompt, with no runtime model call, and checked the way
 `apps/api/src/scripts/decision-analysis-save.ts` checks a submission (schema,
-input fingerprint, anchors). Its `model` says so, and `generatedAt` is the
-moment it was built. `case-law-fixture-analysis.test.ts` holds its
+input fingerprint, anchors). `generatedAt` is the moment it was built. `case-law-fixture-analysis.test.ts` holds its
 `inputFingerprint` to the fixture's text and the current prompt.
