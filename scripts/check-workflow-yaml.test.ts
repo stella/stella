@@ -6,14 +6,14 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import {
   checkWorkflowYaml,
   parseWorkflowYaml,
-  validateCompositeAction,
+  validateActionMetadata,
 } from "./check-workflow-yaml";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const FIXTURES = path.join(import.meta.dirname, "__fixtures__/workflow-yaml");
 
 describe("workflow YAML validation", () => {
-  test("every repository workflow and composite action is valid", async () => {
+  test("every repository workflow and action is valid", async () => {
     await checkWorkflowYaml(ROOT);
   });
 
@@ -28,8 +28,8 @@ describe("workflow YAML validation", () => {
   test("a composite run step without a shell reports its location", async () => {
     const file = path.join(FIXTURES, "broken-action.yml");
     const action = await parseWorkflowYaml(file);
-    expect(() => validateCompositeAction(action, file)).toThrow(
-      `${file}: runs.steps[0] has run but no shell`,
+    expect(() => validateActionMetadata(action, file)).toThrow(
+      `${file}: runs.steps[0] run and shell must be nonempty strings`,
     );
   });
 
@@ -39,9 +39,58 @@ describe("workflow YAML validation", () => {
       description: "Fixture composite action",
       runs: { using: "composite", steps: [{ run: "echo ok", shell: " " }] },
     };
-    expect(() => validateCompositeAction(action, "action.yml")).toThrow(
-      "action.yml: runs.steps[0] has run but no shell",
+    expect(() => validateActionMetadata(action, "action.yml")).toThrow(
+      "action.yml: runs.steps[0] run and shell must be nonempty strings",
     );
+  });
+
+  test.each([
+    { using: "node20", main: "index.js" },
+    { using: "node24", main: "index.js" },
+    { using: "docker", image: "Dockerfile" },
+  ])("a $using action does not require composite steps", (runs) => {
+    expect(() =>
+      validateActionMetadata(
+        { name: "setup", description: "Fixture action", runs },
+        "action.yml",
+      ),
+    ).not.toThrow();
+  });
+
+  test.each(
+    [null, undefined, false, 42, [], {}, "", " "].map((run) => ({ run })),
+  )("a composite run value $run is rejected even with a shell", ({ run }) => {
+    expect(() =>
+      validateActionMetadata(
+        {
+          name: "setup",
+          description: "Fixture composite action",
+          runs: { using: "composite", steps: [{ run, shell: "bash" }] },
+        },
+        "action.yml",
+      ),
+    ).toThrow(
+      "action.yml: runs.steps[0] run and shell must be nonempty strings",
+    );
+  });
+
+  test("composite run and uses steps retain their distinct requirements", () => {
+    expect(() =>
+      validateActionMetadata(
+        {
+          name: "setup",
+          description: "Fixture composite action",
+          runs: {
+            using: "composite",
+            steps: [
+              { run: "echo ok", shell: "bash" },
+              { uses: "actions/checkout@v4" },
+            ],
+          },
+        },
+        "action.yml",
+      ),
+    ).not.toThrow();
   });
 
   test("workflows with the .yaml extension are parsed", async () => {
@@ -62,7 +111,7 @@ describe("workflow YAML validation", () => {
     const file = path.join(root, ".github/actions/setup/action.yaml");
     expect(await rejectionOf(checkWorkflowYaml(root))).toHaveProperty(
       "message",
-      `${file}: runs.steps[0] has run but no shell`,
+      `${file}: runs.steps[0] run and shell must be nonempty strings`,
     );
   });
 });

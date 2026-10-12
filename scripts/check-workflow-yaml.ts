@@ -24,7 +24,7 @@ const requireNonemptyString = (
   const value = record[field];
   if (typeof value !== "string" || value.trim() === "") {
     throw new WorkflowYamlError({
-      message: `${file}: composite action ${field} must be a nonempty string`,
+      message: `${file}: action ${field} must be a nonempty string`,
       file,
     });
   }
@@ -43,10 +43,10 @@ export const parseWorkflowYaml = async (file: string): Promise<unknown> => {
   }
 };
 
-export const validateCompositeAction = (value: unknown, file: string): void => {
+export const validateActionMetadata = (value: unknown, file: string): void => {
   if (!isRecord(value)) {
     throw new WorkflowYamlError({
-      message: `${file}: composite action metadata must be a mapping`,
+      message: `${file}: action metadata must be a mapping`,
       file,
     });
   }
@@ -54,11 +54,18 @@ export const validateCompositeAction = (value: unknown, file: string): void => {
   requireNonemptyString(value, "description", file);
 
   const runs = value["runs"];
-  if (!isRecord(runs) || runs["using"] !== "composite") {
+  if (
+    !isRecord(runs) ||
+    typeof runs["using"] !== "string" ||
+    runs["using"].trim() === ""
+  ) {
     throw new WorkflowYamlError({
-      message: `${file}: runs.using must be composite`,
+      message: `${file}: runs.using must be a nonempty string`,
       file,
     });
+  }
+  if (runs["using"] !== "composite") {
+    return;
   }
   if (!Array.isArray(runs["steps"])) {
     throw new WorkflowYamlError({
@@ -76,10 +83,13 @@ export const validateCompositeAction = (value: unknown, file: string): void => {
     }
     if (
       "run" in step &&
-      (typeof step["shell"] !== "string" || step["shell"].trim() === "")
+      (typeof step["run"] !== "string" ||
+        step["run"].trim() === "" ||
+        typeof step["shell"] !== "string" ||
+        step["shell"].trim() === "")
     ) {
       throw new WorkflowYamlError({
-        message: `${file}: runs.steps[${index}] has run but no shell`,
+        message: `${file}: runs.steps[${index}] run and shell must be nonempty strings`,
         file,
       });
     }
@@ -125,7 +135,7 @@ export const checkWorkflowYaml = async (root: string): Promise<void> => {
       metadata[0] ?? panic("action metadata missing"),
     );
     const action = await parseWorkflowYaml(file);
-    validateCompositeAction(action, file);
+    validateActionMetadata(action, file);
   }
 };
 
