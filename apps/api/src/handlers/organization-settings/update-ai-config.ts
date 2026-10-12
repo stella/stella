@@ -5,9 +5,9 @@ import { MODEL_ROLES, TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 
 import { organizationSettings } from "@/api/db/schema";
 import {
-  DECISION_MODEL_PROVIDERS,
   supportsRegion,
   type DataRegion,
+  type DecisionModelProvider,
   type OrgAIConfig,
   type OrgAIModelSelection,
   type OrgAIProviderConfig,
@@ -18,6 +18,7 @@ import {
   maskApiKey,
 } from "@/api/lib/ai-config-crypto";
 import {
+  decisionModelResponse,
   providerResponseExtras,
   providerResponseRegion,
   storedAIConfigUnreadableError,
@@ -61,11 +62,23 @@ const modelSelectionBody = t.Object({
 });
 
 // Absent keeps the stored decision model, null clears it, an object sets it.
-const decisionBody = t.Object({
-  provider: t.UnionEnum(DECISION_MODEL_PROVIDERS),
-  apiKey: t.Optional(t.String({ minLength: 1 })),
-  modelId: t.String({ minLength: 1, maxLength: 256 }),
-});
+const decisionBodyByProvider = {
+  typesafe: t.Object({
+    provider: t.Literal("typesafe"),
+    apiKey: t.Optional(t.String({ minLength: 1 })),
+    modelId: t.String({ minLength: 1, maxLength: 256 }),
+  }),
+  openai: t.Object({
+    provider: t.Literal("openai"),
+    apiKey: t.Optional(t.Nullable(t.String({ minLength: 1 }))),
+    region: t.Optional(t.Union([t.Literal("eu"), t.Literal("global")])),
+    modelId: t.String({ minLength: 1, maxLength: 256 }),
+  }),
+} satisfies Record<DecisionModelProvider, unknown>;
+const decisionBody = t.Union([
+  decisionBodyByProvider.typesafe,
+  decisionBodyByProvider.openai,
+]);
 
 const updateAIConfigBody = t.Object({
   providers: t.Array(providerBody, { minItems: 1 }),
@@ -83,6 +96,12 @@ const updateAIConfigBody = t.Object({
 });
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId:
+      "apps/api/src/handlers/organization-settings/update-ai-config.ts",
+  },
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
@@ -170,10 +189,12 @@ const updateAIConfig = createSafeRootHandler(
       );
     }
 
-    const decisionResult = resolveDecisionConfig(
-      body.decision,
-      existingConfig?.decision,
-    );
+    const decisionResult = resolveDecisionConfig({
+      input: body.decision,
+      existing: existingConfig?.decision,
+      providers: providerResult.providers,
+      existingProviders: existingConfig ? existingConfig.providers : [],
+    });
     if (!decisionResult.valid) {
       return Result.err(
         new HandlerError({
@@ -233,10 +254,10 @@ const updateAIConfig = createSafeRootHandler(
 
     const decision = decisionResult.decision;
     if (decision !== null && decisionResult.needsProbe) {
-      const probe = await probeDecisionModel(
-        decision,
-        SETTINGS_PROBE_TIMEOUT_MS,
-      );
+      const probe = await probeDecisionModel({
+        config: decisionResult.probeConfig,
+        timeoutMs: SETTINGS_PROBE_TIMEOUT_MS,
+      });
       if (!probe.valid) {
         return Result.err(
           new HandlerError({
@@ -301,14 +322,7 @@ const updateAIConfig = createSafeRootHandler(
         ...providerResponseExtras(providerConfig),
       })),
       overrideModels: orgConfig.overrideModels,
-      decision:
-        orgConfig.decision === null
-          ? null
-          : {
-              provider: orgConfig.decision.provider,
-              apiKeyMasked: maskApiKey(orgConfig.decision.apiKey),
-              modelId: orgConfig.decision.modelId,
-            },
+      decision: decisionModelResponse(orgConfig.decision),
     });
   },
 );

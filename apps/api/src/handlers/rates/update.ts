@@ -25,6 +25,7 @@ const updateRateTableBodySchema = t.Object({
 
 const updateRateTable = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Rename a rate table, change its currency, or make it the matter's " +
       "default, which clears the flag on the previous default. Unsetting the " +

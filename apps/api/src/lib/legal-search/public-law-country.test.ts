@@ -48,6 +48,7 @@ const constructedRefusal: PublicCountryUnavailable = {
 
 const refusing = createSafeBoundedPublicHandler(
   {
+    contract: "patch",
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "health_infra" },
     cache: { kind: "none" },

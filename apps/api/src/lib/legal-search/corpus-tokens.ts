@@ -1,3 +1,5 @@
+import { normalizeUnicode } from "@stll/text-normalize";
+
 /**
  * How corpus text is cut into terms, mirroring the engine's `simple`
  * tokenizer, which the `folded` tokenizer is built on: a run of letters or
@@ -27,7 +29,7 @@ const CORPUS_TOKEN_PATTERN = /[\p{L}\p{N}]+/gu;
  * those offsets normalises it with this first.
  */
 export const normalizeCorpusText = (text: string): string =>
-  text.normalize("NFC");
+  normalizeUnicode(text, "NFC");
 
 /** One token and where it sits in {@link normalizeCorpusText} of the input. */
 export type CorpusTokenSpan = {

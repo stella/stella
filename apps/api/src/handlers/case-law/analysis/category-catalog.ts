@@ -1,4 +1,5 @@
 import type { AnalysisHeading } from "@stll/legal-ast/analysis";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 const CORE_CATEGORIES = [
   "facts",
@@ -50,7 +51,7 @@ const resolveLanguage = (language: string): CategoryLanguage =>
   CATEGORY_LANGUAGES.find((value) => value === language) ?? "en";
 
 const normalizeLabel = (label: string): string =>
-  label.normalize("NFKC").toLowerCase().replace(/\s+/gu, " ").trim();
+  normalizeUnicode(label, "NFKC").toLowerCase().replace(/\s+/gu, " ").trim();
 
 const isCoreCategory = (category: string): category is CoreCategory =>
   CORE_CATEGORIES.some((value) => value === category);

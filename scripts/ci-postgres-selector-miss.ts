@@ -4,6 +4,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import type { GatedTestSelection } from "../apps/api/scripts/gated-test-selection";
+import { POSTGRES_TEST_SHARD_IDS } from "../apps/api/scripts/postgres-test-shards";
 import { planPostgresTests } from "./ci-postgres-test-plan";
 import { parseJunit } from "./fix-tests-on-base";
 
@@ -109,6 +110,39 @@ export const fullPostgresRunSha = (displayTitle: string) => {
   );
 };
 
+const fullRunJobsSchema = v.object({
+  total_count: v.number(),
+  jobs: v.array(
+    v.object({
+      name: v.string(),
+      conclusion: v.nullable(v.string()),
+      steps: v.array(
+        v.object({
+          name: v.string(),
+          conclusion: v.nullable(v.string()),
+        }),
+      ),
+    }),
+  ),
+});
+
+type PostgresRunJobs = v.InferOutput<typeof fullRunJobsSchema>["jobs"];
+
+export const hasSuccessfulPostgresShards = (jobs: PostgresRunJobs): boolean =>
+  POSTGRES_TEST_SHARD_IDS.every((shard) => {
+    const name = `postgres-service-suites (${shard})`;
+    return jobs.some(
+      (job) =>
+        (job.name === name || job.name.endsWith(` / ${name}`)) &&
+        job.conclusion === "success" &&
+        job.steps.some(
+          (step) =>
+            step.name === "Run Postgres-gated API suites" &&
+            step.conclusion === "success",
+        ),
+    );
+  });
+
 if (import.meta.main) {
   const checked = await Result.tryPromise(async () => {
     const repository = process.env["REPOSITORY"] ?? panic("Missing REPOSITORY");
@@ -170,21 +204,7 @@ if (import.meta.main) {
       // Historical evidence retrieval is sequential and stays below one call/s.
       await Bun.sleep(1100);
       const jobs = v.parse(
-        v.object({
-          total_count: v.number(),
-          jobs: v.array(
-            v.object({
-              name: v.string(),
-              conclusion: v.nullable(v.string()),
-              steps: v.array(
-                v.object({
-                  name: v.string(),
-                  conclusion: v.nullable(v.string()),
-                }),
-              ),
-            }),
-          ),
-        }),
+        fullRunJobsSchema,
         JSON.parse(
           runCommand([
             "bash",
@@ -197,16 +217,7 @@ if (import.meta.main) {
       if (jobs.total_count !== jobs.jobs.length) {
         panic("Incomplete full-run job evidence");
       }
-      const certified = jobs.jobs.some(
-        (job) =>
-          (job.name === "service-suites" ||
-            job.name.endsWith(" / service-suites")) &&
-          job.steps.some(
-            (step) =>
-              step.name === "Run Postgres-gated API suites" &&
-              step.conclusion === "success",
-          ),
-      );
+      const certified = hasSuccessfulPostgresShards(jobs.jobs);
       if (!certified) {
         continue;
       }

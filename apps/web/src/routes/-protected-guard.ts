@@ -2,14 +2,17 @@ import type { QueryClient } from "@tanstack/react-query";
 import { redirect } from "@tanstack/react-router";
 import { panic } from "better-result";
 
+import { PROFESSIONAL_USE_STATUS } from "@stll/api-contract/professional-use";
+
 import { isInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { roleOptions } from "@/lib/auth-queries";
+import { professionalUseOptions, roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { notificationsOptions } from "@/lib/notification-queries";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
 import {
+  ensureRouteQueryData,
   prefetchNonCriticalInfiniteQuery,
   prefetchRouteQuery,
 } from "@/lib/react-query";
@@ -26,9 +29,10 @@ type ProtectedRouteArgs = {
 };
 
 /**
- * `_protected`'s `beforeLoad`: sends a visitor without a session to sign in
- * and one without an organization to pick one, starts the shell's optional
- * data, and returns the signed-in user as route context.
+ * `_protected`'s `beforeLoad`: sends a visitor without a session to sign in,
+ * one without an organization to pick one, and one whose account has not
+ * accepted the professional-use statement to accept it; starts the shell's
+ * optional data, and returns the signed-in user as route context.
  */
 export const loadProtectedContext = async ({
   context,
@@ -55,6 +59,32 @@ export const loadProtectedContext = async ({
 
   const activeOrganizationId = authContext.session.activeOrganizationId;
   const userId = authContext.session.userId;
+
+  // An account created where the professional-use statement was not shown
+  // (agent provisioning, the operator command) accepts it here, on its first
+  // interactive sign-in, before anything signed-in loads; the API refuses
+  // its signed-in requests until then.
+  const professionalUse = await ensureRouteQueryData(
+    context.queryClient,
+    professionalUseOptions(userId),
+  );
+  switch (professionalUse.status) {
+    case PROFESSIONAL_USE_STATUS.accepted:
+      break;
+    case PROFESSIONAL_USE_STATUS.required:
+      redirect({
+        to: "/auth/professional-use",
+        search: { redirectTo },
+        replace: true,
+        throw: true,
+      });
+      return panic(
+        "TanStack Router did not throw the professional-use redirect.",
+      );
+    default:
+      professionalUse satisfies never;
+      return panic("Unhandled professional-use state");
+  }
 
   // Start optional shell data immediately. The loader settles the role before
   // chrome mounts, while child loaders fetch their independent data in parallel.

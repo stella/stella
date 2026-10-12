@@ -260,13 +260,6 @@
     "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
   },
   {
-    "id": "apps/api/src/lib/audit-log.ts::insertAuditRows",
-    "writes": {
-      "insert:auditLogs": 1
-    },
-    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
-  },
-  {
     "id": "apps/api/src/lib/auth-artifacts.ts::agentDelegation",
     "writes": {
       "delete:agentDelegation": 1
@@ -570,6 +563,13 @@
     "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
   },
   {
+    "id": "apps/api/src/lib/db/audit-recording.ts::insertAuditRows",
+    "writes": {
+      "insert:auditLogs": 1
+    },
+    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
+  },
+  {
     "id": "apps/api/src/lib/db/better-auth-oauth-policy-census.ts::initializePristineBetterAuthOAuthPolicy",
     "writes": {
       "insert:oauth_resource": 1
@@ -636,13 +636,6 @@
     "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
   },
   {
-    "id": "apps/api/src/lib/document-processing-queue.ts::markRunFailed",
-    "writes": {
-      "update:documentProcessingRuns": 1
-    },
-    "reason": "Background work state transition; the request that started the work records the audit event."
-  },
-  {
     "id": "apps/api/src/lib/document-processing-queue.ts::persistMissingNativeExtractionRuns",
     "writes": {
       "insert:documentProcessingRuns": 1
@@ -660,7 +653,7 @@
   {
     "id": "apps/api/src/lib/document-processing-queue.ts::processDocumentProcessingRun",
     "writes": {
-      "update:documentProcessingRuns": 4
+      "update:documentProcessingRuns": 3
     },
     "reason": "Background work state transition; the request that started the work records the audit event."
   },

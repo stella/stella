@@ -1,5 +1,3 @@
-import { SKILL_RESOURCE_KINDS } from "@stll/skills/format";
-
 import {
   agentSkillChildPolicies,
   agentSkillPolicies,
@@ -111,16 +109,11 @@ export const agentSkillResources = p.pgTable(
       .notNull()
       .references(() => agentSkills.id, { onDelete: "cascade" }),
     path: p.varchar({ length: 512 }).notNull(),
-    kind: p.text("kind", { enum: SKILL_RESOURCE_KINDS }).notNull(),
     content: p.text().notNull(),
     sizeBytes: p.integer("size_bytes").notNull(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
-    p.check(
-      "agent_skill_resources_kind_check",
-      sql`${table.kind} IN (${sqlValueList(SKILL_RESOURCE_KINDS)})`,
-    ),
     p
       .uniqueIndex("agent_skill_resources_skill_path_uidx")
       .on(table.skillId, table.path),

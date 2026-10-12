@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -23,6 +24,7 @@ import {
   buildChatCodeMode,
   chatScriptCallCatalog,
   chatScriptReadToolNames,
+  createChatCodeModeSurface,
 } from "./chat-code-mode";
 import { CHAT_READ_SCRIPT_POLICY } from "./chat-read-script-policy";
 import { classifyScriptName } from "./script-call-guide";
@@ -88,6 +90,28 @@ const buildProps = (scopedDb: ScopedDb) => {
     }),
   };
 };
+
+test("advertises discovery exactly when the executable surface has lazy reads", () => {
+  for (const documentedReads of [[], chatScriptReadToolNames()]) {
+    const surface = createChatCodeModeSurface({
+      concurrencyKey: "discovery-prompt-test",
+      documentedReads,
+      runReadTool: async () => Result.ok({}),
+    });
+    const hasDiscovery = surface.discoveryTool !== null;
+    expect(hasDiscovery).toBe(documentedReads.length === 0);
+    expect(surface.systemPrompt.includes("discover_tools")).toBe(hasDiscovery);
+    expect(surface.systemPrompt.includes("### Discoverable APIs")).toBe(
+      hasDiscovery,
+    );
+    expect(surface.tools.some(({ name }) => name === "discover_tools")).toBe(
+      hasDiscovery,
+    );
+    expect(surface.systemPrompt).toContain(
+      "declare function external_list_matters",
+    );
+  }
+});
 
 describe("buildChatCodeMode", () => {
   test("emits an execute_typescript tool, a discover_tools companion, and a system prompt", () => {

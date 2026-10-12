@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import { CHAT_MESSAGE_EDIT_TYPE } from "@stll/api-contract/chat-message-revisions";
 import { sha256Hex } from "@stll/sha256/bun";
 
@@ -173,11 +174,14 @@ const seedFixture = async (db: GatedTestDb) => {
       })
       .from(chatMessages)
       .where(eq(chatMessages.id, messageId)),
-    revisions: await db
-      .select()
-      .from(chatMessageRevisions)
-      .where(eq(chatMessageRevisions.messageId, messageId))
-      .orderBy(chatMessageRevisions.revision),
+    revisions: await scoped(db)(
+      async (tx) =>
+        await tx
+          .select()
+          .from(chatMessageRevisions)
+          .where(eq(chatMessageRevisions.messageId, messageId))
+          .orderBy(chatMessageRevisions.revision),
+    ),
     threads: await db
       .select({
         epoch: chatThreads.compactionEpoch,
@@ -392,8 +396,11 @@ if (!databaseUrl || !runPostgres) {
           expect(await fixture.observe()).toEqual(unedited);
           await fixture.write(db, acceptedChange);
           const before = await fixture.observe();
-          const originalBytes = await db.execute<{ bytes: string }>(
-            sql`SELECT content::text AS bytes FROM chat_message_revisions WHERE message_id = ${fixture.messageId} AND revision = 0`,
+          const originalBytes = await fixture.scoped(db)(
+            async (tx) =>
+              await tx.execute<{ bytes: string }>(
+                sql`SELECT content::text AS bytes FROM chat_message_revisions WHERE message_id = ${fixture.messageId} AND revision = 0`,
+              ),
           );
           expect(await fixture.write(db, acceptedChange)).toEqual({
             type: "stale",
@@ -406,8 +413,11 @@ if (!databaseUrl || !runPostgres) {
               toRevision: 0,
             }),
           ).toEqual({ type: "ok", revision: 2, edited: true });
-          const restoredBytes = await db.execute<{ bytes: string }>(
-            sql`SELECT content::text AS bytes FROM chat_messages WHERE id = ${fixture.messageId}`,
+          const restoredBytes = await fixture.scoped(db)(
+            async (tx) =>
+              await tx.execute<{ bytes: string }>(
+                sql`SELECT content::text AS bytes FROM chat_messages WHERE id = ${fixture.messageId}`,
+              ),
           );
           expect(restoredBytes).toEqual(originalBytes);
           const after = await fixture.observe();
@@ -1057,6 +1067,7 @@ if (!databaseUrl || !runPostgres) {
               { type: "text", content: "Hello" },
               {
                 type: "tool-call",
+                metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
                 id: "settled-call",
                 name: "mcp__external__search",
                 arguments: '{"query":"answer"}',
@@ -1138,6 +1149,7 @@ if (!databaseUrl || !runPostgres) {
         outcome: "denied approval",
         toolCall: {
           type: "tool-call",
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
           id: "denied-call",
           name: "mcp__external__search",
           arguments: '{"query":"answer"}',
@@ -1153,6 +1165,7 @@ if (!databaseUrl || !runPostgres) {
         outcome: "failed tool call",
         toolCall: {
           type: "tool-call",
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
           id: "failed-call",
           name: "mcp__external__search",
           arguments: '{"query":"answer"}',

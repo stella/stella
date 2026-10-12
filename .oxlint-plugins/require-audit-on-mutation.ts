@@ -99,6 +99,14 @@ const AUDIT_RECORDER_NAME =
 // Imported helpers that write their own audit row.
 const AUDITED_HELPERS = [
   {
+    module: "apps/api/src/lib/db/audit-recording",
+    names: new Set(["recordAuditGroups"]),
+  },
+  {
+    module: "apps/api/src/lib/db/service-client-audit",
+    names: new Set(["recordServiceClientOperatorAuditEvent"]),
+  },
+  {
     module: "apps/api/src/lib/audit-log",
     names: new Set(["recordAuditGroups"]),
   },
@@ -124,7 +132,10 @@ const SYSTEM_AUDIT_RECORDER_FILE = "apps/api/src/lib/system-audit/record.ts";
 const MEMBER_RUN_MODULE_FILES: ReadonlySet<string> = new Set(
   MEMBER_RUN_MODULES,
 );
-const AUDIT_LOG_MODULE = "apps/api/src/lib/audit-log";
+const AUDIT_LOG_MODULES = [
+  "apps/api/src/lib/audit-log",
+  "apps/api/src/lib/db/audit-recording",
+];
 const AUDIT_RECORDER_FACTORIES: ReadonlySet<string> = new Set([
   "createAuditRecorder",
   "createBackgroundAuditRecorder",
@@ -159,7 +170,7 @@ const isRecorderFactoryCall = (
     isImportedFrom({
       context,
       node: invokedCallee(call),
-      modules: [AUDIT_LOG_MODULE],
+      modules: AUDIT_LOG_MODULES,
       names: AUDIT_RECORDER_FACTORIES,
     })
   );
@@ -244,7 +255,7 @@ const isAuditCall = (context: RuleContext, node: unknown): boolean => {
 
 type Range = [number, number];
 
-const REPOSITORY_ROOT = path.resolve(import.meta.dir, "..");
+const REPOSITORY_ROOT = path.resolve(import.meta.dirname, "..");
 
 const FUNCTION_TYPES: ReadonlySet<string> = new Set([
   "FunctionDeclaration",

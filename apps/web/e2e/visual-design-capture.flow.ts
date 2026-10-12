@@ -194,6 +194,23 @@ const captureVisualDesign = async ({
   );
   await expect(guest.locator("html")).toHaveCSS("color-scheme", "light");
   await prepareCapture();
+  const assertLegibleLabels = async () => {
+    const labels = chart.locator("svg text");
+    expect(
+      await labels.count(),
+      "desktop treemap renders labels",
+    ).toBeGreaterThan(0);
+    expect(
+      await labels.evaluateAll((elements) =>
+        elements.every(
+          (element) =>
+            Number.parseFloat(getComputedStyle(element).fontSize) >= 14,
+        ),
+      ),
+      "treemap labels are at least 14 CSS pixels",
+    ).toBe(true);
+  };
+  await assertLegibleLabels();
   await expect
     .poll(async () => viewportRatio(chart))
     .toBeGreaterThanOrEqual(0.25);
@@ -209,6 +226,7 @@ const captureVisualDesign = async ({
   await expect(guest.locator("html")).toHaveCSS("color-scheme", "dark");
   await expect(outer).toHaveAttribute("src", initialSrc ?? "");
   await prepareCapture();
+  await assertLegibleLabels();
   await expect
     .poll(async () => viewportRatio(chart))
     .toBeGreaterThanOrEqual(0.25);
@@ -224,6 +242,58 @@ const captureVisualDesign = async ({
     guest.locator("#chart").locator("svg, canvas").first(),
   ).toBeVisible();
   await prepareCapture();
+  for (const root of [
+    page.locator("html"),
+    page.frameLocator(selector).locator("html"),
+    guest.locator("html"),
+  ]) {
+    await expect
+      .poll(
+        async () =>
+          root.evaluate((element) => element.scrollWidth - element.clientWidth),
+        { message: "mobile generated view has no horizontal overflow" },
+      )
+      .toBeLessThanOrEqual(1);
+  }
+  await expect
+    .poll(
+      async () => {
+        const bounds = await chart.boundingBox();
+        const frameBounds = await outer.boundingBox();
+        const viewport = page.viewportSize();
+        return (
+          bounds !== null &&
+          frameBounds !== null &&
+          viewport !== null &&
+          bounds.x >= frameBounds.x - 1 &&
+          bounds.x + bounds.width <= frameBounds.x + frameBounds.width + 1 &&
+          bounds.x >= -1 &&
+          bounds.x + bounds.width <= viewport.width + 1
+        );
+      },
+      { message: "mobile chart fits inside its frame and the host viewport" },
+    )
+    .toBe(true);
+  await expect
+    .poll(
+      async () =>
+        chart.evaluate((element) => {
+          const bounds = element.getBoundingClientRect();
+          const tiles = Array.from(element.querySelectorAll("svg rect"));
+          return (
+            tiles.length > 0 &&
+            tiles.every((tile) => {
+              const tileBounds = tile.getBoundingClientRect();
+              return (
+                tileBounds.left >= bounds.left - 1 &&
+                tileBounds.right <= bounds.right + 1
+              );
+            })
+          );
+        }),
+      { message: "every mobile treemap tile fits the chart" },
+    )
+    .toBe(true);
   await snap("visual-design-light-mobile", { waitFor: selector });
   // The wrapping statistics can put the chart below the mobile overview.
   // Capture its own viewport as well so the palette and labels are reviewable.
@@ -238,6 +308,23 @@ const captureVisualDesign = async ({
     .poll(async () => viewportRatio(firstRankingButton))
     .toBeGreaterThanOrEqual(0.6);
   await snap("visual-design-light-mobile-ranking", { waitFor: selector });
+
+  const transcript = page
+    .getByRole("log")
+    .locator('[data-slot="scroll-area-viewport"]');
+  await transcript.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect(page.locator("[data-chat-bottom-fade]")).toBeHidden();
+  await page.setViewportSize({ width: 1440, height: 2400 });
+  await expect
+    .poll(async () =>
+      transcript.evaluate(
+        (element) => element.scrollHeight - element.clientHeight,
+      ),
+    )
+    .toBeLessThanOrEqual(1);
+  await expect(page.locator("[data-chat-bottom-fade]")).toBeHidden();
 };
 
 export default captureVisualDesign;

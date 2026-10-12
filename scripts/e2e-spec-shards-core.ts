@@ -2,7 +2,9 @@ import assert from "node:assert";
 import { readdirSync } from "node:fs";
 import path from "node:path";
 
-export const E2E_SHARD_COUNT = 2;
+import { E2E_SHARD_COUNT } from "../apps/web/e2e/shard-count";
+
+export { E2E_SHARD_COUNT } from "../apps/web/e2e/shard-count";
 const SPEC_ROOT = "apps/web/e2e/specs";
 
 // Playwright's default `testMatch`: every `.spec` and `.test` script file.

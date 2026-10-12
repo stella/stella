@@ -7,8 +7,10 @@
 // custom event) is not counted, and neither is thinking.
 
 import { EventType } from "@tanstack/ai";
-import type { StreamChunk } from "@tanstack/ai";
+import type { StreamChunk, UIMessage } from "@tanstack/ai";
 import { panic } from "better-result";
+
+import { arrayOrEmpty } from "@/api/lib/array";
 
 /** What each chunk says about an answer. `text` answers only when its delta
  *  holds more than whitespace. */
@@ -65,4 +67,60 @@ export const chunkCarriesAnswer = (chunk: StreamChunk): boolean => {
       policy satisfies never;
       return panic(`Unhandled chunk policy: ${String(policy)}`);
   }
+};
+
+type SnapshotAnswerOptions = {
+  message: UIMessage;
+  initial: UIMessage | undefined;
+};
+
+// Explicit UI snapshots can supply a new answer without deltas. Model-history
+// snapshots and unchanged continuation content do not establish a new answer.
+export const snapshotMessageAddsAnswer = ({
+  message,
+  initial,
+}: SnapshotAnswerOptions) => {
+  if (message.role !== "assistant") {
+    return false;
+  }
+  const textContent = (parts: UIMessage["parts"]) =>
+    parts
+      .flatMap((part) => (part.type === "text" ? [part.content] : []))
+      .join("");
+  const text = textContent(message.parts);
+  if (
+    text.trim().length > 0 &&
+    text !== textContent(arrayOrEmpty(initial?.parts))
+  ) {
+    return true;
+  }
+  return message.parts.some((part) => {
+    switch (part.type) {
+      case "tool-call":
+        return !initial?.parts.some(
+          (previous) =>
+            previous.type === "tool-call" && previous.id === part.id,
+        );
+      case "subagent":
+        return !initial?.parts.some(
+          (previous) =>
+            previous.type === "subagent" &&
+            previous.subagent.id === part.subagent.id,
+        );
+      case "text":
+      case "thinking":
+      case "tool-result":
+      case "activity":
+      case "structured-output":
+      case "ui-resource":
+      case "image":
+      case "audio":
+      case "video":
+      case "document":
+        return false;
+      default:
+        part satisfies never;
+        return panic("Unhandled snapshot answer part");
+    }
+  });
 };
