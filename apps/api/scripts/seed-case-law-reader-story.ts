@@ -99,6 +99,16 @@ export const CASE_LAW_READER_STORY: ReaderStory = {
       style: "highlight",
     },
     {
+      // On the framed paragraph itself, so a whole comment card sits in the
+      // shot beside the AI note rather than below the frame's edge.
+      key: "confiscation-comment",
+      kind: "comment",
+      anchor: "p-7",
+      quote:
+        "V roce 1942 mu byl veškerý majetek zkonfiskován ve prospěch Německé říše a po válce nebyl vrácen.",
+      body: "Confiscated for the Reich in 1942 and never returned: the claim rests on § 2(2) of Act 243/1992, so the 1948 cut-off in the Land Act does not bite (¶ 96).",
+    },
+    {
       key: "extreme-conflict",
       kind: "highlight",
       anchor: "p-8",

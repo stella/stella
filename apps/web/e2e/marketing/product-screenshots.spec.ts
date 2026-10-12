@@ -41,9 +41,9 @@ const READER_STORY_THREAD_TITLE =
 // Words from the seeded answer, proving it rendered rather than the empty
 // chat's prompt cards.
 const READER_STORY_ANSWER_TEXT = /two independent grounds/u;
-// Where the framed paragraph lands below the reader's top edge, leaving room
-// for the section heading above it.
-const READER_SCROLL_OFFSET_PX = 112;
+// Where the framed paragraph lands below the reader's top edge: room for its
+// section heading, and for the comment cards beside it to fit the clip.
+const READER_SCROLL_OFFSET_PX = 48;
 // Duplicated from packages/api-contract/src/browser-storage.ts
 // (`ownerStorageKey`) and apps/web/src/components/inspector/
 // inspector-storage-keys.ts, for the same reason as the theme key below.
@@ -65,6 +65,10 @@ const requestedCapture = process.env["MARKETING_CAPTURE"];
 // each route pays a cold build that the config's 15s expect timeout cannot
 // cover on a CI runner. Mirrors the same allowance in e2e/specs/route-smoke.
 const COLD_COMPILE_TIMEOUT = 60_000;
+
+type CaptureClip = { x: number; y: number; width: number; height: number };
+// What a capture without its own clip records.
+const DEFAULT_CLIP: CaptureClip = { x: 255, y: 0, width: 1137, height: 710 };
 
 // The document inspector renders `${versionLabel} · ${formatRelativeTime(...)}`
 // against the current version's timestamp, so the caption changes with wall
@@ -377,13 +381,21 @@ test("capture landing product screenshots", async ({
           "readerStory" in capture ? readerMark : aiMarginNote,
         );
         // Notes are placed beside their passages once the reader measured
-        // them, so these also wait out that layout.
-        await expect(aiMarginNote).toBeInViewport();
+        // them, so these also wait out that layout. Whole notes, inside the
+        // shot's own clip: a card cut at the frame's edge reads as a glitch.
+        const captureClip = "clip" in capture ? capture.clip : DEFAULT_CLIP;
+        await expectWithinClip(aiMarginNote, captureClip, "The AI margin note");
         if ("readerStory" in capture) {
-          await expect(readerMark).toBeInViewport();
-          await expect(
+          await expectWithinClip(
+            readerMark,
+            captureClip,
+            "The first mark in the text",
+          );
+          await expectWithinClip(
             page.locator('[data-margin-note="comment"] > *').first(),
-          ).toBeInViewport();
+            captureClip,
+            "The first comment card",
+          );
         }
         // Keep the breadcrumb in frame: only the nested reader scrolls.
         await page.evaluate(() => window.scrollTo({ left: 0, top: 0 }));
@@ -437,10 +449,7 @@ test("capture landing product screenshots", async ({
         .toHaveScreenshot(`${capture.name}${themeSuffix}.png`, {
           animations: "disabled",
           caret: "hide",
-          clip:
-            "clip" in capture
-              ? capture.clip
-              : { x: 255, y: 0, width: 1137, height: 710 },
+          clip: "clip" in capture ? capture.clip : DEFAULT_CLIP,
           // Baselines are produced on the CI runner by the "Update marketing
           // screenshots" workflow (.github/workflows/
           // marketing-screenshots-update.yml) and compared on that same runner
@@ -467,6 +476,33 @@ const clearPersistedInspectorState = async (page: Page) => {
       }
     }
   }, INSPECTOR_STORAGE_PREFIXES);
+};
+
+// Waits until the element's whole box lies inside the recorded clip, so a
+// note half past the frame's edge fails here, naming itself, rather than
+// shipping in the shot.
+const expectWithinClip = async (
+  target: Locator,
+  clip: CaptureClip,
+  label: string,
+) => {
+  await expect
+    .poll(
+      async () => {
+        const box = await target.boundingBox();
+        return (
+          box !== null &&
+          box.y >= clip.y &&
+          box.x >= clip.x &&
+          box.y + box.height <= clip.y + clip.height &&
+          box.x + box.width <= clip.x + clip.width
+        );
+      },
+      {
+        message: `${label} must lie wholly inside the ${String(clip.width)}x${String(clip.height)} capture clip`,
+      },
+    )
+    .toBe(true);
 };
 
 // Scrolls the reader's own scroller, never the page, so the target's passage
