@@ -563,6 +563,11 @@ export const PUBLIC_LAW_PLAN_DISPOSITION = {
     type: "excluded",
     reason: "Court activity has a date-window-dependent aggregate shape.",
   },
+  [PUBLIC_LAW_SHARED_QUERY.caseLawCourtCount]: {
+    type: "excluded",
+    reason:
+      "Court count is a cached aggregate over the public-corpus court index.",
+  },
   [PUBLIC_LAW_SHARED_QUERY.caseLawCourtWeights]: {
     type: "excluded",
     reason: "Reads the small court-weight configuration table.",

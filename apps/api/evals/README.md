@@ -89,3 +89,44 @@ the default provider chain (see `getTanStackTextModelById`).
 - `agent-orientation.ts`: given stella's MCP tool list or CLI skill, does a
   model pick the right tool or command and arguments for a natural-language
   task, scored without executing anything?
+
+## Explain citations through local harnesses
+
+`reader-explain-local.ts` covers ten public decision selections with cited and
+citing precedent. The recorded Schrems II fixture establishes the source
+paragraphs and the publisher paragraph numbers it cites in Schrems I. Actual
+corpus ids, AST paragraph ids, excerpts and citator edges must be captured from
+the admitted case-law reader before running these cases. No paragraph ids are
+inferred from publisher paragraph numbers. The Schrems I capture is not in the
+recorded seed; missing or ambiguous capture data fails before evaluation.
+
+Keep captures, prompts and results outside the repository. A capture contains
+`decisions: [{decisionId, ecli, paragraphs: [{paragraphId, publisherParagraph,
+text}]}]` and `edges: [{citingDecisionId, citedDecisionId}]`; use actual corpus
+reads for both. `paragraphId` is the reader’s stable `block.anchorId`, not the
+internal `block.id`; `publisherParagraph` is the court’s printed paragraph
+number and only locates the captured anchor. From `apps/api`:
+
+```sh
+bun run eval:reader-explain prompts /absolute/path/corpus-capture.json > /absolute/path/prompts.jsonl
+bun run eval:reader-explain score /absolute/path/corpus-capture.json /absolute/path/local-results.jsonl <tracePath-from-prompts>
+```
+
+Run each emitted prompt through a local coding-agent harness, making the
+emitted `fetch_related_decision_excerpts.command` available as a local shell
+operation. The `tool` mode replays at most eight captured related paragraphs;
+prompts include bounded context from the selected decision.
+Each prompt invocation creates a unique `runId` and an empty trace at the emitted
+`tracePath`; all prompts in that invocation share them. Record each result as
+JSONL with that `runId`, `caseId`, `harness` (a nonempty local run label), `answer`,
+`citations: [{decisionId, paragraphId}]`. The tool command appends its actual
+returned citations to a local trace; scoring reads this trace separately from
+model output and accepts only entries matching the result's run and case.
+The tool preserves each excerpt's cited or citing direction and prioritizes the
+case direction and expected paragraph before applying its bound.
+The runner never imports a provider or calls a model API; it emits local
+harness inputs and scores captured outputs. It requires exactly one result per
+case and rejects invented or unreturned citations. The content and the expected
+legal distinction are emitted together for separate review; citation success
+alone does not certify the explanation. These evaluations are operator runs,
+not CI model calls.
