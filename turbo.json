@@ -289,7 +289,7 @@
         "@stll/web#generate:route-tree",
         "@stll/cli#codegen:runtime",
         "@stll/api#generate:capability-runtime",
-        "@stll/api#typecheck:declarations"
+        "@stll/api#generate:typecheck-declarations"
       ],
       // Root projects can import workspace source. The broad workspace inputs
       // trade some misses for correctness while still sharing exact results
@@ -2489,8 +2489,12 @@
         "src/handlers/case-law/ingestion/parsers/courtlistener/plain-text.test.ts",
         "src/handlers/case-law/ingestion/parsers/courtlistener/plain-text.ts",
         "src/handlers/case-law/ingestion/parsers/courtlistener/select.ts",
+        "src/handlers/case-law/ingestion/parsers/courtlistener/short-text.test-fixture.json",
         "src/handlers/case-law/ingestion/parsers/courtlistener/test-oracle.test.ts",
         "src/handlers/case-law/ingestion/parsers/courtlistener/test-oracle.ts",
+        "src/handlers/case-law/ingestion/parsers/courtlistener/usability.property.test.ts",
+        "src/handlers/case-law/ingestion/parsers/courtlistener/usability.test.ts",
+        "src/handlers/case-law/ingestion/parsers/courtlistener/usability.ts",
         "src/handlers/case-law/ingestion/parsers/cz-ns-retention.property.test.ts",
         "src/handlers/case-law/ingestion/parsers/cz-ns.ts",
         "src/handlers/case-law/ingestion/parsers/cz-nss-retention.property.test.ts",
@@ -4929,8 +4933,6 @@
         "src/lib/document-processing-handoff.ts",
         "src/lib/document-processing-idle-exit.test.ts",
         "src/lib/document-processing-idle-exit.ts",
-        "src/lib/document-processing-manual-ocr-restore.db.test.ts",
-        "src/lib/document-processing-manual-ocr-restore.ts",
         "src/lib/document-processing-ocr-result.property.test.ts",
         "src/lib/document-processing-ocr-result.ts",
         "src/lib/document-processing-queue-attempt.ts",
@@ -4942,6 +4944,9 @@
         "src/lib/document-processing-reconciliation-feeds.db.test.ts",
         "src/lib/document-processing-reconciliation-progress.ts",
         "src/lib/document-processing-request.ts",
+        "src/lib/document-processing-retry.postgres.test.ts",
+        "src/lib/document-processing-retry.test.ts",
+        "src/lib/document-processing-retry.ts",
         "src/lib/document-processing-workspace-lock.postgres.test.ts",
         "src/lib/document-reference.test.ts",
         "src/lib/document-reference.ts",
@@ -6313,6 +6318,8 @@
         "src/lib/search/cursor.test.ts",
         "src/lib/search/cursor.ts",
         "src/lib/search/detect-language.ts",
+        "src/lib/search/document-processing-manual-ocr-restore.db.test.ts",
+        "src/lib/search/document-processing-manual-ocr-restore.ts",
         "src/lib/search/extract-content.test.ts",
         "src/lib/search/extract-content.ts",
         "src/lib/search/extractable-mime-types.test.ts",
@@ -7677,6 +7684,7 @@
         "src/tests/security/write-contracts.test.ts",
         "src/tests/security/write-handler-permission-coverage.test.ts",
         "src/tests/setup-env.ts",
+        "src/tests/setup-postgres.ts",
         "src/tests/stella-table-privileges.ts",
         "src/tests/test-database-environment.test.ts",
         "src/tests/test-database-environment.ts",
@@ -7696,7 +7704,7 @@
       ],
       "outputs": []
     },
-    "@stll/api#typecheck:declarations": {
+    "@stll/api#generate:typecheck-declarations": {
       "dependsOn": [
         "transit",
         "@stll/cli#codegen:runtime",
@@ -8487,6 +8495,7 @@
         "src/handlers/case-law/ingestion/parsers/courtlistener/outcome.ts",
         "src/handlers/case-law/ingestion/parsers/courtlistener/plain-text.ts",
         "src/handlers/case-law/ingestion/parsers/courtlistener/select.ts",
+        "src/handlers/case-law/ingestion/parsers/courtlistener/usability.ts",
         "src/handlers/case-law/ingestion/parsers/cz-ns.ts",
         "src/handlers/case-law/ingestion/parsers/cz-nss.ts",
         "src/handlers/case-law/ingestion/parsers/cz-regional.ts",
@@ -9103,13 +9112,13 @@
         "src/lib/document-processing-contract.ts",
         "src/lib/document-processing-enqueue.ts",
         "src/lib/document-processing-failure-fields.ts",
-        "src/lib/document-processing-manual-ocr-restore.ts",
         "src/lib/document-processing-ocr-result.ts",
         "src/lib/document-processing-queue-attempt.ts",
         "src/lib/document-processing-queue-policy.ts",
         "src/lib/document-processing-queue.ts",
         "src/lib/document-processing-readiness.ts",
         "src/lib/document-processing-reconciliation-progress.ts",
+        "src/lib/document-processing-retry.ts",
         "src/lib/document-reference.ts",
         "src/lib/document-review/approved-playbook-versions.ts",
         "src/lib/document-review/contract.ts",
@@ -9779,6 +9788,7 @@
         "src/lib/search/contact-workspace-access-sql.ts",
         "src/lib/search/cursor.ts",
         "src/lib/search/detect-language.ts",
+        "src/lib/search/document-processing-manual-ocr-restore.ts",
         "src/lib/search/extract-content.ts",
         "src/lib/search/extractable-mime-types.ts",
         "src/lib/search/extraction-worker-attachments.ts",
@@ -10130,7 +10140,7 @@
         "transit",
         "@stll/cli#codegen:runtime",
         "generate:capability-runtime",
-        "typecheck:declarations"
+        "generate:typecheck-declarations"
       ],
       "inputs": [
         "!src/handlers/visual-sandbox/browser/**/*",
@@ -13692,7 +13702,6 @@
         "src/lib/document-processing-enqueue.ts",
         "src/lib/document-processing-failure-fields.ts",
         "src/lib/document-processing-handoff.ts",
-        "src/lib/document-processing-manual-ocr-restore.ts",
         "src/lib/document-processing-ocr-result.ts",
         "src/lib/document-processing-queue-attempt.ts",
         "src/lib/document-processing-queue-policy.ts",
@@ -13700,6 +13709,7 @@
         "src/lib/document-processing-readiness.ts",
         "src/lib/document-processing-reconciliation-progress.ts",
         "src/lib/document-processing-request.ts",
+        "src/lib/document-processing-retry.ts",
         "src/lib/document-reference.ts",
         "src/lib/document-review/approved-playbook-versions.ts",
         "src/lib/document-review/contract.ts",
@@ -14487,6 +14497,7 @@
         "src/lib/search/contact-workspace-access-sql.ts",
         "src/lib/search/cursor.ts",
         "src/lib/search/detect-language.ts",
+        "src/lib/search/document-processing-manual-ocr-restore.ts",
         "src/lib/search/extract-content.ts",
         "src/lib/search/extractable-mime-types.ts",
         "src/lib/search/extraction-worker-attachments.ts",
@@ -16084,7 +16095,7 @@
         "src/lib/document-processing-automatic-request.ts",
         "src/lib/document-processing-contract.ts",
         "src/lib/document-processing-enqueue.ts",
-        "src/lib/document-processing-manual-ocr-restore.ts",
+        "src/lib/document-processing-retry.ts",
         "src/lib/document-reference.ts",
         "src/lib/document-review/approved-playbook-versions.ts",
         "src/lib/document-review/contract.ts",
@@ -16597,6 +16608,7 @@
         "src/lib/search/contact-workspace-access-sql.ts",
         "src/lib/search/cursor.ts",
         "src/lib/search/detect-language.ts",
+        "src/lib/search/document-processing-manual-ocr-restore.ts",
         "src/lib/search/extract-content.ts",
         "src/lib/search/extractable-mime-types.ts",
         "src/lib/search/extraction-worker-attachments.ts",
@@ -17310,7 +17322,11 @@
       "outputs": []
     },
     "@stll/api#lint": {
-      "dependsOn": ["typecheck"],
+      "dependsOn": [
+        "@stll/cli#codegen:runtime",
+        "generate:capability-runtime",
+        "generate:typecheck-declarations"
+      ],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",
@@ -17425,6 +17441,7 @@
     "@stll/desktop#test:native": {
       "dependsOn": [],
       "inputs": [
+        "rust-toolchain.toml",
         "src-tauri/**",
         "!src-tauri/target/**",
         "!src-tauri/gen/**",

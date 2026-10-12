@@ -576,11 +576,11 @@ const expectScope = ({ current, base }: ScopeOptions) => {
   // Ordinary scope comparisons supply fresh-run evidence. Completion reuse
   // is exercised separately by the depth contract's true/false census. A
   // merge base may already carry the completion guard, so strip it from both.
-  // The PR-depth reuse skip is bound to its job set in
-  // ci-pr-depth-workflow.test.ts, so strip it here too.
+  // PR-depth evidence guards are bound to their job set and merge-group
+  // execution in ci-pr-depth-workflow.test.ts; compare the underlying scope.
   const freshScope = (value: unknown) => {
     const tokens = conditionTokens(v.parse(v.string(), value)).replace(
-      /^needs\.ci-plan\.outputs\.pr_depth_reused != 'true' && /u,
+      /^(?:needs\.ci-plan\.outputs\.pr_depth_reused != 'true'|\(github\.event_name == 'merge_group' \|\| needs\.ci-plan\.outputs\.pr_depth_reused != 'true'\)) && /u,
       "",
     );
     return (
@@ -902,6 +902,32 @@ test("CI check scope permits only the heavy-only wrapper around the unchanged co
   expect(() => expectScope({ current: missingCondition, base })).toThrow(
     "Invalid type",
   );
+});
+
+test("scope comparisons preserve queued certification and the underlying trust gate", () => {
+  const scope =
+    "inputs.heavy_only != true && ( needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch' )";
+  const reused = "needs.ci-plan.outputs.pr_depth_reused != 'true'";
+  const queued = `(github.event_name == 'merge_group' || ${reused})`;
+  const current = {
+    if: `${queued} && needs.ci-plan.outputs.run_required != 'false' && (${scope})`,
+  };
+  for (const prefix of ["", `${reused} && `, `${queued} && `]) {
+    expectScope({ current, base: { if: `${prefix}${scope}` } });
+  }
+  for (const condition of [
+    current.if.replace("merge_group", "pull_request"),
+    current.if.replace(
+      " || needs.ci-plan.outputs.pr_depth_reused",
+      " && needs.ci-plan.outputs.pr_depth_reused",
+    ),
+    current.if.replace("trusted == 'true'", "trusted != 'true'"),
+    current.if.replace("workflow_dispatch", "push"),
+  ]) {
+    expect(() =>
+      expectScope({ current: { if: condition }, base: { if: scope } }),
+    ).toThrow("Expected:");
+  }
 });
 
 test("package scope narrows check legs while retaining baseline trust and completion gates", () => {
