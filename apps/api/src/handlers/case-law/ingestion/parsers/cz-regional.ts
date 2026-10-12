@@ -23,12 +23,13 @@ import {
 } from "@stll/legal-ast/czech-document-roles";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
-import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 
 import {
   buildValidationHtml,
   validateAndLog,
 } from "@/api/lib/legal-search/parsers/validate-ast";
+
+import { courtParagraphNumbers } from "./court-paragraph-numbers";
 
 // ── Types for the finaldoc JSON ────────────────────────────
 
@@ -232,7 +233,12 @@ export const parseRegionalDecision = (
     }
   }
 
-  const fulltext = blocks
+  const numbered = courtParagraphNumbers(blocks, {
+    parser: "cz-regional",
+    caseNumber: input.caseNumber,
+    url: input.sourceUrl,
+  });
+  const fulltext = numbered
     .flatMap((b) => (b.plainText ? [b.plainText] : []))
     .join("\n\n");
 
@@ -245,7 +251,7 @@ export const parseRegionalDecision = (
   validateAndLog(
     { parser: "cz-regional", caseNumber: input.caseNumber },
     validationHtml,
-    blocks,
+    numbered,
   );
 
   const ast: DocumentAst = {
@@ -265,7 +271,7 @@ export const parseRegionalDecision = (
       keywords: [],
       statutes: [],
     },
-    blocks,
+    blocks: numbered,
   };
 
   return { documentAst: ast, fulltext };
@@ -312,82 +318,6 @@ const toInlines = (
   return { inlines, plainText: plain.trim() };
 };
 
-const inlinePlainLength = (nodes: readonly Inline[]): number => {
-  let len = 0;
-  for (const n of nodes) {
-    if (n.type === "text") {
-      len += n.text.length;
-    } else if (hasInlineChildren(n)) {
-      len += inlinePlainLength(n.children);
-    }
-  }
-  return len;
-};
-
-/** Strip N characters from the front of inlines. */
-const stripPrefix = (
-  inlines: readonly Inline[],
-  charCount: number,
-): Inline[] => {
-  if (charCount <= 0) {
-    return [...inlines];
-  }
-
-  const result: Inline[] = [];
-  let remaining = charCount;
-
-  for (const node of inlines) {
-    if (remaining <= 0) {
-      result.push(node);
-      continue;
-    }
-    if (node.type === "text") {
-      if (node.text.length <= remaining) {
-        remaining -= node.text.length;
-      } else {
-        const sliced: Inline = {
-          type: "text",
-          text: node.text.slice(remaining),
-          ...(node.anonymized && { anonymized: true }),
-        };
-        result.push(sliced);
-        remaining = 0;
-      }
-    } else if (
-      node.type === "bold" ||
-      node.type === "italic" ||
-      node.type === "link"
-    ) {
-      const len = inlinePlainLength(node.children);
-      if (len <= remaining) {
-        remaining -= len;
-      } else {
-        const stripped = stripPrefix(node.children, remaining);
-        remaining = 0;
-        if (stripped.length > 0) {
-          result.push({ ...node, children: stripped });
-        }
-      }
-    }
-  }
-
-  const first = result[0];
-  if (result.length > 0 && first?.type === "text") {
-    const trimmed = first.text.trimStart();
-    if (trimmed) {
-      result[0] = {
-        type: "text",
-        text: trimmed,
-        ...(first.anonymized && { anonymized: true }),
-      };
-    } else {
-      result.shift();
-    }
-  }
-
-  return result;
-};
-
 /** Classify a justification paragraph into the right block type. */
 const classifyJustificationParagraph = (
   inlines: Inline[],
@@ -395,18 +325,9 @@ const classifyJustificationParagraph = (
   blockIndex: number,
   makeBlockId: () => string,
 ): Block => {
-  // Numbered paragraph: "1. ...", "2. ..."
-  const numMatch = NUMBERED_PARA_RE.exec(plainText);
-  if (numMatch) {
-    const text = plainText.slice(numMatch[0].length).trim();
-    return {
-      id: makeBlockId(),
-      anchorId: `p-${blockIndex}`,
-      type: "paragraph",
-      inlines: stripPrefix(inlines, numMatch[0].length),
-      plainText: text,
-    };
-  }
+  // A numbered paragraph ("1. …") stays whole here: whether its marker is the
+  // court's numbering is decided over the whole decision, by
+  // `courtParagraphNumbers` once every block is built.
 
   // Closing: "V [City] dne [date]"
   if (CLOSING_RE.test(plainText)) {
@@ -441,7 +362,3 @@ const classifyJustificationParagraph = (
     plainText,
   };
 };
-
-// ── Patterns ───────────────────────────────────────────────
-
-const NUMBERED_PARA_RE = /^(?:\d+)\.\s+/u;

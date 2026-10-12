@@ -75,6 +75,7 @@ import {
 import { RTF_SOURCE_OPTIONS } from "@/api/lib/legal-search/rtf-source-registry";
 import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
 
+import { courtParagraphNumbers } from "./court-paragraph-numbers";
 import {
   visibleHtmlText,
   stripFurniturePrefix,
@@ -118,7 +119,10 @@ export const parseUsDecisionHtml = (
   const crossReferences = extractCrossReferences($);
 
   const lines = extractLines($);
-  const blocks = classifyUsDocumentLines(lines);
+  const blocks = courtParagraphNumbers(classifyUsDocumentLines(lines), {
+    parser: "cz-us",
+    caseNumber: input.caseNumber,
+  });
 
   // Synthesize decision title heading if none was parsed.
   // The RTF docContentHidden doesn't include decorative
@@ -591,7 +595,7 @@ const classifyUsBodyLine = ({
   // The court numbers some of these headings. The number is stripped for
   // the match alone: the heading block below carries the line the court
   // printed, because what the heading is does not change what it says.
-  const { match: numberPrefix, line: unnumbered } = stripInlineLinePrefix(
+  const { line: unnumbered } = stripInlineLinePrefix(
     normalized,
     NUMBERED_PARA_RE,
   );
@@ -746,21 +750,9 @@ const classifyUsBodyLine = ({
     }
   }
 
-  // Numbered paragraphs: "1. ...", "2. ..."
-  if (numberPrefix !== null) {
-    state.blockIndex += 1;
-    blocks.push({
-      id: makeUsBlockId(state),
-      anchorId: makeAnchorId("p", state.blockIndex),
-      type: "paragraph",
-      role: state.inDissent ? "dissent" : undefined,
-      inlines: unnumbered.inlines,
-      plainText: unnumbered.plainText,
-    });
-    return;
-  }
-
-  // Default: paragraph
+  // Default: paragraph. A numbered one ("1. …") stays whole here: whether
+  // its marker is the court's numbering is decided over the whole decision,
+  // by `courtParagraphNumbers` once every block is classified.
   state.blockIndex += 1;
   blocks.push({
     id: makeUsBlockId(state),

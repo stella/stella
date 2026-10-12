@@ -38,6 +38,7 @@ import { normalizeUnicode, collapseSpacedLetters } from "@stll/text-normalize";
 
 import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 
+import { courtParagraphNumbers } from "./court-paragraph-numbers";
 import {
   inlinesToPlainText,
   isExcludedHtmlTag,
@@ -45,7 +46,6 @@ import {
   visibleHtmlText,
   stripFurniturePrefix,
   normalizeInlineLine,
-  stripInlineLinePrefix,
   walkInlines as walkInlinesShared,
 } from "./shared-inlines";
 
@@ -74,7 +74,11 @@ export const parseNssDecisionHtml = (
 ): ParseNssDecisionOutput => {
   const $ = cheerio.load(input.html);
   const chunks = extractChunks($);
-  const blocks = classifyChunks(chunks);
+  const blocks = courtParagraphNumbers(classifyChunks(chunks), {
+    parser: "cz-nss",
+    caseNumber: input.caseNumber,
+    url: input.sourceUrl,
+  });
 
   validateAndLog(
     { parser: "cz-nss", caseNumber: input.caseNumber, url: input.sourceUrl },
@@ -1035,23 +1039,9 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
       continue;
     }
 
-    // Numbered paragraphs: [1], [2], ...
-    const { match: numMatch, line: unnumbered } = stripInlineLinePrefix(
-      content,
-      NUMBERED_PARA_RE,
-    );
-    if (numMatch) {
-      blockIndex += 1;
-      blocks.push({
-        id: makeBlockId(),
-        anchorId: makeAnchorId("p", blockIndex),
-        type: "paragraph",
-        inlines: unnumbered.inlines,
-        plainText: unnumbered.plainText,
-      });
-      continue;
-    }
-
+    // A numbered paragraph ("[1] …") stays whole here: whether its marker is
+    // the court's numbering is decided over the whole decision, by
+    // `courtParagraphNumbers` once every block is classified.
     // Default: paragraph
     blockIndex += 1;
     blocks.push({

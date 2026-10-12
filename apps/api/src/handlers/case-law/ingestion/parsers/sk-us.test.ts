@@ -174,3 +174,54 @@ test("Roman verdict items keep their holding role while reasoning titles enter t
       .map((block) => block.plainText),
   ).not.toContain(verdict);
 });
+
+describe("numbered reasoning set without blank lines", () => {
+  const reasoning = (lines: readonly string[]) =>
+    parse(
+      `<html><body><div><span style="font-size: 12px; ">O d ôvod n eni e : <br/><br/>${lines
+        .map((line) => `${line} <br/>`)
+        .join("\n")}<br/></span></div></body></html>`,
+    )
+      .documentAst.blocks.filter(
+        (block) => block.type === "paragraph" && block.role === undefined,
+      )
+      // The markup's line ends carry their own spaces; the words are the test.
+      .map((block) => ({
+        ...block,
+        plainText: block.plainText.replaceAll(/\s+/gu, " "),
+      }));
+
+  test("the court's next number on a new line starts the next paragraph", () => {
+    const blocks = reasoning([
+      "1. Sťažovateľ sa ústavnou sťažnosťou doručenou ústavnému súdu",
+      "domáha ochrany osobnosti.",
+      "2. Sudca spravodajca oznámil, že sa dozvedel o komunikácii.",
+      "3. Sťažovateľ vzniesol námietku zaujatosti.",
+    ]);
+    expect(
+      blocks.map((block) => [
+        block.type === "paragraph" ? block.number : null,
+        block.plainText,
+      ]),
+    ).toEqual([
+      [
+        1,
+        "Sťažovateľ sa ústavnou sťažnosťou doručenou ústavnému súdu domáha ochrany osobnosti.",
+      ],
+      [2, "Sudca spravodajca oznámil, že sa dozvedel o komunikácii."],
+      [3, "Sťažovateľ vzniesol námietku zaujatosti."],
+    ]);
+  });
+
+  test("a date wrapped to the start of a line does not split a sentence", () => {
+    const blocks = reasoning([
+      "1. Sťažovateľ podal ústavnú sťažnosť dňa",
+      "2. februára 2026 a domáha sa ochrany.",
+      "2. Sudca spravodajca oznámil námietku.",
+    ]);
+    expect(blocks.map((block) => block.plainText)).toEqual([
+      "Sťažovateľ podal ústavnú sťažnosť dňa 2. februára 2026 a domáha sa ochrany.",
+      "Sudca spravodajca oznámil námietku.",
+    ]);
+  });
+});

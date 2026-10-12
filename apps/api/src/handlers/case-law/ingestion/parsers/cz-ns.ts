@@ -30,6 +30,7 @@ import type {
 import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
+import { courtParagraphNumbers } from "./court-paragraph-numbers";
 import {
   inlinesToPlainText,
   isExcludedHtmlTag,
@@ -76,7 +77,14 @@ export const parseNsDecisionHtml = (
 
   const { canonical, source, relatedProceedingsTable } = extractNsMetadata($);
   const rawChunks = extractRawChunks($);
-  const blocks = classifyBlocks(rawChunks, relatedProceedingsTable);
+  const blocks = courtParagraphNumbers(
+    classifyBlocks(rawChunks, relatedProceedingsTable),
+    {
+      parser: "cz-ns",
+      caseNumber: canonical.caseNumber ?? input.documentId,
+      url: input.webUrl,
+    },
+  );
   const fulltext = blocksToPlainText(blocks);
 
   validateAndLog(

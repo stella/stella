@@ -1,0 +1,51 @@
+{
+  "comment": "Processed-field dispositions that are a debt rather than a fact, per source and field. processed-field-inventory.test.ts holds PROCESSED_FIELD_INVENTORY and this file to exact agreement in both directions, so both lists can only shrink: extracting a field, assessing a source, or recording evidence for a claim deletes its line here.",
+  "skipped": {
+    "not-extracted": {
+      "pl-courts": ["court-paragraph-numbers"],
+      "pl-nsa": ["court-paragraph-numbers"]
+    },
+    "unassessed": {
+      "pl-sn": ["court-paragraph-numbers"],
+      "pl-kio": ["court-paragraph-numbers"],
+      "pl-ncourt": ["court-paragraph-numbers"],
+      "at-courts": ["court-paragraph-numbers"],
+      "at-vfgh": ["court-paragraph-numbers"],
+      "at-vwgh": ["court-paragraph-numbers"],
+      "at-bvwg": ["court-paragraph-numbers"],
+      "at-lvwg": ["court-paragraph-numbers"],
+      "at-asylgh": ["court-paragraph-numbers"],
+      "at-ubas": ["court-paragraph-numbers"],
+      "at-uvs": ["court-paragraph-numbers"],
+      "at-verg": ["court-paragraph-numbers"],
+      "at-umse": ["court-paragraph-numbers"],
+      "at-bks": ["court-paragraph-numbers"],
+      "pl-kis": ["court-paragraph-numbers"],
+      "pl-uodo": ["court-paragraph-numbers"],
+      "pl-uokik": ["court-paragraph-numbers"],
+      "us-courtlistener": ["court-paragraph-numbers"]
+    }
+  },
+  "unrecorded": {
+    "sk-courts": ["court-paragraph-numbers"],
+    "pl-courts": ["court-paragraph-numbers"],
+    "pl-sn": ["court-paragraph-numbers"],
+    "pl-kio": ["court-paragraph-numbers"],
+    "pl-ncourt": ["court-paragraph-numbers"],
+    "at-courts": ["court-paragraph-numbers"],
+    "at-vfgh": ["court-paragraph-numbers"],
+    "at-vwgh": ["court-paragraph-numbers"],
+    "at-bvwg": ["court-paragraph-numbers"],
+    "at-lvwg": ["court-paragraph-numbers"],
+    "at-asylgh": ["court-paragraph-numbers"],
+    "at-ubas": ["court-paragraph-numbers"],
+    "at-uvs": ["court-paragraph-numbers"],
+    "at-verg": ["court-paragraph-numbers"],
+    "at-umse": ["court-paragraph-numbers"],
+    "at-bks": ["court-paragraph-numbers"],
+    "pl-kis": ["court-paragraph-numbers"],
+    "pl-uodo": ["court-paragraph-numbers"],
+    "pl-uokik": ["court-paragraph-numbers"],
+    "us-courtlistener": ["court-paragraph-numbers"]
+  }
+}

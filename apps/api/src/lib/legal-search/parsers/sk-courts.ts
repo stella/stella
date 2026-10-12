@@ -51,6 +51,7 @@ import {
 } from "@stll/legal-ast/slovak-document-roles";
 import type { SkDocumentSection } from "@stll/legal-ast/slovak-document-roles";
 
+import { courtParagraphNumbers } from "@/api/handlers/case-law/ingestion/parsers/court-paragraph-numbers";
 import {
   buildBoldRanges,
   isBoldFont,
@@ -124,7 +125,10 @@ export const parseSkDecisionPdf = async (
   input: ParseSkDecisionInput,
 ): Promise<ParseSkDecisionOutput> => {
   const lines = await extractLines(input.pdfBytes);
-  const blocks = buildSkDecisionPdfBlocks({ lines, metadata: input });
+  const blocks = courtParagraphNumbers(
+    buildSkDecisionPdfBlocks({ lines, metadata: input }),
+    { parser: "sk-courts", caseNumber: input.caseNumber },
+  );
 
   // Synthesize decision title if none detected
   const hasTitle = blocks.some(

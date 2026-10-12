@@ -21,6 +21,7 @@ import {
 } from "@/api/lib/legal-search/parsers/run-content-text.fixtures";
 import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
 
+import { courtParagraphNumbers } from "./court-paragraph-numbers";
 import { classifyUsDocumentLines, usDocumentLinesOf } from "./cz-us";
 import {
   noteTableRtf,
@@ -87,17 +88,27 @@ const findAllByType = (blocks: Block[], type: string) =>
 
 // ── RTF-based decision (post-2007) ──────────────────────────
 
+/**
+ * The paragraph the court numbered `number`, in a reasoning numbered from 1
+ * (a lone "1." is as likely a list item, so a numbering needs a run).
+ */
 const numberedRtfBlocks = (leading: string, number: number, body: string) => {
   const whitespace = leading
     .replaceAll("\t", "\\tab ")
     .replaceAll("\u00a0", "\\~");
-  return classifyUsDocumentLines(
-    usDocumentLinesOf(
-      readRtfString(
-        `{\\rtf1\\ansi \\pard {\\b ${whitespace}${number}}. {\\b ${body}}  \\par}`,
+  const paragraphs = Array.from({ length: Math.max(number, 2) }, (_, index) =>
+    index + 1 === number
+      ? `{\\b ${whitespace}${number}}. {\\b ${body}}  \\par`
+      : `${String(index + 1)}. Soud v\u011bc posoudil. \\par`,
+  );
+  return courtParagraphNumbers(
+    classifyUsDocumentLines(
+      usDocumentLinesOf(
+        readRtfString(`{\\rtf1\\ansi \\pard ${paragraphs.join(" ")}}`),
       ),
     ),
-  );
+    { parser: "cz-us", caseNumber: "test" },
+  ).filter((block) => block.type === "paragraph" && block.number === number);
 };
 
 test.each(["  ", "\t", "\u00a0", " \t\u00a0"])(
@@ -125,7 +136,7 @@ test("CZ numbered prefixes share normalized offsets with rendered inline text", 
         minLength: 1,
         maxLength: 12,
       }),
-      fc.integer({ min: 1, max: 999 }),
+      fc.integer({ min: 1, max: 60 }),
       fc.array(fc.constantFrom("Body", "text", "žluťoučký", "😀"), {
         minLength: 1,
         maxLength: 5,

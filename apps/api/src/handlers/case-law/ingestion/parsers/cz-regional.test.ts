@@ -325,23 +325,43 @@ describe("parseRegionalDecision", () => {
   // ── Justification classification ──────────────────────────
 
   describe("justification paragraph classification", () => {
-    test("strips numbered prefix from paragraphs", () => {
+    test("moves the court's numbers into the paragraphs' number", () => {
       const input = baseInput({
-        justification: [makePara("1. Žalobce podal žalobu dne 1. 1. 2025.")],
-        justificationText: "Žalobce podal žalobu dne 1. 1. 2025.",
+        justification: [
+          makePara("1. Žalobce podal žalobu dne 1. 1. 2025."),
+          makePara("2. Žalovaný se nevyjádřil."),
+        ],
+        justificationText:
+          "1. Žalobce podal žalobu dne 1. 1. 2025. 2. Žalovaný se nevyjádřil.",
       });
 
       const { documentAst } = parseRegionalDecision(input);
 
-      // Find the justification paragraph (not the heading)
       const justBlocks = documentAst.blocks.filter(
         (b) => b.type === "paragraph" && !("role" in b && b.role),
       );
-      // Should strip "1. " prefix
-      const stripped = justBlocks.find((b) =>
-        b.plainText.startsWith("Žalobce"),
-      );
-      expect(stripped).toBeDefined();
+      expect(
+        justBlocks.map((b) => [
+          b.type === "paragraph" ? b.number : undefined,
+          b.plainText,
+        ]),
+      ).toEqual([
+        [1, "Žalobce podal žalobu dne 1. 1. 2025."],
+        [2, "Žalovaný se nevyjádřil."],
+      ]);
+    });
+
+    test("a lone '1.' is a list item, not a numbering, and stays as printed", () => {
+      const input = baseInput({
+        justification: [makePara("1. Žalobce podal žalobu dne 1. 1. 2025.")],
+        justificationText: "1. Žalobce podal žalobu dne 1. 1. 2025.",
+      });
+
+      const { documentAst } = parseRegionalDecision(input);
+
+      expect(
+        documentAst.blocks.find((b) => b.plainText.includes("Žalobce")),
+      ).toMatchObject({ plainText: "1. Žalobce podal žalobu dne 1. 1. 2025." });
     });
 
     test("classifies closing formula", () => {

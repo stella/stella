@@ -46,6 +46,7 @@ import {
 } from "@stll/legal-ast/slovak-document-roles";
 import type { SkDocumentSection } from "@stll/legal-ast/slovak-document-roles";
 
+import { courtParagraphNumbers } from "@/api/handlers/case-law/ingestion/parsers/court-paragraph-numbers";
 import {
   ANONYMIZED_CLASS,
   inlinesToPlainText,
@@ -246,8 +247,11 @@ const classifyLines = (lines: readonly MarkupLine[]): Block[] => {
   const blocks: Block[] = [];
   const state: ClassifyState = { section: "preamble", blockCount: 0 };
   let paragraph: MarkupLine | null = null;
+  let nextCourtNumber = 1;
 
   const nextId = (): string => `b${blocks.length + 1}`;
+  /** The open paragraph's text, read through the closure that owns it. */
+  const openParagraphText = (): string | null => paragraph?.text ?? null;
 
   const flushParagraph = (): void => {
     if (paragraph === null) {
@@ -380,12 +384,39 @@ const classifyLines = (lines: readonly MarkupLine[]): Block[] => {
       continue;
     }
 
+    // The court's next paragraph number opening a line ends the paragraph
+    // before it when that one has finished its sentence: some decisions set
+    // no blank line between numbered paragraphs. Only the number that comes
+    // next counts, and only before a capital, so a wrapped "1. februára"
+    // or a list inside the paragraph does not split it.
+    const opening =
+      state.section === "reasoning"
+        ? Number(COURT_PARAGRAPH_OPENING.exec(line.text)?.groups?.["number"])
+        : Number.NaN;
+    if (opening === nextCourtNumber) {
+      const open = openParagraphText();
+      if (open !== null && SENTENCE_END.test(open)) {
+        flushParagraph();
+      }
+      if (openParagraphText() === null) {
+        nextCourtNumber += 1;
+      }
+    }
     openParagraph(line);
   }
   flushParagraph();
 
   return blocks;
 };
+
+/** A line opening with a court paragraph number and a capitalised word. */
+const COURT_PARAGRAPH_OPENING = /^(?<number>\d{1,3})\.\s+\p{Lu}/u;
+
+/**
+ * The end of a sentence, before the page number the court prints at the
+ * foot of a page and which reaches the line it ends.
+ */
+const SENTENCE_END = /[.!?:;“”")]\s*(?:\d{1,4}\s*)?$/u;
 
 export type ParseSkUsDocumentOptions = {
   /** The XHTML the content endpoint served, base64-decoded. */
@@ -417,7 +448,11 @@ export const parseSkUsDocumentXhtml = ({
 }: ParseSkUsDocumentOptions): ParseSkUsDocumentResult => {
   const $ = cheerio.load(xhtml);
   markHiddenRuns($);
-  const blocks = classifyLines(readMarkupLines($));
+  const blocks = courtParagraphNumbers(classifyLines(readMarkupLines($)), {
+    parser: "sk-us",
+    caseNumber,
+    url: documentUrl,
+  });
 
   validateAndLog(
     {
