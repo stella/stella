@@ -1,3 +1,4 @@
+// parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
 export {
   applyArabicFolds,
   applyArabicFoldsWithOffsets,
@@ -23,3 +24,9 @@ export {
 } from "./spaced-letters.js";
 export { slugify } from "./slug.js";
 export type { SlugCharset, SlugifyOptions, SlugSeparator } from "./slug.js";
+export {
+  normalizeUnicode,
+  stripUnicodeMarks,
+  UNICODE_NORMALIZATION_FORMS,
+} from "./unicode.js";
+export type { UnicodeMarkClass, UnicodeNormalizationForm } from "./unicode.js";

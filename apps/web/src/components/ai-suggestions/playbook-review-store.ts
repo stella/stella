@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * Document-review sessions: a client cache over durable server runs.
  *
@@ -11,8 +12,6 @@
  * what lets a freshly opened facet restore the document's latest run instead of
  * starting from the launcher.
  */
-
-import { panic, Result } from "better-result";
 import { create } from "zustand";
 
 import { REVIEW_START_MODE } from "@/components/ai-suggestions/document-review-basis.logic";
@@ -38,6 +37,7 @@ import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import type { Position } from "@/lib/knowledge/playbook-types";
 import { toSafeId } from "@/lib/safe-id";
+import { createUuid } from "@/lib/uuid";
 
 const RUN_CREATE_TIMEOUT_MS = 30_000;
 
@@ -375,7 +375,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => {
         });
       }
 
-      const requestId = crypto.randomUUID();
+      const requestId = createUuid();
       set((state) => ({
         sessions: {
           ...state.sessions,
@@ -631,7 +631,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => {
       confirmedUnits,
     }) => {
       const key = reviewSessionKey(entityId, fileFieldId);
-      const requestId = crypto.randomUUID();
+      const requestId = createUuid();
       set((state) => {
         const current = state.sessions[key];
         return {

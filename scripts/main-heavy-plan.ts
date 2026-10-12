@@ -98,45 +98,27 @@ export const prDepthJobs = (workflow: unknown) => {
   );
 };
 
-/** Heavy jobs a thin merge group still runs unless the switch turns them off. */
-export const QUEUE_BROWSER_SUITES_SWITCH = "vars.QUEUE_BROWSER_SUITES";
-
-export const queueGateJobs = (workflow: unknown) => {
-  const jobs = record(record(workflow)["jobs"]);
-  const steps = record(jobs["ci-result"])["steps"];
-  if (!Array.isArray(steps)) {
-    panic("Expected ci-result steps");
-  }
-  const outcome = steps.find(
-    (step: unknown) => record(step)["name"] === "Evaluate CI outcome",
-  );
-  const gatesJson = record(record(outcome)["env"])["QUEUE_GATES"];
-  if (typeof gatesJson !== "string") {
-    panic("Expected QUEUE_GATES JSON");
-  }
-  const gates: unknown = JSON.parse(gatesJson);
-  const heavy = mainHeavyJobs(workflow);
-  if (
-    !Array.isArray(gates) ||
-    !gates.every(
-      (job): job is string => typeof job === "string" && heavy.includes(job),
-    )
-  ) {
-    panic("Queue gates must name existing heavy jobs");
-  }
-  return gates;
-};
+// These jobs cannot certify the queued tree: they either consume a different
+// revision or duplicate a producer selected for an ordinary merge group.
+export const MERGE_GROUP_EXCEPTIONS = {
+  "ci-checks-docs":
+    "Documentation-only checks; package checks certify queued code.",
+  "fix-tests-on-base":
+    "Negative proof against the pull request base, rather than the queued tree.",
+  "heavy-web-build":
+    "Heavy-dispatch artifact producer; web-build produces the merge-group artifact.",
+  "release-typecheck":
+    "Scheduled compilation of the next release version; normal typechecks certify queued source.",
+} as const;
 
 export const queueAdmittedJobs = (workflow: unknown) => {
-  const jobs = record(record(workflow)["jobs"]);
-  const gates = queueGateJobs(workflow);
-  return mainHeavyJobs(workflow).filter((name) => {
-    const condition = record(jobs[name])["if"];
-    return (
-      typeof condition === "string" &&
-      (gates.includes(name) || condition.includes(QUEUE_BROWSER_SUITES_SWITCH))
-    );
-  });
+  const gated = [...thinJobs(workflow), ...mainHeavyJobs(workflow)];
+  for (const exception of Object.keys(MERGE_GROUP_EXCEPTIONS)) {
+    if (!gated.includes(exception)) {
+      panic(`Stale merge-group exception: ${exception}`);
+    }
+  }
+  return gated.filter((job) => !Object.hasOwn(MERGE_GROUP_EXCEPTIONS, job));
 };
 
 if (import.meta.main) {
@@ -147,5 +129,6 @@ if (import.meta.main) {
   const workflow: unknown = Bun.YAML.parse(readFileSync(source, "utf-8"));
   console.log(`thin_jobs=${JSON.stringify(thinJobs(workflow))}`);
   console.log(`heavy_jobs=${JSON.stringify(mainHeavyJobs(workflow))}`);
+  console.log(`queue_jobs=${JSON.stringify(queueAdmittedJobs(workflow))}`);
   console.log(`pr_depth_jobs=${JSON.stringify(prDepthJobs(workflow))}`);
 }
