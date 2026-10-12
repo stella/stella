@@ -39,6 +39,23 @@ const MODEL_CATALOG_INPUTS = [
 
 const GENERATOR_DECLARATIONS = [
   {
+    id: "cloud-setup",
+    outputKind: "committed",
+    outputs: [".agents/cloud-setup.sh"],
+    inputs: [
+      "stll-toolchain.json",
+      ".node-version",
+      "package.json",
+      "bun.lock",
+      "scripts/generate-cloud-setup.ts",
+      "scripts/generated-artifacts.ts",
+    ],
+    write: ["bun", "scripts/generate-cloud-setup.ts", "--write"],
+    check: ["bun", "scripts/generate-cloud-setup.ts"],
+    autofix: true,
+    after: [],
+  },
+  {
     id: "status-tables",
     outputKind: "committed",
     outputs: ["apps/api/src/lib/db/status-tables.gen.ts"],

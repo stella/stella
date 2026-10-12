@@ -55,7 +55,7 @@ process.on("exit", () => {
     assert.equal(process.env[key], value);
   }
   assert.equal(process.env.DB_LOAD_GATE_EBS_SIGNAL, undefined);
-  assert.equal(process.env.TEST_ENV_UNRELATED, "inherited");
+  assert.equal(process.env.TZ, "Europe/Prague");
   console.log("test environment verified");
 });`,
   );
@@ -72,7 +72,7 @@ process.on("exit", () => {
     env: {
       ...inheritedEnvironment,
       PATH: process.env["PATH"],
-      TEST_ENV_UNRELATED: "inherited",
+      TZ: "Europe/Prague",
     },
     stdout: "pipe",
     stderr: "pipe",
@@ -101,7 +101,7 @@ for (const runner of ["run-postgres-tests.ts", "run-valkey-tests.ts"]) {
       }
       await Bun.write(
         path.join(directory, ".env.test"),
-        `${environmentSource}\nTEST_ENV_UNRELATED=file\nDB_LOAD_GATE_EBS_SIGNAL=disabled\n`,
+        `${environmentSource}\nTZ=UTC\nDB_LOAD_GATE_EBS_SIGNAL=disabled\n`,
       );
       const result = await runEntrypoint({
         directory,
