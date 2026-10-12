@@ -346,6 +346,7 @@ export const deleteEntitiesHandler = async function* ({
 };
 
 const config = {
+  contract: "patch",
   description:
     "Permanently delete documents, folders, or tasks from one matter, together " +
     "with their versions, field values, and stored files. Refused while any of " +

@@ -1,5 +1,6 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { repoRelativePath } from "@stll/portable-path";
 
@@ -83,6 +84,13 @@ export const requireFormatterEnvironment = () => {
   if (!existsSync(tailwindStylesheet)) {
     errors.push(
       "Formatter dependencies are incomplete. Run `bun install --frozen-lockfile` before formatting.",
+    );
+  } else if (
+    realpathSync(tailwindStylesheet) !==
+    realpathSync(fileURLToPath(import.meta.resolve("tailwindcss/theme.css")))
+  ) {
+    errors.push(
+      "Formatter stylesheet must resolve from the root Tailwind dependency.",
     );
   }
 

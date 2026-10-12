@@ -2,6 +2,10 @@ name: Verify image-provided Playwright browsers
 description: Launch the pinned browsers without caches, downloads, or system package installs
 
 inputs:
+  package-directory:
+    description: Workspace directory containing the installed Playwright package
+    required: false
+    default: apps/web
   browsers:
     description: Space-separated browser engines to verify (chromium, firefox, webkit)
     required: false
@@ -17,6 +21,7 @@ runs:
     - name: Verify image browser executables
       shell: bash
       env:
+        PLAYWRIGHT_PACKAGE_DIR: ${{ inputs.package-directory }}
         BROWSERS: ${{ inputs.browsers }}
         DEPENDENCY_MODE: ${{ inputs.dependency-mode }}
         PLAYWRIGHT_BROWSERS_PATH: /ms-playwright

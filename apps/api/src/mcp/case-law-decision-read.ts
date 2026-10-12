@@ -10,6 +10,7 @@ import { panic } from "better-result";
 
 import type { DecisionTextWithheldReason } from "@stll/api-contract/case-law-text-field";
 import { createSha256 } from "@stll/sha256/bun";
+import { stripUnicodeMarks } from "@stll/text-normalize";
 
 import type { DecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import type { RankedRelatedDecision } from "@/api/handlers/case-law/decisions/citation-graph";
@@ -378,7 +379,10 @@ export const decisionParagraphs = ({
 export const QUERY_HIT_LIMIT = 20;
 
 const fold = (term: string): string =>
-  term.normalize("NFD").replaceAll(/\p{M}/gu, "").toLowerCase();
+  stripUnicodeMarks(term, {
+    form: "NFD",
+    markClass: "combining",
+  }).toLowerCase();
 
 /**
  * How a word is compared: by the stem search indexes it under, in the

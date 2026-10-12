@@ -32,6 +32,7 @@ import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 
 const config = {
+  contract: "patch",
   // The other AI reads (recap, suggested prompts, improve-prompt) require
   // chat "create" because they assist with conversing. This one requires
   // "update" — the permission of the rename PATCH it feeds — so a user who

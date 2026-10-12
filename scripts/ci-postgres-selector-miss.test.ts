@@ -1,8 +1,10 @@
 import { expect, test } from "bun:test";
 
+import { POSTGRES_TEST_SHARD_IDS } from "../apps/api/scripts/postgres-test-shards";
 import {
   formatPostgresSelectorMisses,
   fullPostgresRunSha,
+  hasSuccessfulPostgresShards,
   postgresSelectorMisses,
   readPostgresFailures,
 } from "./ci-postgres-selector-miss";
@@ -97,4 +99,82 @@ test("selector misses name omitted failures and leave full selection unalerted",
   expect(
     postgresSelectorMisses({ selection: { mode: "none" }, failingFiles }),
   ).toEqual(failingFiles);
+});
+
+test("full-run certification requires every Postgres matrix shard", () => {
+  for (const prefix of ["", "Heavy suites / "]) {
+    const jobs = POSTGRES_TEST_SHARD_IDS.map((shard) => ({
+      name: `${prefix}postgres-service-suites (${shard})`,
+      conclusion: "success",
+      steps: [{ name: "Run Postgres-gated API suites", conclusion: "success" }],
+    })) satisfies Parameters<typeof hasSuccessfulPostgresShards>[0];
+    expect(hasSuccessfulPostgresShards(jobs)).toBeTrue();
+    for (const missing of jobs) {
+      expect(
+        hasSuccessfulPostgresShards(jobs.filter((job) => job !== missing)),
+      ).toBeFalse();
+    }
+  }
+  expect(hasSuccessfulPostgresShards([])).toBeFalse();
+});
+
+test("unsuccessful or absent Postgres steps cannot certify any shard", () => {
+  const jobs = POSTGRES_TEST_SHARD_IDS.map((shard) => ({
+    name: `postgres-service-suites (${shard})`,
+    conclusion: "success",
+    steps: [{ name: "Run Postgres-gated API suites", conclusion: "success" }],
+  })) satisfies Parameters<typeof hasSuccessfulPostgresShards>[0];
+  for (const target of jobs) {
+    for (const conclusion of [null, "failure", "cancelled", "skipped"]) {
+      expect(
+        hasSuccessfulPostgresShards(
+          jobs.map((job) => (job === target ? { ...job, conclusion } : job)),
+        ),
+      ).toBeFalse();
+      expect(
+        hasSuccessfulPostgresShards(
+          jobs.map((job) =>
+            job === target
+              ? {
+                  ...job,
+                  steps: [
+                    { name: "Run Postgres-gated API suites", conclusion },
+                  ],
+                }
+              : job,
+          ),
+        ),
+      ).toBeFalse();
+    }
+    expect(
+      hasSuccessfulPostgresShards(
+        jobs.map((job) => (job === target ? { ...job, steps: [] } : job)),
+      ),
+    ).toBeFalse();
+  }
+});
+
+test("legacy service jobs and repeated shards cannot certify full Postgres coverage", () => {
+  const steps = [
+    { name: "Run Postgres-gated API suites", conclusion: "success" },
+  ];
+  for (const name of [
+    "service-suites",
+    "Heavy suites / service-suites",
+    "postgres-service-suites",
+  ]) {
+    expect(
+      hasSuccessfulPostgresShards([{ name, conclusion: "success", steps }]),
+    ).toBeFalse();
+  }
+  const repeatedShard = {
+    name: "postgres-service-suites (1)",
+    conclusion: "success",
+    steps,
+  };
+  expect(
+    hasSuccessfulPostgresShards(
+      POSTGRES_TEST_SHARD_IDS.map(() => repeatedShard),
+    ),
+  ).toBeFalse();
 });

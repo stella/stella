@@ -18,7 +18,6 @@ import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import type { EditorView } from "@tiptap/pm/view";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
-import { v7 as uuidv7 } from "uuid";
 
 import { CHAT_SKILL_DOCUMENT } from "@stll/api-contract";
 import {
@@ -112,6 +111,7 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
+import { createUuid } from "@/lib/uuid";
 import { inputTypeValueKind } from "@/lib/value-types";
 import { useTemplateStudioStore } from "@/routes/knowledge/-components/template-studio-store";
 import {
@@ -195,7 +195,7 @@ type ScopedPresetSend = {
 
 const createTextChatMessage = (text: string): ChatUserMessageInput => ({
   content: text,
-  id: toSafeId<"chatMessage">(uuidv7()),
+  id: toSafeId<"chatMessage">(createUuid()),
 });
 
 const ResolvedTemplateStudioChat = (props: TemplateStudioChatProps) => {

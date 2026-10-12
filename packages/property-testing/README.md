@@ -8,6 +8,7 @@ Keep arbitraries beside the code under test.
 ```ts
 import { expect, test } from "bun:test";
 import fc from "fast-check";
+
 import { assertProperty } from "@stll/property-testing";
 
 test("normalization is idempotent", () => {

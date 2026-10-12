@@ -1,3 +1,8 @@
+import { panic } from "better-result";
+
+// parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import type { DecisionReporterGrammar } from "./decision-query-intent";
 import {
   US_REPORTER_EDITIONS,
@@ -99,17 +104,29 @@ const flexibleSpellingSource = (spelling: string): string => {
       const next = characters[index + 1];
       const escaped = escapeRegExp(character);
       return next !== undefined && spaceMayFollow(character, next)
-        ? `${escaped}\\s*`
+        ? `${escaped}\\s{0,16}`
         : escaped;
     })
     .join("");
 };
 
-// Longest first, so an edition is never read as a shorter one it begins with.
-const REPORTER_SOURCE = Object.keys(US_REPORTER_SPELLINGS)
+/**
+ * Bounded spelling grammar shared by parsing and scanning. Longest first,
+ * so an edition is never read as a shorter one it begins with.
+ */
+export const US_REPORTER_SPELLING_SOURCE = Object.keys(US_REPORTER_SPELLINGS)
   .toSorted((left, right) => right.length - left.length)
   .map(flexibleSpellingSource)
   .join("|");
+
+/** Optional nominative volume and reporter, shared by whole and contextual reads. */
+export const US_REPORTER_NOMINATIVE_SOURCE = String.raw`(?:\s{0,16}\((?<nominative>\d{1,3}\s{1,16}(?:${US_REPORTER_SPELLING_SOURCE}))\))?`;
+
+/** A first page follows whitespace or a comma, with bounded typography gaps. */
+export const US_REPORTER_PAGE_LEAD_SOURCE = String.raw`(?:\s{0,16},\s{0,16}|\s{1,16})`;
+
+/** A page cannot end inside a word or a longer numeral. */
+export const US_REPORTER_PAGE_END_SOURCE = String.raw`(?![\p{L}\p{N}])`;
 
 const DASH = "[-‐‑‒–—―−]";
 const PAGE_RANGE_SOURCE = String.raw`\d{1,5}(?:\s*${DASH}\s*\d{1,5})?`;
@@ -119,12 +136,12 @@ const PIN_SOURCE = String.raw`(?:${PAGE_RANGE_SOURCE}(?:\s*,?\s*(?:&\s*|and\s+)?
 const PIN_LIST_SOURCE = String.raw`${PIN_SOURCE}(?:\s*,\s*${PIN_SOURCE}){0,9}`;
 
 const VOLUME_SOURCE = String.raw`(?<volume>\d{1,4})`;
-const REPORTER_GROUP_SOURCE = `(?<reporter>${REPORTER_SOURCE})`;
+const REPORTER_GROUP_SOURCE = `(?<reporter>${US_REPORTER_SPELLING_SOURCE})`;
 
 const FULL_RE = new RegExp(
   String.raw`^${VOLUME_SOURCE}\s+${REPORTER_GROUP_SOURCE}` +
-    String.raw`(?:\s*\((?<nominative>\d{1,3}\s+(?:${REPORTER_SOURCE}))\))?` +
-    String.raw`\s+(?<page>\d{1,5})` +
+    US_REPORTER_NOMINATIVE_SOURCE +
+    String.raw`${US_REPORTER_PAGE_LEAD_SOURCE}(?<page>\d{1,5})${US_REPORTER_PAGE_END_SOURCE}` +
     String.raw`(?:(?:\s*,\s*(?:at\s+)?|\s+at\s+)(?<pins>${PIN_LIST_SOURCE}))?` +
     String.raw`(?:\s*\((?<parenthetical>[^()]{0,60}\d{4})\))?$`,
   "iu",
@@ -236,7 +253,7 @@ const citationOf =
   });
 
 const foldInput = (raw: string): string =>
-  raw.normalize("NFKC").replace(/\s+/gu, " ").trim();
+  normalizeUnicode(raw, "NFKC").replace(/\s+/gu, " ").trim();
 
 /**
  * Reads a whole entry as one reporter citation, or null. The entry must be
@@ -324,6 +341,35 @@ export const canonicalUsReporterCitation = (raw: string): string | null => {
   return others.length === 0 && only.reporter !== null && publishers === 1
     ? formatUsReporterCitation(only)
     : null;
+};
+
+const REFERENCE_START_RE = new RegExp(
+  String.raw`\d{1,4}\s{1,16}(?<reporter>${US_REPORTER_SPELLING_SOURCE})${US_REPORTER_NOMINATIVE_SOURCE}(?:${US_REPORTER_PAGE_LEAD_SOURCE}\d{1,5}${US_REPORTER_PAGE_END_SOURCE}|\s{0,16},?\s{1,16}at\s{1,16}\d{1,5}${US_REPORTER_PAGE_END_SOURCE})`,
+  "iyu",
+);
+
+/**
+ * A next reference may displace a page only with an exact table spelling.
+ * Case-folded candidates alone cannot distinguish prose `p.` from `P.`.
+ * This proves numeric roles, not identity; ambiguous reporters also qualify.
+ */
+export const isUsReporterReferenceStart = (
+  text: string,
+  from: number,
+): boolean => {
+  REFERENCE_START_RE.lastIndex = from;
+  const match = REFERENCE_START_RE.exec(text);
+  if (match === null) {
+    return false;
+  }
+  const reporter = match.groups?.["reporter"];
+  if (reporter === undefined) {
+    return panic("Reporter reference grammar matched without its reporter");
+  }
+  return (
+    US_REPORTER_SPELLINGS[spellingKey(reporter)] !== undefined &&
+    parseUsReporterReference(match[0]) !== null
+  );
 };
 
 const US_REPORTER_GRAMMAR: DecisionReporterGrammar = {

@@ -14,6 +14,7 @@ const getSkillParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Read one agent skill in full: its instruction body, scope, origin, " +
     "version, license, compatibility, source URL, slash command, and every " +
@@ -87,7 +88,6 @@ const getSkill = createSafeRootHandler(
           .select({
             id: agentSkillResources.id,
             path: agentSkillResources.path,
-            kind: agentSkillResources.kind,
             sizeBytes: agentSkillResources.sizeBytes,
             content: agentSkillResources.content,
           })

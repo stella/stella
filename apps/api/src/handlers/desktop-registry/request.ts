@@ -33,6 +33,7 @@ import { revokeDesktopRegistryCredential } from "@/api/lib/business-registries/d
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
   cache: { kind: "none" },

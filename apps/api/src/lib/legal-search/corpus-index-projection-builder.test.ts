@@ -419,6 +419,88 @@ const SUMMARY_AST = {
   ],
 } as const satisfies DocumentAst;
 
+test("every generation emits stable unique passage identities exactly when its mapping supports them", () => {
+  const texts = [
+    "první ".repeat(250),
+    "druhý ".repeat(250),
+    "třetí ".repeat(250),
+  ];
+  const text = texts.join("\n\n");
+  const ast = {
+    ...SUMMARY_AST,
+    blocks: texts.map((plainText, index) => ({
+      id: `p${index}`,
+      anchorId: `p${index}`,
+      type: "paragraph",
+      role: "argumentation",
+      plainText,
+      inlines: [{ type: "text", text: plainText }],
+    })),
+  } satisfies DocumentAst;
+  const nextRevision = toSafeId<"corpusIndexProjectionIntent">(
+    "0198e331-e578-7000-8000-000000000007",
+  );
+  expect(nextRevision).not.toBe(REVISION);
+  for (const manifest of Object.values(CORPUS_INDEX_MANIFESTS)) {
+    if (manifest.family !== "case_law") {
+      continue;
+    }
+    const mapping = manifest.engine.indexConfig.doc_mapping.field_mappings.find(
+      ({ name }) => name === "chunk_id",
+    );
+    for (const payload of [
+      { text, ast: null },
+      { text, ast },
+    ]) {
+      const documents = buildCaseLawProjectionDocuments({
+        manifest,
+        input: CASE_LAW_INPUT,
+        payload,
+        revision: REVISION,
+      });
+      expect(documents).toHaveLength(texts.length);
+      if (mapping === undefined) {
+        expect(documents.every((document) => !("chunk_id" in document))).toBe(
+          true,
+        );
+        continue;
+      }
+      expect(mapping).toMatchObject({
+        indexed: true,
+        stored: true,
+        tokenizer: "raw",
+      });
+      const expected = documents.map(
+        (_, seq) => `${CASE_LAW_INPUT.documentId}:${seq}`,
+      );
+      const identities = documents.map(({ chunk_id }) => chunk_id);
+      expect(identities).toEqual(expected);
+      expect(new Set(identities).size).toBe(documents.length);
+      const replay = buildCaseLawProjectionDocuments({
+        manifest,
+        input: CASE_LAW_INPUT,
+        payload,
+        revision: nextRevision,
+      });
+      expect(replay.map(({ chunk_id }) => chunk_id)).toEqual(identities);
+      const otherId = "0198e331-e578-7000-8000-000000000008";
+      expect(otherId).not.toBe(CASE_LAW_INPUT.documentId);
+      const other = buildCaseLawProjectionDocuments({
+        manifest,
+        input: { ...CASE_LAW_INPUT, documentId: otherId },
+        payload,
+        revision: REVISION,
+      });
+      expect(other.map(({ chunk_id }) => chunk_id)).toEqual(
+        other.map((_, seq) => `${otherId}:${seq}`),
+      );
+      expect(
+        new Set([...identities, ...other.map(({ chunk_id }) => chunk_id)]).size,
+      ).toBe(documents.length + other.length);
+    }
+  }
+});
+
 test("v6 writes the publisher summary on the opening passage only", () => {
   const documents = buildCaseLawProjectionDocuments({
     manifest: CORPUS_INDEX_MANIFESTS.case_law_v6,
