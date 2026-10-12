@@ -1,4 +1,4 @@
-import { TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 
 import { dockerCommand, type DockerTarget } from "./dev-docker";
 
@@ -7,6 +7,7 @@ const KEEPER_POLL_MS = 1000;
 
 class DockerKeeperError extends TaggedError("DockerKeeperError")<{
   message: string;
+  cause?: unknown;
 }> {}
 
 type EnsureDockerKeeperOptions = {
@@ -25,28 +26,62 @@ export const ensureDockerKeeper = async ({
   sleep,
 }: EnsureDockerKeeperOptions) => {
   if (!/^[A-Za-z0-9_.-]+$/u.test(label)) {
-    throw new DockerKeeperError({ message: "Invalid Docker keeper label." });
+    return Result.err(
+      new DockerKeeperError({ message: "Invalid Docker keeper label." }),
+    );
   }
-  if (run(dockerCommand(dockerTarget, ["info"]).cmd)) {
-    return;
+  const execute = (command: string[]) =>
+    Result.try({
+      try: () => run(command),
+      catch: (cause) =>
+        new DockerKeeperError({
+          message: "Docker keeper command failed.",
+          cause,
+        }),
+    });
+  const initial = execute(dockerCommand(dockerTarget, ["info"]).cmd);
+  if (initial.isErr()) {
+    return initial;
+  }
+  if (initial.value) {
+    return Result.ok(undefined);
   }
   const target = `system/${label}`;
   // No -k: a keeper may already be recovering a protected runtime.
-  if (!run(["launchctl", "kickstart", target])) {
-    throw new DockerKeeperError({
-      message: `Cannot start Docker keeper ${label}.`,
-    });
+  const started = execute(["launchctl", "kickstart", target]);
+  if (started.isErr()) {
+    return started;
+  }
+  if (!started.value) {
+    return Result.err(
+      new DockerKeeperError({
+        message: `Cannot start Docker keeper ${label}.`,
+      }),
+    );
   }
   const deadline = now() + KEEPER_READY_TIMEOUT_MS;
   while (now() < deadline) {
-    if (run(dockerCommand(dockerTarget, ["info"]).cmd)) {
-      return;
+    const ready = execute(dockerCommand(dockerTarget, ["info"]).cmd);
+    if (ready.isErr()) {
+      return ready;
     }
-    await sleep(KEEPER_POLL_MS);
+    if (ready.value) {
+      return Result.ok(undefined);
+    }
+    const waited = await Result.tryPromise({
+      try: () => sleep(KEEPER_POLL_MS),
+      catch: (cause) =>
+        new DockerKeeperError({ message: "Docker keeper wait failed.", cause }),
+    });
+    if (waited.isErr()) {
+      return waited;
+    }
   }
-  throw new DockerKeeperError({
-    message: `Docker keeper ${label} did not recover Docker within 120 seconds.`,
-  });
+  return Result.err(
+    new DockerKeeperError({
+      message: `Docker keeper ${label} did not recover Docker within 120 seconds.`,
+    }),
+  );
 };
 
 type DockerKeeperCommandOptions = {

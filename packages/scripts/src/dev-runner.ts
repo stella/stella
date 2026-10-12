@@ -23,6 +23,8 @@ import { isSealTrusted, parseSealStatus } from "./agent-evidence";
 import { childExitStatus } from "./child-exit-status";
 import {
   dockerCommand,
+  DockerEndpointError,
+  resolveDevDockerKeeper,
   type DockerTarget,
   resolveDockerTarget,
 } from "./dev-docker";
@@ -1055,25 +1057,52 @@ const ensureHostDockerKeeper = async ({
   mode: DevMode;
 }) => {
   if (!modeIncludesApi(mode)) {
-    return null;
+    return Result.ok(null);
   }
-  const dockerTarget = resolveDockerTarget({ env: process.env });
-  if (dryRun) {
-    return dockerTarget;
+  const resolved = resolveDockerTarget({ env: process.env });
+  if (resolved.isErr()) {
+    return resolved;
   }
-  const resolver = Bun.which("docker-keeper");
-  let label = process.env["STELLA_DOCKER_KEEPER_LABEL"];
-  if (!label && resolver) {
-    label = runCommandText({
-      cmd: [resolver, "--host", dockerTarget.host],
-      env: dockerTarget.env,
-      cwd: "/",
-    }).trim();
+  const dockerTarget = resolved.value;
+  const approved = resolveDevDockerKeeper({
+    target: dockerTarget,
+    resolver: Bun.which("docker-keeper"),
+    configuredLabel: process.env["STELLA_DOCKER_KEEPER_LABEL"],
+    run: (command, env) =>
+      Result.try({
+        try: () =>
+          Bun.spawnSync(command, {
+            cwd: "/",
+            env,
+            stdout: "pipe",
+            stderr: "pipe",
+            timeout: 5000,
+          }),
+        catch: (cause) =>
+          new DockerEndpointError({
+            message: "Could not validate the development Docker endpoint.",
+            cause,
+          }),
+      }).andThen((result) =>
+        result.success
+          ? Result.ok(result.stdout.toString())
+          : Result.err(
+              new DockerEndpointError({
+                message:
+                  "Selected Docker endpoint cannot be used for development. Select an unprotected Docker context.",
+                cause: result.stderr.toString(),
+              }),
+            ),
+      ),
+  });
+  if (approved.isErr()) {
+    return approved;
   }
-  if (!label) {
-    return dockerTarget;
+  const label = approved.value;
+  if (dryRun || !label) {
+    return Result.ok(dockerTarget);
   }
-  await ensureDockerKeeper({
+  const recovered = await ensureDockerKeeper({
     label,
     dockerTarget,
     run: (command) => {
@@ -1093,7 +1122,7 @@ const ensureHostDockerKeeper = async ({
     now: () => Temporal.Now.instant().epochMilliseconds,
     sleep: (milliseconds) => Bun.sleep(milliseconds),
   });
-  return dockerTarget;
+  return recovered.map(() => dockerTarget);
 };
 
 const ensureDockerServices = async ({
@@ -2493,10 +2522,12 @@ const main = async () => {
   const preparedEnvFiles = preparedEnvFilesResult.value;
 
   const { devInstance, mode, portOffset } = parsedArgs;
-  const dockerTarget = await ensureHostDockerKeeper({
-    dryRun: parsedArgs.dryRun,
-    mode,
-  });
+  const dockerTarget = (
+    await ensureHostDockerKeeper({
+      dryRun: parsedArgs.dryRun,
+      mode,
+    })
+  ).unwrap("Development Docker endpoint preparation failed");
   // Offsets resolve before any process or container starts, so a signal
   // during resolution has nothing to clean up.
   const initialOffset = resolveOffset({

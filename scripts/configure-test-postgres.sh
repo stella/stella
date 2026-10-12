@@ -28,6 +28,9 @@ case "$docker_host" in
   unix:///*|tcp://*|ssh://*|npipe://*) ;;
   *) echo 'Docker context did not resolve a supported endpoint.' >&2; exit 1 ;;
 esac
+if command -v docker-keeper >/dev/null 2>&1; then
+  docker-keeper --purpose dev --host "$docker_host" >/dev/null
+fi
 unset DOCKER_HOST DOCKER_CONTEXT
 docker() { command docker --host "$docker_host" "$@"; }
 

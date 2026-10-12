@@ -4,7 +4,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { dockerCommand, resolveDockerTarget } from "./dev-docker";
+import {
+  dockerCommand,
+  DockerEndpointError,
+  resolveDevDockerKeeper,
+  resolveDockerTarget,
+} from "./dev-docker";
 
 test("endpoint resolution preserves the supplied selectors, then pins a captured environment", () => {
   const env = {
@@ -17,9 +22,9 @@ test("endpoint resolution preserves the supplied selectors, then pins a captured
     env,
     inspect: (captured) => {
       inspections.push(captured);
-      return "unix:///tmp/chosen.sock\n";
+      return Result.ok("unix:///tmp/chosen.sock\n");
     },
-  });
+  }).unwrap();
   expect(inspections).toEqual([env]);
   env.DOCKER_CONTEXT = "changed";
   env.DOCKER_HOST = "unix:///tmp/changed.sock";
@@ -36,7 +41,10 @@ test.each([
   "ssh://user@host",
   "npipe:////./pipe/docker_engine",
 ])("accepts supported Docker endpoint transport %s", (host) => {
-  expect(resolveDockerTarget({ env: {}, inspect: () => host }).host).toBe(host);
+  expect(
+    resolveDockerTarget({ env: {}, inspect: () => Result.ok(host) }).unwrap()
+      .host,
+  ).toBe(host);
 });
 
 test.each([
@@ -52,9 +60,11 @@ test.each([
   "tcp:///",
   "unix:///tmp/a.sock\nunix:///tmp/b.sock",
 ])("refuses an invalid or ambiguous Docker endpoint %s", (host) => {
-  expect(() => resolveDockerTarget({ env: {}, inspect: () => host })).toThrow(
-    "valid endpoint",
-  );
+  expect(
+    resolveDockerTarget({ env: {}, inspect: () => Result.ok(host) }),
+  ).toMatchObject({
+    error: { message: expect.stringContaining("valid endpoint") },
+  });
 });
 
 test("clearing selectors preserves transport credentials and other environment", () => {
@@ -66,7 +76,10 @@ test("clearing selectors preserves transport credentials and other environment",
     PATH: "/tools",
   };
   expect(
-    resolveDockerTarget({ env, inspect: () => "unix:///tmp/test.sock" }).env,
+    resolveDockerTarget({
+      env,
+      inspect: () => Result.ok("unix:///tmp/test.sock"),
+    }).unwrap().env,
   ).toEqual({
     DOCKER_TLS_VERIFY: "1",
     DOCKER_CERT_PATH: "/certificates",
@@ -158,7 +171,7 @@ test.skipIf(process.platform === "win32" || !Bun.which("docker"))(
         { DOCKER_CONTEXT: "missing" },
       ]) {
         const env = { ...base, ...selectors };
-        const resolved = Result.try(() => resolveDockerTarget({ env }));
+        const resolved = resolveDockerTarget({ env });
         const ambient = await run(
           ["version", "--format", "{{.Server.Version}}"],
           env,
@@ -219,12 +232,77 @@ test("a configured host cannot bypass a refused CLI discovery", () => {
     DOCKER_HOST: "unix:///tmp/configured.sock",
     DOCKER_CONTEXT: "selected",
   };
-  expect(() =>
+  expect(
     resolveDockerTarget({
       env,
-      inspect: () => {
-        throw new TypeError("Docker CLI refused discovery");
-      },
+      inspect: () =>
+        Result.err(
+          new DockerEndpointError({ message: "Docker CLI refused discovery" }),
+        ),
     }),
-  ).toThrow("Docker CLI refused discovery");
+  ).toMatchObject({ error: { message: "Docker CLI refused discovery" } });
+});
+
+test("a configured keeper cannot bypass a protected development endpoint refusal", () => {
+  const target = resolveDockerTarget({
+    env: { DOCKER_HOST: "unix:///tmp/protected.sock" },
+    inspect: () => Result.ok("unix:///tmp/protected.sock\n"),
+  }).unwrap();
+  const calls: string[][] = [];
+  const result = resolveDevDockerKeeper({
+    target,
+    resolver: "/tools/docker-keeper",
+    configuredLabel: "dev.test.override",
+    run: (command, env) => {
+      calls.push(command);
+      expect(env).not.toHaveProperty("DOCKER_HOST");
+      return Result.err(
+        new DockerEndpointError({ message: "Selected endpoint is protected" }),
+      );
+    },
+  });
+  expect(calls).toEqual([
+    [
+      "/tools/docker-keeper",
+      "--purpose",
+      "dev",
+      "--host",
+      target.host,
+      "--keeper-label",
+      "dev.test.override",
+    ],
+  ]);
+  expect(result).toMatchObject({
+    error: { message: "Selected endpoint is protected" },
+  });
+});
+
+test("an approved unprotected endpoint can use its configured keeper", () => {
+  const target = resolveDockerTarget({
+    env: {},
+    inspect: () => Result.ok("unix:///tmp/dev.sock\n"),
+  }).unwrap();
+  const result = resolveDevDockerKeeper({
+    target,
+    resolver: "/tools/docker-keeper",
+    configuredLabel: "dev.test.keeper",
+    run: () => Result.ok(""),
+  });
+  expect(result.unwrap()).toBe("dev.test.keeper");
+});
+
+test("a configured keeper is refused without its policy resolver", () => {
+  const target = resolveDockerTarget({
+    env: {},
+    inspect: () => Result.ok("unix:///tmp/dev.sock"),
+  }).unwrap();
+  const result = resolveDevDockerKeeper({
+    target,
+    resolver: null,
+    configuredLabel: "dev.test.keeper",
+    run: () => panic("Resolver must not run when absent"),
+  });
+  expect(result).toMatchObject({
+    error: { message: expect.stringContaining("resolver is required") },
+  });
 });

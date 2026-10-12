@@ -86,8 +86,8 @@ test("worktree Compose commands build that checkout's Postgres image", async () 
   const command = dockerComposeCommand({
     dockerTarget: resolveDockerTarget({
       env: {},
-      inspect: () => "unix:///tmp/test-docker.sock",
-    }),
+      inspect: () => Result.ok("unix:///tmp/test-docker.sock"),
+    }).unwrap(),
     args: ["up", "-d", "--build"],
     composeFile: path.resolve(worktree, "docker-compose.yml"),
     dockerProject: "worktree-parity",
@@ -508,8 +508,8 @@ describe("Docker project ownership", () => {
     const command = dockerComposeDownCommand({
       dockerTarget: resolveDockerTarget({
         env: {},
-        inspect: () => "unix:///tmp/test-docker.sock",
-      }),
+        inspect: () => Result.ok("unix:///tmp/test-docker.sock"),
+      }).unwrap(),
       composeFile: "/Users/dev/stella/docker-compose.yml",
       dockerProject: "stella-dev-44000-cafef00dbeef",
     }).cmd;

@@ -1,4 +1,4 @@
-import { Result, TaggedError } from "better-result";
+import { type InferOk, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 const dockerHostSchema = v.pipe(
@@ -31,7 +31,7 @@ const dockerHostSchema = v.pipe(
   v.brand("DockerHost"),
 );
 
-class DockerEndpointError extends TaggedError("DockerEndpointError")<{
+export class DockerEndpointError extends TaggedError("DockerEndpointError")<{
   message: string;
   cause?: unknown;
 }> {}
@@ -39,11 +39,13 @@ class DockerEndpointError extends TaggedError("DockerEndpointError")<{
 const validateDockerHost = (value: string) => {
   const parsed = v.safeParse(dockerHostSchema, value);
   if (!parsed.success) {
-    throw new DockerEndpointError({
-      message: "Docker context did not resolve a valid endpoint.",
-    });
+    return Result.err(
+      new DockerEndpointError({
+        message: "Docker context did not resolve a valid endpoint.",
+      }),
+    );
   }
-  return parsed.output;
+  return Result.ok(parsed.output);
 };
 
 const dockerEnvironment = (base: NodeJS.ProcessEnv) => {
@@ -61,30 +63,31 @@ const DOCKER_ENDPOINT_COMMAND = [
   "{{.Endpoints.docker.Host}}",
 ];
 
-const inspectDockerEndpoint = (env: NodeJS.ProcessEnv) => {
-  const result = Result.try(() =>
-    Bun.spawnSync(DOCKER_ENDPOINT_COMMAND, {
-      cwd: "/",
-      env,
-      stdout: "pipe",
-      stderr: "pipe",
-      timeout: 5000,
-    }),
+const inspectDockerEndpoint = (env: NodeJS.ProcessEnv) =>
+  Result.try({
+    try: () =>
+      Bun.spawnSync(DOCKER_ENDPOINT_COMMAND, {
+        cwd: "/",
+        env,
+        stdout: "pipe",
+        stderr: "pipe",
+        timeout: 5000,
+      }),
+    catch: (cause) =>
+      new DockerEndpointError({
+        message: "Could not inspect the Docker endpoint.",
+        cause,
+      }),
+  }).andThen((result) =>
+    result.success
+      ? Result.ok(result.stdout.toString())
+      : Result.err(
+          new DockerEndpointError({
+            message: "Docker endpoint discovery failed.",
+            cause: result.stderr.toString(),
+          }),
+        ),
   );
-  if (result.isErr()) {
-    throw new DockerEndpointError({
-      message: "Could not inspect the Docker endpoint.",
-      cause: result.error,
-    });
-  }
-  if (!result.value.success) {
-    throw new DockerEndpointError({
-      message: "Docker endpoint discovery failed.",
-      cause: result.value.stderr.toString(),
-    });
-  }
-  return result.value.stdout.toString();
-};
 
 type ResolveDockerTargetOptions = {
   env: NodeJS.ProcessEnv;
@@ -96,14 +99,14 @@ export const resolveDockerTarget = ({
   inspect = inspectDockerEndpoint,
 }: ResolveDockerTargetOptions) => {
   const captured = { ...env };
-  const host = validateDockerHost(inspect(captured).replace(/\n$/u, ""));
-  return Object.freeze({
-    host,
-    env: Object.freeze(dockerEnvironment(captured)),
-  });
+  return inspect(captured)
+    .andThen((output) => validateDockerHost(output.replace(/\n$/u, "")))
+    .map((host) =>
+      Object.freeze({ host, env: Object.freeze(dockerEnvironment(captured)) }),
+    );
 };
 
-export type DockerTarget = ReturnType<typeof resolveDockerTarget>;
+export type DockerTarget = InferOk<ReturnType<typeof resolveDockerTarget>>;
 
 export const dockerCommand = (
   target: DockerTarget,
@@ -112,3 +115,43 @@ export const dockerCommand = (
   cmd: ["docker", "--host", target.host, ...args],
   env: target.env,
 });
+
+type ResolveDevDockerKeeperOptions = {
+  target: DockerTarget;
+  resolver: string | null;
+  configuredLabel: string | undefined;
+  run: (
+    command: string[],
+    env: NodeJS.ProcessEnv,
+  ) => Result<string, DockerEndpointError>;
+};
+
+export const resolveDevDockerKeeper = ({
+  target,
+  resolver,
+  configuredLabel,
+  run,
+}: ResolveDevDockerKeeperOptions) => {
+  if (!resolver && configuredLabel) {
+    return Result.err(
+      new DockerEndpointError({
+        message:
+          "A keeper resolver is required to validate a configured development keeper.",
+      }),
+    );
+  }
+  const checked = resolver
+    ? run(
+        [
+          resolver,
+          "--purpose",
+          "dev",
+          "--host",
+          target.host,
+          ...(configuredLabel ? ["--keeper-label", configuredLabel] : []),
+        ],
+        target.env,
+      )
+    : Result.ok("");
+  return checked.map((label) => label.trim() || configuredLabel);
+};
