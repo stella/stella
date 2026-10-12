@@ -130,7 +130,11 @@ export type ChatToolResultInput = Omit<TanStackClientToolResult, "output"> & {
 
 const CHAT_RUNTIME_BRAND: unique symbol = Symbol("StellaChatRuntime");
 
-export type ChatRuntime = {
+export type ChatActivitySession = {
+  readonly reportedUnknownActivityTypes: Set<string>;
+};
+
+export type ChatRuntime = ChatActivitySession & {
   readonly [CHAT_RUNTIME_BRAND]: true;
   resolveToolApproval: (
     response: {
@@ -996,6 +1000,7 @@ export const createChatRuntime = ({
 
   const runtime = {
     [CHAT_RUNTIME_BRAND]: true,
+    reportedUnknownActivityTypes: new Set<string>(),
     resolveToolApproval: async (response, options) => {
       if (isStoppedTurn()) {
         return;
@@ -1227,9 +1232,22 @@ export const buildSendRequestBody = ({
     panic("Missing chat message");
   }
 
+  switch (message.role) {
+    case "activity":
+      return panic("An activity cannot submit or continue a chat turn");
+    case "assistant":
+    case "system":
+    case "user":
+      break;
+    default:
+      message.role satisfies never;
+      return panic(`Unhandled chat role: ${String(message.role)}`);
+  }
+
   const body: ChatSendRequestDraft = {
     message: {
       ...message,
+      role: message.role,
       id: toSafeId<"chatMessage">(message.id),
     },
     sendMode: resolveChatRequestSendMode({
