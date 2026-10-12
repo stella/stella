@@ -14,6 +14,23 @@ import {
   writeTurboTypecheckInputs,
 } from "./turbo-typecheck-inputs";
 
+// Opt-in timings identify expensive serialization without changing task output.
+const declarationProfile = (
+  phase: string,
+  details: Record<string, string | number>,
+) => {
+  if (process.env["API_TYPECHECK_DECLARATIONS_PROFILE"] !== "1") {
+    return;
+  }
+  process.stderr.write(
+    `${JSON.stringify({
+      phase,
+      ...details,
+      rssMiB: Math.round(process.memoryUsage().rss / 1024 / 1024),
+    })}\n`,
+  );
+};
+
 export const typescriptModuleReferences = (text: string, filename: string) => {
   const imports = new Set<string>();
   let dynamic = false;
@@ -238,9 +255,15 @@ export const emitApiTypecheckDeclarations = (project: string) => {
       "API declaration project must use noCheck, emitDeclarationOnly and outDir",
     );
   }
+  const programStarted = performance.now();
+  declarationProfile("program:start", { roots: parsed.fileNames.length });
   const program = ts.createProgram({
     rootNames: parsed.fileNames,
     options: { ...parsed.options, declarationMap: false },
+  });
+  declarationProfile("program:end", {
+    elapsedMs: Math.round(performance.now() - programStarted),
+    sourceFiles: program.getSourceFiles().length,
   });
   const resolutionCache = ts.createModuleResolutionCache(
     path.dirname(configPath),
@@ -271,10 +294,14 @@ export const emitApiTypecheckDeclarations = (project: string) => {
       );
     }
     emitted.add(filename);
+    const emitStarted = performance.now();
+    let outputCharacters = 0;
+    declarationProfile("file:start", { filename });
     const result = program.emit(
       source,
       (output, text) => {
         outputs.set(output, text);
+        outputCharacters += text.length;
         for (const specifier of typescriptModuleReferences(text, output)
           .imports) {
           const resolved = ts.resolveModuleName(
@@ -305,6 +332,12 @@ export const emitApiTypecheckDeclarations = (project: string) => {
       undefined,
       true,
     );
+    declarationProfile("file:end", {
+      filename,
+      elapsedMs: Math.round(performance.now() - emitStarted),
+      outputCharacters,
+      diagnostics: result.diagnostics.length,
+    });
     diagnostics.push(...result.diagnostics);
   }
   if (diagnostics.length > 0) {
@@ -365,7 +398,15 @@ const nativeRequiredDeclarationRoots = (project: string) => {
       const owned = new Set(
         parsed.fileNames.map((file) => ts.sys.realpath?.(file) ?? file),
       );
-      for (const source of nativeTypecheckProgramFiles(consumer)) {
+      const consumerStarted = performance.now();
+      declarationProfile("consumer:start", { project: consumer });
+      const sources = nativeTypecheckProgramFiles(consumer);
+      declarationProfile("consumer:end", {
+        project: consumer,
+        elapsedMs: Math.round(performance.now() - consumerStarted),
+        sourceFiles: sources.length,
+      });
+      for (const source of sources) {
         if (
           source.startsWith(`${path.join(api, "src")}${path.sep}`) &&
           /\.[cm]?tsx?$/u.test(source) &&
@@ -384,6 +425,8 @@ export const regenerateApiDeclarationSurface = (project: string) => {
   const refreshInputs = () => {
     const turbo = path.resolve(path.dirname(project), "../../turbo.json");
     if (existsSync(turbo)) {
+      const inputsStarted = performance.now();
+      declarationProfile("inputs:start", { project });
       writeTurboTypecheckInputs(
         turbo,
         new Map([
@@ -393,9 +436,15 @@ export const regenerateApiDeclarationSurface = (project: string) => {
           ],
         ]),
       );
+      declarationProfile("inputs:end", {
+        project,
+        elapsedMs: Math.round(performance.now() - inputsStarted),
+      });
     }
   };
   refreshInputs();
+  let iteration = 1;
+  declarationProfile("iteration:start", { iteration });
   let result = emitApiTypecheckDeclarations(project);
   while (result.diagnostics.length === 0) {
     const roots = writeApiDeclarationSurface(project, result.files);
@@ -403,6 +452,12 @@ export const regenerateApiDeclarationSurface = (project: string) => {
     const required = nativeRequiredDeclarationRoots(project);
     const directory = path.dirname(path.resolve(project));
     const api = ts.sys.realpath?.(directory) ?? directory;
+    declarationProfile("iteration:resolved", {
+      iteration,
+      emittedModules: result.files.length,
+      roots: roots.length,
+      requiredRoots: required.length,
+    });
     const missing = required.filter(
       (file) => !roots.includes(path.relative(api, file)),
     );
@@ -411,6 +466,8 @@ export const regenerateApiDeclarationSurface = (project: string) => {
     }
     writeApiDeclarationSurface(project, [...result.files, ...missing]);
     refreshInputs();
+    iteration += 1;
+    declarationProfile("iteration:start", { iteration });
     result = emitApiTypecheckDeclarations(project);
   }
   return result;
