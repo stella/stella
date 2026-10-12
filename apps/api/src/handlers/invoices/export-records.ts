@@ -4,8 +4,11 @@ import type {
   InvoiceExportLine,
   InvoiceExportRecord,
   InvoiceExportSeller,
+  InvoiceLine,
   InvoiceParty,
+  InvoiceTotals,
 } from "@stll/invoicing";
+import type { CentsAmount } from "@stll/money";
 import { Temporal, todayFor } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -154,9 +157,14 @@ export const loadInvoiceExport = async (
 type LoadedExport = Awaited<ReturnType<typeof loadInvoiceExport>>;
 type LoadedInvoice = LoadedExport["invoices"][number];
 /** The lines and totals `readInvoiceDocumentLines` computes for a document. */
-type DocumentAmounts = Parameters<
-  Parameters<ReturnType<typeof readInvoiceDocumentLines>["map"]>[0]
->[0];
+type DocumentAmounts = {
+  lines: readonly (InvoiceLine & {
+    quantity: string | null;
+    unit: string | null;
+    unitPrice: CentsAmount | null;
+  })[];
+  totals: InvoiceTotals;
+};
 
 const exportLines = (
   invoice: LoadedInvoice,
