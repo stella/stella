@@ -14,17 +14,15 @@ import {
   MARKETING_AGENT_THREAD_TITLE,
   settleMarketingAgentThread,
 } from "./agent-thread";
+import {
+  assertNoActiveEditBadge,
+  releaseSupplierAgreementEditLock,
+  SUPPLIER_AGREEMENT_EDITOR_PATH,
+  SUPPLIER_AGREEMENT_ENTITY_ID,
+} from "./edit-locks";
 
 const AKVIZICE_WORKSPACE_ID = "6cbf3f81-bcc9-55da-8a4e-840221d4cabe";
 const EXPORT_REVIEW_WORKSPACE_ID = "bb8641dc-0667-574c-8e30-152a1fd4b3f5";
-// Seeded Supplier Agreement redline in the "Meridian supply agreement"
-// matter; keep in sync with record-product-story.ts (seed-dev.ts
-// `ws-akvizice-energo-doc-7`).
-const SUPPLIER_AGREEMENT_ENTITY_ID = "84824638-eb81-58c5-8a81-5d7e961fb7d5";
-const SUPPLIER_AGREEMENT_FIELD_ID = "3f985a8b-26be-5a07-89d3-2a05acb94354";
-// The matter's file property (seed-dev.ts `ws-akvizice-energo-prop-file`): the
-// edit lock the editor capture takes is keyed by entity and this property.
-const SUPPLIER_AGREEMENT_PROPERTY_ID = "fa85736e-0b89-5386-8332-c2bb53f18c46";
 // Seeded `Redacted_Due_Diligence_Extract.docx` in the same matter, opened by
 // the anonymization capture.
 const ANONYMIZED_EXTRACT_ENTITY_ID = "c3dc74a6-7855-5157-84db-ddf14f886df4";
@@ -46,6 +44,10 @@ const INSPECTOR_STORAGE_PREFIXES = [
   "stella:inspector-state:v1:",
 ] as const;
 const requestedCapture = process.env["MARKETING_CAPTURE"];
+const MARKETING_URLS = {
+  apiUrl: process.env["E2E_API_URL"] ?? "http://localhost:3001",
+  webUrl: process.env["E2E_WEB_URL"] ?? "http://localhost:3000",
+};
 
 // Route chunks are compiled on demand by the dev server, so the first visit to
 // each route pays a cold build that the config's 15s expect timeout cannot
@@ -108,11 +110,7 @@ const captures = [
   },
   {
     name: "editor",
-    path:
-      `/workspaces/${AKVIZICE_WORKSPACE_ID}/all/document` +
-      "?editing=true" +
-      `&entity=${SUPPLIER_AGREEMENT_ENTITY_ID}` +
-      `&field=${SUPPLIER_AGREEMENT_FIELD_ID}`,
+    path: SUPPLIER_AGREEMENT_EDITOR_PATH,
     readyText: "Supplier_Agreement.docx",
     readySelector: '[aria-label="Document content"][contenteditable="true"]',
     // `?editing=true` is a request, not a state: without this the shot can
@@ -186,7 +184,7 @@ test("capture landing product screenshots", async ({
 
   // Start from no edit lock: a lock left by an earlier run would badge the
   // Supplier Agreement row in the workspace shot.
-  await releaseSupplierAgreementEditLock(page.request);
+  await releaseSupplierAgreementEditLock(page.request, MARKETING_URLS);
 
   // Resolved once (not per capture/theme): only needed when the "agent"
   // capture is actually part of this run.
@@ -354,9 +352,7 @@ test("capture landing product screenshots", async ({
         await expect(
           page.getByText("Supplier_Agreement.docx").first(),
         ).toBeVisible();
-        await expect(
-          page.locator('[data-slot="active-edit-badge"]'),
-        ).toHaveCount(0);
+        await assertNoActiveEditBadge(page, capture.name);
       }
       if ("prepare" in capture && capture.prepare === "open-table") {
         await page.getByRole("tab", { name: "Table" }).click();
@@ -411,32 +407,11 @@ test("capture landing product screenshots", async ({
       // the session would outlive this capture and badge the document in the
       // next theme pass's workspace shot. Release it explicitly.
       if (capture.name === "editor") {
-        await releaseSupplierAgreementEditLock(page.request);
+        await releaseSupplierAgreementEditLock(page.request, MARKETING_URLS);
       }
     }
   }
 });
-
-// Cancels this user's live edit session on the Supplier Agreement, if any
-// (apps/api/src/handlers/entities/release-desktop-edit-lock.ts); a no-op when
-// none is open.
-const releaseSupplierAgreementEditLock = async (request: APIRequestContext) => {
-  const apiBaseURL = process.env["E2E_API_URL"] ?? "http://localhost:3001";
-  const webOrigin = new URL(
-    process.env["E2E_WEB_URL"] ?? "http://localhost:3000",
-  ).origin;
-  const response = await request.post(
-    `${apiBaseURL}/v1/entities/${AKVIZICE_WORKSPACE_ID}/desktop-edit-sessions/release`,
-    {
-      data: {
-        entityId: SUPPLIER_AGREEMENT_ENTITY_ID,
-        propertyId: SUPPLIER_AGREEMENT_PROPERTY_ID,
-      },
-      headers: { origin: webOrigin },
-    },
-  );
-  expect(response.ok(), await response.text()).toBe(true);
-};
 
 // Each product capture owns its Inspector state. Full navigation creates a
 // fresh store, while removing the persisted Inspector state prevents an editor

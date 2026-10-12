@@ -4,7 +4,7 @@
 /// <reference lib="dom" />
 /// <reference lib="dom.iterable" />
 import { chromium } from "@playwright/test";
-import type { Browser, Locator, Page } from "@playwright/test";
+import type { Browser, BrowserContext, Locator, Page } from "@playwright/test";
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -37,26 +37,28 @@ import type {
   RecordingsManifest,
   StoryCaptureId,
 } from "./captures";
+import {
+  assertNoActiveEditBadge,
+  releaseSupplierAgreementEditLock,
+  SUPPLIER_AGREEMENT_EDITOR_PATH,
+} from "./edit-locks";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../../..");
 const MEDIA_DIR = path.join(REPO_ROOT, "apps/landing/public/media/products");
 const RAW_VIDEO_DIR = path.join(REPO_ROOT, ".playwright/marketing-video");
 const WEB_URL = process.env["E2E_WEB_URL"] ?? "http://localhost:3000";
 const API_URL = process.env["E2E_API_URL"] ?? "http://localhost:3001";
+const MARKETING_URLS = { apiUrl: API_URL, webUrl: WEB_URL };
 const CAPTURE_FILTER = process.env["MARKETING_CAPTURE"];
 const THEME_FILTER = process.env["MARKETING_THEME"];
 const EMAIL = "test@stella.dev";
 const MARKETING_ORGANIZATION_NAME = "Harbrook & Partners";
 const EXPORT_REVIEW_WORKSPACE_ID = "bb8641dc-0667-574c-8e30-152a1fd4b3f5";
 const MERIDIAN_WORKSPACE_ID = "6cbf3f81-bcc9-55da-8a4e-840221d4cabe";
-// The negotiated Supplier Agreement in the "Meridian supply agreement"
-// matter (seed-dev.ts: `ws-akvizice-energo-doc-7` /
-// `ws-akvizice-energo-field-file-6`): the docx with the clause-12
-// liability-cap redline and playbook margin comments that the editor scenes
-// film, matching the landing DOM mock (storyEditorDocument in
+// The editor scenes film the negotiated Supplier Agreement (edit-locks.ts):
+// the docx with the clause-12 liability-cap redline and playbook margin
+// comments, matching the landing DOM mock (storyEditorDocument in
 // apps/landing/src/data/product-story.ts).
-const SUPPLIER_AGREEMENT_ENTITY_ID = "84824638-eb81-58c5-8a81-5d7e961fb7d5";
-const SUPPLIER_AGREEMENT_FIELD_ID = "3f985a8b-26be-5a07-89d3-2a05acb94354";
 const SUPPLIER_AGREEMENT_FILE_NAME = "Supplier_Agreement.docx";
 // The wide/hero/portrait viewports and the capture matrix live in
 // ./captures.ts so the staleness check (scripts/check-marketing-recordings.ts)
@@ -79,6 +81,10 @@ type StoryScene = {
   collapsedSidebar?: boolean;
   cursor: CursorMode;
   durationSeconds: number;
+  // Opens the Supplier Agreement for editing, which takes its edit lock; the
+  // recorder releases it after every take and expects no lock badge in every
+  // other scene (edit-locks.ts).
+  holdsEditLock?: boolean;
   id: StoryCaptureId;
   path: (views: MarketingViewRoutes) => string;
   prepare: (page: Page) => Promise<void>;
@@ -502,11 +508,8 @@ const scenes = [
     // imply drag-scrolling that is not happening), so the overlay stays off.
     id: "editor",
     cursor: "hidden",
-    path: () =>
-      `/workspaces/${MERIDIAN_WORKSPACE_ID}/all/document` +
-      "?editing=true" +
-      `&entity=${SUPPLIER_AGREEMENT_ENTITY_ID}` +
-      `&field=${SUPPLIER_AGREEMENT_FIELD_ID}`,
+    holdsEditLock: true,
+    path: () => SUPPLIER_AGREEMENT_EDITOR_PATH,
     durationSeconds: 3.5,
     prepare: prepareEditorScene,
   },
@@ -519,11 +522,8 @@ const scenes = [
     id: "editor-doc",
     collapsedSidebar: true,
     cursor: "hidden",
-    path: () =>
-      `/workspaces/${MERIDIAN_WORKSPACE_ID}/all/document` +
-      "?editing=true" +
-      `&entity=${SUPPLIER_AGREEMENT_ENTITY_ID}` +
-      `&field=${SUPPLIER_AGREEMENT_FIELD_ID}`,
+    holdsEditLock: true,
+    path: () => SUPPLIER_AGREEMENT_EDITOR_PATH,
     durationSeconds: 3.5,
     prepare: prepareEditorScene,
   },
@@ -830,6 +830,10 @@ const warmSceneRoutes = async ({
     await page.goto(route, { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle").catch(() => undefined);
   }
+  // Warming opened the editor routes, and with them the Supplier Agreement's
+  // edit lock; release it (and any lock an earlier run left) before the
+  // first take.
+  await releaseSupplierAgreementEditLock(context.request, MARKETING_URLS);
   await context.close();
 };
 
@@ -999,11 +1003,35 @@ const recordCapture = async ({
     theme,
     viewport: capture.viewport,
   });
+  try {
+    return await recordCaptureInContext({ capture, context, theme, views });
+  } finally {
+    // Closing the page never unmounts the editor, so an editor take's lock
+    // would outlive it and badge the document in later scenes. Release it
+    // even when the take failed and is about to be retried.
+    if (capture.holdsEditLock === true) {
+      await releaseSupplierAgreementEditLock(context.request, MARKETING_URLS);
+    }
+    await context.close();
+  }
+};
+
+const recordCaptureInContext = async ({
+  capture,
+  context,
+  theme,
+  views,
+}: Omit<RecordCaptureOptions, "browser" | "cookies"> & {
+  context: BrowserContext;
+}) => {
   const page = await context.newPage();
   configurePage(page);
 
   await page.goto(capture.path(views), { waitUntil: "commit" });
   await capture.prepare(page);
+  if (capture.holdsEditLock !== true) {
+    await assertNoActiveEditBadge(page, capture.captureId);
+  }
   await hideCaptureNoise(page);
   await page.evaluate(async () => {
     await document.fonts.ready;
@@ -1062,7 +1090,6 @@ const recordCapture = async ({
     `story-${capture.captureId}${suffix}-poster.jpg`,
   );
   await video.saveAs(rawPath);
-  await context.close();
 
   const label = `${capture.captureId} (${theme})`;
   const { lastFrameSeconds, markerEndSeconds } = await findReadyMarker(

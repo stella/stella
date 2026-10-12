@@ -77,6 +77,8 @@ export type CaptureDefinition = {
 const COMMON_WATCHED_PATHS = [
   "apps/web/e2e/marketing/captures.ts",
   "apps/web/e2e/marketing/record-product-story.ts",
+  // Releases the editor scenes' edit lock, which every list scene would show.
+  "apps/web/e2e/marketing/edit-locks.ts",
   "apps/api/scripts/seed-dev.ts",
   // The Export Review data room's documents, filmed by several scenes.
   "apps/api/scripts/seed-export-review.ts",
