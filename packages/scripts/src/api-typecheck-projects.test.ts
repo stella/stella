@@ -20,8 +20,68 @@ import { CI_GENERATED_OUTPUTS } from "./generated-files";
 const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
 
 test("every API TypeScript source has exactly one compiler project owner", () => {
-  expect(validateApiTypecheckProjects(REPO_ROOT)).toEqual([]);
-}, 30_000);
+  const root = realpathSync(mkdtempSync(path.join(tmpdir(), "api-ownership-")));
+  const api = path.join(root, "apps/api");
+  const write = (file: string, contents: unknown) => {
+    const destination = path.join(api, file);
+    mkdirSync(path.dirname(destination), { recursive: true });
+    writeFileSync(
+      destination,
+      typeof contents === "string" ? contents : JSON.stringify(contents),
+    );
+  };
+  try {
+    write("package.json", {
+      scripts: {
+        "typecheck:src": "bun check --project=tsconfig.src.json",
+        "typecheck:tests": "bun check --project=tsconfig.tests.json",
+      },
+    });
+    write("tsconfig.json", {
+      compilerOptions: {
+        types: [],
+        moduleResolution: "Bundler",
+        module: "ESNext",
+      },
+      include: ["src"],
+    });
+    write("tsconfig.declarations.json", {
+      extends: "./tsconfig.json",
+      files: ["src/value.ts"],
+      include: [],
+    });
+    write("tsconfig.src.json", {
+      extends: "./tsconfig.json",
+      exclude: ["src/value.test.ts"],
+    });
+    write("tsconfig.tests.json", {
+      extends: "./tsconfig.json",
+      files: ["src/value.test.ts"],
+      include: [],
+    });
+    write("src/value.ts", "export type Value = string;\n");
+    write(
+      "src/value.test.ts",
+      "import type { Value } from './value'; export type Test = Value;\n",
+    );
+    write("src/routes.ts", "export const route = 1;\n");
+    write(
+      "src/routes.test.ts",
+      "import { route } from './routes'; export const checked = route;\n",
+    );
+    expect(validateApiTypecheckProjects(root)).toEqual([]);
+    write("src/new.ts", "export const value = 1;\n");
+    expect(validateApiTypecheckProjects(root)).toEqual([]);
+    write("tsconfig.src.json", { extends: "./tsconfig.json", exclude: [] });
+    expect(
+      validateApiTypecheckProjects(root).some(({ message }) =>
+        message.includes("found 2"),
+      ),
+    ).toBe(true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("Bun consumers read referenced declarations instead of source", () => {
   const config = JSON.parse(

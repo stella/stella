@@ -490,7 +490,10 @@ test("declaration aliases resolve transitive API contracts without checking thei
       path.join(api, "consumer.test.ts"),
       'import { extra } from "./src/extra"; export const count: number = extra;\n',
     );
-    const regenerated = await regenerateApiDeclarationSurface(project);
+    const regenerated = await regenerateApiDeclarationSurface(
+      project,
+      "update-inputs",
+    );
     expect(regenerated.diagnostics).toEqual([]);
     expect(readFileSync(turbo, "utf-8")).toContain(
       "// retain configuration comments",
@@ -506,7 +509,8 @@ test("declaration aliases resolve transitive API contracts without checking thei
       "Emitted API sources missing from declaration cache inputs",
     );
     expect(
-      (await regenerateApiDeclarationSurface(project)).diagnostics,
+      (await regenerateApiDeclarationSurface(project, "update-inputs"))
+        .diagnostics,
     ).toEqual([]);
     const stale = JSON.parse(readFileSync(project, "utf-8"));
     stale.files.push("src/deleted.ts");
@@ -628,6 +632,13 @@ test("stable wrappers prepare and restore exact roots and owners without committ
       path.join(api, "tsconfig.src.json"),
       path.join(api, "tsconfig.tests.json"),
     ];
+    const turbo = path.join(root, "turbo.json");
+    const turboSource = JSON.stringify({
+      tasks: {
+        "@stll/api#generate:typecheck-declarations": { inputs: ["**"] },
+      },
+    });
+    writeFileSync(turbo, turboSource);
     const before = wrappers.map((file) => readFileSync(file, "utf-8"));
     expect(() => readApiTypecheckConfig(project)).toThrow(
       "run bun --filter @stll/api generate:typecheck-declarations",
@@ -656,6 +667,7 @@ test("stable wrappers prepare and restore exact roots and owners without committ
       path.join(api, "src/extra.ts"),
     );
     expect(wrappers.map((file) => readFileSync(file, "utf-8"))).toEqual(before);
+    expect(readFileSync(turbo, "utf-8")).toBe(turboSource);
     const output = path.join(api, ".cache/typecheck-declarations");
     const cached = path.join(root, "cached");
     cpSync(output, cached, { recursive: true });

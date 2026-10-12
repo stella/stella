@@ -11,7 +11,6 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { readApiTypecheckConfig } from "./api-typecheck-config";
 import { apiResolvedTypecheckInputs } from "./api-typecheck-inputs";
 
 const ROOT = path.resolve(import.meta.dir, "../../..");
@@ -428,28 +427,10 @@ test("declaration consumers run after emission and invalidate with API source ch
 }, 30_000);
 
 test("each API test owner invalidates cached checking and rejects a newly introduced type error", () => {
-  const api = path.join(ROOT, "apps/api");
-  const tests = readApiTypecheckConfig(
-    path.join(api, "tsconfig.tests.json"),
-  ).fileNames.map((file) => path.relative(api, file));
-  const sourceRoots = new Set(
-    readApiTypecheckConfig(path.join(api, "tsconfig.src.json")).fileNames.map(
-      (file) => path.relative(api, file),
-    ),
-  );
-  const safe = tests.find(
-    (file): file is string =>
-      typeof file === "string" && file.endsWith(".test.ts"),
-  );
-  const coupled = [...new Bun.Glob("src/**/*.test.ts").scanSync(api)].find(
-    (file) =>
-      sourceRoots.has(file) &&
-      !file.startsWith("src/mcp/apps/") &&
-      !file.startsWith("src/handlers/visual-sandbox/browser/"),
-  );
-  if (!safe || !coupled) {
-    panic("Both API test ownership classes must have members");
-  }
+  // The cache fixture owns both classes itself; it does not require the
+  // checkout's prepared compiler projects in an ordinary unit-test job.
+  const safe = "src/value.test.ts";
+  const coupled = "src/routes.test.ts";
   const tasks = readObject(path.join(ROOT, "turbo.json"))["tasks"];
   if (!isRecord(tasks)) {
     panic("Missing Turbo tasks");

@@ -426,7 +426,8 @@ const nativeRequiredDeclarationRoots = (project: string) => {
 // External consumers define the required surface. Test candidates are admitted
 // only when their import graph cannot reach a runtime declaration boundary.
 export const discoverApiDeclarationEntries = (project: string) => {
-  const config = path.resolve(project);
+  const absolute = path.resolve(project);
+  const config = ts.sys.realpath?.(absolute) ?? absolute;
   const api = path.dirname(config);
   const root = path.resolve(api, "../..");
   const prefix = `${path.join(api, "src")}${path.sep}`;
@@ -557,7 +558,10 @@ export const discoverApiDeclarationEntries = (project: string) => {
   return [...entries].toSorted();
 };
 
-export const regenerateApiDeclarationSurface = async (project: string) => {
+export const regenerateApiDeclarationSurface = async (
+  project: string,
+  mode: "prepare" | "update-inputs" = "prepare",
+) => {
   if (usesGeneratedApiConfig(project)) {
     const api = path.dirname(path.resolve(project));
     writeApiDeclarationSurface(project, discoverApiDeclarationEntries(project));
@@ -600,6 +604,11 @@ export const regenerateApiDeclarationSurface = async (project: string) => {
     }
   }
   const refreshInputs = () => {
+    // Preparing ignored compiler artifacts must not mutate the tracked input
+    // tree that identifies the shared generated-source artifact.
+    if (mode !== "update-inputs") {
+      return;
+    }
     const turbo = path.resolve(path.dirname(project), "../../turbo.json");
     if (existsSync(turbo)) {
       const inputsStarted = performance.now();
@@ -666,7 +675,10 @@ if (import.meta.main) {
   const generated = usesGeneratedApiConfig(project);
   const writeSurface = generated || process.argv.includes("--write-surface");
   const { diagnostics, files } = writeSurface
-    ? await regenerateApiDeclarationSurface(project)
+    ? await regenerateApiDeclarationSurface(
+        project,
+        process.argv.includes("--write-surface") ? "update-inputs" : "prepare",
+      )
     : emitApiTypecheckDeclarations(project);
   if (diagnostics.length > 0) {
     process.stderr.write(
