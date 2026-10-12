@@ -1,0 +1,164 @@
+<main style="margin: 0; line-height: 1.5">
+  <header style="margin-block: 0 16px">
+    <h1 id="title" style="font-size: 20px; margin-block: 0 4px"></h1>
+    <p id="scope" class="stella-muted" style="font-size: 13px; margin: 0"></p>
+  </header>
+  <dl
+    id="stats"
+    style="
+      display: flex;
+      flex-wrap: wrap;
+      gap: 24px;
+      margin-block: 0 12px;
+      padding-block: 12px;
+      border-width: 1px 0;
+      border-style: solid;
+      border-color: var(--border);
+    "
+  ></dl>
+  <div
+    id="split"
+    role="img"
+    style="display: flex; gap: 2px; height: 8px; margin-block: 0 16px"
+  ></div>
+  <table id="matrix" class="stella-table" style="font-size: 13px">
+    <thead>
+      <tr id="matrix-head"></tr>
+    </thead>
+    <tbody id="matrix-body"></tbody>
+  </table>
+  <p
+    id="note"
+    class="stella-muted"
+    style="font-size: 12px; margin-block: 12px 0"
+  ></p>
+</main>
+<script>
+  (() => {
+    const { formattingLocale, currency, labels, positions, counterparties } =
+      stella.data;
+    const money = new Intl.NumberFormat(formattingLocale, {
+      style: "currency",
+      currency,
+      notation: "compact",
+      maximumFractionDigits: 1,
+    });
+    const count = new Intl.NumberFormat(formattingLocale);
+    const share = new Intl.NumberFormat(formattingLocale, {
+      style: "percent",
+      maximumFractionDigits: 0,
+    });
+    const tone = {
+      consent: "var(--destructive)",
+      confirm: "var(--chart-3)",
+      notice: "var(--chart-2)",
+    };
+    const text = (id, value) => {
+      document.getElementById(id).textContent = value;
+    };
+    const element = (tag, value, cssText) => {
+      const node = document.createElement(tag);
+      if (value !== undefined) node.textContent = value;
+      if (cssText) node.style.cssText = cssText;
+      return node;
+    };
+    const dot = (position) =>
+      element(
+        "span",
+        undefined,
+        `display:inline-block;flex:none;width:8px;height:8px;border-radius:50%;background-color:${tone[position]}`,
+      );
+    const total = (rows, field) =>
+      rows.reduce((sum, row) => sum + row[field], 0);
+    document.documentElement.lang = formattingLocale;
+    text("title", labels.title);
+    text("scope", labels.scope);
+    text("note", labels.note);
+
+    const allValue = total(counterparties, "value");
+    const split = document.getElementById("split");
+    split.setAttribute("aria-label", labels.splitLabel);
+    for (const position of positions) {
+      const rows = counterparties.filter((row) => row.position === position);
+      const value = total(rows, "value");
+      const group = element("div", undefined, "flex:1;min-width:180px");
+      const name = element(
+        "dt",
+        undefined,
+        "display:flex;align-items:center;gap:6px;font-size:12px",
+      );
+      name.className = "stella-muted";
+      name.append(dot(position), element("span", labels.positions[position]));
+      const amount = element(
+        "dd",
+        money.format(value),
+        "margin:2px 0 0;font-size:22px;font-weight:600;font-variant-numeric:tabular-nums",
+      );
+      const detail = element(
+        "dd",
+        labels.statDetail
+          .replace("{counterparties}", count.format(rows.length))
+          .replace("{documents}", count.format(total(rows, "documents")))
+          .replace(
+            "{share}",
+            share.format(allValue === 0 ? 0 : value / allValue),
+          ),
+        "margin:0;font-size:12px",
+      );
+      detail.className = "stella-muted";
+      group.append(name, amount, detail);
+      document.getElementById("stats").append(group);
+      split.append(
+        element(
+          "div",
+          undefined,
+          `flex:${value} 1 0;min-width:4px;border-radius:4px;background-color:${tone[position]}`,
+        ),
+      );
+    }
+
+    for (const [index, column] of labels.columns.entries()) {
+      const cell = element(
+        "th",
+        column,
+        index === 2 || index === 3 ? "text-align:end" : "",
+      );
+      cell.scope = "col";
+      document.getElementById("matrix-head").append(cell);
+    }
+    const ordered = [...counterparties].sort(
+      (a, b) =>
+        positions.indexOf(a.position) - positions.indexOf(b.position) ||
+        b.value - a.value,
+    );
+    const compact = "padding-block:6px";
+    for (const row of ordered) {
+      const line = document.createElement("tr");
+      const marker = element(
+        "span",
+        undefined,
+        "display:inline-flex;align-items:center;gap:6px",
+      );
+      marker.append(
+        dot(row.position),
+        element("span", labels.positions[row.position]),
+      );
+      const position = element("td", undefined, compact);
+      position.append(marker);
+      const badge = element("span", row.risk);
+      badge.className = "stella-badge";
+      const risk = element("td", undefined, compact);
+      risk.append(badge);
+      line.append(
+        element("td", row.name, `${compact};font-weight:500`),
+        element("td", row.agreement, compact),
+        element("td", count.format(row.documents), `${compact};text-align:end`),
+        element("td", money.format(row.value), `${compact};text-align:end`),
+        risk,
+        position,
+      );
+      document.getElementById("matrix-body").append(line);
+    }
+    stella.ready();
+  })();
+</script>

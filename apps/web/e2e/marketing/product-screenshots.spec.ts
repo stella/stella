@@ -8,6 +8,12 @@ import {
 } from "@stll/api-contract/professional-use";
 
 import { setFixedBrowserTime } from "../helpers/clock";
+import {
+  getMarketingAgentThreadId,
+  MARKETING_AGENT_FIRST_QUESTION,
+  MARKETING_AGENT_THREAD_TITLE,
+  settleMarketingAgentThread,
+} from "./agent-thread";
 
 const AKVIZICE_WORKSPACE_ID = "6cbf3f81-bcc9-55da-8a4e-840221d4cabe";
 const EXPORT_REVIEW_WORKSPACE_ID = "bb8641dc-0667-574c-8e30-152a1fd4b3f5";
@@ -20,13 +26,6 @@ const SUPPLIER_AGREEMENT_FIELD_ID = "3f985a8b-26be-5a07-89d3-2a05acb94354";
 // the anonymization capture.
 const ANONYMIZED_EXTRACT_ENTITY_ID = "c3dc74a6-7855-5157-84db-ddf14f886df4";
 const ANONYMIZED_EXTRACT_FIELD_ID = "e98a6746-dae9-5509-888b-d58bfbca9a33";
-// Seeded "Change-of-control" thread in the Export Review matter (seed-dev.ts
-// `marketing-agent-thread`), already containing the cited Q&A; keep in sync
-// with record-product-story.ts's MARKETING_AGENT_THREAD_TITLE. Resolved by
-// title via the chat threads API rather than a fixed thread id, mirroring
-// the video recorder's resolveMarketingViewRoutes, so the agent screenshot
-// never lands on the empty /chat/new composer.
-const MARKETING_AGENT_THREAD_TITLE = "Project Atlas · Change-of-control review";
 // The org that owns every seeded marketing workspace (AKVIZICE/EXPORT_REVIEW/
 // Meridian). Fixed id from seed-utils' DEFAULT_ORG_ID ("Harbrook & Partners",
 // apps/api/scripts/seed-test-user.ts), seeded by
@@ -118,12 +117,15 @@ const captures = [
     },
   },
   {
+    // The seeded change-of-control thread in the Export Review matter
+    // (apps/api/scripts/seed-marketing-agent-thread.ts), resolved by title so
+    // the shot never lands on the empty /chat/new composer.
     name: "agent",
     prepare: "open-agent-thread",
-    // The question from the seeded thread; the answer and its source chips
-    // are asserted separately in the "open-agent-thread" prepare block below
-    // so the shot never ships mid-render.
-    readyText: "Compare the change-of-control clauses across this matter.",
+    // The thread's first question; the answers, citations, generated view
+    // and recap are awaited in the "open-agent-thread" prepare block below so
+    // the shot never ships mid-render.
+    readyText: MARKETING_AGENT_FIRST_QUESTION,
   },
   {
     name: "public-data",
@@ -342,16 +344,12 @@ test("capture landing product screenshots", async ({
         await expect(page.getByRole("grid")).toBeVisible();
       }
       if ("prepare" in capture && capture.prepare === "open-agent-thread") {
-        // The seeded thread already contains the full cited answer; wait for
-        // it and one of its source chips so the shot never lands on a
-        // pre-render/loading state (the empty /chat/new composer this
-        // replaces had neither).
-        await expect(
-          page.getByText(/assignment or a material service change/u).first(),
-        ).toBeVisible();
-        await expect(
-          page.getByText(/Aurora_Retail_Shareholder_Register_2018/u).first(),
-        ).toBeVisible();
+        // Waits for every answer, citation chip, the generated view's guest
+        // page (content, fonts, final height, host theme) and the recap, then
+        // frames the final turn. The guest page has no animations or
+        // transitions of its own, so the animation freeze below, which the
+        // style tag applies to this document only, misses nothing.
+        await settleMarketingAgentThread(page);
       }
       await page.locator("body").waitFor({ state: "visible" });
       await page.evaluate(async () => document.fonts.ready);
@@ -410,9 +408,9 @@ const clearPersistedInspectorState = async (page: Page) => {
 };
 
 // Resolves the seeded agent thread's route by title via the chat threads
-// API (same lookup as record-product-story.ts's
-// resolveMarketingViewRoutes/getMarketingAgentThreadId), instead of a fixed
-// thread id that would need updating whenever the dev seed reruns.
+// API (the same lookup record-product-story.ts's resolveMarketingViewRoutes
+// uses), instead of a fixed thread id that would need updating whenever the
+// dev seed reruns.
 const resolveAgentThreadPath = async (request: APIRequestContext) => {
   const apiBaseURL = process.env["E2E_API_URL"] ?? "http://localhost:3001";
   const response = await request.get(`${apiBaseURL}/v1/chat/threads?limit=50`);
@@ -486,42 +484,6 @@ const getCurrentVersionCreatedAt = (payload: unknown): string | undefined => {
 // `Array.isArray` narrows `unknown` to `any[]`; this keeps elements `unknown`.
 const isUnknownArray = (value: unknown): value is unknown[] =>
   Array.isArray(value);
-
-const getMarketingAgentThreadId = (payload: unknown): string | undefined => {
-  if (
-    typeof payload !== "object" ||
-    payload === null ||
-    !("workspaces" in payload) ||
-    !isUnknownArray(payload.workspaces)
-  ) {
-    return undefined;
-  }
-
-  for (const workspace of payload.workspaces) {
-    if (
-      typeof workspace !== "object" ||
-      workspace === null ||
-      !("threads" in workspace) ||
-      !isUnknownArray(workspace.threads)
-    ) {
-      continue;
-    }
-    for (const thread of workspace.threads) {
-      if (
-        typeof thread === "object" &&
-        thread !== null &&
-        "id" in thread &&
-        typeof thread.id === "string" &&
-        "title" in thread &&
-        thread.title === MARKETING_AGENT_THREAD_TITLE
-      ) {
-        return thread.id;
-      }
-    }
-  }
-
-  return undefined;
-};
 
 const authenticateMarketingSession = async (request: APIRequestContext) => {
   const apiBaseURL = process.env["E2E_API_URL"] ?? "http://localhost:3001";

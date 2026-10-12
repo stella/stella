@@ -1,0 +1,94 @@
+{
+  "title": "Change-of-control exposure · Project Atlas",
+  "data": {
+    "formattingLocale": "en-GB",
+    "currency": "EUR",
+    "labels": {
+      "title": "Change-of-control exposure",
+      "scope": "Project Atlas data room · every reviewed agreement, grouped by counterparty",
+      "positions": {
+        "consent": "Consent or termination review",
+        "confirm": "Consent to confirm",
+        "notice": "Notice only"
+      },
+      "statDetail": "{counterparties} counterparties · {documents} documents · {share} of value",
+      "splitLabel": "Share of contract value by change-of-control position",
+      "columns": [
+        "Counterparty",
+        "Agreement",
+        "Documents",
+        "Contract value",
+        "Risk",
+        "Change of control"
+      ],
+      "note": "Contract value sums each counterparty's agreements in the data room. Positions follow each review extract's risk finding and tags; every agreement also requires written notice before an assignment."
+    },
+    "positions": ["consent", "confirm", "notice"],
+    "counterparties": [
+      {
+        "name": "Aurora Retail GmbH",
+        "agreement": "Shareholder Register",
+        "documents": 9,
+        "value": 20250000,
+        "risk": "Low",
+        "position": "notice"
+      },
+      {
+        "name": "Delta Logistics Kft.",
+        "agreement": "Customer Contract",
+        "documents": 9,
+        "value": 21487500,
+        "risk": "Critical",
+        "position": "consent"
+      },
+      {
+        "name": "Granite Properties B.V.",
+        "agreement": "Supplier Agreement",
+        "documents": 9,
+        "value": 22725000,
+        "risk": "High",
+        "position": "consent"
+      },
+      {
+        "name": "BluePeak Manufacturing s.r.o.",
+        "agreement": "Employment Agreement",
+        "documents": 9,
+        "value": 23962500,
+        "risk": "Medium",
+        "position": "confirm"
+      },
+      {
+        "name": "Edison Bank plc",
+        "agreement": "Permit",
+        "documents": 9,
+        "value": 20250000,
+        "risk": "Low",
+        "position": "notice"
+      },
+      {
+        "name": "Helios Energy a.s.",
+        "agreement": "Loan Agreement",
+        "documents": 9,
+        "value": 21487500,
+        "risk": "Critical",
+        "position": "consent"
+      },
+      {
+        "name": "Cedar Cloud Ltd.",
+        "agreement": "Lease",
+        "documents": 9,
+        "value": 22725000,
+        "risk": "High",
+        "position": "consent"
+      },
+      {
+        "name": "Fjord Analytics AB",
+        "agreement": "Insurance Policy",
+        "documents": 9,
+        "value": 23962500,
+        "risk": "Medium",
+        "position": "confirm"
+      }
+    ]
+  }
+}

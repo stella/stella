@@ -17,6 +17,13 @@ import {
 } from "@stll/api-contract/professional-use";
 
 import {
+  anchorMarketingAgentFinalTurn,
+  getMarketingAgentThreadId,
+  MARKETING_AGENT_CITED_SOURCES,
+  MARKETING_AGENT_FIRST_QUESTION,
+  settleMarketingAgentThread,
+} from "./agent-thread";
+import {
   CAPTURE_DPR,
   CAPTURE_THEMES,
   captureDefinitions,
@@ -40,7 +47,6 @@ const CAPTURE_FILTER = process.env["MARKETING_CAPTURE"];
 const THEME_FILTER = process.env["MARKETING_THEME"];
 const EMAIL = "test@stella.dev";
 const MARKETING_ORGANIZATION_NAME = "Harbrook & Partners";
-const MARKETING_AGENT_THREAD_TITLE = "Project Atlas · Change-of-control review";
 const EXPORT_REVIEW_WORKSPACE_ID = "bb8641dc-0667-574c-8e30-152a1fd4b3f5";
 const MERIDIAN_WORKSPACE_ID = "6cbf3f81-bcc9-55da-8a4e-840221d4cabe";
 // The negotiated Supplier Agreement in the "Meridian supply agreement"
@@ -188,21 +194,43 @@ const waitForInspectorPreview = async (
   }
 };
 
-const FIRST_SOURCE_PREVIEW = {
-  bodyMarker: "Aurora_Retail_Shareholder_Register_2018",
-  label: "Aurora_Retail_Shareholder_Register_2018",
-} as const satisfies InspectorPreviewMarker;
-const SECOND_SOURCE_PREVIEW = {
-  bodyMarker: "Edison_Bank_Permit_2018",
-  label: "Edison_Bank_Permit_2018",
-} as const satisfies InspectorPreviewMarker;
+const [FIRST_CITED_SOURCE, SECOND_CITED_SOURCE] =
+  MARKETING_AGENT_CITED_SOURCES satisfies readonly InspectorPreviewMarker[];
+
+// A cited source's inline chip in the final answer. Clicked only once it is
+// inside the viewport, so the scene never films a click that scrolled the
+// transcript or landed off-frame.
+const citedSourceChip = async (
+  page: Page,
+  source: (typeof MARKETING_AGENT_CITED_SOURCES)[number],
+) => {
+  const chip = page.getByText(source.chipLabel).first();
+  await chip.waitFor();
+  const inViewport = await chip.evaluate(
+    (element) =>
+      new Promise<boolean>((resolve) => {
+        const observer = new IntersectionObserver((entries) => {
+          observer.disconnect();
+          resolve((entries.at(-1)?.intersectionRatio ?? 0) >= 0.99);
+        });
+        observer.observe(element);
+      }),
+  );
+  if (!inViewport) {
+    throw new Error(
+      `agent: the "${source.chipLabel}" citation is not fully in frame; ` +
+        "refusing to film a click outside the shot",
+    );
+  }
+  return chip;
+};
 
 // ─── Review-citation scene: cell-to-passage click-through ───────────────
 // The Export Review table's Governing Law column for the seeded
 // Aurora_Retail_Shareholder_Register_2018.docx row (seed-dev.ts row index 0:
 // a "Direct citation" evidence-quality DOCX). Its citation quote
 // ("Governing law: Netherlands") is a verbatim line in the seeded document
-// body, and seed-dev.ts's ExportReviewCitationSeed.blockIndex points the
+// body, and seed-export-review.ts's ExportReviewCitationSeed.blockIndex points the
 // citation at that exact paragraph, so opening it resolves to a real
 // folio exact-passage highlight (PR #1215) instead of a degraded block
 // flash — required for this scene to ever have something to hold on.
@@ -548,37 +576,36 @@ const scenes = [
     path: ({ agent }) => agent,
     durationSeconds: 5.5,
     prepare: async (page) => {
-      await page
-        .getByText("Compare the change-of-control clauses across this matter.")
-        .first()
-        .waitFor();
-      await page
-        .getByText(/assignment or a material service change/u)
-        .first()
-        .waitFor();
+      await page.getByText(MARKETING_AGENT_FIRST_QUESTION).first().waitFor();
+      // Every answer, citation, the generated view and the recap have
+      // painted, and the final turn (question, cited lead-in, view) is
+      // framed at the top of the transcript.
+      await settleMarketingAgentThread(page);
       // Pre-warm both cited documents the loop will click: open each in
       // the inspector, require its folio preview to really paint (this
       // fails the run early when a preview cannot render), then close the
       // pane again so frame 0 keeps the full-width chat. The warmed
       // download/layout caches are what let the in-cut opens meet the
       // paint budget enforced in the replay.
-      for (const marker of [FIRST_SOURCE_PREVIEW, SECOND_SOURCE_PREVIEW]) {
-        await page.getByText(new RegExp(marker.label, "u")).first().click();
+      for (const source of [FIRST_CITED_SOURCE, SECOND_CITED_SOURCE]) {
+        await (await citedSourceChip(page, source)).click();
         await waitForInspectorPreview(
           page,
-          marker,
+          source,
           INSPECTOR_PREWARM_TIMEOUT_MS,
         );
       }
       // Pre-warming opened one inspector tab per document; close them all
       // so frame 0 keeps the full-width chat and the loop's first click
-      // performs the open on camera.
+      // performs the open on camera. The pane reflowed the chat, so frame
+      // the final turn again.
       await closeAllInspectorTabs(page);
+      await anchorMarketingAgentFinalTurn(page);
       // Rest just below-right of the first cited source: neutral (nothing
       // hovered), and the loop's first eased move starts from a short,
       // natural approach onto that source.
       const firstSource = await locatorCenter(
-        page.getByText(/Aurora_Retail_Shareholder_Register_2018/u).first(),
+        await citedSourceChip(page, FIRST_CITED_SOURCE),
       );
       await moveCursorTo(page, {
         x: firstSource.x + 56,
@@ -1623,46 +1650,6 @@ const resolveMarketingViewRoutes = async (
   };
 };
 
-// `Array.isArray` narrows `unknown` to `any[]`; this keeps elements `unknown`.
-const isUnknownArray = (value: unknown): value is unknown[] =>
-  Array.isArray(value);
-
-const getMarketingAgentThreadId = (payload: unknown): string | undefined => {
-  if (
-    typeof payload !== "object" ||
-    payload === null ||
-    !("workspaces" in payload) ||
-    !isUnknownArray(payload.workspaces)
-  ) {
-    return undefined;
-  }
-
-  for (const workspace of payload.workspaces) {
-    if (
-      typeof workspace !== "object" ||
-      workspace === null ||
-      !("threads" in workspace) ||
-      !isUnknownArray(workspace.threads)
-    ) {
-      continue;
-    }
-    for (const thread of workspace.threads) {
-      if (
-        typeof thread === "object" &&
-        thread !== null &&
-        "id" in thread &&
-        typeof thread.id === "string" &&
-        "title" in thread &&
-        thread.title === MARKETING_AGENT_THREAD_TITLE
-      ) {
-        return thread.id;
-      }
-    }
-  }
-
-  return undefined;
-};
-
 type ViewRecord = {
   id: string;
   layout: { type: string };
@@ -2057,26 +2044,22 @@ const replayCaptureMotion = async (page: Page, captureId: StoryCaptureId) => {
   // paint budget (pre-warmed in prepare); a blank pane on camera fails
   // the run, and the budget wait is deducted from the hold so the loop's
   // cadence stays fixed.
-  await clickWithCursor(
-    page,
-    page.getByText(/Aurora_Retail_Shareholder_Register_2018/u).first(),
-  );
+  await clickWithCursor(page, await citedSourceChip(page, FIRST_CITED_SOURCE));
   const firstPaintStartedAt = Date.now();
   await waitForInspectorPreview(
     page,
-    FIRST_SOURCE_PREVIEW,
+    FIRST_CITED_SOURCE,
     INSPECTOR_PREVIEW_PAINT_BUDGET_MS,
   );
   await page.waitForTimeout(
     Math.max(0, 2600 - (Date.now() - firstPaintStartedAt)),
   );
-  await clickWithCursor(
-    page,
-    page.getByText(/Edison_Bank_Permit_2018/u).first(),
-  );
+  // The open pane narrowed the chat; the chip check refuses a second click
+  // the reflow pushed out of frame.
+  await clickWithCursor(page, await citedSourceChip(page, SECOND_CITED_SOURCE));
   await waitForInspectorPreview(
     page,
-    SECOND_SOURCE_PREVIEW,
+    SECOND_CITED_SOURCE,
     INSPECTOR_PREVIEW_PAINT_BUDGET_MS,
   );
 };
