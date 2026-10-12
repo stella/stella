@@ -1,3 +1,4 @@
+import { getEndpoints } from "better-auth/api";
 import { panic } from "better-result";
 import {
   afterAll,
@@ -145,7 +146,27 @@ describe("handoff sessions enforce recent authentication at real entry points", 
     expect(response.status, await response.clone().text()).toBe(200);
   });
 
-  test("registered sensitive plugin endpoints receive a policy decision", () => {
+  test("registered authentication methods remain available beside account management", async () => {
+    const auth = getAuth();
+    const { api: registered } = getEndpoints(await auth.$context, auth.options);
+    const authenticationEndpoints = [
+      registered.signInEmail,
+      registered.signInSocial,
+      registered.callbackOAuth,
+      registered.sendVerificationOTP,
+      registered.checkVerificationOTP,
+      registered.signInEmailOTP,
+      registered.sendTwoFactorOTP,
+      registered.verifyTOTP,
+      registered.verifyTwoFactorOTP,
+      registered.verifyBackupCode,
+    ];
+    const allowed = new Set(authenticationEndpoints.map(({ path }) => path));
+    expect(allowed.size).toBe(authenticationEndpoints.length);
+    for (const path of allowed) {
+      expect(requiresHandoffStepUpForAuthPath(path), path).toBe(false);
+    }
+
     const sensitivePluginIds = new Set([
       "organization",
       "two-factor",
@@ -181,7 +202,7 @@ describe("handoff sessions enforce recent authentication at real entry points", 
       }
       if (
         path.startsWith("/.well-known/") ||
-        path.startsWith("/two-factor/verify-") ||
+        allowed.has(path) ||
         path === "/oauth2/token" ||
         path.startsWith("/organization/list") ||
         path.startsWith("/organization/get-")

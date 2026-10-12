@@ -73,9 +73,14 @@ export const isHandoffStepUpGuard = (
 export const requiresHandoffStepUpForAuthPath = (path: string): boolean => {
   const normalized = normalizePath(path).replace(/^\/auth(?=\/|$)/u, "");
   if (
-    normalized.startsWith("/two-factor/verify-") ||
-    normalized === "/oauth2/token" ||
     [
+      "/passkey/generate-authenticate-options",
+      "/passkey/verify-authentication",
+      "/two-factor/send-otp",
+      "/two-factor/verify-totp",
+      "/two-factor/verify-otp",
+      "/two-factor/verify-backup-code",
+      "/oauth2/token",
       "/organization/list",
       "/organization/get-full-organization",
       "/organization/get-active-member",

@@ -189,6 +189,28 @@ describe("handoff sessions require recent account authentication", () => {
     }
   });
 
+  test("passkey authentication remains available while management requires sign-in", () => {
+    for (const path of [
+      "/passkey/generate-authenticate-options",
+      "/passkey/verify-authentication",
+      "/two-factor/send-otp",
+    ]) {
+      expect(requiresHandoffStepUpForAuthPath(path)).toBe(false);
+      expect(requiresHandoffStepUpForAuthPath(`/api/auth${path}`)).toBe(false);
+    }
+    for (const path of [
+      "/passkey/generate-register-options",
+      "/passkey/verify-registration",
+      "/passkey/list-user-passkeys",
+      "/passkey/update-passkey",
+      "/passkey/delete-passkey",
+      "/passkey/verify-authentication/another-operation",
+      "/two-factor/verify-another-operation",
+    ]) {
+      expect(requiresHandoffStepUpForAuthPath(path)).toBe(true);
+    }
+  });
+
   test("new endpoints in sensitive authentication families require step-up", () => {
     for (const family of [
       "organization",

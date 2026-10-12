@@ -1,13 +1,25 @@
-import { betterAuth } from "better-auth";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
+import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import {
   APIError,
   createAuthMiddleware,
   getAuthoritativeSessionFromCtx,
 } from "better-auth/api";
-import { organization as organizationPlugin } from "better-auth/plugins";
+import {
+  emailOTP,
+  organization as organizationPlugin,
+} from "better-auth/plugins";
 import { Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  beforeAll,
+  describe,
+  expect,
+  setDefaultTimeout,
+  spyOn,
+  test,
+} from "bun:test";
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import * as v from "valibot";
@@ -44,6 +56,7 @@ import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const baseURL = "https://example.test";
+setDefaultTimeout(120_000);
 const browserOrganizationId = "00000000-0000-4000-8000-000000000014";
 const makeDb = (client: Awaited<ReturnType<typeof createTestPglite>>) =>
   drizzle({ client, relations: databaseRelations, logger: queryCountLogger });
@@ -53,6 +66,7 @@ let service: ReturnType<typeof createWebHandoffService>;
 let auth: ReturnType<typeof makeAuth>;
 let handoffEnabled = true;
 let handoffTextEnabled = true;
+let deliveredEmailOtp: string | undefined;
 const fixture = {
   credentialType: "oauth" as const,
   grantedScopes: [...MCP_OAUTH_SCOPES],
@@ -63,13 +77,17 @@ const fixture = {
     "00000000-0000-4000-8000-000000000012",
   ),
 };
-const makeAuth = (handoffService = service) =>
+const makeAuth = (
+  handoffService = service,
+  socialProviders?: BetterAuthOptions["socialProviders"],
+) =>
   betterAuth({
     baseURL,
     secret: "handoff-test-secret-long-enough-for-better-auth",
     database: drizzleAdapter(db, { provider: "pg", schema: authSchema }),
     advanced: { database: { generateId: () => Bun.randomUUIDv7() } },
     emailAndPassword: { enabled: true },
+    ...(socialProviders ? { socialProviders } : {}),
     session: {
       freshAge: 0,
       cookieCache: { enabled: true },
@@ -80,6 +98,13 @@ const makeAuth = (handoffService = service) =>
     },
     plugins: [
       organizationPlugin(),
+      emailOTP({
+        disableSignUp: true,
+        generateOTP: () => "314159",
+        sendVerificationOTP: async ({ otp }) => {
+          deliveredEmailOtp = otp;
+        },
+      }),
       createMcpWebHandoffPlugin({
         service: () => handoffService,
         textSessionMaxSeconds: () => 43_200,
@@ -221,6 +246,16 @@ const cookieOf = (response: Response) =>
       }),
     ).values(),
   ].join("; ");
+const mergeCookies = (...cookieHeaders: string[]) => {
+  const cookies = new Map<string, string>();
+  for (const cookie of cookieHeaders.flatMap((header) => header.split("; "))) {
+    const name = cookie.split("=").at(0);
+    if (name) {
+      cookies.set(name, cookie);
+    }
+  }
+  return [...cookies.values()].join("; ");
+};
 describe("MCP link sign-in", () => {
   test("a rejected request performs no database work or audit write", async () => {
     const budget = new InMemoryRateLimitContext();
@@ -407,13 +442,21 @@ describe("MCP link sign-in", () => {
     );
     expect(sensitive.status).toBe(403);
     expect(await sensitive.json()).toMatchObject({ code: "step_up_required" });
-    const reauthenticated = await auth.api.signInEmail({
-      body: {
-        email: "handoff@example.test",
-        password: "test-fixture-password",
-      },
-      asResponse: true,
-    });
+    const reauthenticated = await auth.handler(
+      new Request(`${baseURL}/api/auth/sign-in/email`, {
+        method: "POST",
+        headers: {
+          cookie: cookieOf(response),
+          origin: baseURL,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "handoff@example.test",
+          password: "test-fixture-password",
+        }),
+      }),
+    );
+    expect(reauthenticated.status).toBe(200);
     const normalCookie = cookieOf(reauthenticated);
     expect(
       (await auth.api.getSession({ headers: { cookie: normalCookie } }))
@@ -442,6 +485,167 @@ describe("MCP link sign-in", () => {
         ).password.hash("test-fixture-password"),
       })
       .where(eq(account.id, "handoff-credential"));
+  });
+  test("email OTP completion from a handoff cookie creates an ordinary session", async () => {
+    const handedOff = await redeem(await mint("click"));
+    const handoffCookie = cookieOf(handedOff);
+    expect(
+      (await auth.api.getSession({ headers: { cookie: handoffCookie } }))
+        ?.session.originConsentId,
+    ).toBe(fixture.consentId);
+    deliveredEmailOtp = undefined;
+    const sent = await auth.handler(
+      new Request(`${baseURL}/api/auth/email-otp/send-verification-otp`, {
+        method: "POST",
+        headers: {
+          cookie: handoffCookie,
+          origin: baseURL,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "handoff@example.test",
+          type: "sign-in",
+        }),
+      }),
+    );
+    expect(sent.status).toBe(200);
+    expect(deliveredEmailOtp).toBe("314159");
+    const completed = await auth.handler(
+      new Request(`${baseURL}/api/auth/sign-in/email-otp`, {
+        method: "POST",
+        headers: {
+          cookie: handoffCookie,
+          origin: baseURL,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "handoff@example.test",
+          otp: deliveredEmailOtp,
+        }),
+      }),
+    );
+    expect(completed.status).toBe(200);
+    const normalCookie = cookieOf(completed);
+    const normalSession = await auth.api.getSession({
+      headers: { cookie: normalCookie },
+    });
+    expect(normalSession?.user.id).toBe(fixture.userId);
+    expect(normalSession?.session.originConsentId ?? null).toBeNull();
+    try {
+      const sensitive = await auth.handler(
+        new Request(`${baseURL}/api/auth/change-password`, {
+          method: "POST",
+          headers: {
+            cookie: normalCookie,
+            origin: baseURL,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            currentPassword: "test-fixture-password",
+            newPassword: "test-fixture-otp-password",
+          }),
+        }),
+      );
+      expect(sensitive.status).toBe(200);
+    } finally {
+      await db
+        .update(account)
+        .set({
+          password: await (
+            await auth.$context
+          ).password.hash("test-fixture-password"),
+        })
+        .where(eq(account.id, "handoff-credential"));
+    }
+  });
+  test("Google callback from a handoff cookie creates an ordinary session", async () => {
+    const handedOff = await redeem(await mint("click"));
+    const handoffCookie = cookieOf(handedOff);
+    const socialAuth = makeAuth(service, {
+      google: {
+        clientId: "test-google-client",
+        clientSecret: "test-google-secret",
+        getUserInfo: async () => ({
+          user: {
+            name: "Account",
+            email: "handoff@example.test",
+            emailVerified: true,
+          },
+          data: {
+            aud: "test-google-client",
+            azp: "test-google-client",
+            email: "handoff@example.test",
+            email_verified: true,
+            exp: Math.floor(Date.now() / 1000) + 3600,
+            family_name: "Fixture",
+            given_name: "Account",
+            iat: Math.floor(Date.now() / 1000),
+            iss: "https://accounts.google.com",
+            name: "Account",
+            picture: "https://example.test/avatar.png",
+            sub: "handoff-social-account",
+          } satisfies GoogleProfile,
+        }),
+      },
+    });
+    const started = await socialAuth.handler(
+      new Request(`${baseURL}/api/auth/sign-in/social`, {
+        method: "POST",
+        headers: {
+          cookie: handoffCookie,
+          origin: baseURL,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ provider: "google", callbackURL: "/" }),
+      }),
+    );
+    expect(started.status).toBe(200);
+    const { url } = v.parse(
+      v.object({ url: v.string() }),
+      await started.json(),
+    );
+    const state = new URL(url).searchParams.get("state");
+    expect(state).not.toBeNull();
+    const fetchToken = Object.assign(
+      async () =>
+        await Promise.resolve(
+          Response.json({
+            access_token: "access-token",
+            token_type: "Bearer",
+            expires_in: 3600,
+          }),
+        ),
+      { preconnect: globalThis.fetch.preconnect },
+    );
+    const tokenExchange = spyOn(globalThis, "fetch").mockImplementation(
+      fetchToken,
+    );
+    let callback: Response;
+    try {
+      callback = await socialAuth.handler(
+        new Request(
+          `${baseURL}/api/auth/callback/google?code=code&state=${encodeURIComponent(state ?? "")}`,
+          {
+            headers: {
+              cookie: mergeCookies(handoffCookie, cookieOf(started)),
+            },
+          },
+        ),
+      );
+    } finally {
+      tokenExchange.mockRestore();
+    }
+    expect(callback.status).toBe(302);
+    const normalCookie = mergeCookies(
+      handoffCookie,
+      cookieOf(started),
+      cookieOf(callback),
+    );
+    const normalSession = await socialAuth.api.getSession({
+      headers: { cookie: normalCookie },
+    });
+    expect(normalSession?.user.id).toBe(fixture.userId);
+    expect(normalSession?.session.originConsentId ?? null).toBeNull();
   });
   test("a same-account browser switches to the link organization while keeping its session", async () => {
     const signedIn = await auth.api.signInEmail({

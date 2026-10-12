@@ -261,6 +261,7 @@ export type VisibleActivityAction =
 
 /** Total over `AuditAction`, so a new action must be narrated or excluded. */
 export const VISIBLE_ACTIVITY_ACTION_BY_ACTION = {
+  [AUDIT_ACTION.MCP_WEB_HANDOFF_CONFIRMATION_SHOWN]: null,
   [AUDIT_ACTION.MCP_WEB_HANDOFF_ISSUED]: null,
   [AUDIT_ACTION.MCP_WEB_HANDOFF_REDEEMED]: null,
   [AUDIT_ACTION.MCP_WEB_HANDOFF_REFUSED]: null,
