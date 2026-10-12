@@ -226,6 +226,7 @@ const createProposalFromComments = createSafeRootHandler(
       feature: "skills.apply_comments",
       modelTask: "short-text",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: session.activeOrganizationId },
       traceId: Bun.randomUUIDv7(),
     });

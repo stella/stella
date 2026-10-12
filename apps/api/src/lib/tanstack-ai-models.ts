@@ -83,6 +83,10 @@ import {
   createManagedOpenRouterText,
   createStellaOpenRouterText,
 } from "@/api/lib/stella-openrouter-text-adapter";
+import {
+  MANAGED_MODEL_TIER,
+  type ManagedModelTier,
+} from "@/api/lib/usage/managed-model-tier";
 
 const AI_PROVIDER_VALUES = new Set<string>(AI_PROVIDERS);
 const ANTHROPIC_LEGACY_THINKING_BUDGET_TOKENS = 10_000;
@@ -1500,6 +1504,42 @@ const MODEL_OVERRIDES = {
   pdf: env.AI_MODEL_PDF,
 } satisfies Record<ModelOverrideGroup, string | undefined>;
 
+/** The fast tier serves every task with the short-text model. */
+const managedModelTask = (
+  task: ModelTask,
+  modelTier: ManagedModelTier,
+): ModelTask => {
+  switch (modelTier) {
+    case MANAGED_MODEL_TIER.standard:
+      return task;
+    case MANAGED_MODEL_TIER.fast:
+      return "short-text";
+    default:
+      modelTier satisfies never;
+      return panic("Unhandled managed model tier");
+  }
+};
+
+const instanceModelIdForTask = ({
+  provider,
+  task,
+  modelTier,
+}: {
+  provider: AIProvider;
+  task: ModelTask;
+  modelTier: ManagedModelTier;
+}): string => {
+  const servingTask = managedModelTask(task, modelTier);
+  const modelId =
+    MODEL_OVERRIDES[MODEL_TASK_OVERRIDE_GROUP[servingTask]] ??
+    resolveDefaultModel({ task: servingTask, orgProviders: [provider] })
+      ?.modelId;
+  if (modelId === undefined) {
+    return panic("Supported instance task has no catalog default");
+  }
+  return modelId;
+};
+
 const GOOGLE_SAFETY_SETTINGS_BASELINE = [
   {
     category: HarmCategory.HARM_CATEGORY_HARASSMENT,
@@ -2084,8 +2124,12 @@ const resolveInstanceTextModel = ({
 export const getTanStackTextModelForTask = (
   task: ModelTask,
   orgConfig: OrgAIConfig | null | undefined,
-  options: {
+  {
+    modelTier,
+    ...options
+  }: {
     organizationId: SafeId<"organization"> | null;
+    modelTier: ManagedModelTier;
     managedOpenRouterCredential?: ManagedOpenRouterCredential | undefined;
   } & AIRequestPolicy,
 ): ResolvedTanStackTextModel => {
@@ -2119,12 +2163,7 @@ export const getTanStackTextModelForTask = (
     resolveTanStackTextProvider({ provider }),
     task,
   );
-  const modelId =
-    MODEL_OVERRIDES[MODEL_TASK_OVERRIDE_GROUP[task]] ??
-    resolveDefaultModel({ task, orgProviders: [provider] })?.modelId;
-  if (modelId === undefined) {
-    return panic("Supported instance task has no catalog default");
-  }
+  const modelId = instanceModelIdForTask({ provider, task, modelTier });
   return resolveInstanceTextModel({
     task,
     modelId,
@@ -2139,6 +2178,7 @@ export const getTanStackTextModelInfoForTask = (
   options: {
     dataClass: AIDataClass;
     organizationId: SafeId<"organization"> | null;
+    modelTier: ManagedModelTier;
   },
 ): ResolvedTanStackTextModelInfo => {
   const selection = orgConfig
@@ -2174,12 +2214,11 @@ export const getTanStackTextModelInfoForTask = (
   const provider = getActiveProvider();
   const supportedProvider = resolveTanStackTextProvider({ provider });
   assertTanStackProviderTaskSupport(supportedProvider, task);
-  const modelId =
-    MODEL_OVERRIDES[MODEL_TASK_OVERRIDE_GROUP[task]] ??
-    resolveDefaultModel({ task, orgProviders: [provider] })?.modelId;
-  if (modelId === undefined) {
-    return panic("Supported instance task has no catalog default");
-  }
+  const modelId = instanceModelIdForTask({
+    provider,
+    task,
+    modelTier: options.modelTier,
+  });
   // Metadata must agree with dispatch: never advertise an instance
   // model that resolveInstanceTextModel would refuse as unrated.
   if (supportedProvider === "openrouter") {
@@ -2237,9 +2276,20 @@ export const getTanStackTextModelInfoById = (
   modelId: string,
   orgConfig: OrgAIConfig | null | undefined,
   task: ModelTask,
-  dataClass: AIDataClass,
+  {
+    dataClass,
+    modelTier,
+  }: { dataClass: AIDataClass; modelTier: ManagedModelTier },
 ): ResolvedTanStackTextModelInfo => {
   const override = decodeModelOverride(modelId);
+
+  if (!orgConfig && modelTier === MANAGED_MODEL_TIER.fast) {
+    return getTanStackTextModelInfoForTask(task, null, {
+      dataClass,
+      organizationId: null,
+      modelTier,
+    });
+  }
 
   if (orgConfig) {
     const providerConfig = override.provider
@@ -2282,17 +2332,31 @@ export const getTanStackTextModelInfoById = (
   };
 };
 
+/**
+ * A per-turn selection chooses among the standard tier's models. On the
+ * managed fast tier the task resolves to the fast model instead, with the
+ * task's default reasoning; an organization's own key serves the selection.
+ */
 export const getTanStackTextModelById = (
   modelId: string,
   orgConfig: OrgAIConfig | null | undefined,
-  options: {
+  {
+    modelTier,
+    ...options
+  }: {
     task: ModelTask;
     organizationId: SafeId<"organization"> | null;
+    modelTier: ManagedModelTier;
     reasoningEffort?: ReasoningEffort | undefined;
     managedOpenRouterCredential?: ManagedOpenRouterCredential | undefined;
   } & AIRequestPolicy,
 ): ResolvedTanStackTextModel => {
   const override = decodeModelOverride(modelId);
+
+  if (!orgConfig && modelTier === MANAGED_MODEL_TIER.fast) {
+    const { task, reasoningEffort: _selectedEffort, ...dispatch } = options;
+    return getTanStackTextModelForTask(task, null, { ...dispatch, modelTier });
+  }
 
   if (orgConfig) {
     const providerConfig = override.provider

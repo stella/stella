@@ -180,6 +180,7 @@ const buildProposalRequest = ({
     feature: "document-review.positions",
     modelTask: MODEL_TASK,
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: {
       file_count: references.length + 1,
       organization_id: organizationId,

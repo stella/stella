@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The custom lint test runner census directly imports shell-quote/parse to recognize shell quoting, operators and glob tokens in package scripts, workflows and shell runners. Declaring the existing locked shell-quote version makes that parser dependency explicit and reuses its shell grammar instead of introducing a separate tokenizer."
+}

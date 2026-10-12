@@ -150,6 +150,7 @@ export const createConditionPreviewHandler = ({
                         feature: "templates.preview-conditions",
                         modelTask: "classify",
                         orgAIConfig,
+                        modelTier: admission.modelTier,
                         organizationId: session.activeOrganizationId,
                         traceId: Bun.randomUUIDv7(),
                         usageMetering: {

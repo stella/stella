@@ -429,27 +429,28 @@ const prefillTemplate = createSafeRootHandler(config, async function* (ctx) {
     return Result.ok({ fields: [] });
   }
 
-  const aiAnalytics = createTanStackAIAnalyticsCallbacks({
-    dataClass: "customer",
-    usageMetering: {
-      actionType: "chat",
-      organizationId,
-      safeDb,
-      serviceTier: "standard",
-      userId: user.id,
-      workspaceId: null,
-    },
-    feature: "templates.prefill",
-    modelTask: "short-text",
-    orgAIConfig,
-    properties: { organization_id: organizationId },
-    traceId: Bun.randomUUIDv7(),
-  });
-
   return yield* admitFiniteAction({
     actionKind: "templates.prefill",
     ctx,
     async *handler({ modelAdmission }) {
+      const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+        dataClass: "customer",
+        usageMetering: {
+          actionType: "chat",
+          organizationId,
+          safeDb,
+          serviceTier: "standard",
+          userId: user.id,
+          workspaceId: null,
+        },
+        feature: "templates.prefill",
+        modelTask: "short-text",
+        orgAIConfig,
+        modelTier: modelAdmission.modelTier,
+        properties: { organization_id: organizationId },
+        traceId: Bun.randomUUIDv7(),
+      });
+
       const fields = yield* Result.await(
         Result.tryPromise({
           try: async () =>

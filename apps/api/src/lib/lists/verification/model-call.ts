@@ -107,6 +107,7 @@ export const createVerificationCall = <TSchema extends v.GenericSchema>({
     feature,
     modelTask: VERIFICATION_MODEL_TASK,
     orgAIConfig: deps.orgAIConfig,
+    modelTier: deps.admission.modelTier,
     properties: {
       organization_id: deps.organizationId,
       workspace_id: deps.workspaceId,

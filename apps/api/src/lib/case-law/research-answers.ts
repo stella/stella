@@ -359,16 +359,19 @@ const CITED_EXCERPT_CHARS = 300;
 /**
  * The cited passages as justification blocks. One block per anchor, in the
  * order the anchors were sent, so the card renders them the way the reader
- * scrolls them.
+ * scrolls them. Each names the court's number for its block from the
+ * decision's AST (`courtParagraphNumbersByAnchor`), never from the anchor.
  */
 export const buildAnswerJustification = (
   anchorIds: readonly string[],
   excerptByAnchor: ReadonlyMap<string, string>,
+  courtParagraphNumbers: ReadonlyMap<string, number>,
 ): JustificationContent => ({
   version: 1,
   blocks: anchorIds.map((anchorId) => ({
     kind: "decision-passage",
     anchorId,
+    courtParagraphNumber: courtParagraphNumbers.get(anchorId) ?? null,
     excerpt: (excerptByAnchor.get(anchorId) ?? "").slice(
       0,
       CITED_EXCERPT_CHARS,

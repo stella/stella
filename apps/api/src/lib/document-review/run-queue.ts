@@ -352,6 +352,7 @@ export const initDocumentReviewRunWorker = ({ db }: BullMqWorkerContext) => {
         actionKind: "document-reviews.background",
         organizationId: actor.organizationId,
         userId: actor.userId,
+        organizationStateDb: actor.writeDb,
         job,
         signal: new AbortController().signal,
         run: async (_signal, admission) =>
@@ -621,7 +622,11 @@ const executeRun = async ({
         graderModel: getTanStackTextModelInfoForTask(
           REFERENCE_GRADE_TASK,
           orgAIConfig,
-          { dataClass: "customer", organizationId: actor.organizationId },
+          {
+            dataClass: "customer",
+            organizationId: actor.organizationId,
+            modelTier: admission.modelTier,
+          },
         ),
         promptCachingEnabled,
       });

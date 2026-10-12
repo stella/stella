@@ -93,9 +93,11 @@ export type WorkflowDataOutput = Record<
   { answer: Answer; justification: AIJustificationOutput }
 >;
 
-type WorkflowAIAnalyticsProps = Parameters<
-  typeof createTanStackAIAnalyticsCallbacks
->[0];
+/** Everything but the tier, which only the chunk's admission can state. */
+type WorkflowAIAnalyticsProps = Omit<
+  Parameters<typeof createTanStackAIAnalyticsCallbacks>[0],
+  "modelTier"
+>;
 
 type BuildWorkflowAIAnalyticsPropsInput = {
   entityVersionId: string;
@@ -401,8 +403,8 @@ export const generateWorkflowData = async ({
       organizationId,
       admission,
       tenantWorkspaceIds: [workspaceId],
-      analytics: createTanStackAIAnalyticsCallbacks(
-        buildWorkflowAIAnalyticsProps({
+      analytics: createTanStackAIAnalyticsCallbacks({
+        ...buildWorkflowAIAnalyticsProps({
           entityVersionId,
           organizationId,
           orgAIConfig: orgAIConfig ?? null,
@@ -410,7 +412,8 @@ export const generateWorkflowData = async ({
           usageMetering,
           workspaceId,
         }),
-      ),
+        modelTier: admission.modelTier,
+      }),
       caching: cachingDecision,
       serviceTier,
       messages: [
@@ -498,8 +501,8 @@ export const generateWorkflowData = async ({
   const runChunk = async (
     chunkProperties: AIBatchProperty[],
   ): Promise<Result<WorkflowDataOutput, WorkflowIntegrationError>> => {
-    const aiAnalytics = createTanStackAIAnalyticsCallbacks(
-      buildWorkflowAIAnalyticsProps({
+    const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+      ...buildWorkflowAIAnalyticsProps({
         entityVersionId,
         organizationId,
         orgAIConfig: orgAIConfig ?? null,
@@ -507,7 +510,8 @@ export const generateWorkflowData = async ({
         usageMetering,
         workspaceId,
       }),
-    );
+      modelTier: admission.modelTier,
+    });
 
     const chunkContent: WorkflowMessagePart[] = [
       ...messageContent,

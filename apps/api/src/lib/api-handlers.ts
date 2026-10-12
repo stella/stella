@@ -19,7 +19,7 @@ import {
 } from "@/api/lib/ai-config-response";
 import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
-import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";
@@ -118,6 +118,7 @@ import {
 import { computeUsageUnitCost } from "@/api/lib/usage/action-weights";
 import { decideChatUsageLane } from "@/api/lib/usage/lane-routing";
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
+import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
 import { recordWriteContract } from "@/api/lib/write-contract";
 import type { WriteContract } from "@/api/lib/write-contract";
@@ -1152,6 +1153,7 @@ const runAdmittedFiniteHandler = async function* <
         const outcome = await admitModelDispatch({
           organizationId: ctx.session.activeOrganizationId,
           actionKind,
+          organizationStateDb: ctx.scopedDb,
           signal,
           run: async (modelAdmission) => {
             const admitted = Object.assign(ctx, {
@@ -1596,6 +1598,9 @@ export const resolveMeteringContext = ({
   const modelInfo = getTanStackTextModelInfoForTask(modelTask, orgAIConfig, {
     dataClass: "customer",
     organizationId,
+    // Unit metering and the free tier never run together
+    // (`freeTierInvariantViolation`), so a metered organization is standard.
+    modelTier: MANAGED_MODEL_TIER.standard,
   });
   const isByok = modelInfo.keySource === "byok";
   const serviceTier = resolveEffectiveServiceTierForProvider({

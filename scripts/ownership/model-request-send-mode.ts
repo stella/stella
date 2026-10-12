@@ -2,6 +2,7 @@ import type { OwnershipEntry } from "../ownership-types.ts";
 // Model requests whose content never comes from a chat thread: documents,
 // matters, templates, playbooks and public corpora, requested outside chat.
 const MODEL_REQUESTS_WITHOUT_CHAT_CONTENT = [
+  "apps/api/src/handlers/legal-reader/answers/model.ts",
   "apps/api/src/handlers/ai-autocomplete/stream.ts",
   "apps/api/src/handlers/case-law/analysis/generate.ts",
   "apps/api/src/handlers/case-law/analysis/significance-run.ts",

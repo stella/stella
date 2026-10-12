@@ -541,22 +541,6 @@ const extractCandidates = async ({
 
   const tried = await Result.tryPromise({
     try: async () => {
-      analytics = createTanStackAIAnalyticsCallbacks({
-        dataClass: "customer",
-        feature: "memory.extractor",
-        modelTask: "short-text",
-        orgAIConfig,
-        traceId: Bun.randomUUIDv7(),
-        usageMetering: {
-          actionType: "background",
-          organizationId: compaction.threadOrganizationId,
-          safeDb: actor.writeSafeDb,
-          serviceTier: "batch",
-          userId: compaction.threadUserId,
-          workspaceId: compaction.threadWorkspaceId,
-        },
-      });
-
       // Re-read after potentially slow configuration loading and immediately
       // before provider transmission. The outer check avoids needless setup;
       // this one closes the opt-out window around the actual model call.
@@ -594,8 +578,26 @@ const extractCandidates = async ({
         actionKind: "chat.background",
         organizationId: compaction.threadOrganizationId,
         userId: compaction.threadUserId,
-        run: async (leaseSignal, admission) =>
-          await generateTanStackObjectForTask({
+        organizationStateDb: actor.writeDb,
+        run: async (leaseSignal, admission) => {
+          analytics = createTanStackAIAnalyticsCallbacks({
+            dataClass: "customer",
+            feature: "memory.extractor",
+            modelTask: "short-text",
+            orgAIConfig,
+            modelTier: admission.modelTier,
+            traceId: Bun.randomUUIDv7(),
+            usageMetering: {
+              actionType: "background",
+              organizationId: compaction.threadOrganizationId,
+              safeDb: actor.writeSafeDb,
+              serviceTier: "batch",
+              userId: compaction.threadUserId,
+              workspaceId: compaction.threadWorkspaceId,
+            },
+          });
+
+          return await generateTanStackObjectForTask({
             dataClass: "customer",
             task: "short-text",
             serviceTier: "batch",
@@ -621,7 +623,8 @@ const extractCandidates = async ({
               schedulerSignal,
               leaseSignal,
             ]),
-          }),
+          });
+        },
       });
     },
     catch: (error: unknown) => error,

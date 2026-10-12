@@ -124,6 +124,7 @@ export const detectReviewParties = async ({
     feature: "document-review.parties",
     modelTask: MODEL_TASK,
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: {
       file_count: 1,
       organization_id: organizationId,

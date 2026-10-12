@@ -285,6 +285,7 @@ const extractProcuracao = createSafeRootHandler(
         feature: "contacts.extractProcuracao",
         modelTask: "short-text",
         orgAIConfig,
+        modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
         properties: { organization_id: organizationId },
         traceId: Bun.randomUUIDv7(),
       });

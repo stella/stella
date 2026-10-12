@@ -361,6 +361,7 @@ export const suggestColumnPrompt = async ({
     feature: scope.feature,
     modelTask: "short-text",
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: {
       organization_id: organizationId,
       content_type: draft.contentType,

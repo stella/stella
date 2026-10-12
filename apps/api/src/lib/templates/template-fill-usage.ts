@@ -240,6 +240,7 @@ export const buildTemplateFillAiWiring = (
               feature,
               modelTask: "short-text",
               orgAIConfig: config.orgAIConfig,
+              modelTier: admission.modelTier,
               properties: { organization_id: organizationId },
               traceId: Bun.randomUUIDv7(),
             }),

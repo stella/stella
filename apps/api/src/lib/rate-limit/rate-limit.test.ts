@@ -8,6 +8,11 @@ import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
+import type {
+  RateLimitContext,
+  RateLimitContextConfig,
+  RateLimitOptions,
+} from "@/api/lib/rate-limit/contracts";
 import { withDemoActionBudget } from "@/api/lib/rate-limit/demo-action-budget";
 import {
   createOtpAccountBudget,
@@ -18,9 +23,6 @@ import {
   scopedGenerator,
   scopedRateLimitKey,
   rateLimit,
-  type RateLimitContext,
-  type RateLimitContextConfig,
-  type RateLimitOptions,
 } from "@/api/lib/rate-limit/rate-limit";
 import {
   createRedisRateLimit,

@@ -58,6 +58,7 @@ export const polarityGeneration = ({
       dataClass: "public_corpus",
       feature: "case-law.polarity",
       modelTask: "classify",
+      modelTier: NO_ORGANIZATION_MODEL_DISPATCH.modelTier,
       properties: { language },
       traceId: Bun.randomUUIDv7(),
     }),

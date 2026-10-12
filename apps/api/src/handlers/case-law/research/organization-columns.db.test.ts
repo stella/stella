@@ -30,7 +30,11 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { queueResearchAnswerCells } from "@/api/lib/case-law/research-answer-queue";
 import type { ResearchAnswerClaim } from "@/api/lib/case-law/research-answer-queue";
 import { runResearchAnswers } from "@/api/lib/case-law/research-answer-runner";
-import type { CaseLawResearchColumnContent } from "@/api/lib/case-law/research-answers";
+import { buildAnswerJustification } from "@/api/lib/case-law/research-answers";
+import type {
+  CaseLawResearchAnswerRun,
+  CaseLawResearchColumnContent,
+} from "@/api/lib/case-law/research-answers";
 import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
@@ -612,6 +616,52 @@ describe("a run answers only the cells that need it", () => {
       body: { decisionIds: [decisionOne] },
     });
     expect(looked).toMatchObject({ items: [{ columnId: columnA }] });
+  });
+
+  test("a cited passage keeps the court's paragraph number through storage and lookup", async () => {
+    const columnId = await addColumn(ids.orgA, ids.userA1, "Numbered?");
+    const run = {
+      version: 1,
+      model: "test-model",
+      completedAt: "2026-10-12T10:00:00.000Z",
+      retrieved: false,
+      rationale: "As held.",
+      justification: buildAnswerJustification(
+        ["p-8", "p-3"],
+        new Map([
+          ["p-8", "The appeal is dismissed."],
+          ["p-3", "Facts."],
+        ]),
+        new Map([["p-8", 6]]),
+      ),
+    } satisfies CaseLawResearchAnswerRun;
+    await testDb.insert(caseLawResearchAnswers).values({
+      columnId,
+      organizationId: ids.orgA,
+      decisionId: decisionOne,
+      state: "answered",
+      answer: { version: 1, type: "text", value: "Dismissed." },
+      run,
+    });
+
+    const looked = await call(lookupResearchAnswers, ids.orgA, ids.userA1, {
+      body: { decisionIds: [decisionOne] },
+    });
+    expect(looked).toMatchObject({
+      items: [
+        {
+          columnId,
+          run: {
+            justification: {
+              blocks: [
+                { anchorId: "p-8", courtParagraphNumber: 6 },
+                { anchorId: "p-3", courtParagraphNumber: null },
+              ],
+            },
+          },
+        },
+      ],
+    });
   });
 
   test("an answer that is not field content is refused by the table", async () => {

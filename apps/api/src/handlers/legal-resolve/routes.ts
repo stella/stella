@@ -31,11 +31,11 @@ import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { resolveResponseStatus } from "@/api/lib/observability/response-status";
-import {
-  rateLimit,
-  type RateLimitContext,
-  type RateLimitOptions,
-} from "@/api/lib/rate-limit/rate-limit";
+import type {
+  RateLimitContext,
+  RateLimitOptions,
+} from "@/api/lib/rate-limit/contracts";
+import { rateLimit, scopedRateLimitKey } from "@/api/lib/rate-limit/rate-limit";
 import {
   createRedisRateLimitRequestKey,
   createRedisRateLimit,
@@ -44,6 +44,7 @@ import {
   CACHE_CONTROL_HEADER,
   PRIVATE_CACHE_CONTROL,
 } from "@/api/lib/security-headers";
+import { getMcpWwwAuthenticateHeader } from "@/api/mcp/metadata";
 import { LEGAL_RESOLVE_RESOURCE_ROUTES } from "@/api/mcp/resource-policy-contract";
 
 import type { authenticateLegalResolveToken } from "./authentication";
@@ -78,10 +79,14 @@ export const createLegalResolveRateLimitOptions = (
   ...createRedisRateLimit({
     failurePolicy: "fail_closed",
     scope: `legal-resolve-${route}`,
-    counterKeyGenerator: async (request) => {
+    counterKeyGenerator: async (request, server) => {
       const authorization = await getAuthorization(request);
       if (authorization.session === undefined) {
-        return `unauthorized:${route}`;
+        return scopedRateLimitKey({
+          scope: `unauthorized:${route}`,
+          request,
+          server,
+        });
       }
       return `${authorization.session.organizationId}:${credentialKey(authorization.session)}:${route}`;
     },
@@ -171,6 +176,14 @@ export const createLegalResolveRoute = ({
 
   return new Elysia()
     .mapResponse(async ({ set, request, responseValue, params }) => {
+      if (set.status === 401) {
+        set.headers["WWW-Authenticate"] = getMcpWwwAuthenticateHeader({
+          error: request.headers.has("authorization")
+            ? "invalid_token"
+            : "none",
+          mode: "law",
+        });
+      }
       set.headers[CACHE_CONTROL_HEADER] = PRIVATE_CACHE_CONTROL;
       if (auditedRequests.has(request)) {
         return;

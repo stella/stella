@@ -56,6 +56,7 @@ export const translateTaggedSegments = async ({
     feature: "document_translation.translate",
     modelTask: TRANSLATION_TASK,
     orgAIConfig: context.orgAIConfig,
+    modelTier: context.admission.modelTier,
     properties: {
       organization_id: context.organizationId,
       workspace_id: context.workspaceId,

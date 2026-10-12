@@ -83,6 +83,7 @@ const improvePrompt = createSafeRootHandler(
       feature: "chat.improve_prompt",
       modelTask: "short-text",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: session.activeOrganizationId },
       traceId: Bun.randomUUIDv7(),
     });

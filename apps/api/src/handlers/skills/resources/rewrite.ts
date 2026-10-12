@@ -122,6 +122,7 @@ const rewriteSkillResource = createSafeRootHandler(
       feature: "skills.rewrite_resource",
       modelTask: "short-text",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: session.activeOrganizationId },
       traceId: Bun.randomUUIDv7(),
     });

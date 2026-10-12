@@ -152,6 +152,7 @@ const rewriteClause = createSafeRootHandler(
       feature: "clauses.rewrite",
       modelTask: "short-text",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: organizationId },
       traceId: Bun.randomUUIDv7(),
     });

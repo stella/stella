@@ -6,7 +6,10 @@ import { withTimeout } from "@stll/concurrency/with-timeout";
 import type { Transaction } from "@/api/db/root";
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
-import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import {
+  GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS,
+  withGatedTestClients,
+} from "@/api/tests/gated-test-database";
 
 type Actor = "a" | "b";
 export type InterleavingToken = `${Actor}.${string}`;
@@ -343,7 +346,7 @@ export const withInterleaving = async <State>({
           }
         }
       },
-      { closeTimeout: 0 },
+      { closeTimeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS },
     );
     results.push(result);
     await invariant(result);

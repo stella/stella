@@ -1417,14 +1417,16 @@ const isStructuredOutputPartial = <TOutput>(
 
 export const resolveTanStackTextModel = async (
   options: ResolveTextModelOptions,
-  credentials = getManagedOpenRouterCredentialProvider(),
+  credentials: ReturnType<
+    typeof getManagedOpenRouterCredentialProvider
+  > = getManagedOpenRouterCredentialProvider(),
 ): Promise<ResolvedTanStackTextModel> => {
   // Every inference path resolves its model here with the proof that its
   // action was admitted; the type requires the proof, this binds it to the
   // organization the model serves.
   assertModelDispatchScope(options);
   const {
-    admission: _admission,
+    admission: { modelTier },
     modelId,
     organizationId,
     orgAIConfig,
@@ -1442,14 +1444,13 @@ export const resolveTanStackTextModel = async (
   let managedOpenRouterCredential: ManagedOpenRouterCredential | undefined;
   if (!orgAIConfig && !mockAnswersForOrganization(orgAIConfig)) {
     const info = modelId
-      ? getTanStackTextModelInfoById(
-          modelId,
-          orgAIConfig,
-          task,
-          policy.dataClass,
-        )
-      : getTanStackTextModelInfoForTask(task, orgAIConfig, {
+      ? getTanStackTextModelInfoById(modelId, orgAIConfig, task, {
+          dataClass: policy.dataClass,
+          modelTier,
+        })
+      : getTanStackTextModelInfoForTask(role, orgAIConfig, {
           organizationId,
+          modelTier,
           ...policy,
         });
     if (info.provider === "openrouter") {
@@ -1483,12 +1484,14 @@ export const resolveTanStackTextModel = async (
     ? getTanStackTextModelById(modelId, orgAIConfig, {
         task,
         organizationId,
+        modelTier,
         reasoningEffort,
         managedOpenRouterCredential,
         ...policy,
       })
     : getTanStackTextModelForTask(task, orgAIConfig, {
         organizationId,
+        modelTier,
         managedOpenRouterCredential,
         ...policy,
       });

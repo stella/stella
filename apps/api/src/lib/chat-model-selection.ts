@@ -51,6 +51,7 @@ import {
   hasTanStackInstanceProvider,
   isAllowedBYOKModelForTask,
 } from "@/api/lib/tanstack-ai-models";
+import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
 
 const CHAT_MODEL_TASK = "chat";
 
@@ -290,9 +291,11 @@ export const getChatModelBenchmarkOptions = (
 export const getDefaultChatModelValue = ({
   orgAIConfig,
   organizationId,
+  modelTier,
 }: {
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization"> | null;
+  modelTier: ManagedModelTier;
 }): string | null => {
   if (!hasResolvableModelForTask({ orgAIConfig, task: CHAT_MODEL_TASK })) {
     return null;
@@ -301,6 +304,7 @@ export const getDefaultChatModelValue = ({
   const info = getTanStackTextModelInfoForTask(CHAT_MODEL_TASK, orgAIConfig, {
     dataClass: "customer",
     organizationId,
+    modelTier,
   });
   return encodeChatModelSelection({
     provider: info.provider,

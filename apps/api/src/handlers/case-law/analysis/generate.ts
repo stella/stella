@@ -282,6 +282,7 @@ const runGeneration = async ({
     modelTask: "short-text",
     organizationId,
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: {
       decision_id: decisionId,
       jurisdiction: country,
@@ -300,6 +301,7 @@ const runGeneration = async ({
       {
         dataClass: "public_corpus",
         organizationId,
+        modelTier: admission.modelTier,
       },
     );
     const result = await generateTanStackObjectForTask({

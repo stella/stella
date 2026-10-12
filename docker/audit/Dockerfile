@@ -1,11 +1,11 @@
 FROM oven/bun:1.4.3-slim@sha256:14a223fa35747ec728bce300ef85888bc5f7958164d15bbba6a54b22b52a3288 AS bun
 FROM node:24-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20 AS node
-FROM rust:1.97.1-bookworm@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97 AS tools
+FROM rust:1.99.0-bookworm@sha256:114c7a4425406451c2866b6aafe69fe29b1b298832db1277d411ac73c82d04d6 AS tools
 
 COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 RUN ln -s /usr/local/bin/bun /usr/local/bin/bunx
-ENV RUSTUP_TOOLCHAIN=1.97.1
+ENV RUSTUP_TOOLCHAIN=1.99.0
 RUN apt-get update && apt-get install -y --no-install-recommends \
       bash ca-certificates curl git python3 pkg-config libwebkit2gtk-4.1-dev \
       librsvg2-dev libayatana-appindicator3-dev patchelf \

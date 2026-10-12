@@ -13,10 +13,10 @@ import { BYOK_MODEL_OPTIONS } from "@stll/ai-catalog";
 import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
 import { sleep } from "@stll/concurrency/sleep";
 
-import { chatAttemptRequestOptions } from "@/api/handlers/chat/chat-request";
 import { classifyRunErrorChunk } from "@/api/handlers/chat/stream-chat";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { chatAttemptRequestOptions } from "@/api/lib/chat/chat-request";
 import { chatToolMapToArray } from "@/api/lib/chat/chat-tool-types";
 import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
 import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
@@ -25,6 +25,7 @@ import {
   createTanStackTextAdapterFactory,
   getTanStackTextModelForTask,
 } from "@/api/lib/tanstack-ai-models";
+import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
 import {
@@ -183,7 +184,11 @@ const prepareWireRequest = ({
       chatModel: scenario === "bad-request" ? wireChatModel(provider) : model,
       provider,
     }),
-    { dataClass: "public_corpus", organizationId: null },
+    {
+      dataClass: "public_corpus",
+      organizationId: null,
+      modelTier: MANAGED_MODEL_TIER.standard,
+    },
   );
   // The chat attempt's own request options, so each cassette pins the
   // request a chat turn sends (its system prompt aside: the scenarios send
