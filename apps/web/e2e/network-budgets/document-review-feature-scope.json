@@ -107,7 +107,7 @@
       "GET /v1/workspaces/:id": 6,
       "GET /v1/workspaces/:id/activity": 7,
       "GET /v1/workspaces/:id/anonymization-terms": 6,
-      "GET /v1/workspaces/:id/document-reviews/runs": 4,
+      "GET /v1/workspaces/:id/document-reviews/runs": 7,
       "GET /v1/workspaces/:id/events": 4,
       "GET /v1/workspaces/:id/overview": 7,
       "GET /v1/workspaces/:id/workflow": 4,
