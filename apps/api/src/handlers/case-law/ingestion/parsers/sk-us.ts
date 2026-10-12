@@ -27,6 +27,7 @@
 import * as cheerio from "cheerio";
 import { type AnyNode, isTag, isText } from "domhandler";
 
+import { COURT_PARAGRAPH_NUMBERING_LIMITS } from "@stll/legal-ast/court-paragraph-numbers";
 // parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
@@ -47,15 +48,12 @@ import {
 import type { SkDocumentSection } from "@stll/legal-ast/slovak-document-roles";
 
 import {
-  COURT_PARAGRAPH_NUMBERING_LIMITS,
-  courtParagraphNumbers,
-} from "@/api/handlers/case-law/ingestion/parsers/court-paragraph-numbers";
-import {
   ANONYMIZED_CLASS,
   inlinesToPlainText,
   isExcludedHtmlTag,
   walkInlines,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 
 /**

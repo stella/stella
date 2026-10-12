@@ -20,12 +20,8 @@
 
 import { panic } from "better-result";
 
-import type { Block, ParagraphBlock } from "@stll/legal-ast/document-ast";
-
-import type { ValidationSubject } from "@/api/lib/legal-search/parsers/validate-ast";
-import { logger } from "@/api/lib/observability/logger";
-
-import { normalizeInlineLine, stripInlineLinePrefix } from "./shared-inlines";
+import type { Block, ParagraphBlock } from "./document-ast.js";
+import { normalizeInlineLine, stripInlineLinePrefix } from "./inline-line.js";
 
 /** The three ways Czech and Slovak courts print a paragraph number. */
 const COURT_PARAGRAPH_MARKER_STYLES = ["bracket", "dot", "paren"] as const;
@@ -525,34 +521,4 @@ export const extractCourtParagraphNumbers = (
       return panic("Unhandled court paragraph numbering reading");
     }
   }
-};
-
-/**
- * Log event emitted when a decision's paragraphs open with markers that do
- * not read as numbering. Reported at WARN: the text is whole and the markers
- * stay in it, but `#par=` links and the reader's gutter have no numbers for
- * this decision.
- */
-const PARAGRAPH_NUMBERING_REJECTED =
-  "case_law.ingestion.paragraph_numbering_rejected";
-
-/**
- * The blocks with the court's numbers moved into structure, reporting a
- * numbering that was present but implausible.
- */
-export const courtParagraphNumbers = (
-  blocks: readonly Block[],
-  subject: ValidationSubject,
-): Block[] => {
-  const numbering = extractCourtParagraphNumbers(blocks);
-  if (numbering.type === "rejected") {
-    logger.warn(PARAGRAPH_NUMBERING_REJECTED, {
-      parser: subject.parser,
-      caseNumber: subject.caseNumber,
-      ...(subject.url === undefined ? {} : { url: subject.url }),
-      defect: numbering.defect,
-      detail: numbering.detail,
-    });
-  }
-  return numbering.blocks;
 };

@@ -8,13 +8,13 @@
 
 import { describe, expect, test } from "bun:test";
 
-import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
-import { resolveDecisionParagraphRange } from "@stll/legal-ast/paragraph-range";
-
 import {
   COURT_PARAGRAPH_NUMBERING_DEFECTS,
   extractCourtParagraphNumbers,
-} from "@/api/handlers/case-law/ingestion/parsers/court-paragraph-numbers";
+} from "@stll/legal-ast/court-paragraph-numbers";
+import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
+import { resolveDecisionParagraphRange } from "@stll/legal-ast/paragraph-range";
+
 import {
   type EvidenceDocument,
   PROCESSED_FIELD_EVIDENCE_READERS,

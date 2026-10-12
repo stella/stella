@@ -17,11 +17,11 @@ import { describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import path from "node:path";
 
+import { extractCourtParagraphNumbers } from "@stll/legal-ast/court-paragraph-numbers";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import { listSourceRegistrations } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import baseline from "@/api/handlers/case-law/ingestion/adapters/processed-field-backlog-baseline.json";
-import { extractCourtParagraphNumbers } from "@/api/handlers/case-law/ingestion/parsers/court-paragraph-numbers";
 import {
   BACKLOG_SKIP_REASONS,
   PROCESSED_FIELD_INVENTORY,

@@ -8,6 +8,7 @@ import { assertProperty } from "@stll/property-testing";
 
 import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
 import type { ParseUsDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
+import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 import {
   embeddedTextFixtures,
@@ -21,7 +22,6 @@ import {
 } from "@/api/lib/legal-search/parsers/run-content-text.fixtures";
 import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
 
-import { courtParagraphNumbers } from "./court-paragraph-numbers";
 import { classifyUsDocumentLines, usDocumentLinesOf } from "./cz-us";
 import {
   noteTableRtf,

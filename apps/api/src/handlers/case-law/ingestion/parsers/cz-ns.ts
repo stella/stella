@@ -27,10 +27,10 @@ import type {
   TableCell,
 } from "@stll/legal-ast/document-ast";
 
+import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
-import { courtParagraphNumbers } from "./court-paragraph-numbers";
 import {
   inlinesToPlainText,
   isExcludedHtmlTag,

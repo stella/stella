@@ -220,7 +220,7 @@ export const PROCESSED_FIELD_INVENTORY = {
   [ADAPTER_KEYS.SK_COURTS]: {
     "court-paragraph-numbers": skippedField(
       PROCESSED_FIELD_SKIP_REASONS.NOT_EXTRACTED,
-      "general-court decisions can number their reasoning ('1. Okresný súd …' in a seeded decision) and the PDF parser keeps the number as text; the shared extractor sits in the ingestion handlers, which the PDF parser's library layer does not import",
+      "general-court decisions can number their reasoning ('1. Okresný súd …' in a seeded decision) and the PDF parser keeps the number as text; it is not run through the shared extractor until a recorded PDF shows its paragraphs number correctly",
       unrecordedEvidence(
         "the two general-court PDFs checked on 2026-10-12 (a district and a regional decision) had unnumbered reasoning; the seeded decision's document was unavailable",
       ),

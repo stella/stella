@@ -58,10 +58,13 @@ scalars slice.
 - **Paragraph numbers: the number moves into structure** (Hungarian
   precedent; the reader renders `number` as gutter chrome and
   `paragraph-range.ts` resolves it). One shared extractor,
-  `parsers/court-paragraph-numbers.ts`, runs as the last step of the CZ NS,
-  NSS, ÚS, regional and SK ÚS parsers (the SK general courts' PDF parser
-  lives in the library layer, which does not import the ingestion handlers;
-  it follows once the inline helpers move to a shared owner). It accepts
+  `@stll/legal-ast/court-paragraph-numbers`, runs as the last step of the CZ NS,
+  NSS, ÚS, regional and SK ÚS parsers. The extractor and the inline-line
+  helpers it needs live in `@stll/legal-ast` (`court-paragraph-numbers`,
+  `inline-line`), and the logging wrapper in
+  `apps/api/src/lib/legal-search/parsers/`, so any parser layer can use them;
+  the SK general courts' PDF parser is not switched on until a recording
+  shows its paragraphs number correctly. It accepts
   `[N]`, `N.`,
   `N)` only when the decision's body paragraphs read as one numbering
   (counting from 1, nested lists restarting beside it, density and lead-in
@@ -123,7 +126,7 @@ second tool; it is shaped to be picked up by that generator:
 
 - The paragraph-number step is a pure function over classified blocks,
   `extractCourtParagraphNumbers(blocks)` in
-  `parsers/court-paragraph-numbers.ts`, run as the last step of every parser
+  `@stll/legal-ast/court-paragraph-numbers`, run as the last step of every parser
   that provides numbers. A stored AST is exactly such blocks, so the generator
   re-normalizes a raw-less row by running it over `document_ast.blocks` for
   sources whose inventory disposition is `provided` (the same function, so the

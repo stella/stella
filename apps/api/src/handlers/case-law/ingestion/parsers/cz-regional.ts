@@ -24,12 +24,11 @@ import {
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 
+import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import {
   buildValidationHtml,
   validateAndLog,
 } from "@/api/lib/legal-search/parsers/validate-ast";
-
-import { courtParagraphNumbers } from "./court-paragraph-numbers";
 
 // ── Types for the finaldoc JSON ────────────────────────────
 

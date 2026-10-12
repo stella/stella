@@ -83,6 +83,14 @@
       "types": "./src/paragraph-range.ts",
       "import": "./src/paragraph-range.ts"
     },
+    "./court-paragraph-numbers": {
+      "types": "./src/court-paragraph-numbers.ts",
+      "import": "./src/court-paragraph-numbers.ts"
+    },
+    "./inline-line": {
+      "types": "./src/inline-line.ts",
+      "import": "./src/inline-line.ts"
+    },
     "./inline": {
       "types": "./src/inline.ts",
       "import": "./src/inline.ts"

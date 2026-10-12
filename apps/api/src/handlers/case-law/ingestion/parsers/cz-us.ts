@@ -58,9 +58,14 @@ import {
 } from "@stll/legal-ast/czech-document-roles";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
+import {
+  normalizeInlineLine,
+  stripInlineLinePrefix,
+} from "@stll/legal-ast/inline-line";
 
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import {
   createParagraphLineReader,
   type BodyDocumentLine,
@@ -75,13 +80,7 @@ import {
 import { RTF_SOURCE_OPTIONS } from "@/api/lib/legal-search/rtf-source-registry";
 import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
 
-import { courtParagraphNumbers } from "./court-paragraph-numbers";
-import {
-  visibleHtmlText,
-  stripFurniturePrefix,
-  normalizeInlineLine,
-  stripInlineLinePrefix,
-} from "./shared-inlines";
+import { visibleHtmlText, stripFurniturePrefix } from "./shared-inlines";
 
 // ── Public API ─────────────────────────────────────────────
 

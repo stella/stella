@@ -13,10 +13,10 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import type { Block, ParagraphBlock } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
-import { extractCourtParagraphNumbers } from "@/api/handlers/case-law/ingestion/parsers/court-paragraph-numbers";
+import { extractCourtParagraphNumbers } from "./court-paragraph-numbers.js";
+import type { Block, ParagraphBlock } from "./document-ast.js";
 
 const MARKERS = {
   bracket: (number: number) => `[${String(number)}] `,
