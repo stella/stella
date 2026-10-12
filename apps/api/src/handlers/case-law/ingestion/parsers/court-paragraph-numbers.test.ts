@@ -328,6 +328,42 @@ describe("the hard invariants of a numbering", () => {
     ).toEqual([1, 2, null, null, null, 3]);
   });
 
+  test("consecutive lists that could own the court's next number reject the decision", () => {
+    // Court 1, 2; list 1-3; list 1-2; court 3, 4, 5; list 1-2; court 6. The
+    // first list's 3 could be the court's 3 with the second list following
+    // it; nothing settles it, so nothing is stored.
+    expect(
+      numbersOfMarked([1, 2, 1, 2, 3, 1, 2, 3, 4, 5, 1, 2, 6]).type,
+    ).not.toBe("numbered");
+  });
+
+  test("a short decision with many lowercase points and an instruction keeps its numbering", () => {
+    const texts = [
+      "1. Soud zjistil, že žalobce uplatnil tyto nároky:",
+      "a) náhradu škody,",
+      "b) ušlý zisk,",
+      "c) úroky z prodlení.",
+      "2. Soud vyšel z těchto ustanovení:",
+      "1. osoby, které vyvíjely činnost,",
+      "2. osoby, které ji podporovaly.",
+      "3. Žaloba je důvodná.",
+      "Poučení: Proti tomuto rozsudku lze podat odvolání.",
+      "Odvolání se podává u soudu prvního stupně.",
+      "Lhůta k odvolání činí 15 dnů.",
+      "Nesplní-li povinný dobrovolně, co mu ukládá rozhodnutí, lze podat návrh na výkon.",
+    ];
+    const numbering = extractCourtParagraphNumbers(
+      texts.map((text, index) => paragraph(index, text)),
+    );
+    expect(
+      numbering.blocks.flatMap((block) =>
+        block.type === "paragraph" && block.number !== undefined
+          ? [block.number]
+          : [],
+      ),
+    ).toEqual([1, 2, 3]);
+  });
+
   test("a short list opening an unnumbered reasoning stays text", () => {
     const texts = [
       "1. Žalobce podal žalobu.",

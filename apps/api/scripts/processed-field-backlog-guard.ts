@@ -53,6 +53,65 @@ export const backlogPairs = (baseline: unknown, where: string): string[] => {
   ].toSorted();
 };
 
+const AT_RIS = [
+  "at-asylgh",
+  "at-bks",
+  "at-bvwg",
+  "at-courts",
+  "at-lvwg",
+  "at-ubas",
+  "at-umse",
+  "at-uvs",
+  "at-verg",
+  "at-vfgh",
+  "at-vwgh",
+] as const;
+
+const paragraphNumbers = (sources: readonly string[]) =>
+  Object.fromEntries(
+    sources.map((source) => [source, ["court-paragraph-numbers"]]),
+  );
+
+/**
+ * The backlog the baseline was introduced with: what a base revision that
+ * predates the file is compared against, so the change that introduces the
+ * file cannot add a debt the review did not see written here. Fixed; never
+ * edited after the file exists, because from then on the base revision's
+ * file is the reference.
+ */
+export const BOOTSTRAP_BACKLOG = {
+  skipped: {
+    "not-extracted": paragraphNumbers(["pl-courts", "pl-nsa"]),
+    unassessed: paragraphNumbers([
+      ...AT_RIS,
+      "pl-kio",
+      "pl-kis",
+      "pl-ncourt",
+      "pl-sn",
+      "pl-uodo",
+      "pl-uokik",
+      "sk-courts",
+      "us-courtlistener",
+    ]),
+  },
+  unrecorded: paragraphNumbers([
+    ...AT_RIS,
+    "pl-courts",
+    "pl-kio",
+    "pl-kis",
+    "pl-ncourt",
+    "pl-sn",
+    "pl-uodo",
+    "pl-uokik",
+    "sk-courts",
+    "us-courtlistener",
+  ]),
+} as const;
+
+/** The reference pairs: the base revision's file, or the bootstrap list. */
+export const referencePairs = (base: readonly string[] | undefined) =>
+  base ?? backlogPairs(BOOTSTRAP_BACKLOG, "bootstrap backlog");
+
 /** Pairs the current file lists that the base revision's did not. */
 export const grownPairs = ({
   current,
@@ -95,13 +154,13 @@ const baseArgument = (): string => {
 };
 
 const main = (): number => {
-  const base = readBasePairs(baseArgument());
-  if (base === undefined) {
+  const basePairs = readBasePairs(baseArgument());
+  if (basePairs === undefined) {
     console.log(
-      "processed-field-backlog-guard: the base has no backlog file; nothing to compare.",
+      "processed-field-backlog-guard: the base has no backlog file; comparing with the bootstrap backlog.",
     );
-    return 0;
   }
+  const base = referencePairs(basePairs);
   const current = backlogPairs(
     JSON.parse(
       readFileSync(path.join(REPO_ROOT, PROCESSED_FIELD_BACKLOG_FILE), "utf-8"),

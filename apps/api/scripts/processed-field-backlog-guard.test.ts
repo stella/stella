@@ -6,6 +6,7 @@ import {
   backlogPairs,
   grownPairs,
   PROCESSED_FIELD_BACKLOG_FILE,
+  referencePairs,
 } from "./processed-field-backlog-guard";
 
 const baseline = {
@@ -81,6 +82,36 @@ describe("processed-field backlog guard", () => {
     expect(
       backlogPairs(committed, PROCESSED_FIELD_BACKLOG_FILE).length,
     ).toBeGreaterThan(0);
+  });
+
+  test("without a base file, the bootstrap backlog is the reference", () => {
+    const committed: unknown = JSON.parse(
+      readFileSync(
+        path.join(
+          import.meta.dir,
+          "..",
+          "..",
+          "..",
+          PROCESSED_FIELD_BACKLOG_FILE,
+        ),
+        "utf-8",
+      ),
+    );
+    const current = backlogPairs(committed, PROCESSED_FIELD_BACKLOG_FILE);
+    expect(grownPairs({ current, base: referencePairs(undefined) })).toEqual(
+      [],
+    );
+    expect(
+      grownPairs({
+        current: [
+          ...current,
+          "skipped:unassessed|eu-ecj|court-paragraph-numbers",
+        ],
+        base: referencePairs(undefined),
+      }),
+    ).toEqual(["skipped:unassessed|eu-ecj|court-paragraph-numbers"]);
+    // A base file, once there, is the reference instead.
+    expect(referencePairs([])).toEqual([]);
   });
 
   test("a malformed list fails with its name", () => {

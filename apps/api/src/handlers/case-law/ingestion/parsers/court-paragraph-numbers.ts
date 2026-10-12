@@ -51,6 +51,16 @@ const MARKER_PATTERNS = {
   paren: /^(?<number>\d{1,4})\)[ \t ]+(?![\d\p{Ll}])/u,
 } as const satisfies Record<CourtParagraphMarkerStyle, RegExp>;
 
+/**
+ * Any item marker, whatever follows it: a court marker, a list's lowercase
+ * point ("2. osoby …"), a lettered point ("a) …"). An item is not text the
+ * numbering leaves out.
+ */
+const LIST_ITEM_RE = /^(?:\[\d{1,4}\]|\d{1,4}[.)]|\p{L}\)|[-–•])[ \t ]/u;
+
+/** The instruction on remedies, which closes a decision's reasoning. */
+const INSTRUCTION_RE = /^\s*P\s*o\s*u\s*[čc]\s*e\s*n\s*(?:[íi]|i\s*e)\s*:/iu;
+
 /** Preference when two styles explain the same number of paragraphs. */
 const STYLE_PRIORITY: Readonly<Record<CourtParagraphMarkerStyle, number>> = {
   bracket: 0,
@@ -185,15 +195,27 @@ const bodyOf = (blocks: readonly Block[]): Body => {
   const opinionStarts = new Set<number>();
   let headingSinceBody = false;
   let inDissent = false;
+  let inInstruction = false;
   for (const [index, block] of blocks.entries()) {
     if (block.type === "heading") {
       headingSinceBody = true;
+      inInstruction ||= INSTRUCTION_RE.test(block.plainText);
       continue;
     }
     if (!isBodyParagraph(block)) {
       continue;
     }
     const dissent = block.role === "dissent";
+    // The instruction on remedies ("Poučení: …") and what follows it up to a
+    // separate opinion is not reasoning: never numbered, and not text the
+    // numbering leaves out.
+    if (INSTRUCTION_RE.test(block.plainText)) {
+      inInstruction = true;
+    }
+    if (inInstruction && !dissent) {
+      continue;
+    }
+    inInstruction = false;
     if (dissent && (!inDissent || headingSinceBody)) {
       opinionStarts.add(paragraphs.length);
     }
@@ -208,9 +230,11 @@ const bodyOf = (blocks: readonly Block[]): Body => {
  * Whose a number is when it both continues the court's run and the open
  * nested list. Past the list's own continuation (value + 1, value + 2, …):
  * the court's paragraph with this very number follows, so this one is the
- * list's; or something that continues neither breaks the list off, so this
- * one is the court's. Reaching the end with only the continuation seen,
- * both readings hold, and neither may be stored.
+ * list's; or a number that continues neither, and is not a new list's 1,
+ * breaks the list off, so this one is the court's. A new list's 1 proves
+ * nothing — it may follow the list or the court's paragraph — and reaching
+ * the end with only the continuation seen leaves both readings standing:
+ * neither may be stored.
  */
 const readContinuation = (
   candidates: readonly Candidate[],
@@ -223,7 +247,7 @@ const readContinuation = (
       return "list";
     }
     if (later.number !== listNext) {
-      return "court";
+      return later.number === 1 ? "ambiguous" : "court";
     }
     listNext += 1;
   }
@@ -348,10 +372,7 @@ const candidatesOf = (
 
 /** Whether a body paragraph opens with any marker shape at all. */
 const opensWithMarker = (block: Block | undefined): boolean =>
-  block?.type === "paragraph" &&
-  COURT_PARAGRAPH_MARKER_STYLES.some(
-    (style) => markerNumber(style, block.plainText.trimStart()) !== null,
-  );
+  block?.type === "paragraph" && LIST_ITEM_RE.test(block.plainText.trimStart());
 
 type Reading =
   | {

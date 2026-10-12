@@ -231,13 +231,13 @@ const numberedWithLists = fc
       inlines: [{ type: "text", text }],
       plainText: text,
     }));
-    // A list after paragraph i that counts exactly to i, with no list after
-    // it, reads two ways to the end: the court's i+1, i+2, … or the list's.
-    // Nothing tells them apart, so the decision must be rejected.
-    const lastList = lists.findLastIndex(
-      (length, index) => length > 0 && index + 1 < lists.length,
+    // A list after paragraph i that counts exactly to i reads two ways: the
+    // court's i+1, i+2, … carry on, or they are the list's. Nothing after it
+    // tells them apart (a later list only restarts at 1), so the decision
+    // must be rejected.
+    const ambiguous = lists.some(
+      (length, index) => index + 1 < lists.length && length === index + 1,
     );
-    const ambiguous = lastList !== -1 && lists[lastList] === lastList + 1;
     return { blocks, courts: layout.map(({ court }) => court), ambiguous };
   });
 
@@ -254,6 +254,66 @@ test("lists in the court's own marker style never take the court's numbers", () 
           block.type === "paragraph" ? (block.number ?? null) : null,
         ),
       ).toEqual(ambiguous ? courts.map(() => null) : courts);
+      expect(invariantViolations(blocks, numbering.blocks)).toEqual([]);
+    }),
+  );
+});
+
+/**
+ * The court's run with any number of same-style lists after each paragraph,
+ * back to back. Some layouts are genuinely ambiguous; none may be read
+ * wrongly.
+ */
+const numberedWithConsecutiveLists = fc
+  .record({
+    style: fc.constantFrom("bracket", "dot", "paren"),
+    lists: fc.array(
+      fc.array(fc.integer({ min: 1, max: 5 }), { maxLength: 3 }),
+      { minLength: 2, maxLength: 12 },
+    ),
+  })
+  .map(({ style, lists }) => {
+    const layout: { court: number | null; text: string }[] = [];
+    for (const [index, after] of lists.entries()) {
+      const court = index + 1;
+      layout.push({
+        court,
+        text: `${MARKERS[style](court)}Soud uvážil bod ${String(court)}.`,
+      });
+      if (court === lists.length) {
+        continue;
+      }
+      for (const length of after) {
+        for (let item = 1; item <= length; item += 1) {
+          layout.push({
+            court: null,
+            text: `${MARKERS[style](item)}Položka ${String(item)}.`,
+          });
+        }
+      }
+    }
+    const blocks: Block[] = layout.map(({ text }, index) => ({
+      id: `b${String(index)}`,
+      anchorId: `p-${String(index)}`,
+      type: "paragraph",
+      inlines: [{ type: "text", text }],
+      plainText: text,
+    }));
+    return { blocks, courts: layout.map(({ court }) => court) };
+  });
+
+test("no layout of same-style lists is read into a wrong court number", () => {
+  assertProperty(
+    "no layout of same-style lists is read into a wrong court number",
+    fc.property(numberedWithConsecutiveLists, ({ blocks, courts }) => {
+      const numbering = extractCourtParagraphNumbers(blocks);
+      const stored = numbering.blocks.map((block) =>
+        block.type === "paragraph" ? (block.number ?? null) : null,
+      );
+      // Either the court's own numbers exactly, or nothing at all.
+      expect(stored).toEqual(
+        numbering.type === "numbered" ? courts : courts.map(() => null),
+      );
       expect(invariantViolations(blocks, numbering.blocks)).toEqual([]);
     }),
   );
