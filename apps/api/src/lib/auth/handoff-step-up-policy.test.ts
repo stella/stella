@@ -189,51 +189,9 @@ describe("handoff sessions require recent account authentication", () => {
     }
   });
 
-  test("passkey authentication remains available while management requires sign-in", () => {
-    for (const path of [
-      "/passkey/generate-authenticate-options",
-      "/passkey/verify-authentication",
-      "/two-factor/send-otp",
-    ]) {
-      expect(requiresHandoffStepUpForAuthPath(path)).toBe(false);
-      expect(requiresHandoffStepUpForAuthPath(`/api/auth${path}`)).toBe(false);
-    }
-    for (const path of [
-      "/passkey/generate-register-options",
-      "/passkey/verify-registration",
-      "/passkey/list-user-passkeys",
-      "/passkey/update-passkey",
-      "/passkey/delete-passkey",
-      "/passkey/verify-authentication/another-operation",
-      "/two-factor/verify-another-operation",
-    ]) {
-      expect(requiresHandoffStepUpForAuthPath(path)).toBe(true);
-    }
-  });
-
-  test("new endpoints in sensitive authentication families require step-up", () => {
-    for (const family of [
-      "organization",
-      "two-factor",
-      "passkey",
-      "api-key",
-      "oauth2",
-    ]) {
-      expect(
-        requiresHandoffStepUpForAuthPath(`/${family}/future-operation`),
-      ).toBe(true);
-    }
-    for (const path of [
-      "/change-password",
-      "/set-password",
-      "/change-email",
-      "/delete-user",
-      "/link-social",
-      "/unlink-account",
-      "/oauth2/authorize",
-      "/oauth2/consent",
-    ]) {
-      expect(requiresHandoffStepUpForAuthPath(path)).toBe(true);
-    }
+  test("unclassified auth routes require an explicit decision", () => {
+    expect(() =>
+      requiresHandoffStepUpForAuthPath("/passkey/verify-authentication"),
+    ).toThrow("Auth endpoint has no handoff disposition");
   });
 });

@@ -1,17 +1,17 @@
+import { panic } from "better-result";
 import { status } from "elysia";
 
 import { MCP_HANDOFF_STEP_UP_REQUIRED } from "@stll/api-contract/mcp-web-handoff";
 
 import { ACCOUNT_ACCESS } from "@/api/lib/auth/account-access";
 import type { AccountAccess } from "@/api/lib/auth/account-access";
+import { HANDOFF_AUTH_ENDPOINT_POLICY } from "@/api/lib/auth/handoff-auth-endpoint-policy";
+import { matchesAuthPathTemplate } from "@/api/lib/auth/review-account-token-subjects";
 
 export const HANDOFF_ACCESS_DETAIL = {
   accountAccess: "__stellaHandoffAccountAccess",
   permissions: "__stellaHandoffPermissions",
 } as const;
-
-const isPathFamily = (path: string, family: string) =>
-  path === family || path.startsWith(`${family}/`);
 
 const normalizePath = (path: string) =>
   path
@@ -70,56 +70,31 @@ export const isHandoffStepUpGuard = (
 ): value is HandoffStepUpGuard =>
   typeof value === "function" && registeredGuards.has(value);
 
+const authDispositionByPath = new Map(
+  Object.entries(HANDOFF_AUTH_ENDPOINT_POLICY),
+);
+const parameterizedAuthDispositions = Object.entries(
+  HANDOFF_AUTH_ENDPOINT_POLICY,
+).filter(([path]) => path.includes(":"));
+
 export const requiresHandoffStepUpForAuthPath = (path: string): boolean => {
   const normalized = normalizePath(path).replace(/^\/auth(?=\/|$)/u, "");
-  if (
-    [
-      "/passkey/generate-authenticate-options",
-      "/passkey/verify-authentication",
-      "/two-factor/send-otp",
-      "/two-factor/verify-totp",
-      "/two-factor/verify-otp",
-      "/two-factor/verify-backup-code",
-      "/oauth2/token",
-      "/organization/list",
-      "/organization/get-full-organization",
-      "/organization/get-active-member",
-      "/organization/get-active-member-role",
-      "/organization/list-members",
-      "/organization/list-user-organizations",
-      "/organization/list-invitations",
-      "/organization/get-invitation",
-    ].includes(normalized)
-  ) {
-    return false;
+  const disposition =
+    authDispositionByPath.get(normalized) ??
+    parameterizedAuthDispositions.find(([template]) =>
+      matchesAuthPathTemplate(template, normalized),
+    )?.[1];
+  if (disposition === undefined) {
+    return panic(`Auth endpoint has no handoff disposition: ${normalized}`);
   }
-  if (
-    [
-      "/organization",
-      "/two-factor",
-      "/passkey",
-      "/api-key",
-      "/oauth2",
-      "/admin/oauth2",
-      "/sso",
-      "/scim",
-    ].some((family) => isPathFamily(normalized, family))
-  ) {
-    return true;
+  switch (disposition) {
+    case "refused":
+      return true;
+    case "step-up-method":
+    case "ordinary":
+      return false;
+    default:
+      disposition satisfies never;
+      return panic("Unhandled auth endpoint disposition");
   }
-  return [
-    "/change-password",
-    "/set-password",
-    "/change-email",
-    "/delete-user",
-    "/update-user",
-    "/link-social",
-    "/unlink-account",
-    "/revoke-session-by-id",
-    "/email-otp/change-email",
-    "/email-otp/request-email-change",
-    "/revoke-session",
-    "/revoke-sessions",
-    "/revoke-other-sessions",
-  ].some((family) => isPathFamily(normalized, family));
 };

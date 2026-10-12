@@ -1,4 +1,5 @@
-import { getEndpoints } from "better-auth/api";
+import type { BetterAuthPlugin } from "better-auth";
+import { createAuthEndpoint, getEndpoints } from "better-auth/api";
 import { panic } from "better-result";
 import {
   afterAll,
@@ -15,6 +16,7 @@ import { agentAuthConfirmRoute } from "@/api/handlers/agent-auth/routes";
 import { apiKeysRoute } from "@/api/handlers/api-keys/routes";
 import { meRoute } from "@/api/handlers/me/routes";
 import { getAuth } from "@/api/lib/auth";
+import { HANDOFF_AUTH_ENDPOINT_POLICY } from "@/api/lib/auth/handoff-auth-endpoint-policy";
 import { requiresHandoffStepUpForAuthPath } from "@/api/lib/auth/handoff-step-up-policy";
 import {
   createHumanSession,
@@ -47,6 +49,20 @@ const expectStepUp = async (response: Response) => {
   expect(response.status, await response.clone().text()).toBe(403);
   expect(await response.json()).toMatchObject({ code: "step_up_required" });
 };
+
+// The SDK types pathless server helpers as endpoints, so inspect their runtime path.
+const mountedEndpoints = (
+  endpoints: Readonly<Record<string, { path: unknown }>>,
+) =>
+  Object.entries(endpoints).flatMap(([name, { path }]) => {
+    if (path === undefined) {
+      return [];
+    }
+    if (typeof path !== "string") {
+      return panic("Auth endpoint has an invalid HTTP path");
+    }
+    return [{ name, path }];
+  });
 
 describe("handoff sessions enforce recent authentication at real entry points", () => {
   test("session and application macros plus Better Auth refuse account changes until reauthentication", async () => {
@@ -123,6 +139,17 @@ describe("handoff sessions enforce recent authentication at real entry points", 
         }),
       ),
     );
+    for (const path of ["/get-access-token", "/refresh-token"]) {
+      await expectStepUp(
+        await getAuth().handler(
+          new Request(`http://localhost:3000/api/auth${path}`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ accountId: "fixture-provider-account" }),
+          }),
+        ),
+      );
+    }
     expect(
       await db
         .select()
@@ -149,69 +176,58 @@ describe("handoff sessions enforce recent authentication at real entry points", 
   test("registered authentication methods remain available beside account management", async () => {
     const auth = getAuth();
     const { api: registered } = getEndpoints(await auth.$context, auth.options);
-    const authenticationEndpoints = [
-      registered.signInEmail,
-      registered.signInSocial,
-      registered.callbackOAuth,
-      registered.sendVerificationOTP,
-      registered.checkVerificationOTP,
-      registered.signInEmailOTP,
-      registered.sendTwoFactorOTP,
-      registered.verifyTOTP,
-      registered.verifyTwoFactorOTP,
-      registered.verifyBackupCode,
-    ];
-    const allowed = new Set(authenticationEndpoints.map(({ path }) => path));
-    expect(allowed.size).toBe(authenticationEndpoints.length);
-    for (const path of allowed) {
-      expect(requiresHandoffStepUpForAuthPath(path), path).toBe(false);
-    }
+    const mounted = mountedEndpoints(registered);
+    const census = (paths: readonly string[]) => {
+      const mountedPaths = new Set(paths);
+      const policyPaths = new Set(Object.keys(HANDOFF_AUTH_ENDPOINT_POLICY));
+      return {
+        missingFromPolicy: [...mountedPaths].filter(
+          (path) => !policyPaths.has(path),
+        ),
+        absentFromAuth: [...policyPaths].filter(
+          (path) => !mountedPaths.has(path),
+        ),
+      };
+    };
 
-    const sensitivePluginIds = new Set([
-      "organization",
-      "two-factor",
-      "passkey",
-      "api-key",
-      "oauth-provider",
-      "sso",
-      "scim",
-      "email-otp",
-    ]);
-    const endpoints = getAuth().options.plugins.flatMap((plugin) =>
-      sensitivePluginIds.has(plugin.id) && "endpoints" in plugin
-        ? Object.entries(plugin.endpoints).map(([name, endpoint]) => ({
-            name,
-            plugin: plugin.id,
-            path: endpoint.path,
-          }))
-        : [],
-    );
-    expect(endpoints.length).toBeGreaterThan(20);
-    for (const { plugin, path, name } of endpoints) {
-      // Server-only API helpers expose no browser route to classify.
-      if (typeof path !== "string") {
-        expect(path, `${plugin}: ${name}`).toBeUndefined();
-        continue;
-      }
-      if (
-        plugin === "email-otp" &&
-        !path.includes("change-email") &&
-        !path.includes("request-email-change")
-      ) {
-        continue;
-      }
-      if (
-        path.startsWith("/.well-known/") ||
-        allowed.has(path) ||
-        path === "/oauth2/token" ||
-        path.startsWith("/organization/list") ||
-        path.startsWith("/organization/get-")
-      ) {
-        continue;
-      }
-      expect(requiresHandoffStepUpForAuthPath(path), `${plugin}: ${path}`).toBe(
-        true,
+    const mountedPaths = mounted.map(({ path }) => path);
+    expect(census(mountedPaths)).toEqual({
+      missingFromPolicy: [],
+      absentFromAuth: [],
+    });
+    const policyByPath = new Map(Object.entries(HANDOFF_AUTH_ENDPOINT_POLICY));
+    for (const { name, path } of mounted) {
+      const disposition = policyByPath.get(path);
+      expect(disposition, `${name}: ${path}`).toBeDefined();
+      expect(requiresHandoffStepUpForAuthPath(path), `${name}: ${path}`).toBe(
+        disposition === "refused",
       );
     }
+
+    const futurePlugin = {
+      id: "future-auth-method-fixture",
+      endpoints: {
+        futureAuthenticationMethod: createAuthEndpoint(
+          "/future/authentication-method",
+          { method: "POST" },
+          async (ctx) => ctx.json({}),
+        ),
+      },
+    } satisfies BetterAuthPlugin;
+    const futureOptions = {
+      ...auth.options,
+      plugins: [...auth.options.plugins, futurePlugin],
+    };
+    const { api: futureRegistered } = getEndpoints(
+      await auth.$context,
+      futureOptions,
+    );
+    const futurePaths = mountedEndpoints(futureRegistered).map(
+      ({ path }) => path,
+    );
+    expect(census(futurePaths)).toEqual({
+      missingFromPolicy: ["/future/authentication-method"],
+      absentFromAuth: [],
+    });
   });
 });
