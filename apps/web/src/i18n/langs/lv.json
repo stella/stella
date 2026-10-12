@@ -804,7 +804,7 @@
       "courtCount": "{count, plural, zero {# tiesu} one {# tiesa} other {# tiesas}}",
       "newLast24Hours": "{count} pēdējās 24 h",
       "newLast7Days": "Jaunie pēdējās 7 dienās",
-      "unlistedCourts": "{count, plural, zero {Tiesas ārpus # lielākajām} one {Tiesas ārpus lielākās} other {Tiesas ārpus # lielākajām}}"
+      "otherCourts": "Citas tiesas"
     },
     "courtTiers": {
       "constitutional": "Konstitucionālās tiesas",
@@ -820,6 +820,7 @@
       "decisionYears": "Nolēmumu gadi",
       "description": "Cik daudz tiesu prakses ir korpusā pa valstīm un tiesām un cik aktuāls ir katrs avots.",
       "exceedsReportedTotal": "Satur vairāk nekā publicētāja pēdējais norādītais kopskaits {date}",
+      "gapStatusUnknown": "Iztrūkumu statuss nav zināms",
       "generatedAt": "Dati uz {date}",
       "globeLabel": "Valstis, kuru judikatūru satur korpuss, uz globusa",
       "healthCurrent": "Aktuāls",
@@ -828,9 +829,12 @@
       "healthStalled": "Apstājies",
       "healthUnknown": "Nekad nav palaists",
       "inPreparation": "Sagatavošanā",
+      "knownGaps": "Zināmie iztrūkumi",
       "lastSync": "Pēdējā sinhronizācija",
+      "noGapsRecorded": "Iztrūkumi nav reģistrēti",
       "notCountedYet": "Vēl nav saskaitīts",
       "notMeasuredYet": "Vēl nav izmērīts",
+      "pendingTexts": "Neiegūtie teksti",
       "reportedByListing": "Saskaitīts pēc publicētāja saraksta",
       "reportedByOperator": "Ievadīts manuāli",
       "reportedByPublisher": "Paša publicētāja skaits",

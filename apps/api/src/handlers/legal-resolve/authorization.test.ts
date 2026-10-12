@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import Elysia from "elysia";
 
+import type { authenticateLegalResolveToken } from "@/api/handlers/legal-resolve/authentication";
 import {
   authorizeLegalResolveRequest,
   authorizeOncePerRequest,
@@ -39,7 +40,7 @@ const limit = (scope: string): RateLimitOptions => ({
   max: 1,
 });
 
-const routeApp = (authenticate: () => Promise<Result<typeof session, never>>) =>
+const routeApp = (authenticate: typeof authenticateLegalResolveToken) =>
   new Elysia().use(
     createLegalResolveRoute({
       authenticate,
@@ -58,8 +59,8 @@ test("one request is authorized once, whoever asks first", async () => {
   const authorize = authorizeOncePerRequest(async (request) => {
     seen.push(request);
     return await Promise.resolve({
-      status: 403 as const,
-      body: { error: "missing_scope" as const },
+      status: 401 as const,
+      body: { error: "unauthorized" as const },
     });
   });
   const first = new Request("https://api.test/v1/law/cz/citations/resolve");
@@ -69,8 +70,8 @@ test("one request is authorized once, whoever asks first", async () => {
   expect(seen).toEqual([]);
   await Promise.all([authorize(first), authorize(first)]);
   expect(await authorize.getExistingAuthorization(first)).toEqual({
-    status: 403,
-    body: { error: "missing_scope" },
+    status: 401,
+    body: { error: "unauthorized" },
   });
   expect(await authorize.getExistingAuthorization(second)).toBeUndefined();
   await authorize(first);
@@ -162,7 +163,7 @@ test("legal resolve rejects a token for another audience after one verification"
     },
   );
 
-  expect(result).toEqual({ status: 403, body: { error: "missing_scope" } });
+  expect(result).toEqual({ status: 401, body: { error: "unauthorized" } });
   expect(authenticationCount).toBe(1);
 });
 
@@ -210,7 +211,7 @@ test("legal resolve reports verifier outages as a captured 503", async () => {
   expect(captured.at(0)).toBeInstanceOf(McpTokenVerificationError);
 });
 
-test("legal resolve reports token rejection as an uncaptured 403", async () => {
+test("legal resolve reports token rejection as an uncaptured 401", async () => {
   const captured: unknown[] = [];
   const result = await authorizeLegalResolveRequest(
     authorizationRequest(tokenForAudience(getMcpResourceUrl("law"))),
@@ -223,7 +224,7 @@ test("legal resolve reports token rejection as an uncaptured 403", async () => {
     },
   );
 
-  expect(result).toEqual({ status: 403, body: { error: "missing_scope" } });
+  expect(result).toEqual({ status: 401, body: { error: "unauthorized" } });
   expect(captured).toEqual([]);
 });
 
@@ -320,3 +321,27 @@ test("legal resolve captures live user-session outages and retains the audit pri
   });
   expect(captured).toHaveLength(1);
 });
+
+test.each([undefined, "Bearer rejected"])(
+  "unauthenticated routes return a token challenge for %s",
+  async (authorization) => {
+    const app = routeApp(async () =>
+      Result.err(new McpAuthenticationError({ message: "Rejected" })),
+    );
+    const response = await app.handle(
+      new Request(
+        "http://localhost/case/CZE/decisions/resolve?identifier=decision",
+        { headers: authorization === undefined ? {} : { authorization } },
+      ),
+    );
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: "unauthorized" });
+    const challenge = response.headers.get("WWW-Authenticate");
+    expect(challenge).toContain("Bearer ");
+    if (authorization === undefined) {
+      expect(challenge).not.toContain("invalid_token");
+    } else {
+      expect(challenge).toContain('error="invalid_token"');
+    }
+  },
+);
