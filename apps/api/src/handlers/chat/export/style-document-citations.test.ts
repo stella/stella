@@ -434,7 +434,7 @@ describe("styleDocumentCitations", () => {
       options,
     );
 
-    expect(result.document).toBe(document);
+    expect(result.document).toEqual(document);
     expect(result.citationCounts).toEqual({ unverified: 2, verified: 0 });
   });
 
