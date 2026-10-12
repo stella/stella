@@ -225,6 +225,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `invoices.delete` | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices delete` |
 | `invoices.entries.add` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices entries-add` |
 | `invoices.entries.remove` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices entries-remove` |
+| `invoices.export` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices export` |
 | `invoices.get` | read | stella:read | FEATURE_TIME_BILLING | covered by `list_invoices` |
 | `invoices.lines.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices lines-create` |
 | `invoices.lines.delete` | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices lines-delete` |

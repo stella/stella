@@ -535,6 +535,18 @@
       "createInvoice": "Rechnung erstellen",
       "dueDate": "Fälligkeitsdatum",
       "editInvoice": "Rechnung bearbeiten",
+      "export": {
+        "accounting": "Buchhaltungsimport",
+        "eBilling": "E-Billing",
+        "eso9": "ESO9-Importtabelle (XLSX)",
+        "exporting": "Export wird vorbereitet…",
+        "failed": "Export fehlgeschlagen",
+        "isdoc": "ISDOC-E-Rechnung (ABRA Gen u. a.)",
+        "menu": "Exportieren",
+        "spreadsheets": "Tabellen",
+        "xlsx": "Rechnungen (XLSX)",
+        "xlsxLines": "Rechnungspositionen (XLSX)"
+      },
       "finalize": "Abschließen",
       "invoiceDate": "Rechnungsdatum",
       "invoiceDetail": "Rechnungsdetails",

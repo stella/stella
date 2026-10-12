@@ -535,6 +535,18 @@
       "createInvoice": "Sukurti sąskaitą",
       "dueDate": "Mokėjimo terminas",
       "editInvoice": "Redaguoti sąskaitą",
+      "export": {
+        "accounting": "Importas į apskaitą",
+        "eBilling": "El. sąskaitos",
+        "eso9": "ESO9 importo lentelė (XLSX)",
+        "exporting": "Ruošiamas eksportas…",
+        "failed": "Eksportuoti nepavyko",
+        "isdoc": "ISDOC el. sąskaita (ABRA Gen ir kt.)",
+        "menu": "Eksportuoti",
+        "spreadsheets": "Skaičiuoklės",
+        "xlsx": "Sąskaitos (XLSX)",
+        "xlsxLines": "Sąskaitų eilutės (XLSX)"
+      },
       "finalize": "Užbaigti",
       "invoiceDate": "Sąskaitos data",
       "invoiceDetail": "Sąskaitos detalės",
