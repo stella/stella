@@ -27,6 +27,7 @@ type GeneratedInputTreeHashOptions = {
   root: string;
   toolchain: unknown;
   generatedOutputs: "exclude" | "tracked";
+  excluded?: ReadonlySet<string>;
   createHasher: () => Sha256Hasher;
   hashFile: (contents: string | Uint8Array) => string;
   onFailure: (message: string) => never;
@@ -35,11 +36,11 @@ export const generatedInputTreeHash = ({
   root,
   toolchain,
   generatedOutputs,
+  excluded = new Set<string>(CI_GENERATED_FILES),
   createHasher,
   hashFile,
   onFailure,
 }: GeneratedInputTreeHashOptions) => {
-  const generated = new Set<string>(CI_GENERATED_FILES);
   const hash = createHasher();
   hash.update(JSON.stringify(toolchain));
   // A full tracked closure covers newly added generator inputs automatically.
@@ -57,7 +58,7 @@ export const generatedInputTreeHash = ({
       return onFailure("Generated source input inventory has no path");
     }
     const file = entry.slice(separator + 1);
-    if (generated.has(file)) {
+    if (excluded.has(file)) {
       if (generatedOutputs === "tracked") {
         // Hydration replaces working bytes. The index still identifies the
         // committed output that source consistency checks must validate.

@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { lstatSync, mkdirSync, readFileSync, readlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -60,38 +60,16 @@ type TrackedInputHashOptions = {
 export const trackedInputHash = (
   root: string,
   { excluded, context }: TrackedInputHashOptions,
-) => {
-  const hash = createSha256();
-  hash.update(JSON.stringify(context));
-  // A full tracked inventory covers new workspace inputs without another glob.
-  // Producers exclude only the canonical outputs that they regenerate.
-  for (const entry of git(root, ["ls-files", "--stage", "-z"]).split("\0")) {
-    if (entry === "") {
-      continue;
-    }
-    const separator = entry.indexOf("\t");
-    if (separator === -1) {
-      panic("Generated source input inventory has no path");
-    }
-    const file = entry.slice(separator + 1);
-    if (excluded.has(file)) {
-      continue;
-    }
-    const absolute = path.join(root, file);
-    const bytes = (() => {
-      if (entry.startsWith("160000 ")) {
-        return entry.slice(0, separator);
-      }
-      return lstatSync(absolute).isSymbolicLink()
-        ? readlinkSync(absolute)
-        : readFileSync(absolute);
-    })();
-    hash.update(
-      JSON.stringify([entry.slice(0, 6), file, generatedFileHash(bytes)]),
-    );
-  }
-  return hash.digest("hex");
-};
+) =>
+  generatedInputTreeHash({
+    root,
+    toolchain: context,
+    generatedOutputs: "exclude",
+    excluded,
+    createHasher: createSha256,
+    hashFile: generatedFileHash,
+    onFailure: panic,
+  });
 
 const resultManifestSchema = v.strictObject({
   inputHash: hashSchema,
