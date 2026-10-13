@@ -978,3 +978,92 @@ test("a failing test run keeps its exit status through tee and the tail", () => 
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("the recorded network assertion leads the digest despite surrounding output", () => {
+  const fixture = readFileSync(
+    path.join(import.meta.dir, "fixtures/ci-route-network-failure.txt"),
+    "utf-8",
+  ).split("\n");
+  for (const padding of [0, 100, 10_000]) {
+    const lines = failureLines([
+      ...Array.from(
+        { length: padding },
+        () => "[network-baseline] improvement; not a failure",
+      ),
+      ...fixture,
+      ...Array.from({ length: padding }, () => "timing notice"),
+    ]);
+    expect(lines.at(0)?.message).toContain(
+      "Request waterfall got deeper on /settings/organization/vat-rates: 4 -> 5",
+    );
+    expect(lines.length).toBeLessThanOrEqual(MAX_LINES_PER_STEP);
+    expect(lines.every(({ message }) => message.length <= MAX_LINE_WIDTH)).toBe(
+      true,
+    );
+  }
+});
+
+test("explicit error markers survive noise anywhere in the saved log", () => {
+  for (const marker of [
+    "error: assertion failed",
+    "::error file=apps/web/src/a.ts,line=9::assertion failed",
+    "##[error]assertion failed",
+  ]) {
+    for (const padding of [0, 100, 10_000]) {
+      expect(
+        failureLines([
+          marker,
+          ...Array.from({ length: padding }, () => "timing notice"),
+        ]).at(0)?.message,
+      ).toContain("assertion failed");
+      expect(
+        failureLines([
+          ...Array.from({ length: padding }, () => "timing notice"),
+          marker,
+        ]).at(0)?.message,
+      ).toContain("assertion failed");
+    }
+  }
+});
+
+test("logs without failure markers retain their closing fallback", () => {
+  expect(failureLines(["setup", "last diagnostic"])).toEqual([
+    { message: "setup" },
+    { message: "last diagnostic" },
+  ]);
+});
+
+test("annotation-only Playwright output preserves its multiline assertion", () => {
+  const fixture = readFileSync(
+    path.join(import.meta.dir, "fixtures/ci-route-network-failure.txt"),
+    "utf-8",
+  ).split("\n");
+  const annotation = fixture.filter((line) => line.includes("::error "));
+  expect(annotation).toHaveLength(1);
+  expect(failureLines(annotation).at(0)?.message).toContain(
+    "Request waterfall got deeper on /settings/organization/vat-rates: 4 -> 5",
+  );
+});
+
+test("located diagnostics do not suppress other explicit errors", () => {
+  expect(
+    failureLines([
+      "scripts/check.ts:9: error: located diagnostic",
+      "::error::assertion failed",
+    ]).map(({ message }) => message),
+  ).toEqual([
+    "scripts/check.ts:9: error: located diagnostic",
+    "assertion failed",
+  ]);
+});
+
+test("a detailed Playwright summary beats longer progress noise", () => {
+  expect(
+    failureLines([
+      "✘ 1 [route-smoke] › e2e/routes.spec.ts:1:1 › baseline",
+      ...Array.from({ length: 30 }, () => "[network-baseline] not a failure"),
+      "1) [route-smoke] › e2e/routes.spec.ts:1:1 › baseline",
+      "Error: waterfall assertion failed",
+    ]).at(0)?.message,
+  ).toContain("waterfall assertion failed");
+});

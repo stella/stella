@@ -140,6 +140,28 @@ const logLine = (raw: string): LogLine => {
     : { text, scope: "" };
 };
 
+const logLines = (rawLines: readonly string[]): LogLine[] =>
+  rawLines.flatMap((raw) => {
+    const line = logLine(raw);
+    if (!line.text.startsWith("::error")) {
+      return [line];
+    }
+    const end = line.text.indexOf("::", 2);
+    if (end === -1) {
+      return [line];
+    }
+    // Decode only command data, after its header and before line parsing.
+    const message = line.text
+      .slice(end + 2)
+      .replaceAll("%0A", "\n")
+      .replaceAll("%0D", "\r")
+      .replaceAll("%25", "%");
+    return [
+      line,
+      ...message.split("\n").map((text) => ({ text, scope: line.scope })),
+    ];
+  });
+
 // ---------------------------------------------------------------------------
 // Failure extraction
 
@@ -316,7 +338,7 @@ const cleanDetail = (lines: readonly string[]): string[] =>
 
 /** Failing bun and Playwright tests, in log order and deduplicated. */
 export const testFailures = (rawLines: readonly string[]): TestFailure[] => {
-  const lines = rawLines.map(logLine);
+  const lines = logLines(rawLines);
   const failures: TestFailure[] = [];
   // Turbo interleaves packages, so each scope keeps its own pending block.
   const pending = new Map<string, string[]>();
@@ -393,7 +415,16 @@ export const testFailures = (rawLines: readonly string[]): TestFailure[] => {
   for (const failure of failures) {
     const key = `${failure.scope}\u0000${failure.name}`;
     const known = best.get(key);
-    if (known === undefined || known.detail.length < failure.detail.length) {
+    const hasError = failure.detail.some((text) => ERROR_HEADLINE.test(text));
+    const knownHasError = known?.detail.some((text) =>
+      ERROR_HEADLINE.test(text),
+    );
+    if (
+      known === undefined ||
+      (hasError && !knownHasError) ||
+      (hasError === knownHasError &&
+        known.detail.length < failure.detail.length)
+    ) {
       best.set(key, failure);
     }
   }
@@ -416,16 +447,24 @@ const headline = (failure: TestFailure): string => {
     failure.detail.find((text) => ERROR_HEADLINE.test(text))?.trim() ??
     failure.detail.at(0)?.trim() ??
     "";
+  const index = failure.detail.findIndex((text) => text.trim() === error);
+  const continuation = failure.detail.at(index + 1)?.trim();
+  const reason =
+    error.endsWith(":") && continuation ? `${error} ${continuation}` : error;
   const added = failure.detail.find((text) => DIFF_ADDED.test(text));
-  return added === undefined ? error : `${error} | ${added.slice(1).trim()}`;
+  return added === undefined ? reason : `${reason} | ${added.slice(1).trim()}`;
 };
 
 const testFailureLine = (failure: TestFailure): FailureLine => {
   const prefix = failure.scope === "" ? "" : `${failure.scope}: `;
   const reason = headline(failure);
+  const title = `${prefix}(fail) ${failure.name}${where(failure)}`;
+  const message = `${title}${reason === "" ? "" : ` -- ${reason}`}`;
   return {
     message: truncate(
-      `${prefix}(fail) ${failure.name}${where(failure)}${reason === "" ? "" : ` -- ${reason}`}`,
+      message.length > MAX_LINE_WIDTH && reason !== ""
+        ? `${prefix}(fail) ${reason} -- ${failure.name}${where(failure)}`
+        : message,
     ),
     ...located(failure.file, failure.line?.toString()),
   };
@@ -604,14 +643,63 @@ export const failureLines = (
   rawLines: readonly string[],
   limit = MAX_LINES_PER_STEP,
 ): FailureLine[] => {
-  const lines = rawLines
-    .map(logLine)
-    .filter(({ text }) => !EXIT_MARKER.test(text));
+  const lines = logLines(rawLines).filter(
+    ({ text }) => !EXIT_MARKER.test(text),
+  );
   const extractors = [
-    () => testFailures(rawLines).map(testFailureLine),
+    () =>
+      testFailures(rawLines).flatMap((failure) => {
+        const index = failure.detail.findIndex((text) =>
+          ERROR_HEADLINE.test(text),
+        );
+        const error = failure.detail.at(index);
+        const detail =
+          index !== -1 && error?.trimEnd().endsWith(":")
+            ? failure.detail.slice(index + 2, index + MAX_LINES_PER_STEP)
+            : [];
+        return [
+          testFailureLine(failure),
+          ...detail.map((message) => ({
+            message: truncate(message),
+            ...located(failure.file, failure.line?.toString()),
+          })),
+        ];
+      }),
     () => tscLines(lines),
     () => oxlintLines(lines),
-    () => genericLines(lines),
+    () => {
+      const markers = lines.flatMap(({ text, scope }) => {
+        const trimmed = text.trimStart();
+        if (
+          !/^(?:error:|::error(?: |::)|##\[error\])/iu.test(trimmed) ||
+          isRetrySummary(trimmed)
+        ) {
+          return [];
+        }
+        const message = withoutErrorCommand(trimmed);
+        if (
+          message === "" ||
+          isStackFrame(message) ||
+          /^error: script ".*" exited with code \d+$/u.test(message)
+        ) {
+          return [];
+        }
+        const location = findLocation(trimmed);
+        return [
+          {
+            message: truncate(`${scope === "" ? "" : `${scope}: `}${message}`),
+            ...(location === undefined
+              ? {}
+              : located(location.path, location.line)),
+          },
+        ];
+      });
+      const generic = genericLines(lines);
+      if (generic.length > 0) {
+        return [...generic, ...markers];
+      }
+      return markers.length === 0 ? [] : [...markers, ...closingLines(lines)];
+    },
     () => closingLines(lines),
   ];
   for (const extract of extractors) {
