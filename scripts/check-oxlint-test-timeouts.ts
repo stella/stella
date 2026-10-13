@@ -265,8 +265,8 @@ export const customLintTestTimeoutViolations = ({
           guard: "central-test-timeout",
           file: repositoryFile,
           line,
-          changedLines,
-          now,
+          ...(changedLines === undefined ? {} : { changedLines }),
+          ...(now === undefined ? {} : { now }),
         }),
     });
     if (violation === undefined) {

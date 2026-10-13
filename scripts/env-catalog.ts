@@ -1348,6 +1348,8 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // Dated guard-rollout healing requests full scope before removing the temporary scope.
+  "STELLA_GUARD_SCOPE",
   // Manual regeneration binds the requested PR and checks available job services.
   "PR_NUMBER",
   "JOB_SERVICES",

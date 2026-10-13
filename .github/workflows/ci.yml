@@ -2621,7 +2621,11 @@ jobs:
 
       - name: Custom lint test timeout policy
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun test scripts/check-oxlint-test-timeouts.test.ts scripts/run-custom-lint-tests.test.ts scripts/guard-rollouts.test.ts
+        run: bun test scripts/check-oxlint-test-timeouts.test.ts scripts/run-custom-lint-tests.test.ts
+
+      - name: Guard rollout scope tests
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/guard-rollouts.test.ts
 
       - name: Dated waiver lifecycle guards
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}

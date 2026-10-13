@@ -18,7 +18,7 @@ import {
   RELEASE_AGE_EXCEPTION_SOURCES,
 } from "./check-stll-quarantine-excludes";
 import type { AcceptanceTerms } from "./dependency-audit-acceptance";
-import { GUARD_ROLLOUTS, type GuardRollout } from "./guard-rollouts";
+import { GUARD_ROLLOUTS, type GuardRollout } from "./guard-rollout-policy";
 import { parseLedger } from "./suppression-waivers";
 
 export const DAY_MS = 86_400_000;
@@ -225,7 +225,7 @@ export const collectWaivers = ({
     if (rollout.type !== "changed-lines") {
       continue;
     }
-    const source = "scripts/guard-rollouts.ts";
+    const source = "scripts/guard-rollout-policy.ts";
     entries.push({
       source,
       line: sourceLine(read(source), rollout.id),
@@ -484,7 +484,7 @@ export const loadWaivers = (tracked: readonly string[]): DatedWaiver[] => {
     Object.fromEntries(policyFiles.map((file) => [file, read(file)])),
     new Set([
       DOC_SOURCE_FILE,
-      "scripts/guard-rollouts.ts",
+      "scripts/guard-rollout-policy.ts",
       "scripts/suppression-waivers.ts",
       "scripts/suppression-waivers.json",
       "scripts/dependency-audit-baseline.json",

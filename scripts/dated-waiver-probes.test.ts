@@ -610,7 +610,7 @@ test.each([
 test("guard rollout healing restores full enforcement and preserves the checker", () => {
   const entry = waiver(
     "guard-rollout",
-    "scripts/guard-rollouts.ts",
+    "scripts/guard-rollout-policy.ts",
     "fixture-guard",
   );
   for (const fields of [
@@ -634,7 +634,7 @@ test("guard rollout healing restores full enforcement and preserves the checker"
 test("guard rollout healing rejects a changed deadline", () => {
   const entry = waiver(
     "guard-rollout",
-    "scripts/guard-rollouts.ts",
+    "scripts/guard-rollout-policy.ts",
     "fixture-guard",
   );
   const source =

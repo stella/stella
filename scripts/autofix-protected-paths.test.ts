@@ -16,7 +16,7 @@ import {
 import { BASELINE_PATHS } from "./baseline-paths";
 
 test("every committed baseline and decision ledger is protected", () => {
-  expect(isAutofixProtectedPath("scripts/guard-rollouts.ts")).toBe(true);
+  expect(isAutofixProtectedPath("scripts/guard-rollout-policy.ts")).toBe(true);
   const tracked = Bun.spawnSync(["git", "ls-files", "-z"], {
     stdout: "pipe",
     stderr: "pipe",

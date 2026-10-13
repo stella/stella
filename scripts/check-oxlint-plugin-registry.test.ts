@@ -13,7 +13,7 @@ import {
   ruleNamesFromSource,
   newGuardRolloutErrors,
 } from "./check-oxlint-plugin-registry.ts";
-import { GUARD_ROLLOUTS } from "./guard-rollouts";
+import { GUARD_ROLLOUTS } from "./guard-rollout-policy";
 
 const temporaryDirectories: string[] = [];
 const TYPEBOX_UNSAFE_RULE_ID =
