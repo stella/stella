@@ -2,7 +2,7 @@
 // path.relative() returns platform separators, so its output is not stable.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
-import type { Variable } from "@oxlint/plugins";
+import type { Ranged, Variable } from "@oxlint/plugins";
 
 import { guardEnforcesLine } from "../scripts/guard-rollouts";
 import type { ScopeContext } from "./utils.ts";
@@ -167,19 +167,55 @@ const cookedTemplatePart = (quasi: unknown): string | null => {
   return typeof value.cooked === "string" ? value.cooked : null;
 };
 
+const isNativeEscapePrefix = (
+  node: unknown,
+  isPathSeparator: (node: unknown) => boolean,
+): boolean => {
+  if (staticStringValue(node) === "..\\") {
+    return true;
+  }
+  if (!isAstNode(node) || node.type !== "TemplateLiteral") {
+    return false;
+  }
+  const { expressions, quasis } = node;
+  if (
+    !Array.isArray(expressions) ||
+    expressions.length !== 1 ||
+    !Array.isArray(quasis) ||
+    quasis.length !== 2
+  ) {
+    return false;
+  }
+  const head = quasis.at(0);
+  const tail = quasis.at(1);
+
+  return (
+    cookedTemplatePart(head) === ".." &&
+    cookedTemplatePart(tail) === "" &&
+    isPathSeparator(expressions.at(0))
+  );
+};
+
 type PathGuardContext = Parameters<typeof filenameForContext>[0] & {
   sourceCode: { getLocFromIndex: (offset: number) => { line: number } };
 };
 
-const enforcesPortablePath = (
-  context: PathGuardContext,
-  node: { range: readonly [number, number] },
-): boolean => {
+type PortablePathScopeOptions = {
+  context: PathGuardContext;
+  node: Ranged;
+  enforcesLine: typeof guardEnforcesLine;
+};
+
+const enforcesPortablePath = ({
+  context,
+  node,
+  enforcesLine,
+}: PortablePathScopeOptions): boolean => {
   const start = context.sourceCode.getLocFromIndex(node.range[0]).line;
   const end = context.sourceCode.getLocFromIndex(node.range[1] - 1).line;
   for (let line = start; line <= end; line++) {
     if (
-      guardEnforcesLine({
+      enforcesLine({
         guard: "portable-path",
         file: filenameForContext(context),
         line,
@@ -191,216 +227,191 @@ const enforcesPortablePath = (
   return false;
 };
 
-export default eslintCompatPlugin({
-  meta: { name: "no-raw-path-relative" },
-  rules: {
-    "no-raw-path-relative": {
-      meta: {
-        type: "problem",
-        messages: {
-          noRawPathRelative:
-            "Do not call Node path.relative() directly. Use repoRelativePath() for portable identifiers or isPathInside() for containment.",
+export const createPortablePathPlugin = (enforcesLine = guardEnforcesLine) =>
+  eslintCompatPlugin({
+    meta: { name: "no-raw-path-relative" },
+    rules: {
+      "no-raw-path-relative": {
+        meta: {
+          type: "problem",
+          messages: {
+            noRawPathRelative:
+              "Do not call Node path.relative() directly. Use repoRelativePath() for portable identifiers or isPathInside() for containment.",
+          },
         },
-      },
-      createOnce(context) {
-        let isOwner = false;
-        const variableFor = (node: unknown): Variable | null =>
-          isIdentifierReference(node) ? resolveVariable(context, node) : null;
-        const importedPathExpression = (node: unknown, imported: string) => {
-          const binding = resolveImportedExpressionForEnforcement(
-            context,
-            node,
-          );
-          return (
-            binding !== null &&
-            PATH_MODULES.has(binding.source) &&
-            binding.imported === imported
-          );
-        };
-        const pathObjectImport = (node: unknown): boolean => {
-          if (!isIdentifierReference(node)) {
-            return false;
-          }
-          const variable = variableFor(node);
-          const imported = importedPathBinding(variable);
-          if (
-            imported !== null &&
-            (imported.type === "ImportDefaultSpecifier" ||
-              imported.type === "ImportNamespaceSpecifier" ||
-              PATH_PLATFORMS.has(imported.importedName ?? ""))
-          ) {
-            return true;
-          }
-          return isDefaultedPathParameter(
-            variable,
-            node.name,
-            pathObjectImport,
-          );
-        };
-        const isDestructuredPathMember = (
-          variable: Variable | null,
-          member: string,
-        ): boolean => {
-          const definition = variable?.defs.at(0);
-          return (
-            variable?.defs.length === 1 &&
-            definition?.type === "Variable" &&
-            isAstNode(definition.node) &&
-            definition.node.type === "VariableDeclarator" &&
-            isAstNode(definition.node.id) &&
-            definition.node.id.type === "ObjectPattern" &&
-            patternKeyFor(definition.node.id, definition.name) === member &&
-            stableInitializer(variable) !== null &&
-            pathObjectImport(definition.node.init)
-          );
-        };
-        const isPathRelative = (callee: unknown): boolean => {
-          if (isIdentifierReference(callee)) {
-            if (importedPathExpression(callee, "relative")) {
-              return true;
-            }
-            const variable = variableFor(callee);
-            if (isDestructuredPathMember(variable, "relative")) {
-              return true;
-            }
-            const initializer =
-              variable === null ? null : stableInitializer(variable);
-            return initializer !== null && isPathRelative(initializer);
-          }
-          if (
-            !isAstNode(callee) ||
-            callee.type !== "MemberExpression" ||
-            getPropertyName(callee.property) !== "relative"
-          ) {
-            return false;
-          }
-          if (pathObjectImport(callee.object)) {
-            return true;
-          }
-          const object = callee.object;
-          return (
-            isAstNode(object) &&
-            object.type === "MemberExpression" &&
-            PATH_PLATFORMS.has(getPropertyName(object.property) ?? "") &&
-            pathObjectImport(object.object)
-          );
-        };
-        const isPathSeparator = (node: unknown): boolean => {
-          if (isIdentifierReference(node)) {
-            if (importedPathExpression(node, "sep")) {
-              return true;
+        createOnce(context) {
+          const enforces = (node: Ranged) =>
+            enforcesPortablePath({ context, node, enforcesLine });
+          let isOwner = false;
+          const variableFor = (node: unknown): Variable | null =>
+            isIdentifierReference(node) ? resolveVariable(context, node) : null;
+          const importedPathExpression = (node: unknown, imported: string) => {
+            const binding = resolveImportedExpressionForEnforcement(
+              context,
+              node,
+            );
+            return (
+              binding !== null &&
+              PATH_MODULES.has(binding.source) &&
+              binding.imported === imported
+            );
+          };
+          const pathObjectImport = (node: unknown): boolean => {
+            if (!isIdentifierReference(node)) {
+              return false;
             }
             const variable = variableFor(node);
-            if (isDestructuredPathMember(variable, "sep")) {
+            const imported = importedPathBinding(variable);
+            if (
+              imported !== null &&
+              (imported.type === "ImportDefaultSpecifier" ||
+                imported.type === "ImportNamespaceSpecifier" ||
+                PATH_PLATFORMS.has(imported.importedName ?? ""))
+            ) {
               return true;
             }
-            const initializer =
-              variable === null ? null : stableInitializer(variable);
-            return initializer !== null && isPathSeparator(initializer);
-          }
-          if (
-            !isAstNode(node) ||
-            node.type !== "MemberExpression" ||
-            getPropertyName(node.property) !== "sep"
-          ) {
-            return false;
-          }
-          if (pathObjectImport(node.object)) {
-            return true;
-          }
-          const object = node.object;
-          return (
-            isAstNode(object) &&
-            object.type === "MemberExpression" &&
-            PATH_PLATFORMS.has(getPropertyName(object.property) ?? "") &&
-            pathObjectImport(object.object)
-          );
-        };
-        const isNativeEscapePrefix = (node: unknown): boolean => {
-          if (staticStringValue(node) === "..\\") {
-            return true;
-          }
-          if (!isAstNode(node) || node.type !== "TemplateLiteral") {
-            return false;
-          }
-          const { expressions, quasis } = node;
-          if (
-            !Array.isArray(expressions) ||
-            expressions.length !== 1 ||
-            !Array.isArray(quasis) ||
-            quasis.length !== 2
-          ) {
-            return false;
-          }
-          const head = quasis.at(0);
-          const tail = quasis.at(1);
+            return isDefaultedPathParameter(
+              variable,
+              node.name,
+              pathObjectImport,
+            );
+          };
+          const isDestructuredPathMember = (
+            variable: Variable | null,
+            member: string,
+          ): boolean => {
+            const definition = variable?.defs.at(0);
+            return (
+              variable?.defs.length === 1 &&
+              definition?.type === "Variable" &&
+              isAstNode(definition.node) &&
+              definition.node.type === "VariableDeclarator" &&
+              isAstNode(definition.node.id) &&
+              definition.node.id.type === "ObjectPattern" &&
+              patternKeyFor(definition.node.id, definition.name) === member &&
+              stableInitializer(variable) !== null &&
+              pathObjectImport(definition.node.init)
+            );
+          };
+          const isPathRelative = (callee: unknown): boolean => {
+            if (isIdentifierReference(callee)) {
+              if (importedPathExpression(callee, "relative")) {
+                return true;
+              }
+              const variable = variableFor(callee);
+              if (isDestructuredPathMember(variable, "relative")) {
+                return true;
+              }
+              const initializer =
+                variable === null ? null : stableInitializer(variable);
+              return initializer !== null && isPathRelative(initializer);
+            }
+            if (
+              !isAstNode(callee) ||
+              callee.type !== "MemberExpression" ||
+              getPropertyName(callee.property) !== "relative"
+            ) {
+              return false;
+            }
+            if (pathObjectImport(callee.object)) {
+              return true;
+            }
+            const object = callee.object;
+            return (
+              isAstNode(object) &&
+              object.type === "MemberExpression" &&
+              PATH_PLATFORMS.has(getPropertyName(object.property) ?? "") &&
+              pathObjectImport(object.object)
+            );
+          };
+          const isPathSeparator = (node: unknown): boolean => {
+            if (isIdentifierReference(node)) {
+              if (importedPathExpression(node, "sep")) {
+                return true;
+              }
+              const variable = variableFor(node);
+              if (isDestructuredPathMember(variable, "sep")) {
+                return true;
+              }
+              const initializer =
+                variable === null ? null : stableInitializer(variable);
+              return initializer !== null && isPathSeparator(initializer);
+            }
+            if (
+              !isAstNode(node) ||
+              node.type !== "MemberExpression" ||
+              getPropertyName(node.property) !== "sep"
+            ) {
+              return false;
+            }
+            if (pathObjectImport(node.object)) {
+              return true;
+            }
+            const object = node.object;
+            return (
+              isAstNode(object) &&
+              object.type === "MemberExpression" &&
+              PATH_PLATFORMS.has(getPropertyName(object.property) ?? "") &&
+              pathObjectImport(object.object)
+            );
+          };
 
-          return (
-            cookedTemplatePart(head) === ".." &&
-            cookedTemplatePart(tail) === "" &&
-            isPathSeparator(expressions.at(0))
+          const isNativeEscapeCheck = (node: unknown): boolean =>
+            isAstNode(node) &&
+            node.type === "MemberExpression" &&
+            getPropertyName(node.property) === "startsWith";
+          const mixesPortableIdentifierAndSeparator = portableIdentifierMixer(
+            context,
+            isPathSeparator,
           );
-        };
-        const isNativeEscapeCheck = (node: unknown): boolean =>
-          isAstNode(node) &&
-          node.type === "MemberExpression" &&
-          getPropertyName(node.property) === "startsWith";
-        const mixesPortableIdentifierAndSeparator = portableIdentifierMixer(
-          context,
-          isPathSeparator,
-        );
-        return {
-          before() {
-            isOwner = filenameForContext(context).includes(OWNER_PATH);
-          },
-          CallExpression(node) {
-            if (isOwner) {
-              return;
-            }
-            if (
-              isPathRelative(node.callee) &&
-              enforcesPortablePath(context, node)
-            ) {
-              context.report({ node, messageId: "noRawPathRelative" });
-            }
-            if (
-              isNativeEscapeCheck(node.callee) &&
-              Array.isArray(node.arguments) &&
-              isNativeEscapePrefix(node.arguments.at(0)) &&
-              enforcesPortablePath(context, node)
-            ) {
-              context.report({
-                node,
-                message:
-                  "Do not build path escape checks from native separators. Use isPathInside from @stll/portable-path.",
-              });
-            }
-            if (
-              mixesPortableIdentifierAndSeparator(node) &&
-              enforcesPortablePath(context, node)
-            ) {
-              context.report({
-                node,
-                message:
-                  "Do not combine native path separators with portable repository-relative identifiers. Use a forward slash.",
-              });
-            }
-          },
-          "BinaryExpression, TemplateLiteral"(node) {
-            if (
-              !isOwner &&
-              mixesPortableIdentifierAndSeparator(node) &&
-              enforcesPortablePath(context, node)
-            ) {
-              context.report({
-                node,
-                message:
-                  "Do not combine native path separators with portable repository-relative identifiers. Use a forward slash.",
-              });
-            }
-          },
-        };
+          return {
+            before() {
+              isOwner = filenameForContext(context).includes(OWNER_PATH);
+            },
+            CallExpression(node) {
+              if (isOwner) {
+                return;
+              }
+              if (isPathRelative(node.callee) && enforces(node)) {
+                context.report({ node, messageId: "noRawPathRelative" });
+              }
+              if (
+                isNativeEscapeCheck(node.callee) &&
+                Array.isArray(node.arguments) &&
+                isNativeEscapePrefix(node.arguments.at(0), isPathSeparator) &&
+                enforces(node)
+              ) {
+                context.report({
+                  node,
+                  message:
+                    "Do not build path escape checks from native separators. Use isPathInside from @stll/portable-path.",
+                });
+              }
+              if (mixesPortableIdentifierAndSeparator(node) && enforces(node)) {
+                context.report({
+                  node,
+                  message:
+                    "Do not combine native path separators with portable repository-relative identifiers. Use a forward slash.",
+                });
+              }
+            },
+            "BinaryExpression, TemplateLiteral"(node) {
+              if (
+                !isOwner &&
+                mixesPortableIdentifierAndSeparator(node) &&
+                enforces(node)
+              ) {
+                context.report({
+                  node,
+                  message:
+                    "Do not combine native path separators with portable repository-relative identifiers. Use a forward slash.",
+                });
+              }
+            },
+          };
+        },
       },
     },
-  },
-});
+  });
+
+export default createPortablePathPlugin();

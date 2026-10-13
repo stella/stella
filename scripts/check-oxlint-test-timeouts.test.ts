@@ -389,6 +389,47 @@ const rolloutFixture = (directory: string, lines: readonly number[]) =>
     ],
   ]);
 
+for (const { name, now, changedLines, diagnostics } of [
+  {
+    name: "unchanged during rollout",
+    now: "2026-10-14",
+    changedLines: [],
+    diagnostics: [],
+  },
+  {
+    name: "changed inside the call during rollout",
+    now: "2026-10-14",
+    changedLines: [6],
+    diagnostics: [
+      "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
+    ],
+  },
+  {
+    name: "unchanged after rollout expiry",
+    now: "2026-10-21",
+    changedLines: [],
+    diagnostics: [
+      "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
+    ],
+  },
+]) {
+  test(`multiline custom lint timeout: ${name}`, () => {
+    withFixture((directory, file) => {
+      writeFileSync(
+        file,
+        `${IMPORTS}test(\n  "case",\n  () => {},\n  {\n    timeout: 60_000,\n  },\n);\n`,
+      );
+      expect(
+        checkTimeouts({
+          directory,
+          now: new Date(now),
+          changedLines: rolloutFixture(directory, changedLines),
+        }),
+      ).toEqual(diagnostics);
+    });
+  });
+}
+
 test("the first week ignores an unchanged timeout and rejects a changed one", () => {
   withFixture((directory, file) => {
     writeFileSync(
