@@ -37,7 +37,13 @@ if (import.meta.main) {
     v.pipe(v.number(), v.integer(), v.minValue(1)),
     Number(process.argv.at(3)),
   );
-  switch (process.argv.at(2)) {
+  const mode = process.argv.at(2);
+  if (mode !== "--minutes" && mode !== "--check") {
+    panic(
+      "Usage: e2e-shard-deadline.ts --minutes <shard> | --check <shard> <elapsed-seconds>",
+    );
+  }
+  switch (mode) {
     case "--minutes":
       console.log(measuredShardBudget(shard).minutes);
       break;
@@ -53,9 +59,5 @@ if (import.meta.main) {
       }
       break;
     }
-    default:
-      panic(
-        "Usage: e2e-shard-deadline.ts --minutes <shard> | --check <shard> <elapsed-seconds>",
-      );
   }
 }

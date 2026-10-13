@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -201,7 +202,7 @@ test("measured wall-time budgets cover every shard and retain the existing spars
       ...new Set(
         configuredBudgets.e2eProductionShards.samples.map(({ shard }) => shard),
       ),
-    ].toSorted(),
+    ].toSorted((left, right) => left - right),
   ).toEqual(allE2eMatrix().shard.filter((shard) => typeof shard === "number"));
   const step = job.steps.find(({ name }) => name === "Run Playwright shard");
   expect(step?.["timeout-minutes"]).toBe(
@@ -244,7 +245,7 @@ test("changing the measured shard split requires fresh wall-time evidence", () =
     configuredBudgets.e2eProductionShards.planSha256,
   );
   expect(run).toContain(
-    `bun scripts/e2e-shard-deadline.ts --check \${{ matrix.shard }} "$SECONDS"`,
+    `bun --preload ./scripts/offline-network-preload.ts scripts/e2e-shard-deadline.ts --check \${{ matrix.shard }} "$SECONDS"`,
   );
   expect(run).toContain("SECONDS=0");
 });
@@ -254,24 +255,33 @@ test("the workflow publishes computed deadlines and an over-budget shard fails w
     v.string(),
     job.steps.find(({ name }) => name === "Install dependencies")?.run,
   );
-  for (const shard of allE2eMatrix().shard) {
-    const result = Bun.spawnSync(
-      [
-        "bash",
-        "-euc",
-        install
-          .replace("bash scripts/retry.sh bun ci --ignore-scripts", "true")
-          .replaceAll(`\${{ matrix.shard }}`, () => String(shard)),
-      ],
-      {
-        cwd: path.resolve(import.meta.dir, ".."),
-        env: { ...process.env, GITHUB_OUTPUT: "/dev/stdout" },
-      },
-    );
-    expect(result.exitCode, result.stderr.toString()).toBe(0);
-    expect(result.stdout.toString().trim()).toBe(
-      `minutes=${typeof shard === "number" ? measuredShardBudget(shard).minutes : 1}`,
-    );
+  const outputDirectory = mkdtempSync(
+    path.join(tmpdir(), "e2e-budget-output-"),
+  );
+  const output = path.join(outputDirectory, "github-output");
+  try {
+    for (const shard of allE2eMatrix().shard) {
+      writeFileSync(output, "");
+      const result = Bun.spawnSync(
+        [
+          "bash",
+          "-euc",
+          install
+            .replace("bash scripts/retry.sh bun ci --ignore-scripts", "true")
+            .replaceAll(`\${{ matrix.shard }}`, () => String(shard)),
+        ],
+        {
+          cwd: path.resolve(import.meta.dir, ".."),
+          env: { ...process.env, GITHUB_OUTPUT: output },
+        },
+      );
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      expect(readFileSync(output, "utf-8").trim()).toBe(
+        `minutes=${typeof shard === "number" ? measuredShardBudget(shard).minutes : 1}`,
+      );
+    }
+  } finally {
+    rmSync(outputDirectory, { recursive: true, force: true });
   }
   const result = Bun.spawnSync([
     process.execPath,

@@ -3887,7 +3887,11 @@ jobs:
 
       - name: Test geometry shard plan
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun test scripts/e2e-geometry-shards.test.ts scripts/e2e-shard-budget.test.ts
+        run: bun test scripts/e2e-geometry-shards.test.ts
+
+      - name: Test e2e shard budget
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/e2e-shard-budget.test.ts
 
       - name: Validate CI service image mirror inventory
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
@@ -6640,7 +6644,7 @@ jobs:
         run: |
           bash scripts/retry.sh bun ci --ignore-scripts
           if [[ "${{ matrix.shard }}" != network-baseline ]]; then
-            minutes=$(bun scripts/e2e-shard-deadline.ts --minutes ${{ matrix.shard }})
+            minutes=$(bun --preload ./scripts/offline-network-preload.ts scripts/e2e-shard-deadline.ts --minutes ${{ matrix.shard }})
             echo "minutes=$minutes" >> "$GITHUB_OUTPUT"
           else
             echo "minutes=1" >> "$GITHUB_OUTPUT"
@@ -6754,7 +6758,7 @@ jobs:
               bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" \
               bun --filter @stll/web test:e2e -- --project=docked-chat-geometry --shard=${{ matrix.shard }}/2 || status=$?
           fi
-          bun scripts/e2e-shard-deadline.ts --check ${{ matrix.shard }} "$SECONDS" || status=$?
+          bun --preload ./scripts/offline-network-preload.ts scripts/e2e-shard-deadline.ts --check ${{ matrix.shard }} "$SECONDS" || status=$?
           exit "$status"
 
       # API-owned browser checks (visual sandbox) need the API from this stack
