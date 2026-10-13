@@ -625,8 +625,6 @@ const gatingCommandExecutionFailure = ({
     ? undefined
     : missingMessage;
 
-const SHELL_OPERATORS = new Set(["||", "&&", ";", "&", "|", "(", ")", "\n"]);
-
 // Workflow steps run under `bash -eo pipefail`. Package scripts run with
 // neither errexit nor pipefail: only the last statement sets their status, and
 // a runner piped into another command cannot fail them.
@@ -640,11 +638,23 @@ const PACKAGE_SCRIPT_PROPAGATION: ShellPropagation = {
   errexit: false,
 };
 
-const shellInvocationGates = (
-  command: string,
-  matches: (words: readonly string[], index: number) => boolean,
-  propagation?: ShellPropagation,
-): boolean => {
+type ShellInvocation = {
+  readonly words: readonly string[];
+  readonly tokens: readonly ShellToken[];
+  readonly index: number;
+};
+
+type ShellInvocationGatesOptions = {
+  readonly command: string;
+  readonly matches: (invocation: ShellInvocation) => boolean;
+  readonly propagation?: ShellPropagation;
+};
+
+const shellInvocationGates = ({
+  command,
+  matches,
+  propagation,
+}: ShellInvocationGatesOptions): boolean => {
   const pipefail = propagation?.pipefail ?? true;
   const scriptErrexit = propagation?.errexit ?? true;
   const tokens = shellTokens(command.replaceAll(/\\\r?\n/gu, " "));
@@ -660,7 +670,7 @@ const shellInvocationGates = (
     if (words[index] === "set" && words[index + 1] === "-e") {
       errexit = true;
     }
-    if (!errexit || !matches(words, index)) {
+    if (!errexit || !matches({ words, tokens, index })) {
       continue;
     }
     const suffix = words.slice(index + 1);
@@ -677,13 +687,15 @@ const shellInvocationGates = (
     // A `||` fallback swallows the runner's failure unless the fallback itself
     // fails: `false`, or an `exit` with a non-zero literal status.
     const fallbackFails = (offset: number): boolean => {
-      const grouped = suffix.at(offset) === "{";
+      const grouped =
+        suffixTokens[offset]?.role === "operator" && suffix.at(offset) === "{";
       const start = grouped ? offset + 1 : offset;
       for (let cursor = start; cursor < suffix.length; cursor += 1) {
         const word = suffix[cursor];
         if (
           word === undefined ||
-          (grouped ? word === "}" : SHELL_OPERATORS.has(word))
+          (suffixTokens[cursor]?.role === "operator" &&
+            (grouped ? word === "}" : true))
         ) {
           return false;
         }
@@ -760,9 +772,7 @@ const shellInvocationGates = (
   return false;
 };
 
-type PackageInvocationOptions = {
-  readonly words: readonly string[];
-  readonly index: number;
+type PackageInvocationOptions = ShellInvocation & {
   readonly packageDirectory: string;
   readonly packageName: string;
   readonly scriptName: string;
@@ -770,6 +780,7 @@ type PackageInvocationOptions = {
 
 const packageInvocationEnd = ({
   words,
+  tokens,
   index,
   packageDirectory,
   packageName,
@@ -793,15 +804,24 @@ const packageInvocationEnd = ({
   ) {
     return index + cwdOffset + 3;
   }
+  // An adjacent `cd ... &&` proves the directory whenever this runner executes.
+  const preceding = tokens
+    .slice(0, index)
+    .filter(
+      (token) => token.role !== "assignment" && token.role !== "redirect",
+    );
+  const separator = preceding.at(-1);
+  const directory = preceding.at(-2);
+  const changeDirectory = preceding.at(-3);
   if (
     words[index + 1] === "run" &&
     words[index + 2] === scriptName &&
-    words
-      .slice(0, index)
-      .some(
-        (word, cursor) =>
-          word === "cd" && words[cursor + 1] === packageDirectory,
-      )
+    separator?.role === "operator" &&
+    separator.value === "&&" &&
+    directory?.role === "argument" &&
+    directory.value === packageDirectory &&
+    changeDirectory?.role === "command" &&
+    changeDirectory.value === "cd"
   ) {
     return index + 3;
   }
@@ -810,10 +830,7 @@ const packageInvocationEnd = ({
 
 type GatingArgumentsOptions = {
   readonly command: string;
-  readonly invocationEnd: (
-    words: readonly string[],
-    index: number,
-  ) => number | undefined;
+  readonly invocationEnd: (invocation: ShellInvocation) => number | undefined;
   readonly propagation?: ShellPropagation;
 };
 
@@ -822,25 +839,22 @@ const gatingArguments = ({
   invocationEnd,
   propagation,
 }: GatingArgumentsOptions): readonly string[][] => {
-  const words = shellWords(command.replaceAll(/\\\r?\n/gu, " "), "include");
+  const tokens = shellTokens(command.replaceAll(/\\\r?\n/gu, " "));
+  const words = tokens.map(({ value }) => value);
   const invocations: string[][] = [];
   for (let index = 0; index < words.length; index += 1) {
-    const end = invocationEnd(words, index);
+    const end = invocationEnd({ words, tokens, index });
     if (
       end === undefined ||
-      !shellInvocationGates(
+      !shellInvocationGates({
         command,
-        (_words, cursor) => cursor === index,
-        propagation,
-      )
+        matches: ({ index: cursor }) => cursor === index,
+        ...(propagation === undefined ? {} : { propagation }),
+      })
     ) {
       continue;
     }
-    const remaining = words.slice(end);
-    const boundary = remaining.findIndex((word) => SHELL_OPERATORS.has(word));
-    invocations.push(
-      boundary === -1 ? remaining : remaining.slice(0, boundary),
-    );
+    invocations.push(shellCommandSpan(tokens, end).words);
   }
   return invocations;
 };
@@ -864,11 +878,13 @@ const expandRootScripts = (
 ): RootCommand[] => {
   const packageScript = visited.size > 0;
   const expanded: RootCommand[] = [{ command, packageScript }];
-  const words = shellWords(command, "include");
+  const commandWords = shellWords(command, "include");
   const invokedNames = new Set(
-    words.flatMap((word, index) => {
-      const name = words[index + 2];
-      return word === "bun" && words[index + 1] === "run" && name !== undefined
+    commandWords.flatMap((word, index) => {
+      const name = commandWords[index + 2];
+      return word === "bun" &&
+        commandWords[index + 1] === "run" &&
+        name !== undefined
         ? [name]
         : [];
     }),
@@ -880,11 +896,13 @@ const expandRootScripts = (
     }
     const invocations = gatingArguments({
       command,
-      invocationEnd: (tokens, index) =>
-        tokens[index] === "bun" &&
-        tokens[index + 1] === "run" &&
-        tokens[index + 2] === name &&
-        !tokens.slice(0, index).includes("cd")
+      invocationEnd: ({ words, tokens, index }) =>
+        words[index] === "bun" &&
+        words[index + 1] === "run" &&
+        words[index + 2] === name &&
+        !tokens
+          .slice(0, index)
+          .some((token) => token.role === "command" && token.value === "cd")
           ? index + 3
           : undefined,
       ...(packageScript ? { propagation: PACKAGE_SCRIPT_PROPAGATION } : {}),
@@ -942,9 +960,10 @@ export const packageTestExecutionFailure = ({
     )) {
       const invocations = gatingArguments({
         command,
-        invocationEnd: (words, index) =>
+        invocationEnd: ({ words, tokens, index }) =>
           packageInvocationEnd({
             words,
+            tokens,
             index,
             packageDirectory,
             packageName,
@@ -975,15 +994,15 @@ export const packageTestExecutionFailure = ({
     scriptName === "test" &&
     shardedPackages.has(packageName) &&
     testJob?.some((command) =>
-      shellInvocationGates(
+      shellInvocationGates({
         command,
-        (words, index) =>
+        matches: ({ words, index }) =>
           words[index] === "bun" &&
           words[index + 1] === "run" &&
           words[index + 2] === "test" &&
           words[index + 3] === "--" &&
           words[index + 4] === "--concurrency=2",
-      ),
+      }),
     ) === true &&
     testJob.some((command) => command.includes("bun scripts/test-scope.ts")) &&
     testJob.some((command) =>
@@ -1015,9 +1034,11 @@ export const managedServiceRunnerFailure = ({
   const runner = shellWords(command);
   return gatingCommandExecutionFailure({
     commandMatches: (candidate) =>
-      shellInvocationGates(candidate, (words, index) =>
-        runner.every((word, offset) => words[index + offset] === word),
-      ),
+      shellInvocationGates({
+        command: candidate,
+        matches: ({ words, index }) =>
+          runner.every((word, offset) => words[index + offset] === word),
+      }),
     gatingJobs,
     missingMessage: `job condition: no gating job executes the ${gate} runner`,
   });
@@ -1036,9 +1057,11 @@ export const rootCommandExecutionFailure = ({
   const runner = shellWords(command);
   return gatingCommandExecutionFailure({
     commandMatches: (candidate) =>
-      shellInvocationGates(candidate, (words, index) =>
-        runner.every((word, offset) => words[index + offset] === word),
-      ),
+      shellInvocationGates({
+        command: candidate,
+        matches: ({ words, index }) =>
+          runner.every((word, offset) => words[index + offset] === word),
+      }),
     gatingJobs,
     missingMessage: `job condition: no gating job executes ${command}`,
   });
@@ -1061,6 +1084,18 @@ type ShellToken = {
     | "assignment"
     | "redirect"
     | "operator";
+};
+
+const shellCommandSpan = (tokens: readonly ShellToken[], start: number) => {
+  const end = tokens.findIndex(
+    (token, index) => index >= start && token.role === "operator",
+  );
+  const words = tokens
+    .slice(start, end === -1 ? undefined : end)
+    .flatMap(({ role, value }) =>
+      role === "command" || role === "argument" ? [value] : [],
+    );
+  return { end, words };
 };
 
 const PLAYWRIGHT_IMAGE_WRAPPER =
@@ -1157,11 +1192,12 @@ const shellTokens = (command: string): ShellToken[] => {
     }
     const operator = match[2];
     if (operator !== undefined) {
-      tokens.push({ value: operator, role: "operator" });
       if (/[<>]/u.test(operator)) {
+        tokens.push({ value: operator, role: "redirect" });
         redirect = operator.replace(/^\d+/u, "");
         continue;
       }
+      tokens.push({ value: operator, role: "operator" });
       commandPosition = true;
       redirect = undefined;
       timeoutArgument = undefined;
@@ -1380,27 +1416,28 @@ export const packageTestCollectionFailure = ({
     return `runner command: package script ${scriptName} is missing`;
   }
   const normalizedCommand = command.replaceAll(/\\\r?\n/gu, " ");
-  const words = shellWords(normalizedCommand, "include");
+  const tokens = shellTokens(normalizedCommand);
+  const words = tokens.map(({ value }) => value);
   // Every gating runner in the script counts: the file is collected when any
   // of them collects it, and the first failure is reported only when none do.
   let firstFailure: string | undefined;
   for (let index = 0; index < words.length; index += 1) {
     if (
       words[index] !== "bun" ||
-      !shellInvocationGates(
-        normalizedCommand,
-        (_words, cursor) => cursor === index,
-        PACKAGE_SCRIPT_PROPAGATION,
-      )
+      !shellInvocationGates({
+        command: normalizedCommand,
+        matches: ({ index: cursor }) => cursor === index,
+        propagation: PACKAGE_SCRIPT_PROPAGATION,
+      })
     ) {
       continue;
     }
     const delegatedScript = words[index + 2];
     if (words[index + 1] === "run" && delegatedScript?.startsWith("test:")) {
-      const remaining = words.slice(index + 3);
-      const boundary = remaining.findIndex((word) => SHELL_OPERATORS.has(word));
-      const delegatedArguments =
-        boundary === -1 ? remaining : remaining.slice(0, boundary);
+      const { words: delegatedArguments, end: boundary } = shellCommandSpan(
+        tokens,
+        index + 3,
+      );
       const delegatedFailure = packageTestCollectionFailure({
         candidate,
         packageDirectory,
@@ -1421,14 +1458,13 @@ export const packageTestCollectionFailure = ({
       continue;
     }
     if (words[index + 1]?.endsWith("scripts/run-tests.ts")) {
-      const remaining = words.slice(index + 2);
-      const boundary = remaining.findIndex((word) => SHELL_OPERATORS.has(word));
+      const { words: remaining, end: boundary } = shellCommandSpan(
+        tokens,
+        index + 2,
+      );
       const failure = bunArgumentCollectionFailure(
         repoRelativePath(packageDirectory, candidate),
-        [
-          ...(boundary === -1 ? remaining : remaining.slice(0, boundary)),
-          ...(boundary === -1 ? forwardedArguments : []),
-        ],
+        [...remaining, ...(boundary === -1 ? forwardedArguments : [])],
       );
       const wrapperFailure =
         failure ?? testWrapperCollectionFailure(packageDirectory, candidate);
@@ -1441,10 +1477,9 @@ export const packageTestCollectionFailure = ({
     if (words[index + 1] !== "test") {
       continue;
     }
-    const remaining = words.slice(index + 2);
-    const end = remaining.findIndex((word) => SHELL_OPERATORS.has(word));
+    const { words: remaining, end } = shellCommandSpan(tokens, index + 2);
     const arguments_ = [
-      ...(end === -1 ? remaining : remaining.slice(0, end)),
+      ...remaining,
       ...(end === -1 ? forwardedArguments : []),
     ];
     const relativeCandidate = repoRelativePath(packageDirectory, candidate);
@@ -2503,12 +2538,12 @@ export const gatingPlaywrightCollection = ({
   for (const [scriptName, command] of Object.entries(scripts)) {
     if (
       typeof command !== "string" ||
-      !shellInvocationGates(
+      !shellInvocationGates({
         command,
-        (words, index) =>
+        matches: ({ words, index }) =>
           words[index] === "playwright" && words[index + 1] === "test",
-        PACKAGE_SCRIPT_PROPAGATION,
-      ) ||
+        propagation: PACKAGE_SCRIPT_PROPAGATION,
+      }) ||
       packageTestExecutionFailure({
         ...topology,
         packageDirectory,
@@ -2520,7 +2555,7 @@ export const gatingPlaywrightCollection = ({
     }
     const bodies = gatingArguments({
       command,
-      invocationEnd: (words, index) =>
+      invocationEnd: ({ words, index }) =>
         words[index] === "playwright" && words[index + 1] === "test"
           ? index + 2
           : undefined,
@@ -2529,9 +2564,10 @@ export const gatingPlaywrightCollection = ({
       const invocations = commands.flatMap((workflowCommand) =>
         gatingArguments({
           command: workflowCommand,
-          invocationEnd: (words, index) =>
+          invocationEnd: ({ words, tokens, index }) =>
             packageInvocationEnd({
               words,
+              tokens,
               index,
               packageDirectory,
               packageName,
@@ -2625,104 +2661,110 @@ export const firstCollectionFailure = ({
       new Bun.Glob("scripts/**/*.test.ts").match(file) &&
       unlistedTests([file], topology.workflow).length === 1;
     const commandMatches = (command: string): boolean =>
-      shellInvocationGates(command, (words, index) => {
-        if (words[index] === "bash" && words[index + 1] === "-c") {
-          const body = words[index + 2];
-          return body !== undefined && commandMatches(body);
-        }
-        if (
-          isUnlistedScript &&
-          words[index] === "bun" &&
-          words[index + 1] === "scripts/run-unlisted-script-tests.ts"
-        ) {
-          return true;
-        }
-        if (words[index] !== "bun") {
-          return false;
-        }
-        const start = words.findLastIndex(
-          (word, cursor) =>
-            cursor < index &&
-            (word === ";" || word === "\n" || word === "&&" || word === "||"),
-        );
-        if (words.slice(start + 1, index).includes("|")) {
-          return false;
-        }
-        const remaining = words.slice(index);
-        const end = remaining.findIndex((word) => SHELL_OPERATORS.has(word));
-        if (end !== -1 && remaining[end] === "|") {
-          return false;
-        }
-        const invocation = end === -1 ? remaining : remaining.slice(0, end);
-        if (words[index + 1] === "scripts/run-custom-lint-tests.ts") {
-          const args = invocation.slice(2);
+      shellInvocationGates({
+        command,
+        matches: ({ words, tokens, index }) => {
+          if (words[index] === "bash" && words[index + 1] === "-c") {
+            const body = words[index + 2];
+            return body !== undefined && commandMatches(body);
+          }
           if (
-            args.some(
-              (argument) =>
-                argument === "--timeout" || argument.startsWith("--timeout="),
-            )
+            isUnlistedScript &&
+            words[index] === "bun" &&
+            words[index + 1] === "scripts/run-unlisted-script-tests.ts"
+          ) {
+            return true;
+          }
+          if (words[index] !== "bun") {
+            return false;
+          }
+          const start = words.findLastIndex(
+            (word, cursor) =>
+              tokens[cursor]?.role === "operator" &&
+              cursor < index &&
+              (word === ";" || word === "\n" || word === "&&" || word === "||"),
+          );
+          if (
+            tokens
+              .slice(start + 1, index)
+              .some((token) => token.role === "operator" && token.value === "|")
           ) {
             return false;
           }
-          const runner = customLintTestCommand(args);
-          return (
+          const { words: invocation, end } = shellCommandSpan(tokens, index);
+          if (end !== -1 && tokens[end]?.value === "|") {
+            return false;
+          }
+          if (words[index + 1] === "scripts/run-custom-lint-tests.ts") {
+            const args = invocation.slice(2);
+            if (
+              args.some(
+                (argument) =>
+                  argument === "--timeout" || argument.startsWith("--timeout="),
+              )
+            ) {
+              return false;
+            }
+            const runner = customLintTestCommand(args);
+            return (
+              packageTestCollectionFailure({
+                candidate: file,
+                packageDirectory: ".",
+                scripts: {
+                  test: ["bun", ...runner.slice(1)]
+                    .map((word) => JSON.stringify(word))
+                    .join(" "),
+                },
+              }) === undefined
+            );
+          }
+          const line = invocation.map((word) => JSON.stringify(word)).join(" ");
+          if (
             packageTestCollectionFailure({
               candidate: file,
               packageDirectory: ".",
-              scripts: {
-                test: ["bun", ...runner.slice(1)]
-                  .map((word) => JSON.stringify(word))
-                  .join(" "),
-              },
+              scripts: { test: line },
+            }) === undefined
+          ) {
+            return true;
+          }
+          const cwdIndex = invocation.indexOf("--cwd");
+          if (
+            cwdIndex === -1 ||
+            (invocation[cwdIndex - 1] !== "bun" &&
+              !(
+                invocation[cwdIndex - 1] === "run" &&
+                invocation[cwdIndex - 2] === "bun"
+              )) ||
+            invocation[cwdIndex + 2] !== "test"
+          ) {
+            return false;
+          }
+          const packageDirectory = invocation[cwdIndex + 1];
+          if (packageDirectory === undefined) {
+            return false;
+          }
+          const manifest = path.posix.join(packageDirectory, "package.json");
+          if (!existsSync(path.join(ROOT, manifest))) {
+            return false;
+          }
+          const scripts = packageScripts(manifest);
+          const testCommand = scripts?.["test"];
+          if (typeof testCommand !== "string") {
+            return false;
+          }
+          const arguments_ = invocation
+            .slice(cwdIndex + 3)
+            .map((word) => JSON.stringify(word))
+            .join(" ");
+          return (
+            packageTestCollectionFailure({
+              candidate: file,
+              packageDirectory,
+              scripts: { ...scripts, test: `${testCommand} ${arguments_}` },
             }) === undefined
           );
-        }
-        const line = invocation.map((word) => JSON.stringify(word)).join(" ");
-        if (
-          packageTestCollectionFailure({
-            candidate: file,
-            packageDirectory: ".",
-            scripts: { test: line },
-          }) === undefined
-        ) {
-          return true;
-        }
-        const cwdIndex = invocation.indexOf("--cwd");
-        if (
-          cwdIndex === -1 ||
-          (invocation[cwdIndex - 1] !== "bun" &&
-            !(
-              invocation[cwdIndex - 1] === "run" &&
-              invocation[cwdIndex - 2] === "bun"
-            )) ||
-          invocation[cwdIndex + 2] !== "test"
-        ) {
-          return false;
-        }
-        const packageDirectory = invocation[cwdIndex + 1];
-        if (packageDirectory === undefined) {
-          return false;
-        }
-        const manifest = path.posix.join(packageDirectory, "package.json");
-        if (!existsSync(path.join(ROOT, manifest))) {
-          return false;
-        }
-        const scripts = packageScripts(manifest);
-        const testCommand = scripts?.["test"];
-        if (typeof testCommand !== "string") {
-          return false;
-        }
-        const arguments_ = invocation
-          .slice(cwdIndex + 3)
-          .map((word) => JSON.stringify(word))
-          .join(" ");
-        return (
-          packageTestCollectionFailure({
-            candidate: file,
-            packageDirectory,
-            scripts: { ...scripts, test: `${testCommand} ${arguments_}` },
-          }) === undefined
-        );
+        },
       });
     return gatingCommandExecutionFailure({
       commandMatches,

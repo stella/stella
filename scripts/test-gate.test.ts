@@ -440,6 +440,45 @@ context("test registration census", () => {
     }
   });
 
+  check.each([";", "&&", "||", "&", "|", "(", ")"])(
+    "quoted operator selectors remain arguments: %s",
+    (operator) => {
+      for (const scripts of [
+        { test: `bun test '${operator}'` },
+        { test: `bun run test:unit '${operator}'`, "test:unit": "bun test" },
+      ]) {
+        expect(
+          packageTestCollectionFailure({
+            candidate: "packages/fixture/src/other.test.ts",
+            packageDirectory: "packages/fixture",
+            scripts,
+          }),
+        ).toBe("runner glob: test command does not collect the file");
+        expect(
+          packageTestCollectionFailure({
+            candidate: `packages/fixture/src/${operator}/selected.test.ts`,
+            packageDirectory: "packages/fixture",
+            scripts,
+          }),
+        ).toBeUndefined();
+      }
+      expect(
+        packageTestExecutionFailure({
+          gatingJobs: new Map([
+            ["checks", [`bun --filter @stll/fixture test -- '${operator}'`]],
+          ]),
+          packageDirectory: "packages/fixture",
+          packageName: "@stll/fixture",
+          shardedPackages: new Set<string>(),
+          collection: {
+            candidate: "packages/fixture/src/other.test.ts",
+            scripts: { test: "bun test" },
+          },
+        }),
+      ).toContain("runner glob: test command does not collect the file");
+    },
+  );
+
   check("root script bodies keep package-script failure propagation", () => {
     const failure = (body: string) =>
       packageTestExecutionFailure({
@@ -459,6 +498,35 @@ context("test registration census", () => {
       failure("bun --filter @stll/orphan test && echo done"),
     ).toBeUndefined();
   });
+
+  check(
+    "only a successful adjacent directory change supplies package context",
+    () => {
+      for (const command of [
+        "echo cd packages/fixture && bun run test",
+        "cd packages/fixture || true; bun run test",
+        "cd packages/fixture && cd packages/other && bun run test",
+      ]) {
+        expect(
+          packageTestExecutionFailure({
+            gatingJobs: new Map([["checks", [command]]]),
+            packageDirectory: "packages/fixture",
+            packageName: "@stll/fixture",
+            shardedPackages: new Set<string>(),
+          }),
+        ).toBe("job condition: no gating job executes @stll/fixture test");
+      }
+      expect(
+        packageTestExecutionFailure({
+          rootScripts: { check: "bun --filter @stll/fixture test" },
+          gatingJobs: new Map([["checks", ["echo cd && bun run check"]]]),
+          packageDirectory: "packages/fixture",
+          packageName: "@stll/fixture",
+          shardedPackages: new Set<string>(),
+        }),
+      ).toBeUndefined();
+    },
+  );
 
   check("rejects a collectable package absent from gating jobs", () => {
     const scripts = { test: "bun test" };
