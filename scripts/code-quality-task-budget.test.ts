@@ -725,7 +725,7 @@ test("only a missing summary directory permits starting the command; other files
   }
 });
 
-test("leader exit audits and terminates an inherited-pipe descendant without waiting for the deadline", async () => {
+test("successful leader exit cleans its inherited-pipe descendants without failing the command", async () => {
   const cwd = await scratch();
   try {
     const descendant =
@@ -743,12 +743,12 @@ test("leader exit audits and terminates an inherited-pipe descendant without wai
     const start = Date.now();
     const result = await run([process.execPath, "-e", leader], cwd, 5000)
       .result;
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(0);
     expect(Date.now() - start).toBeLessThan(4000);
     const pid = Number(await Bun.file(path.join(cwd, "inherited-pid")).text());
     expect(Number.isSafeInteger(pid)).toBe(true);
     expect(result.output).toContain(
-      `Owned process remained after leader exit: pid=${pid}`,
+      `Notice: Terminating owned process after leader exit: pid=${pid}`,
     );
     expect(result.output).toContain("command=");
     expect(result.output).not.toContain("execution deadline exceeded");

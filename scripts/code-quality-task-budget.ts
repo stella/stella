@@ -416,7 +416,7 @@ const auditExitedProcessGroup = async ({
     leftovers
       .map(
         ({ pid, command: processCommand }) =>
-          `Owned process remained after leader exit: pid=${pid} pgid=${group} command=${processCommand}\n`,
+          `Notice: Terminating owned process after leader exit: pid=${pid} pgid=${group} command=${processCommand}\n`,
       )
       .join(""),
   );
@@ -555,7 +555,7 @@ export const runBudgetedCheck = async ({
   };
   child.stdout.on("data", (chunk: Buffer) => tee(chunk, "stdout"));
   child.stderr.on("data", (chunk: Buffer) => tee(chunk, "stderr"));
-  let cleanupFailed = false;
+  let cleanupRequired = false;
   let cleanupGrace: Promise<void> | undefined;
   const terminateLeftovers = () => {
     killGroup("SIGTERM");
@@ -583,7 +583,7 @@ export const runBudgetedCheck = async ({
   });
   const endedAt = Date.now();
   if (ownsGroup && child.pid !== undefined && process.platform !== "win32") {
-    cleanupFailed = await auditExitedProcessGroup({
+    cleanupRequired = await auditExitedProcessGroup({
       group: child.pid,
       report: reportDiagnostic,
       terminate: terminateLeftovers,
@@ -597,7 +597,7 @@ export const runBudgetedCheck = async ({
     closed,
     new Promise<void>((resolve) => {
       drainTimer = setTimeout(() => {
-        cleanupFailed = true;
+        cleanupRequired = true;
         const diagnostic =
           "Command pipes remained open after leader exit; terminating owned group and closing pipes\n";
         reportDiagnostic(diagnostic);
@@ -611,7 +611,7 @@ export const runBudgetedCheck = async ({
   if (drainTimer !== undefined) {
     clearTimeout(drainTimer);
   }
-  if (cleanupFailed) {
+  if (cleanupRequired) {
     killGroup("SIGKILL");
   }
   clearTimeout(timer);
@@ -623,13 +623,12 @@ export const runBudgetedCheck = async ({
   }
   process.off("SIGTERM", onTerm);
   process.off("SIGINT", onInt);
-  const finalExitCode = cleanupFailed && exitCode === 0 ? 1 : exitCode;
   return await finishBudgetedCheck({
     turbo,
     runDirectory,
     previous,
     tracker,
-    exitCode: finalExitCode,
+    exitCode,
     termination,
     output,
     writeStderr,
