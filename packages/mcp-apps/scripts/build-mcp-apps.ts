@@ -187,6 +187,7 @@ const buildMcpApp = async ({
     plugins: [reactCompiler, inlineReaderFonts],
     entrypoints: [path.join(appRoot, input)],
     minify: true,
+    define: { "process.env.NODE_ENV": JSON.stringify("production") },
     target: "browser",
   });
   if (!result.success) {
@@ -196,6 +197,14 @@ const buildMcpApp = async ({
 
   const graph =
     result.metafile ?? panic("MCP app build did not report reachable inputs");
+  const developmentInputs = Object.keys(graph.inputs).filter((file) =>
+    /[/\\]react(?:-dom)?[/\\].*\.development\.js$/u.test(file),
+  );
+  if (developmentInputs.length > 0) {
+    panic(
+      `MCP app ${app} includes React development modules: ${developmentInputs.join(", ")}`,
+    );
+  }
   const apiInputs = Object.keys(graph.inputs).filter((file) =>
     repoRelativePath(repoRoot, path.resolve(file)).startsWith("apps/api/"),
   );
