@@ -158,153 +158,216 @@ const parseDockerInspection = (output: string) =>
 
 type DockerInspection = InferOk<ReturnType<typeof parseDockerInspection>>;
 // Docker's own default option paths are resolved from the captured environment.
-const defaultCertificatePath = (env: NodeJS.ProcessEnv) => {
-  const result = Bun.spawnSync(["docker", "--help"], {
-    cwd: "/",
-    env,
-    stdout: "pipe",
-    stderr: "pipe",
-    timeout: 5000,
+const defaultCertificatePath = (
+  env: NodeJS.ProcessEnv,
+): Result<string, DockerEndpointError> =>
+  Result.try({
+    try: () =>
+      Bun.spawnSync(["docker", "--help"], {
+        cwd: "/",
+        env,
+        stdout: "pipe",
+        stderr: "pipe",
+        timeout: 5000,
+      }),
+    catch: (cause) =>
+      new DockerEndpointError({
+        message: "Could not inspect Docker's TLS certificate defaults.",
+        cause,
+      }),
+  }).andThen((result) => {
+    if (!result.success) {
+      return Result.err(
+        new DockerEndpointError({
+          message: "Could not inspect Docker's TLS certificate defaults.",
+          cause: result.stderr.toString(),
+        }),
+      );
+    }
+    const lines = result.stdout.toString().split("\n");
+    const start = lines.findIndex((line) =>
+      line.trimStart().startsWith("--tlscacert "),
+    );
+    const block: string[] = [];
+    for (let index = start; index >= 0 && index < lines.length; index += 1) {
+      const line = lines.at(index);
+      if (
+        line === undefined ||
+        (index !== start && line.trimStart().startsWith("-"))
+      ) {
+        break;
+      }
+      block.push(line);
+    }
+    const option = block.join("\n");
+    const marker = "(default";
+    const position = option.indexOf(marker);
+    const value =
+      position === -1 ? "" : option.slice(position + marker.length).trim();
+    const encoded = value.endsWith(")") ? value.slice(0, -1) : undefined;
+    if (!encoded) {
+      return Result.err(
+        new DockerEndpointError({
+          message: "Docker did not report its TLS certificate defaults.",
+        }),
+      );
+    }
+    return Result.try({
+      try: (): unknown => JSON.parse(encoded),
+      catch: (cause) =>
+        new DockerEndpointError({
+          message: "Docker reported invalid TLS certificate defaults.",
+          cause,
+        }),
+    }).andThen((filename) => {
+      if (
+        typeof filename !== "string" ||
+        !path.isAbsolute(filename) ||
+        path.basename(filename) !== "ca.pem"
+      ) {
+        return Result.err(
+          new DockerEndpointError({
+            message: "Docker reported invalid TLS certificate defaults.",
+          }),
+        );
+      }
+      return Result.ok(path.dirname(filename));
+    });
   });
-  if (!result.success) {
-    throw new DockerEndpointError({
-      message: "Could not inspect Docker's TLS certificate defaults.",
-      cause: result.stderr.toString(),
-    });
-  }
-  const option = result.stdout
-    .toString()
-    .split(/\n\s+--/u)
-    .find((block) => block.startsWith("tlscacert "));
-  const matched = option && /\(default\s+("(?:[^"\\]|\\.)*")\)/u.exec(option);
-  const encoded = matched?.at(1);
-  if (!encoded) {
-    throw new DockerEndpointError({
-      message: "Docker did not report its TLS certificate defaults.",
-    });
-  }
-  const filename: unknown = JSON.parse(encoded);
-  if (
-    typeof filename !== "string" ||
-    !path.isAbsolute(filename) ||
-    path.basename(filename) !== "ca.pem"
-  ) {
-    throw new DockerEndpointError({
-      message: "Docker reported invalid TLS certificate defaults.",
-    });
-  }
-  return path.dirname(filename);
-};
 
 type SnapshotDockerTargetOptions = {
   inspection: DockerInspection;
   env: NodeJS.ProcessEnv;
 };
+type DockerTLSSettings =
+  | { type: "plain" }
+  | { type: "tls"; source: string | undefined };
+const dockerTLSSettings = ({
+  inspection,
+  env,
+}: SnapshotDockerTargetOptions): Result<
+  DockerTLSSettings,
+  DockerEndpointError
+> => {
+  if (inspection.context === "default") {
+    return env["DOCKER_TLS"] || env["DOCKER_TLS_VERIFY"]
+      ? defaultCertificatePath(env).map((source) => ({
+          type: "tls" as const,
+          source,
+        }))
+      : Result.ok({ type: "plain" });
+  }
+  if (inspection.material.length === 0 && !inspection.skipTLSVerify) {
+    return Result.ok({ type: "plain" });
+  }
+  const source = inspection.tlsPath && path.join(inspection.tlsPath, "docker");
+  if ((!source || !path.isAbsolute(source)) && inspection.material.length > 0) {
+    return Result.err(
+      new DockerEndpointError({
+        message: "Docker TLS material has no storage path.",
+      }),
+    );
+  }
+  return Result.ok({ type: "tls", source });
+};
+
 const snapshotDockerTarget = ({
   inspection,
   env,
-}: SnapshotDockerTargetOptions) => {
-  let snapshot: string | undefined;
-  return Result.try({
-    try: () => {
-      const executionEnv = dockerEnvironment(env);
-      const namedContext = inspection.context !== "default";
-      const tlsEnabled = namedContext
-        ? inspection.material.length > 0 || inspection.skipTLSVerify
-        : Boolean(env["DOCKER_TLS"] || env["DOCKER_TLS_VERIFY"]);
-      if (namedContext) {
-        delete executionEnv["DOCKER_TLS"];
-        delete executionEnv["DOCKER_TLS_VERIFY"];
-        delete executionEnv["DOCKER_CERT_PATH"];
-        if (tlsEnabled) {
-          executionEnv["DOCKER_TLS"] = "1";
-          if (!inspection.skipTLSVerify) {
-            executionEnv["DOCKER_TLS_VERIFY"] = "1";
+}: SnapshotDockerTargetOptions) =>
+  dockerTLSSettings({ inspection, env }).andThen((tls) => {
+    let snapshot: string | undefined;
+    return Result.try({
+      try: () => {
+        const executionEnv = dockerEnvironment(env);
+        const namedContext = inspection.context !== "default";
+        if (namedContext) {
+          delete executionEnv["DOCKER_TLS"];
+          delete executionEnv["DOCKER_TLS_VERIFY"];
+          delete executionEnv["DOCKER_CERT_PATH"];
+          if (tls.type === "tls") {
+            executionEnv["DOCKER_TLS"] = "1";
+            if (!inspection.skipTLSVerify) {
+              executionEnv["DOCKER_TLS_VERIFY"] = "1";
+            }
           }
         }
-      }
-      if (tlsEnabled) {
-        const source = namedContext
-          ? inspection.tlsPath && path.join(inspection.tlsPath, "docker")
-          : defaultCertificatePath(env);
-        if (
-          (!source || !path.isAbsolute(source)) &&
-          inspection.material.length > 0
-        ) {
-          throw new DockerEndpointError({
-            message: "Docker TLS material has no storage path.",
+        if (tls.type === "tls") {
+          const { source } = tls;
+          const files = TLS_FILES.flatMap((name) => {
+            const registered = namedContext
+              ? inspection.material.includes(name)
+              : source && existsSync(path.join(source, name));
+            return registered && source
+              ? [{ name, bytes: readFileSync(path.join(source, name)) }]
+              : [];
           });
+          snapshot = mkdtempSync(path.join(tmpdir(), "stella-docker-tls-"));
+          for (const { name, bytes } of files) {
+            writeFileSync(path.join(snapshot, name), bytes, {
+              mode: 0o600,
+              flag: "wx",
+            });
+          }
+          executionEnv["DOCKER_CERT_PATH"] = snapshot;
         }
-        const files = TLS_FILES.flatMap((name) => {
-          const registered = namedContext
-            ? inspection.material.includes(name)
-            : source && existsSync(path.join(source, name));
-          return registered && source
-            ? [{ name, bytes: readFileSync(path.join(source, name)) }]
-            : [];
+        const close = (): Result<void, DockerEndpointError> => {
+          if (snapshot === undefined) {
+            return Result.ok(undefined);
+          }
+          const directory = snapshot;
+          return Result.try({
+            try: () => rmSync(directory, { recursive: true, force: true }),
+            catch: (cause) =>
+              new DockerEndpointError({
+                message: "Could not remove Docker TLS snapshot.",
+                cause,
+              }),
+          }).tap(() => {
+            snapshot = undefined;
+            process.removeListener("exit", onExit);
+          });
+        };
+        const reportCleanupFailure = () => {
+          const removed = close();
+          if (removed.isErr()) {
+            process.stderr.write(
+              `${removed.error.message} ${String(removed.error.cause)}\n`,
+            );
+            process.exitCode = 1;
+          }
+        };
+        const onExit = reportCleanupFailure;
+        if (snapshot !== undefined) {
+          process.once("exit", onExit);
+        }
+        return Object.freeze({
+          host: inspection.host,
+          env: Object.freeze(executionEnv),
+          close,
+          // The disposal protocol cannot return an error to its caller. Owners consume
+          // close() explicitly; this fallback reports failures and sets a failing status.
+          [Symbol.dispose]: reportCleanupFailure,
         });
-        snapshot = mkdtempSync(path.join(tmpdir(), "stella-docker-tls-"));
-        for (const { name, bytes } of files) {
-          writeFileSync(path.join(snapshot, name), bytes, {
-            mode: 0o600,
-            flag: "wx",
-          });
-        }
-        executionEnv["DOCKER_CERT_PATH"] = snapshot;
-      }
-      const dispose = () => {
-        if (snapshot === undefined) {
-          return;
-        }
-        const directory = snapshot;
+      },
+      catch: (cause) => {
         const removed = Result.try({
-          try: () => rmSync(directory, { recursive: true, force: true }),
-          catch: (cause) =>
-            new DockerEndpointError({
-              message: "Could not remove Docker TLS snapshot.",
-              cause,
-            }),
+          try: () => {
+            if (snapshot !== undefined) {
+              rmSync(snapshot, { recursive: true, force: true });
+            }
+          },
+          catch: (cleanup) => cleanup,
         });
-        if (removed.isErr()) {
-          throw removed.error;
-        }
-        snapshot = undefined;
-        process.removeListener("exit", onExit);
-      };
-      const onExit = () => {
-        const removed = Result.try({ try: dispose, catch: (cause) => cause });
-        if (removed.isErr()) {
-          process.stderr.write("Docker TLS snapshot cleanup failed.\n");
-          process.exitCode = 1;
-        }
-      };
-      if (snapshot !== undefined) {
-        process.once("exit", onExit);
-      }
-      return Object.freeze({
-        host: inspection.host,
-        env: Object.freeze(executionEnv),
-        [Symbol.dispose]: dispose,
-      });
-    },
-    catch: (cause) => {
-      const removed = Result.try({
-        try: () => {
-          if (snapshot !== undefined) {
-            rmSync(snapshot, { recursive: true, force: true });
-          }
-        },
-        catch: (cleanup) => cleanup,
-      });
-      return new DockerEndpointError({
-        message: "Could not snapshot Docker transport settings.",
-        cause: removed.isErr()
-          ? { snapshot: cause, cleanup: removed.error }
-          : cause,
-      });
-    },
+        return new DockerEndpointError({
+          message: "Could not snapshot Docker transport settings.",
+          cause: removed.isErr()
+            ? { snapshot: cause, cleanup: removed.error }
+            : cause,
+        });
+      },
+    });
   });
-};
 
 export const resolveDockerTarget = ({
   env,

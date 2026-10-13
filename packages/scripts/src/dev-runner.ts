@@ -23,6 +23,7 @@ import { isSealTrusted, parseSealStatus } from "./agent-evidence";
 import { childExitStatus } from "./child-exit-status";
 import {
   dockerCommand,
+  DockerEndpointError,
   resolveInstalledDevDockerKeeper,
   type DockerTarget,
   resolveDockerTarget,
@@ -1065,7 +1066,15 @@ const ensureHostDockerKeeper = async ({
   const dockerTarget = resolved.value;
   const approved = resolveInstalledDevDockerKeeper(dockerTarget);
   if (approved.isErr()) {
-    dockerTarget[Symbol.dispose]();
+    const closed = dockerTarget.close();
+    if (closed.isErr()) {
+      return Result.err(
+        new DockerEndpointError({
+          message: `${approved.error.message}; ${closed.error.message}`,
+          cause: { operation: approved.error, cleanup: closed.error },
+        }),
+      );
+    }
     return approved;
   }
   const label = approved.value;
@@ -1093,7 +1102,15 @@ const ensureHostDockerKeeper = async ({
     sleep: async (milliseconds) => Bun.sleep(milliseconds),
   });
   if (recovered.isErr()) {
-    dockerTarget[Symbol.dispose]();
+    const closed = dockerTarget.close();
+    if (closed.isErr()) {
+      return Result.err(
+        new DockerEndpointError({
+          message: `${recovered.error.message}; ${closed.error.message}`,
+          cause: { operation: recovered.error, cleanup: closed.error },
+        }),
+      );
+    }
     return Result.err(recovered.error);
   }
   return Result.ok(dockerTarget);
@@ -2550,6 +2567,20 @@ const main = async () => {
   const processGroupValue = <T>(result: Result<T, DevProcessGroupError>) =>
     result.unwrap("Dev process group operation failed");
 
+  const closeDockerTarget = () => {
+    if (dockerTarget === null) {
+      return true;
+    }
+    const closed = dockerTarget.close();
+    if (closed.isErr()) {
+      console.error(
+        `Docker TLS snapshot cleanup failed: ${formatErrorChain(closed.error)}`,
+      );
+      return false;
+    }
+    return true;
+  };
+
   const cleanup = async () => {
     if (cleanupPromise) {
       return cleanupPromise;
@@ -2571,7 +2602,8 @@ const main = async () => {
 
       const groupStopped = reportGroupStopFailure(groupStop);
       if (!ownsDockerProject || dockerTarget === null) {
-        return groupStopped;
+        const closed = closeDockerTarget();
+        return groupStopped && closed;
       }
 
       const stopped = Result.try({
@@ -2590,7 +2622,8 @@ const main = async () => {
           `Docker cleanup failed for ${dockerProject}: ${stopped.error}`,
         );
       }
-      return stopped.isOk() && groupStopped;
+      const closed = closeDockerTarget();
+      return stopped.isOk() && groupStopped && closed;
     })();
 
     return cleanupPromise;
