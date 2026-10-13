@@ -3,6 +3,11 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import {
+  sourceWriteExceptionIssues,
+  validateSourceWriteExceptions,
+} from "./test-source-write-exceptions";
+
 const repositoryRoot = path.resolve(import.meta.dir, "../../..");
 const writers = new Set([
   "writeFileSync",
@@ -67,15 +72,17 @@ const inspectSourceWrites = (source: string, file: string) => {
   };
   collect(tree);
   const bindingFor = (node: ts.Identifier) => {
-    let scope: ts.Node | undefined = node.parent;
-    while (scope !== undefined) {
+    let scope = node.parent;
+    while (true) {
       const initializer = bindings.get(scope)?.get(node.text);
       if (initializer !== undefined) {
         return initializer;
       }
+      if (ts.isSourceFile(scope)) {
+        return undefined;
+      }
       scope = scope.parent;
     }
-    return undefined;
   };
   const callName = (
     expression: ts.Expression,
@@ -89,15 +96,29 @@ const inspectSourceWrites = (source: string, file: string) => {
       if (initializer !== undefined) {
         return callName(initializer, new Set(seen).add(expression));
       }
-      return aliases.get(expression.text) ?? expression.text;
+      return expression.text === "write" && !aliases.has(expression.text)
+        ? undefined
+        : (aliases.get(expression.text) ?? expression.text);
     }
     if (ts.isPropertyAccessExpression(expression)) {
+      if (
+        expression.name.text === "write" &&
+        callName(expression.expression, new Set(seen).add(expression)) !== "Bun"
+      ) {
+        return undefined;
+      }
       return expression.name.text;
     }
     if (
       ts.isElementAccessExpression(expression) &&
       ts.isStringLiteral(expression.argumentExpression)
     ) {
+      if (
+        expression.argumentExpression.text === "write" &&
+        callName(expression.expression, new Set(seen).add(expression)) !== "Bun"
+      ) {
+        return undefined;
+      }
       return expression.argumentExpression.text;
     }
     return undefined;
@@ -209,11 +230,16 @@ const inspectSourceWrites = (source: string, file: string) => {
       node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
       ts.isIdentifier(node.left)
     ) {
-      let scope: ts.Node | undefined = node.parent;
-      while (scope !== undefined && !bindings.get(scope)?.has(node.left.text)) {
+      let scope = node.parent;
+      while (
+        !ts.isSourceFile(scope) &&
+        !bindings.get(scope)?.has(node.left.text)
+      ) {
         scope = scope.parent;
       }
-      const targetScope = scope ?? scopeOf(node);
+      const targetScope = bindings.get(scope)?.has(node.left.text)
+        ? scope
+        : scopeOf(node);
       let entries = bindings.get(targetScope);
       if (entries === undefined) {
         entries = new Map();
@@ -221,9 +247,13 @@ const inspectSourceWrites = (source: string, file: string) => {
       }
       entries.set(node.left.text, node.right);
     }
+    const writer = ts.isCallExpression(node)
+      ? callName(node.expression)
+      : undefined;
     if (
       ts.isCallExpression(node) &&
-      writers.has(callName(node.expression) ?? "")
+      writer !== undefined &&
+      writers.has(writer)
     ) {
       const destination = node.arguments.at(0);
       const value =
@@ -241,7 +271,7 @@ const inspectSourceWrites = (source: string, file: string) => {
             node.getStart(tree),
           );
           violations.push(
-            `${file}:${line + 1}: ${callName(node.expression)} writes into src`,
+            `${file}:${line + 1}: ${writer} writes into src (${relative})`,
           );
         }
       }
@@ -265,8 +295,90 @@ test("tests keep generated files outside application and package source trees", 
       file,
     ),
   );
-  // No exceptions: source scanners must see a stable tree throughout a test run.
-  expect(violations).toEqual([]);
+  expect(sourceWriteExceptionIssues(repositoryRoot, violations)).toEqual([]);
+});
+
+test("source-write exceptions exactly match observed writes and may only shrink", () => {
+  const exception = {
+    source: "apps/example/src/example.test.ts",
+    operation: "writeFileSync",
+    destination: "apps/example/src/baseline.json",
+    reason: "Explicit regeneration of a committed baseline.",
+  };
+  const violation = `${exception.source}:12: ${exception.operation} writes into src (${exception.destination})`;
+  const current = JSON.stringify([exception]);
+  expect(
+    validateSourceWriteExceptions({
+      observed: [violation],
+      current,
+      baseline: current,
+    }),
+  ).toEqual([]);
+  expect(
+    validateSourceWriteExceptions({
+      observed: [],
+      current: "[]",
+      baseline: current,
+    }),
+  ).toEqual([]);
+  expect(
+    validateSourceWriteExceptions({
+      observed: [violation],
+      current,
+      baseline: "[]",
+    }),
+  ).toEqual([
+    expect.stringContaining("Source-write exceptions may only shrink:"),
+  ]);
+  expect(
+    validateSourceWriteExceptions({ observed: [], current, baseline: current }),
+  ).toEqual([
+    expect.stringContaining(
+      "Source-write exceptions must equal observed debt:",
+    ),
+  ]);
+  expect(
+    validateSourceWriteExceptions({
+      observed: [violation, violation],
+      current,
+      baseline: current,
+    }),
+  ).toEqual([
+    expect.stringContaining(
+      "Source-write exceptions must equal observed debt:",
+    ),
+  ]);
+  expect(
+    validateSourceWriteExceptions({
+      observed: [violation],
+      current: JSON.stringify([{ ...exception, reason: "" }]),
+      baseline: current,
+    }),
+  ).toContain(
+    "Source-write exceptions require source, operation, destination, and a reason",
+  );
+});
+
+test("only Bun.write is treated as the filesystem write API", () => {
+  const destination = '"packages/scripts/src/file.ts"';
+  expect(
+    inspectSourceWrites(
+      `const { write } = fixture(); write(${destination}, "");`,
+      "packages/scripts/src/example.test.ts",
+    ),
+  ).toEqual([]);
+  expect(
+    inspectSourceWrites(
+      `fixture.write(${destination}, "");`,
+      "packages/scripts/src/example.test.ts",
+    ),
+  ).toEqual([]);
+  expect(
+    inspectSourceWrites(
+      `Bun.write(${destination}, "");`,
+      "packages/scripts/src/example.test.ts",
+    ),
+  ).toHaveLength(1);
 });
 
 test("the census rejects every writer through direct and derived source destinations", () => {
