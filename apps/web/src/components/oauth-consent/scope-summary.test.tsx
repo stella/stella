@@ -63,7 +63,10 @@ describe("concise consent permissions", () => {
       ).toHaveLength(1);
       expect(markup).toContain(messages.consent.summaryStaySignedIn);
       const entries = toOAuthScopeDisplayEntries(scopes);
-      const t = createTranslator({ locale, messages });
+      const t = createTranslator({
+        locale,
+        messages: { consent: messages.consent },
+      });
       for (const entry of entries) {
         if (entry.type === "known") {
           expect(markup).toContain(
