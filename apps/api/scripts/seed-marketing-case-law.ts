@@ -272,10 +272,7 @@ export const seedMarketingCaseLaw = async ({
         .onConflictDoUpdate({
           target: chatThreads.id,
           set: thread,
-          setWhere: and(
-            eq(chatThreads.organizationId, organizationId),
-            eq(chatThreads.userId, userId),
-          ),
+          setWhere: sql`${chatThreads.organizationId} = ${organizationId} AND ${chatThreads.userId} = ${userId}`,
         });
       await tx
         .insert(chatMessages)
@@ -287,10 +284,7 @@ export const seedMarketingCaseLaw = async ({
             role: sql`excluded.role`,
             createdAt: sql`excluded.created_at`,
           },
-          setWhere: and(
-            eq(chatMessages.threadId, threadId),
-            eq(chatMessages.userId, userId),
-          ),
+          setWhere: sql`${chatMessages.threadId} = ${threadId} AND ${chatMessages.userId} = ${userId}`,
         });
       const marks = [
         {
@@ -360,10 +354,7 @@ export const seedMarketingCaseLaw = async ({
             updatedAt: sql`excluded.updated_at`,
             visibility: sql`excluded.visibility`,
           },
-          setWhere: and(
-            eq(legalReaderAnnotations.organizationId, organizationId),
-            eq(legalReaderAnnotations.userId, userId),
-          ),
+          setWhere: sql`${legalReaderAnnotations.organizationId} = ${organizationId} AND ${legalReaderAnnotations.userId} = ${userId}`,
         });
     }
   });
