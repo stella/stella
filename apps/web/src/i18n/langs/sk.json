@@ -535,6 +535,16 @@
       "createInvoice": "Vytvoriť faktúru",
       "dueDate": "Dátum splatnosti",
       "editInvoice": "Upraviť faktúru",
+      "export": {
+        "accounting": "Import do účtovníctva",
+        "eBilling": "Elektronická fakturácia",
+        "eso9": "Importná tabuľka ESO9 (XLSX)",
+        "exporting": "Pripravujem export…",
+        "isdoc": "E-faktúra ISDOC (ABRA Gen a ďalšie)",
+        "spreadsheets": "Tabuľky",
+        "xlsx": "Faktúry (XLSX)",
+        "xlsxLines": "Položky faktúr (XLSX)"
+      },
       "finalize": "Finalizovať",
       "invoiceDate": "Dátum faktúry",
       "invoiceDetail": "Detail faktúry",
