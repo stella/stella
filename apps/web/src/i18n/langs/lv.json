@@ -1435,6 +1435,8 @@
     "sendPrompt": "Sūtīt ziņojumu",
     "sendQueuedMessageNow": "Sūtīt tūlīt",
     "sendWithoutAnonymization": "Sūtīt bez anonimizācijas",
+    "signInToChat": "Piesakieties, lai tērzētu par šo dokumentu",
+    "signInToChatAbout": "Piesakieties, lai tērzētu par",
     "skills": {
       "scope": {
         "private": "Jūsu prasmes",

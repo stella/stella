@@ -1435,6 +1435,8 @@
     "sendPrompt": "Üzenet küldése",
     "sendQueuedMessageNow": "Küldés most",
     "sendWithoutAnonymization": "Küldés anonimizálás nélkül",
+    "signInToChat": "Jelentkezzen be, hogy erről a dokumentumról csevegjen",
+    "signInToChatAbout": "Jelentkezzen be a csevegéshez:",
     "skills": {
       "scope": {
         "private": "Saját készségek",

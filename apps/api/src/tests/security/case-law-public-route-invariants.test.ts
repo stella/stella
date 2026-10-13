@@ -259,6 +259,11 @@ const PUBLIC_DECISION_READ_GATES = {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "Sitemap shard naming fragments; no query.",
   },
+  "apps/api/src/lib/db/aggregate-lock.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason:
+      "Locks citation stats batch rows by ID for ingestion; returns no row.",
+  },
   "apps/api/src/lib/decision-date-bounds-sql.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "Date-bound fragments; no query.",
