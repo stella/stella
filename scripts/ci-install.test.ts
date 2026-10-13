@@ -145,6 +145,7 @@ test("slow progressing installs warn once and pass beyond the wall budget (fake 
   }
   monitor.finish();
   expect(events).toEqual(["warning"]);
+  expect(monitor.wasStalled()).toBe(false);
 });
 
 test("silent hangs warn then emit exactly one stall kill (fake clock)", () => {
@@ -171,6 +172,7 @@ test("silent hangs warn then emit exactly one stall kill (fake clock)", () => {
   now = 500;
   monitor.tick();
   expect(events).toEqual(["warning", "install-stall"]);
+  expect(monitor.wasStalled()).toBe(true);
 });
 
 test("file extraction and growing downloads count as progress without installer output", async () => {

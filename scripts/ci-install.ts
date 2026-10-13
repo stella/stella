@@ -93,6 +93,7 @@ export const createInstallWatchdog = ({
     },
     maximumGapMs: () => Math.max(maximumGap, now() - progressAt),
     finish: warning,
+    wasStalled: () => stalled,
     idleMs: () => now() - progressAt,
     tick: () => {
       warning();
@@ -182,11 +183,9 @@ export const runLoggedInstall = async ({
   mkdirSync(path.dirname(logFile), { recursive: true });
   const descriptor = openSync(logFile, "w+");
   const started = Date.now();
-  let watchdog: ReturnType<typeof createInstallWatchdog> | undefined;
   let timer: ReturnType<typeof setInterval> | undefined;
   let sampling: Promise<void> | undefined;
-  let completed = false;
-  let stalled = false;
+  const completion = new AbortController();
   const record = (chunk: string | Uint8Array) => {
     writeSync(
       descriptor,
@@ -198,18 +197,13 @@ export const runLoggedInstall = async ({
     report(message);
   };
   try {
-    const telemetry = () =>
-      `restore=${restoreOutcome} key=${storeKey} install_ms=${Date.now() - started} budget_ms=${budgetMs} stall_ms=${stallMs} max_progress_gap_ms=${watchdog?.maximumGapMs() ?? 0}`;
-    summary(
-      `Install started; warning budget ${budgetMs} ms; ${telemetry()}; log ${logFile}\n`,
-    );
     const child = Bun.spawn({
       cmd: [...command],
       stdin: "ignore",
       stdout: "pipe",
       stderr: "pipe",
     });
-    watchdog = createInstallWatchdog({
+    const watchdog = createInstallWatchdog({
       budgetMs,
       stallMs,
       now: Date.now,
@@ -218,18 +212,49 @@ export const runLoggedInstall = async ({
           `::warning title=install-budget::kind=infra class=${restoreOutcome === "cold" ? "install-cold-budget" : "install-budget"} ${telemetry()}\n`,
         ),
       kill: () => {
-        stalled = true;
         summary(
-          `::error title=install-stall::kind=infra class=install-stall ${telemetry()} idle_ms=${watchdog?.idleMs()} pid=${child.pid}\n`,
+          `::error title=install-stall::kind=infra class=install-stall ${telemetry()} idle_ms=${watchdog.idleMs()} pid=${child.pid}\n`,
         );
         child.kill("SIGKILL");
       },
     });
+    const telemetry = () =>
+      `restore=${restoreOutcome} key=${storeKey} install_ms=${Date.now() - started} budget_ms=${budgetMs} stall_ms=${stallMs} max_progress_gap_ms=${watchdog.maximumGapMs()}`;
+    summary(
+      `Install started; warning budget ${budgetMs} ms; ${telemetry()}; log ${logFile}\n`,
+    );
     let previousStore: string | undefined;
     let lastProbe = started;
+    const probeStore = async () => {
+      try {
+        const store = await installStoreProgress(
+          progressRoots,
+          () => !completion.signal.aborted,
+        );
+        if (completion.signal.aborted) {
+          return;
+        }
+        if (
+          (previousStore !== undefined && store.signature !== previousStore) ||
+          (store.newest >= started && previousStore === undefined)
+        ) {
+          watchdog.progress();
+        }
+        previousStore = store.signature;
+        watchdog.tick();
+      } catch (error) {
+        // An unreadable store cannot prove a stall. Keep the job deadline and
+        // surface the failed probe rather than killing a progressing install.
+        if (!completion.signal.aborted) {
+          summary(`::warning title=install-progress-probe::${String(error)}\n`);
+        }
+      } finally {
+        sampling = undefined;
+      }
+    };
     timer = setInterval(
       () => {
-        if (completed || sampling !== undefined || watchdog === undefined) {
+        if (completion.signal.aborted || sampling !== undefined) {
           return;
         }
         watchdog.finish();
@@ -242,42 +267,13 @@ export const runLoggedInstall = async ({
           return;
         }
         lastProbe = Date.now();
-        sampling = (async () => {
-          try {
-            const store = await installStoreProgress(
-              progressRoots,
-              () => !completed,
-            );
-            if (completed) {
-              return;
-            }
-            if (
-              (previousStore !== undefined &&
-                store.signature !== previousStore) ||
-              (store.newest >= started && previousStore === undefined)
-            ) {
-              watchdog?.progress();
-            }
-            previousStore = store.signature;
-            watchdog?.tick();
-          } catch (error) {
-            // An unreadable store cannot prove a stall. Keep the job deadline and
-            // surface the failed probe rather than killing a progressing install.
-            if (!completed) {
-              summary(
-                `::warning title=install-progress-probe::${String(error)}\n`,
-              );
-            }
-          } finally {
-            sampling = undefined;
-          }
-        })();
+        sampling = probeStore();
       },
       Math.min(1000, stallMs / 2),
     );
     const output = (chunk: Uint8Array) => {
       if (chunk.byteLength > 0) {
-        watchdog?.progress();
+        watchdog.progress();
       }
       record(chunk);
     };
@@ -288,7 +284,7 @@ export const runLoggedInstall = async ({
       child.stderr.pipeTo(new WritableStream({ write: output })),
       child.exited,
     ]);
-    completed = true;
+    completion.abort();
     clearInterval(timer);
     await sampling;
     watchdog.finish();
@@ -300,11 +296,7 @@ export const runLoggedInstall = async ({
       readSync(descriptor, tail, 0, length, size - length);
       report(`Installer log tail:\n${tail.toString()}\n`);
     }
-    if (
-      child.signalCode !== null &&
-      child.signalCode !== undefined &&
-      !stalled
-    ) {
+    if (child.signalCode !== undefined && !watchdog.wasStalled()) {
       summary(
         `::error title=install-signal::kind=infra class=install-signal ${telemetry()} signal=${child.signalCode}\n`,
       );
@@ -314,7 +306,7 @@ export const runLoggedInstall = async ({
     );
     return exitCode;
   } finally {
-    completed = true;
+    completion.abort();
     if (timer !== undefined) {
       clearInterval(timer);
     }
