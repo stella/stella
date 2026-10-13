@@ -6,7 +6,7 @@ import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { INVOICE_DUE_DAY_PRESETS } from "@stll/api-contract";
-import type { InvoiceTotals } from "@stll/invoicing";
+import type { InvoiceTotals, VatTreatment } from "@stll/invoicing";
 import { parsePlainDate } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -83,10 +83,19 @@ const STEP_LABELS = {
   issue: "billing.invoiceComposer.steps.issue",
 } as const satisfies Record<ComposerStep, TranslationKey>;
 
+const VAT_TREATMENT_LABELS = {
+  domestic_vat: "billing.invoiceComposer.noVat",
+  not_vat_payer: "billing.invoiceComposer.noVat",
+  exempt: "billing.invoiceComposer.noVat",
+  reverse_charge: "billing.invoiceComposer.reverseCharge",
+  outside_scope: "billing.invoiceComposer.outsideScope",
+} as const satisfies Record<VatTreatment, TranslationKey>;
+
 const VAT_REASON_LABELS = {
   no_seller_profile: "billing.invoiceComposer.vatReasons.noSellerProfile",
   seller_not_vat_payer: "billing.invoiceComposer.vatReasons.sellerNotVatPayer",
   reverse_charge: "billing.invoiceComposer.vatReasons.reverseCharge",
+  outside_scope: "billing.invoiceComposer.vatReasons.outsideScope",
   domestic_rate: "billing.invoiceComposer.vatReasons.domesticRate",
   no_vat_rate: "billing.invoiceComposer.vatReasons.noVatRate",
   client_country_unconfirmed:
@@ -887,11 +896,7 @@ const DetailsStep = ({
                           maximumFractionDigits: 2,
                         }),
                       })
-                    : t(
-                        vat.vatTreatment === "reverse_charge"
-                          ? "billing.invoiceComposer.reverseCharge"
-                          : "billing.invoiceComposer.noVat",
-                      )}
+                    : t(VAT_TREATMENT_LABELS[vat.vatTreatment])}
                 </span>
                 <SourceHint>{t(VAT_REASON_LABELS[vat.reason])}</SourceHint>
               </span>

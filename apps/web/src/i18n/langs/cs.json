@@ -553,6 +553,7 @@
       "nothingToBill": "Zatím není co fakturovat. Schvalte ve spisu časové záznamy nebo výdaje a budete je moci vyfakturovat.",
       "openInvoice": "Otevřít fakturu",
       "otherCurrency": "{count, plural, one {# položka je vedena} few {# položky jsou vedeny} many {# položky je vedeno} other {# položek je vedeno}} v jiné měně než {currency} a {count, plural, one {zůstává} few {zůstávají} many {zůstává} other {zůstává}} k vyfakturování zvlášť.",
+      "outsideScope": "Není předmětem daně v tuzemsku, 0 %",
       "rate": "Sazba",
       "readyDescription": "Vystavením se faktuře přidělí další číslo z vaší číselné řady a faktura se uzamkne. Koncept lze dál upravovat.",
       "readyTitle": "Připraveno k vystavení",
@@ -583,6 +584,7 @@
         "domesticRate": "Vaše nejvyšší sazba DPH platná ke dni plnění",
         "noSellerProfile": "Chybí profil dodavatele, DPH se proto neúčtuje, dokud ji na faktuře nenastavíte",
         "noVatRate": "V nastavení fakturace není nastavena žádná sazba DPH",
+        "outsideScope": "DIČ klienta je registrováno mimo EU, místo plnění je proto v zahraničí",
         "reverseCharge": "DIČ klienta je registrováno v jiné zemi",
         "sellerNotVatPayer": "Dodavatel není plátcem DPH"
       }

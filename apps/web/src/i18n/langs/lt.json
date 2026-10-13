@@ -553,6 +553,7 @@
       "nothingToBill": "Kol kas nėra už ką išrašyti sąskaitos. Patvirtinkite šios bylos laiko įrašus ar išlaidas, kad galėtumėte už juos išrašyti sąskaitą.",
       "openInvoice": "Atidaryti sąskaitą",
       "otherCurrency": "{count, plural, one {# eilutė užregistruota} few {# eilutės užregistruotos} many {# eilutės užregistruota} other {# eilučių užregistruota}} kita valiuta nei {currency} ir lieka atskirai sąskaitai.",
+      "outsideScope": "Nepatenka į PVM taikymo sritį, 0 %",
       "rate": "Įkainis",
       "readyDescription": "Išrašant sąskaitai suteikiamas kitas jūsų numerių serijos numeris ir ji užrakinama. Juodraštį galima toliau redaguoti.",
       "readyTitle": "Paruošta išrašyti",
@@ -583,6 +584,7 @@
         "domesticRate": "Jūsų didžiausias paslaugų suteikimo dieną galiojantis PVM tarifas",
         "noSellerProfile": "Nėra pardavėjo profilio, todėl PVM netaikomas, kol jo nenustatysite sąskaitoje",
         "noVatRate": "Atsiskaitymo nustatymuose nenustatytas joks PVM tarifas",
+        "outsideScope": "Kliento PVM kodas įregistruotas ne ES, todėl paslaugų teikimo vieta yra užsienyje",
         "reverseCharge": "Kliento PVM mokėtojo kodas įregistruotas kitoje šalyje",
         "sellerNotVatPayer": "Pardavėjas nėra PVM mokėtojas"
       }

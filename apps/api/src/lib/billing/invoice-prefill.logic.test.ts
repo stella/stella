@@ -64,11 +64,18 @@ const VAT_CASES: VatCase[] = [
     expected: ["reverse_charge", 0, "reverse_charge"],
   },
   {
-    name: "a business client outside the EU with a matching address is reverse charged",
+    name: "a business client outside the EU is outside the scope of VAT",
     seller: { vatId: "CZ12345678", vatPayer: true },
     buyerVatId: "GB123456789",
     buyerCountry: "United Kingdom",
-    expected: ["reverse_charge", 0, "reverse_charge"],
+    expected: ["outside_scope", 0, "outside_scope"],
+  },
+  {
+    name: "a Northern Ireland VAT ID (XI) is a UK service client, not an EU one",
+    seller: { vatId: "CZ12345678", vatPayer: true },
+    buyerVatId: "XI123456789",
+    buyerCountry: "GB",
+    expected: ["outside_scope", 0, "outside_scope"],
   },
   {
     name: "a free-text tax ID of a Czech client keeps the standard rate",

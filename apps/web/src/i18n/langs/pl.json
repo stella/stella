@@ -553,6 +553,7 @@
       "nothingToBill": "Na razie nie ma czego fakturować. Zatwierdź wpisy czasu lub wydatki w tej sprawie, aby je rozliczyć.",
       "openInvoice": "Otwórz fakturę",
       "otherCurrency": "{count, plural, one {# pozycja jest zapisana} few {# pozycje są zapisane} many {# pozycji jest zapisanych} other {# pozycji jest zapisanych}} w innej walucie niż {currency} i czekają na osobną fakturę.",
+      "outsideScope": "Niepodlegające opodatkowaniu VAT w kraju, 0 %",
       "rate": "Stawka",
       "readyDescription": "Wystawienie nadaje fakturze kolejny numer z serii i blokuje ją. Szkic można dalej edytować.",
       "readyTitle": "Gotowa do wystawienia",
@@ -583,6 +584,7 @@
         "domesticRate": "Twoja najwyższa stawka VAT obowiązująca w dniu wykonania usługi",
         "noSellerProfile": "Brak profilu sprzedawcy, więc VAT nie jest naliczany, dopóki nie ustawisz go na fakturze",
         "noVatRate": "W ustawieniach rozliczeń nie skonfigurowano stawki VAT",
+        "outsideScope": "NIP klienta jest zarejestrowany poza UE, więc miejsce świadczenia jest za granicą",
         "reverseCharge": "Numer VAT klienta jest zarejestrowany w innym kraju",
         "sellerNotVatPayer": "Sprzedawca nie jest czynnym podatnikiem VAT"
       }

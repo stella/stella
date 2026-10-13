@@ -553,6 +553,7 @@
       "nothingToBill": "Veel pole midagi arveldada. Kinnitage selle toimiku ajakanded või kulud, et neid arveldada.",
       "openInvoice": "Ava arve",
       "otherCurrency": "{count, plural, one {# rida on} other {# rida on}} kirjendatud muus valuutas kui {currency} ja jääb eraldi arve jaoks.",
+      "outsideScope": "Ei kuulu käibemaksu kohaldamisalasse, 0 %",
       "rate": "Tunnihind",
       "readyDescription": "Väljastamisel saab arve teie numbriseeria järgmise numbri ja lukustatakse. Mustandit saab edasi muuta.",
       "readyTitle": "Valmis väljastamiseks",
@@ -583,6 +584,7 @@
         "domesticRate": "Teie kõrgeim teenuse osutamise päeval kehtiv käibemaksumäär",
         "noSellerProfile": "Müüja profiil puudub, seega käibemaksu ei arvestata enne, kui selle arvele määrate",
         "noVatRate": "Arvelduse seadetes pole käibemaksumäära seadistatud",
+        "outsideScope": "Kliendi KMKR number on registreeritud väljaspool ELi, seega on teenuse osutamise koht välismaal",
         "reverseCharge": "Kliendi käibemaksukohustuslase number on registreeritud teises riigis",
         "sellerNotVatPayer": "Müüja ei ole käibemaksukohustuslane"
       }

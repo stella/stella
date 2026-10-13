@@ -553,6 +553,7 @@
       "nothingToBill": "Pagaidām nav par ko izrakstīt rēķinu. Apstipriniet šīs lietas laika ierakstus vai izdevumus, lai tos iekļautu rēķinā.",
       "openInvoice": "Atvērt rēķinu",
       "otherCurrency": "{count, plural, zero {# pozīciju ir reģistrētas} one {# pozīcija ir reģistrēta} other {# pozīcijas ir reģistrētas}} citā valūtā, nevis {currency}, un paliek atsevišķam rēķinam.",
+      "outsideScope": "Neietilpst PVN piemērošanas jomā, 0 %",
       "rate": "Likme",
       "readyDescription": "Izrakstot rēķinam tiek piešķirts nākamais numurs no jūsu numuru sērijas, un tas tiek bloķēts. Melnrakstu var turpināt rediģēt.",
       "readyTitle": "Gatavs izrakstīšanai",
@@ -583,6 +584,7 @@
         "domesticRate": "Jūsu augstākā PVN likme, kas ir spēkā piegādes datumā",
         "noSellerProfile": "Nav pārdevēja profila, tāpēc PVN netiek piemērots, kamēr to neiestatāt rēķinā",
         "noVatRate": "Norēķinu iestatījumos nav iestatīta neviena PVN likme",
+        "outsideScope": "Klienta PVN numurs ir reģistrēts ārpus ES, tāpēc piegādes vieta ir ārvalstīs",
         "reverseCharge": "Klienta PVN numurs ir reģistrēts citā valstī",
         "sellerNotVatPayer": "Pārdevējs nav PVN maksātājs"
       }
