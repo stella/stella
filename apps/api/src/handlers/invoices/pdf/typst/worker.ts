@@ -11,7 +11,7 @@ const send = (reply: TypstWorkerReply) => {
   if (process.send === undefined) {
     return panic("The Typst renderer must run with an IPC channel");
   }
-  process.send(reply);
+  return process.send(reply);
 };
 
 const maxGrowthBytes = Number(process.argv[2]);

@@ -132,10 +132,11 @@ const wasm = async () => {
         createdAt: CREATED_AT,
       });
     const cold = await timed(async () => render());
-    const outcome = cold.value.unwrap();
-    if (outcome.status !== "rendered") {
-      return panic(outcome.diagnostics.join("\n"));
-    }
+    const result = cold.value.unwrap();
+    const outcome =
+      result.status === "rendered"
+        ? result
+        : panic(result.diagnostics.join("\n"));
     const warm: number[] = [];
     const compile: number[] = [];
     for (let run = 1; run <= WARM_RUNS; run += 1) {
