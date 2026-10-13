@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
 import { toChatDecisionPassageHref } from "@stll/api-contract";
 import {
@@ -181,12 +181,34 @@ test.describe("reader chat decision citations", () => {
       await expect(action).toHaveAttribute("href", `${targetPath}#p-28`);
       await action.click();
     };
+    const expectLandingMarker = async (target: Locator) => {
+      await expect(target).toBeInViewport();
+      await expect(target).toHaveAttribute("data-reader-landing");
+      await expect
+        .poll(async () =>
+          target.evaluate((element) => {
+            const marker = getComputedStyle(element, "::before");
+            return {
+              content: marker.content,
+              width: marker.width,
+              position: marker.position,
+              painted:
+                marker.backgroundColor !== "transparent" &&
+                marker.backgroundColor !== "rgba(0, 0, 0, 0)",
+            };
+          }),
+        )
+        .toEqual({
+          content: '""',
+          width: "2px",
+          position: "absolute",
+          painted: true,
+        });
+    };
     await openCitation(decision);
     await expect(panel.locator("main.reader-paper")).toHaveCount(0);
     await expect(chips).toHaveCount(chipCount);
-    await expect(paragraph).toBeInViewport();
-    await expect(paragraph).toHaveClass(/\bbg-accent\b/u);
-    await expect(paragraph).toHaveAttribute("data-reader-landing");
+    await expectLandingMarker(paragraph);
     await expect
       .poll(async () => mainReader.evaluate((element) => element.scrollTop))
       .toBeGreaterThan(0);
@@ -195,9 +217,7 @@ test.describe("reader chat decision citations", () => {
     await page.mouse.wheel(0, -100_000);
     await expect(paragraph).not.toBeInViewport();
     await openCitation(decision);
-    await expect(paragraph).toBeInViewport();
-    await expect(paragraph).toHaveClass(/\bbg-accent\b/u);
-    await expect(paragraph).toHaveAttribute("data-reader-landing");
+    await expectLandingMarker(paragraph);
     await expect(panel.locator("main.reader-paper")).toHaveCount(0);
     await expect(chips).toHaveCount(chipCount);
 
@@ -206,7 +226,7 @@ test.describe("reader chat decision citations", () => {
     const panelParagraph = panel.locator(
       'main.reader-paper [data-anchor="p-28"]',
     );
-    await expect(panelParagraph).toBeInViewport();
+    await expectLandingMarker(panelParagraph);
     await panel
       .locator('[data-slot="scroll-area-viewport"]')
       .filter({
@@ -216,9 +236,7 @@ test.describe("reader chat decision citations", () => {
     await page.mouse.wheel(0, -100_000);
     await expect(panelParagraph).not.toBeInViewport();
     await openCitation(otherDecision);
-    await expect(panelParagraph).toBeInViewport();
-    await expect(panelParagraph).toHaveClass(/\bbg-accent\b/u);
-    await expect(panelParagraph).toHaveAttribute("data-reader-landing");
+    await expectLandingMarker(panelParagraph);
     await expect(chips).toHaveCount(chipCount + 1);
     await expect(panel.locator("main.reader-paper")).toHaveCount(1);
   });
