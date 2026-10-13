@@ -250,3 +250,36 @@ export const vatOnSupplyDate = <TReason extends string>(
     reason: vat.reason === "no_vat_rate" ? "domestic_rate" : vat.reason,
   };
 };
+
+/**
+ * Creates the draft at most once, then issues it when asked and reads it
+ * back. `draftId` is the draft an earlier attempt already created: a retry
+ * after a failed issue or read continues with that draft instead of creating
+ * a second invoice, which matters for a flat fee where no claimed entry would
+ * refuse the duplicate.
+ */
+export const submitComposedInvoice = async <TInvoice>({
+  draftId,
+  issue,
+  create,
+  onCreated,
+  finalize,
+  read,
+}: {
+  draftId: string | null;
+  issue: boolean;
+  create: () => Promise<{ id: string }>;
+  onCreated: (id: string) => void;
+  finalize: (id: string) => Promise<void>;
+  read: (id: string) => Promise<TInvoice>;
+}): Promise<TInvoice> => {
+  let id = draftId;
+  if (id === null) {
+    id = (await create()).id;
+    onCreated(id);
+  }
+  if (issue) {
+    await finalize(id);
+  }
+  return read(id);
+};

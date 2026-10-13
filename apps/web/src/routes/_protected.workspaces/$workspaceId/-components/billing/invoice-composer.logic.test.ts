@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import {
   composeTotals,
   hasBillableItems,
@@ -7,6 +9,7 @@ import {
   entryAdjustments,
   lastIncludedWorkDate,
   parseHoursInput,
+  submitComposedInvoice,
   vatOnSupplyDate,
 } from "./invoice-composer.logic";
 import type {
@@ -231,5 +234,50 @@ describe("VAT for the selected work", () => {
       vatRateBps: 0,
       reason: "no_vat_rate",
     });
+  });
+});
+
+describe("submitComposedInvoice", () => {
+  const submit = (draftId: string | null, readFails: boolean) => {
+    const calls: string[] = [];
+    let created: string | null = null;
+    const result = submitComposedInvoice({
+      draftId,
+      issue: true,
+      create: async () => {
+        calls.push("create");
+        return { id: "inv-1" };
+      },
+      onCreated: (id) => {
+        created = id;
+      },
+      finalize: async (id) => {
+        calls.push(`finalize:${id}`);
+      },
+      read: async (id) => {
+        calls.push(`read:${id}`);
+        if (readFails) {
+          throw new Error("read failed");
+        }
+        return id;
+      },
+    });
+    return { calls, result, created: () => created };
+  };
+
+  test("a retry after a failed read continues with the created draft", async () => {
+    const first = submit(null, true);
+    expect(await rejectionOf(first.result)).toBeInstanceOf(Error);
+    expect(first.created()).toBe("inv-1");
+
+    const retry = submit(first.created(), false);
+    expect(await retry.result).toBe("inv-1");
+    expect(retry.calls).toEqual(["finalize:inv-1", "read:inv-1"]);
+  });
+
+  test("a first attempt creates the draft once", async () => {
+    const attempt = submit(null, false);
+    expect(await attempt.result).toBe("inv-1");
+    expect(attempt.calls).toEqual(["create", "finalize:inv-1", "read:inv-1"]);
   });
 });

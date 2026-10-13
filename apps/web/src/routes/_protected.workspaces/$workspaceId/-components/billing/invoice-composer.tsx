@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -67,6 +67,7 @@ import {
   includedMinutes,
   lastIncludedWorkDate,
   parseHoursInput,
+  submitComposedInvoice,
   vatOnSupplyDate,
 } from "./invoice-composer.logic";
 import type {
@@ -340,7 +341,9 @@ type CreateInvoiceBody = Parameters<ReturnType<typeof api.invoices>["put"]>[0];
 
 /**
  * Creates the draft and, when asked, issues it. A refused issue keeps the
- * saved draft and says why, so nothing the person composed is lost.
+ * saved draft and says why, so nothing the person composed is lost. A retry
+ * after a failed issue or read reuses the saved draft instead of creating
+ * another one.
  */
 const useComposerSubmit = ({
   workspaceId,
@@ -351,6 +354,8 @@ const useComposerSubmit = ({
 }) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
+  // The draft an earlier attempt created; a retry continues with it.
+  const draftId = useRef<string | null>(null);
   return useMutation({
     mutationFn: async ({
       issue,
@@ -362,21 +367,26 @@ const useComposerSubmit = ({
       const invoices = api.invoices({
         workspaceId: toSafeId<"workspace">(workspaceId),
       });
-      const created = unwrapEden(await invoices.put(body));
-      if (issue) {
-        const finalized = await invoices({
-          invoiceId: toSafeId<"invoice">(created.id),
-        }).transition.post({ action: "finalize" });
-        if (finalized.error) {
-          notifyUserError(
-            finalized.error,
-            t("billing.invoiceComposer.issueFailed"),
-          );
-        }
-      }
-      const invoice = await queryClient.query(
-        invoiceByIdOptions(workspaceId, created.id),
-      );
+      const invoice = await submitComposedInvoice({
+        draftId: draftId.current,
+        issue,
+        create: async () => unwrapEden(await invoices.put(body)),
+        onCreated: (id) => {
+          draftId.current = id;
+        },
+        finalize: async (id) => {
+          const finalized = await invoices({
+            invoiceId: toSafeId<"invoice">(id),
+          }).transition.post({ action: "finalize" });
+          if (finalized.error) {
+            notifyUserError(
+              finalized.error,
+              t("billing.invoiceComposer.issueFailed"),
+            );
+          }
+        },
+        read: (id) => queryClient.query(invoiceByIdOptions(workspaceId, id)),
+      });
       return {
         id: invoice.id,
         invoiceNumber: invoice.invoiceNumber,
