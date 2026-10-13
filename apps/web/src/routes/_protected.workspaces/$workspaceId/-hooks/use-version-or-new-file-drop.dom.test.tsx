@@ -180,6 +180,7 @@ const FilesView = () => (
   <WorkspaceDropZone workspaceId={workspaceId}>
     {[folder, fileRow].map((node) => (
       <FilesystemRow
+        canTransferEntities={() => false}
         ancestorIds={new Set()}
         currentFolderId={currentFolderId}
         depth={0}

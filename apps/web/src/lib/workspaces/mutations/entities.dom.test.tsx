@@ -13,9 +13,23 @@ const requests: {
   name: string;
   answer: ReturnType<typeof Promise.withResolvers<Response>>;
 }[] = [];
+const eligibilityRequests: string[] = [];
 globalThis.fetch = Object.assign(
   async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("/transfer-eligibility")) {
+      eligibilityRequests.push(url);
+      const body =
+        typeof init?.body === "string"
+          ? JSON.parse(init.body)
+          : { entityIds: [] };
+      return Response.json({
+        transfers: body.entityIds.map((entityId: string) => ({
+          entityId,
+          access: "unavailable",
+        })),
+      });
+    }
     if (url.includes("/rename")) {
       const requestBody = init?.body;
       if (typeof requestBody !== "string") {
@@ -54,6 +68,7 @@ const { KanbanCard } =
   await import("@/components/workspaces/kanban/kanban-card");
 const { FilesystemRow } =
   await import("@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view");
+const { RowActions } = await import("@/components/workspaces/row-actions");
 const { PdfBreadcrumb } =
   await import("@/components/breadcrumbs/pdf-breadcrumb");
 const { useInspectorTabsStore } =
@@ -62,6 +77,8 @@ const { toSafeId } = await import("@/lib/safe-id");
 const { rootKeys } = await import("@/lib/auth-queries");
 const { propertiesKeys } = await import("@/lib/workspaces/queries/properties");
 const { fileMetadataOptions } = await import("@/lib/files/file-metadata-query");
+const { transferEligibilityOptions } =
+  await import("@/lib/workspaces/queries/transfer-eligibility");
 
 const entity = (id: string) =>
   ({
@@ -217,6 +234,7 @@ const confirm = (index: number) => {
 afterEach(async () => {
   await act(async () => cleanup());
   requests.length = 0;
+  eligibilityRequests.length = 0;
   useInspectorTabsStore.setState({ tabs: [], activeId: null });
 });
 afterAll(async () => {
@@ -245,6 +263,61 @@ const openMenuRename = async (scope: HTMLElement) => {
   );
 };
 
+test("a folder menu keeps copy and move unavailable for an unavailable server decision", async () => {
+  const folder = {
+    ...entity("folder-a"),
+    name: "Folder",
+    kind: "folder",
+  } as const satisfies WorkspaceEntity;
+  const view = await mount(() => (
+    <RowActions entity={folder} workspaceId="matter" open />
+  ));
+  await waitFor(() => {
+    expect(
+      view.client.getQueryData(
+        transferEligibilityOptions({
+          workspaceId: "matter",
+          userId: "user",
+          organizationId: "org",
+          entityIds: [folder.entityId],
+        }).queryKey,
+      ),
+    ).toEqual({
+      transfers: [{ entityId: folder.entityId, access: "unavailable" }],
+    });
+    expect(
+      within(document.body)
+        .getByRole("menuitem", {
+          name: englishMessages.workspaces.copyToMatter.menuItem,
+        })
+        .getAttribute("aria-disabled"),
+    ).toBe("true");
+    expect(
+      within(document.body)
+        .getByRole("menuitem", { name: englishMessages.common.duplicate })
+        .getAttribute("aria-disabled"),
+    ).toBe("true");
+  });
+});
+
+test("primary duplicate eligibility waits for hover or focus intent", async () => {
+  const view = await mount(() => (
+    <RowActions
+      entity={entity("A")}
+      workspaceId="matter"
+      duplicatePresentation="primary"
+    />
+  ));
+  expect(eligibilityRequests).toHaveLength(0);
+  const button = view.getByRole("button", {
+    name: englishMessages.common.duplicate,
+  });
+  expect(button.getAttribute("aria-disabled")).toBe("true");
+  fireEvent.focus(button);
+  await waitFor(() => expect(eligibilityRequests).toHaveLength(1));
+  expect(button.getAttribute("aria-disabled")).toBe("true");
+});
+
 test("tree row completions clear each pending rename independently of refetch", async () => {
   const Rows = () => {
     const rename = useRenameEntity();
@@ -255,6 +328,7 @@ test("tree row completions clear each pending rename independently of refetch", 
         {nodes.map((node) => (
           <section data-testid={node.entityId} key={node.entityId}>
             <FilesystemRow
+              canTransferEntities={() => false}
               node={{ ...node, children: [] }}
               depth={0}
               workspaceId="matter"

@@ -51,6 +51,7 @@ import {
 import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-entries";
 import { reportExportsKeys } from "@/lib/workspaces/queries/report-exports";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
+import { transferEligibilityOptions } from "@/lib/workspaces/queries/transfer-eligibility";
 import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
 import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
 import { featureEnrolmentsOptions } from "@/queries/feature-enrolments";
@@ -118,6 +119,19 @@ const FEATURE_VISIBILITY =
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
+  "entities/transfer-eligibility.ts": {
+    kind: "keyed",
+    calls: ['api.entities()["transfer-eligibility"].post'],
+    files: ["lib/workspaces/queries/transfer-eligibility.ts"],
+    keys: () => [
+      transferEligibilityOptions({
+        workspaceId: WORKSPACE,
+        userId: USER,
+        organizationId: ORG,
+        entityIds: ["folder-a"],
+      }).queryKey,
+    ],
+  },
   "work-obligations/transition.ts": {
     kind: "not-per-user",
     reason: WRITE,
