@@ -547,6 +547,45 @@ test.each([0, 7])(
   },
 );
 
+test.skipIf(process.platform === "win32")(
+  "a quiet compiler with advancing CPU time survives beyond the stall window",
+  async () => {
+    const cwd = await scratch();
+    const stdout: string[] = [];
+    try {
+      const result = await runBudgetedCheck({
+        command: [
+          process.execPath,
+          "-e",
+          `const fs = require("node:fs"); const end = Date.now() + 6000; while (Date.now() < end) {} const cpu = process.cpuUsage(); fs.writeFileSync("cpu-ms", String((cpu.user + cpu.system) / 1000));`,
+        ],
+        cwd,
+        timeoutMs: 20,
+        stallMs: 4000,
+        graceMs: 200,
+        summary: "none",
+        writeStdout: (text) => {
+          stdout.push(text);
+        },
+        writeStderr: () => {},
+        writeSummary: () => {},
+      });
+      expect(result.exitCode, result.output).toBe(0);
+      expect(result.outcome).toBe("completed");
+      expect(stdout.join("")).toBe("");
+      expect(result.output).toContain("::warning title=task-budget::");
+      expect(result.output).not.toContain("class=task-stall");
+      expect(result.output).not.toContain("task-progress-probe");
+      expect(
+        Number(await readFile(path.join(cwd, "cpu-ms"), "utf-8")),
+      ).toBeGreaterThan(1000);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  },
+  15_000,
+);
+
 const run = (
   command: string[],
   cwd: string,
