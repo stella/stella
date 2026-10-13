@@ -6,6 +6,8 @@ export const AGGREGATE_LOCK_OWNER = "apps/api/src/lib/db/aggregate-lock.ts";
 export const aggregateLockSourceIncluded = (file: string) =>
   /\.(?:[cm]?ts|tsx|[cm]?js|jsx|sql)$/u.test(file) &&
   file !== AGGREGATE_LOCK_OWNER &&
+  // Host-local database cluster provisioning has no tenant aggregate transaction.
+  file !== "packages/scripts/src/dev-postgres-lock.ts" &&
   !file.startsWith("apps/api/drizzle/") &&
   !/\.(?:test|fixture)\.|\/(?:__tests__|__fixtures__|fixtures|tests)\//u.test(
     file,
