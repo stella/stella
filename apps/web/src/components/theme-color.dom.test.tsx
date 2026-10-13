@@ -67,7 +67,7 @@ test("browser chrome follows runtime light to dark and back without duplicate me
   `;
   document.head.append(style);
   const fallbackMetas = createRootHead(false).meta.flatMap((meta) =>
-    "media" in meta && meta.name === THEME_COLOR ? [meta] : [],
+    "media" in meta ? [meta] : [],
   );
   for (const fallback of fallbackMetas) {
     const meta = document.createElement("meta");
