@@ -1063,6 +1063,39 @@ type ShellToken = {
     | "operator";
 };
 
+const PLAYWRIGHT_IMAGE_WRAPPER =
+  ".github/actions/setup-playwright/run-in-image.sh";
+
+// This repository-owned wrapper forwards its command with exec, preserving
+// its exit status. Preparation mode deliberately executes no child command.
+const markImageWrapperCommands = (tokens: ShellToken[]): ShellToken[] => {
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    const script = tokens[index + 1];
+    if (
+      token?.role !== "command" ||
+      token.value !== "bash" ||
+      script?.role !== "argument"
+    ) {
+      continue;
+    }
+    const wrapper = script.value
+      .replace(/^\$(?:GITHUB_WORKSPACE|\{GITHUB_WORKSPACE\})\//u, "")
+      .replace(/^\.\//u, "");
+    if (wrapper !== PLAYWRIGHT_IMAGE_WRAPPER) {
+      continue;
+    }
+    const commandIndex =
+      index + (tokens[index + 2]?.value === "--offline" ? 3 : 2);
+    const command = tokens[commandIndex];
+    if (command?.role !== "argument" || command.value.startsWith("-")) {
+      continue;
+    }
+    tokens[commandIndex] = { value: command.value, role: "command" };
+  }
+  return tokens;
+};
+
 type TimeoutArgument = "duration" | "option-value" | "unresolved";
 
 type TimeoutArgumentOptions = {
@@ -1198,7 +1231,9 @@ const shellTokens = (command: string): ShellToken[] => {
     }
     commandPosition = false;
   }
-  return command.slice(consumed).trim() === "" ? tokens : [];
+  return command.slice(consumed).trim() === ""
+    ? markImageWrapperCommands(tokens)
+    : [];
 };
 
 const shellWords = (
