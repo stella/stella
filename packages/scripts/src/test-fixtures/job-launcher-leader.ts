@@ -23,7 +23,8 @@ switch (process.argv.at(2) ?? panic("Missing job fixture mode")) {
     console.log(worker.pid);
     process.exit(0);
   }
-  case "leader": {
+  case "leader":
+  case "leader-exit": {
     const launcher = Bun.spawn(
       [process.execPath, import.meta.path, "launcher", marker],
       {
@@ -37,6 +38,9 @@ switch (process.argv.at(2) ?? panic("Missing job fixture mode")) {
       await Bun.sleep(10);
     }
     console.log(`${launcher.pid} ${worker}`);
+    if (process.argv.at(2) === "leader-exit") {
+      process.exit(0);
+    }
     break;
   }
   default:

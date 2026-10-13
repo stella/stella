@@ -1,14 +1,111 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import {
   createProcessMemoryReader,
+  parseProcessGroupMemory,
   testInvocationMemoryLimit,
   TEST_INVOCATION_MEMORY_GIB_ENV,
   watchTestProcessMemory,
 } from "./process-memory";
 import { attachTestProcessShutdown } from "./process-shutdown";
 import { spawnTestProcess } from "./test-process-spawn";
+
+const posixTest = process.platform === "win32" ? test.skip : test;
+posixTest.each(["leader", "leader-exit"] as const)(
+  "%s process group counts and kills the orphan after its launcher exits before the first sample",
+  async (mode) => {
+    const directory = mkdtempSync(path.join(tmpdir(), "stella-group-orphan-"));
+    const { child } = spawnTestProcess({
+      command: [
+        process.execPath,
+        `${import.meta.dir}/test-fixtures/job-launcher-leader.ts`,
+        mode,
+        path.join(directory, "ready"),
+      ],
+      options: { detached: true, stdout: "pipe", stderr: "inherit" },
+      onWarning: (message) => {
+        throw new TypeError(message);
+      },
+    });
+    try {
+      const ready = await child.stdout.getReader().read();
+      const [launcher, worker] = new TextDecoder()
+        .decode(ready.value)
+        .trim()
+        .split(/\s+/u)
+        .map(Number);
+      if (
+        launcher === undefined ||
+        worker === undefined ||
+        !Number.isSafeInteger(launcher) ||
+        !Number.isSafeInteger(worker) ||
+        worker <= 1
+      ) {
+        throw new TypeError("Fixture must report launcher and worker PIDs");
+      }
+      if (mode === "leader-exit") {
+        await child.exited;
+      }
+      expect(Result.try(() => process.kill(launcher, 0)).isErr()).toBe(true);
+      expect(Result.try(() => process.kill(worker, 0)).isOk()).toBe(true);
+      const membership = Bun.spawnSync([
+        "ps",
+        "-o",
+        "pgid=",
+        "-p",
+        String(worker),
+      ]);
+      expect(membership.success).toBe(true);
+      expect(Number(membership.stdout.toString().trim())).toBe(child.pid);
+      const failures: string[] = [];
+      const watchdog = watchTestProcessMemory({
+        child,
+        termination: "group",
+        readBytes: await createProcessMemoryReader(),
+        limitBytes: 64 * 1024 ** 2,
+        intervalMs: 60_000,
+        file: () => "group-orphan.test.ts",
+        onFailure: (message) => {
+          failures.push(message);
+        },
+        onWarning: (message) => {
+          throw new TypeError(message);
+        },
+      });
+      try {
+        expect(watchdog.peakBytes()).toBeGreaterThanOrEqual(96 * 1024 ** 2);
+        expect(failures).toHaveLength(1);
+        await child.exited;
+        const alive = () => {
+          if (process.platform === "linux") {
+            const status = Result.try(() =>
+              readFileSync(`/proc/${worker}/status`, "utf-8"),
+            );
+            if (status.isOk() && /^State:\s+Z\b/mu.test(status.value)) {
+              return false;
+            }
+          }
+          return Result.try(() => process.kill(worker, 0)).isOk();
+        };
+        for (let attempt = 0; attempt < 100 && alive(); attempt += 1) {
+          await Bun.sleep(10);
+        }
+        expect(alive()).toBe(false);
+      } finally {
+        await watchdog.stop();
+      }
+    } finally {
+      Result.try(() => process.kill(-child.pid, "SIGKILL"));
+      await child.exited;
+      rmSync(directory, { recursive: true, force: true });
+    }
+  },
+  15_000,
+);
 
 test("memory budgets default to six GiB and reject unbounded overrides", () => {
   expect(testInvocationMemoryLimit({})).toBe(6 * 1024 ** 3);
@@ -90,146 +187,63 @@ for (const fixture of ["memory-allocation.ts", "memory-allocation-parent.ts"]) {
   }, 15_000);
 }
 
-for (const boundary of ["census", "reading"] as const) {
-  test(`unknown ${boundary} samples warn once and only kill after a measured cap breach`, async () => {
-    const failures: string[] = [];
-    const signals: (number | NodeJS.Signals | undefined)[] = [];
-    const warnings: string[] = [];
-    let attempts = 0;
-    const failUntilRecovered = () => {
-      attempts += 1;
-      if (attempts < 3) {
-        throw new TypeError(`fixture ${boundary} timed out`);
-      }
-    };
-    const watchdog = watchTestProcessMemory({
-      child: {
-        pid: 42,
-        exited: new Promise<number>(() => {}),
-        exitCode: null,
-        signalCode: null,
-        kill: (signal) => {
-          signals.push(signal);
-        },
-      },
-      limitBytes: 1024,
-      children: (pid) => {
-        if (pid !== 42) {
-          return Result.ok([]);
-        }
-        if (boundary === "census") {
-          failUntilRecovered();
-        }
-        return Result.ok([43, 44]);
-      },
-      signalPid: () => {},
-      readBytes: () => {
-        if (boundary === "reading") {
-          failUntilRecovered();
-        }
-        return Result.ok(400);
-      },
-      file: () => "fixture.test.ts",
-      onFailure: (message) => {
-        failures.push(message);
-      },
-      onWarning: (message) => {
-        warnings.push(message);
-      },
-      intervalMs: 10,
-    });
-    expect(signals).toEqual([]);
-    expect(failures).toEqual([]);
-    await Bun.sleep(75);
-    await watchdog.stop();
-    expect(signals).toEqual(["SIGKILL"]);
-    expect(failures).toHaveLength(1);
-    expect(failures.at(0)).toContain(
-      "Test invocation memory limit exceeded for fixture.test.ts",
-    );
-    expect(warnings).toHaveLength(1);
-    expect(warnings.at(0)).toContain(
-      "Test memory sample partially unavailable for fixture.test.ts",
-    );
-    expect(attempts).toBeGreaterThan(2);
-    expect(watchdog.peakBytes()).toBe(1200);
-  });
-}
-
-test("the cap sums measured workers instead of allowing each worker a full budget", async () => {
-  const signals: (number | NodeJS.Signals | undefined)[] = [];
-  const failures: string[] = [];
-  const warnings: string[] = [];
-  const watchdog = watchTestProcessMemory({
-    child: {
-      pid: process.pid,
-      exited: new Promise<number>(() => {}),
-      exitCode: null,
-      signalCode: null,
-      kill: (signal) => {
-        signals.push(signal);
-      },
-    },
-    limitBytes: 1024,
-    children: (pid) => Result.ok(pid === process.pid ? [42, 43] : []),
-    signalPid: () => {},
-    readBytes: () => Result.ok(400),
-    file: () => "workers.test.ts",
-    onFailure: (message) => {
-      failures.push(message);
-    },
-    onWarning: (message) => {
-      warnings.push(message);
-    },
-  });
-  await watchdog.stop();
-  expect(watchdog.peakBytes()).toBe(1200);
-  expect(signals).toEqual(["SIGKILL"]);
-  expect(failures.at(0)).toContain(
-    "Test invocation memory limit exceeded for workers.test.ts",
-  );
-  expect(warnings).toEqual([]);
+test("group samples retain reparented members, reject malformed rows, and exclude other groups", () => {
+  expect([
+    ...parseProcessGroupMemory(42, "43 42 2\n99 99 9000\n44 42 3").unwrap(),
+  ]).toEqual([
+    [43, 2048],
+    [44, 3072],
+  ]);
+  expect(parseProcessGroupMemory(42, "").unwrap().size).toBe(0);
+  for (const row of [
+    "bad row",
+    "0 42 1",
+    "43 -1 1",
+    "43 42 -1",
+    "43 42 NaN",
+    "43 42 1 extra",
+  ]) {
+    expect(parseProcessGroupMemory(42, row).isErr()).toBe(true);
+  }
 });
 
 for (const boundary of ["census", "reading"] as const) {
-  for (const total of ["below", "above"] as const) {
-    test(`a partial ${boundary} sample ${total} the cap enforces its readable lower bound`, async () => {
-      const signals: (number | NodeJS.Signals | undefined)[] = [];
+  for (const budget of ["below", "above"] as const) {
+    test(`unavailable group ${boundary} ${budget} the cap preserves readable lower bounds and retries`, async () => {
       const failures: string[] = [];
       const warnings: string[] = [];
+      const signals: { pid: number; signal: NodeJS.Signals | 0 }[] = [];
       let samples = 0;
+      const bytes = budget === "above" ? 1200 : 300;
       const watchdog = watchTestProcessMemory({
         child: {
           pid: 42,
-          exited: new Promise<number>(() => {}),
-          exitCode: null,
+          exitCode: 0,
           signalCode: null,
-          kill: (signal) => {
-            signals.push(signal);
+          exited: Promise.resolve(0),
+          kill: () => {
+            throw new TypeError("Must kill group");
           },
         },
+        termination: "group",
         limitBytes: 1024,
-        children: (pid) => {
-          if (pid === 42) {
-            samples += 1;
-            return Result.ok([43, 44]);
+        sampleGroup: () => {
+          samples += 1;
+          if (boundary === "census") {
+            throw new TypeError("Group sample unavailable");
           }
-          if (boundary === "census" && pid === 43) {
-            throw new TypeError("fixture descendant census unavailable");
-          }
-          return Result.ok([]);
+          return Result.ok(new Map([[43, bytes]]));
         },
-        readBytes: (pid) => {
-          if (pid === 44) {
-            if (boundary === "reading") {
-              throw new TypeError("fixture descendant reading unavailable");
-            }
-            return Result.ok(0);
+        readBytes: () => {
+          if (boundary === "reading") {
+            throw new TypeError("Footprint unavailable");
           }
-          return Result.ok(total === "above" ? 600 : 300);
+          return Result.ok(bytes);
         },
-        signalPid: () => {},
-        file: () => "partial-tree.test.ts",
+        signalPid: (pid, signal) => {
+          signals.push({ pid, signal });
+        },
+        file: () => "group.test.ts",
         onFailure: (message) => {
           failures.push(message);
         },
@@ -239,25 +253,19 @@ for (const boundary of ["census", "reading"] as const) {
         intervalMs: 10,
       });
       try {
-        if (total === "below") {
-          expect(signals).toEqual([]);
-          await Bun.sleep(50);
+        if (budget === "below") {
+          await Bun.sleep(40);
           expect(samples).toBeGreaterThan(1);
-          expect(signals).toEqual([]);
           expect(failures).toEqual([]);
-          expect(watchdog.peakBytes()).toBe(600);
         } else {
-          expect(signals).toEqual(["SIGKILL"]);
           expect(failures).toHaveLength(1);
-          expect(failures.at(0)).toContain(
-            "Test invocation memory limit exceeded for partial-tree.test.ts",
-          );
-          expect(watchdog.peakBytes()).toBe(1200);
+          expect(signals).toContainEqual({ pid: -42, signal: "SIGKILL" });
+          expect(
+            signals.filter(({ signal }) => signal === "SIGKILL"),
+          ).toHaveLength(1);
         }
+        expect(watchdog.peakBytes()).toBe(bytes);
         expect(warnings).toHaveLength(1);
-        expect(warnings.at(0)).toContain(
-          "enforcing readable lower bound and retrying",
-        );
       } finally {
         await watchdog.stop();
       }
@@ -265,39 +273,77 @@ for (const boundary of ["census", "reading"] as const) {
   }
 }
 
-test("an unavailable root census still enforces the measured root memory", async () => {
-  const signals: (number | NodeJS.Signals | undefined)[] = [];
-  const warnings: string[] = [];
-  const failures: string[] = [];
+test("a process-group budget sums surviving workers and signals only the group", async () => {
+  const killed: number[] = [];
   const watchdog = watchTestProcessMemory({
     child: {
       pid: 42,
-      exited: new Promise<number>(() => {}),
-      exitCode: null,
+      exitCode: 0,
       signalCode: null,
-      kill: (signal) => {
-        signals.push(signal);
+      exited: Promise.resolve(0),
+      kill: () => {
+        throw new TypeError("Must kill group");
       },
     },
-    limitBytes: 1024,
-    children: () => {
-      throw new TypeError("fixture root census timed out");
+    termination: "group",
+    limitBytes: 1000,
+    sampleGroup: () =>
+      Result.ok(
+        new Map([
+          [43, 600],
+          [44, 600],
+        ]),
+      ),
+    readBytes: () => Result.ok(0),
+    signalPid: (pid) => {
+      killed.push(pid);
     },
-    readBytes: () => Result.ok(1200),
-    signalPid: () => {},
-    file: () => "root-tree.test.ts",
-    onFailure: (message) => {
-      failures.push(message);
-    },
+    file: () => "workers.test.ts",
+    onFailure: () => {},
     onWarning: (message) => {
-      warnings.push(message);
+      throw new TypeError(message);
     },
   });
   await watchdog.stop();
   expect(watchdog.peakBytes()).toBe(1200);
-  expect(signals).toEqual(["SIGKILL"]);
-  expect(failures.at(0)).toContain(
-    "Test invocation memory limit exceeded for root-tree.test.ts",
-  );
-  expect(warnings).toHaveLength(1);
+  expect(killed).toEqual([-42]);
+});
+
+test("an empty process group ends ownership before its PGID can be reused", async () => {
+  let samples = 0;
+  const watchdog = watchTestProcessMemory({
+    child: {
+      pid: 42,
+      exitCode: 0,
+      signalCode: null,
+      exited: Promise.resolve(0),
+      kill: () => {
+        throw new TypeError("No owned processes");
+      },
+    },
+    termination: "group",
+    limitBytes: 1000,
+    sampleGroup: () => {
+      samples += 1;
+      return Result.ok(samples === 1 ? new Map() : new Map([[99, 9000]]));
+    },
+    readBytes: () => {
+      throw new TypeError("Empty group must not read another process");
+    },
+    file: () => "empty-group.test.ts",
+    onFailure: (message) => {
+      throw new TypeError(message);
+    },
+    onWarning: (message) => {
+      throw new TypeError(message);
+    },
+    intervalMs: 10,
+  });
+  try {
+    await Bun.sleep(40);
+    expect(samples).toBe(1);
+    expect(watchdog.peakBytes()).toBe(0);
+  } finally {
+    await watchdog.stop();
+  }
 });

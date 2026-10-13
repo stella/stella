@@ -101,34 +101,62 @@ let memoryReader: ReturnType<typeof loadProcessMemoryReader> | undefined;
 export const createProcessMemoryReader = async () =>
   (memoryReader ??= loadProcessMemoryReader());
 
-const processChildren = (pid: number) => {
-  const result = Bun.spawnSync(["pgrep", "-P", String(pid)], { timeout: 1000 });
-  // pgrep uses status 1 to report an empty child set.
-  if (!result.success && result.exitCode !== 1) {
-    return Result.err(
-      new ProcessMemoryReadError({
-        message: `Cannot enumerate children of PID ${pid}`,
-      }),
-    );
-  }
-  const text = result.stdout.toString().trim();
-  if (text === "") {
-    return Result.ok([]);
-  }
-  const pids: number[] = [];
-  for (const value of text.split(/\s+/u)) {
-    const childPid = Number(value);
-    if (!Number.isSafeInteger(childPid) || childPid <= 0) {
+/** Process-group membership survives launcher exit and reparenting. A child
+ * that calls setsid escapes this boundary; Linux cgroup containment is out of
+ * scope for these portable test runners. */
+export const parseProcessGroupMemory = (pgid: number, output: string) => {
+  const readings = new Map<number, number>();
+  for (const line of output.trim().split(/\r?\n/u)) {
+    if (line.trim() === "") {
+      continue;
+    }
+    const columns = line.trim().split(/\s+/u).map(Number);
+    const [pid, group, rss] = columns;
+    if (
+      columns.length !== 3 ||
+      pid === undefined ||
+      group === undefined ||
+      rss === undefined ||
+      !Number.isSafeInteger(pid) ||
+      pid <= 0 ||
+      !Number.isSafeInteger(group) ||
+      group < 0 ||
+      !Number.isSafeInteger(rss) ||
+      rss < 0 ||
+      !Number.isSafeInteger(rss * 1024)
+    ) {
       return Result.err(
         new ProcessMemoryReadError({
-          message: `Invalid child PID of ${pid}`,
+          message: "Invalid process-group memory sample",
         }),
       );
     }
-    pids.push(childPid);
+    if (group === pgid) {
+      readings.set(pid, rss * 1024);
+    }
   }
-  return Result.ok(pids);
+  return Result.ok(readings);
 };
+
+const sampleProcessGroupMemory = (pgid: number) =>
+  Result.try({
+    try: () => {
+      const result = Bun.spawnSync(["ps", "-A", "-o", "pid=,pgid=,rss="], {
+        timeout: 1000,
+      });
+      if (!result.success) {
+        return Result.err(
+          new ProcessMemoryReadError({
+            message: `Cannot sample process group ${pgid}`,
+            cause: result.stderr.toString(),
+          }),
+        );
+      }
+      return parseProcessGroupMemory(pgid, result.stdout.toString());
+    },
+    catch: (cause) =>
+      new ProcessMemoryReadError({ message: String(cause), cause }),
+  }).andThen((result) => result);
 
 type WatchTestProcessMemoryOptions = {
   child: Pick<
@@ -142,7 +170,7 @@ type WatchTestProcessMemoryOptions = {
   onWarning: (message: string) => void;
   termination?: "process" | "group";
   intervalMs?: number;
-  children?: (pid: number) => Result<readonly number[], ProcessMemoryReadError>;
+  sampleGroup?: typeof sampleProcessGroupMemory;
   signalPid?: (pid: number, signal: NodeJS.Signals | 0) => void;
   windowsProcesses?:
     | Pick<WindowsProcessOwnership, "readPeakMemory" | "signal">
@@ -153,14 +181,12 @@ type KillMemoryProcessTreeOptions = Pick<
   WatchTestProcessMemoryOptions,
   "child" | "termination" | "onFailure" | "windowsProcesses"
 > & {
-  sampledPids: readonly number[];
   signalPid: NonNullable<WatchTestProcessMemoryOptions["signalPid"]>;
 };
 
 const killMemoryProcessTree = ({
   child,
   termination,
-  sampledPids,
   signalPid,
   windowsProcesses,
   onFailure,
@@ -185,21 +211,7 @@ const killMemoryProcessTree = ({
         `Could not kill test process group ${child.pid}: ${killed.error.message}`,
       );
     }
-  }
-  for (const pid of sampledPids.toReversed()) {
-    if (pid === child.pid) {
-      continue;
-    }
-    const killed = Result.try({
-      try: () => signalPid(pid, "SIGKILL"),
-      catch: (cause) =>
-        new ProcessMemoryReadError({ message: String(cause), cause }),
-    });
-    if (killed.isErr() && !processGone(killed.error)) {
-      onFailure(
-        `Could not kill test descendant PID ${pid}: ${killed.error.message}`,
-      );
-    }
+    return;
   }
   child.kill("SIGKILL");
 };
@@ -213,7 +225,7 @@ export const watchTestProcessMemory = ({
   onWarning,
   termination = "process",
   intervalMs = SAMPLE_INTERVAL_MS,
-  children = processChildren,
+  sampleGroup = sampleProcessGroupMemory,
   windowsProcesses,
   signalPid = (pid, signal) => {
     process.kill(pid, signal);
@@ -221,7 +233,6 @@ export const watchTestProcessMemory = ({
 }: WatchTestProcessMemoryOptions) => {
   let peakBytes = 0;
   let failure: string | undefined;
-  let sampledPids: number[] = [];
   let stopped = false;
   let warned = false;
   const fail = (message: string) => {
@@ -229,7 +240,6 @@ export const watchTestProcessMemory = ({
     killMemoryProcessTree({
       child,
       termination,
-      sampledPids,
       signalPid,
       windowsProcesses,
       onFailure,
@@ -241,32 +251,30 @@ export const watchTestProcessMemory = ({
       stopped ||
       failure !== undefined ||
       (windowsProcesses === undefined &&
+        termination === "process" &&
         (child.exitCode !== null || child.signalCode !== null))
     ) {
       return;
     }
-    sampledPids = [child.pid];
-    let unavailable: ProcessMemoryReadError | undefined;
-    for (let index = 0; index < sampledPids.length; index += 1) {
-      const pid = sampledPids.at(index) ?? panic("Missing sampled PID");
-      const descendants = Result.try({
-        try: () =>
-          windowsProcesses === undefined ? children(pid) : Result.ok([]),
-        catch: (cause) =>
-          new ProcessMemoryReadError({ message: String(cause), cause }),
-      }).andThen((result) => result);
-      if (descendants.isErr()) {
-        unavailable ??= descendants.error;
-        continue;
-      }
-      for (const childPid of descendants.value) {
-        if (!sampledPids.includes(childPid)) {
-          sampledPids.push(childPid);
-        }
-      }
+    const group = Result.try({
+      try: () =>
+        windowsProcesses !== undefined || termination === "process"
+          ? Result.ok(new Map([[child.pid, 0]]))
+          : sampleGroup(child.pid),
+      catch: (cause) =>
+        new ProcessMemoryReadError({ message: String(cause), cause }),
+    }).andThen((result) => result);
+    let unavailable = group.isErr() ? group.error : undefined;
+    // If ps fails, retain a readable root lower bound without inventing workers.
+    const readings = group.isOk() ? group.value : new Map([[child.pid, 0]]);
+    // An empty group releases ownership permanently; never adopt a later group
+    // that happens to reuse this numeric PGID.
+    if (group.isOk() && readings.size === 0) {
+      stopped = true;
+      return;
     }
     let totalBytes = 0;
-    for (const pid of sampledPids) {
+    for (const [pid, rssBytes] of readings) {
       const read = Result.try({
         try: () =>
           windowsProcesses === undefined
@@ -282,12 +290,14 @@ export const watchTestProcessMemory = ({
             new ProcessMemoryReadError({ message: String(cause), cause }),
         });
         if (pid !== child.pid && alive.isErr() && processGone(alive.error)) {
+          totalBytes += rssBytes;
           continue;
         }
         unavailable ??= new ProcessMemoryReadError({
           message: read.error.message,
           cause: read.error,
         });
+        totalBytes += rssBytes;
         continue;
       }
       const bytes = read.value;
@@ -295,9 +305,10 @@ export const watchTestProcessMemory = ({
         unavailable ??= new ProcessMemoryReadError({
           message: `Invalid memory reading for PID ${pid}`,
         });
+        totalBytes += rssBytes;
         continue;
       }
-      totalBytes += bytes;
+      totalBytes += Math.max(bytes, rssBytes);
     }
     // Missing readings contribute no invented bytes. The readable sum is still
     // a lower bound that can prove a breach; retry unknowns on the next sample.
@@ -319,7 +330,7 @@ export const watchTestProcessMemory = ({
   tick();
   return {
     stop: async () => {
-      if (windowsProcesses !== undefined) {
+      if (windowsProcesses !== undefined || termination === "group") {
         sample();
       }
       stopped = true;

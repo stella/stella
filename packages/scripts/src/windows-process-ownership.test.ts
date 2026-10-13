@@ -57,7 +57,7 @@ windowsTest(
         readBytes: () => {
           throw new TypeError("Job must provide memory");
         },
-        children: () => {
+        sampleGroup: () => {
           throw new TypeError("Job must not walk ancestry");
         },
         file: () => "launcher-orphan.test.ts",
@@ -162,7 +162,7 @@ test("job peak remains enforceable after the leader and launcher exit, without a
     readBytes: () => {
       throw new TypeError("Must measure job");
     },
-    children: () => {
+    sampleGroup: () => {
       throw new TypeError("Must not walk ancestry");
     },
     file: () => "orphan.test.ts",
