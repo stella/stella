@@ -345,22 +345,26 @@ const ensureContainerUnlocked = async ({
   return Result.ok("ready" as const);
 };
 
+type EnsureContainerResult = Awaited<
+  ReturnType<typeof ensureContainerUnlocked>
+>;
+
 export const ensureContainer = async (options: EnsureContainerOptions) => {
   // SQLite owns release on process death; never unlink its stable lock inode.
-  const locked = await withGenerationLock({
+  const locked = await withGenerationLock<EnsureContainerResult>({
     lockPath: path.join(options.state, "container.lock"),
     waitTimeoutMs: CONTAINER_CREATION_LOCK_TIMEOUT_MS,
     run: () => ensureContainerUnlocked(options),
   });
-  return locked
-    .mapError(
-      (cause) =>
-        new SharedTestPostgresError({
-          message: "Cannot acquire shared Postgres container creation lock.",
-          cause,
-        }),
-    )
-    .andThen((result) => result);
+  if (locked.isErr()) {
+    return Result.err(
+      new SharedTestPostgresError({
+        message: "Cannot acquire shared Postgres container creation lock.",
+        cause: locked.error,
+      }),
+    );
+  }
+  return locked.value;
 };
 
 export const withSharedTestPostgresConnection = async <T>(

@@ -168,9 +168,11 @@ test("concurrent cold provisioning callers create exactly one container", async 
           }),
       ),
     );
-    expect(results.map((result) => result.unwrap())).toEqual(
-      Array.from({ length: 8 }, () => "ready"),
-    );
+    expect(
+      results.map((result: Awaited<ReturnType<typeof ensureContainer>>) =>
+        result.unwrap(),
+      ),
+    ).toEqual(Array.from({ length: 8 }, () => "ready"));
     expect(runs).toBe(1);
     expect(readdirSync(state)).toEqual(["container.lock"]);
   } finally {
