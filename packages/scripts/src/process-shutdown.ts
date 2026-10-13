@@ -1,6 +1,6 @@
 import { Result, TaggedError } from "better-result";
 
-import { createWindowsProcessOwnership } from "./windows-process-ownership";
+import type { WindowsProcessOwnership } from "./windows-process-ownership";
 
 const SHUTDOWN_SIGNALS = [
   { signal: "SIGINT", number: 2 },
@@ -18,9 +18,7 @@ type AttachTestProcessShutdownOptions = {
   child: Pick<Bun.Subprocess, "pid" | "kill">;
   termination: "process" | "group";
   onWarning: (message: string) => void;
-  windowsProcesses?:
-    | ReturnType<typeof createWindowsProcessOwnership>
-    | undefined;
+  windowsProcesses?: WindowsProcessOwnership | undefined;
 };
 
 /** Own this child's process tree until its pipes and exit have settled. */
@@ -28,9 +26,7 @@ export const attachTestProcessShutdown = ({
   child,
   termination,
   onWarning,
-  windowsProcesses = process.platform === "win32"
-    ? createWindowsProcessOwnership({ rootPid: child.pid, onWarning })
-    : undefined,
+  windowsProcesses,
 }: AttachTestProcessShutdownOptions) => {
   let exitCode: number | undefined;
   let escalation: ReturnType<typeof setTimeout> | undefined;

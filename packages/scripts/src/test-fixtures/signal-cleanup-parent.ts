@@ -1,19 +1,24 @@
 import { attachTestProcessShutdown } from "../process-shutdown";
+import { spawnTestProcess } from "../test-process-spawn";
 
-const child = Bun.spawn(
-  [
+const { child, windowsProcesses } = spawnTestProcess({
+  command: [
     process.execPath,
     `${import.meta.dir}/signal-cleanup-child.ts`,
     ...process.argv.slice(2),
   ],
-  {
+  options: {
     detached: process.platform !== "win32",
     stdout: "pipe",
     stderr: "inherit",
   },
-);
+  onWarning: (message) => {
+    process.stderr.write(`${message}\n`);
+  },
+});
 const shutdown = attachTestProcessShutdown({
   child,
+  windowsProcesses,
   termination: process.platform === "win32" ? "process" : "group",
   onWarning: (message) => {
     process.stderr.write(`${message}\n`);

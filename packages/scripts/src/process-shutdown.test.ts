@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { attachTestProcessShutdown } from "./process-shutdown";
+import { spawnTestProcess } from "./test-process-spawn";
 
 const SIGNAL_EXIT_CODES = { SIGINT: 130, SIGTERM: 143, SIGHUP: 129 } as const;
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP", "exit"] as const) {
@@ -105,14 +106,18 @@ test("disposing shutdown ownership removes its listeners and signals cleanup onl
   const events = ["SIGINT", "SIGTERM", "SIGHUP", "exit"] as const;
   const previous = events.map((event) => process.listenerCount(event));
   const signals: (number | NodeJS.Signals | undefined)[] = [];
-  const child = Bun.spawn(
-    [process.execPath, "-e", "setInterval(() => {}, 1000)"],
-    {
+  const { child, windowsProcesses } = spawnTestProcess({
+    command: [process.execPath, "-e", "setInterval(() => {}, 1000)"],
+    options: {
       stdout: "ignore",
       stderr: "inherit",
     },
-  );
+    onWarning: (message) => {
+      throw new TypeError(message);
+    },
+  });
   const shutdown = attachTestProcessShutdown({
+    windowsProcesses,
     child: {
       pid: child.pid,
       kill: (signal) => {

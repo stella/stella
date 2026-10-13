@@ -10,7 +10,7 @@ import {
   watchTestProcessMemory,
 } from "@stll/scripts/src/process-memory";
 import { spawnTestProcess } from "@stll/scripts/src/test-process-spawn";
-import type { createWindowsProcessOwnership } from "@stll/scripts/src/windows-process-ownership";
+import type { WindowsProcessOwnership } from "@stll/scripts/src/windows-process-ownership";
 
 // A measured CI solo batch (254 chat turn tests) took 250.9s. Ten minutes
 // gives it more than twice that headroom, while bounding imports, snapshot
@@ -88,9 +88,7 @@ type ActiveProcess = {
   child: Bun.Subprocess;
   tail: Buffer;
   cancelStreams: () => void;
-  windowsProcesses:
-    | ReturnType<typeof createWindowsProcessOwnership>
-    | undefined;
+  windowsProcesses: WindowsProcessOwnership | undefined;
 };
 
 type SupervisorOptions = {

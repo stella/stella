@@ -34,7 +34,10 @@ test.each(["eval", "test"] as const)(
           Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 300);
           expect(existsSync(marker)).toBe(false);
           expect(Result.try(() => process.kill(pid, 0)).isOk()).toBe(true);
-          return Result.ok({ pid, creationTime: 1n });
+          return Result.ok({
+            readPeakMemory: () => Result.ok(0),
+            signal: () => Result.ok(undefined),
+          });
         },
       );
       expect(await new Response(child.stdout).text()).toMatch(
@@ -65,9 +68,9 @@ test("failed leader registration never releases the entry point", async () => {
             throw new TypeError(message);
           },
         },
-        () => Result.ok(undefined),
+        () => Result.err(new TypeError("Registration failed")),
       ),
-    ).toThrow("Test leader exited before ownership registration");
+    ).toThrow("Registration failed");
     await Bun.sleep(100);
     expect(existsSync(marker)).toBe(false);
   } finally {

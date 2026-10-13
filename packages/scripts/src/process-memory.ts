@@ -1,13 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 import { readFileSync } from "node:fs";
 
-import {
-  parseWindowsProcessRows,
-  windowsProcessTreeCommand,
-  WINDOWS_POWERSHELL_COMMAND,
-  type WindowsProcessIdentity,
-  type createWindowsProcessOwnership,
-} from "./windows-process-ownership";
+import type { WindowsProcessOwnership } from "./windows-process-ownership";
 
 const GIB = 1024 ** 3;
 const SAMPLE_INTERVAL_MS = 2000;
@@ -32,111 +26,9 @@ class ProcessMemoryReadError extends TaggedError("ProcessMemoryReadError")<{
 const processGone = ({ cause }: ProcessMemoryReadError) =>
   cause instanceof Error && "code" in cause && cause.code === "ESRCH";
 
-type ProcessTreeSample = {
-  identities: WindowsProcessIdentity[];
-  readings: Map<number, Result<number, ProcessMemoryReadError>>;
-  children: Map<number, number[]>;
-  unavailable: ProcessMemoryReadError | undefined;
-};
-
-type ProcessMemoryReader = ((
+type ProcessMemoryReader = (
   pid: number,
-) => Result<number, ProcessMemoryReadError>) & {
-  sampleTree?: (
-    pid: number,
-    signal: AbortSignal,
-  ) => Promise<Result<ProcessTreeSample, ProcessMemoryReadError>>;
-};
-
-/** Ignore foreign rows even if a sampler returns more than the owned tree. */
-export const parseWindowsProcessTree = (rootPid: number, output: string) => {
-  const parsed = parseWindowsProcessRows(output);
-  if (parsed.isErr()) {
-    return Result.err(
-      new ProcessMemoryReadError({
-        message: parsed.error.message,
-        cause: parsed.error,
-      }),
-    );
-  }
-  const rows = new Map(parsed.value.rows.map((row) => [row.pid, row] as const));
-  const unavailable =
-    parsed.value.unavailable === undefined
-      ? undefined
-      : new ProcessMemoryReadError({
-          message: parsed.value.unavailable.message,
-          cause: parsed.value.unavailable,
-        });
-  const sample: ProcessTreeSample = {
-    identities: [],
-    readings: new Map(),
-    children: new Map(),
-    unavailable,
-  };
-  const owned = [rootPid];
-  for (const pid of owned) {
-    const row = rows.get(pid);
-    if (row?.creationTime !== undefined) {
-      sample.identities.push({ pid, creationTime: row.creationTime });
-    }
-    sample.readings.set(
-      pid,
-      row !== undefined && Number.isFinite(row.bytes) && row.bytes >= 0
-        ? Result.ok(row.bytes)
-        : Result.err(
-            new ProcessMemoryReadError({
-              message: `Cannot read memory for PID ${pid}`,
-            }),
-          ),
-    );
-    const descendants: number[] = [];
-    for (const [candidate, value] of rows) {
-      if (value.parent === pid && !owned.includes(candidate)) {
-        descendants.push(candidate);
-        owned.push(candidate);
-      }
-    }
-    sample.children.set(pid, descendants);
-  }
-  return Result.ok(sample);
-};
-
-const sampleWindowsProcessTree = async (rootPid: number, signal: AbortSignal) =>
-  Result.tryPromise({
-    try: async () => {
-      // Windows has no POSIX process group: query the full descendant census on
-      // every sample. Working sets are queried only for those owned PIDs.
-      // Keep the root handle open through the census, so its identity survives
-      // an exit during the query. CIM dates have microsecond precision; compare
-      // that metadata to the handle before retaining its exact FILETIME.
-      const command = windowsProcessTreeCommand({ rootPid });
-      const child = Bun.spawn([...WINDOWS_POWERSHELL_COMMAND], {
-        stdin: new TextEncoder().encode(command),
-        stdout: "pipe",
-        stderr: "ignore",
-        signal,
-        timeout: 5000,
-        killSignal: "SIGKILL",
-      });
-      const [output, exitCode] = await Promise.all([
-        new Response(child.stdout).text(),
-        child.exited,
-      ]);
-      if (exitCode !== 0) {
-        return Result.err(
-          new ProcessMemoryReadError({
-            message: `Cannot sample process tree rooted at PID ${rootPid}`,
-          }),
-        );
-      }
-      return parseWindowsProcessTree(rootPid, output);
-    },
-    catch: (cause) =>
-      new ProcessMemoryReadError({
-        message: `Cannot sample process tree rooted at PID ${rootPid}`,
-        cause,
-      }),
-  }).then((result) => result.andThen((sample) => sample));
+) => Result<number, ProcessMemoryReadError>;
 
 /** Read the child's memory, never the host's free-memory counters. */
 const loadProcessMemoryReader = async () => {
@@ -195,15 +87,12 @@ const loadProcessMemoryReader = async () => {
     };
   }
   if (process.platform === "win32") {
-    return Object.assign(
-      (pid: number) =>
-        Result.err(
-          new ProcessMemoryReadError({
-            message: `No completed memory sample for PID ${pid}`,
-          }),
-        ),
-      { sampleTree: sampleWindowsProcessTree },
-    );
+    return (pid: number) =>
+      Result.err(
+        new ProcessMemoryReadError({
+          message: `Windows test PID ${pid} requires a Job Object memory owner`,
+        }),
+      );
   }
   return panic(`No test process memory reader for ${process.platform}`);
 };
@@ -256,10 +145,7 @@ type WatchTestProcessMemoryOptions = {
   children?: (pid: number) => Result<readonly number[], ProcessMemoryReadError>;
   signalPid?: (pid: number, signal: NodeJS.Signals | 0) => void;
   windowsProcesses?:
-    | Pick<
-        ReturnType<typeof createWindowsProcessOwnership>,
-        "recordTree" | "signal" | "finish"
-      >
+    | Pick<WindowsProcessOwnership, "readPeakMemory" | "signal">
     | undefined;
 };
 
@@ -318,59 +204,6 @@ const killMemoryProcessTree = ({
   child.kill("SIGKILL");
 };
 
-type ObserveWindowsProcessExitOptions = Pick<
-  WatchTestProcessMemoryOptions,
-  "child"
-> & {
-  windowsProcesses: NonNullable<
-    WatchTestProcessMemoryOptions["windowsProcesses"]
-  >;
-};
-
-const observeWindowsProcessExit = ({
-  child,
-  windowsProcesses,
-}: ObserveWindowsProcessExitOptions) => {
-  let status: "watching" | "stopped" = "watching";
-  let failure: ProcessMemoryReadError | undefined;
-  const finish = () => {
-    const finished = Result.try({
-      try: () => windowsProcesses.finish(),
-      catch: (cause) =>
-        new ProcessMemoryReadError({
-          message: `Cannot retain descendants at test process exit: ${String(cause)}`,
-          cause,
-        }),
-    });
-    if (finished.isErr()) {
-      failure = finished.error;
-    }
-  };
-  const exited = Result.tryPromise({
-    try: async () => {
-      await child.exited;
-      if (status === "watching") {
-        finish();
-      }
-    },
-    catch: (cause) =>
-      new ProcessMemoryReadError({ message: String(cause), cause }),
-  });
-  return {
-    stop: async () => {
-      finish();
-      status = "stopped";
-      if (child.exitCode !== null || child.signalCode !== null) {
-        const settled = await exited;
-        if (settled.isErr()) {
-          failure ??= settled.error;
-        }
-      }
-      return failure;
-    },
-  };
-};
-
 export const watchTestProcessMemory = ({
   child,
   limitBytes,
@@ -403,24 +236,22 @@ export const watchTestProcessMemory = ({
     });
     onFailure(message);
   };
-  const sample = (tree?: ProcessTreeSample) => {
+  const sample = () => {
     if (
       stopped ||
       failure !== undefined ||
-      child.exitCode !== null ||
-      child.signalCode !== null
+      (windowsProcesses === undefined &&
+        (child.exitCode !== null || child.signalCode !== null))
     ) {
       return;
     }
     sampledPids = [child.pid];
-    let unavailable = tree?.unavailable;
+    let unavailable: ProcessMemoryReadError | undefined;
     for (let index = 0; index < sampledPids.length; index += 1) {
       const pid = sampledPids.at(index) ?? panic("Missing sampled PID");
       const descendants = Result.try({
         try: () =>
-          tree === undefined
-            ? children(pid)
-            : Result.ok(tree.children.get(pid) ?? []),
+          windowsProcesses === undefined ? children(pid) : Result.ok([]),
         catch: (cause) =>
           new ProcessMemoryReadError({ message: String(cause), cause }),
       }).andThen((result) => result);
@@ -438,14 +269,9 @@ export const watchTestProcessMemory = ({
     for (const pid of sampledPids) {
       const read = Result.try({
         try: () =>
-          tree === undefined
+          windowsProcesses === undefined
             ? readBytes(pid)
-            : (tree.readings.get(pid) ??
-              Result.err(
-                new ProcessMemoryReadError({
-                  message: `Cannot read memory for PID ${pid}`,
-                }),
-              )),
+            : windowsProcesses.readPeakMemory(),
         catch: (cause) =>
           new ProcessMemoryReadError({ message: String(cause), cause }),
       }).andThen((result) => result);
@@ -458,7 +284,10 @@ export const watchTestProcessMemory = ({
         if (pid !== child.pid && alive.isErr() && processGone(alive.error)) {
           continue;
         }
-        unavailable ??= read.error;
+        unavailable ??= new ProcessMemoryReadError({
+          message: read.error.message,
+          cause: read.error,
+        });
         continue;
       }
       const bytes = read.value;
@@ -485,69 +314,17 @@ export const watchTestProcessMemory = ({
       );
     }
   };
-  const exitObserver =
-    windowsProcesses === undefined
-      ? undefined
-      : observeWindowsProcessExit({ child, windowsProcesses });
-  const cancellation = new AbortController();
-  let pendingSample: Promise<void> | undefined;
-  const tick = () => {
-    if (
-      stopped ||
-      failure !== undefined ||
-      pendingSample !== undefined ||
-      child.exitCode !== null ||
-      child.signalCode !== null
-    ) {
-      return;
-    }
-    const sampleTree = readBytes.sampleTree;
-    if (sampleTree === undefined) {
-      sample();
-      return;
-    }
-    // The watchdog owns one asynchronous query at a time; stop aborts it.
-    pendingSample = sampleTree(child.pid, cancellation.signal)
-      .then((result) => {
-        if (result.isOk()) {
-          // A completed census can still establish ownership after the root's
-          // exit notification. Retain it before memory sampling stops.
-          windowsProcesses?.recordTree(result.value.identities);
-        }
-        if (stopped) {
-          return undefined;
-        }
-        sample(
-          result.isOk()
-            ? result.value
-            : {
-                identities: [],
-                readings: new Map(),
-                children: new Map(),
-                unavailable: result.error,
-              },
-        );
-        return undefined;
-      })
-      .finally(() => {
-        pendingSample = undefined;
-      });
-  };
+  const tick = sample;
   const timer = setInterval(tick, intervalMs);
   tick();
   return {
     stop: async () => {
-      // The final synchronous census retains orphans before cancellation can
-      // discard the asynchronous query that was still running at root exit.
-      const exitStopped = exitObserver?.stop();
+      if (windowsProcesses !== undefined) {
+        sample();
+      }
       stopped = true;
       clearInterval(timer);
-      cancellation.abort();
-      await pendingSample;
-      const exitFailure = await exitStopped;
-      if (exitFailure !== undefined) {
-        onWarning(exitFailure.message);
-      }
+      await Promise.resolve();
     },
     failure: () => failure,
     peakBytes: () => peakBytes,
