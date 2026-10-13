@@ -182,14 +182,22 @@ stretched timeline can raise it. Sequence boundaries read launch times only,
 so a longer response cannot move one; coverage is a running max that is never
 rewound at a boundary, so a split can only lower the count.
 
-One residual remains, and it is what the +1 `DEPTH_JITTER_ALLOWANCE` in
-`assertNetworkBaseline` covers: two requests issued from different ticks may
-overlap on one run and not the next, shifting a route by exactly one block. No
-launch-time metric can tell that apart from a real added round. The allowance
-is capped at one level and must stay there, because the metric can no longer
-carry a count across an observation boundary: a route reporting **two** extra
-levels has genuinely grown one, so investigate the request graph rather than
-re-running. Only `write`/`rewrite` when the route's behavior actually changed.
+One residual remains: two requests issued from different ticks may overlap on
+one run and not the next. A faster response can expose a previously masked
+busy block; timing alone cannot distinguish that from a new dependency.
+
+The route-smoke suite gives an initially deeper route at most
+`WATERFALL_DEPTH_RESAMPLES` (currently two) additional measurements. It folds
+them with `mergeResampledMetrics`: depth and its diagnostic chain come from
+the shallowest sample; request sets use their union, and request counts, DB
+query counts, response sizes and missing-header counts retain their per-key
+maxima. Resampling cannot erase a regression in another dimension.
+
+`assertNetworkBaseline` compares that minimum depth directly with the budget;
+there is no extra depth allowance. A route that remains deeper fails the
+guard. Investigate and fix its request graph; do not manually retry until
+green or widen the budget to absorb timing noise. Only `write`/`rewrite` when
+the route's behavior actually changed.
 
 ## Live Hotspot Burn-Down
 
