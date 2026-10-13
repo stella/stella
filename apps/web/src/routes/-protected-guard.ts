@@ -17,7 +17,6 @@ import {
   prefetchRouteQuery,
 } from "@/lib/react-query";
 import { returnPathOf } from "@/lib/redirect";
-import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { organizationSettingsOptions } from "@/queries/organization-settings";
 import { loadAuthContext } from "@/routes/-auth-context";
 
@@ -122,19 +121,6 @@ export const loadProtectedContext = async ({
       onPrefetchError,
     ),
     "protected-layout.prefetch",
-  );
-  // Chrome defers cold queries until mount; start navigation in the shell's
-  // request wave so it does not wait for the member role or route content.
-  detached(
-    prefetchRouteQuery(
-      context.queryClient,
-      workspacesNavigationOptions({
-        organizationId: activeOrganizationId,
-        userId,
-      }),
-      onPrefetchError,
-    ),
-    "protected-layout.navigation-prefetch",
   );
   // Prefetched here so the bell's first page joins the shell's request wave
   // instead of chaining a new sequential round after hydration.
