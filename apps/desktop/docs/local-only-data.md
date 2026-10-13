@@ -91,6 +91,8 @@ discarded locally after confirming the same possible loss of draft recovery.
 Unsupported envelope versions and successfully decrypted payloads that this build
 cannot parse are incompatible: erasure and retention preserve them,
 and the UI asks the user to update the app.
+Version metadata is checked before envelope decoding and before missing-key
+erasure. Settings and day-file rewrites preserve unknown optional payload fields.
 Namespace identity changed before
 release, so there is no migration or read of old unnamespaced stores.
 

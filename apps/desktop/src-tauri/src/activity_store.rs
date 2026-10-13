@@ -38,6 +38,8 @@ struct ActivityDayFile {
   manual_assignments: Vec<ActivityManualAssignment>,
   #[serde(default)]
   pending_batch: Option<ActivityPendingBatch>,
+  #[serde(flatten)]
+  extra: BTreeMap<String, serde_json::Value>,
 }
 
 enum PendingMutation<'a> {
@@ -85,19 +87,97 @@ impl ActivityStore {
     earliest: NaiveDate,
   ) -> Result<Option<DateTime<Utc>>, EncryptedReadError> {
     let mut latest = None;
+    let mut failure = None;
     for date in self.day_dates().map_err(EncryptedReadError::Unavailable)? {
       let day = match self.day_file(date).load_checked::<ActivityDayFile>() {
         Ok(Some(day)) => day,
         Ok(None) => continue,
         Err(EncryptedReadError::Unreadable(_)) if date < earliest => continue,
-        Err(error) => return Err(error),
+        Err(error) => {
+          let priority = |error: &EncryptedReadError| match error {
+            EncryptedReadError::Incompatible(_) => 3,
+            EncryptedReadError::Unavailable(_) => 2,
+            EncryptedReadError::Unreadable(_) => 1,
+          };
+          if failure
+            .as_ref()
+            .is_none_or(|previous| priority(&error) > priority(previous))
+          {
+            failure = Some(error);
+          }
+          continue;
+        }
       };
       for segment in day.segments {
         latest =
           Some(latest.map_or(segment.end, |end: DateTime<Utc>| end.max(segment.end)));
       }
     }
-    Ok(latest)
+    match failure {
+      Some(error) => Err(error),
+      None => Ok(latest),
+    }
+  }
+
+  pub(crate) fn check_root_envelope_compatibility(
+    root: &Path,
+  ) -> Result<(), EncryptedReadError> {
+    let mut paths = Vec::new();
+    match fs::read_dir(root) {
+      Ok(entries) => {
+        for entry in entries {
+          let entry = entry.map_err(|error| {
+            EncryptedReadError::Unavailable(format!(
+              "activity files could not be listed: {error}"
+            ))
+          })?;
+          if entry
+            .file_type()
+            .map_err(|error| {
+              EncryptedReadError::Unavailable(format!(
+                "activity file type could not be read: {error}"
+              ))
+            })?
+            .is_symlink()
+          {
+            continue;
+          }
+          if entry.file_name() != DAYS_DIR_NAME
+            && !entry
+              .path()
+              .extension()
+              .is_some_and(|extension| extension == "tmp")
+          {
+            paths.push(entry.path());
+          }
+        }
+      }
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+      Err(error) => {
+        return Err(EncryptedReadError::Unavailable(format!(
+          "activity files could not be listed: {error}"
+        )));
+      }
+    }
+    paths.extend(
+      Self::day_entries_root(root)
+        .map_err(EncryptedReadError::Unavailable)?
+        .into_iter()
+        .map(|(path, _)| path)
+        .filter(|path| !path.extension().is_some_and(|extension| extension == "tmp")),
+    );
+    let mut unavailable = None;
+    for path in paths {
+      match crate::local_store::check_envelope_compatibility(&path, LABEL) {
+        Ok(()) | Err(EncryptedReadError::Unreadable(_)) => {}
+        Err(error @ EncryptedReadError::Incompatible(_)) => return Err(error),
+        Err(EncryptedReadError::Unavailable(message)) => unavailable = Some(message),
+      }
+    }
+    match unavailable {
+      Some(message) => Err(EncryptedReadError::Unavailable(message)),
+      None => Ok(()),
+    }
   }
 
   /// Whether anything encrypted under the store key exists. Leftover
@@ -134,15 +214,48 @@ impl ActivityStore {
   pub fn load_settings_checked(
     &self,
   ) -> Result<Option<ActivitySettings>, EncryptedReadError> {
+    match fs::symlink_metadata(self.settings_file().path()) {
+      Ok(metadata) if metadata.file_type().is_symlink() => {
+        return Err(EncryptedReadError::Unavailable(
+          "activity settings path is a symbolic link".into(),
+        ));
+      }
+      Ok(_) => {}
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+      Err(error) => {
+        return Err(EncryptedReadError::Unavailable(format!(
+          "activity settings could not be inspected: {error}"
+        )));
+      }
+    }
     self.settings_file().load_checked()
   }
 
   pub fn save_settings(&self, settings: &ActivitySettings) -> Result<(), String> {
-    self
+    let saved = self
       .load_settings_checked()
       .map_err(|error| error.to_string())?;
+    let mut settings = settings.clone();
+    if let Some(saved) = saved {
+      for (key, value) in saved.extra {
+        settings.extra.entry(key).or_insert(value);
+      }
+    }
     self.ensure_dirs()?;
-    self.settings_file().persist(settings)
+    self.settings_file().persist(&settings)
+  }
+
+  fn load_inactive_settings_checked(
+    &self,
+  ) -> Result<Option<ActivitySettings>, EncryptedReadError> {
+    match fs::symlink_metadata(self.settings_file().path()) {
+      Ok(metadata) if metadata.file_type().is_symlink() => Ok(None),
+      Ok(_) => self.load_settings_checked(),
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+      Err(error) => Err(EncryptedReadError::Unavailable(format!(
+        "activity settings could not be inspected: {error}"
+      ))),
+    }
   }
 
   pub fn load_day(&self, date: NaiveDate) -> Result<Vec<ActivitySegment>, String> {
@@ -179,6 +292,7 @@ impl ActivityStore {
           drafted_entries: Vec::new(),
           manual_assignments: Vec::new(),
           pending_batch: None,
+          extra: BTreeMap::new(),
         });
     let saved_pending = day.pending_batch.clone();
     update(&mut day);
@@ -223,6 +337,7 @@ impl ActivityStore {
       && day.drafted_entries.is_empty()
       && day.manual_assignments.is_empty()
       && day.pending_batch.is_none()
+      && day.extra.is_empty()
     {
       return remove_file_if_present(self.day_file(date).path());
     }
@@ -365,10 +480,20 @@ impl ActivityStore {
   }
 
   /// Every file in the days directory with the date it belongs to; files
-  /// that are not day files (interrupted writes) have no date.
+  /// with unrecognized names have no date; only temporary writes may be removed.
   fn day_entries_root(
     root: &Path,
   ) -> Result<Vec<(PathBuf, Option<NaiveDate>)>, String> {
+    match fs::symlink_metadata(root.join(DAYS_DIR_NAME)) {
+      Ok(metadata) if metadata.file_type().is_symlink() => return Ok(Vec::new()),
+      Ok(_) => {}
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+        return Ok(Vec::new());
+      }
+      Err(error) => {
+        return Err(format!("activity days could not be inspected: {error}"));
+      }
+    }
     let entries = match fs::read_dir(root.join(DAYS_DIR_NAME)) {
       Ok(entries) => entries,
       Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -380,6 +505,13 @@ impl ActivityStore {
     for entry in entries {
       let entry =
         entry.map_err(|error| format!("activity days could not be listed: {error}"))?;
+      if entry
+        .file_type()
+        .map_err(|error| format!("activity day type could not be read: {error}"))?
+        .is_symlink()
+      {
+        continue;
+      }
       let name = entry.file_name();
       let date = name
         .to_str()
@@ -467,9 +599,82 @@ impl ActivityStore {
         "activity account namespace is invalid".into(),
       ));
     }
+    match fs::symlink_metadata(root) {
+      Ok(metadata) if metadata.file_type().is_symlink() => return Ok(()),
+      Ok(_) => {}
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+      Err(error) => {
+        return Err(ActivityDeletionError::Unavailable(format!(
+          "activity history could not be inspected: {error}"
+        )));
+      }
+    }
     let history = Self::other_account_history_files(root, current_namespace)
       .map_err(ActivityDeletionError::Unavailable)?;
     let mut stores = BTreeMap::new();
+    let entries = match fs::read_dir(root) {
+      Ok(entries) => Some(entries),
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+      Err(error) => {
+        return Err(ActivityDeletionError::Unavailable(format!(
+          "activity accounts could not be listed: {error}"
+        )));
+      }
+    };
+    if let Some(entries) = entries {
+      for entry in entries {
+        let entry = entry.map_err(|error| {
+          ActivityDeletionError::Unavailable(format!(
+            "activity account could not be listed: {error}"
+          ))
+        })?;
+        let name = entry.file_name();
+        let Some(namespace) = name.to_str() else {
+          continue;
+        };
+        if namespace == current_namespace
+          || !Self::is_account_namespace(namespace)
+          || !entry
+            .file_type()
+            .map_err(|error| {
+              ActivityDeletionError::Unavailable(format!(
+                "activity account type could not be read: {error}"
+              ))
+            })?
+            .is_dir()
+        {
+          continue;
+        }
+        let settings = entry.path().join(SETTINGS_FILE_NAME);
+        let has_settings = match fs::symlink_metadata(&settings) {
+          Ok(metadata) => !metadata.file_type().is_symlink(),
+          Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+          Err(error) => {
+            return Err(ActivityDeletionError::Unavailable(format!(
+              "activity settings could not be inspected: {error}"
+            )));
+          }
+        };
+        if !has_settings {
+          continue;
+        }
+        let account =
+          match lookup(namespace).map_err(ActivityDeletionError::Unavailable)? {
+            LocalDataKeyLookup::Found(key) => {
+              InactiveAccountKey::Found(Self::new(key, entry.path()))
+            }
+            LocalDataKeyLookup::Missing => {
+              Self::check_root_envelope_compatibility(&entry.path())
+                .map_err(ActivityDeletionError::from)?;
+              if recovery != ActivityOtherHistoryRecovery::DiscardUnrecoverable {
+                return Err(ActivityDeletionError::KeyMissing);
+              }
+              InactiveAccountKey::Missing(entry.path())
+            }
+          };
+        stores.insert(namespace.to_owned(), account);
+      }
+    }
     for path in &history.paths {
       if path.extension().is_some_and(|extension| extension == "tmp") {
         continue;
@@ -492,6 +697,8 @@ impl ActivityStore {
               InactiveAccountKey::Found(Self::new(key, account_root.to_path_buf()))
             }
             LocalDataKeyLookup::Missing => {
+              Self::check_root_envelope_compatibility(account_root)
+                .map_err(ActivityDeletionError::from)?;
               if recovery != ActivityOtherHistoryRecovery::DiscardUnrecoverable {
                 return Err(ActivityDeletionError::KeyMissing);
               }
@@ -525,7 +732,9 @@ impl ActivityStore {
           (InactiveAccountKey::Found(store), LocalDataKeyLookup::Found(key))
             if key == store.key =>
           {
-            check_read(store.load_settings_checked().map(|_| false))?;
+            Self::check_root_envelope_compatibility(store.root())
+              .map_err(ActivityDeletionError::from)?;
+            check_read(store.load_inactive_settings_checked().map(|_| false))?;
             for date in store
               .day_dates()
               .map_err(ActivityDeletionError::Unavailable)?
@@ -537,7 +746,10 @@ impl ActivityStore {
               )?;
             }
           }
-          (InactiveAccountKey::Missing(_), LocalDataKeyLookup::Missing) => {}
+          (InactiveAccountKey::Missing(account_root), LocalDataKeyLookup::Missing) => {
+            Self::check_root_envelope_compatibility(account_root)
+              .map_err(ActivityDeletionError::from)?;
+          }
           _ => {
             return Err(ActivityDeletionError::Unavailable(
               "activity history key changed; review the deletion again".into(),
@@ -555,14 +767,16 @@ impl ActivityStore {
             || lookup(namespace),
           )?
         }
-        InactiveAccountKey::Found(store) => match store.load_settings_checked() {
-          Err(EncryptedReadError::Unreadable(_)) => {
-            remove_file_if_present(&store.root.join(SETTINGS_FILE_NAME))
-              .map_err(ActivityDeletionError::Unavailable)?;
+        InactiveAccountKey::Found(store) => {
+          match store.load_inactive_settings_checked() {
+            Err(EncryptedReadError::Unreadable(_)) => {
+              remove_file_if_present(&store.root.join(SETTINGS_FILE_NAME))
+                .map_err(ActivityDeletionError::Unavailable)?;
+            }
+            Err(error) => return Err(ActivityDeletionError::from(error)),
+            Ok(_) => {}
           }
-          Err(error) => return Err(ActivityDeletionError::from(error)),
-          Ok(_) => {}
-        },
+        }
       }
     }
     for path in history.paths {
@@ -665,6 +879,8 @@ impl ActivityStore {
   }
 
   pub fn delete_all_days(&self) -> Result<(), ActivityDeletionError> {
+    Self::check_root_envelope_compatibility(&self.root)
+      .map_err(ActivityDeletionError::from)?;
     if !self
       .pending_dates(NaiveDate::MIN)
       .map_err(ActivityDeletionError::from)?
@@ -776,6 +992,8 @@ impl ActivityStore {
         ));
       }
       LocalDataKeyLookup::Missing => {
+        Self::check_root_envelope_compatibility(root)
+          .map_err(ActivityDeletionError::from)?;
         if recovery != ActivityDeletionRecovery::DiscardMissingKey {
           return Err(ActivityDeletionError::KeyMissing);
         }
@@ -1087,6 +1305,88 @@ mod tests {
   }
 
   #[test]
+  fn envelope_version_999_survives_confirmed_missing_key_erasure() {
+    let (store, root) = store();
+    store.save_pending(date(1), &pending()).unwrap();
+    let path = store.day_file(date(1)).path().to_path_buf();
+    let original = br#"{"version":999,"futureCiphertext":{"data":"saved"}}"#;
+    fs::write(&path, original).unwrap();
+    assert!(matches!(
+      ActivityStore::remove_missing_key_with_lookup(
+        &root,
+        ActivityDeletionRecovery::DiscardMissingKey,
+        || Ok(LocalDataKeyLookup::Missing)
+      ),
+      Err(ActivityDeletionError::Incompatible)
+    ));
+    assert_eq!(fs::read(&path).unwrap(), original);
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn noncanonical_version_999_survives_retention_and_keyed_all_days_erasure() {
+    let (store, root) = store();
+    store.save_day(date(1), &[segment("app")]).unwrap();
+    let path = root.join(DAYS_DIR_NAME).join("future-history.encrypted");
+    let original = br#"{"version":999,"futureCiphertext":{"data":"saved"}}"#;
+    fs::write(&path, original).unwrap();
+    assert_eq!(store.delete_days_before(date(2)).unwrap(), 1);
+    assert_eq!(fs::read(&path).unwrap(), original);
+    assert!(matches!(
+      store.delete_all_days(),
+      Err(ActivityDeletionError::Incompatible)
+    ));
+    assert_eq!(fs::read(&path).unwrap(), original);
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn incompatible_missing_key_history_blocks_every_inactive_root_erasure() {
+    let (_, root) = store();
+    let current = "a".repeat(64);
+    let settled = ActivityStore::new([9; 32], root.join("b".repeat(64)));
+    settled.save_day(date(1), &[segment("app")]).unwrap();
+    let future = ActivityStore::new([9; 32], root.join("c".repeat(64)));
+    future.save_pending(date(1), &pending()).unwrap();
+    let path = future.day_file(date(1)).path().to_path_buf();
+    let original = br#"{"version":999,"futureCiphertext":{"data":"saved"}}"#;
+    fs::write(&path, original).unwrap();
+    assert!(matches!(
+      ActivityStore::delete_other_account_history_with_key_lookup(
+        &root,
+        &current,
+        ActivityOtherHistoryRecovery::DiscardUnrecoverable,
+        |_| Ok(LocalDataKeyLookup::Missing)
+      ),
+      Err(ActivityDeletionError::Incompatible)
+    ));
+    assert!(settled.day_file(date(1)).path().exists());
+    assert_eq!(fs::read(&path).unwrap(), original);
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn recording_boundary_prioritizes_incompatible_over_corrupt_in_either_order() {
+    for incompatible_date in [date(1), date(2)] {
+      let (store, root) = store();
+      for day in [date(1), date(2)] {
+        store.save_day(day, &[segment("app")]).unwrap();
+        let content = if day == incompatible_date {
+          br#"{"version":999}"#.as_slice()
+        } else {
+          b"invalid envelope".as_slice()
+        };
+        fs::write(store.day_file(day).path(), content).unwrap();
+      }
+      assert!(matches!(
+        store.recorded_until(date(1)),
+        Err(EncryptedReadError::Incompatible(_))
+      ));
+      ActivityStore::remove(&root).unwrap();
+    }
+  }
+
+  #[test]
   fn confirmed_inactive_cleanup_handles_missing_and_unreadable_history_together() {
     let (_, root) = store();
     let current = "a".repeat(64);
@@ -1296,6 +1596,58 @@ mod tests {
     assert_eq!(fs::read(store.settings_file().path()).unwrap(), original);
     assert_eq!(store.load_pending(date(1)).unwrap(), Some(pending()));
     assert!(!store.day_file(date(2)).path().exists());
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn optional_settings_fields_survive_known_setting_changes() {
+    let (store, root) = store();
+    let extra = serde_json::json!({"mode": "future", "options": [1, 2]});
+    let mut saved = serde_json::to_value(ActivitySettings::default()).unwrap();
+    saved["optionalSettings"] = extra.clone();
+    store.settings_file().persist(&saved).unwrap();
+    store
+      .save_settings(&ActivitySettings {
+        recording_status: crate::activity::ActivityRecordingStatus::Paused,
+        ..ActivitySettings::default()
+      })
+      .unwrap();
+    let rewritten = store
+      .settings_file()
+      .load::<serde_json::Value>()
+      .unwrap()
+      .unwrap();
+    assert_eq!(rewritten["optionalSettings"], extra);
+    assert_eq!(rewritten["recordingStatus"], "paused");
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn optional_day_fields_survive_rewrites_and_empty_known_content() {
+    let (store, root) = store();
+    let pending = pending();
+    let extra = serde_json::json!({"items": [{"mode": "future"}]});
+    let saved = serde_json::json!({
+      "segments": [segment("app")],
+      "draftedEntries": [],
+      "manualAssignments": [],
+      "pendingBatch": pending,
+      "optionalDay": extra,
+    });
+    store.day_file(date(1)).persist(&saved).unwrap();
+    store.save_day(date(1), &[]).unwrap();
+    assert_eq!(store.load_pending(date(1)).unwrap(), Some(pending.clone()));
+    store
+      .cancel_pending(date(1), &pending.idempotency_key)
+      .unwrap();
+    let rewritten = store
+      .day_file(date(1))
+      .load::<serde_json::Value>()
+      .unwrap()
+      .unwrap();
+    assert_eq!(rewritten["optionalDay"], saved["optionalDay"]);
+    assert_eq!(rewritten["segments"], serde_json::json!([]));
+    assert_eq!(rewritten["pendingBatch"], serde_json::Value::Null);
     ActivityStore::remove(&root).unwrap();
   }
 
@@ -1560,141 +1912,23 @@ mod tests {
   }
 
   #[test]
-  fn inactive_history_deletion_preflights_readable_days_without_reading_settings() {
+  fn inactive_history_refuses_unavailable_metadata_before_any_erasure() {
     let (_, root) = store();
     let current = "a".repeat(64);
-    let inactive = "b".repeat(64);
-    // An older origin-derived namespace is still an inactive account's data.
-    let old_origin_namespace = "c".repeat(64);
-    let non_hex = "g".repeat(64);
-    let short = "d".repeat(63);
-    let long = "e".repeat(65);
-    assert_eq!(
-      ActivityStore::other_account_history_days(&root, &current).unwrap(),
-      0
-    );
-    delete_inactive_history(&root, &current).unwrap();
-    for namespace in [
-      &current,
-      &inactive,
-      &old_origin_namespace,
-      &non_hex,
-      &short,
-      &long,
-      &"unrelated".to_string(),
-      &DAYS_DIR_NAME.to_string(),
-    ] {
-      let days = root.join(namespace).join(DAYS_DIR_NAME);
-      fs::create_dir_all(&days).unwrap();
-      fs::write(
-        root.join(namespace).join(SETTINGS_FILE_NAME),
-        b"unreadable settings",
-      )
-      .unwrap();
-      fs::write(days.join("2020-01-01.json.enc"), b"unreadable ciphertext").unwrap();
-      fs::write(days.join("2026-03-03.json.enc"), b"unreadable ciphertext").unwrap();
-      if namespace == &inactive || namespace == &old_origin_namespace {
-        fs::remove_file(days.join("2020-01-01.json.enc")).unwrap();
-        fs::remove_file(days.join("2026-03-03.json.enc")).unwrap();
-        let account = ActivityStore::new([9; 32], root.join(namespace));
-        account
-          .save_day(
-            NaiveDate::from_ymd_opt(2020, 1, 1).unwrap(),
-            &[segment("app")],
-          )
-          .unwrap();
-        account.save_day(date(3), &[segment("app")]).unwrap();
-      }
-      fs::write(days.join("2026-03-03.json.123.tmp"), b"partial").unwrap();
-      fs::write(days.join("2026-99-99.json.enc"), b"not a day").unwrap();
-      fs::write(days.join("2026-3-1.json.enc"), b"not canonical").unwrap();
-      fs::create_dir(days.join("2026-03-04.json.enc")).unwrap();
-    }
-    for _ in 0..2 {
-      assert_eq!(
-        ActivityStore::other_account_history_days(&root, &current).unwrap(),
-        4
-      );
-      // Merely inspecting history never applies retention to inactive accounts.
-      assert!(
-        root
-          .join(&inactive)
-          .join("days/2020-01-01.json.enc")
-          .exists()
-      );
-      assert!(
-        root
-          .join(&old_origin_namespace)
-          .join("days/2020-01-01.json.enc")
-          .exists()
-      );
-      assert!(
-        root
-          .join(&inactive)
-          .join("days/2026-03-03.json.123.tmp")
-          .exists()
-      );
-    }
-    delete_inactive_history(&root, &current).unwrap();
-    assert_eq!(
-      ActivityStore::other_account_history_days(&root, &current).unwrap(),
-      0
-    );
-    delete_inactive_history(&root, &current).unwrap();
-    for namespace in [&inactive, &old_origin_namespace] {
-      assert!(
-        !root
-          .join(namespace)
-          .join("days/2020-01-01.json.enc")
-          .exists()
-      );
-      assert!(
-        !root
-          .join(namespace)
-          .join("days/2026-03-03.json.enc")
-          .exists()
-      );
-      assert_eq!(
-        fs::read(root.join(namespace).join(SETTINGS_FILE_NAME)).unwrap(),
-        b"unreadable settings"
-      );
-      assert!(
-        !root
-          .join(namespace)
-          .join("days/2026-03-03.json.123.tmp")
-          .exists()
-      );
-      for retained in [
-        "2026-99-99.json.enc",
-        "2026-3-1.json.enc",
-        "2026-03-04.json.enc",
-      ] {
-        assert!(
-          root
-            .join(namespace)
-            .join(DAYS_DIR_NAME)
-            .join(retained)
-            .exists()
-        );
-      }
-    }
-    for namespace in [
-      &current,
-      &non_hex,
-      &short,
-      &long,
-      &"unrelated".to_string(),
-      &DAYS_DIR_NAME.to_string(),
-    ] {
-      assert_eq!(
-        fs::read(root.join(namespace).join("days/2020-01-01.json.enc")).unwrap(),
-        b"unreadable ciphertext"
-      );
-      assert_eq!(
-        fs::read(root.join(namespace).join("days/2026-03-03.json.enc")).unwrap(),
-        b"unreadable ciphertext"
-      );
-    }
+    let account = ActivityStore::new([9; 32], root.join("b".repeat(64)));
+    account.save_day(date(1), &[segment("app")]).unwrap();
+    fs::create_dir(account.settings_file().path()).unwrap();
+    let day_path = account.day_file(date(1)).path().to_path_buf();
+    let original = fs::read(&day_path).unwrap();
+    let temporary = account.days_dir().join("interrupted.tmp");
+    fs::write(&temporary, b"partial").unwrap();
+    assert!(matches!(
+      delete_inactive_history(&root, &current),
+      Err(ActivityDeletionError::Unavailable(_))
+    ));
+    assert_eq!(fs::read(&day_path).unwrap(), original);
+    assert!(account.settings_file().path().is_dir());
+    assert_eq!(fs::read(&temporary).unwrap(), b"partial");
     ActivityStore::remove(&root).unwrap();
   }
 

@@ -31,6 +31,44 @@ struct EncryptedEnvelope {
   version: u8,
 }
 
+#[derive(Deserialize)]
+struct EnvelopeMetadata {
+  version: serde_json::Value,
+}
+
+fn read_envelope(
+  path: &Path,
+  label: &str,
+) -> Result<Option<EncryptedEnvelope>, EncryptedReadError> {
+  let raw = match fs::read(path) {
+    Ok(raw) => raw,
+    Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+    Err(error) => {
+      return Err(EncryptedReadError::Unavailable(format!(
+        "{label} store read failed: {error}"
+      )));
+    }
+  };
+  let metadata: EnvelopeMetadata = serde_json::from_slice(&raw).map_err(|error| {
+    EncryptedReadError::Unreadable(format!("{label} envelope is invalid: {error}"))
+  })?;
+  if metadata.version.as_u64() != Some(u64::from(ENVELOPE_VERSION)) {
+    return Err(EncryptedReadError::Incompatible(format!(
+      "{label} store version is unsupported"
+    )));
+  }
+  serde_json::from_slice(&raw).map(Some).map_err(|error| {
+    EncryptedReadError::Unreadable(format!("{label} envelope is invalid: {error}"))
+  })
+}
+
+pub(crate) fn check_envelope_compatibility(
+  path: &Path,
+  label: &str,
+) -> Result<(), EncryptedReadError> {
+  read_envelope(path, label).map(|_| ())
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum EncryptedReadError {
   Unavailable(String),
@@ -92,24 +130,9 @@ impl EncryptedJsonFile {
     &self,
   ) -> Result<Option<T>, EncryptedReadError> {
     let label = self.label;
-    let raw = match fs::read(&self.path) {
-      Ok(raw) => raw,
-      Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-      Err(error) => {
-        return Err(EncryptedReadError::Unavailable(format!(
-          "{label} store read failed: {error}"
-        )));
-      }
+    let Some(envelope) = read_envelope(&self.path, label)? else {
+      return Ok(None);
     };
-    let envelope: EncryptedEnvelope =
-      serde_json::from_slice(&raw).map_err(|error| {
-        EncryptedReadError::Unreadable(format!("{label} envelope is invalid: {error}"))
-      })?;
-    if envelope.version != ENVELOPE_VERSION {
-      return Err(EncryptedReadError::Incompatible(format!(
-        "{label} store version is unsupported"
-      )));
-    }
     let nonce = hex::decode(envelope.nonce).map_err(|error| {
       EncryptedReadError::Unreadable(format!("{label} nonce is invalid: {error}"))
     })?;
@@ -371,6 +394,25 @@ mod tests {
       file.load_checked::<serde_json::Value>(),
       Err(EncryptedReadError::Incompatible(_))
     ));
+    remove_store(&path);
+  }
+
+  #[test]
+  fn envelope_version_999_is_incompatible_before_decoding_changed_fields() {
+    let path = unique_path();
+    let file = EncryptedJsonFile::new([9; 32], path.clone(), "fixture");
+    file.persist(&true).unwrap();
+    let original = br#"{"version":999,"futureCiphertext":{"data":"saved"}}"#;
+    fs::write(&path, original).unwrap();
+    assert!(matches!(
+      file.load_checked::<serde_json::Value>(),
+      Err(EncryptedReadError::Incompatible(_))
+    ));
+    assert!(matches!(
+      check_envelope_compatibility(&path, "fixture"),
+      Err(EncryptedReadError::Incompatible(_))
+    ));
+    assert_eq!(fs::read(&path).unwrap(), original);
     remove_store(&path);
   }
 

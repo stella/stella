@@ -102,6 +102,8 @@ pub struct ActivitySettings {
   pub app_name_only_apps: Vec<AppExclusion>,
   #[serde(default)]
   pub browser_title_apps: Vec<AppExclusion>,
+  #[serde(flatten)]
+  pub extra: BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -710,31 +712,36 @@ impl ActivityManager {
       .checked_sub_days(Days::new(settings.retention.days() - 1))
       .unwrap_or(local_date(now));
     let (persistence, settings, wall_floor) = match persistence {
-      ActivityPersistence::Encrypted(store) => match store
-        .delete_days_before(earliest)
-        .map_err(crate::local_store::EncryptedReadError::Unavailable)
-        .and_then(|_| store.recorded_until(earliest))
-      {
-        Ok(floor) => (ActivityPersistence::Encrypted(store), settings, floor),
-        Err(error) => {
-          tracing::warn!("activity recording boundary could not be loaded");
-          (
-            match error {
-              crate::local_store::EncryptedReadError::Unavailable(_) => {
-                ActivityPersistence::DeletionOnly(store.root().to_path_buf())
-              }
-              crate::local_store::EncryptedReadError::Unreadable(_) => {
-                ActivityPersistence::Unreadable(store.root().to_path_buf())
-              }
-              crate::local_store::EncryptedReadError::Incompatible(_) => {
-                ActivityPersistence::Incompatible(store.root().to_path_buf())
-              }
-            },
-            ActivitySettings::default(),
-            None,
-          )
+      ActivityPersistence::Encrypted(store) => {
+        match ActivityStore::check_root_envelope_compatibility(store.root())
+          .and_then(|()| {
+            store
+              .delete_days_before(earliest)
+              .map_err(crate::local_store::EncryptedReadError::Unavailable)
+          })
+          .and_then(|_| store.recorded_until(earliest))
+        {
+          Ok(floor) => (ActivityPersistence::Encrypted(store), settings, floor),
+          Err(error) => {
+            tracing::warn!("activity recording boundary could not be loaded");
+            (
+              match error {
+                crate::local_store::EncryptedReadError::Unavailable(_) => {
+                  ActivityPersistence::DeletionOnly(store.root().to_path_buf())
+                }
+                crate::local_store::EncryptedReadError::Unreadable(_) => {
+                  ActivityPersistence::Unreadable(store.root().to_path_buf())
+                }
+                crate::local_store::EncryptedReadError::Incompatible(_) => {
+                  ActivityPersistence::Incompatible(store.root().to_path_buf())
+                }
+              },
+              ActivitySettings::default(),
+              None,
+            )
+          }
         }
-      },
+      }
       persistence => (persistence, settings, None),
     };
     self.cached_pending_dates = match &persistence {
@@ -2187,10 +2194,15 @@ fn open_persistence(namespace: &str) -> (ActivityPersistence, ActivitySettings) 
     match keychain::get_local_data_key(LocalDataKey::ActivityTimeline(namespace)) {
       Ok(LocalDataKeyLookup::Found(key)) => key,
       Ok(LocalDataKeyLookup::Missing) => {
-        return (
-          ActivityPersistence::KeyMissing(root),
-          ActivitySettings::default(),
-        );
+        let persistence = match ActivityStore::check_root_envelope_compatibility(&root)
+        {
+          Ok(()) => ActivityPersistence::KeyMissing(root),
+          Err(crate::local_store::EncryptedReadError::Incompatible(_)) => {
+            ActivityPersistence::Incompatible(root)
+          }
+          Err(_) => ActivityPersistence::DeletionOnly(root),
+        };
+        return (persistence, ActivitySettings::default());
       }
       Err(_) => {
         tracing::warn!("activity history key is unavailable");
@@ -2218,6 +2230,20 @@ fn open_persistence(namespace: &str) -> (ActivityPersistence, ActivitySettings) 
     }
   };
   let store = ActivityStore::new(key, root.clone());
+  if let Err(error) = ActivityStore::check_root_envelope_compatibility(&root) {
+    let persistence = match error {
+      crate::local_store::EncryptedReadError::Incompatible(_) => {
+        ActivityPersistence::Incompatible(root)
+      }
+      crate::local_store::EncryptedReadError::Unavailable(_) => {
+        ActivityPersistence::DeletionOnly(root)
+      }
+      crate::local_store::EncryptedReadError::Unreadable(_) => {
+        ActivityPersistence::Unreadable(root)
+      }
+    };
+    return (persistence, ActivitySettings::default());
+  }
   match store.load_settings_checked() {
     Ok(settings) => {
       let mut settings = settings.unwrap_or_default();
@@ -4334,6 +4360,41 @@ mod tests {
   }
 
   #[test]
+  fn keyed_install_preserves_noncanonical_version_999_and_requires_an_updated_app() {
+    let root =
+      std::env::temp_dir().join(format!("stella-future-name-{}", uuid::Uuid::new_v4()));
+    let store = ActivityStore::new([9; 32], root.clone());
+    let date = local_date(at(0));
+    store.save_pending(date, &review_batch()).unwrap();
+    let path = root.join("days").join("future-history.encrypted");
+    let original = br#"{"version":999,"futureCiphertext":{"data":"saved"}}"#;
+    std::fs::write(&path, original).unwrap();
+    let mut manager = ActivityManager::new();
+    manager.install(
+      ActivityPersistence::Encrypted(store),
+      ActivitySettings::default(),
+      at(0),
+    );
+    let snapshot = manager.day_snapshot(
+      date,
+      at(0),
+      &ActivityCaller::for_account_test(1, "fixture"),
+      0,
+      ActivityDetailsAccess::Ready,
+    );
+    assert_eq!(
+      snapshot.deletion_status,
+      ActivityDeletionStatus::Incompatible
+    );
+    assert!(matches!(
+      manager.delete_all(ActivityDeletionRecovery::DiscardUnreadable),
+      Err(ActivityDeletionError::Incompatible)
+    ));
+    assert_eq!(std::fs::read(&path).unwrap(), original);
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
   fn concurrent_initializers_share_one_key_and_leave_a_decryptable_store() {
     use std::sync::{
       Condvar,
@@ -4465,8 +4526,8 @@ mod tests {
   }
 
   #[test]
-  fn initialization_preserves_unreadable_expired_days_and_refuses_an_unknown_boundary()
-  {
+  fn initialization_preserves_unreadable_expired_days_and_records_after_the_known_boundary()
+   {
     let root = std::env::temp_dir().join(format!(
       "stella-expired-unreadable-{}",
       uuid::Uuid::new_v4()
@@ -4495,15 +4556,22 @@ mod tests {
     assert!(expired_path.exists());
     assert_eq!(
       manager.persistence_status(),
-      ActivityPersistenceStatus::DeletionOnly
+      ActivityPersistenceStatus::Encrypted
     );
-    assert!(!manager.is_recording());
-    assert_eq!(manager.wall_floor, None);
+    assert!(manager.is_recording());
+    assert_eq!(manager.wall_floor, Some(at(5)));
     assert_eq!(store.load_day(retained_date).unwrap().len(), 1);
-    assert!(
-      manager
-        .set_recording_status(ActivityRecordingStatus::Recording, at(10))
-        .is_err()
+    manager.observe(at(4), active("word"));
+    assert!(manager.open.is_none());
+    manager.observe(at(10), active("word"));
+    manager.stop(at(15)).unwrap();
+    let saved = store.load_day(retained_date).unwrap();
+    assert_eq!(saved.len(), 2);
+    assert_eq!((saved[0].start, saved[0].end), (at(0), at(5)));
+    assert_eq!((saved[1].start, saved[1].end), (at(10), at(15)));
+    assert_eq!(
+      std::fs::read(&expired_path).unwrap(),
+      b"unreadable envelope"
     );
     ActivityStore::remove(&root).unwrap();
   }
