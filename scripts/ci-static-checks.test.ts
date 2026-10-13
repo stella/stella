@@ -348,26 +348,26 @@ test("receipts require a successful queue run in the same repository and workflo
 test("skipped, cancelled, failed and continue-on-error tasks publish no success receipt", () => {
   const keys = { checked: "key", other: "other-key" };
   expect(
-    passedStaticChecks(
+    passedStaticChecks({
       keys,
-      { checked: { outcome: "success", conclusion: "success" } },
-      42,
-    ),
+      outcomes: { checked: { outcome: "success", conclusion: "success" } },
+      runId: 42,
+    }),
   ).toEqual({ checked: reuse.receipt });
   for (const outcome of ["skipped", "cancelled", "failure"]) {
     expect(
-      passedStaticChecks(
+      passedStaticChecks({
         keys,
-        { checked: { outcome, conclusion: "success" } },
-        42,
-      ),
+        outcomes: { checked: { outcome, conclusion: "success" } },
+        runId: 42,
+      }),
     ).toEqual({});
     expect(
-      passedStaticChecks(
+      passedStaticChecks({
         keys,
-        { checked: { outcome: "success", conclusion: outcome } },
-        42,
-      ),
+        outcomes: { checked: { outcome: "success", conclusion: outcome } },
+        runId: 42,
+      }),
     ).toEqual({});
   }
 });
