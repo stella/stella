@@ -11,6 +11,12 @@ import {
   scanResultConsumption,
 } from "./result-consumption";
 
+const createFixtureDirectory = (prefix: string) => {
+  const root = path.join(import.meta.dir, "../.cache/result-consumption");
+  mkdirSync(root, { recursive: true });
+  return mkdtempSync(path.join(root, prefix));
+};
+
 const createFixtureProgram = (
   source: string,
   relativeFile = "packages/example/src/fixture.ts",
@@ -18,7 +24,7 @@ const createFixtureProgram = (
   readonly directory: string;
   readonly program: ts.Program;
 } => {
-  const directory = mkdtempSync(path.join(import.meta.dir, ".result-test-"));
+  const directory = createFixtureDirectory("result-test-");
   const file = path.join(directory, relativeFile);
   mkdirSync(path.dirname(file), { recursive: true });
   writeFileSync(file, source);
@@ -147,7 +153,7 @@ describe("Result consumption guard", () => {
   });
 
   test("partition legs preserve all changed-file diagnostics exactly once", () => {
-    const directory = mkdtempSync(path.join(import.meta.dir, ".result-test-"));
+    const directory = createFixtureDirectory("result-test-");
     const relativeFiles = [
       "apps/api/src/changed.ts",
       "apps/web/src/changed.ts",
@@ -256,9 +262,7 @@ describe("Result consumption guard", () => {
   });
 
   test("discovers wrapper-only package script projects", () => {
-    const repositoryRoot = mkdtempSync(
-      path.join(import.meta.dir, ".result-discovery-test-"),
-    );
+    const repositoryRoot = createFixtureDirectory("result-discovery-test-");
     const scriptsDirectory = path.join(
       repositoryRoot,
       "packages/example/scripts",

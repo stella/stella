@@ -132,3 +132,65 @@ test("host mount guard accepts and rejects the documented cases", () => {
     expect(isDockerMountGuardInput(file, "docker run")).toBe(true);
   }
 });
+
+test.each([
+  'readonly ["ps", ...string[]]',
+  'readonly ["compose", ...string[]] | readonly ["volume", "ls", ...string[]]',
+])(
+  "the mount guard proves each closed command tuple is non-mounting: %s",
+  (type) => {
+    const source = `type Commands = ${type}; type Alias = Commands; const command = (args: Alias) => ["docker", "--host", target.host, ...args];`;
+    expect(inspectDockerHelper(source)).toEqual([]);
+  },
+);
+
+test.each([
+  "readonly string[]",
+  "UnknownCommands",
+  'readonly ["volume", ...string[]]',
+  'readonly ["run", ...string[]]',
+  'readonly ["volume", "create", ...string[]]',
+  'readonly ["ps", ...string[]] | readonly ["container", "run", ...string[]]',
+])("unsafe or unresolved parameter types remain refused: %s", (type) => {
+  expect(
+    inspectDockerHelper(
+      `type Commands = ${type}; const command = (args: Commands) => ["docker", "--host", target.host, ...args];`,
+    ).length,
+  ).toBeGreaterThan(0);
+});
+
+test("an unresolved global flag cannot be made safe by a command tuple", () => {
+  expect(
+    inspectDockerHelper(
+      'type Commands = readonly ["ps", ...string[]]; const command = (args: Commands) => ["docker", ...globals, ...args];',
+    ).length,
+  ).toBeGreaterThan(0);
+});
+
+test.each([
+  'const wrapper = (args: Commands) => { { const args = untrusted; return ["docker", ...args]; } };',
+  'const wrapper = (args: Commands) => { return values.map((args) => ["docker", ...args]); };',
+  'const wrapper = (args: Commands) => { try {} catch (args) { return ["docker", ...args]; } };',
+  'const wrapper = (args: Commands) => { for (const args of values) { return ["docker", ...args]; } };',
+  'const wrapper = () => { type Commands = readonly ["run", ...string[]]; return (args: Commands) => ["docker", ...args]; };',
+  'const wrapper = <Commands>(args: Commands) => ["docker", ...args];',
+  'const wrapper = () => { class Commands extends Array<string> {} return (args: Commands) => ["docker", ...args]; };',
+  'const wrapper = () => { enum Commands { unsafe } return (args: Commands) => ["docker", ...args]; };',
+])(
+  "nearer lexical bindings cannot borrow a safe outer command type: %s",
+  (body) => {
+    expect(
+      inspectDockerHelper(
+        `type Commands = readonly ["ps", ...string[]]; ${body}`,
+      ).length,
+    ).toBeGreaterThan(0);
+  },
+);
+
+test("a constant parameter alias and a typed nested callback retain their actual command domain", () => {
+  expect(
+    inspectDockerHelper(
+      'type Commands = readonly ["ps", ...string[]]; const wrapper = (args: Commands) => { const alias = args; return values.map((other: Commands) => [["docker", ...alias], ["docker", ...other]]); };',
+    ),
+  ).toEqual([]);
+});

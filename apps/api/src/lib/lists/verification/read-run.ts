@@ -7,7 +7,7 @@
  */
 
 import { panic } from "better-result";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -24,7 +24,10 @@ import type {
 } from "@/api/lib/lists/verification/contract";
 import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";
 import type { ClaimReview } from "@/api/lib/lists/verification/review-fold";
-import { foldClaimReview } from "@/api/lib/lists/verification/review-fold";
+import {
+  contestedFactIds,
+  foldClaimReview,
+} from "@/api/lib/lists/verification/review-fold";
 
 export const serializeClaimReview = (review: ClaimReview) => ({
   ...review,
@@ -152,6 +155,38 @@ type ReadVerificationRunArgs = {
   tx: Pick<Transaction, "select">;
   workspaceId: SafeId<"workspace">;
   runId: SafeId<"legalListVerificationRun">;
+};
+
+/** The list identity a run summary projects from its stored evidence. */
+export const verificationRunListIdColumn = sql<
+  SafeId<"legalList">
+>`(${legalListVerificationRuns.evidence} ->> 'listId')`;
+
+/** `null` when the workspace holds no such run. */
+export const readRunEvidenceForGrading = async ({
+  tx,
+  workspaceId,
+  runId,
+}: ReadVerificationRunArgs) => {
+  const run = (
+    await tx
+      .select({ evidence: legalListVerificationRuns.evidence })
+      .from(legalListVerificationRuns)
+      .where(
+        and(
+          eq(legalListVerificationRuns.id, runId),
+          eq(legalListVerificationRuns.workspaceId, workspaceId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  return run === undefined ? null : run.evidence;
+};
+
+/** Only the fact identities needed to decide which claims need attention. */
+export const readContestedFactIds = async (args: ReadVerificationRunArgs) => {
+  const evidence = await readRunEvidenceForGrading(args);
+  return evidence === null ? null : contestedFactIds(evidence);
 };
 
 /** `null` when the workspace holds no such run. */

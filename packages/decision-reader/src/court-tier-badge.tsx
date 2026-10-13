@@ -13,6 +13,8 @@ type CourtTierBadgeProps = {
 /**
  * The chip alone, weighted by tier: for a place that already names the court
  * beside it, or that stands for the decision as a whole (an inspector tab).
+ * It draws the shared document identity badge, so a decision looks the same
+ * in every list, rail and reader.
  */
 export const CourtTierBadge = ({
   abbreviation,
