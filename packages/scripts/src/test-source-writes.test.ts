@@ -314,6 +314,8 @@ const filesToInspect = (root: string) =>
       /\/(?:tests|__tests__|test-helpers|test-fixtures)\//u.test(file),
   );
 
+// The repository-wide AST census and Git baseline share this deadline. Bun's
+// default 5s can interrupt Git after parsing, masking the timeout as a missing base.
 test("tests keep generated files outside application and package source trees", () => {
   const files = filesToInspect(repositoryRoot);
   expect(files.length).toBeGreaterThan(0);
@@ -324,7 +326,7 @@ test("tests keep generated files outside application and package source trees", 
     ),
   );
   expect(sourceWriteExceptionIssues(repositoryRoot, violations)).toEqual([]);
-});
+}, 30_000);
 
 test("the census inspects test helper directories and fixture modules", () => {
   const root = mkdtempSync(path.join(tmpdir(), "stella-source-write-census-"));
