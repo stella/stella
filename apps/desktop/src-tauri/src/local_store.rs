@@ -422,7 +422,7 @@ mod tests {
     let file = EncryptedJsonFile::new([7; 32], path.clone(), "fixture");
     file.persist(&true).unwrap();
     for raw in [
-      r#"{}"#,
+      "{}",
       r#"{"futureCiphertext":"saved"}"#,
       r#"{"version":null}"#,
       r#"{"version":"1"}"#,
