@@ -3,6 +3,8 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import nodePath from "node:path";
 import * as ts from "typescript";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 const SCRIPT_EXTENSION = /\.[cm]?[jt]sx?$/u;
 const CANDIDATE_SUFFIXES = [
   "",
@@ -111,7 +113,7 @@ export const walkEagerGraph = ({
       if (file === undefined) {
         continue;
       }
-      const chain = [...next.chain, nodePath.relative(root, file)];
+      const chain = [...next.chain, repoRelativePath(root, file)];
       if (forbiddenFiles.has(file)) {
         violations.push(chain.join(" -> "));
         continue;

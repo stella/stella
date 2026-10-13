@@ -204,6 +204,10 @@ export const AppBreadcrumbs = () => {
       <BreadcrumbLink to="/chat">{t("navigation.chat")}</BreadcrumbLink>,
     ),
     defineBreadcrumb(
+      ["/chat/history"],
+      <BreadcrumbLink to="/chat/history">{t("common.history")}</BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
       ["/chat/$threadId", "/chat/workspaces/$workspaceId/$threadId"],
       renderChatThreadBreadcrumb,
     ),
