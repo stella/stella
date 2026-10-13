@@ -78,7 +78,7 @@ export default eslintCompatPlugin({
           },
           Property(node) {
             // Only object literals supply a budget; destructuring reads one.
-            if (node.parent?.type !== "ObjectExpression") {
+            if (node.parent.type !== "ObjectExpression") {
               return;
             }
             const name = node.computed
