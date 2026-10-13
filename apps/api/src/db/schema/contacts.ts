@@ -3,6 +3,7 @@ import type { SQLWrapper } from "drizzle-orm";
 import { CONTACT_TYPES, WORKSPACE_CONTACT_ROLES } from "@stll/api-contract";
 
 import { workspaceInsertCheck } from "@/api/db/rls";
+import { systemScopePolicies } from "@/api/db/system-scope-policies";
 import {
   ACCOUNT_AUDIT_EVENT_TYPES,
   AUDIT_ACTION,
@@ -112,6 +113,7 @@ export const contacts = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...systemScopePolicies(table),
     p.unique("contacts_org_id_unique").on(table.organizationId, table.id),
     p.index("contacts_organization_id_idx").on(table.organizationId),
     p.index("contacts_org_type_idx").on(table.organizationId, table.type),
@@ -337,6 +339,7 @@ export const workspaces = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...systemScopePolicies(table),
     p.index("workspaces_organization_id_idx").on(table.organizationId),
     p
       .unique("workspaces_org_reference_uidx")
@@ -390,6 +393,7 @@ export const workspaceMembers = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...systemScopePolicies(table),
     p
       .uniqueIndex("workspace_members_workspace_user_uidx")
       .on(table.workspaceId, table.userId),

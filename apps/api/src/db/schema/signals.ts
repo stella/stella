@@ -12,6 +12,8 @@ import type {
   SUGGESTION_KIND,
 } from "@stll/api-contract/signals";
 
+import { systemScopePolicies } from "@/api/db/system-scope-policies";
+
 import {
   jsonb,
   organization,
@@ -148,6 +150,7 @@ export const signals = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...systemScopePolicies(table),
     p
       .foreignKey({
         columns: [table.workspaceId, table.organizationId],
@@ -249,6 +252,7 @@ export const signalEvents = p.pgTable(
     )`;
 
     return [
+      ...systemScopePolicies(table),
       p
         .foreignKey({
           columns: [table.signalId, table.organizationId],
@@ -311,6 +315,7 @@ export const scoutRuns = p.pgTable(
     finishedAt: timestamptz("finished_at"),
   },
   (table) => [
+    ...systemScopePolicies(table),
     p
       .index("scout_runs_org_scout_started_idx")
       .on(table.organizationId, table.scoutKey, table.startedAt.desc()),
@@ -353,6 +358,7 @@ export const pendingScoutEmissions = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...systemScopePolicies(table),
     p.primaryKey({
       name: "pending_scout_emissions_identity_pk",
       columns: [table.organizationId, table.sourceKind, table.sourceId],
@@ -386,12 +392,17 @@ export const pendingScoutEmissions = p.pgTable(
         sql`, `,
       )})`,
     ),
-    // Allow the table owner to maintain feature receipts.
+    // Discovery reads and locks do not authorize owner receipt mutations.
     p.pgPolicy("pending_scout_emissions_owner_access", {
-      for: "all",
+      for: "select",
       to: "public",
       using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.pending_scout_emissions'::regclass)`,
-      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.pending_scout_emissions'::regclass)`,
+    }),
+    p.pgPolicy("pending_scout_emissions_owner_lock", {
+      for: "update",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.pending_scout_emissions'::regclass)`,
+      withCheck: sql`false`,
     }),
     ...organizationOptionalWorkspacePolicies("pending_scout_emissions"),
   ],

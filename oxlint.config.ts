@@ -4487,6 +4487,11 @@ const config = defineConfig({
           {
             allowedFiles: [
               {
+                file: "apps/api/src/db/org-scope-registry.ts",
+                reason:
+                  "Static account table classification metadata; the registry executes no data queries.",
+              },
+              {
                 file: "apps/api/src/lib/db/operator-activity/read.ts",
                 reason:
                   "deployment-credential authorized aggregate counts, bounded by time windows and statement timeout, with transactional access auditing",

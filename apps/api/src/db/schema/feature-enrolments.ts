@@ -1,3 +1,4 @@
+import { systemScopePolicies } from "@/api/db/system-scope-policies";
 import { SELF_SERVE_FEATURE_IDS } from "@/api/lib/feature-access/registry";
 
 import {
@@ -26,6 +27,7 @@ export const featureEnrolments = p.pgTable.withRLS(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...systemScopePolicies(table, "read"),
     p.primaryKey({
       columns: [table.userId, table.organizationId, table.featureId],
     }),

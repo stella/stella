@@ -15,6 +15,11 @@ export default {
     names: ["hostedUsageWebhookEvents"],
     allowed: [
       {
+        path: "apps/api/src/db/org-scope-registry.ts",
+        reason:
+          "Static row ownership and key metadata only; no data queries or mutations.",
+      },
+      {
         path: "apps/api/src/tests/pglite-test-db.ts",
         reason:
           "Schema export or full-schema test introspection; no production receipt writer.",

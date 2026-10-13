@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 
 import { timestamptz } from "@/api/db/columns";
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
+import { systemScopePolicies } from "@/api/db/system-scope-policies";
 import { DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 
 import {
@@ -294,6 +295,7 @@ export const documentProcessingRuns = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...systemScopePolicies(table),
     ...entityFeatureGateChecks(table),
     ...entityFeaturePolicies(
       table,

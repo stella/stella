@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
+import { systemScopePolicies } from "@/api/db/system-scope-policies";
 import {
   FLOW_RUN_STATUSES,
   FLOW_RUN_RECOVERY_STATES,
@@ -75,6 +76,7 @@ export const flowDefinitions = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...systemScopePolicies(table),
     p.index("flow_definitions_organization_id_idx").on(table.organizationId),
     p
       .index("flow_definitions_org_created_at_idx")
@@ -107,6 +109,7 @@ export const flowUploadTriggerIntents = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...systemScopePolicies(table),
     p.primaryKey({ columns: [table.definitionId, table.entityId] }),
     p.check(
       "flow_upload_trigger_intents_settlement_check",
@@ -166,12 +169,17 @@ export const flowUploadTriggerIntents = p.pgTable(
       table,
       new Map([[table.entityId, { target: "entities", kind: "context" }]]),
     ),
-    // Allow the table owner to maintain feature receipts.
+    // Discovery reads and locks do not authorize owner receipt mutations.
     p.pgPolicy("flow_upload_trigger_intents_owner_access", {
-      for: "all",
+      for: "select",
       to: "public",
       using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.flow_upload_trigger_intents'::regclass)`,
-      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.flow_upload_trigger_intents'::regclass)`,
+    }),
+    p.pgPolicy("flow_upload_trigger_intents_owner_lock", {
+      for: "update",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.flow_upload_trigger_intents'::regclass)`,
+      withCheck: sql`false`,
     }),
     ...organizationOptionalWorkspacePolicies("flow_upload_trigger_intents"),
   ],
@@ -214,6 +222,7 @@ export const flowRuns = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...systemScopePolicies(table),
     p.check(
       "flow_runs_status_domain",
       sql`${table.status} IN (${sql.join(
@@ -298,6 +307,7 @@ export const flowRunSteps = p.pgTable(
     finishedAt: timestamptz("finished_at"),
   },
   (table) => [
+    ...systemScopePolicies(table),
     ...entityFeatureGateChecks(table),
     p.check(
       "flow_run_steps_status_domain",

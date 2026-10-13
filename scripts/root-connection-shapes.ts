@@ -52,7 +52,10 @@
 // operations in ROOT_OPERATION_RESULTS, each named with the one file it may
 // be awaited in and why its result is not a handle.
 
+import { panic } from "better-result";
 import ts from "typescript";
+
+import { sha256Hex } from "@stll/sha256/node";
 
 import { parseSource } from "./parse-memo";
 
@@ -591,6 +594,327 @@ export const countRootConnectionShapes = (
   content: string,
   file: string,
 ): number => findRootConnectionShapes(content, file).length;
+
+const ORG_SCOPE_MODULE = /(?:^|\/)db\/org-scope(?:\.[cm]?[jt]sx?)?$/u;
+const hasNodeFlag = (flags: ts.NodeFlags, mask: ts.NodeFlags): boolean =>
+  flags % (mask * 2) >= mask;
+
+const accessName = (
+  access: ts.PropertyAccessExpression | ts.ElementAccessExpression,
+): string | undefined => {
+  if (ts.isPropertyAccessExpression(access)) {
+    return access.name.text;
+  }
+  if (ts.isStringLiteralLike(access.argumentExpression)) {
+    return access.argumentExpression.text;
+  }
+  return undefined;
+};
+const SCHEMA_MODULE =
+  /(?:^|\/)db\/(?:schema(?:\/[^.]+)?|auth-schema|agent-auth-schema)(?:\.[cm]?[jt]sx?)?$/u;
+const ORG_WRITE_METHODS = new Set(["insert", "update", "delete"]);
+
+type ImportedValue = { type: "member"; name: string } | { type: "namespace" };
+
+const isDynamicModuleImport = (
+  expression: ts.Expression,
+  modulePattern: RegExp,
+): boolean => {
+  const value = unwrap(expression);
+  const source = ts.isCallExpression(value) ? value.arguments.at(0) : undefined;
+  return (
+    ts.isCallExpression(value) &&
+    value.expression.kind === ts.SyntaxKind.ImportKeyword &&
+    source !== undefined &&
+    ts.isStringLiteralLike(source) &&
+    modulePattern.test(source.text)
+  );
+};
+
+// Resolve imports and immutable aliases using the same lexical declarations
+// as the owner-handle scanner. Mutable aliases never establish admission.
+const importedValue = (
+  expression: ts.Expression,
+  modulePattern: RegExp,
+  seen = new Set<ts.Identifier>(),
+): ImportedValue | undefined => {
+  const value = unwrap(expression);
+  if (ts.isIdentifier(value)) {
+    const declaration = resolveDeclaration(value);
+    if (declaration === undefined || seen.has(declaration)) {
+      return undefined;
+    }
+    seen.add(declaration);
+    const parent = declaration.parent;
+    if (
+      ts.isBindingElement(parent) &&
+      ts.isObjectBindingPattern(parent.parent) &&
+      ts.isVariableDeclaration(parent.parent.parent) &&
+      parent.parent.parent.initializer !== undefined &&
+      isDynamicModuleImport(parent.parent.parent.initializer, modulePattern)
+    ) {
+      const name = parent.propertyName ?? parent.name;
+      return ts.isIdentifier(name) || ts.isStringLiteralLike(name)
+        ? { type: "member", name: name.text }
+        : undefined;
+    }
+    if (ts.isImportSpecifier(parent) || ts.isNamespaceImport(parent)) {
+      const imported = ts.findAncestor(parent, ts.isImportDeclaration);
+      if (
+        imported === undefined ||
+        !ts.isImportDeclaration(imported) ||
+        !ts.isStringLiteralLike(imported.moduleSpecifier) ||
+        !modulePattern.test(imported.moduleSpecifier.text) ||
+        imported.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword ||
+        (ts.isImportSpecifier(parent) && parent.isTypeOnly)
+      ) {
+        return undefined;
+      }
+      return ts.isImportSpecifier(parent)
+        ? { type: "member", name: (parent.propertyName ?? parent.name).text }
+        : { type: "namespace" };
+    }
+    if (
+      ts.isVariableDeclaration(parent) &&
+      parent.initializer !== undefined &&
+      ts.isVariableDeclarationList(parent.parent) &&
+      hasNodeFlag(parent.parent.flags, ts.NodeFlags.Const)
+    ) {
+      if (isDynamicModuleImport(parent.initializer, modulePattern)) {
+        return { type: "namespace" };
+      }
+      return importedValue(parent.initializer, modulePattern, seen);
+    }
+    return undefined;
+  }
+  if (
+    ts.isPropertyAccessExpression(value) ||
+    ts.isElementAccessExpression(value)
+  ) {
+    const name = accessName(value);
+    if (
+      name !== undefined &&
+      importedValue(value.expression, modulePattern, seen)?.type === "namespace"
+    ) {
+      return { type: "member", name };
+    }
+  }
+  return undefined;
+};
+
+const resolvesToBinding = (
+  expression: ts.Expression,
+  binding: ts.Identifier,
+  seen = new Set<ts.Identifier>(),
+): boolean => {
+  const value = unwrap(expression);
+  if (!ts.isIdentifier(value)) {
+    return false;
+  }
+  const declaration = resolveDeclaration(value);
+  if (declaration === binding) {
+    return true;
+  }
+  if (declaration === undefined || seen.has(declaration)) {
+    return false;
+  }
+  seen.add(declaration);
+  const parent = declaration.parent;
+  return (
+    ts.isVariableDeclaration(parent) &&
+    parent.initializer !== undefined &&
+    ts.isVariableDeclarationList(parent.parent) &&
+    hasNodeFlag(parent.parent.flags, ts.NodeFlags.Const) &&
+    resolvesToBinding(parent.initializer, binding, seen)
+  );
+};
+
+const scopedReceiver = (
+  call: ts.CallExpression,
+  receiver: ts.Expression,
+): boolean => {
+  let scoped = false;
+  ts.findAncestor(call.parent, (node) => {
+    if (!ts.isArrowFunction(node) && !ts.isFunctionExpression(node)) {
+      return false;
+    }
+    const property = node.parent;
+    if (
+      !ts.isPropertyAssignment(property) ||
+      (!ts.isIdentifier(property.name) &&
+        !ts.isStringLiteralLike(property.name)) ||
+      property.name.text !== "fn" ||
+      !ts.isObjectLiteralExpression(property.parent)
+    ) {
+      return false;
+    }
+    const invocation = property.parent.parent;
+    if (
+      !ts.isCallExpression(invocation) ||
+      invocation.arguments.at(0) !== property.parent
+    ) {
+      return false;
+    }
+    const imported = importedValue(invocation.expression, ORG_SCOPE_MODULE);
+    const parameter = node.parameters.at(0)?.name;
+    if (
+      imported?.type !== "member" ||
+      imported.name !== "withOrgScope" ||
+      parameter === undefined ||
+      !ts.isIdentifier(parameter)
+    ) {
+      return false;
+    }
+    scoped = resolvesToBinding(receiver, parameter);
+    return scoped;
+  });
+  return scoped;
+};
+
+export type OrgWriteScopeHit = {
+  line: number;
+  table: string;
+  operation: string;
+  fingerprint: string;
+};
+
+// Syntax kinds and token values retain the write's statement while omitting
+// offsets, trivia, and quote style. Formatting and relocation stay neutral.
+const writeStatementFingerprint = (call: ts.CallExpression): string => {
+  const statement =
+    ts.findAncestor(
+      call,
+      (node) =>
+        ts.isExpressionStatement(node) ||
+        ts.isReturnStatement(node) ||
+        ts.isVariableStatement(node),
+    ) ?? call;
+  const tokens: string[] = [];
+  const visit = (node: ts.Node): void => {
+    const text =
+      ts.isIdentifier(node) ||
+      ts.isStringLiteralLike(node) ||
+      ts.isNumericLiteral(node) ||
+      ts.isTemplateHead(node) ||
+      ts.isTemplateMiddle(node) ||
+      ts.isTemplateTail(node)
+        ? node.text
+        : "";
+    tokens.push(`${node.kind}:${text}`);
+    ts.forEachChild(node, visit);
+  };
+  visit(statement);
+  return sha256Hex(JSON.stringify(tokens));
+};
+
+type FindUnscopedOrgWritesOptions = {
+  content: string;
+  file: string;
+  orgTables: ReadonlySet<string>;
+};
+
+/** ORG table writes in owner modules require the scoped callback's receiver. */
+export const findUnscopedOrgWrites = ({
+  content,
+  file,
+  orgTables,
+}: FindUnscopedOrgWritesOptions): OrgWriteScopeHit[] => {
+  const source = parseSource({ fileName: file, text: content });
+  const hits: OrgWriteScopeHit[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const callee = unwrap(node.expression);
+      if (
+        ts.isPropertyAccessExpression(callee) ||
+        ts.isElementAccessExpression(callee)
+      ) {
+        const operation = accessName(callee);
+        const target = node.arguments.at(0);
+        const imported =
+          target === undefined
+            ? undefined
+            : importedValue(target, SCHEMA_MODULE);
+        if (
+          operation !== undefined &&
+          ORG_WRITE_METHODS.has(operation) &&
+          imported?.type === "member" &&
+          orgTables.has(imported.name) &&
+          !scopedReceiver(node, callee.expression)
+        ) {
+          hits.push({
+            line:
+              source.getLineAndCharacterOfPosition(node.getStart(source)).line +
+              1,
+            table: imported.name,
+            operation,
+            fingerprint: writeStatementFingerprint(node),
+          });
+        }
+        // SQL mutations cannot classify their target from a Drizzle argument;
+        // keep each owner module's explicit SQL mutation debt independently.
+        if (
+          operation === "execute" &&
+          target !== undefined &&
+          /\b(?:INSERT\s+INTO|DELETE\s+FROM|UPDATE)\b/iu.test(
+            target.getText(source).replace(/\bFOR\s+UPDATE\b/giu, ""),
+          ) &&
+          !scopedReceiver(node, callee.expression)
+        ) {
+          hits.push({
+            line:
+              source.getLineAndCharacterOfPosition(node.getStart(source)).line +
+              1,
+            table: "<raw-sql>",
+            operation: "execute",
+            fingerprint: writeStatementFingerprint(node),
+          });
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return hits;
+};
+
+/** The classification registry is shared by both measured source trees. */
+export const orgScopeTableExportNames = (
+  content: string,
+  file: string,
+): string[] => {
+  const source = parseSource({ fileName: file, text: content });
+  for (const statement of source.statements) {
+    if (!ts.isVariableStatement(statement)) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        !ts.isIdentifier(declaration.name) ||
+        declaration.name.text !== "ORG_SCOPE_TABLES" ||
+        declaration.initializer === undefined
+      ) {
+        continue;
+      }
+      const value = unwrap(declaration.initializer);
+      if (!ts.isObjectLiteralExpression(value)) {
+        panic("ORG scope table registry requires explicit export keys");
+      }
+      return value.properties.map((property) => {
+        if (
+          !ts.isPropertyAssignment(property) ||
+          (!ts.isIdentifier(property.name) &&
+            !ts.isStringLiteralLike(property.name))
+        ) {
+          return panic(
+            "ORG scope table registry requires explicit export keys",
+          );
+        }
+        return property.name.text;
+      });
+    }
+  }
+  return panic("ORG scope table registry is missing");
+};
 
 // --- Which modules reach the handles ----------------------------------------
 //

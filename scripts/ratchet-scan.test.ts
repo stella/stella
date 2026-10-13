@@ -30,6 +30,64 @@ const ownSelection = (
 };
 
 describe("shared ratchet scan", () => {
+  test("owner writer budgets remain independent per table and operation", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "ratchet-org-writers-"));
+    const metric =
+      RATCHET_METRICS.find(({ id }) => id === "unscoped-org-owner-writes") ??
+      panic("Owner writer metric is missing");
+    const owner = "apps/api/src/lib/flows/writer-fixture.ts";
+    const filename = path.join(root, owner);
+    mkdirSync(path.dirname(filename), { recursive: true });
+    const measure = (
+      table: string,
+      operation: string,
+      receiver = "ownerTx",
+      value = 0,
+    ) => {
+      writeFileSync(
+        filename,
+        [
+          'import { flowRuns, signals } from "@/api/db/schema";',
+          'import { withOrgScope } from "@/api/db/org-scope";',
+          `withOrgScope({ tx: ownerTx, scope, actor: { type: "system" }, fn: (scopedTx) => ${receiver}.${operation}(${table}).where(eq(${table}.id, ${value})) });`,
+        ].join("\n"),
+      );
+      return scanTree({ tree: openSourceTree(root), metrics: [metric] })
+        .snapshot;
+    };
+    try {
+      const baseline = measure("flowRuns", "update");
+      const budget =
+        baseline[metric.id] ?? panic("Owner writer fixture budget is missing");
+      expect(budget.count).toBe(1);
+      expect(Object.keys(budget.files)).toHaveLength(1);
+      expect(
+        Object.keys(budget.files)
+          .at(0)
+          ?.startsWith(`${owner}#flowRuns#update#`),
+      ).toBe(true);
+      const assess = (
+        table: string,
+        operation: string,
+        receiver?: string,
+        value?: number,
+      ) =>
+        assessMeasurements({
+          current: measure(table, operation, receiver, value),
+          baseline,
+          metrics: [metric],
+        });
+      expect(assess("flowRuns", "update").allowed).toBe(true);
+      expect(assess("flowRuns", "update", "scopedTx").allowed).toBe(true);
+      expect(assess("signals", "update").allowed).toBe(false);
+      expect(assess("flowRuns", "delete").allowed).toBe(false);
+      expect(assess("flowRuns", "update", "ownerTx", 1).allowed).toBe(false);
+      expect(metric.growth).toBe("shrink-only");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("every file metric scans exactly the files its own globs select", () => {
     const tree = openSourceTree(ROOT);
     for (const metric of RATCHET_METRICS) {

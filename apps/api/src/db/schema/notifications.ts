@@ -4,6 +4,8 @@ import {
 } from "@stll/api-contract/notifications";
 import type { NotificationMetadataValue } from "@stll/api-contract/notifications";
 
+import { systemScopePolicies } from "@/api/db/system-scope-policies";
+
 import {
   jsonb,
   organization,
@@ -77,6 +79,7 @@ export const notifications = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...systemScopePolicies(table),
     p
       .uniqueIndex("notifications_user_idempotency_uidx")
       .on(table.userId, table.idempotencyKey),

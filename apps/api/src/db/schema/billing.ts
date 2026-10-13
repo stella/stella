@@ -15,6 +15,7 @@ import { ORGANIZATION_MANAGEMENT_ROLES } from "@stll/permissions";
 
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
 import { timeEntryPolicies } from "@/api/db/rls";
+import { systemScopePolicies } from "@/api/db/system-scope-policies";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -194,6 +195,7 @@ export const timeEntries = p.pgTable(
     updatedAt: timestamptz("updated_at").defaultNow(),
   },
   (table) => [
+    ...systemScopePolicies(table),
     ...entityFeaturePolicies(
       table,
       new Map([[table.workItemId, { target: "entities", kind: "context" }]]),

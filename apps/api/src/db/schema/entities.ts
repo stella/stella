@@ -2,6 +2,7 @@ import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
 import { DESKTOP_HANDOFF_FAILURE_REASONS } from "@stll/api-contract/desktop-handoff";
 import type { DocumentTranslationSourceLanguageCode } from "@stll/api-contract/document-translation";
 
+import { systemScopePolicies } from "@/api/db/system-scope-policies";
 import { DESKTOP_EDIT_FILE_TYPES } from "@/api/lib/desktop-edit-file-types";
 import {
   FOLIO_COLLAB_CHECKPOINT_MAX_BYTES,
@@ -142,6 +143,7 @@ export const entities = p.pgTable(
     updatedAt: timestamptz("updated_at").defaultNow(),
   },
   (table) => [
+    ...systemScopePolicies(table),
     p.index("entities_workspace_id_idx").on(table.workspaceId),
     p
       .index("entities_ws_created_at_id_idx")
@@ -316,6 +318,7 @@ export const taskAssignees = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...systemScopePolicies(table),
     ...entityFeatureGateChecks(table),
     p.index("task_assignees_workspace_id_idx").on(table.workspaceId),
     p.index("task_assignees_entity_id_idx").on(table.entityId),
@@ -436,6 +439,7 @@ export const entityVersions = p.pgTable(
     deletedBy: p.text("deleted_by"),
   },
   (table) => [
+    ...systemScopePolicies(table),
     ...entityFeatureGateChecks(table),
     p
       .uniqueIndex("entity_versions_id_entity_ws_uidx")
@@ -598,6 +602,7 @@ export const desktopEditSessions = p.pgTable(
     ),
   },
   (table) => [
+    ...systemScopePolicies(table),
     ...entityFeatureGateChecks(table),
     p.index("desktop_edit_sessions_workspace_id_idx").on(table.workspaceId),
     p.index("desktop_edit_sessions_entity_id_idx").on(table.entityId),
@@ -706,6 +711,7 @@ export const desktopEditHandoffs = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...systemScopePolicies(table),
     ...entityFeatureGateChecks(table),
     p.check(
       "desktop_edit_handoffs_failure_check",
@@ -1465,6 +1471,7 @@ export const fields = p.pgTable(
     content: jsonb().$type<FieldContent>().notNull(),
   },
   (table) => [
+    ...systemScopePolicies(table),
     ...entityFeatureGateChecks(table),
     p
       .uniqueIndex("fields_property_id_entity_version_id_key")

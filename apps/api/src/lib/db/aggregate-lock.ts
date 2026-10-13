@@ -21,6 +21,7 @@ import * as v from "valibot";
 import { compareCodeUnit } from "@stll/collation";
 
 import { organization } from "@/api/db/auth-schema";
+import { ORG_SCOPE_TABLES } from "@/api/db/org-scope-registry";
 import type { Transaction } from "@/api/db/root";
 import type { pendingScoutEmissions } from "@/api/db/schema";
 import {
@@ -2028,4 +2029,69 @@ export const withDecisionCitationStatsLocks = async ({
       ORDER BY key
     ) anchors
   `);
+};
+
+type OrgScopeSourceOptions = {
+  tx: Pick<Transaction, "select" | "execute">;
+  table: keyof typeof ORG_SCOPE_TABLES;
+  where: SQL;
+};
+
+class AggregateScopeSourceBusy extends TaggedError("AggregateScopeSourceBusy")<{
+  message: string;
+  cause: unknown;
+}>() {}
+
+/** Pin ownership without adding a blocking upgrade to the caller's resource chain. */
+export const lockOrgScopeSource = async ({
+  tx,
+  table,
+  where,
+}: OrgScopeSourceOptions) => {
+  const source = ORG_SCOPE_TABLES[table];
+  const tableName = getTableName(source.table);
+  const sourceMode =
+    tableName === "workspaces" ? sql`KEY SHARE` : sql`NO KEY UPDATE`;
+  const result = await Result.tryPromise(async () => {
+    const row = (
+      await tx.execute<{
+        organizationId: SafeId<"organization"> | null;
+        workspaceId: SafeId<"workspace"> | null;
+        id: string;
+      }>(sql`SELECT ${source.organizationId} AS "organizationId",
+        ${source.workspaceId} AS "workspaceId", ${source.rowId} AS id
+      FROM ${source.table} WHERE ${where} LIMIT 1
+      FOR ${sourceMode} OF ${sql.identifier(tableName)} NOWAIT`)
+    ).at(0);
+    if (row === undefined) {
+      return undefined;
+    }
+    if (row.organizationId === null) {
+      return panic("Scope source has no organization");
+    }
+    if (row.workspaceId !== null) {
+      const matter = (
+        await tx
+          .select({ organizationId: workspaces.organizationId })
+          .from(workspaces)
+          .where(eq(workspaces.id, row.workspaceId))
+          .for("key share", { noWait: true })
+          .limit(1)
+      ).at(0);
+      if (matter?.organizationId !== row.organizationId) {
+        return panic("Scope source and matter organization must agree");
+      }
+    }
+    return { ...row, organizationId: row.organizationId };
+  });
+  if (Result.isError(result)) {
+    if (getPgErrorCode(result.error) === PG_ERROR.LOCK_NOT_AVAILABLE) {
+      throw new AggregateScopeSourceBusy({
+        message: "Scope source is in use",
+        cause: result.error,
+      });
+    }
+    throw result.error;
+  }
+  return result.value;
 };
