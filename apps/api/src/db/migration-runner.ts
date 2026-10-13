@@ -1,5 +1,5 @@
 import { panic, Result, TaggedError } from "better-result";
-import type { ReservedSQL } from "bun";
+import type { MaybePromise, ReservedSQL } from "bun";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
 import { readMigrationFiles } from "drizzle-orm/migrator";
@@ -424,6 +424,10 @@ const ledgerFingerprint = (rows: readonly LedgerRow[]) =>
     )
     .join(",");
 
+type OnlineMigrationRunner = (
+  ...args: Parameters<typeof runOnlineMigrations>
+) => MaybePromise<Awaited<ReturnType<typeof runOnlineMigrations>>>;
+
 type RunMigrationsOptions = {
   /** Local test templates replay existing cluster roles without changing source hashes. */
   readMigrations?: typeof readMigrationFiles;
@@ -435,7 +439,7 @@ type RunMigrationsOptions = {
   ebs: ConfiguredEbsConfiguration;
   migrationsSchema?: string;
   migrationsTable?: string;
-  runOnline?: typeof runOnlineMigrations;
+  runOnline?: OnlineMigrationRunner;
   onlineIndexHold?: OnlineIndexHoldRef;
   /** Test seam: the pauses between lock-wait attempts and how to wait them. */
   lockWaitRetry?: LockWaitRetry;

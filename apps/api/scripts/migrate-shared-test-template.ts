@@ -24,7 +24,7 @@ await runScriptWithErrorOutput(
         ebs: { type: "disabled" },
         // Online repairs belong to the worker revision, after its dependencies
         // are installed; canonical runtime code must never alter an older schema.
-        runOnline: async () => ({ type: "complete" }),
+        runOnline: () => ({ type: "complete" }),
       });
     }),
 );
