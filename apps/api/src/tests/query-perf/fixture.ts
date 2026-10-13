@@ -117,12 +117,13 @@ export const withQueryPerfFixture = async <T>({
       });
       const outcome = await (async () => {
         try {
-          // An interrupted run can leave the fixed-name clone behind.
+          // An interrupted run can leave the fixed-name clone behind. Live sessions
+          // must close themselves before another invocation can reuse its name.
           await deadline.run(
             "DROP DATABASE stale fixture",
             async () =>
               await admin.execute(
-                sql`DROP DATABASE IF EXISTS ${sql.identifier(fixtureName)} WITH (FORCE)`,
+                sql`DROP DATABASE IF EXISTS ${sql.identifier(fixtureName)}`,
               ),
           );
           await deadline.run(
@@ -188,7 +189,7 @@ export const withQueryPerfFixture = async <T>({
               await withTimeout(
                 async () =>
                   await db.execute(
-                    sql`DROP DATABASE IF EXISTS ${sql.identifier(fixtureName)} WITH (FORCE)`,
+                    sql`DROP DATABASE IF EXISTS ${sql.identifier(fixtureName)}`,
                   ),
                 {
                   label: `query perf ${profileId}: DROP DATABASE teardown`,
