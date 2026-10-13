@@ -153,6 +153,10 @@ export const installStoreProgress = async (
   return { signature: `${files}:${bytes}:${modified}`, newest };
 };
 
+// Bun returns null at runtime for ordinary exits despite its signalCode type.
+const installTerminationSignal = (signal: string | number | null | undefined) =>
+  signal ?? undefined;
+
 type LoggedInstallOptions = {
   command: readonly string[];
   logFile: string;
@@ -296,13 +300,14 @@ export const runLoggedInstall = async ({
       readSync(descriptor, tail, 0, length, size - length);
       report(`Installer log tail:\n${tail.toString()}\n`);
     }
-    if (child.signalCode !== undefined && !watchdog.wasStalled()) {
+    const signal = installTerminationSignal(child.signalCode);
+    if (signal !== undefined && !watchdog.wasStalled()) {
       summary(
-        `::error title=install-signal::kind=infra class=install-signal ${telemetry()} signal=${child.signalCode}\n`,
+        `::error title=install-signal::kind=infra class=install-signal ${telemetry()} signal=${signal}\n`,
       );
     }
     summary(
-      `Install finished; exit ${exitCode}; signal ${child.signalCode ?? "none"}; ${telemetry()}\n`,
+      `Install finished; exit ${exitCode}; signal ${signal ?? "none"}; ${telemetry()}\n`,
     );
     return exitCode;
   } finally {

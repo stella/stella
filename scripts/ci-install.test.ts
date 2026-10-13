@@ -108,11 +108,14 @@ test.each([0, 7])(
       }),
     ).toBe(exitCode);
     const artifact = readFileSync(logFile, "utf-8");
+    expect(artifact).not.toContain("class=install-signal");
+    expect(artifact).toContain("signal none;");
     expect(artifact).toContain("begin evidence");
     expect(artifact).toContain("last diagnostic");
     expect(artifact.match(/verbose extraction/gu)).toHaveLength(10_000);
     expect(artifact.match(/Install started/gu)).toHaveLength(1);
     const reported = consoleOutput.join("");
+    expect(reported).not.toContain("class=install-signal");
     expect(reported).toContain("Install started;");
     expect(reported).toContain(`Install finished; exit ${exitCode};`);
     expect(reported.length).toBeLessThan(5000);
@@ -263,5 +266,6 @@ test("external installer termination emits a distinct typed infrastructure annot
     }),
   ).not.toBe(0);
   expect(messages.join("")).toContain("kind=infra class=install-signal");
+  expect(messages.join("")).toContain("signal=SIGTERM");
   expect(messages.join("")).not.toContain("class=install-stall");
 });
