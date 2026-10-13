@@ -6,7 +6,7 @@ import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import { capabilityRoute } from "@/api/lib/capability-route";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";

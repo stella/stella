@@ -1,6 +1,7 @@
 import { DESKTOP_TIME_ENTRY_BATCH_STATUSES } from "@stll/api-contract/desktop-time-entries";
 
 import {
+  caseLawDecisionCitationStatsState,
   desktopEditSessions,
   desktopTimeEntryBatches,
   legalReaderAnswerMessages,
@@ -76,6 +77,14 @@ const UNMANAGED_REASONS = {
   coordinatedTimers:
     "Timer state and its entry projection are coordinated by the timer transaction owner pending migration.",
 } as const;
+
+// Refresh atomically publishes a complete recount; later recounts remain exact.
+const DECISION_CITATION_STATS_TRANSITIONS = defineKeyedTransitions({
+  table: caseLawDecisionCitationStatsState,
+  key: "decisionId",
+  edges: { pending: ["exact"], exact: [] },
+  options: { terminal: ["exact"] },
+});
 
 const READER_ANSWER_MESSAGE_TRANSITIONS = defineScopedTransitions({
   ...READER_ANSWER_TRANSITION_IDENTITIES.READER_ANSWER_MESSAGE_TRANSITIONS,
@@ -268,6 +277,7 @@ export const TRANSITIONS = {
   caseLawDecisionIdentifierBackfills: {
     unmanaged: UNMANAGED_REASONS.workerRun,
   },
+  caseLawDecisionCitationStatsState: DECISION_CITATION_STATS_TRANSITIONS,
   caseLawDecisions: { unmanaged: UNMANAGED_REASONS.projection },
   caseLawIndexJobs: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawIngestionEvents: { unmanaged: UNMANAGED_REASONS.workerRun },

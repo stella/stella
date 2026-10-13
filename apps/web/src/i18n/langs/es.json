@@ -776,6 +776,9 @@
       "none": "Aún no hay citas registradas.",
       "openAtCitation": "Abrir en la cita",
       "openDecision": "Abrir la resolución",
+      "paragraphLabel": "Apartado {paragraph}",
+      "paragraphMark": "¶ {paragraph}",
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, apartado {paragraph}",
       "partialSummary": "Los totales de citas y la cronología son parciales.",
       "passageNotFound": "No se encontró el pasaje citante en el texto",
       "positiveCount": "{count, plural, one {# positiva} many {# positivas} other {# positivas}}",
@@ -1432,6 +1435,8 @@
     "sendPrompt": "Enviar mensaje",
     "sendQueuedMessageNow": "Enviar ahora",
     "sendWithoutAnonymization": "Enviar sin anonimización",
+    "signInToChat": "Inicia sesión para chatear sobre este documento",
+    "signInToChatAbout": "Inicia sesión para chatear sobre",
     "skills": {
       "scope": {
         "private": "Tus habilidades",

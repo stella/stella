@@ -776,6 +776,9 @@
       "none": "Nenhuma citação registrada ainda.",
       "openAtCitation": "Abrir na citação",
       "openDecision": "Abrir a decisão",
+      "paragraphLabel": "Parágrafo {paragraph}",
+      "paragraphMark": "¶ {paragraph}",
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, parágrafo {paragraph}",
       "partialSummary": "Os totais de citações e a linha do tempo são parciais.",
       "passageNotFound": "O trecho citante não foi encontrado no texto",
       "positiveCount": "{count, plural, one {# positiva} many {# positivas} other {# positivas}}",
@@ -1432,6 +1435,8 @@
     "sendPrompt": "Enviar mensagem",
     "sendQueuedMessageNow": "Enviar agora",
     "sendWithoutAnonymization": "Enviar sem anonimização",
+    "signInToChat": "Entre para conversar sobre este documento",
+    "signInToChatAbout": "Entre para conversar sobre",
     "skills": {
       "scope": {
         "private": "Suas habilidades de IA",

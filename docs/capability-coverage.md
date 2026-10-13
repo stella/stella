@@ -56,6 +56,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
+| `chat.decision-threads.get` | read | stella:chat | — | generic invoke → `stella capability chat decision-threads-get` |
 | `chat.export.create` | write | stella:chat | — | generic invoke → `stella capability chat export-create` |
 | `chat.fork.create` | write | stella:chat | — | generic invoke → `stella capability chat fork-create` |
 | `chat.messages.list` | read | stella:chat | — | generic invoke → `stella capability chat messages-list` |

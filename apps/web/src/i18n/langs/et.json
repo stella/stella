@@ -776,6 +776,9 @@
       "none": "Viiteid pole veel salvestatud.",
       "openAtCitation": "Ava viite kohal",
       "openDecision": "Ava lahend",
+      "paragraphLabel": "Punkt {paragraph}",
+      "paragraphMark": "¶ {paragraph}",
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, punkt {paragraph}",
       "partialSummary": "Viidete koguarvud ja ajajoon on osalised.",
       "passageNotFound": "Viitavat lõiku tekstist ei leitud",
       "positiveCount": "{count, plural, one {# positiivne} other {# positiivset}}",
@@ -1432,6 +1435,8 @@
     "sendPrompt": "Saada sõnum",
     "sendQueuedMessageNow": "Saada kohe",
     "sendWithoutAnonymization": "Saada anonüümimiseta",
+    "signInToChat": "Logi sisse, et sellest dokumendist vestelda",
+    "signInToChatAbout": "Logi sisse, et vestelda:",
     "skills": {
       "scope": {
         "private": "Sinu AI oskused",

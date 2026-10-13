@@ -2,8 +2,8 @@ import { Result } from "better-result";
 
 import type { rootDb } from "@/api/db/root";
 import { captureError } from "@/api/lib/analytics/capture";
-import type { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
+import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -75,7 +75,7 @@ type StartAutomatedFlowRunDependencies = {
       }
     | undefined
   >;
-  resolveAuthorization: typeof resolveCredentialMemberAuthorization;
+  resolveAuthorization: ResolveCredentialMemberAuthorization;
   insertWithinCap: (
     input: Omit<InsertAutomatedFlowRunWithinCapInput, "database">,
   ) => Promise<InsertAutomatedFlowRunWithinCapResult>;

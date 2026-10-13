@@ -72,7 +72,6 @@ import {
 } from "@/components/drag-and-drop-live-region.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterActivityRow } from "@/components/matter-activity-row";
-import { SearchDialog } from "@/components/search-dialog";
 import {
   Sidebar,
   SidebarContent,
@@ -135,6 +134,7 @@ import {
   dropTargetForElements,
 } from "@/lib/drag-and-drop/element-registration";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useFindModalBoundary } from "@/lib/find-owner";
 import { formatHotkeyForPlatform, NAV_KEY } from "@/lib/hotkeys";
 import { inboxCountOptions } from "@/lib/inbox/queries";
 import { knowledgeSections } from "@/lib/knowledge/navigation";
@@ -169,6 +169,19 @@ const GuideHelpDrawer = lazy(async () => {
   return { default: module.GuideHelpDrawer };
 });
 
+const SearchDialog = lazy(async () => {
+  const module = await import("@/components/search-dialog");
+  return { default: module.SearchDialog };
+});
+
+const SEARCH_DIALOG_STATES = {
+  idle: "idle",
+  open: "open",
+  closed: "closed",
+} as const;
+type SearchDialogState =
+  (typeof SEARCH_DIALOG_STATES)[keyof typeof SEARCH_DIALOG_STATES];
+
 export const AppSidebar = (props: AppSidebarProps) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -196,7 +209,15 @@ export const AppSidebar = (props: AppSidebarProps) => {
   });
   const user = useAuthenticatedUser();
 
-  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchState, setSearchState] = useState<SearchDialogState>(
+    SEARCH_DIALOG_STATES.idle,
+  );
+  useFindModalBoundary(searchState === SEARCH_DIALOG_STATES.open);
+  const setSearchOpen = useCallback((open: boolean) => {
+    setSearchState(
+      open ? SEARCH_DIALOG_STATES.open : SEARCH_DIALOG_STATES.closed,
+    );
+  }, []);
   const guideDrawerAttentionSequence = useGuideDrawerStore(
     (store) => store.attentionSequence,
   );
@@ -321,7 +342,11 @@ export const AppSidebar = (props: AppSidebarProps) => {
 
   const searchHotkey = useEffectiveHotkey("search");
   useHotkey(searchHotkey, () => {
-    setSearchOpen((prev) => !prev);
+    setSearchState((searchDialogState) =>
+      searchDialogState === SEARCH_DIALOG_STATES.open
+        ? SEARCH_DIALOG_STATES.closed
+        : SEARCH_DIALOG_STATES.open,
+    );
   });
 
   useHotkey(useEffectiveHotkey("newMatter"), () => {
@@ -834,7 +859,15 @@ export const AppSidebar = (props: AppSidebarProps) => {
         </SidebarMenu>
       </SidebarFooter>
 
-      <SearchDialog onOpenChange={setSearchOpen} open={searchOpen} />
+      {/* Retain the dialog after first opening so its close-completion actions run. */}
+      {searchState !== SEARCH_DIALOG_STATES.idle && (
+        <Suspense fallback={null}>
+          <SearchDialog
+            onOpenChange={setSearchOpen}
+            open={searchState === SEARCH_DIALOG_STATES.open}
+          />
+        </Suspense>
+      )}
 
       {pendingEntityDrop && (
         <CopyToMatterDialog

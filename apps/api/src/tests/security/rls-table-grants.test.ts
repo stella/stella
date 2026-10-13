@@ -97,6 +97,8 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   "case_law_statute_citation_memberships",
   "case_law_statute_citation_counts",
   "case_law_statute_citation_count_state",
+  "case_law_decision_citation_stats",
+  "case_law_decision_citation_stats_state",
   // Per-decision provision-citation state and revisions: request code reads
   // them; owner-run database functions and the extraction writers own every
   // mutation.
