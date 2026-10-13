@@ -782,12 +782,14 @@ const applyAdmittedPinDrift = (
   ]);
 
 type ChangedExecutableUsageOptions = {
+  sdks: readonly string[];
   file: string;
   baseline: string | undefined;
   current: string;
 };
 
 export const hasChangedExecutableUsage = ({
+  sdks,
   file,
   baseline,
   current,
@@ -798,11 +800,59 @@ export const hasChangedExecutableUsage = ({
   const printer = ts.createPrinter({ removeComments: true });
   const statements = (text: string) => {
     const source = parseSource({ fileName: file, text });
+    const bindings = new Set(["fetch", "WebSocket"]);
+    for (const statement of source.statements) {
+      if (
+        !ts.isImportDeclaration(statement) ||
+        !ts.isStringLiteral(statement.moduleSpecifier)
+      ) {
+        continue;
+      }
+      const specifier = statement.moduleSpecifier.text;
+      if (
+        !sdks.some(
+          (sdk) => specifier === sdk || specifier.startsWith(`${sdk}/`),
+        )
+      ) {
+        continue;
+      }
+      const clause = statement.importClause;
+      if (clause?.isTypeOnly) {
+        continue;
+      }
+      if (clause?.name) {
+        bindings.add(clause.name.text);
+      }
+      const named = clause?.namedBindings;
+      if (named && ts.isNamespaceImport(named)) {
+        bindings.add(named.name.text);
+      }
+      if (named && ts.isNamedImports(named)) {
+        for (const element of named.elements) {
+          if (!element.isTypeOnly) {
+            bindings.add(element.name.text);
+          }
+        }
+      }
+    }
+    const usesSdk = (node: ts.Node): boolean => {
+      if (ts.isIdentifier(node) && bindings.has(node.text)) {
+        return true;
+      }
+      if (
+        ts.isStringLiteral(node) &&
+        sdks.some((sdk) => node.text === sdk || node.text.startsWith(`${sdk}/`))
+      ) {
+        return true;
+      }
+      return ts.forEachChild(node, usesSdk) ?? false;
+    };
     return source.statements
       .filter(
         (statement) =>
           !ts.isTypeAliasDeclaration(statement) &&
-          !ts.isInterfaceDeclaration(statement),
+          !ts.isInterfaceDeclaration(statement) &&
+          usesSdk(statement),
       )
       .map((statement) =>
         printer.printNode(ts.EmitHint.Unspecified, statement, source),
@@ -909,6 +959,7 @@ export const checkExternalContracts = (
       admitted !== undefined &&
       entry.owners.some(({ path: file }) =>
         hasChangedExecutableUsage({
+          sdks: entry.sdks,
           file,
           baseline: baseline(file),
           current: readFileSync(path.join(root, file), "utf-8"),

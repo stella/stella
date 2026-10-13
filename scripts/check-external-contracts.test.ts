@@ -547,6 +547,7 @@ test("dated drift admits only unchanged pins before its exact deadline", () => {
 
 test("changed SDK usage invalidates dated debt while comments and deletions do not", () => {
   const options = {
+    sdks: ["vendor"],
     file: "client.ts",
     baseline: 'import sdk from "vendor"; sdk.send("old");',
     current: 'import sdk from "vendor"; sdk.send("new");',
@@ -570,12 +571,25 @@ test("changed SDK usage invalidates dated debt while comments and deletions do n
 });
 
 test("duplicate added SDK calls count as changed usage", () => {
-  const baseline = 'sdk.send("old");';
+  const baseline = 'import sdk from "vendor"; sdk.send("old");';
   expect(
     hasChangedExecutableUsage({
+      sdks: ["vendor"],
       file: "client.ts",
       baseline,
-      current: `${baseline} ${baseline}`,
+      current: `${baseline} sdk.send("old");`,
     }),
   ).toBe(true);
+});
+
+test("receipt bookkeeping changes do not count as SDK usage", () => {
+  const usage = 'import sdk from "vendor"; sdk.send("request");';
+  expect(
+    hasChangedExecutableUsage({
+      sdks: ["vendor"],
+      file: "client.ts",
+      baseline: usage,
+      current: `${usage} const receipt = { pin: "old" };`,
+    }),
+  ).toBe(false);
 });

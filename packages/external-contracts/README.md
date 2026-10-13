@@ -23,7 +23,15 @@ constants. Fixture receipts record the pins, owners and SDKs exercised by a
 fixture set. A bounded static runtime-import graph starts at each replay entry
 point and proves which repository owner paths and registry SDKs are reachable;
 it parses source without executing modules. A changed pin or coverage scope
-requires re-characterisation.
+requires re-characterisation. Existing pin drift can be recorded in
+`scripts/external-contract-pin-allowances.json` with exact current values and an
+expiry no more than seven days after its checked date. An allowance applies only
+while those pins match the merge base and no SDK-bearing executable statement
+has been added or changed in a registered owner. Added duplicate SDK calls count
+as changed usage; comments and receipt bookkeeping do not. New unregistered SDK
+usage still fails the closed census. Removed patch pins use the explicit
+`<removed>` value. The existing `dated-waiver-expiry` job rejects an elapsed
+allowance on every merge candidate, even when package checks are not selected.
 Receipts include every declared owner path, including shared assignments.
 Publisher captures retain their existing hash sidecars and their honest legacy
 provenance; an unversioned publisher has no invented upstream release number.
