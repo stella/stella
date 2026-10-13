@@ -21,6 +21,7 @@ export {
 } from "./db/audit-recording";
 export type {
   AccountAuditRecorder,
+  AsyncAuditRecorder,
   AuditAction,
   AuditResourceType,
   NonChatAuditResourceType,
