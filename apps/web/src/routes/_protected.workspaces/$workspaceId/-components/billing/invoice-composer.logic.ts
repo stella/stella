@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import { calculateDocumentTotals, standardVatRateOn } from "@stll/invoicing";
 import type {
   InvoiceTotals,
@@ -275,12 +277,16 @@ export const submitComposedInvoice = async <
   savedDraft: (created: TCreated, error: unknown) => TInvoice;
 }): Promise<TInvoice> => {
   const created = await create();
-  try {
-    if (issue) {
-      await finalize(created.id);
-    }
-    return await read(created.id);
-  } catch (error) {
-    return savedDraft(created, error);
-  }
+  const result = await Result.tryPromise({
+    try: async () => {
+      if (issue) {
+        await finalize(created.id);
+      }
+      return await read(created.id);
+    },
+    catch: (cause) => cause,
+  });
+  return Result.isError(result)
+    ? savedDraft(created, result.error)
+    : result.value;
 };

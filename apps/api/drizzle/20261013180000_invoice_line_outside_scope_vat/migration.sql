@@ -5,5 +5,8 @@ SET statement_timeout = '10s';--> statement-breakpoint
 -- (place of supply abroad) and its lines record the outside_scope treatment.
 -- The check only widens, so existing lines keep satisfying it; it is
 -- validated in the next migration so this one takes no long lock.
+-- stella-migration-safety: reviewed drop-constraint - Drops only the check
+-- the next statement re-adds with one more allowed value; rollback re-adds
+-- the narrower check, and no data is touched.
 ALTER TABLE "invoice_lines" DROP CONSTRAINT IF EXISTS "invoice_lines_vat_treatment_check";--> statement-breakpoint
 ALTER TABLE "invoice_lines" ADD CONSTRAINT "invoice_lines_vat_treatment_check" CHECK ("vat_treatment" in ('domestic_vat', 'not_vat_payer', 'reverse_charge', 'outside_scope', 'exempt')) NOT VALID;

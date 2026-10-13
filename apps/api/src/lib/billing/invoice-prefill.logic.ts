@@ -106,7 +106,7 @@ const EU_VAT_ID_FORMATS: ReadonlyMap<string, RegExp> = new Map([
 export const isWellFormedEuVatId = (vatId: string | null): boolean => {
   const compact = compactVatId(vatId);
   const format = EU_VAT_ID_FORMATS.get(compact.slice(0, 2));
-  return format !== undefined && format.test(compact.slice(2));
+  return format?.test(compact.slice(2)) === true;
 };
 
 /**
