@@ -147,9 +147,10 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   "sanctions_edition_entries",
 ]);
 
-// Request transactions append names alongside chat messages and read them on
-// later requests. The role needs SELECT and INSERT, never UPDATE or DELETE.
+// Request transactions append history and read it on later requests.
+// The role needs SELECT and INSERT, never UPDATE or DELETE.
 const POST_BOOTSTRAP_APPEND_ONLY_TABLES = new Set([
+  "account_audit_logs",
   "chat_thread_names",
   "chat_message_revisions",
 ]);

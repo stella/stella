@@ -555,13 +555,6 @@
     "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
   },
   {
-    "id": "apps/api/src/lib/db/audit-recording.ts::insertAuditRows",
-    "writes": {
-      "insert:auditLogs": 1
-    },
-    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
-  },
-  {
     "id": "apps/api/src/lib/db/better-auth-oauth-policy-census.ts::initializePristineBetterAuthOAuthPolicy",
     "writes": {
       "insert:oauth_resource": 1

@@ -1,8 +1,7 @@
 import type { CourtTierLabel as CourtTier } from "@stll/api-contract/case-law-court-tiers";
 import { BidiText } from "@stll/ui/bidi-text";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { cn } from "@stll/ui/utils";
-
-import { CourtTierBadge } from "./court-tier-badge";
 
 type CourtNameProps = {
   /**
@@ -28,9 +27,13 @@ export const CourtName = ({
   tier,
 }: CourtNameProps) => (
   <span className={cn("inline-flex min-w-0 items-center gap-1.5", className)}>
-    {abbreviation && tier !== undefined && (
-      <CourtTierBadge abbreviation={abbreviation} tier={tier} />
-    )}
+    <DocumentIdentityBadge
+      identity={{
+        kind: "decision",
+        courtAbbreviation: abbreviation,
+        courtTier: tier,
+      }}
+    />
     <BidiText as="span" className="truncate" title={court}>
       {court}
     </BidiText>

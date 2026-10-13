@@ -6,7 +6,7 @@ import type {
   AUDIT_ACTIVITY_CATEGORIES,
   SearchHistoryKind,
 } from "@/api/db/schema";
-import { auditLogs } from "@/api/db/schema";
+import { accountAuditLogs, auditLogs } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { insertInChunks } from "@/api/lib/db/bulk-write";
 import { recordContentDeliveryReceipt } from "@/api/lib/files/content-delivery";
@@ -21,7 +21,11 @@ import type {
   NonChatAuditResourceType,
 } from "../audit-log-details";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "../audit-log.constants";
-import type { AuditAction, AuditResourceType } from "../audit-log.constants";
+import type {
+  AccountAuditEventType,
+  AuditAction,
+  AuditResourceType,
+} from "../audit-log.constants";
 
 export { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "../audit-log.constants";
 export type { AuditAction, AuditResourceType } from "../audit-log.constants";
@@ -397,6 +401,7 @@ const insertAuditRows = async (
 };
 
 type BackgroundAuditRecorderBindings = {
+  account?: never;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace"> | null;
   userId: string;
@@ -468,7 +473,7 @@ export const recordAuditGroups = async ({
  * request. Uses the same insertion owner as the HTTP recorder, but with no
  * request-derived metadata (IP, UA, forwarded-for) since there is no request.
  */
-export const createBackgroundAuditRecorder =
+const createOrganizationBackgroundAuditRecorder =
   (bindings: BackgroundAuditRecorderBindings): AuditRecorder =>
   async (tx, event) => {
     await recordAuditGroups({
@@ -476,3 +481,66 @@ export const createBackgroundAuditRecorder =
       groups: [{ bindings, events: Array.isArray(event) ? event : [event] }],
     });
   };
+
+type AccountAuditEvent = {
+  type: AccountAuditEventType;
+  resourceId: string;
+};
+
+export type AccountAuditRecorder = (
+  tx: AuditTransaction,
+  event: AccountAuditEvent | AccountAuditEvent[],
+) => Promise<void>;
+
+export type AccountAuditBindings = {
+  account: { userId: SafeId<"user"> };
+  organizationId?: never;
+  workspaceId?: never;
+  userId?: never;
+  execution?: never;
+};
+
+const ACCOUNT_EXPORT_DOWNLOADED_EVENT_TYPE =
+  "account.data_export.downloaded" satisfies AccountAuditEventType;
+
+export const createAccountRecorder =
+  (
+    { account: { userId } }: AccountAuditBindings,
+    requestMetadata: typeof accountAuditLogs.$inferInsert.requestMetadata,
+  ): AccountAuditRecorder =>
+  async (tx, event) => {
+    const events = Array.isArray(event) ? event : [event];
+    const groupId = Bun.randomUUIDv7();
+    await insertInChunks(events, (batch) =>
+      tx.insert(accountAuditLogs).values(
+        batch.map(({ type, resourceId }) => ({
+          id: Bun.randomUUIDv7(),
+          userId,
+          eventType: type,
+          resourceId,
+          requestMetadata,
+          groupId,
+        })),
+      ),
+    );
+    if (
+      events.some(({ type }) => type === ACCOUNT_EXPORT_DOWNLOADED_EVENT_TYPE)
+    ) {
+      recordContentDeliveryReceipt();
+    }
+  };
+
+export function createBackgroundAuditRecorder(
+  bindings: AccountAuditBindings,
+): AccountAuditRecorder;
+export function createBackgroundAuditRecorder(
+  bindings: BackgroundAuditRecorderBindings,
+): AuditRecorder;
+export function createBackgroundAuditRecorder(
+  bindings: BackgroundAuditRecorderBindings | AccountAuditBindings,
+): AuditRecorder | AccountAuditRecorder {
+  if (bindings.account !== undefined) {
+    return createAccountRecorder(bindings, null);
+  }
+  return createOrganizationBackgroundAuditRecorder(bindings);
+}
