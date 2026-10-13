@@ -1,6 +1,8 @@
 {
   "extends": "@stll/typescript-config/base.json",
   "compilerOptions": {
+    // The sole JS root is Ajv output; its declaration supplies the app contract.
+    "checkJs": false,
     "jsx": "react-jsx",
     "paths": { "@/api/*": ["./src/*"] },
     "target": "ES2024",
@@ -13,6 +15,7 @@
   "include": [
     "src/mcp/apps/**/*.ts",
     "src/mcp/apps/**/*.tsx",
+    "src/mcp/apps/shared/generated/input-validators.js",
     "../../types",
     "../../packages/ui/src/css.d.ts"
   ]

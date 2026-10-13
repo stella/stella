@@ -163,7 +163,7 @@ const MultipleCourtGroup = ({
   hintId,
 }: MultipleCourtGroupProps) => {
   const { selected } = options;
-  const values = group.courts.map(({ value }) => value);
+  const values = courts.map(({ value }) => value);
   const tierSelected = values.every((value) => selected.includes(value));
   const nextTier = toggleCourtSelection(selected, values);
   const tierDisabled = !tierSelected && nextTier.length > options.maxSelections;

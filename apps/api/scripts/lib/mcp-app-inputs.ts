@@ -96,7 +96,8 @@ export const generateMcpAppInputs = async (generatedRoot: string) => {
   );
   await Bun.write(
     path.join(generatedRoot, "input-validators.js"),
-    `${standaloneCode(ajv, Object.fromEntries(tools.map((name) => [name, name])))}\nexport default { ${tools.join(", ")} };\n`,
+    // Validators are internal; the app consumes the single default registry.
+    `${standaloneCode(ajv, Object.fromEntries(tools.map((name) => [name, name]))).replaceAll("export const ", "const ")}\nexport default { ${tools.join(", ")} };\n`,
   );
   await Bun.write(
     path.join(generatedRoot, "input-validators.d.ts"),

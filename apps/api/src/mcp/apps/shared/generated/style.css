@@ -971,6 +971,9 @@
   .h-36 {
     height: calc(var(--spacing) * 36);
   }
+  .h-72 {
+    height: calc(var(--spacing) * 72);
+  }
   .h-\[140px\] {
     height: 140px;
   }
@@ -1256,6 +1259,9 @@
   .max-w-90 {
     max-width: calc(var(--spacing) * 90);
   }
+  .max-w-\[calc\(100vw-2rem\)\] {
+    max-width: calc(100vw - 2rem);
+  }
   .max-w-\[min\(--spacing\(64\)\,var\(--available-width\)\)\] {
     max-width: min(calc(var(--spacing) * 64), var(--available-width));
   }
@@ -1291,6 +1297,9 @@
   }
   .min-w-7 {
     min-width: calc(var(--spacing) * 7);
+  }
+  .min-w-11 {
+    min-width: calc(var(--spacing) * 11);
   }
   .min-w-12 {
     min-width: calc(var(--spacing) * 12);
@@ -1467,6 +1476,9 @@
   }
   .scrollbar-none {
     scrollbar-width: none;
+  }
+  .list-disc {
+    list-style-type: disc;
   }
   .list-none {
     list-style-type: none;
@@ -2777,6 +2789,9 @@
   .underline-offset-4 {
     text-underline-offset: 4px;
   }
+  .accent-primary {
+    accent-color: var(--primary);
+  }
   .opacity-0 {
     opacity: 0%;
   }
@@ -3281,6 +3296,9 @@
   }
   .not-\[class\*\=\'w-\'\]\:min-w-32:not(:is(class*='w-')) {
     min-width: calc(var(--spacing) * 32);
+  }
+  .group-open\:rotate-90:is(:where(.group):is([open], :popover-open, :open) *) {
+    rotate: 90deg;
   }
   .group-focus-within\:opacity-100:is(:where(.group):focus-within *) {
     opacity: 100%;
@@ -4196,6 +4214,13 @@
   .has-\[\:disabled\,\:focus-within\,\[aria-invalid\]\]\:shadow-none:has(:is(:disabled, :focus-within, [aria-invalid])) {
     --tw-shadow: 0 0 #0000;
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+  .has-\[\:focus-visible\]\:ring-2:has(:is(:focus-visible)) {
+    --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+  .has-\[\:focus-visible\]\:ring-ring:has(:is(:focus-visible)) {
+    --tw-ring-color: var(--ring);
   }
   .has-\[\[aria-expanded\=true\]\]\:pointer-events-auto:has(:is([aria-expanded=true])) {
     pointer-events: auto;
@@ -5625,6 +5650,9 @@
   .\[\&_tr\:last-child\]\:border-0 tr:last-child {
     border-style: var(--tw-border-style);
     border-width: 0px;
+  }
+  .\[\&\:\:-webkit-details-marker\]\:hidden::-webkit-details-marker {
+    display: none;
   }
   .\[\&\:\:-webkit-scrollbar\]\:hidden::-webkit-scrollbar {
     display: none;

@@ -113,10 +113,8 @@ export const DecisionFilterPopover = ({
             groups={facets.courtTiers.map(({ courts, tier }) => ({
               value: tier ?? "untiered",
               label: tier === null ? null : t(COURT_TIER_LABEL_KEYS[tier]),
-              courts: courts.map((court) => ({
-                value: court.value,
-                label: court.label ?? court.value,
-                badgeText:
+              courts: courts.map((court) => {
+                const badgeText =
                   court.count === null || court.count === undefined
                     ? undefined
                     : (formatFacetCount(
@@ -126,8 +124,13 @@ export const DecisionFilterPopover = ({
                           count: court.count,
                         },
                         format.number,
-                      ) ?? undefined),
-              })),
+                      ) ?? undefined);
+                return {
+                  value: court.value,
+                  label: court.label ?? court.value,
+                  ...(badgeText === undefined ? {} : { badgeText }),
+                };
+              }),
             }))}
             selected={selection.court}
             onChange={(value) => onSelect("court", value)}

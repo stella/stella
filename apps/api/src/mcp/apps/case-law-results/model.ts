@@ -225,7 +225,7 @@ export type CaseLawView =
   | ReturnType<typeof searchView>
   | ReturnType<typeof resolveView>;
 
-export type CourtSelection =
+type CourtSelection =
   | { type: "all" }
   | { type: "court"; name: string }
   | { type: "courts"; names: readonly string[] };

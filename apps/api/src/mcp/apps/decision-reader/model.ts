@@ -1,4 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { Result } from "better-result";
 import * as v from "valibot";
 
@@ -8,6 +7,7 @@ import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import { resolveDecisionParagraphRange } from "@stll/legal-ast/paragraph-range";
 
 import { parseAppFailure } from "../shared/app-error";
+import type { AppToolResult } from "../shared/bridge";
 import {
   APP_OPEN_DECISION_SCHEMA,
   APP_DECISION_BLOCKS_SCHEMA,
@@ -35,7 +35,7 @@ export const parseProvisionPreview = (payload: unknown) => {
 };
 
 export const isReaderCursorConflict = (
-  result: Pick<CallToolResult, "isError" | "structuredContent">,
+  result: Pick<AppToolResult, "isError" | "structuredContent">,
 ) =>
   result.isError === true &&
   parseAppFailure(result.structuredContent)?.type === "conflict";

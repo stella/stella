@@ -159,8 +159,6 @@ test("Retry repeats the failed new court selection rather than the earlier succe
       connect: async () => {},
       openLink: async () => ({}),
       requestDisplayMode: async () => ({ mode: "inline" }),
-      onerror: undefined,
-      onteardown: undefined,
     },
   });
   await bridge.call({
@@ -212,7 +210,7 @@ describe("presentation actions normalize raw model input before transport", () =
   ])(
     "$action reaches the host with repaired dates, lists and the declared page size",
     async ({ arguments: arguments_ }) => {
-      const sent: Record<string, unknown>[] = [];
+      const sent: unknown[] = [];
       const result = await requestPresentationTool({
         manifest: CASE_LAW_RESULTS_APP,
         request: { name: "search_case_law", arguments: arguments_ },
@@ -266,7 +264,7 @@ describe("presentation actions normalize raw model input before transport", () =
 test("a locally refused filter preserves its page input and leaves Next working without entering loading", async () => {
   const page = { results: ["existing decision"] };
   const states: string[] = [];
-  const calls: Record<string, unknown>[] = [];
+  const calls: unknown[] = [];
   const bridge = createPresentationBridge({
     manifest: CASE_LAW_RESULTS_APP,
     parse: () => page,
@@ -282,8 +280,6 @@ test("a locally refused filter preserves its page input and leaves Next working 
       connect: async () => {},
       openLink: async () => ({}),
       requestDisplayMode: async () => ({ mode: "inline" }),
-      onerror: undefined,
-      onteardown: undefined,
     },
   });
   await bridge.call({
@@ -292,7 +288,9 @@ test("a locally refused filter preserves its page input and leaves Next working 
   });
   const previousInput = bridge.getSnapshot().input;
   const previousTool = bridge.getSnapshot().tool;
-  bridge.subscribe(() => states.push(bridge.getSnapshot().result.status));
+  bridge.subscribe(() => {
+    states.push(bridge.getSnapshot().result.status);
+  });
   await bridge.call({
     name: "search_case_law",
     arguments: { queries: ["x".repeat(501)], country: "CZE" },
