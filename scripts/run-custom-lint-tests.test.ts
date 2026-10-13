@@ -186,7 +186,10 @@ test("parallel batches retain a deliberately failing fixture and every passing f
     const status = await runCustomLintTestCommands(
       customLintTestCommands([], paths),
       async (command) => {
-        const child = Bun.spawn(command, { stdout: "pipe", stderr: "pipe" });
+        const child = Bun.spawn([...command], {
+          stdout: "pipe",
+          stderr: "pipe",
+        });
         const stderr = new Response(child.stderr).text();
         const exitCode = await child.exited;
         output.push(await stderr);
@@ -220,7 +223,7 @@ test("worker coverage merges complete records and preserves prior caller coverag
         `import { test, expect } from "bun:test";
 import { appendFileSync } from "node:fs";
 test("${outcome}", () => {
-  for (let index = 0; index < 50; index += 1) appendFileSync(process.env.OXLINT_RULE_COVERAGE_PATH, JSON.stringify({ ruleId: "fixture/" + index, outcome: "${outcome}" }) + "\\n");
+  for (let index = 0; index < 50; index += 1) appendFileSync(process.env["OXLINT_RULE_COVERAGE_PATH"], JSON.stringify({ ruleId: "fixture/" + index, outcome: "${outcome}" }) + "\\n");
   expect(true).toBe(${outcome === "clean"});
 });`,
       );

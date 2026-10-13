@@ -1524,6 +1524,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "OSV_SCANNER_PRIMARY_RELEASE_URL",
   "OSV_SCANNER_RELEASE_VERSION",
   "OSV_SCANNER_SHA256",
+  // Worker-local custom lint reports, merged before the coverage census.
+  "OXLINT_RULE_COVERAGE_PATH",
   "PGLITE_TEST_SNAPSHOT",
   "PR_HEAD_SHA",
   "PRODUCT_MEDIA_S3_BUCKET",

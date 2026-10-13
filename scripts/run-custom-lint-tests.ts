@@ -104,7 +104,7 @@ export const runCustomLintTests = async (
     const status = await runCustomLintTestCommands(
       commands,
       async (command, worker) => {
-        const result = Bun.spawn(command, {
+        const result = Bun.spawn([...command], {
           cwd: repoRoot,
           env:
             coverageDirectory === undefined
@@ -156,6 +156,6 @@ if (import.meta.main) {
         .map((file) => `${TEST_DIRECTORY}/${file}`);
   process.exitCode = await runCustomLintTests(
     customLintTestCommands(args, testPaths),
-    process.env.OXLINT_RULE_COVERAGE_PATH,
+    process.env["OXLINT_RULE_COVERAGE_PATH"],
   );
 }
