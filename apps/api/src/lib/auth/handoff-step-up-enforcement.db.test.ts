@@ -1,4 +1,4 @@
-import type { BetterAuthPlugin } from "better-auth";
+import type { AuthContext, BetterAuthPlugin } from "better-auth";
 import { createAuthEndpoint, getEndpoints } from "better-auth/api";
 import { panic } from "better-result";
 import {
@@ -64,6 +64,21 @@ const mountedEndpoints = (
     }
     return [{ name, path }];
   });
+
+const endpointInspectionContext = async (
+  auth: ReturnType<typeof getAuth>,
+): Promise<AuthContext> => {
+  const context = await auth.$context;
+  // getEndpoints only closes over this context for middleware execution; the
+  // census inspects registration and never invokes those middleware closures.
+  return {
+    ...context,
+    getPlugin: () =>
+      panic("Endpoint census must not execute plugin middleware"),
+    hasPlugin: () =>
+      panic("Endpoint census must not execute plugin middleware"),
+  };
+};
 
 describe("handoff sessions enforce recent authentication at real entry points", () => {
   test("session and application macros plus Better Auth refuse account changes until reauthentication", async () => {
@@ -176,7 +191,10 @@ describe("handoff sessions enforce recent authentication at real entry points", 
 
   test("registered authentication methods remain available beside account management", async () => {
     const auth = getAuth();
-    const { api: registered } = getEndpoints(await auth.$context, auth.options);
+    const { api: registered } = getEndpoints(
+      endpointInspectionContext(auth),
+      auth.options,
+    );
     const mounted = mountedEndpoints(registered);
     const census = (paths: readonly string[]) => {
       const mountedPaths = new Set(paths);
@@ -230,7 +248,7 @@ describe("handoff sessions enforce recent authentication at real entry points", 
       plugins: [...auth.options.plugins, futurePlugin],
     };
     const { api: futureRegistered } = getEndpoints(
-      await auth.$context,
+      endpointInspectionContext(auth),
       futureOptions,
     );
     const futurePaths = mountedEndpoints(futureRegistered).map(
