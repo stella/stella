@@ -535,6 +535,16 @@
       "createInvoice": "Vytvoriť faktúru",
       "dueDate": "Dátum splatnosti",
       "editInvoice": "Upraviť faktúru",
+      "export": {
+        "accounting": "Import do účtovníctva",
+        "eBilling": "Elektronická fakturácia",
+        "eso9": "Importná tabuľka ESO9 (XLSX)",
+        "exporting": "Pripravujem export…",
+        "isdoc": "E-faktúra ISDOC (ABRA Gen a ďalšie)",
+        "spreadsheets": "Tabuľky",
+        "xlsx": "Faktúry (XLSX)",
+        "xlsxLines": "Položky faktúr (XLSX)"
+      },
       "finalize": "Finalizovať",
       "invoiceDate": "Dátum faktúry",
       "invoiceDetail": "Detail faktúry",
@@ -1273,6 +1283,11 @@
     "greeting": "Na čom chcete pracovať?",
     "greetingSubtitle": "Začnite spisom, dokumentom alebo obyčajnou otázkou.",
     "hideThread": "Skryť konverzáciu",
+    "history": {
+      "matterUnavailable": "Tento spis nie je dostupný",
+      "older": "Staršie",
+      "previous7Days": "Predchádzajúcich 7 dní"
+    },
     "historyContext": {
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {a # ďalší} few {a # ďalšie} other {a # ďalších}}"
@@ -1769,6 +1784,8 @@
     "citations": "Citácie",
     "clauses": "Ustanovenia",
     "clearDate": "Vymazať dátum",
+    "clearFilters": "Vymazať filtre",
+    "clearSearch": "Vymazať hľadanie",
     "close": "Zavrieť",
     "closeAll": "Zavrieť všetko",
     "closeOthers": "Zavrieť ostatné",
@@ -1799,6 +1816,7 @@
       "nextDecade": "Nasledujúce desaťročie",
       "nextMonth": "Nasledujúci mesiac",
       "nextYear": "Nasledujúci rok",
+      "outOfRange": "Vyberte dátum v povolenom rozsahu.",
       "previousDecade": "Predchádzajúce desaťročie",
       "previousMonth": "Predchádzajúci mesiac",
       "previousYear": "Predchádzajúci rok",
@@ -4124,7 +4142,6 @@
     "appsSubtitle": "stella funguje aj mimo prehliadača: v aplikácii pre počítač a vo vašom AI asistentovi. K tomuto nastaveniu sa môžete kedykoľvek neskôr vrátiť.",
     "appsTitle": "Získajte stellu všade",
     "catalogueAlwaysOn": "Vždy zapnuté",
-    "catalogueClearSearch": "Vymazať hľadanie",
     "catalogueCommunityHeading": "Ostatné",
     "catalogueContinueWithCount": "{count, plural, one {Pokračovať s # nástrojom} few {Pokračovať s # nástrojmi} other {Pokračovať s # nástrojmi}}",
     "catalogueDetailAbout": "O nástroji",
@@ -6385,7 +6402,6 @@
         "year": "Rok"
       },
       "cannotDeleteRequired": "Je vyžadované aspoň jedno zobrazenie tohto typu",
-      "clearFilters": "Vymazať filtre",
       "copySuffix": "{name} (kópia)",
       "deleteView": "Vymazať zobrazenie",
       "exportCsv": "Exportovať CSV",

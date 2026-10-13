@@ -28,6 +28,7 @@ const source = readFileSync(
 );
 const stepSchema = v.looseObject({
   name: v.optional(v.string()),
+  id: v.optional(v.string()),
   if: v.optional(v.string()),
   uses: v.optional(v.string()),
   with: v.optional(v.record(v.string(), v.unknown())),
@@ -67,6 +68,10 @@ if (!outcome?.run || !outcomeEnv) {
 const scopes = v.parse(
   v.record(v.string(), v.nullable(v.string())),
   JSON.parse(outcomeEnv["JOB_SCOPES"] ?? ""),
+);
+const foldedSuites = v.parse(
+  v.record(v.string(), v.record(v.string(), v.string())),
+  JSON.parse(outcomeEnv["FOLDED_SUITES"] ?? ""),
 );
 const expectedHeavy = Object.keys(scopes).filter(
   (job) => !THIN_JOBS.some((thin) => thin === job),
@@ -152,6 +157,7 @@ const allPlanned = Object.fromEntries(
   [
     ...new Set([
       ...Object.values(scopes).filter((scope) => scope !== null),
+      ...Object.values(foldedSuites).flatMap(Object.values),
       ...Object.entries(planOutputs)
         .filter(([, expression]) => {
           const reference = directScopePattern.exec(expression)?.[1];
@@ -685,6 +691,7 @@ type EvaluateOptions = {
   isPlanned?: boolean;
   planResult?: string;
   thinResult?: string;
+  suiteResults?: Record<string, string>;
 };
 const evaluate = ({
   event,
@@ -693,6 +700,7 @@ const evaluate = ({
   isPlanned = true,
   planResult = "success",
   thinResult = "skipped",
+  suiteResults = {},
 }: EvaluateOptions) => {
   const needs = Object.fromEntries(
     ciNeeds.map((job) => {
@@ -706,13 +714,12 @@ const evaluate = ({
         job,
         {
           result: jobResult,
-          outputs:
-            job === "docker-checks"
-              ? {
-                  "agent-sandbox-docker": "success",
-                  "api-image-deps": "success",
-                }
-              : {},
+          outputs: Object.fromEntries(
+            Object.keys(foldedSuites[job] ?? {}).map((suite) => [
+              suite,
+              suiteResults[suite] ?? "success",
+            ]),
+          ),
         },
       ];
     }),
@@ -749,6 +756,26 @@ const evaluate = ({
   return run.exitCode;
 };
 
+test("main heavy aggregation rejects unsuccessful or missing folded verdicts", () => {
+  for (const event of heavyEvents) {
+    expect(evaluate({ event, result: "success" }), event).toBe(0);
+    for (const suites of Object.values(foldedSuites)) {
+      for (const suite of Object.keys(suites)) {
+        for (const verdict of ["failure", "cancelled", "skipped", ""]) {
+          expect(
+            evaluate({
+              event,
+              result: "success",
+              suiteResults: { [suite]: verdict },
+            }),
+            `${event}/${suite}/${verdict}`,
+          ).toBe(1);
+        }
+      }
+    }
+  }
+}, 30_000);
+
 test("main heavy aggregation rejects failures, cancellations, timeouts and planned skips", () => {
   for (const event of heavyEvents) {
     for (const result of [
@@ -782,7 +809,7 @@ test("the reusable result gate allows skipped thin checks in heavy mode", () => 
   }
 }, 30_000);
 
-test("heavy scope selection plans full suites even on an empty main diff", () => {
+test("heavy scope selection plans full suites with runnable folded producers even on an empty main diff", () => {
   const scope = workflow.jobs["ci-plan"]?.steps?.find(
     ({ name }) => name === "Check changed file scope",
   );
@@ -812,6 +839,57 @@ test("heavy scope selection plans full suites even on an empty main diff", () =>
           .split("\n")
           .map((line) => line.split("=", 2)),
       );
+      const folded = v.parse(
+        v.record(v.string(), v.record(v.string(), v.string())),
+        JSON.parse(outcomeEnv["FOLDED_SUITES"] ?? ""),
+      );
+      for (const [job, suites] of Object.entries(folded)) {
+        const producer = workflow.jobs[job];
+        if (!producer?.if || !producer.outputs) {
+          panic(`Missing folded producer: ${job}`);
+        }
+        const plannedContext = context(event, true, {
+          ...heavyPlan,
+          ...outputs,
+        });
+        expect(heavy, `${event}/${job}`).toContain(job);
+        expect(selected(producer.if, plannedContext), `${event}/${job}`).toBe(
+          true,
+        );
+        const steps = Object.fromEntries(
+          (producer.steps ?? []).flatMap((step) =>
+            step.id === undefined
+              ? []
+              : [
+                  [
+                    step.id,
+                    {
+                      outcome: selected(step.if ?? "true", plannedContext)
+                        ? "success"
+                        : "skipped",
+                    },
+                  ],
+                ],
+          ),
+        );
+        for (const [suite, suiteScope] of Object.entries(suites)) {
+          expect(outputs[suiteScope], `${event}/${suite}`).toBe("true");
+          const expression = producer.outputs[suite];
+          if (expression === undefined) {
+            panic(`Missing folded output: ${job}/${suite}`);
+          }
+          expect(
+            evaluateExpression(
+              expression,
+              contextWithPlanOutputs({
+                context: contextFromNested({ ...plannedContext, steps }),
+                outputs: planOutputs,
+              }),
+            ),
+            `${event}/${suite}`,
+          ).toBe("success");
+        }
+      }
       for (const key of [
         "desktop_rust_checks_required",
         "docker_checks_required",
@@ -829,6 +907,24 @@ test("heavy scope selection plans full suites even on an empty main diff", () =>
     rmSync(directory, { force: true, recursive: true });
   }
 }, 30_000);
+
+test("main-heavy planning rejects a folded producer excluded by its condition", () => {
+  const folded = v.parse(
+    v.record(v.string(), v.record(v.string(), v.string())),
+    JSON.parse(outcomeEnv["FOLDED_SUITES"] ?? ""),
+  );
+  for (const job of Object.keys(folded)) {
+    const mutated = structuredClone(workflow);
+    const producer = mutated.jobs[job];
+    if (!producer?.if) {
+      panic(`Missing folded producer: ${job}`);
+    }
+    producer.if = `inputs.heavy_only != true && (${producer.if})`;
+    expect(() => mainHeavyJobs(mutated)).toThrow(
+      `Folded suites require a main-heavy producer: ${job}`,
+    );
+  }
+});
 
 test("every main heavy event requires the planned compiler to succeed", () => {
   for (const event of heavyEvents) {
