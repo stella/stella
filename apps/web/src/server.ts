@@ -47,7 +47,7 @@ export default createServerEntry({
           request,
           fetchResponse: async (renderRequest, rendererSignal) =>
             await createStartHandler(
-              defineHandlerCallback(({ router, responseHeaders }) =>
+              defineHandlerCallback(async ({ router, responseHeaders }) =>
                 renderSsrResponse({
                   request: renderRequest,
                   rendererSignal,
