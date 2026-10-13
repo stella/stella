@@ -4,7 +4,11 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { watchTestProcessMemory } from "./process-memory";
+import {
+  testInvocationMemoryLimit,
+  TEST_INVOCATION_MEMORY_GIB_ENV,
+  watchTestProcessMemory,
+} from "./process-memory";
 import { spawnTestProcess } from "./test-process-spawn";
 import {
   createWindowsProcessOwnership,
@@ -111,7 +115,7 @@ windowsTest.each(["measurement", "hard-cap"] as const)(
   15_000,
 );
 
-const fakeJobApi = () => {
+const fakeJobApi = (expectedLimit = 1000) => {
   let peak = 700;
   let terminated = 0;
   let accounting: "disabled" | "enabled" = "disabled";
@@ -138,7 +142,7 @@ const fakeJobApi = () => {
       accounting =
         Math.floor(flags / 0x02_00) % 2 === 1 ? "enabled" : "disabled";
       limit = Number(view.getBigUint64(120, true));
-      expect(limit).toBe(1000);
+      expect(limit).toBe(expectedLimit);
       expect(Math.floor(flags / 0x20_00) % 2).toBe(1);
       return 1;
     },
@@ -244,5 +248,20 @@ test("job assignment failure stays an error and closes both handles", () => {
     job.api,
   );
   expect(owner.isErr()).toBe(true);
+  expect(job.closed).toEqual([200n, 100n, 300n]);
+});
+
+test("a fractional GiB budget registers as exact integer bytes in Windows job ownership", () => {
+  const limitBytes = testInvocationMemoryLimit({
+    [TEST_INVOCATION_MEMORY_GIB_ENV]: "0.1",
+  });
+  expect(limitBytes).toBe(107_374_182);
+  const job = fakeJobApi(limitBytes);
+  const owner = createWindowsProcessOwnership(
+    { rootPid: 42, limitBytes },
+    job.api,
+  ).unwrap();
+  expect(owner.readMemory().unwrap().peakBytes).toBe(700);
+  owner.signal("SIGKILL").unwrap();
   expect(job.closed).toEqual([200n, 100n, 300n]);
 });

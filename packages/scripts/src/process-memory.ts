@@ -11,8 +11,8 @@ export const TEST_INVOCATION_MEMORY_GIB_ENV = "TEST_INVOCATION_MEMORY_GIB";
 export const testInvocationMemoryLimit = (environment: NodeJS.ProcessEnv) => {
   const value = environment[TEST_INVOCATION_MEMORY_GIB_ENV];
   const gib = value === undefined ? 6 : Number(value);
-  const bytes = gib * GIB;
-  if (!Number.isFinite(bytes) || gib <= 0) {
+  const bytes = Math.floor(gib * GIB);
+  if (!Number.isSafeInteger(bytes) || bytes <= 0 || gib <= 0) {
     panic(`${TEST_INVOCATION_MEMORY_GIB_ENV} must be a positive number`);
   }
   return bytes;

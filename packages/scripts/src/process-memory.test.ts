@@ -112,11 +112,57 @@ test("memory budgets default to six GiB and reject unbounded overrides", () => {
   expect(
     testInvocationMemoryLimit({ [TEST_INVOCATION_MEMORY_GIB_ENV]: "0.125" }),
   ).toBe(128 * 1024 ** 2);
-  for (const value of ["", "0", "-1", "Infinity", "NaN", "garbage"]) {
+  for (const value of [
+    "",
+    "0",
+    "-1",
+    "Infinity",
+    "NaN",
+    "garbage",
+    "0.0000000001",
+    "9007199254740992",
+  ]) {
     expect(() =>
       testInvocationMemoryLimit({ [TEST_INVOCATION_MEMORY_GIB_ENV]: value }),
     ).toThrow(`${TEST_INVOCATION_MEMORY_GIB_ENV} must be a positive number`);
   }
+});
+
+test("the POSIX group watchdog consumes the same integer bytes for a fractional GiB budget", async () => {
+  const limitBytes = testInvocationMemoryLimit({
+    [TEST_INVOCATION_MEMORY_GIB_ENV]: "0.1",
+  });
+  const signals: number[] = [];
+  const failures: string[] = [];
+  const watchdog = watchTestProcessMemory({
+    child: {
+      pid: 42,
+      exitCode: 0,
+      signalCode: null,
+      exited: Promise.resolve(0),
+      kill: () => {
+        throw new TypeError("Must kill group");
+      },
+    },
+    limitBytes,
+    sampleGroup: () => Result.ok(new Map([[43, 107_374_183]])),
+    readBytes: () => Result.ok(0),
+    signalPid: (pid) => {
+      signals.push(pid);
+    },
+    file: () => "fractional-budget.test.ts",
+    onFailure: (message) => {
+      failures.push(message);
+    },
+    onWarning: (message) => {
+      throw new TypeError(message);
+    },
+  });
+  await watchdog.stop();
+  expect(limitBytes).toBe(107_374_182);
+  expect(watchdog.peakBytes()).toBe(limitBytes + 1);
+  expect(failures).toHaveLength(1);
+  expect(signals).toEqual([-42]);
 });
 
 for (const fixture of ["memory-allocation.ts", "memory-allocation-parent.ts"]) {
