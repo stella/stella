@@ -26,11 +26,21 @@ const checkerName = (value: string) => {
 
 const CHECKER_MODULE = "apps/api/src/lib/api-handlers";
 
-const resolveCheckerExport = (
-  moduleId: string,
-  exportedName: string,
+type ResolveCheckerExportOptions = {
+  moduleId: string;
+  exportedName: string;
+  sources: Map<string, ts.SourceFile | undefined>;
+  visited?: Set<string>;
+};
+
+const resolveCheckerExport = ({
+  moduleId,
+  exportedName,
+  sources,
   visited = new Set<string>(),
-): ConditionalOperation["checker"] | undefined => {
+}: ResolveCheckerExportOptions):
+  | ConditionalOperation["checker"]
+  | undefined => {
   const checker = checkerName(exportedName);
   if (moduleId === CHECKER_MODULE) {
     return checker;
@@ -41,16 +51,24 @@ const resolveCheckerExport = (
   }
   visited.add(visitKey);
   const moduleFile = `${moduleId}.ts`;
-  const absoluteModuleFile = path.join(REPO_ROOT, moduleFile);
-  if (!existsSync(absoluteModuleFile)) {
+  if (!sources.has(moduleFile)) {
+    const absoluteModuleFile = path.join(REPO_ROOT, moduleFile);
+    sources.set(
+      moduleFile,
+      existsSync(absoluteModuleFile)
+        ? ts.createSourceFile(
+            moduleFile,
+            readFileSync(absoluteModuleFile, "utf-8"),
+            ts.ScriptTarget.Latest,
+            true,
+          )
+        : undefined,
+    );
+  }
+  const source = sources.get(moduleFile);
+  if (source === undefined) {
     return undefined;
   }
-  const source = ts.createSourceFile(
-    moduleFile,
-    readFileSync(absoluteModuleFile, "utf-8"),
-    ts.ScriptTarget.Latest,
-    true,
-  );
   for (const statement of source.statements) {
     if (
       !ts.isExportDeclaration(statement) ||
@@ -65,11 +83,12 @@ const resolveCheckerExport = (
       if (element.name.text !== exportedName) {
         continue;
       }
-      return resolveCheckerExport(
-        canonicalModuleId(statement.moduleSpecifier.text, moduleFile),
-        element.propertyName?.text ?? element.name.text,
+      return resolveCheckerExport({
+        moduleId: canonicalModuleId(statement.moduleSpecifier.text, moduleFile),
+        exportedName: element.propertyName?.text ?? element.name.text,
+        sources,
         visited,
-      );
+      });
     }
   }
   return undefined;
@@ -106,7 +125,18 @@ type EnumerateConditionalOperationsOptions = { file: string; text: string };
 export const enumerateConditionalOperations = ({
   file,
   text,
-}: EnumerateConditionalOperationsOptions): ConditionalOperation[] => {
+}: EnumerateConditionalOperationsOptions): ConditionalOperation[] =>
+  enumerateWithSources({ file, text, sources: new Map() });
+
+type EnumerateWithSourcesOptions = EnumerateConditionalOperationsOptions & {
+  sources: Map<string, ts.SourceFile | undefined>;
+};
+
+const enumerateWithSources = ({
+  file,
+  text,
+  sources,
+}: EnumerateWithSourcesOptions): ConditionalOperation[] => {
   const operations: ConditionalOperation[] = [];
   const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
   const aliases = new Map<string, ConditionalOperation["checker"]>();
@@ -125,10 +155,11 @@ export const enumerateConditionalOperations = ({
     }
     if (bindings && ts.isNamedImports(bindings)) {
       for (const imported of bindings.elements) {
-        const checker = resolveCheckerExport(
+        const checker = resolveCheckerExport({
           moduleId,
-          imported.propertyName?.text ?? imported.name.text,
-        );
+          exportedName: imported.propertyName?.text ?? imported.name.text,
+          sources,
+        });
         if (checker) {
           aliases.set(imported.name.text, checker);
         }
@@ -162,11 +193,13 @@ export const enumerateConditionalOperations = ({
         ts.isIdentifier(expression.expression) &&
         namespaces.has(expression.expression.text)
       ) {
-        checker = resolveCheckerExport(
-          namespaces.get(expression.expression.text) ??
+        checker = resolveCheckerExport({
+          moduleId:
+            namespaces.get(expression.expression.text) ??
             panic("Missing namespace"),
-          expression.name.text,
-        );
+          exportedName: expression.name.text,
+          sources,
+        });
       }
       if (checker) {
         const input = node.arguments.at(0);
@@ -201,6 +234,9 @@ export const discoverConditionalOperations = async (): Promise<
   ConditionalOperation[]
 > => {
   const operations: ConditionalOperation[] = [];
+  // Imported modules recur across symbols and owners. Cache only their parsed
+  // syntax for this census; resolution and operation collection still run anew.
+  const sources = new Map<string, ts.SourceFile | undefined>();
   for await (const file of new Bun.Glob("apps/api/src/**/*.ts").scan({
     cwd: REPO_ROOT,
   })) {
@@ -208,7 +244,7 @@ export const discoverConditionalOperations = async (): Promise<
       continue;
     }
     const text = await Bun.file(path.join(REPO_ROOT, file)).text();
-    operations.push(...enumerateConditionalOperations({ file, text }));
+    operations.push(...enumerateWithSources({ file, text, sources }));
   }
   return operations;
 };
