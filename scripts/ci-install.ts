@@ -158,7 +158,7 @@ type LoggedInstallOptions = {
   budgetMs?: number;
   stallMs?: number;
   restoreOutcome?: InstallRestoreOutcome;
-  storeKey?: string;
+  storeKey?: string | undefined;
   progressRoots?: readonly string[];
   report?: (message: string) => void;
 };

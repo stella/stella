@@ -204,7 +204,7 @@ test.each(["hit", "cold"] as const)(
       budgetMs: 20,
       stallMs: 1000,
       restoreOutcome,
-      storeKey: "test-key",
+      storeKey: restoreOutcome === "hit" ? "test-key" : undefined,
       progressRoots: [],
       report: (message) => {
         messages.push(message);
@@ -213,7 +213,7 @@ test.each(["hit", "cold"] as const)(
     expect(result).toBe(0);
     expect(messages.join("")).toContain("::warning title=install-budget::");
     expect(messages.join("")).toContain(
-      `restore=${restoreOutcome} key=test-key`,
+      `restore=${restoreOutcome} key=${restoreOutcome === "hit" ? "test-key" : "unavailable"}`,
     );
     expect(messages.join("")).not.toContain("class=install-stall");
   },
