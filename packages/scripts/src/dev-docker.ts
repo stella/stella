@@ -160,12 +160,16 @@ type DockerInspection = InferOk<ReturnType<typeof parseDockerInspection>>;
 // Docker's own default option paths are resolved from the captured environment.
 const defaultCertificatePath = (
   env: NodeJS.ProcessEnv,
-): Result<string, DockerEndpointError> =>
-  Result.try({
+): Result<string, DockerEndpointError> => {
+  // Help must resolve filesystem defaults without initializing a live transport.
+  const helpEnv = dockerEnvironment(env);
+  delete helpEnv["DOCKER_TLS"];
+  delete helpEnv["DOCKER_TLS_VERIFY"];
+  return Result.try({
     try: () =>
-      Bun.spawnSync(["docker", "--help"], {
+      Bun.spawnSync(["docker", "--context", "default", "--help"], {
         cwd: "/",
-        env,
+        env: helpEnv,
         stdout: "pipe",
         stderr: "pipe",
         timeout: 5000,
@@ -180,7 +184,10 @@ const defaultCertificatePath = (
       return Result.err(
         new DockerEndpointError({
           message: "Could not inspect Docker's TLS certificate defaults.",
-          cause: result.stderr.toString(),
+          cause: {
+            exitCode: result.exitCode,
+            stderr: result.stderr.toString(),
+          },
         }),
       );
     }
@@ -234,6 +241,7 @@ const defaultCertificatePath = (
       return Result.ok(path.dirname(filename));
     });
   });
+};
 
 type SnapshotDockerTargetOptions = {
   inspection: DockerInspection;
@@ -488,7 +496,7 @@ export const dockerCommand = (
 };
 
 type ResolveDevDockerKeeperOptions = {
-  target: DockerTarget;
+  target: Pick<DockerTarget, "host" | "env">;
   resolver: string | null;
   configuredLabel: string | undefined;
   run: (
@@ -533,10 +541,12 @@ export const resolveDevDockerKeeper = ({
   return Result.ok(checked.value.trim() || configuredLabel);
 };
 
-export const resolveInstalledDevDockerKeeper = (target: DockerTarget) =>
+export const resolveInstalledDevDockerKeeper = (
+  target: Pick<DockerTarget, "host" | "env">,
+) =>
   resolveDevDockerKeeper({
     target,
-    resolver: Bun.which("docker-keeper"),
+    resolver: Bun.which("docker-keeper", { PATH: target.env["PATH"] ?? "" }),
     configuredLabel: target.env["STELLA_DOCKER_KEEPER_LABEL"],
     run: (command, env) =>
       Result.try({
@@ -565,3 +575,14 @@ export const resolveInstalledDevDockerKeeper = (target: DockerTarget) =>
             ),
       ),
   });
+
+export const validateCapturedDevDockerHost = (
+  host: string,
+  env: NodeJS.ProcessEnv,
+) =>
+  validateDockerHost(host).andThen((validatedHost) =>
+    resolveInstalledDevDockerKeeper({
+      host: validatedHost,
+      env: dockerEnvironment(env),
+    }),
+  );

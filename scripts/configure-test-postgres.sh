@@ -13,46 +13,12 @@ case "$target_mode" in
   captured) [[ -n "$docker_host" ]] || { echo 'Captured Postgres Docker endpoint is required.' >&2; exit 1; } ;;
   *) echo 'Unknown Postgres Docker target mode.' >&2; exit 1 ;;
 esac
-resolve_transport() {
-  command -v bun >/dev/null 2>&1 || { echo 'Bun and installed workspace dependencies are required to capture this Docker transport.' >&2; exit 1; }
+command -v bun >/dev/null 2>&1 || { echo 'Bun and installed workspace dependencies are required to capture this Docker transport.' >&2; exit 1; }
+if [[ "$target_mode" == resolve ]]; then
   exec bun "$repo/packages/scripts/src/dev-postgres.ts" "$container" "$owner" "$database" "$supplied_host"
-}
-if [[ -z "$docker_host" ]]; then
-  # Capture bytes before Bash can discard NUL or trailing newlines.
-  docker_bytes=$(command docker context inspect --format '{{.Name}}{{"\t"}}{{.Endpoints.docker.Host}}' | LC_ALL=C od -An -v -t x1)
-  encoded_endpoint=""
-  for byte in $docker_bytes; do
-    case "$byte" in
-      00|0d) echo 'Docker context returned an ambiguous endpoint.' >&2; exit 1 ;;
-      [0-9a-f][0-9a-f]) encoded_endpoint+="\\x$byte" ;;
-      *) echo 'Docker endpoint byte capture failed.' >&2; exit 1 ;;
-    esac
-  done
-  printf -v docker_record '%b' "$encoded_endpoint"
-  docker_record=${docker_record%$'\n'}
-  [[ "$docker_record" == *$'\t'* ]] || { echo 'Docker endpoint metadata is missing.' >&2; exit 1; }
-  docker_context=${docker_record%%$'\t'*}
-  docker_host=${docker_record#*$'\t'}
-  if [[ "$docker_context" != default || -n "${DOCKER_TLS:-}" || -n "${DOCKER_TLS_VERIFY:-}" ]]; then
-    resolve_transport
-  fi
-elif [[ "$target_mode" != captured && ( -n "${DOCKER_TLS:-}" || -n "${DOCKER_TLS_VERIFY:-}" ) ]]; then
-  resolve_transport
 fi
-if [[ "$docker_host" =~ ^[[:space:]]|[[:space:]]$ || "$docker_host" == *$'\r'* || "$docker_host" == *$'\n'* ]]; then
-  echo 'Docker context returned an ambiguous endpoint.' >&2
-  exit 1
-fi
-case "$docker_host" in
-  unix:///*|tcp://*|ssh://*|npipe://*) ;;
-  *) echo 'Docker context did not resolve a supported endpoint.' >&2; exit 1 ;;
-esac
-if command -v docker-keeper >/dev/null 2>&1; then
-  docker-keeper --purpose dev --host "$docker_host" >/dev/null
-elif [[ "$docker_host" == unix:///* && "$docker_host" == */.colima/* ]]; then
-  echo 'A keeper resolver is required to validate this Colima development endpoint.' >&2
-  exit 1
-fi
+# The fixed owner validates captured endpoints through the same development policy.
+bun "$repo/packages/scripts/src/dev-postgres.ts" --validate-captured-host "$docker_host"
 unset DOCKER_HOST DOCKER_CONTEXT
 docker() { command docker --host "$docker_host" "$@"; }
 

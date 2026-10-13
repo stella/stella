@@ -374,10 +374,6 @@ jobs:
           persist-credentials: false
           submodules: true
 
-      - name: Configure test Postgres parity
-        run: |
-          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
-
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
@@ -388,6 +384,10 @@ jobs:
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
+
+      - name: Configure test Postgres parity
+        run: |
+          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
 
       - name: Apply migrations to service Postgres
         working-directory: apps/api
@@ -542,11 +542,6 @@ jobs:
           echo "sha=$base" >> "$GITHUB_OUTPUT"
           echo "candidate=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Configure test Postgres parity
-        run: |
-          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
-          bash scripts/configure-test-postgres.sh "${{ job.services.postgres-clean.id }}" stella_owner
-
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
@@ -556,6 +551,11 @@ jobs:
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
+
+      - name: Configure test Postgres parity
+        run: |
+          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
+          bash scripts/configure-test-postgres.sh "${{ job.services.postgres-clean.id }}" stella_owner
 
       - name: Test exact-base rehearsal contracts
         run: bun test scripts/migration-catalog.test.ts scripts/rehearse-exact-base-upgrade.test.ts

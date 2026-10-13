@@ -5,10 +5,14 @@ import {
   DockerEndpointError,
   resolveDockerTarget,
   resolveInstalledDevDockerKeeper,
+  validateCapturedDevDockerHost,
 } from "./dev-docker";
 
 const configurePostgres = (): Result<number, DockerEndpointError> => {
   const [container, owner, database = "stella", host] = process.argv.slice(2);
+  if (container === "--validate-captured-host" && owner) {
+    return validateCapturedDevDockerHost(owner, process.env).map(() => 0);
+  }
   if (!container || !owner) {
     return Result.err(
       new DockerEndpointError({
