@@ -32,7 +32,7 @@ import {
 } from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import {
-  authRefusalLogPlugin,
+  createAuthRefusalLogPlugin,
   markAuthRequestRoute,
 } from "@/api/lib/auth/auth-request-observability";
 import {
@@ -351,7 +351,7 @@ describe("the request lifecycle", () => {
           verification: [],
         }),
         plugins: [
-          authRefusalLogPlugin,
+          createAuthRefusalLogPlugin(createAuthMiddleware),
           {
             id: "refused-auth-fixture",
             endpoints: {

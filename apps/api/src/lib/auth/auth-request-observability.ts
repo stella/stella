@@ -1,5 +1,5 @@
 import type { BetterAuthPlugin, HookEndpointContext } from "better-auth";
-import { createAuthMiddleware } from "better-auth/api";
+import type { createAuthMiddleware } from "better-auth/api";
 
 import { describeAuthRefusal } from "@/api/lib/auth/auth-refusal-log";
 import { logger } from "@/api/lib/observability/logger";
@@ -23,27 +23,30 @@ export const markAuthRequestRoute = ({
   );
 };
 
-export const authRefusalLogPlugin = {
-  id: "stella-auth-refusal-log",
-  hooks: {
-    after: [
-      {
-        matcher: () => true,
-        handler: createAuthMiddleware(async (ctx) => {
-          const refusal = describeAuthRefusal({
-            path: ctx.path,
-            returned: ctx.context.returned,
-            body: ctx.body,
-          });
-          if (refusal.type === "refused") {
-            logger.warn("auth.request_refused", {
-              ...refusal.attributes,
-              "request.id": getCurrentRequestId(),
+export const createAuthRefusalLogPlugin = (
+  middleware: typeof createAuthMiddleware,
+) =>
+  ({
+    id: "stella-auth-refusal-log",
+    hooks: {
+      after: [
+        {
+          matcher: () => true,
+          handler: middleware(async (ctx) => {
+            const refusal = describeAuthRefusal({
+              path: ctx.path,
+              returned: ctx.context.returned,
+              body: ctx.body,
             });
-          }
-          await Promise.resolve();
-        }),
-      },
-    ],
-  },
-} satisfies BetterAuthPlugin;
+            if (refusal.type === "refused") {
+              logger.warn("auth.request_refused", {
+                ...refusal.attributes,
+                "request.id": getCurrentRequestId(),
+              });
+            }
+            await Promise.resolve();
+          }),
+        },
+      ],
+    },
+  }) satisfies BetterAuthPlugin;

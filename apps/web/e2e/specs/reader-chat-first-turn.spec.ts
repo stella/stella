@@ -1,11 +1,10 @@
 import type { Page } from "@playwright/test";
-import { EventType } from "@tanstack/ai";
-import type { StreamChunk } from "@tanstack/ai";
+import { EventType } from "@tanstack/ai/client";
+import type { StreamChunk } from "@tanstack/ai/client";
 import * as v from "valibot";
 
 import { toSafeId } from "@stll/api-contract/safe-id";
 
-import type { WebRoutes } from "../../src/generated/api-routes.gen";
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 import { dockedChatMessagePage } from "../helpers/docked-chat-history";
 import {
@@ -63,7 +62,7 @@ test("a fresh decision reader succeeds on its first chat question", async ({
     edited: false,
     createdAt: new Date().toISOString(),
     parts: [{ type: "text", content: ANSWER }],
-  } satisfies WebRoutes["v1"]["chat"]["threads"][":threadId"]["messages"]["get"]["response"][200]["messages"][number];
+  } satisfies (typeof dockedChatMessagePage.messages)[number];
   await page.route("**/v1/chat/threads/*/messages*", async (route) => {
     await route.fulfill({
       json: {
@@ -115,7 +114,9 @@ test("a fresh decision reader succeeds on its first chat question", async ({
   const composer = await openFreshReader(page);
   await composer.getByRole("textbox").fill(QUESTION);
   await composer.getByRole("button", { name: "Send message" }).click();
-  await expect(page.getByRole("log")).toContainText(ANSWER);
+  await expect(page.locator('[data-slot="docked-chat-thread"]')).toContainText(
+    ANSWER,
+  );
   await expect(
     page.getByRole("button", { name: "Resend", exact: true }),
   ).toHaveCount(0);
@@ -149,16 +150,16 @@ test("a fresh reader shows specific copy when the API refuses its first chat que
   const composer = await openFreshReader(page);
   await composer.getByRole("textbox").fill(QUESTION);
   await composer.getByRole("button", { name: "Send message" }).click();
-  await expect(page.getByRole("log")).toContainText(
+  await expect(page.locator('[data-slot="docked-chat-thread"]')).toContainText(
     messages.errors.api.unauthorized,
   );
   await expect(
     page.getByRole("button", { name: "Resend", exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("log")).not.toContainText(
-    messages.chat.sendError,
-  );
-  await expect(page.getByRole("log")).not.toContainText(
-    "Private authentication diagnostics",
-  );
+  await expect(
+    page.locator('[data-slot="docked-chat-thread"]'),
+  ).not.toContainText(messages.chat.sendError);
+  await expect(
+    page.locator('[data-slot="docked-chat-thread"]'),
+  ).not.toContainText("Private authentication diagnostics");
 });
