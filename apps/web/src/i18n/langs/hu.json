@@ -553,6 +553,7 @@
       "nothingToBill": "Még nincs mit számlázni. Hagyja jóvá az ügy időbejegyzéseit vagy költségeit, hogy kiszámlázhassa őket.",
       "openInvoice": "Számla megnyitása",
       "otherCurrency": "{count, plural, one {# tétel} other {# tétel}} {currency} helyett más pénznemben van rögzítve, ezek külön számlára várnak.",
+      "outsideScope": "Az ÁFA hatályán kívül, 0 %",
       "rate": "Óradíj",
       "readyDescription": "Kiállításkor a számla megkapja a sorszámtartomány következő számát, és zárolódik. A piszkozat továbbra is szerkeszthető.",
       "readyTitle": "Kiállításra kész",
@@ -583,6 +584,7 @@
         "domesticRate": "A teljesítés napján hatályos legmagasabb áfakulcsa",
         "noSellerProfile": "Nincs eladói profil, így nincs ÁFA, amíg a számlán be nem állítja",
         "noVatRate": "A számlázási beállításokban nincs áfakulcs megadva",
+        "outsideScope": "Az ügyfél adószáma az EU-n kívül van nyilvántartva, ezért a teljesítés helye külföldön van",
         "reverseCharge": "Az ügyfél áfaazonosítója másik országban van nyilvántartva",
         "sellerNotVatPayer": "Az eladó nem áfaalany"
       }

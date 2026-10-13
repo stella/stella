@@ -1,5 +1,6 @@
 import { normalizeCountry } from "@stll/agent-input";
 import { DEFAULT_INVOICE_DUE_DAYS } from "@stll/api-contract";
+import { EU_MEMBER_STATES } from "@stll/catalogue";
 import type { VatTreatment } from "@stll/invoicing";
 
 import type {
@@ -92,6 +93,7 @@ const INVOICE_VAT_REASONS = [
   "no_seller_profile",
   "seller_not_vat_payer",
   "reverse_charge",
+  "outside_scope",
   "domestic_rate",
   "no_vat_rate",
   "client_country_unconfirmed",
@@ -169,11 +171,16 @@ export const decideInvoiceVat = ({
   if (addressCountry(buyerCountry) !== vatCountry) {
     return domesticVat(standardRateBps, "client_country_unconfirmed");
   }
-  return {
-    vatTreatment: "reverse_charge",
-    vatRateBps: 0,
-    reason: "reverse_charge",
-  };
+  // A business client in another member state accounts for the VAT itself
+  // (Art. 44/196). Outside the EU, including Northern Ireland for services,
+  // the place of supply is abroad and the service is outside the scope of VAT.
+  return EU_MEMBER_STATES.has(vatCountry)
+    ? {
+        vatTreatment: "reverse_charge",
+        vatRateBps: 0,
+        reason: "reverse_charge",
+      }
+    : { vatTreatment: "outside_scope", vatRateBps: 0, reason: "outside_scope" };
 };
 
 export type InvoiceBuyerSnapshot = {

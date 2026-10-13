@@ -553,6 +553,7 @@
       "nothingToBill": "Nothing to invoice yet. Approve time entries or expenses on this matter to bill them.",
       "openInvoice": "Open invoice",
       "otherCurrency": "{count, plural, one {# item is} other {# items are}} recorded in another currency than {currency} and stay unbilled for a separate invoice.",
+      "outsideScope": "Outside the scope of VAT, 0 %",
       "rate": "Rate",
       "readyDescription": "Issuing assigns the next number from your number series and locks the invoice. A draft can still be edited.",
       "readyTitle": "Ready to issue",
@@ -583,6 +584,7 @@
         "domesticRate": "Your highest VAT rate in force on the supply date",
         "noSellerProfile": "No seller profile, so no VAT is charged until you set it on the invoice",
         "noVatRate": "No VAT rate is set up in billing settings",
+        "outsideScope": "The client's VAT ID is registered outside the EU, so the place of supply is abroad",
         "reverseCharge": "The client's VAT ID is registered in another country",
         "sellerNotVatPayer": "The seller is not a VAT payer"
       }

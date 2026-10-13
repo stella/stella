@@ -402,6 +402,33 @@ describe("invoice prefill", () => {
     expect(invoice.vatAmount).toBe(cents(0));
   });
 
+  test("a business client outside the EU is invoiced outside the scope of VAT", async () => {
+    await seedSeller("CZ12345678");
+    await seedVatRates();
+    await setClient("GB123456789", "GB");
+    const entry = await seedEntry("2026-09-15");
+
+    const prefill = await prefillInvoice.handler(
+      context(prefillInvoice.handler, {}),
+    );
+    expect(prefill).toMatchObject({
+      vat: {
+        vatTreatment: "outside_scope",
+        vatRateBps: 0,
+        reason: "outside_scope",
+      },
+    });
+
+    const invoice = await readInvoice(
+      createdId(await create({ timeEntryIds: [entry] })),
+    );
+    expect(invoice.lines.at(0)).toMatchObject({
+      vatTreatment: "outside_scope",
+      vatRateBps: 0,
+    });
+    expect(invoice.vatAmount).toBe(cents(0));
+  });
+
   test("a free-text tax ID of a Czech client keeps the standard rate", async () => {
     await seedSeller("CZ12345678");
     await seedVatRates();

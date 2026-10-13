@@ -553,6 +553,7 @@
       "nothingToBill": "Aún no hay nada que facturar. Apruebe registros de tiempo o gastos de este asunto para facturarlos.",
       "openInvoice": "Abrir factura",
       "otherCurrency": "{count, plural, one {# concepto está registrado} other {# conceptos están registrados}} en una moneda distinta de {currency} y quedan pendientes para otra factura.",
+      "outsideScope": "Fuera del ámbito del IVA, 0 %",
       "rate": "Tarifa",
       "readyDescription": "Al emitirla, la factura recibe el siguiente número de su serie y queda bloqueada. Un borrador se puede seguir editando.",
       "readyTitle": "Lista para emitir",
@@ -583,6 +584,7 @@
         "domesticRate": "Su tipo de IVA más alto vigente en la fecha de devengo",
         "noSellerProfile": "No hay perfil de vendedor, así que no se cobra IVA hasta que lo indique en la factura",
         "noVatRate": "No hay ningún tipo de IVA configurado en la facturación",
+        "outsideScope": "El NIF-IVA del cliente está registrado fuera de la UE, por lo que el lugar de prestación está en el extranjero",
         "reverseCharge": "El número de IVA del cliente está registrado en otro país",
         "sellerNotVatPayer": "El vendedor no es sujeto pasivo de IVA"
       }

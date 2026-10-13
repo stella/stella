@@ -553,6 +553,7 @@
       "nothingToBill": "Ainda não há nada a faturar. Aprove lançamentos de tempo ou despesas deste caso para faturá-los.",
       "openInvoice": "Abrir fatura",
       "otherCurrency": "{count, plural, one {# item está registrado} other {# itens estão registrados}} em outra moeda que não {currency} e ficam para uma fatura separada.",
+      "outsideScope": "Fora do âmbito do IVA, 0 %",
       "rate": "Valor/hora",
       "readyDescription": "Ao emitir, a fatura recebe o próximo número da sua série e fica bloqueada. Um rascunho ainda pode ser editado.",
       "readyTitle": "Pronta para emitir",
@@ -583,6 +584,7 @@
         "domesticRate": "Sua alíquota de IVA mais alta em vigor na data do fato gerador",
         "noSellerProfile": "Sem perfil de vendedor, nenhum IVA é cobrado até você defini-lo na fatura",
         "noVatRate": "Nenhuma alíquota de IVA configurada no faturamento",
+        "outsideScope": "O número de IVA do cliente está registrado fora da UE, por isso o local da prestação é no exterior",
         "reverseCharge": "O número de IVA do cliente está registrado em outro país",
         "sellerNotVatPayer": "O vendedor não é contribuinte de IVA"
       }

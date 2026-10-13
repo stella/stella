@@ -553,6 +553,7 @@
       "nothingToBill": "Noch nichts abzurechnen. Geben Sie Zeiteinträge oder Auslagen dieser Akte frei, um sie abzurechnen.",
       "openInvoice": "Rechnung öffnen",
       "otherCurrency": "{count, plural, one {# Position ist} other {# Positionen sind}} in einer anderen Währung als {currency} erfasst und bleiben für eine eigene Rechnung offen.",
+      "outsideScope": "Im Inland nicht steuerbar, 0 %",
       "rate": "Satz",
       "readyDescription": "Beim Ausstellen erhält die Rechnung die nächste Nummer aus Ihrem Nummernkreis und wird gesperrt. Ein Entwurf bleibt bearbeitbar.",
       "readyTitle": "Bereit zum Ausstellen",
@@ -583,6 +584,7 @@
         "domesticRate": "Ihr höchster am Leistungsdatum geltender Umsatzsteuersatz",
         "noSellerProfile": "Kein Verkäuferprofil, daher keine Umsatzsteuer, bis Sie sie in der Rechnung festlegen",
         "noVatRate": "In den Abrechnungseinstellungen ist kein Umsatzsteuersatz eingerichtet",
+        "outsideScope": "Die USt-IdNr. des Mandanten ist außerhalb der EU registriert, der Leistungsort liegt daher im Ausland",
         "reverseCharge": "Die Umsatzsteuer-ID des Mandanten ist in einem anderen Land registriert",
         "sellerNotVatPayer": "Der Verkäufer ist nicht umsatzsteuerpflichtig"
       }
