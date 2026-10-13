@@ -1435,6 +1435,8 @@
     "sendPrompt": "Wyślij wiadomość",
     "sendQueuedMessageNow": "Wyślij teraz",
     "sendWithoutAnonymization": "Wyślij bez anonimizacji",
+    "signInToChat": "Zaloguj się, aby czatować o tym dokumencie",
+    "signInToChatAbout": "Zaloguj się, aby czatować o",
     "skills": {
       "scope": {
         "private": "Twoje umiejętności AI",

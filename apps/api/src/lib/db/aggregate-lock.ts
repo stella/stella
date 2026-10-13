@@ -1994,3 +1994,38 @@ export const withAutomatedFlowRunCapLock = async <T>(
     });
     return await run(tx);
   });
+
+type DecisionCitationStatsLocksOptions = {
+  tx: ExecuteTransaction;
+  decisionIds: readonly SafeId<"caseLawDecision">[];
+};
+
+/**
+ * Lock before comparing so a concurrent writer cannot create false drift.
+ * Every existing batch row, published or listing-only, is locked before any
+ * stripe: refresh rebuilds each supplied decision, and a visibility update
+ * holds its own row while it waits for stripes.
+ */
+export const withDecisionCitationStatsLocks = async ({
+  tx,
+  decisionIds,
+}: DecisionCitationStatsLocksOptions) => {
+  await tx.execute(sql`
+    SELECT id FROM case_law_decisions
+    WHERE id IN (${sql.join(
+      decisionIds.map((id) => sql`${id}::uuid`),
+      sql`, `,
+    )})
+    ORDER BY id FOR NO KEY UPDATE
+  `);
+  await tx.execute(sql`
+    SELECT pg_advisory_xact_lock(19053, key) FROM (
+      SELECT DISTINCT (hashtextextended('decision-citation-stats:' || id::text, 0) & 127)::integer AS key
+      FROM case_law_decisions WHERE id IN (${sql.join(
+        decisionIds.map((id) => sql`${id}::uuid`),
+        sql`, `,
+      )})
+      ORDER BY key
+    ) anchors
+  `);
+};

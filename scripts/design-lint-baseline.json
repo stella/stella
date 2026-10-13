@@ -491,7 +491,6 @@
     "apps/api/scripts/ai-provider-canary-chat-toolsets.ts": 1,
     "apps/api/scripts/ai-provider-cassette.ts": 1,
     "apps/api/scripts/classify-local.ts": 1,
-    "apps/api/scripts/exact-mirror-guard.ts": 1,
     "apps/api/scripts/export-capability-catalog.ts": 2,
     "apps/api/scripts/export-mcp-tool-registry.ts": 2,
     "apps/api/scripts/lib/capability-catalog.ts": 1,
