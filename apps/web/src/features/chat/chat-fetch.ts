@@ -37,18 +37,24 @@ const chatResponseError = async (response: Response): Promise<APIError> => {
 export const chatFetchClient = Object.assign(
   async (input: RequestInfo | URL, init?: RequestInit) => {
     const { signal, ...requestInit } = init ?? {};
+    const effectiveSignal =
+      signal ?? (input instanceof Request ? input.signal : undefined);
     const received = await Result.tryPromise({
       try: async () =>
-        await fetchWithTimeout(input, {
-          ...requestInit,
-          ...(signal === null ? {} : { signal }),
-          timeoutMs: CHAT_FETCH_TIMEOUT_MS,
-        }),
+        // The timeout helper combines Request and init signals. Normalize an
+        // overriding signal first to preserve fetch's replacement semantics.
+        await fetchWithTimeout(
+          input instanceof Request && signal !== undefined && signal !== null
+            ? new Request(input, { signal })
+            : input,
+          {
+            ...requestInit,
+            ...(signal === null ? {} : { signal }),
+            timeoutMs: CHAT_FETCH_TIMEOUT_MS,
+          },
+        ),
       catch: (cause) => {
-        if (
-          signal?.aborted ||
-          (input instanceof Request && input.signal.aborted)
-        ) {
+        if (effectiveSignal?.aborted) {
           return cause;
         }
         const timedOut =

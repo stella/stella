@@ -15,6 +15,42 @@ describe("chat transport failures", () => {
     { cause: new TypeError("Failed to fetch"), kind: "connection_failed" },
     { cause: new DOMException("Timeout", "TimeoutError"), kind: "timed_out" },
   ] as const)(
+    "classifies $kind when init overrides an aborted Request signal",
+    async ({ cause, kind }) => {
+      const requestController = new AbortController();
+      requestController.abort();
+      const overridingController = new AbortController();
+      let effectiveSignalAborted: boolean | undefined;
+      globalThis.fetch = Object.assign(
+        async (_input: RequestInfo | URL, init?: RequestInit) => {
+          effectiveSignalAborted = init?.signal?.aborted;
+          throw cause;
+        },
+        { preconnect: originalFetch.preconnect },
+      );
+      const request = new Request("https://example.test/v1/chat/", {
+        signal: requestController.signal,
+      });
+      const outcome = await Result.tryPromise({
+        try: async () =>
+          await chatFetchClient(request, {
+            signal: overridingController.signal,
+          }),
+        catch: (error) => error,
+      });
+      expect(outcome.isErr()).toBe(true);
+      if (outcome.isErr()) {
+        expect(findChatRequestError(outcome.error)?.kind).toBe(kind);
+        expect(findChatRequestError(outcome.error)?.cause).toBe(cause);
+      }
+      expect(effectiveSignalAborted).toBe(false);
+    },
+  );
+
+  test.each([
+    { cause: new TypeError("Failed to fetch"), kind: "connection_failed" },
+    { cause: new DOMException("Timeout", "TimeoutError"), kind: "timed_out" },
+  ] as const)(
     "classifies $kind without losing its cause",
     async ({ cause, kind }) => {
       let requests = 0;

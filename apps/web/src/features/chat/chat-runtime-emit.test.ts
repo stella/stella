@@ -291,11 +291,7 @@ describe("chat runtime emits while a response streams", () => {
     expect(requests).toBe(0);
     expect(error?.kind).toBe("preparation_failed");
     expect(error?.cause).toBe(failure);
-    expect(
-      page.runtime
-        .getSnapshot()
-        .messages.every((message) => message.role !== "assistant"),
-    ).toBe(true);
+    expect(answerText(page.runtime.getSnapshot())).toBe("");
 
     contextReady = true;
     const server = installStream();
