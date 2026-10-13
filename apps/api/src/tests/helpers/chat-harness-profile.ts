@@ -40,6 +40,17 @@ export const createChatHarnessProfile = (
   { now = () => performance.now() }: ChatHarnessProfileOptions = {},
 ) => {
   const started = now();
+  const counters = {
+    webIdleNotifications: 0,
+    webIdleBusyWaits: 0,
+    webIdleQuietTicks: 0,
+    webIdleTransitions: 0,
+    turnBarrierReads: 0,
+    turnBarrierWaits: 0,
+  };
+  const recordCounter = (counter: keyof typeof counters) => {
+    counters[counter] += 1;
+  };
   const store = new AsyncLocalStorage<Span>();
   const totals = new Map<ChatHarnessPhase, PhaseTotals>();
   for (const phase of CHAT_HARNESS_PHASES) {
@@ -137,6 +148,7 @@ export const createChatHarnessProfile = (
       (sum, phase) => sum + phase.statements,
       0,
     ),
+    counters: { ...counters },
     timing:
       "inclusive and self totals may overlap across concurrent siblings; self excludes only the union of direct child durations",
     statementsScope:
@@ -150,7 +162,7 @@ export const createChatHarnessProfile = (
   });
   const report = () =>
     process.stdout.write(`CHAT_HARNESS_PROFILE ${JSON.stringify(summary())}\n`);
-  return { measure, logger, summary, report };
+  return { measure, logger, summary, report, recordCounter };
 };
 
 export type ChatHarnessProfile = ReturnType<typeof createChatHarnessProfile>;
