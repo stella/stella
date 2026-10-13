@@ -106,7 +106,7 @@ describe("transient deferred document reads", () => {
       const pending = rejectionOf(
         readTransientDecisionDocument({
           decision: transientDecision(),
-          fetchDocument: (target, { signal }) => {
+          fetchDocument: async (target, { signal }) => {
             expect(target.href).toBe(PUBLISHER_URL);
             operationSignal = signal;
             return new Promise(() => {});
