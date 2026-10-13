@@ -733,6 +733,7 @@ jobs:
         id: changed-files
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
           EVENT_NAME: ${{ github.event_name }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           SUITE_DEPTH: ${{ steps.depth.outputs.suite_depth }}
@@ -741,7 +742,7 @@ jobs:
           changed_files=()
           scope_unknown=false
           if [[ "$EVENT_NAME" != "workflow_dispatch" && "${HEAVY_ONLY:-false}" != true ]]; then
-            base_ref="origin/$BASE_REF"
+            base_ref="${BASE_SHA:-origin/$BASE_REF}"
             changed_paths=$(mktemp)
             if git diff --name-only -z --no-renames "$base_ref"...HEAD > "$changed_paths"; then
               while IFS= read -r -d '' file; do
@@ -1278,7 +1279,7 @@ jobs:
 
       - name: Select affected API test files
         id: api-test-selection
-        if: steps.completed-depth.outputs.run_required != 'false' && github.event_name == 'pull_request' && steps.api-test-deps.outcome == 'success'
+        if: steps.completed-depth.outputs.run_required != 'false' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && steps.api-test-deps.outcome == 'success'
         env:
           EVENT_NAME: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref || 'main' }}
