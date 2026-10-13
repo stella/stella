@@ -1,9 +1,7 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { STORAGE_OWNERS } from "../no-raw-browser-storage.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
-
-setDefaultTimeout(30_000);
 
 const lint = async (
   source: string,

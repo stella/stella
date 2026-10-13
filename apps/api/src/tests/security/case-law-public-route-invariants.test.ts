@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -258,6 +259,11 @@ const PUBLIC_DECISION_READ_GATES = {
   "apps/api/src/lib/case-law/sitemap-shard-sql.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "Sitemap shard naming fragments; no query.",
+  },
+  "apps/api/src/lib/db/aggregate-lock.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason:
+      "Locks citation stats batch rows by ID for ingestion; returns no row.",
   },
   "apps/api/src/lib/decision-date-bounds-sql.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
@@ -800,7 +806,7 @@ describe("public case-law route boundary", () => {
       [...modules].map(async (modulePath) => {
         const source = await Bun.file(modulePath).text();
         if (DECISION_TABLE_MENTION.test(source)) {
-          readers.set(nodePath.relative(repoRoot, modulePath), source);
+          readers.set(repoRelativePath(repoRoot, modulePath), source);
         }
       }),
     );

@@ -2,6 +2,8 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import {
   missingPreparedApiTypecheckConfigs,
   validateApiTypecheckProjects,
@@ -56,7 +58,7 @@ const BABEL_TOOLCHAINS = [
 const TYPESCRIPT_TOOLCHAIN = {
   native: "npm:typescript@7.0.2",
   oxlint: "1.87.0",
-  oxlintConfig: "0.12.0",
+  oxlintConfig: "1.0.2",
   tsgolint: "7.0.2003",
   typescript6Compatibility: "6.0.3",
 } as const;
@@ -661,7 +663,7 @@ const validateBunTypeOwnership = (
     )
     .map((filePath) => ({
       message: `${BUN_TYPES_DEPENDENCY} is named by this TypeScript project but is not declared in the workspace package.json`,
-      path: `${relativeWorkspacePath}/${path.relative(workspacePath, filePath)}`,
+      path: `${relativeWorkspacePath}/${repoRelativePath(workspacePath, filePath)}`,
     }));
 };
 
@@ -695,7 +697,7 @@ const validateTurboInstallPins = (rootDir: string): WorkspaceIssue[] => {
       const installVersion = match[0].slice(match[0].lastIndexOf("@") + 1);
       issues.push({
         message: `turbo install version must derive from root package.json; found mirrored pin ${installVersion}`,
-        path: `${path.relative(rootDir, filePath)}:${lineNumberForIndex(content, match.index)}`,
+        path: `${repoRelativePath(rootDir, filePath)}:${lineNumberForIndex(content, match.index)}`,
       });
     }
   }
@@ -733,7 +735,7 @@ const validateBunCwdRunForm = (rootDir: string): WorkspaceIssue[] =>
       return [...content.matchAll(BUN_SPACED_CWD_RUN_PATTERN)].map((match) => ({
         message:
           "`bun --cwd <dir> run <script>` exits 0 without running the script; use `bun run --cwd <dir> <script>`",
-        path: `${path.relative(rootDir, filePath)}:${lineNumberForIndex(content, match.index)}`,
+        path: `${repoRelativePath(rootDir, filePath)}:${lineNumberForIndex(content, match.index)}`,
       }));
     });
 

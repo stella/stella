@@ -5,11 +5,11 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { TaskStatus } from "@stll/api-contract";
-import { UserText } from "@stll/ui/bidi-text";
 import { KanbanCellAction } from "@stll/ui/kanban";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { MatterOptionLabel } from "@/components/matter-option-label";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -137,7 +137,7 @@ export const NewEntityViewTask = ({
               detached(create(workspace.id), "entity-view.create-task")
             }
           >
-            <UserText>{workspace.name}</UserText>
+            <MatterOptionLabel matter={workspace} />
           </MenuItem>
         ))}
       </MenuPopup>

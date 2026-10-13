@@ -6,6 +6,8 @@ import {
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { BASELINE_PATHS } from "../scripts/baseline-paths.ts";
 import { parseTestStateBaseline } from "../scripts/check-test-state-baseline.ts";
 import {
@@ -253,7 +255,7 @@ export default eslintCompatPlugin({
 
         return {
           before() {
-            filename = path.relative(REPO_ROOT, filenameForContext(context));
+            filename = repoRelativePath(REPO_ROOT, filenameForContext(context));
             mutations = [];
             hasFixture = false;
             concurrent = [];

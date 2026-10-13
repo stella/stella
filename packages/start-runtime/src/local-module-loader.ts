@@ -11,14 +11,25 @@ export class LocalModuleLoadError extends TaggedError("LocalModuleLoadError")<{
 
 type LoadLocalModuleOptions = { root: string; modulePath: string };
 
-type PathContainmentOptions = { root: string; target: string };
+type PathContainmentOptions = {
+  pathApi: Pick<typeof path, "isAbsolute" | "relative" | "resolve" | "sep">;
+  root: string;
+  target: string;
+};
 
-const isWithinRoot = ({ root, target }: PathContainmentOptions) => {
-  const relative = path.relative(root, target);
+export const isWithinRoot = ({
+  pathApi,
+  root,
+  target,
+}: PathContainmentOptions) => {
+  const resolvedRoot = pathApi.resolve(root);
+  const resolvedTarget = pathApi.resolve(target);
+  const relativeTarget = pathApi.relative(resolvedRoot, resolvedTarget);
   return (
-    relative !== ".." &&
-    !relative.startsWith(`..${path.sep}`) &&
-    !path.isAbsolute(relative)
+    relativeTarget === "" ||
+    (relativeTarget !== ".." &&
+      !relativeTarget.startsWith(`..${pathApi.sep}`) &&
+      !pathApi.isAbsolute(relativeTarget))
   );
 };
 
@@ -49,7 +60,7 @@ export const loadLocalModule = async ({
     return Result.err(resolved.error);
   }
   const [rootPath, targetPath] = resolved.value;
-  if (!isWithinRoot({ root: rootPath, target: targetPath })) {
+  if (!isWithinRoot({ pathApi: path, root: rootPath, target: targetPath })) {
     return Result.err(
       new LocalModuleLoadError({
         code: "invalid-path",

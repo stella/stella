@@ -596,6 +596,16 @@
       "createInvoice": "إنشاء فاتورة",
       "dueDate": "تاريخ الاستحقاق",
       "editInvoice": "تعديل الفاتورة",
+      "export": {
+        "accounting": "استيراد محاسبي",
+        "eBilling": "الفوترة الإلكترونية",
+        "eso9": "جدول استيراد ESO9 (XLSX)",
+        "exporting": "جارٍ تجهيز التصدير…",
+        "isdoc": "فاتورة ISDOC الإلكترونية (ABRA Gen وغيره)",
+        "spreadsheets": "جداول البيانات",
+        "xlsx": "الفواتير (XLSX)",
+        "xlsxLines": "بنود الفواتير (XLSX)"
+      },
       "finalize": "إنهاء",
       "invoiceDate": "تاريخ الفاتورة",
       "invoiceDetail": "تفاصيل الفاتورة",
@@ -1337,6 +1347,11 @@
     "greeting": "ما الذي تودّ العمل عليه؟",
     "greetingSubtitle": "ابدأ بملف قانوني أو مستند أو سؤال مباشر.",
     "hideThread": "إخفاء المحادثة",
+    "history": {
+      "matterUnavailable": "هذا الملف القانوني غير متاح",
+      "older": "أقدم",
+      "previous7Days": "الأيام السبعة السابقة"
+    },
     "historyContext": {
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, zero {ولا شيء آخر} one {وعنصر واحد آخر} two {وعنصران آخران} few {و# عناصر أخرى} many {و# عنصرًا آخر} other {و# عنصر آخر}}"
@@ -1499,6 +1514,8 @@
     "sendPrompt": "إرسال الرسالة",
     "sendQueuedMessageNow": "إرسال الآن",
     "sendWithoutAnonymization": "إرسال دون تجهيل",
+    "signInToChat": "سجّل الدخول للدردشة حول هذا المستند",
+    "signInToChatAbout": "سجّل الدخول للدردشة حول",
     "skills": {
       "scope": {
         "private": "مهاراتك",
@@ -1829,6 +1846,8 @@
     "citations": "الاستشهادات",
     "clauses": "البنود",
     "clearDate": "مسح التاريخ",
+    "clearFilters": "مسح عوامل التصفية",
+    "clearSearch": "مسح البحث",
     "close": "إغلاق",
     "closeAll": "إغلاق الكل",
     "closeOthers": "إغلاق الأخرى",
@@ -1859,6 +1878,7 @@
       "nextDecade": "العقد التالي",
       "nextMonth": "الشهر التالي",
       "nextYear": "السنة التالية",
+      "outOfRange": "اختر تاريخًا ضمن النطاق المسموح به.",
       "previousDecade": "العقد السابق",
       "previousMonth": "الشهر السابق",
       "previousYear": "السنة السابقة",
@@ -4184,7 +4204,6 @@
     "appsSubtitle": "تعمل stella أيضًا خارج المتصفح: على سطح مكتبك وداخل مساعد الذكاء الاصطناعي الخاص بك. يمكنك العودة إلى هذا الإعداد في أي وقت لاحقًا.",
     "appsTitle": "احصل على stella في كل مكان",
     "catalogueAlwaysOn": "مُفعَّل دائمًا",
-    "catalogueClearSearch": "مسح البحث",
     "catalogueCommunityHeading": "أخرى",
     "catalogueContinueWithCount": "المتابعة بـ {count, plural, zero {# أداة} one {# أداة} two {# أداتين} few {# أدوات} many {# أداة} other {# أداة}}",
     "catalogueDetailAbout": "حول",
@@ -6445,7 +6464,6 @@
         "year": "السنة"
       },
       "cannotDeleteRequired": "يلزم وجود طريقة عرض واحدة على الأقل من هذا النوع",
-      "clearFilters": "مسح عوامل التصفية",
       "copySuffix": "{name} (نسخة)",
       "deleteView": "حذف طريقة العرض",
       "exportCsv": "تصدير CSV",
