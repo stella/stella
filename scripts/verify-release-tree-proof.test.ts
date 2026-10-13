@@ -4,15 +4,110 @@ import {
   mkdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { Script } from "node:vm";
 
 const verifier = path.join(import.meta.dir, "verify-release-tree-proof.sh");
 const healthGate = path.join(import.meta.dir, "check-release-main-health.sh");
 const prepareTag = path.join(import.meta.dir, "prepare-release-tag.sh");
 const repository = "stella/stella";
+
+type WorkflowStepBodyOptions = {
+  source: string;
+  name: string;
+  kind: "run" | "script";
+};
+const workflowStepBody = ({ source, name, kind }: WorkflowStepBodyOptions) => {
+  const step = source
+    .split(`      - name: ${name}\n`)
+    .at(1)
+    ?.split("      - name:")
+    .at(0);
+  const block = step?.split(`${kind}: |\n`).at(1);
+  expect(block).toBeDefined();
+  return (block ?? "")
+    .split("\n")
+    .filter((line) => /^ {10,}\S/u.test(line))
+    .map((line) => line.slice(kind === "script" ? 12 : 10))
+    .join("\n");
+};
+
+type WorkflowReuseOptions = {
+  fixture: ReturnType<typeof createRepository>;
+  workflow: string;
+  sha?: string;
+};
+
+const exerciseWorkflowReuse = ({
+  fixture,
+  workflow,
+  sha = fixture.target,
+}: WorkflowReuseOptions) => {
+  const source = readFileSync(
+    path.join(import.meta.dir, "../.github/workflows", workflow),
+    "utf-8",
+  );
+  const outputPath = path.join(fixture.directory, "workflow-output");
+  writeFileSync(outputPath, "");
+  const result = Bun.spawnSync(
+    [
+      "bash",
+      "-c",
+      workflowStepBody({
+        source,
+        name: "Reuse completed release proof",
+        kind: "run",
+      }),
+    ],
+    {
+      cwd: fixture.directory,
+      env: {
+        ...fixture.environment,
+        SHA: sha,
+        GITHUB_REPOSITORY: repository,
+        GITHUB_OUTPUT: outputPath,
+      },
+    },
+  );
+  expect(result.exitCode).toBe(0);
+  const output = Object.fromEntries(
+    readFileSync(outputPath, "utf-8")
+      .trim()
+      .split("\n")
+      .map((line) => line.split("=")),
+  );
+  const selectionOutputs: Record<string, string> = {};
+  if (output.run === "true") {
+    const name =
+      workflow === "main-heavy.yml"
+        ? "Select untested heavy SHA"
+        : "Select untested PR-depth SHA";
+    new Script(
+      `(async () => { ${workflowStepBody({ source, name, kind: "script" })} })()`,
+    ).runInNewContext({
+      process: { env: { REUSE_RUN: output.run } },
+      core: {
+        setOutput: (key: string, value: string) => {
+          selectionOutputs[key] = value;
+        },
+      },
+    });
+    expect(selectionOutputs.run).toBe("true");
+  }
+  const publishCondition = source
+    .match(/ {4}if: (always\(\) && needs\.validate\.result[^\n]+)\n/u)
+    ?.at(1);
+  expect(publishCondition).toBeDefined();
+  const publishes = new Script(publishCondition ?? "false").runInNewContext({
+    always: () => true,
+    needs: { validate: { result: "success", outputs: output } },
+  });
+  return { output, publishes };
+};
 
 const withRepository = (
   run: (fixture: ReturnType<typeof createRepository>) => void,
@@ -50,18 +145,20 @@ const createRepository = (directory: string) => {
     return result.stdout.toString().trim();
   };
   git("init", "--quiet", "--initial-branch=main", "--template=");
-  writeFileSync(path.join(directory, "VERSION"), "1.2.3\n");
+  writeFileSync(path.join(directory, "VERSION"), "1.2.2\n");
   git("add", "VERSION");
   const commit = (contents: string, message: string) => {
     writeFileSync(path.join(directory, "release.txt"), contents);
-    git("add", "release.txt");
+    git("add", "release.txt", "VERSION");
     git("commit", "--quiet", "--message", message);
     return git("rev-parse", "HEAD");
   };
   const base = commit("a", "base");
   git("checkout", "--quiet", "-b", "release");
+  writeFileSync(path.join(directory, "VERSION"), "1.2.3\n");
   const proof = commit("b", "release proof");
   git("checkout", "--quiet", "main");
+  writeFileSync(path.join(directory, "VERSION"), "1.2.3\n");
   const target = commit("b", "squash release");
   git("update-ref", "refs/remotes/origin/main", target);
   const publishCommit = (sha: string) => {
@@ -78,7 +175,7 @@ const createRepository = (directory: string) => {
   }
   const mergedPullRequest = {
     number: 1,
-    title: "chore: release v1.0.0",
+    title: "chore: release v1.2.3",
     state: "closed",
     merged_at: "2026-01-01T00:00:00Z",
     merge_commit_sha: target,
@@ -96,6 +193,15 @@ const createRepository = (directory: string) => {
   };
   publishPullRequests(target, [mergedPullRequest]);
   publishPullRequests(proof, [mergedPullRequest]);
+  writeFileSync(
+    path.join(responses, "pull-files"),
+    JSON.stringify([
+      git("diff", "--name-only", base, proof)
+        .split("\n")
+        .map((filename) => ({ filename, status: "modified" })),
+    ]),
+  );
+  symlinkSync(import.meta.dir, path.join(directory, "scripts"), "dir");
   writeFileSync(path.join(responses, `${target}-statuses`), "[[]]");
   const recordTestedBase = (testedBase: string) => {
     writeFileSync(
@@ -120,6 +226,9 @@ const createRepository = (directory: string) => {
 set -euo pipefail
 endpoint="\${!#}"
 case "$endpoint" in
+  repos/stella/stella/pulls/1/files?per_page=100)
+    cat "$PROOF_TEST_RESPONSES/pull-files"
+    ;;
   repos/stella/stella/commits/*/statuses?per_page=100)
     sha="\${endpoint#repos/stella/stella/commits/}"
     sha="\${sha%%/*}"
@@ -295,6 +404,7 @@ describe("release proof trust boundary", () => {
         verify,
       }) => {
         git("checkout", "--quiet", "-B", "main", base);
+        writeFileSync(path.join(directory, "VERSION"), "1.2.3\n");
         const changedTarget = commit("c", "changed release");
         git("update-ref", "refs/remotes/origin/main", changedTarget);
         publishCommit(changedTarget);
@@ -547,7 +657,7 @@ describe("release health with reused proof", () => {
         expect(result.stderr.toString()).toContain(context);
         const discoveredResult = checkHealth(true);
         expect(discoveredResult.exitCode).not.toBe(0);
-        expect(discoveredResult.stderr.toString()).toContain(context);
+        expect(discoveredResult.stderr.toString()).toContain("missing");
       });
     },
   );
@@ -565,3 +675,86 @@ describe("release tag selection with reused proof", () => {
     });
   });
 });
+
+describe.each(["main-heavy.yml", "main-pr-depth.yml"])(
+  "%s proof reuse",
+  (workflow) => {
+    test("runs and publishes fresh evidence for an ordinary squash without release proof", () => {
+      withRepository((fixture) => {
+        fixture.publishPullRequests(fixture.target, [
+          { ...fixture.mergedPullRequest, title: "fix: ordinary change" },
+        ]);
+        writeFileSync(
+          path.join(fixture.responses, `${fixture.proof}-statuses`),
+          "[[]]",
+        );
+        const discovery = fixture.discoverProof();
+        expect(discovery.exitCode).toBe(0);
+        expect(discovery.stdout.toString().trim()).toBe(fixture.target);
+        const { output, publishes } = exerciseWorkflowReuse({
+          fixture,
+          workflow,
+        });
+        expect(output.run).toBe("true");
+        expect(output.proof).toBeUndefined();
+        expect(publishes).toBe(true);
+      });
+    });
+
+    test("reuses a green release VERSION change and suppresses new publication", () => {
+      withRepository((fixture) => {
+        fixture.publishStatuses();
+        expect(fixture.git("show", `${fixture.base}:VERSION`)).toBe("1.2.2");
+        expect(fixture.git("show", `${fixture.proof}:VERSION`)).toBe("1.2.3");
+        const { output, publishes } = exerciseWorkflowReuse({
+          fixture,
+          workflow,
+        });
+        expect(output.run).toBe("false");
+        expect(output.proof).toBe(fixture.proof);
+        expect(publishes).toBe(false);
+      });
+    });
+
+    test("a one-byte release tree mismatch forces fresh suites and refuses release gates", () => {
+      withRepository((fixture) => {
+        fixture.publishStatuses();
+        fixture.git("checkout", "--quiet", "-B", "main", fixture.base);
+        writeFileSync(path.join(fixture.directory, "VERSION"), "1.2.3\n");
+        const changedTarget = fixture.commit("c", "changed squash");
+        fixture.git("update-ref", "refs/remotes/origin/main", changedTarget);
+        fixture.publishCommit(changedTarget);
+        fixture.publishPullRequests(changedTarget, [
+          { ...fixture.mergedPullRequest, merge_commit_sha: changedTarget },
+        ]);
+        writeFileSync(
+          path.join(fixture.responses, `${changedTarget}-statuses`),
+          "[[]]",
+        );
+        const { output, publishes } = exerciseWorkflowReuse({
+          fixture,
+          workflow,
+          sha: changedTarget,
+        });
+        expect(output.run).toBe("true");
+        expect(output.proof).toBeUndefined();
+        expect(publishes).toBe(true);
+        expect(fixture.verify(changedTarget).exitCode).not.toBe(0);
+        expect(fixture.prepareReleaseTag().exitCode).not.toBe(0);
+      });
+    });
+
+    test("an unavailable proof API forces fresh suites without emitting reusable evidence", () => {
+      withRepository((fixture) => {
+        rmSync(path.join(fixture.responses, `${fixture.target}-statuses`));
+        const { output, publishes } = exerciseWorkflowReuse({
+          fixture,
+          workflow,
+        });
+        expect(output.run).toBe("true");
+        expect(output.proof).toBeUndefined();
+        expect(publishes).toBe(true);
+      });
+    });
+  },
+);

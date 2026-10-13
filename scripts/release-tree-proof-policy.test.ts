@@ -51,6 +51,8 @@ const workflowSteps = (source: string) => {
           uses: field(step, "uses"),
           ref: field(field(step, "with"), "ref"),
           path: field(field(step, "with"), "path"),
+          actionScript: field(field(step, "with"), "script"),
+          reuseRun: field(env, "REUSE_RUN"),
         },
       ];
     });
@@ -225,12 +227,12 @@ const reuseProblems = (source: string) => {
     problems.push("reuse may skip only after the health gate succeeds");
   }
   const blockingHealth = [
-    'if [[ "$proof" != "$SHA" ]]; then',
+    'if proof=$(bash scripts/verify-release-tree-proof.sh --find-proof "$GITHUB_REPOSITORY" "$SHA") &&',
+    'bash scripts/check-release-main-health.sh "$GITHUB_REPOSITORY" "$SHA" "$proof"; then',
     'echo "proof=$proof" >> "$GITHUB_OUTPUT"',
-    'bash scripts/check-release-main-health.sh "$GITHUB_REPOSITORY" "$SHA" "$proof"',
     'echo "run=false" >> "$GITHUB_OUTPUT"',
-    'elif bash scripts/check-release-main-health.sh "$GITHUB_REPOSITORY" "$SHA" "$SHA"; then',
-    'echo "run=false" >> "$GITHUB_OUTPUT"',
+    "else",
+    'echo "run=true" >> "$GITHUB_OUTPUT"',
     "fi",
   ].join("\n");
   const normalized = script
@@ -245,12 +247,34 @@ const reuseProblems = (source: string) => {
     !normalized.includes(blockingHealth)
   ) {
     problems.push(
-      "matching proof failures must block instead of falling back or skipping",
+      "proof reuse must publish proof only after success and force fresh gates on failure",
     );
   }
   const selection = steps.find(({ id }) => id === "selection");
   if (selection?.condition !== "steps.reuse.outputs.run != 'false'") {
     problems.push("successful reuse must suppress selection");
+  }
+  const freshSelection = [
+    'if (process.env.REUSE_RUN === "true") {',
+    'core.setOutput("run", "true");',
+    "return;",
+    "}",
+  ].join("\n");
+  const selectionScript =
+    typeof selection?.actionScript === "string"
+      ? selection.actionScript
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .join("\n")
+      : "";
+  if (
+    selection?.reuseRun !== `\${{ steps.reuse.outputs.run }}` ||
+    !selectionScript.startsWith(freshSelection)
+  ) {
+    problems.push(
+      "failed proof validation must force fresh gates before historical status selection",
+    );
   }
   const workflow: unknown = Bun.YAML.parse(source);
   const jobs = field(workflow, "jobs");
@@ -262,7 +286,7 @@ const reuseProblems = (source: string) => {
       "always() && needs.validate.result != 'skipped' && needs.validate.outputs.run != 'false' && !needs.validate.outputs.proof"
   ) {
     problems.push(
-      "cross-SHA proof validation must not publish a synthetic target failure",
+      "successful proof reuse must suppress target status publication",
     );
   }
   return problems;
@@ -283,8 +307,8 @@ test("main proof workflows skip through the trusted successful health gate", () 
       ),
       source.replace("if: steps.reuse.outputs.run != 'false'", "if: always()"),
       source.replace(
-        'bash scripts/check-release-main-health.sh "$GITHUB_REPOSITORY" "$SHA" "$proof"',
-        'bash scripts/check-release-main-health.sh "$GITHUB_REPOSITORY" "$SHA" "$proof" || true',
+        'bash scripts/check-release-main-health.sh "$GITHUB_REPOSITORY" "$SHA" "$proof"; then',
+        'bash scripts/check-release-main-health.sh "$GITHUB_REPOSITORY" "$SHA" "$proof" || true; then',
       ),
       source.replace(
         "bash scripts/verify-release-tree-proof.sh --find-proof",
@@ -293,6 +317,18 @@ test("main proof workflows skip through the trusted successful health gate", () 
       source.replace(" && !needs.validate.outputs.proof", ""),
       source.replace(`proof: \${{ steps.reuse.outputs.proof }}`, "proof: ''"),
       source.replace('echo "proof=$proof" >> "$GITHUB_OUTPUT"', "true"),
+      source.replace(
+        'echo "run=true" >> "$GITHUB_OUTPUT"',
+        'echo "run=false" >> "$GITHUB_OUTPUT"',
+      ),
+      source.replace(
+        `REUSE_RUN: \${{ steps.reuse.outputs.run }}`,
+        "REUSE_RUN: 'false'",
+      ),
+      source.replace(
+        'process.env.REUSE_RUN === "true"',
+        'process.env.REUSE_RUN === "false"',
+      ),
     ]) {
       expect(changed).not.toBe(source);
       expect(reuseProblems(changed).length).toBeGreaterThan(0);

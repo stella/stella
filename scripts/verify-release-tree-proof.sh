@@ -22,13 +22,29 @@ if [[ "${1:-}" == --find-proof ]]; then
     exit 0
   fi
   pulls=$(bash "$gh_retry_script" api --paginate --slurp "repos/$repo/commits/$sha/pulls?per_page=100")
-  proofs=$(jq -r --arg repo "$repo" --arg sha "$sha" '
-    .[][] | select((.merged_at | type) == "string" and .merged_at != "" and .merge_commit_sha == $sha and .head.repo.full_name == $repo and
-      .base.repo.full_name == $repo and .base.ref == "main") | .head.sha
+  candidate=$(jq -r --arg repo "$repo" --arg sha "$sha" '
+    [.[][] | select((.merged_at | type) == "string" and .merged_at != "" and .state == "closed" and
+      (.title | startswith("chore: release v")) and .merge_commit_sha == $sha and .head.repo.full_name == $repo and
+      .base.repo.full_name == $repo and .base.ref == "main")] |
+    if length == 0 then empty elif length == 1 then "\(.[0].head.sha) \(.[0].number)"
+    else error("ambiguous release proof") end
   ' <<< "$pulls")
-  if [[ -n "$proofs" ]]; then
-    [[ "$proofs" =~ ^[0-9a-f]{40}$ ]] || { echo '::error::Ambiguous release proof' >&2; exit 1; }
-    printf '%s\n' "$proofs"
+  if [[ -z "$candidate" ]]; then printf '%s\n' "$sha"; exit 0; fi
+  read -r proof pull_number <<< "$candidate"
+  [[ "$proof" =~ ^[0-9a-f]{40}$ && "$pull_number" =~ ^[1-9][0-9]*$ ]] || exit 1
+  proof_statuses=$(bash "$gh_retry_script" api --paginate --slurp "repos/$repo/commits/$proof/statuses?per_page=100")
+  if ! jq -e --argjson contexts "$contexts" '
+    [.[][]] as $all | all($contexts[]; . as $context |
+      [$all[] | select(.context == $context)][0] |
+      .creator.login == "github-actions[bot]" and .creator.type == "Bot" and
+      (.description | type) == "string" and (.description | test("; main=[0-9a-f]{40}$")))
+  ' <<< "$proof_statuses" >/dev/null; then
+    printf '%s\n' "$sha"
+    exit 0
+  fi
+  files=$(bash "$gh_retry_script" api --paginate --slurp "repos/$repo/pulls/$pull_number/files?per_page=100")
+  if jq -e 'any(.[][]; .filename == "VERSION" and .status == "modified")' <<< "$files" >/dev/null; then
+    printf '%s\n' "$proof"
   else
     printf '%s\n' "$sha"
   fi
