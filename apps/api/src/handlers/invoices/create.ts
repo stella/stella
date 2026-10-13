@@ -117,9 +117,27 @@ type CreateInvoiceResult = {
   entryCount: number;
   expenseCount: number;
 };
+type CreateInvoiceBody = Static<typeof createInvoiceBodySchema>;
+// The request with its optional lists resolved once, so no step re-defaults them.
+type CreateInvoiceInput = Omit<
+  CreateInvoiceBody,
+  "expenseIds" | "entryAdjustments"
+> & {
+  expenseIds: NonNullable<CreateInvoiceBody["expenseIds"]>;
+  entryAdjustments: NonNullable<CreateInvoiceBody["entryAdjustments"]>;
+};
+const createInvoiceInput = ({
+  expenseIds = [],
+  entryAdjustments = [],
+  ...rest
+}: CreateInvoiceBody): CreateInvoiceInput => ({
+  ...rest,
+  expenseIds,
+  entryAdjustments,
+});
 type InvoiceCreationEntryOptions = {
   workspaceId: SafeId<"workspace">;
-  body: Static<typeof createInvoiceBodySchema>;
+  body: CreateInvoiceInput;
   flatFee: CentsAmount | null;
 };
 const validateCreationEntries = async (
@@ -181,11 +199,11 @@ const validateCreationEntries = async (
     );
   }
   const adjusted = new Set(
-    (body.entryAdjustments ?? []).map((entry) => entry.timeEntryId),
+    body.entryAdjustments.map((entry) => entry.timeEntryId),
   );
   const selectedIds = new Set<string>(body.timeEntryIds);
   if (
-    adjusted.size !== (body.entryAdjustments ?? []).length ||
+    adjusted.size !== body.entryAdjustments.length ||
     [...adjusted].some((id) => !selectedIds.has(id))
   ) {
     return Result.err(
@@ -203,13 +221,13 @@ const validateCreationEntries = async (
 
 type CreationExpenseOptions = {
   workspaceId: SafeId<"workspace">;
-  body: Static<typeof createInvoiceBodySchema>;
+  body: CreateInvoiceInput;
 };
 const validateCreationExpenses = async (
   tx: Transaction,
   { workspaceId, body }: CreationExpenseOptions,
 ) => {
-  const expenseIds = body.expenseIds ?? [];
+  const expenseIds = body.expenseIds;
   if (expenseIds.length === 0) {
     return Result.ok(undefined);
   }
@@ -291,9 +309,7 @@ const createInvoiceLineDrafts = (
 type EntryAdjustmentOptions = {
   actorUserId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
-  adjustments: NonNullable<
-    Static<typeof createInvoiceBodySchema>["entryAdjustments"]
-  >;
+  adjustments: CreateInvoiceInput["entryAdjustments"];
   memberRole: AuthorizedMemberRole;
   now: Date;
   recordAuditEvent: AuditRecorder;
@@ -408,7 +424,7 @@ const applyEntryAdjustments = async (
 
 type SupplyDateOptions = {
   workspaceId: SafeId<"workspace">;
-  body: Static<typeof createInvoiceBodySchema>;
+  body: CreateInvoiceInput;
 };
 /** The last day of included work, which is when the supply took place. */
 const lastWorkDate = async (
@@ -427,7 +443,7 @@ const lastWorkDate = async (
               inArray(timeEntries.id, body.timeEntryIds),
             ),
           ),
-    (body.expenseIds ?? []).length === 0
+    body.expenseIds.length === 0
       ? []
       : tx
           .select({ date: expenses.dateIncurred })
@@ -435,7 +451,7 @@ const lastWorkDate = async (
           .where(
             and(
               eq(expenses.workspaceId, workspaceId),
-              inArray(expenses.id, body.expenseIds ?? []),
+              inArray(expenses.id, body.expenseIds),
             ),
           ),
   ]);
@@ -452,7 +468,7 @@ const dueDateAfter = (invoiceDate: string, days: number) =>
 type CreationDefaultsOptions = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
-  body: Static<typeof createInvoiceBodySchema>;
+  body: CreateInvoiceInput;
   documentType: InvoiceDocumentType;
   flatFee: CentsAmount | null;
 };
@@ -470,7 +486,7 @@ const resolveCreationDefaults = async (
     flatFee,
   }: CreationDefaultsOptions,
 ) => {
-  if (flatFee !== null && (body.expenseIds ?? []).length > 0) {
+  if (flatFee !== null && body.expenseIds.length > 0) {
     return Result.err(
       new HandlerError({
         status: 409,
@@ -519,13 +535,13 @@ type CreateDraftInvoiceOptions = {
   memberRole: AuthorizedMemberRole;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
-  body: Static<typeof createInvoiceBodySchema>;
+  body: CreateInvoiceInput;
   now: Date;
   recordAuditEvent: AuditRecorder;
 };
 type CheckCreationOptions = {
   workspaceId: SafeId<"workspace">;
-  body: Static<typeof createInvoiceBodySchema>;
+  body: CreateInvoiceInput;
 };
 /** Everything that can refuse a create before anything is written. */
 const checkCreation = async (
@@ -572,7 +588,7 @@ const checkCreation = async (
   const originalInvoiceId = body.originalInvoiceId ?? null;
   if (
     documentType === "credit_note" &&
-    (body.timeEntryIds.length > 0 || (body.expenseIds ?? []).length > 0)
+    (body.timeEntryIds.length > 0 || body.expenseIds.length > 0)
   ) {
     return Result.err(
       new HandlerError({
@@ -596,7 +612,7 @@ const checkCreation = async (
 type BillCreatedDraftOptions = {
   actorUserId: SafeId<"user">;
   created: { id: SafeId<"invoice">; invoiceNumber: string | null };
-  body: Static<typeof createInvoiceBodySchema>;
+  body: CreateInvoiceInput;
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   flatFee: CentsAmount | null;
@@ -669,7 +685,7 @@ const billCreatedDraft = async (
       noCharge: timeEntries.noCharge,
     });
 
-  const expenseIds = body.expenseIds ?? [];
+  const expenseIds = body.expenseIds;
   const attachedExpenses =
     expenseIds.length === 0
       ? []
@@ -800,7 +816,7 @@ const createDraftInvoice = async (
   const adjusted = await applyEntryAdjustments(tx, {
     actorUserId,
     workspaceId,
-    adjustments: body.entryAdjustments ?? [],
+    adjustments: body.entryAdjustments,
     memberRole,
     now,
     recordAuditEvent,
@@ -918,7 +934,7 @@ const createInvoice = createSafeHandler(
             memberRole,
             organizationId: session.activeOrganizationId,
             workspaceId,
-            body,
+            body: createInvoiceInput(body),
             now: new Date(),
             recordAuditEvent,
           }),

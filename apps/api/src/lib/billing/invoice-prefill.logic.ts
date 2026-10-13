@@ -219,12 +219,12 @@ const text = (value: string | undefined | null, max: number) => {
 export const buyerSnapshotFromContact = (
   contact: BuyerContact,
 ): InvoiceBuyerSnapshot => {
-  const addresses = contact.addresses ?? [];
+  const { addresses } = contact;
   const address: BillingAddress | undefined =
     contact.billingAddress?.line1 === undefined
-      ? (addresses.find((entry) => entry.type === "billing") ??
-        addresses.find((entry) => entry.isPrimary) ??
-        addresses.at(0))
+      ? (addresses?.find((entry) => entry.type === "billing") ??
+        addresses?.find((entry) => entry.isPrimary) ??
+        addresses?.at(0))
       : contact.billingAddress;
   return {
     buyerName: text(contact.displayName, 512),

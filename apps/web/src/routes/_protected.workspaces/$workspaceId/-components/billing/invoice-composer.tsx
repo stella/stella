@@ -92,7 +92,7 @@ const VAT_REASON_LABELS = {
 type PrefillEntry = InvoicePrefill["timeEntries"][number];
 type PrefillExpense = InvoicePrefill["expenses"][number];
 
-export type IssuedInvoice = {
+type IssuedInvoice = {
   id: string;
   invoiceNumber: string | null;
   issued: boolean;
@@ -1081,11 +1081,7 @@ type IssuedStateProps = {
   buyerName: string | null;
 };
 
-export const IssuedState = ({
-  workspaceId,
-  invoice,
-  buyerName,
-}: IssuedStateProps) => {
+const IssuedState = ({ workspaceId, invoice, buyerName }: IssuedStateProps) => {
   const t = useTranslations();
   const format = useFormatter();
   const summary = [

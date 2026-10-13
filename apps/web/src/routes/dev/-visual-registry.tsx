@@ -81,13 +81,6 @@ const visualLoaders = {
       return { default: ProtectedPendingSkeleton };
     },
   },
-  "invoice-issued": {
-    load: async () => {
-      const { InvoiceIssuedPlayground } =
-        await import("./-components/invoice-issued-playground");
-      return { default: InvoiceIssuedPlayground };
-    },
-  },
   "workspace-table": {
     load: async () => {
       const { WorkspaceTablePlayground } =
