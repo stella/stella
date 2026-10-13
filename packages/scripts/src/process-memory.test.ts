@@ -7,6 +7,7 @@ import path from "node:path";
 import {
   createProcessMemoryReader,
   parseProcessGroupMemory,
+  parseLinuxProcessMemoryStatus,
   testInvocationMemoryLimit,
   TEST_INVOCATION_MEMORY_GIB_ENV,
   watchTestProcessMemory,
@@ -15,6 +16,36 @@ import { attachTestProcessShutdown } from "./process-shutdown";
 import { spawnTestProcess } from "./process-spawn";
 
 const posixTest = process.platform === "win32" ? test.skip : test;
+test.each(["R", "S", "X", "Z"])(
+  "Linux status without an address space reports zero even in state %s",
+  (state) => {
+    expect(
+      parseLinuxProcessMemoryStatus(
+        42,
+        `Name:\tfinishing\nState:\t${state}\nPid:\t42\nThreads:\t1\n`,
+      ).unwrap(),
+    ).toBe(0);
+  },
+);
+test("Linux memory status sums resident and swapped pages and rejects partial counters", () => {
+  expect(
+    parseLinuxProcessMemoryStatus(
+      42,
+      "State:\tR\nVmRSS:\t4 kB\nVmSwap:\t2 kB\n",
+    ).unwrap(),
+  ).toBe(6144);
+  for (const status of [
+    "",
+    "Name:\tfinishing\n",
+    "State:\tR\nVmRSS:\t4 kB\n",
+    "State:\tR\nVmSwap:\t2 kB\n",
+    "State:\tR\nVmSize:\t8 kB\n",
+    "State:\tR\nVmRSS:\tbad kB\nVmSwap:\t2 kB\n",
+  ]) {
+    expect(parseLinuxProcessMemoryStatus(42, status).isErr()).toBe(true);
+  }
+});
+
 posixTest.each(["leader", "leader-exit"] as const)(
   "%s process group counts and kills the orphan after its launcher exits before the first sample",
   async (mode) => {

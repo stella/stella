@@ -26,6 +26,28 @@ class ProcessMemoryReadError extends TaggedError("ProcessMemoryReadError")<{
 const processGone = ({ cause }: ProcessMemoryReadError) =>
   cause instanceof Error && "code" in cause && cause.code === "ESRCH";
 
+export const parseLinuxProcessMemoryStatus = (pid: number, status: string) => {
+  const rss = /^VmRSS:\s+(\d+)\s+kB$/mu.exec(status)?.at(1);
+  const swap = /^VmSwap:\s+(\d+)\s+kB$/mu.exec(status)?.at(1);
+  if (rss === undefined || swap === undefined) {
+    // proc_pid_status emits Vm* only while get_task_mm returns an address
+    // space. During exit it can be absent before the PID/state becomes dead.
+    // Partial memory fields remain an error; an entire absent block means zero.
+    if (
+      /^State:\s+[RSDTtXZxPI]\b/mu.test(status) &&
+      !/^Vm[A-Za-z]+:/mu.test(status)
+    ) {
+      return Result.ok(0);
+    }
+    return Result.err(
+      new ProcessMemoryReadError({
+        message: `Cannot read memory for PID ${pid}`,
+      }),
+    );
+  }
+  return Result.ok((Number(rss) + Number(swap)) * 1024);
+};
+
 type ProcessMemoryReader = (
   pid: number,
 ) => Result<number, ProcessMemoryReadError>;
@@ -70,20 +92,7 @@ const loadProcessMemoryReader = async () => {
       if (loaded.isErr()) {
         return Result.err(loaded.error);
       }
-      const status = loaded.value;
-      const rss = /^VmRSS:\s+(\d+)\s+kB$/mu.exec(status)?.at(1);
-      const swap = /^VmSwap:\s+(\d+)\s+kB$/mu.exec(status)?.at(1);
-      if (rss === undefined || swap === undefined) {
-        if (/^State:\s+Z\b/mu.test(status)) {
-          return Result.ok(0);
-        }
-        return Result.err(
-          new ProcessMemoryReadError({
-            message: `Cannot read memory for PID ${pid}`,
-          }),
-        );
-      }
-      return Result.ok((Number(rss) + Number(swap)) * 1024);
+      return parseLinuxProcessMemoryStatus(pid, loaded.value);
     };
   }
   if (process.platform === "win32") {
