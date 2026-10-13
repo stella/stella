@@ -76,7 +76,11 @@ import type {
   ChatThreadKey,
   ChatThreadOptionsContext,
 } from "./chat-query-contract";
-import { ChatRequestError, findChatRequestError } from "./chat-request-error";
+import {
+  ChatRequestError,
+  findChatRequestError,
+  normalizeChatStreamError,
+} from "./chat-request-error";
 
 type ChatToolScope = typeof SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE;
 
@@ -673,13 +677,7 @@ export const createChatRuntime = ({
         activeToolResultOperation.rejection = error;
       }
       const normalized = withProviderDiagnostic(
-        error instanceof DOMException && error.name === "TimeoutError"
-          ? new ChatRequestError({
-              kind: "timed_out",
-              message: "Chat stream timed out",
-              cause: error,
-            })
-          : error,
+        normalizeChatStreamError(error),
         providerDiagnostic,
       );
       onError(normalized);

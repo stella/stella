@@ -25,3 +25,24 @@ export const findChatRequestError = (
   }
   return undefined;
 };
+
+/** Body-read errors acquire an SDK wrapper after response headers arrive. */
+export const normalizeChatStreamError = (error: Error): Error => {
+  const seen = new Set<Error>();
+  let current: unknown = error;
+  while (current instanceof Error && !seen.has(current)) {
+    if (ChatRequestError.is(current)) {
+      return error;
+    }
+    if (current instanceof DOMException && current.name === "TimeoutError") {
+      return new ChatRequestError({
+        kind: "timed_out",
+        message: "Chat stream timed out",
+        cause: current,
+      });
+    }
+    seen.add(current);
+    current = current.cause;
+  }
+  return error;
+};
