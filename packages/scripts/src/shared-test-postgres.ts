@@ -201,7 +201,7 @@ export const ensureContainer = async ({
       "-t",
       IMAGE,
       "-f",
-      "docker/postgres/Dockerfile",
+      path.join(repo, "docker/postgres/Dockerfile"),
       repo,
     ]);
     if (built.isErr()) {

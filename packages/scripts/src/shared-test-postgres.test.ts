@@ -33,6 +33,11 @@ test("container startup removes its private credential file on success and failu
     let envFile = "";
     let runCalls = 0;
     const docker = (args: string[]) => {
+      if (args.at(0) === "build") {
+        expect(path.isAbsolute(args.at(args.indexOf("-f") + 1) ?? "")).toBe(
+          true,
+        );
+      }
       if (args.at(0) === "run") {
         runCalls++;
         envFile = args.at(args.indexOf("--env-file") + 1) ?? "";
