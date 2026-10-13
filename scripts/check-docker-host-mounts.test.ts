@@ -133,6 +133,33 @@ test("host mount guard accepts and rejects the documented cases", () => {
   }
 });
 
+test("scalar Docker option values cannot inject mounts, while spreads and mount values remain checked", () => {
+  for (const option of ["--name", "--publish", "--env-file", "--memory"]) {
+    expect(
+      inspectDockerHelper(
+        `["docker", "--host", host, "run", "${option}", value, "--", image]`,
+      ),
+    ).toEqual([]);
+    expect(
+      inspectDockerHelper(
+        `["docker", "run", "${option}", ...values, "--", image]`,
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(
+      inspectDockerHelper(`docker run ${option} $value image`).length,
+    ).toBeGreaterThan(0);
+  }
+  for (const option of ["--mount", "--volume", "--volume-driver"]) {
+    expect(
+      inspectDockerHelper(`["docker", "run", "${option}", value, "--", image]`)
+        .length,
+    ).toBeGreaterThan(0);
+  }
+  expect(
+    inspectDockerHelper('["docker", "run", ...options, "--", image]').length,
+  ).toBeGreaterThan(0);
+});
+
 test.each([
   'readonly ["ps", ...string[]]',
   'readonly ["compose", ...string[]] | readonly ["volume", "ls", ...string[]]',
