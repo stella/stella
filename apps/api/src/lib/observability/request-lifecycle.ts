@@ -33,6 +33,7 @@ import {
 } from "@/api/lib/observability/failure-shadow";
 import { logger } from "@/api/lib/observability/logger";
 import {
+  getMountedRequestRoute,
   getRequestContext,
   getRequestFailure,
 } from "@/api/lib/observability/request-context";
@@ -67,7 +68,9 @@ const setDbQueryCountHeader = (set: Context["set"]) => {
 const shouldLogRequest = (path: string): boolean => !HEALTH_PATHS.has(path);
 
 const getRouteName = (route: string | undefined): string =>
-  route ?? "unmatched";
+  (route === undefined || route.includes("*")
+    ? (getMountedRequestRoute() ?? route)
+    : route) ?? "unmatched";
 
 const buildRequestLogDetails = ({
   durationMs,
@@ -89,7 +92,7 @@ const buildRequestLogDetails = ({
   const details = {
     durationMs: Math.round(durationMs),
     method: request.method,
-    route,
+    route: getRouteName(route),
     statusCode,
   };
 

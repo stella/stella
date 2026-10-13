@@ -23,7 +23,11 @@ const workflow: unknown = Bun.YAML.parse(
 );
 const targets = {
   "e2e-report": ["@stll/playwright-tools", "!stella"],
-  "desktop-windows-dry-run": ["@stll/desktop...", "!stella"],
+  "desktop-windows-dry-run": [
+    "@stll/scripts...",
+    "@stll/desktop...",
+    "!stella",
+  ],
   "docker-checks": ["@stll/agent-engine...", "stella"],
   "landing-build": ["@stll/landing...", "@stll/cli...", "stella"],
   "e2e-landing": ["@stll/landing...", "@stll/cli...", "stella"],
