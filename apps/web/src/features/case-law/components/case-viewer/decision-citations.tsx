@@ -10,6 +10,7 @@ import type {
 } from "@stll/api-contract/case-law-text-field";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
@@ -40,9 +41,10 @@ import { useHydrated } from "@/hooks/use-hydrated";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { optionalArray } from "@/lib/arrays";
-import { citedDecisionLabel } from "@/lib/cited-decision-label";
 import { formatDecisionDate } from "@/lib/decision-date";
 import { detached } from "@/lib/detached";
+import { citedDecisionLabel } from "@/lib/legal/cited-decision-label";
+import { decisionDocumentIdentity } from "@/lib/legal/document-identity";
 import type { SafeId } from "@/lib/safe-id";
 
 export const DIRECTION_TITLE = {
@@ -447,6 +449,10 @@ const CitationRow = ({
 
   return (
     <li className="flex flex-wrap items-baseline gap-x-2 text-xs">
+      <DocumentIdentityBadge
+        identity={decisionDocumentIdentity(item.decision)}
+        title={`${item.decision.caseNumber} · ${item.decision.court}`}
+      />
       <CitedDecisionLink
         decision={item.decision}
         presentation={

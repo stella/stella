@@ -788,3 +788,47 @@ test("RTF code-page decoding stays in the document reader", async () => {
     }),
   ).toEqual([]);
 });
+
+describe.serial("verification run evidence reads", () => {
+  const entry = OWNERSHIP.find(
+    ({ id }) => id === "verification-run-evidence-read",
+  );
+  const source = [
+    'import { legalListVerificationRuns } from "@/api/db/schema";',
+    "db.select({ evidence: legalListVerificationRuns.evidence }).from(legalListVerificationRuns);",
+    "db.update(legalListVerificationRuns).set({ status: 'running' }).returning({ evidence: legalListVerificationRuns.evidence });",
+    "db.select().from(legalListVerificationRuns);",
+    "db.update(legalListVerificationRuns).set({ status: 'running' }).returning();",
+    "db.select({ id: legalListVerificationRuns.id }).from(legalListVerificationRuns);",
+    "db.update(legalListVerificationRuns).set({ status: 'running' }).returning({ id: legalListVerificationRuns.id });",
+  ].join("\n");
+  const options = {
+    ruleOptions: { entries: [entry] },
+    sourcePath: "apps/api/src/lib/lists/verification/run-queue.ts",
+    cwd: "scratch",
+  } as const;
+
+  test("rejects foreign evidence selections and returning rows", async () => {
+    expect(entry?.owner).toEqual([
+      "apps/api/src/lib/lists/verification/read-run.ts",
+    ]);
+    expect(await lintSingleRule("confine-owner", source, options)).toEqual([
+      2, 3, 4, 5,
+    ]);
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ...options,
+        ruleOptions: { entries: [] },
+      }),
+    ).toEqual([]);
+  });
+
+  test("admits evidence reads inside the reader", async () => {
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ...options,
+        sourcePath: "apps/api/src/lib/lists/verification/read-run.ts",
+      }),
+    ).toEqual([]);
+  });
+});
