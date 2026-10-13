@@ -104,6 +104,7 @@ type ResolveDockerTargetOptions = {
   env: NodeJS.ProcessEnv;
   cwd?: string;
   inspect?: typeof inspectDockerEndpoint;
+  tlsDefaults?: typeof defaultCertificatePath;
 };
 
 const TLS_FILES = ["ca.pem", "cert.pem", "key.pem"] as const;
@@ -246,6 +247,7 @@ const defaultCertificatePath = (
 type SnapshotDockerTargetOptions = {
   inspection: DockerInspection;
   env: NodeJS.ProcessEnv;
+  tlsDefaults: typeof defaultCertificatePath;
 };
 type DockerTLSSettings =
   | { type: "plain" }
@@ -253,13 +255,14 @@ type DockerTLSSettings =
 const dockerTLSSettings = ({
   inspection,
   env,
+  tlsDefaults,
 }: SnapshotDockerTargetOptions): Result<
   DockerTLSSettings,
   DockerEndpointError
 > => {
   if (inspection.context === "default") {
     return env["DOCKER_TLS"] || env["DOCKER_TLS_VERIFY"]
-      ? defaultCertificatePath(env).map((source) => ({
+      ? tlsDefaults(env).map((source) => ({
           type: "tls" as const,
           source,
         }))
@@ -282,8 +285,9 @@ const dockerTLSSettings = ({
 const snapshotDockerTarget = ({
   inspection,
   env,
+  tlsDefaults,
 }: SnapshotDockerTargetOptions) =>
-  dockerTLSSettings({ inspection, env }).andThen((tls) => {
+  dockerTLSSettings({ inspection, env, tlsDefaults }).andThen((tls) => {
     let snapshot: string | undefined;
     return Result.try({
       try: () => {
@@ -381,6 +385,7 @@ export const resolveDockerTarget = ({
   env,
   cwd = process.cwd(),
   inspect = inspectDockerEndpoint,
+  tlsDefaults = defaultCertificatePath,
 }: ResolveDockerTargetOptions) => {
   const captured = Object.fromEntries(
     Object.entries(env).map(([key, value]) => [
@@ -393,7 +398,7 @@ export const resolveDockerTarget = ({
   return inspect(captured)
     .andThen(parseDockerInspection)
     .andThen((inspection) =>
-      snapshotDockerTarget({ inspection, env: captured }),
+      snapshotDockerTarget({ inspection, env: captured, tlsDefaults }),
     );
 };
 
