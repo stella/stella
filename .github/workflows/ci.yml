@@ -7741,6 +7741,9 @@ jobs:
             packages/portable-path/src/index.ts
             scripts/retry.sh
             scripts/ci-install.ts
+            scripts/ci-install-store.ts
+            packages/sha256/src/bun.ts
+            packages/sha256/src/types.ts
           sparse-checkout-cone-mode: false
 
       - name: Install smoke dependencies
