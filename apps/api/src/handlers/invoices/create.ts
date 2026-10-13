@@ -383,8 +383,8 @@ const applyEntryAdjustments = async (
         row.noCharge !== entry.noCharge)
     );
   });
-  // db-await-in-loop: one keyed update per changed entry, bounded by the 500-entry body limit
   for (const entry of changed) {
+    // db-await-in-loop: one keyed update per changed entry, bounded by the 500-entry body limit
     await tx
       .update(timeEntries)
       .set({
