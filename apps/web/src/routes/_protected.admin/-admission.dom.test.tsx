@@ -112,6 +112,7 @@ describe("organization admin admission", () => {
                 },
               },
               location: { pathname },
+              matches: [{ staticData: {} }],
             }),
           )
           .then(

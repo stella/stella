@@ -9,6 +9,7 @@ import { NumberSeriesCard } from "@/routes/_protected.settings/-components/organ
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
 export const Route = createFileRoute("/_protected/admin/number-series")({
+  staticData: { organizationSettingsAdmission: "time-billing" },
   beforeLoad: async ({ context }) => {
     const role = await ensureRouteQueryData(context.queryClient, roleOptions);
     if (

@@ -14,6 +14,7 @@ import { VatRatesCard } from "@/routes/_protected.settings/-components/organizat
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
 export const Route = createFileRoute("/_protected/admin/vat-rates")({
+  staticData: { organizationSettingsAdmission: "time-billing" },
   beforeLoad: async ({ context }) => {
     const role = await ensureRouteQueryData(context.queryClient, roleOptions);
     if (
