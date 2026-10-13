@@ -3195,19 +3195,32 @@ jobs:
       - name: Record typecheck parity report
         env:
           CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_REUSE_SOURCE: typecheck_parity
+          CI_STATIC_REUSED: ${{ steps.static_receipts.outputs.reuse_typecheck_parity }}
+          CI_STATIC_RECEIPT_RUN_ID: ${{ steps.static_receipts.outputs.receipt_run_typecheck_parity }}
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && steps.typecheck_parity_gate.outputs.required == 'true') }}
         run: |
-          {
-            cat CLOUD_REPORT.md
-            printf '\n## CI parity output\n\n```text\n'
-            cat "$RUNNER_TEMP/typecheck-parity.log"
-            printf '\n```\n'
-          } > "$RUNNER_TEMP/CLOUD_REPORT.md"
+          if [[ "$CI_STATIC_REUSED" == "true" ]]; then
+            {
+              cat CLOUD_REPORT.md
+              printf '\n## CI parity output\n\nReused typecheck parity from receipt run %s.\n' "$CI_STATIC_RECEIPT_RUN_ID"
+            } > "$RUNNER_TEMP/CLOUD_REPORT.md"
+          else
+            {
+              cat CLOUD_REPORT.md
+              printf '\n## CI parity output\n\n```text\n'
+              cat "$RUNNER_TEMP/typecheck-parity.log"
+              printf '\n```\n'
+            } > "$RUNNER_TEMP/CLOUD_REPORT.md"
+          fi
 
       - name: Upload typecheck parity report
         env:
           CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_REUSE_SOURCE: typecheck_parity
+          CI_STATIC_REUSED: ${{ steps.static_receipts.outputs.reuse_typecheck_parity }}
+          CI_STATIC_RECEIPT_RUN_ID: ${{ steps.static_receipts.outputs.receipt_run_typecheck_parity }}
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && steps.typecheck_parity_gate.outputs.required == 'true') }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

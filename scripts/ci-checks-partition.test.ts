@@ -40,6 +40,9 @@ const withoutStaticReceipts = (steps: Record<string, unknown>[]) => {
                 "CI_CHECK_KIND",
                 "CI_CHECK_INPUTS",
                 "CI_CHECK_CONTEXT",
+                "CI_CHECK_REUSE_SOURCE",
+                "CI_STATIC_REUSED",
+                "CI_STATIC_RECEIPT_RUN_ID",
               ].includes(key),
           ),
         );
@@ -48,6 +51,25 @@ const withoutStaticReceipts = (steps: Record<string, unknown>[]) => {
         } else {
           result["env"] = env;
         }
+      }
+      // The raw receipt-reader census and shell regression own the added
+      // reuse branch; this projection preserves the original execution report.
+      if (
+        typeof rawEnv === "object" &&
+        rawEnv !== null &&
+        "CI_CHECK_REUSE_SOURCE" in rawEnv &&
+        typeof result["run"] === "string"
+      ) {
+        const run = result["run"];
+        expect(
+          run.startsWith('if [[ "$CI_STATIC_REUSED" == "true" ]]; then\n'),
+        ).toBe(true);
+        expect(run.endsWith("fi\n")).toBe(true);
+        const separator = run.indexOf("\nelse\n");
+        expect(separator).toBeGreaterThan(0);
+        result["run"] = run
+          .slice(separator + "\nelse\n".length, -"fi\n".length)
+          .replaceAll(/^ {2}/gmu, "");
       }
       if (typeof result["if"] === "string") {
         result["if"] = result["if"].replace(

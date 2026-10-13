@@ -1619,6 +1619,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "CI_GENERATED_SOURCES_MANIFEST",
   // Queue proof outcomes and resolved hosted-runner image for static receipts.
   "CHECK_OUTCOMES",
+  "CI_CHECK_REUSE_SOURCE",
+  "CI_STATIC_REUSED",
+  "CI_STATIC_RECEIPT_RUN_ID",
   "ImageOS",
   "ImageVersion",
   // Internal handoff between the code-quality supervisor and its process group.

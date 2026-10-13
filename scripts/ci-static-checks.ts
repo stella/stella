@@ -429,6 +429,14 @@ export const downloadReceipt = ({
   return undefined;
 };
 
+export const staticReuseOutputs = (reused: { id: string; runId: number }[]) =>
+  reused
+    .map(
+      ({ id, runId }) =>
+        `reuse_${id}=true\nreceipt_run_${id}=${String(runId)}\n`,
+    )
+    .join("");
+
 const output = (contents: string) => {
   const filename = process.env["GITHUB_OUTPUT"];
   if (filename) {
@@ -475,7 +483,7 @@ const main = () => {
         console.log(`Static check receipt unavailable: ${resolved.message}`);
         return;
       case "available":
-        output(resolved.reused.map(({ id }) => `reuse_${id}=true\n`).join(""));
+        output(staticReuseOutputs(resolved.reused));
         for (const { key, runId } of resolved.reused) {
           console.log(`reused ${key} from run ${runId}`);
         }
