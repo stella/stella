@@ -33,6 +33,7 @@ import { selectApiTestImpact } from "./api-test-impact";
 import { FULL_TEST_JOB_SHARDS } from "./api-test-shard-plan";
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
 import { planCiApiTests } from "./ci-api-test-plan";
+import { ciBrowserScopePredicate } from "./ci-browser-scope";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
 import {
   markdownReaders,
@@ -204,7 +205,13 @@ const onlyOutcome = <T>(outcomes: readonly T[]): T => {
 // The selector's bun detectors, keyed by the script it invokes. Served in
 // process, each answer comes from the same function the CLI prints; a bun
 // call the selector adds without an entry here fails the plan.
+const selectorBrowserScope = ciBrowserScopePredicate();
 const SELECTOR_BUN_CLIS = {
+  "scripts/ci-browser-scope.ts": {
+    variable: "SERVED_BROWSER_SCOPE",
+    flag: "",
+    output: (files: readonly string[]) => String(selectorBrowserScope(files)),
+  },
   "scripts/ci-package-scope.ts": {
     variable: "SERVED_LANDING_BUILD",
     flag: "--landing-build",
@@ -2095,6 +2102,9 @@ test("thin merge groups require planned desktop Rust tests to succeed", () => {
           ...base.env,
           QUEUE_DEPTH: "thin",
           THIN_JOBS: JSON.stringify(thinJobs({ jobs: ciJobs })),
+          QUEUE_REQUIRED_JOBS: JSON.stringify(
+            queueAdmittedJobs({ jobs: ciJobs }),
+          ),
         },
       };
     },
@@ -5263,6 +5273,7 @@ test("path-scoped coverage rejects event and queue-depth exclusions", () => {
     scopedCoverageViolations([
       {
         ...check,
+        requiredOnThin: false,
         condition: `github.event_name != 'pull_request' && (${scoped})`,
       },
     ]),
@@ -6466,6 +6477,7 @@ type BrowserPlanOptions = {
   trusted?: string;
   queueDepth?: string;
   packageChecksRequired?: string;
+  browserScopeRequired?: string;
 };
 const browserPlanOutput = ({
   event,
@@ -6475,6 +6487,7 @@ const browserPlanOutput = ({
   trusted = "true",
   queueDepth = "full",
   packageChecksRequired = "true",
+  browserScopeRequired = "true",
 }: BrowserPlanOptions) => {
   const { outputs } = v.parse(
     v.object({ outputs: v.record(v.string(), v.string()) }),
@@ -6488,6 +6501,8 @@ const browserPlanOutput = ({
         "steps.completed-depth.outputs.run_required": runRequired,
         "steps.check.outputs.trusted": trusted,
         "steps.changed-files.outputs.desktop_browser_required": desktopRequired,
+        "steps.changed-files.outputs.ci_browser_scope_required":
+          browserScopeRequired,
         "steps.changed-files.outputs.package_checks_required":
           packageChecksRequired,
         "steps.depth.outputs.suite_depth": depth,
@@ -6496,6 +6511,198 @@ const browserPlanOutput = ({
     }),
   );
 };
+
+test("Playwright image-only changes admit browser suites in merge groups", () => {
+  for (const file of [
+    "scripts/ci-service-images.ts",
+    "scripts/ci-service-images.json",
+  ]) {
+    const [browserScopeRequired, desktopRequired, packageChecksRequired] =
+      runSelector(
+        [file],
+        [
+          "ci_browser_scope_required",
+          "desktop_browser_required",
+          "package_checks_required",
+        ],
+        SUITE_DEPTH.full,
+        "false",
+        EVENT.mergeGroup,
+      );
+    expect(browserScopeRequired, file).toBe("true");
+    const planned = browserPlanOutput({
+      event: EVENT.mergeGroup,
+      depth: SUITE_DEPTH.full,
+      desktopRequired: desktopRequired ?? panic("Missing desktop scope"),
+      packageChecksRequired:
+        packageChecksRequired ?? panic("Missing package scope"),
+      browserScopeRequired:
+        browserScopeRequired ?? panic("Missing browser scope"),
+    });
+    expect(planned, file).toBe("true");
+    expect(
+      evaluate(jobIf(ciJobs["ci-browser"]), {
+        values: {
+          "inputs.pr_depth_only": false,
+          "needs.ci-plan.outputs.ci_browser_required": planned,
+          "needs.ci-plan.outputs.coverage_profile": "normal-v1",
+        },
+      }),
+      file,
+    ).toBe(true);
+  }
+});
+
+test("browser scope vetoes otherwise eligible execution", () => {
+  for (const event of [
+    EVENT.pullRequest,
+    EVENT.mergeGroup,
+    EVENT.workflowDispatch,
+  ]) {
+    const eligible = {
+      event,
+      depth: SUITE_DEPTH.full,
+      desktopRequired: "true",
+    };
+    expect(
+      browserPlanOutput({ ...eligible, browserScopeRequired: "true" }),
+      event,
+    ).toBe("true");
+    const planned = browserPlanOutput({
+      ...eligible,
+      browserScopeRequired: "false",
+    });
+    expect(planned, event).toBe("false");
+    expect(
+      evaluate(jobIf(ciJobs["ci-browser"]), {
+        values: {
+          "needs.ci-plan.outputs.ci_browser_required": planned,
+          "needs.ci-plan.outputs.coverage_profile": "normal-v1",
+        },
+      }),
+      event,
+    ).toBe(false);
+  }
+});
+
+test("Legal Atlas scope deadlines conservatively select the image after timeout or kill", () => {
+  const { steps } = v.parse(
+    v.object({
+      steps: v.array(
+        v.object({
+          id: v.optional(v.string()),
+          run: v.optional(v.string()),
+          if: v.optional(v.string()),
+        }),
+      ),
+    }),
+    ciJobs["ci-plan"],
+  );
+  const step = steps.find(({ id }) => id === "legal-atlas-scope");
+  const condition = v.parse(v.string(), step?.if);
+  for (const runRequired of ["true", "false"]) {
+    expect(
+      evaluate(condition, {
+        values: {
+          "steps.completed-depth.outputs.run_required": runRequired,
+          "steps.api-test-deps.outcome": "success",
+          "steps.changed-files.outputs.legal_atlas_image_required": "true",
+        },
+      }),
+      runRequired,
+    ).toBe(runRequired === "true");
+  }
+  const script = v.parse(v.string(), step?.run);
+  const fixture = mkdtempSync(nodePath.join(tmpdir(), "atlas-scope-deadline-"));
+  try {
+    const bin = nodePath.join(fixture, "bin");
+    mkdirSync(bin);
+    writeFileSync(
+      nodePath.join(fixture, "api-test-changed-paths"),
+      "apps/api/src/handlers/health.ts\0",
+    );
+    const timeout = nodePath.join(bin, "timeout");
+    writeFileSync(
+      timeout,
+      `#!/bin/sh
+[ "$1" = --kill-after=10s ] && [ "$2" = 120s ] || exit 64
+shift 2
+if [ "$TIMEOUT_FIXTURE" != 0 ]; then exit "$TIMEOUT_FIXTURE"; fi
+exec "$@"
+`,
+    );
+    const bun = nodePath.join(bin, "bun");
+    writeFileSync(
+      bun,
+      `#!/bin/sh
+[ "$1" = scripts/legal-atlas-image-scope.ts ] || exit 65
+printf 'false\\n'
+`,
+    );
+    chmodSync(timeout, 0o700);
+    chmodSync(bun, 0o700);
+    const output = nodePath.join(fixture, "output");
+    const run = (program: string, outcome: string) => {
+      writeFileSync(output, "");
+      const result = Bun.spawnSync(["/bin/bash", "-euc", program], {
+        cwd: fixture,
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env["PATH"] ?? ""}`,
+          RUNNER_TEMP: fixture,
+          GITHUB_OUTPUT: output,
+          TIMEOUT_FIXTURE: outcome,
+        },
+      });
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      return readFileSync(output, "utf-8");
+    };
+    for (const outcome of ["0", "124", "137"]) {
+      expect(run(script, outcome), outcome).toBe(
+        `api_source_required=${outcome !== "0"}\n`,
+      );
+    }
+    const unbounded = script.replace("timeout --kill-after=10s 120s ", "");
+    expect(unbounded).not.toBe(script);
+    expect(run(unbounded, "124")).toBe("api_source_required=false\n");
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+test("Legal Atlas API source scope vetoes otherwise eligible execution", () => {
+  const { outputs } = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  for (const apiSourceRequired of ["true", "false", ""]) {
+    const planned = v.parse(
+      v.boolean(),
+      evaluate(outputs["legal_atlas_image_required"] ?? "", {
+        values: {
+          "steps.changed-files.outputs.legal_atlas_image_required": "true",
+          "steps.legal-atlas-scope.outputs.api_source_required":
+            apiSourceRequired,
+        },
+      }),
+    );
+    const expected = apiSourceRequired !== "false";
+    expect(planned, apiSourceRequired).toBe(expected);
+    expect(
+      evaluate(jobIf(ciJobs["legal-atlas-image"]), {
+        values: {
+          "inputs.pr_depth_only": false,
+          "github.event_name": EVENT.mergeGroup,
+          "needs.ci-plan.outputs.run_required": "true",
+          "needs.ci-plan.outputs.trusted": "true",
+          "needs.ci-plan.outputs.legal_atlas_image_required": String(planned),
+          "needs.ci-plan.outputs.suite_depth": SUITE_DEPTH.full,
+        },
+      }),
+      apiSourceRequired,
+    ).toBe(expected);
+  }
+});
 
 test("browser planning, scheduling and result gates agree across events and depths", () => {
   const cases = (

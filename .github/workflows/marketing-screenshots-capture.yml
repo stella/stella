@@ -1,0 +1,81 @@
+name: Capture marketing screenshots
+
+defaults:
+  run:
+    shell: bash
+
+# Regenerates every marketing screenshot baseline for one branch, in a run on
+# that branch's own ref (marketing-screenshots-update.yml dispatches it). The
+# branch's app and spec code run here, so the run holds no release secret,
+# saves no cache outside its branch scope, and refuses to run on main. Its
+# only output is the `marketing-screenshots` artifact, which
+# marketing-screenshots-publish.yml validates as data before pushing.
+#
+# A pull request from a fork cannot be pushed to: run this on a
+# same-repository branch carrying the change and commit the artifact's PNGs
+# to the fork's pull request.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  # Two regenerations of one branch would race on the same push target.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  capture:
+    # Never on main: main's baselines change through a pull request, and a
+    # run on main would execute branch code in the default-branch scope.
+    if: >-
+      startsWith(github.ref, 'refs/heads/')
+      && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+          submodules: true
+
+      - name: Capture marketing screenshots
+        uses: ./.github/actions/marketing-capture
+        with:
+          mode: update
+          dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Upload regenerated baselines
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: marketing-screenshots
+          path: apps/landing/public/media/products/*.png
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Note the artifact for fork pull requests
+        run: |
+          {
+            echo "### Regenerated PNGs: \`marketing-screenshots\`"
+            echo
+            echo "The publish run pushes them to a branch of this repository. A pull request from a fork downloads this artifact and commits the PNGs itself."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: marketing-screenshots-update-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /tmp/api.log
+            /tmp/web.log
+            apps/web/test-results/
+          if-no-files-found: ignore
+          retention-days: 7

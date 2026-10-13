@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { readFileSync } from "node:fs";
 
+import { spawnPostgresTestProcess } from "./postgres-lock-diagnostics";
 import {
   assertSharedTableDdlIsolated,
   EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
@@ -33,6 +34,7 @@ process.exitCode = await runGatedTests({
   preload: "./src/tests/setup-postgres.ts",
   selection: process.env["CI_POSTGRES_TEST_SELECTION"],
   exclusiveTestPaths: EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
+  spawnTestProcess: spawnPostgresTestProcess,
   validateTestPlan: async (apiRoot, files) => {
     await assertSharedTableDdlIsolated(apiRoot, files);
     const shard = parseApiTestShard(shardValue);
