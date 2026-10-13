@@ -90,6 +90,7 @@
     "./review-author-avatar": "./src/review/review-author-avatar.tsx",
     "./review-comment-card": "./src/review/review-comment-card.tsx",
     "./review-decision-actions": "./src/review/review-decision-actions.tsx",
+    "./review-word-diff": "./src/review/review-word-diff.ts",
     "./review-diff-text": "./src/review/review-diff-text.tsx",
     "./review-out-of-date-notice": "./src/review/review-out-of-date-notice.tsx",
     "./review-severity-dot": "./src/review/review-severity-dot.tsx",

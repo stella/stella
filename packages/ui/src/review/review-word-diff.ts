@@ -9,10 +9,23 @@ export type WordDiffOp = { type: "equal" | "insert" | "delete"; token: string };
 const tokenize = (text: string): string[] =>
   text.split(/(\s+)/u).filter((token) => token.length > 0);
 
+const MAX_LCS_CELLS = 250_000;
+
 /** Diffs `before` (standard wording) against `after` (target wording). */
 export const diffWords = (before: string, after: string): WordDiffOp[] => {
   const a = tokenize(before);
   const b = tokenize(after);
+  if (before === after) {
+    return a.map((token) => ({ token, type: "equal" }));
+  }
+  // Large inputs remain a truthful replacement without a quadratic allocation
+  // or computation on the rendering thread.
+  if ((a.length + 1) * (b.length + 1) > MAX_LCS_CELLS) {
+    return [
+      ...a.map((token) => ({ token, type: "delete" as const })),
+      ...b.map((token) => ({ token, type: "insert" as const })),
+    ];
+  }
   return backtrack(a, b, lcsLengthTable(a, b));
 };
 

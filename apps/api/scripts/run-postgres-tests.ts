@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { readFileSync } from "node:fs";
+import path from "node:path";
 
+import { loadTestEnv } from "./load-test-env";
 import { spawnPostgresTestProcess } from "./postgres-lock-diagnostics";
 import {
   assertSharedTableDdlIsolated,
@@ -27,6 +29,8 @@ if (measured === undefined || measured.isErr()) {
   );
 }
 const durations = measured?.unwrapOr({}) ?? {};
+
+loadTestEnv(path.resolve(import.meta.dir, "../.env.test"));
 
 process.exitCode = await runGatedTests({
   requiredEnv: ["DATABASE_URL"],

@@ -535,6 +535,16 @@
       "createInvoice": "Loo arve",
       "dueDate": "Tähtaeg",
       "editInvoice": "Muuda arvet",
+      "export": {
+        "accounting": "Raamatupidamise import",
+        "eBilling": "E-arveldus",
+        "eso9": "ESO9 impordileht (XLSX)",
+        "exporting": "Eksporti valmistatakse ette…",
+        "isdoc": "ISDOC e-arve (ABRA Gen jt)",
+        "spreadsheets": "Tabelid",
+        "xlsx": "Arved (XLSX)",
+        "xlsxLines": "Arveread (XLSX)"
+      },
       "finalize": "Lõpeta",
       "invoiceDate": "Arve kuupäev",
       "invoiceDetail": "Arve detailid",
