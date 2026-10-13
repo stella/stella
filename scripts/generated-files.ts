@@ -56,6 +56,21 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    id: "bun-toolchain",
+    outputKind: "committed",
+    outputs: ["scripts/bun-toolchain.gen.json"],
+    inputs: [
+      "package.json",
+      "scripts/generate-bun-toolchain.ts",
+      "scripts/generated-artifacts.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+    ],
+    write: ["bun", "scripts/generate-bun-toolchain.ts", "--write"],
+    check: ["bun", "scripts/generate-bun-toolchain.ts"],
+    autofix: true,
+    after: [],
+  },
+  {
     id: "status-tables",
     outputKind: "committed",
     outputs: ["apps/api/src/lib/db/status-tables.gen.ts"],
