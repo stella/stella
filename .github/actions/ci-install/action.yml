@@ -52,6 +52,8 @@ runs:
         STORE_KEY: ${{ steps.identity.outputs.key }}
         START_MS: ${{ steps.identity.outputs.start }}
       run: |
+        # Later host and container steps must resolve the same global-store links.
+        echo "BUN_INSTALL_CACHE_DIR=$BUN_INSTALL_CACHE_DIR" >> "$GITHUB_ENV"
         if [[ "$CACHE_HIT" == true ]]; then
           bun scripts/ci-install-store.ts verify "$STORE_KEY"
         fi
