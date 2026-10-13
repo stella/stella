@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
 import type { FrameLocator, Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
-import type * as v from "valibot";
+import * as v from "valibot";
 
 import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "@stll/api-contract/mcp-app-sandbox-policy";
 
-import type { READ_PROVISION_HISTORY_PROJECTION } from "../src/lib/chat/legislation-result-projections";
+import { READ_PROVISION_HISTORY_PROJECTION } from "../src/lib/chat/legislation-result-projections";
 
 type ProvisionHistory = v.InferInput<typeof READ_PROVISION_HISTORY_PROJECTION>;
 type FixtureHost = {
@@ -32,6 +32,8 @@ const VERSION_2020 = {
   windowDispositionBasis: null,
   status: "found",
   text: "A person may exercise this right. This wording applies in the first version.",
+  nextTextCursor:
+    "ptw1.76.zCTeT_qJpfxvyScxpKvf2ZUsXuPizOybc5k-5yBoLh8.Xgc8NU2ep8EOvsz4dzqjr1nEdiNeB-5ipD7bUVzu5bE",
   truncated: true,
 } satisfies ProvisionHistory["items"][number];
 const VERSION_2021 = {
@@ -47,6 +49,7 @@ const VERSION_2021 = {
   windowDispositionBasis: null,
   status: "found",
   text: "A person may exercise this updated right in the later version.",
+  nextTextCursor: null,
   truncated: false,
 } satisfies ProvisionHistory["items"][number];
 const VERSION_WITHHELD = {
@@ -75,6 +78,7 @@ const VERSION_WITHDRAWN = {
   windowDisposition: "withdrawn",
   windowDispositionBasis: "publisher-unlisted",
   text: "The publisher withdrew this published wording.",
+  nextTextCursor: null,
   truncated: false,
 } satisfies ProvisionHistory["items"][number];
 const VERSION_NEVER_IN_FORCE = {
@@ -88,20 +92,21 @@ const VERSION_NEVER_IN_FORCE = {
   windowDisposition: "never-in-force",
   windowDispositionBasis: "publisher-flag",
   text: "The publisher marks this wording as never having entered into force.",
+  nextTextCursor: null,
   truncated: false,
 } satisfies ProvisionHistory["items"][number];
-const FIRST_PAGE = {
+const FIRST_PAGE = v.parse(READ_PROVISION_HISTORY_PROJECTION, {
   eli: INPUT.eli,
   anchor: INPUT.anchor,
   items: [VERSION_2021, VERSION_2020],
   nextCursor: "timeline-page-2",
-} satisfies ProvisionHistory;
-const SECOND_PAGE = {
+} satisfies ProvisionHistory);
+const SECOND_PAGE = v.parse(READ_PROVISION_HISTORY_PROJECTION, {
   eli: INPUT.eli,
   anchor: INPUT.anchor,
   items: [VERSION_WITHHELD],
   nextCursor: null,
-} satisfies ProvisionHistory;
+} satisfies ProvisionHistory);
 
 const mountTimeline = async ({
   page,
@@ -118,6 +123,10 @@ const mountTimeline = async ({
   initialHistory?: ProvisionHistory;
   browserErrors: string[];
 }): Promise<FrameLocator> => {
+  const parsedHistory = v.parse(
+    READ_PROVISION_HISTORY_PROJECTION,
+    initialHistory,
+  );
   page.on("pageerror", (error) => browserErrors.push(error.message));
   page.on("console", (message) => {
     if (message.type() === "error") {
@@ -279,7 +288,7 @@ const mountTimeline = async ({
       initialTheme: theme,
       hostLocale: locale,
       input: INPUT,
-      firstPage: initialHistory,
+      firstPage: parsedHistory,
       secondPage: SECOND_PAGE,
     },
   );
