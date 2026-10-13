@@ -69,11 +69,9 @@ const chapters = [
   },
 ] as const satisfies readonly StoryChapter[];
 
-// Data chapter: cycles through three different national decisions (CZE,
-// POL, SVK), each captured with the structured reader (structure/AI margin
-// populated) — see apps/web/e2e/marketing/product-screenshots.spec.ts,
-// "story-public-data-1/2/3". Keep in sync with that spec's decisionText
-// values.
+// Data chapter: cycles through three Czech decisions with cited chat,
+// AI notes and reader marks. The shared scenario fixture drives
+// apps/web/e2e/marketing/product-screenshots.spec.ts.
 const storyShots = [
   {
     darkSrc: "/media/products/story-public-data-1-dark.png",

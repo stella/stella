@@ -115,6 +115,7 @@ import type {
   ExportReviewMetadata,
 } from "./seed-export-review";
 import { buildMarketingAgentThread } from "./seed-marketing-agent-thread";
+import { seedMarketingCaseLaw } from "./seed-marketing-case-law";
 import { writeSeedRecentFiles } from "./seed-recents";
 import { seedTemplates } from "./seed-templates";
 import {
@@ -6139,6 +6140,8 @@ export async function seed(organizationId?: string, userId?: string) {
       ],
     });
   }
+
+  await seedMarketingCaseLaw({ db, organizationId: ORG_ID, userId: USER_ID });
 
   console.log("\nDone. Dev data seeded successfully.");
   return { organizationId: ORG_ID, userId: USER_ID, workspaceIds: allWsIds };
