@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 const API_SRC = path.resolve(import.meta.dir, "..");
 
 // The tool-output surfaces: MCP tools and the chat adapter that runs them.
@@ -27,7 +29,7 @@ const sourceFiles = (dir: string): string[] =>
         !entry.name.endsWith(".test.ts"),
     )
     .map((entry) =>
-      path.relative(API_SRC, path.join(entry.parentPath, entry.name)),
+      repoRelativePath(API_SRC, path.join(entry.parentPath, entry.name)),
     );
 
 describe("tool output constructors", () => {
