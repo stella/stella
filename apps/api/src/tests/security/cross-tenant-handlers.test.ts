@@ -7,10 +7,13 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
+import type { Context } from "elysia";
+import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_SKILL_DOCUMENT } from "@stll/api-contract";
+import { desktopTimeEntryBatchResponseSchema } from "@stll/api-contract/desktop-time-entries";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import {
   SIGNAL_KIND,
@@ -47,6 +50,7 @@ import {
   searchHistoryEntries,
   sellerProfiles,
   signals,
+  timeEntries,
   timeTimers,
   vatRates,
   WORK_OBLIGATION_STATUS,
@@ -207,6 +211,7 @@ type TestHandlerContext = {
   route: string;
   safeDb: ReturnType<typeof createSafeDb<TestDatabaseTransaction>>;
   scopedDb: ReturnType<typeof createScopedDb<TestDatabaseTransaction>>;
+  set: Context["set"];
   session: { activeOrganizationId: SafeId<"organization"> };
   user: { id: SafeId<"user"> };
   workspaceId: SafeId<"workspace">;
@@ -2743,6 +2748,7 @@ const createWorkspaceContext = ({
     route: "/security/cross-tenant-handler",
     safeDb,
     scopedDb,
+    set: { headers: {} },
     session: { activeOrganizationId: organizationId },
     user: { id: userId },
     workspaceId,
@@ -2802,6 +2808,47 @@ const desktopAccountForContext = (context: TestHandlerContext) => {
   };
 };
 
+const enableDesktopActivityForContext = ({ session }: TestHandlerContext) => {
+  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
+    ...env.API_FEATURE_ACCESS_GRANTS,
+    "activity-timeline": [
+      ...(env.API_FEATURE_ACCESS_GRANTS["activity-timeline"] ?? []),
+      {
+        type: "member",
+        organizationId: session.activeOrganizationId,
+        email: "desktop-review-a@example.test",
+      },
+    ],
+  });
+};
+
+const expectCreatedDesktopTimeEntry = async (
+  entryId: unknown,
+  context: TestHandlerContext,
+) => {
+  const rows = await testDb
+    .select({
+      id: timeEntries.id,
+      workspaceId: timeEntries.workspaceId,
+      organizationId: timeEntries.organizationId,
+      userId: timeEntries.userId,
+    })
+    .from(timeEntries)
+    .where(
+      and(
+        eq(timeEntries.workspaceId, context.workspaceId),
+        eq(timeEntries.organizationId, context.session.activeOrganizationId),
+        eq(timeEntries.userId, context.user.id),
+      ),
+    );
+  expect(rows).toContainEqual({
+    id: entryId,
+    workspaceId: context.workspaceId,
+    organizationId: context.session.activeOrganizationId,
+    userId: context.user.id,
+  });
+};
+
 function desktopTimeEntryIsolationCases(): IsolationCase[] {
   return [
     {
@@ -2855,16 +2902,7 @@ function desktopTimeEntryIsolationCases(): IsolationCase[] {
     {
       name: "desktop time entry batch",
       runAAgainstB: async ({ ids: testIds, workspaceA }) => {
-        testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
-          ...env.API_FEATURE_ACCESS_GRANTS,
-          "activity-timeline": [
-            {
-              type: "member",
-              organizationId: testIds.orgA,
-              email: "desktop-review-a@example.test",
-            },
-          ],
-        });
+        enableDesktopActivityForContext(workspaceA);
         return await runHandler(
           createDesktopTimeEntryBatchEndpoint(
             desktopAccountForContext(workspaceA),
@@ -2878,8 +2916,8 @@ function desktopTimeEntryIsolationCases(): IsolationCase[] {
           },
         );
       },
-      runBPositive: async ({ ids: testIds, workspaceB }) =>
-        await runHandler(
+      runBPositive: async ({ ids: testIds, workspaceB }) => {
+        const result = await runHandler(
           createDesktopTimeEntryBatchEndpoint(
             desktopAccountForContext(workspaceB),
           ),
@@ -2890,7 +2928,14 @@ function desktopTimeEntryIsolationCases(): IsolationCase[] {
               entries: [{ matterId: testIds.wsB1, ...desktopTimeEntryBody }],
             },
           },
-        ),
+        );
+        const response = v.parse(desktopTimeEntryBatchResponseSchema, result);
+        expect(response.entries).toHaveLength(1);
+        for (const entry of response.entries) {
+          await expectCreatedDesktopTimeEntry(entry.id, workspaceB);
+        }
+        return result;
+      },
       expectDenied: expectStatus(404),
       expectPositive: (result, { ids: testIds }) =>
         expect(recordField(result, "entries")).toEqual([
@@ -2924,28 +2969,25 @@ function desktopTimeEntryIsolationCases(): IsolationCase[] {
     {
       name: "desktop time entry create",
       runAAgainstB: async ({ ids: testIds, workspaceA }) => {
-        testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
-          ...env.API_FEATURE_ACCESS_GRANTS,
-          "activity-timeline": [
-            {
-              type: "member",
-              organizationId: testIds.orgA,
-              email: "desktop-review-a@example.test",
-            },
-          ],
-        });
+        enableDesktopActivityForContext(workspaceA);
         return await runHandler(
           createDesktopTimeEntryEndpoint(desktopAccountForContext(workspaceA)),
           workspaceA,
           { params: { workspaceId: testIds.wsB1 }, body: desktopTimeEntryBody },
         );
       },
-      runBPositive: async ({ ids: testIds, workspaceB }) =>
-        await runHandler(
+      runBPositive: async ({ ids: testIds, workspaceB }) => {
+        const result = await runHandler(
           createDesktopTimeEntryEndpoint(desktopAccountForContext(workspaceB)),
           workspaceB,
           { params: { workspaceId: testIds.wsB1 }, body: desktopTimeEntryBody },
-        ),
+        );
+        await expectCreatedDesktopTimeEntry(
+          recordField(result, "id"),
+          workspaceB,
+        );
+        return result;
+      },
       expectDenied: expectStatus(404),
       expectPositive: (result) =>
         expect(result).toEqual({ id: expect.any(String) }),
