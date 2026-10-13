@@ -7,6 +7,7 @@ import {
   PROFESSIONAL_USE_STATEMENT_VERSION,
 } from "@stll/api-contract/professional-use";
 
+import marketingCaseLaw from "../../../api/scripts/__fixtures__/marketing-case-law.json" with { type: "json" };
 import { setFixedBrowserTime } from "../helpers/clock";
 import {
   getMarketingAgentThreadId,
@@ -80,34 +81,17 @@ const captures = [
     prepare: "open-table",
     readyText: "Export Review - Project Atlas Data Room",
   },
-  // Three different national decisions (CZE, POL, SVK), each rendering with
-  // the structured reader (structure/AI margin populated) so the chapter can
-  // cross-fade between jurisdictions. Keep in sync with
-  // HomeProductStory.astro's data chapter.
-  {
-    name: "story-public-data-1",
-    prepare: "open-decision",
-    country: "CZE",
-    decisionText: "IV.ÚS 1394/24",
-    readyText: "Case Law",
-    clip: { x: 0, y: 0, width: 1440, height: 760 },
-  },
-  {
-    name: "story-public-data-2",
-    prepare: "open-decision",
-    country: "POL",
-    decisionText: "IV C 1273/16",
-    readyText: "Case Law",
-    clip: { x: 0, y: 0, width: 1440, height: 760 },
-  },
-  {
-    name: "story-public-data-3",
-    prepare: "open-decision",
-    country: "SVK",
-    decisionText: "25Cbr/166/2024",
-    readyText: "Case Law",
-    clip: { x: 0, y: 0, width: 1440, height: 760 },
-  },
+  ...marketingCaseLaw.map(
+    (scenario, index) =>
+      ({
+        name: `story-public-data-${String(index + 1)}`,
+        prepare: "open-decision",
+        country: scenario.country,
+        decisionText: scenario.caseNumber,
+        readyText: "Case Law",
+        clip: { x: 0, y: 0, width: 1440, height: 760 },
+      }) as const,
+  ),
   {
     name: "editor",
     path: SUPPLIER_AGREEMENT_EDITOR_PATH,
@@ -136,8 +120,9 @@ const captures = [
     name: "public-data",
     prepare: "open-decision",
     country: "CZE",
-    decisionText: "IV.ÚS 1394/24",
+    decisionText: "27 Cdo 59/2022",
     readyText: "Case Law",
+    clip: { x: 0, y: 0, width: 1440, height: 760 },
   },
   { name: "templates", path: "/knowledge/templates", readyText: "Templates" },
   {
@@ -214,8 +199,11 @@ test("capture landing product screenshots", async ({
       if (requestedCapture && capture.name !== requestedCapture) {
         continue;
       }
-      if ("country" in capture && !isPublicCaseLawCountry(capture.country)) {
-        continue;
+      if ("country" in capture) {
+        expect(
+          isPublicCaseLawCountry(capture.country),
+          `${capture.name}: the filmed jurisdiction is publicly supported`,
+        ).toBe(true);
       }
       // A decision capture scopes the search to its country so only a
       // matching decision is deterministically on screen.
@@ -315,29 +303,118 @@ test("capture landing product screenshots", async ({
         await inspectorDock
           .getByRole("button", { exact: true, name: "Show pane" })
           .click();
-        // The inspector chat loads its saved-skill prompts independently of
-        // the decision and analysis queries. The empty state paints the logo
-        // first, so waiting only for the reader can record a blank inspector.
-        // Scope readiness to the visible inspector: other route shells may
-        // remain mounted and must not satisfy the capture gate.
+        const scenario = marketingCaseLaw.find(
+          (item) => item.caseNumber === capture.decisionText,
+        );
+        if (scenario === undefined) {
+          throw new Error(`${capture.name}: no rich reader scenario`);
+        }
         const inspectorChat = page.locator(
           '[data-slot="inspector-chat-panel"]:visible',
         );
         await expect(inspectorChat).toHaveCount(1, {
           timeout: COLD_COMPILE_TIMEOUT,
         });
-        // This component only exists when at least one prompt card rendered.
+        const messages = inspectorChat.locator("[data-chat-message-id]");
+        await expect(messages).toHaveCount(4, {
+          timeout: COLD_COMPILE_TIMEOUT,
+        });
+        for (const [index, text] of [
+          scenario.question,
+          scenario.answer,
+          scenario.followUp,
+          scenario.followUpAnswer,
+        ].entries()) {
+          await expect(messages.nth(index)).toContainText(text);
+        }
         await expect(
           inspectorChat.locator('[data-slot="prompt-suggestions"]'),
-        ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT });
-        // The first margin annotation may sit below a long headnote (e.g. a
-        // Constitutional Court "legal sentence" summary); scroll it into view
-        // so the capture shows the structure margin, not just headnote text.
-        await page.locator("aside button").first().scrollIntoViewIfNeeded();
-        // `scrollIntoViewIfNeeded` positions the nested reader correctly, but
-        // can also move the document viewport. Restore only the outer viewport
-        // so the breadcrumb remains in frame without undoing the reader scroll.
+        ).toHaveCount(0);
+        const citations = inspectorChat.locator("[data-decision-citation]");
+        await expect(citations).toHaveCount(2);
+        await expect(citations.first()).toContainText(scenario.caseNumber);
+        await inspectorChat
+          .locator('[data-slot="scroll-area-viewport"]')
+          .evaluate((element) => {
+            element.scrollTop = 0;
+          });
+
+        // Align the earlier marked paragraph with the reader's top, rather
+        // than centering it against the taller browser viewport.
+        const clip = "clip" in capture ? capture.clip : DEFAULT_CLIP;
+        const readerAnchors = page.locator(
+          `article [data-anchor="${scenario.highlightAnchor}"], article [data-anchor="${scenario.underlineAnchor}"]`,
+        );
+        await expect(readerAnchors).toHaveCount(2);
+        await readerAnchors.evaluateAll((elements, clipTop) => {
+          const first = elements.at(0);
+          const scroller = first?.closest(".reader-scroll");
+          if (scroller === undefined || scroller === null) {
+            throw new Error("The case-law reader has no scroll container");
+          }
+          const anchorTop = Math.min(
+            ...elements.map((element) => element.getBoundingClientRect().top),
+          );
+          const frameTop = Math.max(
+            clipTop,
+            scroller.getBoundingClientRect().top,
+          );
+          scroller.scrollTop += anchorTop - frameTop - 16;
+        }, clip.y);
         await page.evaluate(() => window.scrollTo({ left: 0, top: 0 }));
+        const requiredElements = [
+          page.locator("aside").getByText(scenario.aiNote, { exact: true }),
+          page.locator("aside").getByText(scenario.comment, { exact: true }),
+        ];
+        for (const [anchor, variant, paragraphNumber] of [
+          [
+            scenario.highlightAnchor,
+            "text-foreground",
+            scenario.highlightNumber,
+          ],
+          [scenario.underlineAnchor, "underline", scenario.underlineNumber],
+        ] as const) {
+          requiredElements.push(
+            page
+              .locator(
+                `article [data-anchor="${anchor}"] mark[data-annotation-id].${variant}:not(.decoration-dotted)`,
+              )
+              .first(),
+          );
+          // A published paragraph number stays visible independently of
+          // how long the paragraph below it is.
+          const number = page.locator(
+            `article [data-anchor="${anchor}"] > span.reader-chrome.absolute`,
+          );
+          await expect(number).toHaveCount(1);
+          await expect(number).toHaveText(String(paragraphNumber));
+          requiredElements.push(number);
+        }
+        requiredElements.push(
+          ...(await messages.all()),
+          ...(await citations.all()),
+        );
+        for (const element of requiredElements) {
+          await expect(element).toBeVisible();
+          await expect(element).toBeInViewport({ ratio: 1 });
+          await expect
+            .poll(
+              async () => {
+                const box = await element.boundingBox();
+                return (
+                  box !== null &&
+                  box.x >= clip.x &&
+                  box.y >= clip.y &&
+                  box.x + box.width <= clip.x + clip.width &&
+                  box.y + box.height <= clip.y + clip.height
+                );
+              },
+              {
+                message: `${capture.name}: required reader content fits the screenshot clip`,
+              },
+            )
+            .toBe(true);
+        }
       }
       if ("prepare" in capture && capture.prepare === "open-files") {
         await page.getByRole("tab", { name: "Files" }).click();
