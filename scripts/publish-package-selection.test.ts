@@ -28,6 +28,52 @@ const workspaceDependencies = async (
   );
 };
 
+const dependencyGroups = [
+  "dependencies",
+  "optionalDependencies",
+  "peerDependencies",
+] as const;
+
+const packageManifest = async (packageName: string): Promise<unknown> =>
+  await Bun.file(
+    new URL(`../packages/${packageName}/package.json`, import.meta.url),
+  ).json();
+
+const manifestName = (manifest: unknown): string | null =>
+  typeof manifest === "object" &&
+  manifest !== null &&
+  "name" in manifest &&
+  typeof manifest.name === "string"
+    ? manifest.name
+    : null;
+
+const isPrivateManifest = (manifest: unknown): boolean =>
+  typeof manifest === "object" &&
+  manifest !== null &&
+  "private" in manifest &&
+  manifest.private === true;
+
+const isPublishedManifest = (manifest: unknown): boolean =>
+  typeof manifest === "object" &&
+  manifest !== null &&
+  "publishConfig" in manifest &&
+  typeof manifest.publishConfig === "object" &&
+  manifest.publishConfig !== null &&
+  !isPrivateManifest(manifest);
+
+const manifestDependencies = (manifest: unknown): readonly string[] => {
+  if (typeof manifest !== "object" || manifest === null) {
+    return [];
+  }
+  return dependencyGroups.flatMap((group) => {
+    const dependencies: unknown = Reflect.get(manifest, group);
+    if (typeof dependencies !== "object" || dependencies === null) {
+      return [];
+    }
+    return Object.keys(dependencies);
+  });
+};
+
 describe("publish package selection", () => {
   test("publishes exactly the packages the release policy gates", () => {
     const order: readonly string[] = ALL_PACKAGE_ORDER;
@@ -48,6 +94,36 @@ describe("publish package selection", () => {
       }
     }
     expect(misordered).toEqual([]);
+  });
+
+  test("published packages do not depend on private workspace packages", async () => {
+    const packageNames = [
+      ...new Bun.Glob("*/package.json").scanSync({
+        cwd: new URL("../packages", import.meta.url).pathname,
+      }),
+    ].map((file) => file.slice(0, -"/package.json".length));
+    const manifests = await Promise.all(packageNames.map(packageManifest));
+    const privateWorkspaceNames = new Set(
+      manifests.flatMap((manifest) => {
+        const name = manifestName(manifest);
+        return name !== null && isPrivateManifest(manifest) ? [name] : [];
+      }),
+    );
+    const violations = manifests.flatMap((manifest) => {
+      if (!isPublishedManifest(manifest)) {
+        return [];
+      }
+      const name = manifestName(manifest);
+      if (name === null) {
+        return ["published package has no name"];
+      }
+      return manifestDependencies(manifest).flatMap((dependency) =>
+        privateWorkspaceNames.has(dependency)
+          ? [`${name} depends on private workspace package ${dependency}`]
+          : [],
+      );
+    });
+    expect(violations).toEqual([]);
   });
 
   test("publish workflow delegates push selection to the tested resolver", async () => {

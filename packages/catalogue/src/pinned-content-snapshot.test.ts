@@ -3,6 +3,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { validatePinnedSource } from "../scripts/check-pinned-content";
 import {
   buildPinnedSnapshot,
@@ -14,7 +16,6 @@ import {
   projectFrontmatter,
   readPinnedSnapshot,
   recordingPinnedSource,
-  repositoryPath,
   serializePinnedSnapshot,
 } from "../scripts/pinned-content-facts";
 import type { PinnedSource } from "../scripts/pinned-content-facts";
@@ -447,7 +448,7 @@ describe("refresh facts reduction", () => {
 
 test("parser input paths use forward slashes on every platform", () => {
   expect(
-    repositoryPath(
+    repoRelativePath(
       "C:\\repo",
       "C:\\repo\\packages\\skills\\src\\a.ts",
       path.win32,
