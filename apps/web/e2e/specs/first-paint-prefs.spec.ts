@@ -2,6 +2,8 @@ import type { Page } from "@playwright/test";
 
 import {
   parsePresentationPrefs,
+  defaultPresentationPrefs,
+  serializePresentationPrefs,
   PRESENTATION_PREFS_COOKIE,
 } from "../../src/lib/presentation-prefs";
 import { E2E_API_ORIGIN } from "../helpers/api";
@@ -179,5 +181,40 @@ test("profile language and collapsed sidebar render in the first HTML response",
     }
   } finally {
     await profileSession.cleanup();
+  }
+});
+
+test("a fresh visitor renders the preferred browser catalogue and explicit preference overrides it", async ({
+  browser,
+  baseURL,
+}) => {
+  const webBaseURL = baseURL ?? "http://localhost:3000";
+  const context = await browser.newContext({
+    baseURL: webBaseURL,
+    extraHTTPHeaders: { "Accept-Language": "en;q=0.2,cs-CZ;q=0.9" },
+  });
+  try {
+    const response = await context.request.get("/law/cases?country=cze");
+    expect(response.ok()).toBe(true);
+    expect(await response.text()).toMatch(/<html[^>]*\blang="cs"/u);
+    await context.addCookies([
+      {
+        name: PRESENTATION_PREFS_COOKIE,
+        value: encodeURIComponent(
+          serializePresentationPrefs({
+            ...defaultPresentationPrefs,
+            visitorLocale: "de",
+          }),
+        ),
+        url: webBaseURL,
+      },
+    ]);
+    const explicitResponse = await context.request.get(
+      "/law/cases?country=cze",
+    );
+    expect(explicitResponse.ok()).toBe(true);
+    expect(await explicitResponse.text()).toMatch(/<html[^>]*\blang="de"/u);
+  } finally {
+    await context.close();
   }
 });

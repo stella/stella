@@ -20,5 +20,6 @@ export {
   displayLanguageName,
   isUiLocale,
   resolveUiLocale,
+  resolveAcceptLanguage,
   toLanguageCode,
 } from "./helpers.js";

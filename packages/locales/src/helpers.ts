@@ -47,6 +47,33 @@ export const resolveUiLocale = (value: string): UiLocale | null => {
   return null;
 };
 
+/** Selects a shipped catalogue using browser quality weights; exclusions never win. */
+export const resolveAcceptLanguage = (header: string | undefined): UiLocale => {
+  let selected: UiLocale = "en";
+  let highestQuality = 0;
+  for (const part of (header ?? "").split(",")) {
+    const [range, ...parameters] = part.trim().split(";");
+    if (!range || !/^[a-z]{1,8}(?:-[a-z0-9]{1,8})*$/iu.test(range)) {
+      continue;
+    }
+    const weight = parameters.at(0)?.trim();
+    if (
+      parameters.length > 1 ||
+      (weight !== undefined &&
+        !/^q=(?:0(?:\.\d{0,3})?|1(?:\.0{0,3})?)$/iu.test(weight))
+    ) {
+      continue;
+    }
+    const quality = weight === undefined ? 1 : Number(weight.slice(2));
+    const locale = resolveUiLocale(range.toLowerCase());
+    if (locale !== null && quality > highestQuality) {
+      selected = locale;
+      highestQuality = quality;
+    }
+  }
+  return selected;
+};
+
 /**
  * Canonicalizes a (possibly regional) language tag to its ISO 639-1 base
  * code if that base code is a known living language, else `null`. Used to

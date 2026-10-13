@@ -11,8 +11,32 @@ import { getBrowserPresentationPrefs } from "@/lib/presentation-prefs-provider";
 import { readPresentationPrefs } from "@/lib/presentation-prefs-server";
 import { loadAuthContext } from "@/routes/-auth-context";
 
-// Resolve once per document on the server. Client navigations retain the
-// already loaded catalogue and preferences instead of resetting from a cache.
+const documentUsers = new WeakMap<QueryClient, string | null>();
+
+export const initializeDocumentUser = (
+  queryClient: QueryClient,
+  userId: string | null,
+) => {
+  documentUsers.set(queryClient, userId);
+};
+
+export const loadClientDocumentPresentation = async (
+  queryClient: QueryClient,
+) => {
+  const prefs = getBrowserPresentationPrefs();
+  const { user } = await loadAuthContext(queryClient);
+  const userId = user?.id ?? null;
+  if (
+    !documentUsers.has(queryClient) ||
+    documentUsers.get(queryClient) !== userId
+  ) {
+    const locale = resolveUiLocale(user?.locale ?? prefs.visitorLocale) ?? "en";
+    const messages = await loadLocaleMessages(locale);
+    initializeRenderedLocale({ locale, messages, prefs });
+    initializeDocumentUser(queryClient, userId);
+  }
+  return prefs;
+};
 export const loadDocumentPresentation = createIsomorphicFn()
   .server(async (queryClient: QueryClient) => {
     const [prefs, auth] = await Promise.all([
@@ -25,7 +49,4 @@ export const loadDocumentPresentation = createIsomorphicFn()
     initializeRenderedLocale({ locale, messages, prefs });
     return prefs;
   })
-  .client(
-    async (_queryClient: QueryClient) =>
-      await Promise.resolve(getBrowserPresentationPrefs()),
-  );
+  .client(loadClientDocumentPresentation);

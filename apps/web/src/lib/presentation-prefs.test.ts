@@ -5,6 +5,7 @@ import { UI_LOCALES } from "@stll/locales";
 import {
   defaultPresentationPrefs,
   parsePresentationPrefs,
+  parseVisitorPresentationPrefs,
   presentationPrefsSchema,
   serializePresentationPrefs,
 } from "./presentation-prefs";
@@ -103,4 +104,26 @@ describe("server-readable presentation preferences", () => {
       parsePresentationPrefs('{"region":"<script>","calendar":"bogus"}'),
     ).toEqual(defaultPresentationPrefs);
   });
+});
+
+test("cookie-free visitors negotiate language and explicit preferences win over every header", () => {
+  expect(
+    parseVisitorPresentationPrefs(undefined, "en;q=0.2,cs-CZ;q=0.9")
+      .visitorLocale,
+  ).toBe("cs");
+  for (const visitorLocale of UI_LOCALES) {
+    const cookie = serializePresentationPrefs({
+      ...defaultPresentationPrefs,
+      visitorLocale,
+    });
+    expect(
+      parseVisitorPresentationPrefs(cookie, "cs,en;q=0.8").visitorLocale,
+    ).toBe(visitorLocale);
+  }
+  expect(
+    parseVisitorPresentationPrefs(undefined, undefined).visitorLocale,
+  ).toBe("en");
+  expect(parseVisitorPresentationPrefs("bad-cookie", "cs").visitorLocale).toBe(
+    "en",
+  );
 });

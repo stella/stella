@@ -9,6 +9,7 @@ import {
   DefaultNotFoundComponent,
   DefaultPendingComponent,
 } from "@/components/route-components";
+import { initializeDocumentUser } from "@/i18n/document-presentation";
 import {
   initializeRenderedLocale,
   loadLocaleMessages,
@@ -31,6 +32,7 @@ import { createAppQueryClient } from "@/lib/react-query";
 import { isAuthFlowPathname } from "@/lib/redirect";
 import { installSessionCacheGuard } from "@/lib/session-cache-guard";
 import { installTableStoreReconcile } from "@/lib/workspaces/table-store";
+import { loadAuthContext } from "@/routes/-auth-context";
 import { routeTree } from "@/routeTree.gen";
 
 enableMapSet();
@@ -82,9 +84,11 @@ export function getRouter() {
     routeTree,
     dehydrate: async () => ({
       locale: useI18nStore.getState().loadedLang,
+      localeUserId: (await loadAuthContext(queryClient)).user?.id ?? null,
       prefs: await readPresentationPrefs(),
     }),
     hydrate: async (presentation) => {
+      initializeDocumentUser(queryClient, presentation.localeUserId);
       const messages = await loadLocaleMessages(presentation.locale);
       initializeBrowserPresentationPrefs(presentation.prefs);
       initializeRenderedLocale({

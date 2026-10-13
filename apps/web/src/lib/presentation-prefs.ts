@@ -5,7 +5,7 @@ import {
   READER_TEXT_SCALES,
   READER_TEXT_SCALE_DEFAULT,
 } from "@stll/decision-reader/reader-text-scale.logic";
-import { UI_LOCALES } from "@stll/locales";
+import { resolveAcceptLanguage, UI_LOCALES } from "@stll/locales";
 import {
   INSPECTOR_PANE_DEFAULT_WIDTH,
   INSPECTOR_PANE_MAX_WIDTH,
@@ -114,6 +114,16 @@ export const parsePresentationPrefs = (
   return parsed.success
     ? { ...defaultPresentationPrefs, ...parsed.output }
     : { ...defaultPresentationPrefs };
+};
+
+export const parseVisitorPresentationPrefs = (
+  raw: string | undefined,
+  acceptLanguage: string | undefined,
+): PresentationPrefs => {
+  const prefs = parsePresentationPrefs(raw);
+  return raw === undefined
+    ? { ...prefs, visitorLocale: resolveAcceptLanguage(acceptLanguage) }
+    : prefs;
 };
 
 export const serializePresentationPrefs = ({
