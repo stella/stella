@@ -293,7 +293,7 @@ const GENERATOR_DECLARATIONS = [
     ],
     write: ["bun", "--cwd=apps/api", "run", "build:mcp-apps"],
     prepare: ["bun", "scripts/prepare-mcp-apps.ts"],
-    check: null,
+    check: ["bun", "scripts/check-mcp-generated-tracking.ts"],
     checkedBy: "MCP App bundle and shared assets guard",
     autofix: true,
     after: [],

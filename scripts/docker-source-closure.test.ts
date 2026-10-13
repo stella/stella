@@ -672,6 +672,7 @@ describe("Docker source closure", () => {
       const files = {
         "scripts/prepare-mcp-apps.ts": "export {};",
         "apps/api/package.json": JSON.stringify({
+          name: "@stll/api",
           scripts: { "build:mcp-apps": "bun scripts/build-mcp-apps.ts" },
         }),
         "apps/api/scripts/build-mcp-apps.ts": "export {};",
@@ -1331,7 +1332,7 @@ describe("Docker source closure", () => {
     put(
       helper,
       actual.replace(
-        '"./generated-files"',
+        '"./generated-file-inventory"',
         '"../../../scripts/generated-files"',
       ),
     );

@@ -11,6 +11,7 @@ import { assertProperty } from "@stll/property-testing";
 
 import { testProcessBudgets } from "../apps/api/scripts/test-process-supervisor";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
+import { GENERATORS } from "./generated-files";
 import { customLintTestCommand } from "./run-custom-lint-tests";
 import { jobCachePolicy } from "./workflow-cache-policy.ts";
 import { flattenWorkflowSteps, isWorkflowBarrier } from "./workflow-steps";
@@ -417,15 +418,56 @@ const withoutPreparedGeneration = (step: Step): Step => {
   ) {
     return {
       ...step,
-      run: `bun apps/api/scripts/generate-capability-runtime.ts\n${run.slice(regeneration.length)}`,
+      run: [
+        "bun --cwd=apps/api run generate:capability-runtime",
+        run.slice(regeneration.length),
+      ].join("\n"),
     };
   }
   return run?.startsWith(prepared)
     ? {
         ...step,
-        run: `bun apps/api/scripts/generate-capability-runtime.ts\n${run.slice(prepared.length)}`,
+        run: [
+          "bun --cwd=apps/api run generate:capability-runtime",
+          run.slice(prepared.length),
+        ].join("\n"),
       }
     : step;
+};
+const withoutMcpTrackingGuardChange = (step: Step): Step => {
+  if (step.name !== "MCP App bundle and shared assets guard") {
+    return step;
+  }
+  const { run } = v.parse(v.looseObject({ run: v.string() }), step);
+  const previousRun = [
+    "(cd apps/api && bun run build:mcp-apps)",
+    'git diff --exit-code -- "apps/api/src/mcp/apps/*/generated/app.html.txt" "apps/api/src/mcp/apps/shared/generated/*"',
+  ].join("\n");
+  if (run === previousRun) {
+    return step;
+  }
+  const generator = GENERATORS.find(({ id }) => id === "mcp-app-bundles");
+  expect(generator?.outputKind).toBe("derived");
+  expect(generator?.write).toEqual([
+    "bun",
+    "--cwd=apps/api",
+    "run",
+    "build:mcp-apps",
+  ]);
+  expect(generator?.prepare).toEqual(["bun", "scripts/prepare-mcp-apps.ts"]);
+  expect(generator?.outputs).toEqual([
+    "apps/api/src/mcp/apps/*/generated/app.html.txt",
+    "apps/api/src/mcp/apps/shared/generated/*",
+  ]);
+  expect(generator?.check).toEqual([
+    "bun",
+    "scripts/check-mcp-generated-tracking.ts",
+  ]);
+  expect(run).toBe("bun scripts/check-mcp-generated-tracking.ts");
+  return {
+    ...step,
+    run: previousRun,
+  };
 };
 const PACKAGE_SCOPE = "needs.ci-plan.outputs.package_checks_required == 'true'";
 const DOCUMENTATION_CHECKS = new Set([
@@ -518,6 +560,7 @@ const ownedSteps = (steps: readonly Step[]) =>
     .map(documentationScope)
     .map(withoutContinuation)
     .map(withoutPreparedGeneration)
+    .map(withoutMcpTrackingGuardChange)
     .map(withoutTestTimeout)
     .map(withoutApiProjectParityTrigger)
     .map(withoutStepId)

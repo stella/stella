@@ -20,11 +20,43 @@ import {
   MCP_READER_UI_APP_DIRECTORIES,
 } from "./lib/mcp-reader-ui-guard";
 
+const checking = Bun.argv.includes("--check");
+const generatedAssets = new Map<string, string>();
+const writeGenerated = async (file: string, contents: string) => {
+  if (checking) {
+    generatedAssets.set(file, contents);
+    return;
+  }
+  await Bun.write(file, contents);
+};
+const generatedAssetPlugin = {
+  name: "generated-mcp-assets",
+  setup(builder: Bun.PluginBuilder) {
+    builder.onResolve(
+      { filter: /generated\//u },
+      ({ path: specifier, resolveDir }) => {
+        const file = path.resolve(resolveDir, specifier);
+        if (generatedAssets.has(file)) {
+          return { path: file };
+        }
+        return undefined;
+      },
+    );
+    builder.onLoad({ filter: /shared\/generated\//u }, ({ path: file }) => {
+      const contents = generatedAssets.get(file);
+      if (contents === undefined) {
+        return undefined;
+      }
+      return { contents, loader: file.endsWith(".css") ? "css" : "json" };
+    });
+  },
+};
+
 const generatedRoot = path.resolve(
   import.meta.dirname,
   "../src/mcp/apps/shared/generated",
 );
-await Bun.write(
+await writeGenerated(
   path.join(generatedRoot, "messages.json"),
   `${JSON.stringify(MCP_APP_MESSAGES, null, 2)}\n`,
 );
@@ -34,7 +66,7 @@ const schemas = Object.fromEntries(
     defineChatProjectionMcpToolOutput(schema).outputSchema,
   ]),
 );
-await Bun.write(
+await writeGenerated(
   path.join(generatedRoot, "schemas.json"),
   `${JSON.stringify(schemas, null, 2)}\n`,
 );
@@ -71,7 +103,7 @@ for (const file of [
   }
   readerMessages.set(locale, messages);
 }
-await Bun.write(
+await writeGenerated(
   path.join(generatedRoot, "reader-messages.json"),
   `${JSON.stringify(Object.fromEntries([...readerMessages].map(([locale, messages]) => [locale, Object.fromEntries(messages)])), null, 2)}\n`,
 );
@@ -124,7 +156,7 @@ for (const fontPath of paths) {
       `url("data:font/woff2;base64,${Buffer.from(bytes).toString("base64")}")`,
   );
 }
-await Bun.write(
+await writeGenerated(
   path.join(generatedRoot, "style.css"),
   `${fonts}\n${styles.css}`,
 );
@@ -153,7 +185,7 @@ const buildMcpApp = async ({
     root: repoRoot,
     compile: true,
     metafile: true,
-    plugins: [inlineReaderFonts],
+    plugins: [generatedAssetPlugin, inlineReaderFonts],
     entrypoints: [path.join(appRoot, input)],
     minify: true,
     define: { "process.env.NODE_ENV": '"production"' },
@@ -230,7 +262,7 @@ const buildMcpApp = async ({
     );
   }
 
-  await Bun.write(
+  await writeGenerated(
     path.join(appRoot, "generated", `${input}.txt`),
     canonicalHtml,
   );
@@ -251,12 +283,18 @@ const readerGraphs = Object.fromEntries(
       panic(`MCP reader graph was not built for ${directory}`),
   ]),
 );
-await Bun.write(
+await writeGenerated(
   path.join(generatedRoot, "reader-inputs.json"),
   `${JSON.stringify(readerGraphs, null, 2)}\n`,
 );
 
-await Bun.write(
+await writeGenerated(
   path.join(generatedRoot, "style.css.d.ts"),
   "declare const styles: string;\nexport default styles;\n",
 );
+
+if (checking) {
+  console.log(
+    `Checked ${MCP_APPS.length} MCP app bundles without writing outputs`,
+  );
+}

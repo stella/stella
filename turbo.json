@@ -104,6 +104,8 @@
         "!$TURBO_ROOT$/apps/api/src/mcp/generated/capability-dispatch.ts",
         "!$TURBO_ROOT$/apps/api/src/mcp/generated/capability-catalog.ts",
         "!$TURBO_ROOT$/apps/api/src/mcp/generated/capability-feature-bindings.ts",
+        "!$TURBO_ROOT$/apps/api/src/mcp/generated/**",
+        "!$TURBO_ROOT$/apps/api/src/mcp/apps/*/generated/**",
         "!src/generated/api-routes.gen.ts",
         "!src/routeTree.gen.ts"
       ],

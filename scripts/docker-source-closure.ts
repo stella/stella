@@ -1743,6 +1743,7 @@ export const checkDockerSource = (
               const missingInputs = [...context].filter(([file]) => {
                 const relative = file.replace(/^\//u, "");
                 return (
+                  generator.prepare !== undefined &&
                   generator.inputs.some((input) =>
                     matchesGeneratedGlob(input, relative),
                   ) &&

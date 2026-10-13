@@ -1069,3 +1069,19 @@ test("cloud setup has one generator owner and checks shared policy output", () =
     ),
   ).toBe(false);
 });
+
+test("Knip explicitly traverses the ignored capability runtime tree", () => {
+  const config = v.parse(
+    v.object({
+      workspaces: v.object({
+        "apps/api": v.object({ entry: v.array(v.string()) }),
+      }),
+    }),
+    Bun.JSONC.parse(
+      readFileSync(new URL("../knip.json", import.meta.url), "utf-8"),
+    ),
+  );
+  expect(config.workspaces["apps/api"].entry).toContain(
+    "src/mcp/generated/**/*.ts!",
+  );
+});

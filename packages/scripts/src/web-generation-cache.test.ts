@@ -177,13 +177,17 @@ test("web sources generate once across compiler tasks and restore until source i
     ) {
       panic("Missing API runtime producer outputs");
     }
+    // Turbo declares output globs; the producer writes files beneath them.
+    const apiOutputs = apiTask["outputs"].map((output) =>
+      output.replaceAll("**", "fixture.ts").replaceAll("*", "fixture"),
+    );
     write(
       "apps/api/scripts/generate-capability-runtime.ts",
       [
         "import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';",
         "import path from 'node:path';",
         "process.chdir(path.resolve(import.meta.dir, '..'));",
-        `for (const output of ${JSON.stringify(apiTask["outputs"])}) { mkdirSync(path.dirname(output), { recursive: true }); writeFileSync(output, 'generated API bytes'); }`,
+        `for (const output of ${JSON.stringify(apiOutputs)}) { mkdirSync(path.dirname(output), { recursive: true }); writeFileSync(output, 'generated API bytes'); }`,
         "appendFileSync('../../runs.log', 'api-runtime\\n');",
       ].join("\n"),
     );

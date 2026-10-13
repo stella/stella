@@ -110,7 +110,7 @@ test("fresh CLI export includes preparation metadata imports", () => {
     missingPreparationImports(
       EXPORTED_PATHS.filter((file) => file !== "packages/scripts"),
     ),
-  ).toContain("packages/scripts/src/generated-files.ts");
+  ).toContain("packages/scripts/src/generated-file-inventory.ts");
 });
 
 const Sha = v.pipe(v.string(), v.regex(/^[0-9a-f]{40}$/u));

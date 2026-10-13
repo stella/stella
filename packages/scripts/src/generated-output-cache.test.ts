@@ -83,7 +83,9 @@ test("failed generation never becomes a cache hit", async () => {
     const successfulIdentity = (await readdir(cacheRoot)).find((entry) =>
       /^[a-f0-9]{64}$/u.test(entry),
     );
-    expect(successfulIdentity).toBeDefined();
+    if (successfulIdentity === undefined) {
+      panic("Missing successful cache identity");
+    }
     await writeFile(path.join(root, "input.txt"), "failed");
     const run = async () =>
       withGeneratedOutputCache({

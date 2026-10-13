@@ -47,9 +47,8 @@
         "src/server.ts!",
         // Browser entrypoints bundled by build-mcp-apps.ts.
         "src/mcp/apps/*/app.{ts,tsx}",
-        // Ignored runtime aggregates import every committed capability shard.
-        "src/mcp/generated/capability-dispatch.ts!",
-        "src/mcp/generated/capability-catalog.ts!",
+        // Generated entrypoints and shards remain visible after hydration.
+        "src/mcp/generated/**/*.ts!",
         // Read by scripts/generate-web-api-types.ts through the compiler.
         "src/eden-contract.ts",
         // Callable receiver boundary for authenticated mail transport hosts.

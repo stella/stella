@@ -2,7 +2,6 @@ import { panic } from "better-result";
 import path from "node:path";
 
 import { readRuntimeMode } from "../packages/runtime-mode/src/index";
-import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import { withGeneratedOutputCache } from "../packages/scripts/src/generated-output-cache";
 import { hasPreparedGeneratedSources } from "../packages/scripts/src/prepared-generated-sources";
 import { GENERATORS } from "./generated-files";
@@ -26,12 +25,12 @@ if (!hasPreparedGeneratedSources(root)) {
     ],
     outputs: owner.outputs,
     generate: async () => {
-      const generated = Bun.spawnSync([...owner.write], {
+      const generated = Bun.spawn([...owner.write], {
         cwd: root,
         stdout: "inherit",
         stderr: "inherit",
       });
-      if (childExitStatus(generated) !== 0) {
+      if ((await generated.exited) !== 0) {
         panic("MCP app generation failed");
       }
     },
