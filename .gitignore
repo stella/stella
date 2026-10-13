@@ -92,3 +92,6 @@ packages/cli/src/generated/tool-annotations.ts
 
 # Derived TanStack route tree, restored by the web generation task.
 apps/web/src/routeTree.gen.ts
+
+# MCP app HTML is built for source consumers and embedded API binaries.
+packages/mcp-apps/src/*/generated/app.html.txt
