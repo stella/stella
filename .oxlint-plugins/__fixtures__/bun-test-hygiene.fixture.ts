@@ -146,8 +146,14 @@ describe("second block", () => {
 // oxlint-disable-next-line bun-test-hygiene/no-identical-title
 describe("first block", noop);
 
-// --- no-unmanaged-database-client ---
+// --- no-forced-database-drop ---
+declare const fixtureDatabaseName: string;
+// oxlint-disable-next-line bun-test-hygiene/no-forced-database-drop -- Fixture exercises rejected database teardown.
+const _forcedDrop = `DROP DATABASE "${fixtureDatabaseName}" WITH (FORCE)`;
+// expect-clean: bun-test-hygiene/no-forced-database-drop
+const _normalDrop = "DROP DATABASE IF EXISTS fixture";
 
+// --- no-unmanaged-database-client ---
 declare const databaseUrl: string;
 declare const openedClient: SQL;
 
