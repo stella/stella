@@ -12,7 +12,7 @@ test("MCP app bundles build in production without server configuration", async (
   ].toSorted();
   const readOutputs = async () =>
     await Promise.all(
-      outputs.map((file) => Bun.file(`${apiRoot}/${file}`).text()),
+      outputs.map(async (file) => Bun.file(`${apiRoot}/${file}`).text()),
     );
   const before = await readOutputs();
   const child = Bun.spawn(
