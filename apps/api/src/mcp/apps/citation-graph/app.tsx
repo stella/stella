@@ -197,9 +197,10 @@ const CitationList = ({
       {edges.map((edge) => {
         const targetId = edge.direction === "cites" ? edge.target : edge.source;
         const node = byId.get(targetId) ?? panic("Citation list has no node");
+        const decision = edge.decision;
         const url =
-          node.type === "resolved"
-            ? (parseLegalCitationHttpUrl(node.decision.appUrl)?.href ?? null)
+          decision !== null
+            ? (parseLegalCitationHttpUrl(decision.appUrl)?.href ?? null)
             : null;
         return (
           <article
@@ -208,21 +209,19 @@ const CitationList = ({
             className="space-y-2 rounded-lg border p-3"
           >
             <div className="flex min-w-0 flex-wrap items-center gap-2">
-              {node.type === "resolved" ? (
+              {decision !== null ? (
                 <Button
                   variant="link"
                   className="max-w-full min-w-0 shrink"
                   disabled={busy || (!bridge.supportsTools() && url === null)}
                   onClick={containedEventHandler(() =>
                     bridge.detached(
-                      controller.open(node.id, url),
+                      controller.open(decision.decisionId, url),
                       "open citation decision",
                     ),
                   )}
                 >
-                  <bdi className="min-w-0 truncate">
-                    {node.decision.caseNumber}
-                  </bdi>
+                  <bdi className="min-w-0 truncate">{decision.caseNumber}</bdi>
                 </Button>
               ) : (
                 <p className="min-w-0 font-medium break-words">
@@ -257,16 +256,18 @@ const CitationList = ({
                 </blockquote>
               )
             )}
-            {node.type === "resolved" && (
+            {decision !== null && (
               <Button
                 variant="outline"
                 disabled={
-                  busy || !bridge.supportsTools() || !canExpand(model, node.id)
+                  busy ||
+                  !bridge.supportsTools() ||
+                  !canExpand(model, decision.decisionId)
                 }
-                aria-label={`${t("expandNode")}: ${node.decision.caseNumber}`}
+                aria-label={`${t("expandNode")}: ${decision.caseNumber}`}
                 onClick={containedEventHandler(() =>
                   bridge.detached(
-                    controller.read(node.id),
+                    controller.read(decision.decisionId),
                     "expand citation node",
                   ),
                 )}

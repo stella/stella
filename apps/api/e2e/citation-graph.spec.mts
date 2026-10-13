@@ -112,6 +112,8 @@ type HostOptions = {
   locale?: string;
   navigation?: "tools" | "links";
   theme?: "light" | "dark";
+  direction?: CitationPage["direction"];
+  expansionPages?: CitationPage[];
 };
 const mountGraph = async ({
   page,
@@ -119,6 +121,8 @@ const mountGraph = async ({
   locale = "en-GB",
   navigation = "tools",
   theme = "light",
+  direction = "cites",
+  expansionPages = [expandedPage],
 }: HostOptions): Promise<FrameLocator> => {
   const bundle = await readFile(
     new URL(
@@ -149,9 +153,8 @@ const mountGraph = async ({
       subjectId,
       initialPage,
       hostName,
-      decisionIds,
       pagedResult,
-      expandedResult,
+      expandedResults,
     }) => {
       const iframe = document.querySelector<HTMLIFrameElement>("iframe");
       if (iframe === null) {
@@ -267,15 +270,18 @@ const mountGraph = async ({
               reject(id, `Unexpected tool request: ${name}`);
               return;
             }
-            const direction = args["direction"];
+            const requestedDirection = args["direction"];
             const cursor = args["cursor"];
             const decisionId = args["decision_id"];
+            const expansion = expandedResults.find(
+              (entry) => entry.decisionId === decisionId,
+            );
             let result: CitationPage = initialPage;
             if (decisionId === subjectId && cursor === "fixture-cites-more") {
               result = pagedResult;
-            } else if (decisionId === decisionIds[0]) {
-              result = expandedResult;
-            } else if (direction === "cited_by") {
+            } else if (expansion !== undefined) {
+              result = expansion;
+            } else if (requestedDirection === "cited_by") {
               result = {
                 ...initialPage,
                 direction: "cited_by",
@@ -316,10 +322,9 @@ const mountGraph = async ({
       navigationMode: navigation,
       hostTheme: theme,
       subjectId: SUBJECT_ID,
-      initialPage: firstPage,
-      decisionIds: DECISION_IDS,
+      initialPage: { ...firstPage, direction },
       pagedResult: morePage,
-      expandedResult: expandedPage,
+      expandedResults: expansionPages,
     },
   );
   expect(mounted).toBe("mounted");
@@ -416,6 +421,74 @@ test("citation graph pagination deduplicates an edge and expansion loads the sel
       },
     });
 });
+
+for (const direction of ["cites", "cited_by"] as const) {
+  for (const depth of [1, 2]) {
+    test(`citation graph opens the subject reached through ${depth} ${direction} expansions`, async ({
+      page,
+    }) => {
+      const subjectCitation = citation(10, "neutral", SUBJECT_ID);
+      const expansionPages = [
+        {
+          decisionId: DECISION_IDS[0],
+          direction,
+          nextCursor: null,
+          citations: [
+            depth === 1
+              ? subjectCitation
+              : citation(9, "positive", DECISION_IDS[1]),
+          ],
+        },
+        {
+          decisionId: DECISION_IDS[1],
+          direction,
+          nextCursor: null,
+          citations: [subjectCitation],
+        },
+      ] satisfies CitationPage[];
+      const app = await mountGraph({ page, direction, expansionPages });
+      await app.getByRole("button", { name: "List", exact: true }).click();
+      await app
+        .locator('article[data-citation-id="fixture-citation-0"]')
+        .getByRole("button", { name: /Expand citations/u })
+        .click();
+      if (depth === 2) {
+        await app
+          .locator('article[data-citation-id="fixture-citation-9"]')
+          .getByRole("button", { name: /Expand citations/u })
+          .click();
+      }
+      const subjectRow = app.locator(
+        'article[data-citation-id="fixture-citation-10"]',
+      );
+      const open = subjectRow.getByRole("button", {
+        name: caseNumber(10),
+        exact: true,
+      });
+      await expect(open).toBeEnabled();
+      await expect(
+        subjectRow.getByRole("button", { name: /Expand citations/u }),
+      ).toBeDisabled();
+      await open.click();
+      await expect
+        .poll(async () => (await history(page)).calls)
+        .toContainEqual({
+          name: "open_case_law_decision",
+          arguments: { decision_id: SUBJECT_ID },
+        });
+      await expect
+        .poll(async () => (await history(page)).links)
+        .toEqual([decisionUrl(SUBJECT_ID)]);
+      await app.getByRole("button", { name: "Graph", exact: true }).click();
+      await expect(app.locator(`[data-node-id="${SUBJECT_ID}"]`)).toHaveText(
+        EN_MESSAGES.subjectDecision,
+      );
+      await expect(
+        app.locator(`g:has([data-node-id="${SUBJECT_ID}"]) > circle`),
+      ).toHaveAttribute("stroke-width", "3");
+    });
+  }
+}
 
 test("citation graph opens decisions through host tools and openLink fallback", async ({
   page,
