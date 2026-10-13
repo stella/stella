@@ -14,6 +14,7 @@ import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { timestamptz } from "@/api/db/columns";
+import { FOLIO_COLLAB_TRANSITION_IDENTITIES } from "@/api/lib/db/folio-collab-transition-identities";
 import { READER_ANSWER_TRANSITION_IDENTITIES } from "@/api/lib/db/reader-answer-transition-identities";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import {
@@ -77,6 +78,7 @@ test("state-column ownership covers every scoped runtime transition", () => {
     [
       ...Object.values(SANCTIONS_MONITORING_TRANSITION_IDENTITIES),
       ...Object.values(READER_ANSWER_TRANSITION_IDENTITIES),
+      ...Object.values(FOLIO_COLLAB_TRANSITION_IDENTITIES),
     ].toSorted(order),
   );
 });

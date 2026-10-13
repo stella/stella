@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Doc, XmlElement, XmlText, encodeStateAsUpdate } from "yjs";
 
 import { FOLIO_YJS_ATTR_SCHEMA_VERSION } from "@stll/folio-core/server";
-import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
@@ -113,7 +112,10 @@ const scopedTransaction: QueryApi = {
     scopedDeleteCalls += 1;
     return createScopedQueryBuilder();
   },
-  execute: async () => [],
+  execute: async () => {
+    const row = resolveQueuedRows(scopedRows.shift()).at(0);
+    return [{ count: row === undefined ? 0 : 1 }];
+  },
   insert: () =>
     createScopedQueryBuilder({ captureValues: true, readsRows: false }),
   select: () => createScopedQueryBuilder(),
@@ -368,7 +370,7 @@ describe("folio collaboration room snapshot generation", () => {
       FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
     );
 
-    const loaded = await loadFolioCollabSnapshot(authorized.value);
+    const loaded = (await loadFolioCollabSnapshot(authorized.value)).unwrap();
     expect(loaded).toEqual({
       generation: 3,
       loadOutcome: "loaded",
@@ -432,14 +434,15 @@ describe("folio collaboration room snapshot generation", () => {
       );
 
       if (replacementOutcome === "conflict") {
-        expect(
-          await rejectionOf(loadFolioCollabSnapshot(authorized.value)),
-        ).toMatchObject({
+        const result = await loadFolioCollabSnapshot(authorized.value);
+        expect(Result.isError(result) && result.error).toMatchObject({
           status: 503,
           code: "folio_collab_snapshot_recovery_conflict",
         });
       } else {
-        expect(await loadFolioCollabSnapshot(authorized.value)).toEqual(
+        expect(
+          (await loadFolioCollabSnapshot(authorized.value)).unwrap(),
+        ).toEqual(
           replacementOutcome === "loaded"
             ? {
                 generation: 3,
@@ -452,7 +455,7 @@ describe("folio collaboration room snapshot generation", () => {
                 resetGeneration: 3,
                 loadOutcome: "rematerialize-from-docx",
                 snapshotBase64: null,
-                snapshotRevision: 5,
+                snapshotRevision: 0,
               },
         );
       }
@@ -502,12 +505,12 @@ describe("folio collaboration room snapshot generation", () => {
       FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
     );
 
-    expect(await loadFolioCollabSnapshot(authorized.value)).toEqual({
+    expect((await loadFolioCollabSnapshot(authorized.value)).unwrap()).toEqual({
       generation: 4,
       resetGeneration: 3,
       loadOutcome: "rematerialize-from-docx",
       snapshotBase64: null,
-      snapshotRevision: 4,
+      snapshotRevision: 0,
     });
     expect(
       scopedInsertedRows.find((row) => row["resourceId"] === roomId),

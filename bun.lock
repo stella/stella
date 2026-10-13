@@ -201,6 +201,7 @@
         "pdfjs-dist": "^6.4.299",
         "postcss": "catalog:",
         "tailwindcss": "catalog:",
+        "yjs": "^13.6.33",
       },
     },
     "apps/collab": {

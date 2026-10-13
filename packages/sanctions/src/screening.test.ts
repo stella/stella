@@ -1,4 +1,4 @@
-import { Panic, panic } from "better-result";
+import { Panic } from "better-result";
 import { beforeAll, describe, expect, test } from "bun:test";
 import path from "node:path";
 
@@ -587,7 +587,7 @@ describe("warm screening", () => {
     legacy = buildLegacyScreeningIndex(commonLists);
   });
 
-  test("warm common-token screening stays within the legacy time budget", () => {
+  test("warm common-token screening stays within the legacy work budget", () => {
     const query = {
       name: "Registered Entity Holdings",
       entityType: "organisation",
@@ -596,43 +596,32 @@ describe("warm screening", () => {
     expect(screen(realistic, query, options).unwrap()).toEqual(
       legacyScreen(legacy, query, options).unwrap(),
     );
-    // Warm the matcher and its bounded caches before collecting timings.
-    for (let warmup = 0; warmup < 2; warmup += 1) {
-      screen(realistic, query, options).unwrap();
-      legacyScreen(legacy, query, options).unwrap();
-    }
-    const compactTimes: number[] = [];
-    const legacyTimes: number[] = [];
-    const runs = [
-      () => {
-        const started = performance.now();
-        screen(realistic, query, options).unwrap();
-        compactTimes.push(performance.now() - started);
-      },
-      () => {
-        const started = performance.now();
-        legacyScreen(legacy, query, options).unwrap();
-        legacyTimes.push(performance.now() - started);
-      },
-    ];
-    // Alternate the order, then compare medians to limit scheduling and GC noise.
-    for (let sample = 0; sample < 3; sample += 1) {
-      for (const run of sample % 2 === 0 ? runs : runs.toReversed()) {
-        run();
+    const minimumSuccessfulWork = (
+      canComplete: (maxWork: number) => boolean,
+    ) => {
+      let lower = 0;
+      let upper = MAX_SCREENING_WORK;
+      expect(canComplete(upper)).toBe(true);
+      while (upper - lower > 1) {
+        const middle = Math.floor((lower + upper) / 2);
+        if (canComplete(middle)) {
+          upper = middle;
+        } else {
+          lower = middle;
+        }
       }
-    }
-    const compactMs =
-      compactTimes.toSorted((a, b) => a - b).at(1) ??
-      panic("Missing warm-screen timing sample");
-    const legacyMs =
-      legacyTimes.toSorted((a, b) => a - b).at(1) ??
-      panic("Missing warm-screen timing sample");
-    expect(legacyMs).toBeGreaterThan(0);
-    console.info(
-      JSON.stringify({ compactMs, legacyMs, ratio: compactMs / legacyMs }),
+      return upper;
+    };
+    const compactWork = minimumSuccessfulWork((maxWork) =>
+      screen(realistic, query, { ...options, maxWork }).isOk(),
     );
-    // Allow runner noise while rejecting the several-fold compaction regression.
-    expect(compactMs / legacyMs).toBeLessThanOrEqual(1.25);
+    const legacyWork = minimumSuccessfulWork((maxWork) =>
+      legacyScreen(legacy, query, { ...options, maxWork }).isOk(),
+    );
+    const ratio = compactWork / legacyWork;
+    console.info(JSON.stringify({ compactWork, legacyWork, ratio }));
+    // Compare deterministic work-budget units, independent of runner load.
+    expect(ratio).toBeLessThanOrEqual(1.25);
   });
 
   test("warm screening work stays bounded for repeated common query tokens", () => {

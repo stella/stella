@@ -7,6 +7,7 @@ import {
   test,
 } from "bun:test";
 import { and, eq, inArray, lt, sql } from "drizzle-orm";
+import { Doc, XmlElement, XmlText, encodeStateAsUpdate } from "yjs";
 
 import { sha256Hex as legacyHex } from "@stll/sha256/node";
 
@@ -16,15 +17,20 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { FOLIO_COLLAB_SEED_CLAIM_STALE_MS } from "@/api/lib/folio-collab-room-contract";
 import {
   cleanupExpiredFolioCollabRoomTokens,
-  issueFolioCollabToken,
   folioCollabSeedClaimLeaseOnHeartbeat,
+  issueFolioCollabToken,
+  loadFolioCollabSnapshot,
 } from "@/api/lib/folio-collab-rooms";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
   releaseRlsFixture,
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
-import type { TestDatabase } from "@/api/tests/security/test-utils";
+import type {
+  TestDatabase,
+  TestDatabaseTransaction,
+} from "@/api/tests/security/test-utils";
 
 import {
   decideFolioCollabSeedClaim,
@@ -33,12 +39,15 @@ import {
 
 let testDb: TestDatabase;
 let ids: TestIds;
+let scopedQuery: Awaited<ReturnType<typeof getRlsFixture>>["scopedQuery"];
 const roomIds: SafeId<"folioCollabRoom">[] = [];
+const UNSUPPORTED_FOLIO_ATTR_SCHEMA_VERSION = 11;
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
+  scopedQuery = fixture.scopedQuery;
 });
 
 afterEach(async () => {
@@ -61,14 +70,22 @@ const insertRoom = async ({
   seedClaimedBy,
   seedState,
   seededAt,
+  yjsSnapshotRevision,
+  yjsSnapshotSizeBytes,
+  yjsSnapshotUpdatedAt,
 }: {
   generation: number;
   seedClaimedAt?: Date;
   seedClaimedBy?: SafeId<"user">;
   seedState: "claimed" | "empty" | "seeded";
   seededAt?: Date;
+  yjsSnapshotRevision?: number;
+  yjsSnapshotSizeBytes?: number | null;
+  yjsSnapshotUpdatedAt?: Date | null;
 }) => {
   const roomId = createSafeId<"folioCollabRoom">();
+  const seeded = seedState === "seeded";
+  const snapshotAt = new Date();
   roomIds.push(roomId);
   await testDb.insert(folioCollabRooms).values({
     baseVersionId: ids.entityVersionA1,
@@ -79,14 +96,32 @@ const insertRoom = async ({
     generation,
     id: roomId,
     propertyId: ids.filePropertyA1,
-    seedClaimedAt,
+    seedClaimedAt: seedClaimedAt ?? (seeded ? snapshotAt : undefined),
     seedClaimedBy,
     seedState,
-    seededAt,
+    seededAt: seededAt ?? (seeded ? snapshotAt : undefined),
     workspaceId: ids.wsA1,
     yjsSnapshotFileId: createSafeId<"userFile">(),
+    yjsSnapshotRevision: yjsSnapshotRevision ?? (seeded ? 1 : 0),
+    yjsSnapshotSizeBytes: yjsSnapshotSizeBytes ?? (seeded ? 1 : null),
+    yjsSnapshotUpdatedAt: yjsSnapshotUpdatedAt ?? (seeded ? snapshotAt : null),
   });
   return roomId;
+};
+
+const unsupportedSnapshot = () => {
+  const doc = new Doc();
+  doc
+    .getMap("folio:document-metadata")
+    .set("attrSchemaVersion", UNSUPPORTED_FOLIO_ATTR_SCHEMA_VERSION);
+  const paragraph = new XmlElement("paragraph");
+  const text = new XmlText();
+  text.insert(0, "1", { footnoteRef: { id: 1 } });
+  paragraph.insert(0, [text]);
+  doc.getXmlFragment("prosemirror").insert(0, [paragraph]);
+  const update = encodeStateAsUpdate(doc);
+  doc.destroy();
+  return update;
 };
 
 const claimConcurrently = async ({
@@ -277,6 +312,117 @@ describe("folio collaboration room seed generation CAS", () => {
       expectedClaimedAt: touchedAt,
       userId: ids.userA1,
     });
+  });
+
+  test("refused seeded snapshots reset persisted state once", async () => {
+    const snapshotBytes = unsupportedSnapshot();
+    const roomId = await insertRoom({
+      generation: 4,
+      seedClaimedBy: ids.userA1,
+      seedState: "seeded",
+      yjsSnapshotRevision: 7,
+      yjsSnapshotSizeBytes: snapshotBytes.byteLength,
+    });
+    const beforeRows = await testDb
+      .select({
+        baseVersionId: folioCollabRooms.baseVersionId,
+        generation: folioCollabRooms.generation,
+        seedClaimedAt: folioCollabRooms.seedClaimedAt,
+        seedState: folioCollabRooms.seedState,
+        seededAt: folioCollabRooms.seededAt,
+        snapshotFileId: folioCollabRooms.yjsSnapshotFileId,
+        snapshotRevision: folioCollabRooms.yjsSnapshotRevision,
+        snapshotSizeBytes: folioCollabRooms.yjsSnapshotSizeBytes,
+        snapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
+      })
+      .from(folioCollabRooms)
+      .where(eq(folioCollabRooms.id, roomId))
+      .limit(1);
+    const before = beforeRows.at(0);
+    expect(before).toBeDefined();
+    if (!before) {
+      throw new Error("Expected the seeded room to be stored");
+    }
+    expect(before).toMatchObject({
+      generation: 4,
+      seedState: "seeded",
+      snapshotRevision: 7,
+      snapshotSizeBytes: snapshotBytes.byteLength,
+    });
+    expect(before.seedClaimedAt).toBeInstanceOf(Date);
+    expect(before.seededAt).toBeInstanceOf(Date);
+    expect(before.snapshotUpdatedAt).toBeInstanceOf(Date);
+
+    let readCount = 0;
+    const scopedDb = asTestRaw<
+      Parameters<typeof loadFolioCollabSnapshot>[0]["scopedDb"]
+    >(
+      async <T>(fn: (tx: TestDatabaseTransaction) => Promise<T>) =>
+        await scopedQuery([ids.wsA1], ids.orgA, fn, ids.userA1),
+    );
+    const loadTarget = {
+      organizationId: ids.orgA,
+      roomId,
+      scopedDb,
+      workspaceId: ids.wsA1,
+    };
+    const readObject = async (_key: string, _signal: AbortSignal) => {
+      readCount += 1;
+      return new Uint8Array(snapshotBytes).buffer;
+    };
+
+    expect(
+      (await loadFolioCollabSnapshot(loadTarget, readObject)).unwrap(),
+    ).toEqual({
+      generation: 5,
+      loadOutcome: "rematerialize-from-docx",
+      resetGeneration: 4,
+      snapshotBase64: null,
+      snapshotRevision: 0,
+    });
+
+    const resetRows = await testDb
+      .select({
+        baseVersionId: folioCollabRooms.baseVersionId,
+        generation: folioCollabRooms.generation,
+        seedClaimedAt: folioCollabRooms.seedClaimedAt,
+        seedClaimedBy: folioCollabRooms.seedClaimedBy,
+        seedState: folioCollabRooms.seedState,
+        seededAt: folioCollabRooms.seededAt,
+        sourceVersionId: folioCollabRooms.sourceVersionId,
+        snapshotFileId: folioCollabRooms.yjsSnapshotFileId,
+        snapshotRevision: folioCollabRooms.yjsSnapshotRevision,
+        snapshotSizeBytes: folioCollabRooms.yjsSnapshotSizeBytes,
+        snapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
+      })
+      .from(folioCollabRooms)
+      .where(eq(folioCollabRooms.id, roomId))
+      .limit(1);
+    const reset = resetRows.at(0);
+    expect(reset).toMatchObject({
+      baseVersionId: before.baseVersionId,
+      generation: 5,
+      seedClaimedAt: null,
+      seedClaimedBy: null,
+      seedState: "empty",
+      seededAt: null,
+      sourceVersionId: before.baseVersionId,
+      snapshotRevision: 0,
+      snapshotSizeBytes: null,
+      snapshotUpdatedAt: null,
+    });
+    expect(reset?.snapshotFileId).not.toBe(before.snapshotFileId);
+    expect(readCount).toBe(1);
+
+    expect(
+      (await loadFolioCollabSnapshot(loadTarget, readObject)).unwrap(),
+    ).toEqual({
+      generation: 5,
+      loadOutcome: "loaded",
+      snapshotBase64: null,
+      snapshotRevision: 0,
+    });
+    expect(readCount).toBe(1);
   });
 });
 

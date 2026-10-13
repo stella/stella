@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { Doc, XmlElement, XmlText, encodeStateAsUpdate } from "yjs";
 
@@ -6,7 +7,7 @@ import { FOLIO_YJS_ATTR_SCHEMA_VERSION } from "@stll/folio-core/server";
 import {
   FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME,
   loadPersistedFolioSnapshot,
-} from "@/api/lib/folio-collab-snapshot-loader";
+} from "@/api/lib/files/folio-collab-snapshot-loader";
 
 const snapshotAtVersion = (version: number, unattributedReference = false) => {
   const doc = new Doc();
@@ -26,6 +27,19 @@ const snapshotAtVersion = (version: number, unattributedReference = false) => {
 };
 
 describe("persisted Folio collaboration snapshot loading", () => {
+  test("invalid snapshot data returns a typed failure without resetting the room", async () => {
+    let recoveryCalls = 0;
+    const loaded = await loadPersistedFolioSnapshot({
+      snapshotBytes: new Uint8Array(),
+      onRefused: async () => {
+        recoveryCalls += 1;
+        return { status: "reset", generation: 4, resetGeneration: 3 };
+      },
+    });
+    expect(Result.isError(loaded) && loaded.error.code).toBe("invalid_update");
+    expect(recoveryCalls).toBe(0);
+  });
+
   test("refused old-schema state is discarded for DOCX rematerialization", async () => {
     const refusedSnapshot = snapshotAtVersion(11, true);
     const refusalCodes: string[] = [];
@@ -39,7 +53,7 @@ describe("persisted Folio collaboration snapshot loading", () => {
     });
 
     expect(refusalCodes).toEqual(["unsupported_version"]);
-    expect(loaded).toEqual({
+    expect(loaded.unwrap()).toEqual({
       outcome: FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME.rematerializeFromDocx,
       generation: 4,
       resetGeneration: 3,
@@ -52,7 +66,7 @@ describe("persisted Folio collaboration snapshot loading", () => {
       snapshotBytes: snapshotAtVersion(11, true),
       onRefused: async () => ({ status: "replaced" }),
     });
-    expect(loaded).toEqual({ outcome: "reload-current" });
+    expect(loaded.unwrap()).toEqual({ outcome: "reload-current" });
   });
 
   test("a current snapshot loads byte for byte", async () => {
@@ -65,7 +79,9 @@ describe("persisted Folio collaboration snapshot loading", () => {
       },
     });
 
-    expect(loaded.outcome).toBe(FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME.loaded);
-    expect(loaded.snapshotBytes).toEqual(snapshot);
+    expect(loaded.unwrap()).toEqual({
+      outcome: FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME.loaded,
+      snapshotBytes: snapshot,
+    });
   });
 });

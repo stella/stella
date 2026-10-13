@@ -1,6 +1,7 @@
 import {
   caseLawDecisionCitationStatsState,
   desktopEditSessions,
+  folioCollabRooms,
   legalReaderAnswerMessages,
   EU_COMPLETION_STATUSES,
   euCompletionApprovals,
@@ -15,6 +16,7 @@ import {
   FLOW_RUN_TRANSITIONS_V1,
   FLOW_RUN_STEP_TRANSITIONS_V1,
 } from "@/api/lib/db/flow-run-transition-spec";
+import { FOLIO_COLLAB_TRANSITION_IDENTITIES } from "@/api/lib/db/folio-collab-transition-identities";
 import { READER_ANSWER_TRANSITION_IDENTITIES } from "@/api/lib/db/reader-answer-transition-identities";
 import type {
   STATUS_COLUMNS,
@@ -74,6 +76,17 @@ const UNMANAGED_REASONS = {
   coordinatedTimers:
     "Timer state and its entry projection are coordinated by the timer transaction owner pending migration.",
 } as const;
+
+export const FOLIO_COLLAB_SEED_TRANSITIONS = defineScopedTransitions({
+  ...FOLIO_COLLAB_TRANSITION_IDENTITIES.FOLIO_COLLAB_SEED_TRANSITIONS,
+  table: folioCollabRooms,
+  edges: {
+    empty: ["empty", "claimed"],
+    claimed: ["empty", "claimed", "seeded"],
+    seeded: ["empty", "seeded"],
+  },
+  initial: ["empty"],
+});
 
 // Refresh atomically publishes a complete recount; later recounts remain exact.
 const DECISION_CITATION_STATS_TRANSITIONS = defineKeyedTransitions({
@@ -304,7 +317,7 @@ export const TRANSITIONS = {
   fileComparisonUploads: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   flowRuns: FLOW_RUN_TRANSITIONS_V1,
   flowRunSteps: FLOW_RUN_STEP_TRANSITIONS_V1,
-  folioCollabRooms: { unmanaged: UNMANAGED_REASONS.collaboration },
+  folioCollabRooms: FOLIO_COLLAB_SEED_TRANSITIONS,
   invitation: { unmanaged: UNMANAGED_REASONS.delegatedAuth },
   invoices: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   legalListClaims: { unmanaged: UNMANAGED_REASONS.userWorkflow },

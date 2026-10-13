@@ -238,7 +238,8 @@
     "openai": "6.49.0",
     "pdfjs-dist": "^6.4.299",
     "postcss": "catalog:",
-    "tailwindcss": "catalog:"
+    "tailwindcss": "catalog:",
+    "yjs": "^13.6.33"
   },
   "ciGateTestRunners": {
     "test:corpus": {

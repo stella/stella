@@ -269,7 +269,7 @@ const checkpointFolioCollabRoom = createSafeHandler(
       const result = await safeDb(operation);
       return result.unwrap();
     };
-    const [sourceDocx, persistedSnapshot] = await Promise.all([
+    const [sourceDocx, snapshotResult] = await Promise.all([
       readStoredFile({
         key: sourceKey,
         mimeType: DOCX_MIME_TYPE,
@@ -282,6 +282,10 @@ const checkpointFolioCollabRoom = createSafeHandler(
         workspaceId,
       }),
     ]);
+    if (Result.isError(snapshotResult)) {
+      return Result.err(snapshotResult.error);
+    }
+    const persistedSnapshot = snapshotResult.value;
     if (
       persistedSnapshot === null ||
       persistedSnapshot.loadOutcome === "rematerialize-from-docx" ||

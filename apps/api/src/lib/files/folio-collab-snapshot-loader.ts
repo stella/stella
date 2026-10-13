@@ -28,27 +28,27 @@ export const loadPersistedFolioSnapshot = async ({
 }: LoadPersistedFolioSnapshotOptions) => {
   const migrated = migrateFolioYjsSnapshot(snapshotBytes);
   if (Result.isOk(migrated)) {
-    return {
+    return Result.ok({
       outcome: FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME.loaded,
       snapshotBytes: migrated.value.update,
-    } as const;
+    } as const);
   }
 
   if (migrated.error.code !== "unsupported_version") {
-    throw migrated.error;
+    return Result.err(migrated.error);
   }
 
   const recovery = await onRefused(migrated.error);
   switch (recovery.status) {
     case "reset":
-      return {
+      return Result.ok({
         outcome: FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME.rematerializeFromDocx,
         generation: recovery.generation,
         resetGeneration: recovery.resetGeneration,
         snapshotBytes: null,
-      } as const;
+      } as const);
     case "replaced":
-      return { outcome: "reload-current" } as const;
+      return Result.ok({ outcome: "reload-current" } as const);
     default: {
       recovery satisfies never;
       return panic("Unhandled snapshot recovery outcome");
