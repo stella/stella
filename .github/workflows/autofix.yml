@@ -493,10 +493,14 @@ jobs:
             fi
             protected_path=false
             for pattern in "${protected[@]}"; do
-              if [[ "$path" == @($pattern) ]]; then
-                protected_path=true
-                break
-              fi
+              # Protected entries are glob patterns, so expansion must stay unquoted.
+              # shellcheck disable=SC2254
+              case "$path" in
+                $pattern)
+                  protected_path=true
+                  break
+                  ;;
+              esac
             done
             [[ "$protected_path" == false ]] || continue
             format_paths+=("./$path")
