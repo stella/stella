@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import type { Subprocess } from "bun";
 import { fileURLToPath } from "node:url";
 
@@ -38,6 +39,18 @@ export const TYPST_RENDER_LIMITS = {
 
 const START_TIMEOUT_MS = 30_000;
 
+export type TypstSessionOptions = {
+  /**
+   * An idle renderer process exits after this long, so a server that renders
+   * an invoice only at issue time holds no renderer between issues.
+   */
+  idleExitMs: number;
+};
+
+export const TYPST_SESSION_OPTIONS = {
+  idleExitMs: 60_000,
+} as const satisfies TypstSessionOptions;
+
 type TypstRenderRejection =
   | "template-too-large"
   | "input-too-large"
@@ -71,7 +84,7 @@ export type TypstSession = {
   render: (request: TypstRenderRequest) => Promise<TypstRenderOutcome>;
   close: () => Promise<void>;
   /** Renderer processes started and exited so far; equal when none runs. */
-  renderers: () => { started: number; exited: number };
+  renderers: () => { started: number; exited: number; pid: number | null };
 };
 
 type Renderer = {
@@ -81,6 +94,8 @@ type Renderer = {
   listen: (listener: ((reply: TypstWorkerReply) => void) | null) => void;
   /** Resolves after the process exited and every exit callback ran. */
   gone: Promise<void>;
+  /** True once the process exited, whether or not a render was running. */
+  isGone: () => boolean;
   /** Called once if the process exits while a render waits on it. */
   watchExit: (listener: (() => void) | null) => void;
 };
@@ -108,6 +123,7 @@ const startRenderer = (
   const timer = setTimeout(() => {
     resolveReady(false);
   }, START_TIMEOUT_MS);
+  let exited = false;
   let markGone: () => void = () => undefined;
   const gone = new Promise<void>((resolve) => {
     markGone = resolve;
@@ -134,6 +150,7 @@ const startRenderer = (
       listener?.(message);
     },
     onExit: () => {
+      exited = true;
       markReady(false);
       onExit();
       exitListener?.();
@@ -144,6 +161,7 @@ const startRenderer = (
     process: child,
     ready,
     gone,
+    isGone: () => exited,
     listen: (next) => {
       listener = next;
     },
@@ -161,8 +179,10 @@ const byteLength = (value: string) => Buffer.byteLength(value, "utf-8");
  */
 export const openTypstSession = (
   limits: TypstRenderLimits = TYPST_RENDER_LIMITS,
+  options: TypstSessionOptions = TYPST_SESSION_OPTIONS,
 ): TypstSession => {
   let live: Renderer | null = null;
+  let idleTimer: Timer | undefined;
   let nextId = 0;
   let queue: Promise<unknown> = Promise.resolve();
   const counts = { started: 0, exited: 0 };
@@ -178,28 +198,10 @@ export const openTypstSession = (
     }
   };
 
-  const run = async (
-    request: TypstRenderRequest,
-  ): Promise<TypstRenderOutcome> => {
-    if (byteLength(request.template) > limits.maxTemplateBytes) {
-      return {
-        status: "rejected",
-        reason: "template-too-large",
-        diagnostics: [
-          `Template exceeds ${String(limits.maxTemplateBytes)} bytes`,
-        ],
-      };
-    }
-    const inputBytes = Object.entries(request.inputs).reduce(
-      (total, [key, value]) => total + byteLength(key) + byteLength(value),
-      0,
-    );
-    if (inputBytes > limits.maxInputBytes) {
-      return {
-        status: "rejected",
-        reason: "input-too-large",
-        diagnostics: [`Inputs exceed ${String(limits.maxInputBytes)} bytes`],
-      };
+  /** The live renderer, replacing one that exited since its last render. */
+  const acquire = async () => {
+    if (live?.isGone() === true) {
+      live = null;
     }
     if (live === null) {
       counts.started += 1;
@@ -208,7 +210,14 @@ export const openTypstSession = (
       });
     }
     const current = live;
-    if (!(await current.ready)) {
+    return (await current.ready) ? current : null;
+  };
+
+  const attempt = async (
+    request: TypstRenderRequest,
+  ): Promise<(TypstRenderOutcome & { memoryBytes?: number }) | "unsent"> => {
+    const current = await acquire();
+    if (current === null) {
       await retire();
       return {
         status: "rejected",
@@ -218,11 +227,11 @@ export const openTypstSession = (
     }
     nextId += 1;
     const id = nextId;
-    const outcome = await new Promise<
-      TypstRenderOutcome & { memoryBytes?: number }
-    >((resolve) => {
+    return await new Promise((resolve) => {
       const state: { settled: boolean; timer?: Timer } = { settled: false };
-      const finish = (value: TypstRenderOutcome & { memoryBytes?: number }) => {
+      const finish = (
+        value: (TypstRenderOutcome & { memoryBytes?: number }) | "unsent",
+      ) => {
         if (state.settled) {
           return;
         }
@@ -269,12 +278,65 @@ export const openTypstSession = (
           ],
         });
       });
-      current.process.send({
-        id,
-        ...request,
-        maxOutputBytes: limits.maxOutputBytes,
-      } satisfies TypstWorkerRequest);
+      if (current.isGone()) {
+        // Exited between acquiring it and sending: its exit callback already
+        // ran, so nothing else would settle this render.
+        finish("unsent");
+        return;
+      }
+      const sent = Result.try(() => {
+        current.process.send({
+          id,
+          ...request,
+          maxOutputBytes: limits.maxOutputBytes,
+        } satisfies TypstWorkerRequest);
+      });
+      if (sent.isErr()) {
+        finish("unsent");
+      }
     });
+  };
+
+  const run = async (
+    request: TypstRenderRequest,
+  ): Promise<TypstRenderOutcome> => {
+    if (byteLength(request.template) > limits.maxTemplateBytes) {
+      return {
+        status: "rejected",
+        reason: "template-too-large",
+        diagnostics: [
+          `Template exceeds ${String(limits.maxTemplateBytes)} bytes`,
+        ],
+      };
+    }
+    const inputBytes = Object.entries(request.inputs).reduce(
+      (total, [key, value]) => total + byteLength(key) + byteLength(value),
+      0,
+    );
+    if (inputBytes > limits.maxInputBytes) {
+      return {
+        status: "rejected",
+        reason: "input-too-large",
+        diagnostics: [`Inputs exceed ${String(limits.maxInputBytes)} bytes`],
+      };
+    }
+    let outcome = await attempt(request);
+    if (outcome === "unsent") {
+      // The IPC channel closed before the request reached the renderer, so
+      // nothing of it ran: one retry on a fresh process is safe. A renderer
+      // that exits after receiving a request is reported as "crashed" and is
+      // not retried, because the template itself may be what crashed it.
+      await retire();
+      outcome = await attempt(request);
+    }
+    if (outcome === "unsent") {
+      await retire();
+      return {
+        status: "rejected",
+        reason: "crashed",
+        diagnostics: ["The Typst renderer could not receive the request"],
+      };
+    }
     const keep =
       (outcome.status === "rendered" ||
         outcome.reason === "diagnostics" ||
@@ -286,9 +348,22 @@ export const openTypstSession = (
     return outcome;
   };
 
+  const scheduleIdleExit = () => {
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => {
+      queue = queue.then(async () => retire());
+    }, options.idleExitMs);
+    idleTimer.unref();
+  };
+
   return {
     render: async (request) => {
-      const next = queue.then(async () => run(request));
+      clearTimeout(idleTimer);
+      const next = queue.then(async () => {
+        const outcome = await run(request);
+        scheduleIdleExit();
+        return outcome;
+      });
       // Keep the queue alive whatever this render's outcome; the caller
       // receives the rejection through `next`.
       queue = next.then(
@@ -298,9 +373,10 @@ export const openTypstSession = (
       return next;
     },
     close: async () => {
+      clearTimeout(idleTimer);
       await queue;
       await retire();
     },
-    renderers: () => ({ ...counts }),
+    renderers: () => ({ ...counts, pid: live?.process.pid ?? null }),
   };
 };
