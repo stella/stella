@@ -197,8 +197,9 @@ describe("online migrations", () => {
     });
     await runOnlineMigrations(pool);
     await assertOnlineMigrationsApplied(pool);
-    expect(harness.statements).toContain("SET LOCAL lock_timeout = '1s'");
-    expect(harness.statements).toContain("SET LOCAL statement_timeout = '10s'");
+    expect(harness.statements).toContain(
+      "SELECT set_config('statement_timeout', $1, true), set_config('lock_timeout', $2, true)\n-- params [\"10000ms\",\"1000ms\"]",
+    );
   });
 
   test("accepts an already valid index without rebuilding it", async () => {

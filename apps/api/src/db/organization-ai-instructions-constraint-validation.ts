@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import { readConstraintCompletion } from "./online-constraint-completion";
 import type { OnlineRepair } from "./online-migration-connection";
+import { setSharedQueryTimeouts } from "./shared-pool-timeouts";
 
 const CONSTRAINT_NAME = "organization_settings_ai_instructions_length_check";
 
@@ -20,8 +21,10 @@ export const ORGANIZATION_AI_INSTRUCTIONS_CONSTRAINT_VALIDATION = {
     await connection.execute("BEGIN");
     const outcome = await Result.tryPromise({
       try: async () => {
-        await connection.execute("SET LOCAL lock_timeout = '1s'");
-        await connection.execute("SET LOCAL statement_timeout = '10s'");
+        await setSharedQueryTimeouts(connection.query, {
+          statementTimeoutMs: 10_000,
+          lockTimeoutMs: 1000,
+        });
         await connection.execute(
           `ALTER TABLE public."organization_settings" VALIDATE CONSTRAINT "${CONSTRAINT_NAME}"`,
         );
