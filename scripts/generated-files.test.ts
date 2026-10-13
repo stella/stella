@@ -10,6 +10,7 @@ import * as v from "valibot";
 
 import { generateCapabilityRuntime } from "../apps/api/scripts/generate-capability-runtime";
 import { pinnedParserInputs } from "../packages/catalogue/scripts/pinned-content-facts";
+import { repoRelativePath } from "../packages/portable-path/src/index";
 import { API_TYPECHECK_REGENERATION_COMMANDS } from "../packages/scripts/src/api-typecheck-regenerate";
 import {
   GENERATORS,
@@ -162,7 +163,7 @@ test("MCP app parser schema imports are registered generation inputs", () => {
       if (!specifier.startsWith(".")) {
         continue;
       }
-      const dependency = nodePath.relative(
+      const dependency = repoRelativePath(
         repoRoot,
         nodePath.resolve(repoRoot, nodePath.dirname(file), `${specifier}.ts`),
       );
