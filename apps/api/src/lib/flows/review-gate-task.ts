@@ -157,34 +157,40 @@ export const readEntityTransferEligibility = async (
     entityId: SafeId<"entity">;
     eligible: boolean;
   }>(sql`
-    WITH RECURSIVE subtree AS (
-      SELECT ${entities.id} AS root_id, ${entities.id} AS id, 1 AS depth
+    WITH roots AS (
+      SELECT ${entities.id} AS root_id
       FROM ${entities}
       WHERE ${inArray(entities.id, [...entityIds])}
         AND ${entities.workspaceId} = ${workspaceId}
-      UNION ALL
-      SELECT subtree.root_id, child.id, subtree.depth + 1
-      FROM ${entities} child
-      JOIN subtree ON child.parent_id = subtree.id
-      WHERE child.workspace_id = ${workspaceId}
-        AND subtree.depth < ${LIMITS.entityAncestorWalkDepthMax}
     )
-    SELECT root_id AS "entityId",
-      count(*) <= ${LIMITS.entitiesCount}
-      AND max(depth) < ${LIMITS.entityAncestorWalkDepthMax}
-      AND NOT EXISTS (
-        SELECT 1 FROM subtree linked
-        JOIN ${flowRunSteps} ON ${flowRunSteps.reviewTaskEntityId} = linked.id
-          AND ${flowRunSteps.workspaceId} = ${workspaceId}
-        WHERE linked.root_id = roots.root_id
-          AND NOT (${flowFeatureActorVisibilitySql({
+    SELECT roots.root_id AS "entityId", eligibility.eligible
+    FROM roots
+    CROSS JOIN LATERAL (
+      WITH RECURSIVE subtree AS (
+        SELECT roots.root_id AS id, 1 AS depth
+        UNION ALL
+        SELECT child.id, subtree.depth + 1
+        FROM ${entities} child
+        JOIN subtree ON child.parent_id = subtree.id
+        WHERE child.workspace_id = ${workspaceId}
+          AND subtree.depth < ${LIMITS.entityAncestorWalkDepthMax}
+      ), bounded AS MATERIALIZED (
+        SELECT id, depth FROM subtree LIMIT ${LIMITS.entitiesCount + 1}
+      )
+      SELECT count(*) <= ${LIMITS.entitiesCount}
+        AND max(depth) < ${LIMITS.entityAncestorWalkDepthMax}
+        AND NOT EXISTS (
+          SELECT 1 FROM bounded
+          JOIN ${flowRunSteps} ON ${flowRunSteps.reviewTaskEntityId} = bounded.id
+            AND ${flowRunSteps.workspaceId} = ${workspaceId}
+          WHERE NOT (${flowFeatureActorVisibilitySql({
             organizationId: workspace.organizationId,
             workspaceId,
             userId,
           })})
-      ) AS eligible
-    FROM subtree roots
-    GROUP BY root_id
+        ) AS eligible
+      FROM bounded
+    ) eligibility
   `);
 };
 
