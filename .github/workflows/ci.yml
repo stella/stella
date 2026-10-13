@@ -6673,9 +6673,10 @@ jobs:
       )
       )
     runs-on: ubuntu-latest
-    # Longest leg: 15m setup + 21m tests + 4m uploads + 2m cancellation/post hooks.
-    # Playwright uses measured p95/max plus the task registry margin.
-    timeout-minutes: 42
+    # Longest leg: 16m setup (incl. 1m budget resolution) + 21m tests + 4m uploads
+    # + 2m cancellation/post hooks. Playwright uses measured p95/max plus the
+    # task registry margin.
+    timeout-minutes: 43
     permissions:
       contents: read
       packages: read
@@ -6714,6 +6715,7 @@ jobs:
 
       - name: Resolve e2e shard budget
         id: e2e-budget
+        timeout-minutes: 1
         run: |
           if [[ "${{ matrix.shard }}" != network-baseline ]]; then
             minutes=$(bun --preload ./scripts/offline-network-preload.ts scripts/e2e-shard-deadline.ts --minutes ${{ matrix.shard }})
