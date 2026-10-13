@@ -18,6 +18,7 @@ import { Script } from "node:vm";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
+import { repoRelativePath } from "@stll/portable-path";
 import { drawPropertySamples, propertyConfig } from "@stll/property-testing";
 
 import eventPolicies from "../.github/ci-event-policy.json" with { type: "json" };
@@ -1995,7 +1996,7 @@ test("path-scoped platform checks run in the merge group", () => {
 
 test("Docker checks are required at every selected merge-group depth", () => {
   const job = "docker-checks";
-  expect(thinJobs({ jobs: ciJobs })).toContain(job);
+  expect(mainHeavyJobs({ jobs: ciJobs })).toContain(job);
   expect(jobScopes[job]).toBe("docker_checks_required");
   expect(fastRequired).not.toContain(job);
   for (const queueDepth of ["thin", "full"] as const) {
@@ -3499,31 +3500,35 @@ test("direct web compiler package scripts generate before inspecting types", () 
   expect(consumers).toBeGreaterThan(0);
 });
 
-test("folded suites are expected only from producers that run in this mode", () => {
-  const thin = new Set(thinJobs({ jobs: ciJobs }));
-  const excluded = Object.keys(foldedSuites).filter((job) => thin.has(job));
-  expect(excluded.length).toBeGreaterThan(0);
-  for (const job of excluded) {
+test("folded suites are expected only when their producer and suites are planned", () => {
+  expect(Object.keys(foldedSuites).length).toBeGreaterThan(0);
+  for (const [job, suites] of Object.entries(foldedSuites)) {
     const silent = {
       results: { [job]: "skipped" },
       suiteResults: Object.fromEntries(
-        Object.keys(foldedSuites[job] ?? {}).map((suite) => [suite, ""]),
+        Object.keys(suites).map((suite) => [suite, ""]),
       ),
     };
-    // Heavy runs leave thin producers out entirely, so their suites cannot be owed.
-    expect(
-      evaluateResult({
-        event: EVENT.workflowDispatch,
-        heavyOnly: true,
-        ...silent,
-      }),
-      `${job} heavy`,
-    ).toBe(0);
-    // A full run that planned the producer still fails when it stays silent.
-    expect(
-      evaluateResult({ event: EVENT.workflowDispatch, ...silent }),
-      `${job} full`,
-    ).toBe(1);
+    const scope = jobScopes[job];
+    const unplannedScopes = [
+      ...Object.values(suites),
+      ...(typeof scope === "string" ? [scope] : []),
+    ];
+    for (const heavyOnly of [false, true]) {
+      expect(
+        evaluateResult({
+          event: EVENT.workflowDispatch,
+          heavyOnly,
+          unplannedScopes,
+          ...silent,
+        }),
+        `${job} unplanned, heavyOnly=${heavyOnly}`,
+      ).toBe(0);
+      expect(
+        evaluateResult({ event: EVENT.workflowDispatch, heavyOnly, ...silent }),
+        `${job} planned, heavyOnly=${heavyOnly}`,
+      ).toBe(1);
+    }
   }
 });
 
@@ -3614,6 +3619,42 @@ test("folded Docker suites keep their scopes and fail independently, including m
       ["$", "{{ steps.api-deps.outcome }}"].join(""),
     );
   }
+});
+
+test("folded verdicts remain mandatory on main-heavy and thin queues", () => {
+  const gates: ExpectedResultGate[] = [];
+  for (const context of [
+    { event: EVENT.workflowDispatch, heavyOnly: true },
+    { event: EVENT.mergeGroup, plannedOutputs: { queue_depth: "thin" } },
+  ] as const) {
+    gates.push({
+      label: `${context.event}: successful folded verdicts`,
+      options: { ...context, results: {} },
+      exitCode: 0,
+    });
+    for (const suites of Object.values(foldedSuites)) {
+      for (const [suite, scope] of Object.entries(suites)) {
+        for (const verdict of ["failure", "skipped", "cancelled", ""]) {
+          const options = {
+            ...context,
+            results: {},
+            suiteResults: { [suite]: verdict },
+          };
+          gates.push({
+            label: `${context.event}/${suite}/${verdict}`,
+            options,
+            exitCode: 1,
+          });
+          gates.push({
+            label: `${context.event}/${suite}/unplanned/${verdict}`,
+            options: { ...options, unplannedScopes: [scope] },
+            exitCode: 0,
+          });
+        }
+      }
+    }
+  }
+  expectResultGates(gates);
 });
 
 test("the Docker fold is planned by either original scope without changing the suite selectors", () => {
@@ -6832,7 +6873,7 @@ test("a planted desktop path plans the PR desktop browser leg while unrelated pa
   const directory = mkdtempSync(
     nodePath.join(root, "apps/desktop/.ci-browser-scope-"),
   );
-  const planted = nodePath.relative(
+  const planted = repoRelativePath(
     root,
     nodePath.join(directory, "planted.unclassified"),
   );

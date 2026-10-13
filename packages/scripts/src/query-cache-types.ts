@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import path from "node:path";
 import ts from "typescript";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { createProgram } from "./typescript-program";
 
 const CACHE_METHODS = new Set(["getQueryData", "setQueryData"]);
@@ -121,7 +123,7 @@ if (import.meta.main) {
   const diagnostics = scanQueryCacheTypes({ program, sourceFiles });
   for (const diagnostic of diagnostics) {
     console.error(
-      `${path.relative(repositoryRoot, diagnostic.file)}:${diagnostic.line}:${diagnostic.column} ${diagnostic.message} [query-cache-types]`,
+      `${repoRelativePath(repositoryRoot, diagnostic.file)}:${diagnostic.line}:${diagnostic.column} ${diagnostic.message} [query-cache-types]`,
     );
   }
   console.log(

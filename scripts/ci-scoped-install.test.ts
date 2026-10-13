@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { repoRelativePath } from "../packages/portable-path/src/index";
 import { lexShell } from "./install-free-ci";
 import { workflowJobSteps } from "./workflow-steps";
 
@@ -435,7 +436,7 @@ test("landing diagnostics follow the browser configuration output directory", ()
       ),
     );
     expect(artifacts.with.path.split("\n")).toContain(
-      `${path.relative(directory, config.outputDir)}/`,
+      `${repoRelativePath(directory, config.outputDir)}/`,
     );
   } finally {
     rmSync(directory, { recursive: true, force: true });

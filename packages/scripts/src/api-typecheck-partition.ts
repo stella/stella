@@ -5,6 +5,8 @@ import path from "node:path";
 import ts from "typescript";
 import * as v from "valibot";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import {
   apiTypecheckArtifact,
   readApiTypecheckConfig,
@@ -165,7 +167,7 @@ export const deriveApiTestPartition = (directory: string) => {
   const independent = [...testFiles].filter((file) => !unsafe.has(file));
   const coupled = [...testFiles]
     .filter((file) => unsafe.has(file))
-    .map((file) => path.relative(api, file));
+    .map((file) => repoRelativePath(api, file));
   // A safe test imported by source-owned code still belongs to source: exclude
   // every such root from the isolated project, including transitive test imports.
   const isolated = new Set(independent);
@@ -178,7 +180,7 @@ export const deriveApiTestPartition = (directory: string) => {
     visitedSource.add(file);
     for (const dependency of moduleInfo(file, "source").dependencies) {
       if (isolated.delete(dependency)) {
-        coupled.push(path.relative(api, dependency));
+        coupled.push(repoRelativePath(api, dependency));
       }
       if (
         dependency.startsWith(`${root}${path.sep}`) &&
@@ -191,7 +193,7 @@ export const deriveApiTestPartition = (directory: string) => {
   }
   return {
     independent: [...isolated]
-      .map((file) => path.relative(api, file))
+      .map((file) => repoRelativePath(api, file))
       .toSorted(),
     coupled: coupled.toSorted(),
   };
@@ -236,12 +238,12 @@ export const apiTestPartitionIssues = (root: string) => {
   const sourceProject = path.join(api, "tsconfig.src.json");
   const actual = new Set(
     readApiTypecheckConfig(testsProject)
-      .fileNames.map((file) => path.relative(api, file))
+      .fileNames.map((file) => repoRelativePath(api, file))
       .filter((file) => !/\.d\.[cm]?ts$/u.test(file)),
   );
   const sourceFiles = new Set(
     readApiTypecheckConfig(sourceProject).fileNames.map((file) =>
-      path.relative(api, file),
+      repoRelativePath(api, file),
     ),
   );
   const excluded = new Set(
@@ -409,7 +411,7 @@ export const writeApiTestPartition = (root: string) => {
     const source = apiTypecheckArtifact(api, "src");
     const tests = apiTypecheckArtifact(api, "tests");
     const relative = (file: string) =>
-      path.relative(path.dirname(source), path.resolve(api, file));
+      repoRelativePath(path.dirname(source), path.resolve(api, file));
     writeApiTypecheckArtifact(source, {
       exclude: [
         "src/mcp/apps",
@@ -420,7 +422,10 @@ export const writeApiTestPartition = (root: string) => {
     writeApiTypecheckArtifact(tests, {
       files: partition.independent.map(relative),
       include: [
-        path.relative(path.dirname(tests), path.join(root, "types/**/*.d.ts")),
+        repoRelativePath(
+          path.dirname(tests),
+          path.join(root, "types/**/*.d.ts"),
+        ),
       ],
       exclude: ["src/mcp/apps", "src/handlers/visual-sandbox/browser"].map(
         relative,
