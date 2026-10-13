@@ -290,7 +290,15 @@ export const watchTestProcessMemory = ({
           catch: (cause) =>
             new ProcessMemoryReadError({ message: String(cause), cause }),
         });
-        if (pid !== child.pid && alive.isErr() && processGone(alive.error)) {
+        // A census can outlive either the leader or a worker. Keep its readable
+        // RSS lower bound without diagnosing normal process exit as a read fault.
+        // Job accounting remains readable after leader exit, so its errors differ.
+        if (
+          jobMemory === undefined &&
+          ((pid === child.pid &&
+            (child.exitCode !== null || child.signalCode !== null)) ||
+            (alive.isErr() && processGone(alive.error)))
+        ) {
           totalBytes += rssBytes;
           continue;
         }

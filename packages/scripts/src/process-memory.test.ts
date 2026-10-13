@@ -311,6 +311,99 @@ test("group samples retain reparented members, reject malformed rows, and exclud
   }
 });
 
+for (const disappearance of [
+  "exited-leader",
+  "gone-leader",
+  "gone-worker",
+] as const) {
+  test.each([300, 1200])(
+    `${disappearance} between group census and memory read retains a %i-byte lower bound without warning`,
+    async (rssBytes) => {
+      const warnings: string[] = [];
+      const failures: string[] = [];
+      const killed: number[] = [];
+      const pid = disappearance === "gone-worker" ? 43 : 42;
+      const watchdog = watchTestProcessMemory({
+        child: {
+          pid: 42,
+          exitCode: disappearance === "gone-leader" ? null : 0,
+          signalCode: null,
+          exited: Promise.resolve(0),
+          kill: () => {
+            throw new TypeError("Must terminate group");
+          },
+        },
+        limitBytes: 1024,
+        sampleGroup: () => Result.ok(new Map([[pid, rssBytes]])),
+        readBytes: () => {
+          throw new TypeError("Process memory disappeared after census");
+        },
+        signalPid: (target, signal) => {
+          if (signal === 0 && disappearance !== "exited-leader") {
+            throw Object.assign(new TypeError("Process is gone"), {
+              code: "ESRCH",
+            });
+          }
+          if (signal === "SIGKILL") {
+            killed.push(target);
+          }
+        },
+        file: () => "exited-process.test.ts",
+        onWarning: (message) => {
+          warnings.push(message);
+        },
+        onFailure: (message) => {
+          failures.push(message);
+        },
+      });
+      await watchdog.stop();
+      expect(watchdog.peakBytes()).toBe(rssBytes);
+      expect(warnings).toEqual([]);
+      expect(failures).toHaveLength(rssBytes > 1024 ? 1 : 0);
+      expect(killed).toEqual(rssBytes > 1024 ? [-42] : []);
+    },
+  );
+}
+
+test("Windows job read failures remain visible after its leader exits", async () => {
+  const warnings: string[] = [];
+  const watchdog = watchTestProcessMemory({
+    child: {
+      pid: 42,
+      exitCode: 0,
+      signalCode: null,
+      exited: Promise.resolve(0),
+      kill: () => {
+        throw new TypeError("Must terminate job");
+      },
+    },
+    windowsProcesses: {
+      readMemory: () => {
+        throw new TypeError("Job accounting unavailable");
+      },
+      signal: () => Result.ok(undefined),
+    },
+    limitBytes: 1024,
+    readBytes: () => {
+      throw new TypeError("Must measure job");
+    },
+    signalPid: () => {
+      throw Object.assign(new TypeError("Leader is gone"), { code: "ESRCH" });
+    },
+    file: () => "job-reading.test.ts",
+    onFailure: (message) => {
+      throw new TypeError(message);
+    },
+    onWarning: (message) => {
+      warnings.push(message);
+    },
+  });
+  await watchdog.stop();
+  expect(warnings).toHaveLength(1);
+  expect(warnings.at(0)).toContain("Job accounting unavailable");
+  expect(watchdog.peakBytes()).toBe(0);
+});
+
 for (const boundary of ["census", "reading"] as const) {
   for (const budget of ["below", "above"] as const) {
     test(`unavailable group ${boundary} ${budget} the cap preserves readable lower bounds and retries`, async () => {
