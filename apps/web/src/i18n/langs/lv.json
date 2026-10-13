@@ -1273,6 +1273,11 @@
     "greeting": "Pie kā vēlaties strādāt?",
     "greetingSubtitle": "Sāciet ar lietu, dokumentu vai vienkāršu jautājumu.",
     "hideThread": "Paslēpt sarunu",
+    "history": {
+      "matterUnavailable": "Šī lieta nav pieejama",
+      "older": "Vecākas",
+      "previous7Days": "Iepriekšējās 7 dienas"
+    },
     "historyContext": {
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, zero {un vēl #} one {un vēl #} other {un vēl #}}"
@@ -1767,6 +1772,8 @@
     "citations": "Citējumi",
     "clauses": "Klauzulas",
     "clearDate": "Notīrīt datumu",
+    "clearFilters": "Notīrīt filtrus",
+    "clearSearch": "Notīrīt meklēšanu",
     "close": "Aizvērt",
     "closeAll": "Aizvērt visu",
     "closeOthers": "Aizvērt citus",
@@ -4122,7 +4129,6 @@
     "appsSubtitle": "stella darbojas arī ārpus pārlūkprogrammas: jūsu datorā un jūsu AI asistentā. Pie šīs iestatīšanas varat atgriezties jebkurā laikā.",
     "appsTitle": "Iegūstiet stella visur",
     "catalogueAlwaysOn": "Vienmēr ieslēgts",
-    "catalogueClearSearch": "Notīrīt meklēšanu",
     "catalogueCommunityHeading": "Citi",
     "catalogueContinueWithCount": "{count, plural, zero {Turpināt ar # rīkiem} one {Turpināt ar # rīku} other {Turpināt ar # rīkiem}}",
     "catalogueDetailAbout": "Par rīku",
@@ -6383,7 +6389,6 @@
         "year": "Gads"
       },
       "cannotDeleteRequired": "Ir nepieciešams vismaz viens šāda veida skats",
-      "clearFilters": "Notīrīt filtrus",
       "copySuffix": "{name} (kopija)",
       "deleteView": "Dzēst skatu",
       "exportCsv": "Eksportēt CSV",

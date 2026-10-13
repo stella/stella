@@ -1491,6 +1491,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/require-loader-prefetch.ts",
     "./.oxlint-plugins/require-matter-affordance.ts",
+    "./.oxlint-plugins/require-matter-option-label.ts",
     "./.oxlint-plugins/no-raw-route-query-client.ts",
     "./.oxlint-plugins/no-discarded-toast-error.ts",
     "./.oxlint-plugins/no-direct-error-toast.ts",
@@ -3459,6 +3460,7 @@ const config = defineConfig({
         "no-direct-error-toast/no-direct-error-toast": "error",
         "no-raw-router-invalidation/no-raw-router-invalidation": "error",
         "require-matter-affordance/require-matter-affordance": "error",
+        "require-matter-option-label/require-matter-option-label": "error",
         "security-guards/no-unsanitized-href": "error",
         "stella-toast/stella-toast": "error",
       },
@@ -3512,6 +3514,14 @@ const config = defineConfig({
       ],
       rules: {
         "require-matter-affordance/require-matter-affordance": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/require-matter-option-label.fixture.tsx",
+      ],
+      rules: {
+        "require-matter-option-label/require-matter-option-label": "error",
       },
     },
     {

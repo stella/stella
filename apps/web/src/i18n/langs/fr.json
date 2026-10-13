@@ -1273,6 +1273,11 @@
     "greeting": "Sur quoi souhaitez-vous travailler ?",
     "greetingSubtitle": "Commencez par un dossier, un document ou une question simple.",
     "hideThread": "Masquer la conversation",
+    "history": {
+      "matterUnavailable": "Ce dossier n'est pas disponible",
+      "older": "Plus anciennes",
+      "previous7Days": "7 jours précédents"
+    },
     "historyContext": {
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {et # autre} many {et # autres} other {et # autres}}"
@@ -1767,6 +1772,8 @@
     "citations": "Citations",
     "clauses": "Clauses",
     "clearDate": "Effacer la date",
+    "clearFilters": "Effacer les filtres",
+    "clearSearch": "Effacer la recherche",
     "close": "Fermer",
     "closeAll": "Tout fermer",
     "closeOthers": "Fermer les autres",
@@ -4122,7 +4129,6 @@
     "appsSubtitle": "stella fonctionne aussi en dehors du navigateur : sur votre bureau et dans votre assistant IA. Vous pourrez revenir à cette configuration à tout moment.",
     "appsTitle": "Obtenez stella partout",
     "catalogueAlwaysOn": "Toujours actif",
-    "catalogueClearSearch": "Effacer la recherche",
     "catalogueCommunityHeading": "Autres",
     "catalogueContinueWithCount": "{count, plural, one {Continuer avec # outil} other {Continuer avec # outils}}",
     "catalogueDetailAbout": "À propos",
@@ -6383,7 +6389,6 @@
         "year": "Année"
       },
       "cannotDeleteRequired": "Au moins une vue de ce type est requise",
-      "clearFilters": "Effacer les filtres",
       "copySuffix": "{name} (copie)",
       "deleteView": "Supprimer la vue",
       "exportCsv": "Exporter en CSV",
