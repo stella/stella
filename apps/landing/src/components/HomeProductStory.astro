@@ -76,16 +76,19 @@ const storyShots = [
   {
     darkSrc: "/media/products/story-public-data-1-dark.png",
     lightSrc: "/media/products/story-public-data-1.png",
+    altKey: "story.dataMainAlt",
   },
   {
     darkSrc: "/media/products/story-public-data-2-dark.png",
     lightSrc: "/media/products/story-public-data-2.png",
+    altKey: "story.dataConstitutionalAlt",
   },
   {
     darkSrc: "/media/products/story-public-data-3-dark.png",
     lightSrc: "/media/products/story-public-data-3.png",
+    altKey: "story.dataSupremeAlt",
   },
-] as const;
+] as const satisfies readonly { darkSrc: string; lightSrc: string; altKey: TranslationKey }[];
 
 // Each shot holds at full opacity for ~3.6s and cross-fades over ~0.8s, for
 // a ~13.2s total loop. The keyframes (below, in .story-shot-layer) are
@@ -227,7 +230,7 @@ const proofItems = [
                           <span class="mac-traffic-glyph">+</span>
                         </span>
                       </div>
-                      <div class="mac-titlebar-label">stella · Case Law</div>
+                      <div class="mac-titlebar-label">stella · {t("story.dataEyebrow")}</div>
                     </div>
                     <div class="story-shot-body">
                       {
@@ -238,7 +241,7 @@ const proofItems = [
                             style={`animation-duration: ${STORY_SHOT_TOTAL_SECONDS}s; animation-delay: ${(shotIndex - storyShots.length) * STORY_SHOT_SEGMENT_SECONDS}s`}
                           >
                             <ThemeImage
-                              alt={shotIndex === 0 ? t("story.dataMainAlt") : ""}
+                              alt={t(shot.altKey)}
                               class="h-full w-full object-cover object-top"
                               darkSrc={shot.darkSrc}
                               decoding="async"

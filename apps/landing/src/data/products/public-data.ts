@@ -6,7 +6,7 @@ export const publicData = {
     type: "image",
     src: "/media/products/public-data.png",
     darkSrc: "/media/products/public-data-dark.png",
-    alt: "A court decision open in the stella case-law reader",
+    altKey: "story.dataMainAlt",
     aspect: "16 / 10",
   },
   heroFrameVariant: "bloom",
