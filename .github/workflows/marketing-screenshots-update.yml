@@ -10,14 +10,13 @@ defaults:
 #
 #   gh workflow run marketing-screenshots-update.yml -f branch=<pr-branch>
 #
-# Dispatching on main is what keeps the release App key on trusted workflow
-# code: this job body and the reusable workflow it calls are resolved from
-# main, only the app and spec code checked out from `branch` is
-# branch-controlled, and the token stays confined to the push step's
-# environment. Regeneration rewrites every baseline on the CI runner and
-# pushes the PNGs to the branch, which re-runs the PR's checks against the new
-# head. Baselines are never regenerated on a developer machine, so the
-# comparison tolerance only has to cover run-to-run noise on one runner image.
+# It only starts marketing-screenshots-capture.yml on that branch's own ref,
+# where the branch's code regenerates the baselines without any release
+# secret and without touching main's caches. When the capture completes,
+# marketing-screenshots-publish.yml (from main) validates the PNGs as data and
+# pushes them, which re-runs the PR's checks against the new head. Baselines
+# are never regenerated on a developer machine, so the comparison tolerance
+# only has to cover run-to-run noise on one runner image.
 
 on:
   workflow_dispatch:
@@ -28,7 +27,6 @@ on:
         type: string
 
 concurrency:
-  # Two regenerations of one branch would race on the same push target.
   group: marketing-screenshots-update-${{ inputs.branch }}
   cancel-in-progress: false
 
@@ -36,15 +34,44 @@ permissions: {}
 
 jobs:
   update:
-    uses: ./.github/workflows/marketing-screenshots.yml
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
+      # Starting the capture run on the branch.
+      actions: write
       contents: read
-      # The reusable check job's artifact-read permission must be declared even when update mode skips it.
-      actions: read
-    with:
-      mode: update
-      ref: ${{ inputs.branch }}
-    secrets:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      STELLA_RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+    steps:
+      - name: Validate inputs
+        env:
+          BRANCH: ${{ inputs.branch }}
+          WORKFLOW_REF: ${{ github.ref_name }}
+        run: |
+          # `branch` becomes the ref of the capture run, so it has to be a
+          # plain branch name and nothing that reads as an option or a path
+          # traversal.
+          if [[ "$BRANCH" == "main" ]]; then
+            echo "::error::main's baselines are regenerated through a pull request, never pushed in place"
+            exit 1
+          fi
+          if [[ ! "$BRANCH" =~ ^[A-Za-z0-9._/-]+$ || "$BRANCH" == *".."* || "$BRANCH" == -* ]]; then
+            echo "::error::Not a plain branch name: $BRANCH"
+            exit 1
+          fi
+          if [[ "$WORKFLOW_REF" != "main" ]]; then
+            echo "::error::Dispatch this on main, not $WORKFLOW_REF; pass the branch with -f branch=<pr-branch>"
+            exit 1
+          fi
+
+      # A fork PR's branch does not exist here; its author takes the PNGs
+      # from a capture run's artifact on a same-repository branch.
+      - name: Start the capture on the branch
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          BRANCH: ${{ inputs.branch }}
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              ...context.repo,
+              workflow_id: 'marketing-screenshots-capture.yml',
+              ref: process.env.BRANCH,
+            });

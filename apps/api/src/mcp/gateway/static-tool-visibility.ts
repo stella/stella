@@ -1,3 +1,7 @@
+import {
+  hasLawReadScope,
+  LAW_READ_SCOPE,
+} from "@/api/handlers/legal-resolve/scope";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
@@ -157,4 +161,8 @@ export const listOfferedStaticMcpToolDefinitions = ({
 export const hasGrantedScope = (
   grantedScopes: readonly string[] | undefined,
   scope: ToolScope,
-): boolean => grantedScopes === undefined || grantedScopes.includes(scope);
+): boolean =>
+  grantedScopes === undefined ||
+  (scope === LAW_READ_SCOPE
+    ? hasLawReadScope(grantedScopes)
+    : grantedScopes.includes(scope));

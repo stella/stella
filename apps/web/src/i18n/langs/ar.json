@@ -128,6 +128,11 @@
     "orSignInWithEmail": "أو سجّل الدخول بالبريد الإلكتروني",
     "organizationNamePlaceholder": "مؤسستي",
     "password": "كلمة المرور",
+    "professionalUse": {
+      "description": "لم يُعرض عليك هذا البيان عند إنشاء حسابك. اقبله للمتابعة.",
+      "title": "تأكيد الاستخدام المهني"
+    },
+    "professionalUseStatement": "بإنشاء حساب، تؤكد أنك تستخدم stella لأغراض مهنية، وتقرّ بأن stella أداة مخصّصة للمهنيين القانونيين ولا تُغني عن الاستشارة القانونية.",
     "rateLimitExceeded": "محاولات كثيرة جدًا. يُرجى المحاولة مرة أخرى لاحقًا.",
     "resendCode": "إرسال الرمز مرة أخرى إلى <email>{emailAddress}</email>",
     "selectOrganization": "اختر مؤسسة",
@@ -530,6 +535,16 @@
       "createInvoice": "إنشاء فاتورة",
       "dueDate": "تاريخ الاستحقاق",
       "editInvoice": "تعديل الفاتورة",
+      "export": {
+        "accounting": "استيراد محاسبي",
+        "eBilling": "الفوترة الإلكترونية",
+        "eso9": "جدول استيراد ESO9 (XLSX)",
+        "exporting": "جارٍ تجهيز التصدير…",
+        "isdoc": "فاتورة ISDOC الإلكترونية (ABRA Gen وغيره)",
+        "spreadsheets": "جداول البيانات",
+        "xlsx": "الفواتير (XLSX)",
+        "xlsxLines": "بنود الفواتير (XLSX)"
+      },
       "finalize": "إنهاء",
       "invoiceDate": "تاريخ الفاتورة",
       "invoiceDetail": "تفاصيل الفاتورة",
@@ -771,6 +786,9 @@
       "none": "لم تُسجَّل أي استشهادات بعد.",
       "openAtCitation": "فتح عند موضع الاستشهاد",
       "openDecision": "فتح الحكم",
+      "paragraphLabel": "الفقرة {paragraph}",
+      "paragraphMark": "¶ {paragraph}",
+      "paragraphReferenceLabel": "{court}، {caseNumber}، {date}، الفقرة {paragraph}",
       "partialSummary": "إجماليات الاستشهادات والخط الزمني غير مكتملة.",
       "passageNotFound": "لم يُعثر على المقطع المستشهِد في النص",
       "positiveCount": "{count, plural, zero {لا إيجابية} one {إيجابي واحد} two {إيجابيان} few {# إيجابية} many {# إيجابيًا} other {# إيجابي}}",
@@ -799,7 +817,7 @@
       "courtCount": "{count, plural, zero {لا محاكم} one {محكمة واحدة} two {محكمتان} few {# محاكم} many {# محكمة} other {# محكمة}}",
       "newLast24Hours": "{count} خلال آخر 24 ساعة",
       "newLast7Days": "الجديد خلال آخر 7 أيام",
-      "unlistedCourts": "{count, plural, zero {المحاكم غير المدرجة} one {المحاكم خارج أكبر محكمة} two {المحاكم خارج أكبر محكمتين} few {المحاكم خارج أكبر # محاكم} many {المحاكم خارج أكبر # محكمة} other {المحاكم خارج أكبر # محكمة}}"
+      "otherCourts": "محاكم أخرى"
     },
     "courtTiers": {
       "constitutional": "المحاكم الدستورية",
@@ -815,6 +833,7 @@
       "decisionYears": "سنوات الأحكام",
       "description": "حجم الاجتهاد القضائي في قاعدة البيانات حسب الدولة والمحكمة، ومدى حداثة كل مصدر.",
       "exceedsReportedTotal": "يحتوي على أكثر من آخر إجمالي أعلنته الجهة الناشرة في {date}",
+      "gapStatusUnknown": "حالة الفجوات غير معروفة",
       "generatedAt": "أرقام بتاريخ {date}",
       "globeLabel": "الدول التي يحتوي المخزن على سوابقها القضائية، على كرة أرضية",
       "healthCurrent": "محدّثة",
@@ -823,9 +842,12 @@
       "healthStalled": "متعثّر",
       "healthUnknown": "لم يُشغَّل قط",
       "inPreparation": "قيد الإعداد",
+      "knownGaps": "فجوات معروفة",
       "lastSync": "آخر مزامنة",
+      "noGapsRecorded": "لم تُسجّل فجوات",
       "notCountedYet": "لم يُحصَ بعد",
       "notMeasuredYet": "لم يُقَس بعد",
+      "pendingTexts": "نصوص معلقة",
       "reportedByListing": "محسوب من قائمة الجهة الناشرة",
       "reportedByOperator": "مُدخَل يدويًا",
       "reportedByPublisher": "إحصاء الجهة الناشرة نفسها",
@@ -1261,6 +1283,11 @@
     "greeting": "ما الذي تودّ العمل عليه؟",
     "greetingSubtitle": "ابدأ بملف قانوني أو مستند أو سؤال مباشر.",
     "hideThread": "إخفاء المحادثة",
+    "history": {
+      "matterUnavailable": "هذا الملف القانوني غير متاح",
+      "older": "أقدم",
+      "previous7Days": "الأيام السبعة السابقة"
+    },
     "historyContext": {
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, zero {ولا شيء آخر} one {وعنصر واحد آخر} two {وعنصران آخران} few {و# عناصر أخرى} many {و# عنصرًا آخر} other {و# عنصر آخر}}"
@@ -1277,6 +1304,9 @@
       "noMatters": "لا توجد ملفات قانونية بعد",
       "noRecentChats": "لا توجد دردشات حديثة",
       "noSkills": "لا توجد مهارات بعد",
+      "openAllMatters": "فتح جميع الملفات القانونية",
+      "openChatHistory": "فتح سجل الدردشات",
+      "openSkillsLibrary": "فتح مكتبة المهارات",
       "pinnedMatters": "الملفات القانونية المثبّتة",
       "recentChats": "الدردشات الحديثة",
       "skillEditedBy": "عُدِّل بواسطة {name} · {time}",
@@ -1420,6 +1450,8 @@
     "sendPrompt": "إرسال الرسالة",
     "sendQueuedMessageNow": "إرسال الآن",
     "sendWithoutAnonymization": "إرسال دون تجهيل",
+    "signInToChat": "سجّل الدخول للدردشة حول هذا المستند",
+    "signInToChatAbout": "سجّل الدخول للدردشة حول",
     "skills": {
       "scope": {
         "private": "مهاراتك",
@@ -1750,6 +1782,8 @@
     "citations": "الاستشهادات",
     "clauses": "البنود",
     "clearDate": "مسح التاريخ",
+    "clearFilters": "مسح عوامل التصفية",
+    "clearSearch": "مسح البحث",
     "close": "إغلاق",
     "closeAll": "إغلاق الكل",
     "closeOthers": "إغلاق الأخرى",
@@ -1780,6 +1814,7 @@
       "nextDecade": "العقد التالي",
       "nextMonth": "الشهر التالي",
       "nextYear": "السنة التالية",
+      "outOfRange": "اختر تاريخًا ضمن النطاق المسموح به.",
       "previousDecade": "العقد السابق",
       "previousMonth": "الشهر السابق",
       "previousYear": "السنة السابقة",
@@ -4105,7 +4140,6 @@
     "appsSubtitle": "تعمل stella أيضًا خارج المتصفح: على سطح مكتبك وداخل مساعد الذكاء الاصطناعي الخاص بك. يمكنك العودة إلى هذا الإعداد في أي وقت لاحقًا.",
     "appsTitle": "احصل على stella في كل مكان",
     "catalogueAlwaysOn": "مُفعَّل دائمًا",
-    "catalogueClearSearch": "مسح البحث",
     "catalogueCommunityHeading": "أخرى",
     "catalogueContinueWithCount": "المتابعة بـ {count, plural, zero {# أداة} one {# أداة} two {# أداتين} few {# أدوات} many {# أداة} other {# أداة}}",
     "catalogueDetailAbout": "حول",
@@ -6366,7 +6400,6 @@
         "year": "السنة"
       },
       "cannotDeleteRequired": "يلزم وجود طريقة عرض واحدة على الأقل من هذا النوع",
-      "clearFilters": "مسح عوامل التصفية",
       "copySuffix": "{name} (نسخة)",
       "deleteView": "حذف طريقة العرض",
       "exportCsv": "تصدير CSV",

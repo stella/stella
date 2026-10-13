@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import {
   bareCitationKey,
   citationKeyOf,
@@ -42,7 +44,7 @@ const sourceFiles = (dir: string): string[] =>
 const NON_TEST_SOURCES = sourceFiles(API_SRC)
   .filter((file) => !file.endsWith(".test.ts"))
   .map((file) => ({
-    module: nodePath.relative(API_SRC, file),
+    module: repoRelativePath(API_SRC, file),
     contents: readFileSync(file, "utf-8"),
   }));
 
