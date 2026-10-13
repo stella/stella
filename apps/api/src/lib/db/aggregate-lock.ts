@@ -50,6 +50,7 @@ export const AGGREGATE_LOCKS = {
   scoutCensus: { rank: 60, kind: "row" },
   desktopMembership: { rank: 70, kind: "row" },
   desktopCredential: { rank: 80, kind: "row" },
+  organizationSettings: { rank: 90, kind: "row" },
   workspace: { rank: 100, kind: "row" },
   memberCleanup: { rank: 110, kind: "row" },
   // A chat interaction's fences: the thread, then the turn awaiting input,
@@ -121,6 +122,7 @@ export const AGGREGATE_CHAINS = {
   ],
   professionalUseAcceptance: ["professionalUseAcceptance"],
   desktopRenewal: ["desktopMembership", "desktopCredential"],
+  organizationSettings: ["organization", "organizationSettings"],
   documentSource: [
     "workspace",
     "entity",
@@ -174,6 +176,7 @@ const modeCovers = (
 
 type AggregateIdentities = {
   organization: SafeId<"organization">;
+  organizationSettings: SafeId<"organization">;
   professionalUseAcceptance: { userId: SafeId<"user"> };
   desktopMembership: {
     organizationId: SafeId<"organization">;
@@ -659,6 +662,14 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
       return {
         table: "organization",
         columns: ["id"],
+        values: [options.id],
+        scopeColumns: [],
+        scopeValues: [],
+      };
+    case "organizationSettings":
+      return {
+        table: "organization_settings",
+        columns: ["organization_id"],
         values: [options.id],
         scopeColumns: [],
         scopeValues: [],

@@ -7,6 +7,7 @@ import { env } from "@/api/env";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { MemberRole } from "@/api/lib/member-roles";
+import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/lib/organization-ai-instructions";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
@@ -270,6 +271,52 @@ describe("manage_organization per-action validation", () => {
       }),
     );
     expect(message).toBe("Settings fields apply only to update_org_settings");
+  });
+
+  test("rejects organization AI instructions on member actions", async () => {
+    expect(
+      errorMessage(
+        await runManageOrg({
+          action: "add_member",
+          matter_id: WORKSPACE_ID,
+          user_id: "user_2",
+          ai_instructions: "Use concise language.",
+        }),
+      ),
+    ).toBe("Settings fields apply only to update_org_settings");
+  });
+
+  test("rejects organization AI instructions exceeding the shared limit", async () => {
+    for (const aiInstructions of [
+      "x".repeat(ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH + 1),
+      "😀".repeat(ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH / 2 + 1),
+    ]) {
+      expect(
+        errorText(
+          await runManageOrg({
+            action: "update_org_settings",
+            ai_instructions: aiInstructions,
+          }),
+        ),
+      ).toContain("ai_instructions");
+    }
+  });
+
+  test("allows setting and clearing AI instructions through the organization authority gate", async () => {
+    for (const aiInstructions of [
+      "Use concise language.",
+      "",
+      "😀".repeat(ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH / 2),
+    ]) {
+      const result = await RESEARCH_ADMIN_TOOL_HANDLERS.manage_organization({
+        args: {
+          action: "update_org_settings",
+          ai_instructions: aiInstructions,
+        },
+        context: createContext("member"),
+      });
+      expect(errorMessage(result)).toBe("Forbidden");
+    }
   });
 
   test("rejects an empty update_org_settings action", async () => {

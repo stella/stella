@@ -451,6 +451,7 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
             include: [
               "matter_number_pattern",
               "matter_number_padding",
+              "ai_instructions",
               "prompt_caching_enabled",
               "document_processing_mode",
               "time_minimum_unit_minutes",

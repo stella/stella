@@ -1627,12 +1627,6 @@
   },
   {
     "file": "apps/api/src/handlers/organization-settings/update.ts",
-    "fingerprint": "7843812a9e82c0d0c2210a81644ffbae6d902dad34a10c8845c0d8cbdb8ad035",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/organization-settings/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/organization-settings/update.ts",
     "fingerprint": "939a41ef5abaae42b9dc4e8a11e2cf17d26a02422209beced1d98261b2dbb789",
     "count": 1,
     "reason": "pg_advisory_xact_lock( in apps/api/src/handlers/organization-settings/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."

@@ -29,6 +29,7 @@ import {
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
 } from "@/api/lib/matter-reference";
+import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/lib/organization-ai-instructions";
 import {
   effectiveOrganizationTimeZone,
   ORGANIZATION_TIME_ZONE_SOURCE,
@@ -39,7 +40,7 @@ const config = {
   description:
     "Read the organization's general settings: document processing mode, " +
     "matter-number pattern and padding, practice jurisdictions, prompt " +
-    "caching, memory extraction, time policy, and the time zone whose calendar " +
+    "caching, organization AI instructions, memory extraction, time policy, and the time zone whose calendar " +
     "decides the organization's day. declaredFeatureIds identifies policies in force; " +
     "capabilities contains caller decisions; deploymentFeatures supplies deployment availability. " +
     "timeZoneSource says whether the zone was " +
@@ -63,6 +64,7 @@ type OrganizationSettingsRow = {
   matterNumberPattern: string;
   practiceJurisdictions: PracticeJurisdiction[];
   promptCachingEnabled: boolean;
+  aiInstructions: string;
   managedAIResidency: ManagedAIResidency;
   memoryExtractionEnabled: boolean;
   timeMinimumUnitMinutes: number;
@@ -107,6 +109,8 @@ export const projectOrganizationSettingsRow = (
       row?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING,
     practiceJurisdictions: arrayOrEmpty(row?.practiceJurisdictions),
     promptCachingEnabled: row?.promptCachingEnabled ?? true,
+    aiInstructions: row?.aiInstructions ?? "",
+    aiInstructionsMaxLength: ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH,
     managedAIResidency: row?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY,
     memoryExtractionEnabled: row?.memoryExtractionEnabled ?? false,
     timeMinimumUnitMinutes:
@@ -140,6 +144,7 @@ const readOrganizationSettings = createSafeRootHandler(
             matterNumberPadding: true,
             practiceJurisdictions: true,
             promptCachingEnabled: true,
+            aiInstructions: true,
             managedAIResidency: true,
             memoryExtractionEnabled: true,
             timeMinimumUnitMinutes: true,

@@ -4294,6 +4294,12 @@
       "title": "Configuration de l’IA",
       "usingDefaults": "Valeurs par défaut utilisées"
     },
+    "aiInstructions": {
+      "characterCount": "{count}/{maxLength} caractères",
+      "description": "Ces instructions s’appliquent à toutes les conversations avec l’IA de votre organisation et prévalent sur les préférences personnelles. Les changements prennent effet dès le prochain message. Utilisez-les pour les règles de conformité, le traitement des données et les normes de mise en forme.",
+      "title": "Instructions de l’organisation",
+      "tooLong": "Les instructions doivent contenir au maximum {maxLength} caractères."
+    },
     "invitations": {
       "cancelInvitation": "Annuler l'invitation",
       "emailAddressLabel": "Adresse e-mail",

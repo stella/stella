@@ -30,6 +30,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { buildOrganizationAIInstructionsPrompt } from "@/api/lib/organization-ai-instructions";
 import { authorizeOperation } from "@/api/lib/proofs/checked-transaction";
 import type { CheckedOperationContext } from "@/api/lib/proofs/checked-transaction";
 import {
@@ -85,6 +86,7 @@ const SUBAGENT_FALLBACK_TIMEOUT_MS = 300_000;
 type SubagentSpec = SpawnSubagentsInput["subagents"][number];
 
 type BuildSubagentSystemPromptOptions = {
+  organizationAIInstructions: string;
   expectedOutput: string | undefined;
   tools: ChatToolMap;
 };
@@ -107,6 +109,7 @@ type SubagentSystemPrompt = Pick<
  * boundary on the untrusted half.
  */
 const buildSubagentSystemPrompt = ({
+  organizationAIInstructions,
   expectedOutput,
   tools,
 }: BuildSubagentSystemPromptOptions): SubagentSystemPrompt => {
@@ -119,9 +122,12 @@ const buildSubagentSystemPrompt = ({
     systemSafe: tools[CODE_MODE_EXECUTE_TOOL_NAME]
       ? `${base}\n\n${CHAT_CODE_MODE_SYSTEM_PROMPT}`
       : base,
-    systemUntrusted: expectedOutput
-      ? `Return output matching: ${expectedOutput}`
-      : "",
+    systemUntrusted: [
+      buildOrganizationAIInstructionsPrompt(organizationAIInstructions),
+      expectedOutput ? `Return output matching: ${expectedOutput}` : "",
+    ]
+      .filter((section) => section.length > 0)
+      .join("\n\n"),
   };
 };
 
@@ -289,6 +295,7 @@ const preflightSubagentBatchUsage = async ({
 };
 
 type CreateSpawnSubagentsToolProps = {
+  organizationAIInstructions?: string | undefined;
   /**
    * Lazily builds the (already depth+1, already projected) subagent toolset.
    * Approval-requiring tools in the projection are non-executing proposal
@@ -379,6 +386,7 @@ export const runCheckedSubagentBatch = async <N>({
           modelInfo: fastModelInfo,
         }),
         ...buildSubagentSystemPrompt({
+          organizationAIInstructions: props.organizationAIInstructions ?? "",
           expectedOutput: sub.expectedOutput,
           tools,
         }),

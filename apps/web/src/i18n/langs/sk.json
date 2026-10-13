@@ -4294,6 +4294,12 @@
       "title": "Konfigurácia AI",
       "usingDefaults": "Používa predvolené nastavenia"
     },
+    "aiInstructions": {
+      "characterCount": "{count}/{maxLength} znakov",
+      "description": "Tieto pokyny platia pre všetky konverzácie s AI vo vašej organizácii a majú prednosť pred osobnými preferenciami. Zmeny sa prejavia od ďalšej správy. Použite ich pre pravidlá dodržiavania predpisov, nakladania s údajmi a formátovania.",
+      "title": "Pokyny organizácie",
+      "tooLong": "Pokyny môžu obsahovať najviac {maxLength} znakov."
+    },
     "invitations": {
       "cancelInvitation": "Zrušiť pozvánku",
       "emailAddressLabel": "E-mailová adresa",

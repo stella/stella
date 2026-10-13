@@ -41,6 +41,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
+import { buildOrganizationAIInstructionsPrompt } from "@/api/lib/organization-ai-instructions";
 import {
   admitModelDispatch,
   NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1969,6 +1970,29 @@ describe("prompt caching at the layer boundaries", () => {
     modelOf("bedrock", "us.anthropic.claude-sonnet-4-5-20250929-v1:0"),
     modelOf("mistral", "mistral-medium-latest"),
   ];
+
+  test("organization instructions preserve enabled and disabled caching decisions", () => {
+    const system = {
+      ...layered,
+      turn: `\n\n${buildOrganizationAIInstructionsPrompt("Use numbered paragraphs.")}${layered.turn}`,
+    };
+    for (const model of markerModels) {
+      expect(systemPromptsPatch({ caching, model, system })).toEqual({
+        systemPrompts: [
+          { content: layered.static, metadata: marker },
+          { content: layered.organization, metadata: marker },
+          system.turn,
+        ],
+      });
+      expect(systemPromptsPatch({ caching: noCaching, model, system })).toEqual(
+        {
+          systemPrompts: [
+            `${system.static}${system.organization}${system.turn}`,
+          ],
+        },
+      );
+    }
+  });
 
   test("marks the static and organization layers where the provider caches at markers", () => {
     for (const model of markerModels) {

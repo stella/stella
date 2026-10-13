@@ -4294,6 +4294,12 @@
       "title": "AI-konfiguráció",
       "usingDefaults": "Alapértelmezett beállítások használatban"
     },
+    "aiInstructions": {
+      "characterCount": "{count}/{maxLength} karakter",
+      "description": "Ezek az utasítások a szervezet minden AI-beszélgetésére vonatkoznak, és elsőbbséget élveznek a személyes beállításokkal szemben. A módosítások a következő üzenettől érvényesek. Használja őket a megfelelőségi szabályok, az adatkezelés és a formázási előírások meghatározására.",
+      "title": "Szervezeti utasítások",
+      "tooLong": "Az utasítások legfeljebb {maxLength} karaktert tartalmazhatnak."
+    },
     "invitations": {
       "cancelInvitation": "Meghívó visszavonása",
       "emailAddressLabel": "E-mail cím",

@@ -139,6 +139,25 @@ test("migrated fences retain workspace share mode, signal scope, and flow cap ke
   ]);
 });
 
+test("organization settings locks retain the unique organization row identity", async () => {
+  const fixture = fences();
+  const dialect = new PgDialect();
+  const statements: ReturnType<typeof dialect.sqlToQuery>[] = [];
+  const tx = {
+    execute: async (statement: SQL) => {
+      statements.push(dialect.sqlToQuery(statement));
+      return aggregateExecutionRows(statement);
+    },
+  };
+  await withAggregateLock({ ...fixture.organization, tx });
+  await withAggregateLock({ ...fixture.organizationSettings, tx });
+  const settings = statements.at(1) ?? panic("Settings lock was not executed");
+  expect(settings.sql).toContain('"organization_settings"');
+  expect(settings.sql).toContain('"organization_id"');
+  expect(settings.sql).toContain("FOR UPDATE");
+  expect(settings.params).toEqual([fixture.organizationSettings.id]);
+});
+
 test("definition admission and automated run caps use separate advisory namespaces", async () => {
   const fixture = fences();
   const dialect = new PgDialect();

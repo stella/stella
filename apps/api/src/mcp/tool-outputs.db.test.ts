@@ -322,6 +322,7 @@ const STEPS: readonly Step[] = [
     tool: "manage_organization",
     args: () => ({
       action: "update_org_settings",
+      ai_instructions: "Use concise language.",
       time_narrative_required: false,
     }),
   },

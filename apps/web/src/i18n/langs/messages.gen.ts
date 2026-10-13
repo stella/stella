@@ -4297,6 +4297,12 @@ type Messages = {
       "title": "AI configuration";
       "usingDefaults": "Using defaults";
     };
+    "aiInstructions": {
+      "characterCount": "{count}/{maxLength} characters";
+      "description": "These instructions apply to every AI conversation in your organization and take priority over personal preferences. Changes apply from the next message. Use them for compliance rules, data handling, and formatting standards.";
+      "title": "Organization instructions";
+      "tooLong": "Instructions must be at most {maxLength} characters.";
+    };
     "invitations": {
       "cancelInvitation": "Cancel invitation";
       "emailAddressLabel": "Email address";

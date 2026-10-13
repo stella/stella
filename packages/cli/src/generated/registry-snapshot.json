@@ -5327,6 +5327,7 @@
             "include": [
               "matter_number_pattern",
               "matter_number_padding",
+              "ai_instructions",
               "prompt_caching_enabled",
               "document_processing_mode",
               "time_minimum_unit_minutes",
@@ -5378,6 +5379,11 @@
           "minimum": 1,
           "maximum": 6,
           "description": "Matter-number zero-padding width (update_org_settings); send with matter_number_pattern"
+        },
+        "ai_instructions": {
+          "type": "string",
+          "maxLength": 3000,
+          "description": "Organization-wide AI instructions, up to 3000 characters (update_org_settings); send an empty string to clear. Apply across conversations and take priority over personal preferences."
         },
         "prompt_caching_enabled": {
           "type": "boolean",

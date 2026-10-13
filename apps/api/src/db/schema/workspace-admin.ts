@@ -8,6 +8,7 @@ import {
 } from "@/api/lib/chat/ai-data-policy";
 import { SANCTIONS_MONITORING_MODES } from "@/api/lib/lists/sanctions/monitoring-vocabulary";
 import { PERSONAL_API_KEY_POLICIES } from "@/api/lib/machine-api-key-config";
+import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/lib/organization-ai-instructions";
 
 import {
   entityFeatureGateChecks,
@@ -278,6 +279,8 @@ export const organizationSettings = p.pgTable(
       .text("managed_ai_residency", { enum: MANAGED_AI_RESIDENCIES })
       .notNull()
       .default(DEFAULT_MANAGED_AI_RESIDENCY),
+    /** Admin-authored instructions applied to every organization chat turn. */
+    aiInstructions: p.text("ai_instructions").notNull().default(""),
     /**
      * Whether stella may annotate AI requests with prompt-cache
      * markers (Anthropic `cacheControl`, OpenAI `promptCacheKey`).
@@ -328,6 +331,10 @@ export const organizationSettings = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    p.check(
+      "organization_settings_ai_instructions_length_check",
+      sql`char_length(${table.aiInstructions}) <= ${sql.raw(String(ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH))}`,
+    ),
     p.check(
       "organization_settings_personal_api_key_policy_check",
       sql`${table.personalApiKeyPolicy} IN (${sql.join(

@@ -16,6 +16,14 @@ import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries"
 GlobalRegistrator.register({
   url: "http://localhost:3000/settings/organization",
 });
+// happy-dom omits the legacy browser commands the EditContext polyfill wraps.
+Object.assign(document, {
+  execCommand: () => false,
+  queryCommandEnabled: () => false,
+  queryCommandSupported: () => false,
+  queryCommandState: () => false,
+  queryCommandValue: () => "",
+});
 const originalFetch = globalThis.fetch;
 const requests: { method: string; url: string; body: string }[] = [];
 let settingsFailure: { code: string; message: string } | undefined;
@@ -24,6 +32,8 @@ const ORGANIZATION = "byok-navigation-fixture";
 let sessionOrganization = ORGANIZATION;
 let auxiliaryFailure: { path: string; message: string } | undefined;
 let organizationSettings = {
+  aiInstructions: "",
+  aiInstructionsMaxLength: 3000,
   promptCachingEnabled: false,
   documentProcessingMode: "off",
   memoryExtractionEnabled: false,
@@ -165,6 +175,7 @@ const { act, useState } = await import("react");
 const { cleanup, fireEvent, render, screen, waitFor, within } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const router = await import("@tanstack/react-router");
@@ -184,6 +195,8 @@ afterEach(() => {
   auxiliaryFailure = undefined;
   sessionOrganization = ORGANIZATION;
   organizationSettings = {
+    aiInstructions: "",
+    aiInstructionsMaxLength: 3000,
     promptCachingEnabled: false,
     documentProcessingMode: "off",
     memoryExtractionEnabled: false,
@@ -268,7 +281,9 @@ const mount = async (
         }}
       >
         <IntlProvider locale="en" messages={messages} timeZone="UTC">
-          <router.RouterProvider router={appRouter} />
+          <FormattingProvider locale="en" timeZone="UTC">
+            <router.RouterProvider router={appRouter} />
+          </FormattingProvider>
         </IntlProvider>
       </AuthenticatedUserProvider>
     </QueryClientProvider>,
@@ -347,6 +362,45 @@ test("leaving AI provider settings with a dirty key prompts before navigation", 
   expect(await screen.findByRole("alertdialog")).toBeDefined();
   expect(screen.getByText(messages.common.unsavedLeaveConfirm)).toBeDefined();
   expect(appRouter.state.location.pathname).toBe("/settings/organization");
+});
+
+test("organization instruction edits block navigation before the editor debounce interval", async () => {
+  const appRouter = await mount();
+  await waitFor(() =>
+    expect(document.querySelector(".md-editor")).not.toBeNull(),
+  );
+  const element = document.querySelector(".md-editor");
+  if (!(element instanceof HTMLElement) || !("editContext" in element)) {
+    panic("Expected the mounted instructions EditContext");
+  }
+  const context = element.editContext;
+  if (
+    !(context instanceof EventTarget) ||
+    !("text" in context) ||
+    typeof context.text !== "string"
+  ) {
+    panic("Expected the instructions source");
+  }
+  const priorLength = context.text.length;
+  const text = "Use numbered paragraphs.";
+  act(() => {
+    context.dispatchEvent(
+      Object.assign(new Event("textupdate"), {
+        text,
+        updateRangeStart: 0,
+        updateRangeEnd: priorLength,
+        selectionStart: text.length,
+        selectionEnd: text.length,
+      }),
+    );
+  });
+  expect(hasUnsavedWork()).toBe(true);
+  await act(async () => {
+    void appRouter.navigate({ to: "/settings" });
+  });
+  expect(await screen.findByRole("alertdialog")).toBeDefined();
+  expect(appRouter.state.location.pathname).toBe("/settings/organization");
+  expect(writes()).toEqual([]);
 });
 
 test("leaving clean AI provider settings proceeds without a prompt", async () => {

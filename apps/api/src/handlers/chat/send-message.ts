@@ -2910,6 +2910,7 @@ export const createSendMessage = (
           ...chatToolContext,
           modelAdmission,
           externalTools: externalMcpTools?.tools ?? {},
+          organizationAIInstructions: chatContext.organizationAIInstructions,
           skillMetadata: chatContext.skillMetadata,
           activeSkillContext: chatContext.activeSkillContext,
         });
@@ -3405,6 +3406,7 @@ type PrepareChatContextProps = {
 type PrepareChatContextResult = Result<
   {
     hydratedMessages: ChatMessage[];
+    organizationAIInstructions: string;
     promptCacheKey: string;
     /**
      * Server-built scaffold. Safe to send to the LLM verbatim.
@@ -3456,10 +3458,11 @@ const prepareChatContext = async ({
       safeDb((tx) =>
         tx.query.organizationSettings.findFirst({
           where: { organizationId: { eq: organizationId } },
-          columns: { practiceJurisdictions: true },
+          columns: { aiInstructions: true, practiceJurisdictions: true },
         }),
       ),
     );
+    const organizationAIInstructions = orgSettingsRow?.aiInstructions ?? "";
     const practiceJurisdictions = normalizeOptionalArray(
       orgSettingsRow?.practiceJurisdictions,
     );
@@ -3479,6 +3482,7 @@ const prepareChatContext = async ({
         hasReachableMatter,
         offeredToolNamesForSkills,
         organizationId,
+        organizationAIInstructions,
         practiceJurisdictions,
         refRegistry,
         safeDb,
@@ -3532,6 +3536,7 @@ const prepareChatContext = async ({
     );
 
     return Result.ok({
+      organizationAIInstructions,
       promptCacheKey: buildChatPromptCacheKey(systemPrompt.cacheStablePrefix),
       systemSafe: systemPrompt.safeLayers,
       systemUntrusted: systemPrompt.untrustedSuffix,

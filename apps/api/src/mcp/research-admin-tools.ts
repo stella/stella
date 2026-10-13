@@ -24,6 +24,7 @@ import {
 } from "@/api/lib/chat/projections";
 import { boeClient } from "@/api/lib/legal-search/boe-client";
 import { LIMITS } from "@/api/lib/limits";
+import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/lib/organization-ai-instructions";
 import { TIME_ZONE_ID_MAX_LENGTH } from "@/api/lib/organization-time-zone";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
@@ -744,6 +745,15 @@ const manageOrganizationArgsSchema = nullAsAbsent(
           ),
         ),
       ),
+      ai_instructions: v.optional(
+        v.pipe(
+          v.string(),
+          v.maxLength(ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH),
+          v.description(
+            `Organization-wide AI instructions, up to ${ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH} characters (update_org_settings); send an empty string to clear. Apply across conversations and take priority over personal preferences.`,
+          ),
+        ),
+      ),
       prompt_caching_enabled: v.optional(
         v.pipe(
           v.boolean(),
@@ -855,6 +865,7 @@ const manageOrganizationArgsSchema = nullAsAbsent(
         ["action"],
         ["matter_number_pattern"],
         ["matter_number_padding"],
+        ["ai_instructions"],
         ["prompt_caching_enabled"],
         ["document_processing_mode"],
         ["time_minimum_unit_minutes"],
@@ -867,6 +878,7 @@ const manageOrganizationArgsSchema = nullAsAbsent(
         i.action === "update_org_settings" ||
         (i.matter_number_pattern === undefined &&
           i.matter_number_padding === undefined &&
+          i.ai_instructions === undefined &&
           i.prompt_caching_enabled === undefined &&
           i.document_processing_mode === undefined &&
           i.time_minimum_unit_minutes === undefined &&
@@ -890,6 +902,7 @@ const manageOrganizationArgsSchema = nullAsAbsent(
         ["action"],
         ["matter_number_pattern"],
         ["matter_number_padding"],
+        ["ai_instructions"],
         ["prompt_caching_enabled"],
         ["document_processing_mode"],
         ["time_minimum_unit_minutes"],
@@ -902,6 +915,7 @@ const manageOrganizationArgsSchema = nullAsAbsent(
         i.action !== "update_org_settings" ||
         i.matter_number_pattern !== undefined ||
         i.matter_number_padding !== undefined ||
+        i.ai_instructions !== undefined ||
         i.prompt_caching_enabled !== undefined ||
         i.document_processing_mode !== undefined ||
         i.time_minimum_unit_minutes !== undefined ||
@@ -1103,6 +1117,9 @@ const handleManageOrganizationTool: TypedMcpToolHandler<
         ...(input.matter_number_padding === undefined
           ? {}
           : { matterNumberPadding: input.matter_number_padding }),
+        ...(input.ai_instructions === undefined
+          ? {}
+          : { aiInstructions: input.ai_instructions }),
         ...(input.prompt_caching_enabled === undefined
           ? {}
           : { promptCachingEnabled: input.prompt_caching_enabled }),
