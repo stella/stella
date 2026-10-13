@@ -166,6 +166,15 @@ This installs dependencies, prepares local env files, starts Docker services,
 pushes the database schema, starts the API at <http://localhost:3001>, starts
 the web app at <http://localhost:3000>, and opens the browser.
 
+### Cloud environments
+
+Cloud environments run `bash .agents/cloud-setup.sh install` once, then
+`bash .agents/cloud-setup.sh start` each session. Startup restores local PostgreSQL
+and Valkey and writes `apps/api/.env.test`, which the API test runners load.
+Apply migrations next with
+`(cd apps/api && DB_LOAD_GATE_EBS_SIGNAL=disabled bun --env-file=.env.test run db:migrate)`; the explicit
+signal setting applies to this disposable local database. Startup does not run migrations.
+
 ### Optional demo data
 
 ```bash
