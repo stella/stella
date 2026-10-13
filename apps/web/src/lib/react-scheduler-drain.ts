@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { createRequire } from "node:module";
+import { setImmediate as nextMacrotask } from "node:timers/promises";
 
 type ReactScheduler = {
   unstable_IdlePriority: number;
@@ -48,6 +49,10 @@ export const loadReactScheduler = (): ReactScheduler => {
  * expires after the barrier). The scheduler exposes no queue inspection, so
  * the drain repeats barriers until one follows the previous with no task
  * scheduled in between: then nothing is left behind the last barrier.
+ * Work can also schedule a task from a promise continuation any number of
+ * microtask hops after it ran, so each barrier is followed by a full
+ * macrotask turn (every pending microtask chain settles) before the next
+ * barrier takes its id.
  * Work that never stops enqueueing more never drains; the test runner's hook
  * timeout reports that, exactly as it would for the work itself.
  */
@@ -66,6 +71,7 @@ export const drainReactScheduler = async (): Promise<void> => {
   let previous = barrier();
   for (;;) {
     await previous.ran;
+    await nextMacrotask();
     const next = barrier();
     if (next.id === previous.id + 1) {
       await next.ran;

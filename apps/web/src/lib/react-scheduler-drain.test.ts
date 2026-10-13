@@ -45,3 +45,32 @@ test("the drain waits for idle work that queued work enqueues after the drain be
 
   expect(ran).toEqual(["effects", "idle follow-up"]);
 });
+
+test("the drain waits for idle work enqueued several microtask hops later, and the idle work that work enqueues", async () => {
+  const scheduler = loadReactScheduler();
+  const ran: string[] = [];
+  const scheduleIdleFromMicrotask = (label: string, then?: () => void) => {
+    queueMicrotask(() => {
+      scheduler.unstable_scheduleCallback(
+        scheduler.unstable_IdlePriority,
+        () => {
+          ran.push(label);
+          then?.();
+        },
+      );
+    });
+  };
+  scheduler.unstable_scheduleCallback(scheduler.unstable_NormalPriority, () => {
+    ran.push("effects");
+    // Two hops: the drain's own continuation runs between them.
+    queueMicrotask(() => {
+      scheduleIdleFromMicrotask("idle follow-up", () => {
+        scheduleIdleFromMicrotask("second idle follow-up");
+      });
+    });
+  });
+
+  await drainReactScheduler();
+
+  expect(ran).toEqual(["effects", "idle follow-up", "second idle follow-up"]);
+});
