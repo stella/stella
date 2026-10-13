@@ -4,9 +4,9 @@
  * wording the court applied.
  */
 
-import { isEligibleLegislationExpression } from "@stll/api-contract/legislation-expression";
-import type { LegislationExpressionEligibility } from "@stll/api-contract/legislation-expression";
-import { provisionVersionAsOf } from "@stll/api-contract/provision-version-basis";
+import { isEligibleLegislationExpression } from "./legislation-expression";
+import type { LegislationExpressionEligibility } from "./legislation-expression";
+import { provisionVersionAsOf } from "./provision-version-basis";
 
 export type StatuteVersionWindow = LegislationExpressionEligibility & {
   /** Opens the window; null for a work kept as a single unversioned text. */

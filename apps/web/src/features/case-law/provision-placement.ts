@@ -1,10 +1,10 @@
 import type { ProvisionPlacementFailureReason } from "@stll/api-contract/provision-placement";
-
-import type { ResolvedCitedStatute } from "@/features/case-law/queries/provisions";
 import {
   pickVersionAt,
   versionCoversDate,
-} from "@/features/case-law/statute-version";
+} from "@stll/api-contract/statute-version";
+
+import type { ResolvedCitedStatute } from "@/features/case-law/queries/provisions";
 
 type ProvisionDocumentPlacement =
   | { status: "placed"; document: ResolvedCitedStatute }
