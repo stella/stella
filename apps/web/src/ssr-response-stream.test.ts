@@ -243,6 +243,7 @@ test("SSR stream lifetime closes a stalled renderer even when cancellation never
     signal: renderer.signal,
     lifetimeMs: 10,
     abortRenderer: (error) => renderer.abort(error),
+    drainMs: 10,
     reportError: (error) => errors.push(error),
   });
   expect(await new Response(body).text()).toBe(SHELL);

@@ -3,6 +3,7 @@ import { panic, Result, TaggedError } from "better-result";
 import { createDetached } from "@stll/errors";
 
 const SSR_STREAM_LIFETIME_MS = 15_000;
+const SSR_ABORT_DRAIN_MS = 1000;
 
 export class SsrStreamTimeoutError extends TaggedError(
   "SsrStreamTimeoutError",
@@ -22,7 +23,10 @@ const unavailableSsrResponse = () =>
 
 type BoundedSsrResponseOptions = {
   request: Request;
-  fetchResponse: (request: Request) => Promise<Response>;
+  fetchResponse: (
+    request: Request,
+    rendererSignal: AbortSignal,
+  ) => Promise<Response>;
   reportError: (error: unknown) => void;
   lifetimeMs?: number;
 };
@@ -35,7 +39,11 @@ export const fetchBoundedSsrResponse = async ({
 }: BoundedSsrResponseOptions): Promise<Response> => {
   const started = performance.now();
   const renderer = new AbortController();
-  const signal = AbortSignal.any([request.signal, renderer.signal]);
+  // Start's request abort disposes hydration scripts and the response. After
+  // the shell exists, only abort React so its recovery instructions can drain.
+  const startup = new AbortController();
+  const signal = AbortSignal.any([request.signal, startup.signal]);
+  const rendererSignal = AbortSignal.any([request.signal, renderer.signal]);
   // Document GETs may arrive from Vite's Request realm, which the runtime's
   // constructor cannot recognize as a Request input.
   const boundedRequest = new Request(request.url, {
@@ -50,17 +58,15 @@ export const fetchBoundedSsrResponse = async ({
   if (signal.aborted) {
     onAbort();
   }
-  const timeout = setTimeout(
-    () =>
-      renderer.abort(
-        new SsrStreamTimeoutError({
-          message: "Server-rendered HTML exceeded its response lifetime",
-        }),
-      ),
-    lifetimeMs,
-  );
+  const timeout = setTimeout(() => {
+    const error = new SsrStreamTimeoutError({
+      message: "Server-rendered HTML exceeded its response lifetime",
+    });
+    startup.abort(error);
+    renderer.abort(error);
+  }, lifetimeMs);
   const fetched = Result.tryPromise({
-    try: async () => fetchResponse(boundedRequest),
+    try: async () => fetchResponse(boundedRequest, rendererSignal),
     catch: (error) => error,
   }).then((result) => {
     if (signal.aborted && result.isOk() && result.value.body) {
@@ -104,7 +110,7 @@ export const fetchBoundedSsrResponse = async ({
       return new Response(
         boundSsrStream({
           source: response.body,
-          signal,
+          signal: request.signal,
           reportError,
           abortRenderer: (error) => renderer.abort(error),
           lifetimeMs: Math.max(0, lifetimeMs - (performance.now() - started)),
@@ -129,21 +135,24 @@ type BoundedSsrStreamOptions = {
   reportError: (error: unknown) => void;
   abortRenderer: (error: unknown) => void;
   lifetimeMs?: number;
+  drainMs?: number;
 };
 
-// Closing a failed HTML response lets the browser reach DOMContentLoaded and
-// hydrate the shell. Waiting for renderer cancellation can itself hang, so it
-// must never own downstream completion.
+// React aborts pending boundaries by emitting client-render instructions.
+// Keep forwarding those bytes briefly, but never await producer cancellation
+// to finish the HTTP response.
 export const boundSsrStream = ({
   source,
   signal,
   reportError,
   abortRenderer,
   lifetimeMs = SSR_STREAM_LIFETIME_MS,
+  drainMs = SSR_ABORT_DRAIN_MS,
 }: BoundedSsrStreamOptions): ReadableStream<Uint8Array> => {
   const reader = source.getReader();
   const detached = createDetached(reportError);
-  let terminal = false;
+  let phase: "rendering" | "draining" | "closed" = "rendering";
+  const isClosed = () => phase === "closed";
   let timeout: ReturnType<typeof setTimeout> | undefined;
   let controller: ReadableStreamDefaultController<Uint8Array>;
 
@@ -160,10 +169,10 @@ export const boundSsrStream = ({
   };
 
   const fail = (error: unknown) => {
-    if (terminal) {
+    if (isClosed()) {
       return;
     }
-    terminal = true;
+    phase = "closed";
     cleanup();
     controller.close();
     abortRenderer(error);
@@ -173,32 +182,51 @@ export const boundSsrStream = ({
 
   const onAbort = () => fail(signal.reason);
 
+  const drain = () => {
+    if (phase !== "rendering") {
+      return;
+    }
+    phase = "draining";
+    cleanup();
+    const error = new SsrStreamTimeoutError({
+      message: "Server-rendered HTML exceeded its stream lifetime",
+    });
+    timeout = setTimeout(() => {
+      if (isClosed()) {
+        return;
+      }
+      phase = "closed";
+      cleanup();
+      controller.close();
+      cancelSource(error);
+    }, drainMs);
+    // The phase and drain deadline are installed before aborting: React may
+    // synchronously resume the pending read with its recovery instructions.
+    abortRenderer(error);
+    reportError(error);
+    if (!signal.aborted) {
+      signal.addEventListener("abort", onAbort, { once: true });
+    }
+  };
+
   return new ReadableStream<Uint8Array>({
     start(streamController) {
       controller = streamController;
       signal.addEventListener("abort", onAbort, { once: true });
-      timeout = setTimeout(
-        () =>
-          fail(
-            new SsrStreamTimeoutError({
-              message: "Server-rendered HTML exceeded its stream lifetime",
-            }),
-          ),
-        lifetimeMs,
-      );
+      timeout = setTimeout(drain, lifetimeMs);
       if (signal.aborted) {
         onAbort();
       }
     },
     async pull() {
-      if (terminal) {
+      if (isClosed()) {
         return;
       }
       const read = await Result.tryPromise({
         try: async () => reader.read(),
         catch: (error) => error,
       });
-      if (terminal) {
+      if (isClosed()) {
         return;
       }
       if (read.isErr()) {
@@ -206,7 +234,7 @@ export const boundSsrStream = ({
         return;
       }
       if (read.value.done) {
-        terminal = true;
+        phase = "closed";
         cleanup();
         reader.releaseLock();
         controller.close();
@@ -215,10 +243,10 @@ export const boundSsrStream = ({
       controller.enqueue(read.value.value);
     },
     cancel(reason) {
-      if (terminal) {
+      if (isClosed()) {
         return;
       }
-      terminal = true;
+      phase = "closed";
       cleanup();
       abortRenderer(reason);
       cancelSource(reason);

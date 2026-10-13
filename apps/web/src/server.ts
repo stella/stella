@@ -1,8 +1,13 @@
+import { createElement } from "react";
+
+import { defineHandlerCallback } from "@tanstack/react-router/ssr/server";
+import { createStartHandler, StartServer } from "@tanstack/react-start/server";
 import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 
 import { getAnalytics } from "@/lib/analytics/provider";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 import { SSR_CACHE_CLASS_HEADER } from "@/route-response-policy";
+import { renderSsrResponse } from "@/ssr-renderer";
 import { SSR_STATUS_HEADER, ssrStatusFromHeader } from "@/ssr-response-status";
 import { fetchBoundedSsrResponse } from "@/ssr-response-stream";
 
@@ -19,6 +24,18 @@ const CROSS_ORIGIN_ISOLATION_HEADERS = {
   "Cross-Origin-Embedder-Policy": "credentialless",
 } as const;
 
+const reportSsrError = (error: unknown) => {
+  getAnalytics().captureError(error);
+  // Request URLs and renderer messages can contain reader data.
+  process.stderr.write(
+    `${JSON.stringify({
+      severity: "ERROR",
+      message: "ssr.response_failed",
+      error: error instanceof Error ? error.name : "UnknownError",
+    })}\n`,
+  );
+};
+
 export default createServerEntry({
   async fetch(request) {
     const documentRequest =
@@ -28,20 +45,20 @@ export default createServerEntry({
     const response = documentRequest
       ? await fetchBoundedSsrResponse({
           request,
-          fetchResponse: async (renderRequest) =>
-            await handler.fetch(renderRequest),
-          reportError: (error) => {
-            getAnalytics().captureError(error);
-            // Keep server diagnostics available without an analytics sink;
-            // request URLs and renderer messages can contain reader data.
-            process.stderr.write(
-              `${JSON.stringify({
-                severity: "ERROR",
-                message: "ssr.response_failed",
-                error: error instanceof Error ? error.name : "UnknownError",
-              })}\n`,
-            );
-          },
+          fetchResponse: async (renderRequest, rendererSignal) =>
+            await createStartHandler(
+              defineHandlerCallback(({ router, responseHeaders }) =>
+                renderSsrResponse({
+                  request: renderRequest,
+                  rendererSignal,
+                  router,
+                  responseHeaders,
+                  children: createElement(StartServer, { router }),
+                  reportError: reportSsrError,
+                }),
+              ),
+            )(renderRequest),
+          reportError: reportSsrError,
         })
       : await handler.fetch(request);
     const headers = new Headers(response.headers);
