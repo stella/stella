@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 4,
+  "reason": "The TanStack connection adapter and public send boundary require exceptions or rejected streams rather than Result values. Four additional throws preserve typed transport and preparation failures, SDK busy-send queue recovery, and the original rejection cause. Real SDK canaries cover these boundary failures; no other runtime code gains an exception exemption."
+}
