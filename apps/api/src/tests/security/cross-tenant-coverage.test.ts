@@ -188,25 +188,6 @@ const DATED_CROSS_TENANT_WAIVERS: Record<string, DatedWaiver> = {
       { file: "handlers/desktop-registry/auth.test.ts", titles: [] },
     ],
   },
-  // This session-driven matrix cannot authenticate desktop credentials;
-  // credential binding is covered by desktop-registry/auth.test.ts and real
-  // membership/RLS isolation by the cross-organization tests below.
-  "desktop-time-entries": {
-    reason: WAIVER_REASON.isolatedOutsideRlsHarness,
-    expiresOn: "2026-10-17",
-    substituteTests: [
-      {
-        file: "handlers/desktop-time-entries/cross-org.db.test.ts",
-        titles: [
-          "org A desktop candidates exclude org B matters for a user belonging to both organizations",
-          "org A desktop batch refuses org B matters and never replays an org B batch key",
-          "org A desktop status hides an org B batch key and fences only its own namespace",
-          "org A desktop single create refuses an org B matter despite dual organization membership",
-        ],
-      },
-      { file: "handlers/desktop-registry/auth.test.ts", titles: [] },
-    ],
-  },
 };
 
 const waivedDomains = [
@@ -223,6 +204,7 @@ const apiSrcDir = path.resolve(import.meta.dir, "../..");
  * otherwise mark the whole domain covered and hide a new route beside it.
  */
 const PER_HANDLER_WAIVERS: Record<string, Record<string, WaiverReason>> = {
+  "desktop-time-entries": {},
   chat: {
     // The model catalog for the caller's own organization: no record id in,
     // nothing another tenant owns out.
@@ -260,11 +242,21 @@ const domainHandlerImports = (source: string, domain: string): string[] =>
     .map((match) => match[1])
     .filter((modulePath): modulePath is string => modulePath !== undefined);
 
-const mountedHandlers = (domain: string): string[] =>
-  domainHandlerImports(
-    readFileSync(path.join(handlersDir, domain, "routes.ts"), "utf-8"),
-    domain,
-  ).toSorted();
+const mountedHandlers = (domain: string): string[] => {
+  const source = readFileSync(
+    path.join(handlersDir, domain, "routes.ts"),
+    "utf-8",
+  );
+  const relativeImports = [
+    ...source.matchAll(/import \w+ from "\.\/([^"]+)"/gu),
+  ]
+    .map((match) => match[1])
+    .filter((modulePath): modulePath is string => modulePath !== undefined);
+  return [
+    ...domainHandlerImports(source, domain),
+    ...relativeImports,
+  ].toSorted();
+};
 
 describe("cross-tenant matrix coverage guard", () => {
   test("every handler domain is in the cross-tenant matrix or explicitly waived", () => {
