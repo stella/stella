@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import {
   existsSync,
   lstatSync,
+  mkdtempSync,
   mkdirSync,
   readFileSync,
   readdirSync,
@@ -59,6 +60,46 @@ export const sharedTestMigrationHistory = (tree: string) => {
     }))
     .toSorted(({ name: left }, { name: right }) => left.localeCompare(right));
   return { folder, key: sha256Hex(JSON.stringify(entries)) };
+};
+
+export const snapshotSharedTestMigrations = (
+  history: ReturnType<typeof sharedTestMigrationHistory>,
+  histories: string,
+) => {
+  mkdirSync(histories, { recursive: true, mode: 0o700 });
+  const temporary = mkdtempSync(path.join(histories, ".building-"));
+  const snapshot = path.join(histories, history.key);
+  try {
+    const folder = path.join(temporary, "apps/api/drizzle");
+    mkdirSync(folder, { recursive: true, mode: 0o700 });
+    for (const entry of readdirSync(history.folder, { withFileTypes: true })) {
+      const file = path.join(history.folder, entry.name, "migration.sql");
+      if (!entry.isDirectory() || !existsSync(file)) {
+        continue;
+      }
+      const destination = path.join(folder, entry.name);
+      mkdirSync(destination, { recursive: true, mode: 0o700 });
+      writeFileSync(
+        path.join(destination, "migration.sql"),
+        readFileSync(file),
+        {
+          mode: 0o600,
+        },
+      );
+    }
+    if (sharedTestMigrationHistory(temporary).key !== history.key) {
+      throw new SharedTestPostgresError({
+        message:
+          "Worker migrations changed during snapshot; retry preparation.",
+      });
+    }
+    // Only incomplete templates reach this path, under the cluster advisory lock.
+    rmSync(snapshot, { recursive: true, force: true });
+    renameSync(temporary, snapshot);
+    return path.join(snapshot, "apps/api/drizzle");
+  } finally {
+    rmSync(temporary, { recursive: true, force: true });
+  }
 };
 
 const secret = (directory: string, name: string) => {
@@ -351,25 +392,10 @@ const ensureWorkerTemplate = async ({
   // Retry only an incomplete template, which has never been handed to a worker.
   await session.unsafe(`DROP DATABASE IF EXISTS "${template}" WITH (FORCE)`);
   await session.unsafe(`CREATE DATABASE "${template}" OWNER "${OWNER}"`);
-  const snapshot = path.join(state, "histories", history.key);
-  const folder = path.join(snapshot, "apps/api/drizzle");
-  mkdirSync(folder, { recursive: true, mode: 0o700 });
-  for (const entry of readdirSync(history.folder, { withFileTypes: true })) {
-    const file = path.join(history.folder, entry.name, "migration.sql");
-    if (!entry.isDirectory() || !existsSync(file)) {
-      continue;
-    }
-    const destination = path.join(folder, entry.name);
-    mkdirSync(destination, { recursive: true, mode: 0o700 });
-    writeFileSync(path.join(destination, "migration.sql"), readFileSync(file), {
-      mode: 0o600,
-    });
-  }
-  if (sharedTestMigrationHistory(snapshot).key !== history.key) {
-    throw new SharedTestPostgresError({
-      message: "Worker migrations changed during snapshot; retry preparation.",
-    });
-  }
+  const folder = snapshotSharedTestMigrations(
+    history,
+    path.join(state, "histories"),
+  );
   docker(
     [
       "exec",

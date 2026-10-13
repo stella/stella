@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 import {
   mkdtempSync,
   mkdirSync,
+  existsSync,
+  readdirSync,
   renameSync,
   rmSync,
   writeFileSync,
@@ -12,6 +14,7 @@ import path from "node:path";
 import {
   sharedTestDatabase,
   sharedTestMigrationHistory,
+  snapshotSharedTestMigrations,
 } from "./shared-test-postgres";
 
 test("worktree identities are bounded SQL identifiers and distinguish paths", () => {
@@ -29,6 +32,35 @@ test("worktree identities are bounded SQL identifiers and distinguish paths", ()
     expect(database.length).toBeLessThan(63);
   }
   expect(sharedTestDatabase("/work/a")).toBe(sharedTestDatabase("/work/a"));
+});
+
+test("a rejected migration snapshot can be retried after an added migration is reverted", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "stella-pg-snapshot-"));
+  try {
+    const tree = path.join(root, "worker");
+    const first = path.join(tree, "apps/api/drizzle/20260101000000_first");
+    mkdirSync(first, { recursive: true });
+    writeFileSync(path.join(first, "migration.sql"), "SELECT 1;");
+    const history = sharedTestMigrationHistory(tree);
+    const histories = path.join(root, "histories");
+    const extra = path.join(tree, "apps/api/drizzle/20260102000000_extra");
+    mkdirSync(extra);
+    writeFileSync(path.join(extra, "migration.sql"), "SELECT 2;");
+    expect(() => snapshotSharedTestMigrations(history, histories)).toThrow(
+      "Worker migrations changed during snapshot",
+    );
+    expect(existsSync(path.join(histories, history.key))).toBe(false);
+    expect(readdirSync(histories)).toEqual([]);
+    rmSync(extra, { recursive: true });
+    expect(sharedTestMigrationHistory(tree).key).toBe(history.key);
+    const folder = snapshotSharedTestMigrations(history, histories);
+    expect(readdirSync(folder)).toEqual(["20260101000000_first"]);
+    expect(
+      sharedTestMigrationHistory(path.join(histories, history.key)).key,
+    ).toBe(history.key);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("migration history identity follows ordered migration names and SQL rather than worker paths", () => {
