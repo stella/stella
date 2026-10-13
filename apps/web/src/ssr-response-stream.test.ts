@@ -17,7 +17,7 @@ test("SSR responses return an unavailable document when the renderer never produ
   let producerSignal: AbortSignal | undefined;
   const response = await fetchBoundedSsrResponse({
     request: new Request("https://stella.test/law/cases"),
-    fetchResponse: (request) => {
+    fetchResponse: async (request) => {
       producerSignal = request.signal;
       return new Promise<Response>(() => {});
     },
@@ -52,7 +52,7 @@ test("SSR responses release a renderer that resolves after the deadline", async 
   const errors: unknown[] = [];
   const response = await fetchBoundedSsrResponse({
     request: new Request("https://stella.test/law/cases"),
-    fetchResponse: () => late.promise,
+    fetchResponse: async () => late.promise,
     lifetimeMs: 10,
     reportError: (error) => errors.push(error),
   });
@@ -73,7 +73,7 @@ test("SSR responses stop a pending renderer when the request aborts", async () =
     request: new Request("https://stella.test/law/cases", {
       signal: request.signal,
     }),
-    fetchResponse: () => new Promise<Response>(() => {}),
+    fetchResponse: async () => new Promise<Response>(() => {}),
     reportError: (error) => errors.push(error),
   });
   request.abort(reason);
@@ -233,7 +233,7 @@ test("SSR stream lifetime closes a stalled renderer even when cancellation never
     start(controller) {
       controller.enqueue(encoder.encode(SHELL));
     },
-    cancel() {
+    async cancel() {
       cancelled = true;
       return new Promise<void>(() => {});
     },
@@ -259,7 +259,7 @@ test("SSR stream cancellation releases the renderer without awaiting its cancell
   const reason = "consumer stopped reading";
   let cancelledWith: unknown;
   const source = new ReadableStream<Uint8Array>({
-    cancel(value) {
+    async cancel(value) {
       cancelledWith = value;
       return new Promise<void>(() => {});
     },

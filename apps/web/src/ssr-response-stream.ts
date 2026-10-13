@@ -60,7 +60,7 @@ export const fetchBoundedSsrResponse = async ({
     lifetimeMs,
   );
   const fetched = Result.tryPromise({
-    try: () => fetchResponse(boundedRequest),
+    try: async () => fetchResponse(boundedRequest),
     catch: (error) => error,
   }).then((result) => {
     if (signal.aborted && result.isOk() && result.value.body) {
@@ -195,7 +195,7 @@ export const boundSsrStream = ({
         return;
       }
       const read = await Result.tryPromise({
-        try: () => reader.read(),
+        try: async () => reader.read(),
         catch: (error) => error,
       });
       if (terminal) {
