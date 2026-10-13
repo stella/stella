@@ -204,6 +204,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "SESSION_LIFETIME_CAP_ENABLED",
   "SES_CONFIGURATION_SET",
   "SES_REGION",
+  "STELLA_ALLOW_PRIVILEGED_DB_LOGIN_FOR_LOCAL_DEV",
   "SKIP_MIGRATION_CHECK",
   "SMTP_HOST",
   "SMTP_PORT",
@@ -303,6 +304,8 @@ const requestBudgetUnitDescription = (name: string): string => {
 };
 
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
+  STELLA_ALLOW_PRIVILEGED_DB_LOGIN_FOR_LOCAL_DEV:
+    "Unsafe local development opt-in: set to 1 only with an explicitly enabled local development runtime. Strict runtimes refuse this setting.",
   ...Object.fromEntries(
     Object.keys(rateLimitBudgetEnvSchema).map((name) => {
       const unit = requestBudgetUnitDescription(name);
@@ -931,6 +934,8 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   SES_CONFIGURATION_SET: ENV_CREDENTIAL_KIND.notCredential,
   SES_REGION: ENV_CREDENTIAL_KIND.notCredential,
   SES_SECRET_ACCESS_KEY: ENV_CREDENTIAL_KIND.credential,
+  STELLA_ALLOW_PRIVILEGED_DB_LOGIN_FOR_LOCAL_DEV:
+    ENV_CREDENTIAL_KIND.notCredential,
   SKIP_MIGRATION_CHECK: ENV_CREDENTIAL_KIND.notCredential,
   SMOKE_SESSION_SECRET: ENV_CREDENTIAL_KIND.credential,
   SMTP_HOST: ENV_CREDENTIAL_KIND.notCredential,
@@ -1349,6 +1354,19 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 
 export const TOOLING_ENV_KEYS = new Set([
   "STELLA_RUN_SHARED_POSTGRES_TESTS",
+  // Ordered frozen install flags shared by the scoped CI cache and installer.
+  "STELLA_CI_INSTALL_FLAGS",
+  // Optional smaller process cap leaves room inside the composite caller deadline.
+  "STELLA_CI_INSTALL_BUDGET_MS",
+  // Scoped install-store ownership and phase measurement.
+  "BUN_INSTALL_GLOBAL_STORE",
+  "CACHE_HIT",
+  "STORE_KEY",
+  "START_MS",
+  "INSTALL_LOG",
+  "RESTORE_MS",
+  "INSTALL_MS",
+  "INSTALL_OUTCOME",
   // Manual regeneration binds the requested PR and checks available job services.
   "PR_NUMBER",
   "JOB_SERVICES",

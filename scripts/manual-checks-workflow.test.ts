@@ -13,7 +13,10 @@ import * as v from "valibot";
 
 import { assertProperty } from "@stll/property-testing";
 
-import { MANUAL_CHECKS, validateManualCheckInput } from "./manual-check-input";
+import {
+  MANUAL_WORKFLOW_CHECKS,
+  validateManualCheckInput,
+} from "./manual-check-input";
 import { groupTestFiles } from "./run-manual-test-files";
 
 const workflowFile = new URL(
@@ -55,7 +58,7 @@ const workflowProblems = (text: string): string[] => {
     }),
     workflow.on["workflow_dispatch"],
   ).inputs.check.options;
-  if (JSON.stringify(options) !== JSON.stringify(MANUAL_CHECKS)) {
+  if (JSON.stringify(options) !== JSON.stringify(MANUAL_WORKFLOW_CHECKS)) {
     problems.push("enum");
   }
   if (

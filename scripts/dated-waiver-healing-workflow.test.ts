@@ -4,6 +4,7 @@ import * as v from "valibot";
 
 import { PROBE_PHASE_BUDGET_MS } from "./dated-waiver-probes";
 import { evaluate } from "./github-expression";
+import { workflowCiInstallFlags } from "./workflow-steps";
 
 const workflow = v.parse(
   v.object({
@@ -248,7 +249,13 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
   const trackedFiles = expiry.steps.find(
     ({ name }) => name === "List tracked files for dated waiver guard",
   );
-  expect(install?.run).toContain("bun scripts/ci-install.ts");
+  if (!install) {
+    throw new TypeError("Missing dated waiver install");
+  }
+  expect(workflowCiInstallFlags(install)).toEqual([
+    "--frozen-lockfile",
+    "--ignore-scripts",
+  ]);
   expect(trackedFiles?.run).toBe(
     'git ls-files -z > "$RUNNER_TEMP/dated-waiver-tracked-files"',
   );

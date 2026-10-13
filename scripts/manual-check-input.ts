@@ -9,6 +9,10 @@ export const MANUAL_CHECKS = [
   "verify-affected",
 ] as const;
 export type ManualCheck = (typeof MANUAL_CHECKS)[number];
+export const MANUAL_WORKFLOW_CHECKS = [
+  ...MANUAL_CHECKS,
+  "install-cache-benchmark",
+] as const;
 
 const packageNames = (root: string) =>
   ["apps", "packages"].flatMap((directory) =>
