@@ -2,23 +2,15 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { getColumns, getTableName, sql } from "drizzle-orm";
 
-import { agentDelegation, agentRegistration } from "@/api/db/agent-auth-schema";
-import {
-  apikey,
-  member,
-  oauthAccessToken,
-  oauthConsent,
-  oauthRefreshToken,
-  session,
-} from "@/api/db/auth-schema";
+import { apikey, member } from "@/api/db/auth-schema";
 import {
   desktopEditHandoffs,
   desktopEditSessions,
   entities,
   entityVersions,
+  folioCollabRoomTokens,
   properties,
   bufferObjectCleanupIntents,
-  folioCollabRoomTokens,
   mcpOAuthState,
   mcpUserConnections,
   pdfSigningSessions,
@@ -27,7 +19,10 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import { removeOrganizationMemberWithAuthArtifacts } from "@/api/lib/auth-artifacts";
+import {
+  memberCredentialRevocationTables,
+  removeOrganizationMemberWithAuthArtifacts,
+} from "@/api/lib/auth-artifacts";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   authorizeDesktopEditSessionWithDb,
@@ -40,32 +35,18 @@ import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 type Transaction = Parameters<Parameters<GatedTestDb["transaction"]>[0]>[0];
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
-const credentialTables = [
-  mcpUserConnections,
-  mcpOAuthState,
-  sharepointConnections,
-  sharepointOAuthState,
-  desktopEditHandoffs,
-  pdfSigningSessions,
-  folioCollabRoomTokens,
-];
+const registeredCredentialTables = Object.values(
+  memberCredentialRevocationTables,
+);
 const tables = [
-  ...credentialTables,
+  ...registeredCredentialTables,
   entities,
   entityVersions,
   properties,
   bufferObjectCleanupIntents,
-  desktopEditSessions,
   workspaces,
   workspaceMembers,
   member,
-  oauthAccessToken,
-  oauthRefreshToken,
-  oauthConsent,
-  session,
-  agentRegistration,
-  agentDelegation,
-  apikey,
 ];
 
 const snapshot = async (tx: Transaction) => ({
@@ -136,6 +117,13 @@ if (!databaseUrl || !enabled) {
               );
             }
           }
+          const fixtureRelations = await db
+            .select({ tableName: sql<string>`table_name` })
+            .from(sql`information_schema.tables`)
+            .where(sql`table_schema = ${schema} AND table_type = 'BASE TABLE'`);
+          expect(
+            fixtureRelations.map(({ tableName }) => tableName).toSorted(),
+          ).toEqual(tables.map((table) => getTableName(table)).toSorted());
           const transaction = async <T>(
             work: (tx: Transaction) => Promise<T>,
           ) =>

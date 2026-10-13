@@ -350,6 +350,26 @@ const MEMBER_CREDENTIAL_REVOCATION = {
   },
 } as const satisfies Record<string, RevokeMemberCredentials>;
 
+/** Tables whose credential rows are revoked by the registry above. */
+export const memberCredentialRevocationTables = {
+  mcpWebHandoff,
+  oauthAccessToken,
+  oauthRefreshToken,
+  oauthConsent,
+  session: sessionTable,
+  agentRegistration,
+  agentDelegation,
+  mcpUserConnection: mcpUserConnections,
+  mcpOAuthState,
+  sharepointConnection: sharepointConnections,
+  sharepointOAuthState,
+  desktopEditHandoff: desktopEditHandoffs,
+  desktopEditSession: desktopEditSessions,
+  pdfSigningSession: pdfSigningSessions,
+  folioCollabRoomToken: folioCollabRoomTokens,
+  apiKey: apikey,
+} as const satisfies Record<keyof typeof MEMBER_CREDENTIAL_REVOCATION, PgTable>;
+
 /**
  * End every credential one member holds in one organization. Runs inside the
  * caller's transaction so the membership row and its credentials go together.
