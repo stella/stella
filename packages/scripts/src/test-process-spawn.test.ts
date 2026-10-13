@@ -25,17 +25,19 @@ test.each(["eval", "test"] as const)(
             ...(mode === "eval" ? ["-e", source] : ["test", file]),
           ],
           options: { stdout: "pipe", stderr: "inherit" },
+          limitBytes: 1024 ** 3,
           onWarning: (message) => {
             throw new TypeError(message);
           },
         },
-        (pid) => {
+        ({ rootPid: pid }) => {
           // Longer than this trivial entry point needs, reproducing census startup.
           Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 300);
           expect(existsSync(marker)).toBe(false);
           expect(Result.try(() => process.kill(pid, 0)).isOk()).toBe(true);
           return Result.ok({
-            readPeakMemory: () => Result.ok(0),
+            readMemory: () =>
+              Result.ok({ peakBytes: 0, status: "within-limit" }),
             signal: () => Result.ok(undefined),
           });
         },
@@ -64,6 +66,7 @@ test("failed leader registration never releases the entry point", async () => {
             `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'unowned')`,
           ],
           options: { stdout: "ignore", stderr: "inherit" },
+          limitBytes: 1024 ** 3,
           onWarning: (message) => {
             throw new TypeError(message);
           },

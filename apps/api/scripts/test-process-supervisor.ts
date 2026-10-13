@@ -288,6 +288,7 @@ export class TestProcessSupervisor {
     const junitPath = path.join(this.options.directory, `${id}.xml`);
     writeFileSync(logPath, "", { mode: 0o600 });
     const { child, windowsProcesses } = spawnTestProcess({
+      limitBytes: this.memoryLimitBytes,
       command: command(junitPath),
       options: {
         cwd,

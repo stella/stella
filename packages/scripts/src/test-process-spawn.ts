@@ -19,6 +19,7 @@ type SpawnTestProcessOptions<
   Err extends Bun.Spawn.Readable,
 > = {
   command: string[];
+  limitBytes: number;
   options: Bun.Spawn.SpawnOptions<In, Out, Err>;
   onWarning: (message: string) => void;
 };
@@ -29,9 +30,14 @@ export const spawnGatedTestProcess = <
   const Out extends Bun.Spawn.Readable,
   const Err extends Bun.Spawn.Readable,
 >(
-  { command, options, onWarning }: SpawnTestProcessOptions<In, Out, Err>,
+  {
+    command,
+    options,
+    onWarning,
+    limitBytes,
+  }: SpawnTestProcessOptions<In, Out, Err>,
   registerJob: (
-    pid: number,
+    args: Parameters<typeof createWindowsProcessOwnership>[0],
   ) => Result<WindowsProcessOwnership, Error> = createWindowsProcessOwnership,
 ) => {
   const directory = mkdtempSync(path.join(tmpdir(), "stella-test-startup-"));
@@ -63,7 +69,7 @@ export const spawnGatedTestProcess = <
           },
         },
       );
-      const registered = registerJob(child.pid);
+      const registered = registerJob({ rootPid: child.pid, limitBytes });
       if (registered.isErr()) {
         onWarning(registered.error.message);
         return Result.err(

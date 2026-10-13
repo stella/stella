@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -12,16 +12,20 @@ import {
 } from "./windows-process-ownership";
 
 const windowsTest = process.platform === "win32" ? test : test.skip;
-windowsTest(
-  "job measures and terminates the worker after its intermediate launcher exits before any sample",
-  async () => {
+windowsTest.each(["measurement", "hard-cap"] as const)(
+  "native Windows job %s reports memory and terminates the orphan worker",
+  async (mode) => {
     const directory = mkdtempSync(path.join(tmpdir(), "stella-job-orphan-"));
+    const marker = path.join(directory, "ready");
+    const limitBytes = (mode === "hard-cap" ? 128 : 256) * 1024 ** 2;
     const { child, windowsProcesses } = spawnTestProcess({
+      limitBytes,
       command: [
         process.execPath,
         `${import.meta.dir}/test-fixtures/job-launcher-leader.ts`,
         "leader",
-        path.join(directory, "ready"),
+        marker,
+        ...(mode === "hard-cap" ? ["hard-cap"] : []),
       ],
       options: { stdout: "pipe", stderr: "inherit" },
       onWarning: (message) => {
@@ -48,11 +52,14 @@ windowsTest(
       workerPid = worker;
       expect(Result.try(() => process.kill(launcher, 0)).isErr()).toBe(true);
       expect(Result.try(() => process.kill(worker, 0)).isOk()).toBe(true);
+      if (mode === "hard-cap") {
+        expect(readFileSync(marker, "utf-8")).toBe("rejected");
+      }
       const failures: string[] = [];
       const watchdog = watchTestProcessMemory({
         child,
         windowsProcesses,
-        limitBytes: 64 * 1024 ** 2,
+        limitBytes: mode === "hard-cap" ? limitBytes : 64 * 1024 ** 2,
         intervalMs: 60_000,
         readBytes: () => {
           throw new TypeError("Job must provide memory");
@@ -69,7 +76,15 @@ windowsTest(
         },
       });
       try {
-        expect(watchdog.peakBytes()).toBeGreaterThanOrEqual(96 * 1024 ** 2);
+        if (mode === "hard-cap") {
+          expect(watchdog.peakBytes()).toBeGreaterThan(0);
+          expect(watchdog.peakBytes()).toBeLessThanOrEqual(limitBytes);
+          expect(failures.at(0)).toContain(
+            "Windows job rejected an allocation",
+          );
+        } else {
+          expect(watchdog.peakBytes()).toBeGreaterThanOrEqual(96 * 1024 ** 2);
+        }
         expect(failures).toHaveLength(1);
         await child.exited;
         for (
@@ -99,6 +114,9 @@ windowsTest(
 const fakeJobApi = () => {
   let peak = 700;
   let terminated = 0;
+  let accounting: "disabled" | "enabled" = "disabled";
+  let limit = 0;
+  const messages: number[] = [];
   const closed: (number | bigint)[] = [];
   const api = {
     CreateJobObjectW: () => 100n,
@@ -110,9 +128,18 @@ const fakeJobApi = () => {
         buffer.byteOffset,
         buffer.byteLength,
       );
+      if (kind === 7) {
+        expect(length).toBe(16);
+        return 1;
+      }
       expect(kind).toBe(9);
       expect(length).toBe(144);
-      expect(view.getUint32(16, true)).toBe(0x20_00);
+      const flags = view.getUint32(16, true);
+      accounting =
+        Math.floor(flags / 0x02_00) % 2 === 1 ? "enabled" : "disabled";
+      limit = Number(view.getBigUint64(120, true));
+      expect(limit).toBe(1000);
+      expect(Math.floor(flags / 0x20_00) % 2).toBe(1);
       return 1;
     },
     QueryInformationJobObject: (_job, _kind, buffer) => {
@@ -120,7 +147,7 @@ const fakeJobApi = () => {
         buffer.buffer,
         buffer.byteOffset,
         buffer.byteLength,
-      ).setBigUint64(136, BigInt(peak), true);
+      ).setBigUint64(136, BigInt(accounting === "enabled" ? peak : 0), true);
       return 1;
     },
     TerminateJobObject: () => {
@@ -131,21 +158,40 @@ const fakeJobApi = () => {
       closed.push(handle);
       return 1;
     },
-    GetLastError: () => 5,
+    CreateIoCompletionPort: () => 300n,
+    GetQueuedCompletionStatus: (_port, message) => {
+      const value = messages.shift();
+      if (value === undefined) {
+        return 0;
+      }
+      new DataView(
+        message.buffer,
+        message.byteOffset,
+        message.byteLength,
+      ).setUint32(0, value, true);
+      return 1;
+    },
+    GetLastError: () => 258,
   } satisfies WindowsJobApi;
   return {
     api,
     closed,
     terminated: () => terminated,
     allocate: () => {
-      peak = 1200;
+      peak = accounting === "enabled" ? Math.min(900, limit) : 1200;
+      if (accounting === "enabled") {
+        messages.push(10);
+      }
     },
   };
 };
 
 test("job peak remains enforceable after the leader and launcher exit, without a PID census", async () => {
   const job = fakeJobApi();
-  const owner = createWindowsProcessOwnership(42, job.api).unwrap();
+  const owner = createWindowsProcessOwnership(
+    { rootPid: 42, limitBytes: 1000 },
+    job.api,
+  ).unwrap();
   const failures: string[] = [];
   const watchdog = watchTestProcessMemory({
     child: {
@@ -178,10 +224,10 @@ test("job peak remains enforceable after the leader and launcher exit, without a
     expect(watchdog.peakBytes()).toBe(700);
     job.allocate();
     await Bun.sleep(30);
-    expect(watchdog.peakBytes()).toBe(1200);
+    expect(watchdog.peakBytes()).toBe(900);
     expect(failures).toHaveLength(1);
     expect(job.terminated()).toBe(1);
-    expect(job.closed).toEqual([200n, 100n]);
+    expect(job.closed).toEqual([200n, 100n, 300n]);
     expect(owner.signal("SIGKILL").isOk()).toBe(true);
     expect(job.terminated()).toBe(1);
   } finally {
@@ -193,7 +239,10 @@ test("job peak remains enforceable after the leader and launcher exit, without a
 test("job assignment failure stays an error and closes both handles", () => {
   const job = fakeJobApi();
   job.api.AssignProcessToJobObject = () => 0;
-  const owner = createWindowsProcessOwnership(42, job.api);
+  const owner = createWindowsProcessOwnership(
+    { rootPid: 42, limitBytes: 1000 },
+    job.api,
+  );
   expect(owner.isErr()).toBe(true);
-  expect(job.closed).toEqual([200n, 100n]);
+  expect(job.closed).toEqual([200n, 100n, 300n]);
 });

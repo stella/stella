@@ -2,6 +2,7 @@ import { attachTestProcessShutdown } from "../process-shutdown";
 import { spawnTestProcess } from "../test-process-spawn";
 
 const { child, windowsProcesses } = spawnTestProcess({
+  limitBytes: 1024 ** 3,
   command: [
     process.execPath,
     `${import.meta.dir}/signal-cleanup-child.ts`,

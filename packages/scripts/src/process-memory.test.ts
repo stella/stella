@@ -20,6 +20,7 @@ posixTest.each(["leader", "leader-exit"] as const)(
   async (mode) => {
     const directory = mkdtempSync(path.join(tmpdir(), "stella-group-orphan-"));
     const { child } = spawnTestProcess({
+      limitBytes: 1024 ** 3,
       command: [
         process.execPath,
         `${import.meta.dir}/test-fixtures/job-launcher-leader.ts`,
@@ -122,7 +123,9 @@ for (const fixture of ["memory-allocation.ts", "memory-allocation-parent.ts"]) {
   test(`a resident allocating process in ${fixture} is killed with its file and measured peak`, async () => {
     const readBytes = await createProcessMemoryReader();
     const filename = `test-fixtures/${fixture}`;
+    const limitBytes = 128 * 1024 ** 2;
     const { child, windowsProcesses } = spawnTestProcess({
+      limitBytes,
       command: [process.execPath, `${import.meta.dir}/${filename}`],
       options: {
         stdout: "ignore",
@@ -134,7 +137,6 @@ for (const fixture of ["memory-allocation.ts", "memory-allocation-parent.ts"]) {
       },
     });
     const failures: string[] = [];
-    const limitBytes = 128 * 1024 ** 2;
     const shutdown =
       process.platform === "win32"
         ? attachTestProcessShutdown({
@@ -162,12 +164,19 @@ for (const fixture of ["memory-allocation.ts", "memory-allocation-parent.ts"]) {
     });
     try {
       await child.exited;
+      await watchdog.stop();
       if (process.platform === "win32") {
         expect(child.exitCode).not.toBe(0);
       } else {
         expect(child.signalCode).toBe("SIGKILL");
       }
-      expect(watchdog.peakBytes()).toBeGreaterThan(limitBytes);
+      if (process.platform === "win32") {
+        expect(watchdog.peakBytes()).toBeGreaterThan(0);
+        expect(watchdog.peakBytes()).toBeLessThanOrEqual(limitBytes);
+        expect(failures.at(0)).toContain("Windows job rejected an allocation");
+      } else {
+        expect(watchdog.peakBytes()).toBeGreaterThan(limitBytes);
+      }
       expect(failures).toHaveLength(1);
       expect(failures.at(0)).toContain(
         `Test invocation memory limit exceeded for ${filename}`,

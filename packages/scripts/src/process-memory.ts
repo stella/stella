@@ -172,7 +172,7 @@ type WatchTestProcessMemoryOptions = {
   sampleGroup?: typeof sampleProcessGroupMemory;
   signalPid?: (pid: number, signal: NodeJS.Signals | 0) => void;
   windowsProcesses?:
-    | Pick<WindowsProcessOwnership, "readPeakMemory" | "signal">
+    | Pick<WindowsProcessOwnership, "readMemory" | "signal">
     | undefined;
 };
 
@@ -259,13 +259,28 @@ export const watchTestProcessMemory = ({
       stopped = true;
       return;
     }
+    const jobMemory =
+      windowsProcesses === undefined
+        ? undefined
+        : Result.try({
+            try: () => windowsProcesses.readMemory(),
+            catch: (cause) =>
+              new ProcessMemoryReadError({ message: String(cause), cause }),
+          }).andThen((result) => result);
+    const memoryStatus = jobMemory?.isOk()
+      ? jobMemory.value.status
+      : "within-limit";
     let totalBytes = 0;
     for (const [pid, rssBytes] of readings) {
       const read = Result.try({
-        try: () =>
-          windowsProcesses === undefined
-            ? readBytes(pid)
-            : windowsProcesses.readPeakMemory(),
+        try: () => {
+          if (jobMemory === undefined) {
+            return readBytes(pid);
+          }
+          return jobMemory.isErr()
+            ? Result.err(jobMemory.error)
+            : Result.ok(jobMemory.value.peakBytes);
+        },
         catch: (cause) =>
           new ProcessMemoryReadError({ message: String(cause), cause }),
       }).andThen((result) => result);
@@ -305,9 +320,9 @@ export const watchTestProcessMemory = ({
       );
     }
     peakBytes = Math.max(peakBytes, totalBytes);
-    if (peakBytes > limitBytes) {
+    if (peakBytes > limitBytes || memoryStatus === "limit-exceeded") {
       fail(
-        `Test invocation memory limit exceeded for ${file()} (process tree rooted at PID ${child.pid}): measured peak ${(peakBytes / GIB).toFixed(3)} GiB, cap ${(limitBytes / GIB).toFixed(3)} GiB`,
+        `Test invocation memory limit exceeded for ${file()} (process tree rooted at PID ${child.pid}): measured peak ${(peakBytes / GIB).toFixed(3)} GiB, cap ${(limitBytes / GIB).toFixed(3)} GiB${memoryStatus === "limit-exceeded" ? "; Windows job rejected an allocation over its hard cap" : ""}`,
       );
     }
   };

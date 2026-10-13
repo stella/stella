@@ -107,6 +107,7 @@ test("disposing shutdown ownership removes its listeners and signals cleanup onl
   const previous = events.map((event) => process.listenerCount(event));
   const signals: (number | NodeJS.Signals | undefined)[] = [];
   const { child, windowsProcesses } = spawnTestProcess({
+    limitBytes: 1024 ** 3,
     command: [process.execPath, "-e", "setInterval(() => {}, 1000)"],
     options: {
       stdout: "ignore",

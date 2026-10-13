@@ -10,6 +10,7 @@ import { spawnTestProcess } from "../test-process-spawn";
 const readBytes = await createProcessMemoryReader();
 
 const { child, windowsProcesses } = spawnTestProcess({
+  limitBytes: 1024 ** 3,
   command: [
     process.execPath,
     `${import.meta.dir}/signal-cleanup-child.ts`,

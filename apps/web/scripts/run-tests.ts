@@ -59,6 +59,7 @@ for (const run of runs) {
       .filter((arg) => /\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(arg))
       .join(", ") || `${run.label} suite (before first file)`;
   const { child, windowsProcesses } = spawnTestProcess({
+    limitBytes,
     command: ["bun", "--smol", "test", ...run.args],
     options: {
       cwd: WEB_ROOT_PATH,
