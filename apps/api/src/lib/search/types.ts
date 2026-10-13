@@ -225,6 +225,7 @@ export type ContactGlobalSearchHit = GlobalSearchHitBase & {
 
 type CaseLawGlobalSearchHit = GlobalSearchHitBase & {
   type: "case-law";
+  courtAbbreviation: string | null;
   resource: ResourceRef<"case_law_decision">;
   decisionId: string;
   caseNumber: string;

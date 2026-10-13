@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 132,
+    "count": 131,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 7,
       "apps/api/scripts/lib/case-law-fixture-analyses.ts": 1,
@@ -20,7 +20,6 @@
       "apps/api/src/lib/ai-config.ts": 6,
       "apps/api/src/lib/ai-provider-probe.ts": 2,
       "apps/api/src/lib/auth/feature-access/view-eligibility.ts": 1,
-      "apps/api/src/lib/auth/review-account-plugin.ts": 1,
       "apps/api/src/lib/buffer-intent-reconciliation.ts": 7,
       "apps/api/src/lib/chat/thread-compaction.ts": 1,
       "apps/api/src/lib/document-processing-ocr-result.ts": 1,
