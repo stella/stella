@@ -86,11 +86,12 @@ export const markAiRequest = (): void => {
 export const isAiRequest = (): boolean =>
   requestIdStore.getStore()?.isAiRequest ?? false;
 
-/** Only registered endpoint templates belong here; never a request pathname. */
+/** The outer endpoint owns the route even when nested auth calls share its scope.
+ * Only registered templates belong here; never a request pathname. */
 export const markMountedRequestRoute = (template: string): void => {
   const ambient = requestIdStore.getStore();
   if (ambient) {
-    ambient.mountedRoute = template;
+    ambient.mountedRoute ??= template;
   }
 };
 

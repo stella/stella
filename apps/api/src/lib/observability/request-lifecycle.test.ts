@@ -329,6 +329,76 @@ describe("the request lifecycle", () => {
     resetFailureObservationsForTesting();
   });
 
+  test("nested server-side auth calls cannot replace the outer HTTP route", async () => {
+    const visitedPaths: (string | undefined)[] = [];
+    const auth = betterAuth({
+      baseURL: "http://localhost:3001",
+      secret: "test-secret-that-is-long-enough-for-better-auth",
+      hooks: {
+        before: createAuthMiddleware(async (ctx) => {
+          visitedPaths.push(ctx.path);
+          markAuthRequestRoute(ctx);
+          await Promise.resolve();
+        }),
+      },
+      database: memoryAdapter({
+        user: [],
+        session: [],
+        account: [],
+        verification: [],
+      }),
+      plugins: [
+        {
+          id: "nested-auth-fixture",
+          endpoints: {
+            nestedAuth: createAuthEndpoint(
+              "/outer/:id",
+              { method: "GET" },
+              async () => {
+                await nestedCall();
+                throw new APIError("BAD_REQUEST", { error: "invalid_grant" });
+              },
+            ),
+          },
+        },
+      ],
+    });
+    const nestedCall = async (): Promise<void> => {
+      await auth.api.getSession({ headers: new Headers() });
+    };
+    const app = new Elysia()
+      .wrap(
+        (handleRequest) => (request: Request) =>
+          runWithRequestScope(() => handleRequest(request)),
+      )
+      .onRequest(({ request }) => initRequestContext(request))
+      .onError((context) => answerRequestError(context))
+      .onAfterHandle(async (context) => await completeRequest(context))
+      .mount(auth.handler);
+
+    const response = await app.handle(
+      new Request("http://localhost:3001/api/auth/outer/fixture-id"),
+    );
+    expect(response.status).toBe(400);
+    expect(visitedPaths).toEqual(["/outer/:id", "/get-session"]);
+    expect(
+      logs.records.find(({ message }) => message === "request.completed")
+        ?.attributes?.["http.route"],
+    ).toBe("/api/auth/outer/:id");
+    expect(
+      metricLines
+        .map((line) => JSON.parse(line))
+        .find((record) => "RequestDuration" in record)?.["http.route"],
+    ).toBe("/api/auth/outer/:id");
+
+    logs.records.length = 0;
+    await app.handle(new Request("http://localhost:3001/api/auth/get-session"));
+    expect(
+      logs.records.find(({ message }) => message === "request.completed")
+        ?.attributes?.["http.route"],
+    ).toBe("/api/auth/get-session");
+  });
+
   test.each(["before", "handler"] as const)(
     "identifies %s auth refusals by registered template and receipt without request data",
     async (refusalSource) => {
