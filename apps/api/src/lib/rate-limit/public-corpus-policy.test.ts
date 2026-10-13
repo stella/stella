@@ -5,13 +5,13 @@ import ts from "typescript";
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 
 import { PUBLIC_READ_STATEMENT_TIMEOUT_MS } from "@/api/db/shared-pool-timeouts";
-import { PG_ERROR } from "@/api/lib/pg-error";
 import {
-  getPublicReadStatementTimeoutMs,
   publicReadTimeoutError,
   PUBLIC_READ_TIMEOUT_CODE,
   runPublicReadRequest,
-} from "@/api/lib/public-read-timeout";
+} from "@/api/lib/legal-search/public-read-timeout";
+import { getPublicReadStatementTimeoutMs } from "@/api/lib/legal-search/public-read-timeout-context";
+import { PG_ERROR } from "@/api/lib/pg-error";
 import {
   PUBLIC_CORPUS_ROUTE_POLICY,
   resolvePublicCorpusPolicy,
@@ -318,10 +318,7 @@ describe("public corpus admission policy", () => {
         `http://localhost${STELLA_API_VERSION_PREFIX}${path}`,
         { method },
       );
-      const budget = runPublicReadRequest(
-        request,
-        getPublicReadStatementTimeoutMs,
-      );
+      const budget = runPublicReadRequest(request);
       expect(budget, route).toBe(PUBLIC_READ_STATEMENT_TIMEOUT_MS[routeClass]);
       expect(budget, route).toBeGreaterThan(0);
     }

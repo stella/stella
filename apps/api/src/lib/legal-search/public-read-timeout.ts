@@ -1,16 +1,14 @@
-import { AsyncLocalStorage } from "node:async_hooks";
-
 import { PUBLIC_READ_STATEMENT_TIMEOUT_MS } from "@/api/db/shared-pool-timeouts";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  getPublicReadStatementTimeoutMs,
+  runWithPublicReadStatementTimeout,
+} from "@/api/lib/legal-search/public-read-timeout-context";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { resolvePublicCorpusPolicy } from "@/api/public-corpus-policy";
-
-const publicReadTimeout = new AsyncLocalStorage<number>();
+import type { PublicCorpusClass } from "@/api/public-corpus-policy";
 
 export const PUBLIC_READ_TIMEOUT_CODE = "PUBLIC_READ_TIMEOUT";
-
-export const getPublicReadStatementTimeoutMs = () =>
-  publicReadTimeout.getStore();
 
 /** Carry the registered route's budget through every public-law transaction. */
 export const runPublicReadRequest = <T>(request: Request, fn: () => T): T => {
@@ -18,8 +16,13 @@ export const runPublicReadRequest = <T>(request: Request, fn: () => T): T => {
   if (policy === undefined) {
     return fn();
   }
-  return publicReadTimeout.run(
-    PUBLIC_READ_STATEMENT_TIMEOUT_MS[policy.class],
+  return runWithPublicReadStatementTimeout(
+    (
+      PUBLIC_READ_STATEMENT_TIMEOUT_MS satisfies Record<
+        PublicCorpusClass,
+        number
+      >
+    )[policy.class],
     fn,
   );
 };
@@ -27,7 +30,7 @@ export const runPublicReadRequest = <T>(request: Request, fn: () => T): T => {
 /** SQLSTATE survives query and Result wrappers; SQL diagnostics stay server-side. */
 export const publicReadTimeoutError = (error: unknown) => {
   if (
-    publicReadTimeout.getStore() === undefined ||
+    getPublicReadStatementTimeoutMs() === undefined ||
     getPgErrorCode(error) !== PG_ERROR.QUERY_CANCELED
   ) {
     return null;

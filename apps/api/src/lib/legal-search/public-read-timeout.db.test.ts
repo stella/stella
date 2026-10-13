@@ -13,8 +13,8 @@ import {
 } from "@/api/lib/api-handlers";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { PUBLIC_READ_TIMEOUT_CODE } from "@/api/lib/legal-search/public-read-timeout";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
-import { PUBLIC_READ_TIMEOUT_CODE } from "@/api/lib/public-read-timeout";
 import { isRecord } from "@/api/lib/type-guards";
 
 const databaseUrl = process.env["DATABASE_URL"];

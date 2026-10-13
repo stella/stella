@@ -404,7 +404,6 @@ export const createRobotsTxt = ({
     return `${[
       "User-agent: *",
       "Disallow: /",
-      ...ROBOTS_DISALLOWED_PATHS.map((path) => `Disallow: ${path}`),
       ...createDeniedCrawlerRules(),
     ].join("\n")}\n`;
   }

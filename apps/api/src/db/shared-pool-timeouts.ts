@@ -9,7 +9,6 @@ import {
 } from "@/api/db/shared-pool-timeout-policy";
 import { envDbTimeouts } from "@/api/env-db-timeouts";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import type { PublicCorpusClass } from "@/api/public-corpus-policy";
 
 /** Request budgets only; background and authenticated reads retain their policy. */
 export const PUBLIC_READ_STATEMENT_TIMEOUT_MS = {
@@ -17,7 +16,7 @@ export const PUBLIC_READ_STATEMENT_TIMEOUT_MS = {
   search: 30_000,
   aggregate: 30_000,
   sitemap: 30_000,
-} as const satisfies Record<PublicCorpusClass, number>;
+} as const;
 
 export const sharedPoolTimeoutPolicy = resolveSharedPoolTimeoutPolicy({
   idleTimeoutSeconds: envDbTimeouts.DATABASE_POOL_IDLE_TIMEOUT_S,

@@ -60,6 +60,10 @@ import {
 } from "@/api/lib/files/content-delivery";
 import type { ContentDelivery } from "@/api/lib/files/content-delivery";
 import {
+  publicReadTimeoutError,
+  runPublicReadRequest,
+} from "@/api/lib/legal-search/public-read-timeout";
+import {
   causeChainAttributes,
   failureSink,
   identityFields,
@@ -86,10 +90,6 @@ import {
   cloneOperationInput,
 } from "@/api/lib/proofs/checked-transaction";
 import type { CheckedOperationContext } from "@/api/lib/proofs/checked-transaction";
-import {
-  publicReadTimeoutError,
-  runPublicReadRequest,
-} from "@/api/lib/public-read-timeout";
 import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import type { PeriodActionKind } from "@/api/lib/rate-limit/action-kinds";
 import {
