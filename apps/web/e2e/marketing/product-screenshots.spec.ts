@@ -15,6 +15,7 @@ import {
   MARKETING_AGENT_THREAD_TITLE,
   settleMarketingAgentThread,
 } from "./agent-thread";
+import { getMarketingDecisionPaths } from "./case-law-reader";
 import {
   assertNoActiveEditBadge,
   releaseSupplierAgreementEditLock,
@@ -178,6 +179,13 @@ test("capture landing product screenshots", async ({
       ? await resolveAgentThreadPath(page.request)
       : undefined;
 
+  const decisionPaths =
+    !requestedCapture ||
+    requestedCapture === "public-data" ||
+    requestedCapture.startsWith("story-public-data-")
+      ? await resolveDecisionPaths(page.request)
+      : new Map<string, string>();
+
   // Whether the shared page still carries a pinned clock from a previous
   // capture; see the anchor block in the capture loop.
   let clockPinned = false;
@@ -205,16 +213,13 @@ test("capture landing product screenshots", async ({
           `${capture.name}: the filmed jurisdiction is publicly supported`,
         ).toBe(true);
       }
-      // A decision capture scopes the search to its country so only a
-      // matching decision is deterministically on screen.
-      const searchedPath =
+      const decisionPath =
         "decisionText" in capture
-          ? `/law/cases?country=${capture.country.toLowerCase()}&q=${encodeURIComponent(
-              capture.decisionText,
-            )}`
+          ? decisionPaths.get(capture.decisionText)
           : undefined;
       const declaredPath = "path" in capture ? capture.path : agentThreadPath;
-      const capturePath = searchedPath ?? declaredPath;
+      const capturePath =
+        "decisionText" in capture ? decisionPath : declaredPath;
       if (!capturePath) {
         throw new Error(`${capture.name}: no path resolved for this capture`);
       }
@@ -238,7 +243,9 @@ test("capture landing product screenshots", async ({
         await page.clock.setSystemTime(Date.now());
         clockPinned = false;
       }
-      await page.goto(capturePath, { waitUntil: "domcontentloaded" });
+      await page.goto(capturePath, {
+        waitUntil: "decisionText" in capture ? "commit" : "domcontentloaded",
+      });
       await expect(page).not.toHaveURL(/\/sign-in(?:\/|\?|$)/u);
       // Each capture is the first visit to its route, so its chunk compiles on
       // demand here too; the config's 15s expect timeout is not enough for that
@@ -252,30 +259,8 @@ test("capture landing product screenshots", async ({
         });
       }
       if ("prepare" in capture && capture.prepare === "open-decision") {
-        // Film a specific national decision deterministically, rather than
-        // whatever happens to be newest in the seeded corpus.
-        const decisionLink = page
-          .locator('main a[href*="/cases/"]')
-          .filter({ hasText: capture.decisionText });
-        await expect(decisionLink).toBeVisible({
-          timeout: COLD_COMPILE_TIMEOUT,
-        });
-        // A plain click on a results row opens that decision in the inspector
-        // beside the results; this capture wants the full reader page, which
-        // is what the row's own href names. Take the href rather than a
-        // rebuilt path, so the shot follows the product's link even if the
-        // decision route's shape changes.
-        const decisionPath = await decisionLink.getAttribute("href");
-        if (decisionPath === null) {
-          throw new Error(
-            `${capture.name}: the "${capture.decisionText}" result row has no href to the decision`,
-          );
-        }
-        // The reader carries its own inspector, which must start from the same
-        // clean state as every other capture rather than inheriting whatever
-        // the results page persisted.
-        await clearPersistedInspectorState(page);
-        await page.goto(decisionPath, { waitUntil: "commit" });
+        // Open the reader directly from its seeded conversation metadata.
+        // Search-page SSR is independent of the completed reader state.
         await expect(page).toHaveURL(/\/law\/[a-z-]+\/cases\//u);
         // The case detail is its own code-split chunk, so this is the first
         // load of another route: same cold-compile allowance as the
@@ -521,6 +506,14 @@ const resolveAgentThreadPath = async (request: APIRequestContext) => {
     );
   }
   return `/chat/workspaces/${EXPORT_REVIEW_WORKSPACE_ID}/${threadId}`;
+};
+
+const resolveDecisionPaths = async (request: APIRequestContext) => {
+  const response = await request.get(
+    `${MARKETING_URLS.apiUrl}/v1/chat/threads?limit=50`,
+  );
+  expect(response.ok(), await response.text()).toBe(true);
+  return getMarketingDecisionPaths(await response.json());
 };
 
 // Reads the timestamp the inspector's version caption formats, from the same

@@ -7,7 +7,7 @@ export const publicData = {
     src: "/media/products/public-data.png",
     darkSrc: "/media/products/public-data-dark.png",
     altKey: "story.dataMainAlt",
-    aspect: "16 / 10",
+    aspect: "1440 / 760",
   },
   heroFrameVariant: "bloom",
   frameAccent: frameAccents.tide,
