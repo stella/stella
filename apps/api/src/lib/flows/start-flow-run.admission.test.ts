@@ -51,7 +51,13 @@ const manualFixtureRows = (projection: Record<string, unknown>) => {
     ];
   }
   if ("email" in projection) {
-    return [{ email: "flow@example.test", emailVerified: true }];
+    return [
+      {
+        email: "flow@example.test",
+        emailVerified: true,
+        enrolledFeatureIds: ["flows"],
+      },
+    ];
   }
   if ("organizationId" in projection && !("featureId" in projection)) {
     return [{ organizationId }];

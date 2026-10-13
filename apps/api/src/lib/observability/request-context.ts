@@ -46,6 +46,7 @@ const requestContextStore = new WeakMap<Request, RequestContext>();
  */
 type AmbientRequestState = {
   current: string | null;
+  mountedRoute?: string;
   /**
    * Whether this request committed to synchronous AI inference. Read at
    * request completion to tag the latency metric `class=ai`, so inherently
@@ -84,6 +85,18 @@ export const markAiRequest = (): void => {
 /** Whether the active request was tagged AI-classed; `false` outside a scope. */
 export const isAiRequest = (): boolean =>
   requestIdStore.getStore()?.isAiRequest ?? false;
+
+/** The outer endpoint owns the route even when nested auth calls share its scope.
+ * Only registered templates belong here; never a request pathname. */
+export const markMountedRequestRoute = (template: string): void => {
+  const ambient = requestIdStore.getStore();
+  if (ambient) {
+    ambient.mountedRoute ??= template;
+  }
+};
+
+export const getMountedRequestRoute = (): string | undefined =>
+  requestIdStore.getStore()?.mountedRoute;
 
 /**
  * A per-request correlation id: `req_` + 128 bits of Bun-native randomness

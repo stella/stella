@@ -8,6 +8,13 @@
  * touch a single response byte.
  */
 
+import { betterAuth } from "better-auth";
+import { memoryAdapter } from "better-auth/adapters/memory";
+import {
+  APIError,
+  createAuthEndpoint,
+  createAuthMiddleware,
+} from "better-auth/api";
 import { Result } from "better-result";
 import { SQL } from "bun";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -24,6 +31,10 @@ import {
   createSafePublicHandler,
 } from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
+import {
+  createAuthRefusalLogPlugin,
+  markAuthRequestRoute,
+} from "@/api/lib/auth/auth-request-observability";
 import {
   DatabaseError,
   DatabaseRlsError,
@@ -45,6 +56,7 @@ import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
+import { runWithRequestScope } from "@/api/lib/observability/request-scope";
 import { ActionSizeError } from "@/api/lib/rate-limit/action-size-limits";
 import { runTenantHttpAction } from "@/api/lib/rate-limit/tenant-action-boundary";
 import {
@@ -316,6 +328,166 @@ describe("the request lifecycle", () => {
     resetMetricLineSinkForTesting();
     resetFailureObservationsForTesting();
   });
+
+  test("nested server-side auth calls cannot replace the outer HTTP route", async () => {
+    const visitedPaths: (string | undefined)[] = [];
+    const auth = betterAuth({
+      baseURL: "http://localhost:3001",
+      secret: "test-secret-that-is-long-enough-for-better-auth",
+      hooks: {
+        before: createAuthMiddleware(async (ctx) => {
+          visitedPaths.push(ctx.path);
+          markAuthRequestRoute(ctx);
+          await Promise.resolve();
+        }),
+      },
+      database: memoryAdapter({
+        user: [],
+        session: [],
+        account: [],
+        verification: [],
+      }),
+      plugins: [
+        {
+          id: "nested-auth-fixture",
+          endpoints: {
+            nestedAuth: createAuthEndpoint(
+              "/outer/:id",
+              { method: "GET" },
+              async () => {
+                await nestedCall();
+                throw new APIError("BAD_REQUEST", { error: "invalid_grant" });
+              },
+            ),
+          },
+        },
+      ],
+    });
+    const nestedCall = async (): Promise<void> => {
+      await auth.api.getSession({ headers: new Headers() });
+    };
+    const app = new Elysia()
+      .wrap(
+        (handleRequest) => (request: Request) =>
+          runWithRequestScope(() => handleRequest(request)),
+      )
+      .onRequest(({ request }) => initRequestContext(request))
+      .onError((context) => answerRequestError(context))
+      .onAfterHandle(async (context) => await completeRequest(context))
+      .mount(auth.handler);
+
+    const response = await app.handle(
+      new Request("http://localhost:3001/api/auth/outer/fixture-id"),
+    );
+    expect(response.status).toBe(400);
+    expect(visitedPaths).toEqual(["/outer/:id", "/get-session"]);
+    expect(
+      logs.records.find(({ message }) => message === "request.completed")
+        ?.attributes?.["http.route"],
+    ).toBe("/api/auth/outer/:id");
+    expect(
+      metricLines
+        .map((line) => JSON.parse(line))
+        .find((record) => "RequestDuration" in record)?.["http.route"],
+    ).toBe("/api/auth/outer/:id");
+
+    logs.records.length = 0;
+    await app.handle(new Request("http://localhost:3001/api/auth/get-session"));
+    expect(
+      logs.records.find(({ message }) => message === "request.completed")
+        ?.attributes?.["http.route"],
+    ).toBe("/api/auth/get-session");
+  });
+
+  test.each(["before", "handler"] as const)(
+    "identifies %s auth refusals by registered template and receipt without request data",
+    async (refusalSource) => {
+      const auth = betterAuth({
+        baseURL: "http://localhost:3001",
+        secret: "test-secret-that-is-long-enough-for-better-auth",
+        hooks: {
+          before: createAuthMiddleware(async (ctx) => {
+            markAuthRequestRoute(ctx);
+            if (refusalSource === "before") {
+              throw new APIError("BAD_REQUEST", { error: "invalid_grant" });
+            }
+            await Promise.resolve();
+          }),
+        },
+        database: memoryAdapter({
+          user: [],
+          session: [],
+          account: [],
+          verification: [],
+        }),
+        plugins: [
+          createAuthRefusalLogPlugin(createAuthMiddleware),
+          {
+            id: "refused-auth-fixture",
+            endpoints: {
+              refusedToken: createAuthEndpoint(
+                "/fixture/:id",
+                { method: "GET" },
+                () => {
+                  throw new APIError("BAD_REQUEST", { error: "invalid_grant" });
+                },
+              ),
+            },
+          },
+        ],
+      });
+      const app = new Elysia()
+        .wrap(
+          (handleRequest) => (request: Request) =>
+            runWithRequestScope(() => handleRequest(request)),
+        )
+        .onRequest(({ request }) => initRequestContext(request))
+        .onError((context) => answerRequestError(context))
+        .onAfterHandle(async (context) => await completeRequest(context))
+        .mount(auth.handler);
+      const response = await app.handle(
+        new Request(
+          "http://localhost:3001/api/auth/fixture/private-id?token=private-token",
+        ),
+      );
+      expect(response.status).toBe(400);
+      const completion = logs.records.find(
+        ({ message }) => message === "request.completed",
+      );
+      const refusal = logs.records.find(
+        ({ message }) => message === "auth.request_refused",
+      );
+      expect(completion?.attributes?.["http.route"]).toBe(
+        "/api/auth/fixture/:id",
+      );
+      expect(completion?.attributes?.["request.id"]).toMatch(
+        /^req_[0-9a-f]{32}$/u,
+      );
+      if (refusalSource === "handler") {
+        expect(refusal?.attributes?.["auth.path"]).toBe("/fixture/:id");
+        expect(refusal?.attributes?.["request.id"]).toBe(
+          completion?.attributes?.["request.id"],
+        );
+      }
+      const serialized = JSON.stringify({ records: logs.records, metricLines });
+      expect(serialized).not.toContain("private-id");
+      expect(serialized).not.toContain("private-token");
+      expect(
+        metricLines
+          .map((line) => JSON.parse(line))
+          .find((record) => "RequestDuration" in record)?.["http.route"],
+      ).toBe("/api/auth/fixture/:id");
+      logs.records.length = 0;
+      await app.handle(
+        new Request("http://localhost:3001/unregistered/private-other"),
+      );
+      expect(
+        logs.records.find(({ message }) => message === "request.completed")
+          ?.attributes?.["http.route"],
+      ).toBe("/*");
+      expect(JSON.stringify(logs.records)).not.toContain("private-other");
+    },
+  );
 
   test("records final bounded responses once, including pre-dispatch refusals", async () => {
     for (const mode of [

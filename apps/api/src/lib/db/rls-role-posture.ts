@@ -1,3 +1,7 @@
+import { Result, TaggedError } from "better-result";
+
+import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
+
 export type ApplicationRlsRolePosture = {
   bypassesRls: boolean;
   canAssumeRole: boolean;
@@ -72,4 +76,68 @@ export const databaseLoginPostureNotes = (
     );
   }
   return notes;
+};
+
+export const UNSAFE_DATABASE_LOGIN_LOCAL_DEV_ENV =
+  "STELLA_ALLOW_PRIVILEGED_DB_LOGIN_FOR_LOCAL_DEV";
+
+const DATABASE_LOGIN_REFUSAL = {
+  localDevSetting: "unsafe_local_development_setting",
+  unavailable: "role_attributes_unavailable",
+  privileged: "privileged_login",
+} as const;
+
+type DatabaseLoginRefusal =
+  (typeof DATABASE_LOGIN_REFUSAL)[keyof typeof DATABASE_LOGIN_REFUSAL];
+
+export class DatabaseLoginPostureError extends TaggedError(
+  "DatabaseLoginPostureError",
+)<{ message: string; reason: DatabaseLoginRefusal }> {}
+
+type DatabaseLoginPostureOptions = {
+  posture: DatabaseLoginPosture | undefined;
+  runtimeMode: RuntimeMode;
+  unsafeLocalDevOptIn: string | undefined;
+};
+
+/** A login is accepted only after its role attributes have been inspected. */
+export const databaseLoginPostureResult = ({
+  posture,
+  runtimeMode,
+  unsafeLocalDevOptIn,
+}: DatabaseLoginPostureOptions): Result<void, DatabaseLoginPostureError> => {
+  if (
+    unsafeLocalDevOptIn !== undefined &&
+    unsafeLocalDevOptIn !== "" &&
+    (unsafeLocalDevOptIn !== "1" || runtimeMode.mode !== RUNTIME_MODE.open)
+  ) {
+    return Result.err(
+      new DatabaseLoginPostureError({
+        reason: DATABASE_LOGIN_REFUSAL.localDevSetting,
+        message: `${UNSAFE_DATABASE_LOGIN_LOCAL_DEV_ENV}=1 requires an explicitly enabled local development runtime.`,
+      }),
+    );
+  }
+  if (posture === undefined) {
+    return Result.err(
+      new DatabaseLoginPostureError({
+        reason: DATABASE_LOGIN_REFUSAL.unavailable,
+        message:
+          "Database login role attributes must be available before startup.",
+      }),
+    );
+  }
+  if (
+    (posture.isSuperuser || posture.bypassesRls) &&
+    unsafeLocalDevOptIn !== "1"
+  ) {
+    return Result.err(
+      new DatabaseLoginPostureError({
+        reason: DATABASE_LOGIN_REFUSAL.privileged,
+        message:
+          "Database login requires NOSUPERUSER NOBYPASSRLS role attributes.",
+      }),
+    );
+  }
+  return Result.ok(undefined);
 };

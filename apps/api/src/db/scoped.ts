@@ -21,6 +21,7 @@ import {
 } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
+import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -28,6 +29,7 @@ import {
   DatabaseError,
   DatabaseRlsError,
 } from "@/api/lib/errors/tagged-errors";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import {
   getPgDriverErrorCode,
   getPgErrorCode,
@@ -100,6 +102,7 @@ type RunScopedTransactionOptions<
   organizationId: SafeId<"organization">;
   userId: SafeId<"user"> | null;
   workspaceScope: WorkspaceScope;
+  featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
 };
 
 type SetScopedTransactionSettingsOptions = {
@@ -171,14 +174,17 @@ type ScopedWorkInTransactionOptions<T> = {
 };
 
 /** Keep aggregate cleanup atomic while lending it the application role. */
-const runScopedTransactionContext = async <T>({
-  tx,
-  organizationId,
-  userId,
-  workspaceScope,
-  fn,
-  role = "application",
-}: ScopedWorkInTransactionOptions<T>): Promise<T> => {
+const runScopedTransactionContext = async <T>(
+  {
+    tx,
+    organizationId,
+    userId,
+    workspaceScope,
+    fn,
+    role = "application",
+  }: ScopedWorkInTransactionOptions<T>,
+  ownerFeatureIds?: readonly string[],
+): Promise<T> => {
   const [previous] = await tx
     .select({
       role: sql<string>`current_setting('role')`,
@@ -195,11 +201,14 @@ const runScopedTransactionContext = async <T>({
   // A failed statement rolls back the savepoint and its settings together;
   // restoring on an aborted connection would hide the original error.
   const value = await withAggregateSavepoint(tx, async (scopedTx) => {
-    const featureIds = await resolveScopedFeatureIds({
-      tx: scopedTx,
-      organizationId,
-      userId,
-    });
+    const featureIds =
+      ownerFeatureIds === undefined
+        ? await resolveScopedFeatureIds({
+            tx: scopedTx,
+            organizationId,
+            userId,
+          })
+        : [...ownerFeatureIds];
     await installScopedTransactionSettings({
       tx: scopedTx,
       organizationId,
@@ -254,18 +263,31 @@ export const runScopedOwnerWorkInTransaction = async <T>({
         role: "system",
         fn,
       });
-    case "actor":
-      return await runScopedTransactionContext({
+    case "actor": {
+      // Owner admission reads live enrolments from the row-proven organization.
+      const snapshot = await resolveFeatureAccessSnapshot({
         tx,
         organizationId: scope.organizationId,
         userId: actor.userId,
-        workspaceScope: {
-          type: WORKSPACE_ACCESS_MODE.explicit,
-          workspaceIds: [...scope.workspaceIds],
-        },
-        role: "application",
-        fn,
       });
+      const featureIds = [...snapshot.decisions]
+        .filter(([, decision]) => decision.status === "enabled")
+        .map(([featureId]) => featureId);
+      return await runScopedTransactionContext(
+        {
+          tx,
+          organizationId: scope.organizationId,
+          userId: actor.userId,
+          workspaceScope: {
+            type: WORKSPACE_ACCESS_MODE.explicit,
+            workspaceIds: [...scope.workspaceIds],
+          },
+          role: "application",
+          fn,
+        },
+        featureIds,
+      );
+    }
     default:
       actor satisfies never;
       return panic("Unknown scope actor");
@@ -298,13 +320,22 @@ const runScopedTransaction = async <
   organizationId,
   userId,
   workspaceScope,
+  featureAccessSnapshot,
 }: RunScopedTransactionOptions<TTransaction, T>): Promise<T> =>
   await database.transaction(async (tx: TTransaction) => {
-    const featureIds = await resolveScopedFeatureIds({
-      tx,
-      organizationId,
-      userId,
-    });
+    if (
+      featureAccessSnapshot !== undefined &&
+      (featureAccessSnapshot.organizationId !== organizationId ||
+        featureAccessSnapshot.userId !== userId)
+    ) {
+      panic("Feature snapshot must belong to the database scope");
+    }
+    const featureIds =
+      featureAccessSnapshot === undefined
+        ? await resolveScopedFeatureIds({ tx, organizationId, userId })
+        : [...featureAccessSnapshot.decisions]
+            .filter(([, decision]) => decision.status === "enabled")
+            .map(([featureId]) => featureId);
     await setScopedTransactionSettings({
       tx,
       organizationId,
@@ -354,6 +385,8 @@ export const createTenantlessDb =
     });
 
 type MembershipScopedDbOptions = {
+  /** Authenticated request decisions reused for that request only. */
+  featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
   organizationId: SafeId<"organization">;
   /**
    * Small, operation-bounded set whose access was already proved by trusted
@@ -376,6 +409,7 @@ export const createMembershipScopedDb =
       organizationId,
       serverValidatedWorkspaceIds,
       userId,
+      featureAccessSnapshot,
     }: MembershipScopedDbOptions,
   ) =>
   async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
@@ -387,6 +421,7 @@ export const createMembershipScopedDb =
       },
       organizationId,
       userId,
+      featureAccessSnapshot,
       fn,
     });
 
@@ -537,6 +572,7 @@ export const createMembershipSafeDb =
       organizationId,
       serverValidatedWorkspaceIds,
       userId,
+      featureAccessSnapshot,
     }: MembershipScopedDbOptions,
   ) =>
   async <T>(
@@ -554,6 +590,7 @@ export const createMembershipSafeDb =
             },
             organizationId,
             userId,
+            featureAccessSnapshot,
             fn,
           }),
         catch: toSafeDbError,

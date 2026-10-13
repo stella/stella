@@ -126,9 +126,25 @@ const fixtureSelect =
         },
       };
     }
-    if (columns.includes(user.email) && columns.includes(user.emailVerified)) {
-      const identity = options?.featureAccess?.identity ?? null;
-      const query = createSelectQueryMock(identity === null ? [] : [identity]);
+    if (
+      options?.featureAccess !== undefined &&
+      columns.some(
+        (column) => column === user.email || column === user.emailVerified,
+      )
+    ) {
+      const { identity, enrolments = [] } = options.featureAccess;
+      const query = createSelectQueryMock(
+        identity === null
+          ? []
+          : [
+              {
+                ...identity,
+                enrolledFeatureIds: enrolments.map(
+                  ({ featureId }) => featureId,
+                ),
+              },
+            ],
+      );
       return {
         from: (table: unknown) => {
           if (table !== member) {

@@ -66,5 +66,25 @@
   {
     "name": "Test merge queue jump-reset recovery",
     "reason": "Removed with the repository merge CLI and its queue-position recovery behavior."
+  },
+  {
+    "name": "Select typecheck parity coverage",
+    "reason": "Compiler parity and seeded compiler probes run only through explicit Manual checks dispatch."
+  },
+  {
+    "name": "Typecheck parity (all checked projects)",
+    "reason": "Compiler parity and seeded compiler probes run only through explicit Manual checks dispatch."
+  },
+  {
+    "name": "Record typecheck parity report",
+    "reason": "Compiler parity and seeded compiler probes run only through explicit Manual checks dispatch."
+  },
+  {
+    "name": "Upload typecheck parity report",
+    "reason": "Compiler parity and seeded compiler probes run only through explicit Manual checks dispatch."
+  },
+  {
+    "name": "Typecheck command rejects errors",
+    "reason": "Compiler parity and seeded compiler probes run only through explicit Manual checks dispatch."
   }
 ]

@@ -377,6 +377,7 @@ describe.skipIf(!enabled)(
       // Wait for that callback before deleting the rows it is measuring.
       fixture.cleanUp(async () => {
         await finished.promise;
+        reportStage("cleanup-started");
         if (seeded) {
           let cleanupIndexCreated = false;
           try {
@@ -385,24 +386,32 @@ describe.skipIf(!enabled)(
                 ON public.entities (current_version_id)
               `);
             cleanupIndexCreated = true;
+            reportStage("cleanup-index-created");
             await client`DELETE FROM search_documents
                 WHERE workspace_id = ${workspaceId}`;
+            reportStage("cleanup-search-documents-deleted");
             await client`UPDATE entities SET current_version_id = NULL
                 WHERE workspace_id = ${workspaceId}
                   AND current_version_id IS NOT NULL`;
+            reportStage("cleanup-current-versions-unlinked");
             await client`DELETE FROM entity_versions
                 WHERE workspace_id = ${workspaceId}`;
+            reportStage("cleanup-versions-deleted");
             await client`DELETE FROM workspaces WHERE id = ${workspaceId}`;
+            reportStage("cleanup-workspace-deleted");
           } finally {
             if (cleanupIndexCreated) {
               await db.execute(sql`
                   DROP INDEX public.${sql.identifier(cleanupIndexName)}
                 `);
+              reportStage("cleanup-index-dropped");
             }
           }
         }
         await client`DELETE FROM organization WHERE id = ${organizationId}`;
+        reportStage("cleanup-organization-deleted");
         await client`DELETE FROM "user" WHERE id = ${userId}`;
+        reportStage("cleanup-user-deleted");
       });
       try {
         await client`INSERT INTO organization (id, name, slug, created_at)
@@ -625,6 +634,7 @@ describe.skipIf(!enabled)(
           ).toBeLessThanOrEqual(offBuffers * MAX_BUFFER_RATIO);
         }
       } finally {
+        reportStage("measurement-finished");
         finished.resolve(undefined);
       }
     }, 240_000);

@@ -1,19 +1,28 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+
+import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { proveOrgScope, withOrgScope } from "@/api/db/org-scope";
 import {
+  featureEnrolments,
   flowDefinitions,
   flowRuns,
   flowUploadTriggerIntents,
   workspaces,
 } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { createSafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
+import { createTestState } from "@/api/tests/helpers/test-state";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const databaseUrl = () =>
@@ -22,6 +31,70 @@ const databaseUrl = () =>
 describe.skipIf(!enabled)(
   "scoped owner organization isolation (postgres)",
   () => {
+    test("actor scopes refresh the flow grant after revoke and regrant", async () => {
+      await withGatedTestClients(databaseUrl(), async ({ openClient }) => {
+        const { db } = openClient();
+        const a = await flowReviewGateFixture(db, { intermediate: false });
+        const restoreRuntime = setRuntimeModeForTesting({
+          mode: RUNTIME_MODE.strict,
+        });
+        testState.setConfig("FEATURE_FLOWS", true);
+        try {
+          const readFlowGrant = async () =>
+            await withAggregateTransaction(db, async (tx) => {
+              await lockFeatureRecoveryAdmission({
+                tx,
+                organizationId: a.organizationId,
+                featureId: "flows",
+              });
+              const scope = await proveOrgScope(tx, {
+                table: "workspaces",
+                where: eq(workspaces.id, a.workspaceId),
+              });
+              if (scope.isErr()) {
+                panic("Fixture matter must have a scope");
+              }
+              return await withOrgScope({
+                tx,
+                scope: scope.value,
+                actor: { type: "actor", userId: a.userId },
+                fn: async (scopedTx) => {
+                  const row = (
+                    await scopedTx.execute<{ enabled: boolean }>(
+                      sql`SELECT current_setting('app.enabled_features', true)::jsonb ? 'flows' AS enabled`,
+                    )
+                  ).at(0);
+                  if (row === undefined) {
+                    panic("Scoped feature setting must exist");
+                  }
+                  return row.enabled;
+                },
+              });
+            });
+          expect(await readFlowGrant()).toBe(true);
+          await db
+            .delete(featureEnrolments)
+            .where(
+              and(
+                eq(featureEnrolments.organizationId, a.organizationId),
+                eq(featureEnrolments.userId, a.userId),
+                eq(featureEnrolments.featureId, "flows"),
+              ),
+            );
+          expect(await readFlowGrant()).toBe(false);
+          await db.insert(featureEnrolments).values({
+            organizationId: a.organizationId,
+            userId: a.userId,
+            featureId: "flows",
+          });
+          expect(await readFlowGrant()).toBe(true);
+        } finally {
+          restoreRuntime();
+          await a.cleanup();
+        }
+      });
+    });
+
     test("an organization-scoped system writer retains other organizations' rows", async () => {
       await withGatedTestClients(databaseUrl(), async ({ openClient }) => {
         const { db } = openClient();

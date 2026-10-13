@@ -9,11 +9,6 @@
     "owner": "security",
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },
-  "apps/api/src/db/feature-enrolments.postgres.test.ts": {
-    "count": 3,
-    "owner": "database",
-    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
-  },
   "apps/api/src/db/list-verification-rls.db.test.ts": {
     "count": 2,
     "owner": "database",
@@ -605,11 +600,6 @@
     "reason": "Existing environment setup and restoration; migrate through createTestState."
   },
   "apps/web/src/components/chat/chat-answer-footer.dom.test.tsx": {
-    "count": 3,
-    "owner": "ai",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
-  "apps/web/src/components/chat/chat-encrypted-refusal.dom.test.tsx": {
     "count": 3,
     "owner": "ai",
     "reason": "Existing environment setup and restoration; migrate through createTestState."
