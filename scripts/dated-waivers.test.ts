@@ -308,7 +308,11 @@ test("all waiver kinds retain their keys when unrelated lines shift their locato
     '// test-quarantine-expires: 2026-10-05\ntest.skip("case", () => {});';
   const entriesAt = (prefix: string) =>
     collectWaivers({
-      read: (file) => prefix + read(file),
+      read: (file) =>
+        prefix +
+        (file === "scripts/guard-rollouts.ts"
+          ? 'const rollouts = [{id: "fixture-guard"}];'
+          : read(file)),
       docs: [doc],
       audit: [{ id: "GHSA-test", package: "pkg", expiresOn: "2026-10-03" }],
       bunfigs: ["bunfig.toml"],
@@ -318,6 +322,14 @@ test("all waiver kinds retain their keys when unrelated lines shift their locato
       quarantineSources: {
         "a.test.ts": `${prefix}${quarantined}`,
       },
+      guardRollouts: [
+        {
+          id: "fixture-guard",
+          type: "changed-lines",
+          expiresAt: "2026-10-20T00:00:00.000Z",
+          check: ["bun", "scripts/check-fixture.ts"],
+        },
+      ],
     });
   const original = entriesAt("");
   expect(Object.keys(RECHECK_INSTRUCTIONS).toSorted()).toEqual(
@@ -430,4 +442,54 @@ test("tracked-files input rejects absolute and parent paths", () => {
   } finally {
     rmSync(directory, { force: true, recursive: true });
   }
+});
+
+test("changed-lines guard rollouts enter the dated inventory with a full-scope probe", () => {
+  const entries = collectWaivers({
+    read: (file) =>
+      file === "scripts/guard-rollouts.ts"
+        ? 'export const GUARD_ROLLOUTS = [{ id: "fixture-guard" }];'
+        : read(file),
+    docs: [],
+    audit: [],
+    bunfigs: [],
+    releaseAgeSources: {},
+    guardRollouts: [
+      {
+        id: "fixture-guard",
+        type: "changed-lines",
+        expiresAt: "2026-10-20T00:00:00.000Z",
+        check: ["bun", "scripts/check-fixture.ts"],
+      },
+      {
+        id: "full-guard",
+        type: "full",
+        check: ["bun", "scripts/check-full.ts"],
+      },
+      {
+        id: "autofix-guard",
+        type: "autofix",
+        generator: "fixture-fix",
+        check: ["bun", "scripts/check-autofix.ts"],
+      },
+    ],
+  }).filter(({ kind }) => kind === "guard-rollout");
+  expect(entries).toHaveLength(1);
+  expect(entries.at(0)?.probe).toEqual({
+    command: [
+      "env",
+      "STELLA_GUARD_SCOPE=all",
+      "bun",
+      "scripts/check-fixture.ts",
+    ],
+    attempts: 20,
+  });
+  expect(
+    expiredWaiverFailures(entries, new Date("2026-10-19T23:59:59.999Z")),
+  ).toEqual([]);
+  expect(
+    expiredWaiverFailures(entries, new Date("2026-10-20T00:00:00.000Z")),
+  ).toEqual([
+    "scripts/guard-rollouts.ts:1 dated waiver expired: fixture-guard",
+  ]);
 });
