@@ -51,6 +51,7 @@ export const createEmbeddedReaderBridge = (parent: EmbeddedReaderTransport) => {
     ({
       status: "error",
       failure,
+      previous: { status: "empty" },
       message: formatAppFailure(
         failure,
         appLocale(parent.getSnapshot().context.locale).t,

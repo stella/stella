@@ -82,6 +82,7 @@ import { CASE_LAW_RESULTS_APP } from "../manifest";
 import { createPresentationBridge } from "../shared/bridge";
 import { appLocale } from "../shared/locale";
 import { SearchNotice } from "../shared/notice";
+import { getAppToolArrayLimit } from "../shared/tool-input";
 import { filterDefaults, searchFilterInput, sortResultRows } from "./model";
 import type { CaseLawView, ResultRow, ResultSort } from "./model";
 import { createCaseLawParser } from "./parse";
@@ -426,6 +427,8 @@ const SearchControls = ({
 }: SearchControlsProps) => {
   const t = useTranslations();
   const locale = useLocale();
+  const format = useFormatter();
+  const maxCourts = getAppToolArrayLimit("search_case_law", "courts");
   const initialQueries = normalizeStringList(input["queries"], {
     split: "never",
   });
@@ -557,10 +560,10 @@ const SearchControls = ({
                   type="button"
                   variant="outline"
                   className="h-auto min-h-11 w-full flex-wrap justify-start text-start"
-                  aria-label={t("court")}
                 />
               }
             >
+              <span className="sr-only">{t("court")}</span>
               {courts.length === 0
                 ? t("all")
                 : courts.map((name) => (
@@ -578,6 +581,11 @@ const SearchControls = ({
             >
               <CourtFilter
                 mode="multiple"
+                maxSelections={maxCourts}
+                selectionHint={t("courtSelectionHint", {
+                  selected: format.number(courts.length),
+                  maximum: format.number(maxCourts),
+                })}
                 matchText={foldSearchMatchText}
                 groups={
                   facets?.court.map(({ tierLabel, courts: options }) => ({
@@ -751,6 +759,75 @@ const LoadingResults = () => {
     </div>
   );
 };
+type CaseLawError = Extract<
+  ReturnType<CaseLawBridge["getSnapshot"]>["result"],
+  { status: "error" }
+>;
+
+const ResultFailure = ({
+  bridge,
+  error,
+}: {
+  bridge: CaseLawBridge;
+  error: CaseLawError;
+}) => {
+  const t = useTranslations();
+  return (
+    <div role="alert" className="space-y-3 rounded-lg border p-4">
+      <p className="text-sm">{error.message}</p>
+      {error.failure.retryable && (
+        <Button
+          variant="outline"
+          onClick={() => bridge.detached(bridge.retry(), "retry case-law read")}
+        >
+          {t("retry")}
+        </Button>
+      )}
+    </div>
+  );
+};
+
+type ViewResultProps = {
+  bridge: CaseLawBridge;
+  view: CaseLawView;
+  input: Record<string, unknown>;
+  onOpen: OpenReader;
+};
+const ViewResult = ({ bridge, view, input, onOpen }: ViewResultProps) => {
+  switch (view.type) {
+    case "unavailable":
+      return (
+        <p role="status" className="bg-muted rounded-lg p-5 text-sm">
+          {view.message} {view.hint}
+        </p>
+      );
+    case "search":
+      return (
+        <SearchResults
+          bridge={bridge}
+          page={view}
+          input={input}
+          onOpen={onOpen}
+        />
+      );
+    case "resolve":
+      return <ResolveResults view={view} bridge={bridge} onOpen={onOpen} />;
+    default:
+      return panic("Unknown case-law result view", view satisfies never);
+  }
+};
+const ReadyResult = ({
+  bridge,
+  view,
+  input,
+  onOpen,
+  error,
+}: ViewResultProps & { error: CaseLawError | null }) => (
+  <div className="space-y-3">
+    {error !== null && <ResultFailure bridge={bridge} error={error} />}
+    <ViewResult bridge={bridge} view={view} input={input} onOpen={onOpen} />
+  </div>
+);
 const ResultContent = ({
   bridge,
   onOpen,
@@ -762,51 +839,33 @@ const ResultContent = ({
     bridge.subscribe,
     bridge.getSnapshot,
   );
-  const t = useTranslations();
   switch (result.status) {
     case "idle":
     case "loading":
       return <LoadingResults />;
     case "error":
-      return (
-        <div role="alert" className="space-y-3 rounded-lg border p-4">
-          <p className="text-sm">{result.message ?? t("error")}</p>
-          {result.failure.retryable && (
-            <Button
-              variant="outline"
-              onClick={() =>
-                bridge.detached(bridge.retry(), "retry case-law read")
-              }
-            >
-              {t("retry")}
-            </Button>
-          )}
-        </div>
-      );
-    case "ready": {
-      const { view } = result;
-      switch (view.type) {
-        case "unavailable":
-          return (
-            <p role="status" className="bg-muted rounded-lg p-5 text-sm">
-              {view.message} {view.hint}
-            </p>
-          );
-        case "search":
-          return (
-            <SearchResults
-              bridge={bridge}
-              page={view}
-              input={input}
-              onOpen={onOpen}
-            />
-          );
-        case "resolve":
-          return <ResolveResults view={view} bridge={bridge} onOpen={onOpen} />;
-        default:
-          return panic("Unknown case-law result view", view satisfies never);
+      if (result.previous.status === "ready") {
+        return (
+          <ReadyResult
+            bridge={bridge}
+            view={result.previous.view}
+            input={input}
+            onOpen={onOpen}
+            error={result}
+          />
+        );
       }
-    }
+      return <ResultFailure bridge={bridge} error={result} />;
+    case "ready":
+      return (
+        <ReadyResult
+          bridge={bridge}
+          view={result.view}
+          input={input}
+          onOpen={onOpen}
+          error={null}
+        />
+      );
     default:
       return panic("Unknown app result state", result satisfies never);
   }

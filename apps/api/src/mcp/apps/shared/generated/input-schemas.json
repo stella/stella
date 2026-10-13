@@ -15,14 +15,12 @@
           "maxLength": 500
         },
         "minItems": 1,
-        "maxItems": 5,
-        "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call."
+        "maxItems": 5
       },
       "limit": {
         "type": "integer",
         "minimum": 1,
         "maximum": 20,
-        "description": "Merged-page size, split evenly across the queries (at least one hit each). Use a JSON number; a value outside the range is clamped to it.",
         "x-stella-agent-input": {
           "kind": "number",
           "range": "clamp"
@@ -31,14 +29,12 @@
       "cursor": {
         "type": "string",
         "minLength": 1,
-        "maxLength": 12450,
-        "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId."
+        "maxLength": 12450
       },
       "court": {
         "type": "string",
         "minLength": 1,
         "maxLength": 512,
-        "description": "Filter by court name. Omit it to search without this filter; a placeholder such as \"all\" or \"-\" reads as no filter.",
         "x-stella-agent-input": {
           "kind": "filter"
         }
@@ -52,7 +48,6 @@
         },
         "minItems": 1,
         "maxItems": 16,
-        "description": "Match any listed court. For Czech apex courts use [\"NS\", \"NSS\", \"ÚS\"]. Combined with court, both filters must match. Use a JSON array of strings; a single string is read as a one-item list.",
         "x-stella-agent-input": {
           "kind": "string-list"
         }
@@ -61,19 +56,16 @@
         "type": "string",
         "minLength": 1,
         "maxLength": 128,
-        "description": "Exact publisher category from metadata.category, for example \"A\" or \"B\"; this does not imply Sbírka publication. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable. Omit it to search without this filter; a placeholder such as \"all\" or \"-\" reads as no filter.",
         "x-stella-agent-input": {
           "kind": "filter"
         }
       },
       "has_legal_sentence": {
-        "type": "boolean",
-        "description": "True requires a non-empty stored legal sentence (právní věta); false selects decisions without one. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable."
+        "type": "boolean"
       },
       "country": {
         "type": "string",
         "maxLength": 64,
-        "description": "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
         "x-stella-agent-input": {
           "kind": "country",
           "country": {
@@ -89,7 +81,6 @@
         "type": "string",
         "minLength": 1,
         "maxLength": 8,
-        "description": "Filter by language code. Omit it to search without this filter; a placeholder such as \"all\" or \"-\" reads as no filter.",
         "x-stella-agent-input": {
           "kind": "filter"
         }
@@ -98,21 +89,18 @@
         "type": "string",
         "minLength": 1,
         "maxLength": 128,
-        "description": "Filter by decision type. Omit it to search without this filter; a placeholder such as \"all\" or \"-\" reads as no filter.",
         "x-stella-agent-input": {
           "kind": "filter"
         }
       },
       "source_id": {
         "type": "string",
-        "format": "uuid",
-        "description": "Filter by source ID"
+        "format": "uuid"
       },
       "date_from": {
         "type": "string",
         "format": "date",
         "maxLength": 10,
-        "description": "Filter decisions from this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its first day.",
         "x-stella-agent-input": {
           "kind": "date",
           "bound": "start"
@@ -122,7 +110,6 @@
         "type": "string",
         "format": "date",
         "maxLength": 10,
-        "description": "Filter decisions up to this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its last day.",
         "x-stella-agent-input": {
           "kind": "date",
           "bound": "end"
@@ -133,12 +120,10 @@
           "relevance",
           "newest"
         ],
-        "type": "string",
-        "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
+        "type": "string"
       },
       "strict": {
-        "type": "boolean",
-        "description": "Require every word of each query, function words included. Off by default: a query phrased as a question carries words no judgment is written with, and `searches[].queryUsed` reports what was required. Pass true when every word matters."
+        "type": "boolean"
       }
     }
   },
@@ -153,7 +138,6 @@
       "country": {
         "type": "string",
         "maxLength": 64,
-        "description": "Country of the deciding court; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
         "x-stella-agent-input": {
           "kind": "country",
           "country": {
@@ -165,8 +149,7 @@
       "identifier": {
         "type": "string",
         "minLength": 1,
-        "maxLength": 256,
-        "description": "One exact docket as the court wrote it, including its sheet, or ECLI. Use search_case_law for a description of a case."
+        "maxLength": 256
       }
     }
   },
@@ -179,12 +162,10 @@
     "properties": {
       "decision_id": {
         "type": "string",
-        "format": "uuid",
-        "description": "Decision ID from search_case_law results or resolve_case_law_decision document.decisionId."
+        "format": "uuid"
       },
       "paragraphs": {
         "type": "string",
-        "description": "Court paragraph number or inclusive range (48 or 48-53); hyphen or en dash, at most 500 court numbers. Never a block position.",
         "maxLength": 33,
         "pattern": "^\\d+(?:[-\\u2013]\\d+)?$"
       }
@@ -199,14 +180,12 @@
     "properties": {
       "decision_id": {
         "type": "string",
-        "format": "uuid",
-        "description": "Decision ID returned by open_case_law_decision."
+        "format": "uuid"
       },
       "cursor": {
         "type": "string",
         "minLength": 1,
-        "maxLength": 1024,
-        "description": "Pass nextCursor exactly; omit for the first page. Continue until null, including anchor-only pages."
+        "maxLength": 1024
       }
     }
   },
@@ -222,28 +201,24 @@
         "properties": {
           "document_id": {
             "type": "string",
-            "format": "uuid",
-            "description": "The consolidated legislation document ID supplied by a provision anchor."
+            "format": "uuid"
           },
           "anchor": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 256,
-            "description": "Provision heading anchor supplied by the anchor."
+            "maxLength": 256
           },
           "cited_anchor": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 256,
-            "description": "Exact cited provision anchor supplied by the anchor, when it differs from anchor."
+            "maxLength": 256
           }
         },
         "required": [
           "document_id",
           "anchor"
         ],
-        "additionalProperties": false,
-        "description": "The provision object from a decision provision anchor, passed unchanged."
+        "additionalProperties": false
       }
     }
   },
@@ -259,7 +234,6 @@
         "type": "string",
         "minLength": 1,
         "maxLength": 512,
-        "description": "European Legislation Identifier of the work, as search_legislation returns it (for example https://www.e-sbirka.cz/eli/cz/sb/2012/89). It addresses the act, not one consolidation of it. A short, prefix-less or reordered ELI is read as the canonical one.",
         "x-stella-agent-input": {
           "kind": "eli"
         }
@@ -267,20 +241,17 @@
       "anchor": {
         "type": "string",
         "minLength": 1,
-        "maxLength": 256,
-        "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes."
+        "maxLength": 256
       },
       "language": {
         "type": "string",
         "minLength": 2,
-        "maxLength": 8,
-        "description": "Language of the consolidation to read. Language is part of the work key, so an act published in two languages has one consolidation in each."
+        "maxLength": 8
       },
       "limit": {
         "type": "integer",
         "minimum": 1,
         "maximum": 20,
-        "description": "Versions per page; defaults to 5, at most 20. Use a JSON number; a value outside the range is clamped to it.",
         "x-stella-agent-input": {
           "kind": "number",
           "range": "clamp"
@@ -289,14 +260,12 @@
       "cursor": {
         "type": "string",
         "minLength": 1,
-        "maxLength": 512,
-        "description": "Opaque cursor from a previous read_provision_history call to read the next page"
+        "maxLength": 512
       },
       "text_cursor": {
         "type": "string",
         "minLength": 1,
-        "maxLength": 512,
-        "description": "Opaque nextTextCursor from one item in the requested history page"
+        "maxLength": 512
       }
     }
   }

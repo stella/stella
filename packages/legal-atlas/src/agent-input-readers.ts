@@ -1,5 +1,4 @@
-import type { AgentInputReaders } from "@stll/agent-input";
-import { locateGazetteCitations } from "@stll/legal-atlas/provision-citation-grammars";
+import { locateGazetteCitations } from "./provision-citation-grammars";
 
 /**
  * The publisher that serves each ELI jurisdiction the legislation corpus
@@ -27,7 +26,7 @@ const eliOfGazetteCitation = (text: string): string | undefined => {
  * dispatch surface passes the same object, so an ELI reads the same on MCP,
  * the CLI and chat.
  */
-export const MCP_AGENT_INPUT_READERS: AgentInputReaders = {
+export const MCP_AGENT_INPUT_READERS = {
   eli: {
     hosts: ELI_PUBLISHER_ORIGINS,
     readCitation: eliOfGazetteCitation,

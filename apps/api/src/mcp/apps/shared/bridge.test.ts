@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { CASE_LAW_RESULTS_APP } from "../manifest";
+import { searchFilterInput } from "../case-law-results/model";
+import { CASE_LAW_RESULTS_APP, STATUTE_TIMELINE_APP } from "../manifest";
 import {
   appFailure,
   formatAppFailure,
@@ -181,4 +182,125 @@ test("Retry repeats the failed new court selection rather than the earlier succe
   expect(sent.at(-1)).toEqual(changed);
   expect(sent.at(-2)).toEqual(changed);
   expect(bridge.getSnapshot().result.status).toBe("ready");
+});
+
+describe("presentation actions normalize raw model input before transport", () => {
+  const input = {
+    queries: ["dismissal"],
+    country: "CZE",
+    limit: 50,
+    date_from: "2024",
+    courts: "X",
+    category: "",
+  };
+  test.each([
+    { action: "search", arguments: input },
+    {
+      action: "next page",
+      arguments: { ...input, cursor: "next-fixture-page" },
+    },
+    {
+      action: "filter submit",
+      arguments: searchFilterInput({
+        input,
+        country: "CZE",
+        court: { type: "courts", names: ["X"] },
+        from: "2024",
+        to: "",
+      }),
+    },
+  ])(
+    "$action reaches the host with repaired dates, lists and the declared page size",
+    async ({ arguments: arguments_ }) => {
+      const sent: Record<string, unknown>[] = [];
+      const result = await requestPresentationTool({
+        manifest: CASE_LAW_RESULTS_APP,
+        request: { name: "search_case_law", arguments: arguments_ },
+        app: {
+          callServerTool: async (request) => {
+            sent.push(request.arguments);
+            return { content: [] };
+          },
+        },
+      });
+      expect(result.status).toBe("ready");
+      expect(sent).toHaveLength(1);
+      expect(sent.at(0)).toMatchObject({
+        limit: 20,
+        date_from: "2024-01-01",
+        courts: ["X"],
+      });
+      expect(sent.at(0)).not.toHaveProperty("category");
+    },
+  );
+  test("timeline load-more normalizes a repaired model page size and retains its cursor", async () => {
+    let sent: unknown;
+    const result = await requestPresentationTool({
+      manifest: STATUTE_TIMELINE_APP,
+      request: {
+        name: "read_provision_history",
+        arguments: {
+          eli: "89/2012 Sb.",
+          limit: 50,
+          cursor: "next-timeline-page",
+          anchor: null,
+        },
+      },
+      app: {
+        callServerTool: async (request) => {
+          sent = request.arguments;
+          return { content: [] };
+        },
+      },
+    });
+    expect(result.status).toBe("ready");
+    expect(sent).toEqual({
+      eli: "https://www.e-sbirka.cz/eli/cz/sb/2012/89",
+      limit: 20,
+      cursor: "next-timeline-page",
+    });
+  });
+});
+
+test("a locally refused filter preserves its editable results and never enters loading", async () => {
+  const page = { results: ["existing decision"] };
+  const states: string[] = [];
+  let calls = 0;
+  const bridge = createPresentationBridge({
+    manifest: CASE_LAW_RESULTS_APP,
+    parse: () => page,
+    host: {
+      callServerTool: async () => {
+        calls += 1;
+        return { content: [], structuredContent: {} };
+      },
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      getHostContext: () => ({}),
+      getHostCapabilities: () => undefined,
+      connect: async () => {},
+      openLink: async () => ({}),
+      requestDisplayMode: async () => ({ mode: "inline" }),
+      onerror: undefined,
+      onteardown: undefined,
+    },
+  });
+  await bridge.call({
+    name: "search_case_law",
+    arguments: { queries: ["dismissal"], country: "CZE" },
+  });
+  bridge.subscribe(() => states.push(bridge.getSnapshot().result.status));
+  await bridge.call({
+    name: "search_case_law",
+    arguments: { queries: ["dismissal"], country: "CZE", limit: "many" },
+  });
+  expect(calls).toBe(1);
+  expect(states).toEqual(["error"]);
+  const result = bridge.getSnapshot().result;
+  expect(result.status).toBe("error");
+  if (result.status !== "error") {
+    return;
+  }
+  expect(result.previous).toEqual({ status: "ready", view: page });
+  expect(result.failure.type).toBe("invalid_arguments");
 });

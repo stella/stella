@@ -527,6 +527,7 @@ describe("MCP decision reader controller", () => {
     const host = fixture();
     host.emit({
       status: "error",
+      previous: { status: "empty" },
       message: "Opening failed",
       failure: appFailure("unavailable", "opening-fixture", true),
     });
@@ -540,6 +541,7 @@ describe("MCP decision reader controller", () => {
     await settle();
     host.emit({
       status: "error",
+      previous: { status: "empty" },
       message: "Host operation failed",
       failure: appFailure("unavailable", "host-fixture", true),
     });

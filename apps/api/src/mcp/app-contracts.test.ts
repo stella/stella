@@ -34,7 +34,12 @@ import {
 import { createCaseLawParser } from "./apps/case-law-results/parse";
 import { CASE_LAW_RESULTS_APP, MCP_APPS } from "./apps/manifest";
 import type { ResolveResults, SearchResults } from "./apps/shared/contracts";
+import {
+  validateAppToolArguments,
+  projectAppToolArguments,
+} from "./apps/shared/tool-input";
 import type { McpMode } from "./constants";
+import { normalizeObjectInputAtBoundary } from "./input-normalization";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolOutputContract,
@@ -711,4 +716,63 @@ describe("MCP app registry and contracts", () => {
       "resolve_case_law_decision",
     ]);
   });
+});
+
+test("every presentation app shares the server input normalization for repaired values", () => {
+  const cases = [
+    {
+      name: "search_case_law",
+      arguments: {
+        queries: ["dismissal"],
+        country: "CZ",
+        limit: 50,
+        date_from: "2024",
+        courts: "X",
+        category: "",
+        cursor: null,
+        source_id: null,
+        strict: "ano",
+        sort: "RELEVANCE",
+      },
+    },
+    {
+      name: "read_provision_history",
+      arguments: {
+        eli: "89/2012 Sb.",
+        limit: 50,
+        anchor: null,
+        cursor: null,
+        language: null,
+      },
+    },
+    {
+      name: "open_case_law_decision",
+      arguments: {
+        decision_id: "00000000-0000-4000-8000-000000000001",
+        paragraphs: null,
+      },
+    },
+  ] as const;
+  for (const request of cases) {
+    const definition = DEFAULT_MCP_TOOL_DEFINITIONS.find(
+      ({ name }) => name === request.name,
+    );
+    expect(definition).toBeDefined();
+    if (definition === undefined) {
+      throw new TypeError("Missing declared presentation tool");
+    }
+    const server = normalizeObjectInputAtBoundary({
+      access: "read",
+      schema: definition.inputSchema,
+      value: projectAppToolArguments(request.name, request.arguments),
+    });
+    const app = validateAppToolArguments(request.name, request.arguments);
+    expect(server.ok).toBe(true);
+    expect(app.status).toBe("valid");
+    if (!server.ok || app.status !== "valid") {
+      continue;
+    }
+    expect(app.arguments).toEqual(server.value);
+    expect(app.arguments).not.toEqual(request.arguments);
+  }
 });

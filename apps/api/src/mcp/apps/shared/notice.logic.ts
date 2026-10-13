@@ -37,6 +37,12 @@ export const searchNoticeDetails = (
       case "filter_read":
         if (warning.filter === "court") {
           for (const pair of warning.courtAliases) {
+            if (
+              normalizeUnicode(pair.input, "NFC").toLowerCase() ===
+              normalizeUnicode(pair.resolved, "NFC").toLowerCase()
+            ) {
+              continue;
+            }
             aliases.set(JSON.stringify([pair.input, pair.resolved]), pair);
           }
         }

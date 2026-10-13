@@ -18,7 +18,7 @@ declare global {
   var statuteTimelineFixtureHost: FixtureHost;
 }
 
-const INPUT = { eli: "cz:act:2012:89", anchor: "par_1", language: "cs" };
+const INPUT = { eli: "89/2012 Sb.", anchor: "par_1", language: "cs", limit: 50 };
 const VERSION_2020 = {
   appUrl: "https://stella.example/legislation/2020",
   url: null,
@@ -363,7 +363,7 @@ test("timeline selection, adjacent comparison and paging work in the fixture hos
   expect(recorded.failures).toEqual([]);
   expect(recorded.calls).toContainEqual({
     name: "read_provision_history",
-    arguments: { ...INPUT, cursor: "timeline-page-2" },
+    arguments: { ...INPUT, eli: "https://www.e-sbirka.cz/eli/cz/sb/2012/89", limit: 20, cursor: "timeline-page-2" },
   });
   expect(recorded.openedUrls).toEqual([
     VERSION_2020.appUrl,

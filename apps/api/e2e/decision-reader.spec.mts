@@ -14,6 +14,7 @@ import type {
   provisionPreviewOutput,
 } from "../src/lib/chat/decision-reader-projections";
 import type { SearchResults } from "../src/mcp/apps/shared/contracts";
+import { getAppToolArrayLimit } from "../src/mcp/apps/shared/tool-input";
 
 type ReaderPage = v.InferInput<typeof blocksDecisionOutput>;
 type ReaderPreview = v.InferInput<typeof provisionPreviewOutput>;
@@ -259,6 +260,7 @@ type HostOptions = {
   sandbox?: "opaque" | "same-origin";
   revision?: "stable" | "updated";
   search?: SearchResults;
+  searchInput?: Record<string, unknown>;
 };
 const mountReader = async ({
   page,
@@ -272,6 +274,7 @@ const mountReader = async ({
   sandbox = "opaque",
   revision = "stable",
   search = RESULT_FIXTURE,
+  searchInput = { queries: ["náhrada škody"], country: "CZE", limit: 100 },
 }: HostOptions) => {
   const bundle = await readFile(
     new URL(
@@ -311,6 +314,7 @@ const mountReader = async ({
       provisionPreview,
       surface: appSurface,
       searchResult,
+      searchArguments,
       revision: documentRevision,
       revisedPages,
     }) => {
@@ -389,11 +393,7 @@ const mountReader = async ({
                         decision_id: result.metadata.decisionId,
                         ...(range === undefined ? {} : { paragraphs: range }),
                       }
-                    : {
-                        queries: ["náhrada škody"],
-                        country: "CZE",
-                        limit: 100,
-                      },
+                    : searchArguments,
               },
             });
             reply({
@@ -415,6 +415,10 @@ const mountReader = async ({
             }
             const { name, arguments: args } = params;
             calls.push({ name, arguments: args });
+            if (name === "search_case_law") {
+              reply({ jsonrpc: "2.0", id, result: toolResult(searchResult) });
+              break;
+            }
             if (name === "open_case_law_decision") {
               reply({
                 jsonrpc: "2.0",
@@ -561,6 +565,7 @@ const mountReader = async ({
       provisionPreview: PREVIEW,
       surface,
       searchResult: search,
+      searchArguments: searchInput,
       revision,
       revisedPages: REVISED_PAGES,
     },
@@ -1278,4 +1283,64 @@ test("search pages with only model guidance have no notice", async ({ page }) =>
   const app = await mountReader({ page, host: "Claude", surface: "results", search });
   await expect(app.locator("tbody tr")).toHaveCount(35);
   await expect(app.locator("[data-app-notice]")).toHaveCount(0);
+});
+
+test("search next page and filter normalize raw model arguments before calling the host", async ({ page }) => {
+  const search = { ...RESULT_FIXTURE, nextCursor: "fixture-search-page-2" } satisfies SearchResults;
+  const searchInput = { queries: ["dismissal"], country: "CZE", limit: 50, date_from: "2024", courts: "X" };
+  const app = await mountReader({ page, host: "ChatGPT", surface: "results", search, searchInput });
+  await app.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(app.getByRole("button", { name: "Filter", exact: true })).toBeVisible();
+  await app.getByRole("button", { name: "Filter", exact: true }).click();
+  await expect(app.getByRole("button", { name: "Filter", exact: true })).toBeVisible();
+  const recorded = await history(page);
+  expect(recorded.calls).toEqual([
+    { name: "search_case_law", arguments: { queries: ["dismissal"], country: "CZE", limit: 20, date_from: "2024-01-01", courts: ["X"], cursor: "fixture-search-page-2" } },
+    { name: "search_case_law", arguments: { queries: ["dismissal"], country: "CZE", limit: 20, date_from: "2024-01-01", courts: ["X"] } },
+  ]);
+});
+
+test("court multi-selection respects the declared cap, tier unions, search and accessible chips", async ({ page }) => {
+  const maxCourts = getAppToolArrayLimit("search_case_law", "courts");
+  const regionalCourts = Array.from({ length: maxCourts + 1 }, (_, index) => ({ value: `Regional Court ${index + 1}` }));
+  const search = {
+    ...RESULT_FIXTURE,
+    facets: { court: [
+      { tierLabel: "supreme", courts: [{ value: "Nejvyšší soud" }, { value: "Ústavní soud" }] },
+      { tierLabel: "regional", courts: regionalCourts },
+    ] },
+  } satisfies SearchResults;
+  const app = await mountReader({ page, host: "ChatGPT", surface: "results", search });
+  const trigger = app.getByRole("button", { name: /^Court/u });
+  await trigger.click();
+  const popup = app.locator('[data-slot="popover-popup"][data-open]');
+  const regionalTier = popup.getByRole("checkbox", { name: "High and regional courts", exact: true });
+  await expect(regionalTier).toBeDisabled();
+  const supremeTier = popup.getByRole("checkbox", { name: "Supreme courts", exact: true });
+  await supremeTier.check();
+  await expect(popup.getByRole("checkbox", { name: "Nejvyšší soud", exact: true })).toBeChecked();
+  await expect(popup.getByRole("checkbox", { name: "Ústavní soud", exact: true })).toBeChecked();
+  const searchCourts = popup.getByRole("searchbox", { name: "Search" });
+  await searchCourts.fill("ustavni");
+  await expect(popup.getByRole("checkbox", { name: "Ústavní soud", exact: true })).toBeVisible();
+  await expect(popup.getByRole("checkbox", { name: "Nejvyšší soud", exact: true })).toHaveCount(0);
+  await supremeTier.uncheck();
+  await searchCourts.fill("");
+  await expect(popup.getByRole("checkbox", { name: "Nejvyšší soud", exact: true })).not.toBeChecked();
+  await supremeTier.check();
+  for (const { value } of regionalCourts.slice(0, maxCourts - 2)) {
+    await popup.getByRole("checkbox", { name: value, exact: true }).check();
+  }
+  await expect(popup.getByRole("status")).toContainText(String(maxCourts));
+  await expect(popup.getByRole("checkbox", { name: `Regional Court ${maxCourts - 1}`, exact: true })).toBeDisabled();
+  await expect(regionalTier).toBeDisabled();
+  await popup.getByRole("checkbox", { name: "Nejvyšší soud", exact: true }).uncheck();
+  await expect(supremeTier).toHaveAttribute("aria-checked", "mixed");
+  await expect(popup.getByRole("checkbox", { name: `Regional Court ${maxCourts - 1}`, exact: true })).toBeEnabled();
+  await popup.getByRole("checkbox", { name: `Regional Court ${maxCourts - 1}`, exact: true }).check();
+  await searchCourts.press("Escape");
+  await expect(trigger).toHaveAccessibleName(new RegExp(`Court.*Ústavní soud.*Regional Court ${maxCourts - 1}`, "u"));
+  await app.getByRole("button", { name: "Filter", exact: true }).click();
+  const calls = (await history(page)).calls;
+  expect(calls).toContainEqual({ name: "search_case_law", arguments: { queries: ["náhrada škody"], country: "CZE", limit: 20, courts: ["Ústavní soud", ...regionalCourts.slice(0, maxCourts - 1).map(({ value }) => value)] } });
 });

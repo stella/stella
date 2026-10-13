@@ -4,8 +4,65 @@ import standaloneCode from "ajv/dist/standalone";
 import { panic } from "better-result";
 import path from "node:path";
 
+import { AGENT_INPUT_NORMALIZATION_KEY } from "@stll/agent-input";
+
 import { MCP_APPS } from "../../src/mcp/apps/manifest";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "../../src/mcp/static-tool-definitions";
+
+type SchemaPurpose = "normalization" | "validation";
+
+const appSchemaValue = (value: unknown, purpose: SchemaPurpose): unknown => {
+  if (Array.isArray(value)) {
+    return value.map((entry: unknown) => appSchemaValue(entry, purpose));
+  }
+  if (typeof value !== "object" || value === null) {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([key, entry]) => {
+      if (
+        key === "description" ||
+        (key.startsWith("x-stella-") &&
+          (purpose === "validation" || key !== AGENT_INPUT_NORMALIZATION_KEY))
+      ) {
+        return [];
+      }
+      if (key === "const" || key === "enum" || key === "default") {
+        return [[key, entry]];
+      }
+      if (
+        (key === "properties" ||
+          key === "patternProperties" ||
+          key === "$defs" ||
+          key === "definitions") &&
+        typeof entry === "object" &&
+        entry !== null &&
+        !Array.isArray(entry)
+      ) {
+        return [
+          [
+            key,
+            Object.fromEntries(
+              Object.entries(entry).map(([name, child]) => [
+                name,
+                appSchemaValue(child, purpose),
+              ]),
+            ),
+          ],
+        ];
+      }
+      return [[key, appSchemaValue(entry, purpose)]];
+    }),
+  );
+};
+
+export const appInputSchema = (schema: unknown, purpose: SchemaPurpose) => {
+  const value = appSchemaValue(schema, purpose);
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return panic("App input must be an object schema");
+  }
+  return Object.fromEntries(Object.entries(value));
+};
 
 export const generateMcpAppInputs = async (generatedRoot: string) => {
   const tools = [
@@ -20,7 +77,7 @@ export const generateMcpAppInputs = async (generatedRoot: string) => {
       const definition =
         DEFAULT_MCP_TOOL_DEFINITIONS.find((tool) => tool.name === name) ??
         panic(`Missing app input contract: ${name}`);
-      return [name, definition.inputSchema];
+      return [name, appInputSchema(definition.inputSchema, "normalization")];
     }),
   );
   // Runtime compilation requires eval, which the embedded-app CSP prohibits.
@@ -31,7 +88,7 @@ export const generateMcpAppInputs = async (generatedRoot: string) => {
   });
   addFormats(ajv);
   for (const [name, schema] of Object.entries(schemas)) {
-    ajv.addSchema(schema, name);
+    ajv.addSchema(appInputSchema(schema, "validation"), name);
   }
   await Bun.write(
     path.join(generatedRoot, "input-schemas.json"),

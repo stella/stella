@@ -64,3 +64,9 @@ export type {
   AgentInputNormalizationKind,
   AgentInputNormalizationResult,
 } from "./schema";
+
+export {
+  withNullOptionalsOmitted,
+  withModelPlaceholdersOmitted,
+  withOptionalsNullable,
+} from "./null-optionals";

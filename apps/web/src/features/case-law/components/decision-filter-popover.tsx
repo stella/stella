@@ -2,11 +2,11 @@ import { useState } from "react";
 
 import { useFormatter, useTranslations } from "use-intl";
 
-import { foldSearchMatchText } from "@stll/text-normalize";
 import { CourtFilter } from "@stll/ui/court-filter";
 
 import { DateRangeFilter } from "@/components/date-range-filter";
 import {
+  FACET_SECTION_LIMIT,
   facetSectionView,
   formatFacetCount,
 } from "@/components/public-law-table/public-law-facets.logic";
@@ -27,6 +27,7 @@ import {
   yearDateRange,
 } from "@/features/case-law/case-law-index-search.logic";
 import {
+  COLLAPSED_COURT_TIERS,
   COURT_TIER_LABEL_KEYS,
   decisionTypeSectionBuckets,
   YEAR_SECTION_LIMIT,
@@ -106,13 +107,12 @@ export const DecisionFilterPopover = ({
           <FilterSectionHeading>{t("common.court")}</FilterSectionHeading>
           <CourtFilter
             mode="single"
-            matchText={foldSearchMatchText}
+            collapsedGroups={COLLAPSED_COURT_TIERS}
+            visibleRowLimit={FACET_SECTION_LIMIT}
+            showAllLabel={t("common.showAll")}
             groups={facets.courtTiers.map(({ courts, tier }) => ({
               value: tier ?? "untiered",
-              label:
-                tier === null
-                  ? t("common.court")
-                  : t(COURT_TIER_LABEL_KEYS[tier]),
+              label: tier === null ? null : t(COURT_TIER_LABEL_KEYS[tier]),
               courts: courts.map((court) => ({
                 value: court.value,
                 label: court.label ?? court.value,
@@ -132,9 +132,6 @@ export const DecisionFilterPopover = ({
             selected={selection.court}
             onChange={(value) => onSelect("court", value)}
             label={t("common.court")}
-            searchLabel={t("common.search")}
-            clearLabel={t("common.reset")}
-            emptyLabel={t("common.noResults")}
           />
         </section>
       )}

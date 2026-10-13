@@ -68,11 +68,41 @@ const FAILURE_KEYS = {
   usage_limited: "bridgeUsageLimited",
 } as const satisfies Record<AppFailure["type"], AppMessageKey>;
 
+const FAILURE_FIELD_LABELS = {
+  court: "court",
+  courts: "court",
+  country: "country",
+  category: "filterCategory",
+  has_legal_sentence: "filterLegalSentence",
+  date_from: "from",
+  date_to: "to",
+  decision_type: "filterType",
+  language: "filterLanguage",
+  source_id: "filterSource",
+  sort: "sort",
+} as const satisfies Record<string, AppMessageKey>;
+
+const isFailureField = (
+  field: string,
+): field is keyof typeof FAILURE_FIELD_LABELS =>
+  Object.hasOwn(FAILURE_FIELD_LABELS, field);
+
 export const formatAppFailure = (
   failure: AppFailure,
   translate: AppTranslator,
-) =>
-  `${translate(FAILURE_KEYS[failure.type], { fields: failure.fields.join(", "), code: failure.toolCode })} ${translate("bridgeRequestId", { requestId: failure.requestId })}`;
+) => {
+  const labels = new Set<string>();
+  for (const field of failure.fields) {
+    const root = field.replace(/(?:\.\d+)+$/u, "");
+    if (isFailureField(root)) {
+      labels.add(translate(FAILURE_FIELD_LABELS[root]));
+    }
+  }
+  const message = translate(FAILURE_KEYS[failure.type], {
+    fields: [...labels].join(", "),
+  }).trim();
+  return `${message} ${translate("bridgeRequestId", { requestId: failure.requestId })}`;
+};
 
 export const appFailure = (
   type: AppFailure["type"],

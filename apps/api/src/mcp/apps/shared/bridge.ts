@@ -94,7 +94,12 @@ type ResultState<View> =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "ready"; view: View }
-  | { status: "error"; message: string; failure: AppFailure };
+  | {
+      status: "error";
+      message: string;
+      failure: AppFailure;
+      previous: { status: "empty" } | { status: "ready"; view: View };
+    };
 type ToolName = PresentationApp["callableTools"][number];
 type AppSnapshot<View> = {
   context: McpUiHostContext;
@@ -129,11 +134,13 @@ type RequestPresentationToolOptions = {
   app: Pick<App, "callServerTool">;
   manifest: PresentationApp;
   request: ReadCall;
+  onRequest?: (arguments_: Record<string, unknown>) => void;
 };
 export const requestPresentationTool = async ({
   app,
   manifest,
   request,
+  onRequest,
 }: RequestPresentationToolOptions) => {
   const requestId = createAppRequestId();
   if (!manifest.callableTools.some((name) => name === request.name)) {
@@ -153,6 +160,7 @@ export const requestPresentationTool = async ({
       },
     } as const;
   }
+  onRequest?.(checked.arguments);
   const called = await Result.tryPromise(async () =>
     app.callServerTool({ name: request.name, arguments: checked.arguments }),
   );
@@ -252,6 +260,7 @@ const mergeHostContextSnapshot = <View>({
         ? {
             status: "error",
             failure: snapshot.result.failure,
+            previous: snapshot.result.previous,
             message: formatAppFailure(
               snapshot.result.failure,
               appLocale(merged.locale).t,
@@ -259,6 +268,36 @@ const mergeHostContextSnapshot = <View>({
           }
         : snapshot.result,
   } satisfies AppSnapshot<View>;
+};
+
+type PresentationListeners = {
+  app: PresentationHost;
+  hostContext: (context: McpUiHostContext) => void;
+  toolInput: (event: AppEventMap["toolinput"]) => void;
+  toolResult: (event: AppEventMap["toolresult"]) => void;
+  toolCancelled: (event: AppEventMap["toolcancelled"]) => void;
+  teardown: () => void;
+};
+const bindPresentationListeners = ({
+  app,
+  hostContext,
+  toolInput,
+  toolResult,
+  toolCancelled,
+  teardown,
+}: PresentationListeners) => {
+  app.addEventListener("hostcontextchanged", hostContext);
+  app.addEventListener("toolinput", toolInput);
+  app.addEventListener("toolresult", toolResult);
+  app.addEventListener("toolcancelled", toolCancelled);
+  app.onteardown = () => {
+    app.removeEventListener("hostcontextchanged", hostContext);
+    app.removeEventListener("toolinput", toolInput);
+    app.removeEventListener("toolresult", toolResult);
+    app.removeEventListener("toolcancelled", toolCancelled);
+    teardown();
+    return {};
+  };
 };
 
 export const createPresentationBridge = <View>({
@@ -279,7 +318,13 @@ export const createPresentationBridge = <View>({
   };
   let generation = 0;
   let lastCall: ReadCall | undefined;
+  let previous: { status: "empty" } | { status: "ready"; view: View } = {
+    status: "empty",
+  };
   const publish = (result: ResultState<View>) => {
+    if (result.status === "ready") {
+      previous = { status: "ready", view: result.view };
+    }
     snapshot = {
       context: snapshot.context,
       input: snapshot.input,
@@ -294,8 +339,12 @@ export const createPresentationBridge = <View>({
     publish({
       status: "error",
       failure,
+      previous:
+        failure.type === "invalid_arguments" ? previous : { status: "empty" },
       message: formatAppFailure(failure, appLocale(snapshot.context.locale).t),
     });
+  const publishUnavailable = () =>
+    publishFailure(appFailure("unavailable", createAppRequestId(), true));
   const receive = (result: AppToolResult, requestId = createAppRequestId()) => {
     const payload = parseAppToolPayload(result);
     if (result.isError === true) {
@@ -317,6 +366,7 @@ export const createPresentationBridge = <View>({
     }
   };
   const toolInput = ({ arguments: input }: AppEventMap["toolinput"]) => {
+    previous = { status: "empty" };
     generation += 1;
     lastCall = undefined;
     snapshot = {
@@ -338,21 +388,18 @@ export const createPresentationBridge = <View>({
     generation += 1;
     publishFailure(appFailure("cancelled", createAppRequestId()));
   };
-  app.addEventListener("hostcontextchanged", hostContext);
-  app.addEventListener("toolinput", toolInput);
-  app.addEventListener("toolresult", toolResult);
-  app.addEventListener("toolcancelled", toolCancelled);
-  app.onteardown = () => {
-    generation += 1;
-    app.removeEventListener("hostcontextchanged", hostContext);
-    app.removeEventListener("toolinput", toolInput);
-    app.removeEventListener("toolresult", toolResult);
-    app.removeEventListener("toolcancelled", toolCancelled);
-    listeners.clear();
-    return {};
-  };
-  const reportAppError: NonNullable<typeof app.onerror> = () =>
-    publishFailure(appFailure("unavailable", createAppRequestId(), true));
+  bindPresentationListeners({
+    app,
+    hostContext,
+    toolInput,
+    toolResult,
+    toolCancelled,
+    teardown: () => {
+      generation += 1;
+      listeners.clear();
+    },
+  });
+  const reportAppError: NonNullable<typeof app.onerror> = publishUnavailable;
   Reflect.set(app, "onerror", reportAppError);
 
   // Paged reads and previews own their request state.
@@ -374,33 +421,33 @@ export const createPresentationBridge = <View>({
       context: snapshot.context,
       mode,
       isCurrent: () => currentGeneration === generation,
-      fail:
-        onError ??
-        (() =>
-          publishFailure(
-            appFailure("unavailable", createAppRequestId(), true),
-          )),
+      fail: onError ?? publishUnavailable,
       hostContext,
     });
   };
   const call = async (request: ReadCall): Promise<void> => {
-    const attempted = {
-      name: request.name,
-      arguments: projectAppToolArguments(request.name, request.arguments),
-    };
-    lastCall = attempted;
+    lastCall = request;
     snapshot = {
       context: snapshot.context,
-      input: attempted.arguments,
-      tool: attempted.name,
+      input: request.arguments,
+      tool: request.name,
       result: snapshot.result,
     };
     const currentGeneration = ++generation;
-    publish({ status: "loading" });
     const called = await requestPresentationTool({
       app,
       manifest,
-      request: attempted,
+      request,
+      onRequest: (arguments_) => {
+        lastCall = { name: request.name, arguments: arguments_ };
+        snapshot = {
+          context: snapshot.context,
+          input: arguments_,
+          tool: request.name,
+          result: snapshot.result,
+        };
+        publish({ status: "loading" });
+      },
     });
     if (currentGeneration !== generation) {
       return;
@@ -415,25 +462,20 @@ export const createPresentationBridge = <View>({
     url: string,
     onError?: (message: string | null) => void,
   ): Promise<void> => {
-    const fail =
-      onError ??
-      (() =>
-        publishFailure(appFailure("unavailable", createAppRequestId(), true)));
+    const fail = onError ?? publishUnavailable;
     await openPresentationLink({ app, url, fail });
   };
   const connect = async (): Promise<void> => {
     applyHostPresentation(snapshot.context, title?.(snapshot.context));
     const connected = await Result.tryPromise(async () => app.connect());
     if (Result.isError(connected)) {
-      publishFailure(appFailure("unavailable", createAppRequestId(), true));
+      publishUnavailable();
       return;
     }
     hostContext(app.getHostContext() ?? {});
   };
   return {
-    detached: createDetached(() =>
-      publishFailure(appFailure("unavailable", createAppRequestId(), true)),
-    ),
+    detached: createDetached(publishUnavailable),
     connect,
     requestTool,
     requestFullscreen: async (onError?: (message: string | null) => void) =>

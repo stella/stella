@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { createTranslator, IntlProvider } from "use-intl";
 
 import MCP_APP_MESSAGES from "@stll/api-contract/mcp-app-messages";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import type { SearchResults } from "./contracts";
 import { AppNotice, SearchNotice } from "./notice";
@@ -61,6 +62,45 @@ describe("compact search notices", () => {
     expect(markup).not.toContain(" open=");
     expect(markup).toContain("truncate");
     expect(markup).toContain("<ul");
+  });
+
+  test("identity aliases are ignored after canonical and case-insensitive comparison", () => {
+    const decomposed = normalizeUnicode("Ústavní soud", "NFD");
+    expect(decomposed).not.toBe("Ústavní soud");
+    const aliases = [
+      {
+        code: "filter_read",
+        filter: "court",
+        courtAliases: [
+          { input: "Nejvyšší soud", resolved: "Nejvyšší soud" },
+          { input: decomposed.toUpperCase(), resolved: "Ústavní soud" },
+        ],
+        message: "MODEL ONLY",
+        hint: "MODEL ONLY",
+      },
+    ] as const satisfies readonly ToolWarning[];
+    expect(searchNoticeDetails(aliases, t)).toEqual([]);
+    expect(
+      searchNoticeDetails(
+        [
+          {
+            ...aliases[0],
+            courtAliases: [{ input: "Ustavní soud", resolved: "Ústavní soud" }],
+          },
+        ],
+        t,
+      ),
+    ).toEqual(["Hledáno Ustavní soud jako Ústavní soud"]);
+  });
+
+  test("German alias summaries introduce the pair without repeating its connector", () => {
+    const translate = createTranslator({
+      locale: "de",
+      messages: MCP_APP_MESSAGES.de,
+    });
+    expect(searchNoticeDetails([warnings[1]], translate)).toEqual([
+      "Gesucht: NS als Nejvyšší soud",
+    ]);
   });
 
   test("adding duplicate warnings is a fixed point", () => {

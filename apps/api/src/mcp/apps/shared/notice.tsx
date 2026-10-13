@@ -14,7 +14,7 @@ export const AppNotice = ({ details }: { details: readonly string[] }) => {
       className="group text-muted-foreground min-w-0 text-xs"
       data-app-notice
     >
-      <summary className="focus-visible:ring-ring flex min-w-0 cursor-pointer items-center gap-1 rounded-sm outline-none focus-visible:ring-2">
+      <summary className="focus-visible:ring-ring flex min-w-0 cursor-pointer list-none items-center gap-1 rounded-sm outline-none focus-visible:ring-2 [&::-webkit-details-marker]:hidden">
         <ChevronRightIcon
           aria-hidden="true"
           className="size-3 shrink-0 group-open:rotate-90 rtl:rotate-180"
