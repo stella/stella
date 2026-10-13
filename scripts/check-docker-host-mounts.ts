@@ -683,11 +683,7 @@ const isNonMountingCommandType = ({
     !type.typeArguments?.length
   ) {
     const name = type.typeName.text;
-    for (
-      let scope: ts.Node | undefined = type.parent;
-      scope !== undefined;
-      scope = scope.parent
-    ) {
+    for (let scope = type.parent; ; scope = scope.parent) {
       if (
         (ts.isFunctionLike(scope) ||
           ts.isClassDeclaration(scope) ||
@@ -710,8 +706,10 @@ const isNonMountingCommandType = ({
           isNonMountingCommandType({ type: alias.type, source, seen })
         );
       }
+      if (ts.isSourceFile(scope)) {
+        return false;
+      }
     }
-    return false;
   }
   if (!ts.isTupleTypeNode(type)) {
     return false;
@@ -783,11 +781,7 @@ const isNonMountingCommandSpread = (
     return false;
   }
   seen.add(expression);
-  for (
-    let node: ts.Node | undefined = expression.parent;
-    node !== undefined;
-    node = node.parent
-  ) {
+  for (let node = expression.parent; ; node = node.parent) {
     if (ts.isBlock(node) || ts.isSourceFile(node)) {
       const proof = blockCommandDomain({
         scope: node,
@@ -797,6 +791,9 @@ const isNonMountingCommandSpread = (
       if (proof !== undefined) {
         return proof;
       }
+    }
+    if (ts.isSourceFile(node)) {
+      return false;
     }
     if (
       ts.isCatchClause(node) &&
@@ -837,7 +834,6 @@ const isNonMountingCommandSpread = (
       );
     }
   }
-  return false;
 };
 
 const dockerSubcommands = new Set(["run", "create", "volume", "container"]);
