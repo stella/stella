@@ -64,6 +64,7 @@ import {
   providerDiagnosticFromThrown,
   withProviderDiagnostic,
 } from "@/lib/errors/provider-diagnostic";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 import { LifecycleRegistry } from "@/stores/lifecycle-registry";
@@ -620,15 +621,13 @@ export const createChatRuntime = ({
             cause,
           }),
       });
-      if (prepared.isErr()) {
-        throw prepared.error;
-      }
+      const requestBody = readQueryResult(prepared);
       return observeChatProviderDiagnostic(
         keepPostedMessagesInSnapshots(
           messages,
           upstreamConnection.connect(
             messages,
-            prepared.value,
+            requestBody,
             abortSignal,
             runContext,
           ),
@@ -897,16 +896,19 @@ export const createChatRuntime = ({
       return {
         messageId: message.id,
         status: "not_started",
-        stream: stream.catch((error: unknown) => {
-          if (requestWasActive) {
-            throw new ChatMessageStartError(message.id, error);
-          }
-          throw new ChatRequestError({
-            kind: "preparation_failed",
-            message: "Chat client failed before starting the message",
-            cause: error,
-          });
-        }),
+        stream: stream.catch((error: unknown) =>
+          readQueryResult(
+            Result.err(
+              requestWasActive
+                ? new ChatMessageStartError(message.id, error)
+                : new ChatRequestError({
+                    kind: "preparation_failed",
+                    message: "Chat client failed before starting the message",
+                    cause: error,
+                  }),
+            ),
+          ),
+        ),
       };
     }
     startTurn();
@@ -919,11 +921,11 @@ export const createChatRuntime = ({
       try: async () => await started.stream,
       catch: (cause) => captureRuntimeError(cause),
     });
-    if (outcome.isErr()) {
-      throw outcome.error;
-    }
+    readQueryResult(outcome);
     if (started.status === "not_started") {
-      throw captureRuntimeError(new ChatMessageStartError(message.id));
+      return readQueryResult(
+        Result.err(captureRuntimeError(new ChatMessageStartError(message.id))),
+      );
     }
   };
 
@@ -1161,7 +1163,11 @@ export const createChatRuntime = ({
         "chat-queries.stream",
       );
       if (started.status === "not_started") {
-        throw captureRuntimeError(new ChatMessageStartError(message.id));
+        return readQueryResult(
+          Result.err(
+            captureRuntimeError(new ChatMessageStartError(message.id)),
+          ),
+        );
       }
       return started;
     },
