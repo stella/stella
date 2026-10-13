@@ -12,13 +12,35 @@ type DoctorClassification =
 
 const normalizePath = (value: string) => value.replaceAll("\\", "/");
 
-const isBunStorePath = (value: string) => {
+type StoreLayout = {
+  projectRoot: string;
+  // Configured Bun store link directories, e.g. a CI-scoped BUN_INSTALL_CACHE_DIR.
+  storeLinks: readonly string[];
+};
+
+const isBunStorePath = (value: string, layout?: StoreLayout) => {
   const normalized = normalizePath(value);
-  return (
+  if (
     normalized.includes("node_modules/.bun/") ||
     normalized.includes(".bun/install/cache/links/")
+  ) {
+    return true;
+  }
+  if (layout === undefined) {
+    return false;
+  }
+  const resolved = path.resolve(layout.projectRoot, value);
+  return layout.storeLinks.some((links) =>
+    resolved.startsWith(`${path.resolve(links)}${path.sep}`),
   );
 };
+
+export const configuredStoreLinks = (
+  env: Record<string, string | undefined>,
+) =>
+  env["BUN_INSTALL_CACHE_DIR"]
+    ? [path.join(env["BUN_INSTALL_CACHE_DIR"], "links")]
+    : [];
 
 const isProjectDependencyLink = (value: string) =>
   normalizePath(value).startsWith("node_modules/");
@@ -115,6 +137,7 @@ const duplicateSections = (output: string): DuplicateSection[] => {
 export const classifyExpoDoctorResult = (
   output: string,
   exitCode: number,
+  layout?: StoreLayout,
 ): DoctorClassification => {
   if (exitCode === 0) {
     return { type: "pass" };
@@ -163,7 +186,7 @@ export const classifyExpoDoctorResult = (
         reason: `${section.name} resolves to multiple versions`,
       };
     }
-    if (!section.entries.some((entry) => isBunStorePath(entry.path))) {
+    if (!section.entries.some((entry) => isBunStorePath(entry.path, layout))) {
       return {
         type: "failure",
         reason: `${section.name} has no Bun store resolution`,
@@ -172,7 +195,8 @@ export const classifyExpoDoctorResult = (
     if (
       section.entries.some(
         (entry) =>
-          !isBunStorePath(entry.path) && !isProjectDependencyLink(entry.path),
+          !isBunStorePath(entry.path, layout) &&
+          !isProjectDependencyLink(entry.path),
       )
     ) {
       return {
@@ -214,6 +238,7 @@ const run = async () => {
   const classification = classifyExpoDoctorResult(
     `${stdout}\n${stderr}`,
     exitCode,
+    { projectRoot, storeLinks: configuredStoreLinks(process.env) },
   );
   if (classification.type === "pass") {
     return;

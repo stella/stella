@@ -1,9 +1,11 @@
 #!/usr/bin/env bun
 
 import { Result, TaggedError } from "better-result";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
 
 import { BASELINE_PATHS } from "./baseline-paths.ts";
+import { actionlintWorkflowSource } from "./check-workflow-yaml";
 
 class ActionlintBaselineError extends TaggedError("ActionlintBaselineError")<{
   message: string;
@@ -43,21 +45,53 @@ const run = (): void => {
       message: "ACTIONLINT_BIN is required",
     });
   }
-  const result = Bun.spawnSync([binary, "-format", "{{json .}}"], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  // Exit 1 reports diagnostics; all other nonzero statuses are tool failures.
-  if (result.exitCode !== 0 && result.exitCode !== 1) {
-    throw new ActionlintBaselineError({
-      message: `actionlint exited with status ${result.exitCode}: ${result.stderr.toString().trim()}`,
-    });
+  const directory = ".github/workflows";
+  const files = readdirSync(directory)
+    .filter((name) => /\.ya?ml$/u.test(name))
+    .toSorted();
+  if (files.length === 0) {
+    throw new ActionlintBaselineError({ message: "No workflow files to lint" });
   }
-  const findings: unknown = JSON.parse(result.stdout.toString());
-  if (!Array.isArray(findings) || !findings.every(isFinding)) {
+  const sources = files.map((name) => {
+    const file = path.join(directory, name);
+    return {
+      file,
+      source: actionlintWorkflowSource({
+        source: readFileSync(file, "utf-8"),
+        root: process.cwd(),
+        file,
+      }),
+    };
+  });
+  const invocations = sources.map(({ file, source }) => ({
+    args: [binary, "-format", "{{json .}}", "-stdin-filename", file, "-"],
+    stdin: Buffer.from(source),
+  }));
+  const findings: unknown[] = [];
+  for (const invocation of invocations) {
+    const result = Bun.spawnSync(invocation.args, {
+      stdin: invocation.stdin,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    // Exit 1 reports diagnostics; all other nonzero statuses are tool failures.
+    if (result.exitCode !== 0 && result.exitCode !== 1) {
+      throw new ActionlintBaselineError({
+        message: `actionlint exited with status ${result.exitCode}: ${result.stderr.toString().trim()}`,
+      });
+    }
+    const reported: unknown = JSON.parse(result.stdout.toString());
+    if (!Array.isArray(reported) || !reported.every(isFinding)) {
+      throw new ActionlintBaselineError({
+        message:
+          "actionlint output must be an array of findings with filepath, kind, and message strings",
+      });
+    }
+    findings.push(...reported);
+  }
+  if (!findings.every(isFinding)) {
     throw new ActionlintBaselineError({
-      message:
-        "actionlint output must be an array of findings with filepath, kind, and message strings",
+      message: "Invalid actionlint findings",
     });
   }
   const groups = new Map<string, Finding & { count: number }>();
