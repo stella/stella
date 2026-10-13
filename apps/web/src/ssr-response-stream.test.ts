@@ -1,4 +1,4 @@
-import { createElement, Suspense } from "react";
+import { createElement, Suspense, use } from "react";
 import { renderToReadableStream } from "react-dom/server";
 
 import { expect, test } from "bun:test";
@@ -24,7 +24,9 @@ test("SSR responses return an unavailable document when the renderer never produ
       return new Promise<Response>(() => {});
     },
     lifetimeMs: 10,
-    reportError: (error) => errors.push(error),
+    reportError: (error) => {
+      errors.push(error);
+    },
   });
   expect(response.status).toBe(503);
   expect(await response.text()).toContain("</body></html>");
@@ -41,7 +43,9 @@ test("SSR responses surface pre-shell render failures as unavailable HTML", asyn
     fetchResponse: async () => {
       throw failure;
     },
-    reportError: (error) => errors.push(error),
+    reportError: (error) => {
+      errors.push(error);
+    },
   });
   expect(response.status).toBe(503);
   expect(response.headers.get("Cache-Control")).toBe("private, no-store");
@@ -56,7 +60,9 @@ test("SSR responses release a renderer that resolves after the deadline", async 
     request: new Request("https://stella.test/law/cases"),
     fetchResponse: async () => late.promise,
     lifetimeMs: 10,
-    reportError: (error) => errors.push(error),
+    reportError: (error) => {
+      errors.push(error);
+    },
   });
   expect(response.status).toBe(503);
   late.resolve(
@@ -76,7 +82,9 @@ test("SSR responses stop a pending renderer when the request aborts", async () =
       signal: request.signal,
     }),
     fetchResponse: async () => new Promise<Response>(() => {}),
-    reportError: (error) => errors.push(error),
+    reportError: (error) => {
+      errors.push(error);
+    },
   });
   request.abort(reason);
   expect((await completion).status).toBe(503);
@@ -104,7 +112,9 @@ test("SSR responses preserve successful documents and non-HTML responses", async
           },
         });
       },
-      reportError: (error) => errors.push(error),
+      reportError: (error) => {
+        errors.push(error);
+      },
     });
     expect(response.status).toBe(201);
     expect(response.headers.get("Content-Type")).toBe(contentType);
@@ -132,7 +142,7 @@ test("SSR streams complete when a React component fails after its shell flushes"
   let resumed = false;
   const DeferredFailure = () => {
     if (!resumed) {
-      throw ready.promise;
+      use(ready.promise);
     }
     throw failure;
   };
@@ -162,7 +172,9 @@ test("SSR streams complete when a React component fails after its shell flushes"
     source,
     signal: renderer.signal,
     abortRenderer: (error) => renderer.abort(error),
-    reportError: (error) => streamErrors.push(error),
+    reportError: (error) => {
+      streamErrors.push(error);
+    },
   });
   const reader = body.getReader();
   const first = await reader.read();
@@ -199,7 +211,9 @@ test("SSR streams preserve successful HTML and release their source", async () =
     source,
     signal: new AbortController().signal,
     abortRenderer: () => {},
-    reportError: (error) => errors.push(error),
+    reportError: (error) => {
+      errors.push(error);
+    },
   });
   expect(await new Response(body).text()).toBe(html);
   expect(errors).toEqual([]);
@@ -227,7 +241,9 @@ test("SSR responses error the body after a source fails during a pending read", 
           "Cache-Control": "public, max-age=300, s-maxage=600",
         },
       }),
-    reportError: (error) => errors.push(error),
+    reportError: (error) => {
+      errors.push(error);
+    },
   });
   expect(response.status).toBe(200);
   expect(response.headers.get("Cache-Control")).toBe("private, no-store");
@@ -264,7 +280,9 @@ test("SSR drain timeout errors the body even when cancellation never settles", a
     lifetimeMs: 10,
     abortRenderer: (error) => renderer.abort(error),
     drainMs: 10,
-    reportError: (error) => errors.push(error),
+    reportError: (error) => {
+      errors.push(error);
+    },
   });
   const reader = body.getReader();
   expect(new TextDecoder().decode((await reader.read()).value)).toBe(SHELL);
@@ -293,7 +311,9 @@ test("SSR stream cancellation releases the renderer without awaiting its cancell
     source,
     signal: new AbortController().signal,
     abortRenderer: () => {},
-    reportError: (error) => errors.push(error),
+    reportError: (error) => {
+      errors.push(error);
+    },
   });
   await body.cancel(reason);
   expect(cancelledWith).toBe(reason);
@@ -320,7 +340,9 @@ test.each(["before reading", "during reading"])(
       source,
       signal: abort.signal,
       abortRenderer: () => {},
-      reportError: (error) => errors.push(error),
+      reportError: (error) => {
+        errors.push(error);
+      },
     });
     const completion = new Response(body).text();
     if (phase === "during reading") {
