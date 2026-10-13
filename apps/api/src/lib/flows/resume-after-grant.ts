@@ -1,3 +1,8 @@
+import { Result } from "better-result";
+import { and, eq, sql } from "drizzle-orm";
+
+import { member } from "@/api/db/auth-schema";
+import { assertCallerOrg, proveOrgScope } from "@/api/db/org-scope";
 import { rootDb } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
@@ -28,6 +33,16 @@ export const resumeFlowsAfterGrant = async (
       organizationId,
       featureId: "flows",
     });
+    const scope = await proveOrgScope(tx, {
+      table: "member",
+      where: sql`${and(eq(member.organizationId, organizationId), eq(member.userId, userId))}`,
+    });
+    if (
+      Result.isError(scope) ||
+      Result.isError(assertCallerOrg(scope.value, organizationId))
+    ) {
+      return false;
+    }
     if (
       !(await isBackgroundFeatureEnabled({
         tx,

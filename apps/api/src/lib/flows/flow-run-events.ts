@@ -11,9 +11,15 @@ import {
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
 
+import { assertCallerOrg, proveOrgScope } from "@/api/db/org-scope";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { featureEnrolments, flowRunSteps } from "@/api/db/schema";
+import {
+  featureEnrolments,
+  flowRunSteps,
+  flowRuns,
+  workspaces,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
@@ -22,7 +28,10 @@ import type {
   FlowRunStatus,
   FlowRunStepStatus,
 } from "@/api/lib/flows/flow-types";
-import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import {
+  brandPersistedUserId,
+  brandPersistedFlowRunId,
+} from "@/api/lib/safe-id-boundaries";
 import { broadcast } from "@/api/lib/sse";
 import type { SseConnectionAuthorizers } from "@/api/lib/sse";
 
@@ -58,6 +67,30 @@ export const deliverFlowRunWorkspaceEvent = async ({
     return;
   }
   await withAggregateTransaction(database, async (tx) => {
+    const scope = await proveOrgScope(tx, {
+      table: "workspaces",
+      where: eq(workspaces.id, workspaceId),
+    });
+    if (scope.isErr() || assertCallerOrg(scope.value, organizationId).isErr()) {
+      return;
+    }
+    if (event.type === FLOW_RUN_UPDATE_EVENT_TYPE) {
+      const source = (
+        await tx
+          .select({ id: flowRuns.id })
+          .from(flowRuns)
+          .where(
+            and(
+              eq(flowRuns.id, brandPersistedFlowRunId(event.data.runId)),
+              eq(flowRuns.workspaceId, workspaceId),
+            ),
+          )
+          .limit(1)
+      ).at(0);
+      if (source === undefined) {
+        return;
+      }
+    }
     let ordinaryEvent: WorkspaceRealtimeEvent | undefined;
     if (event.type !== FLOW_RUN_UPDATE_EVENT_TYPE) {
       const entityIds = [];

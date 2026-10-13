@@ -1,10 +1,15 @@
-import { panic } from "better-result";
-import { getTableName, sql } from "drizzle-orm";
+import { and, asc, eq, getTableName, gt, sql } from "drizzle-orm";
 
+import {
+  assertCallerOrg,
+  proveOrgScope,
+  withOrgScope,
+} from "@/api/db/org-scope";
 import type { Transaction } from "@/api/db/root";
 import { flowDefinitions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { executedRows } from "@/api/lib/db/executed-rows";
+import { readCursorPage } from "@/api/lib/db/read-bounded";
+import { LIMITS } from "@/api/lib/limits";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 export const FLOW_RESET_AUDITED_TABLES = [
@@ -23,25 +28,61 @@ export const cleanupFlowDefinitions = async ({
   organizationId,
   subject,
 }: ResetFlowCleanupOptions): Promise<void> => {
-  const row = executedRows(
-    await tx.execute(sql`
-    WITH removed AS (DELETE FROM ${flowDefinitions}
-      WHERE ${flowDefinitions.organizationId} = ${organizationId} RETURNING 1)
-    SELECT count(*)::int AS n FROM removed
-  `),
-  ).at(0);
-  if (
-    typeof row !== "object" ||
-    row === null ||
-    !("n" in row) ||
-    typeof row.n !== "number" ||
-    !Number.isSafeInteger(row.n) ||
-    row.n < 0
-  ) {
-    panic("Flow cleanup must return its non-negative deletion count");
+  let cursor: SafeId<"flowDefinition"> | undefined;
+  let count = 0;
+  for (;;) {
+    // db-await-in-loop: discover each bounded page after the preceding scoped deletions.
+    const page = await readCursorPage(
+      tx
+        .select({ id: flowDefinitions.id })
+        .from(flowDefinitions)
+        .where(
+          and(
+            eq(flowDefinitions.organizationId, organizationId),
+            cursor === undefined ? undefined : gt(flowDefinitions.id, cursor),
+          ),
+        )
+        .orderBy(asc(flowDefinitions.id)),
+      { limit: LIMITS.flowDefinitionsCount, cursorForItem: (row) => row.id },
+    );
+    for (const row of page.items) {
+      const where = sql`${and(eq(flowDefinitions.id, row.id), eq(flowDefinitions.organizationId, organizationId))}`;
+      // db-await-in-loop: each row pins its own organization before the system role is installed.
+      const proof = await proveOrgScope(tx, {
+        table: "flowDefinitions",
+        where,
+      });
+      const scope = proof.unwrapOr(null);
+      if (scope === null || assertCallerOrg(scope, organizationId).isErr()) {
+        continue;
+      }
+      // db-await-in-loop: scoped role settings are lent and restored serially on this transaction.
+      count += await withOrgScope({
+        tx,
+        scope,
+        actor: { type: "system" },
+        fn: async (scopedTx) => {
+          const changed = await scopedTx
+            .delete(flowDefinitions)
+            .where(
+              and(
+                eq(flowDefinitions.id, row.id),
+                eq(flowDefinitions.organizationId, scope.organizationId),
+              ),
+            )
+            .returning({ id: flowDefinitions.id });
+          return changed.length;
+        },
+      });
+    }
+    const last = page.items.at(-1);
+    if (page.nextCursor === null || last === undefined) {
+      break;
+    }
+    cursor = last.id;
   }
   await recordSystemAudit(tx, "system:review-reset-flows-cleanup", {
     subject,
-    counts: { flowDefinitions: row.n },
+    counts: { flowDefinitions: count },
   });
 };

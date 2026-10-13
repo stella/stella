@@ -1,14 +1,21 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq, gt, inArray, isNull, lte, max, or } from "drizzle-orm";
 
 import { SCOUT_KEY } from "@stll/api-contract/signals";
 import type { OpenWorkObligationStatus } from "@stll/api-contract/signals";
 import { WORK_OBLIGATION_STATUS } from "@stll/api-contract/workflow-status";
 import type { WorkObligationStatus } from "@stll/api-contract/workflow-status";
+import { mapWithConcurrency } from "@stll/concurrency";
 import { DAY_IN_MS, parseTimeZoneId } from "@stll/time";
 import type { TimeZoneId } from "@stll/time";
 
 import { member as organizationMembers, user } from "@/api/db/auth-schema";
+import {
+  assertCallerOrg,
+  combineOrgScopes,
+  proveOrgScope,
+  withOrgScope,
+} from "@/api/db/org-scope";
 import type { rootDb, Transaction } from "@/api/db/root";
 import {
   entities,
@@ -27,6 +34,7 @@ import {
   isBackgroundFeatureEnabled,
   loadBackgroundFeatureActors,
 } from "@/api/lib/feature-access/background";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -474,11 +482,57 @@ export const runWorkAttentionScout = async ({
       organizationsWithoutMember += 1;
       continue;
     }
-    const scopedDb = createScopedDb({
+    const actorDb = createScopedDb({
       organizationId: batch.organizationId,
       userId,
       workspaceIds: batch.workspaceIds,
     });
+    const scopedDb = async <T>(
+      fn: (tx: Transaction) => Promise<T>,
+    ): Promise<T> =>
+      await actorDb(async (tx) => {
+        await lockFeatureRecoveryAdmission({
+          tx,
+          organizationId: batch.organizationId,
+          featureId: "signals",
+        });
+        const proofs = await mapWithConcurrency({
+          items: batch.workspaceIds,
+          limit: 1,
+          operation: async (workspaceId: SafeId<"workspace">) => {
+            const proof = await proveOrgScope(tx, {
+              table: "workspaces",
+              where: eq(workspaces.id, workspaceId),
+            });
+            if (Result.isError(proof)) {
+              throw proof.error;
+            }
+            const agreement = assertCallerOrg(
+              proof.value,
+              batch.organizationId,
+            );
+            if (Result.isError(agreement)) {
+              throw agreement.error;
+            }
+            return proof.value;
+          },
+        });
+        let scope =
+          proofs.at(0) ?? panic("Attention batch requires a source matter");
+        for (const proof of proofs.slice(1)) {
+          const combined = combineOrgScopes(scope, proof);
+          if (Result.isError(combined)) {
+            throw combined.error;
+          }
+          scope = combined.value;
+        }
+        return await withOrgScope({
+          tx,
+          scope,
+          actor: { type: "actor", userId },
+          fn,
+        });
+      });
     // db-await-in-loop: per-recipient RLS connection; atomic census and emission for one enrolled owner
     const result = await runScout({
       db: scopedDb,

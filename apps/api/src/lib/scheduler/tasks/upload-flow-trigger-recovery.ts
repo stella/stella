@@ -8,12 +8,12 @@ import {
   isNotNull,
   lte,
   not,
-  or,
   sql,
 } from "drizzle-orm";
 
 import { mapWithConcurrency } from "@stll/concurrency";
 
+import { proveOrgScope, withOrgScope } from "@/api/db/org-scope";
 import type { Transaction } from "@/api/db/root";
 import {
   flowDefinitions,
@@ -173,42 +173,60 @@ const claimUploadTriggerCandidates = async ({
           rows.map((row) => row.intent),
         );
         const retryAt = new Date(now.getTime() + UPLOAD_TRIGGER_RETRY_MS);
-        const claimed = await mutateRecoveryClaim({
-          type: "upload-claim",
-          tx,
-          table: flowUploadTriggerIntents,
-          retryAt,
-          where: sql`${and(
-            eq(flowUploadTriggerIntents.organizationId, organizationId),
-            eq(flowUploadTriggerIntents.status, "pending"),
-            uploadTriggerActorExists(),
-            or(
-              ...rows.map(({ intent, originalRetryAt }) =>
-                and(
-                  eq(
-                    flowUploadTriggerIntents.definitionId,
-                    intent.definitionId,
-                  ),
-                  eq(flowUploadTriggerIntents.entityId, intent.entityId),
-                  timestampMatchesCasToken(
-                    flowUploadTriggerIntents.retryAt,
-                    originalRetryAt,
-                  ),
-                ),
+        const claims = await mapWithConcurrency({
+          items: rows,
+          limit: 1,
+          operation: async (candidate) => {
+            const { intent, originalRetryAt } = candidate;
+            const where = sql`${and(
+              eq(flowUploadTriggerIntents.organizationId, organizationId),
+              eq(flowUploadTriggerIntents.definitionId, intent.definitionId),
+              eq(flowUploadTriggerIntents.entityId, intent.entityId),
+              eq(flowUploadTriggerIntents.status, "pending"),
+              uploadTriggerActorExists(),
+              timestampMatchesCasToken(
+                flowUploadTriggerIntents.retryAt,
+                originalRetryAt,
               ),
-            ),
-          )}`,
+            )}`;
+            const scopeResult = await proveOrgScope(tx, {
+              table: "flowUploadTriggerIntents",
+              where,
+            });
+            const scope = scopeResult.unwrapOr(null);
+            if (scope === null) {
+              return [];
+            }
+            return await withOrgScope({
+              tx,
+              scope,
+              actor: { type: "system" },
+              fn: async (scopedTx) => {
+                const claimed = await mutateRecoveryClaim({
+                  type: "upload-claim",
+                  tx: scopedTx,
+                  table: flowUploadTriggerIntents,
+                  retryAt,
+                  where,
+                });
+                return claimed.map((current) => {
+                  if (
+                    current.definitionId !== intent.definitionId ||
+                    current.entityId !== intent.entityId
+                  ) {
+                    return panic("Claimed upload receipt was not selected");
+                  }
+                  return {
+                    ...candidate,
+                    intent: current,
+                    claimToken: current.claimToken,
+                  };
+                });
+              },
+            });
+          },
         });
-        return claimed.flatMap((intent) => {
-          const candidate = rows.find(
-            (row) =>
-              row.intent.definitionId === intent.definitionId &&
-              row.intent.entityId === intent.entityId,
-          );
-          return candidate === undefined
-            ? panic("Claimed upload receipt was not selected")
-            : [{ ...candidate, intent, claimToken: intent.claimToken }];
-        });
+        return claims.flat();
       }),
   });
   return pages.flat();
@@ -275,20 +293,36 @@ const settleUploadTriggerClaim = async ({
     ) {
       return "paused";
     }
-    const removed = await mutateRecoveryReceipt({
-      type: "settle-upload",
-      tx,
-      table: flowUploadTriggerIntents,
-      where: sql`${and(
-        eq(flowUploadTriggerIntents.organizationId, intent.organizationId),
-        eq(flowUploadTriggerIntents.definitionId, intent.definitionId),
-        eq(flowUploadTriggerIntents.entityId, intent.entityId),
-        eq(flowUploadTriggerIntents.status, "pending"),
-        timestampMatchesCasToken(flowUploadTriggerIntents.retryAt, claimToken),
-        uploadTriggerActorExists(),
-      )}`,
+    const where = sql`${and(
+      eq(flowUploadTriggerIntents.organizationId, intent.organizationId),
+      eq(flowUploadTriggerIntents.definitionId, intent.definitionId),
+      eq(flowUploadTriggerIntents.entityId, intent.entityId),
+      eq(flowUploadTriggerIntents.status, "pending"),
+      timestampMatchesCasToken(flowUploadTriggerIntents.retryAt, claimToken),
+      uploadTriggerActorExists(),
+    )}`;
+    const scopeResult = await proveOrgScope(tx, {
+      table: "flowUploadTriggerIntents",
+      where,
     });
-    return removed.length === 0 ? "stale" : "settled";
+    const scope = scopeResult.unwrapOr(null);
+    if (scope === null) {
+      return "stale";
+    }
+    return await withOrgScope({
+      tx,
+      scope,
+      actor: { type: "system" },
+      fn: async (scopedTx) => {
+        const removed = await mutateRecoveryReceipt({
+          type: "settle-upload",
+          tx: scopedTx,
+          table: flowUploadTriggerIntents,
+          where,
+        });
+        return removed.length === 0 ? "stale" : "settled";
+      },
+    });
   });
 
 type RecordSkippedUploadClaimOptions = SettleUploadTriggerClaimOptions & {
@@ -310,40 +344,59 @@ const recordSkippedUploadClaim = async ({
       return "paused" as const;
     }
     await lockUploadReceiptRows(tx, [intent]);
-    const updatedCount = await transitionRecoveryGrantState({
-      type: "upload",
-      tx,
-      table: flowUploadTriggerIntents,
-      spec: UPLOAD_TRIGGER_TRANSITIONS,
-      where: sql`${and(eq(flowUploadTriggerIntents.organizationId, intent.organizationId), eq(flowUploadTriggerIntents.definitionId, intent.definitionId), eq(flowUploadTriggerIntents.entityId, intent.entityId), timestampMatchesCasToken(flowUploadTriggerIntents.retryAt, claimToken), reason === "actor_missing" ? uploadTriggerActorMissing() : undefined)}`,
-      options: {
-        from: ["pending"],
-        to: "skipped",
-        set: { skipReason: reason },
-      },
-      log: { event: "flow.upload_trigger_skipped", reason },
+    const where = sql`${and(eq(flowUploadTriggerIntents.organizationId, intent.organizationId), eq(flowUploadTriggerIntents.definitionId, intent.definitionId), eq(flowUploadTriggerIntents.entityId, intent.entityId), timestampMatchesCasToken(flowUploadTriggerIntents.retryAt, claimToken), reason === "actor_missing" ? uploadTriggerActorMissing() : undefined)}`;
+    const scopeResult = await proveOrgScope(tx, {
+      table: "flowUploadTriggerIntents",
+      where,
     });
-    if (updatedCount !== 0) {
-      return "skipped" as const;
+    const scope = scopeResult.unwrapOr(null);
+    if (scope === null) {
+      return "stale" as const;
     }
-    const recorded = await tx
-      .select({ entityId: flowUploadTriggerIntents.entityId })
-      .from(flowUploadTriggerIntents)
-      .where(
-        and(
-          eq(flowUploadTriggerIntents.organizationId, intent.organizationId),
-          eq(flowUploadTriggerIntents.definitionId, intent.definitionId),
-          eq(flowUploadTriggerIntents.entityId, intent.entityId),
-          eq(flowUploadTriggerIntents.status, "skipped"),
-          eq(flowUploadTriggerIntents.skipReason, reason),
-          timestampMatchesCasToken(
-            flowUploadTriggerIntents.retryAt,
-            claimToken,
-          ),
-        ),
-      )
-      .limit(1);
-    return recorded.length === 0 ? "stale" : "skipped";
+    return await withOrgScope({
+      tx,
+      scope,
+      actor: { type: "system" },
+      fn: async (scopedTx) => {
+        const updatedCount = await transitionRecoveryGrantState({
+          type: "upload",
+          tx: scopedTx,
+          table: flowUploadTriggerIntents,
+          spec: UPLOAD_TRIGGER_TRANSITIONS,
+          where,
+          options: {
+            from: ["pending"],
+            to: "skipped",
+            set: { skipReason: reason },
+          },
+          log: { event: "flow.upload_trigger_skipped", reason },
+        });
+        if (updatedCount !== 0) {
+          return "skipped" as const;
+        }
+        const recorded = await scopedTx
+          .select({ entityId: flowUploadTriggerIntents.entityId })
+          .from(flowUploadTriggerIntents)
+          .where(
+            and(
+              eq(
+                flowUploadTriggerIntents.organizationId,
+                intent.organizationId,
+              ),
+              eq(flowUploadTriggerIntents.definitionId, intent.definitionId),
+              eq(flowUploadTriggerIntents.entityId, intent.entityId),
+              eq(flowUploadTriggerIntents.status, "skipped"),
+              eq(flowUploadTriggerIntents.skipReason, reason),
+              timestampMatchesCasToken(
+                flowUploadTriggerIntents.retryAt,
+                claimToken,
+              ),
+            ),
+          )
+          .limit(1);
+        return recorded.length === 0 ? "stale" : "skipped";
+      },
+    });
   });
 
 /** Owner-level sweep; ordinary upload writes persist receipts through workspace RLS. */
@@ -541,7 +594,7 @@ const uploadTriggerReplayEligible = () => sql`EXISTS (
 )`;
 
 type ResumeUploadTriggersAfterGrantOptions = {
-  tx: Pick<Transaction, "select" | "execute" | "rollback">;
+  tx: Transaction;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   now: Date;
@@ -587,19 +640,50 @@ export const resumeUploadTriggersAfterGrant = async ({
     return;
   }
   await lockUploadReceiptRows(tx, rows);
-  await transitionRecoveryGrantState({
-    type: "upload",
-    tx,
-    table: flowUploadTriggerIntents,
-    spec: UPLOAD_TRIGGER_TRANSITIONS,
-    // sql-perf-allow: bounded by 32 preselected and prelocked exact (definition_id, entity_id) primary-key identities; actor/trigger subqueries only narrow those receipts.
-    where: sql`${and(eq(flowUploadTriggerIntents.organizationId, organizationId), uploadTriggerActorExists(userId), uploadTriggerReplayEligible(), or(...rows.map((row) => and(eq(flowUploadTriggerIntents.definitionId, row.definitionId), eq(flowUploadTriggerIntents.entityId, row.entityId), timestampMatchesCasToken(flowUploadTriggerIntents.retryAt, row.retryAtToken)))))}`,
-    options: {
-      from: ["awaiting_grant", "skipped"],
-      to: "pending",
-      set: { retryAt: now, skipReason: null },
+  await mapWithConcurrency({
+    items: rows,
+    limit: 1,
+    operation: async (row) => {
+      const where = sql`${and(
+        eq(flowUploadTriggerIntents.organizationId, organizationId),
+        eq(flowUploadTriggerIntents.definitionId, row.definitionId),
+        eq(flowUploadTriggerIntents.entityId, row.entityId),
+        timestampMatchesCasToken(
+          flowUploadTriggerIntents.retryAt,
+          row.retryAtToken,
+        ),
+        uploadTriggerActorExists(userId),
+        uploadTriggerReplayEligible(),
+      )}`;
+      const scopeResult = await proveOrgScope(tx, {
+        table: "flowUploadTriggerIntents",
+        where,
+      });
+      const scope = scopeResult.unwrapOr(null);
+      if (scope === null) {
+        return;
+      }
+      await withOrgScope({
+        tx,
+        scope,
+        actor: { type: "system" },
+        fn: async (scopedTx) => {
+          await transitionRecoveryGrantState({
+            type: "upload",
+            tx: scopedTx,
+            table: flowUploadTriggerIntents,
+            spec: UPLOAD_TRIGGER_TRANSITIONS,
+            where,
+            options: {
+              from: ["awaiting_grant", "skipped"],
+              to: "pending",
+              set: { retryAt: now, skipReason: null },
+            },
+            log: { event: "flow.upload_trigger_grant_resumed" },
+          });
+        },
+      });
     },
-    log: { event: "flow.upload_trigger_grant_resumed" },
   });
 };
 
@@ -782,55 +866,72 @@ const reconcileUploadTriggerGrantState = async ({
           return;
         }
         await lockUploadReceiptRows(tx, rows);
-        const identities = or(
-          ...rows.map((row) =>
-            and(
+        await mapWithConcurrency({
+          items: rows,
+          limit: 1,
+          operation: async (row) => {
+            const identity = and(
               eq(flowUploadTriggerIntents.entityId, row.entityId),
               eq(flowUploadTriggerIntents.definitionId, row.definitionId),
               timestampMatchesCasToken(
                 flowUploadTriggerIntents.retryAt,
                 row.retryAt,
               ),
-            ),
-          ),
-        );
-        await transitionRecoveryGrantState({
-          type: "upload",
-          tx,
-          table: flowUploadTriggerIntents,
-          spec: UPLOAD_TRIGGER_TRANSITIONS,
-          where: sql`${and(eq(flowUploadTriggerIntents.organizationId, organizationId), identities, uploadTriggerActorMissing())}`,
-          options: {
-            from: ["pending", "awaiting_grant"],
-            to: "skipped",
-            set: { skipReason: "actor_missing" },
+            );
+            const scopeResult = await proveOrgScope(tx, {
+              table: "flowUploadTriggerIntents",
+              where: sql`${and(eq(flowUploadTriggerIntents.organizationId, organizationId), identity)}`,
+            });
+            const scope = scopeResult.unwrapOr(null);
+            if (scope === null) {
+              return;
+            }
+            await withOrgScope({
+              tx,
+              scope,
+              actor: { type: "system" },
+              fn: async (scopedTx) => {
+                await transitionRecoveryGrantState({
+                  type: "upload",
+                  tx: scopedTx,
+                  table: flowUploadTriggerIntents,
+                  spec: UPLOAD_TRIGGER_TRANSITIONS,
+                  where: sql`${and(eq(flowUploadTriggerIntents.organizationId, organizationId), identity, uploadTriggerActorMissing())}`,
+                  options: {
+                    from: ["pending", "awaiting_grant"],
+                    to: "skipped",
+                    set: { skipReason: "actor_missing" },
+                  },
+                  log: {
+                    event: "flow.upload_trigger_skipped",
+                    reason: "actor_missing",
+                  },
+                });
+                await transitionRecoveryGrantState({
+                  type: "upload",
+                  tx: scopedTx,
+                  table: flowUploadTriggerIntents,
+                  spec: UPLOAD_TRIGGER_TRANSITIONS,
+                  where: sql`${and(eq(flowUploadTriggerIntents.organizationId, organizationId), identity, not(uploadTriggerActorExists()))}`,
+                  options: { from: ["pending"], to: "awaiting_grant" },
+                  log: { event: "flow.upload_trigger_awaiting_grant" },
+                });
+                await transitionRecoveryGrantState({
+                  type: "upload",
+                  tx: scopedTx,
+                  table: flowUploadTriggerIntents,
+                  spec: UPLOAD_TRIGGER_TRANSITIONS,
+                  where: sql`${and(eq(flowUploadTriggerIntents.organizationId, organizationId), identity, uploadTriggerActorExists(), uploadTriggerReplayEligible())}`,
+                  options: {
+                    from: ["awaiting_grant", "skipped"],
+                    to: "pending",
+                    set: { retryAt: now, skipReason: null },
+                  },
+                  log: { event: "flow.upload_trigger_grant_repaired" },
+                });
+              },
+            });
           },
-          log: {
-            event: "flow.upload_trigger_skipped",
-            reason: "actor_missing",
-          },
-        });
-        await transitionRecoveryGrantState({
-          type: "upload",
-          tx,
-          table: flowUploadTriggerIntents,
-          spec: UPLOAD_TRIGGER_TRANSITIONS,
-          where: sql`${and(eq(flowUploadTriggerIntents.organizationId, organizationId), identities, not(uploadTriggerActorExists()))}`,
-          options: { from: ["pending"], to: "awaiting_grant" },
-          log: { event: "flow.upload_trigger_awaiting_grant" },
-        });
-        await transitionRecoveryGrantState({
-          type: "upload",
-          tx,
-          table: flowUploadTriggerIntents,
-          spec: UPLOAD_TRIGGER_TRANSITIONS,
-          where: sql`${and(eq(flowUploadTriggerIntents.organizationId, organizationId), identities, uploadTriggerActorExists(), uploadTriggerReplayEligible())}`,
-          options: {
-            from: ["awaiting_grant", "skipped"],
-            to: "pending",
-            set: { retryAt: now, skipReason: null },
-          },
-          log: { event: "flow.upload_trigger_grant_repaired" },
         });
       }),
   });

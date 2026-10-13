@@ -2,9 +2,15 @@ import { panic, Result } from "better-result";
 import { and, eq, gt, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 
 import { MEMBER_REMOVAL_BUSY_CODE } from "@stll/api-contract";
+import { mapWithConcurrency } from "@stll/concurrency";
 
 import { invitation, member, organization } from "@/api/db/auth-schema";
-import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
+import {
+  assertCallerOrg,
+  proveOrgScope,
+  withOrgScope,
+} from "@/api/db/org-scope";
+import type { OrgScope } from "@/api/db/org-scope";
 import type { Transaction } from "@/api/db/root";
 import { abortTransaction } from "@/api/db/safe-db";
 import {
@@ -34,7 +40,6 @@ import {
   WORK_OBLIGATION_STATUS,
   WORK_OBLIGATION_EVENT_TYPE,
 } from "@/api/db/schema";
-import { runScopedWorkInTransaction } from "@/api/db/scoped";
 import { ACTIVE_TASK_REASSIGNMENT_STATUSES } from "@/api/lib/account-deletion-reassignment";
 import {
   AUDIT_ACTION,
@@ -230,6 +235,27 @@ const memberWorkspaceScope = (scope: AssignmentScope) => {
   return undefined;
 };
 
+const assertAssignmentScope = (proof: OrgScope, requested: AssignmentScope) => {
+  switch (requested.type) {
+    case "organization":
+      if (assertCallerOrg(proof, requested.organizationId).isErr()) {
+        abortTransaction(removalBusy());
+      }
+      return;
+    case "workspace":
+      if (!proof.workspaceIds.includes(requested.workspaceId)) {
+        abortTransaction(removalBusy());
+      }
+      return;
+    case "account":
+      return;
+    default: {
+      requested satisfies never;
+      return panic("Unhandled assignment scope");
+    }
+  }
+};
+
 const clearMemberObligationOwners = async ({
   tx,
   scope,
@@ -300,70 +326,119 @@ const clearMemberObligationOwners = async ({
       }
       if (owned.length > 0) {
         // db-await-in-loop: transition this held ownership page before consuming the next counted batch.
-        const changed = await transitionBatch({
-          tx,
-          spec: TRANSITIONS.workObligations,
-          ids: owned.map(({ entityId }) => entityId),
-          options: {
-            from: [
-              WORK_OBLIGATION_STATUS.ACTIVE,
-              WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
-            ],
-            to: nextStatus,
-            set: {
-              ownerUserId: nextOwnerUserId,
-              acknowledgedAt: null,
-              acknowledgedByUserId: null,
-              updatedAt: new Date(),
-            },
-          },
-          recordTransitionAuditEvent: async (auditTx, rows) => {
-            const changedIds = new Set(rows.map(({ id }) => id));
-            const changedOwners = owned.filter(({ entityId }) =>
-              changedIds.has(entityId),
-            );
-            await auditTx.insert(workObligationEvents).values(
-              changedOwners.map((row) => ({
-                id: createSafeId<"workObligationEvent">(),
-                workspaceId: row.workspaceId,
-                obligationEntityId: row.entityId,
-                actorUserId,
-                type: WORK_OBLIGATION_EVENT_TYPE.DELEGATED,
-                details: {
-                  type: "ownership_changed" as const,
-                  previousOwnerUserId: userId,
-                  nextOwnerUserId,
-                  cause: "owner_removed_from_workspace" as const,
-                },
-                occurredAt: new Date(),
-              })),
-            );
-            const recorder = createBackgroundAuditRecorder({
-              organizationId: scope.organizationId,
-              workspaceId: null,
-              userId: actorUserId,
-              execution: {
-                performer: { type: "user", id: actorUserId },
-                trigger: { type: "system", source: "membership_removal" },
+        const changedCounts = await mapWithConcurrency({
+          items: owned,
+          limit: 1,
+          operation: async (ownedRow) => {
+            const proof = await proveOrgScope(tx, {
+              table: "workObligations",
+              where: sql`${and(
+                eq(workObligations.entityId, ownedRow.entityId),
+                eq(workObligations.workspaceId, ownedRow.workspaceId),
+                eq(workObligations.ownerUserId, userId),
+                eq(workObligations.status, ownedRow.status),
+              )}`,
+            });
+            if (proof.isErr()) {
+              abortTransaction(removalBusy());
+            }
+            assertAssignmentScope(proof.value, scope);
+            const auditEvents: Parameters<AuditRecorder>[1][] = [];
+            const changed = await withOrgScope({
+              tx,
+              scope: proof.value,
+              actor: { type: "system" },
+              fn: async (scopedTx) => {
+                const transitioned = await transitionBatch({
+                  tx: scopedTx,
+                  spec: TRANSITIONS.workObligations,
+                  ids: [ownedRow.entityId],
+                  options: {
+                    from: [
+                      WORK_OBLIGATION_STATUS.ACTIVE,
+                      WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+                    ],
+                    to: nextStatus,
+                    set: {
+                      ownerUserId: nextOwnerUserId,
+                      acknowledgedAt: null,
+                      acknowledgedByUserId: null,
+                      updatedAt: new Date(),
+                    },
+                  },
+                  recordTransitionAuditEvent: async (auditTx, rows) => {
+                    const changedIds = new Set(rows.map(({ id }) => id));
+                    const changedOwners = [ownedRow].filter(({ entityId }) =>
+                      changedIds.has(entityId),
+                    );
+                    const recorder = (async (_auditTx, events) => {
+                      auditEvents.push(events);
+                    }) satisfies AuditRecorder;
+                    await recorder(
+                      auditTx,
+                      changedOwners.map((row) => ({
+                        action: AUDIT_ACTION.UPDATE,
+                        resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
+                        resourceId: row.entityId,
+                        workspaceId: row.workspaceId,
+                        changes: {
+                          ownerUserId: { old: userId, new: nextOwnerUserId },
+                          status: { old: row.status, new: nextStatus },
+                        },
+                        metadata: { cause: "membership_removed" },
+                      })),
+                    );
+                  },
+                });
+                const changedIds = new Set(transitioned.map(({ id }) => id));
+                const changedOwners = [ownedRow].filter(({ entityId }) =>
+                  changedIds.has(entityId),
+                );
+                await scopedTx.insert(workObligationEvents).values(
+                  changedOwners.map((row) => ({
+                    id: createSafeId<"workObligationEvent">(),
+                    workspaceId: row.workspaceId,
+                    obligationEntityId: row.entityId,
+                    actorUserId,
+                    type: WORK_OBLIGATION_EVENT_TYPE.DELEGATED,
+                    details: {
+                      type: "ownership_changed" as const,
+                      previousOwnerUserId: userId,
+                      nextOwnerUserId,
+                      cause: "owner_removed_from_workspace" as const,
+                    },
+                    occurredAt: new Date(),
+                  })),
+                );
+                return transitioned;
               },
             });
-            await recorder(
-              auditTx,
-              changedOwners.map((row) => ({
-                action: AUDIT_ACTION.UPDATE,
-                resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
-                resourceId: row.entityId,
-                workspaceId: row.workspaceId,
-                changes: {
-                  ownerUserId: { old: userId, new: nextOwnerUserId },
-                  status: { old: row.status, new: nextStatus },
+            if (changed.length !== 1) {
+              panic(
+                "Locked obligation ownership changed during member removal",
+              );
+            }
+            const recordMemberTransitionAuditEvent =
+              createBackgroundAuditRecorder({
+                organizationId: proof.value.organizationId,
+                workspaceId: null,
+                userId: actorUserId,
+                execution: {
+                  performer: { type: "user", id: actorUserId },
+                  trigger: { type: "system", source: "membership_removal" },
                 },
-                metadata: { cause: "membership_removed" },
-              })),
-            );
+              });
+            for (const events of auditEvents) {
+              // db-await-in-loop: replay exact transition events after the scoped role restores.
+              await recordMemberTransitionAuditEvent(tx, events);
+            }
+            return changed.length;
           },
         });
-        if (changed.length !== owned.length) {
+        if (
+          changedCounts.reduce((count, value) => count + value, 0) !==
+          owned.length
+        ) {
           panic("Locked obligation ownership changed during member removal");
         }
       }
@@ -403,6 +478,7 @@ const clearMemberTaskAssignments = async ({
       await readCursorPage(
         tx
           .select({
+            id: taskAssignees.id,
             entityId: taskAssignees.entityId,
             role: taskAssignees.role,
             workspaceId: taskAssignees.workspaceId,
@@ -442,73 +518,98 @@ const clearMemberTaskAssignments = async ({
         }
       }
     }
-    if (assigned.length > 0) {
-      // db-await-in-loop: clear this page before the next read.
-      await tx.delete(taskAssignees).where(
-        and(
-          eq(taskAssignees.userId, userId),
-          inArray(
-            taskAssignees.entityId,
-            assigned.map(({ entityId }) => entityId),
-          ),
-        ),
-      );
-      if (reassignTo) {
-        // db-await-in-loop: preserve this bounded replacement batch.
-        await tx
-          .insert(taskAssignees)
-          .values(
-            assigned.map((row) => ({
-              entityId: row.entityId,
-              role: row.role,
-              workspaceId: row.workspaceId,
-              userId: reassignTo,
-            })),
-          )
-          .onConflictDoNothing({
-            target: [taskAssignees.entityId, taskAssignees.userId],
-          });
-      }
-    }
-    const auditGroups = [...byWorkspace.values()].flatMap((rows) => {
-      const first = rows.at(0);
-      if (!first) {
-        return [];
-      }
-      return [
-        {
-          bindings: {
-            organizationId: first.organizationId,
-            workspaceId: first.workspaceId,
-            userId: actorUserId,
-            execution: {
-              performer: { type: "user" as const, id: actorUserId },
-              trigger: {
-                type: "system" as const,
-                source: "membership_removal",
-              },
-            },
+    await mapWithConcurrency({
+      items: assigned,
+      limit: 1,
+      operation: async (row) => {
+        const proof = await proveOrgScope(tx, {
+          table: "taskAssignees",
+          where: sql`${and(
+            eq(taskAssignees.id, row.id),
+            eq(taskAssignees.userId, userId),
+            eq(taskAssignees.entityId, row.entityId),
+            eq(taskAssignees.workspaceId, row.workspaceId),
+          )}`,
+        });
+        if (proof.isErr()) {
+          abortTransaction(removalBusy());
+        }
+        assertAssignmentScope(proof.value, scope);
+        const workspaceId =
+          proof.value.workspaceIds.at(0) ??
+          panic("Task assignment requires its matter");
+        await withOrgScope({
+          tx,
+          scope: proof.value,
+          actor: { type: "system" },
+          fn: async (scopedTx) => {
+            await scopedTx
+              .delete(taskAssignees)
+              .where(
+                and(
+                  eq(taskAssignees.id, row.id),
+                  eq(taskAssignees.userId, userId),
+                  eq(taskAssignees.entityId, row.entityId),
+                  eq(taskAssignees.workspaceId, workspaceId),
+                ),
+              );
+            if (!reassignTo) {
+              return;
+            }
+            await scopedTx
+              .insert(taskAssignees)
+              .values({
+                entityId: row.entityId,
+                role: row.role,
+                workspaceId,
+                userId: reassignTo,
+              })
+              .onConflictDoNothing({
+                target: [taskAssignees.entityId, taskAssignees.userId],
+              });
           },
-          events: rows.map((row) => ({
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-            resourceId: row.entityId,
-            workspaceId: row.workspaceId,
-            changes: {
-              assigneeUserId: { old: userId, new: reassignTo ?? null },
+        });
+        await recordAuditGroups({
+          tx,
+          recordAuditEvent,
+          groups: [
+            {
+              bindings: {
+                organizationId: proof.value.organizationId,
+                workspaceId,
+                userId: actorUserId,
+                execution: {
+                  performer: { type: "user" as const, id: actorUserId },
+                  trigger: {
+                    type: "system" as const,
+                    source: "membership_removal",
+                  },
+                },
+              },
+              events: [
+                {
+                  action: AUDIT_ACTION.UPDATE,
+                  resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+                  resourceId: row.entityId,
+                  workspaceId: row.workspaceId,
+                  changes: {
+                    assigneeUserId: { old: userId, new: reassignTo ?? null },
+                  },
+                  metadata: {
+                    kind: "task" as const,
+                    change: reassignTo
+                      ? "assignee-reassigned"
+                      : "assignee-removed",
+                    role: row.role,
+                    cause: "membership_removed",
+                  },
+                },
+              ],
             },
-            metadata: {
-              kind: "task" as const,
-              change: reassignTo ? "assignee-reassigned" : "assignee-removed",
-              role: row.role,
-              cause: "membership_removed",
-            },
-          })),
-        },
-      ];
+          ],
+        });
+      },
     });
-    // db-await-in-loop: audit the changed page before consuming the next counted batch.
-    await recordAuditGroups({ tx, groups: auditGroups, recordAuditEvent });
   }
 };
 
@@ -560,7 +661,123 @@ const recordMemberSessionTransitions = async ({
   });
 };
 
-const closeMemberExchanges = async ({
+const clearMemberTakeovers = async ({
+  tx,
+  scope,
+  userId,
+  actorUserId,
+  recordAuditEvent,
+}: ClearMemberAssignmentsOptions) => {
+  const workspaceScope = memberWorkspaceScope(scope);
+  const scopedWorkspaces = tx
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(workspaceScope);
+  const removePage = async (cursor: string | undefined): Promise<void> => {
+    // A pending takeover would hand the departing member a fresh session token.
+    const page = await readCursorPage(
+      tx
+        .select({
+          id: desktopEditSessions.id,
+          workspaceId: desktopEditSessions.workspaceId,
+          organizationId: workspaces.organizationId,
+        })
+        .from(desktopEditSessions)
+        .innerJoin(
+          workspaces,
+          eq(workspaces.id, desktopEditSessions.workspaceId),
+        )
+        .where(
+          and(
+            cursor === undefined
+              ? undefined
+              : gt(desktopEditSessions.id, cursor),
+            inArray(desktopEditSessions.workspaceId, scopedWorkspaces),
+            eq(desktopEditSessions.takeoverRequestedBy, userId),
+            eq(desktopEditSessions.status, "open"),
+          ),
+        )
+        .orderBy(desktopEditSessions.id),
+      {
+        limit: LIMITS.memberRemovalCleanupBatchSize,
+        cursorForItem: (row) => row.id,
+      },
+    );
+    await mapWithConcurrency({
+      items: page.items,
+      limit: 1,
+      operation: async (row) => {
+        const proof = await proveOrgScope(tx, {
+          table: "desktopEditSessions",
+          where: sql`${and(
+            eq(desktopEditSessions.id, row.id),
+            eq(desktopEditSessions.workspaceId, row.workspaceId),
+            eq(desktopEditSessions.takeoverRequestedBy, userId),
+            eq(desktopEditSessions.status, "open"),
+          )}`,
+        });
+        if (proof.isErr()) {
+          abortTransaction(removalBusy());
+        }
+        assertAssignmentScope(proof.value, scope);
+        await withOrgScope({
+          tx,
+          scope: proof.value,
+          actor: { type: "system" },
+          fn: async (scopedTx) => {
+            await scopedTx
+              .update(desktopEditSessions)
+              .set({ takeoverRequestedBy: null, takeoverRequestedAt: null })
+              .where(
+                and(
+                  eq(desktopEditSessions.id, row.id),
+                  eq(desktopEditSessions.workspaceId, row.workspaceId),
+                  eq(desktopEditSessions.takeoverRequestedBy, userId),
+                  eq(desktopEditSessions.status, "open"),
+                ),
+              );
+          },
+        });
+        await recordAuditGroups({
+          tx,
+          recordAuditEvent,
+          groups: [
+            {
+              bindings: {
+                organizationId: proof.value.organizationId,
+                workspaceId: row.workspaceId,
+                userId: actorUserId,
+                execution: {
+                  performer: { type: "user" as const, id: actorUserId },
+                  trigger: {
+                    type: "system" as const,
+                    source: "membership_removal",
+                  },
+                },
+              },
+              events: [
+                {
+                  action: AUDIT_ACTION.UPDATE,
+                  resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
+                  resourceId: row.id,
+                  workspaceId: row.workspaceId,
+                  changes: { takeoverRequestedBy: { old: userId, new: null } },
+                  metadata: { cause: "membership_removed" },
+                },
+              ],
+            },
+          ],
+        });
+      },
+    });
+    if (page.nextCursor !== null) {
+      await removePage(page.nextCursor);
+    }
+  };
+  await removePage(undefined);
+};
+
+const expireMemberHandoffs = async ({
   tx,
   scope,
   userId,
@@ -573,93 +790,126 @@ const closeMemberExchanges = async ({
     .from(workspaces)
     .where(workspaceScope);
   const now = new Date();
-  // A pending takeover would hand the departing member a fresh session token.
-  const clearedTakeovers = await tx
-    .update(desktopEditSessions)
-    .set({ takeoverRequestedBy: null, takeoverRequestedAt: null })
-    .from(workspaces)
-    .where(
-      and(
-        inArray(desktopEditSessions.workspaceId, scopedWorkspaces),
-        eq(workspaces.id, desktopEditSessions.workspaceId),
-        eq(desktopEditSessions.takeoverRequestedBy, userId),
-        eq(desktopEditSessions.status, "open"),
-      ),
-    )
-    .returning({
-      id: desktopEditSessions.id,
-      workspaceId: desktopEditSessions.workspaceId,
-      organizationId: workspaces.organizationId,
-    });
-  const expiredHandoffs = await tx
-    .update(desktopEditHandoffs)
-    .set({ expiresAt: now, updatedAt: now })
-    .from(workspaces)
-    .where(
-      and(
-        inArray(desktopEditHandoffs.workspaceId, scopedWorkspaces),
-        eq(workspaces.id, desktopEditHandoffs.workspaceId),
-        eq(desktopEditHandoffs.createdBy, userId),
-        sql`${desktopEditHandoffs.expiresAt} > ${now}`,
-      ),
-    )
-    .returning({
-      id: desktopEditHandoffs.id,
-      entityId: desktopEditHandoffs.entityId,
-      workspaceId: desktopEditHandoffs.workspaceId,
-      organizationId: workspaces.organizationId,
-    });
-  await recordAuditGroups({
-    tx,
-    recordAuditEvent,
-    groups: [
-      ...clearedTakeovers.map((row) => ({
-        bindings: {
-          organizationId: row.organizationId,
-          workspaceId: row.workspaceId,
-          userId: actorUserId,
-          execution: {
-            performer: { type: "user" as const, id: actorUserId },
-            trigger: { type: "system" as const, source: "membership_removal" },
+  const removePage = async (cursor: string | undefined): Promise<void> => {
+    const page = await readCursorPage(
+      tx
+        .select({
+          id: desktopEditHandoffs.id,
+          entityId: desktopEditHandoffs.entityId,
+          workspaceId: desktopEditHandoffs.workspaceId,
+          organizationId: workspaces.organizationId,
+        })
+        .from(desktopEditHandoffs)
+        .innerJoin(
+          workspaces,
+          eq(workspaces.id, desktopEditHandoffs.workspaceId),
+        )
+        .where(
+          and(
+            cursor === undefined
+              ? undefined
+              : gt(desktopEditHandoffs.id, cursor),
+            inArray(desktopEditHandoffs.workspaceId, scopedWorkspaces),
+            eq(desktopEditHandoffs.createdBy, userId),
+            sql`${desktopEditHandoffs.expiresAt} > ${now}`,
+          ),
+        )
+        .orderBy(desktopEditHandoffs.id),
+      {
+        limit: LIMITS.memberRemovalCleanupBatchSize,
+        cursorForItem: (row) => row.id,
+      },
+    );
+    await mapWithConcurrency({
+      items: page.items,
+      limit: 1,
+      operation: async (row) => {
+        const proof = await proveOrgScope(tx, {
+          table: "desktopEditHandoffs",
+          where: sql`${and(
+            eq(desktopEditHandoffs.id, row.id),
+            eq(desktopEditHandoffs.workspaceId, row.workspaceId),
+            eq(desktopEditHandoffs.createdBy, userId),
+            sql`${desktopEditHandoffs.expiresAt} > ${now}`,
+          )}`,
+        });
+        if (proof.isErr()) {
+          abortTransaction(removalBusy());
+        }
+        assertAssignmentScope(proof.value, scope);
+        await withOrgScope({
+          tx,
+          scope: proof.value,
+          actor: { type: "system" },
+          fn: async (scopedTx) => {
+            await scopedTx
+              .update(desktopEditHandoffs)
+              .set({ expiresAt: now, updatedAt: now })
+              .where(
+                and(
+                  eq(desktopEditHandoffs.id, row.id),
+                  eq(desktopEditHandoffs.workspaceId, row.workspaceId),
+                  eq(desktopEditHandoffs.createdBy, userId),
+                  sql`${desktopEditHandoffs.expiresAt} > ${now}`,
+                ),
+              );
           },
-        },
-        events: [
-          {
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
-            resourceId: row.id,
-            workspaceId: row.workspaceId,
-            changes: { takeoverRequestedBy: { old: userId, new: null } },
-            metadata: { cause: "membership_removed" },
-          },
-        ],
-      })),
-      ...expiredHandoffs.map((row) => ({
-        bindings: {
-          organizationId: row.organizationId,
-          workspaceId: row.workspaceId,
-          userId: actorUserId,
-          execution: {
-            performer: { type: "user" as const, id: actorUserId },
-            trigger: { type: "system" as const, source: "membership_removal" },
-          },
-        },
-        events: [
-          {
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-            resourceId: row.entityId,
-            workspaceId: row.workspaceId,
-            metadata: {
-              cause: "membership_removed",
-              change: "desktop-handoff-expired",
-              handoffId: row.id,
+        });
+        await recordAuditGroups({
+          tx,
+          recordAuditEvent,
+          groups: [
+            {
+              bindings: {
+                organizationId: proof.value.organizationId,
+                workspaceId: row.workspaceId,
+                userId: actorUserId,
+                execution: {
+                  performer: { type: "user" as const, id: actorUserId },
+                  trigger: {
+                    type: "system" as const,
+                    source: "membership_removal",
+                  },
+                },
+              },
+              events: [
+                {
+                  action: AUDIT_ACTION.UPDATE,
+                  resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+                  resourceId: row.entityId,
+                  workspaceId: row.workspaceId,
+                  metadata: {
+                    cause: "membership_removed",
+                    change: "desktop-handoff-expired",
+                    handoffId: row.id,
+                  },
+                },
+              ],
             },
-          },
-        ],
-      })),
-    ],
-  });
+          ],
+        });
+      },
+    });
+    if (page.nextCursor !== null) {
+      await removePage(page.nextCursor);
+    }
+  };
+  await removePage(undefined);
+};
+
+const cancelMemberSigningSessions = async ({
+  tx,
+  scope,
+  userId,
+  actorUserId,
+  recordAuditEvent,
+}: ClearMemberAssignmentsOptions) => {
+  const workspaceScope = memberWorkspaceScope(scope);
+  const scopedWorkspaces = tx
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(workspaceScope);
+  const now = new Date();
   const signingScope = and(
     inArray(pdfSigningSessions.workspaceId, scopedWorkspaces),
     eq(pdfSigningSessions.createdBy, userId),
@@ -699,58 +949,103 @@ const closeMemberExchanges = async ({
       if (next === undefined) {
         return 0;
       }
-      const [organizationId, organizationSessions] = next;
-      const changed = await runScopedWorkInTransaction({
+      const [, organizationSessions] = next;
+      const held = await lockOpenSigningPage({
         tx,
-        organizationId,
-        userId,
-        workspaceScope: {
-          type: WORKSPACE_ACCESS_MODE.explicit,
-          workspaceIds: [
-            ...new Set(organizationSessions.map((row) => row.workspaceId)),
-          ],
-        },
-        fn: async (scopedTx) => {
-          const held = await lockOpenSigningPage({
-            tx: scopedTx,
-            sessions: organizationSessions,
+        sessions: organizationSessions,
+      });
+      const changedCounts = await mapWithConcurrency({
+        items: held,
+        limit: 1,
+        operation: async (session) => {
+          const proof = await proveOrgScope(tx, {
+            table: "pdfSigningSessions",
+            where: sql`${and(
+              eq(pdfSigningSessions.id, session.id),
+              eq(pdfSigningSessions.workspaceId, session.workspaceId),
+              eq(pdfSigningSessions.createdBy, userId),
+              eq(pdfSigningSessions.status, "open"),
+            )}`,
           });
-          const transitioned = await transitionBatch({
-            tx: scopedTx,
-            spec: TRANSITIONS.pdfSigningSessions,
-            ids: held.map(({ id }) => id),
-            options: {
-              from: ["open"],
-              to: "cancelled",
-              set: {
-                closeReason: "expired",
-                closedAt: now,
-                handoffExpiresAt: now,
-                tokenExpiresAt: now,
-              },
-            },
-            recordTransitionAuditEvent: async (auditTx, rows) => {
-              const ids = new Set(rows.map(({ id }) => id));
-              await recordMemberSessionTransitions({
-                tx: auditTx,
-                actorUserId,
-                resourceType: AUDIT_RESOURCE_TYPE.PDF_SIGNING_SESSION,
-                rows: organizationSessions.filter(({ id }) => ids.has(id)),
-                recordAuditEvent,
-              });
-            },
+          if (proof.isErr()) {
+            abortTransaction(removalBusy());
+          }
+          assertAssignmentScope(proof.value, scope);
+          const auditEvents: Parameters<AuditRecorder>[1][] = [];
+          const bufferAudit = (async (_auditTx, events) => {
+            auditEvents.push(events);
+          }) satisfies AuditRecorder;
+          const changed = await withOrgScope({
+            tx,
+            scope: proof.value,
+            actor: { type: "system" },
+            fn: async (scopedTx) =>
+              await transitionBatch({
+                tx: scopedTx,
+                spec: TRANSITIONS.pdfSigningSessions,
+                ids: [session.id],
+                options: {
+                  from: ["open"],
+                  to: "cancelled",
+                  set: {
+                    closeReason: "expired",
+                    closedAt: now,
+                    handoffExpiresAt: now,
+                    tokenExpiresAt: now,
+                  },
+                },
+                recordTransitionAuditEvent: async (auditTx, rows) =>
+                  await recordMemberSessionTransitions({
+                    tx: auditTx,
+                    actorUserId,
+                    resourceType: AUDIT_RESOURCE_TYPE.PDF_SIGNING_SESSION,
+                    rows: rows.map(() => ({
+                      ...session,
+                      organizationId: proof.value.organizationId,
+                    })),
+                    recordAuditEvent: bufferAudit,
+                  }),
+              }),
           });
-          if (transitioned.length !== held.length) {
+          if (changed.length !== 1) {
             panic("Locked signing sessions changed during member removal");
           }
-          return transitioned.length;
+          const recordMemberTransitionAuditEvent =
+            recordAuditEvent ??
+            createBackgroundAuditRecorder({
+              organizationId: proof.value.organizationId,
+              workspaceId: session.workspaceId,
+              userId: actorUserId,
+              execution: {
+                performer: { type: "user", id: actorUserId },
+                trigger: { type: "system", source: "membership_removal" },
+              },
+            });
+          for (const events of auditEvents) {
+            // db-await-in-loop: replay exact transition events after the scoped role restores.
+            await recordMemberTransitionAuditEvent(tx, events);
+          }
+          return changed.length;
         },
       });
-      return changed + (await closeNextOrganization(index + 1));
+      const changedCount = changedCounts.reduce(
+        (count, value) => count + value,
+        0,
+      );
+      if (changedCount !== held.length) {
+        panic("Locked signing sessions changed during member removal");
+      }
+      return changedCount + (await closeNextOrganization(index + 1));
     };
     // db-await-in-loop: bounded signing pages must lock, transition and audit in organization/session order before the next page.
     await closeNextOrganization(0);
   }
+};
+
+const closeMemberExchanges = async (options: ClearMemberAssignmentsOptions) => {
+  await clearMemberTakeovers(options);
+  await expireMemberHandoffs(options);
+  await cancelMemberSigningSessions(options);
 };
 
 const clearMemberContactAssignments = async ({
@@ -812,58 +1107,80 @@ const clearMemberContactAssignments = async ({
     if (contactRows.length === 0) {
       break;
     }
-    // db-await-in-loop: clear the bounded attorney batch before the next read.
-    await tx
-      .update(contacts)
-      .set({
-        originatingAttorneyId: sql`CASE WHEN ${contacts.originatingAttorneyId} = ${userId} THEN NULL ELSE ${contacts.originatingAttorneyId} END`,
-        responsibleAttorneyId: sql`CASE WHEN ${contacts.responsibleAttorneyId} = ${userId} THEN NULL ELSE ${contacts.responsibleAttorneyId} END`,
-        updatedAt: new Date(),
-      })
-      .where(
-        inArray(
-          contacts.id,
-          contactRows.map(({ id }) => id),
-        ),
-      );
-    // db-await-in-loop: enqueue projection repairs for this bounded batch.
-    await enqueueContactSearchRepairs(
-      tx,
-      contactRows.map(({ id }) => id),
-    );
-    const contactsByOrganization = Map.groupBy(
-      contactRows,
-      (row) => row.organizationId,
-    );
-    // db-await-in-loop: audit the changed contact page before consuming the next counted batch.
-    await recordAuditGroups({
-      tx,
-      groups: [...contactsByOrganization].map(([organizationId, rows]) => ({
-        bindings: {
-          organizationId,
-          workspaceId: null,
-          userId: actorUserId,
-          execution: {
-            performer: { type: "user", id: actorUserId },
-            trigger: { type: "system", source: "membership_removal" },
+    await mapWithConcurrency({
+      items: contactRows,
+      limit: 1,
+      operation: async (row) => {
+        const proof = await proveOrgScope(tx, {
+          table: "contacts",
+          where: sql`${and(
+            eq(contacts.id, row.id),
+            eq(contacts.organizationId, row.organizationId),
+            or(
+              eq(contacts.originatingAttorneyId, userId),
+              eq(contacts.responsibleAttorneyId, userId),
+            ),
+          )}`,
+        });
+        if (proof.isErr()) {
+          abortTransaction(removalBusy());
+        }
+        assertAssignmentScope(proof.value, scope);
+        await withOrgScope({
+          tx,
+          scope: proof.value,
+          actor: { type: "system" },
+          fn: async (scopedTx) => {
+            await scopedTx
+              .update(contacts)
+              .set({
+                originatingAttorneyId: sql`CASE WHEN ${contacts.originatingAttorneyId} = ${userId} THEN NULL ELSE ${contacts.originatingAttorneyId} END`,
+                responsibleAttorneyId: sql`CASE WHEN ${contacts.responsibleAttorneyId} = ${userId} THEN NULL ELSE ${contacts.responsibleAttorneyId} END`,
+                updatedAt: new Date(),
+              })
+              .where(
+                and(
+                  eq(contacts.id, row.id),
+                  eq(contacts.organizationId, proof.value.organizationId),
+                ),
+              );
+            await enqueueContactSearchRepairs(scopedTx, [row.id]);
           },
-        },
-        events: rows.map((row) => ({
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.CONTACT,
-          resourceId: row.id,
-          workspaceId: null,
-          changes: {
-            ...(row.originatingAttorneyId === userId
-              ? { originatingAttorneyId: { old: userId, new: null } }
-              : {}),
-            ...(row.responsibleAttorneyId === userId
-              ? { responsibleAttorneyId: { old: userId, new: null } }
-              : {}),
-          },
-          metadata: { cause: "membership_removed" },
-        })),
-      })),
+        });
+        await recordAuditGroups({
+          tx,
+          groups: [
+            {
+              bindings: {
+                organizationId: proof.value.organizationId,
+                workspaceId: null,
+                userId: actorUserId,
+                execution: {
+                  performer: { type: "user", id: actorUserId },
+                  trigger: { type: "system", source: "membership_removal" },
+                },
+              },
+              events: [
+                {
+                  action: AUDIT_ACTION.UPDATE,
+                  resourceType: AUDIT_RESOURCE_TYPE.CONTACT,
+                  resourceId: row.id,
+                  workspaceId: null,
+                  changes: {
+                    ...(row.originatingAttorneyId === userId
+                      ? { originatingAttorneyId: { old: userId, new: null } }
+                      : {}),
+                    ...(row.responsibleAttorneyId === userId
+                      ? { responsibleAttorneyId: { old: userId, new: null } }
+                      : {}),
+                  },
+                  metadata: { cause: "membership_removed" },
+                },
+              ],
+            },
+          ],
+        });
+      },
     });
   }
 };
@@ -935,40 +1252,73 @@ const clearMemberTimeEntryApprovals = async ({
     if (rows.length === 0) {
       break;
     }
-    // db-await-in-loop: persist this bounded approval batch before the next read.
-    await tx
-      .update(timeEntries)
-      .set({ approverUserId: null, updatedAt: new Date() })
-      .where(
-        inArray(
-          timeEntries.id,
-          rows.map(({ id }) => id),
-        ),
-      );
-    const byOrganization = Map.groupBy(rows, (row) => row.organizationId);
-    const auditGroups = [...byOrganization].map(
-      ([organizationId, grouped]) => ({
-        bindings: {
-          organizationId,
-          workspaceId: null,
-          userId: actorUserId,
-          execution: {
-            performer: { type: "user" as const, id: actorUserId },
-            trigger: { type: "system" as const, source: "membership_removal" },
+    await mapWithConcurrency({
+      items: rows,
+      limit: 1,
+      operation: async (row) => {
+        const proof = await proveOrgScope(tx, {
+          table: "timeEntries",
+          where: sql`${and(
+            eq(timeEntries.id, row.id),
+            eq(timeEntries.organizationId, row.organizationId),
+            eq(timeEntries.approverUserId, userId),
+            eq(timeEntries.status, BILLING_STATUS.DRAFT),
+          )}`,
+        });
+        if (proof.isErr()) {
+          abortTransaction(removalBusy());
+        }
+        assertAssignmentScope(proof.value, scope);
+        await withOrgScope({
+          tx,
+          scope: proof.value,
+          actor: { type: "system" },
+          fn: async (scopedTx) => {
+            await scopedTx
+              .update(timeEntries)
+              .set({ approverUserId: null, updatedAt: new Date() })
+              .where(
+                and(
+                  eq(timeEntries.id, row.id),
+                  eq(timeEntries.organizationId, proof.value.organizationId),
+                  eq(timeEntries.approverUserId, userId),
+                  eq(timeEntries.status, BILLING_STATUS.DRAFT),
+                ),
+              );
           },
-        },
-        events: grouped.map((row) => ({
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
-          resourceId: row.id,
-          workspaceId: row.workspaceId,
-          changes: { approverUserId: { old: userId, new: null } },
-          metadata: { cause: "membership_removed" },
-        })),
-      }),
-    );
-    // db-await-in-loop: audit the changed approval page before consuming the next counted batch.
-    await recordAuditGroups({ tx, groups: auditGroups, recordAuditEvent });
+        });
+        await recordAuditGroups({
+          tx,
+          recordAuditEvent,
+          groups: [
+            {
+              bindings: {
+                organizationId: proof.value.organizationId,
+                workspaceId: null,
+                userId: actorUserId,
+                execution: {
+                  performer: { type: "user" as const, id: actorUserId },
+                  trigger: {
+                    type: "system" as const,
+                    source: "membership_removal",
+                  },
+                },
+              },
+              events: [
+                {
+                  action: AUDIT_ACTION.UPDATE,
+                  resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+                  resourceId: row.id,
+                  workspaceId: row.workspaceId,
+                  changes: { approverUserId: { old: userId, new: null } },
+                  metadata: { cause: "membership_removed" },
+                },
+              ],
+            },
+          ],
+        });
+      },
+    });
   }
 };
 
@@ -1114,9 +1464,13 @@ const selectMemberCleanupWorkspaceIds = async ({
       tx
         .selectDistinct({ id: flowRuns.workspaceId })
         .from(flowRuns)
+        .innerJoin(workspaces, eq(workspaces.id, flowRuns.workspaceId))
         .leftJoin(
           flowDefinitions,
-          eq(flowDefinitions.id, flowRuns.definitionId),
+          and(
+            eq(flowDefinitions.id, flowRuns.definitionId),
+            eq(flowDefinitions.organizationId, workspaces.organizationId),
+          ),
         )
         .where(
           and(
@@ -1281,6 +1635,165 @@ type RemoveOrganizationMemberOptions = {
   reassignTo?: SafeId<"user"> | undefined;
 };
 
+type CancelScopedMemberFlowRunBatchOptions = {
+  tx: Transaction;
+  actorUserId: SafeId<"user">;
+  scopedRuns: readonly {
+    run: Pick<typeof flowRuns.$inferSelect, "id" | "workspaceId" | "status">;
+    scope: OrgScope;
+  }[];
+};
+
+const cancelScopedMemberFlowRunBatch = async ({
+  tx,
+  actorUserId,
+  scopedRuns,
+}: CancelScopedMemberFlowRunBatchOptions) => {
+  const runIds = scopedRuns.map(({ run }) => run.id);
+  const steps = await tx
+    .select({
+      id: flowRunSteps.id,
+      runId: flowRunSteps.runId,
+      status: flowRunSteps.status,
+    })
+    .from(flowRunSteps)
+    .where(inArray(flowRunSteps.runId, runIds))
+    .orderBy(flowRunSteps.runId, flowRunSteps.index)
+    .limit(runIds.length * MAX_FLOW_STEPS)
+    .for("update");
+  const recordAuditEvent = createBackgroundAuditRecorder({
+    organizationId:
+      scopedRuns.at(0)?.scope.organizationId ??
+      panic("Locked run batch requires its scope"),
+    workspaceId: null,
+    userId: actorUserId,
+    execution: {
+      performer: { type: "user", id: actorUserId },
+      trigger: { type: "system", source: "membership_removal" },
+    },
+  });
+  const activeSteps = steps.filter(
+    ({ status }) =>
+      status === "pending" ||
+      status === "running" ||
+      status === "awaiting_review",
+  );
+  const changedCounts = await mapWithConcurrency({
+    items: scopedRuns,
+    limit: 1,
+    operation: async ({ run: lockedRun, scope }) => {
+      const auditEvents: Parameters<AuditRecorder>[1][] = [];
+      const bufferAuditEvent = (async (_auditTx, events) => {
+        auditEvents.push(events);
+      }) satisfies AuditRecorder;
+      const changedCount = await withOrgScope({
+        tx,
+        scope,
+        actor: { type: "system" },
+        fn: async (scopedTx) => {
+          const ownedSteps = activeSteps.filter(
+            ({ runId }) => runId === lockedRun.id,
+          );
+          const changed = await transitionBatch({
+            tx: scopedTx,
+            spec: FLOW_RUN_TRANSITIONS_V1,
+            ids: [lockedRun.id],
+            options: {
+              from: ["pending", "running", "awaiting_review"],
+              to: "cancelled",
+              set: { finishedAt: new Date() },
+            },
+            recordTransitionAuditEvent: async (auditTx, rows) => {
+              const changedIds = new Set(rows.map(({ id }) => id));
+              const changedRuns = [lockedRun].filter(({ id }) =>
+                changedIds.has(id),
+              );
+              const changedSteps = await transitionBatch({
+                tx: auditTx,
+                spec: TRANSITIONS.flowRunSteps,
+                ids: ownedSteps
+                  .filter(({ runId }) => changedIds.has(runId))
+                  .map(({ id }) => id),
+                options: {
+                  from: ["pending", "running", "awaiting_review"],
+                  to: "skipped",
+                  set: { finishedAt: new Date() },
+                },
+                recordTransitionAuditEvent: async (stepTx, stepRows) => {
+                  const stepIds = new Set(stepRows.map(({ id }) => id));
+                  const runById = new Map(
+                    changedRuns.map((run) => [run.id, run]),
+                  );
+                  await bufferAuditEvent(
+                    stepTx,
+                    ownedSteps
+                      .filter(({ id }) => stepIds.has(id))
+                      .map((step) => {
+                        const run = runById.get(step.runId);
+                        if (run === undefined) {
+                          panic(
+                            "A transitioned step must belong to a held run",
+                          );
+                        }
+                        return {
+                          action: AUDIT_ACTION.UPDATE,
+                          resourceType: AUDIT_RESOURCE_TYPE.FLOW_RUN,
+                          resourceId: run.id,
+                          workspaceId: run.workspaceId,
+                          changes: {
+                            stepStatus: {
+                              old: step.status,
+                              new: "skipped",
+                            },
+                          },
+                          metadata: {
+                            cause: "membership_removed",
+                            stepId: step.id,
+                          },
+                        };
+                      }),
+                  );
+                },
+              });
+              if (changedSteps.length !== ownedSteps.length) {
+                panic("Locked flow steps changed during member removal");
+              }
+              await bufferAuditEvent(
+                auditTx,
+                changedRuns.map((run) => ({
+                  action: AUDIT_ACTION.UPDATE,
+                  resourceType: AUDIT_RESOURCE_TYPE.FLOW_RUN,
+                  resourceId: run.id,
+                  workspaceId: run.workspaceId,
+                  changes: {
+                    status: { old: run.status, new: "cancelled" },
+                  },
+                  metadata: { cause: "membership_removed" },
+                })),
+              );
+            },
+          });
+          if (changed.length !== 1) {
+            panic("Locked flow run changed during member removal");
+          }
+          return changed.length;
+        },
+      });
+      for (const events of auditEvents) {
+        // db-await-in-loop: replay the exact transition events after the scoped role restores.
+        await recordAuditEvent(tx, events);
+      }
+      return changedCount;
+    },
+  });
+  if (
+    changedCounts.reduce((count, value) => count + value, 0) !==
+    scopedRuns.length
+  ) {
+    panic("Locked flow runs changed during member removal");
+  }
+};
+
 const cancelMemberFlowRuns = async ({
   tx,
   organizationId,
@@ -1306,7 +1819,13 @@ const cancelMemberFlowRuns = async ({
   const pendingRuns = tx
     .select({ id: flowRuns.id })
     .from(flowRuns)
-    .leftJoin(flowDefinitions, eq(flowDefinitions.id, flowRuns.definitionId))
+    .leftJoin(
+      flowDefinitions,
+      and(
+        eq(flowDefinitions.id, flowRuns.definitionId),
+        eq(flowDefinitions.organizationId, organizationId),
+      ),
+    )
     .where(runScope);
   const rowCount = await tx.$count(pendingRuns.as("pending_runs"));
   for (
@@ -1322,7 +1841,13 @@ const cancelMemberFlowRuns = async ({
         status: flowRuns.status,
       })
       .from(flowRuns)
-      .leftJoin(flowDefinitions, eq(flowDefinitions.id, flowRuns.definitionId))
+      .leftJoin(
+        flowDefinitions,
+        and(
+          eq(flowDefinitions.id, flowRuns.definitionId),
+          eq(flowDefinitions.organizationId, organizationId),
+        ),
+      )
       .where(runScope)
       .orderBy(flowRuns.id)
       // Locked drains process exactly this batch; no unprocessed sentinel may acquire a lock.
@@ -1332,106 +1857,29 @@ const cancelMemberFlowRuns = async ({
       break;
     }
     if (runs.length > 0) {
-      const runIds = runs.map(({ id }) => id);
-      // db-await-in-loop: lock each batch of steps after its run locks.
-      const steps = await tx
-        .select({
-          id: flowRunSteps.id,
-          runId: flowRunSteps.runId,
-          status: flowRunSteps.status,
-        })
-        .from(flowRunSteps)
-        .where(inArray(flowRunSteps.runId, runIds))
-        .orderBy(flowRunSteps.runId, flowRunSteps.index)
-        .limit(runIds.length * MAX_FLOW_STEPS)
-        .for("update");
-      const recordAuditEvent = createBackgroundAuditRecorder({
-        organizationId,
-        workspaceId: null,
-        userId: actorUserId,
-        execution: {
-          performer: { type: "user", id: actorUserId },
-          trigger: { type: "system", source: "membership_removal" },
-        },
-      });
-      const activeSteps = steps.filter(
-        ({ status }) =>
-          status === "pending" ||
-          status === "running" ||
-          status === "awaiting_review",
-      );
-      // db-await-in-loop: transition held runs and steps before consuming the next counted batch.
-      const changed = await transitionBatch({
-        tx,
-        spec: FLOW_RUN_TRANSITIONS_V1,
-        ids: runIds,
-        options: {
-          from: ["pending", "running", "awaiting_review"],
-          to: "cancelled",
-          set: { finishedAt: new Date() },
-        },
-        recordTransitionAuditEvent: async (auditTx, rows) => {
-          const changedIds = new Set(rows.map(({ id }) => id));
-          const changedRuns = runs.filter(({ id }) => changedIds.has(id));
-          const changedSteps = await transitionBatch({
-            tx: auditTx,
-            spec: TRANSITIONS.flowRunSteps,
-            ids: activeSteps
-              .filter(({ runId }) => changedIds.has(runId))
-              .map(({ id }) => id),
-            options: {
-              from: ["pending", "running", "awaiting_review"],
-              to: "skipped",
-              set: { finishedAt: new Date() },
-            },
-            recordTransitionAuditEvent: async (stepTx, stepRows) => {
-              const stepIds = new Set(stepRows.map(({ id }) => id));
-              const runById = new Map(changedRuns.map((run) => [run.id, run]));
-              await recordAuditEvent(
-                stepTx,
-                activeSteps
-                  .filter(({ id }) => stepIds.has(id))
-                  .map((step) => {
-                    const run = runById.get(step.runId);
-                    if (run === undefined) {
-                      panic("A transitioned step must belong to a held run");
-                    }
-                    return {
-                      action: AUDIT_ACTION.UPDATE,
-                      resourceType: AUDIT_RESOURCE_TYPE.FLOW_RUN,
-                      resourceId: run.id,
-                      workspaceId: run.workspaceId,
-                      changes: {
-                        stepStatus: { old: step.status, new: "skipped" },
-                      },
-                      metadata: {
-                        cause: "membership_removed",
-                        stepId: step.id,
-                      },
-                    };
-                  }),
-              );
-            },
+      const scopedRuns = await mapWithConcurrency({
+        items: runs,
+        limit: 1,
+        operation: async (run) => {
+          const proof = await proveOrgScope(tx, {
+            table: "flowRuns",
+            where: sql`${and(
+              eq(flowRuns.id, run.id),
+              eq(flowRuns.workspaceId, run.workspaceId),
+              eq(flowRuns.status, run.status),
+              inArray(flowRuns.workspaceId, affectedWorkspaceIds),
+            )}`,
           });
-          if (changedSteps.length !== activeSteps.length) {
-            panic("Locked flow steps changed during member removal");
+          if (proof.isErr()) {
+            return panic("Locked flow run requires its organization scope");
           }
-          await recordAuditEvent(
-            auditTx,
-            changedRuns.map((run) => ({
-              action: AUDIT_ACTION.UPDATE,
-              resourceType: AUDIT_RESOURCE_TYPE.FLOW_RUN,
-              resourceId: run.id,
-              workspaceId: run.workspaceId,
-              changes: { status: { old: run.status, new: "cancelled" } },
-              metadata: { cause: "membership_removed" },
-            })),
-          );
+          if (assertCallerOrg(proof.value, organizationId).isErr()) {
+            abortTransaction(removalBusy());
+          }
+          return { run, scope: proof.value };
         },
       });
-      if (changed.length !== runs.length) {
-        panic("Locked flow runs changed during member removal");
-      }
+      await cancelScopedMemberFlowRunBatch({ tx, actorUserId, scopedRuns });
     }
   }
 };
@@ -1546,32 +1994,79 @@ const cancelMemberDesktopSessions = async ({
       break;
     }
     // db-await-in-loop: transition and audit the held desktop page before consuming the next counted batch.
-    const changed = await transitionBatch({
-      tx,
-      spec: TRANSITIONS.desktopEditSessions,
-      ids: sessions.map(({ id }) => id),
-      options: {
-        from: ["open"],
-        to: "cancelled",
-        set: { closedAt: new Date() },
-      },
-      recordTransitionAuditEvent: async (auditTx, rows) => {
-        const ids = new Set(rows.map(({ id }) => id));
-        await recordMemberSessionTransitions({
-          tx: auditTx,
-          actorUserId,
-          resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
-          rows: sessions
-            .filter(({ id }) => ids.has(id))
-            .map((row) => ({
-              id: row.id,
-              workspaceId: row.workspaceId,
-              organizationId,
-            })),
+    const changedCounts = await mapWithConcurrency({
+      items: sessions,
+      limit: 1,
+      operation: async (session) => {
+        const proof = await proveOrgScope(tx, {
+          table: "desktopEditSessions",
+          where: sql`${and(
+            eq(desktopEditSessions.id, session.id),
+            eq(desktopEditSessions.workspaceId, session.workspaceId),
+            eq(desktopEditSessions.createdBy, userId),
+            eq(desktopEditSessions.status, "open"),
+          )}`,
         });
+        if (proof.isErr()) {
+          abortTransaction(removalBusy());
+        }
+        if (assertCallerOrg(proof.value, organizationId).isErr()) {
+          abortTransaction(removalBusy());
+        }
+        const auditEvents: Parameters<AuditRecorder>[1][] = [];
+        const bufferAudit = (async (_auditTx, events) => {
+          auditEvents.push(events);
+        }) satisfies AuditRecorder;
+        const changed = await withOrgScope({
+          tx,
+          scope: proof.value,
+          actor: { type: "system" },
+          fn: async (scopedTx) =>
+            await transitionBatch({
+              tx: scopedTx,
+              spec: TRANSITIONS.desktopEditSessions,
+              ids: [session.id],
+              options: {
+                from: ["open"],
+                to: "cancelled",
+                set: { closedAt: new Date() },
+              },
+              recordTransitionAuditEvent: async (auditTx, rows) =>
+                await recordMemberSessionTransitions({
+                  tx: auditTx,
+                  actorUserId,
+                  resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
+                  rows: rows.map(() => ({
+                    ...session,
+                    organizationId: proof.value.organizationId,
+                  })),
+                  recordAuditEvent: bufferAudit,
+                }),
+            }),
+        });
+        if (changed.length !== 1) {
+          panic("Locked desktop sessions changed during member removal");
+        }
+        const recordMemberTransitionAuditEvent = createBackgroundAuditRecorder({
+          organizationId: proof.value.organizationId,
+          workspaceId: session.workspaceId,
+          userId: actorUserId,
+          execution: {
+            performer: { type: "user", id: actorUserId },
+            trigger: { type: "system", source: "membership_removal" },
+          },
+        });
+        for (const events of auditEvents) {
+          // db-await-in-loop: replay exact transition events after the scoped role restores.
+          await recordMemberTransitionAuditEvent(tx, events);
+        }
+        return changed.length;
       },
     });
-    if (changed.length !== sessions.length) {
+    if (
+      changedCounts.reduce((count, value) => count + value, 0) !==
+      sessions.length
+    ) {
       panic("Locked desktop sessions changed during member removal");
     }
   }
@@ -1589,26 +2084,384 @@ const clearMemberPresence = async ({
   memberId,
   recordAuditEvent,
 }: ClearMemberPresenceOptions) => {
-  await runScopedWorkInTransaction({
+  const scope = await proveOrgScope(tx, {
+    table: "member",
+    where: sql`${and(eq(member.id, memberId), eq(member.organizationId, organizationId), eq(member.userId, userId))}`,
+  });
+  if (scope.isErr() || assertCallerOrg(scope.value, organizationId).isErr()) {
+    abortTransaction(removalBusy());
+  }
+  await withOrgScope({
     tx,
-    organizationId,
-    userId,
-    workspaceScope: { type: WORKSPACE_ACCESS_MODE.explicit, workspaceIds: [] },
+    scope: scope.value,
+    actor: { type: "actor", userId },
     fn: async (scopedTx) => {
       await scopedTx
         .delete(desktopPresence)
         .where(
           and(
-            eq(desktopPresence.organizationId, organizationId),
+            eq(desktopPresence.organizationId, scope.value.organizationId),
             eq(desktopPresence.userId, userId),
           ),
         );
-      await recordAuditEvent(scopedTx, {
-        action: AUDIT_ACTION.UPDATE,
-        resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
-        resourceId: organizationId,
-        metadata: { change: "member-presence-cleared", memberId, userId },
-      });
+    },
+  });
+  await recordAuditEvent(tx, {
+    action: AUDIT_ACTION.UPDATE,
+    resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+    resourceId: organizationId,
+    metadata: { change: "member-presence-cleared", memberId, userId },
+  });
+};
+
+type ProvenMemberCleanupOptions = {
+  tx: Transaction;
+  scope: OrgScope;
+  userId: SafeId<"user">;
+  recordAuditEvent: AuditRecorder;
+};
+
+const clearRemovedMemberMatterLeads = async ({
+  tx,
+  scope,
+  userId,
+  recordAuditEvent,
+}: ProvenMemberCleanupOptions) => {
+  const removePage = async (cursor: string | undefined): Promise<void> => {
+    const page = await readCursorPage(
+      tx
+        .select({ id: workspaces.id })
+        .from(workspaces)
+        .where(
+          and(
+            cursor === undefined ? undefined : gt(workspaces.id, cursor),
+            eq(workspaces.organizationId, scope.organizationId),
+            eq(workspaces.leadUserId, userId),
+          ),
+        )
+        .orderBy(workspaces.id),
+      {
+        limit: LIMITS.memberRemovalCleanupBatchSize,
+        cursorForItem: (row) => row.id,
+      },
+    );
+    await mapWithConcurrency({
+      items: page.items,
+      limit: 1,
+      operation: async (matter) => {
+        const proof = await proveOrgScope(tx, {
+          table: "workspaces",
+          where: sql`${and(
+            eq(workspaces.id, matter.id),
+            eq(workspaces.organizationId, scope.organizationId),
+            eq(workspaces.leadUserId, userId),
+          )}`,
+        });
+        if (proof.isErr()) {
+          abortTransaction(removalBusy());
+        }
+        if (assertCallerOrg(proof.value, scope.organizationId).isErr()) {
+          abortTransaction(removalBusy());
+        }
+        await withOrgScope({
+          tx,
+          scope: proof.value,
+          actor: { type: "system" },
+          fn: async (scopedTx) => {
+            await scopedTx
+              .update(workspaces)
+              .set({ leadUserId: null })
+              .where(
+                and(
+                  eq(workspaces.id, matter.id),
+                  eq(workspaces.organizationId, proof.value.organizationId),
+                  eq(workspaces.leadUserId, userId),
+                ),
+              );
+          },
+        });
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
+          resourceId: matter.id,
+          workspaceId: matter.id,
+          changes: { leadUserId: { old: userId, new: null } },
+          metadata: {
+            change: "member-lead-cleared",
+            userId,
+            cause: "membership_removed",
+          },
+        });
+      },
+    });
+    if (page.nextCursor !== null) {
+      await removePage(page.nextCursor);
+    }
+  };
+  await removePage(undefined);
+};
+
+const removeDepartingMemberMatterMemberships = async ({
+  tx,
+  scope,
+  userId,
+  recordAuditEvent,
+}: ProvenMemberCleanupOptions) => {
+  const removePage = async (cursor: string | undefined): Promise<void> => {
+    const page = await readCursorPage(
+      tx
+        .select({
+          id: workspaceMembers.id,
+          workspaceId: workspaceMembers.workspaceId,
+        })
+        .from(workspaceMembers)
+        .where(
+          and(
+            cursor === undefined ? undefined : gt(workspaceMembers.id, cursor),
+            eq(workspaceMembers.userId, userId),
+            inArray(
+              workspaceMembers.workspaceId,
+              tx
+                .select({ id: workspaces.id })
+                .from(workspaces)
+                .where(eq(workspaces.organizationId, scope.organizationId)),
+            ),
+          ),
+        )
+        .orderBy(workspaceMembers.id),
+      {
+        limit: LIMITS.memberRemovalCleanupBatchSize,
+        cursorForItem: (row) => row.id,
+      },
+    );
+    await mapWithConcurrency({
+      items: page.items,
+      limit: 1,
+      operation: async (membership) => {
+        const proof = await proveOrgScope(tx, {
+          table: "workspaceMembers",
+          where: sql`${and(
+            eq(workspaceMembers.id, membership.id),
+            eq(workspaceMembers.workspaceId, membership.workspaceId),
+            eq(workspaceMembers.userId, userId),
+          )}`,
+        });
+        if (proof.isErr()) {
+          abortTransaction(removalBusy());
+        }
+        if (assertCallerOrg(proof.value, scope.organizationId).isErr()) {
+          abortTransaction(removalBusy());
+        }
+        await withOrgScope({
+          tx,
+          scope: proof.value,
+          actor: { type: "system" },
+          fn: async (scopedTx) => {
+            await scopedTx
+              .delete(workspaceMembers)
+              .where(
+                and(
+                  eq(workspaceMembers.id, membership.id),
+                  eq(workspaceMembers.workspaceId, membership.workspaceId),
+                  eq(workspaceMembers.userId, userId),
+                ),
+              );
+          },
+        });
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.DELETE,
+          resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER,
+          resourceId: membership.id,
+          workspaceId: membership.workspaceId,
+
+          changes: {
+            deleted: {
+              old: { userId, workspaceId: membership.workspaceId },
+              new: null,
+            },
+          },
+          metadata: { cause: "membership_removed" },
+        });
+      },
+    });
+    if (page.nextCursor !== null) {
+      await removePage(page.nextCursor);
+    }
+  };
+  await removePage(undefined);
+};
+
+const clearRemovedMemberOrganizationState = async ({
+  tx,
+  scope,
+  userId,
+  recordAuditEvent,
+}: ProvenMemberCleanupOptions) => {
+  const counts = await withOrgScope({
+    tx,
+    scope,
+    actor: { type: "system" },
+    fn: async (scopedTx) => {
+      const searchHistoryTombstonesCount =
+        (
+          await scopedTx.execute<{ count: number }>(
+            sql`WITH removed AS (${scopedTx
+              .delete(searchHistoryTombstones)
+              .where(
+                and(
+                  eq(
+                    searchHistoryTombstones.organizationId,
+                    scope.organizationId,
+                  ),
+                  eq(searchHistoryTombstones.userId, userId),
+                ),
+              )
+              .returning({
+                changed: sql`1`,
+              })}) SELECT count(*)::integer AS count FROM removed`,
+          )
+        ).at(0)?.count ?? panic("Removed member cleanup count is absent");
+      const searchHistoryOwnersCount =
+        (
+          await scopedTx.execute<{ count: number }>(
+            sql`WITH removed AS (${scopedTx
+              .delete(searchHistoryOwners)
+              .where(
+                and(
+                  eq(searchHistoryOwners.organizationId, scope.organizationId),
+                  eq(searchHistoryOwners.userId, userId),
+                ),
+              )
+              .returning({
+                changed: sql`1`,
+              })}) SELECT count(*)::integer AS count FROM removed`,
+          )
+        ).at(0)?.count ?? panic("Removed member cleanup count is absent");
+      const searchHistoryEntriesCount =
+        (
+          await scopedTx.execute<{ count: number }>(
+            sql`WITH removed AS (${scopedTx
+              .delete(searchHistoryEntries)
+              .where(
+                and(
+                  eq(searchHistoryEntries.organizationId, scope.organizationId),
+                  eq(searchHistoryEntries.userId, userId),
+                ),
+              )
+              .returning({
+                changed: sql`1`,
+              })}) SELECT count(*)::integer AS count FROM removed`,
+          )
+        ).at(0)?.count ?? panic("Removed member cleanup count is absent");
+      const mcpUserConnectionsCount =
+        (
+          await scopedTx.execute<{ count: number }>(
+            sql`WITH removed AS (${scopedTx
+              .delete(mcpUserConnections)
+              .where(
+                and(
+                  eq(mcpUserConnections.organizationId, scope.organizationId),
+                  eq(mcpUserConnections.userId, userId),
+                ),
+              )
+              .returning({
+                changed: sql`1`,
+              })}) SELECT count(*)::integer AS count FROM removed`,
+          )
+        ).at(0)?.count ?? panic("Removed member cleanup count is absent");
+      const sharepointConnectionsCount =
+        (
+          await scopedTx.execute<{ count: number }>(
+            sql`WITH removed AS (${scopedTx
+              .delete(sharepointConnections)
+              .where(
+                and(
+                  eq(
+                    sharepointConnections.organizationId,
+                    scope.organizationId,
+                  ),
+                  eq(sharepointConnections.userId, userId),
+                ),
+              )
+              .returning({
+                changed: sql`1`,
+              })}) SELECT count(*)::integer AS count FROM removed`,
+          )
+        ).at(0)?.count ?? panic("Removed member cleanup count is absent");
+      const mcpOAuthStateCount =
+        (
+          await scopedTx.execute<{ count: number }>(
+            sql`WITH removed AS (${scopedTx
+              .delete(mcpOAuthState)
+              .where(
+                and(
+                  eq(mcpOAuthState.organizationId, scope.organizationId),
+                  eq(mcpOAuthState.userId, userId),
+                ),
+              )
+              .returning({
+                changed: sql`1`,
+              })}) SELECT count(*)::integer AS count FROM removed`,
+          )
+        ).at(0)?.count ?? panic("Removed member cleanup count is absent");
+      const sharepointOAuthStateCount =
+        (
+          await scopedTx.execute<{ count: number }>(
+            sql`WITH removed AS (${scopedTx
+              .delete(sharepointOAuthState)
+              .where(
+                and(
+                  eq(sharepointOAuthState.organizationId, scope.organizationId),
+                  eq(sharepointOAuthState.userId, userId),
+                ),
+              )
+              .returning({
+                changed: sql`1`,
+              })}) SELECT count(*)::integer AS count FROM removed`,
+          )
+        ).at(0)?.count ?? panic("Removed member cleanup count is absent");
+      const invitationCount =
+        (
+          await scopedTx.execute<{ count: number }>(
+            sql`WITH removed AS (${scopedTx
+              .delete(invitation)
+              .where(
+                and(
+                  eq(invitation.organizationId, scope.organizationId),
+                  eq(invitation.inviterId, userId),
+                  eq(invitation.status, "pending"),
+                ),
+              )
+              .returning({
+                changed: sql`1`,
+              })}) SELECT count(*)::integer AS count FROM removed`,
+          )
+        ).at(0)?.count ?? panic("Removed member cleanup count is absent");
+      return {
+        searchHistoryTombstones: searchHistoryTombstonesCount,
+        searchHistoryOwners: searchHistoryOwnersCount,
+        searchHistoryEntries: searchHistoryEntriesCount,
+        mcpUserConnections: mcpUserConnectionsCount,
+        sharepointConnections: sharepointConnectionsCount,
+        mcpOAuthState: mcpOAuthStateCount,
+        sharepointOAuthState: sharepointOAuthStateCount,
+        invitation: invitationCount,
+      };
+    },
+  });
+
+  if (!Object.values(counts).some((count) => count > 0)) {
+    return;
+  }
+  await recordAuditEvent(tx, {
+    action: AUDIT_ACTION.UPDATE,
+    resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+    resourceId: scope.organizationId,
+    metadata: {
+      change: "member-state-cleared",
+      userId,
+      counts,
+      cause: "membership_removed",
     },
   });
 };
@@ -1628,21 +2481,59 @@ export const removeOrganizationMemberInTransaction = async (
     reassignTo,
   }: Omit<RemoveOrganizationMemberOptions, "tx">,
 ): Promise<void> => {
-  await tryLockMemberFeatureAdmission(tx, organizationId);
+  const source = (
+    await tx
+      .select({ organizationId: member.organizationId })
+      .from(member)
+      .where(
+        and(
+          eq(member.id, memberId),
+          eq(member.organizationId, organizationId),
+          eq(member.userId, userId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  if (source === undefined) {
+    abortTransaction(removalBusy());
+  }
+  await tryLockMemberFeatureAdmission(tx, source.organizationId);
   const timerClose = await closeRemovedMemberActiveTimer({
     organizationId,
     tx,
     userId,
-    lockWorkspaces: async (transaction) =>
+    lockWorkspaces: async (transaction) => {
       await lockOrganizationCleanupWorkspaces({
         tx: transaction,
-        organizationId,
+        organizationId: source.organizationId,
         userId,
         reassignTo,
-      }),
+      });
+      const scope = await proveOrgScope(transaction, {
+        table: "member",
+        where: sql`${and(eq(member.id, memberId), eq(member.organizationId, source.organizationId), eq(member.userId, userId))}`,
+      });
+      if (
+        scope.isErr() ||
+        assertCallerOrg(scope.value, organizationId).isErr()
+      ) {
+        abortTransaction(removalBusy());
+      }
+    },
   });
   if (Result.isError(timerClose)) {
     abortTransaction(timerClose.error);
+  }
+  const membershipProof = await proveOrgScope(tx, {
+    table: "member",
+    where: sql`${and(
+      eq(member.id, memberId),
+      eq(member.organizationId, source.organizationId),
+      eq(member.userId, userId),
+    )}`,
+  });
+  if (membershipProof.isErr()) {
+    abortTransaction(removalBusy());
   }
   if (reassignTo) {
     const replacement = await tx
@@ -1679,21 +2570,6 @@ export const removeOrganizationMemberInTransaction = async (
     actorUserId,
     reassignTo,
   });
-  await tx
-    .update(workspaces)
-    .set({ leadUserId: null })
-    .where(
-      and(
-        eq(workspaces.organizationId, organizationId),
-        eq(workspaces.leadUserId, userId),
-      ),
-    );
-  await cancelMemberDesktopSessions({
-    tx,
-    organizationId,
-    userId,
-    actorUserId,
-  });
   const recordAuditEvent = createBackgroundAuditRecorder({
     organizationId,
     workspaceId: null,
@@ -1703,6 +2579,18 @@ export const removeOrganizationMemberInTransaction = async (
       trigger: { type: "system", source: "membership_removal" },
     },
   });
+  await clearRemovedMemberMatterLeads({
+    tx,
+    scope: membershipProof.value,
+    userId,
+    recordAuditEvent,
+  });
+  await cancelMemberDesktopSessions({
+    tx,
+    organizationId,
+    userId,
+    actorUserId,
+  });
   await clearMemberPresence({
     tx,
     organizationId,
@@ -1710,86 +2598,18 @@ export const removeOrganizationMemberInTransaction = async (
     memberId,
     recordAuditEvent,
   });
-  await tx
-    .delete(searchHistoryTombstones)
-    .where(
-      and(
-        eq(searchHistoryTombstones.organizationId, organizationId),
-        eq(searchHistoryTombstones.userId, userId),
-      ),
-    );
-  await tx
-    .delete(searchHistoryOwners)
-    .where(
-      and(
-        eq(searchHistoryOwners.organizationId, organizationId),
-        eq(searchHistoryOwners.userId, userId),
-      ),
-    );
-  await tx
-    .delete(searchHistoryEntries)
-    .where(
-      and(
-        eq(searchHistoryEntries.organizationId, organizationId),
-        eq(searchHistoryEntries.userId, userId),
-      ),
-    );
-  await tx
-    .delete(mcpUserConnections)
-    .where(
-      and(
-        eq(mcpUserConnections.organizationId, organizationId),
-        eq(mcpUserConnections.userId, userId),
-      ),
-    );
-  await tx
-    .delete(sharepointConnections)
-    .where(
-      and(
-        eq(sharepointConnections.organizationId, organizationId),
-        eq(sharepointConnections.userId, userId),
-      ),
-    );
-  await tx
-    .delete(mcpOAuthState)
-    .where(
-      and(
-        eq(mcpOAuthState.organizationId, organizationId),
-        eq(mcpOAuthState.userId, userId),
-      ),
-    );
-  await tx
-    .delete(sharepointOAuthState)
-    .where(
-      and(
-        eq(sharepointOAuthState.organizationId, organizationId),
-        eq(sharepointOAuthState.userId, userId),
-      ),
-    );
-  await tx
-    .delete(invitation)
-    .where(
-      and(
-        eq(invitation.organizationId, organizationId),
-        eq(invitation.inviterId, userId),
-        eq(invitation.status, "pending"),
-      ),
-    );
-
-  await tx
-    .delete(workspaceMembers)
-    .where(
-      and(
-        eq(workspaceMembers.userId, userId),
-        inArray(
-          workspaceMembers.workspaceId,
-          tx
-            .select({ id: workspaces.id })
-            .from(workspaces)
-            .where(eq(workspaces.organizationId, organizationId)),
-        ),
-      ),
-    );
+  await clearRemovedMemberOrganizationState({
+    tx,
+    scope: membershipProof.value,
+    userId,
+    recordAuditEvent,
+  });
+  await removeDepartingMemberMatterMemberships({
+    tx,
+    scope: membershipProof.value,
+    userId,
+    recordAuditEvent,
+  });
   await clearOrganizationCorrespondenceAssignments({
     tx,
     organizationId,

@@ -7,7 +7,7 @@ import type { MaybeStartUploadTriggeredFlowsArgs } from "@/api/lib/flows/maybe-s
 
 /** The upload transaction records delivery intent without exposing flow data. */
 export const recordUploadTriggeredFlowIntents = async (
-  tx: Pick<Transaction, "select" | "insert">,
+  tx: Transaction,
   options: MaybeStartUploadTriggeredFlowsArgs,
 ): Promise<void> => {
   await recordUpload(tx, options);

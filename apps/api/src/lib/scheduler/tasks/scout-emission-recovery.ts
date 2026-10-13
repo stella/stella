@@ -3,6 +3,7 @@ import { and, asc, eq, getColumns, lte, not, or, sql } from "drizzle-orm";
 
 import { mapWithConcurrency } from "@stll/concurrency";
 
+import { proveOrgScope, withOrgScope } from "@/api/db/org-scope";
 import type { Transaction } from "@/api/db/root";
 import {
   documentReviewRuns,
@@ -36,7 +37,11 @@ import {
   brandPersistedDocumentReviewRunId,
   brandPersistedEntityId,
 } from "@/api/lib/safe-id-boundaries";
-import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
+import type {
+  SchedulerDb,
+  SchedulerTask,
+  SchedulerTaskContext,
+} from "@/api/lib/scheduler/types";
 import { emitDocumentReviewSignal } from "@/api/lib/scouts/document-review";
 import { emitInfoSoudHearingSignals } from "@/api/lib/scouts/infosoud-hearings";
 import { toHearingRecord } from "@/api/lib/scouts/infosoud-hearings.logic";
@@ -136,6 +141,119 @@ const claimScoutReceipt = async ({
     : { sourceWhere, claimToken: claim.claimToken };
 };
 
+type EmitClaimedScoutReceiptOptions = {
+  tx: Transaction;
+  source: ClaimScoutReceiptOptions["source"];
+  now: Date;
+  workspaceId: SafeId<"workspace">;
+  organizationId: SafeId<"organization">;
+  logger: SchedulerTaskContext["logger"];
+};
+
+const emitClaimedScoutReceipt = async ({
+  tx,
+  source,
+  now,
+  workspaceId,
+  organizationId,
+  logger,
+}: EmitClaimedScoutReceiptOptions) => {
+  const claim = await claimScoutReceipt({
+    tx,
+    source,
+    now,
+  });
+  if (claim === undefined) {
+    return { status: "stale" as const };
+  }
+  switch (source.sourceKind) {
+    case "document-review": {
+      if (!isDeploymentFeatureEnabled("FEATURE_INBOX_DOCUMENT_SCOUTS")) {
+        return { status: "paused" as const };
+      }
+      const outcome = await emitDocumentReviewSignal({
+        tx,
+        workspaceId,
+        runId: brandPersistedDocumentReviewRunId(source.sourceId),
+      });
+      if (outcome === "paused") {
+        logger.info("scout.emission_paused", {
+          sourceKind: source.sourceKind,
+        });
+        return { status: "paused" as const };
+      }
+      break;
+    }
+    case "infosoud-hearing": {
+      if (
+        (await findSignalsBackgroundActor({
+          tx,
+          organizationId,
+          workspaceId,
+        })) === null
+      ) {
+        logger.info("scout.emission_paused", {
+          sourceKind: source.sourceKind,
+        });
+        return { status: "paused" as const };
+      }
+      const entityId = brandPersistedEntityId(source.sourceId);
+      const entity = (
+        await tx
+          .select({
+            externalId: entities.externalId,
+            externalData: entities.externalData,
+            startAt: entities.startAt,
+          })
+          .from(entities)
+          .where(
+            and(
+              eq(entities.id, entityId),
+              eq(entities.workspaceId, workspaceId),
+              eq(entities.externalSource, "infosoud"),
+            ),
+          )
+          .limit(1)
+      ).at(0);
+      const hearing = entity ? toHearingRecord(entity) : null;
+      if (hearing) {
+        await emitInfoSoudHearingSignals({
+          tx,
+          organizationId,
+          workspaceId,
+          inserted: [{ entityId, hearing }],
+          now,
+        });
+        // Recovery owns this claimed receipt; the producer only settles receipts it inserted.
+      }
+      break;
+    }
+    default:
+      source.sourceKind satisfies never;
+      panic("Unknown deferred scout source");
+  }
+  if (!isDeploymentFeatureEnabled("FEATURE_SIGNALS")) {
+    return { status: "paused" as const };
+  }
+  const removed = await mutateRecoveryReceipt({
+    type: "settle-scout",
+    tx,
+    table: pendingScoutEmissions,
+    where: sql`${and(
+      claim.sourceWhere,
+      eq(pendingScoutEmissions.status, "pending"),
+      timestampMatchesCasToken(
+        pendingScoutEmissions.nextAttemptAt,
+        claim.claimToken,
+      ),
+      scoutEmissionActorExists(),
+    )}`,
+  });
+  return {
+    status: removed.length === 0 ? ("stale" as const) : ("settled" as const),
+  };
+};
+
 /** Admission pauses retain source identities; emission and dequeue commit together. */
 export const recoverScoutEmission: SchedulerTask = async ({
   db,
@@ -183,97 +301,40 @@ export const recoverScoutEmission: SchedulerTask = async ({
           return { status: "paused" as const };
         }
         await lockScoutReceiptRows(tx, [source]);
-        const claim = await claimScoutReceipt({ tx, source, now });
-        if (claim === undefined) {
-          return { status: "stale" as const };
-        }
-        switch (source.sourceKind) {
-          case "document-review": {
-            if (!isDeploymentFeatureEnabled("FEATURE_INBOX_DOCUMENT_SCOUTS")) {
-              return { status: "paused" as const };
-            }
-            const outcome = await emitDocumentReviewSignal({
-              tx,
-              workspaceId: source.workspaceId,
-              runId: brandPersistedDocumentReviewRunId(source.sourceId),
-            });
-            if (outcome === "paused") {
-              logger.info("scout.emission_paused", {
-                sourceKind: source.sourceKind,
-              });
-              return { status: "paused" as const };
-            }
-            break;
-          }
-          case "infosoud-hearing": {
-            if (
-              (await findSignalsBackgroundActor({
-                tx,
-                organizationId: source.organizationId,
-                workspaceId: source.workspaceId,
-              })) === null
-            ) {
-              logger.info("scout.emission_paused", {
-                sourceKind: source.sourceKind,
-              });
-              return { status: "paused" as const };
-            }
-            const entityId = brandPersistedEntityId(source.sourceId);
-            const entity = (
-              await tx
-                .select({
-                  externalId: entities.externalId,
-                  externalData: entities.externalData,
-                  startAt: entities.startAt,
-                })
-                .from(entities)
-                .where(
-                  and(
-                    eq(entities.id, entityId),
-                    eq(entities.workspaceId, source.workspaceId),
-                    eq(entities.externalSource, "infosoud"),
-                  ),
-                )
-                .limit(1)
-            ).at(0);
-            const hearing = entity ? toHearingRecord(entity) : null;
-            if (hearing) {
-              await emitInfoSoudHearingSignals({
-                tx,
-                organizationId: source.organizationId,
-                workspaceId: source.workspaceId,
-                inserted: [{ entityId, hearing }],
-                now,
-              });
-              // Recovery owns this claimed receipt; the producer only settles receipts it inserted.
-            }
-            break;
-          }
-          default:
-            source.sourceKind satisfies never;
-            panic("Unknown deferred scout source");
-        }
-        if (!isDeploymentFeatureEnabled("FEATURE_SIGNALS")) {
-          return { status: "paused" as const };
-        }
-        const removed = await mutateRecoveryReceipt({
-          type: "settle-scout",
-          tx,
-          table: pendingScoutEmissions,
+        const proof = await proveOrgScope(tx, {
+          table: "pendingScoutEmissions",
           where: sql`${and(
-            claim.sourceWhere,
+            eq(pendingScoutEmissions.organizationId, source.organizationId),
+            eq(pendingScoutEmissions.sourceKind, source.sourceKind),
+            eq(pendingScoutEmissions.sourceId, source.sourceId),
             eq(pendingScoutEmissions.status, "pending"),
             timestampMatchesCasToken(
               pendingScoutEmissions.nextAttemptAt,
-              claim.claimToken,
+              source.nextAttemptAt,
             ),
             scoutEmissionActorExists(),
           )}`,
         });
-        return {
-          status:
-            removed.length === 0 ? ("stale" as const) : ("settled" as const),
-        };
+        if (proof.isErr()) {
+          return { status: "stale" as const };
+        }
+        const workspaceId =
+          proof.value.workspaceIds.at(0) ??
+          panic("Scout receipt requires a matter");
+        return await withOrgScope({
+          tx,
+          scope: proof.value,
+          actor: { type: "system" },
+          fn: async (scopedTx) =>
+            await emitClaimedScoutReceipt({
+              tx: scopedTx,
+              source,
+              now,
+              workspaceId,
+              organizationId: proof.value.organizationId,
+              logger,
+            }),
+        });
       }),
     );
     if (Result.isOk(recovery)) {
@@ -290,12 +351,8 @@ export const recoverScoutEmission: SchedulerTask = async ({
         return;
       }
       await lockScoutReceiptRows(tx, [source]);
-      await mutateRecoveryClaim({
-        type: "scout-retry",
-        tx,
-        table: pendingScoutEmissions,
-        nextAttemptAt: new Date(now.getTime() + RETRY_INTERVAL_MS),
-        lastError: errorTag(recovery.error.cause).slice(0, 128),
+      const proof = await proveOrgScope(tx, {
+        table: "pendingScoutEmissions",
         where: sql`${and(
           eq(pendingScoutEmissions.organizationId, source.organizationId),
           eq(pendingScoutEmissions.sourceKind, source.sourceKind),
@@ -307,6 +364,37 @@ export const recoverScoutEmission: SchedulerTask = async ({
           ),
           scoutEmissionActorExists(),
         )}`,
+      });
+      if (proof.isErr()) {
+        return;
+      }
+      await withOrgScope({
+        tx,
+        scope: proof.value,
+        actor: { type: "system" },
+        fn: async (scopedTx) => {
+          await mutateRecoveryClaim({
+            type: "scout-retry",
+            tx: scopedTx,
+            table: pendingScoutEmissions,
+            nextAttemptAt: new Date(now.getTime() + RETRY_INTERVAL_MS),
+            lastError: errorTag(recovery.error.cause).slice(0, 128),
+            where: sql`${and(
+              eq(
+                pendingScoutEmissions.organizationId,
+                proof.value.organizationId,
+              ),
+              eq(pendingScoutEmissions.sourceKind, source.sourceKind),
+              eq(pendingScoutEmissions.sourceId, source.sourceId),
+              eq(pendingScoutEmissions.status, "pending"),
+              timestampMatchesCasToken(
+                pendingScoutEmissions.nextAttemptAt,
+                source.nextAttemptAt,
+              ),
+              scoutEmissionActorExists(),
+            )}`,
+          });
+        },
       });
     });
     observeFailure(recovery.error, {
@@ -335,7 +423,7 @@ const scoutEmissionActorExists = (userId?: SafeId<"user">) => sql`CASE
 END`;
 
 type ResumeScoutEmissionAfterGrantOptions = {
-  tx: Pick<Transaction, "select" | "execute" | "rollback">;
+  tx: Transaction;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
 };
@@ -371,18 +459,55 @@ export const resumeScoutEmissionAfterGrant = async ({
     return;
   }
   await lockScoutReceiptRows(tx, rows);
-  await transitionRecoveryGrantState({
-    type: "scout",
-    tx,
-    table: pendingScoutEmissions,
-    spec: SCOUT_EMISSION_TRANSITIONS,
-    // sql-perf-allow: bounded by 100 preselected and prelocked exact (organization_id, source_kind, source_id) primary-key identities; actor subqueries only narrow those receipts.
-    where: sql`${and(eq(pendingScoutEmissions.organizationId, organizationId), scoutEmissionActorExists(userId), or(...rows.map((row) => and(eq(pendingScoutEmissions.sourceKind, row.sourceKind), eq(pendingScoutEmissions.sourceId, row.sourceId), timestampMatchesCasToken(pendingScoutEmissions.nextAttemptAt, row.nextAttemptAt)))))}`,
-    options: {
-      from: ["awaiting_grant"],
-      to: "pending",
+  await mapWithConcurrency({
+    items: rows,
+    limit: 1,
+    operation: async (row) => {
+      const proof = await proveOrgScope(tx, {
+        table: "pendingScoutEmissions",
+        where: sql`${and(
+          eq(pendingScoutEmissions.organizationId, organizationId),
+          eq(pendingScoutEmissions.sourceKind, row.sourceKind),
+          eq(pendingScoutEmissions.sourceId, row.sourceId),
+          eq(pendingScoutEmissions.status, "awaiting_grant"),
+          timestampMatchesCasToken(
+            pendingScoutEmissions.nextAttemptAt,
+            row.nextAttemptAt,
+          ),
+          scoutEmissionActorExists(userId),
+        )}`,
+      });
+      if (proof.isErr()) {
+        return;
+      }
+      await withOrgScope({
+        tx,
+        scope: proof.value,
+        actor: { type: "system" },
+        fn: async (scopedTx) =>
+          await transitionRecoveryGrantState({
+            type: "scout",
+            tx: scopedTx,
+            table: pendingScoutEmissions,
+            spec: SCOUT_EMISSION_TRANSITIONS,
+            where: sql`${and(
+              eq(
+                pendingScoutEmissions.organizationId,
+                proof.value.organizationId,
+              ),
+              eq(pendingScoutEmissions.sourceKind, row.sourceKind),
+              eq(pendingScoutEmissions.sourceId, row.sourceId),
+              timestampMatchesCasToken(
+                pendingScoutEmissions.nextAttemptAt,
+                row.nextAttemptAt,
+              ),
+              scoutEmissionActorExists(userId),
+            )}`,
+            options: { from: ["awaiting_grant"], to: "pending" },
+            log: { event: "scout.emission_grant_resumed" },
+          }),
+      });
     },
-    log: { event: "scout.emission_grant_resumed" },
   });
 };
 
@@ -461,38 +586,67 @@ const reconcileScoutEmissionGrantState = async ({
           return;
         }
         await lockScoutReceiptRows(tx, rows);
-        const identities = or(
-          ...rows.map((row) =>
-            and(
-              eq(pendingScoutEmissions.sourceId, row.sourceId),
-              eq(pendingScoutEmissions.sourceKind, row.sourceKind),
-              timestampMatchesCasToken(
-                pendingScoutEmissions.nextAttemptAt,
-                row.nextAttemptAt,
-              ),
-            ),
-          ),
-        );
-        await transitionRecoveryGrantState({
-          type: "scout",
-          tx,
-          table: pendingScoutEmissions,
-          spec: SCOUT_EMISSION_TRANSITIONS,
-          where: sql`${and(eq(pendingScoutEmissions.organizationId, organizationId), identities, not(scoutEmissionActorExists()))}`,
-          options: { from: ["pending"], to: "awaiting_grant" },
-          log: { event: "scout.emission_awaiting_grant" },
-        });
-        await transitionRecoveryGrantState({
-          type: "scout",
-          tx,
-          table: pendingScoutEmissions,
-          spec: SCOUT_EMISSION_TRANSITIONS,
-          where: sql`${and(eq(pendingScoutEmissions.organizationId, organizationId), identities, scoutEmissionActorExists())}`,
-          options: {
-            from: ["awaiting_grant"],
-            to: "pending",
+        await mapWithConcurrency({
+          items: rows,
+          limit: 1,
+          operation: async (row) => {
+            const proof = await proveOrgScope(tx, {
+              table: "pendingScoutEmissions",
+              where: sql`${and(
+                eq(pendingScoutEmissions.organizationId, organizationId),
+                eq(pendingScoutEmissions.sourceKind, row.sourceKind),
+                eq(pendingScoutEmissions.sourceId, row.sourceId),
+                timestampMatchesCasToken(
+                  pendingScoutEmissions.nextAttemptAt,
+                  row.nextAttemptAt,
+                ),
+                or(
+                  eq(pendingScoutEmissions.status, "pending"),
+                  eq(pendingScoutEmissions.status, "awaiting_grant"),
+                ),
+              )}`,
+            });
+            if (proof.isErr()) {
+              return;
+            }
+            await withOrgScope({
+              tx,
+              scope: proof.value,
+              actor: { type: "system" },
+              fn: async (scopedTx) => {
+                const identity = and(
+                  eq(
+                    pendingScoutEmissions.organizationId,
+                    proof.value.organizationId,
+                  ),
+                  eq(pendingScoutEmissions.sourceKind, row.sourceKind),
+                  eq(pendingScoutEmissions.sourceId, row.sourceId),
+                  timestampMatchesCasToken(
+                    pendingScoutEmissions.nextAttemptAt,
+                    row.nextAttemptAt,
+                  ),
+                );
+                await transitionRecoveryGrantState({
+                  type: "scout",
+                  tx: scopedTx,
+                  table: pendingScoutEmissions,
+                  spec: SCOUT_EMISSION_TRANSITIONS,
+                  where: sql`${and(identity, not(scoutEmissionActorExists()))}`,
+                  options: { from: ["pending"], to: "awaiting_grant" },
+                  log: { event: "scout.emission_awaiting_grant" },
+                });
+                await transitionRecoveryGrantState({
+                  type: "scout",
+                  tx: scopedTx,
+                  table: pendingScoutEmissions,
+                  spec: SCOUT_EMISSION_TRANSITIONS,
+                  where: sql`${and(identity, scoutEmissionActorExists())}`,
+                  options: { from: ["awaiting_grant"], to: "pending" },
+                  log: { event: "scout.emission_grant_repaired" },
+                });
+              },
+            });
           },
-          log: { event: "scout.emission_grant_repaired" },
         });
       }),
   });

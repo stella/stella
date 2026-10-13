@@ -1,10 +1,11 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, inArray, lt, not, or, sql } from "drizzle-orm";
+import { and, asc, eq, lt, not, sql } from "drizzle-orm";
 
 import { SCOUT_KEY } from "@stll/api-contract/signals";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { Temporal } from "@stll/time";
 
+import { proveOrgScope, withOrgScope } from "@/api/db/org-scope";
 import type { Transaction } from "@/api/db/root";
 import {
   documentProcessingRuns,
@@ -123,25 +124,47 @@ export const resumeDocumentDeadlineScoutsAfterGrant = async ({
   if (rows.length === 0) {
     return;
   }
-  await transitionRecoveryGrantState({
-    type: "deadline",
-    tx,
-    table: documentProcessingRuns,
-    spec: DEADLINE_DISPATCH_RECOVERY,
-    where: sql`${and(
-      eq(documentProcessingRuns.organizationId, organizationId),
-      inArray(
-        documentProcessingRuns.id,
-        rows.map((row) => row.id),
-      ),
-      deadlineMatterAdmission(userId),
-    )}`,
-    options: {
-      from: ["awaiting_grant"],
-      to: "pending",
-      set: { deadlineScoutErrorCode: null, updatedAt: new Date() },
+  await mapWithConcurrency({
+    items: rows,
+    limit: 1,
+    operation: async (row) => {
+      const proofResult = await proveOrgScope(tx, {
+        table: "documentProcessingRuns",
+        where: sql`${and(
+          eq(documentProcessingRuns.id, row.id),
+          eq(documentProcessingRuns.organizationId, organizationId),
+          eq(documentProcessingRuns.deadlineScoutStatus, "awaiting_grant"),
+          deadlineMatterAdmission(userId),
+        )}`,
+      });
+      const proof = proofResult.unwrapOr(null);
+      if (proof === null) {
+        return;
+      }
+      await withOrgScope({
+        tx,
+        scope: proof,
+        actor: { type: "system" },
+        fn: async (scopedTx) =>
+          await transitionRecoveryGrantState({
+            type: "deadline",
+            tx: scopedTx,
+            table: documentProcessingRuns,
+            spec: DEADLINE_DISPATCH_RECOVERY,
+            where: sql`${and(
+              eq(documentProcessingRuns.id, row.id),
+              eq(documentProcessingRuns.organizationId, proof.organizationId),
+              deadlineMatterAdmission(userId),
+            )}`,
+            options: {
+              from: ["awaiting_grant"],
+              to: "pending",
+              set: { deadlineScoutErrorCode: null, updatedAt: new Date() },
+            },
+            log: { event: "scout.document_deadlines.grant_resumed" },
+          }),
+      });
     },
-    log: { event: "scout.document_deadlines.grant_resumed" },
   });
 };
 
@@ -179,41 +202,70 @@ export const pauseDocumentDeadlineScoutAfterGrantLoss = async ({
       organizationId: source.organizationId,
       featureId: "signals",
     });
-    const metadata = {
-      deadlineScoutClaimedAt: null,
-      deadlineScoutErrorCode: "feature_not_granted",
-      updatedAt: new Date(),
-    };
-    const parked = isDeploymentFeatureEnabled("FEATURE_SIGNALS")
-      ? await transitionRecoveryGrantState({
-          type: "deadline",
-          tx,
-          table: documentProcessingRuns,
-          spec: DEADLINE_DISPATCH_RECOVERY,
-          where: sql`${and(eq(documentProcessingRuns.id, sourceRunId), claim.from === "running" ? timestampMatchesCasToken(documentProcessingRuns.deadlineScoutClaimedAt, claim.claimedAtToken) : undefined, not(deadlineMatterAdmission()))}`,
-          options: { from: [claim.from], to: "awaiting_grant", set: metadata },
-          log: { event: "scout.document_deadlines.grant_paused" },
-          attemptRefund: claim.from === "running" ? 1 : 0,
-        })
-      : 0;
-    if (parked !== 0) {
-      return { status: "settled" };
-    }
-    if (claim.from === "pending") {
+    const proofResult = await proveOrgScope(tx, {
+      table: "documentProcessingRuns",
+      where: sql`${and(
+        eq(documentProcessingRuns.id, sourceRunId),
+        eq(documentProcessingRuns.organizationId, source.organizationId),
+        eq(documentProcessingRuns.deadlineScoutStatus, claim.from),
+        claim.from === "running"
+          ? timestampMatchesCasToken(
+              documentProcessingRuns.deadlineScoutClaimedAt,
+              claim.claimedAtToken,
+            )
+          : undefined,
+      )}`,
+    });
+    const proof = proofResult.unwrapOr(null);
+    if (proof === null) {
       return { status: "stale_claim" };
     }
-    // A grant that committed before the lock keeps the rejected observation retryable under a new actor.
-    const retried = await transitionRecoveryGrantState({
-      type: "deadline",
+    return await withOrgScope({
       tx,
-      table: documentProcessingRuns,
-      spec: DEADLINE_DISPATCH_RECOVERY,
-      where: sql`${and(eq(documentProcessingRuns.id, sourceRunId), timestampMatchesCasToken(documentProcessingRuns.deadlineScoutClaimedAt, claim.claimedAtToken))}`,
-      options: { from: ["running"], to: "pending", set: metadata },
-      log: { event: "scout.document_deadlines.admission_retry" },
-      attemptRefund: 1,
+      scope: proof,
+      actor: { type: "system" },
+      fn: async (scopedTx): Promise<DeadlineScoutClaimSettlement> => {
+        const metadata = {
+          deadlineScoutClaimedAt: null,
+          deadlineScoutErrorCode: "feature_not_granted",
+          updatedAt: new Date(),
+        };
+        const parked = isDeploymentFeatureEnabled("FEATURE_SIGNALS")
+          ? await transitionRecoveryGrantState({
+              type: "deadline",
+              tx: scopedTx,
+              table: documentProcessingRuns,
+              spec: DEADLINE_DISPATCH_RECOVERY,
+              where: sql`${and(eq(documentProcessingRuns.id, sourceRunId), eq(documentProcessingRuns.organizationId, proof.organizationId), claim.from === "running" ? timestampMatchesCasToken(documentProcessingRuns.deadlineScoutClaimedAt, claim.claimedAtToken) : undefined, not(deadlineMatterAdmission()))}`,
+              options: {
+                from: [claim.from],
+                to: "awaiting_grant",
+                set: metadata,
+              },
+              log: { event: "scout.document_deadlines.grant_paused" },
+              attemptRefund: claim.from === "running" ? 1 : 0,
+            })
+          : 0;
+        if (parked !== 0) {
+          return { status: "settled" };
+        }
+        if (claim.from === "pending") {
+          return { status: "stale_claim" };
+        }
+        // A grant that committed before the lock keeps the rejected observation retryable under a new actor.
+        const retried = await transitionRecoveryGrantState({
+          type: "deadline",
+          tx: scopedTx,
+          table: documentProcessingRuns,
+          spec: DEADLINE_DISPATCH_RECOVERY,
+          where: sql`${and(eq(documentProcessingRuns.id, sourceRunId), eq(documentProcessingRuns.organizationId, proof.organizationId), timestampMatchesCasToken(documentProcessingRuns.deadlineScoutClaimedAt, claim.claimedAtToken))}`,
+          options: { from: ["running"], to: "pending", set: metadata },
+          log: { event: "scout.document_deadlines.admission_retry" },
+          attemptRefund: 1,
+        });
+        return { status: retried === 0 ? "stale_claim" : "settled" };
+      },
     });
-    return { status: retried === 0 ? "stale_claim" : "settled" };
   });
 };
 
@@ -290,18 +342,51 @@ const reconcileDeadlineAdmission = async ({
           organizationId,
           featureId: "signals",
         });
-        return await transitionRecoveryGrantState({
-          type: "deadline",
-          tx,
-          table: documentProcessingRuns,
-          spec: DEADLINE_DISPATCH_RECOVERY,
-          where: sql`${and(inArray(documentProcessingRuns.id, ids), admission)}`,
-          options: transition,
-          log: {
-            event: "scout.document_deadlines.admission_reconciled",
-            direction,
+        const changed = await mapWithConcurrency({
+          items: ids,
+          limit: 1,
+          operation: async (id) => {
+            const proofResult = await proveOrgScope(tx, {
+              table: "documentProcessingRuns",
+              where: sql`${and(
+                eq(documentProcessingRuns.id, id),
+                eq(documentProcessingRuns.organizationId, organizationId),
+                eq(documentProcessingRuns.deadlineScoutStatus, sourceStatus),
+                admission,
+              )}`,
+            });
+            const proof = proofResult.unwrapOr(null);
+            if (proof === null) {
+              return 0;
+            }
+            return await withOrgScope({
+              tx,
+              scope: proof,
+              actor: { type: "system" },
+              fn: async (scopedTx) =>
+                await transitionRecoveryGrantState({
+                  type: "deadline",
+                  tx: scopedTx,
+                  table: documentProcessingRuns,
+                  spec: DEADLINE_DISPATCH_RECOVERY,
+                  where: sql`${and(
+                    eq(documentProcessingRuns.id, id),
+                    eq(
+                      documentProcessingRuns.organizationId,
+                      proof.organizationId,
+                    ),
+                    admission,
+                  )}`,
+                  options: transition,
+                  log: {
+                    event: "scout.document_deadlines.admission_reconciled",
+                    direction,
+                  },
+                }),
+            });
           },
         });
+        return changed.reduce((count, value) => count + value, 0);
       }),
   });
   return {
@@ -319,6 +404,111 @@ const reconcileDeadlineAdmission = async ({
 type RecoverDocumentDeadlineScoutDispatchesOptions = {
   database: Pick<Transaction, "select"> & AnyDrizzle<Transaction>;
   enqueueDocumentDeadlineScout?: typeof enqueueDocumentDeadlineScout;
+};
+
+type RetireExpiredDeadlineDispatchesOptions = {
+  database: RecoverDocumentDeadlineScoutDispatchesOptions["database"];
+  staleBefore: Date;
+};
+
+const retireExpiredDeadlineDispatches = async ({
+  database,
+  staleBefore,
+}: RetireExpiredDeadlineDispatchesOptions) => {
+  const staleDispatches = (
+    await readCursorPage(
+      database
+        .select({
+          id: documentProcessingRuns.id,
+          organizationId: documentProcessingRuns.organizationId,
+          claimedAtToken: timestampCasToken(
+            documentProcessingRuns.deadlineScoutClaimedAt,
+          ),
+        })
+        .from(documentProcessingRuns)
+        .where(
+          and(
+            eq(documentProcessingRuns.deadlineScoutStatus, "running"),
+            lt(
+              documentProcessingRuns.deadlineScoutClaimedAt,
+              sql`${staleBefore}::timestamptz`,
+            ),
+          ),
+        )
+        .orderBy(
+          asc(documentProcessingRuns.deadlineScoutClaimedAt),
+          asc(documentProcessingRuns.id),
+        ),
+      { limit: RECONCILE_BATCH_SIZE, cursorForItem: (row) => row.id },
+    )
+  ).items;
+  // Match the expired claim and state again: overlapping sweeps must not
+  // retire a fresh claim acquired after selection. A stale update then matches
+  // nothing, preserving settlement and preventing a completed scan's replay.
+  const dispatchCounts = await mapWithConcurrency({
+    items: staleDispatches,
+    limit: DEADLINE_SCOUT_DISPATCH_CONCURRENCY,
+    operation: async (row) =>
+      await withAggregateTransaction(database, async (tx) => {
+        await lockFeatureRecoveryAdmission({
+          tx,
+          organizationId: row.organizationId,
+          featureId: "signals",
+        });
+        const claimToken =
+          row.claimedAtToken ?? panic("Expired deadline claim has no token");
+        const proofResult = await proveOrgScope(tx, {
+          table: "documentProcessingRuns",
+          where: sql`${and(
+            eq(documentProcessingRuns.id, row.id),
+            eq(documentProcessingRuns.organizationId, row.organizationId),
+            timestampMatchesCasToken(
+              documentProcessingRuns.deadlineScoutClaimedAt,
+              claimToken,
+            ),
+            eq(documentProcessingRuns.deadlineScoutStatus, "running"),
+            lt(
+              documentProcessingRuns.deadlineScoutClaimedAt,
+              sql`${staleBefore}::timestamptz`,
+            ),
+          )}`,
+        });
+        const proof = proofResult.unwrapOr(null);
+        if (proof === null) {
+          return 0;
+        }
+        return await withOrgScope({
+          tx,
+          scope: proof,
+          actor: { type: "system" },
+          fn: async (scopedTx) =>
+            await mutateRecoveryClaim({
+              type: "deadline-expiry",
+              tx: scopedTx,
+              table: documentProcessingRuns,
+              spec: DEADLINE_DISPATCH_RECOVERY,
+              where: sql`${and(
+                eq(documentProcessingRuns.id, row.id),
+                eq(documentProcessingRuns.organizationId, proof.organizationId),
+                timestampMatchesCasToken(
+                  documentProcessingRuns.deadlineScoutClaimedAt,
+                  claimToken,
+                ),
+                eq(documentProcessingRuns.deadlineScoutStatus, "running"),
+                lt(
+                  documentProcessingRuns.deadlineScoutClaimedAt,
+                  sql`${staleBefore}::timestamptz`,
+                ),
+              )}`,
+              now: new Date(),
+            }),
+        });
+      }),
+  });
+  return {
+    count: dispatchCounts.reduce((total, count) => total + count, 0),
+    selected: staleDispatches.length,
+  };
 };
 
 /**
@@ -339,68 +529,17 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
   const staleBefore = new Date(
     Temporal.Now.instant().epochMilliseconds - DEADLINE_SCOUT_LEASE_TIMEOUT_MS,
   );
-  const staleDispatches = (
-    await readCursorPage(
-      database
-        .select({
-          id: documentProcessingRuns.id,
-          claimedAtToken: timestampCasToken(
-            documentProcessingRuns.deadlineScoutClaimedAt,
-          ),
-        })
-        .from(documentProcessingRuns)
-        .where(
-          and(
-            eq(documentProcessingRuns.deadlineScoutStatus, "running"),
-            lt(documentProcessingRuns.deadlineScoutClaimedAt, staleBefore),
-          ),
-        )
-        .orderBy(
-          asc(documentProcessingRuns.deadlineScoutClaimedAt),
-          asc(documentProcessingRuns.id),
-        ),
-      { limit: RECONCILE_BATCH_SIZE, cursorForItem: (row) => row.id },
-    )
-  ).items;
-  // Match the expired claim and state again: overlapping sweeps must not
-  // retire a fresh claim acquired after selection. A stale update then matches
-  // nothing, preserving settlement and preventing a completed scan's replay.
-  const reclaimedDispatchCount =
-    staleDispatches.length === 0
-      ? 0
-      : await withAggregateTransaction(
-          database,
-          async (tx) =>
-            await mutateRecoveryClaim({
-              type: "deadline-expiry",
-              tx,
-              table: documentProcessingRuns,
-              spec: DEADLINE_DISPATCH_RECOVERY,
-              where: sql`${and(
-                or(
-                  ...staleDispatches.map(({ id, claimedAtToken }) =>
-                    and(
-                      eq(documentProcessingRuns.id, id),
-                      timestampMatchesCasToken(
-                        documentProcessingRuns.deadlineScoutClaimedAt,
-                        claimedAtToken ??
-                          panic("Expired deadline claim has no token"),
-                      ),
-                    ),
-                  ),
-                ),
-                eq(documentProcessingRuns.deadlineScoutStatus, "running"),
-                lt(documentProcessingRuns.deadlineScoutClaimedAt, staleBefore),
-              )}`,
-              now: new Date(),
-            }),
-        );
+  const retiredDispatches = await retireExpiredDeadlineDispatches({
+    database,
+    staleBefore,
+  });
 
   const staleCensusRuns = (
     await readCursorPage(
       database
         .select({
           id: scoutRuns.id,
+          organizationId: scoutRuns.organizationId,
           startedAtToken: timestampCasToken(scoutRuns.startedAt),
         })
         .from(scoutRuns)
@@ -417,35 +556,61 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
   ).items;
   // Same compare-and-set, so a census run that restarted between the select
   // and this update is not retired out from under its worker.
-  const failedCensusCount =
-    staleCensusRuns.length === 0
-      ? 0
-      : await withAggregateTransaction(
-          database,
-          async (tx) =>
+  const censusCounts = await mapWithConcurrency({
+    items: staleCensusRuns,
+    limit: DEADLINE_SCOUT_DISPATCH_CONCURRENCY,
+    operation: async (row) =>
+      await withAggregateTransaction(database, async (tx) => {
+        await lockFeatureRecoveryAdmission({
+          tx,
+          organizationId: row.organizationId,
+          featureId: "signals",
+        });
+        const proofResult = await proveOrgScope(tx, {
+          table: "scoutRuns",
+          where: sql`${and(
+            eq(scoutRuns.id, row.id),
+            eq(scoutRuns.organizationId, row.organizationId),
+            eq(scoutRuns.scoutKey, SCOUT_KEY.DOCUMENT_DEADLINES),
+            timestampMatchesCasToken(scoutRuns.startedAt, row.startedAtToken),
+            eq(scoutRuns.status, SCOUT_RUN_STATUS.RUNNING),
+            lt(scoutRuns.startedAt, staleBefore),
+          )}`,
+        });
+        const proof = proofResult.unwrapOr(null);
+        if (proof === null) {
+          return 0;
+        }
+        return await withOrgScope({
+          tx,
+          scope: proof,
+          actor: { type: "system" },
+          fn: async (scopedTx) =>
             await mutateRecoveryClaim({
               type: "scout-expiry",
-              tx,
+              tx: scopedTx,
               table: scoutRuns,
               spec: DEADLINE_CENSUS_RECOVERY,
               where: sql`${and(
-                or(
-                  ...staleCensusRuns.map(({ id, startedAtToken }) =>
-                    and(
-                      eq(scoutRuns.id, id),
-                      timestampMatchesCasToken(
-                        scoutRuns.startedAt,
-                        startedAtToken,
-                      ),
-                    ),
-                  ),
+                eq(scoutRuns.id, row.id),
+                eq(scoutRuns.organizationId, proof.organizationId),
+                eq(scoutRuns.scoutKey, SCOUT_KEY.DOCUMENT_DEADLINES),
+                timestampMatchesCasToken(
+                  scoutRuns.startedAt,
+                  row.startedAtToken,
                 ),
                 eq(scoutRuns.status, SCOUT_RUN_STATUS.RUNNING),
                 lt(scoutRuns.startedAt, staleBefore),
               )}`,
               now: new Date(),
             }),
-        );
+        });
+      }),
+  });
+  const failedCensusCount = censusCounts.reduce(
+    (total, count) => total + count,
+    0,
+  );
 
   const parked = await reconcileDeadlineAdmission({
     database,
@@ -500,7 +665,7 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
     count:
       parked.count +
       resumed.count +
-      reclaimedDispatchCount +
+      retiredDispatches.count +
       failedCensusCount +
       results.filter(Result.isOk).length,
     hasMore:
@@ -512,7 +677,7 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
       }) ||
       cappedSelectionHasMore({
         limit: RECONCILE_BATCH_SIZE,
-        selected: staleDispatches.length,
+        selected: retiredDispatches.selected,
       }) ||
       cappedSelectionHasMore({
         limit: RECONCILE_BATCH_SIZE,

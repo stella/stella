@@ -1,6 +1,7 @@
 import { and, asc, eq, gt, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { assertCallerOrg, proveOrgScope } from "@/api/db/org-scope";
 import type { Transaction } from "@/api/db/root";
 import { flowDefinitions, schedulerJobs } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -74,6 +75,13 @@ export const syncFlowScheduleTriggerInTransaction = async ({
   const definition = acquired.rows.at(0);
   // Global orphan reconciliation owns jobs whose source is absent.
   if (definition === undefined) {
+    return;
+  }
+  const scope = await proveOrgScope(tx, {
+    table: "flowDefinitions",
+    where: eq(flowDefinitions.id, definition.id),
+  });
+  if (scope.isErr() || assertCallerOrg(scope.value, organizationId).isErr()) {
     return;
   }
   const jobId = flowScheduleJobId(definitionId);

@@ -6,6 +6,7 @@ import {
   SUGGESTION_KIND,
 } from "@stll/api-contract/signals";
 
+import { proveOrgScope, withOrgScope } from "@/api/db/org-scope";
 import type { Transaction } from "@/api/db/root";
 import {
   documentReviewFindings,
@@ -105,74 +106,91 @@ export const emitDocumentReviewSignal = async ({
   if (admitted.length === 0) {
     return "paused";
   }
-  const rows = await tx
-    .select({ payload: documentReviewFindings.payload })
-    .from(documentReviewFindings)
-    .where(
-      and(
-        eq(documentReviewFindings.runId, runId),
-        eq(documentReviewFindings.workspaceId, workspaceId),
-      ),
-    )
-    .limit(DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX);
-  const findings = toReviewSignalFindings(rows.map((row) => row.payload));
-  const verdict = reviewVerdict(findings);
-  if (verdict === "safe") {
+  const scope = await proveOrgScope(tx, {
+    table: "documentReviewRuns",
+    where: sql`${and(eq(documentReviewRuns.id, runId), eq(documentReviewRuns.workspaceId, workspaceId))}`,
+  });
+  if (scope.isErr()) {
     return "absent";
   }
-
-  const entity = await tx
-    .select({ name: entities.name })
-    .from(entities)
-    .where(
-      and(eq(entities.id, run.entityId), eq(entities.workspaceId, workspaceId)),
-    )
-    .limit(1);
-  const entityName = entity.at(0)?.name ?? "Document";
-  const shown = findings.slice(0, REVIEW_FINDINGS_SHOWN_MAX);
-  const headline = shown.map((f) => f.title).join("; ");
-
-  await emitSignals({
+  return await withOrgScope({
     tx,
-    organizationId: run.organizationId,
-    signals: [
-      {
-        kind: SIGNAL_KIND.CONTRACT_REVIEWED,
-        scoutKey: SCOUT_KEY.DOCUMENT_REVIEW,
-        workspaceId,
-        severity: reviewSignalSeverity(verdict),
-        confidence: REVIEW_SIGNAL_CONFIDENCE,
-        title:
-          verdict === "reject"
-            ? `Review blocked: ${entityName}`
-            : `Review needs attention: ${entityName}`,
-        summary: `${findings.length} finding(s): ${headline}`,
-        subject: { type: "entity", workspaceId, entityId: run.entityId },
-        evidence: {
-          kind: SIGNAL_KIND.CONTRACT_REVIEWED,
-          entityId: run.entityId,
-          entityName,
-          verdict,
-          findings: shown,
-          reviewRunId: runId,
-        },
-        suggestions: [
+    scope: scope.value,
+    actor: { type: "system" },
+    fn: async (scopedTx) => {
+      const rows = await scopedTx
+        .select({ payload: documentReviewFindings.payload })
+        .from(documentReviewFindings)
+        .where(
+          and(
+            eq(documentReviewFindings.runId, runId),
+            eq(documentReviewFindings.workspaceId, workspaceId),
+          ),
+        )
+        .limit(DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX);
+      const findings = toReviewSignalFindings(rows.map((row) => row.payload));
+      const verdict = reviewVerdict(findings);
+      if (verdict === "safe") {
+        return "absent" as const;
+      }
+
+      const entity = await scopedTx
+        .select({ name: entities.name })
+        .from(entities)
+        .where(
+          and(
+            eq(entities.id, run.entityId),
+            eq(entities.workspaceId, workspaceId),
+          ),
+        )
+        .limit(1);
+      const entityName = entity.at(0)?.name ?? "Document";
+      const shown = findings.slice(0, REVIEW_FINDINGS_SHOWN_MAX);
+      const headline = shown.map((f) => f.title).join("; ");
+
+      await emitSignals({
+        tx: scopedTx,
+        organizationId: scope.value.organizationId,
+        signals: [
           {
-            kind: SUGGESTION_KIND.CREATE_TASK,
+            kind: SIGNAL_KIND.CONTRACT_REVIEWED,
+            scoutKey: SCOUT_KEY.DOCUMENT_REVIEW,
             workspaceId,
-            name: `Review findings: ${entityName}`,
-            dueAt: null,
-          },
-          {
-            kind: SUGGESTION_KIND.OPEN_CHAT,
-            prompt: `Walk me through the review findings for "${entityName}" and suggest how to negotiate each one.`,
+            severity: reviewSignalSeverity(verdict),
+            confidence: REVIEW_SIGNAL_CONFIDENCE,
+            title:
+              verdict === "reject"
+                ? `Review blocked: ${entityName}`
+                : `Review needs attention: ${entityName}`,
+            summary: `${findings.length} finding(s): ${headline}`,
+            subject: { type: "entity", workspaceId, entityId: run.entityId },
+            evidence: {
+              kind: SIGNAL_KIND.CONTRACT_REVIEWED,
+              entityId: run.entityId,
+              entityName,
+              verdict,
+              findings: shown,
+              reviewRunId: runId,
+            },
+            suggestions: [
+              {
+                kind: SUGGESTION_KIND.CREATE_TASK,
+                workspaceId,
+                name: `Review findings: ${entityName}`,
+                dueAt: null,
+              },
+              {
+                kind: SUGGESTION_KIND.OPEN_CHAT,
+                prompt: `Walk me through the review findings for "${entityName}" and suggest how to negotiate each one.`,
+              },
+            ],
+            dedupeKey: reviewDedupeKey(runId),
           },
         ],
-        dedupeKey: reviewDedupeKey(runId),
-      },
-    ],
+      });
+      return "emitted" as const;
+    },
   });
-  return "emitted";
 };
 
 /**
@@ -206,36 +224,50 @@ export const maybeEmitDocumentReviewSignal = async (
     organizationId: source.organizationId,
     featureId: "signals",
   });
-  const recorded = await mutateRecoveryReceipt({
-    type: "create-review",
-    tx: args.tx,
-    table: pendingScoutEmissions,
-    rows: [
-      {
-        organizationId: source.organizationId,
-        workspaceId: args.workspaceId,
-        sourceKind: "document-review",
-        sourceId: args.runId,
-      },
-    ],
+  const scope = await proveOrgScope(args.tx, {
+    table: "documentReviewRuns",
+    where: sql`${and(eq(documentReviewRuns.id, args.runId), eq(documentReviewRuns.workspaceId, args.workspaceId))}`,
   });
-  const outcome = await emitDocumentReviewSignal(args);
-  if (outcome === "paused") {
+  if (scope.isErr()) {
     return;
   }
-  const ownReceipt = recorded.at(0);
-  if (!ownReceipt) {
-    return;
-  }
-  await mutateRecoveryReceipt({
-    type: "dequeue-scout",
+  await withOrgScope({
     tx: args.tx,
-    table: pendingScoutEmissions,
-    where: sql`${and(
-      eq(pendingScoutEmissions.organizationId, source.organizationId),
-      eq(pendingScoutEmissions.sourceKind, "document-review"),
-      eq(pendingScoutEmissions.sourceId, args.runId),
-      sql`${pendingScoutEmissions.nextAttemptAt} = ${ownReceipt.nextAttemptAt}::timestamptz`,
-    )}`,
+    scope: scope.value,
+    actor: { type: "system" },
+    fn: async (scopedTx) => {
+      const recorded = await mutateRecoveryReceipt({
+        type: "create-review",
+        tx: scopedTx,
+        table: pendingScoutEmissions,
+        rows: [
+          {
+            organizationId: scope.value.organizationId,
+            workspaceId: args.workspaceId,
+            sourceKind: "document-review",
+            sourceId: args.runId,
+          },
+        ],
+      });
+      const outcome = await emitDocumentReviewSignal({ ...args, tx: scopedTx });
+      if (outcome === "paused") {
+        return;
+      }
+      const ownReceipt = recorded.at(0);
+      if (!ownReceipt) {
+        return;
+      }
+      await mutateRecoveryReceipt({
+        type: "dequeue-scout",
+        tx: scopedTx,
+        table: pendingScoutEmissions,
+        where: sql`${and(
+          eq(pendingScoutEmissions.organizationId, source.organizationId),
+          eq(pendingScoutEmissions.sourceKind, "document-review"),
+          eq(pendingScoutEmissions.sourceId, args.runId),
+          sql`${pendingScoutEmissions.nextAttemptAt} = ${ownReceipt.nextAttemptAt}::timestamptz`,
+        )}`,
+      });
+    },
   });
 };

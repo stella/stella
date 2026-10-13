@@ -1,8 +1,14 @@
 import { panic, Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import type { ScoutKey } from "@stll/api-contract/signals";
 
+import { member } from "@/api/db/auth-schema";
+import {
+  assertCallerOrg,
+  proveOrgScope,
+  withOrgScope,
+} from "@/api/db/org-scope";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { SCOUT_RUN_STATUS, scoutRuns } from "@/api/db/schema";
@@ -45,6 +51,65 @@ export type RunScoutResult = EmitSignalsResult & {
   outcome: "emitted" | "paused" | "stale";
 };
 
+type ProveScoutAdmissionOptions = Pick<
+  RunScoutArgs,
+  "organizationId" | "userId"
+> & {
+  tx: Transaction;
+};
+
+const proveScoutAdmission = async ({
+  tx,
+  organizationId,
+  userId,
+}: ProveScoutAdmissionOptions) => {
+  await lockFeatureRecoveryAdmission({
+    tx,
+    organizationId,
+    featureId: "signals",
+  });
+  if (
+    !(await isBackgroundFeatureEnabled({
+      tx,
+      organizationId,
+      userId,
+      featureId: "signals",
+    }))
+  ) {
+    return null;
+  }
+  const requester = (
+    await tx
+      .select({ id: member.id })
+      .from(member)
+      .where(
+        and(
+          eq(member.organizationId, organizationId),
+          eq(member.userId, userId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  if (!requester) {
+    return null;
+  }
+  const scope = await proveOrgScope(tx, {
+    table: "member",
+    where: sql`${and(
+      eq(member.id, requester.id),
+      eq(member.organizationId, organizationId),
+      eq(member.userId, userId),
+    )}`,
+  });
+  if (
+    Result.isError(scope) ||
+    Result.isError(assertCallerOrg(scope.value, organizationId))
+  ) {
+    return null;
+  }
+  return scope.value;
+};
+
 /**
  * Execute one scout for one organization and record the run in the census,
  * so "no signals" and "never ran" stay distinguishable. The run row is
@@ -65,31 +130,28 @@ export const runScout = async ({
   const startedAt = new Date();
   const claim = and(
     eq(scoutRuns.id, runId),
+    eq(scoutRuns.organizationId, organizationId),
     eq(scoutRuns.status, SCOUT_RUN_STATUS.RUNNING),
     eq(scoutRuns.startedAt, startedAt),
   );
   const admitted = await db(async (tx) => {
-    await lockFeatureRecoveryAdmission({
-      tx,
-      organizationId,
-      featureId: "signals",
-    });
-    if (
-      !(await isBackgroundFeatureEnabled({
-        tx,
-        organizationId,
-        userId,
-        featureId: "signals",
-      }))
-    ) {
+    const scope = await proveScoutAdmission({ tx, organizationId, userId });
+    if (scope === null) {
       return false;
     }
-    await tx.insert(scoutRuns).values({
-      id: runId,
-      organizationId,
-      scoutKey,
-      startedAt,
-      status: SCOUT_RUN_STATUS.RUNNING,
+    await withOrgScope({
+      tx,
+      scope,
+      actor: { type: "actor", userId },
+      fn: async (scopedTx) => {
+        await scopedTx.insert(scoutRuns).values({
+          id: runId,
+          organizationId: scope.organizationId,
+          scoutKey,
+          startedAt,
+          status: SCOUT_RUN_STATUS.RUNNING,
+        });
+      },
     });
     return true;
   });
@@ -134,6 +196,16 @@ export const runScout = async ({
         outcome = "stale";
         return { insertedIds: [], emittedCount: 0 };
       }
+      const scopeResult = await proveOrgScope(tx, {
+        table: "scoutRuns",
+        where: sql`${claim}`,
+      });
+      const scope = scopeResult.unwrapOr(null);
+      if (scope === null) {
+        observationAccepted = false;
+        outcome = "stale";
+        return { insertedIds: [], emittedCount: 0 };
+      }
       const enabled = await isBackgroundFeatureEnabled({
         tx,
         organizationId,
@@ -153,34 +225,60 @@ export const runScout = async ({
         organizationId,
         signals: acceptedSignals,
       });
-      await tx
-        .update(scoutRuns)
-        .set({
-          status: SCOUT_RUN_STATUS.SUCCEEDED,
-          emittedCount: emitted.emittedCount,
-          insertedCount: emitted.insertedIds.length,
-          finishedAt: new Date(),
-        })
-        .where(claim);
+      await withOrgScope({
+        tx,
+        scope,
+        actor: { type: "actor", userId },
+        fn: async (scopedTx) => {
+          await scopedTx
+            .update(scoutRuns)
+            .set({
+              status: SCOUT_RUN_STATUS.SUCCEEDED,
+              emittedCount: emitted.emittedCount,
+              insertedCount: emitted.insertedIds.length,
+              finishedAt: new Date(),
+            })
+            .where(claim);
+        },
+      });
       await settle?.(tx, { observationAccepted, featureEnabled: enabled });
       return emitted;
     });
   } catch (error) {
     const recorded = await Result.tryPromise(
       async () =>
-        await db((tx) =>
-          tx
-            .update(scoutRuns)
-            .set({
-              status: SCOUT_RUN_STATUS.FAILED,
-              // The structural name only: an observation's message can
-              // quote model output or document text.
-              error: errorTag(error),
-              finishedAt: new Date(),
-            })
-            .where(claim)
-            .returning({ id: scoutRuns.id }),
-        ),
+        await db(async (tx) => {
+          await lockFeatureRecoveryAdmission({
+            tx,
+            organizationId,
+            featureId: "signals",
+          });
+          const scopeResult = await proveOrgScope(tx, {
+            table: "scoutRuns",
+            where: sql`${claim}`,
+          });
+          const scope = scopeResult.unwrapOr(null);
+          if (scope === null) {
+            return [];
+          }
+          return await withOrgScope({
+            tx,
+            scope,
+            actor: { type: "actor", userId },
+            fn: async (scopedTx) =>
+              await scopedTx
+                .update(scoutRuns)
+                .set({
+                  status: SCOUT_RUN_STATUS.FAILED,
+                  // The structural name only: an observation's message can
+                  // quote model output or document text.
+                  error: errorTag(error),
+                  finishedAt: new Date(),
+                })
+                .where(claim)
+                .returning({ id: scoutRuns.id }),
+          });
+        }),
     );
     if (Result.isError(recorded)) {
       captureError(recorded.error, {

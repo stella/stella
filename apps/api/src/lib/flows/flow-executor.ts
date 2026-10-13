@@ -14,6 +14,11 @@ import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import { drainFanOut } from "@stll/concurrency";
 import { Temporal, todayFor } from "@stll/time";
 
+import {
+  assertCallerOrg,
+  proveOrgScope,
+  withOrgScope,
+} from "@/api/db/org-scope";
 import type { rootDb, Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { abortTransaction, resultTx } from "@/api/db/safe-db";
@@ -54,6 +59,7 @@ import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { applicationErrorMessage } from "@/api/lib/errors/application-error-message";
 import { FlowStepError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
   isFlowEffectAdmitted,
@@ -235,6 +241,133 @@ type ExecuteFlowStepDependencies = {
   flushSearchRepairs?: typeof flushEntitySearchRepairs | undefined;
 };
 
+type PrepareFlowStepClaimOptions = {
+  tx: Transaction;
+  run: LoadedRun;
+  runId: SafeId<"flowRun">;
+  stepIndex: number;
+  organizationId: SafeId<"organization">;
+  actorUserId: SafeId<"user">;
+  retainedClaim: FlowStepJobData["claimedStartedAt"];
+  now: () => Date;
+};
+
+const prepareFlowStepClaim = async ({
+  tx,
+  run,
+  runId,
+  stepIndex,
+  organizationId,
+  actorUserId,
+  retainedClaim,
+  now,
+}: PrepareFlowStepClaimOptions) => {
+  // Serialize the step boundary with grant/revoke, including an absent
+  // enrolment row. Preflight admission alone can go stale before this write.
+  const admitted = await isFlowEffectAdmitted({
+    tx,
+    organizationId,
+    userId: actorUserId,
+  });
+  if (!admitted) {
+    return { type: "paused" } as const;
+  }
+  const workspace = await resolveWorkspaceMemberAccess(
+    {
+      organizationId,
+      workspaceId: run.workspaceId,
+      userId: actorUserId,
+    },
+    tx,
+  );
+  if (workspace === null) {
+    abortTransaction(
+      new FlowStepError({
+        message: "The workflow actor is no longer a member of this matter.",
+      }),
+    );
+  }
+  const current = await lockRunAndCurrentStep(tx, {
+    workspaceId: run.workspaceId,
+    runId,
+  });
+  if (
+    current === undefined ||
+    isTerminalFlowRunStatus(current.run.status) ||
+    current.run.currentStepIndex !== stepIndex ||
+    current.step?.status === "completed" ||
+    current.step?.status === "skipped" ||
+    current.step?.status === "awaiting_review"
+  ) {
+    return null;
+  }
+  if (
+    current.step?.status === "running" &&
+    !(await mayRecoverFlowStepClaim({
+      tx,
+      organizationId,
+      actorUserId,
+      startedAt: current.step.startedAt,
+      token: current.step.startedAtToken,
+      retainedClaim,
+      now: now(),
+    }))
+  ) {
+    return { type: "paused" } as const;
+  }
+  const ownerScope = await proveOrgScope(tx, {
+    table: "flowRuns",
+    where: sql`${and(eq(flowRuns.id, runId), eq(flowRuns.workspaceId, run.workspaceId))}`,
+  });
+  if (
+    ownerScope.isErr() ||
+    assertCallerOrg(ownerScope.value, organizationId).isErr()
+  ) {
+    return null;
+  }
+  return {
+    type: "admitted",
+    scope: ownerScope.value,
+    previousStartedAtToken: current.step?.startedAtToken ?? null,
+  } as const;
+};
+
+type LoadFlowStepExecutionSourceOptions = {
+  runId: SafeId<"flowRun">;
+  stepIndex: number;
+  database: ExecuteFlowStepDependencies["database"];
+};
+
+const loadFlowStepExecutionSource = async ({
+  runId,
+  stepIndex,
+  database,
+}: LoadFlowStepExecutionSourceOptions) => {
+  const source = await loadExecutableFlowStep({ runId, stepIndex, database });
+  if (source === null) {
+    return null;
+  }
+  const { run } = source;
+  const stepDef = run.definitionSnapshot.steps.at(stepIndex);
+  if (!stepDef) {
+    return panic("flow step index out of snapshot bounds");
+  }
+  const scope = await resolveRunScope(run, database);
+  if (
+    scope.actorUserId === null ||
+    !(await flowRunActorExists(scope.actorUserId, database))
+  ) {
+    return { type: "actor-removed" } as const;
+  }
+  return {
+    type: "actor-live",
+    run,
+    stepDef,
+    actorUserId: scope.actorUserId,
+    organizationId: scope.organizationId,
+  } as const;
+};
+
 export const executeFlowStep = async (
   {
     runId: rawRunId,
@@ -259,22 +392,15 @@ export const executeFlowStep = async (
   }: ExecuteFlowStepDependencies,
 ): Promise<FlowStepExecutionOutcome> => {
   const runId = brandPersistedFlowRunId(rawRunId);
-  const source = await loadExecutableFlowStep({ runId, stepIndex, database });
+  const source = await loadFlowStepExecutionSource({
+    runId,
+    stepIndex,
+    database,
+  });
   if (source === null) {
     return { status: "completed" };
   }
-  const { run } = source;
-
-  const stepDef = run.definitionSnapshot.steps.at(stepIndex);
-  if (!stepDef) {
-    return panic("flow step index out of snapshot bounds");
-  }
-
-  const scope = await resolveRunScope(run, database);
-  if (
-    scope.actorUserId === null ||
-    !(await flowRunActorExists(scope.actorUserId, database))
-  ) {
+  if (source.type === "actor-removed") {
     return await failFlowRunFromWorker(
       { runId, stepIndex },
       new FlowStepError({
@@ -289,9 +415,9 @@ export const executeFlowStep = async (
       },
     );
   }
-  const actorUserId = scope.actorUserId;
+  const { run, stepDef, actorUserId, organizationId } = source;
   const scopedDb = makeScopedDb({
-    organizationId: scope.organizationId,
+    organizationId,
     userId: actorUserId,
     workspaceIds: [run.workspaceId],
   });
@@ -300,85 +426,52 @@ export const executeFlowStep = async (
 
   // Mark the step (and run) running. Broadcast so the UI shows progress.
   const startedPayload = await scopedDb(async (tx) => {
-    // Serialize the step boundary with grant/revoke, including an absent
-    // enrolment row. Preflight admission alone can go stale before this write.
-    const admitted = await isFlowEffectAdmitted({
+    const prepared = await prepareFlowStepClaim({
       tx,
-      organizationId: scope.organizationId,
-      userId: actorUserId,
-    });
-    if (!admitted) {
-      return { type: "paused" } as const;
-    }
-    const workspace = await resolveWorkspaceMemberAccess(
-      {
-        organizationId: scope.organizationId,
-        workspaceId: run.workspaceId,
-        userId: actorUserId,
-      },
-      tx,
-    );
-    if (workspace === null) {
-      abortTransaction(
-        new FlowStepError({
-          message: "The workflow actor is no longer a member of this matter.",
-        }),
-      );
-    }
-    const current = await lockRunAndCurrentStep(tx, {
-      workspaceId: run.workspaceId,
+      run,
       runId,
+      stepIndex,
+      organizationId,
+      actorUserId,
+      retainedClaim,
+      now,
     });
-    if (
-      current === undefined ||
-      isTerminalFlowRunStatus(current.run.status) ||
-      current.run.currentStepIndex !== stepIndex ||
-      current.step?.status === "completed" ||
-      current.step?.status === "skipped" ||
-      current.step?.status === "awaiting_review"
-    ) {
-      return null;
+    if (prepared === null || prepared.type === "paused") {
+      return prepared;
     }
-    if (
-      current.step?.status === "running" &&
-      !(await mayRecoverFlowStepClaim({
-        tx,
-        organizationId: scope.organizationId,
-        actorUserId,
-        startedAt: current.step.startedAt,
-        token: current.step.startedAtToken,
-        retainedClaim,
-        now: now(),
-      }))
-    ) {
-      return { type: "paused" } as const;
-    }
-    const startedAt = sql`greatest(clock_timestamp(), ${now()}::timestamptz, ${current.step?.startedAtToken ?? null}::timestamptz + interval '1 millisecond')`;
-    const claimed = await tx
-      .update(flowRunSteps)
-      .set({ status: "running", startedAt })
-      .where(
-        and(
-          eq(flowRunSteps.runId, runId),
-          eq(flowRunSteps.index, stepIndex),
-          timestampMatchesCasToken(
-            flowRunSteps.startedAt,
-            current.step?.startedAtToken ?? null,
-          ),
-        ),
-      )
-      .returning({ token: timestampCasToken(flowRunSteps.startedAt) });
-    const claimedStartedAt =
-      claimed.at(0)?.token ?? panic("Flow start claim missing");
-    await tx
-      .update(flowRuns)
-      .set({ status: "running" })
-      .where(eq(flowRuns.id, runId));
-    return {
-      type: "started",
-      claimedStartedAt,
-      payload: await readRunProgress(tx, runId),
-    } as const;
+    return await withOrgScope({
+      tx,
+      scope: prepared.scope,
+      actor: { type: "actor", userId: actorUserId },
+      fn: async (scopedTx) => {
+        const startedAt = sql`greatest(clock_timestamp(), ${now()}::timestamptz, ${prepared.previousStartedAtToken}::timestamptz + interval '1 millisecond')`;
+        const claimed = await scopedTx
+          .update(flowRunSteps)
+          .set({ status: "running", startedAt })
+          .where(
+            and(
+              eq(flowRunSteps.runId, runId),
+              eq(flowRunSteps.index, stepIndex),
+              timestampMatchesCasToken(
+                flowRunSteps.startedAt,
+                prepared.previousStartedAtToken,
+              ),
+            ),
+          )
+          .returning({ token: timestampCasToken(flowRunSteps.startedAt) });
+        const claimedStartedAt =
+          claimed.at(0)?.token ?? panic("Flow start claim missing");
+        await scopedTx
+          .update(flowRuns)
+          .set({ status: "running" })
+          .where(eq(flowRuns.id, runId));
+        return {
+          type: "started",
+          claimedStartedAt,
+          payload: await readRunProgress(scopedTx, runId),
+        } as const;
+      },
+    });
   });
   const startOutcome = handleFlowStepStart({
     startedPayload,
@@ -397,7 +490,7 @@ export const executeFlowStep = async (
     runId,
     stepIndex,
     stepDef,
-    organizationId: scope.organizationId,
+    organizationId,
     actorUserId,
     scopedDb,
     admission,
@@ -536,23 +629,38 @@ type LoadedRun = {
 
 const loadRun = async (
   runId: SafeId<"flowRun">,
-  database: Pick<typeof rootDb, "query">,
-): Promise<LoadedRun | null> => {
-  const row = await database.query.flowRuns.findFirst({
-    where: { id: { eq: runId } },
-    columns: {
-      id: true,
-      workspaceId: true,
-      definitionId: true,
-      status: true,
-      currentStepIndex: true,
-      triggerSource: true,
-      inputEntityIds: true,
-      definitionSnapshot: true,
-    },
+  database: Pick<typeof rootDb, "query" | "transaction">,
+): Promise<LoadedRun | null> =>
+  await withAggregateTransaction(database, async (tx) => {
+    const scope = await proveOrgScope(tx, {
+      table: "flowRuns",
+      where: eq(flowRuns.id, runId),
+    });
+    const proven = scope.unwrapOr(null);
+    if (proven === null) {
+      return null;
+    }
+    const row = await withOrgScope({
+      tx,
+      scope: proven,
+      actor: { type: "system" },
+      fn: async (scopedTx) =>
+        await scopedTx.query.flowRuns.findFirst({
+          where: { id: { eq: runId } },
+          columns: {
+            id: true,
+            workspaceId: true,
+            definitionId: true,
+            status: true,
+            currentStepIndex: true,
+            triggerSource: true,
+            inputEntityIds: true,
+            definitionSnapshot: true,
+          },
+        }),
+    });
+    return row ?? null;
   });
-  return row ?? null;
-};
 
 type RecoverFlowStepClaimOptions = {
   tx: Transaction;
@@ -600,7 +708,7 @@ const mayRecoverFlowStepClaim = async ({
 type LoadExecutableFlowStepOptions = {
   runId: SafeId<"flowRun">;
   stepIndex: number;
-  database: Pick<typeof rootDb, "query">;
+  database: Pick<typeof rootDb, "query" | "transaction">;
 };
 
 const loadExecutableFlowStep = async ({
@@ -629,17 +737,30 @@ const loadExecutableFlowStep = async ({
   return { run, step };
 };
 
-const loadStep = (
+const loadStep = async (
   runId: SafeId<"flowRun">,
   stepIndex: number,
-  database: Pick<typeof rootDb, "query">,
+  database: Pick<typeof rootDb, "query" | "transaction">,
 ) =>
-  database.query.flowRunSteps.findFirst({
-    where: {
-      runId: { eq: runId },
-      index: { eq: stepIndex },
-    },
-    columns: { id: true, kind: true, status: true },
+  await withAggregateTransaction(database, async (tx) => {
+    const scope = await proveOrgScope(tx, {
+      table: "flowRuns",
+      where: eq(flowRuns.id, runId),
+    });
+    const proven = scope.unwrapOr(null);
+    if (proven === null) {
+      return undefined;
+    }
+    return await withOrgScope({
+      tx,
+      scope: proven,
+      actor: { type: "system" },
+      fn: async (scopedTx) =>
+        await scopedTx.query.flowRunSteps.findFirst({
+          where: { runId: { eq: runId }, index: { eq: stepIndex } },
+          columns: { id: true, kind: true, status: true },
+        }),
+    });
   });
 
 type RunScope = {
@@ -651,23 +772,29 @@ type RunScope = {
 
 const resolveRunScope = async (
   run: LoadedRun,
-  database: Pick<typeof rootDb, "query">,
-): Promise<RunScope> => {
-  const workspace = await database.query.workspaces.findFirst({
-    where: { id: { eq: run.workspaceId } },
-    columns: { organizationId: true },
+  database: Pick<typeof rootDb, "query" | "transaction">,
+): Promise<RunScope> =>
+  await withAggregateTransaction(database, async (tx) => {
+    const scope = await proveOrgScope(tx, {
+      table: "flowRuns",
+      where: sql`${and(eq(flowRuns.id, run.id), eq(flowRuns.workspaceId, run.workspaceId))}`,
+    });
+    if (Result.isError(scope)) {
+      return panic("Flow run scope source is absent");
+    }
+    return await withOrgScope({
+      tx,
+      scope: scope.value,
+      actor: { type: "system" },
+      fn: async (scopedTx) => ({
+        organizationId: scope.value.organizationId,
+        actorUserId: await resolveActorUserId(run, {
+          database: scopedTx,
+          organizationId: scope.value.organizationId,
+        }),
+      }),
+    });
   });
-  if (!workspace) {
-    return panic("flow run references a workspace that no longer exists");
-  }
-  return {
-    organizationId: workspace.organizationId,
-    actorUserId: await resolveActorUserId(run, {
-      database,
-      organizationId: workspace.organizationId,
-    }),
-  };
-};
 
 // ── Step executors ──────────────────────────────────────
 
@@ -1243,53 +1370,70 @@ const completeStepInTransaction = async (
     // The running claim remains recoverable; re-grant retries the current step.
     return { status: "paused" } as const;
   }
-  await tx
-    .update(flowRunSteps)
-    .set({ status: "completed", output, finishedAt: now })
-    .where(
-      and(
-        eq(flowRunSteps.runId, runId),
-        eq(flowRunSteps.index, stepIndex),
-        timestampMatchesCasToken(flowRunSteps.startedAt, claimedStartedAt),
-      ),
-    );
-
-  if (advance.kind !== "finish") {
-    await tx
-      .update(flowRuns)
-      .set({ status: "running", currentStepIndex: advance.nextStepIndex })
-      .where(eq(flowRuns.id, runId));
-    return {
-      status: "completed",
-      payload: await readRunProgress(tx, runId),
-      pings: [],
-    } as const;
+  const ownerScope = await proveOrgScope(tx, {
+    table: "flowRuns",
+    where: sql`${and(eq(flowRuns.id, runId), eq(flowRuns.workspaceId, workspaceId))}`,
+  });
+  if (
+    ownerScope.isErr() ||
+    assertCallerOrg(ownerScope.value, organizationId).isErr()
+  ) {
+    return null;
   }
-
-  await tx
-    .update(flowRuns)
-    .set({ status: "completed", finishedAt: now })
-    .where(eq(flowRuns.id, runId));
-  // Filed in the same transaction as the terminal status, so the badge and
-  // the run can never disagree, and keyed on the run so a redelivered
-  // worker job cannot raise it twice.
-  const runPings = await createNotificationsInTransaction(
-    [
-      flowRunCompletedNotification({
-        actorUserId,
-        flowName,
-        organizationId,
-        runId,
-        workspaceId,
-      }),
-    ],
+  return await withOrgScope({
     tx,
-  );
-  return {
-    status: "completed",
-    payload: await readRunProgress(tx, runId),
-    pings: runPings,
-  } as const;
+    scope: ownerScope.value,
+    actor: { type: "actor", userId: actorUserId },
+    fn: async (scopedTx) => {
+      await scopedTx
+        .update(flowRunSteps)
+        .set({ status: "completed", output, finishedAt: now })
+        .where(
+          and(
+            eq(flowRunSteps.runId, runId),
+            eq(flowRunSteps.index, stepIndex),
+            timestampMatchesCasToken(flowRunSteps.startedAt, claimedStartedAt),
+          ),
+        );
+
+      if (advance.kind !== "finish") {
+        await scopedTx
+          .update(flowRuns)
+          .set({ status: "running", currentStepIndex: advance.nextStepIndex })
+          .where(eq(flowRuns.id, runId));
+        return {
+          status: "completed",
+          payload: await readRunProgress(scopedTx, runId),
+          pings: [],
+        } as const;
+      }
+
+      await scopedTx
+        .update(flowRuns)
+        .set({ status: "completed", finishedAt: now })
+        .where(eq(flowRuns.id, runId));
+      // Filed in the same transaction as the terminal status, so the badge and
+      // the run can never disagree, and keyed on the run so a redelivered
+      // worker job cannot raise it twice.
+      const runPings = await createNotificationsInTransaction(
+        [
+          flowRunCompletedNotification({
+            actorUserId,
+            flowName,
+            organizationId,
+            runId,
+            workspaceId,
+          }),
+        ],
+        scopedTx,
+      );
+      return {
+        status: "completed",
+        payload: await readRunProgress(scopedTx, runId),
+        pings: runPings,
+      } as const;
+    },
+  });
 };
 
 const publishCompletedStep = async (
@@ -1467,58 +1611,81 @@ const pauseAtReviewGate = async ({
     }
     // A redelivered job must not raise a second task: the step keeps the one
     // it already raised and only the status writes below are repeated.
-    const stepRows = await tx
-      .select({ reviewTaskEntityId: flowRunSteps.reviewTaskEntityId })
-      .from(flowRunSteps)
-      .where(
-        and(eq(flowRunSteps.runId, runId), eq(flowRunSteps.index, stepIndex)),
-      )
-      .limit(1);
-    const reviewTaskEntityId =
-      stepRows.at(0)?.reviewTaskEntityId ??
-      (await raiseReviewTask({
-        tx,
-        run,
-        stepDef,
-        actorUserId,
-        features,
-        recordAuditEvent,
-      }));
-    await tx
-      .update(flowRunSteps)
-      .set({ status: "awaiting_review", reviewTaskEntityId })
-      .where(
-        and(
-          eq(flowRunSteps.runId, runId),
-          eq(flowRunSteps.index, stepIndex),
-          timestampMatchesCasToken(flowRunSteps.startedAt, claimedStartedAt),
-        ),
-      );
-    await tx
-      .update(flowRuns)
-      .set({ status: "awaiting_review" })
-      .where(eq(flowRuns.id, runId));
-    const gatePings = await createNotificationsInTransaction(
-      [
-        {
-          kind: NOTIFICATION_KIND.FLOW_RUN_AWAITING_APPROVAL,
-          metadata: { flowName },
-          entityType: "flow_run",
-          entityId: runId,
-          workspaceId,
-          organizationId,
-          userId: actorUserId,
-          idempotencyKey: `flow-run-review-gate:${runId}:${stepIndex}`,
-        },
-      ],
+    const ownerScope = await proveOrgScope(tx, {
+      table: "flowRuns",
+      where: sql`${and(eq(flowRuns.id, runId), eq(flowRuns.workspaceId, workspaceId))}`,
+    });
+    if (
+      ownerScope.isErr() ||
+      assertCallerOrg(ownerScope.value, organizationId).isErr()
+    ) {
+      return null;
+    }
+    return await withOrgScope({
       tx,
-    );
-    return {
-      status: "completed",
-      payload: await readRunProgress(tx, runId),
-      pings: gatePings,
-      taskEntityId: reviewTaskEntityId,
-    } as const;
+      scope: ownerScope.value,
+      actor: { type: "actor", userId: actorUserId },
+      fn: async (scopedTx) => {
+        const stepRows = await scopedTx
+          .select({ reviewTaskEntityId: flowRunSteps.reviewTaskEntityId })
+          .from(flowRunSteps)
+          .where(
+            and(
+              eq(flowRunSteps.runId, runId),
+              eq(flowRunSteps.index, stepIndex),
+            ),
+          )
+          .limit(1);
+        const reviewTaskEntityId =
+          stepRows.at(0)?.reviewTaskEntityId ??
+          (await raiseReviewTask({
+            scopedTx,
+            run,
+            stepDef,
+            actorUserId,
+            features,
+            recordAuditEvent,
+          }));
+        await scopedTx
+          .update(flowRunSteps)
+          .set({ status: "awaiting_review", reviewTaskEntityId })
+          .where(
+            and(
+              eq(flowRunSteps.runId, runId),
+              eq(flowRunSteps.index, stepIndex),
+              timestampMatchesCasToken(
+                flowRunSteps.startedAt,
+                claimedStartedAt,
+              ),
+            ),
+          );
+        await scopedTx
+          .update(flowRuns)
+          .set({ status: "awaiting_review" })
+          .where(eq(flowRuns.id, runId));
+        const gatePings = await createNotificationsInTransaction(
+          [
+            {
+              kind: NOTIFICATION_KIND.FLOW_RUN_AWAITING_APPROVAL,
+              metadata: { flowName },
+              entityType: "flow_run",
+              entityId: runId,
+              workspaceId,
+              organizationId,
+              userId: actorUserId,
+              idempotencyKey: `flow-run-review-gate:${runId}:${stepIndex}`,
+            },
+          ],
+          scopedTx,
+        );
+        return {
+          status: "completed",
+          payload: await readRunProgress(scopedTx, runId),
+          pings: gatePings,
+          taskEntityId: reviewTaskEntityId,
+        } as const;
+      },
+    });
   });
   if (paused === null) {
     return { status: "completed" };
@@ -1672,76 +1839,96 @@ export const failFlowRunFromWorker = async (
     ) {
       return null;
     }
-    const claim = decideFlowFailureClaim({
-      step: current.step,
-      retainedClaim: claimedStartedAt,
-      actorRemoved,
-      now,
+    const ownerScope = await proveOrgScope(tx, {
+      table: "flowRuns",
+      where: sql`${and(eq(flowRuns.id, runId), eq(flowRuns.workspaceId, run.workspaceId))}`,
     });
-    if (claim.type === "stale") {
-      return { status: "stale" } as const;
+    if (
+      ownerScope.isErr() ||
+      assertCallerOrg(ownerScope.value, scope.organizationId).isErr()
+    ) {
+      return null;
     }
-    if (!actorRemoved && !admitted) {
-      return { status: "paused" } as const;
-    }
-    const failureMessage = actorRemoved ? "actor-removed" : message;
-    await tx
-      .update(flowRunSteps)
-      .set({
-        status: "failed",
-        error: failureMessage,
-        finishedAt: now,
-        ...(claim.reclaimAt === null ? {} : { startedAt: claim.reclaimAt }),
-      })
-      .where(
-        and(
-          eq(flowRunSteps.runId, runId),
-          eq(flowRunSteps.index, stepIndex),
-          timestampMatchesCasToken(flowRunSteps.startedAt, claim.token),
-        ),
-      );
-    await tx
-      .update(flowRuns)
-      .set({
-        status: "failed",
-        recoveryState: actorRemoved ? "actor-removed" : null,
-        error: failureMessage,
-        finishedAt: now,
-      })
-      .where(
-        and(
-          eq(flowRuns.id, runId),
-          eq(flowRuns.workspaceId, run.workspaceId),
-          eq(flowRuns.currentStepIndex, stepIndex),
-        ),
-      );
-    if (actorRemoved) {
-      return { status: "actor-removed" } as const;
-    }
-    const actorUserId = scope.actorUserId;
-    const pings =
-      actorUserId === null
-        ? []
-        : await createNotificationsInTransaction(
-            [
-              {
-                kind: NOTIFICATION_KIND.FLOW_RUN_FAILED,
-                metadata: { flowName: run.definitionSnapshot.name },
-                entityType: "flow_run",
-                entityId: runId,
-                workspaceId: run.workspaceId,
-                organizationId: scope.organizationId,
-                userId: actorUserId,
-                idempotencyKey: `flow-run-failed:${runId}`,
-              },
-            ],
-            tx,
+    return await withOrgScope({
+      tx,
+      scope: ownerScope.value,
+      actor:
+        scope.actorUserId === null || actorWorkspace === null
+          ? { type: "system" }
+          : { type: "actor", userId: scope.actorUserId },
+      fn: async (scopedTx) => {
+        const claim = decideFlowFailureClaim({
+          step: current.step,
+          retainedClaim: claimedStartedAt,
+          actorRemoved,
+          now,
+        });
+        if (claim.type === "stale") {
+          return { status: "stale" } as const;
+        }
+        if (!actorRemoved && !admitted) {
+          return { status: "paused" } as const;
+        }
+        const failureMessage = actorRemoved ? "actor-removed" : message;
+        await scopedTx
+          .update(flowRunSteps)
+          .set({
+            status: "failed",
+            error: failureMessage,
+            finishedAt: now,
+            ...(claim.reclaimAt === null ? {} : { startedAt: claim.reclaimAt }),
+          })
+          .where(
+            and(
+              eq(flowRunSteps.runId, runId),
+              eq(flowRunSteps.index, stepIndex),
+              timestampMatchesCasToken(flowRunSteps.startedAt, claim.token),
+            ),
           );
-    return {
-      status: "completed",
-      payload: await readRunProgress(tx, runId),
-      pings,
-    } as const;
+        await scopedTx
+          .update(flowRuns)
+          .set({
+            status: "failed",
+            recoveryState: actorRemoved ? "actor-removed" : null,
+            error: failureMessage,
+            finishedAt: now,
+          })
+          .where(
+            and(
+              eq(flowRuns.id, runId),
+              eq(flowRuns.workspaceId, run.workspaceId),
+              eq(flowRuns.currentStepIndex, stepIndex),
+            ),
+          );
+        if (actorRemoved) {
+          return { status: "actor-removed" } as const;
+        }
+        const actorUserId = scope.actorUserId;
+        const pings =
+          actorUserId === null
+            ? []
+            : await createNotificationsInTransaction(
+                [
+                  {
+                    kind: NOTIFICATION_KIND.FLOW_RUN_FAILED,
+                    metadata: { flowName: run.definitionSnapshot.name },
+                    entityType: "flow_run",
+                    entityId: runId,
+                    workspaceId: run.workspaceId,
+                    organizationId: scope.organizationId,
+                    userId: actorUserId,
+                    idempotencyKey: `flow-run-failed:${runId}`,
+                  },
+                ],
+                scopedTx,
+              );
+        return {
+          status: "completed",
+          payload: await readRunProgress(scopedTx, runId),
+          pings,
+        } as const;
+      },
+    });
   };
 
   // Actor removal records a terminal reason without deleting outputs or admitting
@@ -1761,7 +1948,29 @@ export const failFlowRunFromWorker = async (
     scope.actorUserId === null ||
     actorWorkspace === null ||
     !(await flowRunActorExists(scope.actorUserId, database))
-      ? await withAggregateTransaction(database, writeFailure)
+      ? await withAggregateTransaction(database, async (tx) => {
+          await lockFeatureRecoveryAdmission({
+            tx,
+            organizationId: scope.organizationId,
+            featureId: "flows",
+          });
+          const source = await proveOrgScope(tx, {
+            table: "flowRuns",
+            where: sql`${and(eq(flowRuns.id, runId), eq(flowRuns.workspaceId, run.workspaceId))}`,
+          });
+          if (
+            Result.isError(source) ||
+            Result.isError(assertCallerOrg(source.value, scope.organizationId))
+          ) {
+            return null;
+          }
+          return await withOrgScope({
+            tx,
+            scope: source.value,
+            actor: { type: "system" },
+            fn: writeFailure,
+          });
+        })
       : await makeScopedDb({
           organizationId: scope.organizationId,
           userId: scope.actorUserId,
@@ -1862,6 +2071,72 @@ const lockRunAndCurrentStep = async (
   return { run, step: steps.at(0) };
 };
 
+type ValidateFlowReviewGateOptions = Pick<
+  ResolveFlowReviewGateOptions,
+  "organizationId" | "workspaceId" | "runId" | "reviewTaskEntityId" | "userId"
+> & {
+  tx: Transaction;
+};
+
+const validateFlowReviewGate = async ({
+  tx,
+  organizationId,
+  workspaceId,
+  runId,
+  reviewTaskEntityId,
+  userId,
+}: ValidateFlowReviewGateOptions) => {
+  await requireFlowEffectAdmission({ tx, organizationId, userId });
+  const current = await lockRunAndCurrentStep(tx, { workspaceId, runId });
+  if (current === undefined) {
+    return Result.err(
+      new HandlerError({
+        status: 404,
+        message: "Flow run not found",
+      }),
+    );
+  }
+  const { run, step } = current;
+  if (!canReviewFlowRun(run.status)) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: "This run is not awaiting review.",
+      }),
+    );
+  }
+  if (
+    !step ||
+    step.kind !== "review-gate" ||
+    step.status !== "awaiting_review" ||
+    (reviewTaskEntityId !== undefined &&
+      step.reviewTaskEntityId !== reviewTaskEntityId)
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: "This run has no open review gate.",
+      }),
+    );
+  }
+  const ownerScope = await proveOrgScope(tx, {
+    table: "flowRuns",
+    where: sql`${and(eq(flowRuns.id, runId), eq(flowRuns.workspaceId, workspaceId))}`,
+  });
+  if (
+    ownerScope.isErr() ||
+    assertCallerOrg(ownerScope.value, organizationId).isErr()
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 404,
+        message: "Workflow run was not found.",
+      }),
+    );
+  }
+  return Result.ok({ run, step, scope: ownerScope.value });
+};
+
 /**
  * Record a reviewer's decision on the run's current review gate and either
  * advance to the next step (approved) or cancel the run (rejected). Scoped to
@@ -1899,120 +2174,108 @@ export const resolveFlowReviewGate = async (
   await Result.gen(async function* () {
     const result = yield* Result.await(
       resultTx(safeDb, async (tx) => {
-        await requireFlowEffectAdmission({ tx, organizationId, userId });
-        const current = await lockRunAndCurrentStep(tx, { workspaceId, runId });
-        if (current === undefined) {
-          return Result.err(
-            new HandlerError({
-              status: 404,
-              message: "Flow run not found",
-            }),
-          );
-        }
-        const { run, step } = current;
-        if (!canReviewFlowRun(run.status)) {
-          return Result.err(
-            new HandlerError({
-              status: 409,
-              message: "This run is not awaiting review.",
-            }),
-          );
-        }
-        if (
-          !step ||
-          step.kind !== "review-gate" ||
-          step.status !== "awaiting_review" ||
-          (reviewTaskEntityId !== undefined &&
-            step.reviewTaskEntityId !== reviewTaskEntityId)
-        ) {
-          return Result.err(
-            new HandlerError({
-              status: 409,
-              message: "This run has no open review gate.",
-            }),
-          );
-        }
-        const stepIndex = run.currentStepIndex;
-        const resolution = resolveReviewGateTransition({
-          decision,
-          stepIndex,
-          stepCount: run.definitionSnapshot.steps.length,
-        });
-        const output: FlowStepOutput = {
-          kind: "review-gate",
-          decision,
+        const validated = await validateFlowReviewGate({
+          tx,
+          organizationId,
+          workspaceId,
+          runId,
+          reviewTaskEntityId,
           userId,
-          note,
-        };
-        const now = new Date();
-        await tx
-          .update(flowRunSteps)
-          .set({ status: "completed", output, finishedAt: now })
-          .where(
-            and(
-              eq(flowRunSteps.runId, runId),
-              eq(flowRunSteps.index, stepIndex),
-            ),
-          );
-
-        if (step.reviewTaskEntityId !== null) {
-          // Either decision fulfils the task the gate raised; the decision
-          // itself lives on the step.
-          await settleReviewTask({
-            tx,
-            taskEntityId: step.reviewTaskEntityId,
-            workspaceId,
-            actorUserId: userId,
-            action: "complete",
-            reason: note,
-            recordAuditEvent,
-          });
-        }
-
-        const nextStatus = reviewGateNextStatus(resolution.kind);
-
-        await tx
-          .update(flowRuns)
-          .set({
-            status: nextStatus,
-            recoveryState:
-              nextStatus === "completed" ? "completion-notice-pending" : null,
-            ...(resolution.kind === "advance"
-              ? { currentStepIndex: resolution.nextStepIndex }
-              : { finishedAt: now }),
-          })
-          .where(eq(flowRuns.id, runId));
-
-        // Mark abandoned steps skipped when the decision is terminal. The
-        // just-resolved gate is completed above and therefore excluded.
-        if (resolution.kind !== "advance") {
-          await tx
-            .update(flowRunSteps)
-            .set({ status: "skipped", finishedAt: now })
-            .where(
-              and(
-                eq(flowRunSteps.runId, runId),
-                inArray(flowRunSteps.status, [
-                  "pending",
-                  "running",
-                  "awaiting_review",
-                ]),
-              ),
-            );
-        }
-
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.REVIEW,
-          resourceType: AUDIT_RESOURCE_TYPE.FLOW_RUN,
-          resourceId: runId,
-          changes: { review: { old: null, new: { decision } } },
         });
+        if (Result.isError(validated)) {
+          return validated;
+        }
+        const { run, step, scope } = validated.value;
+        return await withOrgScope({
+          tx,
+          scope,
+          actor: { type: "actor", userId },
+          fn: async (scopedTx) => {
+            const stepIndex = run.currentStepIndex;
+            const resolution = resolveReviewGateTransition({
+              decision,
+              stepIndex,
+              stepCount: run.definitionSnapshot.steps.length,
+            });
+            const output: FlowStepOutput = {
+              kind: "review-gate",
+              decision,
+              userId,
+              note,
+            };
+            const now = new Date();
+            await scopedTx
+              .update(flowRunSteps)
+              .set({ status: "completed", output, finishedAt: now })
+              .where(
+                and(
+                  eq(flowRunSteps.runId, runId),
+                  eq(flowRunSteps.index, stepIndex),
+                ),
+              );
 
-        return Result.ok({
-          run,
-          resolution,
-          nextStatus,
-          payload: await readRunProgress(tx, runId),
+            if (step.reviewTaskEntityId !== null) {
+              // Either decision fulfils the task the gate raised; the decision
+              // itself lives on the step.
+              await settleReviewTask({
+                scopedTx,
+                taskEntityId: step.reviewTaskEntityId,
+                workspaceId,
+                actorUserId: userId,
+                action: "complete",
+                reason: note,
+                recordAuditEvent,
+              });
+            }
+
+            const nextStatus = reviewGateNextStatus(resolution.kind);
+
+            await scopedTx
+              .update(flowRuns)
+              .set({
+                status: nextStatus,
+                recoveryState:
+                  nextStatus === "completed"
+                    ? "completion-notice-pending"
+                    : null,
+                ...(resolution.kind === "advance"
+                  ? { currentStepIndex: resolution.nextStepIndex }
+                  : { finishedAt: now }),
+              })
+              .where(eq(flowRuns.id, runId));
+
+            // Mark abandoned steps skipped when the decision is terminal. The
+            // just-resolved gate is completed above and therefore excluded.
+            if (resolution.kind !== "advance") {
+              await scopedTx
+                .update(flowRunSteps)
+                .set({ status: "skipped", finishedAt: now })
+                .where(
+                  and(
+                    eq(flowRunSteps.runId, runId),
+                    inArray(flowRunSteps.status, [
+                      "pending",
+                      "running",
+                      "awaiting_review",
+                    ]),
+                  ),
+                );
+            }
+
+            await recordAuditEvent(scopedTx, {
+              action: AUDIT_ACTION.REVIEW,
+              resourceType: AUDIT_RESOURCE_TYPE.FLOW_RUN,
+              resourceId: runId,
+              changes: { review: { old: null, new: { decision } } },
+            });
+
+            return Result.ok({
+              run,
+              resolution,
+              nextStatus,
+              payload: await readRunProgress(scopedTx, runId),
+            });
+          },
         });
       }),
     );

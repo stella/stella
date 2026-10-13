@@ -396,7 +396,55 @@ const rootFromOptions = (options: unknown): string =>
 
 type Mutation = { node: Ranged; target: string };
 
+/** The canonical lender awaits its callback within the same transaction. */
+const lendsAuditScopeToParent = (
+  context: RuleContext,
+  node: unknown,
+): boolean => {
+  if (!isAstNode(node) || !isAstNode(node.parent)) {
+    return false;
+  }
+  const property = node.parent;
+  if (
+    property.type !== "Property" ||
+    property.value !== node ||
+    keyName(property.key) !== "fn"
+  ) {
+    return false;
+  }
+  const options = property.parent;
+  if (!isAstNode(options) || options.type !== "ObjectExpression") {
+    return false;
+  }
+  const call = options.parent;
+  if (
+    !isAstNode(call) ||
+    call.type !== "CallExpression" ||
+    !Array.isArray(call.arguments) ||
+    call.arguments.length !== 1 ||
+    call.arguments.at(0) !== options
+  ) {
+    return false;
+  }
+  if (
+    !isImportedFrom({
+      context,
+      node: invokedCallee(call),
+      modules: ["apps/api/src/db/org-scope"],
+      names: new Set(["withOrgScope"]),
+    })
+  ) {
+    return false;
+  }
+  const consumer = call.parent;
+  return (
+    isAstNode(consumer) &&
+    (consumer.type === "AwaitExpression" || consumer.type === "ReturnStatement")
+  );
+};
+
 type FunctionScope = {
+  lendsToParent: boolean;
   owner: string;
   mutationNodes: Mutation[];
   hasAuditCall: boolean;
@@ -681,6 +729,7 @@ export const createAuditOnMutationPlugin = (
               parentScope.childBodyRanges.push(childRange);
             }
             scopes.push({
+              lendsToParent: lendsAuditScopeToParent(context, node),
               owner: ownerName(node),
               mutationNodes: [],
               hasAuditCall: false,
@@ -697,6 +746,11 @@ export const createAuditOnMutationPlugin = (
               scope.hasAuditCall ||
               hasBodySkipDirective(scope, skipDirectiveRanges)
             ) {
+              return;
+            }
+            const parent = currentScope();
+            if (scope.lendsToParent && parent !== null) {
+              parent.mutationNodes.push(...scope.mutationNodes);
               return;
             }
             if (isBudgeted()) {

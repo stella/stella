@@ -30,7 +30,7 @@ export class OrgScopeMismatch extends TaggedError("OrgScopeMismatch")<{
 
 type OrgScopeReference = { table: keyof typeof ORG_SCOPE_TABLES; where: SQL };
 
-/** Lock the source and its matter before lending row-derived organization authority. */
+/** Lock row-derived authority; missing sources are typed absence, while query failures propagate. */
 export const proveOrgScope = async (
   tx: Pick<Transaction, "select" | "execute">,
   ref: OrgScopeReference,

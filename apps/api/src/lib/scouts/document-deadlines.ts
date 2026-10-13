@@ -8,8 +8,9 @@ import {
   SUGGESTION_KIND,
 } from "@stll/api-contract/signals";
 
+import { proveOrgScope, withOrgScope } from "@/api/db/org-scope";
 import type { rootDb, Transaction } from "@/api/db/root";
-import type { ScopedDb, ScopedTransaction } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   documentProcessingRuns,
   entities,
@@ -101,7 +102,7 @@ type ClaimedRun = typeof documentProcessingRuns.$inferSelect & {
 };
 
 const claimRun = async (
-  db: Pick<ScopedTransaction, "execute" | "rollback" | "select">,
+  db: Transaction,
   sourceRunId: SafeId<"documentProcessingRun">,
 ): Promise<ClaimedRun | null> => {
   const now = new Date();
@@ -334,27 +335,23 @@ export const settleDocumentDeadlineScoutClaim = async ({
   run,
   settlement,
 }: {
-  db:
-    | Pick<DeadlineScoutDb, "transaction">
-    | Pick<ScopedTransaction, "execute" | "rollback">;
+  db: Pick<DeadlineScoutDb, "select" | "transaction"> | Transaction;
   run: Pick<ClaimedRun, "id" | "deadlineScoutClaimedAtToken">;
   settlement: DeadlineScanSettlement;
 }): Promise<DeadlineScoutClaimSettlement> => {
   const { attemptRefund, errorCode, skippedUntil, status } =
     settledColumns(settlement);
-  const settle = async (tx: Pick<ScopedTransaction, "execute" | "rollback">) =>
-    await mutateRecoveryClaim({
-      type: "deadline-settlement",
-      tx,
-      spec: DEADLINE_DISPATCH_RECOVERY,
-      table: documentProcessingRuns,
-      now: new Date(),
-      status,
-      errorCode,
-      skippedUntil,
-      attemptRefund,
+  const settle = async (
+    tx: Transaction,
+    organizationId?: SafeId<"organization">,
+  ) => {
+    const proof = await proveOrgScope(tx, {
+      table: "documentProcessingRuns",
       where: sql`${and(
         eq(documentProcessingRuns.id, run.id),
+        organizationId === undefined
+          ? undefined
+          : eq(documentProcessingRuns.organizationId, organizationId),
         eq(documentProcessingRuns.deadlineScoutStatus, "running"),
         timestampMatchesCasToken(
           documentProcessingRuns.deadlineScoutClaimedAt,
@@ -362,10 +359,71 @@ export const settleDocumentDeadlineScoutClaim = async ({
         ),
       )}`,
     });
-  const settled =
-    "rollback" in db
-      ? await settle(db)
-      : await withAggregateTransaction(db, settle);
+    const scope = proof.unwrapOr(null);
+    if (scope === null) {
+      return 0;
+    }
+    return await withOrgScope({
+      tx,
+      scope,
+      actor: { type: "system" },
+      fn: async (scopedTx) =>
+        await mutateRecoveryClaim({
+          type: "deadline-settlement",
+          tx: scopedTx,
+          spec: DEADLINE_DISPATCH_RECOVERY,
+          table: documentProcessingRuns,
+          now: new Date(),
+          status,
+          errorCode,
+          skippedUntil,
+          attemptRefund,
+          where: sql`${and(
+            eq(documentProcessingRuns.id, run.id),
+            eq(
+              documentProcessingRuns.organizationId,
+              proof.value.organizationId,
+            ),
+            eq(documentProcessingRuns.deadlineScoutStatus, "running"),
+            timestampMatchesCasToken(
+              documentProcessingRuns.deadlineScoutClaimedAt,
+              run.deadlineScoutClaimedAtToken,
+            ),
+          )}`,
+        }),
+    });
+  };
+  if ("rollback" in db) {
+    const settled = await settle(db);
+    return { status: settled === 0 ? "stale_claim" : "settled" };
+  }
+  const source = (
+    await db
+      .select({ organizationId: documentProcessingRuns.organizationId })
+      .from(documentProcessingRuns)
+      .where(
+        sql`${and(
+          eq(documentProcessingRuns.id, run.id),
+          eq(documentProcessingRuns.deadlineScoutStatus, "running"),
+          timestampMatchesCasToken(
+            documentProcessingRuns.deadlineScoutClaimedAt,
+            run.deadlineScoutClaimedAtToken,
+          ),
+        )}`,
+      )
+      .limit(1)
+  ).at(0);
+  if (source === undefined) {
+    return { status: "stale_claim" };
+  }
+  const settled = await withAggregateTransaction(db, async (tx) => {
+    await lockFeatureRecoveryAdmission({
+      tx,
+      organizationId: source.organizationId,
+      featureId: "signals",
+    });
+    return await settle(tx, source.organizationId);
+  });
   return { status: settled === 0 ? "stale_claim" : "settled" };
 };
 
@@ -525,6 +583,22 @@ export const validateDocumentDeadlineScoutClaim = async ({
     tx,
     mode: "update",
   });
+  const proof = await proveOrgScope(tx, {
+    table: "documentProcessingRuns",
+    where: sql`${and(
+      eq(documentProcessingRuns.id, run.id),
+      eq(documentProcessingRuns.workspaceId, run.workspaceId),
+      eq(documentProcessingRuns.organizationId, run.organizationId),
+      eq(documentProcessingRuns.deadlineScoutStatus, "running"),
+      timestampMatchesCasToken(
+        documentProcessingRuns.deadlineScoutClaimedAt,
+        run.deadlineScoutClaimedAtToken,
+      ),
+    )}`,
+  });
+  if (proof.isErr()) {
+    return "stale_claim" as const;
+  }
   const claimed = await withAggregateRowQuery({
     aggregate: "processingClaim",
     id: { id: run.id, workspaceId: run.workspaceId },
@@ -733,7 +807,27 @@ const claimAdmittedDeadlineSource = async ({
     if (accessible.length === 0) {
       return null;
     }
-    return await claimRun(tx, sourceRunId);
+    const proof = await proveOrgScope(tx, {
+      table: "documentProcessingRuns",
+      where: sql`${and(
+        eq(documentProcessingRuns.id, sourceRunId),
+        eq(documentProcessingRuns.organizationId, source.organizationId),
+        eq(documentProcessingRuns.workspaceId, source.workspaceId),
+        eq(documentProcessingRuns.status, "succeeded"),
+        eq(documentProcessingRuns.deadlineScoutStatus, "pending"),
+        deadlineScoutDue(new Date()),
+      )}`,
+    });
+    const scope = proof.unwrapOr(null);
+    if (scope === null) {
+      return null;
+    }
+    return await withOrgScope({
+      tx,
+      scope,
+      actor: { type: "system" },
+      fn: async (scopedTx) => await claimRun(scopedTx, sourceRunId),
+    });
   });
 
 export const runDocumentDeadlineScout = async ({

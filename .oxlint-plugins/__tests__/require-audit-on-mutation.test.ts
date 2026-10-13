@@ -347,7 +347,7 @@ describe("audit directive placement", () => {
           "};",
         ].join("\n"),
       ),
-    ).toEqual([8]);
+    ).toEqual([7]);
   });
 
   test("one directive covers only the first mutation when calls share a line", async () => {
@@ -485,4 +485,48 @@ test("the recorder owns audit insertion while other writes still require an even
       },
     ),
   ).toEqual([1]);
+});
+
+describe("organization owner callback audit scope", () => {
+  const owner = (importPath: string, consumption: string, audit: string) => `
+import { withOrgScope as lend } from "${importPath}";
+declare const tx: any;
+declare const rows: any;
+export const change = async (recordAuditEvent: any) => {
+  ${consumption === "return" ? audit : ""}
+  ${consumption} lend({ tx, scope: {}, actor: {}, fn: async (scopedTx) => {
+    await scopedTx.update(rows);
+  }});
+  ${consumption === "return" ? "" : audit}
+};`;
+  test.each(["await", "return"])(
+    "%s canonical owner callback retains its enclosing audit",
+    async (consumption) => {
+      expect(
+        await lintSingleRule(
+          RULE,
+          owner(
+            "@/api/db/org-scope",
+            consumption,
+            "await recordAuditEvent(tx, {});",
+          ),
+          { sourcePath: SOURCE_PATH },
+        ),
+      ).toEqual([]);
+    },
+  );
+  test.each([
+    ["@/api/db/org-scope", "await", ""],
+    ["@/api/db/org-scope", "void", "await recordAuditEvent(tx, {});"],
+    ["./other-owner", "await", "await recordAuditEvent(tx, {});"],
+  ])(
+    "%s %s retains the mutation diagnostic without an awaited canonical audit scope",
+    async (importPath, consumption, audit) => {
+      expect(
+        await lintSingleRule(RULE, owner(importPath, consumption, audit), {
+          sourcePath: SOURCE_PATH,
+        }),
+      ).toEqual([8]);
+    },
+  );
 });

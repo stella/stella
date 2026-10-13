@@ -158,7 +158,8 @@ const installScopedTransactionSettings = async ({
 
 export const setScopedTransactionSettings = async (
   options: Omit<SetScopedTransactionSettingsOptions, "role">,
-): Promise<void> => await installScopedTransactionSettings(options);
+): Promise<void> =>
+  await installScopedTransactionSettings({ ...options, role: "application" });
 
 type ScopedWorkInTransactionOptions<T> = {
   tx: Transaction;
@@ -223,7 +224,8 @@ const runScopedTransactionContext = async <T>({
 /** Request-owned cleanup retains its authenticated application context. */
 export const runScopedWorkInTransaction = async <T>(
   options: Omit<ScopedWorkInTransactionOptions<T>, "role">,
-): Promise<T> => await runScopedTransactionContext(options);
+): Promise<T> =>
+  await runScopedTransactionContext({ ...options, role: "application" });
 
 type ScopedOwnerWorkOptions<T> = {
   tx: Transaction;

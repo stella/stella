@@ -1,9 +1,22 @@
 import { Result, TaggedError } from "better-result";
 import { deepEquals } from "bun";
+import { eq, sql } from "drizzle-orm";
 
+import {
+  assertCallerOrg,
+  combineOrgScopes,
+  proveOrgScope,
+  withOrgScope,
+} from "@/api/db/org-scope";
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { abortableTx, abortTransaction } from "@/api/db/safe-db";
-import { flowRuns, flowRunSteps } from "@/api/db/schema";
+import {
+  flowDefinitions,
+  flowRuns,
+  flowRunSteps,
+  workspaces,
+} from "@/api/db/schema";
 import type { authorizeHandlerRunSize } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -30,11 +43,8 @@ import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
  * and file-upload triggers (Phase 3) construct a root-scoped `safeDb` and call
  * this directly.
  *
- * Ownership invariants are the caller's responsibility: `workspaceId` must
- * belong to `organizationId` and `inputEntityIds` must belong to `workspaceId`
- * (the manual endpoint validates the entities; automated callers pass a
- * workspace they already own). `safeDb` must be scoped to `organizationId` and
- * `workspaceId` so its RLS enforces the definition read + run insert.
+ * The persisted matter binds the organization for run and step writes.
+ * Callers validate input entities against that matter before invoking this owner.
  */
 export class FlowRunStartError extends TaggedError("FlowRunStartError")<{
   message: string;
@@ -146,6 +156,91 @@ type StartFlowRunOutcome = Result<
   FlowRunStartError | SafeDbError | ActionAdmissionError
 >;
 
+type PrepareAdmittedFlowRunOptions = Pick<
+  StartFlowRunOptions,
+  | "organizationId"
+  | "workspaceId"
+  | "definitionId"
+  | "triggerSource"
+  | "inputEntityIds"
+> & {
+  tx: Transaction;
+  runId: SafeId<"flowRun">;
+  actorId: string | null;
+  definition: FlowRunDefinitionSnapshotInput;
+};
+
+const prepareAdmittedFlowRun = async ({
+  tx,
+  organizationId,
+  workspaceId,
+  definitionId,
+  triggerSource,
+  inputEntityIds,
+  runId,
+  actorId,
+  definition,
+}: PrepareAdmittedFlowRunOptions) => {
+  await requireFlowEffectAdmission({
+    tx,
+    organizationId,
+    userId: actorId,
+  });
+  const matterScope = await proveOrgScope(tx, {
+    table: "workspaces",
+    where: sql`${eq(workspaces.id, workspaceId)}`,
+  });
+  if (Result.isError(matterScope)) {
+    abortTransaction(new HandlerError({ status: 404, message: "Not found" }));
+  }
+  if (Result.isError(assertCallerOrg(matterScope.value, organizationId))) {
+    abortTransaction(new HandlerError({ status: 404, message: "Not found" }));
+  }
+  const definitionScope = await proveOrgScope(tx, {
+    table: "flowDefinitions",
+    where: sql`${eq(flowDefinitions.id, definitionId)}`,
+  });
+  if (Result.isError(definitionScope)) {
+    abortTransaction(new HandlerError({ status: 404, message: "Not found" }));
+  }
+  const scope = combineOrgScopes(matterScope.value, definitionScope.value);
+  if (Result.isError(scope)) {
+    abortTransaction(new HandlerError({ status: 404, message: "Not found" }));
+  }
+  const currentDefinition = await tx.query.flowDefinitions.findFirst({
+    where: {
+      id: { eq: definitionId },
+      organizationId: { eq: organizationId },
+    },
+    columns: {
+      id: true,
+      name: true,
+      steps: true,
+      enabled: true,
+    },
+  });
+  if (!currentDefinition?.enabled) {
+    abortTransaction(new HandlerError({ status: 404, message: "Not found" }));
+  }
+  if (!deepEquals(currentDefinition.steps, definition.steps)) {
+    abortTransaction(
+      new HandlerError({
+        status: 409,
+        message: "Flow definition changed. Retry the start.",
+      }),
+    );
+  }
+  const admittedRows = buildFlowRunRows({
+    runId,
+    workspaceId,
+    definitionId,
+    definition: currentDefinition,
+    triggerSource,
+    inputEntityIds,
+  });
+  return { scope: scope.value, rows: admittedRows };
+};
+
 export const startFlowRun = async (
   options: StartFlowRunOptions,
 ): Promise<StartFlowRunOutcome> => {
@@ -223,47 +318,30 @@ export const startFlowRun = async (
               signal?.throwIfAborted();
               yield* (
                 await abortableTx(safeDb, async (tx) => {
-                  await requireFlowEffectAdmission({
+                  const prepared = await prepareAdmittedFlowRun({
                     tx,
                     organizationId,
-                    userId: actorId,
-                  });
-                  const currentDefinition =
-                    await tx.query.flowDefinitions.findFirst({
-                      where: {
-                        id: { eq: definitionId },
-                        organizationId: { eq: organizationId },
-                      },
-                      columns: {
-                        id: true,
-                        name: true,
-                        steps: true,
-                        enabled: true,
-                      },
-                    });
-                  if (!currentDefinition?.enabled) {
-                    abortTransaction(
-                      new HandlerError({ status: 404, message: "Not found" }),
-                    );
-                  }
-                  if (!deepEquals(currentDefinition.steps, definition.steps)) {
-                    abortTransaction(
-                      new HandlerError({
-                        status: 409,
-                        message: "Flow definition changed. Retry the start.",
-                      }),
-                    );
-                  }
-                  const admittedRows = buildFlowRunRows({
-                    runId,
                     workspaceId,
                     definitionId,
-                    definition: currentDefinition,
                     triggerSource,
                     inputEntityIds,
+                    runId,
+                    actorId,
+                    definition,
                   });
-                  await tx.insert(flowRuns).values(admittedRows.run);
-                  await tx.insert(flowRunSteps).values(admittedRows.steps);
+                  await withOrgScope({
+                    tx,
+                    scope: prepared.scope,
+                    actor: actorId
+                      ? { type: "actor", userId: brandPersistedUserId(actorId) }
+                      : { type: "system" },
+                    fn: async (scopedTx) => {
+                      await scopedTx.insert(flowRuns).values(prepared.rows.run);
+                      await scopedTx
+                        .insert(flowRunSteps)
+                        .values(prepared.rows.steps);
+                    },
+                  });
                   await reservePeriod?.();
                 })
               ).mapError((error) =>

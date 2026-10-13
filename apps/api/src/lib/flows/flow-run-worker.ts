@@ -14,7 +14,10 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
+import { mapWithConcurrency } from "@stll/concurrency";
+
 import { member, user } from "@/api/db/auth-schema";
+import { proveOrgScope, withOrgScope } from "@/api/db/org-scope";
 import type { rootDb } from "@/api/db/root";
 import {
   featureEnrolments,
@@ -27,6 +30,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
@@ -34,6 +38,7 @@ import {
   isBackgroundFeatureEnabled,
   loadBackgroundFeatureActors,
 } from "@/api/lib/feature-access/background";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import {
   executeFlowStep,
   failFlowRunFromWorker,
@@ -102,30 +107,76 @@ const executeAdmittedFlowStep = async ({
     logger.info("flow.work_skipped", { reason: "deployment_disabled" });
     return { status: "paused" };
   }
-  // Resolve tenant and actor from the durable run before granting model admission.
-  const row = await database.query.flowRuns.findFirst({
-    where: { id: { eq: brandPersistedFlowRunId(job.data.runId) } },
+  const identity = (
+    await database
+      .select({ organizationId: workspaces.organizationId })
+      .from(flowRuns)
+      .innerJoin(workspaces, eq(workspaces.id, flowRuns.workspaceId))
+      .where(eq(flowRuns.id, brandPersistedFlowRunId(job.data.runId)))
+      .limit(1)
+  ).at(0);
+  if (identity === undefined) {
+    return { status: "completed" };
+  }
+  const current = await withAggregateTransaction(database, async (tx) => {
+    await lockFeatureRecoveryAdmission({
+      tx,
+      organizationId: identity.organizationId,
+      featureId: "flows",
+    });
+    const proof = await proveOrgScope(tx, {
+      table: "flowRuns",
+      where: eq(flowRuns.id, brandPersistedFlowRunId(job.data.runId)),
+    });
+    if (
+      proof.isErr() ||
+      proof.value.organizationId !== identity.organizationId
+    ) {
+      return null;
+    }
+    return await withOrgScope({
+      tx,
+      scope: proof.value,
+      actor: { type: "system" },
+      fn: async (scopedTx) => {
+        const row = await scopedTx.query.flowRuns.findFirst({
+          where: { id: { eq: brandPersistedFlowRunId(job.data.runId) } },
+        });
+        if (row === undefined) {
+          return null;
+        }
+        const actor = await resolveActorUserId(row, {
+          database: scopedTx,
+          organizationId: proof.value.organizationId,
+        });
+        const actorExists = await flowRunActorExists(actor, scopedTx);
+        const admitted =
+          actor !== null &&
+          (await isBackgroundFeatureEnabled({
+            tx: scopedTx,
+            organizationId: proof.value.organizationId,
+            userId: actor,
+            featureId: "flows",
+          }));
+        return {
+          row,
+          actor: actorExists ? actor : null,
+          admitted,
+          organizationId: proof.value.organizationId,
+        };
+      },
+    });
   });
   if (
-    !row ||
-    (row.status !== "pending" &&
-      row.status !== "running" &&
-      row.status !== "awaiting_review")
+    current === null ||
+    (current.row.status !== "pending" &&
+      current.row.status !== "running" &&
+      current.row.status !== "awaiting_review")
   ) {
     return { status: "completed" };
   }
-  const workspace = await database.query.workspaces.findFirst({
-    where: { id: { eq: row.workspaceId } },
-    columns: { organizationId: true },
-  });
-  const actor = workspace
-    ? await resolveActorUserId(row, {
-        database,
-        organizationId: workspace.organizationId,
-      })
-    : null;
-  if (!workspace || !actor || !(await flowRunActorExists(actor, database))) {
-    // The executor refuses a run without tenant or actor before any step.
+  const { row, actor } = current;
+  if (actor === null) {
     return await executeFlowStep(job.data, signal, {
       admission: null,
       database,
@@ -135,14 +186,7 @@ const executeAdmittedFlowStep = async ({
   if (row.status === "awaiting_review") {
     return { status: "completed" };
   }
-  if (
-    !(await isBackgroundFeatureEnabled({
-      tx: database,
-      organizationId: workspace.organizationId,
-      userId: actor,
-      featureId: "flows",
-    }))
-  ) {
+  if (!current.admitted) {
     logger.info("flow.work_skipped", {
       reason: "actor_not_granted",
       runId: row.id,
@@ -151,10 +195,10 @@ const executeAdmittedFlowStep = async ({
   }
   return await runBackgroundJob({
     actionKind: BACKGROUND_ACTION_KIND.flow,
-    organizationId: workspace.organizationId,
+    organizationId: current.organizationId,
     userId: actor,
     organizationStateDb: createRootMembershipScopedDb({
-      organizationId: workspace.organizationId,
+      organizationId: current.organizationId,
       userId: actor,
     }),
     job,
@@ -352,9 +396,6 @@ const reconcilePendingFlowCompletionNotices = async (
         id: flowRuns.id,
         workspaceId: flowRuns.workspaceId,
         organizationId: workspaces.organizationId,
-        definitionId: flowRuns.definitionId,
-        triggerSource: flowRuns.triggerSource,
-        flowName: sql<string>`${flowRuns.definitionSnapshot}->>'name'`,
       })
       .from(flowRuns)
       .innerJoin(workspaces, eq(workspaces.id, flowRuns.workspaceId))
@@ -404,28 +445,186 @@ const reconcilePendingFlowCompletionNotices = async (
       )
       .orderBy(asc(flowRuns.workspaceId), asc(flowRuns.id))
       .limit(batchSize);
-    for (const row of batch) {
-      // db-await-in-loop: each notice commits under the recipient admission fence.
-      await fileFlowRunCompletionNotice(
-        {
-          run: {
-            definitionId: row.definitionId,
-            triggerSource: row.triggerSource,
-          },
-          organizationId: row.organizationId,
-          workspaceId: row.workspaceId,
-          runId: row.id,
-          flowName: row.flowName,
-        },
-        database,
-      );
-    }
+    await mapWithConcurrency({
+      items: batch,
+      limit: 1,
+      operation: async (row) => {
+        const notice = await withAggregateTransaction(database, async (tx) => {
+          await lockFeatureRecoveryAdmission({
+            tx,
+            organizationId: row.organizationId,
+            featureId: "flows",
+          });
+          if (!isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
+            return undefined;
+          }
+          const scope = await proveOrgScope(tx, {
+            table: "flowRuns",
+            where: sql`${and(eq(flowRuns.id, row.id), eq(flowRuns.workspaceId, row.workspaceId), eq(flowRuns.status, "completed"), eq(flowRuns.recoveryState, "completion-notice-pending"))}`,
+          });
+          if (
+            scope.isErr() ||
+            scope.value.organizationId !== row.organizationId
+          ) {
+            return undefined;
+          }
+          return await withOrgScope({
+            tx,
+            scope: scope.value,
+            actor: { type: "system" },
+            fn: async (scopedTx) => {
+              const current = await scopedTx.query.flowRuns.findFirst({
+                where: {
+                  id: { eq: row.id },
+                  workspaceId: { eq: row.workspaceId },
+                },
+              });
+              if (current === undefined) {
+                return undefined;
+              }
+              const currentActor = await resolveActorUserId(current, {
+                database: scopedTx,
+                organizationId: scope.value.organizationId,
+              });
+              if (
+                principal !== undefined &&
+                (principal.organizationId !== scope.value.organizationId ||
+                  currentActor !== principal.userId)
+              ) {
+                return undefined;
+              }
+              return {
+                run: {
+                  definitionId: current.definitionId,
+                  triggerSource: current.triggerSource,
+                },
+                organizationId: scope.value.organizationId,
+                workspaceId: current.workspaceId,
+                runId: current.id,
+                flowName: current.definitionSnapshot.name,
+              };
+            },
+          });
+        });
+        if (notice === undefined) {
+          return;
+        }
+        await fileFlowRunCompletionNotice(notice, database);
+      },
+    });
     const last = batch.at(-1);
     if (last === undefined || batch.length < batchSize) {
       return;
     }
     cursor = { workspaceId: last.workspaceId, id: last.id };
   }
+};
+
+type ReadOrphanFlowRunPageOptions = Pick<
+  ReconcileOrphanedFlowRunsOptions,
+  "principal" | "stalledBefore"
+> & {
+  database: ReconcileOrphanedFlowRunsDependencies["database"];
+  cursor: SafeId<"flowRun"> | null;
+  batchSize: number;
+};
+
+const readOrphanFlowRunPage = async ({
+  database,
+  cursor,
+  principal,
+  stalledBefore,
+  batchSize,
+}: ReadOrphanFlowRunPageOptions) => {
+  const previousStep = alias(flowRunSteps, "flow_recovery_previous_step");
+  const actorUserId = sql`CASE
+    WHEN ${flowRuns.triggerSource}->>'type' = 'manual'
+      THEN ${flowRuns.triggerSource}->>'userId'
+    ELSE ${flowDefinitions.createdByUserId}
+  END`;
+
+  return await database
+    .select({
+      id: flowRuns.id,
+      workspaceId: flowRuns.workspaceId,
+      currentStepIndex: flowRuns.currentStepIndex,
+      createdByUserId: flowDefinitions.createdByUserId,
+      existingActorUserId: user.id,
+      triggerSource: flowRuns.triggerSource,
+      organizationId: workspaces.organizationId,
+    })
+    .from(flowRuns)
+    .innerJoin(workspaces, eq(workspaces.id, flowRuns.workspaceId))
+    .leftJoin(
+      flowDefinitions,
+      and(
+        eq(flowDefinitions.id, flowRuns.definitionId),
+        eq(flowDefinitions.organizationId, workspaces.organizationId),
+      ),
+    )
+    .leftJoin(
+      flowRunSteps,
+      and(
+        eq(flowRunSteps.runId, flowRuns.id),
+        eq(flowRunSteps.workspaceId, flowRuns.workspaceId),
+        eq(flowRunSteps.index, flowRuns.currentStepIndex),
+      ),
+    )
+    .leftJoin(
+      previousStep,
+      and(
+        eq(previousStep.runId, flowRuns.id),
+        eq(previousStep.workspaceId, flowRuns.workspaceId),
+        eq(previousStep.index, sql`${flowRuns.currentStepIndex} - 1`),
+      ),
+    )
+    .leftJoin(user, and(eq(user.id, actorUserId), isNull(user.deletedAt)))
+    .leftJoin(
+      member,
+      and(
+        eq(member.userId, user.id),
+        eq(member.organizationId, workspaces.organizationId),
+      ),
+    )
+    .where(
+      and(
+        inArray(flowRuns.status, ["pending", "running"]),
+        principal === undefined
+          ? undefined
+          : and(
+              eq(workspaces.organizationId, principal.organizationId),
+              or(
+                and(
+                  eq(sql`${flowRuns.triggerSource}->>'type'`, "manual"),
+                  eq(
+                    sql`${flowRuns.triggerSource}->>'userId'`,
+                    principal.userId,
+                  ),
+                ),
+                and(
+                  inArray(sql`${flowRuns.triggerSource}->>'type'`, [
+                    "schedule",
+                    "file-upload",
+                  ]),
+                  eq(flowDefinitions.createdByUserId, principal.userId),
+                ),
+              ),
+            ),
+        cursor === null ? undefined : gt(flowRuns.id, cursor),
+        // An unclaimed current step became ready when its predecessor
+        // finished. Legacy or first-step gaps fall back to the run clock.
+        stalledBefore === undefined
+          ? undefined
+          : lt(
+              sql`CASE WHEN ${flowRuns.status} = 'running'
+                  THEN coalesce(${flowRunSteps.startedAt}, ${previousStep.finishedAt}, ${flowRuns.startedAt}, ${flowRuns.createdAt})
+                  ELSE coalesce(${flowRuns.startedAt}, ${flowRuns.createdAt}) END`,
+              stalledBefore,
+            ),
+      ),
+    )
+    .orderBy(asc(flowRuns.id))
+    .limit(batchSize);
 };
 
 // Keyset-paginate runnable steps without revisiting an already enqueued page.
@@ -460,99 +659,19 @@ export const reconcileOrphanedFlowRuns = async (
   );
   let cursor: SafeId<"flowRun"> | null = null;
   let reconciled = 0;
-  const previousStep = alias(flowRunSteps, "flow_recovery_previous_step");
-  const actorUserId = sql`CASE
-    WHEN ${flowRuns.triggerSource}->>'type' = 'manual'
-      THEN ${flowRuns.triggerSource}->>'userId'
-    ELSE ${flowDefinitions.createdByUserId}
-  END`;
 
   for (;;) {
     if (signal?.aborted === true) {
       break;
     }
     // db-await-in-loop: keyset page per iteration; the page is the batch
-    const batch = await database
-      .select({
-        id: flowRuns.id,
-        currentStepIndex: flowRuns.currentStepIndex,
-        createdByUserId: flowDefinitions.createdByUserId,
-        existingActorUserId: user.id,
-        triggerSource: flowRuns.triggerSource,
-        organizationId: workspaces.organizationId,
-      })
-      .from(flowRuns)
-      .innerJoin(workspaces, eq(workspaces.id, flowRuns.workspaceId))
-      .leftJoin(
-        flowDefinitions,
-        and(
-          eq(flowDefinitions.id, flowRuns.definitionId),
-          eq(flowDefinitions.organizationId, workspaces.organizationId),
-        ),
-      )
-      .leftJoin(
-        flowRunSteps,
-        and(
-          eq(flowRunSteps.runId, flowRuns.id),
-          eq(flowRunSteps.workspaceId, flowRuns.workspaceId),
-          eq(flowRunSteps.index, flowRuns.currentStepIndex),
-        ),
-      )
-      .leftJoin(
-        previousStep,
-        and(
-          eq(previousStep.runId, flowRuns.id),
-          eq(previousStep.workspaceId, flowRuns.workspaceId),
-          eq(previousStep.index, sql`${flowRuns.currentStepIndex} - 1`),
-        ),
-      )
-      .leftJoin(user, and(eq(user.id, actorUserId), isNull(user.deletedAt)))
-      .leftJoin(
-        member,
-        and(
-          eq(member.userId, user.id),
-          eq(member.organizationId, workspaces.organizationId),
-        ),
-      )
-      .where(
-        and(
-          inArray(flowRuns.status, ["pending", "running"]),
-          principal === undefined
-            ? undefined
-            : and(
-                eq(workspaces.organizationId, principal.organizationId),
-                or(
-                  and(
-                    eq(sql`${flowRuns.triggerSource}->>'type'`, "manual"),
-                    eq(
-                      sql`${flowRuns.triggerSource}->>'userId'`,
-                      principal.userId,
-                    ),
-                  ),
-                  and(
-                    inArray(sql`${flowRuns.triggerSource}->>'type'`, [
-                      "schedule",
-                      "file-upload",
-                    ]),
-                    eq(flowDefinitions.createdByUserId, principal.userId),
-                  ),
-                ),
-              ),
-          cursor === null ? undefined : gt(flowRuns.id, cursor),
-          // An unclaimed current step became ready when its predecessor
-          // finished. Legacy or first-step gaps fall back to the run clock.
-          stalledBefore === undefined
-            ? undefined
-            : lt(
-                sql`CASE WHEN ${flowRuns.status} = 'running'
-                  THEN coalesce(${flowRunSteps.startedAt}, ${previousStep.finishedAt}, ${flowRuns.startedAt}, ${flowRuns.createdAt})
-                  ELSE coalesce(${flowRuns.startedAt}, ${flowRuns.createdAt}) END`,
-                stalledBefore,
-              ),
-        ),
-      )
-      .orderBy(asc(flowRuns.id))
-      .limit(batchSize);
+    const batch = await readOrphanFlowRunPage({
+      database,
+      cursor,
+      principal,
+      stalledBefore,
+      batchSize,
+    });
 
     if (batch.length === 0) {
       break;
@@ -593,24 +712,92 @@ export const reconcileOrphanedFlowRuns = async (
         existingActorUserId === null ? [] : [existingActorUserId],
       ),
     );
-    for (const row of batch) {
-      const actor = actors.get(row.id);
-      if (
-        actor !== undefined &&
-        existingActors.has(actor) &&
-        admitted.get(row.organizationId)?.has(actor) !== true
-      ) {
-        logger.info("flow.work_skipped", {
-          reason: "actor_not_granted",
-          runId: row.id,
-        });
-        continue;
-      }
-      // An unavailable actor records actor-removed without deleting outputs;
-      // a live actor's opt-out remains paused until re-grant.
-      await enqueueStep({ runId: row.id, stepIndex: row.currentStepIndex });
-      reconciled += 1;
-    }
+    const recovered = await mapWithConcurrency({
+      items: batch,
+      limit: 1,
+      operation: async (row) => {
+        const actor = actors.get(row.id);
+        if (
+          actor !== undefined &&
+          existingActors.has(actor) &&
+          admitted.get(row.organizationId)?.has(actor) !== true
+        ) {
+          logger.info("flow.work_skipped", {
+            reason: "actor_not_granted",
+            runId: row.id,
+          });
+          return false;
+        }
+        const eligible = await withAggregateTransaction(
+          database,
+          async (tx) => {
+            await lockFeatureRecoveryAdmission({
+              tx,
+              organizationId: row.organizationId,
+              featureId: "flows",
+            });
+            if (!isDeploymentFeatureEnabled("FEATURE_FLOWS")) {
+              return false;
+            }
+            const scope = await proveOrgScope(tx, {
+              table: "flowRuns",
+              where: sql`${and(eq(flowRuns.id, row.id), eq(flowRuns.workspaceId, row.workspaceId), eq(flowRuns.currentStepIndex, row.currentStepIndex), inArray(flowRuns.status, ["pending", "running"]))}`,
+            });
+            if (
+              scope.isErr() ||
+              scope.value.organizationId !== row.organizationId
+            ) {
+              return false;
+            }
+            return await withOrgScope({
+              tx,
+              scope: scope.value,
+              actor: { type: "system" },
+              fn: async (scopedTx) => {
+                const current = await scopedTx.query.flowRuns.findFirst({
+                  where: {
+                    id: { eq: row.id },
+                    workspaceId: { eq: row.workspaceId },
+                  },
+                });
+                if (current === undefined) {
+                  return false;
+                }
+                const currentActor = await resolveActorUserId(current, {
+                  database: scopedTx,
+                  organizationId: scope.value.organizationId,
+                });
+                if (
+                  principal !== undefined &&
+                  (principal.organizationId !== scope.value.organizationId ||
+                    currentActor !== principal.userId)
+                ) {
+                  return false;
+                }
+                if (
+                  currentActor === null ||
+                  !(await flowRunActorExists(currentActor, scopedTx))
+                ) {
+                  return true;
+                }
+                return await isBackgroundFeatureEnabled({
+                  tx: scopedTx,
+                  organizationId: scope.value.organizationId,
+                  userId: currentActor,
+                  featureId: "flows",
+                });
+              },
+            });
+          },
+        );
+        if (!eligible) {
+          return false;
+        }
+        await enqueueStep({ runId: row.id, stepIndex: row.currentStepIndex });
+        return true;
+      },
+    });
+    reconciled += recovered.filter(Boolean).length;
 
     const lastRow = batch.at(-1);
     if (lastRow === undefined || batch.length < batchSize) {

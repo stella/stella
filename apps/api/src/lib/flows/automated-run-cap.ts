@@ -1,9 +1,15 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { deepEquals } from "bun";
 import { and, eq, getColumns, gte, sql } from "drizzle-orm";
 
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
+import {
+  assertCallerOrg,
+  combineOrgScopes,
+  proveOrgScope,
+  withOrgScope,
+} from "@/api/db/org-scope";
 import type { rootDb, Transaction } from "@/api/db/root";
 import {
   flowDefinitions,
@@ -11,6 +17,7 @@ import {
   flowRunSteps,
   flowUploadTriggerIntents,
   schedulerJobs,
+  workspaces,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -262,6 +269,111 @@ const deferCappedUploadIntent = async ({
   });
 };
 
+type LockUploadRunClaimOptions = Pick<
+  InsertAutomatedFlowRunWithinCapInput,
+  "definitionId" | "organizationId" | "rows" | "uploadTriggerClaimToken"
+> & { tx: Transaction };
+
+const lockUploadRunClaim = async ({
+  tx,
+  definitionId,
+  organizationId,
+  rows,
+  uploadTriggerClaimToken,
+}: LockUploadRunClaimOptions): Promise<boolean> => {
+  if (rows.run.triggerSource.type === "file-upload") {
+    if (uploadTriggerClaimToken === undefined) {
+      return false;
+    }
+    const owned = await withAggregateRowQuery({
+      aggregate: "uploadReceipt",
+      id: {
+        definitionId,
+        organizationId,
+        entityId: brandPersistedEntityId(rows.run.triggerSource.entityId),
+      },
+      tx,
+      mode: "update",
+      where:
+        and(
+          eq(flowUploadTriggerIntents.workspaceId, rows.run.workspaceId),
+          eq(flowUploadTriggerIntents.status, "pending"),
+          timestampMatchesCasToken(
+            flowUploadTriggerIntents.retryAt,
+            uploadTriggerClaimToken,
+          ),
+        ) ?? panic("Upload receipt ownership predicate is required"),
+      select: (queryTx) =>
+        queryTx
+          .select({
+            definitionId: flowUploadTriggerIntents.definitionId,
+            organizationId: flowUploadTriggerIntents.organizationId,
+            entityId: flowUploadTriggerIntents.entityId,
+          })
+          .from(flowUploadTriggerIntents)
+          .limit(1),
+    });
+    if (owned.rows.length === 0) {
+      return false;
+    }
+  }
+  return true;
+};
+
+type LockSchedulerRunClaimOptions = {
+  tx: Transaction;
+  schedulerClaim: InsertAutomatedFlowRunWithinCapInput["schedulerClaim"];
+};
+const lockSchedulerRunClaim = async ({
+  tx,
+  schedulerClaim,
+}: LockSchedulerRunClaimOptions): Promise<boolean> => {
+  if (schedulerClaim !== undefined) {
+    const owned = await withAggregateRowQuery({
+      aggregate: "schedulerClaim",
+      id: { id: schedulerClaim.jobId },
+      tx,
+      mode: "update",
+      where: eq(schedulerJobs.lockedBy, schedulerClaim.lockedBy),
+      select: (queryTx) =>
+        queryTx.select({ id: schedulerJobs.id }).from(schedulerJobs).limit(1),
+    });
+    if (owned.rows.length === 0) {
+      return false;
+    }
+  }
+  return true;
+};
+
+type HasAutomatedRunReplayOptions = Pick<
+  InsertAutomatedFlowRunWithinCapInput,
+  "definitionId" | "rows"
+> & { tx: Transaction };
+const hasAutomatedRunReplay = async ({
+  tx,
+  definitionId,
+  rows,
+}: HasAutomatedRunReplayOptions): Promise<boolean> => {
+  const replayIdentity = replayIdentityFor(rows.run.triggerSource);
+  if (replayIdentity !== undefined) {
+    const existing = await tx
+      .select({ id: flowRuns.id })
+      .from(flowRuns)
+      .where(
+        and(
+          eq(flowRuns.definitionId, definitionId),
+          eq(flowRuns.workspaceId, rows.run.workspaceId),
+          replayIdentity,
+        ),
+      )
+      .limit(1);
+    if (existing.length !== 0) {
+      return true;
+    }
+  }
+  return false;
+};
+
 export const insertAutomatedFlowRunWithinCap = async (
   input: InsertAutomatedFlowRunWithinCapInput,
 ): Promise<InsertAutomatedFlowRunWithinCapResult> => {
@@ -294,19 +406,8 @@ export const insertAutomatedFlowRunWithinCap = async (
     ) {
       return { outcome: "paused" };
     }
-    if (schedulerClaim !== undefined) {
-      const owned = await withAggregateRowQuery({
-        aggregate: "schedulerClaim",
-        id: { id: schedulerClaim.jobId },
-        tx,
-        mode: "update",
-        where: eq(schedulerJobs.lockedBy, schedulerClaim.lockedBy),
-        select: (queryTx) =>
-          queryTx.select({ id: schedulerJobs.id }).from(schedulerJobs).limit(1),
-      });
-      if (owned.rows.length === 0) {
-        return { outcome: "stale" };
-      }
+    if (!(await lockSchedulerRunClaim({ tx, schedulerClaim }))) {
+      return { outcome: "stale" };
     }
     // Serialize concurrent automated starts for this definition. The xact lock
     // releases on commit/rollback, after the prior holder's run row is visible,
@@ -334,61 +435,44 @@ export const insertAutomatedFlowRunWithinCap = async (
       currentDefinition = definition.rows.at(0);
     }
 
-    if (rows.run.triggerSource.type === "file-upload") {
-      if (uploadTriggerClaimToken === undefined) {
-        return { outcome: "stale" };
-      }
-      const owned = await withAggregateRowQuery({
-        aggregate: "uploadReceipt",
-        id: {
-          definitionId,
-          organizationId,
-          entityId: brandPersistedEntityId(rows.run.triggerSource.entityId),
-        },
+    const definitionScope = await proveOrgScope(tx, {
+      table: "flowDefinitions",
+      where: eq(flowDefinitions.id, definitionId),
+    });
+    if (
+      Result.isError(definitionScope) ||
+      Result.isError(assertCallerOrg(definitionScope.value, organizationId))
+    ) {
+      return { outcome: "stale" };
+    }
+    const matterScope = await proveOrgScope(tx, {
+      table: "workspaces",
+      where: eq(workspaces.id, rows.run.workspaceId),
+    });
+    if (Result.isError(matterScope)) {
+      return { outcome: "stale" };
+    }
+    const scope = combineOrgScopes(definitionScope.value, matterScope.value);
+    if (Result.isError(scope)) {
+      return { outcome: "stale" };
+    }
+
+    if (
+      !(await lockUploadRunClaim({
         tx,
-        mode: "update",
-        where:
-          and(
-            eq(flowUploadTriggerIntents.workspaceId, rows.run.workspaceId),
-            eq(flowUploadTriggerIntents.status, "pending"),
-            timestampMatchesCasToken(
-              flowUploadTriggerIntents.retryAt,
-              uploadTriggerClaimToken,
-            ),
-          ) ?? panic("Upload receipt ownership predicate is required"),
-        select: (queryTx) =>
-          queryTx
-            .select({
-              definitionId: flowUploadTriggerIntents.definitionId,
-              organizationId: flowUploadTriggerIntents.organizationId,
-              entityId: flowUploadTriggerIntents.entityId,
-            })
-            .from(flowUploadTriggerIntents)
-            .limit(1),
-      });
-      if (owned.rows.length === 0) {
-        return { outcome: "stale" };
-      }
+        definitionId,
+        organizationId,
+        rows,
+        uploadTriggerClaimToken,
+      }))
+    ) {
+      return { outcome: "stale" };
     }
 
     // Recovery may replay after the run committed but before its receipt settled.
     // The same definition lock makes this decision atomic with every insertion.
-    const replayIdentity = replayIdentityFor(rows.run.triggerSource);
-    if (replayIdentity !== undefined) {
-      const existing = await tx
-        .select({ id: flowRuns.id })
-        .from(flowRuns)
-        .where(
-          and(
-            eq(flowRuns.definitionId, definitionId),
-            eq(flowRuns.workspaceId, rows.run.workspaceId),
-            replayIdentity,
-          ),
-        )
-        .limit(1);
-      if (existing.length !== 0) {
-        return { outcome: "already-started" };
-      }
+    if (await hasAutomatedRunReplay({ tx, definitionId, rows })) {
+      return { outcome: "already-started" };
     }
 
     let currentRows = rows;
@@ -412,12 +496,19 @@ export const insertAutomatedFlowRunWithinCap = async (
       });
     }
     if (rows.run.triggerSource.type === "file-upload") {
-      const validation = await revalidateUploadIntent({
+      const entityId = brandPersistedEntityId(rows.run.triggerSource.entityId);
+      const validation = await withOrgScope({
         tx,
-        definitionId,
-        definition: currentDefinition,
-        entityId: brandPersistedEntityId(rows.run.triggerSource.entityId),
-        rows,
+        scope: scope.value,
+        actor: { type: "system" },
+        fn: async (scopedTx) =>
+          await revalidateUploadIntent({
+            tx: scopedTx,
+            definitionId,
+            definition: currentDefinition,
+            entityId,
+            rows,
+          }),
       });
       switch (validation.type) {
         case "source-removed":
@@ -447,21 +538,37 @@ export const insertAutomatedFlowRunWithinCap = async (
         rows.run.triggerSource.type === "file-upload" &&
         uploadTriggerClaimToken !== undefined
       ) {
-        await deferCappedUploadIntent({
+        const entityId = brandPersistedEntityId(
+          rows.run.triggerSource.entityId,
+        );
+        await withOrgScope({
           tx,
-          organizationId,
-          workspaceId: rows.run.workspaceId,
-          definitionId,
-          entityId: brandPersistedEntityId(rows.run.triggerSource.entityId),
-          claimToken: uploadTriggerClaimToken,
-          now,
+          scope: scope.value,
+          actor: { type: "system" },
+          fn: async (scopedTx) =>
+            await deferCappedUploadIntent({
+              tx: scopedTx,
+              organizationId,
+              workspaceId: rows.run.workspaceId,
+              definitionId,
+              entityId,
+              claimToken: uploadTriggerClaimToken,
+              now,
+            }),
         });
       }
       return { outcome: "capped", dailyRunCount };
     }
 
-    await tx.insert(flowRuns).values(currentRows.run);
-    await tx.insert(flowRunSteps).values(currentRows.steps);
+    await withOrgScope({
+      tx,
+      scope: scope.value,
+      actor: { type: "system" },
+      fn: async (scopedTx) => {
+        await scopedTx.insert(flowRuns).values(currentRows.run);
+        await scopedTx.insert(flowRunSteps).values(currentRows.steps);
+      },
+    });
     // A refusal rolls the inserted run back. A later commit failure may rarely
     // over-count the operational throttle; reservations are never refunded.
     await reservePeriod?.();

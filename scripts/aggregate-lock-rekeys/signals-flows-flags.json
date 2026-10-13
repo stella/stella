@@ -65,9 +65,9 @@
   {
     "file": "apps/api/src/lib/member-offboarding/member-assignment-offboarding-owner.ts",
     "from": "21ee7ed7d23db71e6270cb0299bc158cac6f2e27916bd56c433cc622f4d85419",
-    "to": "f1eda68e9ac69e63992747fe6d67d9357f7a6807fc3f5d40bfd00bbabf4672f1",
+    "to": "81f16178689f108d62fbef31b545c8af4612570ab1fac88da7d49ee464afd480",
     "fromFile": "apps/api/src/lib/member-assignment-offboarding.ts",
-    "reason": "existing acquisition moved by #5308; the locked batch limit is capped at the remaining cleanup budget; mode/table/key/predicate unchanged; no new acquisition; migrates with owner extension follow-up"
+    "reason": "Existing flow-run acquisition moved to the offboarding owner; the definition-author join requires the organization and the locked page is capped by the remaining cleanup budget. Mode, table, run predicate and order stay unchanged."
   },
   {
     "file": "apps/api/src/lib/member-offboarding/member-assignment-offboarding-owner.ts",

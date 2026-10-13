@@ -1,12 +1,20 @@
 import { panic, Result } from "better-result";
 import { deepEquals } from "bun";
+import { eq } from "drizzle-orm";
 
+import {
+  assertCallerOrg,
+  proveOrgScope,
+  withOrgScope,
+} from "@/api/db/org-scope";
 import type { rootDb } from "@/api/db/root";
+import { flowDefinitions } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
 import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -111,18 +119,36 @@ export const automatedFlowRunDependencies = (
     definitionId,
     organizationId,
   }: FindFlowDefinitionArgs) =>
-    await database.query.flowDefinitions.findFirst({
-      where: {
-        id: { eq: definitionId },
-        organizationId: { eq: organizationId },
-      },
-      columns: {
-        id: true,
-        name: true,
-        steps: true,
-        enabled: true,
-        trigger: true,
-      },
+    await withAggregateTransaction(database, async (tx) => {
+      const scope = await proveOrgScope(tx, {
+        table: "flowDefinitions",
+        where: eq(flowDefinitions.id, definitionId),
+      });
+      if (
+        Result.isError(scope) ||
+        Result.isError(assertCallerOrg(scope.value, organizationId))
+      ) {
+        return undefined;
+      }
+      return await withOrgScope({
+        tx,
+        scope: scope.value,
+        actor: { type: "system" },
+        fn: async (scopedTx) =>
+          await scopedTx.query.flowDefinitions.findFirst({
+            where: {
+              id: { eq: definitionId },
+              organizationId: { eq: organizationId },
+            },
+            columns: {
+              id: true,
+              name: true,
+              steps: true,
+              enabled: true,
+              trigger: true,
+            },
+          }),
+      });
     }),
   featureEnabled: async (principal) =>
     await isBackgroundFeatureEnabled({

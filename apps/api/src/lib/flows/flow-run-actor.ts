@@ -1,7 +1,8 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 
+import { proveOrgScope, withOrgScope } from "@/api/db/org-scope";
 import type { rootDb } from "@/api/db/root";
 import { flowRuns, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -160,48 +161,63 @@ export const fileFlowRunCompletionNotice = async (
     if (current?.status !== "completed") {
       return [];
     }
-    const actorUserId = await resolveActorUserId(current, {
-      database: tx,
-      organizationId: notice.organizationId,
+    const scope = await proveOrgScope(tx, {
+      table: "flowRuns",
+      where: sql`${and(eq(flowRuns.id, current.id), eq(flowRuns.workspaceId, current.workspaceId))}`,
     });
-    if (!(await flowRunActorExists(actorUserId, tx))) {
-      await recordDeferredNoticeState(tx, {
-        type: "actor-removed",
-        table: flowRuns,
-        runId: notice.runId,
-        workspaceId: notice.workspaceId,
-      });
+    const proven = scope.unwrapOr(null);
+    if (proven === null) {
       return [];
     }
-    if (
-      actorUserId === null ||
-      !(await isBackgroundFeatureEnabled({
-        tx,
-        organizationId: notice.organizationId,
-        userId: actorUserId,
-        featureId: "flows",
-      }))
-    ) {
-      // The completed source records only notices whose filing was deferred.
-      await recordDeferredNoticeState(tx, {
-        type: "completion-notice-pending",
-        table: flowRuns,
-        runId: notice.runId,
-        workspaceId: notice.workspaceId,
-      });
-      return [];
-    }
-    const notificationPings = await createNotificationsInTransaction(
-      [flowRunCompletedNotification({ ...notice, actorUserId })],
+    return await withOrgScope({
       tx,
-    );
-    await recordDeferredNoticeState(tx, {
-      type: "clear",
-      table: flowRuns,
-      runId: notice.runId,
-      workspaceId: notice.workspaceId,
+      scope: proven,
+      actor: { type: "system" },
+      fn: async (scopedTx) => {
+        const actorUserId = await resolveActorUserId(current, {
+          database: scopedTx,
+          organizationId: notice.organizationId,
+        });
+        if (!(await flowRunActorExists(actorUserId, scopedTx))) {
+          await recordDeferredNoticeState(scopedTx, {
+            type: "actor-removed",
+            table: flowRuns,
+            runId: notice.runId,
+            workspaceId: notice.workspaceId,
+          });
+          return [];
+        }
+        if (
+          actorUserId === null ||
+          !(await isBackgroundFeatureEnabled({
+            tx: scopedTx,
+            organizationId: notice.organizationId,
+            userId: actorUserId,
+            featureId: "flows",
+          }))
+        ) {
+          // The completed source records only notices whose filing was deferred.
+          await recordDeferredNoticeState(scopedTx, {
+            type: "completion-notice-pending",
+            table: flowRuns,
+            runId: notice.runId,
+            workspaceId: notice.workspaceId,
+          });
+          return [];
+        }
+        const notificationPings = await createNotificationsInTransaction(
+          [flowRunCompletedNotification({ ...notice, actorUserId })],
+          scopedTx,
+        );
+        await recordDeferredNoticeState(scopedTx, {
+          type: "clear",
+          table: flowRuns,
+          runId: notice.runId,
+          workspaceId: notice.workspaceId,
+        });
+        return notificationPings;
+      },
     });
-    return notificationPings;
   });
   pingNotificationRecipients(pings);
 };
