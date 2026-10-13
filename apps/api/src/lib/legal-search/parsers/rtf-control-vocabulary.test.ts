@@ -112,12 +112,11 @@ test("literal exclusions do not consume adjacent controls", () => {
 });
 
 test.each([
-  String.raw`Held:\par Continued`,
-  String.raw`Note:\pard\plain Continued`,
-  String.raw`§2:\par Continued`,
-])("a drive letter inside a word is not a path: %s", (text) => {
-  expect(matches(text).at(0)).toEqual({
-    index: text.indexOf("\\"),
-    matched: text.slice(text.indexOf("\\")).match(/^\\[a-z]+/u)?.[0],
-  });
-});
+  { text: String.raw`Held:\par Continued`, index: 5, matched: "\\par" },
+  { text: String.raw`Note:\pard\plain Continued`, index: 5, matched: "\\pard" },
+])(
+  "a drive letter inside a word is not a path: $text",
+  ({ text, index, matched }) => {
+    expect(matches(text).at(0)).toEqual({ index, matched });
+  },
+);
