@@ -168,7 +168,6 @@ type WatchTestProcessMemoryOptions = {
   file: () => string;
   onFailure: (message: string) => void;
   onWarning: (message: string) => void;
-  termination?: "process" | "group";
   intervalMs?: number;
   sampleGroup?: typeof sampleProcessGroupMemory;
   signalPid?: (pid: number, signal: NodeJS.Signals | 0) => void;
@@ -179,14 +178,13 @@ type WatchTestProcessMemoryOptions = {
 
 type KillMemoryProcessTreeOptions = Pick<
   WatchTestProcessMemoryOptions,
-  "child" | "termination" | "onFailure" | "windowsProcesses"
+  "child" | "onFailure" | "windowsProcesses"
 > & {
   signalPid: NonNullable<WatchTestProcessMemoryOptions["signalPid"]>;
 };
 
 const killMemoryProcessTree = ({
   child,
-  termination,
   signalPid,
   windowsProcesses,
   onFailure,
@@ -200,20 +198,16 @@ const killMemoryProcessTree = ({
     }
     return;
   }
-  if (termination === "group") {
-    const killed = Result.try({
-      try: () => signalPid(-child.pid, "SIGKILL"),
-      catch: (cause) =>
-        new ProcessMemoryReadError({ message: String(cause), cause }),
-    });
-    if (killed.isErr() && !processGone(killed.error)) {
-      onFailure(
-        `Could not kill test process group ${child.pid}: ${killed.error.message}`,
-      );
-    }
-    return;
+  const killed = Result.try({
+    try: () => signalPid(-child.pid, "SIGKILL"),
+    catch: (cause) =>
+      new ProcessMemoryReadError({ message: String(cause), cause }),
+  });
+  if (killed.isErr() && !processGone(killed.error)) {
+    onFailure(
+      `Could not kill test process group ${child.pid}: ${killed.error.message}`,
+    );
   }
-  child.kill("SIGKILL");
 };
 
 export const watchTestProcessMemory = ({
@@ -223,7 +217,6 @@ export const watchTestProcessMemory = ({
   file,
   onFailure,
   onWarning,
-  termination = "process",
   intervalMs = SAMPLE_INTERVAL_MS,
   sampleGroup = sampleProcessGroupMemory,
   windowsProcesses,
@@ -239,7 +232,6 @@ export const watchTestProcessMemory = ({
     failure = message;
     killMemoryProcessTree({
       child,
-      termination,
       signalPid,
       windowsProcesses,
       onFailure,
@@ -247,18 +239,12 @@ export const watchTestProcessMemory = ({
     onFailure(message);
   };
   const sample = () => {
-    if (
-      stopped ||
-      failure !== undefined ||
-      (windowsProcesses === undefined &&
-        termination === "process" &&
-        (child.exitCode !== null || child.signalCode !== null))
-    ) {
+    if (stopped || failure !== undefined) {
       return;
     }
     const group = Result.try({
       try: () =>
-        windowsProcesses !== undefined || termination === "process"
+        windowsProcesses !== undefined
           ? Result.ok(new Map([[child.pid, 0]]))
           : sampleGroup(child.pid),
       catch: (cause) =>
@@ -330,9 +316,7 @@ export const watchTestProcessMemory = ({
   tick();
   return {
     stop: async () => {
-      if (windowsProcesses !== undefined || termination === "group") {
-        sample();
-      }
+      sample();
       stopped = true;
       clearInterval(timer);
       await Promise.resolve();

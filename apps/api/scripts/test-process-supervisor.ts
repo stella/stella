@@ -100,6 +100,7 @@ type SupervisorOptions = {
   childTimeoutMs?: number;
   deadlineMs?: number;
   stopGraceMs?: number;
+  memoryLimitBytes?: number;
   maxLogBytes?: number;
   tailBytes?: number;
 };
@@ -123,7 +124,7 @@ export class TestProcessSupervisor {
     return this.signal.aborted;
   }
   private readonly memoryReader = createProcessMemoryReader();
-  private readonly memoryLimitBytes = testInvocationMemoryLimit(process.env);
+  private readonly memoryLimitBytes: number;
   private readonly active = new Map<number, ActiveProcess>();
   private readonly deadline: ReturnType<typeof setTimeout>;
   private escalation: ReturnType<typeof setTimeout> | undefined;
@@ -137,11 +138,14 @@ export class TestProcessSupervisor {
 
   constructor(options: SupervisorOptions) {
     this.options = options;
+    this.memoryLimitBytes =
+      options.memoryLimitBytes ?? testInvocationMemoryLimit(process.env);
     this.childTimeoutMs = options.childTimeoutMs ?? CHILD_TIMEOUT_MS;
     this.stopGraceMs = options.stopGraceMs ?? CHILD_STOP_GRACE_MS;
     this.maxLogBytes = options.maxLogBytes ?? MAX_LOG_BYTES;
     this.tailBytes = options.tailBytes ?? TAIL_BYTES;
     for (const limit of [
+      this.memoryLimitBytes,
       this.childTimeoutMs,
       this.stopGraceMs,
       this.maxLogBytes,

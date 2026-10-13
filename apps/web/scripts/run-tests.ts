@@ -84,7 +84,6 @@ for (const run of runs) {
     child,
     limitBytes,
     readBytes,
-    termination: process.platform === "win32" ? "process" : "group",
     file: () => currentFile,
     onFailure: (message) => {
       process.stderr.write(`${message}\n`);

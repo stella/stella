@@ -64,7 +64,6 @@ posixTest.each(["leader", "leader-exit"] as const)(
       const failures: string[] = [];
       const watchdog = watchTestProcessMemory({
         child,
-        termination: "group",
         readBytes: await createProcessMemoryReader(),
         limitBytes: 64 * 1024 ** 2,
         intervalMs: 60_000,
@@ -152,7 +151,6 @@ for (const fixture of ["memory-allocation.ts", "memory-allocation-parent.ts"]) {
       child,
       limitBytes,
       readBytes,
-      termination: process.platform === "win32" ? "process" : "group",
       file: () => filename,
       onFailure: (message) => {
         failures.push(message);
@@ -225,7 +223,6 @@ for (const boundary of ["census", "reading"] as const) {
             throw new TypeError("Must kill group");
           },
         },
-        termination: "group",
         limitBytes: 1024,
         sampleGroup: () => {
           samples += 1;
@@ -285,7 +282,6 @@ test("a process-group budget sums surviving workers and signals only the group",
         throw new TypeError("Must kill group");
       },
     },
-    termination: "group",
     limitBytes: 1000,
     sampleGroup: () =>
       Result.ok(
@@ -321,7 +317,6 @@ test("an empty process group ends ownership before its PGID can be reused", asyn
         throw new TypeError("No owned processes");
       },
     },
-    termination: "group",
     limitBytes: 1000,
     sampleGroup: () => {
       samples += 1;
