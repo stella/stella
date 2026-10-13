@@ -511,14 +511,25 @@ const main = () => {
   output("recorded=true\n");
 };
 
-if (import.meta.main) {
+export const runStaticReceiptBoundary = (
+  operation: () => void,
+  report: (message: string) => void = console.log,
+) => {
   // Receipts are an optimization. Any parsing, IO, toolchain or transport
   // failure leaves every check running and publishes no new evidence.
   try {
-    main();
+    operation();
   } catch (error) {
-    console.log(
-      `Static check receipt unavailable: ${error instanceof Error ? error.message : "invalid receipt"}`,
+    const message = (error instanceof Error ? error.message : "invalid receipt")
+      .replaceAll("%", "%25")
+      .replaceAll("\r", "%0D")
+      .replaceAll("\n", "%0A");
+    report(
+      `::warning::Static check receipts disabled; checks run fresh: ${message}`,
     );
   }
+};
+
+if (import.meta.main) {
+  runStaticReceiptBoundary(main);
 }

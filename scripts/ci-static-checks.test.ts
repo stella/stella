@@ -18,6 +18,7 @@ import {
   passedStaticChecks,
   reusableStaticReceipt,
   resolveStaticReuse,
+  runStaticReceiptBoundary,
   STATIC_RECEIPT_STEP_NAMES,
   staticCheckKey,
   trustedQueueRun,
@@ -102,6 +103,30 @@ test("new or incomplete task declarations fail the census", () => {
       "fixture",
     ),
   ).toThrow("no reason");
+});
+
+test("runtime classification failures warn with the task name before running checks fresh", () => {
+  const fixture = {
+    jobs: {
+      fixture: { steps: [{ name: "New unclassified task", run: "true" }] },
+    },
+  };
+  const operation = () => {
+    classifiedChecks(fixture, "fixture");
+  };
+  expect(operation).toThrow(
+    "Unclassified CI check: fixture/New unclassified task",
+  );
+  const warnings: string[] = [];
+  runStaticReceiptBoundary(operation, (message) => warnings.push(message));
+  expect(warnings).toEqual([
+    "::warning::Static check receipts disabled; checks run fresh: Unclassified CI check: fixture/New unclassified task",
+  ]);
+  runStaticReceiptBoundary(
+    () => {},
+    (message) => warnings.push(message),
+  );
+  expect(warnings).toHaveLength(1);
 });
 
 test("input, resolved toolchain and task definition each invalidate the content key", () => {
