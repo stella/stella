@@ -9,7 +9,7 @@ const originalFetch = globalThis.fetch;
 let originConsentId: string | null = "handoff-consent";
 let handoffRequests = 0;
 let handoffResponse: Response | "network-error" = Response.json({
-  sessions: [{ id: "session-one", clientName: "ChatGPT" }],
+  sessions: [{ id: "session-one", clientName: "Connected app" }],
 });
 
 globalThis.fetch = Object.assign(
@@ -46,7 +46,7 @@ beforeEach(() => {
   originConsentId = "handoff-consent";
   handoffRequests = 0;
   handoffResponse = Response.json({
-    sessions: [{ id: "session-one", clientName: "ChatGPT" }],
+    sessions: [{ id: "session-one", clientName: "Connected app" }],
   });
 });
 
@@ -92,7 +92,7 @@ describe("auth session listing", () => {
     const result = await listAuthSessions();
 
     expect(result.error).toBeNull();
-    expect(result.data?.[0]?.originClientName).toBe("ChatGPT");
+    expect(result.data?.[0]?.originClientName).toBe("Connected app");
     expect(handoffRequests).toBe(1);
   });
 });

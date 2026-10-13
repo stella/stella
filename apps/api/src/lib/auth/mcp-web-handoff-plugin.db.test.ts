@@ -39,6 +39,7 @@ import {
 } from "@/api/db/auth-schema";
 import { databaseRelations } from "@/api/db/database-relations";
 import { auditLogs } from "@/api/db/schema";
+import { mcpWebHandoff } from "@/api/db/schema/mcp-web-handoff";
 import { AUDIT_ACTION } from "@/api/lib/audit-log.constants";
 import { createMcpWebHandoffPlugin } from "@/api/lib/auth";
 import { requiresHandoffStepUpForAuthPath } from "@/api/lib/auth/handoff-step-up-policy";
@@ -257,6 +258,36 @@ const mergeCookies = (...cookieHeaders: string[]) => {
   return [...cookies.values()].join("; ");
 };
 describe("MCP link sign-in", () => {
+  test("redemption needs a trusted browser origin and preserves an unused link", async () => {
+    const code = await mint("click");
+    for (const origin of [undefined, "https://foreign.example.test"]) {
+      const response = await auth.handler(
+        new Request(`${baseURL}/api/auth/mcp-handoff/redeem`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            ...(origin === undefined ? {} : { origin }),
+          },
+          body: JSON.stringify({ code, path: "/law/example" }),
+        }),
+      );
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ status: "refused" });
+      expect(response.headers.getSetCookie()).toEqual([]);
+      const receipt = (
+        await db
+          .select({ consumedAt: mcpWebHandoff.consumedAt })
+          .from(mcpWebHandoff)
+          .where(eq(mcpWebHandoff.codeHash, sha256Hex(code)))
+      ).at(0);
+      expect(receipt).toEqual({ consumedAt: null });
+    }
+    const trusted = await redeem(code);
+    expect(trusted.status).toBe(200);
+    expect(await trusted.json()).toEqual({ status: "redeemed" });
+    expect(trusted.headers.getSetCookie().length).toBeGreaterThan(0);
+  });
+
   test("a rejected request performs no database work or audit write", async () => {
     const budget = new InMemoryRateLimitContext();
     const limited = createWebHandoffService({
