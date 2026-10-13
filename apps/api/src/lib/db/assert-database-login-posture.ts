@@ -1,6 +1,5 @@
-import { sql } from "drizzle-orm";
+import { sql, type SQLWrapper } from "drizzle-orm";
 
-import type { rootDb } from "@/api/db/root";
 import {
   type DatabaseLoginPosture,
   databaseLoginPostureNotes,
@@ -14,9 +13,15 @@ const DATABASE_LOGIN_REFUSED_SINK = failureSink({
   expected: [],
 });
 
+type DatabaseLoginPostureDatabase = {
+  execute: <TRow extends Record<string, unknown>>(
+    query: SQLWrapper | string,
+  ) => PromiseLike<readonly TRow[]>;
+};
+
 /** Inspect the authenticated login, independently of transaction-local role changes. */
 export const readDatabaseLoginPosture = async (
-  database: Pick<typeof rootDb, "execute">,
+  database: DatabaseLoginPostureDatabase,
 ): Promise<DatabaseLoginPosture | undefined> => {
   const rows = await database.execute<DatabaseLoginPosture>(sql`
     SELECT login.rolname AS "loginName",
@@ -34,7 +39,7 @@ export const readDatabaseLoginPosture = async (
 
 /** Owner-connection hosts call this before accepting work. */
 export const assertDatabaseLoginPosture = async (
-  database: Pick<typeof rootDb, "execute">,
+  database: DatabaseLoginPostureDatabase,
 ): Promise<void> => {
   const { logger } = await import("@/api/lib/observability/logger");
   const { envBase } = await import("@/api/env-base");
