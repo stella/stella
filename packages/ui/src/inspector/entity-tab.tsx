@@ -8,7 +8,6 @@ import {
   resolveEntityTabActivateHandler,
   resolveEntityTabCloseHandler,
 } from "./entity-tab.logic";
-import { SIDE_RAIL_TAB_ICON_SIZE } from "./layout-tokens";
 
 /**
  * One rail tab for an open entity: a bordered `InspectorRailTab` cell
@@ -58,8 +57,8 @@ export const InspectorEntityTab = ({
           ) : (
             <span
               className={cn(
-                "flex items-center justify-center",
-                SIDE_RAIL_TAB_ICON_SIZE,
+                "flex w-full min-w-0 items-center justify-center",
+                "min-h-3.5",
                 // No glyph to swap to: dim the persistent icon instead,
                 // unless it asked to stay legible. The exemption has to be
                 // decided here, on the ancestor: `opacity` composites the

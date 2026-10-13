@@ -39,4 +39,16 @@ describe("citation probe candidates", () => {
     expect(residual("sygn. akt I ACa 123/01")).toBe(true);
     expect(residual("sp. zn. 12345/2001")).toBe(true);
   });
+
+  test("a numeric authority reference with a ten-digit head is benign", () => {
+    expect(residual("č. j. 1234567890/1234-12345-123456")).toBe(false);
+    expect(residual("č. j. 12345678901/1234-12345-123456")).toBe(true);
+  });
+
+  test("a court-administration file is benign, a civil docket is not", () => {
+    expect(residual("sp. zn. Spr 1234/2014 z 1. mája 2014")).toBe(false);
+    expect(residual("sp. zn. 1 Spr. 56/14")).toBe(false);
+    expect(residual("sp. zn. Spr 1234/2014-5")).toBe(true);
+    expect(residual("sp. zn. 5 Sp 123/2014")).toBe(true);
+  });
 });

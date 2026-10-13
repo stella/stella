@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 
+import { isPathInside, repoRelativePath } from "@stll/portable-path";
+
 import { flattenWorkflowSteps } from "../../../scripts/workflow-steps";
 
 // Repo root, four levels up from this file (packages/property-testing/src).
@@ -425,11 +427,8 @@ const runnerCovers = ({
   ) {
     return false;
   }
-  const relativeFile = path.posix.relative(
-    runner.packageRoot,
-    declaration.file,
-  );
-  if (relativeFile.startsWith("../")) {
+  const relativeFile = repoRelativePath(runner.packageRoot, declaration.file);
+  if (!isPathInside(runner.packageRoot, declaration.file)) {
     return false;
   }
   return (
@@ -512,8 +511,8 @@ const grepDiscoveryCovers = (
       continue;
     }
     const searchRoot = path.posix.join(step.workingDirectory, directory);
-    const relativeFile = path.posix.relative(searchRoot, declaration.file);
-    if (relativeFile.startsWith("../") || path.posix.isAbsolute(relativeFile)) {
+    const relativeFile = repoRelativePath(searchRoot, declaration.file);
+    if (!isPathInside(searchRoot, declaration.file)) {
       continue;
     }
     // GNU grep applies --include to each basename, including nested files.

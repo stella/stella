@@ -77,7 +77,7 @@ function ConnectionsPage() {
         />
         <SearchField
           aria-label={t("settings.connections.searchPlaceholder")}
-          clearLabel={t("onboarding.catalogueClearSearch")}
+          clearLabel={t("common.clearSearch")}
           onValueChange={setQuery}
           placeholder={t("settings.connections.searchPlaceholder")}
           value={query}
