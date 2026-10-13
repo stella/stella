@@ -642,7 +642,9 @@ describe("duplicate entity", () => {
               return entityLookupCount === 1 ? sourceDocument : undefined;
             },
           },
-          workspaces: { findFirst: async () => ({ reference: null }) },
+          workspaces: {
+            findFirst: async () => ({ reference: null, organizationId }),
+          },
         },
         $count: async () => 1,
         select: () => ({
@@ -670,6 +672,11 @@ describe("duplicate entity", () => {
         update: () => ({ set: () => ({ where: async () => {} }) }),
       };
       const { safeDb } = createScopedDbMock(tx, {
+        entityTransferEligibility: [
+          rootFolderId,
+          documentId,
+          nestedFolderId,
+        ].map((entityId) => ({ entityId, eligible: true })),
         visibleResources: { entity: [rootFolderId, documentId] },
       });
 
@@ -731,7 +738,9 @@ describe("duplicate entity", () => {
             };
           },
         },
-        workspaces: { findFirst: async () => ({ reference: null }) },
+        workspaces: {
+          findFirst: async () => ({ reference: null, organizationId }),
+        },
       },
       $count: async () => 1,
       select: () => ({
@@ -757,6 +766,9 @@ describe("duplicate entity", () => {
       update: () => ({ set: () => ({ where: async () => {} }) }),
     };
     const { safeDb } = createScopedDbMock(tx, {
+      entityTransferEligibility: [rootFolderId, documentId, nestedFolderId].map(
+        (entityId) => ({ entityId, eligible: true }),
+      ),
       visibleResources: { entity: [rootFolderId, documentId] },
     });
 
@@ -820,7 +832,9 @@ describe("duplicate entity", () => {
             };
           },
         },
-        workspaces: { findFirst: async () => ({ reference: null }) },
+        workspaces: {
+          findFirst: async () => ({ reference: null, organizationId }),
+        },
       },
       $count: async () => 1,
       select: () => ({
@@ -846,6 +860,9 @@ describe("duplicate entity", () => {
       update: () => ({ set: () => ({ where: async () => {} }) }),
     };
     const { safeDb: committedSafeDb } = createScopedDbMock(tx, {
+      entityTransferEligibility: [rootFolderId, documentId, nestedFolderId].map(
+        (entityId) => ({ entityId, eligible: true }),
+      ),
       visibleResources: { entity: [rootFolderId, documentId] },
     });
     const safeDb: SafeDb = async (callback, retry) => {
@@ -930,7 +947,7 @@ describe("duplicate entity", () => {
           findMany: async () => sources,
         },
         workspaces: {
-          findFirst: async () => ({ reference: null }),
+          findFirst: async () => ({ reference: null, organizationId }),
         },
       },
       $count: async () => sources.length,
@@ -988,6 +1005,9 @@ describe("duplicate entity", () => {
     };
 
     const { safeDb } = createScopedDbMock(tx, {
+      entityTransferEligibility: [rootFolderId, documentId, nestedFolderId].map(
+        (entityId) => ({ entityId, eligible: true }),
+      ),
       visibleResources: { entity: [rootFolderId, documentId] },
     });
     const result = await duplicateEntity.handler(createContext({ safeDb }));
@@ -1103,7 +1123,9 @@ describe("duplicate entity", () => {
           findFirst: async () => brokenSubtree.at(0),
           findMany: async () => brokenSubtree,
         },
-        workspaces: { findFirst: async () => ({ reference: null }) },
+        workspaces: {
+          findFirst: async () => ({ reference: null, organizationId }),
+        },
       },
       $count: async () => brokenSubtree.length,
       select: () => ({
@@ -1130,6 +1152,9 @@ describe("duplicate entity", () => {
     };
 
     const { safeDb } = createScopedDbMock(tx, {
+      entityTransferEligibility: [rootFolderId, documentId, nestedFolderId].map(
+        (entityId) => ({ entityId, eligible: true }),
+      ),
       visibleResources: { entity: [rootFolderId, documentId] },
     });
     const result = await duplicateEntity.handler(createContext({ safeDb }));

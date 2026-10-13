@@ -32,6 +32,11 @@ import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
+import {
+  admitEntityTransferAccess,
+  FLOW_TASK_FEATURE_ACCESS,
+} from "@/api/lib/flows/review-gate-task";
+import { flowRelatedTaskVisibilityConditions } from "@/api/lib/flows/visibility";
 import { LIMITS } from "@/api/lib/limits";
 import {
   requestNativeExtractionRuns,
@@ -78,6 +83,46 @@ const duplicateReplayPayload = ({
   return { entityId: id, fieldId: fileField?.id ?? null, name };
 };
 
+type ReadDuplicateReplayOptions = {
+  safeDb: SafeDb;
+  workspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
+  sourceEntityId: SafeId<"entity">;
+  targetEntityId: SafeId<"entity">;
+};
+
+const readDuplicateReplay = async ({
+  safeDb,
+  workspaceId,
+  userId,
+  sourceEntityId,
+  targetEntityId,
+}: ReadDuplicateReplayOptions) =>
+  await safeDb(
+    async (tx) =>
+      await tx.query.entities.findFirst({
+        where: {
+          id: { eq: targetEntityId },
+          workspaceId: { eq: workspaceId },
+          createdBy: { eq: userId },
+          duplicateSourceEntityId: { eq: sourceEntityId },
+        },
+        columns: { id: true, name: true },
+        with: {
+          currentVersion: {
+            columns: { id: true },
+            with: {
+              fields: {
+                columns: { id: true, content: true },
+                orderBy: { id: "asc" },
+                limit: LIMITS.propertiesCount,
+              },
+            },
+          },
+        },
+      }),
+  );
+
 export type DuplicateEntityDependencies = CopyEntitiesDependencies & {
   enqueueDocumentProcessingRun: typeof enqueueDocumentProcessingRun;
   flushEntitySearchRepairs: typeof flushEntitySearchRepairs;
@@ -99,16 +144,31 @@ const duplicateEntityHandler = async function* ({
   body: { entityId: sourceEntityId, name, targetEntityId },
   dependencies,
 }: DuplicateEntityHandlerProps) {
-  const source = yield* Result.await(
+  const sourceRead = yield* Result.await(
     safeDb(async (tx) => {
+      const admission = await admitEntityTransferAccess(tx, {
+        workspaceId,
+        entityId: sourceEntityId,
+        userId,
+        access: "write",
+      });
+      if (admission.isErr()) {
+        return admission;
+      }
       const entity = await tx.query.entities.findFirst({
-        where: { id: { eq: sourceEntityId }, workspaceId: { eq: workspaceId } },
+        where: {
+          id: { eq: sourceEntityId },
+          workspaceId: { eq: workspaceId },
+          RAW: flowRelatedTaskVisibilityConditions({ organizationId, userId })
+            .entity,
+        },
         columns: ENTITY_SNAPSHOT_COLUMNS,
         with: CURRENT_VERSION_SELECT,
       });
-      return entity && snapshotOfCurrentVersion(entity);
+      return Result.ok(entity && snapshotOfCurrentVersion(entity));
     }),
   );
+  const source = yield* sourceRead;
 
   if (!source) {
     return Result.err(
@@ -117,30 +177,13 @@ const duplicateEntityHandler = async function* ({
   }
 
   const findReplay = async (replayTargetEntityId: SafeId<"entity">) =>
-    await safeDb(
-      async (tx) =>
-        await tx.query.entities.findFirst({
-          where: {
-            id: { eq: replayTargetEntityId },
-            workspaceId: { eq: workspaceId },
-            createdBy: { eq: userId },
-            duplicateSourceEntityId: { eq: sourceEntityId },
-          },
-          columns: { id: true, name: true },
-          with: {
-            currentVersion: {
-              columns: { id: true },
-              with: {
-                fields: {
-                  columns: { id: true, content: true },
-                  orderBy: { id: "asc" },
-                  limit: LIMITS.propertiesCount,
-                },
-              },
-            },
-          },
-        }),
-    );
+    await readDuplicateReplay({
+      safeDb,
+      workspaceId,
+      userId,
+      sourceEntityId,
+      targetEntityId: replayTargetEntityId,
+    });
   if (targetEntityId) {
     const replayed = yield* Result.await(findReplay(targetEntityId));
     if (replayed) {
@@ -150,18 +193,32 @@ const duplicateEntityHandler = async function* ({
 
   let sourceEntities: EntitySnapshot[] = [source];
   if (source.kind === "folder") {
-    const workspaceEntities = yield* Result.await(
+    const workspaceRead = yield* Result.await(
       safeDb(async (tx) => {
+        const admission = await admitEntityTransferAccess(tx, {
+          workspaceId,
+          entityId: sourceEntityId,
+          userId,
+          access: "write",
+        });
+        if (admission.isErr()) {
+          return admission;
+        }
         const rows = await tx.query.entities.findMany({
-          where: { workspaceId: { eq: workspaceId } },
+          where: {
+            workspaceId: { eq: workspaceId },
+            RAW: flowRelatedTaskVisibilityConditions({ organizationId, userId })
+              .entity,
+          },
           columns: ENTITY_SNAPSHOT_COLUMNS,
           with: CURRENT_VERSION_SELECT,
           limit: LIMITS.entitiesCount,
         });
-        return rows.map(snapshotOfCurrentVersion);
+        return Result.ok(rows.map(snapshotOfCurrentVersion));
       }),
     );
 
+    const workspaceEntities = yield* workspaceRead;
     const subtree = getFolderSubtree(workspaceEntities, sourceEntityId);
     if (!subtree) {
       return Result.err(
@@ -196,26 +253,34 @@ const duplicateEntityHandler = async function* ({
   const remappedEntities = remapFileIds(sourceEntities, fileMappings.value);
 
   const txResultResult = (
-    await safeDb(
-      async (tx) =>
-        await copyEntities({
-          organizationId,
-          tx,
-          targetWorkspaceId: workspaceId,
-          targetParentId: source.parentId,
-          userId,
-          recordAuditEvent,
-          sourceEntityId,
-          sourceEntities: remappedEntities,
-          targetRootEntityId: targetEntityId,
-          targetRootName: name,
-          // A duplicate is a new document in the same matter: its own
-          // version 1, its own stamp and code.
-          transfer: { type: "copy" },
-          fieldMapping: { type: "omit" },
-          dependencies,
-        }),
-    )
+    await safeDb(async (tx) => {
+      const admission = await admitEntityTransferAccess(tx, {
+        workspaceId,
+        entityId: sourceEntityId,
+        userId,
+        access: "write",
+      });
+      if (admission.isErr()) {
+        return admission;
+      }
+      return await copyEntities({
+        organizationId,
+        tx,
+        targetWorkspaceId: workspaceId,
+        targetParentId: source.parentId,
+        userId,
+        recordAuditEvent,
+        sourceEntityId,
+        sourceEntities: remappedEntities,
+        targetRootEntityId: targetEntityId,
+        targetRootName: name,
+        // A duplicate is a new document in the same matter: its own
+        // version 1, its own stamp and code.
+        transfer: { type: "copy" },
+        fieldMapping: { type: "omit" },
+        dependencies,
+      });
+    })
   )
     .mapError(transactionAbortError)
     .andThen((copied) => copied);
@@ -303,6 +368,7 @@ const config = {
     "entities.copy to copy into a different matter.",
   permissions: { entity: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: FLOW_TASK_FEATURE_ACCESS,
   realtime: entityFileRealtimeUpdates,
   mcp: {
     type: "capability",
