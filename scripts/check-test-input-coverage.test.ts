@@ -79,6 +79,10 @@ const createRoot = ({ files, tasks }: Fixture): string => {
   for (const [file, contents] of Object.entries(files)) {
     write(root, file, contents);
   }
+  expect(
+    Bun.spawnSync(["git", "init", "--quiet"], { cwd: root }).exitCode,
+  ).toBe(0);
+  expect(Bun.spawnSync(["git", "add", "."], { cwd: root }).exitCode).toBe(0);
   return root;
 };
 
@@ -168,7 +172,7 @@ describe("target classification", () => {
   });
 
   test("resolves a relative specifier from the test file's directory", () => {
-    expect(classify("./types").type).toBe("package-local");
+    expect(classify("./types").type).toBe("absent");
     expect(classify("..").type).toBe("package-local");
     expect(classify("../../beta/src/route.ts")).toEqual({
       target: "apps/beta/src/route.ts",
@@ -188,6 +192,59 @@ describe("target classification", () => {
       type: "repository",
     });
   });
+});
+
+test("only tracked paths are classified and counted as repository reads", () => {
+  const root = createRoot({
+    files: {
+      ".gitignore": "ignored/**\n",
+      "apps/alpha/src/guard.test.ts": [
+        ".env.local",
+        "ignored/config.ts",
+        "scratch/config.ts",
+        "apps/beta/src/route.ts",
+      ]
+        .map((file) => `readFileSync(${JSON.stringify(file)});`)
+        .join("\n"),
+    },
+    tasks: {},
+  });
+  for (const file of [
+    ".env.local",
+    "ignored/config.ts",
+    "scratch/config.ts",
+    "apps/alpha/src/local.ts",
+  ]) {
+    write(root, file, "fixture\n");
+  }
+  for (const candidate of [
+    ".env.local",
+    "ignored/config.ts",
+    "ignored",
+    "scratch/config.ts",
+    "scratch",
+    "./local.ts",
+  ]) {
+    expect(
+      classifyTarget({
+        candidate: { fromGlob: true, path: candidate },
+        packageDir: "apps/alpha",
+        root,
+        testDir: "apps/alpha/src",
+      }),
+    ).toEqual({ type: "absent" });
+  }
+  expect(
+    classifyTarget({
+      candidate: { fromGlob: false, path: "apps/beta/src/route.ts" },
+      packageDir: "apps/alpha",
+      root,
+      testDir: "apps/alpha/src",
+    }),
+  ).toEqual({ type: "repository", target: "apps/beta/src/route.ts" });
+  const errors = checkTestInputCoverage(root);
+  expect(errors).toHaveLength(1);
+  expect(errors.at(0)).toContain("$TURBO_ROOT$/apps/beta/src/route.ts");
 });
 
 describe("turbo test inputs", () => {

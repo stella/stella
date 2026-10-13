@@ -21,7 +21,7 @@
 //   bun scripts/check-test-input-coverage.ts
 
 import { panic } from "better-result";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
 import { readStringLiterals, readTestInputs } from "./test-input-readers";
@@ -178,33 +178,31 @@ export const literalTargets = (value: string): readonly TargetCandidate[] => {
   return [...candidates.values()];
 };
 
-/**
- * `existsSync` answers case-insensitively on macOS, which makes the root
- * `VERSION` file swallow every `"version"` literal in a test. Paths are matched
- * segment by segment against real directory entries instead, and the listings
- * are cached because one test file resolves hundreds of literals.
- */
-const directoryEntries = new Map<string, ReadonlySet<string>>();
-
-const existsExact = (root: string, relativePath: string): boolean => {
-  let directory = root;
-  for (const segment of relativePath.split("/")) {
-    const cached = directoryEntries.get(directory);
-    const entries =
-      cached ??
-      new Set(
-        existsSync(directory) ? readdirSync(directory) : ([] as string[]),
-      );
-    if (cached === undefined) {
-      directoryEntries.set(directory, entries);
-    }
-    if (!entries.has(segment)) {
-      return false;
-    }
-    directory = path.join(directory, segment);
-  }
-  return true;
+type TrackedPaths = {
+  readonly files: ReadonlySet<string>;
+  readonly directories: ReadonlySet<string>;
 };
+
+/** Git preserves exact casing and excludes untracked and ignored local files. */
+const readTrackedPaths = (root: string): TrackedPaths => {
+  const listed = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: root });
+  if (listed.exitCode !== 0) {
+    panic(`Cannot enumerate tracked test inputs: ${listed.stderr.toString()}`);
+  }
+  const files = new Set(listed.stdout.toString().split("\0").filter(Boolean));
+  const directories = new Set<string>();
+  for (const file of files) {
+    let directory = path.posix.dirname(file);
+    while (directory !== ".") {
+      directories.add(directory);
+      directory = path.posix.dirname(directory);
+    }
+  }
+  return { files, directories };
+};
+
+const hasTrackedPath = (tracked: TrackedPaths, target: string): boolean =>
+  tracked.files.has(target) || tracked.directories.has(target);
 
 type TargetClassification =
   | { readonly type: "absent" }
@@ -233,12 +231,14 @@ export const classifyTarget = ({
   packageDir,
   root,
   testDir,
+  tracked = readTrackedPaths(root),
 }: {
   readonly candidate: TargetCandidate;
   readonly packageDir: string;
   readonly root: string;
   /** Repository-relative directory of the test file. */
   readonly testDir: string;
+  readonly tracked?: TrackedPaths;
 }): TargetClassification => {
   if (
     candidate.startsWith("/") ||
@@ -255,17 +255,18 @@ export const classifyTarget = ({
     if (resolved === ".." || resolved.startsWith("../")) {
       return { type: "absent" };
     }
+    if (!hasTrackedPath(tracked, resolved)) {
+      return { type: "absent" };
+    }
     if (isInside(resolved, packageDir)) {
       return { type: "package-local" };
     }
-    return existsExact(root, resolved)
-      ? { target: resolved, type: "repository" }
-      : { type: "absent" };
+    return { target: resolved, type: "repository" };
   }
-  if (existsExact(path.join(root, packageDir), candidate)) {
+  if (hasTrackedPath(tracked, path.posix.join(packageDir, candidate))) {
     return { type: "package-local" };
   }
-  if (!existsExact(root, candidate)) {
+  if (!hasTrackedPath(tracked, candidate)) {
     return { type: "absent" };
   }
   // A root-level name with no directory in it ("docs", "docker", ".env") is a
@@ -275,8 +276,7 @@ export const classifyTarget = ({
   if (
     !fromGlob &&
     !candidate.includes("/") &&
-    (candidate.lastIndexOf(".") <= 0 ||
-      statSync(path.join(root, candidate)).isDirectory())
+    (candidate.lastIndexOf(".") <= 0 || tracked.directories.has(candidate))
   ) {
     return { type: "absent" };
   }
@@ -415,9 +415,11 @@ type OutsideRead = {
 const outsideReads = ({
   packageDir,
   root,
+  tracked,
 }: {
   readonly packageDir: string;
   readonly root: string;
+  readonly tracked: TrackedPaths;
 }): readonly OutsideRead[] => {
   const reads: OutsideRead[] = [];
   for (const relative of testFiles(root, packageDir)) {
@@ -433,6 +435,7 @@ const outsideReads = ({
           packageDir,
           root,
           testDir: path.posix.dirname(testFile),
+          tracked,
         });
         if (classification.type !== "repository") {
           continue;
@@ -453,6 +456,7 @@ const outsideReads = ({
 };
 
 export const checkTestInputCoverage = (root: string): readonly string[] => {
+  const tracked = readTrackedPaths(root);
   const workspaces = readWorkspaces(root);
   const byName = new Map(
     workspaces.map((workspace) => [workspace.name, workspace]),
@@ -466,6 +470,7 @@ export const checkTestInputCoverage = (root: string): readonly string[] => {
     const reads = outsideReads({
       packageDir: workspace.dir,
       root,
+      tracked,
     });
     const matched = new Set<string>();
 
