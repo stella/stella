@@ -1,5 +1,12 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import ts from "typescript";
 
@@ -9,17 +16,31 @@ import {
 } from "./test-source-write-exceptions";
 
 const repositoryRoot = path.resolve(import.meta.dir, "../../..");
-const writers = new Set([
-  "writeFileSync",
-  "writeFile",
-  "write",
-  "mkdirSync",
-  "mkdtempSync",
+const writers = new Map([
+  ["writeFileSync", [0]],
+  ["writeFile", [0]],
+  ["write", [0]],
+  ["appendFileSync", [0]],
+  ["appendFile", [0]],
+  ["mkdirSync", [0]],
+  ["mkdir", [0]],
+  ["mkdtempSync", [0]],
+  ["mkdtemp", [0]],
+  ["copyFileSync", [1]],
+  ["copyFile", [1]],
+  ["cpSync", [1]],
+  ["cp", [1]],
+  ["renameSync", [0, 1]],
+  ["rename", [0, 1]],
+  ["symlinkSync", [1]],
+  ["symlink", [1]],
 ]);
 
 const inspectSourceWrites = (source: string, file: string) => {
   const violations: string[] = [];
-  if (!/write|mkdir|mkdtemp|\\/u.test(source)) {
+  if (
+    !/write|mkdir|mkdtemp|append|copyFile|cp|rename|symlink|\\/u.test(source)
+  ) {
     return violations;
   }
   const absoluteFile = path.resolve(repositoryRoot, file);
@@ -27,13 +48,7 @@ const inspectSourceWrites = (source: string, file: string) => {
     repositoryRoot,
     file.split("/").slice(0, 2).join("/"),
   );
-  const tree = ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
+  const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
   const bindings = new Map<ts.Node, Map<string, ts.Expression>>();
   const aliases = new Map<string, string>();
   const scopeOf = (node: ts.Node): ts.Node => {
@@ -250,29 +265,33 @@ const inspectSourceWrites = (source: string, file: string) => {
     const writer = ts.isCallExpression(node)
       ? callName(node.expression)
       : undefined;
+    const argumentIndexes =
+      writer === undefined ? undefined : writers.get(writer);
     if (
       ts.isCallExpression(node) &&
       writer !== undefined &&
-      writers.has(writer)
+      argumentIndexes !== undefined
     ) {
-      const destination = node.arguments.at(0);
-      const value =
-        destination === undefined ? undefined : evaluatePath(destination);
-      if (value !== undefined) {
-        const base = /^(?:apps|packages)\//u.test(value)
-          ? repositoryRoot
-          : packageRoot;
-        const relative = path.relative(
-          repositoryRoot,
-          path.resolve(base, value),
-        );
-        if (/^(?:apps|packages)\/[^/]+\/src(?:\/|$)/u.test(relative)) {
-          const { line } = tree.getLineAndCharacterOfPosition(
-            node.getStart(tree),
+      for (const argumentIndex of argumentIndexes) {
+        const destination = node.arguments.at(argumentIndex);
+        const value =
+          destination === undefined ? undefined : evaluatePath(destination);
+        if (value !== undefined) {
+          const base = /^(?:apps|packages)\//u.test(value)
+            ? repositoryRoot
+            : packageRoot;
+          const relative = path.relative(
+            repositoryRoot,
+            path.resolve(base, value),
           );
-          violations.push(
-            `${file}:${line + 1}: ${writer} writes into src (${relative})`,
-          );
+          if (/^(?:apps|packages)\/[^/]+\/src(?:\/|$)/u.test(relative)) {
+            const { line } = tree.getLineAndCharacterOfPosition(
+              node.getStart(tree),
+            );
+            violations.push(
+              `${file}:${line + 1}: ${writer} writes into src (${relative})`,
+            );
+          }
         }
       }
     }
@@ -282,12 +301,19 @@ const inspectSourceWrites = (source: string, file: string) => {
   return violations;
 };
 
-test("tests keep generated files outside application and package source trees", () => {
-  const files = [
+const filesToInspect = (root: string) =>
+  [
     ...new Bun.Glob(
-      "{apps,packages}/*/src/**/*.{test,spec}.{ts,tsx,js,jsx,mts,cts,mjs,cjs}",
-    ).scanSync({ cwd: repositoryRoot, onlyFiles: true }),
-  ];
+      "{apps,packages}/*/src/**/*.{ts,tsx,js,jsx,mts,cts,mjs,cjs}",
+    ).scanSync({ cwd: root, onlyFiles: true }),
+  ].filter(
+    (file) =>
+      /\.(?:test|spec|test-helpers|test-fixtures)\.[cm]?[jt]sx?$/u.test(file) ||
+      /\/(?:tests|__tests__|test-helpers|test-fixtures)\//u.test(file),
+  );
+
+test("tests keep generated files outside application and package source trees", () => {
+  const files = filesToInspect(repositoryRoot);
   expect(files.length).toBeGreaterThan(0);
   const violations = files.flatMap((file) =>
     inspectSourceWrites(
@@ -296,6 +322,46 @@ test("tests keep generated files outside application and package source trees", 
     ),
   );
   expect(sourceWriteExceptionIssues(repositoryRoot, violations)).toEqual([]);
+});
+
+test("the census inspects test helper directories and fixture modules", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "stella-source-write-census-"));
+  const helperFiles = [
+    "apps/example/src/tests/helpers/source-mutant.ts",
+    "apps/example/src/nested/__tests__/source-mutant.ts",
+    "packages/example/src/test-helpers/source-mutant.ts",
+    "packages/example/src/nested/test-fixtures/source-mutant.ts",
+    "packages/example/src/source.test-helpers.ts",
+    "apps/example/src/source.test-fixtures.ts",
+    "packages/example/src/source.spec.mts",
+  ];
+  const excludedFiles = [
+    "apps/example/src/helpers/production.ts",
+    "packages/example/src/production.ts",
+    "apps/example/scripts/outside.test.ts",
+  ];
+  const source = 'writeFileSync(path.join(import.meta.dir, "mutant.ts"), "");';
+  try {
+    for (const file of [...helperFiles, ...excludedFiles]) {
+      const absoluteFile = path.join(root, file);
+      mkdirSync(path.dirname(absoluteFile), { recursive: true });
+      writeFileSync(absoluteFile, source);
+    }
+    const selected = filesToInspect(root);
+    expect(selected.toSorted()).toEqual(helperFiles.toSorted());
+    const violations = selected.flatMap((file) =>
+      inspectSourceWrites(readFileSync(path.join(root, file), "utf-8"), file),
+    );
+    expect(violations).toHaveLength(helperFiles.length);
+    for (const file of helperFiles) {
+      expect(
+        violations.some((violation) => violation.startsWith(`${file}:`)),
+        file,
+      ).toBe(true);
+    }
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
 });
 
 test("source-write exceptions exactly match observed writes and may only shrink", () => {
@@ -391,13 +457,17 @@ test("the census rejects every writer through direct and derived source destinat
     'new URL("./mutation.ts", import.meta.url)',
     "path.join(path.dirname(fileURLToPath(import.meta.url)), name)",
   ];
-  for (const writer of writers) {
+  for (const [writer, argumentIndexes] of writers) {
     for (const destination of destinations) {
-      const fixture = `const root = ${destination}; const target = root; ${writer === "write" ? "Bun.write" : writer}(target, "fixture");`;
+      const arguments_ = ['"fixture"', '"fixture"'];
+      for (const index of argumentIndexes) {
+        arguments_[index] = "target";
+      }
+      const fixture = `const root = ${destination}; const target = root; ${writer === "write" ? "Bun.write" : writer}(${arguments_.join(", ")});`;
       expect(
         inspectSourceWrites(fixture, "apps/api/src/tests/example.test.ts"),
         fixture,
-      ).toHaveLength(1);
+      ).toHaveLength(argumentIndexes.length);
     }
   }
   expect(
@@ -421,6 +491,12 @@ test("the census rejects every writer through direct and derived source destinat
   expect(
     inspectSourceWrites(
       'const save = Bun.write; save(path.join(import.meta.dirname, "mutant.ts"), "");',
+      "apps/api/src/example.test.ts",
+    ),
+  ).toHaveLength(1);
+  expect(
+    inspectSourceWrites(
+      'const identity = <T>(value: T) => value; writeFileSync(path.join(import.meta.dir, "mutant.ts"), "");',
       "apps/api/src/example.test.ts",
     ),
   ).toHaveLength(1);
