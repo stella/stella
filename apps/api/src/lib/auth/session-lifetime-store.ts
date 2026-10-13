@@ -151,7 +151,8 @@ export const createDatabaseSessionLifetimeStore = (
                 ),
               }
             : {}),
-          expiresAt,
+          // SDK refreshes must never extend a text handoff's absolute deadline.
+          expiresAt: sql`LEAST(${expiresAt}::timestamptz, ${session.handoffAbsoluteExpiresAt})`,
           updatedAt: now,
           lastSeenAt: sql`GREATEST(${session.lastSeenAt}, ${now}::timestamptz)`,
         })

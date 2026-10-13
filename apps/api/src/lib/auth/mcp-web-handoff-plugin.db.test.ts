@@ -47,7 +47,11 @@ import { AUDIT_ACTION } from "@/api/lib/audit-log.constants";
 import { createMcpWebHandoffPlugin } from "@/api/lib/auth";
 import { requiresHandoffStepUpForAuthPath } from "@/api/lib/auth/handoff-step-up-policy";
 import { createWebHandoffService } from "@/api/lib/auth/mcp-web-handoff";
-import { SESSION_LIFETIME_FIELDS } from "@/api/lib/auth/session-lifetime";
+import {
+  createSessionLifetime,
+  SESSION_LIFETIME_FIELDS,
+} from "@/api/lib/auth/session-lifetime";
+import { createDatabaseSessionLifetimeStore } from "@/api/lib/auth/session-lifetime-store";
 import { toSafeId } from "@/api/lib/branded-types";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import {
@@ -101,6 +105,12 @@ const makeAuth = (
       },
     },
     plugins: [
+      createSessionLifetime({
+        store: createDatabaseSessionLifetimeStore(db, {
+          expiresIn: 7 * 24 * 60 * 60,
+          updateAge: 24 * 60 * 60,
+        }),
+      }).plugin,
       organizationPlugin(),
       emailOTP({
         disableSignUp: true,
@@ -914,7 +924,8 @@ describe("MCP link sign-in", () => {
     const before = await db
       .select({ id: session.id })
       .from(session)
-      .where(eq(session.userId, fixture.userId));
+      .where(eq(session.userId, fixture.userId))
+      .orderBy(session.id);
     const response = await redeem(code, { cookie: existingCookie });
     expect(response.status).toBe(200);
     expect(cookieOf(response)).toContain("session_token=");
@@ -963,7 +974,8 @@ describe("MCP link sign-in", () => {
       await db
         .select({ id: session.id })
         .from(session)
-        .where(eq(session.userId, fixture.userId)),
+        .where(eq(session.userId, fixture.userId))
+        .orderBy(session.id),
     ).toEqual(before);
   });
   test("a removed link-organization membership leaves the browser organization unchanged", async () => {

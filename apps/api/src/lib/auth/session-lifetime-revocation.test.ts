@@ -104,6 +104,26 @@ const createFixture = async (cacheEnabled: boolean) => {
               return ctx.json({ sessionId: updated?.id ?? null });
             },
           ),
+          deleteDevice: createAuthEndpoint(
+            "/test-delete-device",
+            {
+              method: "POST",
+              body: v.object({ token: v.string() }),
+              requireHeaders: true,
+              use: [sessionMiddleware],
+            },
+            async (ctx) => {
+              await runWithTransaction(ctx.context.adapter, async () => {
+                transactionActive = true;
+                await ctx.context.internalAdapter
+                  .deleteSession(ctx.body.token)
+                  .finally(() => {
+                    transactionActive = false;
+                  });
+              });
+              return ctx.json({ status: true });
+            },
+          ),
         },
       },
     ],
@@ -171,6 +191,26 @@ const createFixture = async (cacheEnabled: boolean) => {
 };
 
 describe("session revocation through HTTP", () => {
+  test.each(["current", "prior"] as const)(
+    "deletes a device by its %s token through the SDK transaction adapter",
+    async (tokenMode) => {
+      const fixture = await createFixture(false);
+      const target = await fixture.createOtherDevice();
+      const token =
+        tokenMode === "prior" ? fixture.rotate(target) : target.token;
+      if (tokenMode === "prior") {
+        expect(token).not.toBe(target.token);
+      }
+      const response = await fixture.post("/test-delete-device", { token });
+      expect(response.status).toBe(200);
+      expect(fixture.database.session.some((row) => row.id === target.id)).toBe(
+        false,
+      );
+      expect(
+        fixture.database.session.some((row) => row.id === fixture.caller.id),
+      ).toBe(true);
+    },
+  );
   test.each(["current", "prior"] as const)(
     "updates a device by its %s token through the SDK transaction adapter",
     async (tokenMode) => {

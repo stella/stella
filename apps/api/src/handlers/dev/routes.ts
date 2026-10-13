@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { eq, inArray } from "drizzle-orm";
-import Elysia, { status, t } from "elysia";
+import Elysia, { t } from "elysia";
 import { rmSync } from "node:fs";
 import path from "node:path";
 
@@ -153,7 +153,7 @@ export const devRoute = new Elysia({ prefix: "/dev" })
           ? ctx.session.activeOrganizationId
           : await resolveMemberDevOrganization(ctx.body.organizationId, userId);
       if (organizationId === null) {
-        return status(403, "Organization membership not found");
+        return ctx.status(403, "Organization membership not found");
       }
 
       const parameters = {
@@ -178,7 +178,7 @@ export const devRoute = new Elysia({ prefix: "/dev" })
             userId,
           })
         ) {
-          return status(409, "A firm-knowledge seed is already running");
+          return ctx.status(409, "A firm-knowledge seed is already running");
         }
 
         return getFirmKnowledgeJobResponse(job);
