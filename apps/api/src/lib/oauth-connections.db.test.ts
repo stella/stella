@@ -1,5 +1,7 @@
+import { panic } from "better-result";
 import {
   afterAll,
+  afterEach,
   beforeAll,
   describe,
   expect,
@@ -9,6 +11,8 @@ import {
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import { sha256Hex } from "@stll/sha256/bun";
+
 import {
   oauthAccessToken,
   oauthConsent,
@@ -17,6 +21,7 @@ import {
 } from "@/api/db/auth-schema";
 import { meRoute } from "@/api/handlers/me/routes";
 import { getAuth } from "@/api/lib/auth";
+import { resetLogSinkForTesting } from "@/api/lib/observability/logger";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import type { HumanBrowser } from "@/api/tests/helpers/human-session";
 import {
@@ -35,6 +40,7 @@ import type {
   OAuthGrant,
   RegisteredOAuthClient,
 } from "@/api/tests/helpers/oauth-grant";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 // Disconnecting a connected app from the settings page, through the real
@@ -52,6 +58,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await releaseAgentAuthTestDb();
 });
+afterEach(resetLogSinkForTesting);
 
 const BASE = "http://localhost";
 
@@ -149,8 +156,33 @@ describe("resource-bound OAuth refresh", () => {
       const client = await registerOAuthClient();
       let grant = await grantOAuthClient(browser, client);
       const requestedScope = grant.scope;
+      const initialRow = await testDb.query.oauthRefreshToken.findFirst({
+        where: eq(oauthRefreshToken.clientId, client.clientId),
+        columns: { authorizationCodeId: true },
+      });
+      const familyId =
+        initialRow?.authorizationCodeId ?? panic("Grant family required");
+      const familyHash = sha256Hex(`stella:oauth:grant-family:v1:${familyId}`);
       expect(grant.scope.split(" ")).toContain("offline_access");
       for (let rotation = 0; rotation < 2; rotation += 1) {
+        const telemetry = installRecordingLogger();
+        const refused = await refreshOAuthGrant({
+          client,
+          refreshToken: grant.refreshToken,
+          scope: "ungranted",
+        });
+        expect(refused.status).toBe(400);
+        const refusals = telemetry.records.filter(
+          ({ message }) => message === "auth.request_refused",
+        );
+        expect(refusals).toHaveLength(1);
+        expect(refusals.at(0)?.attributes).toMatchObject({
+          "oauth.refusal_reason": "scope_mismatch",
+          "oauth.grant_family": familyHash,
+          "oauth.client_id": client.clientId,
+        });
+        expect(JSON.stringify(refusals)).not.toContain(grant.refreshToken);
+        expect(JSON.stringify(refusals)).not.toContain(familyId);
         const response = await refreshOAuthGrant({
           client,
           refreshToken: grant.refreshToken,
@@ -170,6 +202,19 @@ describe("resource-bound OAuth refresh", () => {
         expect(tokens.scope.split(" ").toSorted()).toEqual(
           requestedScope.split(" ").toSorted(),
         );
+        const replay = await refreshOAuthGrant({
+          client,
+          refreshToken: grant.refreshToken,
+          ...(scopeMode === "original" ? { scope: requestedScope } : {}),
+        });
+        expect(replay.status).toBe(200);
+        expect(await replay.json()).toMatchObject(tokens);
+        expect(
+          telemetry.records.filter(
+            ({ message }) => message === "auth.request_refused",
+          ),
+        ).toHaveLength(1);
+        telemetry.restore();
         grant = {
           accessToken: tokens.access_token,
           refreshToken: tokens.refresh_token,
@@ -277,6 +322,7 @@ describe("disconnecting a connected app", () => {
       storedRefreshTokens: 0,
       consents: 0,
     });
+    const telemetry = installRecordingLogger();
     expect(
       (
         await refreshOAuthGrant({
@@ -285,6 +331,24 @@ describe("disconnecting a connected app", () => {
         })
       ).ok,
     ).toBe(false);
+    const refusals = telemetry.records.filter(
+      ({ message }) => message === "auth.request_refused",
+    );
+    expect(refusals).toHaveLength(1);
+    expect(refusals.at(0)?.attributes).toMatchObject({
+      "oauth.refusal_reason": "unknown_token",
+      "oauth.client_id": disconnectedClient.clientId,
+      "oauth.grant_family": null,
+    });
+    expect(JSON.stringify(refusals)).not.toContain(
+      disconnectedGrant.refreshToken,
+    );
+    if (disconnectedClient.clientSecret !== undefined) {
+      expect(JSON.stringify(refusals)).not.toContain(
+        disconnectedClient.clientSecret,
+      );
+    }
+    telemetry.restore();
     expect(
       (await listConnections(browser)).map(({ clientId }) => clientId),
     ).toEqual([keptClient.clientId]);

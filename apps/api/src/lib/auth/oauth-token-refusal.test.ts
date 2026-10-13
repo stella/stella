@@ -1,0 +1,418 @@
+import { oauthProvider } from "@better-auth/oauth-provider";
+import { betterAuth } from "better-auth";
+import { memoryAdapter } from "better-auth/adapters/memory";
+import { afterEach, describe, expect, test } from "bun:test";
+
+import { sha256Hex } from "@stll/sha256/bun";
+
+import { authRefusalLogPlugin } from "@/api/lib/auth/auth-refusal-plugin";
+import {
+  describeOAuthTokenRefusal,
+  OAUTH_PROTOCOL_REFUSAL_REASONS,
+  OAUTH_TOKEN_REFUSAL_REASONS,
+} from "@/api/lib/auth/oauth-token-refusal";
+import {
+  type LogRecord,
+  resetLogSinkForTesting,
+  setLogSinkForTesting,
+} from "@/api/lib/observability/logger";
+import { runWithRequestId } from "@/api/lib/observability/request-context";
+
+const CLIENT_ID = "refusal-client";
+const REFRESH_VALUE = "fixture-refresh-value";
+const CODE_VALUE = "fixture-code-value";
+const SECRET_VALUE = "fixture-client-secret";
+const VERIFIER_VALUE = "fixture-code-verifier";
+const RESOURCE = "https://resource.example.test/mcp";
+const REDIRECT = "https://client.example.test/callback";
+const FAMILY_ID = sha256Hex(CODE_VALUE);
+const FAMILY_HASH = sha256Hex(`stella:oauth:grant-family:v1:${FAMILY_ID}`);
+
+afterEach(resetLogSinkForTesting);
+
+const fixture = async () => {
+  const database: Record<string, Record<string, unknown>[]> = {
+    user: [],
+    session: [],
+    account: [],
+    verification: [],
+    oauthClient: [],
+    oauthAccessToken: [],
+    oauthRefreshToken: [],
+    oauthConsent: [],
+    oauthResource: [],
+    oauthClientResource: [],
+  };
+  const records: LogRecord[] = [];
+  setLogSinkForTesting((record) => records.push(record));
+  const auth = betterAuth({
+    baseURL: "http://localhost:3001",
+    secret: "test-secret-that-is-long-enough-for-better-auth",
+    database: memoryAdapter(database),
+    rateLimit: { enabled: false },
+    plugins: [
+      oauthProvider({
+        loginPage: "/sign-in",
+        consentPage: "/consent",
+        disableJwtPlugin: true,
+        resourceSeedMode: "none",
+        scopes: ["offline_access", "read"],
+        storeTokens: { hash: async (value) => sha256Hex(value) },
+        refreshTokenReuseInterval: 30,
+      }),
+      authRefusalLogPlugin,
+    ],
+  });
+  const context = await auth.$context;
+  await context.adapter.create({
+    model: "oauthClient",
+    data: {
+      clientId: CLIENT_ID,
+      tokenEndpointAuthMethod: "none",
+      scopes: ["offline_access", "read"],
+      grantTypes: ["authorization_code", "refresh_token"],
+      redirectUris: [REDIRECT],
+      disabled: false,
+    },
+  });
+  const seedRefresh = async (fields: Record<string, unknown> = {}) =>
+    await context.adapter.create({
+      model: "oauthRefreshToken",
+      data: {
+        token: sha256Hex(REFRESH_VALUE),
+        clientId: CLIENT_ID,
+        authorizationCodeId: FAMILY_ID,
+        userId: "fixture-user",
+        scopes: ["offline_access", "read"],
+        resources: null,
+        expiresAt: new Date("2100-01-01"),
+        createdAt: new Date(0),
+        ...fields,
+      },
+    });
+  const seedCode = async (fields: Record<string, unknown> = {}) =>
+    await context.internalAdapter.createVerificationValue({
+      identifier: FAMILY_ID,
+      value: JSON.stringify({
+        type: "authorization_code",
+        userId: "fixture-user",
+        sessionId: "fixture-session",
+        query: {
+          client_id: CLIENT_ID,
+          redirect_uri: REDIRECT,
+          scope: "offline_access read",
+          code_challenge: "fixture-challenge",
+          code_challenge_method: "S256",
+          resource: RESOURCE,
+        },
+        ...fields,
+      }),
+      expiresAt: new Date("2100-01-01"),
+    });
+  const refuse = async (body: Record<string, string>) => {
+    const response = await runWithRequestId(
+      "fixture-request-id",
+      async () =>
+        await auth.handler(
+          new Request("http://localhost:3001/api/auth/oauth2/token", {
+            method: "POST",
+            headers: { "content-type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams(body),
+          }),
+        ),
+    );
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(response.status).toBeLessThan(500);
+    const refusals = records.filter(
+      (record) => record.message === "auth.request_refused",
+    );
+    expect(refusals).toHaveLength(1);
+    const attributes = refusals.at(0)?.attributes;
+    expect(attributes).toMatchObject({
+      "http.status_code": response.status,
+      "request.id": "fixture-request-id",
+      "auth.path": "/oauth2/token",
+    });
+    const serialized = JSON.stringify(refusals);
+    for (const credential of [
+      REFRESH_VALUE,
+      CODE_VALUE,
+      SECRET_VALUE,
+      VERIFIER_VALUE,
+      FAMILY_ID,
+    ]) {
+      expect(serialized).not.toContain(credential);
+    }
+    expect(serialized).not.toContain("error_description");
+    expect(await response.text()).not.toContain("oauth.refusal_reason");
+    return attributes;
+  };
+  return { context, database, seedRefresh, seedCode, refuse };
+};
+
+const refreshBody = {
+  grant_type: "refresh_token",
+  client_id: CLIENT_ID,
+  refresh_token: REFRESH_VALUE,
+};
+const codeBody = {
+  grant_type: "authorization_code",
+  client_id: CLIENT_ID,
+  code: CODE_VALUE,
+  code_verifier: VERIFIER_VALUE,
+  redirect_uri: REDIRECT,
+};
+
+describe("OAuth token refusal observations", () => {
+  test.each([
+    ["expired", { expiresAt: new Date(0) }],
+    ["client_mismatch", { clientId: "different-client" }],
+    [
+      "rotated_outside_replay",
+      {
+        revoked: new Date(0),
+        rotatedAt: new Date(0),
+        rotationReplayExpiresAt: new Date(1),
+      },
+    ],
+    ["revoked", { revoked: new Date(0) }],
+    [
+      "rotation_replay_mismatch",
+      {
+        revoked: new Date(0),
+        rotatedAt: new Date(0),
+        rotationReplayExpiresAt: new Date("2100-01-01"),
+      },
+    ],
+    ["scope_mismatch", { scopes: ["read"] }],
+    ["user_unavailable", {}],
+  ] as const)("observes %s at the refresh refusal", async (reason, fields) => {
+    const { seedRefresh, refuse } = await fixture();
+    await seedRefresh(fields);
+    expect(await refuse(refreshBody)).toMatchObject({
+      "oauth.refusal_reason": reason,
+      "oauth.client_id": CLIENT_ID,
+      "oauth.grant_family": FAMILY_HASH,
+    });
+  });
+
+  test("observes a resource mismatch at the refresh refusal", async () => {
+    const { seedRefresh, refuse } = await fixture();
+    await seedRefresh({ resources: [RESOURCE] });
+    expect(
+      await refuse({
+        ...refreshBody,
+        resource: "https://other.example.test/mcp",
+      }),
+    ).toMatchObject({
+      "oauth.refusal_reason": "resource_mismatch",
+      "oauth.grant_family": FAMILY_HASH,
+    });
+  });
+
+  test("observes scope expansion before issuing tokens", async () => {
+    const { seedRefresh, refuse } = await fixture();
+    await seedRefresh({ resources: null });
+    expect(await refuse({ ...refreshBody, scope: "ungranted" })).toMatchObject({
+      "oauth.refusal_reason": "scope_mismatch",
+      "oauth.grant_family": FAMILY_HASH,
+    });
+  });
+
+  test("observes invalid client authentication with the public client id", async () => {
+    const { seedRefresh, refuse } = await fixture();
+    await seedRefresh();
+    expect(
+      await refuse({ ...refreshBody, client_secret: SECRET_VALUE }),
+    ).toMatchObject({
+      "oauth.refusal_reason": "client_authentication_failed",
+      "oauth.client_id": CLIENT_ID,
+    });
+  });
+
+  test("observes a missing required request field before grant lookup", async () => {
+    const { refuse } = await fixture();
+    expect(
+      await refuse({ grant_type: "refresh_token", client_id: CLIENT_ID }),
+    ).toMatchObject({
+      "oauth.refusal_reason": "request_invalid",
+      "oauth.grant_family": null,
+    });
+  });
+
+  test("observes a malformed stored code value", async () => {
+    const { context, seedCode, refuse } = await fixture();
+    await seedCode();
+    await context.adapter.update({
+      model: "verification",
+      where: [{ field: "identifier", value: FAMILY_ID }],
+      update: { value: "{}" },
+    });
+    expect(await refuse(codeBody)).toMatchObject({
+      "oauth.refusal_reason": "code_malformed",
+    });
+  });
+
+  test.each(["unknown", "deleted"] as const)(
+    "observes %s refresh rows without a family",
+    async (state) => {
+      const { seedRefresh, refuse, context } = await fixture();
+      if (state === "deleted") {
+        await seedRefresh();
+        await context.adapter.deleteMany({
+          model: "oauthRefreshToken",
+          where: [{ field: "clientId", value: CLIENT_ID }],
+        });
+      }
+      expect(await refuse(refreshBody)).toMatchObject({
+        "oauth.refusal_reason": "unknown_token",
+        "oauth.grant_family": null,
+      });
+    },
+  );
+
+  test.each([
+    ["client_mismatch", { client_id: "different-client" }],
+    [
+      "redirect_mismatch",
+      { redirect_uri: "https://other.example.test/callback" },
+    ],
+    ["pkce_mismatch", {}],
+  ] as const)("observes %s at the code refusal", async (reason, fields) => {
+    const { seedCode, refuse } = await fixture();
+    await seedCode();
+    expect(await refuse({ ...codeBody, ...fields })).toMatchObject({
+      "oauth.refusal_reason": reason,
+      "oauth.grant_family": FAMILY_HASH,
+    });
+  });
+
+  test.each(["absent", "expired", "consumed"] as const)(
+    "observes %s codes as code_invalid",
+    async (state) => {
+      const { context, seedCode, refuse } = await fixture();
+      if (state !== "absent") {
+        await seedCode();
+        if (state === "expired") {
+          await context.adapter.update({
+            model: "verification",
+            where: [{ field: "identifier", value: FAMILY_ID }],
+            update: { expiresAt: new Date(0) },
+          });
+        } else {
+          expect(
+            await context.internalAdapter.consumeVerificationValue(FAMILY_ID),
+          ).not.toBeNull();
+        }
+      }
+      expect(await refuse(codeBody)).toMatchObject({
+        "oauth.refusal_reason": "code_invalid",
+        "oauth.grant_family": FAMILY_HASH,
+      });
+    },
+  );
+
+  test("keeps family metadata absent for rows without an authorization identifier", async () => {
+    const { seedRefresh, refuse } = await fixture();
+    await seedRefresh({ authorizationCodeId: null, expiresAt: new Date(0) });
+    expect(await refuse(refreshBody)).toMatchObject({
+      "oauth.refusal_reason": "expired",
+      "oauth.grant_family": null,
+    });
+  });
+
+  test("surfaces an unclassified provider observation explicitly", () => {
+    expect(
+      describeOAuthTokenRefusal({
+        observation: { reason: "new_provider_reason" },
+        body: refreshBody,
+        errorCode: "invalid_grant",
+      }),
+    ).toMatchObject({
+      "oauth.refusal_reason": "unclassified",
+      "oauth.refusal_unclassified": true,
+    });
+  });
+});
+
+const providerFile = (name: string) =>
+  Bun.file(
+    new URL(name, import.meta.resolve("@better-auth/oauth-provider")),
+  ).text();
+
+const providerFunction = (source: string, name: string) => {
+  const start = source.indexOf(`function ${name}(`);
+  expect(start).toBeGreaterThanOrEqual(0);
+  const end = source.slice(start + 1).search(/\n(?:async )?function /u);
+  return end < 0 ? source.slice(start) : source.slice(start, start + 1 + end);
+};
+
+const directRefusalsClassified = (source: string) =>
+  !/throw new APIError[\w$]*\(/u.test(source) &&
+  [...source.matchAll(/oauthTokenError\(ctx, (.*?), "[A-Z_]+",/gu)].every(
+    (match) => {
+      const reasons = [...(match.at(1) ?? "").matchAll(/"([a-z_]+)"/gu)];
+      return (
+        reasons.length > 0 &&
+        reasons.every((reason) =>
+          OAUTH_TOKEN_REFUSAL_REASONS.some((known) => known === reason.at(1)),
+        )
+      );
+    },
+  );
+
+test("the pinned provider assigns every direct grant refusal and shared protocol error", async () => {
+  const source = await providerFile("introspect-CbYi2MJT.mjs");
+  for (const name of [
+    "checkVerificationValue",
+    "handleAuthorizationCodeGrant",
+    "handleRefreshTokenGrant",
+    "createRefreshToken",
+  ]) {
+    const body = providerFunction(source, name);
+    expect(body).toContain("oauthTokenError(ctx,");
+    expect(directRefusalsClassified(body)).toBe(true);
+    // The census itself must refuse an added unclassified path.
+    expect(
+      directRefusalsClassified(
+        `${body}\nthrow new APIError("BAD_REQUEST", {});`,
+      ),
+    ).toBe(false);
+    expect(
+      directRefusalsClassified(body.replaceAll('"expired"', '"new_refusal"')),
+    ).toBe(!body.includes('"expired"'));
+  }
+  const utils = await providerFile("utils-CoqjzHuU.mjs");
+  for (const [file, names] of [
+    [
+      source,
+      [
+        "tokenEndpoint",
+        "resolveResourcePolicy",
+        "assertClientLinkedToResources",
+        "decodeRefreshToken",
+        "throwInvalidDpopProof",
+      ],
+    ],
+    [
+      utils,
+      [
+        "extractClientCredentials",
+        "validateClientCredentials",
+        "validateClientScopes",
+        "throwInvalidClient",
+        "throwInvalidAuthenticationRequest",
+      ],
+    ],
+  ] as const) {
+    for (const name of names) {
+      for (const match of providerFunction(file, name).matchAll(
+        /error: "([a-z_]+)"/gu,
+      )) {
+        expect(Object.keys(OAUTH_PROTOCOL_REFUSAL_REASONS)).toContain(
+          match.at(1),
+        );
+      }
+    }
+  }
+});

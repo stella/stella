@@ -27,6 +27,9 @@ describe("auth refusal log", () => {
         "http.status_code": 400,
         "auth.error_code": "invalid_scope",
         "oauth.grant_type": "refresh_token",
+        "oauth.refusal_reason": "scope_mismatch",
+        "oauth.client_id": "client",
+        "oauth.grant_family": null,
       },
     });
   });

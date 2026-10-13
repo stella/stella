@@ -431,6 +431,38 @@ worker process is alive and also requires API readiness. Queue latency and
 worker error logs remain the authoritative signals that work is draining; the
 healthcheck does not claim to execute a synthetic document job.
 
+## OAuth refusal counts
+
+The API emits one `auth.request_refused` event per refused auth request.
+For `/oauth2/token` refresh and authorization-code grants, `oauth.refusal_reason`
+records the provider decision, alongside `oauth.client_id`, `oauth.grant_type`,
+`http.status_code` and the ambient `request.id` when present.
+`oauth.grant_family` is SHA-256 of
+`stella:oauth:grant-family:v1:` followed by the stored authorization-code
+identifier (also carried into each rotated refresh row). It correlates a
+family across rotations without exposing credentials or database identifiers.
+It is null when the refresh row or its authorization-code identifier is absent.
+
+`unknown_token` includes refresh rows deleted by consent revocation or member
+removal; those actions have separate audit records. `code_invalid` combines
+absent, expired and already consumed codes because atomic consumption returns
+the same result for each. No tombstones or additional retention are introduced.
+`revoked` applies only when a revoked refresh row remains available, and
+`rotated_outside_replay` applies to a rotated row past its replay interval.
+`rotation_replay_mismatch` records a rotated row whose replay response cannot
+be returned inside that interval. `oauth.refusal_unclassified = true` identifies
+a refusal requiring a provider-mapping review.
+
+For CloudWatch Logs Insights, select the API log group and desired time range,
+then count refusals by day, reason and public client id (no additional metrics):
+
+```text
+filter message = "auth.request_refused" and `auth.path` = "/oauth2/token"
+| filter ispresent(`oauth.refusal_reason`)
+| stats count(*) as refusals by bin(1d), `oauth.refusal_reason`, `oauth.client_id`
+| sort refusals desc
+```
+
 ## Requirements
 
 - PostgreSQL 18+
