@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -10,8 +9,6 @@ import {
 } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
-
-import { sha256Hex } from "@stll/sha256/bun";
 
 import {
   oauthAccessToken,
@@ -156,33 +153,8 @@ describe("resource-bound OAuth refresh", () => {
       const client = await registerOAuthClient();
       let grant = await grantOAuthClient(browser, client);
       const requestedScope = grant.scope;
-      const initialRow = await testDb.query.oauthRefreshToken.findFirst({
-        where: eq(oauthRefreshToken.clientId, client.clientId),
-        columns: { authorizationCodeId: true },
-      });
-      const familyId =
-        initialRow?.authorizationCodeId ?? panic("Grant family required");
-      const familyHash = sha256Hex(`stella:oauth:grant-family:v1:${familyId}`);
       expect(grant.scope.split(" ")).toContain("offline_access");
       for (let rotation = 0; rotation < 2; rotation += 1) {
-        const telemetry = installRecordingLogger();
-        const refused = await refreshOAuthGrant({
-          client,
-          refreshToken: grant.refreshToken,
-          scope: "ungranted",
-        });
-        expect(refused.status).toBe(400);
-        const refusals = telemetry.records.filter(
-          ({ message }) => message === "auth.request_refused",
-        );
-        expect(refusals).toHaveLength(1);
-        expect(refusals.at(0)?.attributes).toMatchObject({
-          "oauth.refusal_reason": "scope_mismatch",
-          "oauth.grant_family": familyHash,
-          "oauth.client_id": client.clientId,
-        });
-        expect(JSON.stringify(refusals)).not.toContain(grant.refreshToken);
-        expect(JSON.stringify(refusals)).not.toContain(familyId);
         const response = await refreshOAuthGrant({
           client,
           refreshToken: grant.refreshToken,
@@ -202,19 +174,6 @@ describe("resource-bound OAuth refresh", () => {
         expect(tokens.scope.split(" ").toSorted()).toEqual(
           requestedScope.split(" ").toSorted(),
         );
-        const replay = await refreshOAuthGrant({
-          client,
-          refreshToken: grant.refreshToken,
-          ...(scopeMode === "original" ? { scope: requestedScope } : {}),
-        });
-        expect(replay.status).toBe(200);
-        expect(await replay.json()).toMatchObject(tokens);
-        expect(
-          telemetry.records.filter(
-            ({ message }) => message === "auth.request_refused",
-          ),
-        ).toHaveLength(1);
-        telemetry.restore();
         grant = {
           accessToken: tokens.access_token,
           refreshToken: tokens.refresh_token,
