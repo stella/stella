@@ -1,6 +1,24 @@
 import { expect, test } from "bun:test";
 
+import config from "../../oxlint.config";
+import { readScopes, scopeMatches } from "../../scripts/oxlint-config-scopes";
 import { lintSingleRule } from "./lint-single-rule.ts";
+
+test("the production config enables the registered Docker fixture", () => {
+  let severity: unknown;
+  for (const scope of readScopes(config)) {
+    if (
+      scopeMatches(
+        scope,
+        ".oxlint-plugins/__fixtures__/no-ambient-dev-docker.fixture.ts",
+      ) &&
+      Object.hasOwn(scope.rules, "no-ambient-dev-docker/no-ambient-dev-docker")
+    ) {
+      severity = scope.rules["no-ambient-dev-docker/no-ambient-dev-docker"];
+    }
+  }
+  expect(severity).toBe("error");
+});
 
 test.each([
   'import { $ } from "bun";\nawait $`docker ps`;',

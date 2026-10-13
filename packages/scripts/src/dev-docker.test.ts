@@ -345,3 +345,67 @@ test("unmanaged non-Colima Docker remains available without a keeper resolver", 
     }),
   ).toMatchObject({ status: "ok", value: undefined });
 });
+
+test.each([
+  { args: ["run", "--mount", "type=bind,source=/tmp,target=/data", "image"] },
+  { args: ["volume", "create", "--opt", "device=/tmp", "data"] },
+  { args: ["compose", "run", "--volume", "/tmp:/data", "api"] },
+  ...[
+    "--host",
+    "--host=unix:///tmp/other.sock",
+    "-H",
+    "-Hunix:///tmp/other.sock",
+    "-DHunix:///tmp/other.sock",
+    "-aqHunix:///tmp/other.sock",
+    "--context",
+    "--context=other",
+    "-c",
+    "-cother",
+    "-Dcother",
+    "--config",
+    "--config=/tmp/other",
+  ].map((selector) => ({ args: ["ps", selector, "other"] })),
+])(
+  "untyped callers cannot mount host paths or override the Docker endpoint: %j",
+  ({ args }) => {
+    const target = resolveDockerTarget({
+      env: {},
+      inspect: () => Result.ok("unix:///tmp/dev.sock"),
+    }).unwrap();
+    expect(() =>
+      Reflect.apply(dockerCommand, undefined, [target, args]),
+    ).toThrow("outside the pinned, mount-safe command policy");
+  },
+);
+
+test.each([
+  { args: ["ps", "--format", "--host"] },
+  { args: ["ps", "-f", "label=context"] },
+  { args: ["ps", "-flabel=context"] },
+  {
+    args: [
+      "compose",
+      "--project-name",
+      "dev",
+      "--file",
+      "/tmp/compose file.yml",
+      "--profile",
+      "dev",
+      "ps",
+    ],
+  },
+  { args: ["compose", "down", "--volumes"] },
+  { args: ["volume", "ls", "--format", "{{.Name}}"] },
+] as const)(
+  "the closed Docker domain preserves safe actions and argument values: %j",
+  ({ args }) => {
+    const target = resolveDockerTarget({
+      env: {},
+      inspect: () => Result.ok("unix:///tmp/dev.sock"),
+    }).unwrap();
+    expect(dockerCommand(target, args)).toEqual({
+      cmd: ["docker", "--host", target.host, ...args],
+      env: target.env,
+    });
+  },
+);

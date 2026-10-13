@@ -1,4 +1,4 @@
-import { type InferOk, Result, TaggedError } from "better-result";
+import { type InferOk, panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 const dockerHostSchema = v.pipe(
@@ -108,13 +108,101 @@ export const resolveDockerTarget = ({
 
 export type DockerTarget = InferOk<ReturnType<typeof resolveDockerTarget>>;
 
+export type DockerCommandArguments =
+  | readonly ["compose", ...string[]]
+  | readonly ["info", ...string[]]
+  | readonly ["ps", ...string[]]
+  | readonly ["version", ...string[]]
+  | readonly ["volume", "ls", ...string[]];
+
+const COMPOSE_VALUE_OPTIONS = new Set([
+  "--project-name",
+  "--file",
+  "--profile",
+]);
+const composeAction = (args: readonly string[]) => {
+  let index = 1;
+  while (COMPOSE_VALUE_OPTIONS.has(args.at(index) ?? "")) {
+    index += 2;
+  }
+  return args.at(index);
+};
+
+const DOCKER_COMMAND_POLICY = {
+  compose: (args) => ["up", "down", "ps"].includes(composeAction(args) ?? ""),
+  info: (_args) => true,
+  ps: (_args) => true,
+  version: (_args) => true,
+  volume: (args) => args.at(1) === "ls",
+} satisfies Record<
+  DockerCommandArguments[0],
+  (args: readonly string[]) => boolean
+>;
+
+const hasDockerPolicy = (
+  command: string | undefined,
+): command is keyof typeof DOCKER_COMMAND_POLICY =>
+  command !== undefined && Object.hasOwn(DOCKER_COMMAND_POLICY, command);
+
+const assertDockerCommand = (args: readonly string[]) => {
+  const command = args.at(0);
+  const valueOptions = new Set([
+    "--format",
+    "--filter",
+    ...COMPOSE_VALUE_OPTIONS,
+  ]);
+  let unsafeOption = false;
+  for (let index = 1; index < args.length; index += 1) {
+    const arg = args.at(index) ?? "";
+    if (valueOptions.has(arg)) {
+      index += 1;
+      continue;
+    }
+    if (
+      /^(?:--(?:host|context|config|mount|volume|volume-driver|device)(?:=|$))/u.test(
+        arg,
+      )
+    ) {
+      unsafeOption = true;
+      break;
+    }
+    if (arg.startsWith("-") && !arg.startsWith("--")) {
+      for (let offset = 1; offset < arg.length; offset += 1) {
+        const flag = arg.charAt(offset);
+        if (["H", "c", "v"].includes(flag)) {
+          unsafeOption = true;
+          break;
+        }
+        if (["f", "n", "p"].includes(flag)) {
+          if (offset === arg.length - 1) {
+            index += 1;
+          }
+          break;
+        }
+      }
+    }
+  }
+  if (
+    !hasDockerPolicy(command) ||
+    !DOCKER_COMMAND_POLICY[command](args) ||
+    unsafeOption
+  ) {
+    panic(
+      "Development Docker command is outside the pinned, mount-safe command policy.",
+    );
+  }
+};
+
 export const dockerCommand = (
   target: DockerTarget,
-  args: readonly string[],
-) => ({
-  cmd: ["docker", "--host", target.host, ...args],
-  env: target.env,
-});
+  args: DockerCommandArguments,
+) => {
+  assertDockerCommand(args);
+  return {
+    cmd: ["docker", "--host", target.host, ...args],
+    env: target.env,
+  };
+};
 
 type ResolveDevDockerKeeperOptions = {
   target: DockerTarget;

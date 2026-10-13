@@ -1,5 +1,5 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
-import parseShell from "shell-quote/parse";
+import parseShell from "shell-quote/parse.js";
 
 import {
   filenameForContext,

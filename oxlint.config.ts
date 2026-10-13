@@ -1661,6 +1661,7 @@ const config = defineConfig({
       files: [
         "packages/scripts/src/dev-*.ts",
         "packages/scripts/src/agent-session.ts",
+        ".oxlint-plugins/__fixtures__/no-ambient-dev-docker.fixture.ts",
       ],
       excludeFiles: [
         "packages/scripts/src/*.test.ts",
