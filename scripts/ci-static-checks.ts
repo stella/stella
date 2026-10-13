@@ -351,10 +351,20 @@ export const resolveStaticReuse = ({
 
 // Same transport and provenance contract as completed suite depth: an exact
 // artifact name plus a successful producing workflow, never a cache hit alone.
-const downloadReceipt = (name: string, destination: string) => {
-  const repository = process.env["GITHUB_REPOSITORY"] ?? "";
+type DownloadReceiptOptions = {
+  name: string;
+  destination: string;
+  repository: string;
+  request?: (...args: string[]) => string;
+};
+export const downloadReceipt = ({
+  name,
+  destination,
+  repository,
+  request = github,
+}: DownloadReceiptOptions) => {
   const listing = json(
-    github(
+    request(
       "api",
       `repos/${repository}/actions/artifacts?name=${name}&per_page=${MAX_RECEIPT_CANDIDATES}`,
     ),
@@ -386,28 +396,35 @@ const downloadReceipt = (name: string, destination: string) => {
     ) {
       continue;
     }
-    const run = json(
-      github("api", `repos/${repository}/actions/runs/${runId}`),
-    );
-    if (!trustedQueueRun({ raw: run, repository, runId })) {
+    try {
+      const run = json(
+        request("api", `repos/${repository}/actions/runs/${runId}`),
+      );
+      if (!trustedQueueRun({ raw: run, repository, runId })) {
+        continue;
+      }
+      rmSync(destination, { recursive: true, force: true });
+      request(
+        "run",
+        "download",
+        String(runId),
+        "--repo",
+        repository,
+        "--name",
+        name,
+        "--dir",
+        destination,
+      );
+      const raw = json(
+        readFileSync(path.join(destination, "receipt.json"), "utf-8"),
+      );
+      return { runId, raw };
+    } catch (error) {
+      console.log(
+        `Static receipt candidate ${String(runId)} unavailable: ${error instanceof Error ? error.message : "invalid receipt"}`,
+      );
       continue;
     }
-    rmSync(destination, { recursive: true, force: true });
-    github(
-      "run",
-      "download",
-      String(runId),
-      "--repo",
-      repository,
-      "--name",
-      name,
-      "--dir",
-      destination,
-    );
-    const raw = json(
-      readFileSync(path.join(destination, "receipt.json"), "utf-8"),
-    );
-    return { runId, raw };
   }
   return undefined;
 };
@@ -446,7 +463,12 @@ const main = () => {
       ref,
       keys: expected.keys,
       bundleKey: expected.bundleKey,
-      download: () => downloadReceipt(name, path.join(directory, "download")),
+      download: () =>
+        downloadReceipt({
+          name,
+          destination: path.join(directory, "download"),
+          repository: process.env["GITHUB_REPOSITORY"] ?? "",
+        }),
     });
     switch (resolved.status) {
       case "unavailable":

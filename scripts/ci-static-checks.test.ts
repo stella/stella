@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -13,6 +14,7 @@ import { generatedInputTreeHash } from "../packages/scripts/src/generated-input-
 import { createSha256, sha256Hex } from "../packages/sha256/src/bun";
 import {
   classifiedChecks,
+  downloadReceipt,
   passedStaticChecks,
   reusableStaticReceipt,
   resolveStaticReuse,
@@ -345,6 +347,95 @@ test("the receipt boundary runs missing, corrupt, unreadable and failed download
     }
   } finally {
     rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("candidate downloads discard stale receipts and continue after missing or failed downloads", () => {
+  const destination = mkdtempSync(
+    path.join(tmpdir(), "static-check-download-"),
+  );
+  const file = path.join(destination, "receipt.json");
+  const stale = { bundleKey: "bundle", tasks: { checked: reuse.receipt } };
+  try {
+    for (const failure of ["missing", "failed", "corrupt"]) {
+      for (const candidates of [[42], [42, 43]]) {
+        mkdirSync(destination, { recursive: true });
+        writeFileSync(file, JSON.stringify(stale));
+        const downloads: number[] = [];
+        const resolved = resolveStaticReuse({
+          event: reuse.event,
+          ref: reuse.ref,
+          keys: { checked: "key" },
+          bundleKey: "bundle",
+          download: () =>
+            downloadReceipt({
+              name: "receipt-artifact",
+              destination,
+              repository: "owner/repo",
+              request: (...args) => {
+                if (args[0] === "api") {
+                  const endpoint = args.at(1) ?? "";
+                  if (endpoint.includes("/artifacts?")) {
+                    return JSON.stringify({
+                      artifacts: candidates.map((id) => ({
+                        name: "receipt-artifact",
+                        expired: false,
+                        size_in_bytes: 100,
+                        workflow_run: { id },
+                      })),
+                    });
+                  }
+                  return JSON.stringify({
+                    id: Number(endpoint.split("/").at(-1)),
+                    event: "merge_group",
+                    path: ".github/workflows/ci.yml",
+                    status: "completed",
+                    conclusion: "success",
+                    repository: { id: 1, full_name: "owner/repo" },
+                    head_repository: { id: 1 },
+                  });
+                }
+                const runId = Number(args.at(2));
+                downloads.push(runId);
+                expect(existsSync(file)).toBe(false);
+                if (runId === 42) {
+                  if (failure === "failed") {
+                    mkdirSync(destination, { recursive: true });
+                    writeFileSync(file, JSON.stringify(stale));
+                    throw new TypeError(
+                      "download failed after a partial write",
+                    );
+                  }
+                  if (failure === "corrupt") {
+                    mkdirSync(destination, { recursive: true });
+                    writeFileSync(file, "invalid JSON");
+                  }
+                  return "";
+                }
+                mkdirSync(destination, { recursive: true });
+                writeFileSync(
+                  file,
+                  JSON.stringify({
+                    bundleKey: "bundle",
+                    tasks: { checked: { ...reuse.receipt, runId } },
+                  }),
+                );
+                return "";
+              },
+            }),
+        });
+        expect(downloads).toEqual(candidates);
+        expect(resolved).toEqual({
+          status: "available",
+          reused:
+            candidates.length === 1
+              ? []
+              : [{ id: "checked", key: "key", runId: 43 }],
+        });
+      }
+    }
+  } finally {
+    rmSync(destination, { recursive: true, force: true });
   }
 });
 
