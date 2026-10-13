@@ -6,7 +6,17 @@ container=${1:?Postgres container ID required}
 owner=${2:?Database owner login required}
 database=${3:-stella}
 docker_host=${4:-}
-docker_context=${5:-default}
+supplied_host=$docker_host
+target_mode=${5:-resolve}
+case "$target_mode" in
+  resolve) ;;
+  captured) [[ -n "$docker_host" ]] || { echo 'Captured Postgres Docker endpoint is required.' >&2; exit 1; } ;;
+  *) echo 'Unknown Postgres Docker target mode.' >&2; exit 1 ;;
+esac
+resolve_transport() {
+  command -v bun >/dev/null 2>&1 || { echo 'Bun and installed workspace dependencies are required to capture this Docker transport.' >&2; exit 1; }
+  exec bun "$repo/packages/scripts/src/dev-postgres.ts" "$container" "$owner" "$database" "$supplied_host"
+}
 if [[ -z "$docker_host" ]]; then
   # Capture bytes before Bash can discard NUL or trailing newlines.
   docker_bytes=$(command docker context inspect --format '{{.Name}}{{"\t"}}{{.Endpoints.docker.Host}}' | LC_ALL=C od -An -v -t x1)
@@ -23,10 +33,11 @@ if [[ -z "$docker_host" ]]; then
   [[ "$docker_record" == *$'\t'* ]] || { echo 'Docker endpoint metadata is missing.' >&2; exit 1; }
   docker_context=${docker_record%%$'\t'*}
   docker_host=${docker_record#*$'\t'}
-fi
-if [[ -z "$docker_context" || "$docker_context" =~ [[:space:]] ]]; then
-  echo 'Docker endpoint context is invalid.' >&2
-  exit 1
+  if [[ "$docker_context" != default || -n "${DOCKER_TLS:-}" || -n "${DOCKER_TLS_VERIFY:-}" ]]; then
+    resolve_transport
+  fi
+elif [[ "$target_mode" != captured && ( -n "${DOCKER_TLS:-}" || -n "${DOCKER_TLS_VERIFY:-}" ) ]]; then
+  resolve_transport
 fi
 if [[ "$docker_host" =~ ^[[:space:]]|[[:space:]]$ || "$docker_host" == *$'\r'* || "$docker_host" == *$'\n'* ]]; then
   echo 'Docker context returned an ambiguous endpoint.' >&2
@@ -43,13 +54,7 @@ elif [[ "$docker_host" == unix:///* && "$docker_host" == */.colima/* ]]; then
   exit 1
 fi
 unset DOCKER_HOST DOCKER_CONTEXT
-docker() {
-  if [[ "$docker_context" != default ]]; then
-    command docker --context "$docker_context" "$@"
-  else
-    command docker --host "$docker_host" "$@"
-  fi
-}
+docker() { command docker --host "$docker_host" "$@"; }
 
 # Derive the complete expectation from the fragment; there is no second list.
 # Only the committed setting syntax (name = scalar) is accepted here.

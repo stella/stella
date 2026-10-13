@@ -1635,10 +1635,13 @@ export const AMBIENT_ENV_KEYS = new Set([
   "CARGO_MANIFEST_DIR",
   "CARGO_PKG_VERSION",
   "CI",
-  // Read by the Docker CLI; fixtures point it at an empty config.
+  // Captured by the Docker transport owner and consumed by the Docker CLI.
   "DOCKER_CONFIG",
   "DOCKER_HOST",
   "DOCKER_CONTEXT",
+  "DOCKER_TLS",
+  "DOCKER_TLS_VERIFY",
+  "DOCKER_CERT_PATH",
   "ECS_CONTAINER_METADATA_URI_V4",
   "GITHUB_TOKEN",
   "GH_REPO",

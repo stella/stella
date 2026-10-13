@@ -34,7 +34,7 @@ test("endpoint resolution preserves the supplied selectors, then pins a captured
   env.DOCKER_HOST = "unix:///tmp/changed.sock";
   env.PATH = "/changed";
   expect(dockerCommand(target, ["compose", "down"])).toEqual({
-    cmd: ["docker", "--context", "chosen", "compose", "down"],
+    cmd: ["docker", "--host", "unix:///tmp/chosen.sock", "compose", "down"],
     env: { PATH: "/tools", DOCKER_CONFIG: "/configuration" },
   });
 });
@@ -78,7 +78,7 @@ test.each([
   });
 });
 
-test("clearing selectors preserves transport credentials and other environment", () => {
+test("a named plain context retains ordinary environment and ignores ambient TLS settings", () => {
   const env = {
     DOCKER_HOST: "tcp://other:2376",
     DOCKER_CONTEXT: "other",
@@ -86,16 +86,12 @@ test("clearing selectors preserves transport credentials and other environment",
     DOCKER_CERT_PATH: "/certificates",
     PATH: "/tools",
   };
-  expect(
-    resolveDockerTarget({
-      env,
-      inspect: () => Result.ok(dockerInspection("unix:///tmp/test.sock")),
-    }).unwrap().env,
-  ).toEqual({
-    DOCKER_TLS_VERIFY: "1",
-    DOCKER_CERT_PATH: "/certificates",
-    PATH: "/tools",
-  });
+  using target = resolveDockerTarget({
+    env,
+    inspect: () =>
+      Result.ok(dockerInspection("unix:///tmp/test.sock", "selected")),
+  }).unwrap();
+  expect(target.env).toEqual({ PATH: "/tools" });
   expect(env.DOCKER_CONTEXT).toBe("other");
 });
 
@@ -182,6 +178,10 @@ test.skipIf(process.platform === "win32" || !Bun.which("docker"))(
         { DOCKER_CONTEXT: "missing" },
       ]) {
         const env = { ...base, ...selectors };
+        const receipt = await run(
+          ["context", "inspect", "--format", "{{.Name}}"],
+          env,
+        );
         const resolved = resolveDockerTarget({ env });
         const ambient = await run(
           ["version", "--format", "{{.Server.Version}}"],
@@ -199,7 +199,21 @@ test.skipIf(process.platform === "win32" || !Bun.which("docker"))(
         const redirect =
           servers.find((server) => server.host !== target.host) ??
           panic("Missing alternate daemon fixture");
-        // Both a changed environment and changed persisted context must leave the target stable.
+        const selectedContext = receipt.stdout;
+        if (selectedContext !== "default") {
+          const updated = await run(
+            [
+              "context",
+              "update",
+              selectedContext,
+              "--docker",
+              `host=${redirect.host}`,
+            ],
+            base,
+          );
+          expect(updated.exitCode, updated.stderr).toBe(0);
+        }
+        // Selected-context updates, ambient selectors and active-context changes keep the receipt stable.
         env.DOCKER_CONTEXT = redirect.name;
         env.DOCKER_HOST = redirect.host;
         const changed = await run(["context", "use", redirect.name], base);

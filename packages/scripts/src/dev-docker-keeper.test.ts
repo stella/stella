@@ -33,9 +33,9 @@ describe("protected Docker runtime recovery", () => {
     });
     expect(recovered.isOk()).toBe(true);
     expect(calls).toEqual([
-      ["docker", "--context", "selected", "info"],
+      ["docker", "--host", "unix:///tmp/test-docker.sock", "info"],
       ["launchctl", "kickstart", "system/dev.test.docker-keeper"],
-      ["docker", "--context", "selected", "info"],
+      ["docker", "--host", "unix:///tmp/test-docker.sock", "info"],
     ]);
     expect(calls.some((command) => command.includes("colima"))).toBe(false);
   });

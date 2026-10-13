@@ -361,4 +361,4 @@ implies a hazard that is gone.
 
 - [`no-unanchored-footnotes`](./no-unanchored-footnotes.ts): source parsers resolve footnotes at paragraph references instead of reading the package collection as trailing content.
 
-- [`no-ambient-dev-docker`](./no-ambient-dev-docker.ts) (`no-ambient-dev-docker`): keeps development Docker executable references and Bun Shell commands in the endpoint owner, which emits pinned transport selectors and a captured environment together. Follows shell aliases and configuration chains; checks command positions across compound commands while accepting printed text and unrelated tags.
+- [`no-ambient-dev-docker`](./no-ambient-dev-docker.ts) (`no-ambient-dev-docker`): keeps development Docker executable references and Bun Shell commands in the endpoint owner, which emits a validated host and captured TLS settings together. Follows shell aliases and configuration chains; checks command positions across compound commands while accepting printed text and unrelated tags.

@@ -144,13 +144,13 @@ describe("Postgres execution and owner parity", () => {
   });
 
   test.each([
-    { posture: "t|t", context: "default" },
-    { posture: "t|f", context: "default" },
-    { posture: "f|t", context: "default" },
-    { posture: "t|t", context: "fixture-context" },
+    { posture: "t|t", mode: "resolve" },
+    { posture: "t|f", mode: "resolve" },
+    { posture: "f|t", mode: "resolve" },
+    { posture: "t|t", mode: "captured" },
   ])(
     "demotes a reused owner once and preserves the database on replay: %j",
-    async ({ posture, context }) => {
+    async ({ posture, mode }) => {
       const fixture = await mkdtemp(path.join(tmpdir(), "postgres-parity-"));
       try {
         const docker = path.join(fixture, "docker");
@@ -163,7 +163,7 @@ describe("Postgres execution and owner parity", () => {
           docker,
           `#!/usr/bin/env bash
 set -euo pipefail
-[[ "$1" == ${context === "default" ? "--host" : "--context"} && "$2" == ${context === "default" ? "unix:///tmp/test-docker.sock" : context} ]] || exit 1
+[[ "$1" == --host && "$2" == unix:///tmp/test-docker.sock ]] || exit 1
 [[ -z "\${DOCKER_HOST+x}" && -z "\${DOCKER_CONTEXT+x}" ]] || exit 1
 if [[ "$*" == *"SELECT rolsuper, rolbypassrls"* ]]; then
   cat "$PARITY_FIXTURE/posture"
@@ -189,7 +189,7 @@ fi
               "postgres",
               "stella",
               "unix:///tmp/test-docker.sock",
-              context,
+              mode,
             ],
             {
               env: {
@@ -305,3 +305,42 @@ exit 99
     }
   },
 );
+
+test("standalone named Docker transports require the workspace runtime before configuration", async () => {
+  const fixture = await mkdtemp(path.join(tmpdir(), "postgres-runtime-"));
+  try {
+    const docker = path.join(fixture, "docker");
+    await writeFile(
+      docker,
+      `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" == context && "$2" == inspect ]]; then
+  printf 'selected\\tunix:///tmp/selected.sock\\n'
+  exit
+fi
+printf '%s\\n' "$@" > "$PARITY_FIXTURE/mutation"
+exit 99
+`,
+    );
+    await chmod(docker, 0o700);
+    const child = Bun.spawn(
+      [
+        "bash",
+        path.join(root, "scripts/configure-test-postgres.sh"),
+        "fixture-postgres",
+        "postgres",
+      ],
+      {
+        env: { PATH: `${fixture}:/usr/bin:/bin`, PARITY_FIXTURE: fixture },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const stderr = await new Response(child.stderr).text();
+    expect(await child.exited, stderr).toBe(1);
+    expect(stderr).toContain("Bun and installed workspace dependencies");
+    expect(await Bun.file(path.join(fixture, "mutation")).exists()).toBe(false);
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+  }
+});

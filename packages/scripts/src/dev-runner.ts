@@ -23,8 +23,7 @@ import { isSealTrusted, parseSealStatus } from "./agent-evidence";
 import { childExitStatus } from "./child-exit-status";
 import {
   dockerCommand,
-  DockerEndpointError,
-  resolveDevDockerKeeper,
+  resolveInstalledDevDockerKeeper,
   type DockerTarget,
   resolveDockerTarget,
 } from "./dev-docker";
@@ -1064,38 +1063,9 @@ const ensureHostDockerKeeper = async ({
     return resolved;
   }
   const dockerTarget = resolved.value;
-  const approved = resolveDevDockerKeeper({
-    target: dockerTarget,
-    resolver: Bun.which("docker-keeper"),
-    configuredLabel: process.env["STELLA_DOCKER_KEEPER_LABEL"],
-    run: (command, env) =>
-      Result.try({
-        try: () =>
-          Bun.spawnSync(command, {
-            cwd: "/",
-            env,
-            stdout: "pipe",
-            stderr: "pipe",
-            timeout: 5000,
-          }),
-        catch: (cause) =>
-          new DockerEndpointError({
-            message: "Could not validate the development Docker endpoint.",
-            cause,
-          }),
-      }).andThen((result) =>
-        result.success
-          ? Result.ok(result.stdout.toString())
-          : Result.err(
-              new DockerEndpointError({
-                message:
-                  "Selected Docker endpoint cannot be used for development. Select an unprotected Docker context.",
-                cause: result.stderr.toString(),
-              }),
-            ),
-      ),
-  });
+  const approved = resolveInstalledDevDockerKeeper(dockerTarget);
   if (approved.isErr()) {
+    dockerTarget[Symbol.dispose]();
     return approved;
   }
   const label = approved.value;
@@ -1123,6 +1093,7 @@ const ensureHostDockerKeeper = async ({
     sleep: async (milliseconds) => Bun.sleep(milliseconds),
   });
   if (recovered.isErr()) {
+    dockerTarget[Symbol.dispose]();
     return Result.err(recovered.error);
   }
   return Result.ok(dockerTarget);
@@ -2525,7 +2496,7 @@ const main = async () => {
   const preparedEnvFiles = preparedEnvFilesResult.value;
 
   const { devInstance, mode, portOffset } = parsedArgs;
-  const dockerTarget = (
+  using dockerTarget = (
     await ensureHostDockerKeeper({
       dryRun: parsedArgs.dryRun,
       mode,
@@ -2801,7 +2772,7 @@ const main = async () => {
           "postgres",
           "stella",
           dockerTarget.host,
-          dockerTarget.context,
+          "captured",
         ],
         cwd: gitContext.currentRoot,
         env: dockerTarget.env,
