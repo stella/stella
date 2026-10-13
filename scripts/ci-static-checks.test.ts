@@ -217,13 +217,17 @@ test("runtime classification failures warn with the task name before running che
     "Unclassified CI check: fixture/New unclassified task",
   );
   const warnings: string[] = [];
-  runStaticReceiptBoundary(operation, (message) => warnings.push(message));
+  runStaticReceiptBoundary(operation, (message) => {
+    warnings.push(message);
+  });
   expect(warnings).toEqual([
     "::warning::Static check receipts disabled; checks run fresh: Unclassified CI check: fixture/New unclassified task",
   ]);
   runStaticReceiptBoundary(
     () => {},
-    (message) => warnings.push(message),
+    (message) => {
+      warnings.push(message);
+    },
   );
   expect(warnings).toHaveLength(1);
 });
