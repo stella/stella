@@ -139,10 +139,13 @@ export {
 export type { ChatEditApplyMode, DocxEditRepresentation } from "./chat-edit";
 export {
   CHAT_DECISION_PASSAGE_HREF_PREFIX,
+  chatDecisionPassagesIn,
   parseChatDecisionPassageHref,
+  stampChatDecisionPassageHrefs,
   toChatDecisionPassageHref,
 } from "./chat-decision-passage-link";
 export type {
+  ChatDecisionPassage,
   ChatDecisionPassageHref,
   ChatDecisionPassageTarget,
 } from "./chat-decision-passage-link";
@@ -357,6 +360,7 @@ export type {
 } from "./flow-status";
 export {
   AGENT_SKILLS_CHAT_METADATA_MAX,
+  CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT,
   CASE_LAW_CITATION_TIMELINE_MAX_YEARS,
   CASE_LAW_RESEARCH_COLUMNS_PER_ORGANIZATION_MAX,
   CASE_LAW_RESEARCH_RUN_DECISIONS_MAX,

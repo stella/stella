@@ -28,6 +28,8 @@ const run = { ...outcome, retrieved: false };
 const excerptByAnchor = new Map([
   ["b1", "Soud rozhodl, že smlouva je kupní smlouvou."],
 ]);
+// The court numbered block `b1` as its paragraph 12.
+const courtParagraphNumbers = new Map([["b1", 12]]);
 
 const columns = {
   type: {
@@ -124,6 +126,7 @@ describe("resolveSystemOneOutcomes", () => {
       questions: askedFor(columns.type),
       outcomes: new Map([["col-type", answered("Purchase agreement")]]),
       excerptByAnchor,
+      courtParagraphNumbers,
       run,
     });
     expect(resolved.fallbackColumnIds).toEqual([]);
@@ -149,6 +152,7 @@ describe("resolveSystemOneOutcomes", () => {
         {
           kind: "decision-passage",
           anchorId: "b1",
+          courtParagraphNumber: 12,
           excerpt: "Soud rozhodl, že smlouva je kupní smlouvou.",
         },
       ],
@@ -162,6 +166,7 @@ describe("resolveSystemOneOutcomes", () => {
         ["col-type", answered("Purchase agreement", { sourceId: null })],
       ]),
       excerptByAnchor,
+      courtParagraphNumbers,
       run,
     });
     const settled = resolved.settled.at(0);
@@ -186,6 +191,7 @@ describe("resolveSystemOneOutcomes", () => {
         ],
       ]),
       excerptByAnchor,
+      courtParagraphNumbers,
       run,
     });
     expect(resolved.settled).toEqual([
@@ -229,6 +235,7 @@ describe("resolveSystemOneOutcomes", () => {
       questions: asked,
       outcomes: decodeSystemOneAnswers({ plan, questions: asked, decisions }),
       excerptByAnchor,
+      courtParagraphNumbers,
       run,
     });
     expect(resolved.settled).toEqual([
@@ -245,6 +252,7 @@ describe("resolveSystemOneOutcomes", () => {
       questions: askedFor(columns.type),
       outcomes: new Map([["col-type", answered("Franchise")]]),
       excerptByAnchor,
+      courtParagraphNumbers,
       run,
     });
     expect(resolved.settled).toEqual([
@@ -261,6 +269,7 @@ describe("resolveSystemOneOutcomes", () => {
       questions: askedFor(columns.amount),
       outcomes: new Map(),
       excerptByAnchor,
+      courtParagraphNumbers,
       run,
     });
     expect(resolved.settled).toEqual([]);
@@ -301,6 +310,7 @@ describe("resolveSystemOneOutcomes", () => {
       questions: asked,
       outcomes: new Map(asked.map((question) => [question.id, notStated])),
       excerptByAnchor,
+      courtParagraphNumbers,
       run,
     });
 
@@ -323,6 +333,7 @@ describe("resolveSystemOneOutcomes", () => {
       questions: askedFor(columns.type),
       outcomes: new Map([["col-type", answered("Lease")]]),
       excerptByAnchor,
+      courtParagraphNumbers,
       run: { ...outcome, retrieved: true },
     });
     const settled = resolved.settled.at(0);

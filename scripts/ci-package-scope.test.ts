@@ -185,11 +185,12 @@ test("the exact README change derives its genuine readers without package jobs",
   const changed = ["README.md", "apps/desktop/README.md"];
   expect(requiresPackageChecks({ changed })).toBe(false);
   const checks = markdownChecks({ changed });
-  expect(checks).toHaveLength(5);
+  expect(checks).toHaveLength(6);
   expect(checks).toContainEqual([
     "bun",
     "scripts/check-railway-template-shape.ts",
   ]);
+  expect(checks).toContainEqual(["bun", "scripts/check-marketing-content.ts"]);
   expect(checks).toContainEqual([
     "bun",
     "test",

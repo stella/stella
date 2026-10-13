@@ -12,9 +12,9 @@ import type {
 import { createSafeId } from "@/api/lib/branded-types";
 import { ReaderAnswerCorpusError } from "@/api/lib/case-law/reader-answer-corpus";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
-import { admitFixtureModelDispatch } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 
 import { runReaderAnswerModel } from "./model";
 import type { ReaderAnswerModelInput } from "./model";
@@ -166,10 +166,7 @@ const inputFixture = () => {
   const organizationId = mintAuthProviderId<"organization">();
   const userId = mintAuthProviderId<"user">();
   return {
-    admission: admitFixtureModelDispatch({
-      organizationId,
-      actionKind: "chat.send",
-    }),
+    admission: testModelAdmission(organizationId, "chat.send"),
     signal: new AbortController().signal,
     answerId: createSafeId<"legalReaderAnswer">(),
     decisionId: createSafeId<"caseLawDecision">(),

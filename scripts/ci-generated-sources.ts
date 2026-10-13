@@ -6,6 +6,7 @@ import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import {
   generatedFileHash,
   generatedInputIdentity,
+  requireUnchangedGeneratedInputs,
   restorePreparedGeneratedSources,
   hasPreparedGeneratedSources,
 } from "../packages/scripts/src/prepared-generated-sources";
@@ -31,8 +32,9 @@ if (mode === "produce") {
   const destination =
     process.argv.at(3) ?? panic("Expected generated artifact directory");
   const started = performance.now();
-  generate();
   const identity = generatedInputIdentity(root);
+  generate();
+  requireUnchangedGeneratedInputs(root, identity);
   const files = Object.fromEntries(
     CI_GENERATED_FILES.map((file) => {
       const bytes = readFileSync(path.join(root, file));

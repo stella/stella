@@ -39,6 +39,7 @@ const decisionHref = (decisionId: string) =>
   toChatDecisionPassageHref({
     decisionId: toSafeId<"caseLawDecision">(decisionId),
     anchorId: "p-12",
+    courtParagraphNumber: null,
   });
 const targets = (markdown: string) =>
   chatAnswerDecisionTargets({

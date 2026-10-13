@@ -31,12 +31,11 @@ import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { resolveResponseStatus } from "@/api/lib/observability/response-status";
-import {
-  rateLimit,
-  scopedRateLimitKey,
-  type RateLimitContext,
-  type RateLimitOptions,
-} from "@/api/lib/rate-limit/rate-limit";
+import type {
+  RateLimitContext,
+  RateLimitOptions,
+} from "@/api/lib/rate-limit/contracts";
+import { rateLimit, scopedRateLimitKey } from "@/api/lib/rate-limit/rate-limit";
 import {
   createRedisRateLimitRequestKey,
   createRedisRateLimit,
