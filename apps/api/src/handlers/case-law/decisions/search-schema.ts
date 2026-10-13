@@ -224,10 +224,9 @@ const searchCourtTiersSchema = t.Array(
   t.Object(
     {
       tierLabel: t.UnionEnum([...COURT_TIER_LABELS]),
-      courts: {
-        ...searchFacetBucketsSchema,
+      courts: t.Array(searchFacetBucketsSchema.items, {
         maxItems: LIMITS.caseLawFacetLimit,
-      },
+      }),
     },
     { additionalProperties: false },
   ),

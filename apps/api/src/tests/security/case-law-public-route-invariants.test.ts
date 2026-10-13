@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -164,6 +165,7 @@ type PublicDecisionReadEntry =
 /** The spellings of the one predicate, plus the marker reader the projection uses. */
 const PUBLIC_DECISION_PREDICATE_TOKENS = [
   "publishedCaseLawDecision",
+  "servedCaseLawDecisionFor",
   "publicCaseLawDecisionJoin",
   "partialObservationFromMetadata",
 ] as const;
@@ -193,9 +195,6 @@ const PUBLIC_DECISION_READ_GATES = {
     reason: "Relation definitions.",
   },
   [CITATION_GRAPH_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
-  "apps/api/src/handlers/case-law/decisions/citations.ts": {
-    gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
-  },
   [READ_DECISION_FILE]: { gate: PUBLIC_DECISION_READ_GATE.SUBJECT },
   [DECISION_PROVISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.SUBJECT },
   [LATEST_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
@@ -217,9 +216,13 @@ const PUBLIC_DECISION_READ_GATES = {
     gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
   },
   [STATUS_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
+  [COVERAGE_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   [CITING_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   "apps/api/src/handlers/case-law/provisions/previews-for-decision.ts": {
     gate: PUBLIC_DECISION_READ_GATE.SUBJECT,
+  },
+  "apps/api/src/lib/case-law/decision-citations.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
   },
   "apps/api/src/lib/case-law/citation-storage-bounds.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
@@ -256,6 +259,11 @@ const PUBLIC_DECISION_READ_GATES = {
   "apps/api/src/lib/case-law/sitemap-shard-sql.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "Sitemap shard naming fragments; no query.",
+  },
+  "apps/api/src/lib/db/aggregate-lock.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason:
+      "Locks citation stats batch rows by ID for ingestion; returns no row.",
   },
   "apps/api/src/lib/decision-date-bounds-sql.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
@@ -798,7 +806,7 @@ describe("public case-law route boundary", () => {
       [...modules].map(async (modulePath) => {
         const source = await Bun.file(modulePath).text();
         if (DECISION_TABLE_MENTION.test(source)) {
-          readers.set(nodePath.relative(repoRoot, modulePath), source);
+          readers.set(repoRelativePath(repoRoot, modulePath), source);
         }
       }),
     );
@@ -892,7 +900,7 @@ describe("public case-law route boundary", () => {
 
   test("the listing-only predicate has one owner", async () => {
     const [ownerSource, markerSource] = await Promise.all([
-      readSource("apps/api/src/lib/case-law/published-decisions.ts"),
+      readSource("apps/api/src/lib/case-law/published-decisions-sql.ts"),
       readSource("apps/api/src/lib/legal-search/ingestion-normalization.ts"),
     ]);
 

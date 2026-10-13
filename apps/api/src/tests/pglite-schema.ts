@@ -451,6 +451,33 @@ export const installPgliteChatRunLogRls = async (
 };
 
 /** Apply the committed setting omitted by schema push. */
+export const installPgliteReaderAnswerRls = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261010212100_reader_answers",
+      "migration.sql",
+    ),
+  );
+  for (const table of [
+    "legal_reader_answers",
+    "legal_reader_answer_messages",
+  ]) {
+    const statement = statements.find((candidate) =>
+      executableSql(candidate).startsWith(
+        `ALTER TABLE "${table}" FORCE ROW LEVEL SECURITY`,
+      ),
+    );
+    if (statement === undefined) {
+      panic(`Reader answer FORCE RLS migration statement is missing: ${table}`);
+    }
+    await db.execute(sql.raw(statement));
+  }
+};
+
+/** Apply the committed setting omitted by schema push. */
 export const installPgliteChatSecretRls = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
@@ -932,6 +959,29 @@ export const installPgliteDecisionAliases = async (
     );
   });
   for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+/** Use the committed SQL for the projection that schema push cannot install. */
+export const installPgliteDecisionCitationStats = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  for (const statement of readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261005120200_decision_citation_stats",
+      "migration.sql",
+    ),
+  ).filter((candidate) => {
+    const text = executableSql(candidate);
+    return (
+      text.startsWith("CREATE FUNCTION") ||
+      text.startsWith("CREATE TRIGGER") ||
+      text.startsWith("REVOKE ALL ON FUNCTION") ||
+      text.startsWith("GRANT EXECUTE ON FUNCTION")
+    );
+  })) {
     await db.execute(sql.raw(statement));
   }
 };

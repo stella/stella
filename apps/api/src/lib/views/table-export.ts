@@ -4,6 +4,7 @@ import { isReviewFlag } from "@stll/api-contract";
 import type { ReviewFlag } from "@stll/api-contract";
 
 import type { JustificationContent } from "@/api/db/schema";
+import { formatCourtParagraphMark } from "@/api/lib/case-law/court-paragraph-mark";
 import { escapeCSV } from "@/api/lib/csv";
 import type { QueryEntityResult } from "@/api/lib/entities/query-entities";
 import { LIMITS } from "@/api/lib/limits";
@@ -236,6 +237,7 @@ const mergeVerdictValue = (askValue: string, tier: string): string => {
 
 const justificationToComment = (
   content: JustificationContent | undefined,
+  locale: string,
 ): string => {
   if (!content) {
     return "";
@@ -250,10 +252,15 @@ const justificationToComment = (
       continue;
     }
     // A cited decision passage exports as the passage itself; it has no
-    // statement the model wrote around it.
+    // statement the model wrote around it. The court's paragraph number
+    // follows it, as the chip shows it.
     if (block.kind === "decision-passage") {
       if (block.excerpt.length > 0) {
-        parts.push(block.excerpt);
+        parts.push(
+          block.courtParagraphNumber === null
+            ? block.excerpt
+            : `${block.excerpt} (${formatCourtParagraphMark(locale, block.courtParagraphNumber)})`,
+        );
       }
       continue;
     }
@@ -293,7 +300,10 @@ const buildPropertyCell = ({
     ? fieldByPropertyId.get(column.commentPropertyId)
     : undefined;
   const comment = commentField
-    ? justificationToComment(justificationByFieldId.get(commentField.id))
+    ? justificationToComment(
+        justificationByFieldId.get(commentField.id),
+        locale,
+      )
     : "";
   const commentOption = comment.length > 0 ? comment : undefined;
 

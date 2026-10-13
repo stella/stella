@@ -51,6 +51,7 @@ import type {
  *   Judge name + title
  */
 import { caseLawSectionHeading } from "@stll/legal-ast/case-law-heading";
+import { opensWithCourtParagraphMarker } from "@stll/legal-ast/court-paragraph-numbers";
 import {
   CZ_CLOSING_RE as CLOSING_RE,
   CZ_JUDGE_NAME_RE as JUDGE_NAME_RE,
@@ -58,9 +59,14 @@ import {
 } from "@stll/legal-ast/czech-document-roles";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
+import {
+  normalizeInlineLine,
+  stripInlineLinePrefix,
+} from "@stll/legal-ast/inline-line";
 
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import {
   createParagraphLineReader,
   type BodyDocumentLine,
@@ -75,12 +81,7 @@ import {
 import { RTF_SOURCE_OPTIONS } from "@/api/lib/legal-search/rtf-source-registry";
 import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
 
-import {
-  visibleHtmlText,
-  stripFurniturePrefix,
-  normalizeInlineLine,
-  stripInlineLinePrefix,
-} from "./shared-inlines";
+import { visibleHtmlText, stripFurniturePrefix } from "./shared-inlines";
 
 // ── Public API ─────────────────────────────────────────────
 
@@ -118,7 +119,10 @@ export const parseUsDecisionHtml = (
   const crossReferences = extractCrossReferences($);
 
   const lines = extractLines($);
-  const blocks = classifyUsDocumentLines(lines);
+  const blocks = courtParagraphNumbers(classifyUsDocumentLines(lines), {
+    parser: "cz-us",
+    caseNumber: input.caseNumber,
+  });
 
   // Synthesize decision title heading if none was parsed.
   // The RTF docContentHidden doesn't include decorative
@@ -591,7 +595,7 @@ const classifyUsBodyLine = ({
   // The court numbers some of these headings. The number is stripped for
   // the match alone: the heading block below carries the line the court
   // printed, because what the heading is does not change what it says.
-  const { match: numberPrefix, line: unnumbered } = stripInlineLinePrefix(
+  const { line: unnumbered } = stripInlineLinePrefix(
     normalized,
     NUMBERED_PARA_RE,
   );
@@ -614,8 +618,13 @@ const classifyUsBodyLine = ({
     return;
   }
 
+  // A line the court numbered ("3. Věc projednal senát …") is body text,
+  // never a closing or a signature, however it reads: classifying it away
+  // would leave a gap in the court's numbering.
+  const courtNumbered = opensWithCourtParagraphMarker(plainText);
+
   // Closing: "V Brně dne ..."
-  if (CLOSING_RE.test(plainText)) {
+  if (!courtNumbered && CLOSING_RE.test(plainText)) {
     state.blockIndex += 1;
     blocks.push({
       id: makeUsBlockId(state),
@@ -629,7 +638,7 @@ const classifyUsBodyLine = ({
   }
 
   // Signature: judge title line
-  if (SIGNATURE_RE.test(plainText) && plainText.length < 80) {
+  if (!courtNumbered && SIGNATURE_RE.test(plainText) && plainText.length < 80) {
     state.blockIndex += 1;
     blocks.push({
       id: makeUsBlockId(state),
@@ -746,21 +755,9 @@ const classifyUsBodyLine = ({
     }
   }
 
-  // Numbered paragraphs: "1. ...", "2. ..."
-  if (numberPrefix !== null) {
-    state.blockIndex += 1;
-    blocks.push({
-      id: makeUsBlockId(state),
-      anchorId: makeAnchorId("p", state.blockIndex),
-      type: "paragraph",
-      role: state.inDissent ? "dissent" : undefined,
-      inlines: unnumbered.inlines,
-      plainText: unnumbered.plainText,
-    });
-    return;
-  }
-
-  // Default: paragraph
+  // Default: paragraph. A numbered one ("1. …") stays whole here: whether
+  // its marker is the court's numbering is decided over the whole decision,
+  // by `courtParagraphNumbers` once every block is classified.
   state.blockIndex += 1;
   blocks.push({
     id: makeUsBlockId(state),

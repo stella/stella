@@ -8,6 +8,8 @@ import type { StreamChunk } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+
 import { chatMessages, chatTurns } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
@@ -19,7 +21,10 @@ import {
 } from "@/api/lib/rate-limit/action-admission";
 import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
 import { withTimeout } from "@/api/lib/with-timeout";
-import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import {
+  testModelAdmission,
+  testOrganizationStateDb,
+} from "@/api/tests/helpers/model-dispatch-admission";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import {
@@ -489,6 +494,7 @@ describe("chat run admission follows owned settlement", () => {
       parts: [
         {
           type: "tool-call",
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
           id: "approval-1",
           name: "web_search",
           arguments: "{}",
@@ -503,6 +509,7 @@ describe("chat run admission follows owned settlement", () => {
       parts: [
         {
           type: "tool-call",
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
           id: "approval-1",
           name: "web_search",
           arguments: "{}",
@@ -579,6 +586,7 @@ describe("chat run admission follows owned settlement", () => {
         parts: [
           {
             type: "tool-call",
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
             id: "approval-1",
             name: "web_search",
             arguments: "{}",
@@ -593,6 +601,7 @@ describe("chat run admission follows owned settlement", () => {
         parts: [
           {
             type: "tool-call",
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
             id: "approval-1",
             name: "web_search",
             arguments: "{}",
@@ -781,6 +790,7 @@ describe("chat run admission follows owned settlement", () => {
       },
     };
     const acquired = await startExecutionAdmission({
+      organizationStateDb: testOrganizationStateDb,
       mode: "action",
       periodIdentity: {
         actionKind: "chat.send",

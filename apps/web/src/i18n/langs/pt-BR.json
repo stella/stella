@@ -128,6 +128,11 @@
     "orSignInWithEmail": "ou faça login com e-mail",
     "organizationNamePlaceholder": "Minha organização",
     "password": "Senha",
+    "professionalUse": {
+      "description": "Sua conta foi criada sem que esta declaração fosse exibida para você. Aceite-a para continuar.",
+      "title": "Confirme o uso profissional"
+    },
+    "professionalUseStatement": "Ao criar uma conta, você confirma que usa o stella para fins profissionais e reconhece que o stella é uma ferramenta para profissionais do direito e não substitui a assessoria jurídica.",
     "rateLimitExceeded": "Muitas tentativas. Por favor, tente novamente mais tarde.",
     "resendCode": "Enviar código novamente para <email>{emailAddress}</email>",
     "selectOrganization": "Selecione uma organização",
@@ -530,6 +535,16 @@
       "createInvoice": "Criar fatura",
       "dueDate": "Data de vencimento",
       "editInvoice": "Editar fatura",
+      "export": {
+        "accounting": "Importação contábil",
+        "eBilling": "Faturamento eletrônico",
+        "eso9": "Planilha de importação ESO9 (XLSX)",
+        "exporting": "Preparando exportação…",
+        "isdoc": "Fatura eletrônica ISDOC (ABRA Gen e outros)",
+        "spreadsheets": "Planilhas",
+        "xlsx": "Faturas (XLSX)",
+        "xlsxLines": "Itens de fatura (XLSX)"
+      },
       "finalize": "Finalizar",
       "invoiceDate": "Data da fatura",
       "invoiceDetail": "Detalhe da fatura",
@@ -771,6 +786,9 @@
       "none": "Nenhuma citação registrada ainda.",
       "openAtCitation": "Abrir na citação",
       "openDecision": "Abrir a decisão",
+      "paragraphLabel": "Parágrafo {paragraph}",
+      "paragraphMark": "¶ {paragraph}",
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, parágrafo {paragraph}",
       "partialSummary": "Os totais de citações e a linha do tempo são parciais.",
       "passageNotFound": "O trecho citante não foi encontrado no texto",
       "positiveCount": "{count, plural, one {# positiva} many {# positivas} other {# positivas}}",
@@ -799,7 +817,7 @@
       "courtCount": "{count, plural, one {# tribunal} other {# tribunais}}",
       "newLast24Hours": "{count} nas últimas 24 h",
       "newLast7Days": "Novas nos últimos 7 dias",
-      "unlistedCourts": "{count, plural, one {Tribunais além do maior} other {Tribunais além dos # maiores}}"
+      "otherCourts": "Outros tribunais"
     },
     "courtTiers": {
       "constitutional": "Tribunais constitucionais",
@@ -815,6 +833,7 @@
       "decisionYears": "Anos das decisões",
       "description": "Quanta jurisprudência o acervo contém, por país e por tribunal, e quão atualizada está cada fonte.",
       "exceedsReportedTotal": "Contém mais do que o último total informado pelo órgão em {date}",
+      "gapStatusUnknown": "Situação das lacunas desconhecida",
       "generatedAt": "Números de {date}",
       "globeLabel": "Países cuja jurisprudência o corpus contém, em um globo",
       "healthCurrent": "Atualizado",
@@ -823,9 +842,12 @@
       "healthStalled": "Sem avanço",
       "healthUnknown": "Nunca executado",
       "inPreparation": "Em preparação",
+      "knownGaps": "Lacunas conhecidas",
       "lastSync": "Última sincronização",
+      "noGapsRecorded": "Nenhuma lacuna registrada",
       "notCountedYet": "Ainda não contado",
       "notMeasuredYet": "Ainda não medido",
+      "pendingTexts": "Textos pendentes",
       "reportedByListing": "Contado a partir da listagem do próprio órgão",
       "reportedByOperator": "Informado manualmente",
       "reportedByPublisher": "Contagem do próprio órgão",
@@ -1089,6 +1111,9 @@
       "toastDescription": "O chat em página inteira virá com conversas persistidas.",
       "toastTitle": "Visualização completa ainda não disponível"
     },
+    "activity": {
+      "review": "Atualização da revisão"
+    },
     "aiPrompt": "Campo de mensagem de IA",
     "aiThread": "Conversa de IA",
     "analyzingSources": "Analisando fontes",
@@ -1258,6 +1283,11 @@
     "greeting": "No que você gostaria de trabalhar?",
     "greetingSubtitle": "Comece com um caso, documento ou pergunta simples.",
     "hideThread": "Ocultar conversa",
+    "history": {
+      "matterUnavailable": "Este caso não está disponível",
+      "older": "Mais antigas",
+      "previous7Days": "7 dias anteriores"
+    },
     "historyContext": {
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {e mais #} many {e mais #} other {e mais #}}"
@@ -1274,6 +1304,9 @@
       "noMatters": "Ainda não há casos",
       "noRecentChats": "Nenhum chat recente",
       "noSkills": "Nenhuma habilidade ainda",
+      "openAllMatters": "Abrir todos os casos",
+      "openChatHistory": "Abrir o histórico de chats",
+      "openSkillsLibrary": "Abrir a biblioteca de habilidades",
       "pinnedMatters": "Casos fixados",
       "recentChats": "Chats recentes",
       "skillEditedBy": "Editado por {name} · {time}",
@@ -1417,6 +1450,8 @@
     "sendPrompt": "Enviar mensagem",
     "sendQueuedMessageNow": "Enviar agora",
     "sendWithoutAnonymization": "Enviar sem anonimização",
+    "signInToChat": "Entre para conversar sobre este documento",
+    "signInToChatAbout": "Entre para conversar sobre",
     "skills": {
       "scope": {
         "private": "Suas habilidades de IA",
@@ -1747,6 +1782,8 @@
     "citations": "Citações",
     "clauses": "Cláusulas",
     "clearDate": "Limpar data",
+    "clearFilters": "Limpar filtros",
+    "clearSearch": "Limpar busca",
     "close": "Fechar",
     "closeAll": "Fechar tudo",
     "closeOthers": "Fechar outros",
@@ -1777,6 +1814,7 @@
       "nextDecade": "Próxima década",
       "nextMonth": "Próximo mês",
       "nextYear": "Próximo ano",
+      "outOfRange": "Selecione uma data dentro do intervalo permitido.",
       "previousDecade": "Década anterior",
       "previousMonth": "Mês anterior",
       "previousYear": "Ano anterior",
@@ -4102,7 +4140,6 @@
     "appsSubtitle": "A stella também funciona fora do navegador: no seu computador e no seu assistente de IA. Você pode voltar a esta configuração a qualquer momento.",
     "appsTitle": "Leve a stella para todo lugar",
     "catalogueAlwaysOn": "Sempre ativo",
-    "catalogueClearSearch": "Limpar busca",
     "catalogueCommunityHeading": "Outros",
     "catalogueContinueWithCount": "{count, plural, one {Continuar com # ferramenta} other {Continuar com # ferramentas}}",
     "catalogueDetailAbout": "Sobre",
@@ -6363,7 +6400,6 @@
         "year": "Ano"
       },
       "cannotDeleteRequired": "É necessária pelo menos uma visualização deste tipo",
-      "clearFilters": "Limpar filtros",
       "copySuffix": "{name} (cópia)",
       "deleteView": "Excluir visualização",
       "exportCsv": "Exportar CSV",
