@@ -118,7 +118,12 @@ const executeAdmittedFlowStep = async ({
     where: { id: { eq: row.workspaceId } },
     columns: { organizationId: true },
   });
-  const actor = await resolveActorUserId(row, database);
+  const actor = workspace
+    ? await resolveActorUserId(row, {
+        database,
+        organizationId: workspace.organizationId,
+      })
+    : null;
   if (!workspace || !actor || !(await flowRunActorExists(actor, database))) {
     // The executor refuses a run without tenant or actor before any step.
     return await executeFlowStep(job.data, signal, {

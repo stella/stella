@@ -236,10 +236,13 @@ describe("reconcileOrphanedFlowRuns", () => {
     try {
       // The earlier actor lookup cannot authorize a later notification write.
       expect(
-        await resolveActorUserId(
-          notice.run,
-          asTestRaw<Parameters<typeof resolveActorUserId>[1]>(testDb),
-        ),
+        await resolveActorUserId(notice.run, {
+          database:
+            asTestRaw<Parameters<typeof resolveActorUserId>[1]["database"]>(
+              testDb,
+            ),
+          organizationId,
+        }),
       ).toBe(userId);
       await testDb
         .delete(featureEnrolments)

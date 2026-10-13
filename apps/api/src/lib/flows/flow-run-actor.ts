@@ -1,7 +1,9 @@
+import { and, eq } from "drizzle-orm";
+
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 
 import type { rootDb } from "@/api/db/root";
-import { flowRuns } from "@/api/db/schema";
+import { flowRuns, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   withAggregateRowQuery,
@@ -34,16 +36,24 @@ type FlowRunActorSource = {
  * only happens if the author is removed after the run begins; callers retain
  * the run without admitting another feature effect.
  */
+type ResolveActorUserIdOptions = {
+  database: Pick<typeof rootDb, "query">;
+  organizationId: SafeId<"organization">;
+};
+
 export const resolveActorUserId = async (
   run: FlowRunActorSource,
-  database: Pick<typeof rootDb, "query">,
+  { database, organizationId }: ResolveActorUserIdOptions,
 ): Promise<SafeId<"user"> | null> => {
   if (run.triggerSource.type === "manual") {
     return brandPersistedUserId(run.triggerSource.userId);
   }
   if (run.definitionId) {
     const definition = await database.query.flowDefinitions.findFirst({
-      where: { id: { eq: run.definitionId } },
+      where: {
+        id: { eq: run.definitionId },
+        organizationId: { eq: organizationId },
+      },
       columns: { createdByUserId: true },
     });
     if (definition?.createdByUserId) {
@@ -137,13 +147,23 @@ export const fileFlowRunCompletionNotice = async (
             definitionId: flowRuns.definitionId,
             triggerSource: flowRuns.triggerSource,
           })
-          .from(flowRuns),
+          .from(flowRuns)
+          .innerJoin(
+            workspaces,
+            and(
+              eq(workspaces.id, flowRuns.workspaceId),
+              eq(workspaces.organizationId, notice.organizationId),
+            ),
+          ),
     });
     const current = locked.rows.at(0);
     if (current?.status !== "completed") {
       return [];
     }
-    const actorUserId = await resolveActorUserId(current, tx);
+    const actorUserId = await resolveActorUserId(current, {
+      database: tx,
+      organizationId: notice.organizationId,
+    });
     if (!(await flowRunActorExists(actorUserId, tx))) {
       await recordDeferredNoticeState(tx, {
         type: "actor-removed",

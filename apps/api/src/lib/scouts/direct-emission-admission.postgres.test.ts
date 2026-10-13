@@ -36,7 +36,7 @@ import type { DocumentReviewRunBasis } from "@/api/lib/document-review/run-contr
 import { finalizeReviewRun } from "@/api/lib/document-review/run-finalize";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
-import { clearMemberAssignments } from "@/api/lib/member-assignment-offboarding-owner";
+import { clearMemberAssignments } from "@/api/lib/member-offboarding/member-assignment-offboarding-owner";
 import { pauseDocumentDeadlineScoutAfterGrantLoss } from "@/api/lib/scouts/document-deadline-recovery";
 import { settleDocumentDeadlineScoutClaim } from "@/api/lib/scouts/document-deadlines";
 import type { NewSignal } from "@/api/lib/signals/emit";
@@ -248,6 +248,75 @@ const proposedFor = ({ workspaceId, entityId }: Fixture) =>
 describe.skipIf(!enabled)(
   "direct scout admission and receipt ownership (postgres)",
   () => {
+    test("review finalization retains its receipt when the requester has no matter admission", async () => {
+      const previous = env.FEATURE_SIGNALS;
+      const previousScouts = env.FEATURE_INBOX_DOCUMENT_SCOUTS;
+      const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+      testState.setConfig("FEATURE_SIGNALS", true);
+      testState.setConfig("FEATURE_INBOX_DOCUMENT_SCOUTS", true);
+      try {
+        await withGatedTestClients(
+          process.env["DATABASE_URL"] ?? panic("Missing PostgreSQL test URL"),
+          async ({ openClient }) => {
+            const { db } = openClient();
+            const fixture = await fixtureFor(db);
+            try {
+              await db
+                .delete(workspaceMembers)
+                .where(
+                  and(
+                    eq(workspaceMembers.workspaceId, fixture.workspaceId),
+                    eq(workspaceMembers.userId, fixture.userId),
+                  ),
+                );
+              expect(
+                await db.$count(
+                  featureEnrolments,
+                  eq(featureEnrolments.organizationId, fixture.organizationId),
+                ),
+              ).toBe(1);
+              const before = await db.query.documentReviewFindings.findMany({
+                where: { runId: { eq: fixture.runId } },
+              });
+              expect(before).toHaveLength(1);
+              const completed = await db.transaction(
+                async (tx) =>
+                  await finalizeReviewRun({
+                    tx,
+                    ...fixture,
+                    executor: "table",
+                    expectedFindingCount: 1,
+                  }),
+              );
+              expect(completed.type).toBe("completed");
+              expect(
+                await db.$count(
+                  signals,
+                  eq(signals.organizationId, fixture.organizationId),
+                ),
+              ).toBe(0);
+              expect(
+                await db.query.pendingScoutEmissions.findMany({
+                  where: { sourceId: { eq: fixture.runId } },
+                }),
+              ).toHaveLength(1);
+              expect(
+                await db.query.documentReviewFindings.findMany({
+                  where: { runId: { eq: fixture.runId } },
+                }),
+              ).toEqual(before);
+            } finally {
+              await cleanup(db, fixture);
+            }
+          },
+        );
+      } finally {
+        testState.setConfig("FEATURE_SIGNALS", previous);
+        testState.setConfig("FEATURE_INBOX_DOCUMENT_SCOUTS", previousScouts);
+        restore();
+      }
+    });
+
     for (const source of ["review", "hearing"] as const) {
       test(`${source}: revocation committed at the production admission lock retains a replayable receipt`, async () => {
         const previous = env.FEATURE_SIGNALS;

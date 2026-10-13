@@ -17,7 +17,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { mutateRecoveryReceipt } from "@/api/lib/db/recovery-bookkeeping/receipts";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX } from "@/api/lib/document-review/run-contract";
-import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
+import {
+  backgroundFeatureActorExists,
+  isBackgroundFeatureEnabled,
+} from "@/api/lib/feature-access/background";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import {
   REVIEW_FINDINGS_SHOWN_MAX,
@@ -80,6 +83,26 @@ export const emitDocumentReviewSignal = async ({
       featureId: "signals",
     }))
   ) {
+    return "paused";
+  }
+  const admitted = await tx
+    .select({ id: documentReviewRuns.id })
+    .from(documentReviewRuns)
+    .where(
+      and(
+        eq(documentReviewRuns.id, runId),
+        eq(documentReviewRuns.workspaceId, workspaceId),
+        eq(documentReviewRuns.organizationId, run.organizationId),
+        backgroundFeatureActorExists({
+          organizationId: run.organizationId,
+          workspaceId,
+          userId: run.requestedBy,
+          featureId: "signals",
+        }),
+      ),
+    )
+    .limit(1);
+  if (admitted.length === 0) {
     return "paused";
   }
   const rows = await tx

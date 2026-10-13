@@ -662,7 +662,10 @@ const resolveRunScope = async (
   }
   return {
     organizationId: workspace.organizationId,
-    actorUserId: await resolveActorUserId(run, database),
+    actorUserId: await resolveActorUserId(run, {
+      database,
+      organizationId: workspace.organizationId,
+    }),
   };
 };
 

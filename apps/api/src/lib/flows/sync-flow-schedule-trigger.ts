@@ -72,8 +72,12 @@ export const syncFlowScheduleTriggerInTransaction = async ({
         .limit(1),
   });
   const definition = acquired.rows.at(0);
+  // Global orphan reconciliation owns jobs whose source is absent.
+  if (definition === undefined) {
+    return;
+  }
   const jobId = flowScheduleJobId(definitionId);
-  if (definition?.trigger.type !== "schedule") {
+  if (definition.trigger.type !== "schedule") {
     await writeSchedulerBookkeeping({
       type: "delete-source",
       db: tx,
