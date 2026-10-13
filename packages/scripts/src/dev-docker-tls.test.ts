@@ -118,7 +118,7 @@ test.skipIf(!Bun.which("docker") || !Bun.which("openssl"))(
         const target = resolveDockerTarget({
           env: { ...env, DOCKER_CONTEXT: "tls-fixture" },
         }).unwrap();
-        expect(target.host).toBe(host);
+        expect(String(target.host)).toBe(host);
         const command = dockerCommand(target, [
           "version",
           "--format",
