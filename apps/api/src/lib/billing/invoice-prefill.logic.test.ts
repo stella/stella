@@ -8,6 +8,7 @@ import {
   decideInvoiceVat,
   euVatPrefix,
   invoiceDueDays,
+  isWellFormedEuVatId,
   latestDate,
 } from "./invoice-prefill.logic";
 import type { InvoiceVatReason } from "./invoice-prefill.logic";
@@ -85,6 +86,20 @@ const VAT_CASES: VatCase[] = [
     expected: ["domestic_vat", 2100, "client_country_unconfirmed"],
   },
   {
+    name: "a prefixed tax ID without the member state's VAT ID syntax keeps the standard rate",
+    seller: { vatId: "CZ12345678", vatPayer: true },
+    buyerVatId: "DEAB",
+    buyerCountry: "DE",
+    expected: ["domestic_vat", 2100, "client_vat_id_invalid"],
+  },
+  {
+    name: "a German VAT ID one digit short keeps the standard rate",
+    seller: { vatId: "CZ12345678", vatPayer: true },
+    buyerVatId: "DE29876543",
+    buyerCountry: "DE",
+    expected: ["domestic_vat", 2100, "client_vat_id_invalid"],
+  },
+  {
     name: "a VAT ID the address does not confirm keeps the standard rate",
     seller: { vatId: "CZ12345678", vatPayer: true },
     buyerVatId: "DE298765432",
@@ -156,6 +171,10 @@ describe("invoice VAT decision", () => {
 
   test("only EU member state prefixes name a member state", () => {
     expect(euVatPrefix("EL123456789")).toBe("EL");
+    expect(isWellFormedEuVatId("NL 8530.43.775B01")).toBe(true);
+    expect(isWellFormedEuVatId("ATU12345678")).toBe(true);
+    expect(isWellFormedEuVatId("AT12345678")).toBe(false);
+    expect(isWellFormedEuVatId("US123456789")).toBe(false);
     expect(euVatPrefix("GR123456789")).toBeNull();
     expect(euVatPrefix("CZ")).toBeNull();
     expect(euVatPrefix(null)).toBeNull();

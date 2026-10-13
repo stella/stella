@@ -85,7 +85,12 @@ function NewInvoicePage() {
     <div className="flex h-full flex-col">
       <PageHeader workspaceId={workspaceId} />
       <ScrollArea className="flex-1">
-        <InvoiceComposer prefill={prefill} workspaceId={workspaceId} />
+        {/* Keyed so another matter starts from its own selection. */}
+        <InvoiceComposer
+          key={workspaceId}
+          prefill={prefill}
+          workspaceId={workspaceId}
+        />
       </ScrollArea>
     </div>
   );

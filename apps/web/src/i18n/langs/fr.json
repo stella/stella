@@ -581,6 +581,7 @@
       "vatRate": "TVA {rate} %",
       "vatReasons": {
         "clientCountryUnconfirmed": "Impossible de confirmer le pays du client : son numéro de TVA et son adresse n’indiquent pas le même pays, le taux normal s’applique donc",
+        "clientVatIdInvalid": "Le numéro de TVA du client n'a pas le format de son pays, le taux normal s'applique donc",
         "domesticRate": "Votre taux de TVA le plus élevé en vigueur à la date de la prestation",
         "noSellerProfile": "Aucun profil vendeur : pas de TVA tant que vous ne la fixez pas sur la facture",
         "noVatRate": "Aucun taux de TVA n’est configuré dans la facturation",

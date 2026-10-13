@@ -581,6 +581,7 @@
       "vatRate": "IVA {rate} %",
       "vatReasons": {
         "clientCountryUnconfirmed": "No se pudo confirmar el país del cliente: su número de IVA y su dirección no indican el mismo país, así que se aplica el tipo general",
+        "clientVatIdInvalid": "El NIF-IVA del cliente no tiene el formato de su país, por lo que se aplica el tipo general",
         "domesticRate": "Su tipo de IVA más alto vigente en la fecha de devengo",
         "noSellerProfile": "No hay perfil de vendedor, así que no se cobra IVA hasta que lo indique en la factura",
         "noVatRate": "No hay ningún tipo de IVA configurado en la facturación",

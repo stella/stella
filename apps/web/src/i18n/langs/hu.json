@@ -581,6 +581,7 @@
       "vatRate": "{rate} % ÁFA",
       "vatReasons": {
         "clientCountryUnconfirmed": "Az ügyfél országát nem sikerült megerősíteni: az áfaazonosító és a cím nem ugyanazt az országot jelöli, ezért az általános kulcs érvényes",
+        "clientVatIdInvalid": "Az ügyfél közösségi adószáma nem felel meg az országa formátumának, ezért az általános kulcs érvényes",
         "domesticRate": "A teljesítés napján hatályos legmagasabb áfakulcsa",
         "noSellerProfile": "Nincs eladói profil, így nincs ÁFA, amíg a számlán be nem állítja",
         "noVatRate": "A számlázási beállításokban nincs áfakulcs megadva",

@@ -101,6 +101,8 @@ const VAT_REASON_LABELS = {
   no_vat_rate: "billing.invoiceComposer.vatReasons.noVatRate",
   client_country_unconfirmed:
     "billing.invoiceComposer.vatReasons.clientCountryUnconfirmed",
+  client_vat_id_invalid:
+    "billing.invoiceComposer.vatReasons.clientVatIdInvalid",
 } as const satisfies Record<InvoicePrefill["vat"]["reason"], TranslationKey>;
 
 type PrefillEntry = InvoicePrefill["timeEntries"][number];

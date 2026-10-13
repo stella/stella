@@ -581,6 +581,7 @@
       "vatRate": "PVM {rate} %",
       "vatReasons": {
         "clientCountryUnconfirmed": "Kliento šalies patvirtinti nepavyko: PVM mokėtojo kodas ir adresas nurodo skirtingas šalis, todėl taikomas standartinis tarifas",
+        "clientVatIdInvalid": "Kliento PVM mokėtojo kodas neatitinka jo šalies formato, todėl taikomas standartinis tarifas",
         "domesticRate": "Jūsų didžiausias paslaugų suteikimo dieną galiojantis PVM tarifas",
         "noSellerProfile": "Nėra pardavėjo profilio, todėl PVM netaikomas, kol jo nenustatysite sąskaitoje",
         "noVatRate": "Atsiskaitymo nustatymuose nenustatytas joks PVM tarifas",

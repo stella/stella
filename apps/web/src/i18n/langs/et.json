@@ -581,6 +581,7 @@
       "vatRate": "Käibemaks {rate} %",
       "vatReasons": {
         "clientCountryUnconfirmed": "Kliendi riiki ei õnnestunud kinnitada: käibemaksukohustuslase number ja aadress ei viita samale riigile, seega kehtib tavamäär",
+        "clientVatIdInvalid": "Kliendi KMKR number ei vasta tema riigi vormingule, seega kehtib tavamäär",
         "domesticRate": "Teie kõrgeim teenuse osutamise päeval kehtiv käibemaksumäär",
         "noSellerProfile": "Müüja profiil puudub, seega käibemaksu ei arvestata enne, kui selle arvele määrate",
         "noVatRate": "Arvelduse seadetes pole käibemaksumäära seadistatud",

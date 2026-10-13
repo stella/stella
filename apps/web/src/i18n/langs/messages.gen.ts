@@ -584,6 +584,7 @@ type Messages = {
       "vatRate": "{rate} % VAT";
       "vatReasons": {
         "clientCountryUnconfirmed": "Couldn't confirm the client's country: its VAT ID and address don't name the same country, so the standard rate applies";
+        "clientVatIdInvalid": "The client's VAT ID doesn't have the format of a VAT ID from its country, so the standard rate applies";
         "domesticRate": "Your highest VAT rate in force on the supply date";
         "noSellerProfile": "No seller profile, so no VAT is charged until you set it on the invoice";
         "noVatRate": "No VAT rate is set up in billing settings";

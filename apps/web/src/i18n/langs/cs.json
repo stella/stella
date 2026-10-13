@@ -581,6 +581,7 @@
       "vatRate": "DPH {rate} %",
       "vatReasons": {
         "clientCountryUnconfirmed": "Zemi klienta se nepodařilo ověřit: DIČ a adresa neuvádějí stejnou zemi, proto se použije základní sazba",
+        "clientVatIdInvalid": "DIČ klienta nemá formát DIČ jeho státu, uplatní se proto základní sazba",
         "domesticRate": "Vaše nejvyšší sazba DPH platná ke dni plnění",
         "noSellerProfile": "Chybí profil dodavatele, DPH se proto neúčtuje, dokud ji na faktuře nenastavíte",
         "noVatRate": "V nastavení fakturace není nastavena žádná sazba DPH",

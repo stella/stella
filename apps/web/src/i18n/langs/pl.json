@@ -581,6 +581,7 @@
       "vatRate": "VAT {rate} %",
       "vatReasons": {
         "clientCountryUnconfirmed": "Nie udało się potwierdzić kraju klienta: numer VAT i adres nie wskazują tego samego kraju, dlatego stosuje się stawkę podstawową",
+        "clientVatIdInvalid": "Numer VAT klienta nie ma formatu numeru VAT jego kraju, dlatego stosuje się stawkę podstawową",
         "domesticRate": "Twoja najwyższa stawka VAT obowiązująca w dniu wykonania usługi",
         "noSellerProfile": "Brak profilu sprzedawcy, więc VAT nie jest naliczany, dopóki nie ustawisz go na fakturze",
         "noVatRate": "W ustawieniach rozliczeń nie skonfigurowano stawki VAT",

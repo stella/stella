@@ -581,6 +581,7 @@
       "vatRate": "PVN {rate} %",
       "vatReasons": {
         "clientCountryUnconfirmed": "Klienta valsti neizdevās apstiprināt: PVN numurs un adrese nenorāda vienu un to pašu valsti, tāpēc piemēro pamatlikmi",
+        "clientVatIdInvalid": "Klienta PVN numuram nav tā valsts formāta, tāpēc piemēro standarta likmi",
         "domesticRate": "Jūsu augstākā PVN likme, kas ir spēkā piegādes datumā",
         "noSellerProfile": "Nav pārdevēja profila, tāpēc PVN netiek piemērots, kamēr to neiestatāt rēķinā",
         "noVatRate": "Norēķinu iestatījumos nav iestatīta neviena PVN likme",

@@ -64,6 +64,49 @@ const vatIdCountry = (vatId: string | null): string | null => {
 };
 
 /**
+ * The number part of each member state's VAT ID, as the VIES service checks
+ * its syntax. Only a well-formed VAT ID removes VAT by reverse charge; a
+ * prefix with arbitrary characters behind it ("DEAB") does not.
+ */
+const EU_VAT_ID_FORMATS: ReadonlyMap<string, RegExp> = new Map([
+  ["AT", /^U\d{8}$/u],
+  ["BE", /^[01]\d{9}$/u],
+  ["BG", /^\d{9,10}$/u],
+  ["CY", /^\d{8}[A-Z]$/u],
+  ["CZ", /^\d{8,10}$/u],
+  ["DE", /^\d{9}$/u],
+  ["DK", /^\d{8}$/u],
+  ["EE", /^\d{9}$/u],
+  ["EL", /^\d{9}$/u],
+  ["ES", /^[0-9A-Z]\d{7}[0-9A-Z]$/u],
+  ["FI", /^\d{8}$/u],
+  ["FR", /^[0-9A-HJ-NP-Z]{2}\d{9}$/u],
+  ["HR", /^\d{11}$/u],
+  ["HU", /^\d{8}$/u],
+  ["IE", /^(?:\d{7}[A-W][A-I]?|\d[A-Z+*]\d{5}[A-W])$/u],
+  ["IT", /^\d{11}$/u],
+  ["LT", /^(?:\d{9}|\d{12})$/u],
+  ["LU", /^\d{8}$/u],
+  ["LV", /^\d{11}$/u],
+  ["MT", /^\d{8}$/u],
+  ["NL", /^\d{9}B\d{2}$/u],
+  ["PL", /^\d{10}$/u],
+  ["PT", /^\d{9}$/u],
+  ["RO", /^\d{2,10}$/u],
+  ["SE", /^\d{12}$/u],
+  ["SI", /^\d{8}$/u],
+  ["SK", /^\d{10}$/u],
+  ["XI", /^(?:\d{9}|\d{12}|GD\d{3}|HA\d{3})$/u],
+]);
+
+/** Whether a VAT ID with a member-state prefix has that state's syntax. */
+export const isWellFormedEuVatId = (vatId: string | null): boolean => {
+  const compact = compactVatId(vatId);
+  const format = EU_VAT_ID_FORMATS.get(compact.slice(0, 2));
+  return format !== undefined && format.test(compact.slice(2));
+};
+
+/**
  * The ISO 3166-1 alpha-2 country a VAT ID prefix stands for. VAT prefixes are
  * ISO codes except Greece, which writes EL, and Northern Ireland, which writes
  * XI under the United Kingdom.
@@ -97,6 +140,7 @@ const INVOICE_VAT_REASONS = [
   "domestic_rate",
   "no_vat_rate",
   "client_country_unconfirmed",
+  "client_vat_id_invalid",
 ] as const;
 export type InvoiceVatReason = (typeof INVOICE_VAT_REASONS)[number];
 
@@ -171,16 +215,24 @@ export const decideInvoiceVat = ({
   if (addressCountry(buyerCountry) !== vatCountry) {
     return domesticVat(standardRateBps, "client_country_unconfirmed");
   }
+  if (!EU_MEMBER_STATES.has(vatCountry)) {
+    // Outside the EU, including Northern Ireland for services, the place of
+    // supply is abroad and the service is outside the scope of VAT.
+    return {
+      vatTreatment: "outside_scope",
+      vatRateBps: 0,
+      reason: "outside_scope",
+    };
+  }
   // A business client in another member state accounts for the VAT itself
-  // (Art. 44/196). Outside the EU, including Northern Ireland for services,
-  // the place of supply is abroad and the service is outside the scope of VAT.
-  return EU_MEMBER_STATES.has(vatCountry)
+  // (Art. 44/196), shown by a VAT ID with that state's syntax.
+  return isWellFormedEuVatId(buyerVatId)
     ? {
         vatTreatment: "reverse_charge",
         vatRateBps: 0,
         reason: "reverse_charge",
       }
-    : { vatTreatment: "outside_scope", vatRateBps: 0, reason: "outside_scope" };
+    : domesticVat(standardRateBps, "client_vat_id_invalid");
 };
 
 export type InvoiceBuyerSnapshot = {

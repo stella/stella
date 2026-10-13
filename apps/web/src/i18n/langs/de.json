@@ -581,6 +581,7 @@
       "vatRate": "{rate} % Umsatzsteuer",
       "vatReasons": {
         "clientCountryUnconfirmed": "Das Land des Mandanten ließ sich nicht bestätigen: Umsatzsteuer-ID und Anschrift nennen nicht dasselbe Land, daher gilt der Regelsatz",
+        "clientVatIdInvalid": "Die USt-IdNr. des Mandanten hat nicht das Format seines Landes, daher gilt der Regelsatz",
         "domesticRate": "Ihr höchster am Leistungsdatum geltender Umsatzsteuersatz",
         "noSellerProfile": "Kein Verkäuferprofil, daher keine Umsatzsteuer, bis Sie sie in der Rechnung festlegen",
         "noVatRate": "In den Abrechnungseinstellungen ist kein Umsatzsteuersatz eingerichtet",

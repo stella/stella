@@ -581,6 +581,7 @@
       "vatRate": "IVA de {rate} %",
       "vatReasons": {
         "clientCountryUnconfirmed": "Não foi possível confirmar o país do cliente: o número de IVA e o endereço não indicam o mesmo país, então se aplica a alíquota padrão",
+        "clientVatIdInvalid": "O número de IVA do cliente não tem o formato do seu país, por isso aplica-se a taxa normal",
         "domesticRate": "Sua alíquota de IVA mais alta em vigor na data do fato gerador",
         "noSellerProfile": "Sem perfil de vendedor, nenhum IVA é cobrado até você defini-lo na fatura",
         "noVatRate": "Nenhuma alíquota de IVA configurada no faturamento",
