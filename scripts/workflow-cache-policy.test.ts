@@ -414,6 +414,17 @@ test("the census catches duplicate writers, missing writers and per-row mode dri
       },
     }).at(0)?.savers,
   ).toHaveLength(2);
+  const dynamicJob = {
+    ...job("save"),
+    strategy: {
+      matrix: {
+        shard: `\${{ fromJSON(needs.plan.outputs.matrix).shard }}`,
+      },
+    },
+  };
+  expect(() => census({ fixture: { jobs: { dynamic: dynamicJob } } })).toThrow(
+    "dynamic matrices must only restore stores",
+  );
 });
 
 test("scoped store saves are non-fatal post hooks, and containers cannot restore a gzip-only version", () => {
@@ -469,7 +480,7 @@ test("scoped store saves are non-fatal post hooks, and containers cannot restore
     }),
     Bun.YAML.parse(
       readFileSync(
-        new URL(".$/.github/actions/ci-store-save/action.yml", import.meta.url),
+        new URL("../.github/actions/ci-store-save/action.yml", import.meta.url),
         "utf-8",
       ),
     ),

@@ -21,6 +21,11 @@ const matrixRows = (matrix: unknown): Record<string, unknown>[] => {
     if (axis === "include" || axis === "exclude") {
       continue;
     }
+    // Plan-generated shard axes do not change the store identity. Their
+    // callers must restore only; unresolved identity fields still fail below.
+    if (typeof rawValues === "string" && rawValues.includes("needs.")) {
+      continue;
+    }
     const values =
       typeof rawValues === "string"
         ? evaluate(rawValues, { values: { "github.event_name": "push" } })
@@ -85,6 +90,7 @@ const canRunOnMain = (condition: unknown, row: Record<string, unknown>) =>
 const platformIdentity = (runner: unknown) => {
   switch (runner) {
     case "ubuntu-latest":
+    case "ubuntu-24.04":
       return { platform: "linux", arch: "x64" };
     case "macos-14":
       return { platform: "darwin", arch: "arm64" };
@@ -143,6 +149,13 @@ const assertPinnedStoreRuntime = ({
   }
 };
 
+const isDynamicMatrix = (matrix: unknown) =>
+  typeof matrix === "string" ||
+  (isRecord(matrix) &&
+    Object.values(matrix).some(
+      (axis) => typeof axis === "string" && axis.includes("needs."),
+    ));
+
 /** Every declared platform/mode/ordered-flags key has exactly one writer. */
 export const storeSaverCensus = ({
   workflows,
@@ -190,7 +203,7 @@ export const storeSaverCensus = ({
         assertPinnedStoreRuntime({ steps, step, caller: `${file}/${name}` });
         const strategy = isRecord(job["strategy"]) ? job["strategy"] : {};
         if (
-          typeof strategy["matrix"] === "string" &&
+          isDynamicMatrix(strategy["matrix"]) &&
           inputs["cache-write"] !== undefined
         ) {
           panic(`${file}/${name}: dynamic matrices must only restore stores`);
