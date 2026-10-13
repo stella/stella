@@ -63,6 +63,7 @@ type Submission =
   | { type: "submitting"; idempotencyKey: string; items: BatchItem[] }
   | { type: "retry"; idempotencyKey: string; items: BatchItem[] }
   | { type: "saved"; count: number; markerSaved: boolean };
+export type ActivityReviewStatus = Submission["type"] | "receiptPending";
 type Range = { startMs: number; endMs: number };
 
 const useMatterCandidates = (enabled: boolean) => {
@@ -96,23 +97,18 @@ const useMatterCandidates = (enabled: boolean) => {
   return { candidates, refreshCandidates };
 };
 
-export const ActivityDayReview = ({
-  snapshot,
-  header,
-  onCopy,
-}: {
-  header: ReactNode;
-  snapshot: ActivityDaySnapshot;
-  onCopy: (text: string, onSuccess: () => void) => void;
-}) => {
-  const t = useTranslations("activity");
-  const format = useFormatter();
-  const { candidates, refreshCandidates } = useMatterCandidates(
-    snapshot.timeBillingEnabled,
-  );
-  const [edits, setEdits] = useState<Record<string, EntryEdit>>({});
+type ReviewSubmissionOptions = {
+  pendingBatch: ActivityDaySnapshot["pendingBatch"];
+  onReviewStatusChange: (status: ActivityReviewStatus) => void;
+};
+
+const useReviewSubmission = ({
+  pendingBatch,
+  onReviewStatusChange,
+}: ReviewSubmissionOptions) => {
+  const durablePendingSeen = useRef(pendingBatch !== null);
   const [submission, setSubmission] = useState<Submission>(() => {
-    const pending = snapshot.pendingBatch;
+    const pending = pendingBatch;
     if (!pending) {
       return { type: "editing" };
     }
@@ -124,6 +120,56 @@ export const ActivityDayReview = ({
         ranges: pending.ranges.at(index) ?? [],
       })),
     };
+  });
+  const updateSubmission = (next: Submission) => {
+    setSubmission(next);
+    onReviewStatusChange(
+      next.type === "saved" && !next.markerSaved ? "receiptPending" : next.type,
+    );
+  };
+  useEffect(() => {
+    if (pendingBatch !== null) {
+      durablePendingSeen.current = true;
+    }
+    if (
+      pendingBatch === null &&
+      durablePendingSeen.current &&
+      submission.type === "retry"
+    ) {
+      durablePendingSeen.current = false;
+      setSubmission({ type: "editing" });
+      onReviewStatusChange("editing");
+      return;
+    }
+    onReviewStatusChange(
+      submission.type === "saved" && !submission.markerSaved
+        ? "receiptPending"
+        : submission.type,
+    );
+  }, [onReviewStatusChange, pendingBatch, submission]);
+  return { submission, updateSubmission };
+};
+
+export const ActivityDayReview = ({
+  snapshot,
+  header,
+  onCopy,
+  onReviewStatusChange,
+}: {
+  header: ReactNode;
+  snapshot: ActivityDaySnapshot;
+  onCopy: (text: string, onSuccess: () => void) => void;
+  onReviewStatusChange: (status: ActivityReviewStatus) => void;
+}) => {
+  const t = useTranslations("activity");
+  const format = useFormatter();
+  const { candidates, refreshCandidates } = useMatterCandidates(
+    snapshot.timeBillingEnabled,
+  );
+  const [edits, setEdits] = useState<Record<string, EntryEdit>>({});
+  const { submission, updateSubmission } = useReviewSubmission({
+    pendingBatch: snapshot.pendingBatch,
+    onReviewStatusChange,
   });
   const [localDrafts, setLocalDrafts] = useState(snapshot.draftedEntries);
   const [errorMessage, setError] = useState<string | null>(null);
@@ -248,7 +294,7 @@ export const ActivityDayReview = ({
     }
     sending.current = true;
     setError(null);
-    setSubmission({
+    updateSubmission({
       type: "submitting",
       idempotencyKey: pending.idempotencyKey,
       items: pending.items,
@@ -273,7 +319,7 @@ export const ActivityDayReview = ({
               : [];
           }),
         ]);
-        setSubmission({ type: "saved", count: entries.length, markerSaved });
+        updateSubmission({ type: "saved", count: entries.length, markerSaved });
         return undefined;
       })
       .catch((error: unknown) => {
@@ -282,10 +328,10 @@ export const ActivityDayReview = ({
           error !== null &&
           "type" in error &&
           error.type === "rejected";
-        if (rejected) {
-          setSubmission({ type: "editing" });
+        if (rejected && snapshot.pendingBatch === null) {
+          updateSubmission({ type: "editing" });
         } else {
-          setSubmission({
+          updateSubmission({
             type: "retry",
             idempotencyKey: pending.idempotencyKey,
             items: pending.items,
@@ -348,6 +394,11 @@ export const ActivityDayReview = ({
       {errorMessage ? (
         <p role="alert" className="text-destructive text-sm">
           {errorMessage}
+        </p>
+      ) : null}
+      {!snapshot.timeBillingEnabled && submission.type === "retry" ? (
+        <p role="status" className="text-muted-foreground text-sm">
+          {t("batchUnavailable")}
         </p>
       ) : null}
       {editable && selectionExceedsLimit ? (

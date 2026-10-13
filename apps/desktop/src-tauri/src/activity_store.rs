@@ -10,14 +10,16 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use std::{
+  collections::BTreeMap,
   fs,
   path::{Path, PathBuf},
 };
 
 use crate::activity::{
-  ActivityDraftedEntry, ActivityManualAssignment, ActivityPendingBatch,
-  ActivitySegment, ActivitySettings, format_date, parse_date,
+  ActivityDeletionError, ActivityDraftedEntry, ActivityManualAssignment,
+  ActivityPendingBatch, ActivitySegment, ActivitySettings, format_date, parse_date,
 };
+use crate::keychain::{self, LocalDataKey, LocalDataKeyLookup};
 use crate::local_store::{EncryptedJsonFile, create_private_dir};
 
 const LABEL: &str = "activity";
@@ -35,6 +37,13 @@ struct ActivityDayFile {
   manual_assignments: Vec<ActivityManualAssignment>,
   #[serde(default)]
   pending_batch: Option<ActivityPendingBatch>,
+}
+
+enum PendingMutation<'a> {
+  Preserve,
+  Reserve(&'a ActivityPendingBatch),
+  Cancel(&'a str),
+  Finish(&'a [ActivityDraftedEntry]),
 }
 
 #[derive(Clone)]
@@ -120,28 +129,80 @@ impl ActivityStore {
     )
   }
 
-  /// Writes a day; an empty day removes its file.
+  fn mutate_day(
+    &self,
+    date: NaiveDate,
+    pending: PendingMutation<'_>,
+    update: impl FnOnce(&mut ActivityDayFile),
+  ) -> Result<(), String> {
+    let mut day =
+      self
+        .day_file(date)
+        .load::<ActivityDayFile>()?
+        .unwrap_or(ActivityDayFile {
+          segments: Vec::new(),
+          drafted_entries: Vec::new(),
+          manual_assignments: Vec::new(),
+          pending_batch: None,
+        });
+    let saved_pending = day.pending_batch.clone();
+    update(&mut day);
+    day.pending_batch = match pending {
+      PendingMutation::Preserve => saved_pending,
+      PendingMutation::Reserve(pending) => {
+        if saved_pending.as_ref().is_some_and(|saved| saved != pending) {
+          return Err("another activity batch is pending".into());
+        }
+        Some(pending.clone())
+      }
+      PendingMutation::Cancel(key) => {
+        if !saved_pending
+          .as_ref()
+          .is_some_and(|saved| saved.idempotency_key == key)
+        {
+          return Err("activity batch key does not match".into());
+        }
+        None
+      }
+      PendingMutation::Finish(entries) => {
+        let saved = saved_pending
+          .as_ref()
+          .ok_or("activity batch is not pending")?;
+        let ranges: Vec<_> = saved.ranges.iter().flatten().collect();
+        if !entries.starts_with(&day.drafted_entries) {
+          return Err("activity batch receipts do not match".into());
+        }
+        let markers = &entries[day.drafted_entries.len()..];
+        if markers.len() != ranges.len()
+          || markers.iter().zip(ranges).any(|(marker, range)| {
+            marker.start != range.start || marker.end != range.end
+          })
+        {
+          return Err("activity batch receipts do not match".into());
+        }
+        day.drafted_entries = entries.to_vec();
+        None
+      }
+    };
+    if day.segments.is_empty()
+      && day.drafted_entries.is_empty()
+      && day.manual_assignments.is_empty()
+      && day.pending_batch.is_none()
+    {
+      return remove_file_if_present(self.day_file(date).path());
+    }
+    self.ensure_dirs()?;
+    self.day_file(date).persist(&day)
+  }
+
+  /// Ordinary day rewrites preserve the exact pending batch.
   pub fn save_day(
     &self,
     date: NaiveDate,
     segments: &[ActivitySegment],
   ) -> Result<(), String> {
-    let drafted_entries = self.load_drafted(date)?;
-    let manual_assignments = self.load_assignments(date)?;
-    let pending_batch = self.load_pending(date)?;
-    if segments.is_empty()
-      && drafted_entries.is_empty()
-      && manual_assignments.is_empty()
-      && pending_batch.is_none()
-    {
-      return self.delete_day(date);
-    }
-    self.ensure_dirs()?;
-    self.day_file(date).persist(&ActivityDayFile {
-      segments: segments.to_vec(),
-      drafted_entries,
-      manual_assignments,
-      pending_batch,
+    self.mutate_day(date, PendingMutation::Preserve, |day| {
+      day.segments = segments.to_vec();
     })
   }
 
@@ -160,21 +221,13 @@ impl ActivityStore {
   pub fn save_pending(
     &self,
     date: NaiveDate,
-    pending: Option<&ActivityPendingBatch>,
+    pending: &ActivityPendingBatch,
   ) -> Result<(), String> {
-    let mut day =
-      self
-        .day_file(date)
-        .load::<ActivityDayFile>()?
-        .unwrap_or(ActivityDayFile {
-          segments: Vec::new(),
-          drafted_entries: Vec::new(),
-          manual_assignments: Vec::new(),
-          pending_batch: None,
-        });
-    day.pending_batch = pending.cloned();
-    self.ensure_dirs()?;
-    self.day_file(date).persist(&day)
+    self.mutate_day(date, PendingMutation::Reserve(pending), |_| {})
+  }
+
+  pub fn cancel_pending(&self, date: NaiveDate, key: &str) -> Result<(), String> {
+    self.mutate_day(date, PendingMutation::Cancel(key), |_| {})
   }
 
   pub fn finish_batch(
@@ -182,14 +235,7 @@ impl ActivityStore {
     date: NaiveDate,
     entries: &[ActivityDraftedEntry],
   ) -> Result<(), String> {
-    let mut day = self
-      .day_file(date)
-      .load::<ActivityDayFile>()?
-      .ok_or("activity day is unavailable")?;
-    day.drafted_entries = entries.to_vec();
-    day.pending_batch = None;
-    self.ensure_dirs()?;
-    self.day_file(date).persist(&day)
+    self.mutate_day(date, PendingMutation::Finish(entries), |_| {})
   }
 
   pub fn load_assignments(
@@ -210,19 +256,9 @@ impl ActivityStore {
     date: NaiveDate,
     assignments: &[ActivityManualAssignment],
   ) -> Result<(), String> {
-    let mut day =
-      self
-        .day_file(date)
-        .load::<ActivityDayFile>()?
-        .unwrap_or(ActivityDayFile {
-          segments: Vec::new(),
-          drafted_entries: Vec::new(),
-          manual_assignments: Vec::new(),
-          pending_batch: None,
-        });
-    day.manual_assignments = assignments.to_vec();
-    self.ensure_dirs()?;
-    self.day_file(date).persist(&day)
+    self.mutate_day(date, PendingMutation::Preserve, |day| {
+      day.manual_assignments = assignments.to_vec();
+    })
   }
 
   pub fn load_drafted(
@@ -244,30 +280,38 @@ impl ActivityStore {
     date: NaiveDate,
     marker: ActivityDraftedEntry,
   ) -> Result<(), String> {
-    let mut day =
-      self
-        .day_file(date)
-        .load::<ActivityDayFile>()?
-        .unwrap_or(ActivityDayFile {
-          segments: Vec::new(),
-          drafted_entries: Vec::new(),
-          manual_assignments: Vec::new(),
-          pending_batch: None,
-        });
-    if day
-      .drafted_entries
+    if self
+      .load_drafted(date)?
       .iter()
       .any(|saved| saved.start == marker.start)
     {
-      return Err("activity range already drafted".to_string());
+      return Err("activity range already drafted".into());
     }
-    day.drafted_entries.push(marker);
-    self.ensure_dirs()?;
-    self.day_file(date).persist(&day)
+    self.mutate_day(date, PendingMutation::Preserve, |day| {
+      day.drafted_entries.push(marker);
+    })
   }
 
-  pub fn delete_day(&self, date: NaiveDate) -> Result<(), String> {
+  pub fn delete_day(&self, date: NaiveDate) -> Result<(), ActivityDeletionError> {
+    if self
+      .load_pending(date)
+      .map_err(ActivityDeletionError::Unavailable)?
+      .is_some()
+    {
+      return Err(ActivityDeletionError::PendingBatch);
+    }
     remove_file_if_present(self.day_file(date).path())
+      .map_err(ActivityDeletionError::Unavailable)
+  }
+
+  pub fn pending_dates(&self) -> Result<Vec<NaiveDate>, String> {
+    let mut pending = Vec::new();
+    for date in self.day_dates()? {
+      if self.load_pending(date)?.is_some() {
+        pending.push(date);
+      }
+    }
+    Ok(pending)
   }
 
   /// Every file in the days directory with the date it belongs to; files
@@ -296,30 +340,21 @@ impl ActivityStore {
     Ok(days)
   }
 
-  /// Deletes the day files before `earliest`, and temporary files left by an
-  /// interrupted write. Returns how many day files went.
+  /// Retention preserves unresolved batches; only settled days expire.
   pub fn delete_days_before(&self, earliest: NaiveDate) -> Result<usize, String> {
-    Self::delete_days_before_root(&self.root, earliest)
-  }
-
-  /// Retention never needs the key or readable settings. Unavailable account
-  /// settings use the default retention chosen by the caller.
-  pub fn delete_days_before_root(
-    root: &Path,
-    earliest: NaiveDate,
-  ) -> Result<usize, String> {
     let mut deleted = 0;
-    for (path, date) in Self::day_entries_root(root)? {
+    for (path, date) in Self::day_entries_root(&self.root)? {
       match date {
-        Some(date) if date >= earliest => {}
-        Some(_) => {
-          remove_file_if_present(&path)?;
-          deleted += 1;
+        Some(date) if date < earliest => {
+          if self.load_pending(date)?.is_none() {
+            self.delete_day(date).map_err(|error| error.to_string())?;
+            deleted += 1;
+          }
         }
         None if path.extension().is_some_and(|extension| extension == "tmp") => {
           remove_file_if_present(&path)?;
         }
-        None => {}
+        _ => {}
       }
     }
     Ok(deleted)
@@ -346,17 +381,83 @@ impl ActivityStore {
     Ok(Self::other_account_history_files(root, current_namespace)?.day_count)
   }
 
-  /// Explicitly removes inactive accounts' dated history and interrupted-write
-  /// files. Their settings remain; the current account is never included.
+  /// Preflight every inactive day before erasing any account history.
   pub fn delete_other_account_history(
     root: &Path,
     current_namespace: &str,
-  ) -> Result<(), String> {
+  ) -> Result<(), ActivityDeletionError> {
+    Self::delete_other_account_history_with_key_lookup(
+      root,
+      current_namespace,
+      |namespace| {
+        keychain::get_local_data_key(LocalDataKey::ActivityTimeline(namespace))
+      },
+    )
+  }
+
+  fn delete_other_account_history_with_key_lookup(
+    root: &Path,
+    current_namespace: &str,
+    mut lookup: impl FnMut(&str) -> Result<LocalDataKeyLookup, String>,
+  ) -> Result<(), ActivityDeletionError> {
     if !Self::is_account_namespace(current_namespace) {
-      return Err("activity account namespace is invalid".to_string());
+      return Err(ActivityDeletionError::Unavailable(
+        "activity account namespace is invalid".into(),
+      ));
     }
-    for path in Self::other_account_history_files(root, current_namespace)?.paths {
-      remove_file_if_present(&path)?;
+    let history = Self::other_account_history_files(root, current_namespace)
+      .map_err(ActivityDeletionError::Unavailable)?;
+    let mut stores = BTreeMap::new();
+    for path in &history.paths {
+      if path.extension().is_some_and(|extension| extension == "tmp") {
+        continue;
+      }
+      let account_root = path.parent().and_then(Path::parent).ok_or_else(|| {
+        ActivityDeletionError::Unavailable("activity history path is invalid".into())
+      })?;
+      let namespace = account_root
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| {
+          ActivityDeletionError::Unavailable(
+            "activity account namespace is invalid".into(),
+          )
+        })?;
+      if !stores.contains_key(namespace) {
+        let key = match lookup(namespace).map_err(ActivityDeletionError::Unavailable)? {
+          LocalDataKeyLookup::Found(key) => key,
+          LocalDataKeyLookup::Missing => {
+            return Err(ActivityDeletionError::Unavailable(
+              "activity history key is unavailable".into(),
+            ));
+          }
+        };
+        stores.insert(
+          namespace.to_string(),
+          ActivityStore::new(key, account_root.to_path_buf()),
+        );
+      }
+      let date = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .and_then(|name| name.strip_suffix(DAY_FILE_SUFFIX))
+        .ok_or_else(|| {
+          ActivityDeletionError::Unavailable("activity history date is invalid".into())
+        })?;
+      let date = parse_date(date).map_err(ActivityDeletionError::Unavailable)?;
+      let store = stores
+        .get(namespace)
+        .expect("inactive account key was loaded");
+      if store
+        .load_pending(date)
+        .map_err(ActivityDeletionError::Unavailable)?
+        .is_some()
+      {
+        return Err(ActivityDeletionError::PendingBatch);
+      }
+    }
+    for path in history.paths {
+      remove_file_if_present(&path).map_err(ActivityDeletionError::Unavailable)?;
     }
     Ok(())
   }
@@ -454,15 +555,25 @@ impl ActivityStore {
     Ok(history)
   }
 
-  pub fn delete_all_days(&self) -> Result<(), String> {
+  pub fn delete_all_days(&self) -> Result<(), ActivityDeletionError> {
+    if !self
+      .pending_dates()
+      .map_err(ActivityDeletionError::Unavailable)?
+      .is_empty()
+    {
+      return Err(ActivityDeletionError::PendingBatch);
+    }
     match fs::remove_dir_all(self.days_dir()) {
       Ok(()) => Ok(()),
       Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-      Err(error) => Err(format!("activity days could not be deleted: {error}")),
+      Err(error) => Err(ActivityDeletionError::Unavailable(format!(
+        "activity days could not be deleted: {error}"
+      ))),
     }
   }
 
-  /// Removes the whole store, settings included.
+  /// Test teardown only; product deletion requires readable pending state.
+  #[cfg(test)]
   pub fn remove(root: &Path) -> Result<(), String> {
     match fs::remove_dir_all(root) {
       Ok(()) => Ok(()),
@@ -507,6 +618,166 @@ mod tests {
     }
   }
 
+  fn delete_inactive_history(
+    root: &Path,
+    current: &str,
+  ) -> Result<(), ActivityDeletionError> {
+    ActivityStore::delete_other_account_history_with_key_lookup(root, current, |_| {
+      Ok(LocalDataKeyLookup::Found([9; 32]))
+    })
+  }
+
+  fn pending() -> ActivityPendingBatch {
+    let recorded = segment("app");
+    ActivityPendingBatch {
+      idempotency_key: "review-key".into(),
+      entries: serde_json::json!([{"matterId":"matter"}]),
+      ranges: vec![vec![crate::activity::ActivityRange {
+        start: recorded.start.to_rfc3339(),
+        end: recorded.end.to_rfc3339(),
+      }]],
+    }
+  }
+
+  #[test]
+  fn empty_segment_rewrites_preserve_exact_pending_recovery() {
+    let (store, root) = store();
+    let pending = pending();
+    store.save_pending(date(1), &pending).unwrap();
+    store.save_day(date(1), &[]).unwrap();
+    assert_eq!(store.load_pending(date(1)).unwrap(), Some(pending));
+    assert!(store.load_day(date(1)).unwrap().is_empty());
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn assignment_rewrites_preserve_exact_pending_recovery() {
+    let (store, root) = store();
+    let pending = pending();
+    store.save_pending(date(1), &pending).unwrap();
+    store.save_assignments(date(1), &[]).unwrap();
+    assert_eq!(store.load_pending(date(1)).unwrap(), Some(pending));
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn pending_day_deletion_is_refused_without_changing_ciphertext() {
+    let (store, root) = store();
+    store.save_pending(date(1), &pending()).unwrap();
+    let before = fs::read(store.day_file(date(1)).path()).unwrap();
+    assert_eq!(
+      store.delete_day(date(1)),
+      Err(ActivityDeletionError::PendingBatch)
+    );
+    assert_eq!(fs::read(store.day_file(date(1)).path()).unwrap(), before);
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn all_day_deletion_preflights_pending_before_erasing_any_day() {
+    let (store, root) = store();
+    store.save_day(date(1), &[segment("app")]).unwrap();
+    store.save_pending(date(2), &pending()).unwrap();
+    assert_eq!(
+      store.delete_all_days(),
+      Err(ActivityDeletionError::PendingBatch)
+    );
+    assert_eq!(store.load_day(date(1)).unwrap().len(), 1);
+    assert!(store.load_pending(date(2)).unwrap().is_some());
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn retention_preserves_pending_days_and_expires_settled_days() {
+    let (store, root) = store();
+    let pending = pending();
+    store.save_pending(date(1), &pending).unwrap();
+    store.save_day(date(2), &[segment("app")]).unwrap();
+    assert_eq!(store.delete_days_before(date(3)).unwrap(), 1);
+    assert_eq!(store.load_pending(date(1)).unwrap(), Some(pending));
+    assert!(store.load_day(date(2)).unwrap().is_empty());
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn only_matching_cancellation_or_receipts_can_clear_pending_recovery() {
+    let (store, root) = store();
+    let pending = pending();
+    store.save_pending(date(1), &pending).unwrap();
+    let mut changed = pending.clone();
+    changed.idempotency_key = "different-key".into();
+    assert_eq!(
+      store.save_pending(date(1), &changed).unwrap_err(),
+      "another activity batch is pending"
+    );
+    assert_eq!(
+      store.cancel_pending(date(1), "different-key").unwrap_err(),
+      "activity batch key does not match"
+    );
+    assert_eq!(
+      store.finish_batch(date(1), &[]).unwrap_err(),
+      "activity batch receipts do not match"
+    );
+    assert_eq!(store.load_pending(date(1)).unwrap(), Some(pending.clone()));
+    store
+      .cancel_pending(date(1), &pending.idempotency_key)
+      .unwrap();
+    assert!(store.load_pending(date(1)).unwrap().is_none());
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn inactive_history_preflight_preserves_every_file_when_recovery_is_pending() {
+    let (_, root) = store();
+    let current = "a".repeat(64);
+    let inactive = "b".repeat(64);
+    let account = ActivityStore::new([9; 32], root.join(&inactive));
+    account.save_day(date(1), &[segment("app")]).unwrap();
+    account.save_pending(date(2), &pending()).unwrap();
+    let result = ActivityStore::delete_other_account_history_with_key_lookup(
+      &root,
+      &current,
+      |_| Ok(LocalDataKeyLookup::Found([9; 32])),
+    );
+    assert_eq!(result, Err(ActivityDeletionError::PendingBatch));
+    assert_eq!(account.load_day(date(1)).unwrap().len(), 1);
+    assert!(account.load_pending(date(2)).unwrap().is_some());
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn inactive_history_preserves_ciphertext_when_its_key_is_unavailable() {
+    let (_, root) = store();
+    let current = "a".repeat(64);
+    let account = ActivityStore::new([9; 32], root.join("b".repeat(64)));
+    account.save_pending(date(1), &pending()).unwrap();
+    for lookup in [
+      Ok(LocalDataKeyLookup::Missing),
+      Err("keychain unavailable".into()),
+    ] {
+      let mut lookup = Some(lookup);
+      assert!(matches!(
+        ActivityStore::delete_other_account_history_with_key_lookup(
+          &root,
+          &current,
+          |_| lookup.take().unwrap()
+        ),
+        Err(ActivityDeletionError::Unavailable(_))
+      ));
+      assert!(account.load_pending(date(1)).unwrap().is_some());
+    }
+    assert!(matches!(
+      ActivityStore::delete_other_account_history_with_key_lookup(
+        &root,
+        &current,
+        |_| Ok(LocalDataKeyLookup::Found([8; 32]))
+      ),
+      Err(ActivityDeletionError::Unavailable(_))
+    ));
+    assert!(account.load_pending(date(1)).unwrap().is_some());
+    ActivityStore::remove(&root).unwrap();
+  }
+
   #[test]
   fn review_state_survives_flush_and_receipts_atomically_clear_pending() {
     let (store, root) = store();
@@ -535,7 +806,7 @@ mod tests {
     store
       .save_assignments(day, std::slice::from_ref(&assignment))
       .unwrap();
-    store.save_pending(day, Some(&pending)).unwrap();
+    store.save_pending(day, &pending).unwrap();
     store.save_day(day, &[segment("word")]).unwrap();
     assert_eq!(store.load_pending(day).unwrap(), Some(pending));
     assert_eq!(
@@ -696,7 +967,9 @@ mod tests {
       );
       assert_eq!(
         ActivityStore::delete_other_account_history(&root, &invalid).unwrap_err(),
-        "activity account namespace is invalid"
+        ActivityDeletionError::Unavailable(
+          "activity account namespace is invalid".into()
+        )
       );
       for namespace in [&current, &inactive] {
         let days = root.join(namespace).join(DAYS_DIR_NAME);
@@ -718,7 +991,7 @@ mod tests {
   }
 
   #[test]
-  fn inactive_history_count_and_explicit_deletion_need_no_keys_or_settings() {
+  fn inactive_history_deletion_preflights_readable_days_without_reading_settings() {
     let (_, root) = store();
     let current = "a".repeat(64);
     let inactive = "b".repeat(64);
@@ -731,7 +1004,7 @@ mod tests {
       ActivityStore::other_account_history_days(&root, &current).unwrap(),
       0
     );
-    ActivityStore::delete_other_account_history(&root, &current).unwrap();
+    delete_inactive_history(&root, &current).unwrap();
     for namespace in [
       &current,
       &inactive,
@@ -751,6 +1024,18 @@ mod tests {
       .unwrap();
       fs::write(days.join("2020-01-01.json.enc"), b"unreadable ciphertext").unwrap();
       fs::write(days.join("2026-03-03.json.enc"), b"unreadable ciphertext").unwrap();
+      if namespace == &inactive || namespace == &old_origin_namespace {
+        fs::remove_file(days.join("2020-01-01.json.enc")).unwrap();
+        fs::remove_file(days.join("2026-03-03.json.enc")).unwrap();
+        let account = ActivityStore::new([9; 32], root.join(namespace));
+        account
+          .save_day(
+            NaiveDate::from_ymd_opt(2020, 1, 1).unwrap(),
+            &[segment("app")],
+          )
+          .unwrap();
+        account.save_day(date(3), &[segment("app")]).unwrap();
+      }
       fs::write(days.join("2026-03-03.json.123.tmp"), b"partial").unwrap();
       fs::write(days.join("2026-99-99.json.enc"), b"not a day").unwrap();
       fs::write(days.join("2026-3-1.json.enc"), b"not canonical").unwrap();
@@ -781,12 +1066,12 @@ mod tests {
           .exists()
       );
     }
-    ActivityStore::delete_other_account_history(&root, &current).unwrap();
+    delete_inactive_history(&root, &current).unwrap();
     assert_eq!(
       ActivityStore::other_account_history_days(&root, &current).unwrap(),
       0
     );
-    ActivityStore::delete_other_account_history(&root, &current).unwrap();
+    delete_inactive_history(&root, &current).unwrap();
     for namespace in [&inactive, &old_origin_namespace] {
       assert!(
         !root
@@ -865,13 +1150,15 @@ mod tests {
     symlink(&outside_file, &linked_file).unwrap();
     let linked_temp = days.join("interrupted.tmp");
     symlink(&outside_file, &linked_temp).unwrap();
-    fs::write(days.join("2026-03-03.json.enc"), b"inactive").unwrap();
+    ActivityStore::new([9; 32], root.join("c".repeat(64)))
+      .save_day(date(3), &[segment("app")])
+      .unwrap();
     let current = "f".repeat(64);
     assert_eq!(
       ActivityStore::other_account_history_days(&root, &current).unwrap(),
       1
     );
-    ActivityStore::delete_other_account_history(&root, &current).unwrap();
+    delete_inactive_history(&root, &current).unwrap();
     assert_eq!(
       ActivityStore::other_account_history_days(&root, &current).unwrap(),
       0
@@ -895,7 +1182,7 @@ mod tests {
       ActivityStore::other_account_history_days(&root_link, &current).unwrap(),
       0
     );
-    ActivityStore::delete_other_account_history(&root_link, &current).unwrap();
+    delete_inactive_history(&root_link, &current).unwrap();
     fs::remove_file(root_link).unwrap();
     ActivityStore::remove(&root).unwrap();
     ActivityStore::remove(&outside).unwrap();

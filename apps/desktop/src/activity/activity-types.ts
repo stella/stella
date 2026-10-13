@@ -3,6 +3,7 @@ import type {
   DesktopTimeEntryBatch,
 } from "@stll/api-contract/desktop-time-entries";
 
+import activityContract from "../../fixtures/activity-contract.json";
 import {
   type ClipboardSourceAppVisual,
   isClipboardSourceAppVisual,
@@ -63,6 +64,7 @@ export type ActivityManualAssignment = {
 export type ActivityDaySnapshot = {
   /** Local calendar dates as `YYYY-MM-DD`. */
   date: string;
+  deletionStatus: keyof typeof activityContract.deletionStatuses;
   pendingBatch: {
     idempotencyKey: string;
     entries: DesktopTimeEntryBatch["entries"];
@@ -258,6 +260,7 @@ export const isActivityDaySnapshot = (
     earliestDate,
     unreadable,
     timeBillingEnabled,
+    deletionStatus,
     sourceAppVisuals,
     captureDetails,
     detailsAccess,
@@ -277,6 +280,8 @@ export const isActivityDaySnapshot = (
     typeof earliestDate === "string" &&
     typeof unreadable === "boolean" &&
     typeof timeBillingEnabled === "boolean" &&
+    typeof deletionStatus === "string" &&
+    Object.hasOwn(activityContract.deletionStatuses, deletionStatus) &&
     isReviewState(value) &&
     Array.isArray(sourceAppVisuals) &&
     sourceAppVisuals.every(isClipboardSourceAppVisual) &&

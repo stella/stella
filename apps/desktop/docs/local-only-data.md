@@ -16,12 +16,14 @@ local-only feature follows every rule below and adds one entry to
   than one file.
 - **Deletion-only on a missing key.** `local_store::resolve_key` never mints a
   key while encrypted data exists without one; the store opens in a
-  deletion-only state until the user deletes the data.
+  deletion-only state. Activity history remains protected until its pending
+  draft state can be read; other local stores retain their deletion controls.
 - **Debug builds stay in memory** unless the feature's
   `STELLA_ENABLE_DEBUG_*_PERSISTENCE` variable is set.
 - **Retention sweep.** Expired data for the loaded account is deleted on load
   and by an hourly sweep, whether or not the feature is currently enabled.
-  Activity never automatically deletes another account's history.
+  Activity preserves days with pending draft batches and unreadable days.
+  It never automatically deletes another account's history.
 - **Payload-free events.** Changes are announced with `emit(..., ())`; the
   window pulls data through commands that take the feature's `LocalCaller`
   (`local_window.rs`), which checks the window label and the app origin.
@@ -67,13 +69,15 @@ prefix, and unloads all readable account state. Relinking another account
 starts with that account's own consent and history. Previous accounts' encrypted
 files remain available when those accounts relink.
 
-Retention uses day filenames even when keys or settings are unreadable. The
-loaded account uses its configured retention. Other namespaces remain untouched
+The loaded account uses its configured retention after reading each day's
+pending draft state. Pending days remain available for recovery beyond that
+window; unreadable day files are preserved. Other namespaces remain untouched
 until explicit deletion: the open activity window shows only their aggregate
 day count and a Delete action with confirmation. It never shows their dates,
-identity or content, and counting and deleting need no key or decryption.
-Explicit deletion removes inactive day files and interrupted-write remnants;
-it preserves the current account and settings. Namespace identity changed before
+identity or content. Counting needs no key or decryption. Deletion reads each
+inactive account's existing key and refuses the operation if pending state is
+unreadable or a draft batch remains unresolved, before removing any files.
+It preserves the current account and settings. Namespace identity changed before
 release, so there is no migration or read of old unnamespaced stores.
 
 An app exclusion asks whether to keep or delete its past segments. Both choices
@@ -143,6 +147,12 @@ Matter search sends only the user's picker query. Both features must be enabled
 and the server independently checks the linked user's live create permission
 and matter access. A successful create with a failed local marker write shows
 a fixed warning and keeps the form completed, preventing an immediate retry.
+
+The confirmed batch and its idempotency key are stored before submission.
+Ordinary day rewrites and app-history deletion preserve that exact payload.
+Day deletion and all-history deletion wait for pending batches to settle;
+only authoritative cancellation or matching creation receipts clear them.
+Recovery remains available when the day has no recorded segments.
 
 The data-driven guards include the confirmation command owner in the activity
 window's capability and caller checks, and forbid the submission network owner

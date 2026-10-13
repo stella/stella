@@ -20,6 +20,7 @@ const SNAPSHOT = {
   draftedEntries: [],
   manualAssignments: [],
   pendingBatch: null,
+  deletionStatus: "available",
   timeBillingEnabled: true,
   earliestDate: "2026-10-01",
   excludedApps: [],
@@ -46,11 +47,26 @@ const SNAPSHOT = {
   unreadable: false,
 } satisfies ActivityDaySnapshot;
 
+const PENDING_BATCH = {
+  idempotencyKey: "stored-recovery-key",
+  entries: [
+    {
+      matterId: "matter-1",
+      dateWorked: SNAPSHOT.date,
+      timezoneId: "Europe/Prague",
+      durationMinutes: 30,
+      narrative: "Stored confirmed narrative",
+      billable: false,
+    },
+  ],
+  ranges: [[{ start: "2026-10-07T09:00:00Z", end: "2026-10-07T09:30:00Z" }]],
+} satisfies NonNullable<ActivityDaySnapshot["pendingBatch"]>;
+
 type InstallNativeBoundaryOptions = {
   page: Page;
   snapshot?: ActivityDaySnapshot;
   language?: "en" | "ar";
-  batchValidation?: "accept" | "reject-first";
+  batchValidation?: "accept" | "reject-first" | "hold-first";
 };
 
 const installNativeBoundary = async ({
@@ -99,6 +115,14 @@ const installNativeBoundary = async ({
         window,
         "__STELLA_TEST_ACTIVITY_CHANGED__",
         emitActivityChanged,
+      );
+      Reflect.set(
+        window,
+        "__STELLA_TEST_SET_SNAPSHOT__",
+        (next: typeof initialSnapshot) => {
+          activitySnapshot = next;
+          emitActivityChanged();
+        },
       );
       Reflect.set(window, "__TAURI_EVENT_PLUGIN_INTERNALS__", {
         unregisterListener: () => undefined,
@@ -212,6 +236,17 @@ const installNativeBoundary = async ({
           }
           if (command === "time_entry_submit_batch_confirmed") {
             batchAttempts += 1;
+            if (validation === "hold-first" && batchAttempts === 1) {
+              return new Promise((_resolve, reject) => {
+                Reflect.set(window, "__STELLA_TEST_REJECT_BATCH__", () =>
+                  reject(
+                    Object.assign(new Error("Response unavailable"), {
+                      type: "uncertain",
+                    }),
+                  ),
+                );
+              });
+            }
             if (validation === "reject-first" && batchAttempts === 1) {
               throw Object.assign(
                 new Error("Activity range validation failed"),
@@ -266,7 +301,11 @@ const installNativeBoundary = async ({
   const messages = language === "ar" ? arMessages : enMessages;
   if (snapshot.persistence === "deletionOnly") {
     await expect(page.getByText(messages.activity.deletionOnly)).toBeVisible();
-  } else if (snapshot.recordingStatus === "off") {
+  } else if (
+    snapshot.recordingStatus === "off" &&
+    snapshot.pendingBatch === null &&
+    snapshot.deletionStatus !== "pending"
+  ) {
     await expect(
       page.getByRole("heading", {
         name: messages.activity.welcomeTitle,
@@ -277,7 +316,9 @@ const installNativeBoundary = async ({
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   }
   if (
-    snapshot.recordingStatus !== "off" &&
+    (snapshot.recordingStatus !== "off" ||
+      snapshot.pendingBatch !== null ||
+      snapshot.deletionStatus === "pending") &&
     snapshot.persistence !== "deletionOnly"
   ) {
     await page
@@ -715,6 +756,258 @@ test("native validation rejection leaves the review editable and a corrected sel
   expect(submitted.at(1)?.key).not.toBe(submitted.at(0)?.key);
 });
 
+test("unresolved draft creation protects activity deletion and retains its batch key", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    batchValidation: "hold-first",
+    snapshot: { ...SNAPSHOT, otherAccountHistoryDays: 1 },
+  });
+  await page
+    .getByRole("button", { name: "Create 1 draft", exact: true })
+    .click();
+  for (const name of [
+    enMessages.activity.deleteDay,
+    enMessages.activity.deleteAll,
+    enMessages.activity.deleteOtherAccountHistory,
+  ]) {
+    await expect(
+      page.getByRole("button", { name, exact: true }),
+    ).toBeDisabled();
+  }
+  await expect(
+    page.getByRole("button", { name: enMessages.activity.previousDay }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.excludeApp.replace("{name}", "Example Editor"),
+    }),
+  ).toBeDisabled();
+  await page.evaluate(() => {
+    const changed = Reflect.get(window, "__STELLA_TEST_ACTIVITY_CHANGED__");
+    const reject = Reflect.get(window, "__STELLA_TEST_REJECT_BATCH__");
+    if (typeof changed !== "function" || typeof reject !== "function") {
+      throw new TypeError("Native recovery controls are missing");
+    }
+    changed();
+    reject();
+  });
+  const retry = page.getByRole("button", {
+    name: enMessages.activity.pendingRetry,
+    exact: true,
+  });
+  await expect(retry).toBeEnabled();
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.deleteDay,
+      exact: true,
+    }),
+  ).toBeDisabled();
+  const before = await invocations(page);
+  await retry.click();
+  await expect(page.getByRole("status")).toContainText("1 draft created");
+  const after = await invocations(page);
+  const submissions = (calls: unknown) => {
+    if (!Array.isArray(calls)) {
+      throw new TypeError("Native invocations are missing");
+    }
+    return calls.filter(
+      (call: unknown) =>
+        typeof call === "object" &&
+        call !== null &&
+        "command" in call &&
+        call.command === "time_entry_submit_batch_confirmed",
+    );
+  };
+  expect(submissions(before)).toHaveLength(1);
+  expect(submissions(after)).toHaveLength(2);
+  expect(submissions(after).at(0)).toEqual(submissions(after).at(1));
+  for (const command of [
+    "activity_delete_day",
+    "activity_delete_all",
+    "activity_delete_other_account_history",
+    "activity_exclude_app",
+  ]) {
+    expect(after).not.toContainEqual(expect.objectContaining({ command }));
+  }
+});
+
+for (const recoveryState of ["empty", "unreadable", "off"] as const) {
+  test(`stored pending drafts can be retried from ${recoveryState} activity`, async ({
+    page,
+  }) => {
+    const entry = {
+      matterId: "matter-1",
+      dateWorked: SNAPSHOT.date,
+      timezoneId: "Europe/Prague",
+      durationMinutes: 30,
+      narrative: "Stored confirmed narrative",
+      billable: false,
+    };
+    const ranges = [
+      { start: "2026-10-07T09:00:00Z", end: "2026-10-07T09:30:00Z" },
+    ];
+    await installNativeBoundary({
+      page,
+      snapshot: {
+        ...SNAPSHOT,
+        segments: [],
+        unreadable: recoveryState === "unreadable",
+        recordingStatus: recoveryState === "off" ? "off" : "recording",
+        pendingBatch: {
+          idempotencyKey: "stored-recovery-key",
+          entries: [entry],
+          ranges: [ranges],
+        },
+      },
+    });
+    await page
+      .getByRole("button", {
+        name: enMessages.activity.pendingRetry,
+        exact: true,
+      })
+      .click();
+    await expect(page.getByRole("status")).toContainText("1 draft created");
+    expect(await invocations(page)).toContainEqual({
+      command: "time_entry_submit_batch_confirmed",
+      args: {
+        request: {
+          date: SNAPSHOT.date,
+          idempotencyKey: "stored-recovery-key",
+          items: [{ entry, ranges }],
+        },
+      },
+    });
+  });
+}
+
+for (const recordingStatus of ["recording", "off"] as const) {
+  test(`pending drafts on another day protect deletion while ${recordingStatus} and permit recovery navigation`, async ({
+    page,
+  }) => {
+    await installNativeBoundary({
+      page,
+      snapshot: {
+        ...SNAPSHOT,
+        segments: [],
+        recordingStatus,
+        deletionStatus: "pending",
+      },
+    });
+    await expect(
+      page.getByRole("button", {
+        name: enMessages.activity.deleteAll,
+        exact: true,
+      }),
+    ).toBeDisabled();
+    await expect(
+      page.getByRole("button", { name: enMessages.activity.previousDay }),
+    ).toBeEnabled();
+    await page
+      .getByRole("button", { name: enMessages.activity.previousDay })
+      .click();
+    expect(await invocations(page)).toContainEqual({
+      command: "activity_get_day",
+      args: { date: "2026-10-06" },
+    });
+  });
+}
+
+test("stored pending drafts stay immutable after a rejected retry until cancellation is confirmed", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    batchValidation: "reject-first",
+    snapshot: {
+      ...SNAPSHOT,
+      pendingBatch: PENDING_BATCH,
+      deletionStatus: "pending",
+    },
+  });
+  const retry = page.getByRole("button", {
+    name: enMessages.activity.pendingRetry,
+    exact: true,
+  });
+  await retry.click();
+  await expect(page.getByRole("alert")).toContainText(
+    enMessages.activity.batchFailed,
+  );
+  await expect(retry).toBeEnabled();
+  await expect(
+    page.getByRole("checkbox", { name: "Include Example matter", exact: true }),
+  ).toBeDisabled();
+  await page.evaluate((next) => {
+    const update = Reflect.get(window, "__STELLA_TEST_SET_SNAPSHOT__");
+    if (typeof update !== "function") {
+      throw new TypeError("Snapshot control is missing");
+    }
+    update(next);
+  }, SNAPSHOT);
+  await expect(retry).toHaveCount(0);
+  await expect(
+    page.getByRole("checkbox", { name: "Include Example matter", exact: true }),
+  ).toBeEnabled();
+});
+
+test("unreadable saved activity explains why deletion is unavailable", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      persistence: "deletionOnly",
+      recordingStatus: "off",
+      deletionStatus: "unavailable",
+      otherAccountHistoryDays: 3,
+    },
+  });
+  await expect(
+    page.getByText(enMessages.activity.deletionOnly, { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.deleteAll,
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.deleteOtherAccountHistory,
+      exact: true,
+    }),
+  ).toBeDisabled();
+});
+
+test("stored pending drafts remain visible without billing capability and cannot be submitted", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      segments: [],
+      pendingBatch: PENDING_BATCH,
+      timeBillingEnabled: false,
+      deletionStatus: "pending",
+    },
+  });
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.pendingRetry,
+      exact: true,
+    }),
+  ).toBeDisabled();
+  await expect(page.getByRole("status")).toContainText(
+    enMessages.activity.batchUnavailable,
+  );
+  expect(await invocations(page)).not.toContainEqual(
+    expect.objectContaining({ command: "time_entry_submit_batch_confirmed" }),
+  );
+});
+
 test("only an explicit summary copy publishes activity to the clipboard", async ({
   page,
 }) => {
@@ -769,7 +1062,6 @@ test("only an explicit summary copy publishes activity to the clipboard", async 
 for (const state of [
   { persistence: "encrypted", recordingStatus: "recording" },
   { persistence: "encrypted", recordingStatus: "off" },
-  { persistence: "deletionOnly", recordingStatus: "off" },
 ] as const) {
   test(`other-account history is count-only and deletion is confirmed in ${state.persistence}/${state.recordingStatus}`, async ({
     page,

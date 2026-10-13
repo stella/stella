@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
@@ -68,6 +68,7 @@ import type {
   ActivityRetention,
 } from "./activity-types";
 import { ActivityDayReview, ActivityMatterHeading } from "./ActivityDayReview";
+import type { ActivityReviewStatus } from "./ActivityDayReview";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import "./welcome-preview.css";
 import { ActivityTimeline } from "./ActivityTimeline";
@@ -407,7 +408,7 @@ const CaptureDetailsControl = ({
   );
 };
 
-const DeletionOnlyNotice = ({ onDelete }: { onDelete: () => void }) => {
+const DeletionOnlyNotice = () => {
   const t = useTranslations("activity");
   return (
     <section className="flex flex-col gap-4 rounded-2xl border p-6">
@@ -418,11 +419,6 @@ const DeletionOnlyNotice = ({ onDelete }: { onDelete: () => void }) => {
         />
         <p className="text-sm leading-relaxed">{t("deletionOnly")}</p>
       </div>
-      <div>
-        <Button onClick={onDelete} variant="destructive">
-          {t("deleteAll")}
-        </Button>
-      </div>
     </section>
   );
 };
@@ -431,12 +427,14 @@ type DayHeaderProps = {
   onNavigate: (date: string) => void;
   onToggleRecording: () => void;
   snapshot: ActivityDaySnapshot;
+  navigationDisabled: boolean;
 };
 
 const DayHeader = ({
   onNavigate,
   onToggleRecording,
   snapshot,
+  navigationDisabled,
 }: DayHeaderProps) => {
   const t = useTranslations("activity");
   const format = useFormatter();
@@ -446,7 +444,9 @@ const DayHeader = ({
       <nav aria-label={t("dayNavigation")} className="flex items-center gap-1">
         <Button
           aria-label={t("previousDay")}
-          disabled={snapshot.date <= snapshot.earliestDate}
+          disabled={
+            navigationDisabled || snapshot.date <= snapshot.earliestDate
+          }
           onClick={() => onNavigate(shiftDate(snapshot.date, -1))}
           size="icon"
           variant="ghost"
@@ -462,7 +462,7 @@ const DayHeader = ({
         </h1>
         <Button
           aria-label={t("nextDay")}
-          disabled={snapshot.date >= snapshot.today}
+          disabled={navigationDisabled || snapshot.date >= snapshot.today}
           onClick={() => onNavigate(shiftDate(snapshot.date, 1))}
           size="icon"
           variant="ghost"
@@ -470,7 +470,11 @@ const DayHeader = ({
           <ChevronRightIcon aria-hidden="true" className="rtl:rotate-180" />
         </Button>
         {snapshot.date === snapshot.today ? null : (
-          <Button onClick={() => onNavigate(snapshot.today)} variant="ghost">
+          <Button
+            disabled={navigationDisabled}
+            onClick={() => onNavigate(snapshot.today)}
+            variant="ghost"
+          >
             {t("today")}
           </Button>
         )}
@@ -519,11 +523,19 @@ type DayContentProps = {
   header: React.ReactNode;
   onCommand: RunCommand;
   snapshot: ActivityDaySnapshot;
+  reviewPending: boolean;
+  onReviewStatusChange: (status: ActivityReviewStatus) => void;
 };
 
-const DayContent = ({ header, onCommand, snapshot }: DayContentProps) => {
+const DayContent = ({
+  header,
+  onCommand,
+  snapshot,
+  reviewPending,
+  onReviewStatusChange,
+}: DayContentProps) => {
   const t = useTranslations("activity");
-  if (snapshot.unreadable) {
+  if (snapshot.unreadable && !reviewPending) {
     return (
       <>
         {header}
@@ -531,7 +543,7 @@ const DayContent = ({ header, onCommand, snapshot }: DayContentProps) => {
       </>
     );
   }
-  if (snapshot.segments.length === 0) {
+  if (snapshot.segments.length === 0 && !reviewPending) {
     return (
       <>
         {header}
@@ -542,6 +554,7 @@ const DayContent = ({ header, onCommand, snapshot }: DayContentProps) => {
   return (
     <ActivityDayReview
       key={snapshot.date}
+      onReviewStatusChange={onReviewStatusChange}
       header={header}
       snapshot={snapshot}
       onCopy={(text, onSuccess) =>
@@ -570,6 +583,7 @@ type AppTotalsProps = {
     onCommand: RunCommand;
     appNameOnlyApps: readonly ActivityAppExclusion[];
     onExclude: (app: ActivityAppExclusion) => void;
+    deletionDisabled: boolean;
   };
   segments: readonly TimedSegment[];
 };
@@ -626,6 +640,7 @@ const AppTotals = ({
                   })}
                 />
                 <Button
+                  disabled={controls.deletionDisabled}
                   aria-label={t("excludeApp", { name: app.name })}
                   onClick={() =>
                     controls.onExclude({
@@ -722,9 +737,14 @@ const AppDetailCaptureButton = ({
 type OtherAccountHistoryProps = {
   days: number;
   onDelete: () => void;
+  deletionDisabled: boolean;
 };
 
-const OtherAccountHistory = ({ days, onDelete }: OtherAccountHistoryProps) => {
+const OtherAccountHistory = ({
+  days,
+  onDelete,
+  deletionDisabled,
+}: OtherAccountHistoryProps) => {
   const t = useTranslations("activity");
   if (days === 0) {
     return null;
@@ -732,7 +752,12 @@ const OtherAccountHistory = ({ days, onDelete }: OtherAccountHistoryProps) => {
   return (
     <div className="text-muted-foreground flex items-center justify-between gap-3 text-xs">
       <p>{t("otherAccountHistory", { days })}</p>
-      <Button onClick={onDelete} size="sm" variant="ghost">
+      <Button
+        disabled={deletionDisabled}
+        onClick={onDelete}
+        size="sm"
+        variant="ghost"
+      >
         {t("deleteOtherAccountHistory")}
       </Button>
     </div>
@@ -743,6 +768,7 @@ type ActivitySettingsProps = {
   onCommand: RunCommand;
   onDeleteAll: () => void;
   onDeleteDay: () => void;
+  deletionDisabled: boolean;
   snapshot: ActivityDaySnapshot;
 };
 
@@ -750,6 +776,7 @@ const ActivitySettings = ({
   onCommand,
   onDeleteAll,
   onDeleteDay,
+  deletionDisabled,
   snapshot,
 }: ActivitySettingsProps) => {
   const t = useTranslations("activity");
@@ -844,12 +871,27 @@ const ActivitySettings = ({
           </ul>
         )}
       </div>
+      {deletionDisabled ? (
+        <p className="text-muted-foreground text-xs">
+          {snapshot.deletionStatus === "unavailable"
+            ? t("errorRead")
+            : t("pendingActivityProtected")}
+        </p>
+      ) : null}
       <div className="flex flex-wrap gap-2">
-        <Button onClick={onDeleteDay} variant="outline">
+        <Button
+          disabled={deletionDisabled}
+          onClick={onDeleteDay}
+          variant="outline"
+        >
           <Trash2Icon aria-hidden="true" />
           {t("deleteDay")}
         </Button>
-        <Button onClick={onDeleteAll} variant="destructive">
+        <Button
+          disabled={deletionDisabled}
+          onClick={onDeleteAll}
+          variant="destructive"
+        >
           <Trash2Icon aria-hidden="true" />
           {t("deleteAll")}
         </Button>
@@ -1000,12 +1042,28 @@ const ConfirmDialog = ({
   );
 };
 
+const REVIEW_PENDING = {
+  editing: false,
+  submitting: true,
+  retry: true,
+  receiptPending: true,
+  saved: false,
+} as const satisfies Record<ActivityReviewStatus, boolean>;
+
 const ActivityApp = () => {
   const t = useTranslations("activity");
   const [date, setDate] = useState<string | null>(null);
   const [view, setView] = useState<ActivityView>({ type: "loading" });
-  const [error, setError] = useState<string | null>(null);
+  const [errorMessage, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<ActivityDialog>({ type: "closed" });
+  const [reviewStatus, setReviewStatus] =
+    useState<ActivityReviewStatus>("editing");
+  const reviewStatusRef = useRef<ActivityReviewStatus>("editing");
+  const onReviewStatusChange = useCallback((status: ActivityReviewStatus) => {
+    reviewStatusRef.current = status;
+    setReviewStatus(status);
+  }, []);
+  const reviewUnresolved = REVIEW_PENDING[reviewStatus];
   const requestId = useRef(0);
   const errorRead = t("errorRead");
 
@@ -1024,7 +1082,10 @@ const ActivityApp = () => {
               DESKTOP_TELEMETRY_OPERATIONS.activityRead,
               DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
             );
-            setView({ type: "failed" });
+            setView((previousView) =>
+              previousView.type === "ready" ? previousView : { type: "failed" },
+            );
+            setError(errorRead);
             return undefined;
           }
           setView({ snapshot: value, type: "ready" });
@@ -1038,7 +1099,10 @@ const ActivityApp = () => {
             DESKTOP_TELEMETRY_OPERATIONS.activityRead,
             DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
           );
-          setView({ type: "failed" });
+          setView((previousView) =>
+            previousView.type === "ready" ? previousView : { type: "failed" },
+          );
+          setError(errorRead);
         });
     };
     readDay();
@@ -1057,24 +1121,52 @@ const ActivityApp = () => {
       disposed = true;
       stopListening();
     };
-  }, [date]);
+  }, [date, errorRead]);
 
   const runCommand = (
     command: ActivityCommand,
     args: Record<string, unknown> = {},
     onSuccess?: () => void,
   ) => {
+    const pending =
+      REVIEW_PENDING[reviewStatusRef.current] ||
+      (view.type === "ready" &&
+        (view.snapshot.pendingBatch !== null ||
+          view.snapshot.deletionStatus !== "available"));
+    if (
+      pending &&
+      (command === "activity_delete_day" ||
+        command === "activity_delete_all" ||
+        command === "activity_delete_other_account_history" ||
+        (command === "activity_exclude_app" && args["history"] === "delete"))
+    ) {
+      setError(
+        view.type === "ready" && view.snapshot.deletionStatus === "unavailable"
+          ? t("errorRead")
+          : t("pendingActivityProtected"),
+      );
+      return;
+    }
     setError(null);
     invoke(command, args)
       .then(() => {
         onSuccess?.();
         return undefined;
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         reportActivityError(
           DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
           DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
         );
+        if (
+          typeof error === "object" &&
+          error !== null &&
+          "type" in error &&
+          error.type === "pendingBatch"
+        ) {
+          setError(t("pendingActivityProtected"));
+          return;
+        }
         setError(
           command === "activity_copy_text" ? t("errorCopy") : t("errorUpdate"),
         );
@@ -1100,13 +1192,17 @@ const ActivityApp = () => {
   }
 
   const { snapshot } = view;
-  if (snapshot.persistence === "initializing") {
+  const reviewPending = reviewUnresolved || snapshot.pendingBatch !== null;
+  const deletionDisabled =
+    reviewPending || snapshot.deletionStatus !== "available";
+  if (snapshot.persistence === "initializing" && !reviewPending) {
     // The store announces itself with a change event once it is open.
     return <main className="bg-background min-h-dvh" />;
   }
   const otherAccountHistory = (
     <OtherAccountHistory
       days={snapshot.otherAccountHistoryDays}
+      deletionDisabled={deletionDisabled}
       onDelete={() =>
         setDialog({
           days: snapshot.otherAccountHistoryDays,
@@ -1123,17 +1219,21 @@ const ActivityApp = () => {
       onCommand={runCommand}
     />
   );
-  if (snapshot.persistence === "deletionOnly") {
+  if (snapshot.persistence === "deletionOnly" && !reviewPending) {
     return (
       <ActivityShell>
-        <DeletionOnlyNotice onDelete={() => setDialog({ type: "deleteAll" })} />
+        <DeletionOnlyNotice />
         {otherAccountHistory}
-        {error ? <ErrorLine message={error} /> : null}
+        {errorMessage ? <ErrorLine message={errorMessage} /> : null}
         {dialogView}
       </ActivityShell>
     );
   }
-  if (snapshot.recordingStatus === "off") {
+  if (
+    snapshot.recordingStatus === "off" &&
+    !reviewPending &&
+    snapshot.deletionStatus !== "pending"
+  ) {
     return (
       <ActivityShell>
         <ActivityWelcome
@@ -1146,7 +1246,7 @@ const ActivityApp = () => {
           }
         />
         {otherAccountHistory}
-        {error ? <ErrorLine message={error} /> : null}
+        {errorMessage ? <ErrorLine message={errorMessage} /> : null}
         {dialogView}
       </ActivityShell>
     );
@@ -1154,10 +1254,13 @@ const ActivityApp = () => {
 
   return (
     <ActivityShell>
-      {error ? <ErrorLine message={error} /> : null}
+      {errorMessage ? <ErrorLine message={errorMessage} /> : null}
       <DayContent
+        reviewPending={reviewPending}
+        onReviewStatusChange={onReviewStatusChange}
         header={
           <DayHeader
+            navigationDisabled={reviewPending}
             onNavigate={(next) =>
               setDate(next === snapshot.today ? null : next)
             }
@@ -1182,6 +1285,7 @@ const ActivityApp = () => {
         <AppTotals
           controls={{
             onCommand: runCommand,
+            deletionDisabled,
             onExclude: (app) => setDialog({ app, type: "excludeApp" }),
             appNameOnlyApps: snapshot.appNameOnlyApps,
           }}
@@ -1189,6 +1293,7 @@ const ActivityApp = () => {
           sourceAppVisuals={snapshot.sourceAppVisuals}
         />
         <ActivitySettings
+          deletionDisabled={deletionDisabled}
           onCommand={runCommand}
           onDeleteAll={() => setDialog({ type: "deleteAll" })}
           onDeleteDay={() =>

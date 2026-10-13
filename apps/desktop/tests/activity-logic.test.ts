@@ -47,6 +47,7 @@ describe("activity contract", () => {
     const snapshot = {
       date: "2026-03-10",
       pendingBatch: null,
+      deletionStatus: "available",
       manualAssignments: [],
       draftedEntries: [],
       timeBillingEnabled: false,
@@ -67,6 +68,17 @@ describe("activity contract", () => {
       unreadable: false,
     };
     expect(isActivityDaySnapshot(snapshot)).toBe(true);
+    for (const deletionStatus of Object.keys(contract.deletionStatuses)) {
+      expect(isActivityDaySnapshot({ ...snapshot, deletionStatus })).toBe(true);
+    }
+    for (const deletionStatus of [undefined, null, "unknown", "__proto__"]) {
+      expect(isActivityDaySnapshot({ ...snapshot, deletionStatus })).toBe(
+        false,
+      );
+    }
+    const missingDeletionStatus = { ...snapshot };
+    Reflect.deleteProperty(missingDeletionStatus, "deletionStatus");
+    expect(isActivityDaySnapshot(missingDeletionStatus)).toBe(false);
     expect(
       isActivityDaySnapshot({
         ...snapshot,

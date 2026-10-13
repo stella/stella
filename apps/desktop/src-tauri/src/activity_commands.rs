@@ -10,8 +10,8 @@ use tauri::{AppHandle, Emitter, State};
 use crate::{
   activity::{
     self, ActivityAppDetailCapture, ActivityAppState, ActivityDaySnapshot,
-    ActivityHistoryDisposition, ActivityManager, ActivityRecordingStatus,
-    ActivityRetention,
+    ActivityDeletionError, ActivityHistoryDisposition, ActivityManager,
+    ActivityRecordingStatus, ActivityRetention,
   },
   activity_details,
   local_window::ActivityCaller,
@@ -23,15 +23,15 @@ fn lock_error() -> String {
   "activity timeline is unavailable".to_string()
 }
 
-fn update(
+fn update<E: From<String>>(
   app: &AppHandle,
   state: &ActivityAppState,
   caller: &ActivityCaller,
-  change: impl FnOnce(&mut ActivityManager) -> Result<(), String>,
-) -> Result<(), String> {
-  let mut manager = state.lock().map_err(|_| lock_error())?;
-  caller.require_current(app)?;
-  manager.require_caller(caller)?;
+  change: impl FnOnce(&mut ActivityManager) -> Result<(), E>,
+) -> Result<(), E> {
+  let mut manager = state.lock().map_err(|_| E::from(lock_error()))?;
+  caller.require_current(app).map_err(E::from)?;
+  manager.require_caller(caller).map_err(E::from)?;
   change(&mut manager)?;
   drop(manager);
   let _ = app.emit(activity::CHANGED_EVENT, ());
@@ -135,7 +135,7 @@ pub fn activity_delete_day(
   app: AppHandle,
   state: State<'_, ActivityAppState>,
   date: String,
-) -> Result<(), String> {
+) -> Result<(), ActivityDeletionError> {
   let date = activity::parse_date(&date)?;
   update(&app, &state, &caller, |manager| manager.delete_day(date))
 }
@@ -145,7 +145,7 @@ pub fn activity_delete_all(
   caller: ActivityCaller,
   app: AppHandle,
   state: State<'_, ActivityAppState>,
-) -> Result<(), String> {
+) -> Result<(), ActivityDeletionError> {
   update(&app, &state, &caller, ActivityManager::delete_all)
 }
 
@@ -154,7 +154,7 @@ pub fn activity_delete_other_account_history(
   caller: ActivityCaller,
   app: AppHandle,
   state: State<'_, ActivityAppState>,
-) -> Result<(), String> {
+) -> Result<(), ActivityDeletionError> {
   update(
     &app,
     &state,
