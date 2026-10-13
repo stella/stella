@@ -111,7 +111,7 @@ const withScratch = async (
         },
       );
     } finally {
-      await admin.unsafe(`DROP DATABASE "${name}" WITH (FORCE)`);
+      await admin.unsafe(`DROP DATABASE "${name}"`);
     }
   });
 };

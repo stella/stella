@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -9,8 +9,6 @@ import { lintSingleRule } from "./lint-single-rule.ts";
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, "../..");
 const PLUGIN_NAME = "drizzle";
 const RULE_OPTIONS = { drizzleObjectName: ["db", "tx"] };
-
-setDefaultTimeout(20_000);
 
 const lintRule = async (rule: string, source: string) =>
   await lintSingleRule(rule, `${source}\n`, {

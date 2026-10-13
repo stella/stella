@@ -68,6 +68,20 @@ const marketingUpdateWorkflow = readFileSync(
   ),
   "utf-8",
 );
+const marketingCaptureWorkflow = readFileSync(
+  path.join(
+    import.meta.dirname,
+    "../.github/workflows/marketing-screenshots-capture.yml",
+  ),
+  "utf-8",
+);
+const marketingPublishWorkflow = readFileSync(
+  path.join(
+    import.meta.dirname,
+    "../.github/workflows/marketing-screenshots-publish.yml",
+  ),
+  "utf-8",
+);
 const marketingCapture = readFileSync(
   path.join(
     import.meta.dirname,
@@ -509,9 +523,6 @@ describe("detect-e2e-changes", () => {
     expect(workflowJob("ci-plan")).toContain(
       "matrix=$(bun scripts/e2e-spec-shards-core.ts all)",
     );
-    expect(workflowJob("ci-plan")).toContain(
-      'echo "selection_required=true" >> "$GITHUB_OUTPUT"',
-    );
     expect(
       requiredExpression(
         workflowStepValue(production, "Check route network baseline")["if"],
@@ -528,16 +539,76 @@ describe("detect-e2e-changes", () => {
     }
   });
 
-  test("skips an eligible pull request when no e2e specs are selected", () => {
-    const plan = workflowJob("ci-plan");
-    expect(plan).toContain(`if [[ "$matrix" == '{"shard":[]}' ]]`);
-    expect(plan).toContain(
-      'echo "selection_required=false" >> "$GITHUB_OUTPUT"',
+  test("plans e2e outputs from selection and fallback semantics", () => {
+    const plan = workflowStepRun(
+      workflowJob("ci-plan"),
+      "Plan changed PR e2e shards",
     );
+    const fullMatrix = '{"shard":["full"]}';
+    const selectedMatrix = '{"shard":["selected"]}';
+    const selectedSpecs = '["e2e/specs/selected.spec.ts"]';
+    const root = mkdtempSync(path.join(tmpdir(), "e2e-plan-outputs-"));
+    const output = path.join(root, "outputs");
+    try {
+      for (const event of [
+        "pull_request",
+        "merge_group",
+        "workflow_dispatch",
+      ]) {
+        for (const outcome of ["success", "failure", "skipped"]) {
+          for (const matrix of ["", '{"shard":[]}', selectedMatrix]) {
+            for (const required of ["true", "false"]) {
+              writeFileSync(output, "fixture=preserved\n");
+              const result = Bun.spawnSync(
+                [
+                  "/bin/bash",
+                  "-c",
+                  [
+                    'bun() { [[ "$*" == "scripts/e2e-spec-shards-core.ts all" ]] || return 91; printf "%s\\n" "$FULL_MATRIX"; }',
+                    plan,
+                  ].join("\n"),
+                ],
+                {
+                  cwd: root,
+                  env: {
+                    PATH: "/usr/bin:/bin",
+                    GITHUB_OUTPUT: output,
+                    EVENT_NAME: event,
+                    SELECTOR_OUTCOME: outcome,
+                    SELECTED_MATRIX: matrix,
+                    SELECTED_MODE: "selected",
+                    SELECTED_SPECS: selectedSpecs,
+                    E2E_PRODUCTION_REQUIRED: required,
+                    FULL_MATRIX: fullMatrix,
+                  },
+                  stdout: "pipe",
+                  stderr: "pipe",
+                },
+              );
+              expect(result.exitCode, result.stderr.toString()).toBe(0);
+              const usesSelection =
+                event === "pull_request" &&
+                outcome === "success" &&
+                matrix !== "";
+              const emptySelection = usesSelection && matrix === '{"shard":[]}';
+              expect(readFileSync(output, "utf-8").trim().split("\n")).toEqual([
+                "fixture=preserved",
+                `matrix=${usesSelection ? matrix : fullMatrix}`,
+                `mode=${usesSelection ? "selected" : "full"}`,
+                `specs=${usesSelection ? selectedSpecs : "[]"}`,
+                `selection_required=${String(!emptySelection)}`,
+                `required=${emptySelection ? "false" : required}`,
+              ]);
+            }
+          }
+        }
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
     expect(
       ciContract.jobs["ci-plan"]?.outputs?.["e2e_production_required"],
     ).toBe(githubExpression("steps.e2e-pr-plan.outputs.required"));
-    expect(plan).toContain('echo "required=false" >> "$GITHUB_OUTPUT"');
   });
 
   test("starts only infrastructure exercised by pull request E2E", () => {
@@ -908,27 +979,37 @@ describe("detect-e2e-changes", () => {
     expect(marketingUpdateWorkflow).toContain(
       `group: marketing-screenshots-update-${githubExpression("inputs.branch")}`,
     );
-    expect(marketingUpdateWorkflow).toContain(
-      `ref: ${githubExpression("inputs.branch")}`,
-    );
     expect(marketingUpdateWorkflow).not.toContain("--ref");
 
-    const update = jobOf(marketingWorkflow, "update");
+    // The dispatch on main only validates the branch and starts the capture
+    // on that branch's own ref; it runs no branch code and holds no key.
+    const update = jobOf(marketingUpdateWorkflow, "update");
     const validate = workflowStepRun(update, "Validate inputs");
     expect(validate).toContain('if [[ "$WORKFLOW_REF" != "main" ]]');
     expect(validate).toContain('if [[ "$BRANCH" == "main" ]]');
     expect(validate).toContain('"$BRANCH" =~ ^[A-Za-z0-9._/-]+$');
     expect(validate).toContain('"$BRANCH" == *".."*');
     expect(validate).toContain('"$BRANCH" == -*');
-    // Nothing is minted for a branch that does not exist here.
-    expect(update.indexOf("- name: Verify the branch exists")).toBeLessThan(
-      update.indexOf("- name: Mint App token"),
+    expect(update).toContain(
+      "workflow_id: 'marketing-screenshots-capture.yml'",
     );
+    // Workflow source text, not an env read of this process.
+    expect(update).toMatch(/ref: process\.env\.BRANCH,/u);
+    expect(marketingUpdateWorkflow).not.toContain("secrets.");
 
-    // Updates capture the named branch; ordinary checks keep the event's
-    // ref. Only the validated main-heavy caller selects an explicit SHA.
-    expect(workflowStepValue(update, "Checkout")["with"]).toMatchObject({
-      ref: githubExpression("inputs.ref"),
+    // The capture runs on the branch's ref and never on main; it holds no
+    // push credential. The publish run mints the token only after it has
+    // validated the PNGs.
+    const capture = jobOf(marketingCaptureWorkflow, "capture");
+    expect(capture).toContain("github.ref != 'refs/heads/main'");
+    expect(capture).not.toContain("Mint App token");
+    expect(capture).not.toContain("environment:");
+    const publish = jobOf(marketingPublishWorkflow, "publish");
+    expect(publish.indexOf("- name: Stage validated baselines")).toBeLessThan(
+      publish.indexOf("- name: Mint App token"),
+    );
+    expect(workflowStepValue(capture, "Checkout")["with"]).toMatchObject({
+      ref: githubExpression("github.sha"),
     });
     expect(checkoutRefs.length).toBeGreaterThan(0);
     for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
@@ -1039,11 +1120,6 @@ describe("detect-e2e-changes", () => {
         }
       }
     }
-    expect(
-      evaluateExpression(marketingCheckout("update"), {
-        inputs: { ref: "named-branch" },
-      }),
-    ).toBe("named-branch");
     const validateSteps = mainHeavyContract.jobs["validate"]?.steps ?? [];
     expect(
       validateSteps.find(({ name }) => name === "Validate SHA format")?.run,
@@ -1054,13 +1130,13 @@ describe("detect-e2e-changes", () => {
     // The push is an API commit appended to the named branch: GitHub signs
     // it, so it cannot leave a person's pull request behind the
     // signed-commits rule.
-    const push = workflowStepValue(update, "Push regenerated baselines");
+    const push = workflowStepValue(publish, "Push regenerated baselines");
     expect(push["uses"]).toContain(
       "stella/.github/.github/actions/signed-commit@",
     );
     expect(push["with"]).toMatchObject({
       mode: "append",
-      branch: githubExpression("inputs.ref"),
+      branch: githubExpression("steps.select.outputs.branch"),
     });
 
     // Nightly checks continue to use their triggering ref.
@@ -1069,23 +1145,21 @@ describe("detect-e2e-changes", () => {
 
   test("publishes regenerated baselines a fork pull request can commit itself", () => {
     const upload = workflowStepValue(
-      jobOf(marketingWorkflow, "update"),
+      jobOf(marketingCaptureWorkflow, "capture"),
       "Upload regenerated baselines",
     );
     expect(upload["uses"]).toBe(
       "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
     );
     expect(upload["with"]).toMatchObject({
-      name: `marketing-screenshots-${githubExpression("github.run_id")}`,
+      name: "marketing-screenshots",
       path: "apps/landing/public/media/products/*.png",
       "retention-days": 7,
     });
-    // Published before the push, so a run that cannot push still hands over
-    // the PNGs.
-    expect(
-      marketingWorkflow.indexOf("- name: Upload regenerated baselines"),
-    ).toBeLessThan(
-      marketingWorkflow.indexOf("- name: Push regenerated baselines"),
+    // The capture run's own artifact: a run that cannot push (a fork's
+    // change) still hands over the PNGs.
+    expect(marketingCaptureWorkflow).not.toContain(
+      "Push regenerated baselines",
     );
   });
 
@@ -1111,11 +1185,12 @@ describe("detect-e2e-changes", () => {
   test("keeps one capture body behind both screenshot directions", () => {
     // The shared body is a composite action so check and update cannot drift;
     // only the checkout differs, because update captures a named branch.
-    expect(
-      marketingWorkflow.match(
-        /uses: \.\/\.github\/actions\/marketing-capture/gu,
-      ),
-    ).toHaveLength(2);
+    for (const source of [marketingWorkflow, marketingCaptureWorkflow]) {
+      expect(
+        source.match(/uses: \.\/\.github\/actions\/marketing-capture/gu),
+      ).toHaveLength(1);
+    }
+    expect(marketingPublishWorkflow).not.toContain("marketing-capture");
     expect(marketingWorkflow).not.toContain("test:e2e:marketing");
     expect(marketingCapture).toContain("test:e2e:marketing:update");
     // Cleanup stays inside the action so a failed capture still releases the
@@ -1123,12 +1198,12 @@ describe("detect-e2e-changes", () => {
     expect(
       actionStep(marketingCapture, "Stop production web server"),
     ).toContain("if: always()");
-    // An unrecognised mode must fail loudly: the check job runs on anything
-    // that is not update, so it reaches this validation instead of leaving
-    // both jobs skipped and green.
-    expect(jobOf(marketingWorkflow, "check")).toContain(
-      "if: inputs.mode != 'update'",
-    );
+    // An unrecognised mode must fail loudly: the check job always runs and
+    // requires check mode, instead of being skipped green.
+    expect(jobOf(marketingWorkflow, "check")).not.toContain("if: inputs.mode");
+    expect(
+      workflowStepRun(jobOf(marketingWorkflow, "check"), "Require check mode"),
+    ).toContain('if [[ "$MODE" != check ]]');
     expect(actionStep(marketingCapture, "Validate mode")).toContain(
       "Unknown marketing screenshot mode",
     );
@@ -1429,20 +1504,20 @@ describe("detect-e2e-changes", () => {
     // policy is main and release tags. A job that reads it without declaring
     // the environment would be a job the policy never sees, so the census
     // below covers every workflow rather than the two edited here.
-    expect(jobOf(marketingWorkflow, "update")).toContain(
+    expect(jobOf(marketingPublishWorkflow, "publish")).toContain(
       "environment: release-app",
+    );
+    expect(jobOf(marketingCaptureWorkflow, "capture")).not.toContain(
+      "environment:",
     );
     expect(jobOf(marketingWorkflow, "check")).not.toContain("environment:");
 
     // A job that calls a reusable workflow cannot declare an environment:
-    // GitHub allows only name, uses, with, secrets, needs, if, and
-    // permissions there. A local reusable declares it on its own job (walked
+    // GitHub allows only name, uses, with, secrets, strategy, needs, if,
+    // concurrency, and permissions there. A local reusable declares it on its own job (walked
     // below); a remote one must be handed the environment name. Pinned so
     // each caller stays a listed decision.
-    const forwardingCallers = new Set([
-      "marketing-screenshots-update.yml#update",
-      "publish-npm.yml#release",
-    ]);
+    const forwardingCallers = new Set(["publish-npm.yml#release"]);
     const seenCallers = new Set<string>();
 
     const workflowsDir = path.join(import.meta.dirname, "../.github/workflows");

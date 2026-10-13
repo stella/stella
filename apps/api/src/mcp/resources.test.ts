@@ -311,6 +311,9 @@ describe("MCP resources", () => {
     expect(content.text).toContain("`par_1729`");
     expect(content.text).toContain("`text_withheld`");
     expect(content.text).toContain("`textWithheldReason`");
+    expect(content.text).toContain("`documentId`");
+    expect(content.text).toContain("`nextTextCursor`");
+    expect(content.text).toContain("`text_cursor`");
     // Applicability takes both fields, and a promulgated entry never applied.
     expect(content.text).toContain(
       "only when both hold: `windowDisposition` is `effective` and " +

@@ -186,6 +186,7 @@ const fillTemplateToWorkspace = createSafeHandler(
         feature: "templates.fill",
         modelRole: "fast",
         orgAIConfig,
+        modelTier: admission.modelTier,
         properties: { organization_id: organizationId },
         traceId: Bun.randomUUIDv7(),
       });

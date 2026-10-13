@@ -759,6 +759,7 @@ export const gradeReferencePositions = async ({
     feature: "document-review.references",
     modelRole: REFERENCE_GRADE_ROLE,
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: {
       file_count: 1,
       organization_id: organizationId,

@@ -49,7 +49,7 @@ export const authorizeLegalResolveRequest = async (
 ) => {
   const authorization = request.headers.get("authorization");
   if (authorization === null || !authorization.startsWith("Bearer ")) {
-    return { status: 403 as const, body: { error: "missing_scope" as const } };
+    return { status: 401 as const, body: { error: "unauthorized" as const } };
   }
   const token = authorization.slice(7);
   const session = await authenticate(token, {
@@ -66,7 +66,7 @@ export const authorizeLegalResolveRequest = async (
         body: { error: "access_unavailable" as const },
       };
     }
-    return { status: 403 as const, body: { error: "missing_scope" as const } };
+    return { status: 401 as const, body: { error: "unauthorized" as const } };
   }
   if (!hasLawReadScope(session.value.scopes)) {
     return {

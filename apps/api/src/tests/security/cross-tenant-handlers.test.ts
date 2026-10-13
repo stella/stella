@@ -40,6 +40,7 @@ import {
   invoices,
   legalLists,
   legalReaderAnnotations,
+  legalReaderAnswers,
   numberSeries,
   notifications,
   savedTimeNarratives,
@@ -57,6 +58,7 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import readBilingualRun from "@/api/handlers/bilingual-translations/read-run";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
 import lookupResearchAnswers from "@/api/handlers/case-law/research/answers-lookup";
+import getDecisionChatThread from "@/api/handlers/chat/decision-threads/get";
 import exportChatMessage from "@/api/handlers/chat/export/create";
 import forkChatThread from "@/api/handlers/chat/fork/create";
 import readSuggestedChatPrompts from "@/api/handlers/chat/get-suggested-prompts";
@@ -110,6 +112,8 @@ import readInvoiceById from "@/api/handlers/invoices/get";
 import createInvoiceLine from "@/api/handlers/invoices/lines/create";
 import updateInvoiceLine from "@/api/handlers/invoices/lines/update";
 import listReaderAnnotations from "@/api/handlers/legal-reader/annotations/list";
+import listReaderAnswers from "@/api/handlers/legal-reader/answers/list";
+import updateReaderAnswer from "@/api/handlers/legal-reader/answers/update";
 import listLegalLists from "@/api/handlers/lists/list";
 import listMemories from "@/api/handlers/memories/list";
 import listNotifications from "@/api/handlers/notifications/list";
@@ -319,6 +323,12 @@ const notificationB = toSafeId<"notification">(
 const readerAnnotationB = toSafeId<"legalReaderAnnotation">(
   "22222222-2222-4222-8222-222222222254",
 );
+const privateReaderAnswerB = toSafeId<"legalReaderAnswer">(
+  "22222222-2222-4222-8222-222222222301",
+);
+const sharedReaderAnswerB = toSafeId<"legalReaderAnswer">(
+  "22222222-2222-4222-8222-222222222302",
+);
 const compareTargetVersionB = toSafeId<"entityVersion">(
   "22222222-2222-4222-8222-222222222253",
 );
@@ -411,6 +421,14 @@ const chatDeleteThreadB = toSafeId<"chatThread">(
 const chatSendThreadB = toSafeId<"chatThread">(
   "22222222-2222-4222-8222-222222222267",
 );
+// The same user's conversation about a public decision, under organization
+// B: a reader in organization A asking about that decision must not find it.
+const chatDecisionThreadB = toSafeId<"chatThread">(
+  "22222222-2222-4222-8222-222222222293",
+);
+const chatDecisionB = toSafeId<"caseLawDecision">(
+  "22222222-2222-4222-8222-222222222294",
+);
 const chatForkFromA = toSafeId<"chatThread">(
   "11111111-1111-4111-8111-111111111268",
 );
@@ -419,6 +437,12 @@ const chatForkFromB = toSafeId<"chatThread">(
 );
 const chatRevisionThreadB = toSafeId<"chatThread">(
   "22222222-2222-4222-8222-222222222290",
+);
+const chatMatterThreadB = toSafeId<"chatThread">(
+  "22222222-2222-4222-8222-222222222295",
+);
+const chatMatterMessageB = toSafeId<"chatMessage">(
+  "22222222-2222-4222-8222-222222222296",
 );
 const chatRevisionAcceptMessageB = toSafeId<"chatMessage">(
   "22222222-2222-4222-8222-222222222291",
@@ -578,6 +602,7 @@ const savedSearchCriteria = (
 
 const isolationCases: IsolationCase[] = [
   ...desktopPresenceIsolationCases(),
+  ...readerAnswerIsolationCases(),
   {
     name: "user file content",
     runAAgainstB: async ({ ids: testIds, workspaceA }) =>
@@ -1410,6 +1435,39 @@ const isolationCases: IsolationCase[] = [
       expect(globalChatThreadIds(result)).not.toContain(chatThreadB),
     expectPositive: (result) =>
       expect(globalChatThreadIds(result)).toContain(chatThreadB),
+  },
+  {
+    name: "chat thread list filtered by matter",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listChatThreads, workspaceA, {
+        query: { workspaceId: ids.wsB1 },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listChatThreads, sameUserWorkspaceB, {
+        query: { workspaceId: ids.wsB1 },
+      }),
+    expectDenied: (result) => {
+      expectStatus(404)(result);
+      expect(JSON.stringify(result)).not.toContain(chatMatterThreadB);
+    },
+    expectPositive: (result) =>
+      expect(matterChatThreadIds(result)).toEqual([chatMatterThreadB]),
+  },
+  {
+    name: "chat decision conversation lookup",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(getDecisionChatThread, workspaceA, {
+        params: { decisionId: chatDecisionB },
+        query: {},
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(getDecisionChatThread, sameUserWorkspaceB, {
+        params: { decisionId: chatDecisionB },
+        query: {},
+      }),
+    expectDenied: (result) => expect(result).toEqual({ threadId: null }),
+    expectPositive: (result) =>
+      expect(result).toEqual({ threadId: chatDecisionThreadB }),
   },
   {
     name: "chat messages list",
@@ -2353,6 +2411,32 @@ beforeAll(async () => {
     endOffset: 9,
     quote: "important",
   });
+  await testDb.insert(legalReaderAnswers).values([
+    {
+      id: privateReaderAnswerB,
+      organizationId: ids.orgB,
+      userId: ids.userB1,
+      decisionId: ids.caseLawDecisionB,
+      kind: "explain",
+      visibility: "private",
+      paragraphId: "p-1",
+      startOffset: 0,
+      endOffset: 9,
+      quote: "important",
+    },
+    {
+      id: sharedReaderAnswerB,
+      organizationId: ids.orgB,
+      userId: ids.userB1,
+      decisionId: ids.caseLawDecisionB,
+      kind: "ask",
+      visibility: "shared",
+      paragraphId: "p-1",
+      startOffset: 0,
+      endOffset: 9,
+      quote: "important",
+    },
+  ]);
   await testDb.insert(signals).values([
     {
       id: visibleSignalB,
@@ -2492,12 +2576,17 @@ beforeAll(async () => {
     chatThreadOfB(chatTurnThreadB),
     chatThreadOfB(chatDeleteThreadB),
     chatThreadOfB(chatSendThreadB),
+    { ...chatThreadOfB(chatDecisionThreadB), subjectDecisionId: chatDecisionB },
   ]);
   const chatText = (text: string) => ({
     version: 1 as const,
     data: [{ type: "text" as const, text }],
   });
   await testDb.insert(chatThreads).values(chatThreadOfB(chatRevisionThreadB));
+  await testDb.insert(chatThreads).values({
+    ...chatThreadOfB(chatMatterThreadB),
+    workspaceId: ids.wsB1,
+  });
   await testDb.insert(chatMessages).values(
     [chatRevisionAcceptMessageB, chatRevisionRevertMessageB].map((id) => ({
       id,
@@ -2519,6 +2608,15 @@ beforeAll(async () => {
     createdBy: ids.userA1,
   });
   const chatAskedAt = new Date("2026-09-01T09:00:00.000Z");
+  await testDb.insert(chatMessages).values({
+    id: chatMatterMessageB,
+    threadId: chatMatterThreadB,
+    userId: ids.userA1,
+    workspaceId: ids.wsB1,
+    role: "user",
+    content: chatText("Summarise the matter."),
+    createdAt: chatAskedAt,
+  });
   await testDb.insert(chatMessages).values([
     {
       id: chatUserMessageB,
@@ -2707,6 +2805,49 @@ function desktopPresenceIsolationCases(): IsolationCase[] {
   ];
 }
 
+function readerAnswerIsolationCases(): IsolationCase[] {
+  const list = async (
+    context: TestHandlerContext,
+    decisionId: SafeId<"caseLawDecision">,
+  ) =>
+    await runHandler(listReaderAnswers, context, {
+      query: { decisionId, limit: 50 },
+    });
+  const update = async (context: TestHandlerContext) =>
+    await runHandler(updateReaderAnswer, context, {
+      params: { answerId: sharedReaderAnswerB },
+      body: { visibility: "shared" },
+    });
+  return [
+    {
+      name: "reader answers across organizations",
+      runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+        await list(workspaceA, testIds.caseLawDecisionB),
+      runBPositive: async ({ ids: testIds, workspaceB }) =>
+        await list(workspaceB, testIds.caseLawDecisionB),
+      expectDenied: (result) => {
+        expectPageExcludesId(result, privateReaderAnswerB);
+        expectPageExcludesId(result, sharedReaderAnswerB);
+      },
+      expectPositive: (result) => {
+        expectPageContainsId(result, privateReaderAnswerB);
+        expectPageContainsId(result, sharedReaderAnswerB);
+      },
+    },
+    {
+      name: "reader answer mutation across organizations",
+      runAAgainstB: async ({ workspaceA }) => await update(workspaceA),
+      runBPositive: async ({ workspaceB }) => await update(workspaceB),
+      expectDenied: expectStatus(404),
+      expectPositive: (result) =>
+        expect(result).toMatchObject({
+          id: sharedReaderAnswerB,
+          visibility: "shared",
+        }),
+    },
+  ];
+}
+
 function expectStatus(expectedStatus: number): (result: unknown) => void {
   return (result: unknown): void => {
     expect(getStatusCode(result)).toBe(expectedStatus);
@@ -2823,6 +2964,21 @@ function globalChatThreadIds(result: unknown): unknown[] {
     throw new TypeError("Expected a chat thread list response");
   }
   return threads.map((thread) => recordField(thread, "id"));
+}
+
+function matterChatThreadIds(result: unknown): unknown[] {
+  expect(getStatusCode(result)).toBeNull();
+  const groups = recordField(result, "workspaces");
+  if (!Array.isArray(groups)) {
+    throw new TypeError("Expected a chat thread list response");
+  }
+  return groups.flatMap((group) => {
+    const threads = recordField(group, "threads");
+    if (!Array.isArray(threads)) {
+      throw new TypeError("Expected a chat thread group");
+    }
+    return threads.map((thread) => recordField(thread, "id"));
+  });
 }
 
 function chatMessageIds(result: unknown): unknown[] {

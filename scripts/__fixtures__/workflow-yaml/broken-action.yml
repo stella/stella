@@ -1,0 +1,6 @@
+name: Broken composite action
+description: Fixture missing a run step shell
+runs:
+  using: composite
+  steps:
+    - run: echo broken

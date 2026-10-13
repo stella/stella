@@ -128,6 +128,11 @@
     "orSignInWithEmail": "või logi sisse e-postiga",
     "organizationNamePlaceholder": "Minu organisatsioon",
     "password": "Parool",
+    "professionalUse": {
+      "description": "Teie konto loomisel seda kinnitust teile ei näidatud. Jätkamiseks nõustuge sellega.",
+      "title": "Kinnitage kutsealane kasutus"
+    },
+    "professionalUseStatement": "Konto loomisega kinnitate, et kasutate stellat kutsealastel eesmärkidel, ning võtate teadmiseks, et stella on tööriist õigusvaldkonna spetsialistidele ega asenda õigusnõustamist.",
     "rateLimitExceeded": "Liiga palju katseid. Palun proovige hiljem uuesti.",
     "resendCode": "Saada kood uuesti aadressile <email>{emailAddress}</email>",
     "selectOrganization": "Valige organisatsioon",
@@ -530,6 +535,16 @@
       "createInvoice": "Loo arve",
       "dueDate": "Tähtaeg",
       "editInvoice": "Muuda arvet",
+      "export": {
+        "accounting": "Raamatupidamise import",
+        "eBilling": "E-arveldus",
+        "eso9": "ESO9 impordileht (XLSX)",
+        "exporting": "Eksporti valmistatakse ette…",
+        "isdoc": "ISDOC e-arve (ABRA Gen jt)",
+        "spreadsheets": "Tabelid",
+        "xlsx": "Arved (XLSX)",
+        "xlsxLines": "Arveread (XLSX)"
+      },
       "finalize": "Lõpeta",
       "invoiceDate": "Arve kuupäev",
       "invoiceDetail": "Arve detailid",
@@ -771,6 +786,9 @@
       "none": "Viiteid pole veel salvestatud.",
       "openAtCitation": "Ava viite kohal",
       "openDecision": "Ava lahend",
+      "paragraphLabel": "Punkt {paragraph}",
+      "paragraphMark": "¶ {paragraph}",
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, punkt {paragraph}",
       "partialSummary": "Viidete koguarvud ja ajajoon on osalised.",
       "passageNotFound": "Viitavat lõiku tekstist ei leitud",
       "positiveCount": "{count, plural, one {# positiivne} other {# positiivset}}",
@@ -799,7 +817,7 @@
       "courtCount": "{count, plural, one {# kohus} other {# kohut}}",
       "newLast24Hours": "{count} viimase 24 h jooksul",
       "newLast7Days": "Uued viimase 7 päeva jooksul",
-      "unlistedCourts": "{count, plural, one {Kohtud väljaspool suurimat} other {Kohtud väljaspool # suurimat}}"
+      "otherCourts": "Muud kohtud"
     },
     "courtTiers": {
       "constitutional": "Põhiseaduslikkuse järelevalve kohtud",
@@ -815,6 +833,7 @@
       "decisionYears": "Lahendite aastad",
       "description": "Kui palju kohtupraktikat korpuses on, riikide ja kohtute kaupa, ning kui värske on iga allikas.",
       "exceedsReportedTotal": "Sisaldab rohkem, kui avaldaja viimati {date} seisuga teatas",
+      "gapStatusUnknown": "Lünkade olek teadmata",
       "generatedAt": "Andmed seisuga {date}",
       "globeLabel": "Riigid, mille kohtupraktikat korpus sisaldab, gloobusel",
       "healthCurrent": "Ajakohane",
@@ -823,9 +842,12 @@
       "healthStalled": "Takerdunud",
       "healthUnknown": "Pole kunagi käivitunud",
       "inPreparation": "Ettevalmistamisel",
+      "knownGaps": "Teadaolevad lüngad",
       "lastSync": "Viimane sünkroonimine",
+      "noGapsRecorded": "Lünki pole registreeritud",
       "notCountedYet": "Veel loendamata",
       "notMeasuredYet": "Veel mõõtmata",
+      "pendingTexts": "Ootel tekstid",
       "reportedByListing": "Loetud avaldaja nimekirja põhjal",
       "reportedByOperator": "Käsitsi sisestatud",
       "reportedByPublisher": "Avaldaja enda loend",
@@ -1261,6 +1283,11 @@
     "greeting": "Millega soovite tegeleda?",
     "greetingSubtitle": "Alustage toimikust, dokumendist või lihtsast küsimusest.",
     "hideThread": "Peida vestlus",
+    "history": {
+      "matterUnavailable": "See toimik pole saadaval",
+      "older": "Vanemad",
+      "previous7Days": "Eelmised 7 päeva"
+    },
     "historyContext": {
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {ja veel #} other {ja veel #}}"
@@ -1277,6 +1304,9 @@
       "noMatters": "Toimikuid veel pole",
       "noRecentChats": "Hiljutisi vestlusi pole",
       "noSkills": "Oskusi veel pole",
+      "openAllMatters": "Ava kõik toimikud",
+      "openChatHistory": "Ava vestluste ajalugu",
+      "openSkillsLibrary": "Ava oskuste kogu",
       "pinnedMatters": "Kinnitatud toimikud",
       "recentChats": "Hiljutised vestlused",
       "skillEditedBy": "Muutis {name} · {time}",
@@ -1420,6 +1450,8 @@
     "sendPrompt": "Saada sõnum",
     "sendQueuedMessageNow": "Saada kohe",
     "sendWithoutAnonymization": "Saada anonüümimiseta",
+    "signInToChat": "Logi sisse, et sellest dokumendist vestelda",
+    "signInToChatAbout": "Logi sisse, et vestelda:",
     "skills": {
       "scope": {
         "private": "Sinu AI oskused",
@@ -1750,6 +1782,8 @@
     "citations": "Viited",
     "clauses": "Klauslid",
     "clearDate": "Tühjenda kuupäev",
+    "clearFilters": "Tühjenda filtrid",
+    "clearSearch": "Tühjenda otsing",
     "close": "Sulge",
     "closeAll": "Sulge kõik",
     "closeOthers": "Sulge teised",
@@ -1780,6 +1814,7 @@
       "nextDecade": "Järgmine kümnend",
       "nextMonth": "Järgmine kuu",
       "nextYear": "Järgmine aasta",
+      "outOfRange": "Valige kuupäev lubatud vahemikust.",
       "previousDecade": "Eelmine kümnend",
       "previousMonth": "Eelmine kuu",
       "previousYear": "Eelmine aasta",
@@ -4105,7 +4140,6 @@
     "appsSubtitle": "stella töötab ka väljaspool brauserit: teie töölaual ja teie AI-assistendis. Selle seadistuse juurde saate alati hiljem tagasi tulla.",
     "appsTitle": "Hankige stella igale poole",
     "catalogueAlwaysOn": "Alati sees",
-    "catalogueClearSearch": "Tühjenda otsing",
     "catalogueCommunityHeading": "Muud",
     "catalogueContinueWithCount": "{count, plural, one {Jätka # tööriistaga} other {Jätka # tööriistaga}}",
     "catalogueDetailAbout": "Teave",
@@ -6366,7 +6400,6 @@
         "year": "Aasta"
       },
       "cannotDeleteRequired": "Vähemalt üks seda tüüpi vaade on nõutav",
-      "clearFilters": "Tühjenda filtrid",
       "copySuffix": "{name} (koopia)",
       "deleteView": "Kustuta vaade",
       "exportCsv": "Ekspordi CSV",
