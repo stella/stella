@@ -493,7 +493,7 @@ jobs:
             fi
             protected_path=false
             for pattern in "${protected[@]}"; do
-              if [[ "$path" == @($pattern) ]]; then
+              if [[ "$path" == $pattern ]]; then
                 protected_path=true
                 break
               fi
@@ -508,7 +508,7 @@ jobs:
             fi
           done
 
-          if (( ${#lint_paths[@]} > 0 )); then
+          if [[ -n "${lint_paths[0]+present}" ]]; then
             # Type-aware fixes need the complete generated type graph. set -e
             # aborts on preparation or compiler errors before any fixer runs.
             bun scripts/ci-generated-sources.ts prepare
@@ -520,7 +520,7 @@ jobs:
               exit "$lint_status"
             fi
           fi
-          if (( ${#format_paths[@]} > 0 )); then
+          if [[ -n "${format_paths[0]+present}" ]]; then
             bun run format:guard
             bun --bun oxfmt -c .oxfmtrc.json --no-error-on-unmatched-pattern "${format_paths[@]}"
           fi

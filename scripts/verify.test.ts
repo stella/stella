@@ -708,7 +708,11 @@ for (const ci of [undefined, "true"]) {
             "head",
             "tail",
           ]) {
-            const executable = Bun.which(name);
+            // macOS's system Bash exercises local entry compatibility with 3.2.
+            const executable =
+              name === "bash" && process.platform === "darwin"
+                ? "/bin/bash"
+                : Bun.which(name);
             if (executable === null) {
               throw new TypeError(`Fixture needs ${name}`);
             }

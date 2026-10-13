@@ -63,7 +63,7 @@ git -C "$base_dir" submodule update --init --recursive
     while IFS= read -r -d '' arg; do
       installer+=("$arg")
     done < "$STELLA_WORKTREE_INSTALLER_ARGS_FILE"
-    if (( ${#installer[@]} == 0 )); then
+    if [[ -z "${installer[0]+present}" ]]; then
       bun install --frozen-lockfile
     else
       "${installer[@]}" "$base_dir"
