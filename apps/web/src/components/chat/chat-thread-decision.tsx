@@ -3,8 +3,8 @@ import type { MouseEvent } from "react";
 import { panic } from "better-result";
 import { useFormatter } from "use-intl";
 
-import { CourtTierBadge } from "@stll/decision-reader/court-tier-badge";
 import { BidiText } from "@stll/ui/bidi-text";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { useIsMobile } from "@stll/ui/use-mobile";
 
 import {
@@ -12,12 +12,13 @@ import {
   isPlainPrimaryClick,
 } from "@/components/inspector/case-decision-view";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { railCourtAbbreviation } from "@/features/case-law/components/case-decision-rail-icon.logic";
 import { decisionChatKey } from "@/features/chat/legal-document-chat-key";
 import type { ChatHistoryItem } from "@/features/chat/queries";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { formatDecisionDate } from "@/lib/decision-date";
 import { toSafeId } from "@/lib/safe-id";
+
+const INLINE_COURT_ABBREVIATION_MAX_LENGTH = 4;
 
 export type ChatThreadDecision = Extract<
   NonNullable<ChatHistoryItem["decision"]>,
@@ -59,21 +60,28 @@ export const ChatThreadDecisionLabel = ({
   decision: ChatThreadDecision;
 }) => {
   const format = useFormatter();
-  const abbreviation = railCourtAbbreviation(decision.courtAbbreviation);
+  const abbreviation = decision.courtAbbreviation?.trim();
+  const drawsCourtBadge =
+    abbreviation !== undefined &&
+    abbreviation.length > 0 &&
+    abbreviation.length <= INLINE_COURT_ABBREVIATION_MAX_LENGTH;
   const date = formatDecisionDate(decision.decisionDate, format);
 
   return (
     <span className="inline-flex min-w-0 items-center gap-1.5">
-      {abbreviation === null ? (
+      {!drawsCourtBadge ? (
         <BidiText className="shrink-0">{decision.court}</BidiText>
       ) : (
         <span className="inline-flex shrink-0" title={decision.court}>
-          <CourtTierBadge
-            abbreviation={abbreviation}
+          <DocumentIdentityBadge
+            identity={{
+              kind: "decision",
+              courtAbbreviation: abbreviation,
+              courtTier: decision.courtTier,
+            }}
             // Sized to the meta line it sits in, so a decision chat's row is
             // as tall as every other row in the list.
             size="inline"
-            tier={decision.courtTier}
           />
           <span className="sr-only">{decision.court}</span>
         </span>

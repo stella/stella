@@ -39,8 +39,7 @@ jobs:
       # sit on a failed marketing check with the fix already committed.
       contents: read
       pull-requests: read
-    # The release App key is a secret of this environment alone (main and
-    # v* tags only).
+    # The App credentials come from a protected environment.
     environment: release-app
 
     steps:
