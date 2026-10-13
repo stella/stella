@@ -12,7 +12,7 @@ type SearchBookkeepingOperation = {
 export const writeSearchBookkeeping = async (
   operation: SearchBookkeepingOperation,
 ): Promise<void> => {
-  // audit: skip — derived search timestamp refresh from already-audited source activity.
+  // audit: skip — derived search timestamp refresh from already-audited source activity. Pure recovery bookkeeping; no user/customer data or auth/permission change.
   await operation.db.execute(sql`
     UPDATE workspace_search_documents wsd
     SET updated_at = w.last_activity_at

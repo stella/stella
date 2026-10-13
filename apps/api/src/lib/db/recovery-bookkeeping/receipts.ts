@@ -89,7 +89,7 @@ export async function mutateRecoveryReceipt(
   | Pick<typeof flowUploadTriggerIntents.$inferSelect, "entityId">[]
   | Pick<typeof pendingScoutEmissions.$inferSelect, "sourceId">[]
 > {
-  // audit: skip — derived recovery receipts record delivery intent or token-fenced settlement for their audited source effects.
+  // audit: skip — derived recovery receipts record delivery intent or token-fenced settlement for their audited source effects. Pure recovery bookkeeping; no user/customer data or auth/permission change.
   switch (op.type) {
     case "create-upload":
       await op.tx.insert(op.table).values(op.rows).onConflictDoNothing();

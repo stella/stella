@@ -26,7 +26,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { clearMemberAssignments } from "@/api/lib/member-assignment-offboarding";
-import { tryLockAccountMemberCleanup } from "@/api/lib/member-assignment-offboarding-owner";
+import { tryLockAccountMemberCleanup } from "@/api/lib/member-offboarding/member-assignment-offboarding-owner";
 import { cents } from "@/api/lib/money";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";

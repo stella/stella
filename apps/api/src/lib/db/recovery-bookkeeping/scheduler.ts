@@ -73,7 +73,7 @@ export function writeSchedulerBookkeeping(
 export async function writeSchedulerBookkeeping(
   operation: SchedulerBookkeepingOperation,
 ): Promise<void | { id: string }[]> {
-  // audit: skip — derived scheduler configuration, exact-claim slot checkpoints and source-absent cleanup; scheduler_job_runs records attempts.
+  // audit: skip — derived scheduler configuration, exact-claim slot checkpoints and source-absent cleanup; scheduler_job_runs records attempts. Pure recovery bookkeeping; no user/customer data or auth/permission change.
   const { table } = operation;
   switch (operation.type) {
     case "upsert": {

@@ -831,6 +831,8 @@ if (!databaseUrl || !runPostgresTests) {
           checkpointFileId: createSafeId<"userFile">(),
           sessionTokenHash: "0".repeat(64),
           tokenExpiresAt: new Date(Date.now() + 3_600_000),
+          takeoverRequestedBy: leaver.userId,
+          takeoverRequestedAt: new Date(),
         });
         await db.insert(desktopEditHandoffs).values({
           id: handoffId,
@@ -1006,6 +1008,35 @@ if (!databaseUrl || !runPostgresTests) {
             .from(desktopEditSessions)
             .where(eq(desktopEditSessions.id, sessionId)),
         ).toEqual([{ status: "cancelled" }]);
+        const exchangeAudits = await db
+          .select({
+            resourceId: auditLogs.resourceId,
+            resourceType: auditLogs.resourceType,
+            changes: auditLogs.changes,
+            metadata: auditLogs.metadata,
+          })
+          .from(auditLogs)
+          .where(eq(auditLogs.workspaceId, workspaceId));
+        expect(exchangeAudits).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              resourceId: sessionId,
+              resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
+              changes: {
+                takeoverRequestedBy: { old: leaver.userId, new: null },
+              },
+            }),
+            expect.objectContaining({
+              resourceId: taskId,
+              resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+              metadata: expect.objectContaining({
+                cause: "membership_removed",
+                change: "desktop-handoff-expired",
+                handoffId,
+              }),
+            }),
+          ]),
+        );
         // Credential revocation in the same transaction deletes the
         // leaver's handoffs and signing sessions outright.
         expect(

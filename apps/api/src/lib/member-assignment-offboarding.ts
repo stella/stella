@@ -3,7 +3,7 @@ import {
   tryLockMemberCleanupWorkspace as tryLockOwnedMemberCleanupWorkspace,
   tryLockAccountMemberCleanup as tryLockOwnedAccountMemberCleanup,
   removeOrganizationMemberInTransaction as removeOwnedOrganizationMember,
-} from "@/api/lib/member-assignment-offboarding-owner";
+} from "@/api/lib/member-offboarding/member-assignment-offboarding-owner";
 
 export const clearMemberAssignments = async (
   ...args: Parameters<typeof clearOwnedMemberAssignments>

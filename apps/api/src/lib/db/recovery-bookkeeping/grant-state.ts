@@ -109,7 +109,7 @@ type GrantOperation =
 export const transitionRecoveryGrantState = async (
   op: GrantOperation,
 ): Promise<number> => {
-  // audit: skip — recoverable feature-admission parking and replay change only durable source bookkeeping, not feature effects.
+  // audit: skip — recoverable feature-admission parking and replay change only durable source bookkeeping, not feature effects. Pure recovery bookkeeping; no user/customer data or auth/permission change.
   if (op.table !== op.spec.table) {
     return panic("Recovery grant table and lifecycle disagree");
   }

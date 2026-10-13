@@ -3630,85 +3630,85 @@
     "reason": "builder-for in apps/api/src/lib/matter-reference.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "file": "apps/api/src/lib/member-offboarding/member-assignment-offboarding-owner.ts",
     "fingerprint": "00dee21d6793638ce68be3919a7a1275e4ce7ed2698967daf3cc6087e1975577",
     "count": 1,
     "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"
   },
   {
-    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "file": "apps/api/src/lib/member-offboarding/member-assignment-offboarding-owner.ts",
     "fingerprint": "17f394aff15489ecec81b34616e8e226db1e2b310e63e11db418c0b3bae9b62e",
     "count": 1,
     "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"
   },
   {
-    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "file": "apps/api/src/lib/member-offboarding/member-assignment-offboarding-owner.ts",
     "fingerprint": "2599f08be0a75edfa7e8c249566fd4cb63d1c829d1b2ab21dee0612e0cfac4f2",
     "count": 1,
     "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"
   },
   {
-    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "file": "apps/api/src/lib/member-offboarding/member-assignment-offboarding-owner.ts",
     "fingerprint": "c8b18cb2f1762180832bf9c5283284cf2ea3d06a43308f1fc5b3f935ee245f21",
     "count": 1,
     "reason": "existing acquisition moved by #5308; the locked batch limit is capped at the remaining cleanup budget; mode/table/key/predicate unchanged; no new acquisition; migrates with owner extension follow-up"
   },
   {
-    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "file": "apps/api/src/lib/member-offboarding/member-assignment-offboarding-owner.ts",
     "fingerprint": "ebe7b963d97218d9e175bce3079ccb625e1089c4fc632b8875070429da2ff73e",
     "count": 1,
     "reason": "existing acquisition moved by #5308; the locked batch limit is capped at the remaining cleanup budget; mode/table/key/predicate unchanged; no new acquisition; migrates with owner extension follow-up"
   },
   {
-    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "file": "apps/api/src/lib/member-offboarding/member-assignment-offboarding-owner.ts",
     "fingerprint": "5b20991a794d61fd84852641d91b5835c5ae1ffa124b9f9fda62c8b17e292e0c",
     "count": 1,
     "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"
   },
   {
-    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "file": "apps/api/src/lib/member-offboarding/member-assignment-offboarding-owner.ts",
     "fingerprint": "641499b4b42e65c3405cee7054391786b35e05f74a369f2e87021bcb8329d805",
     "count": 1,
     "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"
   },
   {
-    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "file": "apps/api/src/lib/member-offboarding/member-assignment-offboarding-owner.ts",
     "fingerprint": "6ab1087d5bcb4cc26ed3a6cd902f8e014330bfd047596e7bd99a930f3fa3421e",
     "count": 1,
     "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"
   },
   {
-    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "file": "apps/api/src/lib/member-offboarding/member-assignment-offboarding-owner.ts",
     "fingerprint": "7658f64321021ba1b9c84e4ead3ba0bccfb7c7c7044f666bfb6c61073345c999",
     "count": 1,
     "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"
   },
   {
-    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "file": "apps/api/src/lib/member-offboarding/member-assignment-offboarding-owner.ts",
     "fingerprint": "f1eda68e9ac69e63992747fe6d67d9357f7a6807fc3f5d40bfd00bbabf4672f1",
     "count": 1,
     "reason": "existing acquisition moved by #5308; the locked batch limit is capped at the remaining cleanup budget; mode/table/key/predicate unchanged; no new acquisition; migrates with owner extension follow-up"
   },
   {
-    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "file": "apps/api/src/lib/member-offboarding/member-assignment-offboarding-owner.ts",
     "fingerprint": "fcb0954834ddc0ec2a0cb40819f4ecf37bf85ea5c563ee23fdc23c8e200c61f9",
     "count": 1,
     "reason": "existing acquisition moved by #5308; the locked batch limit is capped at the remaining cleanup budget; mode/table/key/predicate unchanged; no new acquisition; migrates with owner extension follow-up"
   },
   {
-    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "file": "apps/api/src/lib/member-offboarding/member-assignment-offboarding-owner.ts",
     "fingerprint": "6a05fd0acc9bfbe4ac2a39169351b64972a1e6b053b7db2907d2f2a6c4e8fc09",
     "count": 1,
     "reason": "existing acquisition moved by #5308; the locked batch limit is capped at the remaining cleanup budget; mode/table/key/predicate unchanged; no new acquisition; migrates with owner extension follow-up"
   },
   {
-    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "file": "apps/api/src/lib/member-offboarding/member-assignment-offboarding-owner.ts",
     "fingerprint": "dc1895cb4fefa177f64451a22aa2f388230255c400865e71eabfcc3a84abaf16",
     "count": 1,
     "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"
   },
   {
-    "file": "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+    "file": "apps/api/src/lib/member-offboarding/member-assignment-offboarding-owner.ts",
     "fingerprint": "dcf88c26320f001b0076bc903791e51552ce19a4d8cdd0af2c2e15d45bafb48e",
     "count": 1,
     "reason": "existing acquisition moved by #5308; exact fingerprint transferred from member-assignment-offboarding.ts; mode/table/key/predicate identical; migrates with owner extension follow-up"

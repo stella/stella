@@ -1,5 +1,6 @@
 -- requires: 20261010005400_upload_trigger_settlements
 -- requires: 20261010005500_feature_recovery_grant_waits
+-- requires: 20261010005600_flow_recovery_outcomes
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 

@@ -459,3 +459,30 @@ describe("recovery bookkeeping audit ownership", () => {
     },
   );
 });
+
+test("the recorder owns audit insertion while other writes still require an event", async () => {
+  const accountInsert =
+    "export const record = (tx) => tx.insert(accountAuditLogs);";
+  expect(
+    await lintSingleRule(RULE, accountInsert, {
+      sourcePath: "apps/api/src/lib/db/audit-recording.ts",
+      ruleOptionsForRoot: (root) => ({ root }),
+    }),
+  ).toEqual([]);
+  expect(
+    await lintSingleRule(RULE, accountInsert, {
+      sourcePath: SOURCE_PATH,
+      ruleOptionsForRoot: (root) => ({ root }),
+    }),
+  ).toEqual([1]);
+  expect(
+    await lintSingleRule(
+      RULE,
+      "export const record = (tx) => tx.insert(otherRows);",
+      {
+        sourcePath: "apps/api/src/lib/db/audit-recording.ts",
+        ruleOptionsForRoot: (root) => ({ root }),
+      },
+    ),
+  ).toEqual([1]);
+});

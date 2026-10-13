@@ -379,7 +379,8 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
           owners: [
             {
               effect: "cleanup",
-              module: "apps/api/src/lib/member-assignment-offboarding-owner.ts",
+              module:
+                "apps/api/src/lib/member-offboarding/member-assignment-offboarding-owner.ts",
               exports: [
                 "clearMemberAssignments",
                 "tryLockMemberCleanupWorkspace",

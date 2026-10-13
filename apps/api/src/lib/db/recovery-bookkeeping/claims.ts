@@ -126,7 +126,7 @@ export async function mutateRecoveryClaim(
 ): Promise<
   ClaimedUpload[] | ClaimedScout[] | DeadlineClaimResult | void | number
 > {
-  // audit: skip — token-fenced recovery claims, lease retirement and retry bookkeeping retain their audited source outcomes.
+  // audit: skip — token-fenced recovery claims, lease retirement and retry bookkeeping retain their audited source outcomes. Pure recovery bookkeeping; no user/customer data or auth/permission change.
   switch (op.type) {
     case "upload-claim":
       return await op.tx

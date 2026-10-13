@@ -12,7 +12,6 @@ import {
   scoutRuns,
 } from "@/api/db/schema";
 import type { AnyDrizzle } from "@/api/db/scoped";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
@@ -33,8 +32,15 @@ import {
 import type { ReconciliationPhaseResult } from "@/api/lib/document-processing-reconciliation-progress";
 import { backgroundFeatureActorExists } from "@/api/lib/feature-access/background";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { deadlineScoutDue } from "@/api/lib/scouts/document-deadline-skip";
+
+const DEADLINE_SCOUT_DISPATCH_FAILURE = failureSink({
+  event: "deadline_scout.dispatch_failed",
+  expected: [],
+});
 
 const DEADLINE_SCOUT_LEASE_TIMEOUT_MS = 5 * 60 * 1000;
 const DEADLINE_SCOUT_DISPATCH_CONCURRENCY = 4;
@@ -481,7 +487,10 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
   });
   for (const result of results) {
     if (Result.isError(result)) {
-      captureError(result.error, { operation: "deadline-scout-dispatch" });
+      observeFailure(result.error, {
+        sink: DEADLINE_SCOUT_DISPATCH_FAILURE,
+        ctx: { operation: "deadline-scout-dispatch" },
+      });
     }
   }
 

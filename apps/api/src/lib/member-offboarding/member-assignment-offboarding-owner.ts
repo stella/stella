@@ -567,7 +567,6 @@ const closeMemberExchanges = async ({
   actorUserId,
   recordAuditEvent,
 }: ClearMemberAssignmentsOptions) => {
-  // audit: skip - removeWorkspaceMemberHandler and removeOrganizationMemberInTransaction record lifecycle audit rows; verifyAndDeleteUser calls recordAccountDeletionRequest in the same transaction.
   const workspaceScope = memberWorkspaceScope(scope);
   const scopedWorkspaces = tx
     .select({ id: workspaces.id })
@@ -575,26 +574,92 @@ const closeMemberExchanges = async ({
     .where(workspaceScope);
   const now = new Date();
   // A pending takeover would hand the departing member a fresh session token.
-  await tx
+  const clearedTakeovers = await tx
     .update(desktopEditSessions)
     .set({ takeoverRequestedBy: null, takeoverRequestedAt: null })
+    .from(workspaces)
     .where(
       and(
         inArray(desktopEditSessions.workspaceId, scopedWorkspaces),
+        eq(workspaces.id, desktopEditSessions.workspaceId),
         eq(desktopEditSessions.takeoverRequestedBy, userId),
         eq(desktopEditSessions.status, "open"),
       ),
-    );
-  await tx
+    )
+    .returning({
+      id: desktopEditSessions.id,
+      workspaceId: desktopEditSessions.workspaceId,
+      organizationId: workspaces.organizationId,
+    });
+  const expiredHandoffs = await tx
     .update(desktopEditHandoffs)
     .set({ expiresAt: now, updatedAt: now })
+    .from(workspaces)
     .where(
       and(
         inArray(desktopEditHandoffs.workspaceId, scopedWorkspaces),
+        eq(workspaces.id, desktopEditHandoffs.workspaceId),
         eq(desktopEditHandoffs.createdBy, userId),
         sql`${desktopEditHandoffs.expiresAt} > ${now}`,
       ),
-    );
+    )
+    .returning({
+      id: desktopEditHandoffs.id,
+      entityId: desktopEditHandoffs.entityId,
+      workspaceId: desktopEditHandoffs.workspaceId,
+      organizationId: workspaces.organizationId,
+    });
+  await recordAuditGroups({
+    tx,
+    recordAuditEvent,
+    groups: [
+      ...clearedTakeovers.map((row) => ({
+        bindings: {
+          organizationId: row.organizationId,
+          workspaceId: row.workspaceId,
+          userId: actorUserId,
+          execution: {
+            performer: { type: "user" as const, id: actorUserId },
+            trigger: { type: "system" as const, source: "membership_removal" },
+          },
+        },
+        events: [
+          {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
+            resourceId: row.id,
+            workspaceId: row.workspaceId,
+            changes: { takeoverRequestedBy: { old: userId, new: null } },
+            metadata: { cause: "membership_removed" },
+          },
+        ],
+      })),
+      ...expiredHandoffs.map((row) => ({
+        bindings: {
+          organizationId: row.organizationId,
+          workspaceId: row.workspaceId,
+          userId: actorUserId,
+          execution: {
+            performer: { type: "user" as const, id: actorUserId },
+            trigger: { type: "system" as const, source: "membership_removal" },
+          },
+        },
+        events: [
+          {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+            resourceId: row.entityId,
+            workspaceId: row.workspaceId,
+            metadata: {
+              cause: "membership_removed",
+              change: "desktop-handoff-expired",
+              handoffId: row.id,
+            },
+          },
+        ],
+      })),
+    ],
+  });
   const signingScope = and(
     inArray(pdfSigningSessions.workspaceId, scopedWorkspaces),
     eq(pdfSigningSessions.createdBy, userId),

@@ -5,6 +5,22 @@ repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 container=${1:?Postgres container ID required}
 owner=${2:?Database owner login required}
 database=${3:-stella}
+docker_host=${4:-}
+supplied_host=$docker_host
+target_mode=${5:-resolve}
+case "$target_mode" in
+  resolve) ;;
+  captured) [[ -n "$docker_host" ]] || { echo 'Captured Postgres Docker endpoint is required.' >&2; exit 1; } ;;
+  *) echo 'Unknown Postgres Docker target mode.' >&2; exit 1 ;;
+esac
+command -v bun >/dev/null 2>&1 || { echo 'Bun and installed workspace dependencies are required to capture this Docker transport.' >&2; exit 1; }
+if [[ "$target_mode" == resolve ]]; then
+  exec bun "$repo/packages/scripts/src/dev-postgres.ts" "$container" "$owner" "$database" "$supplied_host"
+fi
+# The fixed owner validates captured endpoints through the same development policy.
+bun "$repo/packages/scripts/src/dev-postgres.ts" --validate-captured-host "$docker_host"
+unset DOCKER_HOST DOCKER_CONTEXT
+docker() { command docker --host "$docker_host" "$@"; }
 
 # Derive the complete expectation from the fragment; there is no second list.
 # Only the committed setting syntax (name = scalar) is accepted here.

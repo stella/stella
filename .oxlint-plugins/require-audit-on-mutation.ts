@@ -130,6 +130,11 @@ const AUDITED_HELPERS = [
   },
 ] as const;
 // The system-audit recorder: its one write is the audit record.
+const AUDIT_RECORDER_FILE = "apps/api/src/lib/db/audit-recording.ts";
+const AUDIT_RECORDER_INSERTS = new Set([
+  "insert:auditLogs",
+  "insert:accountAuditLogs",
+]);
 const SYSTEM_AUDIT_RECORDER_FILE = "apps/api/src/lib/system-audit/record.ts";
 const MEMBER_RUN_MODULE_FILES: ReadonlySet<string> = new Set(
   MEMBER_RUN_MODULES,
@@ -653,6 +658,7 @@ export const createAuditOnMutationPlugin = (
           // A registered system module, or the system-audit recorder: its
           // writes are recorded by its actor's run, not per function.
           let systemFile = false;
+          let auditRecorderFile = false;
           const isBudgeted = () => census || fileBudgets.size > 0;
           const unauditedByOwner = new Map<string, Mutation[]>();
           // Justified directives are collected once per file. Block bodies
@@ -767,6 +773,7 @@ export const createAuditOnMutationPlugin = (
                 }
               }
               systemFile ||= relative === SYSTEM_AUDIT_RECORDER_FILE;
+              auditRecorderFile = relative === AUDIT_RECORDER_FILE;
               const fileKey = `${relative}::`;
               fileBudgets = new Map(
                 [...budgetsFromOptions(options)].flatMap(([key, budget]) =>
@@ -801,7 +808,12 @@ export const createAuditOnMutationPlugin = (
               } else if (
                 !systemFile &&
                 isDatabaseWriteCall(context, node) &&
-                !isPublicCorpusMutation({ context, node, tables })
+                !isPublicCorpusMutation({ context, node, tables }) &&
+                // Writing the audit row is the emission, not another audited mutation.
+                !(
+                  auditRecorderFile &&
+                  AUDIT_RECORDER_INSERTS.has(databaseWriteTarget(context, node))
+                )
               ) {
                 if (
                   hasCallSkipDirective({

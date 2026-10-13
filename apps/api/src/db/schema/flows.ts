@@ -147,6 +147,9 @@ export const flowUploadTriggerIntents = p.pgTable(
       .onDelete("cascade"),
     p.index("flow_upload_trigger_intents_ws_idx").on(table.workspaceId),
     p
+      .index("flow_upload_trigger_intents_entity_ws_idx")
+      .on(table.entityId, table.workspaceId),
+    p
       .index("flow_upload_trigger_intents_retry_idx")
       .on(table.retryAt, table.definitionId, table.entityId)
       .where(sql`${table.status} = 'pending'`),
