@@ -44,8 +44,12 @@ describe.skipIf(process.env["STELLA_RUN_SHARED_POSTGRES_TESTS"] !== "true")(
           ],
           { stdout: "pipe", stderr: "pipe" },
         );
-        const output = await new Response(child.stdout).text();
-        expect(await child.exited).toBe(0);
+        const [output, error, exitCode] = await Promise.all([
+          new Response(child.stdout).text(),
+          new Response(child.stderr).text(),
+          child.exited,
+        ]);
+        expect({ exitCode, error }).toEqual({ exitCode: 0, error: "" });
         return output;
       };
       try {
@@ -62,6 +66,10 @@ describe.skipIf(process.env["STELLA_RUN_SHARED_POSTGRES_TESTS"] !== "true")(
         symlinkSync(
           path.join(repo, "node_modules"),
           path.join(canonical, "node_modules"),
+        );
+        symlinkSync(
+          path.join(repo, "packages/scripts/node_modules"),
+          path.join(canonical, "packages/scripts/node_modules"),
         );
         const entrypoint = "apps/api/scripts/migrate-shared-test-template.ts";
         mkdirSync(path.join(canonical, "apps/api/scripts"), {

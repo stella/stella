@@ -1348,6 +1348,7 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  "STELLA_RUN_SHARED_POSTGRES_TESTS",
   // Manual regeneration binds the requested PR and checks available job services.
   "PR_NUMBER",
   "JOB_SERVICES",

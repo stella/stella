@@ -1,3 +1,4 @@
+import { Result, TaggedError } from "better-result";
 import { expect, test } from "bun:test";
 import {
   mkdtempSync,
@@ -16,10 +17,54 @@ import path from "node:path";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import {
+  ensureContainer,
   sharedTestDatabase,
   sharedTestMigrationHistory,
   snapshotSharedTestMigrations,
 } from "./shared-test-postgres";
+
+class FixtureDockerError extends TaggedError("SharedTestPostgresError")<{
+  message: string;
+}> {}
+
+test("container startup removes its private credential file on success and failure", async () => {
+  for (const outcome of ["success", "failure"] as const) {
+    const state = mkdtempSync(path.join(tmpdir(), "stella-pg-container-"));
+    let envFile = "";
+    let runCalls = 0;
+    const docker = (args: string[]) => {
+      if (args.at(0) === "run") {
+        runCalls++;
+        envFile = args.at(args.indexOf("--env-file") + 1) ?? "";
+        expect(readFileSync(envFile, "utf-8")).toContain(
+          "POSTGRES_PASSWORD=fixture",
+        );
+        expect(statSync(envFile).mode.toString(8).slice(-3)).toBe("600");
+        return outcome === "success"
+          ? Result.ok("started")
+          : Result.err(
+              new FixtureDockerError({ message: "Docker startup failed" }),
+            );
+      }
+      return Result.ok(args.at(0) === "inspect" ? "true" : "");
+    };
+    try {
+      const result = await ensureContainer({
+        docker,
+        state,
+        password: "fixture",
+        repo: state,
+        action: "prepare",
+      });
+      expect(runCalls).toBe(1);
+      expect(result.isOk()).toBe(outcome === "success");
+      expect(existsSync(envFile)).toBe(false);
+      expect(readdirSync(state)).toEqual([]);
+    } finally {
+      rmSync(state, { recursive: true, force: true });
+    }
+  }
+});
 
 test("worktree identities are bounded SQL identifiers and distinguish paths", () => {
   const paths = [
@@ -50,7 +95,7 @@ test("concurrent first-use credential preparation publishes one complete private
       import { sharedTestCredential } from ${JSON.stringify(path.join(import.meta.dir, "shared-test-postgres.ts"))};
       import { createHash } from "node:crypto";
       await Bun.stdin.text();
-      const value = sharedTestCredential(${JSON.stringify(directory)}, "owner.password");
+      const value = sharedTestCredential(${JSON.stringify(directory)}, "owner.password").unwrap();
       console.log(createHash("sha256").update(value).digest("hex"));
     `,
     );
@@ -104,14 +149,18 @@ test("a rejected migration snapshot can be retried after an added migration is r
     const extra = path.join(tree, "apps/api/drizzle/20260102000000_extra");
     mkdirSync(extra);
     writeFileSync(path.join(extra, "migration.sql"), "SELECT 2;");
-    expect(() => snapshotSharedTestMigrations(history, histories)).toThrow(
-      "Worker migrations changed during snapshot",
-    );
+    const rejected = snapshotSharedTestMigrations(history, histories);
+    expect(rejected.isErr()).toBe(true);
+    if (rejected.isErr()) {
+      expect(rejected.error.message).toContain(
+        "Worker migrations changed during snapshot",
+      );
+    }
     expect(existsSync(path.join(histories, history.key))).toBe(false);
     expect(readdirSync(histories)).toEqual([]);
     rmSync(extra, { recursive: true });
     expect(sharedTestMigrationHistory(tree).key).toBe(history.key);
-    const folder = snapshotSharedTestMigrations(history, histories);
+    const folder = snapshotSharedTestMigrations(history, histories).unwrap();
     expect(readdirSync(folder)).toEqual(["20260101000000_first"]);
     expect(
       sharedTestMigrationHistory(path.join(histories, history.key)).key,
