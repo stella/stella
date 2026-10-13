@@ -1,3 +1,6 @@
+import { createElement } from "react";
+
+import type * as StartServerExports from "@tanstack/react-start/server";
 import type { ServerEntry } from "@tanstack/react-start/server-entry";
 import { expect, mock, test } from "bun:test";
 
@@ -16,37 +19,51 @@ const HTML =
 const REDIRECT_LOCATION = "/auth";
 const STATUS_TEXT = "Fixture response";
 
+const fixtureHandler = {
+  fetch: async (request: Request) => {
+    const url = new URL(request.url);
+    const headers = new Headers({ "Cache-Control": PUBLIC_POLICY });
+    const cacheClass = url.searchParams.get("class");
+    if (cacheClass !== null) {
+      headers.set(SSR_CACHE_CLASS_HEADER, cacheClass);
+    }
+    const contentType = url.searchParams.get("type");
+    if (contentType !== null) {
+      headers.set("Content-Type", contentType);
+    }
+    const status = Number(url.searchParams.get("status") ?? 200);
+    if (status === 302) {
+      headers.set("Location", REDIRECT_LOCATION);
+    }
+    const requestedStatus = url.searchParams.get("documentStatus");
+    if (requestedStatus !== null) {
+      headers.set(SSR_STATUS_HEADER, requestedStatus);
+    }
+    if (url.searchParams.get("policy") === "absent") {
+      headers.delete("Cache-Control");
+    }
+    return await Promise.resolve(
+      new Response(HTML, { headers, status, statusText: STATUS_TEXT }),
+    );
+  },
+};
 await mock.module("@tanstack/react-start/server-entry", () => ({
   createServerEntry: (entry: ServerEntry) => entry,
-  default: {
-    fetch: async (request: Request) => {
-      const url = new URL(request.url);
-      const headers = new Headers({ "Cache-Control": PUBLIC_POLICY });
-      const cacheClass = url.searchParams.get("class");
-      if (cacheClass !== null) {
-        headers.set(SSR_CACHE_CLASS_HEADER, cacheClass);
-      }
-      const contentType = url.searchParams.get("type");
-      if (contentType !== null) {
-        headers.set("Content-Type", contentType);
-      }
-      const status = Number(url.searchParams.get("status") ?? 200);
-      if (status === 302) {
-        headers.set("Location", REDIRECT_LOCATION);
-      }
-      const requestedStatus = url.searchParams.get("documentStatus");
-      if (requestedStatus !== null) {
-        headers.set(SSR_STATUS_HEADER, requestedStatus);
-      }
-      if (url.searchParams.get("policy") === "absent") {
-        headers.delete("Cache-Control");
-      }
-      return await Promise.resolve(
-        new Response(HTML, { headers, status, statusText: STATUS_TEXT }),
-      );
-    },
-  },
+  default: fixtureHandler,
 }));
+const startServer = await import("@tanstack/react-start/server");
+await mock.module(
+  "@tanstack/react-start/server",
+  () =>
+    ({
+      ...startServer,
+      createStartHandler: () => fixtureHandler.fetch,
+      StartServer: () => createElement("div"),
+    }) satisfies Pick<
+      typeof StartServerExports,
+      "createStartHandler" | "StartServer"
+    >,
+);
 const { default: server } = await import("@/server");
 
 const cacheClasses = [...new Set(Object.values(ROUTE_CACHE_CLASSES))];

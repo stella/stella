@@ -190,6 +190,25 @@ describe("complete CourtListener import mapping", () => {
     }
     expect(mapped).toBeGreaterThan(0);
   });
+  test("unclassified page chrome yields a typed cluster rejection", () => {
+    const result = mapCourtListenerRecord(
+      courtListenerRecord({
+        opinions: [
+          opinionRow({
+            xml_harvard: "",
+            html: "<main><h1>Opinion</h1><p>The judgment is reversed.</p></main><aside><nav>Sidebar links</nav><p>Publisher sidebar</p></aside>",
+          }),
+        ],
+      }),
+    );
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.reason).toBe("no-usable-text");
+      expect(result.error.diagnostics).toEqual([
+        { path: "opinions", detail: "held" },
+      ]);
+    }
+  });
   test("image dependence rejects the whole cluster", () => {
     const cases = [
       [

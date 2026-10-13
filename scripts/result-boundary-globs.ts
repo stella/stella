@@ -204,6 +204,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // TanStack Query consumes read failures through queryFn Promise rejection;
   // this adapter translates typed Result errors at that framework boundary.
   "apps/web/src/lib/errors/query-result.ts",
+  // TanStack Start's SSR callback consumes Response/rejection, not Result.
+  // This server entry translates renderer errors into framework failures.
+  "apps/web/src/server.ts",
   // Better Auth invokes these hooks and consumes rejected APIError values.
   "apps/api/src/lib/auth/demo-account-hooks.ts",
   "apps/api/src/lib/auth/review-account-plugin.ts",
