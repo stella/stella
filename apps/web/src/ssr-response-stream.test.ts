@@ -3,6 +3,8 @@ import { renderToReadableStream } from "react-dom/server";
 
 import { expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import {
   boundSsrStream,
   fetchBoundedSsrResponse,
@@ -97,6 +99,7 @@ test("SSR responses preserve successful documents and non-HTML responses", async
           status: 201,
           headers: {
             "Content-Type": contentType,
+            "Cache-Control": "public, max-age=300, s-maxage=600",
             "Content-Length": String(encoder.encode(SHELL).length),
           },
         });
@@ -109,6 +112,11 @@ test("SSR responses preserve successful documents and non-HTML responses", async
       contentType.startsWith("text/html")
         ? null
         : String(encoder.encode(SHELL).length),
+    );
+    expect(response.headers.get("Cache-Control")).toBe(
+      contentType.startsWith("text/html")
+        ? "private, no-store"
+        : "public, max-age=300, s-maxage=600",
     );
     expect(await response.text()).toBe(SHELL);
     expect(errors).toEqual([]);
@@ -198,7 +206,7 @@ test("SSR streams preserve successful HTML and release their source", async () =
   expect(source.locked).toBe(false);
 });
 
-test("SSR streams finish the shell after a renderer fails during a pending read", async () => {
+test("SSR responses error the body after a source fails during a pending read", async () => {
   const errors: unknown[] = [];
   const failure = new TypeError(
     "A previously unvisited boundary must have exactly one root segment",
@@ -210,24 +218,34 @@ test("SSR streams finish the shell after a renderer fails during a pending read"
       failSource = () => controller.error(failure);
     },
   });
-  const body = boundSsrStream({
-    source,
-    signal: new AbortController().signal,
-    abortRenderer: () => {},
+  const response = await fetchBoundedSsrResponse({
+    request: new Request("https://stella.test/law/cases"),
+    fetchResponse: async () =>
+      new Response(source, {
+        headers: {
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "public, max-age=300, s-maxage=600",
+        },
+      }),
     reportError: (error) => errors.push(error),
   });
-  const reader = body.getReader();
+  expect(response.status).toBe(200);
+  expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new TypeError("SSR response body missing");
+  }
   expect(new TextDecoder().decode((await reader.read()).value)).toBe(SHELL);
   const pending = reader.read();
   failSource();
-  expect(await pending).toEqual({ done: true, value: undefined });
+  expect(await rejectionOf(pending)).toBe(failure);
   // Let detached cancellation rejections settle before counting reports.
   await Bun.sleep(0);
   expect(errors).toEqual([failure]);
   expect(source.locked).toBe(false);
 });
 
-test("SSR stream lifetime closes a stalled renderer even when cancellation never settles", async () => {
+test("SSR drain timeout errors the body even when cancellation never settles", async () => {
   const errors: unknown[] = [];
   const renderer = new AbortController();
   let cancelled = false;
@@ -248,7 +266,11 @@ test("SSR stream lifetime closes a stalled renderer even when cancellation never
     drainMs: 10,
     reportError: (error) => errors.push(error),
   });
-  expect(await new Response(body).text()).toBe(SHELL);
+  const reader = body.getReader();
+  expect(new TextDecoder().decode((await reader.read()).value)).toBe(SHELL);
+  expect(await rejectionOf(reader.read())).toBeInstanceOf(
+    SsrStreamTimeoutError,
+  );
   expect(errors).toHaveLength(1);
   expect(errors.at(0)).toBeInstanceOf(SsrStreamTimeoutError);
   expect(renderer.signal.aborted).toBe(true);
@@ -280,7 +302,7 @@ test("SSR stream cancellation releases the renderer without awaiting its cancell
 });
 
 test.each(["before reading", "during reading"])(
-  "SSR request abort closes the response %s",
+  "SSR request abort errors the response %s",
   async (phase) => {
     const abort = new AbortController();
     const reason = new DOMException("Request cancelled", "AbortError");
@@ -304,7 +326,7 @@ test.each(["before reading", "during reading"])(
     if (phase === "during reading") {
       abort.abort(reason);
     }
-    expect(await completion).toBe("");
+    expect(await rejectionOf(completion)).toBe(reason);
     expect(cancelledWith).toBe(reason);
     expect(source.locked).toBe(false);
     expect(errors).toEqual([reason]);

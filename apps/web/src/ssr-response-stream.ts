@@ -105,7 +105,8 @@ export const fetchBoundedSsrResponse = async ({
         return response;
       }
       const headers = new Headers(response.headers);
-      // The bounded stream may finish after only the shell was produced.
+      // A stream can fail after headers are sent; never cache a partial document.
+      headers.set("Cache-Control", "private, no-store");
       headers.delete("Content-Length");
       return new Response(
         boundSsrStream({
@@ -174,7 +175,7 @@ export const boundSsrStream = ({
     }
     phase = "closed";
     cleanup();
-    controller.close();
+    controller.error(error);
     abortRenderer(error);
     disposeSource(error);
     reportError(error);
@@ -197,7 +198,7 @@ export const boundSsrStream = ({
       }
       phase = "closed";
       cleanup();
-      controller.close();
+      controller.error(error);
       cancelSource(error);
     }, drainMs);
     // The phase and drain deadline are installed before aborting: React may
