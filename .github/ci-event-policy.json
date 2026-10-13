@@ -167,7 +167,9 @@
     "manual-checks.yml/check": "main",
     "bundle-size-nightly.yml/report": "main",
     "manual-checks.yml/install-cache-windows": "main",
-    "manual-checks.yml/install-cache-linux": "main"
+    "manual-checks.yml/install-cache-linux": "main",
+    "type-cost-measurement.yml/prepare": "main",
+    "type-cost-measurement.yml/measure": "main"
   },
   "pushMain": {
     "audit-image.yml": {
