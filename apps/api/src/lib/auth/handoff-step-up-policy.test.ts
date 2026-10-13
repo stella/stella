@@ -7,6 +7,7 @@ import { getSafeHandlerAccessMetadata } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS } from "@/api/lib/auth/account-access";
 import {
   HANDOFF_ACCESS_DETAIL,
+  createHandoffStepUpGuard,
   requiresHandoffStepUpForAuthPath,
   requiresHandoffStepUpForRequest,
   isHandoffStepUpGuard,
@@ -110,6 +111,24 @@ const missingHandoffStepUpCoverage = (
   });
 
 describe("handoff sessions require recent account authentication", () => {
+  test("sensitive guards require resolved session provenance", () => {
+    const guard = createHandoffStepUpGuard({
+      accountAccess: ACCOUNT_ACCESS.accountControl,
+    });
+    for (const context of [
+      {},
+      { handoffOriginConsentId: undefined },
+      { handoffOriginConsentId: 1 },
+    ]) {
+      expect(() => guard(context)).toThrow(
+        "Handoff guard requires resolved session provenance",
+      );
+    }
+    expect(guard({ handoffOriginConsentId: null })).toBeUndefined();
+    expect(
+      isHandoffStepUpRefusal(guard({ handoffOriginConsentId: "consent-id" })),
+    ).toBe(true);
+  });
   test("every mounted handler with sensitive access metadata has a live guard", () => {
     const sensitive = api.routes.filter(routeRequiresStepUp);
     expect(sensitive.length).toBeGreaterThan(20);

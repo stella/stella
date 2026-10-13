@@ -140,6 +140,7 @@ export const clausesRoute = new Elysia({
     restoreClauseVersion.handler,
     {
       params: restoreClauseVersion.config.params,
+      body: restoreClauseVersion.config.body,
       permissions: restoreClauseVersion.config.permissions,
       accountAccess: restoreClauseVersion.config.accountAccess,
     },

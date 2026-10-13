@@ -198,7 +198,9 @@ export const listAuthSessions = async () => {
     return result;
   }
   const hasHandoffSession = result.data.some(
-    (session) => typeof session.originConsentId === "string",
+    (session) =>
+      "originConsentId" in session &&
+      typeof session.originConsentId === "string",
   );
   const handoffSessionsResult = hasHandoffSession
     ? await Result.tryPromise({

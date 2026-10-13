@@ -43,32 +43,38 @@ const requiresHandoffStepUpForMetadata = ({
   permissions,
 }: HandoffAccessMetadata) =>
   accountAccess === ACCOUNT_ACCESS.accountControl ||
-  (permissions?.organizationSettings?.length ?? 0) > 0 ||
-  (permissions?.member?.length ?? 0) > 0 ||
-  (permissions?.apiKey?.length ?? 0) > 0 ||
-  (permissions?.integration?.length ?? 0) > 0;
+  (permissions?.["organizationSettings"]?.length ?? 0) > 0 ||
+  (permissions?.["member"]?.length ?? 0) > 0 ||
+  (permissions?.["apiKey"]?.length ?? 0) > 0 ||
+  (permissions?.["integration"]?.length ?? 0) > 0;
 
 const registeredGuards = new WeakSet<object>();
 export const createHandoffStepUpGuard = (metadata: HandoffAccessMetadata) => {
   const required = requiresHandoffStepUpForMetadata(metadata);
-  const guard = ({
-    handoffOriginConsentId,
-  }: {
-    handoffOriginConsentId: string | null;
-  }) =>
-    required && handoffOriginConsentId
+  const guard = (context: object) => {
+    if (!required) {
+      return undefined;
+    }
+    // Macro dependencies resolve this field at runtime, after registration.
+    if (
+      !("handoffOriginConsentId" in context) ||
+      (context.handoffOriginConsentId !== null &&
+        typeof context.handoffOriginConsentId !== "string")
+    ) {
+      return panic("Handoff guard requires resolved session provenance");
+    }
+    return context.handoffOriginConsentId
       ? status(403, {
           code: MCP_HANDOFF_STEP_UP_REQUIRED,
           message: "Sign in again to continue.",
         })
       : undefined;
+  };
   registeredGuards.add(guard);
   return guard;
 };
 
-type HandoffStepUpGuard = (context: {
-  handoffOriginConsentId: string | null;
-}) => unknown;
+type HandoffStepUpGuard = ReturnType<typeof createHandoffStepUpGuard>;
 
 export const isHandoffStepUpGuard = (
   value: unknown,
