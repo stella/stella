@@ -653,7 +653,6 @@ jobs:
         run: docker logout ghcr.io
 
       - name: Install heavy planner dependencies
-        timeout-minutes: 3
         if: steps.completed-depth.outputs.run_required != 'false' && (inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin'))
         uses: $/.github/actions/ci-install
         with:
@@ -1596,7 +1595,6 @@ jobs:
         id: install
         if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/agent-engine...","--filter","stella"]'
         env:
@@ -1717,7 +1715,6 @@ jobs:
 
       - name: Check image dependency trees and production runner
         id: api-deps
-        timeout-minutes: 10
         if: ${{ !cancelled() && needs.ci-plan.outputs.api_image_deps_required == 'true' }}
         env:
           NPM_TOKEN: ""
@@ -1968,7 +1965,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -2077,7 +2073,6 @@ jobs:
       - name: Install dependencies
         id: install
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -2184,7 +2179,6 @@ jobs:
         id: install
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -2496,7 +2490,6 @@ jobs:
         id: install
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -2939,7 +2932,6 @@ jobs:
         id: install
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && steps.standalone_lockfiles.outcome == 'success' && (!(github.event_name != 'workflow_dispatch' && needs.ci-plan.outputs.lockfile_ages_required == 'true') || steps.lockfile_ages.outcome == 'success') }}
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -4229,7 +4221,6 @@ jobs:
       - name: Install dependencies
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -4455,7 +4446,6 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install API script dependencies
-        timeout-minutes: 3
         uses: $/.github/actions/ci-install
         with:
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/api"]'
@@ -4673,7 +4663,6 @@ jobs:
       - name: Install dependencies
         if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -4836,7 +4825,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -4976,7 +4964,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -5241,7 +5228,6 @@ jobs:
           no-cache: true
 
       - name: Install dependencies
-        timeout-minutes: 3
         run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/postgres.log" --frozen-lockfile --ignore-scripts --filter @stll/api --filter @stll/cli
         env:
           NPM_TOKEN: ""
@@ -5432,7 +5418,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -5626,7 +5611,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -5765,7 +5749,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -5882,7 +5865,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -5950,7 +5932,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -5988,7 +5969,6 @@ jobs:
           bun scripts/bundle-baseline.ts --check
 
       - name: Prod-deps web boot smoke
-        timeout-minutes: 3
         # apps/web/Dockerfile's runner installs --production (deps-prod stage).
         # Reproduce that clean production tree and boot dist/runtime.js: a
         # devDependency reached by the SSR server bundle (dist/server/server.js)
@@ -6273,7 +6253,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -6371,7 +6350,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/landing...","--filter","@stll/cli...","--filter","stella"]'
         env:
@@ -6466,7 +6444,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -6524,7 +6501,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -6705,7 +6681,6 @@ jobs:
           bun-version-file: package.json
 
       - name: Install dependencies
-        timeout-minutes: 2
         uses: $/.github/actions/ci-install
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
@@ -6990,7 +6965,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -7109,7 +7083,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -7370,7 +7343,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/landing...","--filter","@stll/cli...","--filter","stella"]'
         env:
@@ -7632,7 +7604,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/playwright-tools","--filter","!stella"]'
         env:
@@ -7773,7 +7744,6 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Install smoke dependencies
-        timeout-minutes: 3
         run: bun .workflow-tooling/scripts/ci-install.ts "$RUNNER_TEMP/bun-install/smoke.log" --frozen-lockfile --ignore-scripts --filter @stll/scripts
         env:
           NPM_TOKEN: ""
@@ -8087,7 +8057,6 @@ jobs:
           bun-version-file: package.json
 
       - name: Install dependencies
-        timeout-minutes: 5
         uses: $/.github/actions/ci-install
         with:
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/desktop...","--filter","!stella"]'
@@ -8207,7 +8176,6 @@ jobs:
           bun-version-file: package.json
 
       - name: Install scripts workspace dependencies
-        timeout-minutes: 5
         uses: $/.github/actions/ci-install
         with:
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts"]'
@@ -8305,7 +8273,6 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
-        timeout-minutes: 3
         uses: $/.github/actions/ci-install
         with:
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scan-engine","--filter","stella"]'
@@ -8561,7 +8528,6 @@ jobs:
       - name: Install desktop transport smoke dependencies
         if: matrix.os == 'macos'
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/api"]'
         env:
@@ -8789,7 +8755,6 @@ jobs:
           bun-version-file: package.json
 
       - name: Install dated waiver guard dependencies
-        timeout-minutes: 3
         uses: $/.github/actions/ci-install
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'

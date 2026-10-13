@@ -245,6 +245,37 @@ test("at most the first lines are kept, deduplicated", () => {
   expect(failureLines(many)).toHaveLength(MAX_LINES_PER_STEP);
 });
 
+test.each(["stall", "signal"])(
+  "typed install %s failures remain infrastructure failures through the digest",
+  (failureClass) => {
+    const lines = failureLines([
+      `::error title=install-${failureClass}::kind=infra class=install-${failureClass} restore=cold key=bun-complete-store-v4 elapsed_ms=300000 idle_ms=180000`,
+      "Error: Process completed with exit code 1.",
+    ]);
+    expect(lines.at(0)?.message).toContain(
+      `kind=infra class=install-${failureClass}`,
+    );
+    for (const step of [
+      "Install dependencies",
+      "Build API image",
+      "Test API smoke",
+    ]) {
+      const kind = classify(step, lines);
+      expect(kind).toBe("infra");
+      const output = annotations([
+        { job: "runner", step, kind, lines, url: "" },
+      ]);
+      expect(output.at(0)).toContain("[infra]");
+      expect(output.at(0)).toContain(
+        `kind=infra class=install-${failureClass}`,
+      );
+    }
+    expect(classify("Build API image", [{ message: "install-stall" }])).toBe(
+      "build",
+    );
+  },
+);
+
 test("step kinds follow the step name, then the extracted lines", () => {
   expect(classify("Test API or rest", [])).toBe("test");
   expect(classify("Typecheck affected packages", [])).toBe("typecheck");

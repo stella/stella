@@ -39,6 +39,7 @@ const MAX_TAIL_DETAIL = 12;
 const TAIL_WINDOW = 40;
 
 export type FailureKind =
+  | "infra"
   | "test"
   | "typecheck"
   | "lint"
@@ -761,6 +762,9 @@ export const classify = (
 ): FailureKind => {
   const name = step.toLowerCase();
   const text = lines.map(({ message }) => message).join("\n");
+  if (/\bkind=infra\s+class=install-(?:stall|signal)\b/u.test(text)) {
+    return "infra";
+  }
   if (/ratchet/u.test(name) || /\bratchet\b/iu.test(text)) {
     return "ratchet";
   }
