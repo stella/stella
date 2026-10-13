@@ -19,6 +19,7 @@ import { sha256Hex } from "@stll/sha256/bun";
 import {
   ensureContainer,
   sharedTestDatabase,
+  sharedTestCredential,
   sharedTestMigrationHistory,
   snapshotSharedTestMigrations,
 } from "./shared-test-postgres";
@@ -32,30 +33,31 @@ test("container startup removes its private credential file on success and failu
     const state = mkdtempSync(path.join(tmpdir(), "stella-pg-container-"));
     let envFile = "";
     let runCalls = 0;
-    const docker = (args: string[]) => {
+    const docker = (args: readonly string[]) => {
       if (args.at(0) === "build") {
         expect(path.isAbsolute(args.at(args.indexOf("-f") + 1) ?? "")).toBe(
           true,
         );
       }
-      if (args.at(0) === "run") {
-        runCalls++;
-        envFile = args.at(args.indexOf("--env-file") + 1) ?? "";
-        expect(readFileSync(envFile, "utf-8")).toContain(
-          "POSTGRES_PASSWORD=fixture",
-        );
-        expect(statSync(envFile).mode.toString(8).slice(-3)).toBe("600");
-        return outcome === "success"
-          ? Result.ok("started")
-          : Result.err(
-              new FixtureDockerError({ message: "Docker startup failed" }),
-            );
-      }
       return Result.ok(args.at(0) === "inspect" ? "true" : "");
+    };
+    const startContainer = (file: string) => {
+      runCalls++;
+      envFile = file;
+      expect(readFileSync(envFile, "utf-8")).toContain(
+        "POSTGRES_PASSWORD=fixture",
+      );
+      expect(statSync(envFile).mode.toString(8).slice(-3)).toBe("600");
+      return outcome === "success"
+        ? Result.ok("started")
+        : Result.err(
+            new FixtureDockerError({ message: "Docker startup failed" }),
+          );
     };
     try {
       const result = await ensureContainer({
         docker,
+        startContainer,
         state,
         password: "fixture",
         repo: state,
@@ -114,7 +116,7 @@ test("concurrent first-use credential preparation publishes one complete private
       return child;
     });
     for (const child of processes) {
-      child.stdin.end();
+      await child.stdin.end();
     }
     const results = await Promise.all(
       processes.map(async (child) => ({
@@ -126,6 +128,9 @@ test("concurrent first-use credential preparation publishes one complete private
     const credential = path.join(directory, "owner.password");
     const value = readFileSync(credential, "utf-8");
     expect(value).toMatch(/^[a-f0-9]{64}$/u);
+    expect(sharedTestCredential(directory, "owner.password").unwrap()).toBe(
+      value,
+    );
     for (const result of results) {
       expect(result.error).toBe("");
       expect(result.code).toBe(0);

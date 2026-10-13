@@ -125,14 +125,6 @@ type PoolDefinition = {
 // constructor set and its actual maximum; additions require a budget decision.
 const DATABASE_POOLS = [
   {
-    file: "scripts/migrate-shared-test-template.ts",
-    constructor: 1,
-    maximum: { type: "fixed", value: 1 },
-    // Local test provisioning does not connect to the production fleet.
-    processes: [],
-    admission: "pooled",
-  },
-  {
     file: "src/db/root.ts",
     constructor: 1,
     maximum: { type: "configured", key: "DATABASE_ROOT_POOL_MAX" },

@@ -32,6 +32,13 @@ export type OutboundTransportCensusEntry = {
 
 export const OUTBOUND_TRANSPORT_CENSUS = [
   {
+    path: "packages/scripts/src/shared-test-postgres.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Owns bounded connections to the host-local shared test Postgres cluster.",
+    transports: ["module:bun"],
+  },
+  {
     path: "packages/start-runtime/src/local-module-loader.ts",
     class: "package-owned-client",
     reason:

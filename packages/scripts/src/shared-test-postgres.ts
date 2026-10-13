@@ -160,13 +160,21 @@ export const sharedTestCredential = (directory: string, name: string) => {
   return Result.ok(value);
 };
 
+type DockerArguments =
+  | readonly ["ps", ...string[]]
+  | readonly ["build", ...string[]]
+  | readonly ["inspect", ...string[]]
+  | readonly ["start", ...string[]]
+  | readonly ["exec", ...string[]];
+
 type DockerCommand = (
-  args: string[],
+  args: DockerArguments,
   input?: string,
 ) => Result<string, SharedTestPostgresError>;
 
 type EnsureContainerOptions = {
   docker: DockerCommand;
+  startContainer: (envFile: string) => Result<string, SharedTestPostgresError>;
   state: string;
   password: string;
   repo: string;
@@ -175,6 +183,7 @@ type EnsureContainerOptions = {
 
 export const ensureContainer = async ({
   docker,
+  startContainer,
   state,
   password,
   repo,
@@ -215,30 +224,7 @@ export const ensureContainer = async ({
         `POSTGRES_USER=${OWNER}\nPOSTGRES_DB=postgres\nPOSTGRES_PASSWORD=${password}\n`,
         { flag: "wx", mode: 0o600 },
       );
-      const started = docker([
-        "run",
-        "-d",
-        "--name",
-        CONTAINER,
-        "--label",
-        "dev.stella.shared-test-postgres=true",
-        "--memory",
-        "512m",
-        "--publish",
-        `127.0.0.1:${PORT}:5432`,
-        "--env-file",
-        envFile,
-        "--mount",
-        "type=volume,source=stella-shared-test-postgres-data,target=/var/lib/postgresql",
-        IMAGE,
-        "postgres",
-        "-c",
-        "config_file=/etc/postgresql/server.conf",
-        "-c",
-        "shared_buffers=64MB",
-        "-c",
-        "max_connections=100",
-      ]);
+      const started = startContainer(envFile);
       if (started.isErr()) {
         const winner = docker([
           "ps",
@@ -313,7 +299,7 @@ export const ensureContainer = async ({
       OWNER,
       "-d",
       "postgres",
-      "-v",
+      "--set",
       "ON_ERROR_STOP=1",
     ],
     "SELECT 1;\n",
@@ -322,6 +308,38 @@ export const ensureContainer = async ({
     return configured;
   }
   return Result.ok("ready" as const);
+};
+
+export const withSharedTestPostgresConnection = async <T>(
+  url: string,
+  work: (connection: ReservedSQL) => Promise<T>,
+) => {
+  const client = new SQL({ url, max: 1 });
+  try {
+    const connection = await client.reserve();
+    try {
+      return await work(connection);
+    } finally {
+      connection.release();
+    }
+  } finally {
+    await client.close();
+  }
+};
+
+const readDockerResult = (
+  result: Bun.ReadableSyncSubprocess,
+  action: string,
+) => {
+  if (!result.success) {
+    // Docker output may contain credentials; keep the boundary error redacted.
+    return Result.err(
+      new SharedTestPostgresError({
+        message: `Shared Postgres Docker ${action} failed (exit ${result.exitCode}).`,
+      }),
+    );
+  }
+  return Result.ok(result.stdout.toString().trim());
 };
 
 const initializeTemplateRegistry = async (session: ReservedSQL) => {
@@ -403,6 +421,7 @@ const collectUnusedTemplates = async (session: ReservedSQL, state: string) => {
     const key = row["history_key"];
     const template = row["template_name"];
     if (
+      typeof template !== "string" ||
       typeof key !== "string" ||
       !/^[a-f0-9]{64}$/u.test(key) ||
       template !== sharedTestTemplateName(key)
@@ -472,9 +491,9 @@ const ensureWorkerTemplate = async ({
       "stella_maintenance",
       "-d",
       template,
-      "-v",
+      "--set",
       "ON_ERROR_STOP=1",
-      "-v",
+      "--set",
       `owner=${OWNER}`,
     ],
     `SET ROLE stella_bootstrap;\n${readFileSync(path.join(repo, "docker/postgres/init.sql"), "utf-8")}`,
@@ -566,25 +585,52 @@ const run = async () => {
   if (keeper.isErr()) {
     return keeper;
   }
-  const docker: DockerCommand = (args, input) => {
+  const docker = (args: DockerArguments, input?: string) => {
     const result = Bun.spawnSync(["docker", "--host", target.host, ...args], {
       env: target.env,
       stdin: input ? Buffer.from(input) : "ignore",
       stdout: "pipe",
       stderr: "pipe",
     });
-    if (!result.success) {
-      // Docker output may contain credentials; keep the boundary error redacted.
-      return Result.err(
-        new SharedTestPostgresError({
-          message: `Shared Postgres Docker ${args.at(0)} failed (exit ${result.exitCode}).`,
-        }),
-      );
-    }
-    return Result.ok(result.stdout.toString().trim());
+    return readDockerResult(result, args[0]);
+  };
+  const startContainer = (envFile: string) => {
+    const result = Bun.spawnSync(
+      [
+        "docker",
+        "--host",
+        target.host,
+        "run",
+        "-d",
+        "--name",
+        CONTAINER,
+        "--label",
+        "dev.stella.shared-test-postgres=true",
+        "--memory",
+        "512m",
+        "--publish",
+        `127.0.0.1:${PORT}:5432`,
+        "--env-file",
+        envFile,
+        "--mount",
+        "type=volume,source=stella-shared-test-postgres-data,target=/var/lib/postgresql",
+        "--",
+        IMAGE,
+        "postgres",
+        "-c",
+        "config_file=/etc/postgresql/server.conf",
+        "-c",
+        "shared_buffers=64MB",
+        "-c",
+        "max_connections=100",
+      ],
+      { env: target.env, stdout: "pipe", stderr: "pipe" },
+    );
+    return readDockerResult(result, "run");
   };
   const container = await ensureContainer({
     docker,
+    startContainer,
     state,
     password,
     repo,
@@ -596,108 +642,102 @@ const run = async () => {
   if (container.value === "absent") {
     return Result.ok(undefined);
   }
-  const admin = new SQL({
-    url: `postgres://${OWNER}:${password}@127.0.0.1:${PORT}/postgres`,
-    max: 1,
-  });
-  const session = await admin.reserve();
-  try {
-    return await withSharedPostgresLock(session, async () => {
-      await initializeTemplateRegistry(session);
-      if (action === "gc") {
-        return await collectUnusedTemplates(session, state);
-      }
-      if (action === "drop") {
-        await session.unsafe(
-          `DROP DATABASE IF EXISTS "${database}" WITH (FORCE)`,
-        );
-        rmSync(path.join(state, `${database}.url`), { force: true });
-        await session`DELETE FROM stella_shared_test.worktrees WHERE database_name = ${database}`;
-        return await collectUnusedTemplates(session, state);
-      }
-      const prepared = await ensureWorkerTemplate({
-        session,
-        docker,
-        state,
-        tree: workerTree,
-        repo,
-        password,
-      });
-      if (prepared.isErr()) {
-        return prepared;
-      }
-      const { key, template } = prepared.value;
-      const registered =
-        await session`SELECT history_key FROM stella_shared_test.worktrees WHERE database_name = ${database}`;
-      if (registered.length && registered.at(0)?.["history_key"] !== key) {
-        return Result.err(
-          new SharedTestPostgresError({
-            message:
-              "Worker migration history changed; drop its test database before preparing again.",
-          }),
-        );
-      }
-      const databases =
-        await session`SELECT datname FROM pg_database WHERE datname = ${database}`;
-      if (databases.length !== 0 && registered.length === 0) {
-        return Result.err(
-          new SharedTestPostgresError({
-            message:
-              "Unregistered worker database exists; drop it before preparing again.",
-          }),
-        );
-      }
-      if (databases.length === 0) {
-        await session.unsafe(
-          `CREATE DATABASE "${database}" TEMPLATE "${template}" OWNER "${OWNER}"`,
-        );
-      }
-      const url = `postgres://${OWNER}:${password}@127.0.0.1:${PORT}/${database}`;
-      const posture =
-        await session`SELECT 1 FROM pg_roles r JOIN pg_database d ON d.datdba = r.oid WHERE r.rolname = ${OWNER} AND d.datname = ${database} AND r.rolcanlogin AND NOT r.rolsuper AND NOT r.rolbypassrls AND r.rolcreatedb AND r.rolcreaterole`;
-      if (posture.length !== 1) {
-        return Result.err(
-          new SharedTestPostgresError({
-            message:
-              "Shared test database owner has an invalid privilege posture.",
-          }),
-        );
-      }
-      await session`INSERT INTO stella_shared_test.worktrees (database_name, tree_path, history_key)
+  return await withSharedTestPostgresConnection(
+    `postgres://${OWNER}:${password}@127.0.0.1:${PORT}/postgres`,
+    async (session) =>
+      await withSharedPostgresLock(session, async () => {
+        await initializeTemplateRegistry(session);
+        if (action === "gc") {
+          return await collectUnusedTemplates(session, state);
+        }
+        if (action === "drop") {
+          await session.unsafe(
+            `DROP DATABASE IF EXISTS "${database}" WITH (FORCE)`,
+          );
+          rmSync(path.join(state, `${database}.url`), { force: true });
+          await session`DELETE FROM stella_shared_test.worktrees WHERE database_name = ${database}`;
+          return await collectUnusedTemplates(session, state);
+        }
+        const prepared = await ensureWorkerTemplate({
+          session,
+          docker,
+          state,
+          tree: workerTree,
+          repo,
+          password,
+        });
+        if (prepared.isErr()) {
+          return prepared;
+        }
+        const { key, template } = prepared.value;
+        const registered =
+          await session`SELECT history_key FROM stella_shared_test.worktrees WHERE database_name = ${database}`;
+        if (registered.length && registered.at(0)?.["history_key"] !== key) {
+          return Result.err(
+            new SharedTestPostgresError({
+              message:
+                "Worker migration history changed; drop its test database before preparing again.",
+            }),
+          );
+        }
+        const databases =
+          await session`SELECT datname FROM pg_database WHERE datname = ${database}`;
+        if (databases.length !== 0 && registered.length === 0) {
+          return Result.err(
+            new SharedTestPostgresError({
+              message:
+                "Unregistered worker database exists; drop it before preparing again.",
+            }),
+          );
+        }
+        if (databases.length === 0) {
+          await session.unsafe(
+            `CREATE DATABASE "${database}" TEMPLATE "${template}" OWNER "${OWNER}"`,
+          );
+        }
+        const url = `postgres://${OWNER}:${password}@127.0.0.1:${PORT}/${database}`;
+        const posture =
+          await session`SELECT 1 FROM pg_roles r JOIN pg_database d ON d.datdba = r.oid WHERE r.rolname = ${OWNER} AND d.datname = ${database} AND r.rolcanlogin AND NOT r.rolsuper AND NOT r.rolbypassrls AND r.rolcreatedb AND r.rolcreaterole`;
+        if (posture.length !== 1) {
+          return Result.err(
+            new SharedTestPostgresError({
+              message:
+                "Shared test database owner has an invalid privilege posture.",
+            }),
+          );
+        }
+        await session`INSERT INTO stella_shared_test.worktrees (database_name, tree_path, history_key)
         VALUES (${database}, ${workerTree}, ${key})
         ON CONFLICT (database_name) DO UPDATE SET tree_path = EXCLUDED.tree_path`;
-      if (sharedTestMigrationHistory(workerTree).key !== key) {
-        return Result.err(
-          new SharedTestPostgresError({
-            message:
-              "Worker migrations changed during preparation; drop and prepare its test database again.",
-          }),
+        if (sharedTestMigrationHistory(workerTree).key !== key) {
+          return Result.err(
+            new SharedTestPostgresError({
+              message:
+                "Worker migrations changed during preparation; drop and prepare its test database again.",
+            }),
+          );
+        }
+        const migrated = migrateWorkerOnline(workerTree, url);
+        if (migrated.isErr()) {
+          return migrated;
+        }
+        const urlFile = path.join(state, `${database}.url`);
+        const temporary = path.join(
+          state,
+          `.url-write-${randomBytes(16).toString("hex")}`,
         );
-      }
-      const migrated = migrateWorkerOnline(workerTree, url);
-      if (migrated.isErr()) {
-        return migrated;
-      }
-      const urlFile = path.join(state, `${database}.url`);
-      const temporary = path.join(
-        state,
-        `.url-write-${randomBytes(16).toString("hex")}`,
-      );
-      writeFileSync(temporary, url, { flag: "wx", mode: 0o600 });
-      renameSync(temporary, urlFile);
-      const collected = await collectUnusedTemplates(session, state);
-      if (collected.isErr()) {
-        return collected;
-      }
-      process.stdout.write(
-        `${JSON.stringify({ database, urlFile, template })}\n`,
-      );
-      return Result.ok(undefined);
-    });
-  } finally {
-    session.release();
-    await admin.close();
-  }
+        writeFileSync(temporary, url, { flag: "wx", mode: 0o600 });
+        renameSync(temporary, urlFile);
+        const collected = await collectUnusedTemplates(session, state);
+        if (collected.isErr()) {
+          return collected;
+        }
+        process.stdout.write(
+          `${JSON.stringify({ database, urlFile, template })}\n`,
+        );
+        return Result.ok(undefined);
+      }),
+  );
 };
 
 if (import.meta.main) {
